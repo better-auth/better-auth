@@ -187,4 +187,15 @@ export const communityAdapters: CommunityAdapter[] = [
 			avatar: "https://github.com/octet-stream.png",
 		},
 	},
+	{
+		name: "@proofkit/better-auth",
+		url: "https://github.com/proofsh/proofkit/tree/main/packages/better-auth",
+		database: "FileMaker OData",
+		databaseUrl: "https://www.claris.com/filemaker/",
+		author: {
+			name: "eluce2",
+			url: "https://github.com/eluce2",
+			avatar: "https://github.com/eluce2.png",
+		},
+	},
 ];

@@ -90,7 +90,7 @@ function chunkCookie(
 	if (chunkCount > MAX_COOKIE_CHUNKS) {
 		// Skip the cache and fall back to the DB. The caller still expires stale chunks.
 		logger.warn(
-			`${storeName} cookie is too large to store even after chunking, so the cache was skipped. Reduce the cached data or use a database session.`,
+			`${storeName} cookie is too large to store even after chunking, so the cookie cache was skipped. Reduce the cached data size or avoid storing this data in cookies.`,
 		);
 		return [];
 	}

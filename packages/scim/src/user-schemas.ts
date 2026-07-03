@@ -18,8 +18,8 @@ export const APIUserSchema = z.object({
 			}),
 		)
 		.optional(),
-	// `false` deactivates the user (maps to the admin plugin's `banned` state and
-	// revokes sessions); `true` reactivates. Requires the admin plugin.
+	// `false` deactivates the user. Organization-scoped tokens remove membership;
+	// app-level tokens use the admin plugin's `banned` state.
 	active: z.boolean().optional(),
 });
 

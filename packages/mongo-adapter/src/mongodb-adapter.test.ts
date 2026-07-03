@@ -104,9 +104,9 @@ describe("mongodb-adapter", () => {
 		expect(updateArg).not.toHaveProperty("$set");
 	});
 
-	it("incrementOne omits $inc for a set-only guarded transition", async () => {
+	it("incrementOne omits $inc for guarded set-only updates", async () => {
 		const findOneAndUpdate = vi.fn(async () => ({
-			value: { _id: "counter-id", lastRequest: 1700000000000 },
+			value: { _id: "counter-id", count: 11, lastRequest: 1700000000000 },
 		}));
 		const db = {
 			collection: vi.fn(() => ({
@@ -117,20 +117,52 @@ describe("mongodb-adapter", () => {
 			rateLimitOptions,
 		);
 
-		await adapter.incrementOne({
+		const result = await adapter.incrementOne({
 			model: "rateLimit",
 			where: [{ field: "key", value: "a" }],
 			increment: {},
 			set: { lastRequest: 1700000000000 },
 		});
 
+		expect(result).toMatchObject({
+			id: "counter-id",
+			count: 11,
+			lastRequest: 1700000000000,
+		});
 		expect(findOneAndUpdate).toHaveBeenCalledWith(
 			{ key: "a" },
 			{ $set: { lastRequest: 1700000000000 } },
-			expect.anything(),
+			expect.objectContaining({
+				returnDocument: "after",
+				includeResultMetadata: true,
+			}),
 		);
 		const updateArg = (findOneAndUpdate.mock.calls[0] as any[])[1];
 		expect(updateArg).not.toHaveProperty("$inc");
+	});
+
+	it("incrementOne reads the guarded row without sending an empty update", async () => {
+		const findOne = vi.fn(async () => ({ _id: "counter-id", count: 11 }));
+		const findOneAndUpdate = vi.fn();
+		const db = {
+			collection: vi.fn(() => ({
+				findOne,
+				findOneAndUpdate,
+			})),
+		} as any;
+		const adapter = mongodbAdapter(db, { transaction: false })(
+			rateLimitOptions,
+		);
+
+		const result = await adapter.incrementOne({
+			model: "rateLimit",
+			where: [{ field: "key", value: "a" }],
+			increment: {},
+		});
+
+		expect(result).toMatchObject({ id: "counter-id", count: 11 });
+		expect(findOne).toHaveBeenCalledWith({ key: "a" }, expect.anything());
+		expect(findOneAndUpdate).not.toHaveBeenCalled();
 	});
 
 	it("incrementOne returns null when the guard matches no document", async () => {

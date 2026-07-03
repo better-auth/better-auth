@@ -1,5 +1,5 @@
 {
-	"$schema": "https://unpkg.com/knip@5/schema-jsonc.json",
+	"$schema": "https://unpkg.com/knip@6/schema-jsonc.json",
 	"ignoreExportsUsedInFile": {
 		"interface": true,
 		"type": true
@@ -11,11 +11,23 @@
 		// CI scripts used by GitHub Actions workflows, not by packages
 		".github/scripts/**"
 	],
-	"ignoreBinaries": ["playwright", "changeset", "open", "remark", "tsx"],
+	// pbcopy/xclip/clip: OS clipboard utilities shelled out from the CLI; auth: the CLI's own bin, self-invoked
+	"ignoreBinaries": [
+		"playwright",
+		"changeset",
+		"open",
+		"remark",
+		"tsx",
+		"pbcopy",
+		"xclip",
+		"clip",
+		"auth"
+	],
 	// exports used only by tests — invisible to --production mode
 	"ignoreIssues": {
 		"packages/cli/src/commands/init/index.ts": ["exports"],
 		"packages/cli/src/commands/init/utility/imports.ts": ["exports"],
+		"packages/oauth-provider/src/oauth-endpoint.ts": ["exports"],
 		"packages/sso/src/saml/assertions.ts": ["exports"],
 		"packages/sso/src/oidc/discovery.ts": ["exports"]
 	},

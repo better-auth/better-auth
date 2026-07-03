@@ -328,13 +328,12 @@ By default, the plugin tracks these authentication methods:
 
 * **Email authentication**: `"email"`
 * **OAuth providers**: Provider ID (e.g., `"google"`, `"github"`, `"discord"`)
-* **OAuth2 callbacks**: Provider ID from URL path
+* **OAuth callbacks**: Provider ID from URL path
 * **Sign up methods**: Tracked the same as sign in methods
 
 The plugin automatically detects the method from these endpoints:
 
 * `/callback/:id` - OAuth callback with provider ID
-* `/oauth2/callback/:id` - OAuth2 callback with provider ID
 * `/sign-in/email` - Email sign in
 * `/sign-up/email` - Email sign up
 

@@ -10,15 +10,33 @@ import type { SessionQueryParams } from "./types";
 // SSR detection
 const isServer = () => typeof window === "undefined";
 
-export type SessionAtom = AuthQueryAtom<{
-	user: User;
-	session: Session;
-}>;
-
-type SessionData = {
+export type SessionData = {
 	user: User;
 	session: Session;
 } & Record<string, any>;
+
+export type SessionAtom = AuthQueryAtom<SessionData>;
+
+export function hydrateSessionAtom(
+	sessionAtom: SessionAtom,
+	session: SessionData | null,
+) {
+	// The client is a module-level singleton, so writing during SSR would leak
+	// one request's session into concurrent requests sharing the same process.
+	if (typeof window === "undefined") {
+		return;
+	}
+	const currentSession = sessionAtom.get();
+	if (currentSession.data !== null || session === null) {
+		return;
+	}
+	sessionAtom.set({
+		...currentSession,
+		data: session,
+		error: null,
+		isPending: false,
+	});
+}
 
 type SessionResponse = (
 	| { session: null; user: null; needsRefresh?: boolean }

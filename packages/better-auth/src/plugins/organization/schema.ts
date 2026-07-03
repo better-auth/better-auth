@@ -56,6 +56,13 @@ interface TeamDefaultFields {
 		type: "string";
 		required: true;
 	};
+	memberCount: {
+		type: "number";
+		required: true;
+		defaultValue: 0;
+		input: false;
+		returned: false;
+	};
 	organizationId: {
 		type: "string";
 		required: true;
@@ -90,6 +97,13 @@ interface TeamMemberDefaultFields {
 			model: "user";
 			field: "id";
 		};
+	};
+	membershipKey: {
+		type: "string";
+		required: false;
+		unique: true;
+		input: false;
+		returned: false;
 	};
 	createdAt: {
 		type: "date";

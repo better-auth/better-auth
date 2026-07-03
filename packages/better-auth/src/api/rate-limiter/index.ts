@@ -2,8 +2,8 @@ import type {
 	AuthContext,
 	BetterAuthRateLimitStorage,
 } from "@better-auth/core";
-import { createRateLimitKey, getIp } from "@better-auth/core/utils/ip";
-import { safeJSONParse } from "@better-auth/core/utils/json";
+import { BetterAuthError } from "@better-auth/core/error";
+import { createRateLimitKey, getIP } from "@better-auth/core/utils/ip";
 import { normalizePathname } from "@better-auth/core/utils/url";
 import type { RateLimit } from "../../types";
 import { wildcardMatch } from "../../utils/wildcard";
@@ -67,7 +67,7 @@ function decideConsume(
 		};
 	}
 	const timeSinceLastRequest = now - data.lastRequest;
-	if (timeSinceLastRequest > windowInMs) {
+	if (timeSinceLastRequest >= windowInMs) {
 		return {
 			next: { ...data, count: 1, lastRequest: now },
 			update: true,
@@ -117,6 +117,7 @@ function createDatabaseStorageWrapper(
 ): BetterAuthRateLimitStorage {
 	const model = "rateLimit";
 	const db = ctx.adapter;
+	let longestObservedWindow = Math.max(...getConfiguredRateLimitWindows(ctx));
 	const readRow = async (key: string) => {
 		const res = await db.findMany<RateLimit>({
 			model,
@@ -133,6 +134,9 @@ function createDatabaseStorageWrapper(
 		key: string,
 		rule: { window: number; max: number },
 	): Promise<{ allowed: boolean; retryAfter: number | null }> => {
+		if (rule.window > longestObservedWindow) {
+			longestObservedWindow = rule.window;
+		}
 		const windowInMs = rule.window * 1000;
 		const data = await readRow(key);
 		const now = Date.now();
@@ -165,7 +169,7 @@ function createDatabaseStorageWrapper(
 
 		// Window elapsed: reset to a single request, guarded on the window so a
 		// concurrent increment in a new window cannot be clobbered.
-		if (timeSinceLastRequest > windowInMs) {
+		if (timeSinceLastRequest >= windowInMs) {
 			const reset = await db.incrementOne<RateLimit>({
 				model,
 				where: [
@@ -210,7 +214,7 @@ function createDatabaseStorageWrapper(
 		if (!fresh) {
 			return consume(key, rule);
 		}
-		if (now - fresh.lastRequest > windowInMs) {
+		if (now - fresh.lastRequest >= windowInMs) {
 			return consume(key, rule);
 		}
 		return {
@@ -222,11 +226,7 @@ function createDatabaseStorageWrapper(
 	// Best-effort sweep of clearly-expired rows to bound table growth. A failure
 	// here never blocks the request.
 	const deleteExpiredRows = (now: number) => {
-		const longestWindow = Math.max(
-			ctx.rateLimit.window,
-			...getDefaultSpecialRules().map((r) => r.window),
-		);
-		const cutoff = now - longestWindow * 1000;
+		const cutoff = now - longestObservedWindow * 1000;
 		ctx.runInBackground(
 			db
 				.deleteMany({
@@ -239,38 +239,31 @@ function createDatabaseStorageWrapper(
 	};
 
 	return {
-		get: readRow,
-		set: async (
-			key: string,
-			value: RateLimit,
-			_update?: boolean | undefined,
-		) => {
-			try {
-				if (_update) {
-					await db.updateMany({
-						model,
-						where: [{ field: "key", value: key }],
-						update: {
-							count: value.count,
-							lastRequest: value.lastRequest,
-						},
-					});
-				} else {
-					await db.create({
-						model,
-						data: {
-							key,
-							count: value.count,
-							lastRequest: value.lastRequest,
-						},
-					});
-				}
-			} catch (e) {
-				ctx.logger.error("Error setting rate limit", e);
-			}
-		},
 		consume,
 	};
+}
+
+function getConfiguredRateLimitWindows(ctx: AuthContext) {
+	const windows = [
+		ctx.rateLimit.window,
+		...getDefaultSpecialRules().map((rule) => rule.window),
+	];
+	for (const plugin of ctx.options.plugins || []) {
+		if (plugin.rateLimit) {
+			windows.push(...plugin.rateLimit.map((rule) => rule.window));
+		}
+	}
+	if (ctx.rateLimit.customRules) {
+		for (const customRule of Object.values(ctx.rateLimit.customRules)) {
+			if (customRule && typeof customRule !== "function") {
+				windows.push(customRule.window);
+			}
+		}
+	}
+	const validWindows = windows.filter(
+		(window) => Number.isFinite(window) && window > 0,
+	);
+	return validWindows.length > 0 ? validWindows : [ctx.rateLimit.window];
 }
 
 function getRateLimitStorage(
@@ -286,58 +279,29 @@ function getRateLimitStorage(
 	if (storage === "secondary-storage") {
 		const ttlFor = (window: number) =>
 			window ?? ctx.options.rateLimit?.window ?? 10;
+		const increment = ctx.options.secondaryStorage?.increment;
+		if (!increment) {
+			throw new BetterAuthError(
+				"Secondary-storage rate limiting requires SecondaryStorage.increment.",
+			);
+		}
 		return {
-			get: async (key: string) => {
-				const data = await ctx.options.secondaryStorage?.get(key);
-				return data ? safeJSONParse<RateLimit>(data) : null;
+			consume: async (key, rule) => {
+				// `increment` creates the counter with `ttl = window` on first use
+				// and never extends it, so the counter expires a fixed window after
+				// it opened. The post-increment value is the request count within
+				// that window.
+				const count = await increment(key, ttlFor(rule.window));
+				if (count <= rule.max) {
+					return { allowed: true, retryAfter: null };
+				}
+				return { allowed: false, retryAfter: rule.window };
 			},
-			set: async (
-				key: string,
-				value: RateLimit,
-				_update?: boolean | undefined,
-			) => {
-				await ctx.options.secondaryStorage?.set?.(
-					key,
-					JSON.stringify(value),
-					ttlFor(rateLimitSettings.window),
-				);
-			},
-			consume: ctx.options.secondaryStorage?.increment
-				? async (key, rule) => {
-						// `increment` creates the counter with `ttl = window` on first
-						// use and never extends it, so the counter expires a fixed
-						// window after it opened. The post-increment value is the
-						// request count within that window.
-						const count = await ctx.options.secondaryStorage!.increment!(
-							key,
-							ttlFor(rule.window),
-						);
-						if (count <= rule.max) {
-							return { allowed: true, retryAfter: null };
-						}
-						return { allowed: false, retryAfter: rule.window };
-					}
-				: undefined,
 		};
 	} else if (storage === "memory") {
 		const ttlFor = (window: number) =>
 			window ?? ctx.options.rateLimit?.window ?? 10;
 		return {
-			async get(key: string) {
-				const entry = memory.get(key);
-				if (!entry) {
-					return null;
-				}
-				if (Date.now() >= entry.expiresAt) {
-					memory.delete(key);
-					return null;
-				}
-				return entry.data;
-			},
-			async set(key: string, value: RateLimit, _update?: boolean | undefined) {
-				const expiresAt = Date.now() + ttlFor(rateLimitSettings.window) * 1000;
-				memory.set(key, { data: value, expiresAt });
-			},
 			// Single-threaded JS makes this read-decide-write atomic: no other
 			// request runs between the `memory.get` and the `memory.set` below.
 			async consume(key, rule) {
@@ -374,7 +338,7 @@ async function resolveRateLimitConfig(req: Request, ctx: AuthContext) {
 	const path = normalizePathname(req.url, basePath);
 	let currentWindow = ctx.rateLimit.window;
 	let currentMax = ctx.rateLimit.max;
-	const ip = getIp(req, ctx.options);
+	const ip = getIP(req, ctx.options);
 	if (!ip && ctx.options.advanced?.ipAddress?.disableIpTracking) {
 		// IP tracking is explicitly disabled; per-IP rate limiting does not apply.
 		return null;
@@ -444,8 +408,6 @@ async function resolveRateLimitConfig(req: Request, ctx: AuthContext) {
 	return { key, currentWindow, currentMax };
 }
 
-let legacyFallbackWarningLogged = false;
-
 /**
  * Decides the rate limit for the request in a single atomic step. The whole
  * check-and-increment happens here in the request phase; there is no separate
@@ -467,47 +429,10 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	});
 	const rule = { window: currentWindow, max: currentMax };
 
-	if (storage.consume) {
-		const { allowed, retryAfter } = await storage.consume(key, rule);
-		if (!allowed) {
-			return rateLimitResponse(retryAfter ?? currentWindow);
-		}
-		return;
+	const { allowed, retryAfter } = await storage.consume(key, rule);
+	if (!allowed) {
+		return rateLimitResponse(retryAfter ?? currentWindow);
 	}
-
-	return legacyConsume(ctx, storage, key, rule);
-}
-
-/**
- * Non-atomic check-then-increment for storages that do not implement `consume`
- * (custom storages, or secondary storages without `increment`). Under
- * concurrency this is best-effort: simultaneous requests can each pass the
- * check before either write lands.
- *
- * FIXME(rate-limit-consume-required): remove on `next` once `consume` is the
- * sole required member of the storage contract.
- */
-async function legacyConsume(
-	ctx: AuthContext,
-	storage: BetterAuthRateLimitStorage,
-	key: string,
-	rule: { window: number; max: number },
-) {
-	if (!legacyFallbackWarningLogged) {
-		ctx.logger.warn(
-			"Rate limiting is best-effort: the configured storage has no atomic " +
-				"`consume`, so concurrent requests may bypass the limit. Provide a " +
-				"storage that implements `consume` for strict enforcement.",
-		);
-		legacyFallbackWarningLogged = true;
-	}
-
-	const data = await storage.get(key);
-	const decision = decideConsume(data, rule, Date.now());
-	if (!decision.allowed) {
-		return rateLimitResponse(decision.retryAfter ?? rule.window);
-	}
-	await storage.set(key, { ...decision.next, key }, decision.update);
 }
 
 function getDefaultSpecialRules() {

@@ -16,7 +16,6 @@ import {
 import {
 	acsEndpoint,
 	callbackSSO,
-	callbackSSOSAML,
 	callbackSSOShared,
 	initiateSLO,
 	registerSSOProvider,
@@ -31,13 +30,6 @@ export {
 	DEFAULT_MAX_SAML_METADATA_SIZE,
 	DEFAULT_MAX_SAML_RESPONSE_SIZE,
 } from "./constants";
-
-export {
-	type SAMLConditions,
-	type TimestampValidationOptions,
-	validateSAMLTimestamp,
-} from "./routes/sso";
-
 export {
 	type AlgorithmValidationOptions,
 	DataEncryptionAlgorithm,
@@ -46,11 +38,23 @@ export {
 	KeyEncryptionAlgorithm,
 	SignatureAlgorithm,
 } from "./saml";
+export {
+	type SAMLConditions,
+	type TimestampValidationOptions,
+	validateSAMLTimestamp,
+} from "./saml/timestamp";
 
-import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
+import type {
+	InferSSOProvider,
+	OIDCConfig,
+	SAMLConfig,
+	SSOOptions,
+	SSOProvider,
+	SSOProviderSchema,
+} from "./types";
 import { PACKAGE_VERSION } from "./version";
 
-export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
+export type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider };
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -102,7 +106,6 @@ type SSOEndpoints<O extends SSOOptions> = {
 	signInSSO: ReturnType<typeof signInSSO>;
 	callbackSSO: ReturnType<typeof callbackSSO>;
 	callbackSSOShared: ReturnType<typeof callbackSSOShared>;
-	callbackSSOSAML: ReturnType<typeof callbackSSOSAML>;
 	acsEndpoint: ReturnType<typeof acsEndpoint>;
 	sloEndpoint: ReturnType<typeof sloEndpoint>;
 	initiateSLO: ReturnType<typeof initiateSLO>;
@@ -119,6 +122,11 @@ export type SSOPlugin<O extends SSOOptions> = {
 		(O extends { domainVerification: { enabled: true } }
 			? DomainVerificationEndpoints
 			: {});
+	schema: SSOProviderSchema<O>;
+	$Infer: {
+		SSOProvider: InferSSOProvider<O>;
+	};
+	options: NoInfer<O>;
 };
 
 /**
@@ -127,10 +135,79 @@ export type SSOPlugin<O extends SSOOptions> = {
  * which won't have a matching Origin header.
  */
 const SAML_SKIP_ORIGIN_CHECK_PATHS = [
-	"/sso/saml2/callback", // SP-initiated SSO callback (prefix matches /callback/:providerId)
-	"/sso/saml2/sp/acs", // IdP-initiated SSO ACS (prefix matches /sp/acs/:providerId)
-	"/sso/saml2/sp/slo", // IdP-initiated SLO (prefix matches /sp/slo/:providerId)
+	"/sso/saml2/sp/acs", // SAML ACS endpoint (prefix matches /sp/acs/:providerId)
+	"/sso/saml2/sp/slo", // SAML SLO endpoint (prefix matches /sp/slo/:providerId)
 ];
+
+const SSO_PROVIDER_BUILT_IN_FIELD_KEYS = [
+	"id",
+	"issuer",
+	"oidcConfig",
+	"samlConfig",
+	"userId",
+	"providerId",
+	"organizationId",
+	"domain",
+	"domainVerified",
+] as const;
+
+const SSO_PROVIDER_RESPONSE_FIELD_KEYS = [
+	"type",
+	"spMetadataUrl",
+	"redirectURI",
+	"domainVerificationToken",
+] as const;
+
+const SSO_PROVIDER_BUILT_IN_FIELD_KEY_SET = new Set<string>(
+	SSO_PROVIDER_BUILT_IN_FIELD_KEYS,
+);
+
+const SSO_PROVIDER_RESPONSE_FIELD_KEY_SET = new Set<string>(
+	SSO_PROVIDER_RESPONSE_FIELD_KEYS,
+);
+
+type SSOProviderBuiltInFieldKey =
+	(typeof SSO_PROVIDER_BUILT_IN_FIELD_KEYS)[number];
+
+function getSSOProviderBuiltInFieldName(
+	options: SSOOptions | undefined,
+	key: SSOProviderBuiltInFieldKey,
+) {
+	const fieldNames = options?.fields as
+		| Partial<Record<SSOProviderBuiltInFieldKey, string>>
+		| undefined;
+	const schemaFieldNames = options?.schema?.ssoProvider?.fields as
+		| Partial<Record<SSOProviderBuiltInFieldKey, string>>
+		| undefined;
+	return fieldNames?.[key] ?? schemaFieldNames?.[key] ?? key;
+}
+
+function assertNoAdditionalFieldCollisions(options?: SSOOptions) {
+	const additionalFields = options?.schema?.ssoProvider?.additionalFields ?? {};
+	const builtInFieldNames = new Set(
+		SSO_PROVIDER_BUILT_IN_FIELD_KEYS.map((key) =>
+			getSSOProviderBuiltInFieldName(options, key),
+		),
+	);
+	for (const [key, field] of Object.entries(additionalFields)) {
+		if (SSO_PROVIDER_BUILT_IN_FIELD_KEY_SET.has(key)) {
+			throw new Error(
+				`ssoProvider additional field "${key}" conflicts with a built-in field`,
+			);
+		}
+		if (SSO_PROVIDER_RESPONSE_FIELD_KEY_SET.has(key)) {
+			throw new Error(
+				`ssoProvider additional field "${key}" conflicts with a returned provider field`,
+			);
+		}
+		const fieldName = field.fieldName ?? key;
+		if (builtInFieldNames.has(fieldName)) {
+			throw new Error(
+				`ssoProvider additional field "${key}" maps to built-in field "${fieldName}"`,
+			);
+		}
+	}
+}
 
 export function sso<
 	O extends SSOOptions & {
@@ -142,7 +219,10 @@ export function sso<
 	id: "sso";
 	version: string;
 	endpoints: SSOEndpoints<O> & DomainVerificationEndpoints;
-	schema: NonNullable<BetterAuthPlugin["schema"]>;
+	schema: SSOProviderSchema<O>;
+	$Infer: {
+		SSOProvider: InferSSOProvider<O>;
+	};
 	options: NoInfer<O>;
 };
 export function sso<O extends SSOOptions>(
@@ -151,12 +231,17 @@ export function sso<O extends SSOOptions>(
 	id: "sso";
 	version: string;
 	endpoints: SSOEndpoints<O>;
+	schema: SSOProviderSchema<O>;
+	$Infer: {
+		SSOProvider: InferSSOProvider<O>;
+	};
 	options: NoInfer<O>;
 };
 
 export function sso<O extends SSOOptions>(
 	options?: O | undefined,
 ): BetterAuthPlugin {
+	assertNoAdditionalFieldCollisions(options);
 	const optionsWithStore = options as O;
 
 	let endpoints = {
@@ -165,12 +250,11 @@ export function sso<O extends SSOOptions>(
 		signInSSO: signInSSO(optionsWithStore),
 		callbackSSO: callbackSSO(optionsWithStore),
 		callbackSSOShared: callbackSSOShared(optionsWithStore),
-		callbackSSOSAML: callbackSSOSAML(optionsWithStore),
 		acsEndpoint: acsEndpoint(optionsWithStore),
 		sloEndpoint: sloEndpoint(optionsWithStore),
 		initiateSLO: initiateSLO(optionsWithStore),
-		listSSOProviders: listSSOProviders(),
-		getSSOProvider: getSSOProvider(),
+		listSSOProviders: listSSOProviders(optionsWithStore),
+		getSSOProvider: getSSOProvider(optionsWithStore),
 		updateSSOProvider: updateSSOProvider(optionsWithStore),
 		deleteSSOProvider: deleteSSOProvider(),
 	};
@@ -259,22 +343,34 @@ export function sso<O extends SSOOptions>(
 		},
 		schema: {
 			ssoProvider: {
-				modelName: options?.modelName ?? "ssoProvider",
+				modelName:
+					options?.modelName ??
+					options?.schema?.ssoProvider?.modelName ??
+					"ssoProvider",
 				fields: {
 					issuer: {
 						type: "string",
 						required: true,
-						fieldName: options?.fields?.issuer ?? "issuer",
+						fieldName:
+							options?.fields?.issuer ??
+							options?.schema?.ssoProvider?.fields?.issuer ??
+							"issuer",
 					},
 					oidcConfig: {
 						type: "string",
 						required: false,
-						fieldName: options?.fields?.oidcConfig ?? "oidcConfig",
+						fieldName:
+							options?.fields?.oidcConfig ??
+							options?.schema?.ssoProvider?.fields?.oidcConfig ??
+							"oidcConfig",
 					},
 					samlConfig: {
 						type: "string",
 						required: false,
-						fieldName: options?.fields?.samlConfig ?? "samlConfig",
+						fieldName:
+							options?.fields?.samlConfig ??
+							options?.schema?.ssoProvider?.fields?.samlConfig ??
+							"samlConfig",
 					},
 					userId: {
 						type: "string",
@@ -282,29 +378,53 @@ export function sso<O extends SSOOptions>(
 							model: "user",
 							field: "id",
 						},
-						fieldName: options?.fields?.userId ?? "userId",
+						fieldName:
+							options?.fields?.userId ??
+							options?.schema?.ssoProvider?.fields?.userId ??
+							"userId",
 					},
 					providerId: {
 						type: "string",
 						required: true,
 						unique: true,
-						fieldName: options?.fields?.providerId ?? "providerId",
+						fieldName:
+							options?.fields?.providerId ??
+							options?.schema?.ssoProvider?.fields?.providerId ??
+							"providerId",
 					},
 					organizationId: {
 						type: "string",
 						required: false,
-						fieldName: options?.fields?.organizationId ?? "organizationId",
+						fieldName:
+							options?.fields?.organizationId ??
+							options?.schema?.ssoProvider?.fields?.organizationId ??
+							"organizationId",
 					},
 					domain: {
 						type: "string",
 						required: true,
-						fieldName: options?.fields?.domain ?? "domain",
+						fieldName:
+							options?.fields?.domain ??
+							options?.schema?.ssoProvider?.fields?.domain ??
+							"domain",
 					},
 					...(options?.domainVerification?.enabled
-						? { domainVerified: { type: "boolean", required: false } }
+						? {
+								domainVerified: {
+									type: "boolean",
+									required: false,
+									fieldName:
+										options?.schema?.ssoProvider?.fields?.domainVerified ??
+										"domainVerified",
+								},
+							}
 						: {}),
+					...(options?.schema?.ssoProvider?.additionalFields ?? {}),
 				},
 			},
+		} as unknown as SSOProviderSchema<O>,
+		$Infer: {
+			SSOProvider: {} as InferSSOProvider<O>,
 		},
 		options: options as NoInfer<O>,
 	} satisfies BetterAuthPlugin;

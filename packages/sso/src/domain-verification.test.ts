@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
+import type { SecondaryStorage } from "better-auth/db";
 import { bearer, organization } from "better-auth/plugins";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sso } from ".";
@@ -32,11 +33,7 @@ describe("Domain verification", async () => {
 	const createTestAuth = (
 		options?: SSOOptions,
 		betterAuthOptions?: {
-			secondaryStorage?: {
-				set: (key: string, value: string, ttl?: number) => void;
-				get: (key: string) => string | null;
-				delete: (key: string) => void;
-			};
+			secondaryStorage?: SecondaryStorage;
 		},
 	) => {
 		const data: Record<string, any[]> = {
@@ -131,7 +128,6 @@ describe("Domain verification", async () => {
 					samlConfig: {
 						entryPoint: "http://idp.com:",
 						cert: "the-cert",
-						callbackUrl: "http://hello.com:8081/api/sso/saml2/callback",
 						spMetadata: {},
 					},
 					organizationId,
@@ -603,7 +599,6 @@ describe("Domain verification", async () => {
 					samlConfig: {
 						entryPoint: "http://idp.com:",
 						cert: "the-cert",
-						callbackUrl: "http://hello.com:8081/api/sso/saml2/callback",
 						spMetadata: {},
 					},
 				},
@@ -648,7 +643,6 @@ describe("Domain verification", async () => {
 					samlConfig: {
 						entryPoint: "http://idp.com:",
 						cert: "the-cert",
-						callbackUrl: "http://hello.com:8081/api/sso/saml2/callback",
 						spMetadata: {},
 					},
 				},
@@ -825,6 +819,16 @@ describe("Domain verification", async () => {
 						},
 						get(key) {
 							return store.get(key) || null;
+						},
+						getAndDelete(key) {
+							const value = store.get(key) || null;
+							store.delete(key);
+							return value;
+						},
+						increment(key) {
+							const count = Number(store.get(key) ?? 0) + 1;
+							store.set(key, String(count));
+							return count;
 						},
 						delete(key) {
 							store.delete(key);

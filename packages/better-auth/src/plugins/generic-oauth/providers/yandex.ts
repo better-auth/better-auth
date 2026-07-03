@@ -64,6 +64,11 @@ export function yandex(options: YandexOptions): GenericOAuthConfig {
 			return null;
 		}
 
+		const email = profile.default_email ?? profile.emails?.[0];
+		if (!email) {
+			return null;
+		}
+
 		return {
 			id: profile.id,
 			name:
@@ -71,7 +76,7 @@ export function yandex(options: YandexOptions): GenericOAuthConfig {
 				profile.real_name ??
 				profile.first_name ??
 				profile.login,
-			email: profile.default_email ?? profile.emails?.[0],
+			email,
 			emailVerified: false,
 			image:
 				!profile.is_avatar_empty && profile.default_avatar_id
@@ -86,6 +91,7 @@ export function yandex(options: YandexOptions): GenericOAuthConfig {
 		tokenUrl: "https://oauth.yandex.com/token",
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		tokenEndpointAuth: options.tokenEndpointAuth,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		pkce: options.pkce,

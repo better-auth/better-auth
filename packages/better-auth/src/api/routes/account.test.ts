@@ -72,12 +72,15 @@ afterEach(() => {
 afterAll(() => server.close());
 
 describe("account", async () => {
+	const googleVerifyIdTokenMock =
+		vi.fn<(token: string, nonce?: string) => Promise<boolean>>();
 	const { auth, signInWithTestUser, client } = await getTestInstance({
 		socialProviders: {
 			google: {
 				clientId: "test",
 				clientSecret: "test",
 				enabled: true,
+				verifyIdToken: googleVerifyIdTokenMock,
 			},
 		},
 		account: {
@@ -90,13 +93,11 @@ describe("account", async () => {
 
 	const ctx = await auth.$context;
 
-	let googleVerifyIdTokenMock: MockInstance;
 	let googleGetUserInfoMock: MockInstance;
 	beforeAll(() => {
 		const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
 		expect(googleProvider).toBeTruthy();
 
-		googleVerifyIdTokenMock = vi.spyOn(googleProvider, "verifyIdToken");
 		googleGetUserInfoMock = vi.spyOn(googleProvider, "getUserInfo");
 	});
 
@@ -198,6 +199,59 @@ describe("account", async () => {
 			expect(accessToken.error).toBeNull();
 			expect(accessToken.data?.accessToken).toBe("test");
 		});
+	});
+
+	it("should not expose empty scope tokens from stored empty account scope", async () => {
+		const {
+			auth,
+			client: scopedClient,
+			testUser,
+			cookieSetter,
+		} = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+		});
+		const headers = new Headers();
+		await scopedClient.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const session = await scopedClient.getSession({
+			fetchOptions: { headers },
+		});
+		const accountId = "empty-scope-google-account";
+		const testCtx = await auth.$context;
+		await testCtx.internalAdapter.createAccount({
+			userId: session.data!.user.id,
+			providerId: "google",
+			accountId,
+			accessToken: "access-token",
+			scope: "",
+		});
+
+		const accounts = await scopedClient.listAccounts({
+			fetchOptions: { headers },
+		});
+		const googleAccount = accounts.data?.find(
+			(account) => account.accountId === accountId,
+		);
+		expect(googleAccount?.scopes).toEqual([]);
+
+		const accessToken = await scopedClient.getAccessToken(
+			{
+				providerId: "google",
+				accountId,
+			},
+			{ headers },
+		);
+		expect(accessToken.data?.scopes).toEqual([]);
 	});
 
 	/**
@@ -318,10 +372,13 @@ describe("account", async () => {
 		const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
 		const getUserInfoMock = vi.spyOn(googleProvider, "getUserInfo");
 		const sharedAccountId = "shared-provider-account-id";
-		const otherUser = await ctx.internalAdapter.createUser({
-			name: "Other User",
-			email: "other-account-info@example.com",
-		});
+		const otherUser = await ctx.internalAdapter.createUser(
+			{
+				name: "Other User",
+				email: "other-account-info@example.com",
+			},
+			{ method: "test" },
+		);
 		await ctx.internalAdapter.createAccount({
 			userId: otherUser.id,
 			providerId: "google",
@@ -460,10 +517,13 @@ describe("account", async () => {
 		const githubGetUserInfoMock = vi.spyOn(githubProvider, "getUserInfo");
 		const sharedAccountId = "shared-server-side-account-id";
 
-		const user = await ctx.internalAdapter.createUser({
-			name: "Server Side User",
-			email: "server-side-disambiguate@example.com",
-		});
+		const user = await ctx.internalAdapter.createUser(
+			{
+				name: "Server Side User",
+				email: "server-side-disambiguate@example.com",
+			},
+			{ method: "test" },
+		);
 		await ctx.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "google",
@@ -580,6 +640,76 @@ describe("account", async () => {
 			const scopesParam = url.searchParams.get("scope");
 			expect(scopesParam).toContain(customScope);
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/2351
+	 */
+	it("should forward additionalParams and loginHint to the authorization URL", async () => {
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
+		await runWithClient2(async () => {
+			const linkAccountRes = await client.linkSocial({
+				provider: "google",
+				callbackURL: "/callback",
+				loginHint: "user@example.com",
+				additionalParams: {
+					access_type: "offline",
+					prompt: "consent",
+				},
+			});
+
+			expect(linkAccountRes.data).toMatchObject({
+				url: expect.stringContaining("google.com"),
+				redirect: true,
+			});
+			const url = new URL(linkAccountRes.data!.url);
+			expect(url.searchParams.get("access_type")).toBe("offline");
+			expect(url.searchParams.get("prompt")).toBe("consent");
+			expect(url.searchParams.get("login_hint")).toBe("user@example.com");
+		});
+	});
+
+	it("should reject additionalParams that override reserved OAuth params", async () => {
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
+		await runWithClient2(async () => {
+			const linkAccountRes = await client.linkSocial({
+				provider: "google",
+				callbackURL: "/callback",
+				additionalParams: {
+					state: "attacker-controlled",
+				},
+			});
+			expect(linkAccountRes.error?.status).toBe(400);
+		});
+	});
+
+	it("should pass idTokenNonce to providers that require redirect nonce binding", async () => {
+		const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
+		const previousRequiresIdTokenNonce = googleProvider.requiresIdTokenNonce;
+		googleProvider.requiresIdTokenNonce = true;
+		const createAuthorizationURLSpy = vi.spyOn(
+			googleProvider,
+			"createAuthorizationURL",
+		);
+
+		try {
+			const { runWithUser: runWithClient2 } = await signInWithTestUser();
+			await runWithClient2(async () => {
+				const linkAccountRes = await client.linkSocial({
+					provider: "google",
+					callbackURL: "/callback",
+				});
+				expect(linkAccountRes.error).toBeNull();
+				expect(createAuthorizationURLSpy).toHaveBeenCalledWith(
+					expect.objectContaining({
+						idTokenNonce: expect.any(String),
+					}),
+				);
+			});
+		} finally {
+			googleProvider.requiresIdTokenNonce = previousRequiresIdTokenNonce;
+			createAuthorizationURLSpy.mockRestore();
+		}
 	});
 
 	it("should link second account from the same provider", async () => {
@@ -1296,7 +1426,7 @@ describe("account", async () => {
 
 	it("should persist refreshed idToken in account cookie during getAccessToken auto-refresh in stateless mode", async () => {
 		const { auth, client, cookieSetter } = await getTestInstance({
-			database: undefined,
+			database: undefined as any,
 			socialProviders: {
 				google: {
 					clientId: "test",
@@ -2072,7 +2202,7 @@ describe("account", async () => {
 		const refreshUpdateAge = 60;
 
 		const { auth, client, cookieSetter } = await getTestInstance({
-			database: undefined,
+			database: undefined as any,
 			socialProviders: {
 				google: { clientId: "test", clientSecret: "test", enabled: true },
 			},
@@ -2167,6 +2297,91 @@ describe("account", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9732
+ */
+describe("validateUserInfo account linking", async () => {
+	const { signInWithTestUser, client } = await getTestInstance({
+		user: {
+			validateUserInfo({ source }) {
+				if (source.action !== "link-account") {
+					return;
+				}
+				expect(source.method).toBe("oauth");
+				expect(source.oauth?.providerId).toBe("google");
+				return {
+					error: "domain_blocked",
+					errorDescription: "This email domain is not allowed",
+				};
+			},
+		},
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+			},
+		},
+		account: {
+			accountLinking: {
+				allowDifferentEmails: true,
+			},
+		},
+	});
+
+	const { runWithUser } = await signInWithTestUser();
+
+	it("should reject account linking when validateUserInfo returns error", async () => {
+		await runWithUser(async (headers) => {
+			const linkAccountRes = await client.linkSocial(
+				{
+					provider: "google",
+					callbackURL: "/callback",
+				},
+				{
+					onSuccess(context) {
+						const cookies = parseSetCookieHeader(
+							context.response.headers.get("set-cookie") || "",
+						);
+						const state = cookies.get("better-auth.state")?.value;
+						headers.set(
+							"cookie",
+							`${headers.get("cookie") || ""}; better-auth.state=${state}`,
+						);
+					},
+				},
+			);
+			const state =
+				linkAccountRes.data && "url" in linkAccountRes.data
+					? new URL(linkAccountRes.data.url).searchParams.get("state") || ""
+					: "";
+			email = "blocked@example.com";
+			let redirectLocation = "";
+			await client.$fetch("/callback/google", {
+				query: {
+					state,
+					code: "test",
+				},
+				method: "GET",
+				onError(context) {
+					redirectLocation = context.response.headers.get("location") || "";
+				},
+			});
+
+			expect(redirectLocation).toContain("error=domain_blocked");
+			expect(redirectLocation).toContain(
+				"error_description=This+email+domain+is+not+allowed",
+			);
+
+			const accounts = await client.listAccounts();
+			expect(accounts.data).toHaveLength(1);
+		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9967
+ */
 describe("token routes cookie cache revocation", async () => {
 	it("get-access-token fails closed after the session is revoked in a stateful deployment", async () => {
 		const { auth, client, testUser, cookieSetter } = await getTestInstance({
@@ -2309,10 +2524,14 @@ describe("account resolution in stateless mode", async () => {
 	const signIn = async (auth: ReturnType<typeof makeStatelessAuth>) => {
 		const jar: Jar = new Map();
 		let res = await auth.handler(
-			new Request("http://localhost:3000/api/auth/sign-in/oauth2", {
+			new Request("http://localhost:3000/api/auth/sign-in/social", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ providerId: "idp", callbackURL: "/" }),
+				body: JSON.stringify({
+					provider: "idp",
+					callbackURL: "/",
+					disableRedirect: true,
+				}),
 			}),
 		);
 		collectCookies(res, jar);
@@ -2322,7 +2541,7 @@ describe("account resolution in stateless mode", async () => {
 
 		res = await auth.handler(
 			new Request(
-				`http://localhost:3000/api/auth/oauth2/callback/idp?code=test-code&state=${state}`,
+				`http://localhost:3000/api/auth/callback/idp?code=test-code&state=${state}`,
 				{ headers: requestHeaders(jar), redirect: "manual" },
 			),
 		);

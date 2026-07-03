@@ -361,6 +361,112 @@ describe("siwe", async () => {
 		expect(data?.success).toBe(true);
 	});
 
+	it.each([
+		new Error(
+			"reserveVerificationValue requires database-backed verification storage. Set verification.storeInDatabase to true for flows that reserve verification values.",
+		),
+		new Error("reservation adapter unavailable"),
+	])("should keep wallet email fallback when email reservation fails with %s", async (reservationError) => {
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				plugins: [
+					siwe({
+						domain,
+						anonymous: false,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ signature }) {
+							return signature === "valid_signature";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siweClient()],
+				},
+			},
+		);
+		const context = await auth.$context;
+		const reserveVerificationValue =
+			context.internalAdapter.reserveVerificationValue;
+		context.internalAdapter.reserveVerificationValue = async () => {
+			throw reservationError;
+		};
+		const headers = new Headers();
+
+		try {
+			await client.siwe.nonce({ walletAddress, chainId });
+			const { data, error } = await client.siwe.verify({
+				message: siweMessage(),
+				signature: "valid_signature",
+				walletAddress,
+				chainId,
+				email: "user@example.com",
+				fetchOptions: { onSuccess: sessionSetter(headers) },
+			});
+
+			expect(error).toBeNull();
+			expect(data?.success).toBe(true);
+
+			const session = await client.getSession({ fetchOptions: { headers } });
+			expect(session.data?.user.email).not.toBe("user@example.com");
+			expect(session.data?.user.email).toBe(
+				`${walletAddress.toLowerCase()}@http://localhost:3000`,
+			);
+		} finally {
+			context.internalAdapter.reserveVerificationValue =
+				reserveVerificationValue;
+		}
+	});
+
+	it("should reject new SIWE user when validateUserInfo returns error", async () => {
+		const { client } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo({ source }) {
+						expect(source.method).toBe("siwe");
+						return {
+							error: "siwe_blocked",
+							errorDescription: "SIWE sign-up is not allowed",
+						};
+					},
+				},
+				plugins: [
+					siwe({
+						domain,
+						anonymous: false,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ signature }) {
+							return signature === "valid_signature";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siweClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+
+		await client.siwe.nonce({ walletAddress, chainId });
+		const { error } = await client.siwe.verify({
+			message: siweMessage(),
+			signature: "valid_signature",
+			walletAddress,
+			chainId,
+			email: "siwe@example.com",
+		});
+
+		expect(error?.code).toBe("siwe_blocked");
+		expect(error?.message).toBe("SIWE sign-up is not allowed");
+	});
+
 	it("should not bind a caller-supplied email that already belongs to another account", async () => {
 		const { client, testUser, db, sessionSetter } = await getTestInstance(
 			{

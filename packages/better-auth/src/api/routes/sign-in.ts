@@ -2,14 +2,23 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import {
+	additionalAuthorizationParamsSchema,
+	supportsIdTokenSignIn,
+	verifyProviderIdToken,
+} from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
-import { missingEmailLogMessage } from "../../oauth2/errors";
+import {
+	missingEmailLogMessage,
+	OAUTH_CALLBACK_ERROR_CODES,
+} from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import { generateState } from "../../utils";
+import { getOAuthCallbackPath } from "../../oauth2/utils";
+import { generateIdTokenNonce, generateState } from "../../utils";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
@@ -166,6 +175,12 @@ const socialSignInBodySchema = z.object({
 		})
 		.optional(),
 	/**
+	 * Extra query parameters to append to the provider authorization URL.
+	 * Reserved OAuth keys (state, client_id, redirect_uri, response_type,
+	 * code_challenge, code_challenge_method, nonce, scope) are rejected.
+	 */
+	additionalParams: additionalAuthorizationParamsSchema,
+	/**
 	 * Additional data to be passed through the OAuth flow
 	 */
 	additionalData: z.record(z.string(), z.any()).optional().meta({
@@ -252,7 +267,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 			}
 
 			if (c.body.idToken) {
-				if (!provider.verifyIdToken) {
+				if (!supportsIdTokenSignIn(provider)) {
 					c.context.logger.error(
 						"Provider does not support id token verification",
 						{
@@ -265,7 +280,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					);
 				}
 				const { token, nonce } = c.body.idToken;
-				const valid = await provider.verifyIdToken(token, nonce);
+				const valid = await verifyProviderIdToken(provider, token, nonce);
 				if (!valid) {
 					c.context.logger.warn("Invalid id token", {
 						provider: c.body.provider,
@@ -315,8 +330,18 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					disableSignUp:
 						(provider.disableImplicitSignUp && !c.body.requestSignUp) ||
 						provider.disableSignUp,
+					source: {
+						method: "oauth",
+						oauth: { providerId: provider.id, profile: userInfo.data },
+					},
 				});
 				if (data.error) {
+					if (data.error === OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_VERIFIED) {
+						throw APIError.from(
+							"FORBIDDEN",
+							BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
+						);
+					}
 					throw APIError.from("UNAUTHORIZED", {
 						message: data.error,
 						code: "OAUTH_LINK_ERROR",
@@ -334,17 +359,19 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 				});
 			}
 
-			const { codeVerifier, state } = await generateState(
-				c,
-				undefined,
-				c.body.additionalData,
-			);
+			const idTokenNonce = generateIdTokenNonce(provider);
+			const { codeVerifier, state } = await generateState(c, {
+				additionalData: c.body.additionalData,
+				idTokenNonce,
+			});
 			const url = await provider.createAuthorizationURL({
 				state,
 				codeVerifier,
-				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+				idTokenNonce,
+				redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
 				scopes: c.body.scopes,
 				loginHint: c.body.loginHint,
+				additionalParams: c.body.additionalParams,
 			});
 
 			if (!c.body.disableRedirect) {

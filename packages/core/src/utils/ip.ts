@@ -347,7 +347,7 @@ const DEFAULT_IP_HEADERS = ["x-forwarded-for"];
  * `x-forwarded-for`), and falls back to localhost in development and test.
  * Returns `null` when tracking is disabled or no trustworthy IP can be resolved.
  */
-export function getIp(
+export function getIP(
 	req: Request | Headers,
 	options: BetterAuthOptions,
 ): string | null {

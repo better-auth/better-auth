@@ -4,7 +4,7 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
-import { admin, bearer, organization } from "better-auth/plugins";
+import { bearer, organization } from "better-auth/plugins";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
 import { scimClient } from "./client";
@@ -27,6 +27,10 @@ const createTestInstance = (
 		account: [],
 		ssoProvider: [],
 		scimProvider: [],
+		scimGroup: [],
+		scimGroupMember: [],
+		scimGroupRole: [],
+		scimGroupRoleGrant: [],
 		organization: [],
 		member: [],
 	};
@@ -70,15 +74,30 @@ const createTestInstance = (
 		return headers;
 	}
 
+	let defaultOrgPromise: Promise<string | undefined> | undefined;
+	function ensureDefaultOrg(headers: Headers) {
+		if (!defaultOrgPromise) {
+			defaultOrgPromise = auth.api
+				.createOrganization({
+					body: { slug: "default-org", name: "Default Org" },
+					headers,
+				})
+				.then((org) => org!.id);
+		}
+		return defaultOrgPromise;
+	}
+
 	async function getSCIMToken(
 		providerId: string = "the-saml-provider-1",
 		organizationId?: string,
 	) {
 		const headers = await getAuthCookieHeaders();
+		const orgId = organizationId ?? (await ensureDefaultOrg(headers));
+		if (!orgId) throw new Error("Default organization not found");
 		const { scimToken } = await auth.api.generateSCIMToken({
 			body: {
 				providerId,
-				organizationId,
+				organizationId: orgId,
 			},
 			headers,
 		});
@@ -183,8 +202,8 @@ describe("SCIM", () => {
 			]);
 
 			const [scimTokenOrgA, scimTokenOrgB] = await Promise.all([
-				getSCIMToken("provider-org-a", organizationA?.id),
-				getSCIMToken("provider-org-b", organizationB?.id),
+				getSCIMToken("provider-org-a", organizationA!.id),
+				getSCIMToken("provider-org-b", organizationB!.id),
 			]);
 
 			await createUser("user-a", scimTokenOrgA);
@@ -261,8 +280,8 @@ describe("SCIM", () => {
 			]);
 
 			const [scimTokenProviderA, scimTokenProviderB] = await Promise.all([
-				getSCIMToken("provider-a", organizationA?.id),
-				getSCIMToken("provider-b", organizationB?.id),
+				getSCIMToken("provider-a", organizationA!.id),
+				getSCIMToken("provider-b", organizationB!.id),
 			]);
 
 			const createUser = (userName: string, scimToken: string) => {
@@ -335,7 +354,7 @@ describe("SCIM", () => {
 
 			const users = await auth.api.listSCIMUsers({
 				query: {
-					filter: 'userName eq "user-A"',
+					filter: 'UserName Eq "USER-A"',
 				},
 				headers: {
 					authorization: `Bearer ${scimToken}`,
@@ -469,8 +488,8 @@ describe("SCIM", () => {
 			]);
 
 			const [scimTokenProviderA, scimTokenProviderB] = await Promise.all([
-				getSCIMToken("provider-a", organizationA?.id),
-				getSCIMToken("provider-b", organizationB?.id),
+				getSCIMToken("provider-a", organizationA!.id),
+				getSCIMToken("provider-b", organizationB!.id),
 			]);
 
 			const createUser = (userName: string, scimToken: string) => {
@@ -683,6 +702,10 @@ describe("SCIM", () => {
 				account: [],
 				ssoProvider: [],
 				scimProvider: [],
+				scimGroup: [],
+				scimGroupMember: [],
+				scimGroupRole: [],
+				scimGroupRoleGrant: [],
 				organization: [],
 				member: [],
 			};
@@ -699,6 +722,16 @@ describe("SCIM", () => {
 					},
 					get(key) {
 						return store.get(key) || null;
+					},
+					getAndDelete(key) {
+						const value = store.get(key) || null;
+						store.delete(key);
+						return value;
+					},
+					increment(key) {
+						const count = Number(store.get(key) ?? 0) + 1;
+						store.set(key, String(count));
+						return count;
 					},
 					delete(key) {
 						store.delete(key);
@@ -722,8 +755,12 @@ describe("SCIM", () => {
 				onSuccess: setCookieToHeader(adminHeaders),
 			});
 
+			const org = await auth.api.createOrganization({
+				body: { slug: "scim-storage-org", name: "SCIM Storage Org" },
+				headers: adminHeaders,
+			});
 			const { scimToken } = await auth.api.generateSCIMToken({
-				body: { providerId: "the-saml-provider-1" },
+				body: { providerId: "the-saml-provider-1", organizationId: org!.id },
 				headers: adminHeaders,
 			});
 
@@ -732,8 +769,6 @@ describe("SCIM", () => {
 				headers: { authorization: `Bearer ${scimToken}` },
 			});
 
-			// The SCIM provider is the victim's sole identity, so a SCIM delete
-			// removes the global user and must also clear their stored sessions.
 			const ctx = await auth.$context;
 			const victimSession = await ctx.internalAdapter.createSession(
 				provisioned.id,
@@ -753,7 +788,7 @@ describe("SCIM", () => {
 			const organization = await registerOrganization("org:deprovision");
 			const scimToken = await getSCIMToken(
 				"provider-deprovision",
-				organization?.id,
+				organization!.id,
 			);
 
 			const created = await auth.api.createSCIMUser({
@@ -766,7 +801,6 @@ describe("SCIM", () => {
 
 			const ctx = await auth.$context;
 
-			// SCIM provisioning created an org membership for the new user.
 			const memberBefore = await ctx.adapter.findOne({
 				model: "member",
 				where: [
@@ -781,14 +815,12 @@ describe("SCIM", () => {
 				headers: { authorization: `Bearer ${scimToken}` },
 			});
 
-			// The global Better Auth user must NOT be deleted by an org-scoped token.
 			const userAfter = await ctx.adapter.findOne({
 				model: "user",
 				where: [{ field: "id", value: created.id }],
 			});
 			expect(userAfter).not.toBeNull();
 
-			// The org membership is removed (deprovisioned).
 			const memberAfter = await ctx.adapter.findOne({
 				model: "member",
 				where: [
@@ -798,8 +830,6 @@ describe("SCIM", () => {
 			});
 			expect(memberAfter).toBeNull();
 
-			// The SCIM account link is removed, so the user is no longer
-			// reachable through this provider.
 			await expect(
 				auth.api.getSCIMUser({
 					params: { userId: created.id },
@@ -824,6 +854,10 @@ describe("SCIM", () => {
 				account: [],
 				ssoProvider: [],
 				scimProvider: [],
+				scimGroup: [],
+				scimGroupMember: [],
+				scimGroupRole: [],
+				scimGroupRoleGrant: [],
 				organization: [],
 				member: [],
 				invitation: [],
@@ -926,11 +960,11 @@ describe("SCIM", () => {
 		});
 	});
 
-	describe("Default SCIM provider", () => {
+	describe("Static (app-level) SCIM provider", () => {
 		it("should work with a default SCIM provider", async () => {
-			const scimToken = "dGhlLXNjaW0tdG9rZW46dGhlLXNjaW0tcHJvdmlkZXI="; // base64(scimToken:providerId)
+			const scimToken = "dGhlLXNjaW0tdG9rZW46dGhlLXNjaW0tcHJvdmlkZXI=";
 			const { auth } = createTestInstance({
-				defaultSCIM: [
+				staticProviders: [
 					{
 						providerId: "the-scim-provider",
 						scimToken: "the-scim-token",
@@ -994,9 +1028,40 @@ describe("SCIM", () => {
 			).resolves.toBe(undefined);
 		});
 
+		it("rejects org-scoped static provider tokens without the organization segment", async () => {
+			const orglessToken = "dGhlLXNjaW0tdG9rZW46dGhlLXNjaW0tcHJvdmlkZXI=";
+			const orgToken =
+				"dGhlLXNjaW0tdG9rZW46dGhlLXNjaW0tcHJvdmlkZXI6dGhlLW9yZw==";
+			const { auth } = createTestInstance({
+				staticProviders: [
+					{
+						providerId: "the-scim-provider",
+						scimToken: "the-scim-token",
+						organizationId: "the-org",
+					},
+				],
+			});
+
+			await expect(
+				auth.api.createSCIMUser({
+					body: { userName: "missing-org" },
+					headers: { authorization: `Bearer ${orglessToken}` },
+				}),
+			).rejects.toThrowError(
+				expect.objectContaining({ message: "Invalid SCIM token" }),
+			);
+
+			const createdUser = await auth.api.createSCIMUser({
+				body: { userName: "with-org" },
+				headers: { authorization: `Bearer ${orgToken}` },
+			});
+
+			expect(createdUser.id).toBeTruthy();
+		});
+
 		it("should reject invalid SCIM tokens", async () => {
 			const { auth } = createTestInstance({
-				defaultSCIM: [
+				staticProviders: [
 					{
 						providerId: "the-scim-provider",
 						scimToken: "the-scim-token",
@@ -1059,11 +1124,16 @@ describe("SCIM write-path access and validation", () => {
 		expect(user).not.toBeNull();
 
 		const accounts = await ctx.internalAdapter.findAccounts(provisioned.id);
-		expect(accounts.some((a) => a.providerId === "scim-a")).toBe(false);
+		const [, , organizationId] = Buffer.from(scimToken, "base64")
+			.toString("utf8")
+			.split(":");
+		expect(
+			accounts.some((a) => a.providerId === `scim:${organizationId}:scim-a`),
+		).toBe(false);
 		expect(accounts.some((a) => a.providerId === "credential")).toBe(true);
 	});
 
-	it("deletes the global user when this provider's account is their sole identity", async () => {
+	it("deprovisions from the organization without deleting the global user", async () => {
 		const { auth, getSCIMToken } = createTestInstance();
 		const scimToken = await getSCIMToken("scim-a");
 
@@ -1082,7 +1152,12 @@ describe("SCIM write-path access and validation", () => {
 			model: "user",
 			where: [{ field: "id", value: provisioned.id }],
 		});
-		expect(user).toBeNull();
+		expect(user).not.toBeNull();
+		const members = await ctx.adapter.findMany({
+			model: "member",
+			where: [{ field: "userId", value: provisioned.id }],
+		});
+		expect(members).toHaveLength(0);
 	});
 
 	it("resets emailVerified when a SCIM email change is applied", async () => {
@@ -1141,14 +1216,35 @@ describe("SCIM write-path access and validation", () => {
 		);
 	});
 
-	it("honors active:false by banning the user and reporting the real state (admin plugin)", async () => {
-		const { auth, getSCIMToken } = createTestInstance(undefined, [admin()]);
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-rjg6
+	 */
+	it("deactivates by removing organization membership and reactivates with preserved SCIM group roles", async () => {
+		const { auth, getSCIMToken } = createTestInstance();
 		const scimToken = await getSCIMToken("scim-a");
 
 		const provisioned = await auth.api.createSCIMUser({
 			body: { userName: "deact", emails: [{ value: "deact@email.com" }] },
 			headers: { authorization: `Bearer ${scimToken}` },
 		});
+		expect(provisioned.active).toBe(true);
+
+		await auth.api.createSCIMGroup({
+			body: {
+				displayName: "admin",
+				members: [{ value: provisioned.id }],
+			},
+			headers: { authorization: `Bearer ${scimToken}` },
+		});
+		const ctx = await auth.$context;
+		const memberBeforeDeactivate = await ctx.adapter.findOne<{ role: string }>({
+			model: "member",
+			where: [{ field: "userId", value: provisioned.id }],
+		});
+		expect(memberBeforeDeactivate?.role.split(",").sort()).toEqual([
+			"admin",
+			"member",
+		]);
 
 		const deactivated = await auth.api.updateSCIMUser({
 			params: { userId: provisioned.id },
@@ -1161,18 +1257,29 @@ describe("SCIM write-path access and validation", () => {
 		});
 		expect(deactivated.active).toBe(false);
 
-		const ctx = await auth.$context;
-		const banned = await ctx.adapter.findOne<{
-			banned: boolean;
-			banReason: string | null;
-		}>({
+		const user = await ctx.adapter.findOne({
 			model: "user",
 			where: [{ field: "id", value: provisioned.id }],
 		});
-		expect(banned?.banned).toBe(true);
-		expect(banned?.banReason).toBeTruthy();
+		expect(user).not.toBeNull();
+		const membersAfterDeactivate = await ctx.adapter.findMany({
+			model: "member",
+			where: [{ field: "userId", value: provisioned.id }],
+		});
+		expect(membersAfterDeactivate).toHaveLength(0);
+		const groupMembersAfterDeactivate = await ctx.adapter.findMany({
+			model: "scimGroupMember",
+			where: [{ field: "userId", value: provisioned.id }],
+		});
+		expect(groupMembersAfterDeactivate).toHaveLength(1);
 
-		const reactivated = await auth.api.patchSCIMUser({
+		const fetched = await auth.api.getSCIMUser({
+			params: { userId: provisioned.id },
+			headers: { authorization: `Bearer ${scimToken}` },
+		});
+		expect(fetched.active).toBe(false);
+
+		await auth.api.patchSCIMUser({
 			params: { userId: provisioned.id },
 			body: {
 				schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
@@ -1180,17 +1287,23 @@ describe("SCIM write-path access and validation", () => {
 			},
 			headers: { authorization: `Bearer ${scimToken}` },
 		});
-		expect(reactivated).toBeUndefined();
 
-		const cleared = await ctx.adapter.findOne<{
-			banned: boolean;
-			banReason: string | null;
-		}>({
-			model: "user",
-			where: [{ field: "id", value: provisioned.id }],
+		const membersAfterReactivate = await ctx.adapter.findMany<{ role: string }>(
+			{
+				model: "member",
+				where: [{ field: "userId", value: provisioned.id }],
+			},
+		);
+		expect(membersAfterReactivate).toHaveLength(1);
+		expect(membersAfterReactivate[0]?.role.split(",").sort()).toEqual([
+			"admin",
+			"member",
+		]);
+		const refetched = await auth.api.getSCIMUser({
+			params: { userId: provisioned.id },
+			headers: { authorization: `Bearer ${scimToken}` },
 		});
-		expect(cleared?.banned).toBe(false);
-		expect(cleared?.banReason).toBeFalsy();
+		expect(refetched.active).toBe(true);
 	});
 
 	it("normalizes email casing when checking uniqueness on update", async () => {
@@ -1222,37 +1335,8 @@ describe("SCIM write-path access and validation", () => {
 		);
 	});
 
-	it("rejects active:false rather than silently dropping it when the admin plugin is absent", async () => {
+	it("provisions a user without organization membership when created with active:false", async () => {
 		const { auth, getSCIMToken } = createTestInstance();
-		const scimToken = await getSCIMToken("scim-a");
-
-		const provisioned = await auth.api.createSCIMUser({
-			body: { userName: "noadmin", emails: [{ value: "noadmin@email.com" }] },
-			headers: { authorization: `Bearer ${scimToken}` },
-		});
-
-		await expect(
-			auth.api.updateSCIMUser({
-				params: { userId: provisioned.id },
-				body: {
-					userName: "noadmin",
-					emails: [{ value: "noadmin@email.com" }],
-					active: false,
-				},
-				headers: { authorization: `Bearer ${scimToken}` },
-			}),
-		).rejects.toThrowError(
-			expect.objectContaining({
-				body: expect.objectContaining({
-					detail: expect.stringContaining("admin plugin"),
-					status: "400",
-				}),
-			}),
-		);
-	});
-
-	it("provisions a deactivated user when created with active:false (admin plugin)", async () => {
-		const { auth, getSCIMToken } = createTestInstance(undefined, [admin()]);
 		const scimToken = await getSCIMToken("scim-a");
 
 		const created = await auth.api.createSCIMUser({
@@ -1266,82 +1350,16 @@ describe("SCIM write-path access and validation", () => {
 		expect(created.active).toBe(false);
 
 		const ctx = await auth.$context;
-		const user = await ctx.adapter.findOne<{ banned: boolean }>({
-			model: "user",
-			where: [{ field: "id", value: created.id }],
+		const members = await ctx.adapter.findMany({
+			model: "member",
+			where: [{ field: "userId", value: created.id }],
 		});
-		expect(user?.banned).toBe(true);
-	});
+		expect(members).toHaveLength(0);
 
-	it("rejects create with active:false before persisting when the admin plugin is absent", async () => {
-		const { auth, getSCIMToken } = createTestInstance();
-		const scimToken = await getSCIMToken("scim-a");
-
-		await expect(
-			auth.api.createSCIMUser({
-				body: {
-					userName: "never",
-					emails: [{ value: "never@email.com" }],
-					active: false,
-				},
-				headers: { authorization: `Bearer ${scimToken}` },
-			}),
-		).rejects.toThrowError(
-			expect.objectContaining({
-				body: expect.objectContaining({
-					detail: expect.stringContaining("admin plugin"),
-					status: "400",
-				}),
-			}),
-		);
-
-		const ctx = await auth.$context;
-		const user = await ctx.adapter.findOne({
-			model: "user",
-			where: [{ field: "email", value: "never@email.com" }],
-		});
-		expect(user).toBeNull();
-	});
-
-	it("revokes sessions when create links and deactivates a pre-existing user", async () => {
-		const { auth, authClient, getSCIMToken } = createTestInstance(
-			{ linkExistingUsers: true },
-			[admin()],
-		);
-		const scimToken = await getSCIMToken("scim-a");
-
-		await authClient.signUp.email({
-			email: "existing@email.com",
-			password: "the password",
-			name: "existing",
-		});
-
-		const ctx = await auth.$context;
-		const existing = await ctx.adapter.findOne<{ id: string }>({
-			model: "user",
-			where: [{ field: "email", value: "existing@email.com" }],
-		});
-		await ctx.internalAdapter.createSession(existing!.id);
-
-		await auth.api.createSCIMUser({
-			body: {
-				userName: "existing",
-				emails: [{ value: "existing@email.com" }],
-				active: false,
-			},
+		const fetched = await auth.api.getSCIMUser({
+			params: { userId: created.id },
 			headers: { authorization: `Bearer ${scimToken}` },
 		});
-
-		const sessions = await ctx.adapter.findMany({
-			model: "session",
-			where: [{ field: "userId", value: existing!.id }],
-		});
-		expect(sessions).toHaveLength(0);
-
-		const banned = await ctx.adapter.findOne<{ banned: boolean }>({
-			model: "user",
-			where: [{ field: "id", value: existing!.id }],
-		});
-		expect(banned?.banned).toBe(true);
+		expect(fetched.active).toBe(false);
 	});
 });

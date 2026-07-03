@@ -1,7 +1,46 @@
-import { normalizeIP } from "@better-auth/core/utils/ip";
+import type { SecondaryStorage } from "@better-auth/core/db";
+import { createRateLimitKey, normalizeIP } from "@better-auth/core/utils/ip";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { RateLimit } from "../../types";
+
+function createRateLimitSecondaryStorage(
+	store: Map<string, string>,
+	expirationMap?: Map<string, number>,
+): SecondaryStorage {
+	return {
+		set(key, value, ttl) {
+			store.set(key, value);
+			if (ttl !== undefined) expirationMap?.set(key, ttl);
+		},
+		get(key) {
+			return store.get(key) || null;
+		},
+		getAndDelete(key) {
+			const value = store.get(key) || null;
+			store.delete(key);
+			expirationMap?.delete(key);
+			return value;
+		},
+		increment(key, ttl) {
+			const existing = store.get(key);
+			const current = existing ? (JSON.parse(existing) as RateLimit) : null;
+			const count = (current?.count ?? 0) + 1;
+			const next: RateLimit = {
+				key,
+				count,
+				lastRequest: Date.now(),
+			};
+			store.set(key, JSON.stringify(next));
+			if (!current && ttl !== undefined) expirationMap?.set(key, ttl);
+			return count;
+		},
+		delete(key) {
+			store.delete(key);
+			expirationMap?.delete(key);
+		},
+	};
+}
 
 describe("rate-limiter", async () => {
 	const { client, testUser } = await getTestInstance({
@@ -162,8 +201,161 @@ describe("atomic concurrent enforcement", () => {
 				});
 				expect(allowed.error?.status).not.toBe(429);
 			});
+
+			it("resets the count at the exact window boundary", async () => {
+				vi.useFakeTimers();
+				vi.advanceTimersByTime(360000);
+				const first = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(first.error?.status).not.toBe(429);
+				const blocked = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(blocked.error?.status).toBe(429);
+
+				vi.advanceTimersByTime(10000);
+				const allowed = await client.signIn.email({
+					email: testUser.email,
+					password: testUser.password,
+				});
+				expect(allowed.error?.status).not.toBe(429);
+			});
 		});
 	}
+});
+
+describe("database rate-limit pruning", async () => {
+	const backgroundTasks: Promise<unknown>[] = [];
+	const { client, db, testUser } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+			storage: "database",
+			customRules: {
+				"/get-session": { window: 120, max: 10 },
+			},
+		},
+		advanced: {
+			backgroundTasks: {
+				handler(promise) {
+					backgroundTasks.push(promise);
+				},
+			},
+		},
+	});
+
+	beforeEach(() => {
+		backgroundTasks.length = 0;
+	});
+
+	it("keeps active rows from longer configured windows", async () => {
+		const now = Date.now();
+		const longWindowKey = createRateLimitKey("127.0.0.1", "/get-session");
+		const signInKey = createRateLimitKey("127.0.0.1", "/sign-in/email");
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: longWindowKey,
+				count: 1,
+				lastRequest: now - 90_000,
+			},
+		});
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: signInKey,
+				count: 1,
+				lastRequest: now - 11_000,
+			},
+		});
+
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		await Promise.all(backgroundTasks);
+
+		const activeLongWindowRow = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: longWindowKey }],
+		});
+		expect(activeLongWindowRow).not.toBeNull();
+	});
+});
+
+describe("database rate-limit pruning with dynamic rules", async () => {
+	const backgroundTasks: Promise<unknown>[] = [];
+	const { client, db, testUser } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+			storage: "database",
+			customRules: {
+				"/sign-in/email": () => ({ window: 120, max: 10 }),
+			},
+		},
+		advanced: {
+			backgroundTasks: {
+				handler(promise) {
+					backgroundTasks.push(promise);
+				},
+			},
+		},
+	});
+
+	beforeEach(() => {
+		backgroundTasks.length = 0;
+	});
+
+	it("prunes stale rows using the longest observed dynamic window", async () => {
+		const now = Date.now();
+		const activeDynamicKey = createRateLimitKey("127.0.0.1", "/dynamic-active");
+		const staleDynamicKey = createRateLimitKey("127.0.0.1", "/dynamic-stale");
+		const signInKey = createRateLimitKey("127.0.0.1", "/sign-in/email");
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: activeDynamicKey,
+				count: 1,
+				lastRequest: now - 90_000,
+			},
+		});
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: staleDynamicKey,
+				count: 1,
+				lastRequest: now - 130_000,
+			},
+		});
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: signInKey,
+				count: 1,
+				lastRequest: now - 130_000,
+			},
+		});
+
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		await Promise.all(backgroundTasks);
+
+		const activeDynamicRow = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: activeDynamicKey }],
+		});
+		expect(activeDynamicRow).not.toBeNull();
+
+		const staleDynamicRow = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: staleDynamicKey }],
+		});
+		expect(staleDynamicRow).toBeNull();
+	});
 });
 
 describe("custom rate limiting storage", async () => {
@@ -173,19 +365,7 @@ describe("custom rate limiting storage", async () => {
 		rateLimit: {
 			enabled: true,
 		},
-		secondaryStorage: {
-			set(key, value, ttl) {
-				store.set(key, value);
-				if (ttl) expirationMap.set(key, ttl);
-			},
-			get(key) {
-				return store.get(key) || null;
-			},
-			delete(key) {
-				store.delete(key);
-				expirationMap.delete(key);
-			},
-		},
+		secondaryStorage: createRateLimitSecondaryStorage(store, expirationMap),
 	});
 
 	it("should use custom storage", async () => {
@@ -204,11 +384,10 @@ describe("custom rate limiting storage", async () => {
 			lastRequest = rateLimitData.lastRequest;
 			if (i >= 3) {
 				expect(response.error?.status).toBe(429);
-				expect(rateLimitData.count).toBe(3);
 			} else {
 				expect(response.error).toBeNull();
-				expect(rateLimitData.count).toBe(i + 1);
 			}
+			expect(rateLimitData.count).toBe(i + 1);
 			const rateLimitExp = expirationMap.get("127.0.0.1|/sign-in/email");
 			expect(rateLimitExp).toBe(10);
 		}
@@ -306,17 +485,7 @@ describe("should work in development/test environment", () => {
 				window: 10,
 				max: 3,
 			},
-			secondaryStorage: {
-				set(key, value) {
-					store.set(key, value);
-				},
-				get(key) {
-					return store.get(key) || null;
-				},
-				delete(key) {
-					store.delete(key);
-				},
-			},
+			secondaryStorage: createRateLimitSecondaryStorage(store),
 		});
 
 		for (let i = 0; i < 4; i++) {
@@ -350,17 +519,7 @@ describe("should work in development/test environment", () => {
 				window: 10,
 				max: 3,
 			},
-			secondaryStorage: {
-				set(key, value) {
-					store.set(key, value);
-				},
-				get(key) {
-					return store.get(key) || null;
-				},
-				delete(key) {
-					store.delete(key);
-				},
-			},
+			secondaryStorage: createRateLimitSecondaryStorage(store),
 		});
 
 		for (let i = 0; i < 4; i++) {
@@ -477,17 +636,7 @@ describe("forwarded IP chains", () => {
 				window: 10,
 				max: 20,
 			},
-			secondaryStorage: {
-				set(key, value) {
-					store.set(key, value);
-				},
-				get(key) {
-					return store.get(key) || null;
-				},
-				delete(key) {
-					store.delete(key);
-				},
-			},
+			secondaryStorage: createRateLimitSecondaryStorage(store),
 		});
 
 		for (let i = 0; i < 4; i++) {
@@ -531,17 +680,7 @@ describe("forwarded IP chains", () => {
 					trustedProxies: ["10.0.0.0/8"],
 				},
 			},
-			secondaryStorage: {
-				set(key, value) {
-					store.set(key, value);
-				},
-				get(key) {
-					return store.get(key) || null;
-				},
-				delete(key) {
-					store.delete(key);
-				},
-			},
+			secondaryStorage: createRateLimitSecondaryStorage(store),
 		});
 
 		// `<rotating spoofed>, <real client>, <trusted proxy>`: spoofed rotation

@@ -122,6 +122,7 @@ export const twitter = (options: TwitterOption) => {
 				state: data.state,
 				codeVerifier: data.codeVerifier,
 				redirectURI: data.redirectURI,
+				additionalParams: data.additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {

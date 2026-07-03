@@ -1,6 +1,8 @@
+import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { promisify } from "node:util";
 import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -13,8 +15,91 @@ import { generateDrizzleSchema } from "../src/generators/drizzle";
 import { generateKyselySchema } from "../src/generators/kysely";
 import { generatePrismaSchema } from "../src/generators/prisma";
 import { getPrismaVersion } from "../src/utils/get-package-info";
+import { cliPath } from "./utils";
+
+const execFileAsync = promisify(execFile);
 
 describe("generate", async () => {
+	describe("command output paths", () => {
+		it("should use adapter-specific filenames when output points to an existing directory", async () => {
+			const cases = [
+				{
+					adapter: "drizzle",
+					dialect: "sqlite",
+					expectedFileName: "auth-schema.ts",
+				},
+				{
+					adapter: "prisma",
+					dialect: "sqlite",
+					expectedFileName: "schema.prisma",
+				},
+				{
+					adapter: "kysely",
+					expectedFileName: /^\d{4}-\d{2}-\d{2}T.*\.sql$/,
+				},
+			];
+
+			for (const testCase of cases) {
+				const cacheDir = path.join(
+					process.cwd(),
+					"node_modules",
+					".cache",
+					"generate-output-",
+				);
+				fs.mkdirSync(path.dirname(cacheDir), { recursive: true });
+				const tmpDir = fs.mkdtempSync(cacheDir);
+				const outputDir = path.join(tmpDir, "schema-output");
+				fs.mkdirSync(outputDir);
+				fs.writeFileSync(
+					path.join(tmpDir, "auth.ts"),
+					`import { betterAuth } from "better-auth";
+import Database from "better-sqlite3";
+
+export const auth = betterAuth({
+	database: new Database(":memory:"),
+	secret: "test-secret",
+	baseURL: "http://localhost:3000",
+});
+`,
+				);
+				try {
+					const args = [
+						cliPath,
+						"generate",
+						"--cwd",
+						tmpDir,
+						"--config",
+						"auth.ts",
+						"--adapter",
+						testCase.adapter,
+						"--output",
+						"schema-output",
+						"--yes",
+					];
+					if (testCase.dialect) {
+						args.push("--dialect", testCase.dialect);
+					}
+					await execFileAsync(process.execPath, args, {
+						cwd: tmpDir,
+						env: {
+							...process.env,
+							BETTER_AUTH_TELEMETRY_DISABLED: "true",
+						},
+					});
+					const files = fs.readdirSync(outputDir);
+					expect(files).toHaveLength(1);
+					if (typeof testCase.expectedFileName === "string") {
+						expect(files[0]).toBe(testCase.expectedFileName);
+					} else {
+						expect(files[0]).toMatch(testCase.expectedFileName);
+					}
+				} finally {
+					fs.rmSync(tmpDir, { recursive: true, force: true });
+				}
+			}
+		});
+	});
+
 	it("should generate prisma schema", async () => {
 		const schema = await generatePrismaSchema({
 			file: "test.prisma",
@@ -459,8 +544,11 @@ describe("generate", async () => {
 
 		// Quotes and backslashes must be escaped so the default is a valid
 		// literal. The raw interpolation would emit `.default("say "hi"\done")`
-		// and break the generated schema file.
-		expect(schema.code).toContain(String.raw`.default('say "hi"\\done')`);
+		// and break the generated schema file. The generated schema is formatted
+		// afterward, so the JSON-stringified value normalizes to single quotes.
+		const escapedDefault = String.raw`.default('say "hi"\\done')`;
+		expect(schema.code).toContain(escapedDefault);
+		expect(schema.code).not.toContain(String.raw`.default("say "hi"\done")`);
 	});
 
 	it("should treat fields with omitted required as non-optional in prisma schema", async () => {
@@ -859,7 +947,7 @@ describe("Enum field support in Drizzle schemas", () => {
 		});
 		expect(schema.code).toContain("mysqlEnum");
 		expect(schema.code).toContain(
-			'status: mysqlEnum(["active", "inactive", "pending"])',
+			'status: mysqlEnum("status", ["active", "inactive", "pending"])',
 		);
 		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-mysql-enum.txt",
@@ -887,9 +975,9 @@ describe("Enum field support in Drizzle schemas", () => {
 				},
 			} as BetterAuthOptions,
 		});
-		expect(schema.code).toContain("text({ enum: [");
+		expect(schema.code).toContain('text("priority", { enum: [');
 		expect(schema.code).toContain(
-			'priority: text({ enum: ["high", "medium", "low"] })',
+			'priority: text("priority", { enum: ["high", "medium", "low"] })',
 		);
 		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-sqlite-enum.txt",
@@ -1431,7 +1519,7 @@ describe("--adapter flag support (mock adapter)", () => {
 		const mockAdapter = createMockAdapter("unsupported-adapter");
 		let error: Error | undefined;
 		try {
-			generateSchema({
+			await generateSchema({
 				adapter: mockAdapter,
 				file: "test.txt",
 				options: {
@@ -1727,6 +1815,14 @@ describe("--dialect flag support", () => {
 			emittedTable: {
 				fields: {
 					name: { type: "string", required: true },
+					skippedTableId: {
+						type: "string",
+						required: false,
+						references: {
+							model: "skippedTable",
+							field: "id",
+						},
+					},
 				},
 			},
 			skippedTable: {
@@ -1755,7 +1851,55 @@ describe("--dialect flag support", () => {
 		});
 
 		expect(schema.code).toContain("emittedTable");
-		expect(schema.code).not.toContain("skippedTable");
+		expect(schema.code).toContain("skippedTableId");
+		expect(schema.code).not.toContain("export const skippedTable");
+		expect(schema.code).not.toContain("references(() => skippedTable");
+		expect(schema.code).not.toContain("skippedTable: one(skippedTable");
+	});
+
+	it("should not emit drizzle relations when a rendered model name references disabled migrations", async () => {
+		const plugin: BetterAuthPlugin = {
+			id: "disabled-rendered-reference-test",
+			schema: {
+				emittedTable: {
+					fields: {
+						skippedTableId: {
+							type: "string",
+							required: false,
+							references: {
+								model: "skippedTables",
+								field: "id",
+							},
+						},
+					},
+				},
+				skippedTable: {
+					fields: {
+						name: { type: "string", required: true },
+					},
+					disableMigration: true,
+				},
+			},
+		};
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "pg",
+					adapterConfig: { usePlural: true },
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				plugins: [plugin],
+			} as BetterAuthOptions,
+		});
+
+		expect(schema.code).toContain("skippedTableId");
+		expect(schema.code).not.toContain("references(() => skippedTables");
+		expect(schema.code).not.toContain("skippedTables: one(skippedTables");
 	});
 
 	it("should not emit prisma models with disableMigration", async () => {
@@ -1772,6 +1916,8 @@ describe("--dialect flag support", () => {
 		});
 
 		expect(schema.code).toContain("EmittedTable");
+		expect(schema.code).toContain("skippedTableId");
 		expect(schema.code).not.toContain("SkippedTable");
+		expect(schema.code).not.toContain("skippedtable");
 	});
 });

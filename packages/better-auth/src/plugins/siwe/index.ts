@@ -289,30 +289,77 @@ export const siwe = (options: SIWEPluginOptions) => {
 							const domain =
 								options.emailDomainName ?? getOrigin(ctx.context.baseURL);
 							const normalizedEmail = email?.toLowerCase();
+							const walletEmail = `${walletAddress}@${domain}`;
 							// SIWE proves wallet control, not email ownership: bind the caller
-							// email only when unclaimed, else keep the wallet-derived address.
+							// email only when unclaimed and atomically reserved, else keep
+							// the wallet-derived address.
 							// Silent fallback (no distinct error) avoids an enumeration oracle.
 							// FIXME(siwe-contact-ownership): non-breaking floor; the durable fix
 							// drops the `email` body field and attaches a verified email via a
 							// separate authenticated link flow. Land on `next` after main->next sync.
-							let userEmail = `${walletAddress}@${domain}`;
+							let userEmail = walletEmail;
+							let emailClaimIdentifier: string | undefined;
 							if (!isAnon && normalizedEmail) {
-								const existingUser =
-									await ctx.context.internalAdapter.findUserByEmail(
-										normalizedEmail,
-									);
-								if (!existingUser) {
-									userEmail = normalizedEmail;
+								const identifier = `siwe-email-claim-${normalizedEmail}`;
+								let reserved = false;
+								try {
+									reserved =
+										await ctx.context.internalAdapter.reserveVerificationValue({
+											identifier,
+											value: walletAddress,
+											expiresAt: new Date(Date.now() + 60_000),
+										});
+								} catch {
+									// Email claims are opportunistic. If exclusivity cannot be
+									// reserved, keep the wallet-derived email and let the normal
+									// user creation path surface any primary adapter failure.
+									reserved = false;
+								}
+								if (reserved) {
+									emailClaimIdentifier = identifier;
+									const existingUser =
+										await ctx.context.internalAdapter.findUserByEmail(
+											normalizedEmail,
+										);
+									if (!existingUser) {
+										userEmail = normalizedEmail;
+									}
 								}
 							}
 							const { name, avatar } =
 								(await options.ensLookup?.({ walletAddress })) ?? {};
+							const createSIWEUser = (email: string) =>
+								ctx.context.internalAdapter.createUser(
+									{
+										name: name ?? walletAddress,
+										email,
+										image: avatar ?? "",
+									},
+									{ method: "siwe" },
+								);
 
-							user = await ctx.context.internalAdapter.createUser({
-								name: name ?? walletAddress,
-								email: userEmail,
-								image: avatar ?? "",
-							});
+							try {
+								user = await createSIWEUser(userEmail);
+							} catch (error) {
+								if (userEmail !== normalizedEmail || !normalizedEmail) {
+									throw error;
+								}
+								const claimedUser =
+									await ctx.context.internalAdapter.findUserByEmail(
+										normalizedEmail,
+									);
+								if (!claimedUser) {
+									throw error;
+								}
+								userEmail = walletEmail;
+								user = await createSIWEUser(userEmail);
+							} finally {
+								if (emailClaimIdentifier) {
+									await ctx.context.internalAdapter
+										.consumeVerificationValue(emailClaimIdentifier)
+										.catch(() => {});
+								}
+							}
 
 							// Create wallet address record
 							await ctx.context.adapter.create({

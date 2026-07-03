@@ -37,7 +37,9 @@ interface PatreonProfile {
  * });
  * ```
  */
-export function patreon(options: PatreonOptions): GenericOAuthConfig {
+export function patreon(
+	options: PatreonOptions,
+): GenericOAuthConfig<"patreon"> {
 	const defaultScopes = ["identity[email]"];
 
 	const getUserInfo = async (
@@ -72,6 +74,7 @@ export function patreon(options: PatreonOptions): GenericOAuthConfig {
 		tokenUrl: "https://www.patreon.com/api/oauth2/token",
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		tokenEndpointAuth: options.tokenEndpointAuth,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		pkce: options.pkce,

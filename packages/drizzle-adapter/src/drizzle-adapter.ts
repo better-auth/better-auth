@@ -80,26 +80,29 @@ function getAffectedRowCount(
 	} else if (hasDriverRowCount(result)) {
 		count = readDriverRowCount(result);
 	}
-	if (typeof count !== "number") {
+	if (typeof count !== "number" || !Number.isFinite(count)) {
 		logger.error(
-			`[Drizzle Adapter] The result of the ${operation} operation is not a number. This is likely a bug in the adapter. Please report this issue to the Better Auth team.`,
+			`[Drizzle Adapter] The result of the ${operation} operation is not a finite number. This is likely a bug in the adapter. Please report this issue to the Better Auth team.`,
 			{ result, ...context },
 		);
-		return 0;
+		throw new BetterAuthError(
+			`Drizzle adapter ${operation} returned an invalid affected row count`,
+		);
 	}
 	return count;
 }
 
 function readDriverRowCount(result: unknown): unknown {
 	if (!result || typeof result !== "object") return undefined;
-	if ("affectedRows" in result) return result.affectedRows;
-	if ("rowsAffected" in result) return result.rowsAffected;
-	if ("changes" in result) return result.changes;
+	const driverResult = result as Record<string, unknown>;
+	if ("affectedRows" in driverResult) return driverResult.affectedRows;
+	if ("rowsAffected" in driverResult) return driverResult.rowsAffected;
+	if ("changes" in driverResult) return driverResult.changes;
 
 	// Cloudflare D1 nests the affected-row count under `meta.changes`.
 	// @see https://developers.cloudflare.com/d1/worker-api/return-object/
-	if ("meta" in result) {
-		const meta = result.meta;
+	if ("meta" in driverResult) {
+		const meta = driverResult.meta;
 		if (meta && typeof meta === "object" && "changes" in meta) {
 			return meta.changes;
 		}
@@ -1046,7 +1049,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								`The field "${field}" does not exist in the schema for the model "${model}". Please update your schema.`,
 							);
 						}
-						assignments[columnName] = sql`${column} + ${delta}`;
+						assignments[columnName] = sql`${column} + ${sql.param(delta)}`;
 					}
 					if (set) {
 						for (const [field, value] of Object.entries(set)) {

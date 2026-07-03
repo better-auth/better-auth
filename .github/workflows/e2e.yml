@@ -158,6 +158,8 @@ jobs:
             compose_services: ""
           - packages: "@better-auth-test/drizzle-adapter"
             compose_services: "postgres mysql"
+          - packages: "@better-auth-test/drizzle-v2-relations-adapter"
+            compose_services: "postgres mysql"
           - packages: "@better-auth-test/kysely-prisma-adapter"
             compose_services: "postgres-kysely mysql-kysely postgres-kysely2 mssql"
           - packages: "@better-auth-test/memory-adapter"

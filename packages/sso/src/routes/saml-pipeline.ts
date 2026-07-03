@@ -1,3 +1,4 @@
+import { runWithTransaction } from "@better-auth/core/context";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type { User } from "better-auth";
 import { APIError } from "better-auth/api";
@@ -12,6 +13,8 @@ import {
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
 	SAML_HTTP_POST_BINDING,
+	validateAudience,
+	validateInResponseTo,
 	validateSAMLAlgorithms,
 	validateSAMLResponseBinding,
 	validateSingleAssertion,
@@ -21,7 +24,6 @@ import { validateSAMLTimestamp } from "../saml/timestamp";
 import { parseRelayState } from "../saml-state";
 import { saml } from "../samlify";
 import type {
-	AuthnRequestRecord,
 	SAMLAssertionExtract,
 	SAMLConfig,
 	SAMLSessionRecord,
@@ -34,6 +36,7 @@ import {
 	validateEmailDomain,
 } from "../utils";
 import { createIdP, createSP, findSAMLProvider } from "./helpers";
+import { lockSSOProviderForAccountLink } from "./providers";
 
 type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
 
@@ -72,6 +75,20 @@ export function getSafeRedirectUrl(
 		return url;
 	}
 
+	try {
+		const absoluteUrl = new URL(url);
+		if (absoluteUrl.origin === appOrigin) {
+			const callbackPathname = new URL(callbackPath).pathname;
+			if (absoluteUrl.pathname === callbackPathname) {
+				return appOrigin;
+			}
+			return url;
+		}
+	} catch {
+		// Relative paths are handled above. Anything else must pass the
+		// configured trusted-origin check below.
+	}
+
 	if (!isTrustedOrigin(url, { allowRelativePaths: false })) {
 		return appOrigin;
 	}
@@ -96,8 +113,23 @@ function buildSAMLRedirectUrl(
 	params: Record<string, string>,
 ): string {
 	const searchParams = new URLSearchParams(params);
-	const separator = url.includes("?") ? "&" : "?";
-	return `${url}${separator}${searchParams.toString()}`;
+	try {
+		const isRelativePath = url.startsWith("/") && !url.startsWith("//");
+		const parsedUrl = new URL(url, "http://better-auth.local");
+		for (const [key, value] of searchParams) {
+			parsedUrl.searchParams.set(key, value);
+		}
+		if (isRelativePath) {
+			return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`;
+		}
+		return parsedUrl.toString();
+	} catch {
+		const hashIndex = url.indexOf("#");
+		const urlWithoutFragment = hashIndex === -1 ? url : url.slice(0, hashIndex);
+		const fragment = hashIndex === -1 ? "" : url.slice(hashIndex);
+		const separator = urlWithoutFragment.includes("?") ? "&" : "?";
+		return `${urlWithoutFragment}${separator}${searchParams.toString()}${fragment}`;
+	}
 }
 
 function toArray<T>(value: T | T[] | undefined): T[] {
@@ -178,8 +210,8 @@ export interface SAMLResponseParams {
 /**
  * Unified SAML response processing pipeline.
  *
- * Both `/sso/saml2/callback/:providerId` (POST) and `/sso/saml2/sp/acs/:providerId`
- * delegate to this function. It handles the full lifecycle: provider lookup,
+ * The `/sso/saml2/sp/acs/:providerId` endpoint delegates to this function.
+ * It handles the full lifecycle: provider lookup,
  * SP/IdP construction, response validation, session creation, and redirect
  * URL computation.
  */
@@ -294,6 +326,10 @@ export async function processSAMLResponse(
 	const { extract } = parsedResponse!;
 	const samlContent = parsedResponse.samlContent;
 
+	// Destination validation (SAML Core §3.2.2) is handled by samlify's
+	// parseLoginResponse, which checks the Response Destination against the
+	// SP's registered ACS URL from the metadata.
+
 	// 10. Algorithm validation
 	validateSAMLAlgorithms(parsedResponse, options?.saml?.algorithms);
 
@@ -357,78 +393,25 @@ export async function processSAMLResponse(
 	}
 
 	// 12. InResponseTo validation
-	const inResponseTo = (extract as SAMLAssertionExtract).inResponseTo as
-		| string
-		| undefined;
-	const shouldValidateInResponseTo =
-		options?.saml?.enableInResponseToValidation !== false;
+	await validateInResponseTo(ctx, {
+		extract: extract as SAMLAssertionExtract,
+		providerId,
+		options: {
+			enableInResponseToValidation: options?.saml?.enableInResponseToValidation,
+			allowIdpInitiated: options?.saml?.allowIdpInitiated,
+		},
+		redirectUrl: samlRedirectUrl,
+	});
 
-	if (shouldValidateInResponseTo) {
-		const allowIdpInitiated = options?.saml?.allowIdpInitiated !== false;
+	// 13. Audience restriction validation
+	validateAudience(ctx, {
+		extract: extract as SAMLAssertionExtract,
+		expectedAudience: parsedSamlConfig.audience || sp.entityMeta.getEntityID(),
+		providerId,
+		redirectUrl: samlRedirectUrl,
+	});
 
-		if (inResponseTo) {
-			// Consume the stored AuthnRequest atomically so two concurrent ACS
-			// submissions cannot both match one outstanding request. The consume
-			// returns null for missing or expired rows, so no separate expiry gate
-			// is needed.
-			const consumed =
-				await ctx.context.internalAdapter.consumeVerificationValue(
-					`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
-				);
-
-			let storedRequest: AuthnRequestRecord | null = null;
-			if (consumed) {
-				try {
-					storedRequest = JSON.parse(consumed.value) as AuthnRequestRecord;
-				} catch {
-					storedRequest = null;
-				}
-			}
-
-			if (!storedRequest) {
-				ctx.context.logger.error(
-					"SAML InResponseTo validation failed: unknown or expired request ID",
-					{ inResponseTo, providerId },
-				);
-				throw ctx.redirect(
-					buildSAMLRedirectUrl(samlRedirectUrl, {
-						error: "invalid_saml_response",
-						error_description: "Unknown or expired request ID",
-					}),
-				);
-			}
-
-			if (storedRequest.providerId !== providerId) {
-				ctx.context.logger.error(
-					"SAML InResponseTo validation failed: provider mismatch",
-					{
-						inResponseTo,
-						expectedProvider: storedRequest.providerId,
-						actualProvider: providerId,
-					},
-				);
-				throw ctx.redirect(
-					buildSAMLRedirectUrl(samlRedirectUrl, {
-						error: "invalid_saml_response",
-						error_description: "Provider mismatch",
-					}),
-				);
-			}
-		} else if (!allowIdpInitiated) {
-			ctx.context.logger.error(
-				"SAML IdP-initiated SSO rejected: InResponseTo missing and allowIdpInitiated is false",
-				{ providerId },
-			);
-			throw ctx.redirect(
-				buildSAMLRedirectUrl(samlRedirectUrl, {
-					error: "unsolicited_response",
-					error_description: "IdP-initiated SSO not allowed",
-				}),
-			);
-		}
-	}
-
-	// 13. Replay protection
+	// 14. Replay protection
 	// Reserve the assertion id atomically: the first caller writes the tombstone
 	// and proceeds, every later caller (including a concurrent submission) finds
 	// the row already present and is rejected. The deterministic primary key is
@@ -479,7 +462,7 @@ export async function processSAMLResponse(
 		);
 	}
 
-	// 14. User attribute extraction
+	// 15. User attribute extraction
 	const attributes = extract.attributes || {};
 	const mapping = parsedSamlConfig.mapping ?? {};
 
@@ -529,11 +512,11 @@ export async function processSAMLResponse(
 		});
 	}
 
-	// 15. Session creation
+	// 16. Session creation
 	// SSO provider ids are user-controlled and share the social-provider account
-	// namespace, so trust must come solely from verified domain ownership —
-	// never from a name match against the global `trustedProviders` list
-	// (enforced via `trustProviderByName: false` below).
+	// namespace, so trust must come solely from verified domain ownership, never
+	// from a name match against the global `trustedProviders` list (enforced via
+	// `trustProviderByName: false` below).
 	const isTrustedProvider: boolean =
 		"domainVerified" in provider &&
 		!!(provider as { domainVerified?: boolean }).domainVerified &&
@@ -551,23 +534,30 @@ export async function processSAMLResponse(
 
 	let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 	try {
-		result = await handleOAuthUserInfo(ctx, {
-			userInfo: {
-				email: userInfo.email as string,
-				name: (userInfo.name || userInfo.email) as string,
-				id: userInfo.id as string,
-				emailVerified: userInfo.emailVerified,
-			},
-			account: {
-				providerId,
-				accountId: userInfo.id as string,
-				accessToken: "",
-				refreshToken: "",
-			},
-			callbackURL: callbackUrl,
-			disableSignUp: options?.disableImplicitSignUp,
-			isTrustedProvider,
-			trustProviderByName: false,
+		result = await runWithTransaction(ctx.context.adapter, async () => {
+			await lockSSOProviderForAccountLink(ctx, provider);
+			return handleOAuthUserInfo(ctx, {
+				userInfo: {
+					email: userInfo.email as string,
+					name: (userInfo.name || userInfo.email) as string,
+					id: userInfo.id as string,
+					emailVerified: userInfo.emailVerified,
+				},
+				account: {
+					providerId,
+					accountId: userInfo.id as string,
+					accessToken: "",
+					refreshToken: "",
+				},
+				callbackURL: callbackUrl,
+				disableSignUp: options?.disableImplicitSignUp,
+				source: {
+					method: "sso-saml",
+					sso: { providerId, profile: attributes },
+				},
+				isTrustedProvider,
+				trustProviderByName: false,
+			});
 		});
 	} catch (e) {
 		if (isAPIError(e) && e.body?.code) {
@@ -591,7 +581,7 @@ export async function processSAMLResponse(
 
 	const { session, user } = result.data!;
 
-	// 16. Provision user
+	// 17. Provision user
 	if (
 		options?.provisionUser &&
 		(result.isRegister || options.provisionUserOnEveryLogin)
@@ -603,7 +593,7 @@ export async function processSAMLResponse(
 		});
 	}
 
-	// 17. Organization assignment
+	// 18. Organization assignment
 	await assignOrganizationFromProvider(ctx as any, {
 		user,
 		profile: {
@@ -618,10 +608,10 @@ export async function processSAMLResponse(
 		provisioningOptions: options?.organizationProvisioning,
 	});
 
-	// 18. Set session cookie
+	// 19. Set session cookie
 	await setSessionCookie(ctx, { session, user });
 
-	// 19. SLO session record
+	// 20. SLO session record
 	if (options?.saml?.enableSingleLogout && extract.nameID) {
 		const samlSessionKey = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${extract.nameID}`;
 		const samlSessionData: SAMLSessionRecord = {
@@ -629,7 +619,8 @@ export async function processSAMLResponse(
 			sessionToken: session.token,
 			providerId,
 			nameID: extract.nameID,
-			sessionIndex: (extract as SAMLAssertionExtract).sessionIndex,
+			sessionIndex: (extract as SAMLAssertionExtract).sessionIndex
+				?.sessionIndex,
 		};
 		await ctx.context.internalAdapter
 			.createVerificationValue({
@@ -656,7 +647,7 @@ export async function processSAMLResponse(
 			);
 	}
 
-	// 20. Compute safe redirect URL
+	// 21. Compute safe redirect URL
 	return getSafeRedirectUrl(
 		relayState?.callbackURL || parsedSamlConfig.callbackUrl,
 		currentCallbackPath,

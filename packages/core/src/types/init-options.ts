@@ -14,7 +14,6 @@ import type {
 	Account,
 	DBFieldAttribute,
 	ModelNames,
-	RateLimit,
 	SecondaryStorage,
 	Session,
 	User,
@@ -46,6 +45,98 @@ export type GenerateIdFn = (options: {
 	model: ModelNames;
 	size?: number | undefined;
 }) => string | false;
+
+/**
+ * What Better Auth is about to do with an incoming identity when
+ * {@link BetterAuthOptions.user}'s `validateUserInfo` runs.
+ *
+ * - `create-user`: a brand-new user record is about to be created.
+ * - `link-account`: a new provider account is about to be linked to an
+ *   already-existing user.
+ * - `sign-in`: an existing OAuth or SSO user is signing in again. This is the
+ *   one case where the provider can assert *changed* data, so the hook receives
+ *   the fresh provider email and profile (not the stored row), letting a domain
+ *   or org policy reject a user whose provider identity moved out of bounds.
+ *
+ * Non-provider returning sign-ins are not re-validated: they carry only the
+ * stored row, which has not changed since `create-user` gated it. Use the admin
+ * plugin's ban controls or a `databaseHooks.session.create.before` hook to
+ * block those.
+ */
+export type ValidateUserInfoAction = "create-user" | "link-account" | "sign-in";
+
+/**
+ * The authentication method that produced the incoming user info. The named
+ * methods cover Better Auth's built-ins; the open `string` keeps it extensible
+ * for plugins (for example `"scim"`).
+ */
+export type ValidateUserInfoMethod =
+	| "oauth"
+	| "sso-oidc"
+	| "sso-saml"
+	| "email-password"
+	| "magic-link"
+	| "email-otp"
+	| "anonymous"
+	| "siwe"
+	| "phone-number"
+	| "admin"
+	| (string & {});
+
+/** OAuth-specific provisioning context; present only when `method` is `"oauth"`. */
+export type ValidateUserInfoOAuthInfo = {
+	/** The social or generic OAuth provider id (e.g. `"google"`). */
+	providerId: string;
+	/** The raw provider profile (userinfo or id-token claims), unmapped. */
+	profile?: Record<string, unknown> | undefined;
+};
+
+/** SSO-specific provisioning context; present for OIDC and SAML SSO methods. */
+export type ValidateUserInfoSSOInfo = {
+	/** The configured SSO provider id. */
+	providerId: string;
+	/** The raw OIDC claims or SAML assertion attributes, unmapped. */
+	profile?: Record<string, unknown> | undefined;
+};
+
+/** Provisioning origin passed to `createUser`; the creation seam adds `action: "create-user"` to build {@link ValidateUserInfoSource}. */
+export type UserProvisioningSource = {
+	method: ValidateUserInfoMethod;
+	/** Provider id and raw profile; present iff `method` is `"oauth"`. */
+	oauth?: ValidateUserInfoOAuthInfo | undefined;
+	/** Provider id and raw profile; present iff `method` is `"sso-oidc"` or `"sso-saml"`. */
+	sso?: ValidateUserInfoSSOInfo | undefined;
+};
+
+/**
+ * The context passed to `validateUserInfo`: the lifecycle
+ * {@link ValidateUserInfoAction}, the {@link ValidateUserInfoMethod}, and (for
+ * OAuth/SSO provider methods) protocol-specific provider metadata.
+ *
+ * ```ts
+ * // Scope to one OAuth provider:
+ * if (source.oauth?.providerId !== "google") return;
+ * // Branch on the method:
+ * if (source.method === "anonymous") return { error: "no_anonymous" };
+ * // Inspect SSO claims:
+ * if (source.method === "sso-saml" && source.sso?.profile?.department !== "eng") {
+ *   return { error: "invalid_department" };
+ * }
+ * ```
+ */
+export type ValidateUserInfoSource = UserProvisioningSource & {
+	action: ValidateUserInfoAction;
+};
+
+export type ValidateUserInfoResult = {
+	/** A short, machine-readable rejection code, surfaced to the client. */
+	error: string;
+	/**
+	 * A human-readable reason, surfaced to the client. Do not put sensitive
+	 * details here.
+	 */
+	errorDescription?: string | undefined;
+};
 
 /**
  * Configuration for dynamic base URL resolution.
@@ -95,35 +186,24 @@ export type DynamicBaseURLConfig = {
 export type BaseURLConfig = string | DynamicBaseURLConfig;
 
 export interface BetterAuthRateLimitStorage {
-	get: (key: string) => Promise<RateLimit | null | undefined>;
-	set: (
-		key: string,
-		value: RateLimit,
-		update?: boolean | undefined,
-	) => Promise<void>;
 	/**
-	 * Atomically records one request against `key` within the `window`
+	 * Atomically records one request against `key` within the rolling `window`
 	 * (in seconds) and reports whether it is allowed.
 	 *
-	 * When `allowed` is true the request was counted within the active window;
-	 * when `allowed` is false the limit was already reached and `retryAfter` is
-	 * the number of seconds until the window frees up. Whether the window slides
-	 * or is fixed depends on the backing storage: the database backend resets
-	 * once the window elapses, while secondary storage uses a fixed time-to-live
-	 * set when the window first opens.
+	 * When `allowed` is true the count was incremented within the active window,
+	 * or the window had elapsed and was reset to start at 1. When `allowed` is
+	 * false the limit was already reached and `retryAfter` is the number of
+	 * seconds until the window frees up.
 	 *
 	 * Performing the check and the increment in a single step closes the
 	 * concurrent-bypass gap of the separate `get`/`set` path: N simultaneous
 	 * requests can no longer all pass a stale read before any increment lands.
 	 *
-	 * Optional for backwards compatibility. A storage without it falls back to
-	 * the legacy non-atomic `get`/`set` path, which is best-effort under
-	 * concurrency.
-	 *
-	 * TODO(rate-limit-consume-required): make this the sole required member on
-	 * `next`, dropping `get`/`set` and the non-atomic fallback.
+	 * Custom storages must implement this operation directly. Better Auth no
+	 * longer accepts separate `get`/`set` rate-limit storage because that shape
+	 * cannot enforce a distributed limit under concurrent requests.
 	 */
-	consume?: (
+	consume: (
 		key: string,
 		rule: { window: number; max: number },
 	) => Promise<{ allowed: boolean; retryAfter: number | null }>;
@@ -819,6 +899,33 @@ export type BetterAuthOptions = {
 	user?:
 		| (BetterAuthDBOptions<"user", keyof BaseUser> & {
 				/**
+				 * Gate which identities Better Auth admits. Called just before
+				 * `create-user`, `link-account`, and (for OAuth) `sign-in`, across
+				 * every authentication method, including stateless setups with no
+				 * persistent database. On `sign-in` the hook receives the *fresh*
+				 * provider email and profile, so a domain policy can reject a user
+				 * whose provider identity moved out of bounds.
+				 *
+				 * Non-provider returning sign-ins are not re-validated; use the admin
+				 * plugin's ban controls or a `databaseHooks.session.create.before`
+				 * hook for those.
+				 *
+				 * Return nothing to allow; return `{ error }` to reject. Browser flows
+				 * redirect to the configured error URL; programmatic flows surface a
+				 * `403`.
+				 *
+				 * TODO: rename to `validateUser` (and the `ValidateUserInfo*` types).
+				 * "UserInfo" is the OIDC term and misleads for the email/password,
+				 * SIWE, phone, and admin methods.
+				 */
+				validateUserInfo?: (
+					data: {
+						user: Partial<User> & Record<string, unknown>;
+						source: ValidateUserInfoSource;
+					},
+					context: GenericEndpointContext,
+				) => Awaitable<void | ValidateUserInfoResult>;
+				/**
 				 * Changing email configuration
 				 */
 				changeEmail?: {
@@ -967,6 +1074,20 @@ export type BetterAuthOptions = {
 					 * @default "compact"
 					 */
 					strategy?: "compact" | "jwt" | "jwe";
+					/**
+					 * JWT-specific configuration for `strategy: "jwt"`.
+					 */
+					jwt?: {
+						/**
+						 * Which signing key is used for cookie-cache JWTs.
+						 *
+						 * - `"secret"`: uses the Better Auth secret with HS256.
+						 * - `"jwt-plugin"`: uses the installed `jwt()` plugin's asymmetric signing keys.
+						 *
+						 * @default "secret"
+						 */
+						signingKey?: "secret" | "jwt-plugin";
+					};
 					/**
 					 * Controls stateless cookie cache refresh behavior.
 					 *

@@ -1,10 +1,11 @@
+import type { PrivateKeyJwtSigningAlgorithm } from "@better-auth/core/oauth2";
 import type { JWSAlgorithms } from "better-auth/plugins";
 import type { Prompt } from ".";
 
 /**
  * Supported grant types of the token endpoint
  */
-export type GrantType =
+export type BuiltInGrantType =
 	| "authorization_code"
 	// | "implicit" // NEVER SUPPORT - deprecated in oAuth2.1
 	// | "password" // NEVER SUPPORT - deprecated in oAuth2.1
@@ -14,13 +15,32 @@ export type GrantType =
 // | "urn:ietf:params:oauth:grant-type:jwt-bearer"   // unspecified in oAuth2.1
 // | "urn:ietf:params:oauth:grant-type:saml2-bearer" // unspecified in oAuth2.1
 
-export type AuthMethod =
+export type GrantType = BuiltInGrantType | (string & {});
+
+export type BuiltInAuthMethod =
 	| "client_secret_basic" // Basic header
-	| "client_secret_post"; // POST
-// | "private_key_jwt" // must also add alg_values_supported for that endpoint
+	| "client_secret_post" // POST
+	| "private_key_jwt"; // JWT signed with client's private key (RFC 7523)
 // | "client_secret_jwt" // must also add alg_values_supported for that endpoint
+export type AuthMethod = BuiltInAuthMethod | (string & {});
 export type TokenEndpointAuthMethod = AuthMethod | "none"; // Public client support for the token auth endpoint
 export type BearerMethodsSupported = "header" | "body";
+
+/**
+ * RFC 7800 `cnf` (confirmation) members that sender-constrain an access token to
+ * a key the client must prove possession of. Each binding mechanism populates
+ * one member of the same object: DPoP sets `jkt` (RFC 9449 §6), mTLS sets
+ * `x5t#S256` (RFC 8705 §3.1). The authorization server is the sole authority
+ * over this value; it is token material, never a contributed claim.
+ */
+export type Confirmation = { jkt: string } | { "x5t#S256": string };
+
+/**
+ * Token presentation scheme returned in `token_type`. A DPoP-bound token uses
+ * `"DPoP"` (RFC 9449 §5); everything else (including mTLS-bound) uses
+ * `"Bearer"`, since the mTLS constraint lives at the TLS layer.
+ */
+export type TokenType = "Bearer" | "DPoP";
 
 /**
  * Metadata for authentication servers.
@@ -98,7 +118,7 @@ export interface AuthServerMetadata {
 	 * token endpoint for the "private_key_jwt" and "client_secret_jwt"
 	 * authentication methods (see field token_endpoint_auth_methods_supported).
 	 */
-	token_endpoint_auth_signing_alg_values_supported?: JWSAlgorithms[];
+	token_endpoint_auth_signing_alg_values_supported?: PrivateKeyJwtSigningAlgorithm[];
 	/**
 	 * URL of a page containing human-readable information
 	 * that developers might want or need to know when using the
@@ -136,7 +156,7 @@ export interface AuthServerMetadata {
 	 * @default
 	 * ["client_secret_basic", "client_secret_post"]
 	 */
-	revocation_endpoint_auth_methods_supported?: AuthMethod[];
+	revocation_endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
 	/**
 	 * Array containing a list of the JWS signing
 	 * algorithms ("alg" values) supported by the revocation endpoint for
@@ -144,7 +164,7 @@ export interface AuthServerMetadata {
 	 * token endpoint for the "private_key_jwt" and "client_secret_jwt"
 	 * authentication methods (see field revocation_endpoint_auth_methods_supported).
 	 */
-	revocation_endpoint_auth_signing_alg_values_supported?: JWSAlgorithms[];
+	revocation_endpoint_auth_signing_alg_values_supported?: PrivateKeyJwtSigningAlgorithm[];
 	/**
 	 * URL of the authorization server's OAuth 2.0
 	 * introspection endpoint [RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)
@@ -157,7 +177,7 @@ export interface AuthServerMetadata {
 	 * @default
 	 * ["client_secret_basic", "client_secret_post"]
 	 */
-	introspection_endpoint_auth_methods_supported?: AuthMethod[];
+	introspection_endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
 	/**
 	 * Array containing a list of the JWS signing
 	 * algorithms ("alg" values) supported by the introspection endpoint
@@ -165,7 +185,7 @@ export interface AuthServerMetadata {
 	 * the "private_key_jwt" and "client_secret_jwt" authentication methods
 	 * (see field introspection_endpoint_auth_methods_supported).
 	 */
-	introspection_endpoint_auth_signing_alg_values_supported?: JWSAlgorithms[];
+	introspection_endpoint_auth_signing_alg_values_supported?: PrivateKeyJwtSigningAlgorithm[];
 	/**
 	 * Supported code challenge methods.
 	 *
@@ -180,6 +200,45 @@ export interface AuthServerMetadata {
 	 * @default true
 	 */
 	authorization_response_iss_parameter_supported?: boolean;
+	/**
+	 * Whether the authorization server supports discovering clients via
+	 * [Client ID Metadata Documents](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/)
+	 * (an HTTPS URL as `client_id`).
+	 *
+	 * Set at runtime by the `@better-auth/cimd` plugin (or any other
+	 * `ClientDiscovery` that contributes this field via
+	 * {@link ClientDiscovery.discoveryMetadata}). oauth-provider never sets
+	 * it on its own.
+	 */
+	client_id_metadata_document_supported?: boolean;
+	/**
+	 * Boolean value specifying whether the OP supports back-channel logout,
+	 * with true indicating support.
+	 *
+	 * Registered in the "OAuth Authorization Server Metadata" IANA registry
+	 * under OpenID Connect Back-Channel Logout 1.0, so this may appear at both
+	 * `.well-known/oauth-authorization-server` and `.well-known/openid-configuration`.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#OPMetadata
+	 */
+	backchannel_logout_supported?: boolean;
+	/**
+	 * Boolean value specifying whether the OP can pass a `sid` (session ID)
+	 * Claim in the Logout Token to identify the RP session with the OP.
+	 *
+	 * When true, the OP also includes `sid` in ID Tokens it issues.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#OPMetadata
+	 */
+	backchannel_logout_session_supported?: boolean;
+	/**
+	 * JWS algorithms supported for RFC 9449 DPoP proof JWTs.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449
+	 */
+	dpop_signing_alg_values_supported?: JWSAlgorithms[];
 }
 
 /**
@@ -199,19 +258,16 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	 */
 	userinfo_endpoint: string;
 	/**
-	 * acr_values supported.
+	 * Authentication Context Class Reference values supported.
 	 *
-	 * - `urn:mace:incommon:iap:silver`: Silver level of assurance
-	 * - `urn:mace:incommon:iap:bronze`: Bronze level of assurance
-	 *
-	 * Determination of acr_value is considered bronze by default.
-	 * Silver level determination coming soon.
+	 * Better Auth does not advertise this field by default because it does not
+	 * currently evaluate requested Authentication Context Class References.
 	 *
 	 * @default
-	 * ["urn:mace:incommon:iap:bronze"]
-	 * @see https://incommon.org/federation/attributes.html
+	 * undefined
+	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
 	 */
-	acr_values_supported: string[];
+	acr_values_supported?: string[];
 	/**
 	 * Supported subject types.
 	 *
@@ -240,11 +296,35 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	 */
 	claims_supported: string[];
 	/**
+	 * Whether the OP supports the OIDC `claims` request parameter.
+	 *
+	 * @default true
+	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	 */
+	claims_parameter_supported?: boolean;
+	/**
 	 * RP-Initiated Logout Endpoint
 	 *
 	 * @see https://openid.net/specs/openid-connect-rpinitiated-1_0.html
 	 */
 	end_session_endpoint: string;
+	/**
+	 * Whether the OP supports OpenID Connect Request Objects by value.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	 */
+	request_parameter_supported?: boolean;
+	/**
+	 * Whether the OP supports OpenID Connect Request Objects by reference.
+	 *
+	 * Discovery defaults this field to true when omitted, so providers that do
+	 * not support it should advertise false explicitly.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	 */
+	request_uri_parameter_supported?: boolean;
 	/**
 	 * Prompt values supported by this OIDC server
 	 *
@@ -276,8 +356,9 @@ export interface OAuthClient {
 	contacts?: string[];
 	tos_uri?: string;
 	policy_uri?: string;
-	//---- Jwks (only one can be used) ----//
-	jwks?: string[];
+	//---- Client key metadata (only one can be used) ----//
+	/** JWK Set — accepts either a bare key array or an RFC 7517 JWKS object `{"keys":[...]}` */
+	jwks?: Record<string, unknown>[] | { keys: Record<string, unknown>[] };
 	jwks_uri?: string;
 	//---- User Software Identifiers ----//
 	software_id?: string;
@@ -286,13 +367,26 @@ export interface OAuthClient {
 	//---- Authentication Metadata ----//
 	redirect_uris: string[];
 	post_logout_redirect_uris?: string[];
-	token_endpoint_auth_method?:
-		| "none"
-		| "client_secret_basic"
-		| "client_secret_post";
+	/**
+	 * RP URL that the OP POSTs a signed Logout Token to when a session at the OP
+	 * ends. The RP uses the token to terminate its own session state for that
+	 * user (including any access tokens it has bound to the session).
+	 *
+	 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#RPMetadata
+	 */
+	backchannel_logout_uri?: string;
+	/**
+	 * When true, the RP requires the `sid` Claim in every Logout Token it
+	 * receives; the OP will not dispatch user-scoped (sid-less) logouts to it.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#RPMetadata
+	 */
+	backchannel_logout_session_required?: boolean;
+	token_endpoint_auth_method?: TokenEndpointAuthMethod;
 	grant_types?: GrantType[];
 	response_types?: "code"[];
-	// | "token" // NEVER SUPPORT - depreciated in oAuth2.1
+	// | "token" // NEVER SUPPORT - deprecated in OAuth 2.1
 	//---- RFC6749 Spec ----//
 	public?: boolean;
 	type?: "web" | "native" | "user-agent-based";
@@ -305,10 +399,17 @@ export interface OAuthClient {
 	 *
 	 * @default true
 	 *
-	 * Note: PKCE is always required for public clients and when
-	 * requesting offline_access scope, regardless of this setting.
+	 * Note: PKCE is always required for public clients. When requesting
+	 * offline_access without PKCE, confidential OIDC clients must send both
+	 * `openid` and `nonce`.
 	 */
 	require_pkce?: boolean;
+	/**
+	 * RFC 9449 dynamic client metadata. When true, token requests from this
+	 * client must include a valid DPoP proof and receive DPoP-bound access
+	 * tokens.
+	 */
+	dpop_bound_access_tokens?: boolean;
 	/**
 	 * Subject identifier type for this client.
 	 *

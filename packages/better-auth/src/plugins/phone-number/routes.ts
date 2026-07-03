@@ -8,6 +8,7 @@ import { generateRandomString } from "../../crypto/random";
 import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
 import type { Account } from "../../types";
+import { HIDE_METADATA } from "../../utils";
 import { getDate } from "../../utils/date";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
 import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
@@ -207,6 +208,15 @@ const sendPhoneNumberOTPBodySchema = z.object({
 	}),
 });
 
+const consumePhoneNumberOTPBodySchema = z.object({
+	phoneNumber: z.string().meta({
+		description: 'Phone number to verify. Eg: "+1234567890"',
+	}),
+	code: z.string().meta({
+		description: 'OTP code. Eg: "123456"',
+	}),
+});
+
 /**
  * ### Endpoint
  *
@@ -303,6 +313,51 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 				await sendOTPResult;
 			}
 			return ctx.json({ message: "code sent" });
+		},
+	);
+
+async function verifyAndConsumePhoneNumberOTP(
+	ctx: GenericEndpointContext,
+	opts: RequiredPhoneNumberOptions,
+	body: {
+		phoneNumber: string;
+		code: string;
+	},
+) {
+	const { phoneNumber, code } = body;
+	if (opts.verifyOTP) {
+		const isValid = await opts.verifyOTP({ phoneNumber, code }, ctx);
+		if (!isValid) {
+			throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
+		}
+
+		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+			phoneNumber,
+		);
+		return;
+	}
+
+	await verifyPhoneNumberOTP(ctx, opts, phoneNumber, code);
+}
+
+/**
+ * ### API Methods
+ *
+ * **server:**
+ * `auth.api.consumePhoneNumberOTP`
+ *
+ * Verifies and consumes an OTP without updating a user or creating a session.
+ */
+export const consumePhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
+	createAuthEndpoint(
+		{
+			method: "POST",
+			body: consumePhoneNumberOTPBodySchema,
+			metadata: HIDE_METADATA,
+		},
+		async (ctx) => {
+			await verifyAndConsumePhoneNumberOTP(ctx, opts, ctx.body);
+			return ctx.json({ status: true });
 		},
 	);
 
@@ -464,40 +519,7 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			},
 		},
 		async (ctx) => {
-			if (opts?.verifyOTP) {
-				// Use custom verifyOTP if provided
-				const isValid = await opts.verifyOTP(
-					{
-						phoneNumber: ctx.body.phoneNumber,
-						code: ctx.body.code,
-					},
-					ctx,
-				);
-
-				if (!isValid) {
-					throw APIError.from(
-						"BAD_REQUEST",
-						PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
-					);
-				}
-
-				// Clean up verification value
-				const otp = await ctx.context.internalAdapter.findVerificationValue(
-					ctx.body.phoneNumber,
-				);
-				if (otp) {
-					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						ctx.body.phoneNumber,
-					);
-				}
-			} else {
-				await verifyPhoneNumberOTP(
-					ctx,
-					opts,
-					ctx.body.phoneNumber,
-					ctx.body.code,
-				);
-			}
+			await verifyAndConsumePhoneNumberOTP(ctx, opts, ctx.body);
 
 			if (ctx.body.updatePhoneNumber) {
 				const session = await getSessionFromCtx(ctx);
@@ -572,17 +594,20 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 						"create",
 					);
 					user =
-						await ctx.context.internalAdapter.createUser<UserWithPhoneNumber>({
-							...additionalFields,
-							email: opts.signUpOnVerification.getTempEmail(
-								ctx.body.phoneNumber,
-							),
-							name: opts.signUpOnVerification.getTempName
-								? opts.signUpOnVerification.getTempName(ctx.body.phoneNumber)
-								: ctx.body.phoneNumber,
-							[opts.phoneNumber]: ctx.body.phoneNumber,
-							[opts.phoneNumberVerified]: true,
-						});
+						await ctx.context.internalAdapter.createUser<UserWithPhoneNumber>(
+							{
+								...additionalFields,
+								email: opts.signUpOnVerification.getTempEmail(
+									ctx.body.phoneNumber,
+								),
+								name: opts.signUpOnVerification.getTempName
+									? opts.signUpOnVerification.getTempName(ctx.body.phoneNumber)
+									: ctx.body.phoneNumber,
+								[opts.phoneNumber]: ctx.body.phoneNumber,
+								[opts.phoneNumberVerified]: true,
+							},
+							{ method: "phone-number" },
+						);
 					if (!user) {
 						throw APIError.from(
 							"INTERNAL_SERVER_ERROR",
@@ -864,9 +889,11 @@ async function verifyPhoneNumberOTP(
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.OTP_EXPIRED);
 	}
 
-	const allowedAttempts = opts?.allowedAttempts || 3;
-	const [, peekedAttempts] = existing.value.split(":");
-	if (peekedAttempts && parseInt(peekedAttempts) >= allowedAttempts) {
+	const allowedAttempts = opts?.allowedAttempts ?? 3;
+	const peekedAttempts = parseVerificationAttempts(
+		existing.value.split(":")[1],
+	);
+	if (peekedAttempts >= allowedAttempts) {
 		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 			identifier,
 		);
@@ -882,8 +909,9 @@ async function verifyPhoneNumberOTP(
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
 	}
 
-	const [otpValue, attempts] = consumed.value.split(":");
-	if (attempts && parseInt(attempts) >= allowedAttempts) {
+	const [otpValue, rawAttempts] = consumed.value.split(":");
+	const attempts = parseVerificationAttempts(rawAttempts);
+	if (attempts >= allowedAttempts) {
 		throw APIError.from(
 			"FORBIDDEN",
 			PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS,
@@ -891,12 +919,17 @@ async function verifyPhoneNumberOTP(
 	}
 	if (otpValue !== providedCode) {
 		await ctx.context.internalAdapter.createVerificationValue({
-			value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+			value: `${otpValue}:${attempts + 1}`,
 			identifier,
 			expiresAt: consumed.expiresAt,
 		});
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
 	}
+}
+
+function parseVerificationAttempts(value: string | undefined) {
+	const attempts = Number(value ?? 0);
+	return Number.isSafeInteger(attempts) && attempts > 0 ? attempts : 0;
 }
 
 function generateOTP(size: number) {

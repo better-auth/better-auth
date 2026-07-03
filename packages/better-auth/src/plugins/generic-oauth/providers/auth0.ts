@@ -30,7 +30,7 @@ export interface Auth0Options extends BaseOAuthProviderOptions {
  * });
  * ```
  */
-export function auth0(options: Auth0Options): GenericOAuthConfig {
+export function auth0(options: Auth0Options): GenericOAuthConfig<"auth0"> {
 	const defaultScopes = ["openid", "profile", "email"];
 
 	// Ensure domain doesn't have protocol prefix
@@ -42,6 +42,7 @@ export function auth0(options: Auth0Options): GenericOAuthConfig {
 		discoveryUrl,
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		tokenEndpointAuth: options.tokenEndpointAuth,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		pkce: options.pkce,

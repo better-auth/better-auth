@@ -1,5 +1,48 @@
 # @better-auth/memory-adapter
 
+## 1.7.0-rc.1
+
+## 1.7.0-rc.0
+
+## 1.7.0-beta.10
+
+## 1.7.0-beta.9
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-beta.9
+
+## 1.7.0-beta.8
+
+### Patch Changes
+
+- Updated dependencies [[`7c7313c`](https://github.com/better-auth/better-auth/commit/7c7313c8189baabd11a2ecb681bd2b16eb40fa4d), [`97903c9`](https://github.com/better-auth/better-auth/commit/97903c9cca47f5fa62cf1d2ab86f6228db04aff0), [`3a79aff`](https://github.com/better-auth/better-auth/commit/3a79aff58ed82e45caf04c2ee4acaf0f4d09a86c)]:
+  - @better-auth/core@1.7.0-beta.8
+
+## 1.7.0-beta.7
+
+### Patch Changes
+
+- Updated dependencies [[`3d04fab`](https://github.com/better-auth/better-auth/commit/3d04fababbf3efd4c46a4012f46ed9397715c2e3), [`de8394d`](https://github.com/better-auth/better-auth/commit/de8394de207bae2fe9d0b8d7e901a196c1dc08d0)]:
+  - @better-auth/core@1.7.0-beta.7
+
+## 1.7.0-beta.6
+
+### Patch Changes
+
+- Updated dependencies [[`aedcb97`](https://github.com/better-auth/better-auth/commit/aedcb974f055c3514fe0464dc53d71d45a8a1725), [`2196ea6`](https://github.com/better-auth/better-auth/commit/2196ea65e724830d9f1066c6593210579de586b9)]:
+  - @better-auth/core@1.7.0-beta.6
+
+## 1.7.0-beta.5
+
+### Patch Changes
+
+- Updated dependencies [[`7fe0e2b`](https://github.com/better-auth/better-auth/commit/7fe0e2b165c17207a43863b0f1c12c401976d6b2), [`4f53b61`](https://github.com/better-auth/better-auth/commit/4f53b61f49b470a40ccab18fe1fe4d80f225905f), [`91f235f`](https://github.com/better-auth/better-auth/commit/91f235f8604cd432749adf18c7bd7d658aa1519b), [`41cca60`](https://github.com/better-auth/better-auth/commit/41cca606d14e7b8a1d16da662d644ca39fe4281f)]:
+  - @better-auth/core@1.7.0-beta.5
+
+## 1.7.0-beta.4
+
 ## 1.6.23
 
 ### Patch Changes
@@ -78,32 +121,24 @@
 
 ### Patch Changes
 
-- Updated dependencies [[`43c08a2`](https://github.com/better-auth/better-auth/commit/43c08a2bc77eb01d59ecac28379d5971af6beddc), [`5c3e248`](https://github.com/better-auth/better-auth/commit/5c3e248cbf4f81c2cb540b545baa4a5e69d3b066)]:
-  - @better-auth/core@1.6.13
+- Updated dependencies [[`e7eb45b`](https://github.com/better-auth/better-auth/commit/e7eb45b065903f5fccddae491696cb069814a3c8), [`03e6c94`](https://github.com/better-auth/better-auth/commit/03e6c94e965a7e87c1d44074b8e90257cb1f1cd2), [`1e5b808`](https://github.com/better-auth/better-auth/commit/1e5b80847208cf839c9d45363ca19b8eab41c68a), [`13abc79`](https://github.com/better-auth/better-auth/commit/13abc7922b47f800da59ca212d364a64feeec91f)]:
+  - @better-auth/core@1.7.0-beta.4
 
-## 1.6.12
-
-### Patch Changes
-
-- Updated dependencies [[`a3b0c63`](https://github.com/better-auth/better-auth/commit/a3b0c63de908b9f85d6c1d6c06f89bab16a72ba3), [`c5b9f93`](https://github.com/better-auth/better-auth/commit/c5b9f93498489888f543e1aa1fc07aae26f73a7f), [`83fa369`](https://github.com/better-auth/better-auth/commit/83fa3695e7cc0083ff8531f3a2b4101a2e56deff), [`04303a9`](https://github.com/better-auth/better-auth/commit/04303a92acd6fd3cf9d5f5ab5901255e67526ad3), [`7bf5449`](https://github.com/better-auth/better-auth/commit/7bf5449b11866bd82deafee910619660c153d799)]:
-  - @better-auth/core@1.6.12
-
-## 1.6.11
+## 1.7.0-beta.3
 
 ### Patch Changes
 
-- [#9568](https://github.com/better-auth/better-auth/pull/9568) [`0cbddb8`](https://github.com/better-auth/better-auth/commit/0cbddb8fa4eb19fbca75e9822134f89b3604286a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `internalAdapter.consumeVerificationValue(identifier)`: atomically consume a verification row keyed by identifier. The first concurrent caller receives the row; later racers receive `null`. Backed by a new `DBAdapter.consumeOne` primitive implemented natively per adapter (memory, mongo, drizzle, kysely, prisma), with a `transaction(findMany + delete)` factory fallback. `SecondaryStorage.getAndDelete` is added as an optional companion; Redis ships it via an atomic Lua get-and-delete operation for compatibility with Redis versions before 6.2.
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-beta.3
 
-- [`c6918ec`](https://github.com/better-auth/better-auth/commit/c6918ecc9e3a75892169415d7f6c95b591b6a52d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fix race condition in the OAuth refresh-token grant rotation: two concurrent requests presenting the same refresh token both passed the `revoked` check before either revocation write completed, so each minted a fresh refresh token (forked family). `createRefreshToken` now performs an atomic compare-and-swap on the parent row (`UPDATE ... WHERE id = ? AND revoked IS NULL`) before issuing the new token, and `revokeRefreshToken` uses the same CAS. The loser of a concurrent rotation receives `invalid_grant`; the parent row's `revoked` flag is set, so any subsequent replay trips the existing family-invalidation guard. The `oauthRefreshToken.token` column gains a `unique` constraint for parity with `oauthAccessToken.token`.
+## 1.7.0-beta.2
 
-  `@better-auth/memory-adapter` now treats `undefined` and `null` as equivalent under an `eq null` `where` clause, mirroring SQL `IS NULL` and Mongo's missing-or-null semantics. The adapter factory's `transformInput` skips writing optional fields whose value is `undefined`, so a CAS predicate like `WHERE revoked IS NULL` against a freshly created row (where the field is absent) used to fail-closed on every call. Without this change the refresh-token rotation above is broken for any deployment using the in-memory adapter.
+### Patch Changes
 
-  **Migration note:** the better-auth migration generator only emits `UNIQUE` for newly-created columns. Existing installs will not get the new `oauthRefreshToken.token` unique constraint via `migrate`/`generate`; add it manually if your operational tooling relies on it (e.g. `CREATE UNIQUE INDEX oauth_refresh_token_token_uniq ON "oauthRefreshToken" (token);`). The CAS fix above does not depend on the database-level constraint to be correct; the constraint is defense-in-depth so collisions from buggy custom `generateRefreshToken` callbacks fail loudly.
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-beta.2
 
-  Strict family invalidation on contested rotations (per RFC 9700 §4.14) is deferred to a follow-up minor; closing it cleanly requires opt-in transactional rotation in the adapter contract so the family-delete cannot interleave with the winner's in-flight access-token insert.
-
-- Updated dependencies [[`0cbddb8`](https://github.com/better-auth/better-auth/commit/0cbddb8fa4eb19fbca75e9822134f89b3604286a), [`da7e50b`](https://github.com/better-auth/better-auth/commit/da7e50beee849c59a2ed1ec6b3a38cc6ab9fb563), [`b0ef96f`](https://github.com/better-auth/better-auth/commit/b0ef96fd8ec08ebb4d6ad0c0557d4b7855703f10), [`e21d744`](https://github.com/better-auth/better-auth/commit/e21d744987476c20a934c79ef226fe6a5f468e22)]:
-  - @better-auth/core@1.6.11
+## 1.7.0-beta.1
 
 ## 1.6.10
 
@@ -145,6 +180,14 @@
 ### Patch Changes
 
 - Updated dependencies []:
+  - @better-auth/core@1.7.0-beta.1
+
+## 1.7.0-beta.0
+
+### Patch Changes
+
+- Updated dependencies [[`93d3871`](https://github.com/better-auth/better-auth/commit/93d3871bd2f7c2fdd423c4c88a22a50b6333e656)]:
+  - @better-auth/core@1.7.0-beta.0
   - @better-auth/core@1.6.5
 
 ## 1.6.4

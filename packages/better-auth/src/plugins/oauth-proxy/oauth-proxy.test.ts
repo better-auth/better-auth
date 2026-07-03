@@ -1167,12 +1167,15 @@ describe("oauth-proxy", async () => {
 			const { secret } = previewCtx;
 
 			// Pre-create user in preview DB
-			await previewCtx.internalAdapter.createUser({
-				id: "existing-user-id",
-				email: "user@email.com",
-				name: "Existing User",
-				emailVerified: true,
-			});
+			await previewCtx.internalAdapter.createUser(
+				{
+					id: "existing-user-id",
+					email: "user@email.com",
+					name: "Existing User",
+					emailVerified: true,
+				},
+				{ method: "test" },
+			);
 
 			// Create profile payload for the SAME email
 			const payload = {

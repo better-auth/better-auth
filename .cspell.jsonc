@@ -104,7 +104,10 @@
 		"e2e/smoke/test/fixtures/cloudflare/worker-configuration.d.ts",
 		"*.config.js",
 		"*.config.ts",
+		"docker-compose.override.yml",
 		"*.json",
-		".gitignore"
+		".gitignore",
+		// locale translation files contain non-English text that CSpell doesn't recognize
+		"packages/i18n/src/locales/**"
 	]
 }

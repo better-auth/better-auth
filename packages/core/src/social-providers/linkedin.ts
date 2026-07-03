@@ -37,6 +37,7 @@ export const linkedin = (options: LinkedInOptions) => {
 			scopes,
 			redirectURI,
 			loginHint,
+			additionalParams,
 		}) => {
 			const _scopes = options.disableDefaultScope
 				? []
@@ -51,6 +52,7 @@ export const linkedin = (options: LinkedInOptions) => {
 				state,
 				loginHint,
 				redirectURI,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
