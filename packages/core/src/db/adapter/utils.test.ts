@@ -44,4 +44,31 @@ describe("parseDateValue", () => {
 		expect(parseDateValue(null)).toBeNull();
 		expect(parseDateValue(undefined)).toBeUndefined();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9963
+	 */
+	it("parses a short numeric string like a year, not epoch milliseconds", () => {
+		const result = parseDateValue("2026");
+		expect(result).toBeInstanceOf(Date);
+		expect((result as Date).getUTCFullYear()).toBe(2026);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9963
+	 */
+	it('parses "0" as the string date "0", not epoch millisecond 0', () => {
+		const result = parseDateValue("0");
+		expect(result).toBeInstanceOf(Date);
+		expect((result as Date).getTime()).toBe(new Date("0").getTime());
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9963
+	 */
+	it("still parses a real 13-digit epoch-millisecond string as epoch milliseconds", () => {
+		const result = parseDateValue("1774295570569");
+		expect(result).toBeInstanceOf(Date);
+		expect((result as Date).getTime()).toBe(1774295570569);
+	});
 });

@@ -54,10 +54,13 @@ export function parseDateValue(value: unknown): unknown {
 	}
 	if (typeof value === "string") {
 		const trimmed = value.trim();
-		// A purely numeric string (optionally with a trailing fractional part,
-		// e.g. "1774295570569" or "1774295570569.0") represents epoch
-		// milliseconds, not an ISO date string.
-		if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+		// A purely numeric string of at least 9 digits (optionally with a
+		// trailing fractional part, e.g. "1774295570569" or
+		// "1774295570569.0") represents epoch milliseconds, not an ISO date
+		// string. Shorter numeric strings (e.g. "2026" or "0") are valid
+		// inputs to `new Date()` with a different meaning and must not be
+		// reinterpreted as epoch milliseconds.
+		if (/^-?\d{9,}(\.\d+)?$/.test(trimmed)) {
 			return new Date(Number(trimmed));
 		}
 		return new Date(value);
