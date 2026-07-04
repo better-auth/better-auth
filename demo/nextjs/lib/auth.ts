@@ -440,7 +440,7 @@ const authOptions = {
 	trustedOrigins: [
 		"https://*.better-auth.com",
 		"https://better-auth-demo-*-better-auth.vercel.app",
-		"exp://",
+		"better-auth://",
 		"com.better-auth.demo:/",
 		"https://appleid.apple.com",
 	],

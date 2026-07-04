@@ -3,6 +3,10 @@ import {
 	ATTR_DB_OPERATION_NAME,
 	withSpan,
 } from "@better-auth/core/instrumentation";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "../../context/transaction";
 import { createLogger, getColorDepth, TTY_COLORS } from "../../env";
 import { BetterAuthError } from "../../error";
 import type { BetterAuthOptions } from "../../types";
@@ -131,6 +135,16 @@ export const createAdapterFactory =
 						} else if (
 							method === "deleteMany" &&
 							!config.debugLogs.deleteMany
+						) {
+							return;
+						} else if (
+							method === "consumeOne" &&
+							!config.debugLogs.consumeOne
+						) {
+							return;
+						} else if (
+							method === "incrementOne" &&
+							!config.debugLogs.incrementOne
 						) {
 							return;
 						} else if (method === "count" && !config.debugLogs.count) {
@@ -485,6 +499,8 @@ export const createAdapterFactory =
 				| "updateMany"
 				| "delete"
 				| "deleteMany"
+				| "consumeOne"
+				| "incrementOne"
 				| "count";
 		}): W extends undefined ? undefined : CleanedWhere[] => {
 			if (!where) return undefined as any;
@@ -951,6 +967,11 @@ export const createAdapterFactory =
 					where: unsafeWhere,
 					action: "update",
 				});
+				// `update` targets a single row. Empty predicates have no
+				// target, so fail closed and leave bulk writes to `updateMany`.
+				if (where.length === 0) {
+					return null;
+				}
 				debugLog(
 					{ method: "update" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 4)}`,
@@ -1311,6 +1332,285 @@ export const createAdapterFactory =
 					{ model, data: res },
 				);
 				return res;
+			},
+			consumeOne: async <T>({
+				model: unsafeModel,
+				where: unsafeWhere,
+			}: {
+				model: string;
+				where: Where[];
+			}): Promise<T | null> => {
+				transactionId++;
+				const thisTransactionId = transactionId;
+				const model = getModelName(unsafeModel);
+				const where = transformWhereClause({
+					model: unsafeModel,
+					where: unsafeWhere,
+					action: "consumeOne",
+				});
+				unsafeModel = getDefaultModelName(unsafeModel);
+				debugLog(
+					{ method: "consumeOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
+					`${formatMethod("consumeOne")} ${formatAction("ConsumeOne")}:`,
+					{ model, where },
+				);
+
+				let res: T | null;
+				let resultNeedsOutputTransform = true;
+				if (adapterInstance.consumeOne) {
+					res = await withSpan(
+						`db consumeOne ${model}`,
+						{
+							[ATTR_DB_OPERATION_NAME]: "consumeOne",
+							[ATTR_DB_COLLECTION_NAME]: model,
+						},
+						() => adapterInstance.consumeOne!<T>({ model, where }),
+					);
+				} else {
+					// TODO(consume-one-required): adapters without native `consumeOne`
+					// fall back to `transaction(findMany + deleteMany)`. Race-safe on
+					// engines with real transaction isolation; race window narrows
+					// (does not close) on adapters that fall through to sequential
+					// execution. Remove this branch when consumeOne becomes required.
+					// Use Better Auth's transaction context here, not a direct adapter
+					// transaction, so callers already inside a transaction keep using
+					// the active transaction adapter.
+					res = await withSpan(
+						`db consumeOne ${model}`,
+						{
+							[ATTR_DB_OPERATION_NAME]: "consumeOne",
+							[ATTR_DB_COLLECTION_NAME]: model,
+						},
+						() =>
+							runWithTransaction(adapter, async () => {
+								const trx = await getCurrentAdapter(adapter);
+								const rows = await trx.findMany<Record<string, any>>({
+									model: unsafeModel,
+									where: unsafeWhere,
+									limit: 1,
+								});
+								const target = rows[0];
+								if (!target) return null;
+								const deleted = await trx.deleteMany({
+									model: unsafeModel,
+									where: [
+										...unsafeWhere,
+										{
+											field: "id",
+											value: target.id,
+											operator: "eq",
+											connector: "AND",
+											mode: "sensitive",
+										},
+									],
+								});
+								// A non-numeric count coerces to a false miss, so fail loud.
+								if (typeof deleted !== "number") {
+									throw new BetterAuthError(
+										`Adapter "${config.adapterId}" returned a non-numeric value from deleteMany during the consumeOne fallback. Return the number of deleted rows, or implement a native consumeOne for atomic single-use consumption.`,
+									);
+								}
+								return deleted > 0 ? (target as T) : null;
+							}),
+					);
+					resultNeedsOutputTransform = false;
+				}
+
+				debugLog(
+					{ method: "consumeOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
+					`${formatMethod("consumeOne")} ${formatAction("DB Result")}:`,
+					{ model, data: res },
+				);
+				let transformed: any = res;
+				if (
+					!config.disableTransformOutput &&
+					resultNeedsOutputTransform &&
+					res
+				) {
+					transformed = await transformOutput(
+						res as Record<string, any>,
+						unsafeModel,
+						undefined,
+						undefined,
+					);
+				}
+				debugLog(
+					{ method: "consumeOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
+					`${formatMethod("consumeOne")} ${formatAction("Parsed Result")}:`,
+					{ model, data: transformed },
+				);
+				return transformed as T | null;
+			},
+			incrementOne: async <T>({
+				model: unsafeModel,
+				where: unsafeWhere,
+				increment: unsafeIncrement,
+				set: unsafeSet,
+			}: {
+				model: string;
+				where: Where[];
+				increment: Record<string, number>;
+				set?: Record<string, unknown> | undefined;
+			}): Promise<T | null> => {
+				const hasIncrement = Object.keys(unsafeIncrement).length > 0;
+				const hasSet = !!unsafeSet && Object.keys(unsafeSet).length > 0;
+				if (!hasIncrement && !hasSet) {
+					// An empty `increment` and empty `set` compiles to `UPDATE ... SET `
+					// with no assignments, which is a syntax error on kysely, drizzle, and
+					// Prisma. Fail fast with an actionable message instead.
+					throw new BetterAuthError(
+						"incrementOne requires a non-empty `increment` or `set`; both were empty.",
+					);
+				}
+				transactionId++;
+				const thisTransactionId = transactionId;
+				const model = getModelName(unsafeModel);
+				const where = transformWhereClause({
+					model: unsafeModel,
+					where: unsafeWhere,
+					action: "incrementOne",
+				});
+				unsafeModel = getDefaultModelName(unsafeModel);
+				debugLog(
+					{ method: "incrementOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
+					`${formatMethod("incrementOne")} ${formatAction("IncrementOne")}:`,
+					{ model, where, increment: unsafeIncrement, set: unsafeSet },
+				);
+
+				let res: T | null;
+				let resultNeedsOutputTransform = true;
+				if (adapterInstance.incrementOne) {
+					// Map each increment key to its DB column name, honoring a custom
+					// `mapKeysTransformInput` override the same way `transformInput`
+					// does, and keep the numeric delta unchanged: deltas are arithmetic
+					// operands, not stored values, so they must never be value-transformed.
+					const mappedKeys = config.mapKeysTransformInput ?? {};
+					const increment: Record<string, number> = {};
+					for (const [field, delta] of Object.entries(unsafeIncrement)) {
+						increment[
+							mappedKeys[field] || getFieldName({ model: unsafeModel, field })
+						] = delta;
+					}
+					let set: Record<string, unknown> | undefined;
+					if (unsafeSet && !config.disableTransformInput) {
+						set = await transformInput(unsafeSet, unsafeModel, "update");
+					} else {
+						set = unsafeSet;
+					}
+					// `transformInput` drops unknown-to-schema and `undefined` fields, so
+					// a `set` that was non-empty on input can resolve to nothing. Re-check
+					// after mapping so this never reaches the adapter as an empty UPDATE.
+					if (
+						Object.keys(increment).length === 0 &&
+						(!set || Object.keys(set).length === 0)
+					) {
+						throw new BetterAuthError(
+							"incrementOne resolved to an empty update: every increment/set field was unknown to the schema or transformed away.",
+						);
+					}
+					res = await withSpan(
+						`db incrementOne ${model}`,
+						{
+							[ATTR_DB_OPERATION_NAME]: "incrementOne",
+							[ATTR_DB_COLLECTION_NAME]: model,
+						},
+						() =>
+							adapterInstance.incrementOne!<T>({
+								model,
+								where,
+								increment,
+								set,
+							}),
+					);
+				} else {
+					// FIXME(increment-one-required): remove this fallback when
+					// incrementOne becomes required on `next`. Adapters without a native
+					// incrementOne fall back to `transaction(findMany + updateMany)`.
+					res = await withSpan(
+						`db incrementOne ${model}`,
+						{
+							[ATTR_DB_OPERATION_NAME]: "incrementOne",
+							[ATTR_DB_COLLECTION_NAME]: model,
+						},
+						() =>
+							runWithTransaction(adapter, async () => {
+								const trx = await getCurrentAdapter(adapter);
+								const rows = await trx.findMany<Record<string, any>>({
+									model: unsafeModel,
+									where: unsafeWhere,
+									limit: 1,
+								});
+								const target = rows[0];
+								if (!target) return null;
+								const nextValues: Record<string, unknown> = {
+									...(unsafeSet ?? {}),
+								};
+								for (const [field, delta] of Object.entries(unsafeIncrement)) {
+									const current =
+										typeof target[field] === "number" ? target[field] : 0;
+									nextValues[field] = current + delta;
+								}
+								// Re-applying `unsafeWhere` in the update's where is the
+								// compare-and-swap guard: under an adapter whose transaction
+								// lacks real isolation, it still rejects a racer that
+								// invalidated the guard between the read and the write (e.g.
+								// remaining dropped to 0).
+								const updated = await trx.updateMany({
+									model: unsafeModel,
+									where: [
+										...unsafeWhere,
+										{
+											field: "id",
+											value: target.id,
+											operator: "eq",
+											connector: "AND",
+											mode: "sensitive",
+										},
+									],
+									update: nextValues,
+								});
+								// A non-numeric count coerces to a false miss, so fail loud.
+								if (typeof updated !== "number") {
+									throw new BetterAuthError(
+										`Adapter "${config.adapterId}" returned a non-numeric value from updateMany during the incrementOne fallback. Return the number of updated rows, or implement a native incrementOne for atomic guarded counter updates.`,
+									);
+								}
+								return updated > 0 ? ({ ...target, ...nextValues } as T) : null;
+							}),
+					);
+					resultNeedsOutputTransform = false;
+				}
+
+				debugLog(
+					{ method: "incrementOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
+					`${formatMethod("incrementOne")} ${formatAction("DB Result")}:`,
+					{ model, data: res },
+				);
+				let transformed: any = res;
+				if (
+					!config.disableTransformOutput &&
+					resultNeedsOutputTransform &&
+					res
+				) {
+					transformed = await transformOutput(
+						res as Record<string, any>,
+						unsafeModel,
+						undefined,
+						undefined,
+					);
+				}
+				debugLog(
+					{ method: "incrementOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
+					`${formatMethod("incrementOne")} ${formatAction("Parsed Result")}:`,
+					{ model, data: transformed },
+				);
+				return transformed as T | null;
 			},
 			count: async ({
 				model: unsafeModel,

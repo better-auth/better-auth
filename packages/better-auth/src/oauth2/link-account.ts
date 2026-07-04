@@ -1,9 +1,11 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { isDevelopment, logger } from "@better-auth/core/env";
+import { isDevelopment } from "@better-auth/core/env";
 import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
+import { parseAdditionalUserInputFromProviderProfile } from "../db";
 import type { Account, User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
+import { redirectOnError } from "./errors";
 import { setTokenUtil } from "./utils";
 
 // TODO(#9124): v2 widens `User.email` to nullable; every `userInfo.email.toLowerCase()`
@@ -17,6 +19,19 @@ export async function handleOAuthUserInfo(
 		disableSignUp?: boolean | undefined;
 		overrideUserInfo?: boolean | undefined;
 		isTrustedProvider?: boolean | undefined;
+		/**
+		 * Whether `account.providerId` may be matched against the globally
+		 * configured `accountLinking.trustedProviders` list to infer trust.
+		 *
+		 * Defaults to `true` for built-in social/OAuth providers, whose
+		 * `providerId` namespace is controlled by the developer's config. Callers
+		 * whose `providerId` is user-controlled (e.g. the SSO plugin, where any
+		 * authenticated user can register a provider with an arbitrary id) must
+		 * pass `false` so a provider named after a trusted social provider can't
+		 * launder that trust. Such callers should supply their own
+		 * `isTrustedProvider` signal instead.
+		 */
+		trustProviderByName?: boolean | undefined;
 	},
 ) {
 	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
@@ -28,13 +43,13 @@ export async function handleOAuthUserInfo(
 			account.providerId,
 		)
 		.catch((e) => {
-			logger.error(
+			c.context.logger.error(
 				"Better auth was unable to query your database.\nError: ",
 				e,
 			);
 			const errorURL =
 				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-			throw c.redirect(`${errorURL}?error=internal_server_error`);
+			redirectOnError(c, errorURL, "internal_server_error");
 		});
 	let user = dbUser?.user;
 	const isRegister = !user;
@@ -51,14 +66,20 @@ export async function handleOAuthUserInfo(
 			const accountLinking = c.context.options.account?.accountLinking;
 			const isTrustedProvider =
 				opts.isTrustedProvider ||
-				c.context.trustedProviders.includes(account.providerId);
+				(opts.trustProviderByName !== false &&
+					c.context.trustedProviders.includes(account.providerId));
+			// FIXME(next-minor): drop `requireLocalEmailVerified` option and make
+			// the gate unconditional.
+			const requireLocalEmailVerified =
+				accountLinking?.requireLocalEmailVerified ?? true;
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
+				(requireLocalEmailVerified && !dbUser.user.emailVerified) ||
 				accountLinking?.enabled === false ||
 				accountLinking?.disableImplicitLinking === true
 			) {
 				if (isDevelopment()) {
-					logger.warn(
+					c.context.logger.warn(
 						`User already exist but account isn't linked to ${account.providerId}. To read more about how account linking works in Better Auth see https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
 					);
 				}
@@ -80,13 +101,17 @@ export async function handleOAuthUserInfo(
 					scope: account.scope,
 				});
 			} catch (e) {
-				logger.error("Unable to link account", e);
+				c.context.logger.error("Unable to link account", e);
 				return {
 					error: "unable to link account",
 					data: null,
 				};
 			}
 
+			// Reachable only when `requireLocalEmailVerified: false` lets the link
+			// proceed for an unverified local row. The IdP's verified email is
+			// promoted to the local row so subsequent flows treat it as verified.
+			// FIXME(next-minor): unreachable once the gate becomes unconditional.
 			if (
 				userInfo.emailVerified &&
 				!dbUser.user.emailVerified &&
@@ -96,6 +121,9 @@ export async function handleOAuthUserInfo(
 					emailVerified: true,
 				});
 			}
+
+			user =
+				(await applyUpdateUserInfoOnLink(c, dbUser.user.id, userInfo)) ?? user;
 		} else {
 			const freshTokens =
 				c.context.options.account?.updateAccountOnSignIn !== false
@@ -139,10 +167,24 @@ export async function handleOAuthUserInfo(
 			}
 		}
 		if (overrideUserInfo) {
-			const { id: _, ...restUserInfo } = userInfo;
+			const {
+				id: _id,
+				email: _email,
+				emailVerified: _emailVerified,
+				name,
+				image,
+				...providerProfile
+			} = userInfo;
+			const additionalUserFields = parseAdditionalUserInputFromProviderProfile(
+				c.context.options,
+				providerProfile,
+				"update",
+			);
 			// update user info from the provider if overrideUserInfo is true
 			user = await c.context.internalAdapter.updateUser(dbUser.user.id, {
-				...restUserInfo,
+				name,
+				image,
+				...additionalUserFields,
 				email: userInfo.email.toLowerCase(),
 				emailVerified:
 					userInfo.email.toLowerCase() === dbUser.user.email
@@ -159,7 +201,19 @@ export async function handleOAuthUserInfo(
 			};
 		}
 		try {
-			const { id: _, ...restUserInfo } = userInfo;
+			const {
+				id: _id,
+				email: _email,
+				emailVerified: _emailVerified,
+				name,
+				image,
+				...providerProfile
+			} = userInfo;
+			const additionalUserFields = parseAdditionalUserInputFromProviderProfile(
+				c.context.options,
+				providerProfile,
+				"create",
+			);
 			const accountData = {
 				accessToken: await setTokenUtil(account.accessToken, c.context),
 				refreshToken: await setTokenUtil(account.refreshToken, c.context),
@@ -173,8 +227,11 @@ export async function handleOAuthUserInfo(
 			const { user: createdUser, account: createdAccount } =
 				await c.context.internalAdapter.createOAuthUser(
 					{
-						...restUserInfo,
+						name,
+						image,
+						...additionalUserFields,
 						email: userInfo.email.toLowerCase(),
+						emailVerified: userInfo.emailVerified,
 					},
 					accountData,
 				);
@@ -194,7 +251,9 @@ export async function handleOAuthUserInfo(
 					undefined,
 					c.context.options.emailVerification?.expiresIn,
 				);
-				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+					callbackURL || "/",
+				)}`;
 				await c.context.runInBackgroundOrAwait(
 					c.context.options.emailVerification.sendVerificationEmail(
 						{
@@ -207,7 +266,7 @@ export async function handleOAuthUserInfo(
 				);
 			}
 		} catch (e: any) {
-			logger.error(e);
+			c.context.logger.error(e);
 			if (isAPIError(e)) {
 				return {
 					error: e.message,
@@ -247,4 +306,65 @@ export async function handleOAuthUserInfo(
 		error: null,
 		isRegister,
 	};
+}
+
+/**
+ * Provider profile a freshly linked account may copy onto the local user.
+ * `id` is the provider's account id (never the local user id), and `email`/
+ * `emailVerified` are identity anchors; all three are stripped before the
+ * remaining fields are written.
+ */
+type LinkedProviderProfile = {
+	id: string | number;
+	name?: string | undefined;
+	email?: string | null | undefined;
+	emailVerified?: boolean | undefined;
+	image?: string | null | undefined;
+};
+
+/**
+ * Apply the `account.accountLinking.updateUserInfoOnLink` policy: when enabled,
+ * copy the freshly linked provider's profile onto the local user, matching the
+ * field set persisted on sign-up. The local `email` and `emailVerified` are
+ * never changed, so a link can't rebind the account's identity, and
+ * `updateUser` drops `undefined` fields, so a provider that omits one leaves
+ * the existing column intact.
+ *
+ * Returns the updated user so a caller that issues a session can seed the
+ * cookie cache with the fresh row. Returns `undefined` when the policy is
+ * disabled or the update fails: a failed profile sync must not abort the link.
+ */
+export async function applyUpdateUserInfoOnLink(
+	c: GenericEndpointContext,
+	userId: string,
+	userInfo: LinkedProviderProfile,
+): Promise<User | undefined> {
+	if (
+		c.context.options.account?.accountLinking?.updateUserInfoOnLink !== true
+	) {
+		return undefined;
+	}
+	try {
+		const {
+			id: _id,
+			email: _email,
+			emailVerified: _emailVerified,
+			name,
+			image,
+			...providerProfile
+		} = userInfo;
+		const additionalUserFields = parseAdditionalUserInputFromProviderProfile(
+			c.context.options,
+			providerProfile,
+			"update",
+		);
+		return await c.context.internalAdapter.updateUser(userId, {
+			name,
+			image,
+			...additionalUserFields,
+		});
+	} catch (e) {
+		c.context.logger.warn("Could not update user info on account link", e);
+		return undefined;
+	}
 }

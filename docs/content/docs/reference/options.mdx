@@ -350,7 +350,7 @@ export const auth = betterAuth({
 * `prompt`: The prompt to use for the authorization code request (`"select_account"`, `"consent"`, `"login"`, `"none"`, `"select_account consent"`) (optional)
 * `responseMode`: The response mode to use (`"query"`, `"form_post"`) (optional)
 * `getUserInfo`: Custom function to get user info from the provider (optional)
-* `refreshAccessToken`: Custom function to refresh a token (optional)
+* `refreshAccessToken`: Custom function to refresh a token. Receives the stored refresh token and returns new OAuth tokens. (optional)
 * `verifyIdToken`: Custom function to verify the ID token (optional)
 * `disableIdTokenSignIn`: Disable sign in with ID token sent from the client (optional)
 * `disableDefaultScope`: Disable the provider's default scopes (optional)
@@ -474,7 +474,8 @@ export const auth = betterAuth({
 			userId: "user_id"
 		},
 		encryptOAuthTokens: true, // Encrypt OAuth tokens before storing them in the database
-		storeAccountCookie: true, // Store account data after OAuth flow in a cookie (useful for database-less flows)
+		storeStateStrategy: "database", // Store OAuth state payload in verification storage
+		storeAccountCookie: true, // Store provider account data after OAuth flow in an encrypted cookie (useful for database-less flows)
 		accountLinking: {
 			enabled: true,
 			trustedProviders: ["google", "github", "email-password"], // or async (request) => ["google", "github"]
@@ -496,12 +497,25 @@ Encrypt OAuth tokens before storing them in the database. Default: `false`.
 If enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
 will be updated on sign in with the latest data from the provider.
 
+### `storeStateStrategy`
+
+Controls where OAuth state data is stored during the authentication flow.
+
+* `"cookie"`: Store the state payload in an encrypted cookie. This keeps OAuth state stateless and avoids a database write during the start of the flow.
+* `"database"`: Store the state payload in the verification storage/table, set a signed state cookie when starting the flow, and validate the stored state against the signed cookie sent by the browser on the OAuth callback request.
+
+Defaults to `"database"` when a database or `secondaryStorage` is configured, and to `"cookie"` only when neither is set (a fully stateless setup). With `secondaryStorage`, OAuth state is stored there automatically; you no longer need to set this manually.
+
 ### `storeAccountCookie`
 
-Store account data after OAuth flow in a cookie. This is useful for database-less flows where you want to store account information (access tokens, refresh tokens, etc.) in a cookie instead of the database.
+Store provider account data after an OAuth flow in an encrypted cookie. This is useful for database-less flows where OAuth token material, such as access tokens, refresh tokens, ID tokens, scopes, and token expiry, must be available without an account table.
 
 * Default: `false`
 * Automatically set to `true` if no database is provided
+
+The account cookie has a five-minute max age and is refreshed when Better Auth writes updated provider account data, for example after `getAccessToken` or `/refresh-token` refreshes provider tokens. When this happens in server-side code, forward the returned `Set-Cookie` header to the browser so the refreshed account cookie is retained.
+
+Better Auth chunks oversized account cookies, but browsers and proxies can still enforce total cookie or header limits. Prefer database-backed account storage for providers that issue large JWTs or for production flows that need durable token storage.
 
 When this option is enabled, you can read the decrypted account cookie in hooks or middleware using `getAccountCookie` from `better-auth/cookies`:
 
@@ -519,9 +533,11 @@ const hook = createAuthMiddleware(async (ctx) => {
 Configuration for account linking.
 
 * `enabled`: Enable account linking (default: `true`)
+* `disableImplicitLinking`: Disable automatic account linking on OAuth sign-in. When `true`, a same-email OAuth sign-in for an existing user is rejected with `account_not_linked` instead of being implicitly linked (even for verified emails or `trustedProviders`). New users can still sign up via OAuth, and authenticated users can still link providers explicitly via `linkSocial()`. (default: `false`)
 * `trustedProviders`: List of trusted providers. Can be a static array or an async function that returns providers dynamically based on the request (similar to `trustedOrigins`)
 * `allowDifferentEmails`: Allow users to link accounts with different email addresses
 * `allowUnlinkingAll`: Allow users to unlink all accounts
+* `updateUserInfoOnLink`: When linking, copy the provider's profile (`name`, `image`, and any `mapProfileToUser` fields) onto the local user. The local `email` and `emailVerified` are never changed. (default: `false`)
 
 ## `verification`
 
@@ -588,7 +604,7 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	advanced: {
 		ipAddress: {
-			ipAddressHeaders: ["x-client-ip", "x-forwarded-for"],
+			ipAddressHeaders: ["x-client-ip", "x-real-ip"],
 			disableIpTracking: false
 		},
 		useSecureCookies: true,
@@ -637,6 +653,9 @@ export const auth = betterAuth({
 ```
 
 * `ipAddress`: IP address configuration for rate limiting and session tracking
+  * `disableIpTracking`: Disable IP address tracking.
+  * `ipAddressHeaders`: Trusted header names to read client IP addresses from.
+  * `trustedProxies`: Reverse-proxy IPs or CIDR ranges. The forwarded chain is walked right to left, trusted hops are skipped, and the first untrusted address is used as the client IP.
 * `useSecureCookies`: By default, cookies are secure in production environments. Set this to `true` to force the `Secure` cookie attribute in all environments.
 * `disableCSRFCheck`: Disable all CSRF protection including origin header validation and Fetch Metadata checks (⚠️ security risk)
 * `disableOriginCheck`: Disable URL validation for `callbackURL`, `redirectTo`, and other redirect URLs (⚠️ security risk)

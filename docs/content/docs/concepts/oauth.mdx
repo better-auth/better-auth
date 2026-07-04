@@ -108,7 +108,10 @@ server-side usage:
 
 ```ts
 await auth.api.accountInfo({
-  query: { accountId: "accountId" },
+  query: {
+    accountId: "accountId",
+    userId: "userId", // optional, if you don't provide headers with authenticated token
+  },
   headers: await headers() // headers containing the user's session token
 });
 ```
@@ -274,12 +277,13 @@ The table below summarises, for each affected provider, when `email` may be abse
 
 | Provider           | When `email` may be absent                                                                                                                                               | Stable fallback ID                                  | `email_verified` trust                                                                                                                                              |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Discord            | Phone-only accounts; `email` scope not granted                                                                                                                           | `profile.id` (snowflake)                            | Reliable (dedicated `verified` field)                                                                                                                               |
 | Apple              | Every sign-in after the first (Apple only emits `email` on the initial consent)                                                                                          | `profile.sub` (stable per Apple Team)               | Reliable; relay addresses are also flagged verified                                                                                                                 |
-| GitHub             | User has set email to private; GitHub App lacks the "Email addresses" permission                                                                                         | `profile.id` (numeric)                              | Reliable                                                                                                                                                            |
+| Discord            | Phone-only accounts; `email` scope not granted                                                                                                                           | `profile.id` (snowflake)                            | Reliable (dedicated `verified` field)                                                                                                                               |
 | Facebook           | No valid email on file, even with the `email` permission granted                                                                                                         | `profile.id` (app-scoped)                           | Unknown: Graph API exposes no per-email verification flag                                                                                                           |
+| GitHub             | User has set email to private; GitHub App lacks the "Email addresses" permission                                                                                         | `profile.id` (numeric)                              | Reliable                                                                                                                                                            |
 | LinkedIn           | No confirmed email on the member; `email` scope not granted                                                                                                              | `profile.sub` (pairwise per app)                    | Reliable when present                                                                                                                                               |
 | Microsoft Entra ID | Managed users without a `mail` attribute, unless `email` is configured as an [optional claim](https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims) | `profile.oid` plus `profile.tid` (or `profile.sub`) | **Untrustworthy**: Microsoft [explicitly warns](https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference) never to use for authorization |
+| Roblox             | The default Roblox profile flow does not return an email; Better Auth currently falls back to `preferred_username`                                                       | `profile.sub` (Roblox user ID)                      | Unknown for the default profile flow                                                                                                                                |
 
 ### Synthesize a placeholder email with `mapProfileToUser`
 
@@ -416,6 +420,8 @@ A custom function to map the user profile returned from the provider to the user
 
 Useful, if you have additional fields in your user object you want to populate from the provider's profile. Or if you want to change how by default the user object is mapped.
 
+`mapProfileToUser` follows the input rules from `user.additionalFields`. It can populate additional fields that allow input, but provider values for fields marked `input: false` are ignored during OAuth sign-up, sign-in profile override, and account-link profile sync. Use server-side provisioning code to set server-owned fields such as roles, bans, or internal flags.
+
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 
@@ -438,7 +444,8 @@ export const auth = betterAuth({
 
 <Callout type="info">
   You may want to pass additional fields into the user object in `mapProfileToUser`,
-  to do this, you must configure the `user.additionalFields` [option](/docs/concepts/database#extending-core-schema).
+  to do this, you must configure the `user.additionalFields` [option](/docs/concepts/database#extending-core-schema)
+  and allow those fields as input.
   (The same applies for stateless auth setups)
 </Callout>
 
