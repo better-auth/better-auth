@@ -128,6 +128,27 @@ export default async function Page({
 								{children}
 							</Callout>
 						),
+						HeaderLabel: ({
+							children,
+							variant = "default",
+						}: {
+							children: React.ReactNode;
+							variant?: "default" | "info" | "warning";
+						}) => {
+							const colors = {
+								default: "text-neutral-600 dark:text-neutral-300",
+								info: "text-blue-500 dark:text-blue-400",
+								warning: "text-amber-600 dark:text-amber-400",
+							};
+							return (
+								<span
+									data-header-label="true"
+									className={`text-[11px] font-semibold tracking-wide not-prose block select-none ${colors[variant]}`}
+								>
+									{children}
+								</span>
+							);
+						},
 						iframe: (props: React.ComponentProps<"iframe">) => (
 							<iframe
 								title="Embedded content"

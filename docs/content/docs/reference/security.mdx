@@ -298,6 +298,10 @@ You can also dynamically set the list of trusted origins by providing a function
   **Important**: This function will be invoked per incoming request, so be careful if you decide to dynamically fetch your list of trusted domains.
 </Callout>
 
+## Outbound OAuth Requests
+
+During sign-in, Better Auth makes server-side requests to OAuth and OIDC provider endpoints: the token exchange, token refresh, token introspection, and key-set (JWKS) requests. These requests do not follow HTTP redirects. A conformant provider answers these endpoints with a direct response and never redirects, so standard integrations are unaffected. Refusing redirects keeps a provider endpoint from steering a server-side request to an unintended internal address.
+
 ## Email Enumeration Protection
 
 Better Auth prevents email enumeration on the sign-up and change-email endpoints. When `requireEmailVerification` is enabled or `autoSignIn` is set to `false`, the sign-up endpoint returns the same `200` response whether the email is already registered or not, following [OWASP authentication best practices](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html#authentication-and-error-messages). Timing attacks are mitigated by simulating password hashing on duplicate sign-up attempts.

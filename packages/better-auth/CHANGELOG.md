@@ -1,5 +1,43 @@
 # better-auth
 
+## 1.6.23
+
+### Patch Changes
+
+- [#9138](https://github.com/better-auth/better-auth/pull/9138) [`8581f97`](https://github.com/better-auth/better-auth/commit/8581f97ea0000e03edd6aa7911efabf694a9ff95) Thanks [@vladflotsky](https://github.com/vladflotsky)! - Add a pre-configured Yandex provider helper for the generic OAuth plugin.
+
+- Updated dependencies [[`930b260`](https://github.com/better-auth/better-auth/commit/930b260cfd402e9f8886719a3ced503b9ceff7f6)]:
+  - @better-auth/drizzle-adapter@1.6.23
+  - @better-auth/core@1.6.23
+  - @better-auth/kysely-adapter@1.6.23
+  - @better-auth/memory-adapter@1.6.23
+  - @better-auth/mongo-adapter@1.6.23
+  - @better-auth/prisma-adapter@1.6.23
+  - @better-auth/telemetry@1.6.23
+
+## 1.6.22
+
+### Patch Changes
+
+- [#10239](https://github.com/better-auth/better-auth/pull/10239) [`c06a56d`](https://github.com/better-auth/better-auth/commit/c06a56d83a40bbaeac12d3a8b8b67e59f92a9110) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Magic-link and email-OTP sign-in now reset the credentials on an account whose email had never been confirmed. When verification resolves to such an account, any existing password on it is removed and its sessions are revoked before the user is signed in, so proven control of the mailbox is the source of truth for the account.
+
+  If you signed up with email and password but first signed in through a magic link or email OTP rather than confirming the verification email, your password is cleared and you will need to set a new one through password reset.
+
+- [#10240](https://github.com/better-auth/better-auth/pull/10240) [`3a035e9`](https://github.com/better-auth/better-auth/commit/3a035e968e27bfdee1e53ad857e5569090d9f2d1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add account-level lockout for two-factor verification. The attempt limit applies per account across sign-in challenges and across factors: TOTP, email-OTP, and backup codes share one counter, and a successful verification resets it.
+
+  Enabled by default: an account locks for 15 minutes after 10 consecutive failed verifications, and locked attempts return `429` with the `ACCOUNT_TEMPORARILY_LOCKED` error code. Configure it with `twoFactor({ accountLockout: { enabled, maxFailedAttempts, durationSeconds } })`.
+
+  Run a database migration after upgrading: this adds `failedVerificationCount` and `lockedUntil` columns to the `twoFactor` table.
+
+- Updated dependencies [[`8bd43d9`](https://github.com/better-auth/better-auth/commit/8bd43d9d8312fd9ddbfb8fb5c827cf0a0e55132d)]:
+  - @better-auth/core@1.6.22
+  - @better-auth/drizzle-adapter@1.6.22
+  - @better-auth/kysely-adapter@1.6.22
+  - @better-auth/memory-adapter@1.6.22
+  - @better-auth/mongo-adapter@1.6.22
+  - @better-auth/prisma-adapter@1.6.22
+  - @better-auth/telemetry@1.6.22
+
 ## 1.6.21
 
 ### Patch Changes

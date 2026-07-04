@@ -1,5 +1,21 @@
 # @better-auth/drizzle-adapter
 
+## 1.6.23
+
+### Patch Changes
+
+- [#10257](https://github.com/better-auth/better-auth/pull/10257) [`930b260`](https://github.com/better-auth/better-auth/commit/930b260cfd402e9f8886719a3ced503b9ceff7f6) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix `updateMany` and `deleteMany` reporting 0 affected rows on Cloudflare D1 and on the postgres-js / bun-sql drivers.
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.23
+
+## 1.6.22
+
+### Patch Changes
+
+- Updated dependencies [[`8bd43d9`](https://github.com/better-auth/better-auth/commit/8bd43d9d8312fd9ddbfb8fb5c827cf0a0e55132d)]:
+  - @better-auth/core@1.6.22
+
 ## 1.6.21
 
 ### Patch Changes

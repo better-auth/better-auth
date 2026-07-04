@@ -1,5 +1,21 @@
 # @better-auth/oauth-provider
 
+## 1.6.23
+
+### Patch Changes
+
+- Updated dependencies [[`8581f97`](https://github.com/better-auth/better-auth/commit/8581f97ea0000e03edd6aa7911efabf694a9ff95)]:
+  - better-auth@1.6.23
+  - @better-auth/core@1.6.23
+
+## 1.6.22
+
+### Patch Changes
+
+- Updated dependencies [[`c06a56d`](https://github.com/better-auth/better-auth/commit/c06a56d83a40bbaeac12d3a8b8b67e59f92a9110), [`8bd43d9`](https://github.com/better-auth/better-auth/commit/8bd43d9d8312fd9ddbfb8fb5c827cf0a0e55132d), [`3a035e9`](https://github.com/better-auth/better-auth/commit/3a035e968e27bfdee1e53ad857e5569090d9f2d1)]:
+  - better-auth@1.6.22
+  - @better-auth/core@1.6.22
+
 ## 1.6.21
 
 ### Patch Changes
