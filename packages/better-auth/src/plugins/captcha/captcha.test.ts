@@ -579,6 +579,7 @@ describe("captcha", async () => {
 				secretKey: "xx-secret-key",
 				siteKey: "xx-site",
 			},
+			{ provider: "yandex-smart-captcha", secretKey: "xx-secret-key" },
 		];
 
 		it.each(
@@ -586,7 +587,12 @@ describe("captcha", async () => {
 		)("$provider bounds the verification request with the shared timeout", async (config) => {
 			mockBetterFetch.mockClear();
 			mockBetterFetch.mockResolvedValue({
-				data: { success: true, challenge_ts: "ts", hostname: "example.com" },
+				data: {
+					success: true,
+					status: "ok",
+					challenge_ts: "ts",
+					hostname: "example.com",
+				},
 			});
 
 			const { client } = await getTestInstance({
