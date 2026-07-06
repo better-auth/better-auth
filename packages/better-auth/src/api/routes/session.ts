@@ -587,9 +587,15 @@ export const getSessionFromCtx = async <
 	}
 	if (session.headers) {
 		session.headers.forEach((value, key) => {
+			const lowerKey = key.toLowerCase();
+			// /get-session response cache headers must not leak onto endpoints
+			// that resolve the session via getSessionFromCtx.
+			if (lowerKey === "cache-control" || lowerKey === "pragma") {
+				return;
+			}
 			if (!ctx.context.responseHeaders) {
 				ctx.context.responseHeaders = new Headers({ [key]: value });
-			} else if (key.toLowerCase() === "set-cookie") {
+			} else if (lowerKey === "set-cookie") {
 				ctx.context.responseHeaders.append(key, value);
 			} else {
 				ctx.context.responseHeaders.set(key, value);

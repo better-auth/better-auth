@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-fix: add no-cache cache-control headers to get-session route
+fix: add no-store cache-control headers to get-session route
