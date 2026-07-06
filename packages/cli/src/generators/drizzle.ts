@@ -58,7 +58,10 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	let schemaVarName: string | undefined;
 	if (databaseType === "pg" && schemaName) {
 		schemaVarName = `${toValidIdentifier(schemaName)}Schema`;
-		code += `\nconst ${schemaVarName} = pgSchema("${schemaName}");\n\n`;
+		if (schemaVarName === "pgSchema") {
+			schemaVarName = "pgCustomSchema";
+		}
+		code += `\nconst ${schemaVarName} = pgSchema(${JSON.stringify(schemaName)});\n\n`;
 	}
 
 	const getModelName = initGetModelName({
@@ -631,7 +634,9 @@ function generateImport({
 		coreImports.push("pgSchema");
 	}
 
-	coreImports.push(`${databaseType}Table`);
+	if (!(databaseType === "pg" && schemaName)) {
+		coreImports.push(`${databaseType}Table`);
+	}
 	coreImports.push(
 		databaseType === "mysql"
 			? "varchar, text"

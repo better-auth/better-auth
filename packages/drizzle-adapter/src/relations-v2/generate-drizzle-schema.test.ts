@@ -202,5 +202,39 @@ describe("relations-v2 schema generator", () => {
 			expect(code).toContain("myAuthSchema.table");
 			expect(typeErrors(code)).toEqual([]);
 		});
+
+		it("does not import pgTable when schemaName is set", async () => {
+			const { code = "" } = await generateDrizzleSchema({
+				options: {},
+				provider: "pg",
+				adapterConfig: { provider: "pg", schemaName: "auth" },
+			});
+
+			expect(code).not.toContain("pgTable");
+		});
+
+		it("avoids variable collision when schemaName is 'pg'", async () => {
+			const { code = "" } = await generateDrizzleSchema({
+				options: {},
+				provider: "pg",
+				adapterConfig: { provider: "pg", schemaName: "pg" },
+			});
+
+			expect(code).toContain('pgSchema("pg")');
+			expect(code).not.toMatch(/const pgSchema\s*=/);
+			expect(code).toContain("pgCustomSchema");
+			expect(typeErrors(code)).toEqual([]);
+		});
+
+		it("escapes quotes and backslashes in schemaName", async () => {
+			const { code = "" } = await generateDrizzleSchema({
+				options: {},
+				provider: "pg",
+				adapterConfig: { provider: "pg", schemaName: 'auth"schema' },
+			});
+
+			expect(code).toContain('pgSchema("auth\\"schema")');
+			expect(typeErrors(code)).toEqual([]);
+		});
 	});
 });

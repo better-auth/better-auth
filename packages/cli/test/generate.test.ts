@@ -756,8 +756,9 @@ export const auth = betterAuth({
 		expect(schema.code).toContain('const authSchema = pgSchema("auth")');
 		// Should use schema.table() instead of pgTable() for table definitions
 		expect(schema.code).toContain("authSchema.table");
-		// Should not use pgTable() for table definitions (may still be in imports)
+		// Should not use or import pgTable() when schemaName is set
 		expect(schema.code).not.toMatch(/export const \w+ = pgTable\(/);
+		expect(schema.code).not.toContain("pgTable");
 	});
 
 	it("should generate drizzle schema without schemaName for PostgreSQL", async () => {
