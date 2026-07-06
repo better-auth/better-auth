@@ -126,6 +126,10 @@ if (data) {
   `message` must be a valid [ERC-4361](https://eips.ethereum.org/EIPS/eip-4361) message (which every standard SIWE client produces). Before accepting the signature, the plugin parses the message and requires its **nonce**, **domain**, **address**, and **Chain ID** to match the server-issued nonce and your configured `domain`, and it honors the message's `Expiration Time` / `Not Before` bounds. Signature recovery alone is **not** sufficient — this binding ensures a signature is only accepted together with the message it was produced for, bound to the current server-issued nonce. Verification fails with a 401 (`UNAUTHORIZED_SIWE_MESSAGE_MISMATCH`) if any field doesn't match.
 </Callout>
 
+<Callout type="warning">
+  A SIWE signature proves control of the wallet, not ownership of the `email` you pass. The plugin stores that email unverified and only binds it to the new account when it is not already in use. When `anonymous` is `false` and the supplied email already belongs to another account, the new wallet account is created with a wallet-derived address instead, so a sign-in cannot attach an email another account owns.
+</Callout>
+
 ### Chain-Specific Examples
 
 Here are examples for different blockchain networks:
