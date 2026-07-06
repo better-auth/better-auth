@@ -4,6 +4,7 @@ import { mergeSchema } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
 import type { TimeString } from "../../utils/time";
 import { ms } from "../../utils/time";
+import { PACKAGE_VERSION } from "../../version";
 import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
 import {
 	deviceApprove,
@@ -15,8 +16,7 @@ import {
 import { schema } from "./schema";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"device-authorization": {
 			creator: typeof deviceAuthorization;
 		};
@@ -119,7 +119,7 @@ export const deviceAuthorizationOptionsSchema = z.object({
 		.describe(
 			"The URI where users verify their device code. Can be an absolute URL (https://example.com/device) or relative path (/custom-path). This will be returned as verification_uri in the device code response. If not provided, defaults to /device.",
 		),
-	schema: z.custom<InferOptionSchema<typeof schema>>(() => true),
+	schema: z.custom<InferOptionSchema<typeof schema>>(() => true).optional(),
 });
 
 export type DeviceAuthorizationOptions = z.infer<
@@ -133,6 +133,7 @@ export const deviceAuthorization = (
 
 	return {
 		id: "device-authorization",
+		version: PACKAGE_VERSION,
 		schema: mergeSchema(schema, options?.schema),
 		endpoints: {
 			deviceCode: deviceCode(opts),

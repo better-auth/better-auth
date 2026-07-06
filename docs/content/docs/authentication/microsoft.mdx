@@ -6,18 +6,20 @@ description: Microsoft provider setup and usage.
 Enabling OAuth with Microsoft Azure Entra ID (formerly Active Directory) allows your users to sign in and sign up to your application with their Microsoft account.
 
 <Steps>
-    <Step> 
-        ### Get your Microsoft credentials
-        To use Microsoft as a social provider, you need to get your Microsoft credentials. Which involves generating your own Client ID and Client Secret using your Microsoft Entra ID dashboard account.
+  <Step>
+    ### Get your Microsoft credentials
 
-        Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/microsoft` for local development. For production, you should change it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
+    To use Microsoft as a social provider, you need to get your Microsoft credentials. This involves generating a Client ID in your Microsoft Entra ID dashboard and, for confidential clients, configuring either a Client Secret or a client assertion credential.
 
-        see the [Microsoft Entra ID documentation](https://docs.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app) for more information.
-    </Step>
+    Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/microsoft` for local development. For production, you should change it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
 
-    <Step>
+    see the [Microsoft Entra ID documentation](https://docs.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app) for more information.
+  </Step>
+
+  <Step>
     ### Configure the provider
-    To configure the provider, you need to pass the `clientId` and `clientSecret` to `socialProviders.microsoft` in your auth configuration.
+
+    To configure the provider, pass the `clientId` and, for confidential clients, either `clientSecret` or `clientAssertion` to `socialProviders.microsoft` in your auth configuration.
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth"
@@ -35,18 +37,82 @@ Enabling OAuth with Microsoft Azure Entra ID (formerly Active Directory) allows 
         },
     })
     ```
-    
-    **Authority URL**: Use the default `https://login.microsoftonline.com` for standard Entra ID scenarios or `https://<tenant-id>.ciamlogin.com` for CIAM (Customer Identity and Access Management) scenarios.
-    
-    </Step>
 
+    **Authority URL**: Use the default `https://login.microsoftonline.com` for standard Entra ID scenarios or `https://<tenant-id>.ciamlogin.com` for CIAM (Customer Identity and Access Management) scenarios.
+
+    **Client assertions**: Use `clientAssertion` instead of `clientSecret` when your Microsoft Entra ID app is configured for `private_key_jwt` or workload identity federation. The callback receives the token request context and must return a JWT assertion. Do not combine `clientAssertion` with `clientSecret`.
+
+    ```ts title="auth.ts"
+    import { getVercelOidcToken } from "@vercel/oidc"
+    import { betterAuth } from "better-auth"
+
+    export const auth = betterAuth({
+        socialProviders: {
+            microsoft: {
+                clientId: process.env.MICROSOFT_CLIENT_ID as string,
+                tenantId: process.env.MICROSOFT_TENANT_ID as string,
+                clientAssertion: async () => getVercelOidcToken(),
+            },
+        },
+    })
+    ```
+
+    You can also sign RFC 7523 assertions from a private key with the built-in helper:
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { createPrivateKeyJwtClientAssertionGetter } from "better-auth/oauth2"
+
+    export const auth = betterAuth({
+        socialProviders: {
+            microsoft: {
+                clientId: process.env.MICROSOFT_CLIENT_ID as string,
+                tenantId: process.env.MICROSOFT_TENANT_ID as string,
+                clientAssertion: createPrivateKeyJwtClientAssertionGetter({
+                    privateKeyPem: process.env.MICROSOFT_PRIVATE_KEY_PEM as string,
+                    kid: process.env.MICROSOFT_PRIVATE_KEY_ID,
+                    algorithm: "RS256",
+                }),
+            },
+        },
+    })
+    ```
+
+    <Callout type="warn">
+      Entra does not emit the `email` claim for managed users by default, and the value is [tenant-mutable and never verified by Microsoft](https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference); it must not be used for authorization decisions. Request `email` as an [optional claim](https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims) for managed users, and use `profile.oid` (plus `profile.tid` when correlating across tenants) as the stable identity anchor. See [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email) for the `mapProfileToUser` fallback.
+    </Callout>
+  </Step>
 </Steps>
+
+## Large Profile Images ⚠️
+
+Microsoft returns profile images as base64-encoded strings, which can exceed HTTP header size limits and cause request failures.
+
+To work around this, use the `mapProfileToUser` function to either upload the image to your own storage or strip it entirely:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  socialProviders: {
+    microsoft: {
+      mapProfileToUser: (profile) => {
+        const imgURL = uploadImageToStorage(profile.picture);
+
+        return {
+          image: imgURL, // or `null` to discard the image
+        };
+      },
+    },
+  },
+});
+```
 
 ## Sign In with Microsoft
 
 To sign in with Microsoft, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
 
-- `provider`: The provider to use. It should be set to `microsoft`.
+* `provider`: The provider to use. It should be set to `microsoft`.
 
 ```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";
@@ -59,4 +125,16 @@ const signIn = async () => {
     callbackURL: "/dashboard", // The URL to redirect to after the sign in
   });
 };
+```
+
+### Preselecting an organizational domain
+
+To skip the account picker for users you know belong to a given tenant or
+domain, forward Microsoft's `domain_hint` parameter on the call:
+
+```ts
+await authClient.signIn.social({
+  provider: "microsoft",
+  additionalParams: { domain_hint: "contoso.com" },
+});
 ```

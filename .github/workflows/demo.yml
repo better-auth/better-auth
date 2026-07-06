@@ -1,0 +1,60 @@
+name: Demo
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+  push:
+    branches:
+      - main
+
+permissions: {}
+
+env:
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    concurrency:
+      group: ${{ github.workflow }}-${{ matrix.demo }}-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        demo: [expo, nextjs, electron, oidc-client, stateless]
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Cache turbo build setup
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: '.nvmrc'
+          registry-url: 'https://registry.npmjs.org'
+          cache: pnpm
+
+      - name: Install workspace dependencies
+        run: pnpm install
+
+      - name: Build workspace packages
+        run: pnpm build
+
+      - name: Install demo dependencies
+        working-directory: demo/${{ matrix.demo }}
+        run: pnpm install

@@ -102,10 +102,11 @@ export interface KakaoOptions extends ProviderOptions<KakaoProfile> {
 }
 
 export const kakao = (options: KakaoOptions) => {
+	const tokenEndpoint = "https://kauth.kakao.com/oauth/token";
 	return {
 		id: "kakao",
 		name: "Kakao",
-		createAuthorizationURL({ state, scopes, redirectURI }) {
+		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["account_email", "profile_image", "profile_nickname"];
@@ -118,6 +119,7 @@ export const kakao = (options: KakaoOptions) => {
 				scopes: _scopes,
 				state,
 				redirectURI,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
@@ -125,7 +127,7 @@ export const kakao = (options: KakaoOptions) => {
 				code,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://kauth.kakao.com/oauth/token",
+				tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -138,7 +140,7 @@ export const kakao = (options: KakaoOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://kauth.kakao.com/oauth/token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
@@ -161,7 +163,7 @@ export const kakao = (options: KakaoOptions) => {
 			const kakaoProfile = account.profile || {};
 			const user = {
 				id: String(profile.id),
-				name: kakaoProfile.nickname || account.name || undefined,
+				name: kakaoProfile.nickname || account.name || "",
 				email: account.email,
 				image:
 					kakaoProfile.profile_image_url || kakaoProfile.thumbnail_image_url,

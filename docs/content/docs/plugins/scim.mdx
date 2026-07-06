@@ -6,126 +6,164 @@ description: Integrate SCIM with your application.
 System for Cross-domain Identity Management ([SCIM](https://simplecloud.info/#Specification)) makes managing identities in multi-domain scenarios easier to support via a standardized protocol.
 This plugin exposes a [SCIM](https://simplecloud.info/#Specification) server that allows third party identity providers to sync identities to your service.
 
+<Callout>
+  Need a self-service SCIM setup where your customers can configure their own identity provider sync? [Contact us for enterprise](/enterprise).
+</Callout>
+
 ## Installation
 
 <Steps>
-    <Step>
-        ### Install the plugin
+  <Step>
+    ### Install the plugin
 
-        ```bash
-        npm install @better-auth/scim
+    ```package-install
+    @better-auth/scim
+    ```
+  </Step>
+
+  <Step>
+    ### Add Plugin to the server
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { organization } from "better-auth/plugins";
+    import { scim } from "@better-auth/scim"; // [!code highlight]
+
+    const auth = betterAuth({
+        plugins: [
+            organization(), // [!code highlight]
+            scim() // [!code highlight]
+        ]
+    })
+    ```
+
+    SCIM tokens generated through the management API are scoped to an organization, so the [organization plugin](/docs/plugins/organization) is required. For single-tenant app-level SCIM, configure [`staticProviders`](#static-scim-providers).
+  </Step>
+
+  <Step>
+    ### Enable HTTP methods
+
+    SCIM requires the `POST`, `GET`, `PUT`, `PATCH` and `DELETE` HTTP methods to be supported by your server.
+    For most frameworks, this will work out of the box, but some frameworks may require additional configuration:
+
+    <Tabs items={["Next.js", "Solid Start"]}>
+      <Tab value="Next.js">
+        ```ts title="api/auth/[...all]/route.ts"
+        import { auth } from "@/lib/auth";
+        import { toNextJsHandler } from "better-auth/next-js";
+
+        export const { POST, GET, PUT, PATCH, DELETE } = toNextJsHandler(auth); // [!code highlight]
         ```
-    </Step>
-    <Step>
-        ### Add Plugin to the server
+      </Tab>
 
-        ```ts title="auth.ts"
-        import { betterAuth } from "better-auth"
-        import { scim } from "@better-auth/scim"; // [!code highlight]
+      <Tab value="Solid Start">
+        ```ts title="routes/api/auth/*auth.ts"
+        import { auth } from "~/lib/auth";
+        import { toSolidStartHandler } from "better-auth/solid-start";
 
-        const auth = betterAuth({
-            plugins: [ // [!code highlight]
-                scim() // [!code highlight]
-            ] // [!code highlight]
-        })
+        export const { GET, POST, PUT, PATCH, DELETE } = toSolidStartHandler(auth); // [!code highlight]
         ```
-    </Step>
-    <Step>
-        ### Enable HTTP methods
+      </Tab>
+    </Tabs>
+  </Step>
 
-        SCIM requires the `POST`, `PUT`, `PATCH` and `DELETE` HTTP methods to be supported by your server.
-        For most frameworks, this will work out of the box, but some frameworks may require additional configuration:
+  <Step>
+    ### Migrate the database
 
-        <Tabs items={["Next.js", "Solid Start"]}>
-            <Tab value="Next.js">
-            ```ts title="api/auth/[...all]/route.ts"
-            import { auth } from "@/lib/auth";
-            import { toNextJsHandler } from "better-auth/next-js";
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
 
-            export const { POST, GET, PUT, PATCH, DELETE } = toNextJsHandler(auth); // [!code highlight]
-            ```
-            </Tab>
-            <Tab value="Solid Start">
-            ```ts title="routes/api/auth/*auth.ts"
-            import { auth } from "~/lib/auth";
-            import { toSolidStartHandler } from "better-auth/solid-start";
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```package-install
+        npx auth migrate
+        ```
+      </Tab>
 
-            export const { GET, POST, PUT, PATCH, DELETE } = toSolidStartHandler(auth); // [!code highlight]
-            ```
-            </Tab>
-        </Tabs>
-    </Step>
-    <Step>
-        ### Migrate the database
+      <Tab value="generate">
+        ```package-install
+        npx auth generate
+        ```
+      </Tab>
+    </Tabs>
 
-        Run the migration or generate the schema to add the necessary fields and tables to the database.
-
-        <Tabs items={["migrate", "generate"]}>
-            <Tab value="migrate">
-            ```package-install
-            npx @better-auth/cli migrate
-            ```
-            </Tab>
-            <Tab value="generate">
-            ```package-install
-            npx @better-auth/cli generate
-            ```
-            </Tab>
-        </Tabs>
-        See the [Schema](#schema) section to add the fields manually.
-    </Step>
+    See the [Schema](#schema) section to add the fields manually.
+  </Step>
 </Steps>
 
 ## Usage
 
 Upon registration, this plugin will expose compliant [SCIM 2.0](https://simplecloud.info/#Specification) server. Generally, this server is meant to be consumed by a third-party (your identity provider), and will require a:
 
-- **SCIM base URL**: This should be the fully qualified URL to the SCIM server (e.g `http://your-app.com/api/auth/scim/v2`)
-- **SCIM bearer token**: See [generating a SCIM token](#generating-a-scim-token)
+* **SCIM base URL**: This should be the fully qualified URL to the SCIM server (e.g `http://your-app.com/api/auth/scim/v2`)
+* **SCIM bearer token**: See [generating a SCIM token](#generating-a-scim-token)
+
+### Self-Service Directory Sync
+
+If you're using [Better Auth Infrastructure](https://dash.better-auth.com/sign-in), you get self-service directory sync in the dashboard. Organization admins can create and manage SCIM directory connections and rotate bearer tokens without calling the SCIM APIs directly.
+
+The dashboard is available at:
+
+```
+https://dash.better-auth.com/[project]/organization/[orgId]/enterprise
+```
+
+From the dashboard you can:
+
+* **Create and remove directory connections** scoped to an organization
+* **Regenerate SCIM bearer tokens** when your identity provider requires rotation
+
+This eliminates the back-and-forth typically required when setting up SCIM, reducing onboarding time from days to minutes.
 
 ### Generating a SCIM token
 
 Before your identity provider can start syncing information to your SCIM server,
 you need to generate a SCIM token that your identity provider will use to authenticate against it.
 
-A SCIM token is a simple bearer token that you can generate:
+A runtime SCIM token is a simple bearer token scoped to one organization:
 
 <APIMethod path="/scim/generate-token" method="POST" requireSession>
-```ts
-type generateSCIMToken = {
-  /**
-  * The provider id
-  */
-  providerId: string = "acme-corp"
-  /**
-   * Optional organization id. When specified, the organizations plugin must also be enabled
-  */
-  organizationId?: string = "the-org"
-}
-```
+  ```ts
+  type generateSCIMToken = {
+    /**
+    * The provider id for this directory connection
+    */
+    providerId: string = "acme-corp"
+    /**
+     * The organization this token can provision into
+    */
+    organizationId: string = "the-org"
+  }
+  ```
 </APIMethod>
 
-A `SCIM` token is always restricted to a provider, thus you are required to specify a `providerId`. This can be any provider your instance supports (e.g one of the built-in providers such as `credentials` or an external provider registered through an external plugin such as `@better-auth/sso`).
-Additionally, when the `organization` plugin is registered, you can optionally restrict the token to an organization via the `organizationId`.
+A `SCIM` token is always restricted to a provider and an organization. `providerId` is the logical directory provider ID, such as `okta` or `entra-id`, and `organizationId` is the Better Auth organization the token can manage. Provider IDs cannot contain `:`, because SCIM bearer tokens use that character to separate token segments.
 
 <Callout>
-**Important:** By default, any authenticated user with access to your better-auth instance will be able to generate a SCIM token. This can be an important security risk to your application, especially in multi-tenant scenarios.
-It is highly recommended that you implement [hooks](#hooks) to restrict this access to certain roles or users:
+  The management API no longer creates personal SCIM connections. Use organization-scoped tokens for customer directory sync. Use [`staticProviders`](#static-scim-providers) only when you need a code-configured, app-level provider for a single-tenant deployment.
 </Callout>
 
+#### Organization-scoped authorization
+
+When `organizationId` is provided, Better Auth requires the current user to be a member of that organization and to have at least one of the configured `requiredRole` values.
+
+By default, `requiredRole` resolves to:
+
+* `admin`
+* `organization.creatorRole` or `owner`
+
+The same role requirement is also used by the SCIM management endpoints:
+
+* `GET /scim/list-provider-connections`
+* `GET /scim/get-provider-connection`
+* `POST /scim/delete-provider-connection`
+
 ```ts
-const userRoles = new Set(["admin"]);
-const userAdminIds = new Set(["some-admin-user-id"]);
+const approvedScimOperators = new Set(["some-admin-user-id"]);
 
 scim({
-    beforeSCIMTokenGenerated: async ({ user, member, scimToken }) => {
-        // IMPORTANT: Use this hook to restrict access to certain roles or users
-        // At the very least access must be restricted to admin users (see example below)
-
-        const userHasAdmin = member?.role && userRoles.has(member.role);
-        const userIsAdmin = userAdminIds.size > 0 && userAdminIds.has(user.id);
-
-        if (!userHasAdmin && !userIsAdmin) {
+    beforeSCIMTokenGenerated: async ({ user }) => {
+        // Add stricter rules on top of the built-in organization role checks.
+        if (!approvedScimOperators.has(user.id)) {
             throw new APIError("FORBIDDEN", { message: "User does not have enough permissions" });
         }
     },
@@ -134,19 +172,22 @@ scim({
 
 See the [hooks](#hooks) documentation for more details about supported hooks.
 
-#### Default SCIM token
+#### Static SCIM providers
 
-We also provide a way for you to specify a `SCIM` token to use by default. This allows you to test a SCIM connection without setting up providers in the database:
+Use `staticProviders` when the SCIM provider is declared in code instead of being created through `/scim/generate-token`. This is useful for single-tenant app-level SCIM or for test environments that should not persist provider rows in the database.
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { scim } from "@better-auth/scim"; 
+
 const auth = betterAuth({
     plugins: [
         scim({
-            defaultSCIM: [
+            staticProviders: [
                 {
-                    providerId: "default-scim", // ID of the existing provider you want to provision
+                    providerId: "default-scim", // Logical provider ID
                     scimToken: "some-scim-token", // SCIM plain token
-                    organizationId: "the-org" // Optional organization id
+                    organizationId: "the-org" // Optional. Omit for app-level SCIM.
                 }
             ]
         })
@@ -155,10 +196,63 @@ const auth = betterAuth({
 ```
 
 <Callout type="info">
-**Important**: Please note that you must base64 encode your `scimToken` before you try to use as follows: `base64(scimToken:providerId[:organizationId])`.
+  Base64 encode the bearer token value as `base64(scimToken:providerId[:organizationId])`.
 
-In our example above, you would need to encode the `some-scim-token:default-scim:the-org` text to base64, resulting in the following scimToken: `c29tZS1zY2ltLXRva2VuOmRlZmF1bHQtc2NpbTp0aGUtb3Jn`
+  In the example above, encode `some-scim-token:default-scim:the-org`, which results in `c29tZS1zY2ltLXRva2VuOmRlZmF1bHQtc2NpbTp0aGUtb3Jn`.
 </Callout>
+
+### Managing SCIM provider connections
+
+You can manage SCIM provider connections from your application using the following endpoints:
+
+#### List SCIM provider connections
+
+List existing organization-scoped connections the current user can manage. The user must be a member of the organization and satisfy the configured `requiredRole` policy.
+
+<APIMethod path="/scim/list-provider-connections" method="GET" requireSession>
+  ```ts
+  type listSCIMProviderConnections = {
+  }
+  ```
+</APIMethod>
+
+#### Get SCIM provider connection details
+
+Get a single connection by provider ID and organization ID. Access is allowed only when the user can manage that organization-scoped connection.
+
+<APIMethod path="/scim/get-provider-connection" method="GET" requireSession>
+  ```ts
+  type getSCIMProviderConnection = {
+    /**
+     * Unique provider identifier
+     */
+    providerId: string = "acme-corp"
+    /**
+     * Organization identifier
+     */
+    organizationId: string = "the-org"
+  }
+  ```
+</APIMethod>
+
+#### Delete SCIM provider connection
+
+Delete an existing connection. This will immediately invalidate the connection's associated token.
+
+<APIMethod path="/scim/delete-provider-connection" method="POST" requireSession>
+  ```ts
+  type deleteSCIMProviderConnection = {
+    /**
+     * Unique provider identifier
+     */
+    providerId: string = "acme-corp"
+    /**
+     * Organization identifier
+     */
+    organizationId: string = "the-org"
+  }
+  ```
+</APIMethod>
 
 ### SCIM endpoints
 
@@ -166,135 +260,145 @@ The following subset of the specification is currently supported:
 
 #### List users
 
-Get a list of available users in the database. This is restricted to list only users associated to the same provider and organization than your SCIM token.
+Get provisioned users for the same provider and organization as your SCIM token. App-level static providers list users for their configured provider only.
 
 <APIMethod path="/scim/v2/Users" method="GET" requireBearerToken isExternalOnly note="Returns the provisioned SCIM user details. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.4.1">
-```ts
-type listSCIMUsers = {
-    /**
-     * SCIM compliant filter expression
-    */
-    filter?: string = 'userName eq "user-a"'
-}
-```
+  ```ts
+  type listSCIMUsers = {
+      /**
+       * SCIM compliant filter expression
+      */
+      filter?: string = 'userName eq "user-a"'
+  }
+  ```
 </APIMethod>
 
 #### Get user
 
-Get an user from the database. The user will be only returned if it belongs to the same provider and organization than the SCIM token.
+Get a user from the database. The user is returned only when they are associated with the same SCIM account provider as the bearer token.
 
 <APIMethod path="/scim/v2/Users/:userId" method="GET" forceAsParam requireBearerToken isExternalOnly note="Returns the provisioned SCIM user details. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.4.1">
-```ts
-type getSCIMUser = {
-    /**
-     * Unique user identifier
-    */
-    userId: string = "user id"
-}
-```
+  ```ts
+  type getSCIMUser = {
+      /**
+       * Unique user identifier
+      */
+      userId: string = "user id"
+  }
+  ```
 </APIMethod>
 
 #### Create new user
 
-Provisions a new user to the database. The user will have an account associated to the same provider and will be member of the same org than the SCIM token.
+Provision a new user to the database. For organization-scoped tokens, Better Auth creates the SCIM account and adds the user to the token's organization unless the incoming resource has `active: false`.
 
 <APIMethod path="/scim/v2/Users" method="POST" requireBearerToken isExternalOnly note="Provision a new user via SCIM. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.3">
-```ts
-type createSCIMUser = {
-    /*
-     * Unique external (third party) identifier
-    */
-    externalId?: string = "third party id"
-    /**
-     * User name details
-    */
-    name?: {
-        /**
-         * Formatted name (takes priority over given and family name)
-        */
-        formatted?: string = "Daniel Perez"
-        /**
-         * Given name
-        */
-        givenName?: string = "Daniel"
-        /**
-         * Family name
-        */
-        familyName?: string = "Perez"
-    }
-    /**
-     * List of emails associated to the user, only a single email can be primary
-    */
-    emails?: Array<{ value: string, primary?: boolean }> = [{ value: "daniel@email.com", primary: true }]
-}
-```
+  ```ts
+  type createSCIMUser = {
+      /*
+       * Unique external (third party) identifier
+      */
+      externalId?: string = "third party id"
+      /**
+       * User name details
+      */
+      name?: {
+          /**
+           * Formatted name (takes priority over given and family name)
+          */
+          formatted?: string = "Daniel Perez"
+          /**
+           * Given name
+          */
+          givenName?: string = "Daniel"
+          /**
+           * Family name
+          */
+          familyName?: string = "Perez"
+      }
+      /**
+       * List of emails associated to the user, only a single email can be primary
+      */
+      emails?: Array<{ value: string, primary?: boolean }> = [{ value: "daniel@email.com", primary: true }]
+      /**
+       * Whether the user should be active in this organization
+      */
+      active?: boolean = true
+  }
+  ```
 </APIMethod>
 
 #### Update an existing user
 
-Replaces an existing user details in the database. This operation can only update users that belong to the same provider and organization than the SCIM token.
+Replace an existing user's details. This operation can update only users associated with the same SCIM account provider as the bearer token.
 
 <APIMethod path="/scim/v2/Users/:userId" method="PUT" requireBearerToken isExternalOnly note="Updates an existing user via SCIM. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.3">
-```ts
-type updateSCIMUser = {
-    /*
-     * Unique external (third party) identifier
-    */
-    externalId?: string = "third party id"
-    /**
-     * User name details
-    */
-    name?: {
-        /**
-         * Formatted name (takes priority over given and family name)
-        */
-        formatted?: string = "Daniel Perez"
-        /**
-         * Given name
-        */
-        givenName?: string = "Daniel"
-        /**
-         * Family name
-        */
-        familyName?: string = "Perez"
-    }
-    /**
-     * List of emails associated to the user, only a single email can be primary
-    */
-    emails?: Array<{ value: string, primary?: boolean }> = [{ value: "daniel@email.com", primary: true }]
-}
-```
+  ```ts
+  type updateSCIMUser = {
+      /*
+       * Unique external (third party) identifier
+      */
+      externalId?: string = "third party id"
+      /**
+       * User name details
+      */
+      name?: {
+          /**
+           * Formatted name (takes priority over given and family name)
+          */
+          formatted?: string = "Daniel Perez"
+          /**
+           * Given name
+          */
+          givenName?: string = "Daniel"
+          /**
+           * Family name
+          */
+          familyName?: string = "Perez"
+      }
+      /**
+       * List of emails associated to the user, only a single email can be primary
+      */
+      emails?: Array<{ value: string, primary?: boolean }> = [{ value: "daniel@email.com", primary: true }]
+      /**
+       * Whether the user should be active in this organization
+      */
+      active?: boolean = true
+  }
+  ```
 </APIMethod>
 
 #### Partial update an existing user
 
-Allows to apply a partial update to the user details. This operation can only update users that belong to the same provider and organization than the SCIM token.
+Apply a partial update to a user. This operation can update only users associated with the same SCIM account provider as the bearer token.
 
 <APIMethod path="/scim/v2/Users/:userId" method="PATCH" requireBearerToken isExternalOnly note="Partially updates a user resource. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.5.2">
-```ts
-type patchSCIMUser = {
-    /**
-     * Mandatory schema declaration
-    */
-    schemas: string[] = ["urn:ietf:params:scim:api:messages:2.0:PatchOp"]
-    /**
-     * List of JSON patch operations
-    */
-    Operations: Array<{ op: "replace" | "add" | "remove", path?: string, value: any }> = [{ op: "replace", path: "/userName", value: "any value" }]
-}
-```
+  ```ts
+  type patchSCIMUser = {
+      /**
+       * Mandatory schema declaration
+      */
+      schemas: string[] = ["urn:ietf:params:scim:api:messages:2.0:PatchOp"]
+      /**
+       * List of JSON patch operations
+      */
+      Operations: Array<{ op: "replace" | "add" | "remove", path?: string, value: any }> = [{ op: "replace", path: "/userName", value: "any value" }]
+  }
+  ```
 </APIMethod>
 
 #### Deletes a user resource
 
-Completely deletes a user resource from the database. This operation can only delete users that belong to the same provider and organization than the SCIM token.
+Removes a user resource. This operation only affects users that belong to the same provider (and organization) as the SCIM token.
+
+For an organization-scoped token, the user is deprovisioned from the organization: SCIM group memberships, projected roles, team memberships, organization membership, and the SCIM account link are removed, while the global user record is kept. Sessions are revoked only when the user has no remaining organization memberships. For an app-level static provider, the global user is deleted only when this provider's account is their sole identity; otherwise, just that account is unlinked.
 
 <APIMethod path="/scim/v2/Users/:userId" method="DELETE" forceAsParam requireBearerToken isExternalOnly note="Deletes an existing user resource. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.6">
-```ts
-type deleteSCIMUser = {
-    userId: string
-}
-```
+  ```ts
+  type deleteSCIMUser = {
+      userId: string
+  }
+  ```
 </APIMethod>
 
 #### Get service provider config
@@ -302,10 +406,10 @@ type deleteSCIMUser = {
 Get SCIM metadata describing supported features of this server.
 
 <APIMethod path="/scim/v2/ServiceProviderConfig" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
-```ts
-type getSCIMServiceProviderConfig = {
-}
-```
+  ```ts
+  type getSCIMServiceProviderConfig = {
+  }
+  ```
 </APIMethod>
 
 #### Get SCIM schemas
@@ -313,10 +417,10 @@ type getSCIMServiceProviderConfig = {
 Get the list of supported SCIM schemas.
 
 <APIMethod path="/scim/v2/Schemas" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers to acquire information about supported schemas. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
-```ts
-type getSCIMSchemas = {
-}
-```
+  ```ts
+  type getSCIMSchemas = {
+  }
+  ```
 </APIMethod>
 
 #### Get SCIM schema
@@ -324,10 +428,10 @@ type getSCIMSchemas = {
 Get the details of a supported SCIM schema.
 
 <APIMethod path="/scim/v2/Schemas/:schemaId" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers to acquire information about a given schema. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
-```ts
-type getSCIMSchema = {
-}
-```
+  ```ts
+  type getSCIMSchema = {
+  }
+  ```
 </APIMethod>
 
 #### Get SCIM resource types
@@ -335,10 +439,10 @@ type getSCIMSchema = {
 Get the list of supported SCIM types.
 
 <APIMethod path="/scim/v2/ResourceTypes" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers to get a list of server supported types. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
-```ts
-type getSCIMResourceTypes = {
-}
-```
+  ```ts
+  type getSCIMResourceTypes = {
+  }
+  ```
 </APIMethod>
 
 #### Get SCIM resource type
@@ -346,44 +450,196 @@ type getSCIMResourceTypes = {
 Get the details of a supported SCIM resource type.
 
 <APIMethod path="/scim/v2/ResourceTypes/:resourceTypeId" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers to get a server supported type. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
-```ts
-type getSCIMResourceType = {
-}
-```
+  ```ts
+  type getSCIMResourceType = {
+  }
+  ```
 </APIMethod>
 
 #### SCIM attribute mapping
 
 By default, the SCIM provisioning will automatically map the following fields:
 
-- `user.email`: User primary email or the first available email if there is not a primary one
-- `user.name`: Derived from `name` (`name.formatted` or `name.givenName` + `name.familyName`) and fallbacks to the user primary email
-- `account.providerId`: Provider associated to the `SCIM` token
-- `account.accountId`: Defaults to `externalId` and fallbacks to `userName`
-- `member.organizationId`: Organization associated to the provider
+* `user.email`: User primary email or the first available email if there is not a primary one
+* `user.name`: Derived from `name` (`name.formatted` or `name.givenName` + `name.familyName`) and fallbacks to the user primary email
+* `account.providerId`: Namespaced SCIM provider key. Organization-scoped tokens store `scim:{organizationId}:{providerId}`. App-level static providers store `scim:{providerId}`.
+* `account.accountId`: Defaults to `externalId` and fallbacks to `userName`
+* `member.organizationId`: Organization associated with the provider, for organization-scoped tokens
+
+The logical `providerId` remains in the SCIM token and the `scimProvider` table. Only account rows use the namespaced provider key, so SCIM accounts do not collide with social, SSO, OIDC, SAML, credential, or generic OAuth accounts that use the same provider ID.
+
+Better Auth's email field is globally unique. If another user already has the incoming SCIM email, `createSCIMUser` returns a `409` conflict unless you explicitly enable `linkExistingUsers` and every configured linking constraint passes.
+
+The SCIM `active` attribute maps to organization membership for organization-scoped tokens. `active: false` removes the organization membership and reports the user as inactive to that token, while preserving the SCIM account, SCIM group membership, SCIM role grants, and team association rows for reactivation. `active: true` recreates membership and reapplies SCIM-projected roles; manual roles stored only on the removed member row are not restored. `DELETE` is the full deprovisioning operation and removes SCIM group and team state for that organization. App-level static providers map `active: false` to the [admin](/docs/plugins/admin) plugin's `banned` state and revoke sessions, so honoring app-level deactivation requires the admin plugin. Changing a user's email through SCIM also resets their verified status.
 
 ## Schema
 
 The plugin requires additional fields in the `scimProvider` table to store the provider's configuration.
 
-<DatabaseTable
-    fields={[
-        {
-            name: "id", type: "string", description: "A database identifier", isRequired: true, isPrimaryKey: true,
-        },
-        { name: "providerId", type: "string", description: "The provider ID. Used to identify a provider and to generate a redirect URL.", isRequired: true, isUnique: true },
-        { name: "scimToken", type: "string", description: "The SCIM bearer token. Used by your identity provider to authenticate against your server", isRequired: true, isUnique: true },
-        { name: "organizationId", type: "string", description: "The organization Id. If provider is linked to an organization.", isRequired: false },
-    ]}
-/>
+export const scimProviderTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "A database identifier",
+		isPrimaryKey: true,
+	},
+	{
+		name: "providerId",
+		type: "string",
+		description:
+			"The logical SCIM provider ID.",
+	},
+	{
+		name: "providerKey",
+		type: "string",
+		description:
+			"Internal unique key for the organization-scoped provider connection.",
+		isUnique: true,
+	},
+	{
+		name: "scimToken",
+		type: "string",
+		description:
+			"The SCIM bearer token. Used by your identity provider to authenticate against your server",
+		isUnique: true,
+	},
+	{
+		name: "organizationId",
+		type: "string",
+		description:
+			"The organization ID this provider is scoped to.",
+	},
+];
 
+<DatabaseTable name="scimProvider" fields={scimProviderTableFields} />
+
+### Upgrade notes
+
+Generated SCIM provider rows must now be organization-scoped. If you previously used personal SCIM provider rows, replace them with organization-scoped tokens or configure app-level providers through `staticProviders`.
+
+`defaultSCIM` has been replaced by `staticProviders`. `linkExistingUsers.trustedDomains` has been removed; use `requireExistingOrgMembership`, `shouldLinkUser`, or the explicit `true` escape hatch instead.
+
+SCIM-managed account rows also need the namespaced provider key. Do not bulk update accounts by matching only `account.providerId = scimProvider.providerId`: if a SCIM provider ID was also used by SSO, OAuth, OIDC, SAML, One Tap, or another account provider, that update would convert non-SCIM account rows into SCIM-managed accounts. Build a reviewed staging list of known SCIM-managed account row IDs first, then update only those rows.
+
+<Callout type="warning">
+  If you cannot prove which existing `account` rows were created by SCIM, leave those rows unchanged and let your identity provider reprovision users under the new SCIM namespace.
+</Callout>
+
+<Tabs items={["PostgreSQL", "MySQL", "SQLite"]}>
+  <Tab value="PostgreSQL">
+    ```sql
+    CREATE TEMP TABLE scim_account_migration (
+      "accountId" text PRIMARY KEY,
+      "organizationId" text NOT NULL,
+      "providerId" text NOT NULL
+    );
+
+    -- Insert only reviewed SCIM-managed account row IDs into scim_account_migration.
+
+    UPDATE "account" AS a
+    SET "providerId" = 'scim:' || m."organizationId" || ':' || m."providerId"
+    FROM scim_account_migration AS m
+    WHERE a."id" = m."accountId"
+      AND a."providerId" NOT LIKE 'scim:%';
+
+    UPDATE "scimProvider"
+    SET "providerKey" = "organizationId" || ':' || "providerId"
+    WHERE "organizationId" IS NOT NULL;
+
+    DELETE FROM "scimProvider"
+    WHERE "organizationId" IS NULL;
+
+    ALTER TABLE "scimProvider" DROP COLUMN IF EXISTS "userId";
+    ```
+  </Tab>
+
+  <Tab value="MySQL">
+    ```sql
+    CREATE TEMPORARY TABLE scim_account_migration (
+      accountId varchar(255) PRIMARY KEY,
+      organizationId varchar(255) NOT NULL,
+      providerId varchar(255) NOT NULL
+    );
+
+    -- Insert only reviewed SCIM-managed account row IDs into scim_account_migration.
+
+    UPDATE account AS a
+    JOIN scim_account_migration AS m
+      ON a.id = m.accountId
+    SET a.providerId = CONCAT('scim:', m.organizationId, ':', m.providerId)
+    WHERE a.providerId NOT LIKE 'scim:%';
+
+    UPDATE scimProvider
+    SET providerKey = CONCAT(organizationId, ':', providerId)
+    WHERE organizationId IS NOT NULL;
+
+    DELETE FROM scimProvider
+    WHERE organizationId IS NULL;
+
+    ALTER TABLE scimProvider DROP COLUMN userId;
+    ```
+  </Tab>
+
+  <Tab value="SQLite">
+    ```sql
+    CREATE TEMP TABLE scim_account_migration (
+      accountId text PRIMARY KEY,
+      organizationId text NOT NULL,
+      providerId text NOT NULL
+    );
+
+    -- Insert only reviewed SCIM-managed account row IDs into scim_account_migration.
+
+    UPDATE account
+    SET providerId = (
+      SELECT 'scim:' || m.organizationId || ':' || m.providerId
+      FROM scim_account_migration AS m
+      WHERE m.accountId = account.id
+      LIMIT 1
+    )
+    WHERE providerId NOT LIKE 'scim:%'
+      AND EXISTS (
+        SELECT 1
+        FROM scim_account_migration AS m
+        WHERE m.accountId = account.id
+      );
+
+    UPDATE scimProvider
+    SET providerKey = organizationId || ':' || providerId
+    WHERE organizationId IS NOT NULL;
+
+    DELETE FROM scimProvider
+    WHERE organizationId IS NULL;
+    ```
+
+    SQLite does not support dropping a column with the same syntax as PostgreSQL and MySQL in all supported environments. Use `npx auth generate` to create the table-rebuild migration if you need to remove `scimProvider.userId`.
+  </Tab>
+</Tabs>
 
 ## Options
 
 ### Server
 
-- `defaultSCIM`: Default list of SCIM tokens for testing.
-- `storeSCIMToken`: The method to store the SCIM token in your database, whether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
+* `requiredRole`: `string[] | SCIMRequiredRoleResolver`. Authorizes users who can generate organization-scoped tokens and manage organization-scoped connections. A string array grants access to members with any listed role. A resolver receives `{ user, member, organizationId, ctx }` and returns `true` to allow access. Defaults to `["admin", organization.creatorRole ?? "owner"]`.
+
+```ts title="Allow only owners to manage organization-scoped SCIM connections"
+scim({
+    requiredRole: ["owner"],
+})
+```
+
+```ts title="Use a custom organization policy"
+scim({
+    requiredRole: async ({ member }) => {
+        return member.role.split(",").includes("directory-admin");
+    },
+})
+```
+
+* `staticProviders`: Code-configured SCIM providers. Use an entry with `organizationId` to bind a static token to an organization, or omit `organizationId` for app-level SCIM. Provider IDs must be unique within their organization scope and cannot contain `:`. Organization-scoped static providers require the organization plugin.
+* `linkExistingUsers`: Disabled by default. Set to `true` to allow SCIM provisioning to link to any existing user with the same email, or pass constraints such as `requireExistingOrgMembership` and `shouldLinkUser` to control when linking is allowed.
+* `canGenerateToken`: Additional authorization hook for runtime token generation. It runs after membership and `requiredRole` checks and can only deny access.
+* `storeSCIMToken`: The method to store the SCIM token in your database, whether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
 
 Alternatively, you can pass a custom encryptor or hasher to store the SCIM token in your database.
 
@@ -418,12 +674,17 @@ scim({
 
 The following hooks allow to intercept the lifecycle of the `SCIM` token generation:
 
+<Callout>
+  **Note:** The built-in organization role check runs before these hooks. Use hooks to add stricter rules, not to bypass `requiredRole`.
+</Callout>
+
 ```ts
+const approvedScimOperators = new Set(["some-admin-user-id"]);
+
 scim({
     beforeSCIMTokenGenerated: async ({ user, member, scimToken }) => {
-        // Callback called before the scim token is persisted
-        // can be useful to intercept the generation
-        if (member?.role !== "admin") {
+        // Add any extra restrictions you need before the token is persisted.
+        if (!approvedScimOperators.has(user.id)) {
             throw new APIError("FORBIDDEN", { message: "User does not have enough permissions" });
         }
     },
@@ -436,5 +697,5 @@ scim({
 ```
 
 <Callout>
-**Note**: All hooks support error handling. Throwing an error in a before hook will prevent the operation from proceeding.
+  **Note**: All hooks support error handling. Throwing an error in a before hook will prevent the operation from proceeding.
 </Callout>

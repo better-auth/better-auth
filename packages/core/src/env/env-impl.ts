@@ -46,8 +46,7 @@ function toBoolean(val: boolean | string | undefined) {
 	return val ? val !== "false" : false;
 }
 
-export const nodeENV =
-	(typeof process !== "undefined" && process.env && process.env.NODE_ENV) || "";
+export const nodeENV = env.NODE_ENV ?? "";
 
 /** Detect if `NODE_ENV` environment variable is `production` */
 export const isProduction = nodeENV === "production";
@@ -115,10 +114,10 @@ export const ENV = Object.freeze({
 	get PACKAGE_VERSION() {
 		return getEnvVar("PACKAGE_VERSION", "0.0.0");
 	},
-	get BETTER_AUTH_TELEMETRY_ENDPOINT() {
+	get BETTER_AUTH_TELEMETRY_ENDPOINT(): string | undefined {
 		return getEnvVar(
 			"BETTER_AUTH_TELEMETRY_ENDPOINT",
-			"https://telemetry.better-auth.com/v1/track",
+			import.meta.env.BETTER_AUTH_TELEMETRY_ENDPOINT,
 		);
 	},
 });

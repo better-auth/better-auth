@@ -32,12 +32,14 @@ interface SignInFormProps {
 	onSuccess?: () => void;
 	callbackURL?: string;
 	showPasswordToggle?: boolean;
+	params?: URLSearchParams;
 }
 
 export function SignInForm({
 	onSuccess,
 	callbackURL = "/dashboard",
 	showPasswordToggle = false,
+	params,
 }: SignInFormProps) {
 	const [loading, startTransition] = useTransition();
 	const [isMounted, setIsMounted] = useState(false);
@@ -65,6 +67,7 @@ export function SignInForm({
 					callbackURL,
 				},
 				{
+					query: params ? Object.fromEntries(params.entries()) : undefined,
 					onSuccess() {
 						toast.success("Successfully signed in");
 						onSuccess?.();
@@ -106,7 +109,7 @@ export function SignInForm({
 							<div className="flex items-center">
 								<FieldLabel htmlFor="sign-in-password">Password</FieldLabel>
 								<Link
-									href="/forget-password"
+									href="/forgot-password"
 									className="ml-auto inline-block text-sm underline text-foreground"
 								>
 									Forgot your password?

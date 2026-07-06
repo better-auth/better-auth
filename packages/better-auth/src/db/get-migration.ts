@@ -6,8 +6,9 @@ import {
 	initGetModelName,
 } from "@better-auth/core/db/adapter";
 import { createLogger } from "@better-auth/core/env";
+import type { KyselyDatabaseType } from "@better-auth/kysely-adapter";
+import { createKyselyAdapter } from "@better-auth/kysely-adapter";
 import type {
-	AlterTableBuilder,
 	AlterTableColumnAlteringBuilder,
 	ColumnDataType,
 	CreateIndexBuilder,
@@ -16,8 +17,6 @@ import type {
 	RawBuilder,
 } from "kysely";
 import { sql } from "kysely";
-import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
-import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
 
 const postgresMap = {
@@ -98,18 +97,23 @@ export function matchType(
  */
 async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
 	try {
-		const result = await sql<{ search_path: string }>`SHOW search_path`.execute(
-			db,
-		);
-		if (result.rows[0]?.search_path) {
+		const result = await sql<{
+			search_path?: string;
+			searchPath?: string;
+		}>`SHOW search_path`.execute(db);
+		const searchPath =
+			result.rows[0]?.search_path ?? result.rows[0]?.searchPath;
+		if (searchPath) {
 			// search_path can be a comma-separated list like "$user, public" or '"$user", public'
+			// Supabase may return escaped format like '"\$user", public'
 			// We want the first non-variable schema
-			const schemas = result.rows[0].search_path
+			const schemas = searchPath
 				.split(",")
 				.map((s) => s.trim())
 				// Remove quotes and filter out variables like $user
 				.map((s) => s.replace(/^["']|["']$/g, ""))
-				.filter((s) => !s.startsWith("$"));
+				// Filter out variable references like $user, \$user (escaped)
+				.filter((s) => !s.startsWith("$") && !s.startsWith("\\$"));
 			return schemas[0] || "public";
 		}
 	} catch {
@@ -148,13 +152,18 @@ export async function getMigrations(config: BetterAuthOptions) {
 
 		// Verify the schema exists
 		try {
-			const schemaCheck = await sql<{ schema_name: string }>`
-				SELECT schema_name 
-				FROM information_schema.schemata 
+			const schemaCheck = await sql<{
+				schema_name?: string;
+				schemaName?: string;
+			}>`
+				SELECT schema_name
+				FROM information_schema.schemata
 				WHERE schema_name = ${currentSchema}
 			`.execute(db);
 
-			if (!schemaCheck.rows[0]) {
+			const schemaExists =
+				schemaCheck.rows[0]?.schema_name ?? schemaCheck.rows[0]?.schemaName;
+			if (!schemaExists) {
 				logger.warn(
 					`Schema '${currentSchema}' does not exist. Tables will be inspected from available schemas. Consider creating the schema first or checking your database configuration.`,
 				);
@@ -174,16 +183,17 @@ export async function getMigrations(config: BetterAuthOptions) {
 		// Get tables with their schema information
 		try {
 			const tablesInSchema = await sql<{
-				table_name: string;
+				table_name?: string;
+				tableName?: string;
 			}>`
-				SELECT table_name 
-				FROM information_schema.tables 
+				SELECT table_name
+				FROM information_schema.tables
 				WHERE table_schema = ${currentSchema}
 				AND table_type = 'BASE TABLE'
 			`.execute(db);
 
 			const tableNamesInSchema = new Set(
-				tablesInSchema.rows.map((row) => row.table_name),
+				tablesInSchema.rows.map((row) => row.table_name ?? row.tableName),
 			);
 
 			// Filter to only tables that exist in the target schema
@@ -214,6 +224,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 	}[] = [];
 
 	for (const [key, value] of Object.entries(betterAuthSchema)) {
+		if (value.disableMigrations) {
+			continue;
+		}
 		const table = tableMetadata.find((t) => t.name === key);
 		if (!table) {
 			const tIndex = toBeCreated.findIndex((t) => t.table === key);
@@ -241,7 +254,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 			}
 			continue;
 		}
-		let toBeAddedFields: Record<string, DBFieldAttribute> = {};
+		const toBeAddedFields: Record<string, DBFieldAttribute> = {};
 		for (const [fieldName, field] of Object.entries(value.fields)) {
 			const column = table.columns.find((c) => c.name === fieldName);
 			if (!column) {
@@ -268,15 +281,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 
 	const migrations: (
 		| AlterTableColumnAlteringBuilder
-		| ReturnType<AlterTableBuilder["addIndex"]>
 		| CreateTableBuilder<string, string>
 		| CreateIndexBuilder
 	)[] = [];
 
 	const useUUIDs = config.advanced?.database?.generateId === "uuid";
-	const useNumberId =
-		config.advanced?.database?.useNumberId ||
-		config.advanced?.database?.generateId === "serial";
+	const useNumberId = config.advanced?.database?.generateId === "serial";
 
 	function getType(field: DBFieldAttribute, fieldName: string) {
 		const type = field.type;
@@ -415,20 +425,47 @@ export async function getMigrations(config: BetterAuthOptions) {
 		}
 	}
 
+	// Indexes are collected separately and appended last to ensure all
+	// referenced columns/tables exist before any CREATE INDEX executes.
+	const deferredIndexes: CreateIndexBuilder[] = [];
+
 	if (toBeAdded.length) {
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const type = getType(field, fieldName);
-				let builder = db.schema.alterTable(table.table);
+				const builder = db.schema.alterTable(table.table);
 
-				if (field.index) {
-					const index = db.schema
-						.alterTable(table.table)
-						.addIndex(`${table.table}_${fieldName}_idx`);
-					migrations.push(index);
+				// SQLite cannot add a column with an inline UNIQUE constraint, so a
+				// unique field is enforced with a separate index in the ALTER path.
+				if (field.index || field.unique) {
+					const indexName = `${table.table}_${fieldName}_${field.unique ? "uidx" : "idx"}`;
+					let indexBuilder = db.schema
+						.createIndex(indexName)
+						.on(table.table)
+						.columns([fieldName]);
+					if (field.unique) {
+						indexBuilder = indexBuilder.unique();
+						if (field.required === false && dbType === "mssql") {
+							// MSSQL unique indexes treat NULLs as duplicates, so the
+							// NULL backfill on existing rows would abort the index
+							// build. Filtering NULLs matches the other dialects.
+							indexBuilder = indexBuilder.where(fieldName, "is not", null);
+						}
+						if (
+							field.required !== false &&
+							field.defaultValue !== undefined &&
+							field.defaultValue !== null &&
+							typeof field.defaultValue !== "function"
+						) {
+							logger.warn(
+								`Adding unique column "${fieldName}" to existing table "${table.table}" backfills every existing row with its default value. If the table has more than one row, creating the unique index "${indexName}" will fail; backfill distinct values manually, then re-run the migration or create the index yourself.`,
+							);
+						}
+					}
+					deferredIndexes.push(indexBuilder);
 				}
 
-				let built = builder.addColumn(fieldName, type, (col) => {
+				const built = builder.addColumn(fieldName, type, (col) => {
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {
 						col = col
@@ -440,9 +477,6 @@ export async function getMigrations(config: BetterAuthOptions) {
 							)
 							.onDelete(field.references.onDelete || "cascade");
 					}
-					if (field.unique) {
-						col = col.unique();
-					}
 					if (
 						field.type === "date" &&
 						typeof field.defaultValue === "function" &&
@@ -453,20 +487,36 @@ export async function getMigrations(config: BetterAuthOptions) {
 						} else {
 							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
 						}
+					} else if (
+						!(field.unique && field.required === false) &&
+						(field.type === "string" ||
+							field.type === "number" ||
+							field.type === "boolean") &&
+						field.defaultValue !== undefined &&
+						field.defaultValue !== null &&
+						typeof field.defaultValue !== "function"
+					) {
+						// A required column added to a populated table needs a SQL
+						// default, or the NOT NULL add fails. Nullable unique columns
+						// are excluded: NULL is their only unique-safe backfill. A
+						// required unique column keeps its default; on a table with
+						// more than one row the unique index then rejects the shared
+						// backfill, which no generated migration can avoid.
+						// Booleans map to 1/0 on engines without a native boolean type.
+						col = col.defaultTo(
+							typeof field.defaultValue === "boolean" &&
+								(dbType === "sqlite" || dbType === "mssql")
+								? field.defaultValue
+									? 1
+									: 0
+								: field.defaultValue,
+						);
 					}
 					return col;
 				});
 				migrations.push(built);
 			}
 		}
-	}
-
-	let toBeIndexed: CreateIndexBuilder[] = [];
-
-	if (config.advanced?.database?.useNumberId) {
-		logger.warn(
-			"`useNumberId` is deprecated. Please use `generateId` with `serial` instead.",
-		);
 	}
 
 	if (toBeCreated.length) {
@@ -531,25 +581,21 @@ export async function getMigrations(config: BetterAuthOptions) {
 				});
 
 				if (field.index) {
-					let builder = db.schema
+					const builder = db.schema
 						.createIndex(
 							`${table.table}_${fieldName}_${field.unique ? "uidx" : "idx"}`,
 						)
 						.on(table.table)
 						.columns([fieldName]);
-					toBeIndexed.push(field.unique ? builder.unique() : builder);
+					deferredIndexes.push(field.unique ? builder.unique() : builder);
 				}
 			}
 			migrations.push(dbT);
 		}
 	}
 
-	// instead of adding the index straight to `migrations`,
-	// we do this at the end so that indexes are created after the table is created
-	if (toBeIndexed.length) {
-		for (const index of toBeIndexed) {
-			migrations.push(index);
-		}
+	for (const index of deferredIndexes) {
+		migrations.push(index);
 	}
 
 	async function runMigrations() {

@@ -15,6 +15,12 @@ const deviceCodeBodySchema = z.object({
 	client_id: z.string().meta({
 		description: "The client ID of the application",
 	}),
+	user_id: z
+		.string()
+		.meta({
+			description: "The user ID to which the device code should be pre-bound.",
+		})
+		.optional(),
 	scope: z
 		.string()
 		.meta({
@@ -53,6 +59,7 @@ export const deviceCode = (opts: DeviceAuthorizationOptions) => {
 			body: deviceCodeBodySchema,
 			error: deviceCodeErrorSchema,
 			metadata: {
+				noStore: true,
 				openapi: {
 					description: `Request a device and user code
 
@@ -146,6 +153,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				data: {
 					deviceCode,
 					userCode,
+					userId: ctx.body.user_id || null, // An empty user_id is treated as omitted, per RFC 8628 section 3.1
 					expiresAt,
 					status: "pending",
 					pollingInterval: ms(opts.interval),
@@ -161,21 +169,16 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					userCode,
 				);
 
-			return ctx.json(
-				{
-					device_code: deviceCode,
-					user_code: userCode,
-					verification_uri: verificationUri,
-					verification_uri_complete: verificationUriComplete,
-					expires_in: Math.floor(expiresIn / 1000),
-					interval: Math.floor(ms(opts.interval) / 1000),
-				},
-				{
-					headers: {
-						"Cache-Control": "no-store",
-					},
-				},
-			);
+			ctx.setHeader("Cache-Control", "no-store");
+			ctx.setHeader("Pragma", "no-cache");
+			return ctx.json({
+				device_code: deviceCode,
+				user_code: userCode,
+				verification_uri: verificationUri,
+				verification_uri_complete: verificationUriComplete,
+				expires_in: Math.floor(expiresIn / 1000),
+				interval: Math.floor(ms(opts.interval) / 1000),
+			});
 		},
 	);
 };
@@ -218,6 +221,7 @@ export const deviceToken = (opts: DeviceAuthorizationOptions) =>
 			body: deviceTokenBodySchema,
 			error: deviceTokenErrorSchema,
 			metadata: {
+				noStore: true,
 				openapi: {
 					description: `Exchange device code for access token
 
@@ -395,8 +399,33 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			}
 
 			if (deviceCodeRecord.status === "approved" && deviceCodeRecord.userId) {
+				// Atomically claim the approved code as the single race gate:
+				// concurrent polls contend on this delete-and-return, and only the
+				// caller that removes the row may issue a session. Losers receive
+				// null and are rejected, so the code is redeemed at most once.
+				const claimedDeviceCode = await ctx.context.adapter.consumeOne<{
+					id: string;
+					userId?: string | undefined;
+					scope?: string | undefined;
+				}>({
+					model: "deviceCode",
+					where: [
+						{ field: "id", value: deviceCodeRecord.id },
+						{ field: "clientId", value: client_id },
+						{ field: "status", value: "approved" },
+					],
+				});
+
+				if (!claimedDeviceCode?.userId) {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_grant",
+						error_description:
+							DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE.message,
+					});
+				}
+
 				const user = await ctx.context.internalAdapter.findUserById(
-					deviceCodeRecord.userId,
+					claimedDeviceCode.userId,
 				);
 
 				if (!user) {
@@ -441,34 +470,17 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					);
 				}
 
-				// Delete the device code after successful authorization
-				await ctx.context.adapter.delete({
-					model: "deviceCode",
-					where: [
-						{
-							field: "id",
-							value: deviceCodeRecord.id,
-						},
-					],
-				});
-
 				// Return OAuth 2.0 compliant token response
-				return ctx.json(
-					{
-						access_token: session.token,
-						token_type: "Bearer",
-						expires_in: Math.floor(
-							(new Date(session.expiresAt).getTime() - Date.now()) / 1000,
-						),
-						scope: deviceCodeRecord.scope || "",
-					},
-					{
-						headers: {
-							"Cache-Control": "no-store",
-							Pragma: "no-cache",
-						},
-					},
-				);
+				ctx.setHeader("Cache-Control", "no-store");
+				ctx.setHeader("Pragma", "no-cache");
+				return ctx.json({
+					access_token: session.token,
+					token_type: "Bearer",
+					expires_in: Math.floor(
+						(new Date(session.expiresAt).getTime() - Date.now()) / 1000,
+					),
+					scope: claimedDeviceCode.scope || "",
+				});
 			}
 
 			throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -555,6 +567,28 @@ export const deviceVerify = createAuthEndpoint(
 			});
 		}
 
+		const session = await getSessionFromCtx(ctx);
+		if (
+			session?.user?.id &&
+			!deviceCodeRecord.userId &&
+			deviceCodeRecord.status === "pending"
+		) {
+			const claimedDeviceCodeRecord =
+				await ctx.context.adapter.incrementOne<DeviceCode>({
+					model: "deviceCode",
+					where: [
+						{ field: "id", value: deviceCodeRecord.id },
+						{ field: "status", value: "pending" },
+						{ field: "userId", operator: "eq", value: null },
+					],
+					increment: {},
+					set: { userId: session.user.id },
+				});
+			if (claimedDeviceCodeRecord) {
+				deviceCodeRecord.userId = session.user.id;
+			}
+		}
+
 		return ctx.json({
 			user_code: user_code,
 			status: deviceCodeRecord.status,
@@ -577,6 +611,8 @@ export const deviceApprove = createAuthEndpoint(
 					"invalid_request",
 					"expired_token",
 					"device_code_already_processed",
+					"unauthorized",
+					"access_denied",
 				])
 				.meta({
 					description: "Error code",
@@ -657,6 +693,22 @@ export const deviceApprove = createAuthEndpoint(
 			});
 		}
 
+		if (!deviceCodeRecord.userId) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_request",
+				error_description:
+					DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_NOT_CLAIMED.message,
+			});
+		}
+
+		if (deviceCodeRecord.userId !== session.user.id) {
+			throw new APIError("FORBIDDEN", {
+				error: "access_denied",
+				error_description:
+					"You are not authorized to approve this device authorization",
+			});
+		}
+
 		// Update device code with approved status and user ID
 		await ctx.context.adapter.update({
 			model: "deviceCode",
@@ -688,13 +740,21 @@ export const deviceDeny = createAuthEndpoint(
 			}),
 		}),
 		error: z.object({
-			error: z.enum(["invalid_request", "expired_token"]).meta({
-				description: "Error code",
-			}),
+			error: z
+				.enum([
+					"invalid_request",
+					"expired_token",
+					"unauthorized",
+					"access_denied",
+				])
+				.meta({
+					description: "Error code",
+				}),
 			error_description: z.string().meta({
 				description: "Detailed error description",
 			}),
 		}),
+		requireHeaders: true,
 		metadata: {
 			openapi: {
 				description: "Deny device authorization",
@@ -719,6 +779,15 @@ export const deviceDeny = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
+		const session = await getSessionFromCtx(ctx);
+		if (!session) {
+			throw new APIError("UNAUTHORIZED", {
+				error: "unauthorized",
+				error_description:
+					DEVICE_AUTHORIZATION_ERROR_CODES.AUTHENTICATION_REQUIRED.message,
+			});
+		}
+
 		const { userCode } = ctx.body;
 		const cleanUserCode = userCode.replace(/-/g, "");
 
@@ -757,7 +826,22 @@ export const deviceDeny = createAuthEndpoint(
 			});
 		}
 
-		// Update device code with denied status
+		if (!deviceCodeRecord.userId) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_request",
+				error_description:
+					DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_NOT_CLAIMED.message,
+			});
+		}
+
+		if (deviceCodeRecord.userId !== session.user.id) {
+			throw new APIError("FORBIDDEN", {
+				error: "access_denied",
+				error_description:
+					"You are not authorized to deny this device authorization",
+			});
+		}
+
 		await ctx.context.adapter.update({
 			model: "deviceCode",
 			where: [
@@ -768,6 +852,7 @@ export const deviceDeny = createAuthEndpoint(
 			],
 			update: {
 				status: "denied",
+				userId: session.user.id,
 			},
 		});
 

@@ -1,4 +1,6 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import { parseCookies } from "../../cookies/cookie-utils";
+import { PACKAGE_VERSION } from "../../version";
 
 /**
  * Configuration for the client-side last login method plugin
@@ -9,18 +11,23 @@ export interface LastLoginMethodClientConfig {
 	 * @default "better-auth.last_used_login_method"
 	 */
 	cookieName?: string | undefined;
+	/**
+	 * Domain for the cookie. Required when using cross-subdomain cookies
+	 * so the client can properly clear the cookie set by the server.
+	 *
+	 * Should match the `domain` value in your server's
+	 * `crossSubDomainCookies` configuration.
+	 *
+	 * @example ".example.com"
+	 */
+	domain?: string | undefined;
 }
 
 function getCookieValue(name: string): string | null {
 	if (typeof document === "undefined") {
 		return null;
 	}
-
-	const cookie = document.cookie
-		.split("; ")
-		.find((row) => row.startsWith(`${name}=`));
-
-	return cookie ? cookie.split("=")[1]! : null;
+	return parseCookies(document.cookie).get(name) ?? null;
 }
 
 /**
@@ -33,6 +40,7 @@ export const lastLoginMethodClient = (
 
 	return {
 		id: "last-login-method-client",
+		version: PACKAGE_VERSION,
 		getActions() {
 			return {
 				/**
@@ -48,7 +56,8 @@ export const lastLoginMethodClient = (
 				 */
 				clearLastUsedLoginMethod: (): void => {
 					if (typeof document !== "undefined") {
-						document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+						const domainPart = config.domain ? ` domain=${config.domain};` : "";
+						document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;${domainPart}`;
 					}
 				},
 				/**

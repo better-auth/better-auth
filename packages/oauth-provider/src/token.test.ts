@@ -1,52 +1,82 @@
-import { createClientCredentialsTokenRequest } from "@better-auth/core/oauth2";
+import { clientCredentialsTokenRequest } from "@better-auth/core/oauth2";
 import { createAuthClient } from "better-auth/client";
-import { jwtClient } from "better-auth/client/plugins";
 import { generateRandomString } from "better-auth/crypto";
 import type { ProviderOptions } from "better-auth/oauth2";
 import {
-	createAuthorizationCodeRequest,
+	authorizationCodeRequest,
 	createAuthorizationURL,
-	createRefreshAccessTokenRequest,
+	deriveDpopAth,
+	deriveDpopJkt,
+	refreshAccessTokenRequest,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
-import { beforeAll, describe, expect, it } from "vitest";
+import type { JWK } from "jose";
+import {
+	base64url,
+	createLocalJWKSet,
+	decodeJwt,
+	exportJWK,
+	generateKeyPair,
+	jwtVerify,
+	SignJWT,
+} from "jose";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
-import type { OAuthOptions, Scope } from "./types";
+import { confirmationTokenType } from "./token";
+import type {
+	Confirmation,
+	OAuthOptions,
+	Scope,
+	VerificationValue,
+} from "./types";
 import type { OAuthClient } from "./types/oauth";
+import { verificationValueSchema } from "./types/zod";
+import { storeToken } from "./utils";
 
 type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
+
+type OAuthTokenResponse = {
+	access_token?: string;
+	id_token?: string;
+	refresh_token?: string;
+	expires_in?: number;
+	expires_at?: number;
+	token_type?: string;
+	scope?: string;
+	refresh_call?: string;
+	[key: string]: unknown;
+};
 
 describe("oauth token - authorization_code", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
-	const { auth, signInWithTestUser, customFetchImpl, testUser } =
-		await getTestInstance({
-			baseURL: authServerBaseUrl,
-			plugins: [
-				jwt({
-					jwt: {
-						issuer: authServerBaseUrl,
-					},
-				}),
-				oauthProvider({
-					loginPage: "/login",
-					consentPage: "/consent",
-					validAudiences: [validAudience],
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
-				}),
-			],
-		});
+	const validResource = "https://myapi.example.com";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [validResource],
+				enforcePerClientResources: false,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -57,7 +87,7 @@ describe("oauth token - authorization_code", async () => {
 	let oauthClient: OAuthClient | null;
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const state = "123";
 	let jwks: ReturnType<typeof createLocalJWKSet>;
 
@@ -66,6 +96,11 @@ describe("oauth token - authorization_code", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -77,7 +112,9 @@ describe("oauth token - authorization_code", async () => {
 		oauthClient = response;
 
 		// Get jwks
-		const jwksResult = await client.jwks();
+		const jwksResult = await client.$fetch<
+			Parameters<typeof createLocalJWKSet>[0]
+		>("/jwks", { method: "GET" });
 		if (!jwksResult.data) {
 			throw new Error("Unable to fetch jwks");
 		}
@@ -113,7 +150,7 @@ describe("oauth token - authorization_code", async () => {
 
 	async function validateAuthCode(
 		overrides: MakeRequired<
-			Partial<Parameters<typeof createAuthorizationCodeRequest>[0]>,
+			Partial<Parameters<typeof authorizationCodeRequest>[0]>,
 			"code"
 		>,
 	) {
@@ -121,7 +158,7 @@ describe("oauth token - authorization_code", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			...overrides,
 			redirectURI: redirectUri,
 			options: {
@@ -189,6 +226,35 @@ describe("oauth token - authorization_code", async () => {
 		expect(idToken.payload.email).toBeUndefined();
 	});
 
+	it("should exchange a PKCE authorization code when state is omitted", async () => {
+		const scopes = ["openid"];
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes,
+		});
+		authUrl.searchParams.delete("state");
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain(redirectUri);
+		expect(callbackRedirectUrl).toContain("code=");
+		expect(callbackRedirectUrl).not.toContain("state=");
+		const url = new URL(callbackRedirectUrl);
+
+		const tokens = await validateAuthCode({
+			code: url.searchParams.get("code")!,
+			codeVerifier,
+		});
+
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.id_token).toBeDefined();
+		expect(tokens.data?.scope).toBe(scopes.join(" "));
+	});
+
 	it("scope openid+profile should provide access_token and id_token", async ({
 		expect,
 	}) => {
@@ -225,7 +291,7 @@ describe("oauth token - authorization_code", async () => {
 		expect(idToken.protectedHeader).toBeDefined();
 		expect(idToken.payload).toBeDefined();
 		expect(idToken.payload.sub).toBeDefined();
-		expect(idToken.payload.name).toBe(testUser.name);
+		expect(idToken.payload.name).toBeUndefined();
 		expect(idToken.payload.email).toBeUndefined();
 	});
 
@@ -266,7 +332,7 @@ describe("oauth token - authorization_code", async () => {
 		expect(idToken.payload).toBeDefined();
 		expect(idToken.payload.sub).toBeDefined();
 		expect(idToken.payload.name).toBeUndefined();
-		expect(idToken.payload.email).toBe(testUser.email);
+		expect(idToken.payload.email).toBeUndefined();
 	});
 
 	it("scope openid+offline_access should provide opaque access_token, id_token, and refresh_token", async ({
@@ -335,7 +401,7 @@ describe("oauth token - authorization_code", async () => {
 		const tokens = await validateAuthCode({
 			code: url.searchParams.get("code")!,
 			codeVerifier,
-			resource: validAudience,
+			resource: validResource,
 		});
 		expect(tokens.data?.access_token).toBeDefined();
 		expect(tokens.data?.id_token).toBeDefined();
@@ -350,7 +416,7 @@ describe("oauth token - authorization_code", async () => {
 		expect(idToken.payload.email).toBeUndefined();
 
 		const accessToken = await jwtVerify(tokens.data?.access_token!, jwks, {
-			audience: validAudience,
+			audience: validResource,
 			issuer: authServerBaseUrl,
 		});
 		expect(accessToken.payload.azp).toBe(oauthClient.client_id);
@@ -359,12 +425,309 @@ describe("oauth token - authorization_code", async () => {
 		expect(accessToken.payload.exp).toBe(tokens.data?.expires_at);
 		expect(accessToken.payload.scope).toBe(scopes.join(" "));
 	});
+
+	/**
+	 * Concurrent redemption of the same authorization code must mint
+	 * tokens for exactly one caller. Before the atomic-consume primitive,
+	 * two requests could both pass the find step before either delete
+	 * completed and both proceeded to issue token pairs.
+	 *
+	 * The interleaving relies on the in-memory adapter yielding control at
+	 * each `await` boundary; reverting `consumeVerificationValue` to the old
+	 * find/delete pair makes this test fail with two successes (verified
+	 * empirically), so a synthetic scheduling barrier is unnecessary.
+	 *
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-7w99-5wm4-3g79
+	 */
+	it("rejects concurrent redemption of the same authorization code", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes: ["openid", "offline_access"],
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		const [first, second] = await Promise.all([
+			validateAuthCode({ code: code!, codeVerifier }),
+			validateAuthCode({ code: code!, codeVerifier }),
+		]);
+
+		const successes = [first, second].filter((r) => r.error === null);
+		const failures = [first, second].filter((r) => r.error !== null);
+		expect(successes).toHaveLength(1);
+		expect(failures).toHaveLength(1);
+		expect(successes[0]?.data?.access_token).toBeDefined();
+		expect(successes[0]?.data?.id_token).toBeDefined();
+		expect((failures[0]?.error as { error?: string } | undefined)?.error).toBe(
+			"invalid_grant",
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10150
+	 */
+	it("rejects authorization code replay with invalid_grant and revokes issued tokens", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes: ["openid"],
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		const tokens = await validateAuthCode({ code: code!, codeVerifier });
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+
+		const replay = await validateAuthCode({ code: code!, codeVerifier });
+		expect(replay.error?.status).toBe(400);
+		expect((replay.error as { error?: string } | undefined)?.error).toBe(
+			"invalid_grant",
+		);
+
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: {
+					Authorization: `Bearer ${tokens.data!.access_token}`,
+				},
+			},
+		);
+		expect(userinfo.error?.status).toBe(401);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10150
+	 */
+	it("rejects authorization code replay with invalid_grant and still attempts refresh-token cleanup when access-token cleanup fails", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes: ["openid", "offline_access"],
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		const tokens = await validateAuthCode({ code: code!, codeVerifier });
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.refresh_token).toBeDefined();
+
+		const context = await auth.$context;
+		const deleteMany = vi
+			.spyOn(context.adapter, "deleteMany")
+			.mockRejectedValueOnce(new Error("cleanup failed"));
+		const loggerError = vi
+			.spyOn(context.logger, "error")
+			.mockImplementation(() => undefined);
+
+		try {
+			const replay = await validateAuthCode({ code: code!, codeVerifier });
+			expect(replay.error?.status).toBe(400);
+			expect((replay.error as { error?: string } | undefined)?.error).toBe(
+				"invalid_grant",
+			);
+			expect(loggerError).toHaveBeenCalledWith(
+				"authorization code replay cleanup failed",
+				expect.any(Error),
+			);
+			expect(deleteMany).toHaveBeenNthCalledWith(
+				1,
+				expect.objectContaining({ model: "oauthAccessToken" }),
+			);
+			expect(deleteMany).toHaveBeenNthCalledWith(
+				2,
+				expect.objectContaining({ model: "oauthRefreshToken" }),
+			);
+
+			const { body, headers } = await refreshAccessTokenRequest({
+				refreshToken: tokens.data!.refresh_token!,
+				options: {
+					clientId: oauthClient.client_id,
+					clientSecret: oauthClient.client_secret,
+					redirectURI: redirectUri,
+				},
+			});
+			const refresh = await client.$fetch<{ error?: string }>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers,
+			});
+			expect(refresh.error?.status).toBe(400);
+			expect((refresh.error as { error?: string } | undefined)?.error).toBe(
+				"invalid_grant",
+			);
+		} finally {
+			deleteMany.mockRestore();
+			loggerError.mockRestore();
+		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10159
+	 *
+	 * RFC 6749 §4.1.3 binds redirect_uri at the token endpoint only when the
+	 * authorization request carried one. The authorize endpoint always records a
+	 * redirect_uri (it delivers the code through it), so a headless code is
+	 * inserted the way authorize.ts persists one to exercise redemption directly.
+	 */
+	describe("redirect_uri conditional (RFC 6749 §4.1.3)", () => {
+		const tokenRequestHeaders = {
+			accept: "application/json",
+			"content-type": "application/x-www-form-urlencoded",
+		};
+
+		async function s256Challenge(verifier: string) {
+			const digest = await crypto.subtle.digest(
+				"SHA-256",
+				new TextEncoder().encode(verifier),
+			);
+			return base64url.encode(new Uint8Array(digest));
+		}
+
+		// Headless first-party / device flows are public clients, so the code is
+		// minted with a PKCE challenge and redeemed with its verifier.
+		async function mintHeadlessCode() {
+			const context = await auth.$context;
+			const session = await auth.api.getSession({ headers });
+			if (!session) throw new Error("test session unavailable");
+			const code = generateRandomString(32, "a-z", "A-Z", "0-9");
+			const codeVerifier = generateRandomString(43, "a-z", "A-Z", "0-9");
+			const now = Date.now();
+			await context.internalAdapter.createVerificationValue({
+				identifier: await storeToken("hashed", code, "authorization_code"),
+				value: JSON.stringify({
+					type: "authorization_code",
+					query: {
+						client_id: oauthClient!.client_id,
+						scope: "openid",
+						code_challenge: await s256Challenge(codeVerifier),
+						code_challenge_method: "S256",
+					},
+					userId: session.user.id,
+					sessionId: session.session.id,
+					authTime: now,
+				}),
+				expiresAt: new Date(now + 600_000),
+			});
+			return { code, codeVerifier };
+		}
+
+		async function mintRedirectBoundCode() {
+			const { url: authUrl } = await createAuthUrl();
+			let callbackRedirectUrl = "";
+			await client.$fetch(authUrl.toString(), {
+				onError(context) {
+					callbackRedirectUrl = context.response.headers.get("Location") || "";
+				},
+			});
+			return new URL(callbackRedirectUrl).searchParams.get("code")!;
+		}
+
+		it("exchanges a headless code that omits redirect_uri", async () => {
+			const { code, codeVerifier } = await mintHeadlessCode();
+			const tokens = await client.oauth2.token(
+				{
+					code,
+					code_verifier: codeVerifier,
+					grant_type: "authorization_code",
+					client_id: oauthClient!.client_id,
+					client_secret: oauthClient!.client_secret,
+				},
+				{ headers: tokenRequestHeaders },
+			);
+			expect(tokens.error).toBeNull();
+			expect(tokens.data?.access_token).toBeDefined();
+		});
+
+		it("rejects a redirect_uri supplied against a headless code with invalid_grant", async () => {
+			const { code, codeVerifier } = await mintHeadlessCode();
+			const tokens = await client.oauth2.token(
+				{
+					code,
+					code_verifier: codeVerifier,
+					grant_type: "authorization_code",
+					client_id: oauthClient!.client_id,
+					client_secret: oauthClient!.client_secret,
+					redirect_uri: redirectUri,
+				},
+				{ headers: tokenRequestHeaders },
+			);
+			expect(tokens.data?.access_token).toBeUndefined();
+			expect((tokens.error as { error?: string } | null)?.error).toBe(
+				"invalid_grant",
+			);
+		});
+
+		it("requires redirect_uri when the code was bound to one", async () => {
+			const code = await mintRedirectBoundCode();
+			const tokens = await client.oauth2.token(
+				{
+					code,
+					grant_type: "authorization_code",
+					client_id: oauthClient!.client_id,
+					client_secret: oauthClient!.client_secret,
+				},
+				{ headers: tokenRequestHeaders },
+			);
+			expect(tokens.data?.access_token).toBeUndefined();
+			expect((tokens.error as { error?: string } | null)?.error).toBe(
+				"invalid_request",
+			);
+		});
+
+		it("rejects a mismatched redirect_uri with invalid_grant", async () => {
+			const code = await mintRedirectBoundCode();
+			const tokens = await client.oauth2.token(
+				{
+					code,
+					grant_type: "authorization_code",
+					client_id: oauthClient!.client_id,
+					client_secret: oauthClient!.client_secret,
+					redirect_uri: "https://attacker.example/callback",
+				},
+				{ headers: tokenRequestHeaders },
+			);
+			expect(tokens.data?.access_token).toBeUndefined();
+			expect((tokens.error as { error?: string } | null)?.error).toBe(
+				"invalid_grant",
+			);
+		});
+	});
 });
 
 describe("oauth token - refresh_token", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const {
 		auth: authorizationServer,
 		signInWithTestUser,
@@ -380,7 +743,8 @@ describe("oauth token - refresh_token", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [validAudience],
+				resources: [validResource],
+				enforcePerClientResources: false,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -391,7 +755,7 @@ describe("oauth token - refresh_token", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -402,7 +766,7 @@ describe("oauth token - refresh_token", async () => {
 	let oauthClient: OAuthClient | null;
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const state = "123";
 	let jwks: ReturnType<typeof createLocalJWKSet>;
 
@@ -411,6 +775,11 @@ describe("oauth token - refresh_token", async () => {
 		const response = await authorizationServer.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -422,7 +791,9 @@ describe("oauth token - refresh_token", async () => {
 		oauthClient = response;
 
 		// Get jwks
-		const jwksResult = await client.jwks();
+		const jwksResult = await client.$fetch<
+			Parameters<typeof createLocalJWKSet>[0]
+		>("/jwks", { method: "GET" });
 		if (!jwksResult.data) {
 			throw new Error("Unable to fetch jwks");
 		}
@@ -458,7 +829,7 @@ describe("oauth token - refresh_token", async () => {
 
 	async function validateAuthCode(
 		overrides: MakeRequired<
-			Partial<Parameters<typeof createAuthorizationCodeRequest>[0]>,
+			Partial<Parameters<typeof authorizationCodeRequest>[0]>,
 			"code"
 		>,
 	) {
@@ -466,7 +837,7 @@ describe("oauth token - refresh_token", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const { body, headers } = createAuthorizationCodeRequest({
+		const { body, headers } = await authorizationCodeRequest({
 			...overrides,
 			redirectURI: redirectUri,
 			options: {
@@ -524,7 +895,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(idToken.protectedHeader).toBeDefined();
 		expect(idToken.payload).toBeDefined();
 		expect(idToken.payload.sub).toBeDefined();
-		expect(idToken.payload.name).toBeDefined();
+		expect(idToken.payload.name).toBeUndefined();
 		expect(idToken.payload.email).toBeUndefined();
 
 		return tokens.data;
@@ -542,7 +913,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -576,6 +947,101 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).not.toEqual(newTokens.data?.refresh_token);
 	});
 
+	it("rejects refresh token use by a different client with invalid_grant", async ({
+		expect,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile", "offline_access"];
+		const tokens = await authorizeForRefreshToken(scopes);
+		expect(tokens?.refresh_token).toBeDefined();
+
+		const otherRedirectUri = `${rpBaseUrl}/api/auth/callback/other`;
+		const otherClient = await authorizationServer.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code", "refresh_token"],
+				redirect_uris: [otherRedirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(otherClient.client_id).toBeDefined();
+		expect(otherClient.client_secret).toBeDefined();
+
+		const { body, headers: tokenHeaders } = await refreshAccessTokenRequest({
+			refreshToken: tokens!.refresh_token!,
+			options: {
+				clientId: otherClient.client_id,
+				clientSecret: otherClient.client_secret,
+				redirectURI: otherRedirectUri,
+			},
+			extraParams: {
+				scope: scopes.join(" "),
+			},
+		});
+		const result = await client.$fetch<{
+			error?: string;
+			error_description?: string;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+
+		expect((result.error as { error?: string } | null | undefined)?.error).toBe(
+			"invalid_grant",
+		);
+		expect(
+			(result.error as { error_description?: string } | null | undefined)
+				?.error_description,
+		).toBe("invalid refresh token");
+	});
+
+	it("should preserve auth_time in id_token after refresh (OIDC Core 1.0 Section 12.2)", async ({
+		expect,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile", "offline_access"];
+		const tokens = await authorizeForRefreshToken(scopes);
+		expect(tokens?.id_token).toBeDefined();
+		expect(tokens?.refresh_token).toBeDefined();
+
+		const originalIdToken = decodeJwt(tokens!.id_token!);
+		expect(originalIdToken.auth_time).toBeDefined();
+
+		// Refresh tokens
+		const { body, headers } = await refreshAccessTokenRequest({
+			refreshToken: tokens?.refresh_token!,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			extraParams: {
+				scope: scopes.join(" "),
+			},
+		});
+		const newTokens = await client.$fetch<{
+			access_token?: string;
+			id_token?: string;
+			refresh_token?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body: body,
+			headers: headers,
+		});
+		expect(newTokens.data?.id_token).toBeDefined();
+
+		const refreshedIdToken = decodeJwt(newTokens.data!.id_token!);
+		expect(refreshedIdToken.auth_time).toBe(originalIdToken.auth_time);
+	});
+
 	it("should refresh token with same scopes, JWT access token", async ({
 		expect,
 	}) => {
@@ -588,7 +1054,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -598,7 +1064,7 @@ describe("oauth token - refresh_token", async () => {
 			extraParams: {
 				scope: scopes.join(" "),
 			},
-			resource: validAudience,
+			resource: validResource,
 		});
 		const newTokens = await client.$fetch<{
 			access_token?: string;
@@ -623,7 +1089,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).not.toEqual(newTokens.data?.refresh_token);
 
 		const accessToken = await jwtVerify(newTokens.data?.access_token!, jwks, {
-			audience: validAudience,
+			audience: validResource,
 			issuer: authServerBaseUrl,
 		});
 		expect(accessToken.payload.azp).toBe(oauthClient.client_id);
@@ -646,7 +1112,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -693,7 +1159,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -703,7 +1169,7 @@ describe("oauth token - refresh_token", async () => {
 			extraParams: {
 				scope: newScopes.join(" "),
 			},
-			resource: validAudience,
+			resource: validResource,
 		});
 		const newTokens = await client.$fetch<{
 			access_token?: string;
@@ -728,7 +1194,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).not.toEqual(newTokens.data?.refresh_token);
 
 		const accessToken = await jwtVerify(newTokens.data?.access_token!, jwks, {
-			audience: validAudience,
+			audience: validResource,
 			issuer: authServerBaseUrl,
 		});
 		expect(accessToken.payload.azp).toBe(oauthClient.client_id);
@@ -751,7 +1217,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -794,7 +1260,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -832,7 +1298,7 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).toBeDefined();
 
 		// Refresh tokens
-		const { body, headers } = createRefreshAccessTokenRequest({
+		const { body, headers } = await refreshAccessTokenRequest({
 			refreshToken: tokens?.refresh_token!,
 			options: {
 				clientId: oauthClient.client_id,
@@ -878,7 +1344,7 @@ describe("oauth token - refresh_token", async () => {
 
 		// New tokens should not work either
 		const { body: newBody, headers: newHeaders } =
-			createRefreshAccessTokenRequest({
+			await refreshAccessTokenRequest({
 				refreshToken: newTokens?.data?.refresh_token!,
 				options: {
 					clientId: oauthClient.client_id,
@@ -902,12 +1368,612 @@ describe("oauth token - refresh_token", async () => {
 		});
 		expect(newTokensRefresh.error?.status).toBeDefined();
 	});
+
+	/**
+	 * Concurrent refresh-token rotation against the same parent must mint
+	 * tokens for exactly one caller. Before the atomic CAS on the parent
+	 * row, two concurrent requests both passed the `revoked` check and
+	 * each minted a fresh refresh token (forked family). The loser now
+	 * fails with `invalid_grant`; the parent row's `revoked` flag is set,
+	 * so any subsequent replay of the original token trips the existing
+	 * family-invalidation guard in `handleRefreshTokenGrant`.
+	 *
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-392p-2q2v-4372
+	 */
+	it("rejects concurrent rotation of the same refresh token", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile", "offline_access"];
+		const tokens = await authorizeForRefreshToken(scopes);
+		expect(tokens?.refresh_token).toBeDefined();
+
+		async function refresh(refreshToken: string) {
+			const { body, headers } = await refreshAccessTokenRequest({
+				refreshToken,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+			});
+			return client.$fetch<{
+				access_token?: string;
+				refresh_token?: string;
+				error?: string;
+			}>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers,
+			});
+		}
+
+		const [first, second] = await Promise.all([
+			refresh(tokens!.refresh_token!),
+			refresh(tokens!.refresh_token!),
+		]);
+
+		const successes = [first, second].filter((r) => r.error === null);
+		const failures = [first, second].filter((r) => r.error !== null);
+		expect(successes).toHaveLength(1);
+		expect(failures).toHaveLength(1);
+		expect(successes[0]?.data?.refresh_token).toBeDefined();
+		expect((failures[0]?.error as { error?: string } | undefined)?.error).toBe(
+			"invalid_grant",
+		);
+
+		// Replay of the original (now revoked) parent token must trigger
+		// the existing family-invalidation guard.
+		const replay = await refresh(tokens!.refresh_token!);
+		expect((replay.error as { error?: string } | null | undefined)?.error).toBe(
+			"invalid_grant",
+		);
+	});
+
+	/**
+	 * After a contested rotation, the winner's child refresh token must remain
+	 * usable for a subsequent rotation. The CAS only revokes the parent row; it
+	 * must not poison the rest of the legitimate user's session.
+	 *
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-392p-2q2v-4372
+	 */
+	it("winner's child token is usable for a subsequent rotation", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile", "offline_access"];
+		const tokens = await authorizeForRefreshToken(scopes);
+		expect(tokens?.refresh_token).toBeDefined();
+
+		async function refresh(refreshToken: string) {
+			const { body, headers } = await refreshAccessTokenRequest({
+				refreshToken,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+			});
+			return client.$fetch<{
+				access_token?: string;
+				refresh_token?: string;
+				error?: string;
+			}>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers,
+			});
+		}
+
+		const [first, second] = await Promise.all([
+			refresh(tokens!.refresh_token!),
+			refresh(tokens!.refresh_token!),
+		]);
+
+		const winner = [first, second].find((r) => r.error === null);
+		expect(winner?.data?.refresh_token).toBeDefined();
+
+		const next = await refresh(winner!.data!.refresh_token!);
+		expect(next.error).toBeNull();
+		expect(next.data?.refresh_token).toBeDefined();
+		expect(next.data?.refresh_token).not.toEqual(winner!.data!.refresh_token);
+	});
+
+	/**
+	 * /oauth2/revoke (RFC 7009) on an active refresh token must mark the row
+	 * `revoked` (via the same CAS used in rotation) so that subsequent reuse
+	 * trips the family-invalidation guard.
+	 *
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-392p-2q2v-4372
+	 */
+	it("revoke endpoint marks the refresh row revoked and blocks reuse", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile", "offline_access"];
+		const tokens = await authorizeForRefreshToken(scopes);
+		expect(tokens?.refresh_token).toBeDefined();
+
+		const revoke = await client.$fetch("/oauth2/revoke", {
+			method: "POST",
+			body: new URLSearchParams({
+				token: tokens!.refresh_token!,
+				token_type_hint: "refresh_token",
+				client_id: oauthClient.client_id,
+				client_secret: oauthClient.client_secret,
+			}),
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+			},
+		});
+		expect(revoke.error).toBeNull();
+
+		const context = await authorizationServer.$context;
+		const refreshRows = await context.adapter.findMany<{
+			id: string;
+			revoked: Date | null;
+		}>({
+			model: "oauthRefreshToken",
+			where: [{ field: "clientId", value: oauthClient.client_id }],
+		});
+		expect(refreshRows.length).toBeGreaterThanOrEqual(1);
+		// The just-revoked row must carry a `revoked` timestamp.
+		expect(refreshRows.some((r) => r.revoked != null)).toBe(true);
+
+		// Reusing the revoked refresh token must trip the family-invalidation
+		// guard in handleRefreshTokenGrant (revoked flag → invalidate family).
+		const { body: replayBody, headers: replayHeaders } =
+			await refreshAccessTokenRequest({
+				refreshToken: tokens!.refresh_token!,
+				options: {
+					clientId: oauthClient.client_id,
+					clientSecret: oauthClient.client_secret,
+					redirectURI: redirectUri,
+				},
+			});
+		const replay = await client.$fetch<{
+			error?: string;
+		}>("/oauth2/token", {
+			method: "POST",
+			body: replayBody,
+			headers: replayHeaders,
+		});
+		expect((replay.error as { error?: string } | null | undefined)?.error).toBe(
+			"invalid_grant",
+		);
+	});
+
+	/**
+	 * V1 from variants.md: revokeRefreshToken racing against
+	 * handleRefreshTokenGrant on the same parent row. Both paths must run
+	 * through the same CAS so exactly one wins; the loser fails closed and
+	 * the parent stays revoked.
+	 *
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-392p-2q2v-4372
+	 */
+	it("concurrent revoke + rotate against the same refresh token: exactly one wins", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile", "offline_access"];
+		const tokens = await authorizeForRefreshToken(scopes);
+		expect(tokens?.refresh_token).toBeDefined();
+		const parentToken = tokens!.refresh_token!;
+
+		const refresh = async () => {
+			const { body, headers } = await refreshAccessTokenRequest({
+				refreshToken: parentToken,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+			});
+			return client.$fetch<{
+				access_token?: string;
+				refresh_token?: string;
+				error?: string;
+			}>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers,
+			});
+		};
+
+		const revoke = () =>
+			client.$fetch("/oauth2/revoke", {
+				method: "POST",
+				body: new URLSearchParams({
+					token: parentToken,
+					token_type_hint: "refresh_token",
+					client_id: oauthClient!.client_id,
+					client_secret: oauthClient!.client_secret!,
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			});
+
+		const [refreshResult, revokeResult] = await Promise.all([
+			refresh(),
+			revoke(),
+		]);
+
+		// /oauth2/revoke is RFC 7009 §2.2 always-200, so the racer outcome is
+		// observable through the refresh result alone:
+		//   - refresh won the CAS  → mints a fresh refresh_token; revoke is a no-op
+		//   - revoke won the CAS  → refresh returns invalid_grant
+		expect(revokeResult.error).toBeNull();
+		if (refreshResult.error === null) {
+			expect(refreshResult.data?.refresh_token).toBeDefined();
+		} else {
+			const errPayload = refreshResult.error as { error?: string } | null;
+			expect(errPayload?.error).toBe("invalid_grant");
+		}
+
+		// In both orderings, replaying the parent must now fail closed
+		// (either revoked by the explicit revoke or rotated out by the refresh).
+		const replay = await refresh();
+		const replayErr = replay.error as { error?: string } | null;
+		expect(replayErr?.error).toBe("invalid_grant");
+	});
+});
+
+describe("oauth token - refresh_token reuse interval", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const validAudience = "https://reuse-api.example.com";
+	const otherAudience = "https://other-reuse-api.example.com";
+	let refreshTokenResponseCalls = 0;
+	const {
+		auth: authorizationServer,
+		signInWithTestUser,
+		customFetchImpl,
+	} = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [validAudience, otherAudience],
+				enforcePerClientResources: false,
+				refreshTokenReuseInterval: 30,
+				customTokenResponseFields({ grantType }) {
+					if (grantType !== "refresh_token") {
+						return {};
+					}
+					refreshTokenResponseCalls += 1;
+					return {
+						refresh_call: `${refreshTokenResponseCalls}`,
+					};
+				},
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const state = "123";
+
+	async function createOAuthClient() {
+		const response = await authorizationServer.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		return response;
+	}
+
+	async function authorizeForRefreshToken(scopes: string[]) {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const codeVerifier = generateRandomString(32);
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes,
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const callbackUrl = new URL(callbackRedirectUrl);
+		const { body, headers } = await authorizationCodeRequest({
+			code: callbackUrl.searchParams.get("code")!,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const tokens = await client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers,
+		});
+		expect(tokens.data?.refresh_token).toBeDefined();
+		return tokens.data!;
+	}
+
+	async function refresh(
+		refreshToken: string,
+		params?: { resource?: string | string[]; scope?: string },
+	) {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const { body, headers } = await refreshAccessTokenRequest({
+			refreshToken,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			extraParams: params?.scope ? { scope: params.scope } : undefined,
+			resource: params?.resource,
+		});
+		return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers,
+		});
+	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8512
+	 */
+	it("replays the same response inside the refresh token reuse interval", async () => {
+		oauthClient = await createOAuthClient();
+		refreshTokenResponseCalls = 0;
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+
+		const firstRefresh = await refresh(tokens.refresh_token!);
+		expect(firstRefresh.error).toBeNull();
+		expect(firstRefresh.data?.refresh_token).toBeDefined();
+		expect(firstRefresh.data?.refresh_call).toBe("1");
+
+		const replay = await refresh(tokens.refresh_token!);
+		expect(replay.error).toBeNull();
+		expect(replay.data).toMatchObject({
+			access_token: firstRefresh.data?.access_token,
+			expires_at: firstRefresh.data?.expires_at,
+			token_type: firstRefresh.data?.token_type,
+			refresh_token: firstRefresh.data?.refresh_token,
+			scope: firstRefresh.data?.scope,
+			id_token: firstRefresh.data?.id_token,
+			refresh_call: "1",
+		});
+		expect(replay.data?.expires_in).toBeLessThanOrEqual(
+			firstRefresh.data!.expires_in!,
+		);
+		expect(refreshTokenResponseCalls).toBe(1);
+
+		const next = await refresh(firstRefresh.data!.refresh_token!);
+		expect(next.error).toBeNull();
+		expect(next.data?.refresh_token).toBeDefined();
+		expect(next.data?.refresh_token).not.toEqual(
+			firstRefresh.data?.refresh_token,
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8512
+	 */
+	it("replays equivalent requests when scope and resource order differ", async () => {
+		oauthClient = await createOAuthClient();
+		refreshTokenResponseCalls = 0;
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+
+		const firstRefresh = await refresh(tokens.refresh_token!, {
+			scope: "profile openid offline_access",
+			resource: [validAudience, otherAudience],
+		});
+		expect(firstRefresh.error).toBeNull();
+		expect(firstRefresh.data?.refresh_token).toBeDefined();
+		expect(firstRefresh.data?.refresh_call).toBe("1");
+
+		const replay = await refresh(tokens.refresh_token!, {
+			scope: "offline_access profile openid",
+			resource: [otherAudience, validAudience],
+		});
+		expect(replay.error).toBeNull();
+		expect(replay.data).toMatchObject({
+			access_token: firstRefresh.data?.access_token,
+			expires_at: firstRefresh.data?.expires_at,
+			token_type: firstRefresh.data?.token_type,
+			refresh_token: firstRefresh.data?.refresh_token,
+			scope: firstRefresh.data?.scope,
+			id_token: firstRefresh.data?.id_token,
+			refresh_call: "1",
+		});
+		expect(refreshTokenResponseCalls).toBe(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10145
+	 */
+	it("returns the rotated token response when storing the replay cache fails", async () => {
+		oauthClient = await createOAuthClient();
+		refreshTokenResponseCalls = 0;
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+		const context = await authorizationServer.$context;
+		const originalUpdate = context.adapter.update.bind(context.adapter);
+		const update = vi.spyOn(context.adapter, "update");
+		const loggerError = vi
+			.spyOn(context.logger, "error")
+			.mockImplementation(() => undefined);
+		update.mockImplementation(async (...args) => {
+			const [params] = args;
+			if (
+				params.model === "oauthRefreshToken" &&
+				Object.prototype.hasOwnProperty.call(
+					params.update,
+					"rotationReplayResponse",
+				)
+			) {
+				throw new Error("replay cache unavailable");
+			}
+			return originalUpdate(...args);
+		});
+
+		try {
+			const firstRefresh = await refresh(tokens.refresh_token!);
+			expect(firstRefresh.error).toBeNull();
+			expect(firstRefresh.data?.refresh_token).toBeDefined();
+			expect(firstRefresh.data?.refresh_call).toBe("1");
+			expect(loggerError).toHaveBeenCalledWith(
+				"failed to store refresh token rotation replay",
+				expect.any(Error),
+			);
+
+			const next = await refresh(firstRefresh.data!.refresh_token!);
+			expect(next.error).toBeNull();
+			expect(next.data?.refresh_token).toBeDefined();
+			expect(next.data?.refresh_call).toBe("2");
+		} finally {
+			update.mockRestore();
+			loggerError.mockRestore();
+		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8512
+	 */
+	it("does not replay a cached response for a different resource", async () => {
+		oauthClient = await createOAuthClient();
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+
+		const firstRefresh = await refresh(tokens.refresh_token!, {
+			resource: validAudience,
+		});
+		expect(firstRefresh.error).toBeNull();
+		expect(firstRefresh.data?.refresh_token).toBeDefined();
+
+		const mismatchedReplay = await refresh(tokens.refresh_token!, {
+			resource: otherAudience,
+		});
+		expect((mismatchedReplay.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
+
+		const next = await refresh(firstRefresh.data!.refresh_token!);
+		expect(next.error).toBeNull();
+		expect(next.data?.refresh_token).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8512
+	 */
+	it("invalidates the family after the reuse interval expires", async () => {
+		oauthClient = await createOAuthClient();
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+		const firstRefresh = await refresh(tokens.refresh_token!);
+		expect(firstRefresh.error).toBeNull();
+		expect(firstRefresh.data?.refresh_token).toBeDefined();
+
+		const context = await authorizationServer.$context;
+		const rotatedRows = await context.adapter.findMany<{
+			id: string;
+			rotationReplayResponse?: string | null;
+		}>({
+			model: "oauthRefreshToken",
+			where: [{ field: "clientId", value: oauthClient!.client_id }],
+		});
+		const rotatedRow = rotatedRows.find((row) => row.rotationReplayResponse);
+		expect(rotatedRow?.id).toBeDefined();
+		await context.adapter.update({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", value: rotatedRow!.id }],
+			update: {
+				rotationReplayExpiresAt: new Date(0),
+			},
+		});
+
+		const replay = await refresh(tokens.refresh_token!);
+		expect((replay.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
+
+		const childReplay = await refresh(firstRefresh.data!.refresh_token!);
+		expect((childReplay.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
+	});
 });
 
 describe("oauth token - client_credentials", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const allScopes = ["openid", "profile", "email", "read:posts", "write:posts"];
 	const clientScopes = ["openid", "profile", "email", "read:posts"];
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
@@ -921,7 +1987,8 @@ describe("oauth token - client_credentials", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [validAudience],
+				resources: [validResource],
+				enforcePerClientResources: false,
 				allowDynamicClientRegistration: true,
 				scopes: allScopes,
 				silenceWarnings: {
@@ -934,7 +2001,7 @@ describe("oauth token - client_credentials", async () => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [oauthProviderClient(), jwtClient()],
+		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
 		fetchOptions: {
 			customFetchImpl,
@@ -945,7 +2012,7 @@ describe("oauth token - client_credentials", async () => {
 	let oauthClient: OAuthClient | null;
 
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	let jwks: ReturnType<typeof createLocalJWKSet>;
 
 	// Registers a confidential client application to work with
@@ -953,6 +2020,11 @@ describe("oauth token - client_credentials", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 				scope: clientScopes.join(" "),
@@ -966,7 +2038,9 @@ describe("oauth token - client_credentials", async () => {
 		oauthClient = response;
 
 		// Get jwks
-		const jwksResult = await client.jwks();
+		const jwksResult = await client.$fetch<
+			Parameters<typeof createLocalJWKSet>[0]
+		>("/jwks", { method: "GET" });
 		if (!jwksResult.data) {
 			throw new Error("Unable to fetch jwks");
 		}
@@ -979,7 +2053,7 @@ describe("oauth token - client_credentials", async () => {
 		}
 
 		const scopes = ["read:posts"];
-		const { body, headers } = createClientCredentialsTokenRequest({
+		const { body, headers } = await clientCredentialsTokenRequest({
 			scope: scopes.join(" "),
 			options: {
 				clientId: oauthClient.client_id,
@@ -1014,7 +2088,7 @@ describe("oauth token - client_credentials", async () => {
 			throw Error("beforeAll not run properly");
 		}
 
-		const { body, headers } = createClientCredentialsTokenRequest({
+		const { body, headers } = await clientCredentialsTokenRequest({
 			options: {
 				clientId: oauthClient.client_id,
 				clientSecret: oauthClient.client_secret,
@@ -1049,14 +2123,14 @@ describe("oauth token - client_credentials", async () => {
 		}
 
 		const scopes = ["read:posts"];
-		const { body, headers } = createClientCredentialsTokenRequest({
+		const { body, headers } = await clientCredentialsTokenRequest({
 			scope: scopes.join(" "),
 			options: {
 				clientId: oauthClient.client_id,
 				clientSecret: oauthClient.client_secret,
 				redirectURI: redirectUri,
 			},
-			resource: validAudience,
+			resource: validResource,
 		});
 		const tokens = await client.$fetch<{
 			access_token?: string;
@@ -1080,23 +2154,166 @@ describe("oauth token - client_credentials", async () => {
 		expect(tokens.data?.expires_at).toBeDefined();
 
 		const accessToken = await jwtVerify(tokens.data?.access_token!, jwks, {
-			audience: validAudience,
+			audience: validResource,
 			issuer: authServerBaseUrl,
 		});
 		expect(accessToken.payload.azp).toBe(oauthClient.client_id);
-		expect(accessToken.payload.sub).toBeUndefined(); // unset since not a user!
+		expect(accessToken.payload.sub).toBe(oauthClient.client_id);
 		expect(accessToken.payload.iat).toBeDefined();
 		expect(accessToken.payload.exp).toBe(tokens.data?.expires_at);
 		expect(accessToken.payload.scope).toBe(scopes.join(" "));
 	});
 });
 
+describe("oauth token - customIdTokenClaims precedence", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+				customIdTokenClaims: () => ({
+					given_name: "CustomFirst",
+					family_name: "CustomLast",
+					custom_field: "custom_value",
+				}),
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+	const state = "123";
+	let jwks: ReturnType<typeof createLocalJWKSet>;
+
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		expect(response?.redirect_uris).toBeDefined();
+		oauthClient = response;
+
+		const jwksResult = await client.$fetch<
+			Parameters<typeof createLocalJWKSet>[0]
+		>("/jwks", { method: "GET" });
+		if (!jwksResult.data) {
+			throw new Error("Unable to fetch jwks");
+		}
+		jwks = createLocalJWKSet(jwksResult.data);
+	});
+
+	it("custom claims can add profile claim names to id_token", async ({
+		expect,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile"];
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes,
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).not.toBe("");
+		expect(callbackRedirectUrl).toContain(redirectUri);
+
+		const callbackUrl = new URL(callbackRedirectUrl);
+		const code = callbackUrl.searchParams.get("code");
+		const returnedState = callbackUrl.searchParams.get("state");
+
+		expect(code).toBeTruthy();
+		expect(returnedState).toBe(state);
+
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			code: code!,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const tokens = await client.$fetch<{
+			id_token?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: reqHeaders,
+		});
+
+		expect(tokens.data?.id_token).toBeDefined();
+		const idToken = await jwtVerify(tokens.data?.id_token!, jwks);
+
+		// First-party custom claims can deliberately place profile claims in the
+		// ID token, even though scopes now place them on UserInfo by default.
+		expect(idToken.payload.given_name).toBe("CustomFirst");
+		expect(idToken.payload.family_name).toBe("CustomLast");
+		expect(idToken.payload.custom_field).toBe("custom_value");
+
+		expect(idToken.payload.name).toBeUndefined();
+		expect(idToken.payload.sub).toBeDefined();
+	});
+});
+
 describe("oauth token - config", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	const state = "123";
 	const scopes = [
@@ -1122,7 +2339,8 @@ describe("oauth token - config", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						validAudiences: [validAudience],
+						resources: [validResource],
+						enforcePerClientResources: false,
 						scopes,
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
@@ -1155,6 +2373,11 @@ describe("oauth token - config", async () => {
 		const registeredClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
 				skip_consent: true,
 			},
@@ -1188,7 +2411,7 @@ describe("oauth token - config", async () => {
 	}
 
 	// Client Credentials Grant
-	it.each([
+	it.for([
 		{
 			testScopes: ["read:payments"],
 			result: 1800, // 30m lowest
@@ -1217,7 +2440,7 @@ describe("oauth token - config", async () => {
 		// Client credentials
 		const tokens = await client.oauth2.token(
 			{
-				resource: validAudience,
+				resource: validResource,
 				grant_type: "client_credentials",
 				client_id: oauthClient?.client_id,
 				client_secret: oauthClient?.client_secret,
@@ -1237,7 +2460,7 @@ describe("oauth token - config", async () => {
 	});
 
 	// Authorization Code and Refresh Token grants
-	it.each([
+	it.for([
 		{
 			testScopes: ["read:payments", "offline_access"],
 			result: 1800, // 30m lowest
@@ -1289,7 +2512,7 @@ describe("oauth token - config", async () => {
 				code: url.searchParams.get("code")!,
 				code_verifier: codeVerifier,
 				grant_type: "authorization_code",
-				resource: validAudience,
+				resource: validResource,
 				client_id: oauthClient?.client_id,
 				client_secret: oauthClient?.client_secret,
 				redirect_uri: redirectUri,
@@ -1309,8 +2532,7 @@ describe("oauth token - config", async () => {
 		// Refresh token
 		const refreshedTokens = await client.oauth2.token(
 			{
-				resource: validAudience,
-				// @ts-expect-error refresh token is sent
+				resource: validResource,
 				refresh_token: tokens.data?.refresh_token,
 				grant_type: "refresh_token",
 				client_id: oauthClient?.client_id,
@@ -1420,7 +2642,6 @@ describe("oauth token - config", async () => {
 		// Refresh token
 		const refreshedTokens = await client.oauth2.token(
 			{
-				// @ts-expect-error refresh token is sent
 				refresh_token: tokens.data?.refresh_token,
 				grant_type: "refresh_token",
 				client_id: oauthClient?.client_id,
@@ -1476,5 +2697,1937 @@ describe("oauth token - config", async () => {
 		);
 		expect(tokens.error?.status).toBeUndefined();
 		expect(tokens.data?.access_token).toBeDefined();
+	});
+});
+
+describe("oauth token - client secret validation", async () => {
+	const authServerBaseUrl = "http://localhost:3010";
+	const rpBaseUrl = "http://localhost:5010";
+	const validResource = "https://myapi.example.com";
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+	const scopes = [
+		"openid",
+		"email",
+		"profile",
+		"offline_access",
+		"read:profile",
+	];
+
+	async function createValidationInstance(opts?: {
+		oauthProviderConfig?: Omit<
+			OAuthOptions<Scope[]>,
+			"loginPage" | "consentPage"
+		>;
+	}) {
+		const { auth, customFetchImpl, signInWithTestUser, db } =
+			await getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						resources: [validResource],
+						enforcePerClientResources: false,
+						scopes,
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+						...opts?.oauthProviderConfig,
+					}),
+					...(opts?.oauthProviderConfig?.disableJwtPlugin
+						? []
+						: [
+								jwt({
+									jwt: {
+										issuer: authServerBaseUrl,
+									},
+								}),
+							]),
+				],
+			});
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+
+		return { client, oauthClient, db };
+	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8016
+	 */
+	it("should return invalid_client for encrypted client secret format mismatch", async () => {
+		const storedClientSecret = "Mda8BIefhR8eFkYfFq8H7XAW-fj8GNjQYKPfN8LZ6u8";
+		const { client, oauthClient, db } = await createValidationInstance({
+			oauthProviderConfig: {
+				storeClientSecret: "encrypted",
+				disableJwtPlugin: true,
+			},
+		});
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		await db.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: oauthClient.client_id }],
+			update: { clientSecret: storedClientSecret },
+		});
+
+		let responseStatus = 0;
+		const tokenResponse = await client.oauth2.token(
+			{
+				grant_type: "client_credentials",
+				client_id: oauthClient.client_id,
+				client_secret: oauthClient.client_secret,
+				scope: "read:profile",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				onError(context) {
+					responseStatus = context.response.status;
+				},
+			},
+		);
+		expect(responseStatus).toBe(401);
+		expect(tokenResponse.error).toMatchObject({
+			error: "invalid_client",
+			error_description: "invalid client_secret",
+		});
+	});
+
+	it("should propagate custom decrypt storage errors during client secret verification", async () => {
+		const { client, oauthClient } = await createValidationInstance({
+			oauthProviderConfig: {
+				storeClientSecret: {
+					encrypt: async (clientSecret) => clientSecret,
+					decrypt: async () => {
+						throw new Error("decrypt service unavailable");
+					},
+				},
+				disableJwtPlugin: true,
+			},
+		});
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		let responseStatus = 0;
+		await client.oauth2.token(
+			{
+				grant_type: "client_credentials",
+				client_id: oauthClient.client_id,
+				client_secret: oauthClient.client_secret,
+				scope: "read:profile",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				onError(context) {
+					responseStatus = context.response.status;
+				},
+			},
+		);
+		expect(responseStatus).toBe(500);
+	});
+});
+
+describe("id token claim override security", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+				customIdTokenClaims: () => ({
+					acr: "silver",
+					auth_time: 0,
+					amr: ["evil"],
+					sub: "evil",
+					iss: "https://evil.com",
+					aud: "evil-client",
+					nonce: "evil-nonce",
+					iat: 0,
+					nbf: 0,
+					exp: 0,
+					jti: "evil-jti",
+					azp: "evil-authorized-party",
+					sid: "evil-sid",
+					at_hash: "evil-at-hash",
+					c_hash: "evil-code-hash",
+					s_hash: "evil-state-hash",
+					"https://example.com/custom": "safe-custom-claim",
+				}),
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+	const state = "123";
+
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		expect(response?.redirect_uris).toBeDefined();
+		oauthClient = response;
+	});
+
+	async function getIdTokenClaims() {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile"];
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes,
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).not.toBe("");
+		expect(callbackRedirectUrl).toContain(redirectUri);
+
+		const callbackUrl = new URL(callbackRedirectUrl);
+		const code = callbackUrl.searchParams.get("code");
+		const returnedState = callbackUrl.searchParams.get("state");
+
+		expect(code).toBeTruthy();
+		expect(returnedState).toBe(state);
+
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			code: code!,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const tokens = await client.$fetch<{
+			id_token?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: reqHeaders,
+		});
+
+		expect(tokens.data?.id_token).toBeDefined();
+		return decodeJwt(tokens.data!.id_token!);
+	}
+
+	it("customIdTokenClaims cannot override authentication context claims", async ({
+		expect,
+	}) => {
+		const claims = await getIdTokenClaims();
+		expect(claims.acr).toBe("0");
+		expect(claims.auth_time).not.toBe(0);
+		expect(claims.amr).toBeUndefined();
+	});
+
+	it("customIdTokenClaims cannot override provider-owned id token claims", async ({
+		expect,
+	}) => {
+		const claims = await getIdTokenClaims();
+		expect(claims.sub).not.toBe("evil");
+		expect(claims.iss).not.toBe("https://evil.com");
+		expect(claims.aud).not.toBe("evil-client");
+		expect(claims.nonce).not.toBe("evil-nonce");
+		expect(claims.iat).not.toBe(0);
+		expect(claims.nbf).not.toBe(0);
+		expect(claims.exp).not.toBe(0);
+		expect(claims.jti).not.toBe("evil-jti");
+		expect(claims.azp).not.toBe("evil-authorized-party");
+		expect(claims.sid).not.toBe("evil-sid");
+		expect(claims.at_hash).not.toBe("evil-at-hash");
+		expect(claims.c_hash).not.toBe("evil-code-hash");
+		expect(claims.s_hash).not.toBe("evil-state-hash");
+		expect(claims["https://example.com/custom"]).toBe("safe-custom-claim");
+	});
+});
+
+describe("loopback redirect URI matching", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({ jwt: { issuer: authServerBaseUrl } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	const providerId = "test";
+	const state = "123";
+
+	it("127.0.0.1 with different ports should succeed", async ({ expect }) => {
+		const registeredUri = "http://127.0.0.1:8080/callback";
+		const requestedUri = "http://127.0.0.1:9090/callback";
+
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [registeredUri], skip_consent: true },
+		});
+
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: requestedUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain("code=");
+
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: requestedUri,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: requestedUri,
+			},
+		});
+
+		const tokens = await client.$fetch<{ access_token?: string }>(
+			"/oauth2/token",
+			{ method: "POST", body, headers: reqHeaders },
+		);
+		expect(tokens.data?.access_token).toBeDefined();
+	});
+
+	it("[::1] with different ports should succeed", async ({ expect }) => {
+		const registeredUri = "http://[::1]:8080/callback";
+		const requestedUri = "http://[::1]:3000/callback";
+
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [registeredUri], skip_consent: true },
+		});
+
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: requestedUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain("code=");
+
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: requestedUri,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: requestedUri,
+			},
+		});
+
+		const tokens = await client.$fetch<{ access_token?: string }>(
+			"/oauth2/token",
+			{ method: "POST", body, headers: reqHeaders },
+		);
+		expect(tokens.data?.access_token).toBeDefined();
+	});
+
+	it("non-loopback with different ports should be rejected", async ({
+		expect,
+	}) => {
+		const registeredUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+		const requestedUri = "http://localhost:9999/api/auth/callback/test";
+
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [registeredUri], skip_consent: true },
+		});
+
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: requestedUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain("invalid_redirect");
+		expect(callbackRedirectUrl).not.toContain("code=");
+	});
+
+	it("loopback with different path should be rejected", async ({ expect }) => {
+		const registeredUri = "http://127.0.0.1:8080/callback";
+		const requestedUri = "http://127.0.0.1:8080/other-path";
+
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [registeredUri], skip_consent: true },
+		});
+
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: requestedUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain("invalid_redirect");
+		expect(callbackRedirectUrl).not.toContain("code=");
+	});
+});
+
+describe("scope preservation through authorization code flow", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({ jwt: { issuer: authServerBaseUrl } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+	const state = "123";
+
+	it("scopes from authorization request should survive into token response", async ({
+		expect,
+	}) => {
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [redirectUri], skip_consent: true },
+		});
+
+		const requestedScopes = ["openid", "profile", "email"];
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: requestedScopes,
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain("code=");
+
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient!.client_id!,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const tokens = await client.$fetch<{ scope?: string }>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: reqHeaders,
+		});
+		expect(tokens.data?.scope).toBe(requestedScopes.join(" "));
+	});
+});
+
+describe("at_hash in id tokens", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const validResource = "https://myapi.example.com";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [validResource],
+				enforcePerClientResources: false,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const state = "123";
+
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		oauthClient = response;
+	});
+
+	async function getTokens(scopes: string[], resource?: string) {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes,
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const callbackUrl = new URL(callbackRedirectUrl);
+		const code = callbackUrl.searchParams.get("code")!;
+
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const params = new URLSearchParams(body.toString());
+		if (resource) {
+			params.set("resource", resource);
+		}
+
+		const tokens = await client.$fetch<{
+			access_token?: string;
+			id_token?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body: params.toString(),
+			headers: reqHeaders,
+		});
+
+		return tokens.data!;
+	}
+
+	it("should include at_hash when id token is issued with access token", async ({
+		expect,
+	}) => {
+		const tokens = await getTokens(["openid"]);
+		expect(tokens.id_token).toBeDefined();
+		expect(tokens.access_token).toBeDefined();
+
+		const decoded = decodeJwt(tokens.id_token!);
+		expect(decoded.at_hash).toBeDefined();
+		expect(typeof decoded.at_hash).toBe("string");
+		expect((decoded.at_hash as string).length).toBeGreaterThan(0);
+	});
+
+	/**
+	 * EdDSA (Ed25519) uses SHA-512 per RFC 8032.
+	 * at_hash = base64url(left-half(SHA-512(access_token)))
+	 */
+	it("at_hash should match manual computation for EdDSA", async ({
+		expect,
+	}) => {
+		const tokens = await getTokens(["openid"]);
+		const decoded = decodeJwt(tokens.id_token!);
+
+		const digest = new Uint8Array(
+			await crypto.subtle.digest(
+				"SHA-512",
+				new TextEncoder().encode(tokens.access_token!),
+			),
+		);
+		const expectedAtHash = base64url.encode(digest.slice(0, digest.length / 2));
+
+		expect(decoded.at_hash).toBe(expectedAtHash);
+	});
+
+	it("at_hash should not be present without openid scope", async ({
+		expect,
+	}) => {
+		const tokens = await getTokens(["offline_access"], validResource);
+		expect(tokens.id_token).toBeUndefined();
+	});
+
+	it("customIdTokenClaims should not receive accessToken", async ({
+		expect,
+	}) => {
+		let receivedKeys: string[] = [];
+		const {
+			auth: testAuth,
+			signInWithTestUser: signIn,
+			customFetchImpl: fetchImpl,
+		} = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+					customIdTokenClaims: (info) => {
+						receivedKeys = Object.keys(info);
+						return {};
+					},
+				}),
+			],
+		});
+
+		const { headers: testHeaders } = await signIn();
+		const testClient = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: { customFetchImpl: fetchImpl, headers: testHeaders },
+		});
+
+		const testOauthClient = await testAuth.api.adminCreateOAuthClient({
+			headers: testHeaders,
+			body: { redirect_uris: [redirectUri], skip_consent: true },
+		});
+
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: testOauthClient!.client_id!,
+				clientSecret: testOauthClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let callbackUrl = "";
+		await testClient.$fetch(url.toString(), {
+			onError(context) {
+				callbackUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackUrl).searchParams.get("code")!;
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: testOauthClient!.client_id!,
+				clientSecret: testOauthClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+		await testClient.$fetch("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: reqHeaders,
+		});
+
+		expect(receivedKeys).toContain("user");
+		expect(receivedKeys).toContain("scopes");
+		expect(receivedKeys).toContain("metadata");
+		expect(receivedKeys).not.toContain("accessToken");
+	});
+});
+
+describe("customTokenResponseFields", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+				customTokenResponseFields: ({ grantType, verificationValue }) => {
+					if (
+						grantType === "authorization_code" &&
+						verificationValue?.referenceId
+					) {
+						return { org_id: verificationValue.referenceId };
+					}
+					return { server_time: "2024-01-01" };
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const state = "custom-fields-test";
+
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		oauthClient = response;
+	});
+
+	it("should include custom fields in authorization_code token response", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const codeVerifier = generateRandomString(32);
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		const url = new URL(callbackRedirectUrl);
+		const code = url.searchParams.get("code")!;
+
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const tokens = await client.$fetch<{
+			access_token?: string;
+			server_time?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.server_time).toBe("2024-01-01");
+	});
+
+	it("should not allow custom fields to override standard OAuth fields", async () => {
+		const authServerBaseUrl2 = "http://localhost:3000";
+		const {
+			auth: auth2,
+			signInWithTestUser: signIn2,
+			customFetchImpl: fetch2,
+		} = await getTestInstance({
+			baseURL: authServerBaseUrl2,
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl2 } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+					customTokenResponseFields: () => ({
+						access_token: "should-be-ignored",
+						token_type: "should-be-ignored",
+						custom_field: "should-be-present",
+					}),
+				}),
+			],
+		});
+
+		const { headers: headers2 } = await signIn2();
+		const client2 = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl2,
+			fetchOptions: { customFetchImpl: fetch2, headers: headers2 },
+		});
+
+		const response = await auth2.api.adminCreateOAuthClient({
+			headers: headers2,
+			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+
+		const codeVerifier = generateRandomString(32);
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: response!.client_id!,
+				clientSecret: response!.client_secret!,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl2}/api/auth/oauth2/authorize`,
+			state,
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let callbackUrl = "";
+		await client2.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		const code = new URL(callbackUrl).searchParams.get("code")!;
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: response!.client_id!,
+				clientSecret: response!.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const tokens = await client2.$fetch<{
+			access_token?: string;
+			token_type?: string;
+			custom_field?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+
+		expect(tokens.data?.access_token).not.toBe("should-be-ignored");
+		expect(tokens.data?.token_type).toBe("Bearer");
+		expect(tokens.data?.custom_field).toBe("should-be-present");
+	});
+
+	it("should include custom fields in client_credentials token response", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { body, headers: tokenHeaders } = await clientCredentialsTokenRequest(
+			{
+				options: {
+					clientId: oauthClient.client_id,
+					clientSecret: oauthClient.client_secret,
+					redirectURI: redirectUri,
+				},
+			},
+		);
+
+		const tokens = await client.$fetch<{
+			access_token?: string;
+			server_time?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.server_time).toBe("2024-01-01");
+	});
+});
+
+describe("verificationValueSchema", () => {
+	it("should validate a well-formed verification value", () => {
+		const value: VerificationValue = {
+			type: "authorization_code",
+			query: {
+				response_type: "code",
+				client_id: "test-client",
+				redirect_uri: "https://example.com/callback",
+				scope: "openid",
+				state: "abc123",
+			},
+			userId: "user-1",
+			sessionId: "session-1",
+		};
+
+		const result = verificationValueSchema.safeParse(value);
+		expect(result.success).toBe(true);
+	});
+
+	it("should validate a verification value without state", () => {
+		const value: VerificationValue = {
+			type: "authorization_code",
+			query: {
+				response_type: "code",
+				client_id: "test-client",
+				redirect_uri: "https://example.com/callback",
+				scope: "openid",
+			},
+			userId: "user-1",
+			sessionId: "session-1",
+		};
+
+		const result = verificationValueSchema.safeParse(value);
+		expect(result.success).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10159
+	 */
+	it("should validate a headless verification value without redirect_uri", () => {
+		const value: VerificationValue = {
+			type: "authorization_code",
+			query: {
+				response_type: "code",
+				client_id: "test-client",
+				scope: "openid",
+			},
+			userId: "user-1",
+			sessionId: "session-1",
+		};
+
+		const result = verificationValueSchema.safeParse(value);
+		expect(result.success).toBe(true);
+	});
+
+	it("should validate a verification value with UserInfo claims", () => {
+		const value: VerificationValue = {
+			type: "authorization_code",
+			query: {
+				response_type: "code",
+				client_id: "test-client",
+				redirect_uri: "https://example.com/callback",
+				scope: "openid",
+				claims: JSON.stringify({
+					userinfo: {
+						name: { essential: true },
+					},
+				}),
+			},
+			userId: "user-1",
+			sessionId: "session-1",
+		};
+
+		const result = verificationValueSchema.safeParse(value);
+		expect(result.success).toBe(true);
+	});
+
+	it("should reject a verification value with malformed claims", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				response_type: "code",
+				client_id: "test-client",
+				redirect_uri: "https://example.com/callback",
+				scope: "openid",
+				claims: "not-json",
+			},
+			userId: "user-1",
+			sessionId: "session-1",
+		});
+		expect(result.success).toBe(false);
+	});
+	it("should reject a verification value with wrong type", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "password_reset",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				state: "abc",
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+		expect(result.success).toBe(false);
+	});
+
+	it("should reject a verification value missing required fields", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				state: "abc",
+			},
+		});
+		expect(result.success).toBe(false);
+	});
+
+	it("should pass through unknown fields for extensibility", () => {
+		const value = {
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				state: "abc",
+			},
+			userId: "u1",
+			sessionId: "s1",
+			futureField: "should-pass-through",
+		};
+
+		const result = verificationValueSchema.safeParse(value);
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect((result.data as Record<string, unknown>).futureField).toBe(
+				"should-pass-through",
+			);
+		}
+	});
+
+	it("should coerce valid max_age values in stored authorization queries", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				max_age: "30",
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.query.max_age).toBe(30);
+		}
+	});
+
+	it("should reject invalid max_age values in stored authorization queries", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				max_age: -1,
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(false);
+	});
+
+	it("should reject empty max_age values in stored authorization queries", () => {
+		for (const maxAge of ["", "   "]) {
+			const result = verificationValueSchema.safeParse({
+				type: "authorization_code",
+				query: {
+					client_id: "test",
+					redirect_uri: "https://example.com",
+					max_age: maxAge,
+				},
+				userId: "u1",
+				sessionId: "s1",
+			});
+
+			expect(result.success).toBe(false);
+		}
+	});
+
+	it("should accept valid prompt values in any order", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				prompt: "consent login",
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(true);
+	});
+
+	it("should reject prompt=none combined with other prompt values", () => {
+		const result = verificationValueSchema.safeParse({
+			type: "authorization_code",
+			query: {
+				client_id: "test",
+				redirect_uri: "https://example.com",
+				prompt: "none login",
+			},
+			userId: "u1",
+			sessionId: "s1",
+		});
+
+		expect(result.success).toBe(false);
+	});
+});
+
+describe("oauth token - per-client grant_type enforcement", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({ jwt: { issuer: authServerBaseUrl } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+
+	// A confidential client registered for the authorization_code grant only.
+	let authCodeOnlyClient: OAuthClient | null = null;
+	beforeAll(async () => {
+		authCodeOnlyClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(authCodeOnlyClient?.client_secret).toBeDefined();
+	});
+
+	// The core fix: a user-delegated (authorization_code) client must not be
+	// able to mint machine-to-machine tokens.
+	it("rejects client_credentials for an authorization_code-only client", async () => {
+		const body = new URLSearchParams({ grant_type: "client_credentials" });
+		const reqHeaders = {
+			"content-type": "application/x-www-form-urlencoded",
+			authorization: `Basic ${Buffer.from(
+				`${authCodeOnlyClient!.client_id!}:${authCodeOnlyClient!.client_secret!}`,
+			).toString("base64")}`,
+		};
+		const res = await client.$fetch<{ access_token?: string }>(
+			"/oauth2/token",
+			{ method: "POST", body, headers: reqHeaders },
+		);
+		expect(res.data?.access_token).toBeUndefined();
+		expect(res.error?.status).toBe(400);
+		expect((res.error as { error?: string } | null)?.error).toBe(
+			"unauthorized_client",
+		);
+	});
+
+	// Targeted policy: refresh tokens stay tied to the authorization_code flow +
+	// offline_access, so an authorization_code client keeps getting them without
+	// having to also register the refresh_token grant explicitly.
+	it("still issues refresh tokens to an authorization_code client with offline_access", async () => {
+		const codeVerifier = generateRandomString(32);
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: authCodeOnlyClient!.client_id!,
+				clientSecret: authCodeOnlyClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "grant-enforcement",
+			scopes: ["openid", "offline_access"],
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: authCodeOnlyClient!.client_id!,
+				clientSecret: authCodeOnlyClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+		const tokens = await client.$fetch<{
+			access_token?: string;
+			refresh_token?: string;
+		}>("/oauth2/token", { method: "POST", body, headers: reqHeaders });
+
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.refresh_token).toBeDefined();
+	});
+
+	// Guard against over-blocking: a client explicitly registered for
+	// client_credentials must still be able to use it.
+	it("allows client_credentials for a client registered for it", async () => {
+		const ccClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		const body = new URLSearchParams({ grant_type: "client_credentials" });
+		const reqHeaders = {
+			"content-type": "application/x-www-form-urlencoded",
+			authorization: `Basic ${Buffer.from(
+				`${ccClient!.client_id!}:${ccClient!.client_secret!}`,
+			).toString("base64")}`,
+		};
+		const res = await client.$fetch<{ access_token?: string }>(
+			"/oauth2/token",
+			{ method: "POST", body, headers: reqHeaders },
+		);
+		expect(res.error).toBeNull();
+		expect(res.data?.access_token).toBeDefined();
+	});
+
+	// The /authorize endpoint only serves authorization_code; a machine-to-machine
+	// (client_credentials-only) client must be rejected there too.
+	it("rejects /authorize for a client not registered for authorization_code", async () => {
+		const ccClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		const codeVerifier = generateRandomString(32);
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: ccClient!.client_id!,
+				clientSecret: ccClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "authorize-grant-enforcement",
+			scopes: ["openid"],
+			codeVerifier,
+		});
+
+		let location = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				location = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(location).toContain("error=unauthorized_client");
+	});
+});
+
+describe("oauth token - DPoP", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const jwtResource = "https://dpop-api.example.com";
+	const dpopRequiredResource = "https://dpop-required.example.com";
+	const tokenEndpoint = `${authServerBaseUrl}/api/auth/oauth2/token`;
+
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({ jwt: { issuer: authServerBaseUrl } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				refreshTokenReuseInterval: 30,
+				resources: [
+					jwtResource,
+					{
+						identifier: dpopRequiredResource,
+						dpopBoundAccessTokensRequired: true,
+					},
+				],
+				enforcePerClientResources: false,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	let oauthClient: OAuthClient | null;
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+
+	async function createDpopKey() {
+		const { privateKey, publicKey } = await generateKeyPair("ES256", {
+			extractable: true,
+		});
+		const publicJwk = await exportJWK(publicKey);
+		const jkt = await deriveDpopJkt(publicJwk);
+		return { privateKey, publicJwk, jkt };
+	}
+
+	async function createDpopProof(params: {
+		privateKey: CryptoKey;
+		publicJwk: JWK;
+		method: string;
+		url: string;
+		jti: string;
+		accessToken?: string;
+	}) {
+		return new SignJWT({
+			jti: params.jti,
+			htm: params.method,
+			htu: params.url,
+			iat: Math.floor(Date.now() / 1000),
+			...(params.accessToken
+				? { ath: await deriveDpopAth(params.accessToken) }
+				: {}),
+		})
+			.setProtectedHeader({
+				typ: "dpop+jwt",
+				alg: "ES256",
+				jwk: params.publicJwk,
+			})
+			.sign(params.privateKey);
+	}
+
+	async function createAuthUrl(
+		overrides?: Partial<Parameters<typeof createAuthorizationURL>[0]>,
+	) {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "123",
+			scopes: ["openid", "offline_access"],
+			codeVerifier,
+			...overrides,
+		});
+		return { url, codeVerifier };
+	}
+
+	async function exchangeCode(
+		code: string,
+		codeVerifier: string,
+		resource: string,
+		dpopProof?: string,
+	) {
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			resource,
+			options: {
+				clientId: oauthClient!.client_id,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+		const tokenHeaders = new Headers(reqHeaders);
+		if (dpopProof) tokenHeaders.set("DPoP", dpopProof);
+		return client.$fetch<{
+			access_token?: string;
+			expires_in?: number;
+			expires_at?: number;
+			refresh_token?: string;
+			token_type?: string;
+			error?: string;
+		}>("/oauth2/token", { method: "POST", body, headers: tokenHeaders });
+	}
+
+	async function authorizeForCode(jkt: string | undefined, resource: string) {
+		const { url: authUrl, codeVerifier } = await createAuthUrl(
+			jkt ? { additionalParams: { dpop_jkt: jkt } } : undefined,
+		);
+		authUrl.searchParams.set("resource", resource);
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const url = new URL(callbackRedirectUrl);
+		return { code: url.searchParams.get("code")!, codeVerifier };
+	}
+
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code", "refresh_token"],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		oauthClient = response;
+	});
+
+	it("issues a JWT access token bound to the proof key via cnf.jkt", async () => {
+		const dpopKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "issue-proof",
+		});
+		const tokens = await exchangeCode(code, codeVerifier, jwtResource, proof);
+
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.token_type).toBe("DPoP");
+		const payload = decodeJwt(tokens.data!.access_token!);
+		expect(payload.cnf).toMatchObject({ jkt: dpopKey.jkt });
+	});
+
+	it("rejects a token request without a proof when the resource requires DPoP", async () => {
+		const { code, codeVerifier } = await authorizeForCode(
+			undefined,
+			dpopRequiredResource,
+		);
+		const tokens = await exchangeCode(code, codeVerifier, dpopRequiredResource);
+
+		expect(tokens.data?.access_token).toBeUndefined();
+		expect((tokens.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+	});
+
+	it("preserves the key binding across refresh and rejects a proofless refresh", async () => {
+		const dpopKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+		const issueProof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "rotate-issue-proof",
+		});
+		const tokens = await exchangeCode(
+			code,
+			codeVerifier,
+			jwtResource,
+			issueProof,
+		);
+		expect(tokens.data?.refresh_token).toBeDefined();
+
+		async function refresh(dpopProof?: string) {
+			const { body, headers: reqHeaders } = await refreshAccessTokenRequest({
+				refreshToken: tokens.data!.refresh_token!,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+			});
+			const refreshHeaders = new Headers(reqHeaders);
+			if (dpopProof) refreshHeaders.set("DPoP", dpopProof);
+			return client.$fetch<{
+				access_token?: string;
+				token_type?: string;
+				error?: string;
+			}>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers: refreshHeaders,
+			});
+		}
+
+		const proofless = await refresh();
+		expect((proofless.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+
+		const refreshProof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "rotate-refresh-proof",
+		});
+		const rotated = await refresh(refreshProof);
+		expect(rotated.error).toBeNull();
+		expect(rotated.data?.token_type).toBe("DPoP");
+		const rotatedPayload = decodeJwt(rotated.data!.access_token!);
+		expect(rotatedPayload.cnf).toMatchObject({ jkt: dpopKey.jkt });
+	});
+
+	it("replays a DPoP-bound refresh response only after validating the proof key", async () => {
+		const dpopKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+		const issueProof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "reuse-issue-proof",
+		});
+		const tokens = await exchangeCode(
+			code,
+			codeVerifier,
+			jwtResource,
+			issueProof,
+		);
+		expect(tokens.data?.refresh_token).toBeDefined();
+
+		async function refresh(dpopProof?: string) {
+			const { body, headers: reqHeaders } = await refreshAccessTokenRequest({
+				refreshToken: tokens.data!.refresh_token!,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+			});
+			const refreshHeaders = new Headers(reqHeaders);
+			if (dpopProof) refreshHeaders.set("DPoP", dpopProof);
+			return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers: refreshHeaders,
+			});
+		}
+
+		const firstProof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "reuse-refresh-proof-1",
+		});
+		const firstRefresh = await refresh(firstProof);
+		expect(firstRefresh.error).toBeNull();
+		expect(firstRefresh.data?.token_type).toBe("DPoP");
+		expect(firstRefresh.data?.refresh_token).toBeDefined();
+
+		const prooflessReplay = await refresh();
+		expect((prooflessReplay.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+
+		const replayProof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "reuse-refresh-proof-2",
+		});
+		const replay = await refresh(replayProof);
+		expect(replay.error).toBeNull();
+		expect(replay.data).toMatchObject({
+			access_token: firstRefresh.data?.access_token,
+			expires_at: firstRefresh.data?.expires_at,
+			token_type: "DPoP",
+			refresh_token: firstRefresh.data?.refresh_token,
+			scope: firstRefresh.data?.scope,
+			id_token: firstRefresh.data?.id_token,
+		});
+		expect(replay.data?.expires_in).toBeLessThanOrEqual(
+			firstRefresh.data!.expires_in!,
+		);
+	});
+
+	it("rejects a replayed DPoP proof at the token endpoint", async () => {
+		const dpopKey = await createDpopKey();
+		// One proof (a single jti) reused across two authorization codes. The
+		// database-backed replay store must reject the second presentation.
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "replayed-proof",
+		});
+
+		const first = await authorizeForCode(dpopKey.jkt, jwtResource);
+		const firstTokens = await exchangeCode(
+			first.code,
+			first.codeVerifier,
+			jwtResource,
+			proof,
+		);
+		expect(firstTokens.error).toBeNull();
+		expect(firstTokens.data?.token_type).toBe("DPoP");
+
+		const second = await authorizeForCode(dpopKey.jkt, jwtResource);
+		const replayed = await exchangeCode(
+			second.code,
+			second.codeVerifier,
+			jwtResource,
+			proof,
+		);
+		expect(replayed.data?.access_token).toBeUndefined();
+		expect((replayed.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+	});
+
+	it("persists dpop_bound_access_tokens through dynamic client registration", async () => {
+		// RFC 9449 §5.2: a conformant client declares the flag top-level at
+		// registration. The strict zod body schema must not strip it before it
+		// reaches storage; the response echoes the persisted value.
+		const registration = await client.$fetch<OAuthClient>("/oauth2/register", {
+			method: "POST",
+			body: {
+				redirect_uris: [redirectUri],
+				grant_types: ["authorization_code"],
+				token_endpoint_auth_method: "client_secret_basic",
+				dpop_bound_access_tokens: true,
+			},
+		});
+		expect(registration.error).toBeNull();
+		expect(registration.data?.dpop_bound_access_tokens).toBe(true);
+	});
+
+	it("enforces DPoP from the client dpop_bound_access_tokens flag alone", async () => {
+		// No resource and no dpop_jkt: the client flag is the only thing that can
+		// require DPoP, so this fails unless the flag actually reached storage.
+		const flagged = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+				dpop_bound_access_tokens: true,
+			},
+		});
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: flagged!.client_id,
+				clientSecret: flagged!.client_secret!,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "123",
+			scopes: ["openid"],
+			codeVerifier,
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: flagged!.client_id,
+				clientSecret: flagged!.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+		const tokens = await client.$fetch<{
+			access_token?: string;
+			error?: string;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: reqHeaders,
+		});
+		expect(tokens.data?.access_token).toBeUndefined();
+		expect((tokens.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/10039
+ */
+describe("confirmationTokenType", () => {
+	it("falls back to Bearer for a malformed confirmation instead of throwing", () => {
+		// A corrupted `confirmation` JSON column can deserialize to a primitive or
+		// array; the token type must degrade to Bearer rather than 500.
+		for (const malformed of ["garbage", 42, ["jkt"], { jkt: "" }]) {
+			expect(confirmationTokenType(malformed as unknown as Confirmation)).toBe(
+				"Bearer",
+			);
+		}
+		expect(confirmationTokenType({ jkt: "thumbprint" })).toBe("DPoP");
+		expect(confirmationTokenType(undefined)).toBe("Bearer");
 	});
 });

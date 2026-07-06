@@ -56,7 +56,7 @@ describe("assignOrganizationByDomain", () => {
 
 		const createContext = async () => {
 			const context = await auth.$context;
-			return { context } as Partial<GenericEndpointContext>;
+			return { context } as unknown as Partial<GenericEndpointContext>;
 		};
 
 		return { auth, data, createContext };
@@ -144,6 +144,59 @@ describe("assignOrganizationByDomain", () => {
 		expect(members).toHaveLength(1);
 		expect(members[0]?.organizationId).toBe(org.id);
 		expect(members[0]?.role).toBe("member");
+	});
+
+	it("should assign user when a verified provider's normalized domain set includes the email domain", async () => {
+		const { data, createContext } = createTestContext();
+
+		const org = createOrg();
+		data.organization.push(org);
+		data.ssoProvider.push(
+			createProvider({
+				domain: "https://attacker.com/path,victim.com",
+				domainVerified: true,
+				organizationId: org.id,
+			}),
+		);
+
+		const user = createUser({ email: "alice@victim.com" });
+		data.user.push(user);
+
+		const ctx = (await createContext()) as GenericEndpointContext;
+		await assignOrganizationByDomain(ctx, {
+			user,
+			domainVerification: { enabled: true },
+		});
+
+		const members = data.member.filter((m) => m.userId === user.id);
+		expect(members).toHaveLength(1);
+		expect(members[0]?.organizationId).toBe(org.id);
+	});
+
+	it("should NOT assign user when the email domain is malformed", async () => {
+		const { data, createContext } = createTestContext();
+
+		const org = createOrg();
+		data.organization.push(org);
+		data.ssoProvider.push(
+			createProvider({
+				domain: "victim.com",
+				domainVerified: true,
+				organizationId: org.id,
+			}),
+		);
+
+		const user = createUser({ email: "alice@https://victim.com/path" });
+		data.user.push(user);
+
+		const ctx = (await createContext()) as GenericEndpointContext;
+		await assignOrganizationByDomain(ctx, {
+			user,
+			domainVerification: { enabled: true },
+		});
+
+		const members = data.member.filter((m) => m.userId === user.id);
+		expect(members).toHaveLength(0);
 	});
 
 	it("should NOT assign user when email domain does not match any provider", async () => {

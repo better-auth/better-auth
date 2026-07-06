@@ -1,16 +1,29 @@
-import type { Verification } from "better-auth";
 import {
 	APIError,
 	createAuthEndpoint,
 	sessionMiddleware,
 } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
-import * as z from "zod/v4";
+import * as z from "zod";
 import type { SSOOptions, SSOProvider } from "../types";
+import { parseProviderDomains } from "../utils";
+import { checkProviderAccess } from "./providers";
+
+const DNS_LABEL_MAX_LENGTH = 63;
+const DEFAULT_TOKEN_PREFIX = "better-auth-token";
 
 const domainVerificationBodySchema = z.object({
 	providerId: z.string(),
 });
+
+export function getVerificationIdentifier(
+	options: SSOOptions,
+	providerId: string,
+): string {
+	const tokenPrefix =
+		options.domainVerification?.tokenPrefix || DEFAULT_TOKEN_PREFIX;
+	return `_${tokenPrefix}-${providerId}`;
+}
 
 export const requestDomainVerification = (options: SSOOptions) => {
 	return createAuthEndpoint(
@@ -40,80 +53,36 @@ export const requestDomainVerification = (options: SSOOptions) => {
 		},
 		async (ctx) => {
 			const body = ctx.body;
-			const provider = await ctx.context.adapter.findOne<
-				SSOProvider<SSOOptions>
-			>({
-				model: "ssoProvider",
-				where: [{ field: "providerId", value: body.providerId }],
-			});
+			const provider = await checkProviderAccess(ctx, body.providerId);
 
-			if (!provider) {
-				throw new APIError("NOT_FOUND", {
-					message: "Provider not found",
-					code: "PROVIDER_NOT_FOUND",
-				});
-			}
-
-			const userId = ctx.context.session.user.id;
-			let isOrgMember = true;
-			if (provider.organizationId) {
-				const membershipsCount = await ctx.context.adapter.count({
-					model: "member",
-					where: [
-						{ field: "userId", value: userId },
-						{ field: "organizationId", value: provider.organizationId },
-					],
-				});
-
-				isOrgMember = membershipsCount > 0;
-			}
-
-			if (provider.userId !== userId || !isOrgMember) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						"User must be owner of or belong to the SSO provider organization",
-					code: "INSUFICCIENT_ACCESS",
-				});
-			}
-
-			if ("domainVerified" in provider && provider.domainVerified) {
+			if (provider.domainVerified) {
 				throw new APIError("CONFLICT", {
 					message: "Domain has already been verified",
 					code: "DOMAIN_VERIFIED",
 				});
 			}
 
-			const activeVerification =
-				await ctx.context.adapter.findOne<Verification>({
-					model: "verification",
-					where: [
-						{
-							field: "identifier",
-							value: options.domainVerification?.tokenPrefix
-								? `${options.domainVerification?.tokenPrefix}-${provider.providerId}`
-								: `better-auth-token-${provider.providerId}`,
-						},
-						{ field: "expiresAt", value: new Date(), operator: "gt" },
-					],
-				});
+			const identifier = getVerificationIdentifier(
+				options,
+				provider.providerId,
+			);
 
-			if (activeVerification) {
+			const activeVerification =
+				await ctx.context.internalAdapter.findVerificationValue(identifier);
+
+			if (
+				activeVerification &&
+				new Date(activeVerification.expiresAt) > new Date()
+			) {
 				ctx.setStatus(201);
 				return ctx.json({ domainVerificationToken: activeVerification.value });
 			}
 
 			const domainVerificationToken = generateRandomString(24);
-			await ctx.context.adapter.create<Verification>({
-				model: "verification",
-				data: {
-					identifier: options.domainVerification?.tokenPrefix
-						? `${options.domainVerification?.tokenPrefix}-${provider.providerId}`
-						: `better-auth-token-${provider.providerId}`,
-					createdAt: new Date(),
-					updatedAt: new Date(),
-					value: domainVerificationToken,
-					expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
-				},
+			await ctx.context.internalAdapter.createVerificationValue({
+				identifier,
+				value: domainVerificationToken,
+				expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
 			});
 
 			ctx.setStatus(201);
@@ -156,71 +125,40 @@ export const verifyDomain = (options: SSOOptions) => {
 		},
 		async (ctx) => {
 			const body = ctx.body;
-			const provider = await ctx.context.adapter.findOne<
-				SSOProvider<SSOOptions>
-			>({
-				model: "ssoProvider",
-				where: [{ field: "providerId", value: body.providerId }],
-			});
+			const provider = await checkProviderAccess(ctx, body.providerId);
 
-			if (!provider) {
-				throw new APIError("NOT_FOUND", {
-					message: "Provider not found",
-					code: "PROVIDER_NOT_FOUND",
-				});
-			}
-
-			const userId = ctx.context.session.user.id;
-			let isOrgMember = true;
-			if (provider.organizationId) {
-				const membershipsCount = await ctx.context.adapter.count({
-					model: "member",
-					where: [
-						{ field: "userId", value: userId },
-						{ field: "organizationId", value: provider.organizationId },
-					],
-				});
-
-				isOrgMember = membershipsCount > 0;
-			}
-
-			if (provider.userId !== userId || !isOrgMember) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						"User must be owner of or belong to the SSO provider organization",
-					code: "INSUFICCIENT_ACCESS",
-				});
-			}
-
-			if ("domainVerified" in provider && provider.domainVerified) {
+			if (provider.domainVerified) {
 				throw new APIError("CONFLICT", {
 					message: "Domain has already been verified",
 					code: "DOMAIN_VERIFIED",
 				});
 			}
 
-			const activeVerification =
-				await ctx.context.adapter.findOne<Verification>({
-					model: "verification",
-					where: [
-						{
-							field: "identifier",
-							value: options.domainVerification?.tokenPrefix
-								? `${options.domainVerification?.tokenPrefix}-${provider.providerId}`
-								: `better-auth-token-${provider.providerId}`,
-						},
-						{ field: "expiresAt", value: new Date(), operator: "gt" },
-					],
-				});
+			const identifier = getVerificationIdentifier(
+				options,
+				provider.providerId,
+			);
 
-			if (!activeVerification) {
+			if (identifier.length > DNS_LABEL_MAX_LENGTH) {
+				throw new APIError("BAD_REQUEST", {
+					message: `Verification identifier exceeds the DNS label limit of ${DNS_LABEL_MAX_LENGTH} characters`,
+					code: "IDENTIFIER_TOO_LONG",
+				});
+			}
+
+			const activeVerification =
+				await ctx.context.internalAdapter.findVerificationValue(identifier);
+
+			if (
+				!activeVerification ||
+				new Date(activeVerification.expiresAt) <= new Date()
+			) {
 				throw new APIError("NOT_FOUND", {
 					message: "No pending domain verification exists",
 					code: "NO_PENDING_VERIFICATION",
 				});
 			}
 
-			let records: string[] = [];
 			let dns: typeof import("node:dns/promises");
 
 			try {
@@ -236,30 +174,46 @@ export const verifyDomain = (options: SSOOptions) => {
 				});
 			}
 
-			try {
-				const dnsRecords = await dns.resolveTxt(
-					new URL(provider.domain).hostname,
-				);
-				records = dnsRecords.flat();
-			} catch (error) {
-				ctx.context.logger.warn(
-					"DNS resolution failure while validating domain ownership",
-					error,
-				);
-			}
-
-			const record = records.find((record) =>
-				record.includes(
-					`${activeVerification.identifier}=${activeVerification.value}`,
-				),
-			);
-			if (!record) {
-				throw new APIError("BAD_GATEWAY", {
-					message: "Unable to verify domain ownership. Try again later",
-					code: "DOMAIN_VERIFICATION_FAILED",
+			const domains = parseProviderDomains(provider.domain);
+			if (!domains) {
+				throw new APIError("BAD_REQUEST", {
+					message: "Invalid domain",
+					code: "INVALID_DOMAIN",
 				});
 			}
 
+			for (const domain of domains) {
+				let records: string[] = [];
+				try {
+					const dnsRecords = await dns.resolveTxt(`${identifier}.${domain}`);
+					records = dnsRecords.map((record) => record.join(""));
+				} catch (error) {
+					ctx.context.logger.warn(
+						`DNS resolution failure while validating domain ownership for ${domain}`,
+						error,
+					);
+				}
+
+				const verificationValue = activeVerification.value;
+				const verificationRecord = `${activeVerification.identifier}=${verificationValue}`;
+				const record = records.find((record) => {
+					const normalizedRecord = record.trim();
+					return (
+						normalizedRecord === verificationRecord ||
+						normalizedRecord === verificationValue
+					);
+				});
+				if (!record) {
+					throw new APIError("BAD_GATEWAY", {
+						message: `Unable to verify domain ownership for ${domain}. Try again later`,
+						code: "DOMAIN_VERIFICATION_FAILED",
+					});
+				}
+			}
+
+			// FIXME(next): this remains a provider-level proof bit. When the next
+			// schema can change, store verification per normalized domain or force
+			// previously verified multi-domain providers through re-verification.
 			await ctx.context.adapter.update<SSOProvider<SSOOptions>>({
 				model: "ssoProvider",
 				where: [{ field: "providerId", value: provider.providerId }],

@@ -5,14 +5,22 @@ import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
 import { symmetricDecrypt } from "../../../crypto";
+import { shouldRequirePassword } from "../../../utils/password";
+import { PACKAGE_VERSION } from "../../../version";
 import type { BackupCodeOptions } from "../backup-codes";
+import { DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS } from "../constant";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type {
 	TwoFactorProvider,
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
-import { verifyTwoFactor } from "../verify-two-factor";
+import {
+	assertTwoFactorNotLocked,
+	recordTwoFactorFailure,
+	resetTwoFactorFailures,
+	verifyTwoFactor,
+} from "../verify-two-factor";
 
 export type TOTPOptions = {
 	/**
@@ -35,6 +43,13 @@ export type TOTPOptions = {
 	 */
 	backupCodes?: BackupCodeOptions | undefined;
 	/**
+	 * Allow retrieving the TOTP URI without a password when the user does not
+	 * have a credential account.
+	 * When enabled, password is still required if a credential account exists.
+	 * @default false
+	 */
+	allowPasswordless?: boolean | undefined;
+	/**
 	 * Disable totp
 	 */
 	disable?: boolean | undefined;
@@ -43,12 +58,6 @@ export type TOTPOptions = {
 const generateTOTPBodySchema = z.object({
 	secret: z.string().meta({
 		description: "The secret to generate the TOTP code",
-	}),
-});
-
-const getTOTPURIBodySchema = z.object({
-	password: z.string().meta({
-		description: "User password",
 	}),
 });
 
@@ -76,10 +85,20 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 		digits: options?.digits || 6,
 		period: options?.period || 30,
 	};
+	const passwordSchema = z.string().meta({
+		description: "User password",
+	});
+	const getTOTPURIBodySchema = options?.allowPasswordless
+		? z.object({
+				password: passwordSchema.optional(),
+			})
+		: z.object({
+				password: passwordSchema,
+			});
 
 	const twoFactorTable = "twoFactor";
 
-	const generateTOTP = createAuthEndpoint(
+	const generateTOTP = createAuthEndpoint.serverOnly(
 		{
 			method: "POST",
 			body: generateTOTPBodySchema,
@@ -182,10 +201,20 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				);
 			}
 			const secret = await symmetricDecrypt({
-				key: ctx.context.secret,
+				key: ctx.context.secretConfig,
 				data: twoFactor.secret,
 			});
-			await ctx.context.password.checkPassword(user.id, ctx);
+			const requirePassword = await shouldRequirePassword(
+				ctx,
+				user.id,
+				options?.allowPasswordless,
+			);
+			if (requirePassword) {
+				if (!ctx.body.password) {
+					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
+				}
+				await ctx.context.password.checkPassword(user.id, ctx);
+			}
 			const totpURI = createOTP(secret, {
 				digits: opts.digits,
 				period: opts.period,
@@ -235,16 +264,13 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					code: "TOTP_NOT_CONFIGURED",
 				});
 			}
-			const { session, valid, invalid } = await verifyTwoFactor(ctx);
+			const { session, valid, invalid, beginAttempt } =
+				await verifyTwoFactor(ctx);
 			const user = session.user as UserWithTwoFactor;
+			const isSignIn = !session.session;
 			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 				model: twoFactorTable,
-				where: [
-					{
-						field: "userId",
-						value: user.id,
-					},
-				],
+				where: [{ field: "userId", value: user.id }],
 			});
 
 			if (!twoFactor) {
@@ -253,41 +279,83 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 				);
 			}
-			const decrypted = await symmetricDecrypt({
-				key: ctx.context.secret,
-				data: twoFactor.secret,
-			});
-			const status = await createOTP(decrypted, {
-				period: opts.period,
-				digits: opts.digits,
-			}).verify(ctx.body.code);
+			// During sign-in, reject explicitly unverified rows (abandoned enrollments).
+			// Using === false instead of !twoFactor.verified so that pre-migration rows
+			// where the field is absent/null are treated as verified (legacy-safe).
+			if (isSignIn && twoFactor.verified === false) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
+				);
+			}
+			if (isSignIn) {
+				await assertTwoFactorNotLocked(ctx, twoFactorTable, twoFactor);
+			}
+			// Enforce the per-challenge attempt budget on the sign-in path. The
+			// re-verify branch (already authenticated) is not gated.
+			const attempt = isSignIn
+				? await beginAttempt(DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS)
+				: null;
+			let status: boolean;
+			try {
+				const decrypted = await symmetricDecrypt({
+					key: ctx.context.secretConfig,
+					data: twoFactor.secret,
+				});
+				status = await createOTP(decrypted, {
+					period: opts.period,
+					digits: opts.digits,
+				}).verify(ctx.body.code);
+			} catch (error) {
+				// A server error before the code is checked must not spend the slot.
+				await attempt?.restore();
+				throw error;
+			}
 			if (!status) {
+				await attempt?.recordFailure();
+				if (isSignIn) {
+					await recordTwoFactorFailure(ctx, twoFactorTable, twoFactor);
+				}
 				return invalid("INVALID_CODE");
 			}
+			if (isSignIn) {
+				await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
+			}
 
-			if (!user.twoFactorEnabled) {
-				if (!session.session) {
-					throw APIError.from(
-						"BAD_REQUEST",
-						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+			// Enrollment mode: TOTP row exists but hasn't been verified yet.
+			// This covers fresh TOTP setup (twoFactorEnabled=false),
+			// adding TOTP to an OTP-only account (twoFactorEnabled=true),
+			// and pre-migration rows where verified is null/undefined.
+			if (twoFactor.verified !== true) {
+				if (!user.twoFactorEnabled) {
+					// session.session is guaranteed non-null here: the sign-in guard
+					// above already rejected isSignIn && verified === false.
+					const activeSession = session.session!;
+					const updatedUser = await ctx.context.internalAdapter.updateUser(
+						user.id,
+						{
+							twoFactorEnabled: true,
+						},
 					);
-				}
-				const updatedUser = await ctx.context.internalAdapter.updateUser(
-					user.id,
-					{
-						twoFactorEnabled: true,
-					},
-				);
-				const newSession = await ctx.context.internalAdapter
-					.createSession(user.id, false, session.session)
-					.catch((e) => {
-						throw e;
-					});
+					const newSession = await ctx.context.internalAdapter.createSession(
+						user.id,
+						false,
+						activeSession,
+					);
 
-				await ctx.context.internalAdapter.deleteSession(session.session.token);
-				await setSessionCookie(ctx, {
-					session: newSession,
-					user: updatedUser,
+					await setSessionCookie(ctx, {
+						session: newSession,
+						user: updatedUser,
+					});
+					await ctx.context.internalAdapter.deleteSession(activeSession.token);
+				}
+				// Mark verified only after all session operations succeed.
+				// This keeps the gate on twoFactorEnabled (retry-safe) and ensures
+				// a partial failure cannot leave verified=true with twoFactorEnabled=false.
+				await ctx.context.adapter.update({
+					model: twoFactorTable,
+					update: { verified: true },
+					where: [{ field: "id", value: twoFactor.id }],
 				});
 			}
 			return valid(ctx);
@@ -296,6 +364,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 
 	return {
 		id: "totp",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			/**
 			 * ### Endpoint

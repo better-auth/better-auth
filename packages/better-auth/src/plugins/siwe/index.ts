@@ -8,6 +8,9 @@ import type { InferOptionSchema, User } from "../../types";
 import { toChecksumAddress } from "../../utils/hashing";
 import { isAPIError } from "../../utils/is-api-error";
 import { getOrigin } from "../../utils/url";
+import { PACKAGE_VERSION } from "../../version";
+import { normalizeSiweDomain, parseSiweMessage } from "./parse-message";
+import type { WalletAddressSchema } from "./schema";
 import { schema } from "./schema";
 import type {
 	ENSLookupArgs,
@@ -17,8 +20,7 @@ import type {
 } from "./types";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		siwe: {
 			creator: typeof siwe;
 		};
@@ -35,40 +37,60 @@ export interface SIWEPluginOptions {
 	schema?: InferOptionSchema<typeof schema> | undefined;
 }
 
-const getSiweNonceBodySchema = z.object({
-	walletAddress: z
-		.string()
-		.regex(/^0[xX][a-fA-F0-9]{40}$/i)
-		.length(42),
-	chainId: z.number().int().positive().max(2147483647).optional().default(1),
-});
+const walletAddressInputSchema = z
+	.string()
+	.regex(/^0[xX][a-fA-F0-9]{40}$/i)
+	.length(42);
 
-export const siwe = (options: SIWEPluginOptions) =>
-	({
-		id: "siwe",
-		schema: mergeSchema(schema, options?.schema),
-		endpoints: {
-			getSiweNonce: createAuthEndpoint(
-				"/siwe/nonce",
-				{
-					method: "POST",
-					body: getSiweNonceBodySchema,
-				},
-				async (ctx) => {
-					const { walletAddress: rawWalletAddress, chainId } = ctx.body;
-					const walletAddress = toChecksumAddress(rawWalletAddress);
-					const nonce = await options.getNonce();
+const getSiweNonceBodySchema = z
+	.object({
+		walletAddress: walletAddressInputSchema.optional(),
+		address: walletAddressInputSchema.optional(),
+		chainId: z.number().int().positive().optional().default(1),
+	})
+	.refine((body) => body.walletAddress || body.address, {
+		message: "walletAddress or address is required",
+		path: ["walletAddress"],
+	});
 
-					// Store nonce with wallet address and chain ID context
-					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: `siwe:${walletAddress}:${chainId}`,
-						value: nonce,
-						expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+export const siwe = (options: SIWEPluginOptions) => {
+	const createSiweNonceEndpoint = (path: "/siwe/nonce" | "/siwe/get-nonce") =>
+		createAuthEndpoint(
+			path,
+			{
+				method: "POST",
+				body: getSiweNonceBodySchema,
+			},
+			async (ctx) => {
+				const rawWalletAddress = ctx.body.walletAddress ?? ctx.body.address;
+				if (!rawWalletAddress) {
+					throw APIError.fromStatus("BAD_REQUEST", {
+						message: "walletAddress or address is required",
+						status: 400,
 					});
+				}
+				const { chainId } = ctx.body;
+				const walletAddress = toChecksumAddress(rawWalletAddress);
+				const nonce = await options.getNonce();
 
-					return ctx.json({ nonce });
-				},
-			),
+				// Store nonce with wallet address and chain ID context
+				await ctx.context.internalAdapter.createVerificationValue({
+					identifier: `siwe:${walletAddress}:${chainId}`,
+					value: nonce,
+					expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+				});
+
+				return ctx.json({ nonce });
+			},
+		);
+
+	return {
+		id: "siwe",
+		version: PACKAGE_VERSION,
+		schema: mergeSchema(schema, options?.schema) as WalletAddressSchema,
+		endpoints: {
+			getSiweNonce: createSiweNonceEndpoint("/siwe/nonce"),
+			getNonce: createSiweNonceEndpoint("/siwe/get-nonce"),
 			verifySiweMessage: createAuthEndpoint(
 				"/siwe/verify",
 				{
@@ -81,13 +103,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 								.string()
 								.regex(/^0[xX][a-fA-F0-9]{40}$/i)
 								.length(42),
-							chainId: z
-								.number()
-								.int()
-								.positive()
-								.max(2147483647)
-								.optional()
-								.default(1),
+							chainId: z.number().int().positive().optional().default(1),
 							email: z.email().optional(),
 						})
 						.refine((data) => options.anonymous !== false || !!data.email, {
@@ -116,14 +132,17 @@ export const siwe = (options: SIWEPluginOptions) =>
 					}
 
 					try {
-						// Find stored nonce with wallet address and chain ID context
+						// Atomically consume the single-use nonce before any signature
+						// work or state mutation. The first concurrent request wins; every
+						// racer gets null, so the same nonce can never replay a login.
+						// Consuming here (not after verification) also burns the record on
+						// a failed attempt and applies the built-in expiry gate.
 						const verification =
-							await ctx.context.internalAdapter.findVerificationValue(
+							await ctx.context.internalAdapter.consumeVerificationValue(
 								`siwe:${walletAddress}:${chainId}`,
 							);
 
-						// Ensure nonce is valid and not expired
-						if (!verification || new Date() > verification.expiresAt) {
+						if (!verification) {
 							throw APIError.fromStatus("UNAUTHORIZED", {
 								message: "Unauthorized: Invalid or expired nonce",
 								status: 401,
@@ -133,6 +152,63 @@ export const siwe = (options: SIWEPluginOptions) =>
 
 						// Verify SIWE message with enhanced parameters
 						const { value: nonce } = verification;
+
+						// Bind the *signed* message to server state before accepting the
+						// signature. Signature recovery alone (the documented `verifyMessage`
+						// using viem) does NOT inspect the message body, so a previously
+						// produced signature (stale, for another domain, or over an
+						// arbitrary string) could otherwise be presented alongside a freshly
+						// minted nonce. Parse the ERC-4361 message ourselves and require the
+						// nonce, address, chain id, and domain to match the server-issued
+						// values, plus honor the signed time bounds.
+						const parsedMessage = parseSiweMessage(message);
+						const nonceMatches = parsedMessage.nonce === nonce;
+						const addressMatches =
+							!!parsedMessage.address &&
+							parsedMessage.address.toLowerCase() ===
+								walletAddress.toLowerCase();
+						const chainMatches = parsedMessage.chainId === chainId;
+						const domainMatches =
+							!!parsedMessage.domain &&
+							normalizeSiweDomain(parsedMessage.domain) ===
+								normalizeSiweDomain(options.domain);
+
+						if (
+							!nonceMatches ||
+							!addressMatches ||
+							!chainMatches ||
+							!domainMatches
+						) {
+							throw APIError.fromStatus("UNAUTHORIZED", {
+								message:
+									"Unauthorized: SIWE message does not match the expected nonce, domain, address, or chain ID",
+								status: 401,
+								code: "UNAUTHORIZED_SIWE_MESSAGE_MISMATCH",
+							});
+						}
+
+						const now = Date.now();
+						if (parsedMessage.expirationTime) {
+							const expiresAt = Date.parse(parsedMessage.expirationTime);
+							if (!Number.isNaN(expiresAt) && now >= expiresAt) {
+								throw APIError.fromStatus("UNAUTHORIZED", {
+									message: "Unauthorized: SIWE message has expired",
+									status: 401,
+									code: "UNAUTHORIZED_SIWE_MESSAGE_EXPIRED",
+								});
+							}
+						}
+						if (parsedMessage.notBefore) {
+							const notBefore = Date.parse(parsedMessage.notBefore);
+							if (!Number.isNaN(notBefore) && now < notBefore) {
+								throw APIError.fromStatus("UNAUTHORIZED", {
+									message: "Unauthorized: SIWE message is not yet valid",
+									status: 401,
+									code: "UNAUTHORIZED_SIWE_MESSAGE_NOT_YET_VALID",
+								});
+							}
+						}
+
 						const verified = await options.verifyMessage({
 							message,
 							signature,
@@ -157,11 +233,6 @@ export const siwe = (options: SIWEPluginOptions) =>
 								status: 401,
 							});
 						}
-
-						// Clean up used nonce
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verification.id,
-						);
 
 						// Look for existing user by their wallet addresses
 						let user: User | null = null;
@@ -217,17 +288,78 @@ export const siwe = (options: SIWEPluginOptions) =>
 						if (!user) {
 							const domain =
 								options.emailDomainName ?? getOrigin(ctx.context.baseURL);
-							// Use checksummed address for email generation
-							const userEmail =
-								!isAnon && email ? email : `${walletAddress}@${domain}`;
+							const normalizedEmail = email?.toLowerCase();
+							const walletEmail = `${walletAddress}@${domain}`;
+							// SIWE proves wallet control, not email ownership: bind the caller
+							// email only when unclaimed and atomically reserved, else keep
+							// the wallet-derived address.
+							// Silent fallback (no distinct error) avoids an enumeration oracle.
+							// FIXME(siwe-contact-ownership): non-breaking floor; the durable fix
+							// drops the `email` body field and attaches a verified email via a
+							// separate authenticated link flow. Land on `next` after main->next sync.
+							let userEmail = walletEmail;
+							let emailClaimIdentifier: string | undefined;
+							if (!isAnon && normalizedEmail) {
+								const identifier = `siwe-email-claim-${normalizedEmail}`;
+								let reserved = false;
+								try {
+									reserved =
+										await ctx.context.internalAdapter.reserveVerificationValue({
+											identifier,
+											value: walletAddress,
+											expiresAt: new Date(Date.now() + 60_000),
+										});
+								} catch {
+									// Email claims are opportunistic. If exclusivity cannot be
+									// reserved, keep the wallet-derived email and let the normal
+									// user creation path surface any primary adapter failure.
+									reserved = false;
+								}
+								if (reserved) {
+									emailClaimIdentifier = identifier;
+									const existingUser =
+										await ctx.context.internalAdapter.findUserByEmail(
+											normalizedEmail,
+										);
+									if (!existingUser) {
+										userEmail = normalizedEmail;
+									}
+								}
+							}
 							const { name, avatar } =
 								(await options.ensLookup?.({ walletAddress })) ?? {};
+							const createSIWEUser = (email: string) =>
+								ctx.context.internalAdapter.createUser(
+									{
+										name: name ?? walletAddress,
+										email,
+										image: avatar ?? "",
+									},
+									{ method: "siwe" },
+								);
 
-							user = await ctx.context.internalAdapter.createUser({
-								name: name ?? walletAddress,
-								email: userEmail,
-								image: avatar ?? "",
-							});
+							try {
+								user = await createSIWEUser(userEmail);
+							} catch (error) {
+								if (userEmail !== normalizedEmail || !normalizedEmail) {
+									throw error;
+								}
+								const claimedUser =
+									await ctx.context.internalAdapter.findUserByEmail(
+										normalizedEmail,
+									);
+								if (!claimedUser) {
+									throw error;
+								}
+								userEmail = walletEmail;
+								user = await createSIWEUser(userEmail);
+							} finally {
+								if (emailClaimIdentifier) {
+									await ctx.context.internalAdapter
+										.consumeVerificationValue(emailClaimIdentifier)
+										.catch(() => {});
+								}
+							}
 
 							// Create wallet address record
 							await ctx.context.adapter.create({
@@ -309,4 +441,5 @@ export const siwe = (options: SIWEPluginOptions) =>
 			),
 		},
 		options,
-	}) satisfies BetterAuthPlugin;
+	} satisfies BetterAuthPlugin;
+};

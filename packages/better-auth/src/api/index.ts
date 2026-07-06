@@ -6,10 +6,17 @@ import type {
 } from "@better-auth/core";
 import type { InternalLogger } from "@better-auth/core/env";
 import { logger } from "@better-auth/core/env";
+import {
+	ATTR_CONTEXT,
+	ATTR_HOOK_TYPE,
+	ATTR_HTTP_RESPONSE_STATUS_CODE,
+	ATTR_HTTP_ROUTE,
+	withSpan,
+} from "@better-auth/core/instrumentation";
 import { normalizePathname } from "@better-auth/core/utils/url";
 import type { Endpoint, Middleware } from "better-call";
 import { createRouter } from "better-call";
-import type { UnionToIntersection } from "../types/helper";
+import type { OverrideMerge, UnionToIntersection } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { originCheckMiddleware } from "./middlewares";
 import { onRequestRateLimit } from "./rate-limiter";
@@ -41,6 +48,7 @@ import {
 	signOut,
 	signUpEmail,
 	unlinkAccount,
+	updateSession,
 	updateUser,
 	verifyEmail,
 	verifyPassword,
@@ -192,13 +200,22 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 				plugin.middlewares?.map((m) => {
 					const middleware = (async (context: any) => {
 						const authContext = await ctx;
-						return m.middleware({
-							...context,
-							context: {
-								...authContext,
-								...context.context,
+						return withSpan(
+							`middleware ${m.path} ${plugin.id}`,
+							{
+								[ATTR_HOOK_TYPE]: "middleware",
+								[ATTR_HTTP_ROUTE]: m.path,
+								[ATTR_CONTEXT]: `plugin:${plugin.id}`,
 							},
-						});
+							() =>
+								m.middleware({
+									...context,
+									context: {
+										...authContext,
+										...context.context,
+									},
+								}),
+						);
 					}) as Middleware;
 					middleware.options = m.middleware.options;
 					return {
@@ -224,6 +241,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		changeEmail,
 		changePassword,
 		setPassword,
+		updateSession: updateSession<Option>(),
 		updateUser: updateUser<Option>(),
 		deleteUser,
 		requestPasswordReset,
@@ -248,7 +266,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 	} as const;
 	const api = toAuthEndpoints(endpoints, ctx);
 	return {
-		api: api as typeof endpoints & PluginEndpoint,
+		api: api as unknown as OverrideMerge<typeof endpoints, PluginEndpoint>,
 		middlewares,
 	};
 }
@@ -273,6 +291,7 @@ export const router = <Option extends BetterAuthOptions>(
 			...middlewares,
 		],
 		allowedMediaTypes: ["application/json"],
+		skipTrailingSlashes: options.advanced?.skipTrailingSlashes ?? false,
 		async onRequest(req) {
 			//handle disabled paths
 			const disabledPaths = ctx.options.disabledPaths || [];
@@ -282,9 +301,22 @@ export const router = <Option extends BetterAuthOptions>(
 			}
 
 			let currentRequest = req;
+
+			const rateLimitResponse = await onRequestRateLimit(currentRequest, ctx);
+			if (rateLimitResponse) {
+				return rateLimitResponse;
+			}
+
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onRequest) {
-					const response = await plugin.onRequest(currentRequest, ctx);
+					const response = await withSpan(
+						`onRequest ${plugin.id}`,
+						{
+							[ATTR_HOOK_TYPE]: "onRequest",
+							[ATTR_CONTEXT]: `plugin:${plugin.id}`,
+						},
+						() => plugin.onRequest!(currentRequest, ctx),
+					);
 					if (response && "response" in response) {
 						return response.response;
 					}
@@ -294,17 +326,20 @@ export const router = <Option extends BetterAuthOptions>(
 				}
 			}
 
-			const rateLimitResponse = await onRequestRateLimit(currentRequest, ctx);
-			if (rateLimitResponse) {
-				return rateLimitResponse;
-			}
-
 			return currentRequest;
 		},
-		async onResponse(res) {
+		async onResponse(res, req) {
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onResponse) {
-					const response = await plugin.onResponse(res, ctx);
+					const response = await withSpan(
+						`onResponse ${plugin.id}`,
+						{
+							[ATTR_HOOK_TYPE]: "onResponse",
+							[ATTR_CONTEXT]: `plugin:${plugin.id}`,
+							[ATTR_HTTP_RESPONSE_STATUS_CODE]: res.status,
+						},
+						() => plugin.onResponse!(res, ctx),
+					);
 					if (response) {
 						return response.response;
 					}
@@ -371,10 +406,17 @@ export {
 	type AuthMiddleware,
 	createAuthEndpoint,
 	createAuthMiddleware,
+	NO_STORE_HEADERS,
 	optionsMiddleware,
 } from "@better-auth/core/api";
 export { APIError } from "@better-auth/core/error";
-export { getIp } from "../utils/get-request-ip";
+export { getIP } from "@better-auth/core/utils/ip";
 export { isAPIError } from "../utils/is-api-error";
+export { type DispatchContext, dispatchAuthEndpoint } from "./dispatch";
 export * from "./middlewares";
 export * from "./routes";
+export { addOAuthServerContext, getOAuthState } from "./state/oauth";
+export {
+	getShouldSkipSessionRefresh,
+	setShouldSkipSessionRefresh,
+} from "./state/should-session-refresh";

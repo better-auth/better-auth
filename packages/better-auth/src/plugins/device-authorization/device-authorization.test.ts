@@ -1,4 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import type { BetterAuthOptions } from "@better-auth/core";
+import { getAuthTables } from "@better-auth/core/db";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
+import type { MemoryDB } from "@better-auth/memory-adapter";
+import { memoryAdapter } from "@better-auth/memory-adapter";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { deviceAuthorization, deviceAuthorizationOptionsSchema } from ".";
 import { deviceAuthorizationClient } from "./client";
@@ -120,7 +125,7 @@ describe("client validation", async () => {
 });
 
 describe("device authorization flow", async () => {
-	const { auth, signInWithTestUser } = await getTestInstance(
+	const { auth, signInWithTestUser, db } = await getTestInstance(
 		{
 			plugins: [
 				deviceAuthorization({
@@ -172,6 +177,10 @@ describe("device authorization flow", async () => {
 	});
 
 	describe("device token polling", () => {
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
 		it("should return authorization_pending when not approved", async () => {
 			const { device_code } = await auth.api.deviceCode({
 				body: {
@@ -275,6 +284,36 @@ describe("device authorization flow", async () => {
 	});
 
 	describe("device approval flow", () => {
+		// RFC 8628 §3.2: the device authorization response must not be cached.
+		it("sends no-store on the device code response", async () => {
+			const response = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+				asResponse: true,
+			});
+			expect(response.headers.get("Cache-Control")).toBe("no-store");
+			expect(response.headers.get("Pragma")).toBe("no-cache");
+		});
+
+		// The device token response carries live credentials.
+		it("sends no-store on the device token response", async () => {
+			const { headers } = await signInWithTestUser();
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			await auth.api.deviceVerify({ query: { user_code }, headers });
+			await auth.api.deviceApprove({ body: { userCode: user_code }, headers });
+			const response = await auth.api.deviceToken({
+				body: {
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code,
+					client_id: "test-client",
+				},
+				asResponse: true,
+			});
+			expect(response.headers.get("Cache-Control")).toBe("no-store");
+			expect(response.headers.get("Pragma")).toBe("no-cache");
+		});
+
 		it("should approve device and create session", async () => {
 			// First, sign in as a user
 			const { headers } = await signInWithTestUser();
@@ -284,6 +323,11 @@ describe("device authorization flow", async () => {
 				body: {
 					client_id: "test-client",
 				},
+			});
+
+			await auth.api.deviceVerify({
+				query: { user_code },
+				headers,
 			});
 
 			// Approve the device
@@ -314,16 +358,23 @@ describe("device authorization flow", async () => {
 		});
 
 		it("should deny device authorization", async () => {
+			const { headers } = await signInWithTestUser();
+
 			const { device_code, user_code } = await auth.api.deviceCode({
 				body: {
 					client_id: "test-client",
 				},
 			});
 
+			await auth.api.deviceVerify({
+				query: { user_code },
+				headers,
+			});
+
 			// Deny the device
 			const denyResponse = await auth.api.deviceDeny({
 				body: { userCode: user_code },
-				headers: new Headers(),
+				headers,
 			});
 			expect("success" in denyResponse && denyResponse.success).toBe(true);
 
@@ -412,6 +463,10 @@ describe("device authorization flow", async () => {
 					client_id: "test-client",
 				},
 			});
+			await auth.api.deviceVerify({
+				query: { user_code: userCode },
+				headers,
+			});
 			await auth.api.deviceApprove({
 				body: { userCode },
 				headers,
@@ -454,6 +509,11 @@ describe("device authorization flow", async () => {
 				},
 			});
 
+			await auth.api.deviceVerify({
+				query: { user_code },
+				headers,
+			});
+
 			await auth.api.deviceApprove({
 				body: { userCode: user_code },
 				headers,
@@ -470,6 +530,631 @@ describe("device authorization flow", async () => {
 				"read write profile",
 			);
 		});
+
+		it("should require authentication for deny", async () => {
+			const { user_code } = await auth.api.deviceCode({
+				body: {
+					client_id: "test-client",
+				},
+			});
+
+			await expect(
+				auth.api.deviceDeny({
+					body: { userCode: user_code },
+					headers: new Headers(),
+				}),
+			).rejects.toMatchObject({
+				body: {
+					error: "unauthorized",
+					error_description: "Authentication required",
+				},
+			});
+		});
+
+		it("should allow first user to approve but prevent re-approval", async () => {
+			// Sign in as user
+			const { headers } = await signInWithTestUser();
+
+			// Request device code
+			const { user_code } = await auth.api.deviceCode({
+				body: {
+					client_id: "test-client",
+				},
+			});
+
+			await auth.api.deviceVerify({
+				query: { user_code },
+				headers,
+			});
+
+			// User approves - this should succeed
+			const approveResponse = await auth.api.deviceApprove({
+				body: { userCode: user_code },
+				headers,
+			});
+			expect("success" in approveResponse && approveResponse.success).toBe(
+				true,
+			);
+
+			// Verify the device code is now approved
+			const cleanUserCode = user_code.replace(/-/g, "");
+			const deviceCodeRecord = await db.findOne<DeviceCode>({
+				model: "deviceCode",
+				where: [{ field: "userCode", value: cleanUserCode }],
+			});
+			expect(deviceCodeRecord?.status).toBe("approved");
+			expect(deviceCodeRecord?.userId).toBeDefined();
+
+			// Try to approve again - should fail because already processed
+			await expect(
+				auth.api.deviceApprove({
+					body: { userCode: user_code },
+					headers,
+				}),
+			).rejects.toMatchObject({
+				body: {
+					error: "invalid_request",
+					error_description: "Device code already processed",
+				},
+			});
+		});
+	});
+
+	describe("concurrent token redemption", () => {
+		// Invariant: an approved device code is single-use. Two polls racing to
+		// redeem the same approved code must yield exactly one token; the loser
+		// is rejected and the row must not survive for a third redemption.
+		it("should redeem an approved device code at most once under concurrent polling", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+
+			await auth.api.deviceVerify({
+				query: { user_code },
+				headers,
+			});
+
+			await auth.api.deviceApprove({
+				body: { userCode: user_code },
+				headers,
+			});
+
+			const poll = () =>
+				auth.api
+					.deviceToken({
+						body: {
+							grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+							device_code,
+							client_id: "test-client",
+						},
+					})
+					.then(
+						(value) => ({ ok: true as const, value }),
+						(error) => ({ ok: false as const, error }),
+					);
+
+			const results = await Promise.all([poll(), poll()]);
+
+			const successes = results.filter(
+				(result) => result.ok && "access_token" in result.value,
+			);
+			expect(successes).toHaveLength(1);
+
+			const rowAfter = await db.findOne<DeviceCode>({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: device_code }],
+			});
+			expect(rowAfter).toBeNull();
+
+			await expect(
+				auth.api.deviceToken({
+					body: {
+						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+						device_code,
+						client_id: "test-client",
+					},
+				}),
+			).rejects.toMatchObject({
+				body: { error: "invalid_grant" },
+			});
+		});
+
+		it("should burn an expired approved device code instead of issuing a token", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+
+			await auth.api.deviceVerify({
+				query: { user_code },
+				headers,
+			});
+
+			await auth.api.deviceApprove({
+				body: { userCode: user_code },
+				headers,
+			});
+
+			await db.update({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: device_code }],
+				update: { expiresAt: new Date(Date.now() - 1000) },
+			});
+
+			await expect(
+				auth.api.deviceToken({
+					body: {
+						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+						device_code,
+						client_id: "test-client",
+					},
+				}),
+			).rejects.toMatchObject({
+				body: { error: "expired_token" },
+			});
+
+			const rowAfter = await db.findOne<DeviceCode>({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: device_code }],
+			});
+			expect(rowAfter).toBeNull();
+		});
+	});
+});
+
+describe("device authorization ownership gate", () => {
+	const ATTACKER_EMAIL = "attacker@example.test";
+	const ATTACKER_PASSWORD = "attacker-password-123";
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-cq3f-vc6p-68fh
+	 */
+	it("rejects approve from a session that did not claim the pending code", async () => {
+		const { auth, client, db, signInWithUser } = await getTestInstance(
+			{
+				plugins: [
+					deviceAuthorization({
+						expiresIn: "5min",
+						interval: "2s",
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [deviceAuthorizationClient()],
+				},
+			},
+		);
+
+		await client.signUp.email({
+			email: ATTACKER_EMAIL,
+			password: ATTACKER_PASSWORD,
+			name: "attacker",
+		});
+		const { headers: attackerHeaders, res: attackerSession } =
+			await signInWithUser(ATTACKER_EMAIL, ATTACKER_PASSWORD);
+		const attackerId = attackerSession.user.id;
+
+		const { device_code, user_code } = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		expect(device_code).toBeTruthy();
+		expect(user_code).toBeTruthy();
+
+		await expect(
+			auth.api.deviceApprove({
+				body: { userCode: user_code },
+				headers: attackerHeaders,
+			}),
+		).rejects.toMatchObject({
+			body: { error: "invalid_request" },
+		});
+
+		const rowAfter = await db.findOne<DeviceCode>({
+			model: "deviceCode",
+			where: [{ field: "userCode", value: user_code }],
+		});
+		expect(rowAfter?.userId).not.toBe(attackerId);
+		expect(rowAfter?.status).toBe("pending");
+
+		await expect(
+			auth.api.deviceToken({
+				body: {
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code,
+					client_id: "test-client",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: { error: "authorization_pending" },
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-cq3f-vc6p-68fh
+	 */
+	it("rejects deny from a session that did not claim the pending code", async () => {
+		const { auth, client, db, signInWithUser } = await getTestInstance(
+			{
+				plugins: [
+					deviceAuthorization({
+						expiresIn: "5min",
+						interval: "2s",
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [deviceAuthorizationClient()],
+				},
+			},
+		);
+
+		await client.signUp.email({
+			email: ATTACKER_EMAIL,
+			password: ATTACKER_PASSWORD,
+			name: "attacker",
+		});
+		const { headers: attackerHeaders, res: attackerSession } =
+			await signInWithUser(ATTACKER_EMAIL, ATTACKER_PASSWORD);
+		const attackerId = attackerSession.user.id;
+
+		const { user_code } = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+
+		await expect(
+			auth.api.deviceDeny({
+				body: { userCode: user_code },
+				headers: attackerHeaders,
+			}),
+		).rejects.toMatchObject({
+			body: { error: "invalid_request" },
+		});
+
+		const rowAfter = await db.findOne<DeviceCode>({
+			model: "deviceCode",
+			where: [{ field: "userCode", value: user_code }],
+		});
+		expect(rowAfter?.userId).not.toBe(attackerId);
+		expect(rowAfter?.status).toBe("pending");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-cq3f-vc6p-68fh
+	 */
+	it("allows approve when the same session called verify first", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					expiresIn: "5min",
+					interval: "2s",
+				}),
+			],
+		});
+
+		const { headers: legitHeaders } = await signInWithTestUser();
+
+		const { user_code } = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+
+		await auth.api.deviceVerify({
+			query: { user_code },
+			headers: legitHeaders,
+		});
+
+		const approve = await auth.api.deviceApprove({
+			body: { userCode: user_code },
+			headers: legitHeaders,
+		});
+		expect(approve).toMatchObject({ success: true });
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-cq3f-vc6p-68fh
+	 */
+	it("rejects approve from a different user after another claimed the code", async () => {
+		const { auth, client, signInWithTestUser, signInWithUser } =
+			await getTestInstance(
+				{
+					plugins: [
+						deviceAuthorization({
+							expiresIn: "5min",
+							interval: "2s",
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [deviceAuthorizationClient()],
+					},
+				},
+			);
+
+		const { headers: claimerHeaders } = await signInWithTestUser();
+
+		await client.signUp.email({
+			email: ATTACKER_EMAIL,
+			password: ATTACKER_PASSWORD,
+			name: "attacker",
+		});
+		const { headers: attackerHeaders } = await signInWithUser(
+			ATTACKER_EMAIL,
+			ATTACKER_PASSWORD,
+		);
+
+		const { user_code } = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+
+		await auth.api.deviceVerify({
+			query: { user_code },
+			headers: claimerHeaders,
+		});
+
+		await expect(
+			auth.api.deviceApprove({
+				body: { userCode: user_code },
+				headers: attackerHeaders,
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: { error: "access_denied" },
+		});
+
+		await expect(
+			auth.api.deviceDeny({
+				body: { userCode: user_code },
+				headers: attackerHeaders,
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: { error: "access_denied" },
+		});
+	});
+
+	it("rejects approve from a different user if the code was generated for a different user_id", async () => {
+		const { auth, client, signInWithTestUser, signInWithUser } =
+			await getTestInstance(
+				{
+					plugins: [
+						deviceAuthorization({
+							expiresIn: "5min",
+							interval: "2s",
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [deviceAuthorizationClient()],
+					},
+				},
+			);
+
+		const { user } = await signInWithTestUser();
+
+		await client.signUp.email({
+			email: ATTACKER_EMAIL,
+			password: ATTACKER_PASSWORD,
+			name: "attacker",
+		});
+		const { headers: attackerHeaders } = await signInWithUser(
+			ATTACKER_EMAIL,
+			ATTACKER_PASSWORD,
+		);
+
+		const { user_code } = await auth.api.deviceCode({
+			body: {
+				client_id: "test-client",
+				user_id: user.id,
+			},
+		});
+
+		await expect(
+			auth.api.deviceApprove({
+				body: { userCode: user_code },
+				headers: attackerHeaders,
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: { error: "access_denied" },
+		});
+
+		await expect(
+			auth.api.deviceDeny({
+				body: { userCode: user_code },
+				headers: attackerHeaders,
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: { error: "access_denied" },
+		});
+	});
+
+	it("allows approve when the pre-bound user matches the current user", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					expiresIn: "5min",
+					interval: "2s",
+				}),
+			],
+		});
+
+		const { headers: legitHeaders, user } = await signInWithTestUser();
+
+		const { user_code } = await auth.api.deviceCode({
+			body: {
+				client_id: "test-client",
+				user_id: user.id,
+			},
+		});
+
+		const approve = await auth.api.deviceApprove({
+			body: { userCode: user_code },
+			headers: legitHeaders,
+		});
+		expect(approve).toMatchObject({ success: true });
+	});
+
+	it("allows deny when the pre-bound user matches the current user", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					expiresIn: "5min",
+					interval: "2s",
+				}),
+			],
+		});
+
+		const { headers: legitHeaders, user } = await signInWithTestUser();
+
+		const { user_code } = await auth.api.deviceCode({
+			body: {
+				client_id: "test-client",
+				user_id: user.id,
+			},
+		});
+
+		const deny = await auth.api.deviceDeny({
+			body: { userCode: user_code },
+			headers: legitHeaders,
+		});
+
+		expect(deny).toMatchObject({ success: true });
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc8628#section-3.1
+	 */
+	it("treats an empty user_id as omitted and leaves the code unbound", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					expiresIn: "5min",
+					interval: "2s",
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		const { user_code } = await auth.api.deviceCode({
+			body: {
+				client_id: "test-client",
+				user_id: "",
+			},
+		});
+
+		// The unbound code is claimable by any signed-in user via verify
+		await auth.api.deviceVerify({
+			query: { user_code },
+			headers,
+		});
+
+		const approve = await auth.api.deviceApprove({
+			body: { userCode: user_code },
+			headers,
+		});
+		expect(approve).toMatchObject({ success: true });
+	});
+
+	it("does not overwrite a device code claimed after verify reads it", async () => {
+		let adapter: DBAdapter<BetterAuthOptions> | null = null;
+		let concurrentOwnerId: string | undefined;
+		let simulateConcurrentClaim = false;
+
+		const database = ((options: BetterAuthOptions) => {
+			if (adapter) {
+				return adapter;
+			}
+			const tables = getAuthTables(options);
+			const memoryDB = Object.keys(tables).reduce<MemoryDB>((db, table) => {
+				db[table] = [];
+				return db;
+			}, {});
+			const baseAdapter = memoryAdapter(memoryDB)(options);
+			adapter = {
+				...baseAdapter,
+				incrementOne: async <T>(
+					data: Parameters<DBAdapter<BetterAuthOptions>["incrementOne"]>[0],
+				) => {
+					if (
+						simulateConcurrentClaim &&
+						concurrentOwnerId &&
+						data.model === "deviceCode" &&
+						(data.set as { userId?: string } | undefined)?.userId
+					) {
+						simulateConcurrentClaim = false;
+						const deviceCodeId = data.where.find(
+							(where) => where.field === "id",
+						)?.value;
+						if (typeof deviceCodeId === "string") {
+							await baseAdapter.update<DeviceCode>({
+								model: "deviceCode",
+								where: [{ field: "id", value: deviceCodeId }],
+								update: { userId: concurrentOwnerId },
+							});
+						}
+					}
+					return baseAdapter.incrementOne<T>(data);
+				},
+			};
+			return adapter;
+		}) satisfies BetterAuthOptions["database"];
+
+		const { auth, client, db, signInWithUser } = await getTestInstance({
+			database,
+			plugins: [
+				deviceAuthorization({
+					expiresIn: "5min",
+					interval: "2s",
+				}),
+			],
+		});
+
+		await client.signUp.email({
+			email: "concurrent-owner@example.test",
+			password: "concurrent-owner-password-123",
+			name: "concurrent owner",
+		});
+		const { res: concurrentOwnerSession } = await signInWithUser(
+			"concurrent-owner@example.test",
+			"concurrent-owner-password-123",
+		);
+		concurrentOwnerId = concurrentOwnerSession.user.id;
+
+		await client.signUp.email({
+			email: "racer@example.test",
+			password: "racer-password-123",
+			name: "racer",
+		});
+		const { headers: racerHeaders, res: racerSession } = await signInWithUser(
+			"racer@example.test",
+			"racer-password-123",
+		);
+
+		const { user_code } = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+
+		simulateConcurrentClaim = true;
+		await auth.api.deviceVerify({
+			query: { user_code },
+			headers: racerHeaders,
+		});
+
+		const rowAfter = await db.findOne<DeviceCode>({
+			model: "deviceCode",
+			where: [{ field: "userCode", value: user_code }],
+		});
+		expect(rowAfter?.userId).toBe(concurrentOwnerId);
+		expect(rowAfter?.userId).not.toBe(racerSession.user.id);
+		expect(rowAfter?.status).toBe("pending");
 	});
 });
 

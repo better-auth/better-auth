@@ -1,10 +1,12 @@
 import { betterFetch } from "@better-fetch/fetch";
+import { logger } from "../env";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
+	getOAuth2Tokens,
 	refreshAccessToken,
-	validateAuthorizationCode,
 } from "../oauth2";
+import { authorizationCodeRequest } from "../oauth2/validate-authorization-code";
 
 export interface GithubProfile {
 	login: string;
@@ -29,7 +31,7 @@ export interface GithubProfile {
 	company: string;
 	blog: string;
 	location: string;
-	email: string;
+	email: string | null;
 	hireable: boolean;
 	bio: string;
 	twitter_username: string;
@@ -67,6 +69,7 @@ export const github = (options: GithubOptions) => {
 			loginHint,
 			codeVerifier,
 			redirectURI,
+			additionalParams,
 		}) {
 			const _scopes = options.disableDefaultScope
 				? []
@@ -83,16 +86,37 @@ export const github = (options: GithubOptions) => {
 				redirectURI,
 				loginHint,
 				prompt: options.prompt,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
-			return validateAuthorizationCode({
+			const { body, headers: requestHeaders } = await authorizationCodeRequest({
 				code,
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint,
 			});
+
+			const { data, error } = await betterFetch<
+				| { access_token: string; token_type: string; scope: string }
+				| { error: string; error_description?: string; error_uri?: string }
+			>(tokenEndpoint, {
+				method: "POST",
+				body: body,
+				headers: requestHeaders,
+			});
+
+			if (error) {
+				logger.error("GitHub OAuth token exchange failed:", error);
+				return null;
+			}
+
+			if ("error" in data) {
+				logger.error("GitHub OAuth token exchange failed:", data);
+				return null;
+			}
+
+			return getOAuth2Tokens(data);
 		},
 		refreshAccessToken: options.refreshAccessToken
 			? options.refreshAccessToken
@@ -104,7 +128,7 @@ export const github = (options: GithubOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://github.com/login/oauth/access_token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
@@ -148,7 +172,7 @@ export const github = (options: GithubOptions) => {
 			return {
 				user: {
 					id: profile.id,
-					name: profile.name || profile.login,
+					name: profile.name || profile.login || "",
 					email: profile.email,
 					image: profile.avatar_url,
 					emailVerified,

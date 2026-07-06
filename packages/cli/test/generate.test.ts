@@ -1,20 +1,105 @@
+import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { promisify } from "node:util";
 import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { organization, twoFactor, username } from "better-auth/plugins";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
-import type { SupportedPlugin } from "../src/commands/init";
-import { generateAuthConfig } from "../src/generators/auth-config";
+import { generateSchema } from "../src/generators";
 import { generateDrizzleSchema } from "../src/generators/drizzle";
 import { generateKyselySchema } from "../src/generators/kysely";
 import { generatePrismaSchema } from "../src/generators/prisma";
 import { getPrismaVersion } from "../src/utils/get-package-info";
+import { cliPath } from "./utils";
+
+const execFileAsync = promisify(execFile);
 
 describe("generate", async () => {
+	describe("command output paths", () => {
+		it("should use adapter-specific filenames when output points to an existing directory", async () => {
+			const cases = [
+				{
+					adapter: "drizzle",
+					dialect: "sqlite",
+					expectedFileName: "auth-schema.ts",
+				},
+				{
+					adapter: "prisma",
+					dialect: "sqlite",
+					expectedFileName: "schema.prisma",
+				},
+				{
+					adapter: "kysely",
+					expectedFileName: /^\d{4}-\d{2}-\d{2}T.*\.sql$/,
+				},
+			];
+
+			for (const testCase of cases) {
+				const cacheDir = path.join(
+					process.cwd(),
+					"node_modules",
+					".cache",
+					"generate-output-",
+				);
+				fs.mkdirSync(path.dirname(cacheDir), { recursive: true });
+				const tmpDir = fs.mkdtempSync(cacheDir);
+				const outputDir = path.join(tmpDir, "schema-output");
+				fs.mkdirSync(outputDir);
+				fs.writeFileSync(
+					path.join(tmpDir, "auth.ts"),
+					`import { betterAuth } from "better-auth";
+import Database from "better-sqlite3";
+
+export const auth = betterAuth({
+	database: new Database(":memory:"),
+	secret: "test-secret",
+	baseURL: "http://localhost:3000",
+});
+`,
+				);
+				try {
+					const args = [
+						cliPath,
+						"generate",
+						"--cwd",
+						tmpDir,
+						"--config",
+						"auth.ts",
+						"--adapter",
+						testCase.adapter,
+						"--output",
+						"schema-output",
+						"--yes",
+					];
+					if (testCase.dialect) {
+						args.push("--dialect", testCase.dialect);
+					}
+					await execFileAsync(process.execPath, args, {
+						cwd: tmpDir,
+						env: {
+							...process.env,
+							BETTER_AUTH_TELEMETRY_DISABLED: "true",
+						},
+					});
+					const files = fs.readdirSync(outputDir);
+					expect(files).toHaveLength(1);
+					if (typeof testCase.expectedFileName === "string") {
+						expect(files[0]).toBe(testCase.expectedFileName);
+					} else {
+						expect(files[0]).toMatch(testCase.expectedFileName);
+					}
+				} finally {
+					fs.rmSync(tmpDir, { recursive: true, force: true });
+				}
+			}
+		});
+	});
+
 	it("should generate prisma schema", async () => {
 		const schema = await generatePrismaSchema({
 			file: "test.prisma",
@@ -37,6 +122,120 @@ describe("generate", async () => {
 		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/schema.prisma",
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9717
+	 */
+	const runBigintToggleTest = async (
+		fromBigint: boolean,
+		toBigint: boolean,
+	) => {
+		const fromRegex = fromBigint
+			? /aiCredits\s+BigInt/
+			: /aiCredits\s+Int(?!\w)/;
+		const toRegex = toBigint ? /aiCredits\s+BigInt/ : /aiCredits\s+Int(?!\w)/;
+
+		const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prisma-bigint-"));
+		const relativePath = path.relative(
+			process.cwd(),
+			path.join(tmpDir, "schema.prisma"),
+		);
+		try {
+			const generate = (bigint: boolean) =>
+				generatePrismaSchema({
+					file: relativePath,
+					adapter: prismaAdapter(
+						{},
+						{
+							provider: "postgresql",
+						},
+					)({} as BetterAuthOptions),
+					options: {
+						database: prismaAdapter(
+							{},
+							{
+								provider: "postgresql",
+							},
+						),
+						user: {
+							additionalFields: {
+								aiCredits: {
+									type: "number",
+									input: false,
+									bigint,
+								},
+							},
+						},
+					},
+				});
+
+			const first = await generate(fromBigint);
+			expect(first.code).toBeDefined();
+			expect(first.code).toMatch(fromRegex);
+			fs.writeFileSync(path.join(tmpDir, "schema.prisma"), first.code!);
+
+			const updated = await generate(toBigint);
+			expect(updated.overwrite).toBe(true);
+			expect(updated.code).toMatch(toRegex);
+			expect(updated.code).not.toMatch(fromRegex);
+		} finally {
+			fs.rmSync(tmpDir, { recursive: true });
+		}
+	};
+
+	it("should update an existing prisma bigint number field to int", () =>
+		runBigintToggleTest(true, false));
+
+	it("should update an existing prisma int number field to bigint", () =>
+		runBigintToggleTest(false, true));
+
+	it("should not update existing prisma uuid id fields to serial ids", async () => {
+		const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prisma-uuid-id-"));
+		const schemaPath = path.join(tmpDir, "schema.prisma");
+		const relativePath = path.relative(process.cwd(), schemaPath);
+		try {
+			const generate = (generateId: "uuid" | "serial") =>
+				generatePrismaSchema({
+					file: relativePath,
+					adapter: prismaAdapter(
+						{},
+						{
+							provider: "postgresql",
+						},
+					)({} as BetterAuthOptions),
+					options: {
+						database: prismaAdapter(
+							{},
+							{
+								provider: "postgresql",
+							},
+						),
+						plugins: [twoFactor(), username()],
+						advanced: {
+							database: {
+								generateId,
+							},
+						},
+					},
+				});
+
+			const first = await generate("uuid");
+			expect(first.code).toBeDefined();
+			fs.writeFileSync(schemaPath, first.code!);
+
+			const updated = await generate("serial");
+			const updatedSchema =
+				updated.code || fs.readFileSync(schemaPath, "utf-8");
+			expect(updatedSchema).toMatch(
+				/id\s+String\s+@id\s+@default\(dbgenerated\("pg_catalog\.gen_random_uuid\(\)"\)\)\s+@db\.Uuid/,
+			);
+			expect(updatedSchema).toMatch(/userId\s+String\s+@db\.Uuid/);
+			expect(updatedSchema).not.toMatch(/id\s+Int\s+@id.*@db\.Uuid/);
+			expect(updatedSchema).not.toMatch(/userId\s+Int\s+@db\.Uuid/);
+		} finally {
+			fs.rmSync(tmpDir, { recursive: true });
+		}
 	});
 
 	it("should generate prisma schema with number id", async () => {
@@ -261,6 +460,156 @@ describe("generate", async () => {
 		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-number-id.txt",
 		);
+	});
+
+	it("should treat fields with omitted required as notNull (default true)", async () => {
+		const pluginWithOmittedRequired = (): BetterAuthPlugin => ({
+			id: "omitted-required-test",
+			schema: {
+				testTable: {
+					fields: {
+						requiredField: {
+							type: "string",
+							// required is omitted — should default to true
+						},
+						explicitRequired: {
+							type: "string",
+							required: true,
+						},
+						explicitOptional: {
+							type: "string",
+							required: false,
+						},
+					},
+				},
+			},
+		});
+
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "pg",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				plugins: [pluginWithOmittedRequired()],
+			} as BetterAuthOptions,
+		});
+
+		// Fields with omitted `required` should have .notNull()
+		expect(schema.code).toContain(
+			'requiredField: text("required_field").notNull()',
+		);
+		// Fields with explicit `required: true` should have .notNull()
+		expect(schema.code).toContain(
+			'explicitRequired: text("explicit_required").notNull()',
+		);
+		// Fields with explicit `required: false` should NOT have .notNull()
+		expect(schema.code).not.toMatch(/explicitOptional:.*\.notNull\(\)/);
+	});
+
+	it("should escape string default values so the generated schema stays valid TypeScript", async () => {
+		const pluginWithQuotedDefault = (): BetterAuthPlugin => ({
+			id: "quoted-default-test",
+			schema: {
+				testTable: {
+					fields: {
+						greeting: {
+							type: "string",
+							defaultValue: 'say "hi"\\done',
+						},
+					},
+				},
+			},
+		});
+
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "pg",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				plugins: [pluginWithQuotedDefault()],
+			} as BetterAuthOptions,
+		});
+
+		// Quotes and backslashes must be escaped so the default is a valid
+		// literal. The raw interpolation would emit `.default("say "hi"\done")`
+		// and break the generated schema file. The generated schema is formatted
+		// afterward, so the JSON-stringified value normalizes to single quotes.
+		const escapedDefault = String.raw`.default('say "hi"\\done')`;
+		expect(schema.code).toContain(escapedDefault);
+		expect(schema.code).not.toContain(String.raw`.default("say "hi"\done")`);
+	});
+
+	it("should treat fields with omitted required as non-optional in prisma schema", async () => {
+		const originalCwd = process.cwd();
+		const tmpDir = fs.mkdtempSync(
+			path.join(os.tmpdir(), "prisma-required-test-"),
+		);
+
+		try {
+			fs.writeFileSync(
+				path.join(tmpDir, "package.json"),
+				JSON.stringify({
+					dependencies: { prisma: "^7.0.0" },
+				}),
+			);
+			process.chdir(tmpDir);
+
+			const pluginWithOmittedRequired = (): BetterAuthPlugin => ({
+				id: "omitted-required-test",
+				schema: {
+					testTable: {
+						fields: {
+							requiredField: {
+								type: "string",
+								// required is omitted — should default to true
+							},
+							explicitRequired: {
+								type: "string",
+								required: true,
+							},
+							explicitOptional: {
+								type: "string",
+								required: false,
+							},
+						},
+					},
+				},
+			});
+
+			const schema = await generatePrismaSchema({
+				file: "test.prisma",
+				adapter: prismaAdapter(
+					{},
+					{ provider: "postgresql" },
+				)({} as BetterAuthOptions),
+				options: {
+					database: prismaAdapter({}, { provider: "postgresql" }),
+					plugins: [pluginWithOmittedRequired()],
+				},
+			});
+
+			// Fields with omitted `required` should NOT have "?" (= required)
+			expect(schema.code).toMatch(/requiredField\s+String(?!\?)/);
+			// Fields with explicit `required: true` should NOT have "?"
+			expect(schema.code).toMatch(/explicitRequired\s+String(?!\?)/);
+			// Fields with explicit `required: false` should have "?"
+			expect(schema.code).toMatch(/explicitOptional\s+String\?/);
+		} finally {
+			process.chdir(originalCwd);
+			fs.rmSync(tmpDir, { recursive: true });
+		}
 	});
 
 	// Minimal plugin that reproduces the bug: two fields referencing the same model
@@ -560,35 +909,6 @@ describe("generate", async () => {
 			}),
 		).rejects.toThrow(/Unsupported field type/);
 	});
-
-	it("should add plugin to empty plugins array without leading comma", async () => {
-		const initialConfig = `export const auth = betterAuth({
-			plugins: []
-		});`;
-
-		const mockFormat = (code: string) => Promise.resolve(code);
-		const mockSpinner = { stop: () => {} };
-		const plugins: SupportedPlugin[] = [
-			{
-				id: "next-cookies",
-				name: "nextCookies",
-				path: "better-auth/next-js",
-				clientName: undefined,
-				clientPath: undefined,
-			},
-		];
-
-		const result = await generateAuthConfig({
-			format: mockFormat,
-			current_user_config: initialConfig,
-			spinner: mockSpinner as any,
-			plugins,
-			database: null,
-		});
-
-		expect(result.generatedCode).toContain(`plugins: [nextCookies()]`);
-		expect(result.generatedCode).not.toContain(`plugins: [, nextCookies()]`);
-	});
 });
 
 describe("JSON field support in CLI generators", () => {
@@ -682,7 +1002,8 @@ describe("JSON field support in CLI generators", () => {
 				},
 			} as BetterAuthOptions,
 		});
-		expect(schema.code).toContain("preferences   Json?");
+		// required omitted → defaults to true → non-nullable
+		expect(schema.code).toMatch(/preferences\s+Json(?!\?)/);
 	});
 
 	it("should generate Prisma schema with JSON default values of arrays and objects", async () => {
@@ -716,8 +1037,8 @@ describe("JSON field support in CLI generators", () => {
 				},
 			} as BetterAuthOptions,
 		});
-		expect(schema.code).toContain("preferences   Json?");
-		// expect(schema.code).toContain(JSON.stringify(`@default("{\"premiumuser\":true}")`).slice(1,-1));
+		// required omitted → defaults to true → non-nullable
+		expect(schema.code).toMatch(/preferences\s+Json(?!\?)/);
 		expect(schema.code).toContain('@default("{\\"premiumuser\\":true}")');
 		expect(schema.code).toContain(
 			'@default("[{\\"name\\":\\"john\\",\\"subscribed\\":false},{\\"name\\":\\"doe\\",\\"subscribed\\":true}]")',
@@ -780,7 +1101,7 @@ describe("Enum field support in Drizzle schemas", () => {
 		});
 		expect(schema.code).toContain("mysqlEnum");
 		expect(schema.code).toContain(
-			'status: mysqlEnum(["active", "inactive", "pending"])',
+			'status: mysqlEnum("status", ["active", "inactive", "pending"])',
 		);
 		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-mysql-enum.txt",
@@ -808,9 +1129,9 @@ describe("Enum field support in Drizzle schemas", () => {
 				},
 			} as BetterAuthOptions,
 		});
-		expect(schema.code).toContain("text({ enum: [");
+		expect(schema.code).toContain('text("priority", { enum: [');
 		expect(schema.code).toContain(
-			'priority: text({ enum: ["high", "medium", "low"] })',
+			'priority: text("priority", { enum: ["high", "medium", "low"] })',
 		);
 		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-sqlite-enum.txt",
@@ -881,6 +1202,63 @@ describe("Enum field support in Drizzle schemas", () => {
 				adapter: {} as any,
 			}),
 		).rejects.toThrow(/Unsupported field type/);
+	});
+});
+
+describe("Drizzle array defaultValue serialization", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10046
+	 */
+	it("emits a JS array literal for string[] additionalField defaultValue", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: { provider: "pg", schema: {} },
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						roles: {
+							type: "string[]",
+							required: true,
+							defaultValue: ["customer"],
+							input: false,
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(schema.code).toContain(
+			'roles: text("roles").array().default(["customer"]).notNull()',
+		);
+		expect(schema.code).not.toContain(".default(customer)");
+	});
+
+	it("emits a JS array literal for number[] additionalField defaultValue", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: { provider: "pg", schema: {} },
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						scores: {
+							type: "number[]",
+							required: true,
+							defaultValue: [1, 2, 3],
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(schema.code).toContain(
+			'scores: integer("scores").array().default([1, 2, 3]).notNull()',
+		);
 	});
 });
 
@@ -1030,6 +1408,8 @@ describe("Prisma v7 compatibility", () => {
 
 			expect(schema.code).toContain('provider = "prisma-client"');
 			expect(schema.code).not.toContain('provider = "prisma-client-js"');
+			// Prisma v7+ should not include url in datasource (configured in prisma.config.ts)
+			expect(schema.code).not.toContain("url");
 		} finally {
 			process.chdir(originalCwd);
 			fs.rmSync(tmpDir, { recursive: true });
@@ -1130,5 +1510,568 @@ describe("Prisma v7 compatibility", () => {
 			process.chdir(originalCwd);
 			fs.rmSync(tmpDir, { recursive: true });
 		}
+	});
+});
+
+describe("--adapter flag support (mock adapter)", () => {
+	// Helper function to create a mock adapter similar to createMockAdapter in generate.ts
+	function createMockAdapter(adapterId: string, provider?: string): DBAdapter {
+		return {
+			id: adapterId,
+			create: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			findOne: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			findMany: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			count: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			update: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			updateMany: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			delete: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			deleteMany: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			consumeOne: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			incrementOne: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			transaction: async (callback) => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			options: {
+				adapterConfig: {
+					adapterId,
+				},
+				...(provider && { provider }),
+			},
+		};
+	}
+
+	it("should generate prisma schema with mock adapter", async () => {
+		const mockAdapter = createMockAdapter("prisma", "postgresql");
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: mockAdapter,
+			options: {
+				database: {} as any,
+				plugins: [twoFactor(), username()],
+			},
+		});
+
+		expect(schema.code).toBeDefined();
+		expect(schema.code).toContain("model User");
+		expect(schema.code).toContain("model Account");
+		expect(schema.code).toContain("model Session");
+	});
+
+	it("should generate drizzle schema with mock adapter and provider", async () => {
+		const mockAdapter = createMockAdapter("drizzle", "pg");
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: mockAdapter,
+			options: {
+				database: {} as any,
+				plugins: [twoFactor(), username()],
+			},
+		});
+
+		expect(schema.code).toBeDefined();
+		expect(schema.code).toContain("export const user");
+		expect(schema.code).toContain("export const account");
+		expect(schema.code).toContain("export const session");
+	});
+
+	it("should throw error when generating drizzle schema without provider", async () => {
+		const mockAdapter = createMockAdapter("drizzle");
+		await expect(
+			generateDrizzleSchema({
+				file: "test.drizzle",
+				adapter: mockAdapter,
+				options: {
+					database: {} as any,
+					plugins: [],
+				},
+			}),
+		).rejects.toThrow(/Database provider type is undefined/);
+	});
+
+	it("should generate kysely schema with mock adapter", async () => {
+		const mockAdapter = createMockAdapter("kysely");
+		const schema = await generateKyselySchema({
+			file: "test.sql",
+			adapter: mockAdapter,
+			options: {
+				database: new Database(":memory:"),
+			},
+		});
+
+		expect(schema.code).toBeDefined();
+		expect(schema.code).toContain("create table");
+	});
+
+	it("should route to correct generator using generateSchema with mock prisma adapter", async () => {
+		const mockAdapter = createMockAdapter("prisma", "postgresql");
+		const schema = await generateSchema({
+			adapter: mockAdapter,
+			file: "test.prisma",
+			options: {
+				database: {} as any,
+				plugins: [],
+			},
+		});
+
+		expect(schema.code).toBeDefined();
+		expect(schema.code).toContain("model User");
+		expect(schema.fileName).toBe("test.prisma");
+	});
+
+	it("should route to correct generator using generateSchema with mock drizzle adapter", async () => {
+		const mockAdapter = createMockAdapter("drizzle", "pg");
+		const schema = await generateSchema({
+			adapter: mockAdapter,
+			file: "test.drizzle",
+			options: {
+				database: {} as any,
+				plugins: [],
+			},
+		});
+
+		expect(schema.code).toBeDefined();
+		expect(schema.code).toContain("export const user");
+		expect(schema.fileName).toBe("test.drizzle");
+	});
+
+	it("should route to correct generator using generateSchema with mock kysely adapter", async () => {
+		const mockAdapter = createMockAdapter("kysely");
+		const schema = await generateSchema({
+			adapter: mockAdapter,
+			file: "test.sql",
+			options: {
+				database: new Database(":memory:"),
+			},
+		});
+
+		expect(schema.code).toBeDefined();
+		expect(schema.code).toContain("create table");
+		expect(schema.fileName).toBe("test.sql");
+	});
+
+	it("should throw error for unsupported adapter id", async () => {
+		const mockAdapter = createMockAdapter("unsupported-adapter");
+		let error: Error | undefined;
+		try {
+			await generateSchema({
+				adapter: mockAdapter,
+				file: "test.txt",
+				options: {
+					database: {} as any,
+					plugins: [],
+				},
+			});
+		} catch (e) {
+			error = e as Error;
+		}
+		expect(error).toBeDefined();
+	});
+
+	it("should generate prisma schema with mock adapter and usePlural option", async () => {
+		const mockAdapter: DBAdapter = {
+			...createMockAdapter("prisma", "postgresql"),
+			options: {
+				adapterConfig: {
+					adapterId: "prisma",
+					usePlural: true,
+				},
+				provider: "postgresql",
+			},
+		};
+
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: mockAdapter,
+			options: {
+				database: {} as any,
+				plugins: [],
+			},
+		});
+
+		expect(schema.code).toBeDefined();
+		expect(schema.code).toContain("model Users");
+		expect(schema.code).toContain("model Accounts");
+	});
+
+	it("should generate drizzle schema with mock adapter and usePlural option", async () => {
+		const mockAdapter: DBAdapter = {
+			...createMockAdapter("drizzle", "pg"),
+			options: {
+				adapterConfig: {
+					adapterId: "drizzle",
+					usePlural: true,
+				},
+				provider: "pg",
+			},
+		};
+
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: mockAdapter,
+			options: {
+				database: {} as any,
+				plugins: [],
+			},
+		});
+
+		expect(schema.code).toBeDefined();
+		expect(schema.code).toContain("export const users");
+		expect(schema.code).toContain("export const accounts");
+	});
+});
+
+describe("--dialect flag support", () => {
+	// Helper function that matches the implementation in generate.ts
+	function createMockAdapterWithDialect(
+		adapterId: string,
+		dialect?: string,
+	): DBAdapter {
+		let provider: string | undefined;
+		if (dialect) {
+			if (adapterId === "drizzle") {
+				if (dialect === "postgresql") {
+					provider = "pg";
+				} else if (dialect === "mysql" || dialect === "sqlite") {
+					provider = dialect;
+				} else {
+					provider = dialect === "pg" ? "pg" : undefined;
+				}
+			} else if (adapterId === "prisma") {
+				provider = dialect;
+			}
+		}
+
+		return {
+			id: adapterId,
+			create: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			findOne: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			findMany: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			count: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			update: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			updateMany: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			delete: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			deleteMany: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			consumeOne: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			incrementOne: async () => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			transaction: async (callback) => {
+				throw new Error("Mock adapter methods should not be called");
+			},
+			options: {
+				adapterConfig: {
+					adapterId,
+				},
+				...(provider && { provider }),
+			},
+		};
+	}
+
+	it("should map postgresql dialect to pg provider for drizzle", async () => {
+		const mockAdapter = createMockAdapterWithDialect("drizzle", "postgresql");
+		expect(mockAdapter.options?.provider).toBe("pg");
+
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: mockAdapter,
+			options: {
+				database: {} as any,
+				plugins: [],
+			},
+		});
+
+		expect(schema.code).toBeDefined();
+		expect(schema.code).toContain("pg");
+		expect(schema.code).toContain("export const user");
+	});
+
+	it("should map mysql dialect to mysql provider for drizzle", async () => {
+		const mockAdapter = createMockAdapterWithDialect("drizzle", "mysql");
+		expect(mockAdapter.options?.provider).toBe("mysql");
+
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: mockAdapter,
+			options: {
+				database: {} as any,
+				plugins: [],
+			},
+		});
+
+		expect(schema.code).toBeDefined();
+		expect(schema.code).toContain("mysql");
+		expect(schema.code).toContain("export const user");
+	});
+
+	it("should map sqlite dialect to sqlite provider for drizzle", async () => {
+		const mockAdapter = createMockAdapterWithDialect("drizzle", "sqlite");
+		expect(mockAdapter.options?.provider).toBe("sqlite");
+
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: mockAdapter,
+			options: {
+				database: {} as any,
+				plugins: [],
+			},
+		});
+
+		expect(schema.code).toBeDefined();
+		expect(schema.code).toContain("sqlite");
+		expect(schema.code).toContain("export const user");
+	});
+
+	it("should use postgresql dialect directly for prisma", async () => {
+		const mockAdapter = createMockAdapterWithDialect("prisma", "postgresql");
+		expect(mockAdapter.options?.provider).toBe("postgresql");
+
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: mockAdapter,
+			options: {
+				database: {} as any,
+				plugins: [],
+			},
+		});
+
+		expect(schema.code).toBeDefined();
+		expect(schema.code).toContain('provider = "postgresql"');
+		expect(schema.code).toContain("model User");
+	});
+
+	it("should use mysql dialect directly for prisma", async () => {
+		const mockAdapter = createMockAdapterWithDialect("prisma", "mysql");
+		expect(mockAdapter.options?.provider).toBe("mysql");
+
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: mockAdapter,
+			options: {
+				database: {} as any,
+				plugins: [],
+			},
+		});
+
+		expect(schema.code).toBeDefined();
+		expect(schema.code).toContain('provider = "mysql"');
+		expect(schema.code).toContain("model User");
+	});
+
+	it("should use sqlite dialect directly for prisma", async () => {
+		const mockAdapter = createMockAdapterWithDialect("prisma", "sqlite");
+		expect(mockAdapter.options?.provider).toBe("sqlite");
+
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: mockAdapter,
+			options: {
+				database: {} as any,
+				plugins: [],
+			},
+		});
+
+		expect(schema.code).toBeDefined();
+		expect(schema.code).toContain('provider = "sqlite"');
+		expect(schema.code).toContain("model User");
+	});
+
+	it("should use mongodb dialect directly for prisma", async () => {
+		const mockAdapter = createMockAdapterWithDialect("prisma", "mongodb");
+		expect(mockAdapter.options?.provider).toBe("mongodb");
+
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: mockAdapter,
+			options: {
+				database: {} as any,
+				plugins: [],
+			},
+		});
+
+		expect(schema.code).toBeDefined();
+		expect(schema.code).toContain('provider = "mongodb"');
+		expect(schema.code).toContain("model User");
+	});
+
+	it("should work with generateSchema routing for drizzle with dialect", async () => {
+		const mockAdapter = createMockAdapterWithDialect("drizzle", "postgresql");
+		const schema = await generateSchema({
+			adapter: mockAdapter,
+			file: "test.drizzle",
+			options: {
+				database: {} as any,
+				plugins: [],
+			},
+		});
+
+		expect(schema.code).toBeDefined();
+		expect(schema.code).toContain("pg");
+		expect(schema.fileName).toBe("test.drizzle");
+	});
+
+	it("should work with generateSchema routing for prisma with dialect", async () => {
+		const mockAdapter = createMockAdapterWithDialect("prisma", "mysql");
+		const schema = await generateSchema({
+			adapter: mockAdapter,
+			file: "test.prisma",
+			options: {
+				database: {} as any,
+				plugins: [],
+			},
+		});
+
+		expect(schema.code).toBeDefined();
+		expect(schema.code).toContain('provider = "mysql"');
+		expect(schema.fileName).toBe("test.prisma");
+	});
+
+	const pluginWithDisabledMigration = (): BetterAuthPlugin => ({
+		id: "disabled-migration-test",
+		schema: {
+			emittedTable: {
+				fields: {
+					name: { type: "string", required: true },
+					skippedTableId: {
+						type: "string",
+						required: false,
+						references: {
+							model: "skippedTable",
+							field: "id",
+						},
+					},
+				},
+			},
+			skippedTable: {
+				fields: {
+					name: { type: "string", required: true },
+				},
+				disableMigration: true,
+			},
+		},
+	});
+
+	it("should not emit drizzle tables with disableMigration", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "pg",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				plugins: [pluginWithDisabledMigration()],
+			} as BetterAuthOptions,
+		});
+
+		expect(schema.code).toContain("emittedTable");
+		expect(schema.code).toContain("skippedTableId");
+		expect(schema.code).not.toContain("export const skippedTable");
+		expect(schema.code).not.toContain("references(() => skippedTable");
+		expect(schema.code).not.toContain("skippedTable: one(skippedTable");
+	});
+
+	it("should not emit drizzle relations when a rendered model name references disabled migrations", async () => {
+		const plugin: BetterAuthPlugin = {
+			id: "disabled-rendered-reference-test",
+			schema: {
+				emittedTable: {
+					fields: {
+						skippedTableId: {
+							type: "string",
+							required: false,
+							references: {
+								model: "skippedTables",
+								field: "id",
+							},
+						},
+					},
+				},
+				skippedTable: {
+					fields: {
+						name: { type: "string", required: true },
+					},
+					disableMigration: true,
+				},
+			},
+		};
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "pg",
+					adapterConfig: { usePlural: true },
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				plugins: [plugin],
+			} as BetterAuthOptions,
+		});
+
+		expect(schema.code).toContain("skippedTableId");
+		expect(schema.code).not.toContain("references(() => skippedTables");
+		expect(schema.code).not.toContain("skippedTables: one(skippedTables");
+	});
+
+	it("should not emit prisma models with disableMigration", async () => {
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: prismaAdapter(
+				{},
+				{ provider: "postgresql" },
+			)({} as BetterAuthOptions),
+			options: {
+				database: prismaAdapter({}, { provider: "postgresql" }),
+				plugins: [pluginWithDisabledMigration()],
+			},
+		});
+
+		expect(schema.code).toContain("EmittedTable");
+		expect(schema.code).toContain("skippedTableId");
+		expect(schema.code).not.toContain("SkippedTable");
+		expect(schema.code).not.toContain("skippedtable");
 	});
 });

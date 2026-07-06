@@ -3,18 +3,19 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { runWithTransaction } from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
-import { parseUserOutput } from "../../db/schema";
-import type { AdditionalUserFieldsInput, InferUser, User } from "../../types";
+import { buildSyntheticUserOutput, parseUserOutput } from "../../db/schema";
+import type { AdditionalUserFieldsInput, User } from "../../types";
 import { isAPIError } from "../../utils/is-api-error";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
 const signUpEmailBodySchema = z
 	.object({
-		name: z.string().nonempty(),
+		name: z.string(),
 		email: z.email(),
 		password: z.string().nonempty(),
 		image: z.string().optional(),
@@ -31,6 +32,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			operationId: "signUpWithEmailAndPassword",
 			use: [formCsrfMiddleware],
 			body: signUpEmailBodySchema,
+			cloneRequest: true,
 			metadata: {
 				allowedMediaTypes: [
 					"application/x-www-form-urlencoded",
@@ -47,7 +49,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					} & AdditionalUserFieldsInput<O>,
 					returned: {} as {
 						token: string | null;
-						user: InferUser<O>;
+						user: User<O["user"], O["plugins"]>;
 					},
 				},
 				openapi: {
@@ -215,7 +217,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 
 				const minPasswordLength = ctx.context.password.config.minPasswordLength;
 				if (password.length < minPasswordLength) {
-					ctx.context.logger.error("Password is too short");
+					ctx.context.logger.warn("Password is too short");
 					throw APIError.from(
 						"BAD_REQUEST",
 						BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
@@ -224,17 +226,105 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 
 				const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
 				if (password.length > maxPasswordLength) {
-					ctx.context.logger.error("Password is too long");
+					ctx.context.logger.warn("Password is too long");
 					throw APIError.from(
 						"BAD_REQUEST",
 						BASE_ERROR_CODES.PASSWORD_TOO_LONG,
 					);
 				}
-				const dbUser = await ctx.context.internalAdapter.findUserByEmail(email);
+				const shouldReturnGenericDuplicateResponse =
+					ctx.context.options.emailAndPassword.requireEmailVerification ||
+					ctx.context.options.emailAndPassword.autoSignIn === false;
+				const shouldSkipAutoSignIn =
+					ctx.context.options.emailAndPassword.autoSignIn === false ||
+					shouldReturnGenericDuplicateResponse;
+				const additionalUserFields = parseUserInput(
+					ctx.context.options,
+					rest,
+					"create",
+				);
+				const normalizedEmail = email.toLowerCase();
+
+				// The opaque success returned when an email already exists. Reused
+				// for gate rejections under the same mode so that an existing email
+				// and a policy-rejected one are indistinguishable from a fresh
+				// sign-up, closing an account-enumeration channel.
+				const buildGenericDuplicateResponse = () => {
+					const now = new Date();
+					const generatedId =
+						ctx.context.generateId({ model: "user" }) || generateId();
+					const coreFields = {
+						name,
+						email: normalizedEmail,
+						emailVerified: false,
+						image: image ?? null,
+						createdAt: now,
+						updatedAt: now,
+					};
+
+					const customSyntheticUser =
+						ctx.context.options.emailAndPassword?.customSyntheticUser;
+
+					let syntheticUser: Record<string, unknown>;
+					if (customSyntheticUser) {
+						// Extract only user-defined additionalFields (not plugin fields)
+						const additionalFieldKeys = Object.keys(
+							ctx.context.options.user?.additionalFields ?? {},
+						);
+						const additionalFields: Record<string, unknown> = {};
+						for (const key of additionalFieldKeys) {
+							if (key in additionalUserFields) {
+								additionalFields[key] = additionalUserFields[key];
+							}
+						}
+						const customResult = customSyntheticUser({
+							coreFields,
+							additionalFields,
+							id: generatedId,
+						});
+						syntheticUser = buildSyntheticUserOutput(
+							ctx.context.options,
+							customResult,
+						);
+					} else {
+						syntheticUser = buildSyntheticUserOutput(ctx.context.options, {
+							...coreFields,
+							...additionalUserFields,
+							id: generatedId,
+						});
+					}
+
+					return ctx.json({
+						token: null,
+						user: parseUserOutput(
+							ctx.context.options,
+							syntheticUser as User,
+						) as User<O["user"], O["plugins"]>,
+					});
+				};
+
+				const dbUser =
+					await ctx.context.internalAdapter.findUserByEmail(normalizedEmail);
 				if (dbUser?.user) {
 					ctx.context.logger.info(
 						`Sign-up attempt for existing email: ${email}`,
 					);
+					if (shouldReturnGenericDuplicateResponse) {
+						/**
+						 * Hash the password to reduce timing differences
+						 * between existing and non-existing emails.
+						 */
+						await ctx.context.password.hash(password);
+						if (ctx.context.options.emailAndPassword?.onExistingUserSignUp) {
+							await ctx.context.runInBackgroundOrAwait(
+								ctx.context.options.emailAndPassword.onExistingUserSignUp(
+									{ user: dbUser.user },
+									ctx.request?.clone(),
+								),
+							);
+						}
+						return buildGenericDuplicateResponse();
+					}
 					throw APIError.from(
 						"UNPROCESSABLE_ENTITY",
 						BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
@@ -251,14 +341,16 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				const hash = await ctx.context.password.hash(password);
 				let createdUser: User;
 				try {
-					const data = parseUserInput(ctx.context.options, rest, "create");
-					createdUser = await ctx.context.internalAdapter.createUser({
-						email: email.toLowerCase(),
-						name,
-						image,
-						...data,
-						emailVerified: false,
-					});
+					createdUser = await ctx.context.internalAdapter.createUser(
+						{
+							email: normalizedEmail,
+							name,
+							image,
+							...additionalUserFields,
+							emailVerified: false,
+						},
+						{ method: "email-password" },
+					);
 					if (!createdUser) {
 						throw APIError.from(
 							"BAD_REQUEST",
@@ -266,11 +358,17 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						);
 					}
 				} catch (e) {
+					if (isAPIError(e)) {
+						// Under generic-duplicate mode, a gate rejection (403) returns the
+						// same opaque success as an existing email to prevent account
+						// enumeration.
+						if (e.statusCode === 403 && shouldReturnGenericDuplicateResponse) {
+							return buildGenericDuplicateResponse();
+						}
+						throw e;
+					}
 					if (isDevelopment()) {
 						ctx.context.logger.error("Failed to create user", e);
-					}
-					if (isAPIError(e)) {
-						throw e;
 					}
 					ctx.context.logger?.error("Failed to create user", e);
 					throw APIError.from(
@@ -290,10 +388,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					accountId: createdUser.id,
 					password: hash,
 				});
-				if (
-					ctx.context.options.emailVerification?.sendOnSignUp ||
-					ctx.context.options.emailAndPassword.requireEmailVerification
-				) {
+				const shouldSendVerificationEmail =
+					ctx.context.options.emailVerification?.sendOnSignUp ??
+					ctx.context.options.emailAndPassword.requireEmailVerification;
+				if (shouldSendVerificationEmail) {
 					const token = await createEmailVerificationToken(
 						ctx.context.secret,
 						createdUser.email,
@@ -313,22 +411,19 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 									url,
 									token,
 								},
-								ctx.request,
+								ctx.request?.clone(),
 							),
 						);
 					}
 				}
 
-				if (
-					ctx.context.options.emailAndPassword.autoSignIn === false ||
-					ctx.context.options.emailAndPassword.requireEmailVerification
-				) {
+				if (shouldSkipAutoSignIn) {
 					return ctx.json({
 						token: null,
-						user: parseUserOutput(
-							ctx.context.options,
-							createdUser,
-						) as InferUser<O>,
+						user: parseUserOutput(ctx.context.options, createdUser) as User<
+							O["user"],
+							O["plugins"]
+						>,
 					});
 				}
 
@@ -352,10 +447,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				);
 				return ctx.json({
 					token: session.token,
-					user: parseUserOutput(
-						ctx.context.options,
-						createdUser,
-					) as InferUser<O>,
+					user: parseUserOutput(ctx.context.options, createdUser) as User<
+						O["user"],
+						O["plugins"]
+					>,
 				});
 			});
 		},

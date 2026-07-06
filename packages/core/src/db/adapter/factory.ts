@@ -1,3 +1,8 @@
+import {
+	ATTR_DB_COLLECTION_NAME,
+	ATTR_DB_OPERATION_NAME,
+	withSpan,
+} from "@better-auth/core/instrumentation";
 import { createLogger, getColorDepth, TTY_COLORS } from "../../env";
 import { BetterAuthError } from "../../error";
 import type { BetterAuthOptions } from "../../types";
@@ -24,34 +29,34 @@ import type {
 } from "./types";
 import { withApplyDefault } from "./utils";
 
-export {
-	initGetDefaultModelName,
-	initGetDefaultFieldName,
-	initGetModelName,
-	initGetFieldName,
-	initGetFieldAttributes,
-	initGetIdField,
-};
 export * from "./types";
+export {
+	initGetDefaultFieldName,
+	initGetDefaultModelName,
+	initGetFieldAttributes,
+	initGetFieldName,
+	initGetIdField,
+	initGetModelName,
+};
 
 let debugLogs: { instance: string; args: any[] }[] = [];
 let transactionId = -1;
 
 const createAsIsTransaction =
-	(adapter: DBAdapter<BetterAuthOptions>) =>
-	<R>(fn: (trx: DBTransactionAdapter<BetterAuthOptions>) => Promise<R>) =>
+	<Options extends BetterAuthOptions>(adapter: DBAdapter<Options>) =>
+	<R>(fn: (trx: DBTransactionAdapter<Options>) => Promise<R>) =>
 		fn(adapter);
 
-export type AdapterFactory = (
-	options: BetterAuthOptions,
-) => DBAdapter<BetterAuthOptions>;
+export type AdapterFactory<Options extends BetterAuthOptions> = (
+	options: Options,
+) => DBAdapter<Options>;
 
 export const createAdapterFactory =
-	({
+	<Options extends BetterAuthOptions>({
 		adapter: customAdapter,
 		config: cfg,
-	}: AdapterFactoryOptions): AdapterFactory =>
-	(options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
+	}: AdapterFactoryOptions): AdapterFactory<Options> =>
+	(options: Options): DBAdapter<Options> => {
 		const uniqueAdapterFactoryInstanceId = Math.random()
 			.toString(36)
 			.substring(2, 15);
@@ -71,9 +76,7 @@ export const createAdapterFactory =
 			disableTransformJoin: cfg.disableTransformJoin ?? false,
 		} satisfies AdapterFactoryConfig;
 
-		const useNumberId =
-			options.advanced?.database?.useNumberId === true ||
-			options.advanced?.database?.generateId === "serial";
+		const useNumberId = options.advanced?.database?.generateId === "serial";
 		if (useNumberId && config.supportsNumericIds === false) {
 			throw new BetterAuthError(
 				`[${config.adapterName}] Your database or database adapter does not support numeric ids. Please disable "useNumberId" in your config.`,
@@ -128,6 +131,16 @@ export const createAdapterFactory =
 						} else if (
 							method === "deleteMany" &&
 							!config.debugLogs.deleteMany
+						) {
+							return;
+						} else if (
+							method === "consumeOne" &&
+							!config.debugLogs.consumeOne
+						) {
+							return;
+						} else if (
+							method === "incrementOne" &&
+							!config.debugLogs.incrementOne
 						) {
 							return;
 						} else if (method === "count" && !config.debugLogs.count) {
@@ -189,9 +202,7 @@ export const createAdapterFactory =
 			const fields = schema[defaultModelName]!.fields;
 
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
-			const useNumberId =
-				options.advanced?.database?.useNumberId ||
-				options.advanced?.database?.generateId === "serial";
+			const useNumberId = options.advanced?.database?.generateId === "serial";
 			fields.id = idField({
 				customModelName: defaultModelName,
 				forceAllowId: forceAllowId && "id" in data,
@@ -200,7 +211,7 @@ export const createAdapterFactory =
 				let value = data[field];
 				const fieldAttributes = fields[field];
 
-				let newFieldName: string =
+				const newFieldName: string =
 					newMappedKeys[field] || fields[field]!.fieldName || field;
 				if (
 					value === undefined &&
@@ -309,9 +320,7 @@ export const createAdapterFactory =
 				const idKey = Object.entries(newMappedKeys).find(
 					([_, v]) => v === "id",
 				)?.[0];
-				const useNumberId =
-					options.advanced?.database?.useNumberId ||
-					options.advanced?.database?.generateId === "serial";
+				const useNumberId = options.advanced?.database?.generateId === "serial";
 				tableSchema[idKey ?? "id"] = {
 					type: useNumberId ? "number" : "string",
 				};
@@ -335,7 +344,7 @@ export const createAdapterFactory =
 							newValue = await field.transform.output(newValue);
 						}
 
-						let newFieldName: string = newMappedKeys[key] || key;
+						const newFieldName: string = newMappedKeys[key] || key;
 
 						if (originalKey === "id" || field.references?.field === "id") {
 							// Even if `useNumberId` is true, we must always return a string `id` output.
@@ -392,7 +401,7 @@ export const createAdapterFactory =
 			unsafe_model = getDefaultModelName(unsafe_model);
 			// for now we just transform the base model
 			// later we append the joined models to this object.
-			let transformedData: Record<string, any> = await transformSingleOutput(
+			const transformedData: Record<string, any> = await transformSingleOutput(
 				data,
 				unsafe_model,
 				select,
@@ -443,7 +452,7 @@ export const createAdapterFactory =
 					joinedData = [joinedData];
 				}
 
-				let transformed = [];
+				const transformed = [];
 
 				if (Array.isArray(joinedData)) {
 					for (const item of joinedData) {
@@ -486,6 +495,8 @@ export const createAdapterFactory =
 				| "updateMany"
 				| "delete"
 				| "deleteMany"
+				| "consumeOne"
+				| "incrementOne"
 				| "count";
 		}): W extends undefined ? undefined : CleanedWhere[] => {
 			if (!where) return undefined as any;
@@ -497,6 +508,7 @@ export const createAdapterFactory =
 					value,
 					operator = "eq",
 					connector = "AND",
+					mode = "sensitive",
 				} = w;
 				if (operator === "in") {
 					if (!Array.isArray(value)) {
@@ -523,9 +535,7 @@ export const createAdapterFactory =
 					model: defaultModelName,
 				});
 
-				const useNumberId =
-					options.advanced?.database?.useNumberId ||
-					options.advanced?.database?.generateId === "serial";
+				const useNumberId = options.advanced?.database?.generateId === "serial";
 
 				if (
 					defaultFieldName === "id" ||
@@ -548,12 +558,32 @@ export const createAdapterFactory =
 					newValue = value.toISOString();
 				}
 
+				if (fieldAttr.type === "boolean" && typeof newValue === "string") {
+					newValue = newValue === "true";
+				}
+
+				if (fieldAttr.type === "number") {
+					if (typeof newValue === "string" && newValue.trim() !== "") {
+						const parsed = Number(newValue);
+						if (!Number.isNaN(parsed)) {
+							newValue = parsed;
+						}
+					} else if (Array.isArray(newValue)) {
+						const parsed = newValue.map((v) =>
+							typeof v === "string" && v.trim() !== "" ? Number(v) : NaN,
+						);
+						if (parsed.every((n) => !Number.isNaN(n))) {
+							newValue = parsed;
+						}
+					}
+				}
+
 				if (
 					fieldAttr.type === "boolean" &&
-					typeof value === "boolean" &&
+					typeof newValue === "boolean" &&
 					!config.supportsBooleans
 				) {
-					newValue = value ? 1 : 0;
+					newValue = newValue ? 1 : 0;
 				}
 
 				if (
@@ -589,6 +619,7 @@ export const createAdapterFactory =
 					connector,
 					field: fieldName,
 					value: newValue,
+					mode,
 				} satisfies CleanedWhere;
 			}) as any;
 		};
@@ -753,20 +784,36 @@ export const createAdapterFactory =
 			});
 			try {
 				if (joinConfig.relation === "one-to-one") {
-					result = await adapterInstance.findOne<Record<string, any>>({
-						model: modelName,
-						where: where,
-					});
+					result = await withSpan(
+						`db findOne ${modelName}`,
+						{
+							[ATTR_DB_OPERATION_NAME]: "findOne",
+							[ATTR_DB_COLLECTION_NAME]: modelName,
+						},
+						() =>
+							adapterInstance.findOne<Record<string, any>>({
+								model: modelName,
+								where: where,
+							}),
+					);
 				} else {
 					const limit =
 						joinConfig.limit ??
 						options.advanced?.database?.defaultFindManyLimit ??
 						100;
-					result = await adapterInstance.findMany<Record<string, any>>({
-						model: modelName,
-						where: where,
-						limit,
-					});
+					result = await withSpan(
+						`db findMany ${modelName}`,
+						{
+							[ATTR_DB_OPERATION_NAME]: "findMany",
+							[ATTR_DB_COLLECTION_NAME]: modelName,
+						},
+						() =>
+							adapterInstance.findMany<Record<string, any>>({
+								model: modelName,
+								where: where,
+								limit,
+							}),
+					);
 				}
 			} catch (error) {
 				logger.error(`Failed to query fallback join for model ${modelName}:`, {
@@ -793,10 +840,8 @@ export const createAdapterFactory =
 			transformWhereClause,
 		});
 
-		let lazyLoadTransaction:
-			| DBAdapter<BetterAuthOptions>["transaction"]
-			| null = null;
-		const adapter: DBAdapter<BetterAuthOptions> = {
+		let lazyLoadTransaction: DBAdapter<Options>["transaction"] | null = null;
+		const adapter: DBAdapter<Options> = {
 			transaction: async (cb) => {
 				if (!lazyLoadTransaction) {
 					if (!config.transaction) {
@@ -822,7 +867,7 @@ export const createAdapterFactory =
 				forceAllowId?: boolean;
 			}): Promise<R> => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				unsafeModel = getDefaultModelName(unsafeModel);
 				if (
@@ -869,7 +914,14 @@ export const createAdapterFactory =
 					`${formatMethod("create")} ${formatAction("Parsed Input")}:`,
 					{ model, data },
 				);
-				const res = await adapterInstance.create<T>({ data, model });
+				const res = await withSpan(
+					`db create ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "create",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() => adapterInstance.create<T>({ data, model }),
+				);
 				debugLog(
 					{ method: "create" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 4)}`,
@@ -903,7 +955,7 @@ export const createAdapterFactory =
 				update: Record<string, any>;
 			}): Promise<T | null> => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				unsafeModel = getDefaultModelName(unsafeModel);
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
@@ -911,6 +963,11 @@ export const createAdapterFactory =
 					where: unsafeWhere,
 					action: "update",
 				});
+				// `update` targets a single row. Empty predicates have no
+				// target, so fail closed and leave bulk writes to `updateMany`.
+				if (where.length === 0) {
+					return null;
+				}
 				debugLog(
 					{ method: "update" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 4)}`,
@@ -927,11 +984,19 @@ export const createAdapterFactory =
 					`${formatMethod("update")} ${formatAction("Parsed Input")}:`,
 					{ model, data },
 				);
-				const res = await adapterInstance.update<T>({
-					model,
-					where,
-					update: data,
-				});
+				const res = await withSpan(
+					`db update ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "update",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() =>
+						adapterInstance.update<T>({
+							model,
+							where,
+							update: data,
+						}),
+				);
 				debugLog(
 					{ method: "update" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 4)}`,
@@ -965,7 +1030,7 @@ export const createAdapterFactory =
 				update: Record<string, any>;
 			}) => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
@@ -990,11 +1055,27 @@ export const createAdapterFactory =
 					{ model, data },
 				);
 
-				const updatedCount = await adapterInstance.updateMany({
-					model,
-					where,
-					update: data,
-				});
+				const updatedCount = await withSpan(
+					`db updateMany ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "updateMany",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() =>
+						adapterInstance.updateMany({
+							model,
+							where,
+							update: data,
+						}),
+				);
+				if (
+					typeof updatedCount !== "number" ||
+					!Number.isFinite(updatedCount)
+				) {
+					throw new BetterAuthError(
+						`Adapter "${config.adapterId}" updateMany must return a finite number affected row count.`,
+					);
+				}
 				debugLog(
 					{ method: "updateMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 4)}`,
@@ -1021,7 +1102,7 @@ export const createAdapterFactory =
 				join?: JoinOption;
 			}) => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
@@ -1053,12 +1134,20 @@ export const createAdapterFactory =
 					{ model, where, select, join },
 				);
 
-				const res = await adapterInstance.findOne<T>({
-					model,
-					where,
-					select,
-					join: passJoinToAdapter ? join : undefined,
-				});
+				const res = await withSpan(
+					`db findOne ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "findOne",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() =>
+						adapterInstance.findOne<T>({
+							model,
+							where,
+							select,
+							join: passJoinToAdapter ? join : undefined,
+						}),
+				);
 				debugLog(
 					{ method: "findOne" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
@@ -1083,6 +1172,7 @@ export const createAdapterFactory =
 				model: unsafeModel,
 				where: unsafeWhere,
 				limit: unsafeLimit,
+				select,
 				sortBy,
 				offset,
 				join: unsafeJoin,
@@ -1090,12 +1180,13 @@ export const createAdapterFactory =
 				model: string;
 				where?: Where[];
 				limit?: number;
+				select?: string[] | undefined;
 				sortBy?: { field: string; direction: "asc" | "desc" };
 				offset?: number;
 				join?: JoinOption;
 			}) => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const limit =
 					unsafeLimit ??
 					options.advanced?.database?.defaultFindManyLimit ??
@@ -1110,13 +1201,10 @@ export const createAdapterFactory =
 				let join: JoinConfig | undefined;
 				let passJoinToAdapter = true;
 				if (!config.disableTransformJoin) {
-					const result = transformJoinClause(
-						unsafeModel,
-						unsafeJoin,
-						undefined,
-					);
+					const result = transformJoinClause(unsafeModel, unsafeJoin, select);
 					if (result) {
 						join = result.join;
+						select = result.select;
 					}
 					// If adapter doesn't support joins and we have joins, don't pass them to the adapter
 					const experimentalJoins = options.experimental?.joins;
@@ -1133,14 +1221,23 @@ export const createAdapterFactory =
 					`${formatMethod("findMany")}:`,
 					{ model, where, limit, sortBy, offset, join },
 				);
-				const res = await adapterInstance.findMany<T>({
-					model,
-					where,
-					limit: limit,
-					sortBy,
-					offset,
-					join: passJoinToAdapter ? join : undefined,
-				});
+				const res = await withSpan(
+					`db findMany ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "findMany",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() =>
+						adapterInstance.findMany<T>({
+							model,
+							where,
+							limit: limit,
+							select,
+							sortBy,
+							offset,
+							join: passJoinToAdapter ? join : undefined,
+						}),
+				);
 				debugLog(
 					{ method: "findMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
@@ -1173,7 +1270,7 @@ export const createAdapterFactory =
 				where: Where[];
 			}) => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
@@ -1187,10 +1284,14 @@ export const createAdapterFactory =
 					`${formatMethod("delete")}:`,
 					{ model, where },
 				);
-				await adapterInstance.delete({
-					model,
-					where,
-				});
+				await withSpan(
+					`db delete ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "delete",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() => adapterInstance.delete({ model, where }),
+				);
 				debugLog(
 					{ method: "delete" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 2)}`,
@@ -1206,7 +1307,7 @@ export const createAdapterFactory =
 				where: Where[];
 			}) => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
@@ -1220,10 +1321,14 @@ export const createAdapterFactory =
 					`${formatMethod("deleteMany")} ${formatAction("DeleteMany")}:`,
 					{ model, where },
 				);
-				const res = await adapterInstance.deleteMany({
-					model,
-					where,
-				});
+				const res = await withSpan(
+					`db deleteMany ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "deleteMany",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() => adapterInstance.deleteMany({ model, where }),
+				);
 				debugLog(
 					{ method: "deleteMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 2)}`,
@@ -1231,6 +1336,167 @@ export const createAdapterFactory =
 					{ model, data: res },
 				);
 				return res;
+			},
+			consumeOne: async <T>({
+				model: unsafeModel,
+				where: unsafeWhere,
+			}: {
+				model: string;
+				where: Where[];
+			}): Promise<T | null> => {
+				transactionId++;
+				const thisTransactionId = transactionId;
+				const model = getModelName(unsafeModel);
+				const where = transformWhereClause({
+					model: unsafeModel,
+					where: unsafeWhere,
+					action: "consumeOne",
+				});
+				unsafeModel = getDefaultModelName(unsafeModel);
+				debugLog(
+					{ method: "consumeOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
+					`${formatMethod("consumeOne")} ${formatAction("ConsumeOne")}:`,
+					{ model, where },
+				);
+
+				if (typeof adapterInstance.consumeOne !== "function") {
+					throw new BetterAuthError(
+						`Adapter "${config.adapterId}" must implement consumeOne for atomic single-use credential consumption.`,
+					);
+				}
+				const res = await withSpan(
+					`db consumeOne ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "consumeOne",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() => adapterInstance.consumeOne<T>({ model, where }),
+				);
+
+				debugLog(
+					{ method: "consumeOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
+					`${formatMethod("consumeOne")} ${formatAction("DB Result")}:`,
+					{ model, data: res },
+				);
+				let transformed: any = res;
+				if (!config.disableTransformOutput && res) {
+					transformed = await transformOutput(
+						res as Record<string, any>,
+						unsafeModel,
+						undefined,
+						undefined,
+					);
+				}
+				debugLog(
+					{ method: "consumeOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
+					`${formatMethod("consumeOne")} ${formatAction("Parsed Result")}:`,
+					{ model, data: transformed },
+				);
+				return transformed as T | null;
+			},
+			incrementOne: async <T>({
+				model: unsafeModel,
+				where: unsafeWhere,
+				increment: unsafeIncrement,
+				set: unsafeSet,
+			}: {
+				model: string;
+				where: Where[];
+				increment: Record<string, number>;
+				set?: Record<string, unknown> | undefined;
+			}): Promise<T | null> => {
+				const hasIncrement = Object.keys(unsafeIncrement).length > 0;
+				const hasSet = !!unsafeSet && Object.keys(unsafeSet).length > 0;
+				if (!hasIncrement && !hasSet) {
+					// An empty `increment` and empty `set` compiles to `UPDATE ... SET `
+					// with no assignments, which is a syntax error on kysely, drizzle, and
+					// Prisma. Fail fast with an actionable message instead.
+					throw new BetterAuthError(
+						"incrementOne requires a non-empty `increment` or `set`; both were empty.",
+					);
+				}
+				transactionId++;
+				const thisTransactionId = transactionId;
+				const model = getModelName(unsafeModel);
+				const where = transformWhereClause({
+					model: unsafeModel,
+					where: unsafeWhere,
+					action: "incrementOne",
+				});
+				unsafeModel = getDefaultModelName(unsafeModel);
+				debugLog(
+					{ method: "incrementOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
+					`${formatMethod("incrementOne")} ${formatAction("IncrementOne")}:`,
+					{ model, where, increment: unsafeIncrement, set: unsafeSet },
+				);
+
+				if (typeof adapterInstance.incrementOne !== "function") {
+					throw new BetterAuthError(
+						`Adapter "${config.adapterId}" must implement incrementOne for atomic guarded counter updates.`,
+					);
+				}
+				const mappedKeys = config.mapKeysTransformInput ?? {};
+				const increment: Record<string, number> = {};
+				for (const [field, delta] of Object.entries(unsafeIncrement)) {
+					increment[
+						mappedKeys[field] || getFieldName({ model: unsafeModel, field })
+					] = delta;
+				}
+				let set: Record<string, unknown> | undefined;
+				if (unsafeSet && !config.disableTransformInput) {
+					set = await transformInput(unsafeSet, unsafeModel, "update");
+				} else {
+					set = unsafeSet;
+				}
+				if (
+					Object.keys(increment).length === 0 &&
+					(!set || Object.keys(set).length === 0)
+				) {
+					throw new BetterAuthError(
+						"incrementOne resolved to an empty update: every increment/set field was unknown to the schema or transformed away.",
+					);
+				}
+				const res = await withSpan(
+					`db incrementOne ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "incrementOne",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() =>
+						adapterInstance.incrementOne<T>({
+							model,
+							where,
+							increment,
+							set,
+						}),
+				);
+
+				debugLog(
+					{ method: "incrementOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
+					`${formatMethod("incrementOne")} ${formatAction("DB Result")}:`,
+					{ model, data: res },
+				);
+				let transformed: any = res;
+				if (!config.disableTransformOutput && res) {
+					transformed = await transformOutput(
+						res as Record<string, any>,
+						unsafeModel,
+						undefined,
+						undefined,
+					);
+				}
+				debugLog(
+					{ method: "incrementOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
+					`${formatMethod("incrementOne")} ${formatAction("Parsed Result")}:`,
+					{ model, data: transformed },
+				);
+				return transformed as T | null;
 			},
 			count: async ({
 				model: unsafeModel,
@@ -1240,7 +1506,7 @@ export const createAdapterFactory =
 				where?: Where[];
 			}) => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
@@ -1257,10 +1523,14 @@ export const createAdapterFactory =
 						where,
 					},
 				);
-				const res = await adapterInstance.count({
-					model,
-					where,
-				});
+				const res = await withSpan(
+					`db count ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "count",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() => adapterInstance.count({ model, where }),
+				);
 				debugLog(
 					{ method: "count" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 2)}`,
@@ -1284,42 +1554,6 @@ export const createAdapterFactory =
 							delete tables.session;
 						}
 
-						if (
-							options.rateLimit &&
-							options.rateLimit.storage === "database" &&
-							// rate-limit will default to enabled in production,
-							// and given storage is database, it will try to use the rate-limit table,
-							// so we should make sure to generate rate-limit table schema
-							(typeof options.rateLimit.enabled === "undefined" ||
-								// and of course if they forcefully set to true, then they want rate-limit,
-								// thus we should also generate rate-limit table schema
-								options.rateLimit.enabled === true)
-						) {
-							tables.ratelimit = {
-								modelName: options.rateLimit.modelName ?? "ratelimit",
-								fields: {
-									key: {
-										type: "string",
-										unique: true,
-										required: true,
-										fieldName: options.rateLimit.fields?.key ?? "key",
-									},
-									count: {
-										type: "number",
-										required: true,
-										fieldName: options.rateLimit.fields?.count ?? "count",
-									},
-									lastRequest: {
-										type: "number",
-										required: true,
-										bigint: true,
-										defaultValue: () => Date.now(),
-										fieldName:
-											options.rateLimit.fields?.lastRequest ?? "lastRequest",
-									},
-								},
-							};
-						}
 						return adapterInstance.createSchema!({ file, tables });
 					}
 				: undefined,
@@ -1350,7 +1584,7 @@ export const createAdapterFactory =
 								}
 
 								//`${colors.fg.blue}|${colors.reset} `,
-								let log: any[] = logs
+								const log: any[] = logs
 									.reverse()
 									.map((log) => {
 										log.args[0] = `\n${log.args[0]}`;
@@ -1390,9 +1624,3 @@ function formatMethod(method: string) {
 function formatAction(action: string) {
 	return `${TTY_COLORS.dim}(${action})${TTY_COLORS.reset}`;
 }
-
-/**
- * @deprecated Use `createAdapterFactory` instead. This export will be removed in a future version.
- * @alias
- */
-export const createAdapter = createAdapterFactory;

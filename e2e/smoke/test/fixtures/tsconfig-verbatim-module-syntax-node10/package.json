@@ -1,5 +1,5 @@
 {
-  "name": "tsconfig-verbatim-module-syntax-node10",
+  "name": "@better-auth-test/fixtures-tsconfig-verbatim-module-syntax-node10",
   "private": true,
   "type": "module",
   "scripts": {

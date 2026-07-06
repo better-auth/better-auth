@@ -1,7 +1,7 @@
-import { describe, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 
-describe("sign-out", async (it) => {
+describe("sign-out", async () => {
 	const afterSessionDeleted = vi.fn();
 	const { signInWithTestUser, client } = await getTestInstance({
 		databaseHooks: {

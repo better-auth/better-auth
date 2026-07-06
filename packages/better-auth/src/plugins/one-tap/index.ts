@@ -1,14 +1,22 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
+import {
+	isGoogleHostedDomainAllowed,
+	verifyGoogleIdToken,
+} from "@better-auth/core/social-providers";
 import * as z from "zod";
 import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
+import { parseUserOutput } from "../../db/schema";
+import { OAUTH_CALLBACK_ERROR_CODES } from "../../oauth2/errors";
+import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { toBoolean } from "../../utils/boolean";
+import { PACKAGE_VERSION } from "../../version";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"one-tap": {
 			creator: typeof oneTap;
 		};
@@ -36,11 +44,23 @@ const oneTapCallbackBodySchema = z.object({
 		description:
 			"Google ID token, which the client obtains from the One Tap API",
 	}),
+	/**
+	 * Sent so the global origin-check middleware validates the post-login
+	 * redirect target against `trustedOrigins`. Without it the client performs
+	 * an unvalidated `window.location` redirect, which is an open redirect.
+	 */
+	callbackURL: z
+		.string()
+		.meta({
+			description: "URL to redirect to after a successful sign-in",
+		})
+		.optional(),
 });
 
 export const oneTap = (options?: OneTapOptions | undefined) =>
 	({
 		id: "one-tap",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			oneTapCallback: createAuthEndpoint(
 				"/one-tap/callback",
@@ -80,119 +100,121 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 				},
 				async (ctx) => {
 					const { idToken } = ctx.body;
-					let payload: any;
-					try {
-						const JWKS = createRemoteJWKSet(
-							new URL("https://www.googleapis.com/oauth2/v3/certs"),
-						);
-						const { payload: verifiedPayload } = await jwtVerify(
-							idToken,
-							JWKS,
-							{
-								issuer: ["https://accounts.google.com", "accounts.google.com"],
-								audience:
-									options?.clientId ||
-									ctx.context.options.socialProviders?.google?.clientId,
-							},
-						);
-						payload = verifiedPayload;
-					} catch {
+					const googleProvider =
+						typeof ctx.context.options.socialProviders?.google === "function"
+							? await ctx.context.options.socialProviders?.google()
+							: ctx.context.options.socialProviders?.google;
+					// Fail closed on a missing audience: without an expected client ID,
+					// jose verifies Google's signature and issuer but not that the token
+					// was minted for this relying party, so a token issued to a different
+					// Google client would be accepted. Resolve and require it before
+					// verification.
+					const audience = options?.clientId || googleProvider?.clientId;
+					if (!audience || (Array.isArray(audience) && audience.length === 0)) {
+						throw new APIError("BAD_REQUEST", {
+							message:
+								"Google client ID is required for One Tap. Set it on the oneTap plugin (clientId) or on socialProviders.google.",
+						});
+					}
+					const payload = (await verifyGoogleIdToken({
+						token: idToken,
+						audience,
+					})) as Partial<GoogleProfile> | null;
+					if (!payload) {
 						throw new APIError("BAD_REQUEST", {
 							message: "invalid id token",
 						});
 					}
-					const { email, email_verified, name, picture, sub } = payload;
-					if (!email) {
-						return ctx.json({ error: "Email not available in token" });
-					}
-
-					const user = await ctx.context.internalAdapter.findUserByEmail(email);
-					if (!user) {
-						if (options?.disableSignup) {
-							throw new APIError("BAD_GATEWAY", {
-								message: "User not found",
-							});
-						}
-						const newUser = await ctx.context.internalAdapter.createOAuthUser(
-							{
-								email,
-								emailVerified:
-									typeof email_verified === "boolean"
-										? email_verified
-										: toBoolean(email_verified),
-								name,
-								image: picture,
-							},
-							{
-								providerId: "google",
-								accountId: sub,
-							},
-						);
-						if (!newUser) {
-							throw new APIError("INTERNAL_SERVER_ERROR", {
-								message: "Could not create user",
-							});
-						}
-						const session = await ctx.context.internalAdapter.createSession(
-							newUser.user.id,
-						);
-						await setSessionCookie(ctx, {
-							user: newUser.user,
-							session,
-						});
-						return ctx.json({
-							token: session.token,
-							user: {
-								id: newUser.user.id,
-								email: newUser.user.email,
-								emailVerified: newUser.user.emailVerified,
-								name: newUser.user.name,
-								image: newUser.user.image,
-								createdAt: newUser.user.createdAt,
-								updatedAt: newUser.user.updatedAt,
-							},
+					if (!payload.sub) {
+						throw new APIError("BAD_REQUEST", {
+							message: "invalid id token",
 						});
 					}
-					const account = await ctx.context.internalAdapter.findAccount(sub);
-					if (!account) {
-						const accountLinking = ctx.context.options.account?.accountLinking;
-						const shouldLinkAccount =
-							accountLinking?.enabled !== false &&
-							(accountLinking?.trustedProviders?.includes("google") ||
-								email_verified);
-						if (shouldLinkAccount) {
-							await ctx.context.internalAdapter.linkAccount({
-								userId: user.user.id,
-								providerId: "google",
-								accountId: sub,
-								scope: "openid,profile,email",
-								idToken,
-							});
-						} else {
-							throw new APIError("UNAUTHORIZED", {
-								message: "Google sub doesn't match",
-							});
-						}
+					// Apply the configured Google hosted domain (`hd`) so One Tap
+					// matches the redirect sign-in flow, which rejects tokens whose
+					// `hd` claim is missing or outside the configured restriction.
+					const configuredHostedDomain = googleProvider?.hd;
+					if (
+						!isGoogleHostedDomainAllowed(configuredHostedDomain, payload.hd)
+					) {
+						ctx.context.logger.error(
+							`Google One Tap sign-in rejected: id token hosted domain (hd) "${
+								payload.hd ?? "<missing>"
+							}" does not satisfy the configured "hd" option "${configuredHostedDomain}".`,
+						);
+						throw new APIError("BAD_REQUEST", {
+							message: "invalid id token",
+						});
 					}
-					const session = await ctx.context.internalAdapter.createSession(
-						user.user.id,
-					);
+					const {
+						email: rawEmail,
+						email_verified,
+						name,
+						picture,
+						sub,
+					} = payload;
+					if (typeof rawEmail !== "string" || !rawEmail) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Email not available in token",
+						});
+					}
+					if (typeof sub !== "string" || !sub) {
+						throw new APIError("BAD_REQUEST", {
+							message: "invalid id token",
+						});
+					}
+					const email = rawEmail.toLowerCase();
 
-					await setSessionCookie(ctx, {
-						user: user.user,
-						session,
-					});
-					return ctx.json({
-						token: session.token,
-						user: {
-							id: user.user.id,
-							email: user.user.email,
-							emailVerified: user.user.emailVerified,
-							name: user.user.name,
-							image: user.user.image,
-							createdAt: user.user.createdAt,
-							updatedAt: user.user.updatedAt,
+					const emailVerified =
+						typeof email_verified === "boolean"
+							? email_verified
+							: toBoolean(email_verified);
+
+					// Resolve identity through the shared OAuth path so One Tap matches
+					// the redirect and `signIn.social` flows: the account that owns the
+					// Google `sub` wins, never whichever local user happens to share the
+					// token's email.
+					const result = await handleOAuthUserInfo(ctx, {
+						userInfo: {
+							id: sub,
+							email,
+							emailVerified,
+							name: typeof name === "string" ? name : "",
+							image: typeof picture === "string" ? picture : undefined,
 						},
+						account: {
+							providerId: "google",
+							accountId: sub,
+							idToken,
+							scope: "openid,profile,email",
+						},
+						disableSignUp: options?.disableSignup,
+						source: {
+							method: "oauth",
+							oauth: {
+								providerId: "google",
+								profile: payload as Record<string, unknown>,
+							},
+						},
+					});
+					if (result.error) {
+						if (
+							result.error === OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_VERIFIED
+						) {
+							throw APIError.from(
+								"FORBIDDEN",
+								BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
+							);
+						}
+						throw new APIError("UNAUTHORIZED", {
+							message: result.error,
+						});
+					}
+
+					await setSessionCookie(ctx, result.data!);
+					return ctx.json({
+						token: result.data!.session.token,
+						user: parseUserOutput(ctx.context.options, result.data!.user),
 					});
 				},
 			),

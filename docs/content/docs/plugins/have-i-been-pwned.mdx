@@ -8,13 +8,14 @@ The Have I Been Pwned plugin helps protect user accounts by preventing the use o
 ## Installation
 
 ### Add the plugin to your **auth** config
+
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 import { haveIBeenPwned } from "better-auth/plugins" // [!code highlight]
 
 export const auth = betterAuth({
     plugins: [
-        haveIBeenPwned()
+        haveIBeenPwned() // [!code highlight]
     ]
 })
 ```
@@ -26,21 +27,48 @@ When a user attempts to create an account or update their password with a compro
 ```json
 {
   "code": "PASSWORD_COMPROMISED",
-  "message": "Password is compromised"
+  "message": "The password you entered has been compromised. Please choose a different password."
 }
 ```
 
-## Config
+## Options
 
-You can customize the error message:
+### `enabled`
 
-```ts
-haveIBeenPwned({
-    customPasswordCompromisedMessage: "Please choose a more secure password."
+Enable or disable password checks against the HIBP database. Useful for skipping checks in development or testing without removing the plugin. Defaults to `true`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { haveIBeenPwned } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        haveIBeenPwned({
+            enabled: process.env.NODE_ENV === 'production' // [!code highlight]
+        })
+    ]
 })
 ```
+
+### `customPasswordCompromisedMessage`
+
+Customize the error message shown when a compromised password is detected.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { haveIBeenPwned } from "better-auth/plugins"
+
+const auth = betterAuth({
+    plugins: [
+        haveIBeenPwned({
+            customPasswordCompromisedMessage: "Please choose a more secure password." // [!code highlight]
+        })
+    ]
+})
+```
+
 ## Security Notes
 
-- Only the first 5 characters of the password hash are sent to the API
-- The full password is never transmitted
-- Provides an additional layer of account security
+* Only the first 5 characters of the password hash are sent to the API
+* The full password is never transmitted
+* Provides an additional layer of account security

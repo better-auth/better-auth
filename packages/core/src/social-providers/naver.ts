@@ -40,10 +40,11 @@ export interface NaverOptions extends ProviderOptions<NaverProfile> {
 }
 
 export const naver = (options: NaverOptions) => {
+	const tokenEndpoint = "https://nid.naver.com/oauth2.0/token";
 	return {
 		id: "naver",
 		name: "Naver",
-		createAuthorizationURL({ state, scopes, redirectURI }) {
+		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope ? [] : ["profile", "email"];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
@@ -54,6 +55,7 @@ export const naver = (options: NaverOptions) => {
 				scopes: _scopes,
 				state,
 				redirectURI,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
@@ -61,7 +63,7 @@ export const naver = (options: NaverOptions) => {
 				code,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://nid.naver.com/oauth2.0/token",
+				tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -74,7 +76,7 @@ export const naver = (options: NaverOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://nid.naver.com/oauth2.0/token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
@@ -96,7 +98,7 @@ export const naver = (options: NaverOptions) => {
 			const res = profile.response || {};
 			const user = {
 				id: res.id,
-				name: res.name || res.nickname,
+				name: res.name || res.nickname || "",
 				email: res.email,
 				image: res.profile_image,
 				emailVerified: false,

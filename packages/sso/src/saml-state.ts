@@ -1,7 +1,7 @@
 import type { GenericEndpointContext, StateData } from "better-auth";
 import { generateGenericState, parseGenericState } from "better-auth";
+import { APIError } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
-import { APIError } from "better-call";
 
 export async function generateRelayState(
 	c: GenericEndpointContext,
@@ -11,7 +11,6 @@ export async function generateRelayState(
 				userId: string;
 		  }
 		| undefined,
-	additionalData: Record<string, any> | false | undefined,
 ) {
 	const callbackURL = c.body.callbackURL;
 	if (!callbackURL) {
@@ -21,8 +20,10 @@ export async function generateRelayState(
 	}
 
 	const codeVerifier = generateRandomString(128);
+	// SAML relay state does not carry `serverContext`: no plugin sets server
+	// context on the SAML sign-in path. If that changes, merge
+	// `getOAuthServerContext()` here as `generateState` does.
 	const stateData: StateData = {
-		...(additionalData ? additionalData : {}),
 		callbackURL,
 		codeVerifier,
 		errorURL: c.body.errorCallbackURL,
@@ -61,6 +62,11 @@ export async function parseRelayState(c: GenericEndpointContext) {
 	try {
 		parsedData = await parseGenericState(c, state, {
 			cookieName: "relay_state",
+			/**
+			 * SAML ACS receives a POST from the IdP, which is typically cross-origin.
+			 * SameSite=Lax (default) cookies are not sent on cross-site POST requests.
+			 */
+			skipStateCookieCheck: true,
 		});
 	} catch (error) {
 		c.context.logger.error("Failed to parse relay state", error);

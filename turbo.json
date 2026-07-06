@@ -1,11 +1,12 @@
 {
   "$schema": "./node_modules/turbo/schema.json",
-  "globalDependencies": [
-    "package.json",
-    "tsconfig.json",
-    "pnpm-lock.yaml",
-    "pnpm-workspace.yaml"
-  ],
+  "futureFlags": {
+    "globalConfiguration": true,
+    "affectedUsingTaskInputs": true
+  },
+  "global": {
+    "inputs": ["tsconfig.json", "tsconfig.base.json", "pnpm-workspace.yaml"]
+  },
   "tasks": {
     "dev": {
       "cache": false,
@@ -13,33 +14,117 @@
     },
     "build": {
       "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "tsconfig.json", "tsdown.config.*"],
+      "outputs": ["dist/**", "node_modules/.cache/ts/**"]
+    },
+    "docs#build": {
+      "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**"],
+      "passThroughEnv": [
+        "ENABLE_EXPERIMENTAL_COREPACK",
+        "ORAMA_PRIVATE_API_KEY",
+        "ORAMA_INDEX_ID",
+        "GURUBASE_SLUG",
+        "INKEEP_API_KEY",
+        "SUPPORT_EMAIL",
+        "RESEND_API_KEY",
+        "TYPESENSE_ADMIN_API_KEY",
+        "GITHUB_TOKEN",
+        "OPENROUTER_API_KEY",
+        "UPSTASH_REDIS_REST_URL",
+        "UPSTASH_REDIS_REST_TOKEN"
+      ]
     },
-    "clean": {},
+    "clean": {
+      "cache": false
+    },
     "format": {
-      "dependsOn": ["//#format"]
+      "dependsOn": ["//#format"],
+      "cache": false
     },
-    "//#format": {},
-    "lint": {},
+    "//#format": {
+      "cache": false
+    },
+    "lint": {
+      "outputs": []
+    },
     "lint:types": {
-      "dependsOn": ["build"]
+      "dependsOn": ["^build", "build"],
+      "inputs": ["dist/**", "package.json"],
+      "outputs": []
     },
     "lint:package": {
-      "dependsOn": ["build"]
+      "dependsOn": ["^build", "build"],
+      "inputs": ["dist/**", "package.json"],
+      "outputs": []
     },
     "test": {
-      "dependsOn": ["build"]
+      "dependsOn": ["^build", "build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "src/**",
+        "test/**",
+        "tests/**",
+        "*.test.*",
+        "*.spec.*",
+        "package.json"
+      ],
+      "outputs": [".vitest/**", "coverage/**", "test-results/**"],
+      "cache": true
     },
     "coverage": {
-      "dependsOn": ["build"],
-      "outputs": ["coverage"]
+      "dependsOn": ["^build", "build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "src/**",
+        "test/**",
+        "tests/**",
+        "*.test.*",
+        "*.spec.*",
+        "package.json"
+      ],
+      "outputs": ["coverage/**", "coverage-final.json", ".nyc_output/**"]
     },
     "e2e:smoke": {
-      "dependsOn": ["build"]
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "playwright.config.*",
+        "test/**",
+        "tests/**",
+        "e2e/**",
+        "*.test.*",
+        "*.spec.*",
+        "package.json"
+      ],
+      "outputs": ["test-results/**", "playwright-report/**"],
+      "cache": false
     },
     "e2e:integration": {
-      "dependsOn": ["build"]
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "playwright.config.*",
+        "test/**",
+        "tests/**",
+        "e2e/**",
+        "*.test.*",
+        "*.spec.*",
+        "package.json"
+      ],
+      "outputs": [
+        "coverage/**",
+        "coverage-final.json",
+        ".nyc_output/**",
+        "test-results/**",
+        "playwright-report/**"
+      ],
+      "cache": false
     },
     "deploy": {
       "cache": false

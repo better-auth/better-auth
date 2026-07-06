@@ -46,7 +46,6 @@ vi.mock("./detectors/detect-project-info", () => ({
 
 beforeEach(() => {
 	vi.resetModules();
-	vi.clearAllMocks();
 	process.env.BETTER_AUTH_TELEMETRY = "";
 	process.env.BETTER_AUTH_TELEMETRY_DEBUG = "";
 });
@@ -317,5 +316,34 @@ describe("telemetry", () => {
 			// restore
 			(globalThis as any).process = originalProcess as any;
 		}
+	});
+
+	it("returns noop publisher when BETTER_AUTH_TELEMETRY_ENDPOINT is undefined", async () => {
+		// Import betterFetch mock to check it's not called
+		const { betterFetch } = await import("@better-fetch/fetch");
+
+		// Clear any previous calls to the mock
+		vi.mocked(betterFetch).mockClear();
+
+		// Ensure the environment variable is not set
+		vi.stubEnv("BETTER_AUTH_TELEMETRY_ENDPOINT", undefined);
+
+		// Create telemetry without customTrack to test actual endpoint logic
+		const telemetry = await createTelemetry(
+			{
+				baseURL: "http://localhost",
+				telemetry: { enabled: true },
+			},
+			{ skipTestCheck: true },
+		);
+
+		// The publish function should be a noop and not make any HTTP requests
+		await telemetry.publish({
+			type: "test-event",
+			payload: { test: "data" },
+		} as any);
+
+		// Verify that betterFetch was never called since endpoint is undefined
+		expect(betterFetch).not.toHaveBeenCalled();
 	});
 });

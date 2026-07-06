@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { toSnakeCase } from "@better-auth/core/utils/string";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
@@ -7,14 +8,7 @@ import prettier from "prettier";
 import type { SchemaGenerator } from "./types";
 
 function convertToSnakeCase(str: string, camelCase?: boolean) {
-	if (camelCase) {
-		return str;
-	}
-	// Handle consecutive capitals (like ID, URL, API) by treating them as a single word
-	return str
-		.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2") // Handle AABb -> AA_Bb
-		.replace(/([a-z\d])([A-Z])/g, "$1_$2") // Handle aBb -> a_Bb
-		.toLowerCase();
+	return camelCase ? str : toSnakeCase(str);
 }
 
 function toValidIdentifier(str: string): string {
@@ -72,13 +66,34 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		usePlural: adapter.options?.adapterConfig?.usePlural,
 	});
 
+	const getSingularModelName = initGetModelName({
+		schema: tables,
+		usePlural: false,
+	});
+
 	const getFieldName = initGetFieldName({
 		schema: tables,
 		usePlural: adapter.options?.adapterConfig?.usePlural,
 	});
+	const isMigrationDisabled = (model: string) =>
+		Object.entries(tables).some(([tableKey, table]) => {
+			if (table.disableMigrations !== true) {
+				return false;
+			}
+			const customModelName = table.modelName || tableKey;
+			return (
+				model === tableKey ||
+				model === customModelName ||
+				model === getModelName(tableKey) ||
+				model === getModelName(customModelName)
+			);
+		});
 
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
+		if (isMigrationDisabled(tableKey)) {
+			continue;
+		}
 		const modelName = getModelName(tableKey);
 		const fields = table.fields;
 
@@ -91,9 +106,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			}
 			name = convertToSnakeCase(name, adapter.options?.camelCase);
 			if (field.references?.field === "id") {
-				const useNumberId =
-					options.advanced?.database?.useNumberId ||
-					options.advanced?.database?.generateId === "serial";
+				const useNumberId = options.advanced?.database?.generateId === "serial";
 				const useUUIDs = options.advanced?.database?.generateId === "uuid";
 				if (useNumberId) {
 					if (databaseType === "pg") {
@@ -119,9 +132,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			if (typeof type !== "string") {
 				if (Array.isArray(type) && type.every((x) => typeof x === "string")) {
 					return {
-						sqlite: `text({ enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
+						sqlite: `text('${name}', { enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
 						pg: `text('${name}', { enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
-						mysql: `mysqlEnum([${type.map((x) => `'${x}'`).join(", ")}])`,
+						mysql: `mysqlEnum('${name}', [${type.map((x) => `'${x}'`).join(", ")}])`,
 					}[databaseType];
 				} else {
 					throw new TypeError(
@@ -196,9 +209,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		let id: string = "";
 
-		const useNumberId =
-			options.advanced?.database?.useNumberId ||
-			options.advanced?.database?.generateId === "serial";
+		const useNumberId = options.advanced?.database?.generateId === "serial";
 		const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
 		if (useUUIDs && databaseType === "pg") {
@@ -223,12 +234,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		type Index = { type: "uniqueIndex" | "index"; name: string; on: string };
 
-		let indexes: Index[] = [];
+		const indexes: Index[] = [];
 
 		const assignIndexes = (indexes: Index[]): string => {
 			if (!indexes.length) return "";
 
-			let code: string[] = [`, (table) => [`];
+			const code: string[] = [`, (table) => [`];
 
 			for (const index of indexes) {
 				code.push(`  ${index.type}("${index.name}").on(table.${index.on}),`);
@@ -290,7 +301,22 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 										// custom logic within that function that might not work in drizzle's context.
 									}
 								} else if (typeof attr.defaultValue === "string") {
-									type += `.default("${attr.defaultValue}")`;
+									// Serialize through JSON.stringify so a value with quotes or
+									// backslashes emits valid TypeScript instead of a broken literal.
+									type += `.default(${JSON.stringify(attr.defaultValue)})`;
+								} else if (Array.isArray(attr.defaultValue)) {
+									// Stringify each element so a `["customer"]` default emits
+									// `.default(["customer"])` rather than `.default(customer)`
+									// from JS's implicit Array#toString.
+									const elements = attr.defaultValue
+										.map((value) => JSON.stringify(value))
+										.join(", ");
+									type += `.default([${elements}])`;
+								} else if (
+									typeof attr.defaultValue === "object" &&
+									attr.defaultValue !== null
+								) {
+									type += `.default(${JSON.stringify(attr.defaultValue)})`;
 								} else {
 									type += `.default(${attr.defaultValue})`;
 								}
@@ -302,11 +328,13 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 									type += `.$onUpdate(${attr.onUpdate})`;
 								}
 							}
+							const referencesDisabledModel =
+								attr.references && isMigrationDisabled(attr.references.model);
 
-							return `${fieldName}: ${type}${attr.required ? ".notNull()" : ""}${
+							return `${fieldName}: ${type}${attr.required !== false ? ".notNull()" : ""}${
 								attr.unique ? ".unique()" : ""
 							}${
-								attr.references
+								attr.references && !referencesDisabledModel
 									? `.references(()=> ${getModelName(
 											attr.references.model,
 										)}.${getFieldName({ model: attr.references.model, field: attr.references.field })}, { onDelete: '${
@@ -323,6 +351,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	let relationsString: string = "";
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
+		if (isMigrationDisabled(tableKey)) {
+			continue;
+		}
 		const modelName = getModelName(tableKey);
 
 		type Relation = {
@@ -361,7 +392,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		for (const [fieldName, field] of foreignFields) {
 			const referencedModel = field.references!.model;
-			const relationKey = getModelName(referencedModel);
+			if (isMigrationDisabled(referencedModel)) {
+				continue;
+			}
+			// Use singular form for many-to-one relation keys
+			const relationKey = getSingularModelName(referencedModel);
 			const fieldRef = `${getModelName(tableKey)}.${getFieldName({ model: tableKey, field: fieldName })}`;
 			const referenceRef = `${getModelName(referencedModel)}.${getFieldName({ model: referencedModel, field: field.references!.field || "id" })}`;
 
@@ -380,7 +415,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		// 2. Find all OTHER tables that reference THIS table (creates "many" relations)
 		const otherModels = Object.entries(tables).filter(
-			([modelName]) => modelName !== tableKey,
+			([modelName, otherTable]) =>
+				modelName !== tableKey && !otherTable.disableMigrations,
 		);
 
 		// Map to track relations by model name to determine if unique or many
@@ -586,9 +622,7 @@ function generateImport({
 		if (hasJson && hasBigint) break;
 	}
 
-	const useNumberId =
-		options.advanced?.database?.useNumberId ||
-		options.advanced?.database?.generateId === "serial";
+	const useNumberId = options.advanced?.database?.generateId === "serial";
 
 	const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
@@ -618,7 +652,7 @@ function generateImport({
 					!field.bigint,
 			),
 		);
-		const needsInt = !!useNumberId || hasNonBigintNumber;
+		const needsInt = useNumberId || hasNonBigintNumber;
 		if (needsInt) {
 			coreImports.push("int");
 		}
@@ -654,9 +688,7 @@ function generateImport({
 		// handles the references field with useNumberId
 		const needsInteger =
 			hasNonBigintNumber ||
-			((options.advanced?.database?.useNumberId ||
-				options.advanced?.database?.generateId === "serial") &&
-				hasFkToId);
+			(options.advanced?.database?.generateId === "serial" && hasFkToId);
 		if (needsInteger) {
 			coreImports.push("integer");
 		}

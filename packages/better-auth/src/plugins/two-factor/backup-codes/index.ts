@@ -1,17 +1,27 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { APIError } from "@better-auth/core/error";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
+import type { SecretConfig } from "../../../crypto";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
 import { generateRandomString } from "../../../crypto/random";
+import { parseUserOutput } from "../../../db/schema";
+import { shouldRequirePassword } from "../../../utils/password";
+import { PACKAGE_VERSION } from "../../../version";
+import { DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS } from "../constant";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type {
 	TwoFactorProvider,
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
-import { verifyTwoFactor } from "../verify-two-factor";
+import {
+	assertTwoFactorNotLocked,
+	recordTwoFactorFailure,
+	resetTwoFactorFailures,
+	verifyTwoFactor,
+} from "../verify-two-factor";
 
 export interface BackupCodeOptions {
 	/**
@@ -43,6 +53,13 @@ export interface BackupCodeOptions {
 				  }
 		  )
 		| undefined;
+	/**
+	 * Allow generating backup codes without a password when the user does not
+	 * have a credential account.
+	 * When enabled, password is still required if a credential account exists.
+	 * @default false
+	 */
+	allowPasswordless?: boolean | undefined;
 }
 
 function generateBackupCodesFn(options?: BackupCodeOptions | undefined) {
@@ -52,37 +69,34 @@ function generateBackupCodesFn(options?: BackupCodeOptions | undefined) {
 		.map((code) => `${code.slice(0, 5)}-${code.slice(5)}`);
 }
 
-export async function generateBackupCodes(
-	secret: string,
+export async function encodeBackupCodes(
+	codes: string[],
+	secret: string | SecretConfig,
 	options?: BackupCodeOptions | undefined,
-) {
-	const backupCodes = options?.customBackupCodesGenerate
-		? options.customBackupCodesGenerate()
-		: generateBackupCodesFn(options);
+): Promise<string> {
+	const json = JSON.stringify(codes);
 	if (options?.storeBackupCodes === "encrypted") {
-		const encCodes = await symmetricEncrypt({
-			data: JSON.stringify(backupCodes),
-			key: secret,
-		});
-		return {
-			backupCodes,
-			encryptedBackupCodes: encCodes,
-		};
+		return symmetricEncrypt({ data: json, key: secret });
 	}
 	if (
 		typeof options?.storeBackupCodes === "object" &&
 		"encrypt" in options?.storeBackupCodes
 	) {
-		return {
-			backupCodes,
-			encryptedBackupCodes: await options?.storeBackupCodes.encrypt(
-				JSON.stringify(backupCodes),
-			),
-		};
+		return options.storeBackupCodes.encrypt(json);
 	}
+	return json;
+}
+
+export async function generateBackupCodes(
+	secret: string | SecretConfig,
+	options?: BackupCodeOptions | undefined,
+) {
+	const backupCodes = options?.customBackupCodesGenerate
+		? options.customBackupCodesGenerate()
+		: generateBackupCodesFn(options);
 	return {
 		backupCodes,
-		encryptedBackupCodes: JSON.stringify(backupCodes),
+		encryptedBackupCodes: await encodeBackupCodes(backupCodes, secret, options),
 	};
 }
 
@@ -91,7 +105,7 @@ export async function verifyBackupCode(
 		backupCodes: string;
 		code: string;
 	},
-	key: string,
+	key: string | SecretConfig,
 	options?: BackupCodeOptions | undefined,
 ) {
 	const codes = await getBackupCodes(data.backupCodes, key, options);
@@ -109,7 +123,7 @@ export async function verifyBackupCode(
 
 export async function getBackupCodes(
 	backupCodes: string,
-	key: string,
+	key: string | SecretConfig,
 	options?: BackupCodeOptions | undefined,
 ) {
 	if (options?.storeBackupCodes === "encrypted") {
@@ -160,17 +174,22 @@ const viewBackupCodesBodySchema = z.object({
 	}),
 });
 
-const generateBackupCodesBodySchema = z.object({
-	password: z.string().meta({
-		description: "The users password.",
-	}),
-});
-
 export const backupCode2fa = (opts: BackupCodeOptions) => {
 	const twoFactorTable = "twoFactor";
+	const passwordSchema = z.string().meta({
+		description: "The users password.",
+	});
+	const generateBackupCodesBodySchema = opts.allowPasswordless
+		? z.object({
+				password: passwordSchema.optional(),
+			})
+		: z.object({
+				password: passwordSchema,
+			});
 
 	return {
 		id: "backup_code",
+		version: PACKAGE_VERSION,
 		endpoints: {
 			/**
 			 * ### Endpoint
@@ -305,8 +324,9 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { session, valid } = await verifyTwoFactor(ctx);
+					const { session, valid, beginAttempt } = await verifyTwoFactor(ctx);
 					const user = session.user as UserWithTwoFactor;
+					const isSignIn = !session.session;
 					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 						model: twoFactorTable,
 						where: [
@@ -322,30 +342,47 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 							TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						);
 					}
-					const validate = await verifyBackupCode(
-						{
-							backupCodes: twoFactor.backupCodes,
-							code: ctx.body.code,
-						},
-						ctx.context.secret,
-						opts,
-					);
-					if (!validate.status) {
+					if (isSignIn) {
+						await assertTwoFactorNotLocked(ctx, twoFactorTable, twoFactor);
+					}
+					// Enforce the per-challenge attempt budget on the sign-in path.
+					// The re-verify branch (already authenticated) is not gated.
+					const attempt = isSignIn
+						? await beginAttempt(DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS)
+						: null;
+					let validate: Awaited<ReturnType<typeof verifyBackupCode>>;
+					try {
+						validate = await verifyBackupCode(
+							{
+								backupCodes: twoFactor.backupCodes,
+								code: ctx.body.code,
+							},
+							ctx.context.secretConfig,
+							opts,
+						);
+					} catch (error) {
+						// A server error before the code is checked must not spend the slot.
+						await attempt?.restore();
+						throw error;
+					}
+					if (!validate.status || !validate.updated) {
+						await attempt?.recordFailure();
+						if (isSignIn) {
+							await recordTwoFactorFailure(ctx, twoFactorTable, twoFactor);
+						}
 						throw APIError.from(
 							"UNAUTHORIZED",
 							TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
 						);
 					}
-					const updatedBackupCodes = await symmetricEncrypt({
-						key: ctx.context.secret,
-						data: JSON.stringify(validate.updated),
-					});
+					const updatedBackupCodes = await encodeBackupCodes(
+						validate.updated,
+						ctx.context.secretConfig,
+						opts,
+					);
 
-					const updated = await ctx.context.adapter.update({
+					const updated = await ctx.context.adapter.incrementOne({
 						model: twoFactorTable,
-						update: {
-							backupCodes: updatedBackupCodes,
-						},
 						where: [
 							{
 								field: "id",
@@ -356,6 +393,10 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 								value: twoFactor.backupCodes,
 							},
 						],
+						increment: {},
+						set: {
+							backupCodes: updatedBackupCodes,
+						},
 					});
 					if (!updated) {
 						throw APIError.fromStatus("CONFLICT", {
@@ -363,20 +404,15 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						});
 					}
 
+					if (isSignIn) {
+						await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
+					}
 					if (!ctx.body.disableSession) {
 						return valid(ctx);
 					}
 					return ctx.json({
 						token: session.session?.token,
-						user: {
-							id: session.user?.id,
-							email: session.user.email,
-							emailVerified: session.user.emailVerified,
-							name: session.user.name,
-							image: session.user.image,
-							createdAt: session.user.createdAt,
-							updatedAt: session.user.updatedAt,
-						},
+						user: parseUserOutput(ctx.context.options, session.user),
 					});
 				},
 			),
@@ -443,7 +479,20 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 							TWO_FACTOR_ERROR_CODES.TWO_FACTOR_NOT_ENABLED,
 						);
 					}
-					await ctx.context.password.checkPassword(user.id, ctx);
+					const requirePassword = await shouldRequirePassword(
+						ctx,
+						user.id,
+						opts.allowPasswordless,
+					);
+					if (requirePassword) {
+						if (!ctx.body.password) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								BASE_ERROR_CODES.INVALID_PASSWORD,
+							);
+						}
+						await ctx.context.password.checkPassword(user.id, ctx);
+					}
 
 					// First, find the twoFactor record to get its id
 					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
@@ -464,7 +513,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					}
 
 					const backupCodes = await generateBackupCodes(
-						ctx.context.secret,
+						ctx.context.secretConfig,
 						opts,
 					);
 
@@ -488,9 +537,10 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 				},
 			),
 			/**
-			 * ### Endpoint
-			 *
-			 * POST `/two-factor/view-backup-codes`
+			 * A server-only function that returns a user's decrypted two-factor
+			 * backup codes. It is not exposed over HTTP and has no client method;
+			 * call it from trusted server code with a `userId` taken from an
+			 * authenticated session.
 			 *
 			 * ### API Methods
 			 *
@@ -499,7 +549,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 			 *
 			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/2fa#api-method-two-factor-view-backup-codes)
 			 */
-			viewBackupCodes: createAuthEndpoint(
+			viewBackupCodes: createAuthEndpoint.serverOnly(
 				{
 					method: "POST",
 					body: viewBackupCodesBodySchema,
@@ -522,7 +572,7 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					}
 					const decryptedBackupCodes = await getBackupCodes(
 						twoFactor.backupCodes,
-						ctx.context.secret,
+						ctx.context.secretConfig,
 						opts,
 					);
 

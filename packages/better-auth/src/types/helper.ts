@@ -1,13 +1,7 @@
-import type { Primitive } from "@better-auth/core";
-
-export type LiteralNumber = 0 | (number & Record<never, never>);
-
-export type OmitId<T extends { id: unknown }> = Omit<T, "id">;
+export type IsAny<T> = 0 extends 1 & T ? true : false;
 
 export type Prettify<T> = Omit<T, never>;
-export type PreserveJSDoc<T> = {
-	[K in keyof T]: T[K];
-} & {};
+
 export type PrettifyDeep<T> = {
 	[K in keyof T]: T[K] extends (...args: any[]) => any
 		? T[K]
@@ -19,9 +13,6 @@ export type PrettifyDeep<T> = {
 					: PrettifyDeep<T[K]>
 			: T[K];
 } & {};
-export type LiteralUnion<LiteralType, BaseType extends Primitive> =
-	| LiteralType
-	| (BaseType & Record<never, never>);
 
 export type UnionToIntersection<U> = (
 	U extends any
@@ -40,18 +31,57 @@ export type RequiredKeysOf<BaseType extends object> = Exclude<
 	undefined
 >;
 
-export type HasRequiredKeys<BaseType extends object> =
-	RequiredKeysOf<BaseType> extends never ? false : true;
-export type WithoutEmpty<T> = T extends T ? ({} extends T ? never : T) : never;
+export type HasRequiredKeys<BaseType> =
+	IsAny<BaseType> extends true
+		? false
+		: [BaseType] extends [object]
+			? RequiredKeysOf<BaseType & object> extends never
+				? false
+				: true
+			: false;
 
-export type StripEmptyObjects<T> = T extends { [K in keyof T]: never }
-	? never
-	: T extends object
-		? { [K in keyof T as T[K] extends never ? never : K]: T[K] }
-		: T;
-export type DeepPartial<T> = T extends Function
-	? T
-	: T extends object
-		? { [K in keyof T]?: DeepPartial<T[K]> }
-		: T;
-export type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never;
+export type StripEmptyObjects<T extends object> = { [K in keyof T]: T[K] };
+
+/**
+ * Object merge replacing `Base`'s keys with `Override`'s.
+ * The naive `Omit<Base, keyof Override> & Override` form breaks under generics.
+ *
+ * @see https://github.com/microsoft/TypeScript/issues/57466#issuecomment-1957988380
+ */
+export type OverrideMerge<Base, Override> = Base extends unknown
+	? Override extends unknown
+		? Prettify<
+				{
+					[K in keyof Base as K extends keyof Override ? never : K]: Base[K];
+				} & Override
+			>
+		: never
+	: never;
+
+/**
+ * Extracts a Record-typed field from a plugin, guarding against `any`.
+ */
+export type ExtractPluginField<T, Field extends string> =
+	IsAny<T> extends true
+		? {}
+		: T extends { [K in Field]?: Record<string, any> }
+			? T[Field] extends Record<string, any>
+				? T[Field]
+				: {}
+			: {};
+
+/**
+ * Walks a plugin tuple with tail-recursive accumulator (TS 4.5+),
+ * extracting and intersecting the given field from each element.
+ */
+export type InferPluginFieldFromTuple<
+	T extends readonly unknown[],
+	Field extends string,
+	Acc = {},
+> = T extends readonly [infer Head, ...infer Tail]
+	? InferPluginFieldFromTuple<
+			Tail,
+			Field,
+			Acc & ExtractPluginField<Head, Field>
+		>
+	: Acc;

@@ -1,25 +1,57 @@
 import { base64Url } from "@better-auth/utils/base64";
-import type { Account, DBAdapter, User } from "better-auth";
+import type {
+	Account,
+	DBAdapter,
+	GenericEndpointContext,
+	User,
+} from "better-auth";
 import { HIDE_METADATA } from "better-auth";
-import { APIError, sessionMiddleware } from "better-auth/api";
+import {
+	APIError,
+	createAuthEndpoint,
+	sessionMiddleware,
+} from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import type { Member } from "better-auth/plugins";
-import { createAuthEndpoint } from "better-auth/plugins";
+import { getOrgAdapter } from "better-auth/plugins";
 import * as z from "zod";
-import { getAccountId, getUserFullName, getUserPrimaryEmail } from "./mappings";
+import {
+	applySCIMGroupPatch,
+	createSCIMGroupResource,
+	deleteSCIMGroupResource,
+	findSCIMGroupResource,
+	listSCIMGroupReferencesByUser,
+	listSCIMGroupResources,
+	listUserSCIMGroupReferences,
+	removeUserFromSCIMGroups,
+	replaceSCIMGroupResource,
+} from "./group-provisioning";
+import {
+	APIGroupSchema,
+	OpenAPIGroupResourceSchema,
+	SCIMGroupResourceSchema,
+	SCIMGroupResourceType,
+} from "./group-schemas";
+import {
+	getAccountId,
+	getUserFullName,
+	getUserPrimaryEmail,
+	scimAccountProviderId,
+	scimProviderKey,
+} from "./mappings";
 import type { AuthMiddleware } from "./middlewares";
 import { buildUserPatch } from "./patch-operations";
 import { SCIMAPIError, SCIMErrorOpenAPISchemas } from "./scim-error";
-import type { DBFilter } from "./scim-filters";
+import type { SCIMFilterWhere } from "./scim-filters";
 import { parseSCIMUserFilter, SCIMParseError } from "./scim-filters";
 import {
 	ResourceTypeOpenAPISchema,
 	SCIMSchemaOpenAPISchema,
 	ServiceProviderOpenAPISchema,
 } from "./scim-metadata";
-import { createUserResource } from "./scim-resources";
+import { createGroupResource, createUserResource } from "./scim-resources";
 import { storeSCIMToken } from "./scim-tokens";
-import type { SCIMOptions, SCIMProvider } from "./types";
+import type { SCIMGroupRoleGrant, SCIMOptions, SCIMProvider } from "./types";
 import {
 	APIUserSchema,
 	OpenAPIUserResourceSchema,
@@ -28,17 +60,472 @@ import {
 } from "./user-schemas";
 import { getResourceURL } from "./utils";
 
-const supportedSCIMSchemas = [SCIMUserResourceSchema];
-const supportedSCIMResourceTypes = [SCIMUserResourceType];
+const supportedSCIMSchemas = [SCIMUserResourceSchema, SCIMGroupResourceSchema];
+const supportedSCIMResourceTypes = [
+	SCIMUserResourceType,
+	SCIMGroupResourceType,
+];
 const supportedMediaTypes = ["application/json", "application/scim+json"];
+type SCIMWriteAdapter = Pick<
+	DBAdapter,
+	| "count"
+	| "create"
+	| "delete"
+	| "deleteMany"
+	| "findMany"
+	| "findOne"
+	| "update"
+>;
 
 const generateSCIMTokenBodySchema = z.object({
-	providerId: z.string().meta({ description: "Unique provider identifier" }),
+	providerId: z.string().min(1).meta({ description: "Provider identifier" }),
 	organizationId: z
 		.string()
-		.optional()
-		.meta({ description: "Optional organization id" }),
+		.min(1)
+		.meta({ description: "Organization the token is scoped to" }),
 });
+
+const getSCIMProviderConnectionQuerySchema = z.object({
+	providerId: z.string().min(1),
+	organizationId: z.string().min(1),
+});
+
+const deleteSCIMProviderConnectionBodySchema = z.object({
+	providerId: z.string().min(1),
+	organizationId: z.string().min(1),
+});
+
+function parseMemberRoles(role: string): string[] {
+	return role
+		.split(",")
+		.map((entry) => entry.trim())
+		.filter(Boolean);
+}
+
+function hasRequiredRole(memberRole: string, requiredRole: string[]): boolean {
+	return (
+		!requiredRole.length ||
+		parseMemberRoles(memberRole).some((role) => requiredRole.includes(role))
+	);
+}
+
+function defaultOrgRoles(ctx: GenericEndpointContext): string[] {
+	const creatorRole =
+		ctx.context.getPlugin("organization")?.options?.creatorRole;
+
+	return Array.from(new Set(["admin", creatorRole ?? "owner"]));
+}
+
+async function isOrgActionAllowed(
+	ctx: GenericEndpointContext,
+	opts: SCIMOptions,
+	payload: { user: User; member: Member | null; organizationId: string },
+): Promise<boolean> {
+	if (!payload.member) return false;
+	if (typeof opts.requiredRole === "function") {
+		return !!(await opts.requiredRole({
+			user: payload.user,
+			member: payload.member,
+			organizationId: payload.organizationId,
+			ctx,
+		}));
+	}
+	const roles = opts.requiredRole ?? defaultOrgRoles(ctx);
+	return hasRequiredRole(payload.member.role, roles);
+}
+
+/** Authorizes organization-scoped SCIM management actions. */
+async function assertOrgAccess(
+	ctx: GenericEndpointContext,
+	opts: SCIMOptions,
+	user: User,
+	organizationId: string,
+): Promise<Member> {
+	if (!ctx.context.hasPlugin("organization")) {
+		throw new APIError("FORBIDDEN", {
+			message: "Organization plugin is required to access this SCIM provider",
+		});
+	}
+	const member = await findOrganizationMember(ctx, user.id, organizationId);
+	const allowed = await isOrgActionAllowed(ctx, opts, {
+		user,
+		member,
+		organizationId,
+	});
+	if (!allowed) {
+		throw new APIError("FORBIDDEN", {
+			message: member
+				? "Insufficient role for this operation"
+				: "You are not a member of the organization",
+		});
+	}
+	return member as Member;
+}
+
+async function getUserMembershipsByOrg(
+	ctx: GenericEndpointContext,
+	userId: string,
+): Promise<Map<string, Member>> {
+	const members = await ctx.context.adapter.findMany<Member>({
+		model: "member",
+		where: [{ field: "userId", value: userId }],
+	});
+	return new Map(members.map((member) => [member.organizationId, member]));
+}
+
+function normalizeSCIMProvider(provider: SCIMProvider) {
+	return {
+		id: provider.id,
+		providerId: provider.providerId,
+		organizationId: provider.organizationId,
+	};
+}
+
+async function findOrganizationMember(
+	ctx: GenericEndpointContext,
+	userId: string,
+	organizationId: string,
+): Promise<Member | null> {
+	return ctx.context.adapter.findOne<Member>({
+		model: "member",
+		where: [
+			{
+				field: "userId",
+				value: userId,
+			},
+			{
+				field: "organizationId",
+				value: organizationId,
+			},
+		],
+	});
+}
+
+async function canLinkExistingUser(
+	ctx: GenericEndpointContext,
+	opts: SCIMOptions,
+	existingUser: User,
+	email: string,
+): Promise<boolean> {
+	const policy = opts.linkExistingUsers;
+	if (!policy) return false;
+	if (policy === true) return true;
+
+	const { organizationId, providerId } = ctx.context.scimProvider;
+
+	// Empty policy objects do not opt in to linking.
+	const hasConstraint =
+		policy.requireExistingOrgMembership === true ||
+		typeof policy.shouldLinkUser === "function";
+	if (!hasConstraint) return false;
+
+	if (policy.requireExistingOrgMembership) {
+		if (!organizationId) return false;
+		const member = await findOrganizationMember(
+			ctx,
+			existingUser.id,
+			organizationId,
+		);
+		if (!member) return false;
+	}
+
+	if (policy.shouldLinkUser) {
+		const ok = await policy.shouldLinkUser({
+			user: existingUser,
+			email,
+			provider: { providerId, organizationId },
+		});
+		if (!ok) return false;
+	}
+
+	return true;
+}
+
+async function checkSCIMProviderAccess(
+	ctx: GenericEndpointContext,
+	user: User,
+	providerId: string,
+	organizationId: string,
+	opts: SCIMOptions,
+): Promise<SCIMProvider> {
+	const provider = await ctx.context.adapter.findOne<SCIMProvider>({
+		model: "scimProvider",
+		where: [
+			{
+				field: "providerKey",
+				value: scimProviderKey({ providerId, organizationId }),
+			},
+		],
+	});
+
+	if (!provider) {
+		throw new APIError("NOT_FOUND", {
+			message: "SCIM provider not found",
+		});
+	}
+
+	await assertOrgAccess(ctx, opts, user, organizationId);
+
+	return provider;
+}
+
+async function assertSCIMEmailAvailable(
+	ctx: GenericEndpointContext,
+	email: string,
+	userId: string,
+): Promise<void> {
+	const existing = await ctx.context.adapter.findOne<User>({
+		model: "user",
+		where: [{ field: "email", value: email.toLowerCase() }],
+	});
+	if (existing && existing.id !== userId) {
+		throw new SCIMAPIError("CONFLICT", {
+			detail: "Email already in use",
+			scimType: "uniqueness",
+		});
+	}
+}
+
+async function updateSCIMUserAndAccount(
+	adapter: SCIMWriteAdapter,
+	input: {
+		userId: string;
+		accountId: string;
+		userUpdate: Record<string, unknown>;
+		accountUpdate: Record<string, unknown>;
+	},
+): Promise<[User | null, Account | null]> {
+	const updatedUser =
+		Object.keys(input.userUpdate).length > 0
+			? await adapter.update<User>({
+					model: "user",
+					where: [{ field: "id", value: input.userId }],
+					update: input.userUpdate,
+				})
+			: null;
+
+	const updatedAccount =
+		Object.keys(input.accountUpdate).length > 0
+			? await adapter.update<Account>({
+					model: "account",
+					where: [{ field: "id", value: input.accountId }],
+					update: input.accountUpdate,
+				})
+			: null;
+
+	return [updatedUser, updatedAccount];
+}
+
+async function removeOrgProvisioningState(
+	adapter: SCIMWriteAdapter,
+	{
+		member,
+		account,
+		userId,
+		organizationId,
+		providerId,
+		unlinkAccount,
+		removeSCIMGroupState,
+		removeTeamState,
+	}: {
+		member: Member | null;
+		account: Account | null;
+		userId: string;
+		organizationId: string;
+		providerId: string;
+		unlinkAccount: boolean;
+		removeSCIMGroupState: boolean;
+		removeTeamState: boolean;
+	},
+): Promise<void> {
+	if (removeSCIMGroupState) {
+		await removeUserFromSCIMGroups(adapter, {
+			providerId,
+			organizationId,
+			userId,
+		});
+	}
+	if (member) {
+		await adapter.delete({
+			model: "member",
+			where: [{ field: "id", value: member.id }],
+		});
+		if (removeTeamState) {
+			const teams = await adapter.findMany<{ id: string }>({
+				model: "team",
+				where: [{ field: "organizationId", value: organizationId }],
+			});
+			if (teams.length > 0) {
+				await adapter.deleteMany({
+					model: "teamMember",
+					where: [
+						{ field: "userId", value: member.userId },
+						{
+							field: "teamId",
+							value: teams.map((team) => team.id),
+							operator: "in",
+						},
+					],
+				});
+			}
+		}
+	}
+	if (account && unlinkAccount) {
+		await adapter.delete({
+			model: "account",
+			where: [{ field: "id", value: account.id }],
+		});
+	}
+}
+
+async function getOrgMembershipChangeContext(
+	ctx: GenericEndpointContext,
+	user: User,
+	organizationId: string,
+) {
+	const organizationPlugin = ctx.context.getPlugin("organization");
+	if (!organizationPlugin) {
+		throw new SCIMAPIError("BAD_REQUEST", {
+			detail:
+				"Organization-scoped SCIM membership changes require the organization plugin",
+		});
+	}
+	const orgOptions = organizationPlugin.options;
+	const orgAdapter = getOrgAdapter(ctx.context, orgOptions);
+	const member = await findOrganizationMember(ctx, user.id, organizationId);
+	const organization = member
+		? await orgAdapter.findOrganizationById(organizationId)
+		: null;
+
+	return { orgOptions, member, organization };
+}
+
+async function removeUserFromOrg(
+	ctx: GenericEndpointContext,
+	{
+		user,
+		account,
+		organizationId,
+		providerId,
+		unlinkAccount,
+		removeSCIMGroupState,
+		removeTeamState,
+	}: {
+		user: User;
+		account: Account | null;
+		organizationId: string;
+		providerId: string;
+		unlinkAccount: boolean;
+		removeSCIMGroupState: boolean;
+		removeTeamState: boolean;
+	},
+): Promise<void> {
+	const { orgOptions, member, organization } =
+		await getOrgMembershipChangeContext(ctx, user, organizationId);
+
+	if (member && organization) {
+		await orgOptions?.organizationHooks?.beforeRemoveMember?.({
+			member,
+			user,
+			organization,
+		});
+	}
+
+	await ctx.context.adapter.transaction(async (trx) => {
+		await removeOrgProvisioningState(trx, {
+			member,
+			account,
+			userId: user.id,
+			organizationId,
+			providerId,
+			unlinkAccount,
+			removeSCIMGroupState,
+			removeTeamState: removeTeamState && !!orgOptions?.teams?.enabled,
+		});
+	});
+
+	if (member && organization) {
+		await orgOptions?.organizationHooks?.afterRemoveMember?.({
+			member,
+			user,
+			organization,
+		});
+	}
+}
+
+async function ensureOrgMembership(
+	adapter: SCIMWriteAdapter,
+	userId: string,
+	organizationId: string,
+): Promise<void> {
+	const existing = await adapter.findOne<Member>({
+		model: "member",
+		where: [
+			{ field: "userId", value: userId },
+			{ field: "organizationId", value: organizationId },
+		],
+	});
+	if (existing) return;
+	const roleGrants = await adapter.findMany<SCIMGroupRoleGrant>({
+		model: "scimGroupRoleGrant",
+		where: [
+			{ field: "organizationId", value: organizationId },
+			{ field: "userId", value: userId },
+			{ field: "isRoleProjected", value: true },
+		],
+	});
+	const roles = Array.from(
+		new Set(["member", ...roleGrants.map((grant) => grant.role)]),
+	);
+	await adapter.create<Member>({
+		model: "member",
+		data: {
+			userId,
+			role: roles.join(","),
+			createdAt: new Date(),
+			organizationId,
+		},
+	});
+}
+
+async function revokeSessionsIfSoleOrgMembership(
+	ctx: GenericEndpointContext,
+	userId: string,
+): Promise<void> {
+	const remaining = await ctx.context.adapter.findMany<Member>({
+		model: "member",
+		where: [{ field: "userId", value: userId }],
+	});
+	if (remaining.length === 0) {
+		await ctx.context.internalAdapter.deleteUserSessions(userId);
+	}
+}
+
+function resolveSCIMActiveDeactivation(
+	ctx: GenericEndpointContext,
+	userUpdate: Record<string, unknown>,
+): boolean {
+	if (!("banned" in userUpdate)) return false;
+	const deactivating = userUpdate.banned === true;
+	if (!ctx.context.hasPlugin("admin")) {
+		if (deactivating) {
+			throw new SCIMAPIError("BAD_REQUEST", {
+				detail:
+					"Setting `active: false` requires the admin plugin, which provides the enforced disabled-user state",
+			});
+		}
+		// biome-ignore lint/performance/noDelete: the field must not reach updateUser without an admin `banned` column.
+		delete userUpdate.banned;
+		return false;
+	}
+	if (deactivating) {
+		userUpdate.banReason = "Deactivated via SCIM";
+		return true;
+	}
+	userUpdate.banReason = null;
+	userUpdate.banExpires = null;
+	return false;
+}
 
 export const generateSCIMToken = (opts: SCIMOptions) =>
 	createAuthEndpoint(
@@ -77,54 +564,40 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 			const { providerId, organizationId } = ctx.body;
 			const user = ctx.context.session.user;
 
+			// Prevent forged SCIM account namespace segments.
 			if (providerId.includes(":")) {
 				throw new APIError("BAD_REQUEST", {
 					message: "Provider id contains forbidden characters",
 				});
 			}
 
-			const isOrgPluginEnabled = ctx.context.options.plugins?.some(
-				(p) => p.id === "organization",
-			);
-
-			if (organizationId && !isOrgPluginEnabled) {
+			if (!organizationId) {
 				throw new APIError("BAD_REQUEST", {
 					message:
-						"Restricting a token to an organization requires the organization plugin",
+						"SCIM tokens must be scoped to an organization. Configure an app-level provider via `staticProviders` for single-tenant SCIM.",
 				});
 			}
 
-			let member: Member | null = null;
-			if (organizationId) {
-				member = await ctx.context.adapter.findOne<Member>({
-					model: "member",
-					where: [
-						{
-							field: "userId",
-							value: user.id,
-						},
-						{
-							field: "organizationId",
-							value: organizationId,
-						},
-					],
-				});
+			const member = await assertOrgAccess(ctx, opts, user, organizationId);
 
-				if (!member) {
+			if (opts.canGenerateToken) {
+				const allowed = await opts.canGenerateToken({
+					user,
+					providerId,
+					organizationId,
+					member,
+				});
+				if (!allowed) {
 					throw new APIError("FORBIDDEN", {
-						message: "You are not a member of the organization",
+						message: "You are not allowed to generate a SCIM token",
 					});
 				}
 			}
 
+			const providerKey = scimProviderKey({ providerId, organizationId });
 			const scimProvider = await ctx.context.adapter.findOne<SCIMProvider>({
 				model: "scimProvider",
-				where: [
-					{ field: "providerId", value: providerId },
-					...(organizationId
-						? [{ field: "organizationId", value: organizationId }]
-						: []),
-				],
+				where: [{ field: "providerKey", value: providerKey }],
 			});
 
 			if (scimProvider) {
@@ -136,7 +609,7 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 
 			const baseToken = generateRandomString(24);
 			const scimToken = base64Url.encode(
-				`${baseToken}:${providerId}${organizationId ? `:${organizationId}` : ""}`,
+				`${baseToken}:${providerId}:${organizationId}`,
 			);
 
 			if (opts.beforeSCIMTokenGenerated) {
@@ -150,8 +623,9 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 			const newSCIMProvider = await ctx.context.adapter.create<SCIMProvider>({
 				model: "scimProvider",
 				data: {
-					providerId: providerId,
-					organizationId: organizationId,
+					providerId,
+					providerKey,
+					organizationId,
 					scimToken: await storeSCIMToken(ctx, opts, baseToken),
 				},
 			});
@@ -173,7 +647,207 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 		},
 	);
 
-export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
+export const listSCIMProviderConnections = (opts: SCIMOptions) =>
+	createAuthEndpoint(
+		"/scim/list-provider-connections",
+		{
+			method: "GET",
+			use: [sessionMiddleware],
+			metadata: {
+				openapi: {
+					operationId: "listSCIMProviderConnections",
+					summary: "List SCIM providers",
+					description:
+						"Returns SCIM providers the user owns or has the required org role for.",
+					responses: {
+						"200": {
+							description: "List of SCIM providers",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											providers: {
+												type: "array",
+												items: {
+													type: "object",
+													properties: {
+														id: { type: "string" },
+														providerId: { type: "string" },
+														organizationId: {
+															type: "string",
+															nullable: true,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const user = ctx.context.session.user;
+			const membershipsByOrg = ctx.context.hasPlugin("organization")
+				? await getUserMembershipsByOrg(ctx, user.id)
+				: new Map<string, Member>();
+			const organizationIds = Array.from(membershipsByOrg.keys());
+			if (!organizationIds.length) {
+				return ctx.json({ providers: [] });
+			}
+
+			const orgProviders = await ctx.context.adapter.findMany<SCIMProvider>({
+				model: "scimProvider",
+				where: [
+					{
+						field: "organizationId",
+						value: organizationIds,
+						operator: "in",
+					},
+				],
+			});
+
+			const accessibleProviders: SCIMProvider[] = [];
+			for (const provider of orgProviders) {
+				const member = membershipsByOrg.get(provider.organizationId) ?? null;
+				const allowed = await isOrgActionAllowed(ctx, opts, {
+					user,
+					member,
+					organizationId: provider.organizationId,
+				});
+				if (allowed) accessibleProviders.push(provider);
+			}
+
+			const providers = accessibleProviders.map((p) =>
+				normalizeSCIMProvider(p),
+			);
+
+			return ctx.json({ providers });
+		},
+	);
+
+export const getSCIMProviderConnection = (opts: SCIMOptions) =>
+	createAuthEndpoint(
+		"/scim/get-provider-connection",
+		{
+			method: "GET",
+			use: [sessionMiddleware],
+			query: getSCIMProviderConnectionQuerySchema,
+			metadata: {
+				openapi: {
+					operationId: "getSCIMProviderConnection",
+					summary: "Get SCIM provider details",
+					description: "Returns details for a specific SCIM provider",
+					responses: {
+						"200": {
+							description: "SCIM provider details",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											id: { type: "string" },
+											providerId: { type: "string" },
+											organizationId: {
+												type: "string",
+												nullable: true,
+											},
+										},
+									},
+								},
+							},
+						},
+						"404": {
+							description: "Provider not found",
+						},
+						"403": {
+							description: "Access denied",
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const { providerId, organizationId } = ctx.query;
+			const user = ctx.context.session.user;
+
+			const provider = await checkSCIMProviderAccess(
+				ctx,
+				user,
+				providerId,
+				organizationId,
+				opts,
+			);
+
+			return ctx.json(normalizeSCIMProvider(provider));
+		},
+	);
+
+export const deleteSCIMProviderConnection = (opts: SCIMOptions) =>
+	createAuthEndpoint(
+		"/scim/delete-provider-connection",
+		{
+			method: "POST",
+			use: [sessionMiddleware],
+			body: deleteSCIMProviderConnectionBodySchema,
+			metadata: {
+				openapi: {
+					operationId: "deleteSCIMProviderConnection",
+					summary: "Delete SCIM provider",
+					description: "Deletes a SCIM provider and invalidates its token",
+					responses: {
+						"200": {
+							description: "SCIM provider deleted successfully",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											success: { type: "boolean" },
+										},
+									},
+								},
+							},
+						},
+						"404": {
+							description: "Provider not found",
+						},
+						"403": {
+							description: "Access denied",
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const { providerId, organizationId } = ctx.body;
+			const user = ctx.context.session.user;
+
+			const provider = await checkSCIMProviderAccess(
+				ctx,
+				user,
+				providerId,
+				organizationId,
+				opts,
+			);
+
+			await ctx.context.adapter.delete<SCIMProvider>({
+				model: "scimProvider",
+				where: [{ field: "id", value: provider.id }],
+			});
+
+			return ctx.json({ success: true });
+		},
+	);
+
+export const createSCIMUser = (
+	authMiddleware: AuthMiddleware,
+	opts: SCIMOptions,
+) =>
 	createAuthEndpoint(
 		"/scim/v2/Users",
 		{
@@ -203,14 +877,15 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 		},
 		async (ctx) => {
 			const body = ctx.body;
-			const providerId = ctx.context.scimProvider.providerId;
+			const { organizationId } = ctx.context.scimProvider;
+			const accountProviderId = scimAccountProviderId(ctx.context.scimProvider);
 			const accountId = getAccountId(body.userName, body.externalId);
 
 			const existingAccount = await ctx.context.adapter.findOne<Account>({
 				model: "account",
 				where: [
 					{ field: "accountId", value: accountId },
-					{ field: "providerId", value: providerId },
+					{ field: "providerId", value: accountProviderId },
 				],
 			});
 
@@ -221,7 +896,14 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 				});
 			}
 
-			const email = getUserPrimaryEmail(body.userName, body.emails);
+			if (body.active === false && !organizationId) {
+				resolveSCIMActiveDeactivation(ctx, { banned: true });
+			}
+
+			const email = getUserPrimaryEmail(
+				body.userName,
+				body.emails,
+			).toLowerCase();
 			const name = getUserFullName(email, body.name);
 
 			const existingUser = await ctx.context.adapter.findOne<User>({
@@ -232,41 +914,28 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 			const createAccount = (userId: string) =>
 				ctx.context.internalAdapter.createAccount({
 					userId: userId,
-					providerId: providerId,
+					providerId: accountProviderId,
 					accountId: accountId,
 					accessToken: "",
 					refreshToken: "",
 				});
 
 			const createUser = () =>
-				ctx.context.internalAdapter.createUser({
-					email,
-					name,
-				});
+				ctx.context.internalAdapter.createUser(
+					{
+						email,
+						name,
+					},
+					{ method: "scim" },
+				);
 
 			const createOrgMembership = async (userId: string) => {
-				const organizationId = ctx.context.scimProvider.organizationId;
-
-				if (organizationId) {
-					const isOrgMember = await ctx.context.adapter.findOne({
-						model: "member",
-						where: [
-							{ field: "organizationId", value: organizationId },
-							{ field: "userId", value: userId },
-						],
-					});
-
-					if (!isOrgMember) {
-						return await ctx.context.adapter.create<Member>({
-							model: "member",
-							data: {
-								userId: userId,
-								role: "member",
-								createdAt: new Date(),
-								organizationId,
-							},
-						});
-					}
+				if (organizationId && body.active !== false) {
+					await ensureOrgMembership(
+						ctx.context.adapter,
+						userId,
+						organizationId,
+					);
 				}
 			};
 
@@ -274,6 +943,18 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 			let account: Account;
 
 			if (existingUser) {
+				const allowLink = await canLinkExistingUser(
+					ctx,
+					opts,
+					existingUser,
+					email,
+				);
+				if (!allowLink) {
+					throw new SCIMAPIError("CONFLICT", {
+						detail: "User already exists",
+						scimType: "uniqueness",
+					});
+				}
 				user = existingUser;
 				account = await ctx.context.adapter.transaction<Account>(async () => {
 					const account = await createAccount(user.id);
@@ -291,10 +972,25 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 				});
 			}
 
+			if (body.active === false && !organizationId) {
+				const deactivation: Record<string, unknown> = { banned: true };
+				resolveSCIMActiveDeactivation(ctx, deactivation);
+				const banned = await ctx.context.internalAdapter.updateUser(
+					user.id,
+					deactivation,
+				);
+				if (banned) {
+					user = banned;
+				}
+				await ctx.context.internalAdapter.deleteUserSessions(user.id);
+			}
+
 			const userResource = createUserResource(
 				ctx.context.baseURL,
 				user,
 				account,
+				undefined,
+				organizationId ? body.active !== false : undefined,
 			);
 
 			ctx.setStatus(201);
@@ -335,12 +1031,12 @@ export const updateSCIMUser = (authMiddleware: AuthMiddleware) =>
 			const body = ctx.body;
 			const userId = ctx.params.userId;
 			const { organizationId, providerId } = ctx.context.scimProvider;
+			const accountProviderId = scimAccountProviderId(ctx.context.scimProvider);
 			const accountId = getAccountId(body.userName, body.externalId);
 
 			const { user, account } = await findUserById(ctx.context.adapter, {
 				userId,
-				providerId,
-				organizationId,
+				providerId: accountProviderId,
 			});
 
 			if (!user) {
@@ -349,35 +1045,115 @@ export const updateSCIMUser = (authMiddleware: AuthMiddleware) =>
 				});
 			}
 
+			const email = getUserPrimaryEmail(
+				body.userName,
+				body.emails,
+			).toLowerCase();
+			const name = getUserFullName(email, body.name);
+			const emailChanged = email !== user.email;
+
+			if (emailChanged) {
+				await assertSCIMEmailAvailable(ctx, email, userId);
+			}
+
+			const userUpdate: Record<string, unknown> = {
+				email,
+				name,
+				updatedAt: new Date(),
+			};
+			if (emailChanged) {
+				userUpdate.emailVerified = false;
+			}
+			// App-level providers map `active: false` to a global ban.
+			if (!organizationId && body.active !== undefined) {
+				userUpdate.banned = body.active === false;
+			}
+			const deactivating = organizationId
+				? false
+				: resolveSCIMActiveDeactivation(ctx, userUpdate);
+			const accountUpdate = {
+				accountId,
+				updatedAt: new Date(),
+			};
+			const orgMembershipChange =
+				organizationId && body.active === false
+					? await getOrgMembershipChangeContext(ctx, user, organizationId)
+					: null;
+
+			if (orgMembershipChange?.member && orgMembershipChange.organization) {
+				await orgMembershipChange.orgOptions?.organizationHooks?.beforeRemoveMember?.(
+					{
+						member: orgMembershipChange.member,
+						user,
+						organization: orgMembershipChange.organization,
+					},
+				);
+			}
+
+			let active: boolean | undefined;
 			const [updatedUser, updatedAccount] =
 				await ctx.context.adapter.transaction<[User | null, Account | null]>(
-					async () => {
-						const email = getUserPrimaryEmail(body.userName, body.emails);
-						const name = getUserFullName(email, body.name);
-
-						const updatedUser = await ctx.context.internalAdapter.updateUser(
+					async (trx) => {
+						if (organizationId) {
+							if (body.active === false) {
+								await removeOrgProvisioningState(trx, {
+									member: orgMembershipChange?.member ?? null,
+									account,
+									userId,
+									organizationId,
+									providerId,
+									unlinkAccount: false,
+									removeSCIMGroupState: false,
+									removeTeamState: false,
+								});
+								active = false;
+							} else if (body.active === true) {
+								await ensureOrgMembership(trx, userId, organizationId);
+								active = true;
+							}
+						}
+						return updateSCIMUserAndAccount(trx, {
 							userId,
-							{
-								email,
-								name,
-								updatedAt: new Date(),
-							},
-						);
-
-						const updatedAccount =
-							await ctx.context.internalAdapter.updateAccount(account.id, {
-								accountId,
-								updatedAt: new Date(),
-							});
-
-						return [updatedUser, updatedAccount];
+							accountId: account.id,
+							userUpdate,
+							accountUpdate,
+						});
 					},
 				);
 
+			if (orgMembershipChange?.member && orgMembershipChange.organization) {
+				await orgMembershipChange.orgOptions?.organizationHooks?.afterRemoveMember?.(
+					{
+						member: orgMembershipChange.member,
+						user,
+						organization: orgMembershipChange.organization,
+					},
+				);
+			}
+
+			if (organizationId) {
+				if (body.active === false) {
+					await revokeSessionsIfSoleOrgMembership(ctx, userId);
+				} else if (body.active !== true) {
+					active = !!(await findOrganizationMember(
+						ctx,
+						userId,
+						organizationId,
+					));
+				}
+			} else if (deactivating) {
+				await ctx.context.internalAdapter.deleteUserSessions(userId);
+			}
+
+			const groups = organizationId
+				? await listUserSCIMGroupReferences(ctx, userId)
+				: undefined;
 			const userResource = createUserResource(
 				ctx.context.baseURL,
-				updatedUser!,
-				updatedAccount,
+				updatedUser ?? user,
+				updatedAccount ?? account,
+				groups,
+				active,
 			);
 
 			return ctx.json(userResource);
@@ -430,49 +1206,85 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 			use: [authMiddleware],
 		},
 		async (ctx) => {
-			let apiFilters: DBFilter[] = parseSCIMAPIUserFilter(ctx.query?.filter);
+			const emptyListResponse = {
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+				totalResults: 0,
+				startIndex: 1,
+				itemsPerPage: 0,
+				Resources: [],
+			} as const;
 
-			ctx.context.logger.info("Querying result with filters: ", apiFilters);
+			const apiFilters: SCIMFilterWhere[] = parseSCIMAPIUserFilter(
+				ctx.query?.filter,
+			);
 
-			const providerId = ctx.context.scimProvider.providerId;
+			const accountProviderId = scimAccountProviderId(ctx.context.scimProvider);
 			const accounts = await ctx.context.adapter.findMany<Account>({
 				model: "account",
-				where: [{ field: "providerId", value: providerId }],
+				where: [{ field: "providerId", value: accountProviderId }],
 			});
 
 			const accountUserIds = accounts.map((account) => account.userId);
-			let userFilters: DBFilter[] = [
+
+			if (accountUserIds.length === 0) {
+				return ctx.json(emptyListResponse);
+			}
+
+			const userFilters: SCIMFilterWhere[] = [
 				{ field: "id", value: accountUserIds, operator: "in" },
 			];
 
 			const organizationId = ctx.context.scimProvider.organizationId;
-			if (organizationId) {
-				const members = await ctx.context.adapter.findMany<Member>({
-					model: "member",
-					where: [
-						{ field: "organizationId", value: organizationId },
-						{ field: "userId", value: accountUserIds, operator: "in" },
-					],
-				});
-
-				const memberUserIds = members.map((member) => member.userId);
-				userFilters = [{ field: "id", value: memberUserIds, operator: "in" }];
-			}
 
 			const users = await ctx.context.adapter.findMany<User>({
 				model: "user",
 				where: [...userFilters, ...apiFilters],
 			});
 
+			// Deactivated org users keep their SCIM account; membership sets `active`.
+			const activeMemberIds = organizationId
+				? new Set(
+						(
+							await ctx.context.adapter.findMany<Member>({
+								model: "member",
+								where: [
+									{ field: "organizationId", value: organizationId },
+									{
+										field: "userId",
+										value: users.map((user) => user.id),
+										operator: "in",
+									},
+								],
+							})
+						).map((member) => member.userId),
+					)
+				: null;
+
+			const accountByUserId = new Map(
+				accounts.map((account) => [account.userId, account]),
+			);
+			const groupReferencesByUserId = organizationId
+				? await listSCIMGroupReferencesByUser(
+						ctx,
+						users.map((user) => user.id),
+					)
+				: new Map();
+			const resources = users.map((user) =>
+				createUserResource(
+					ctx.context.baseURL,
+					user,
+					accountByUserId.get(user.id),
+					groupReferencesByUserId.get(user.id),
+					activeMemberIds ? activeMemberIds.has(user.id) : undefined,
+				),
+			);
+
 			return ctx.json({
 				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
 				totalResults: users.length,
 				startIndex: 1,
 				itemsPerPage: users.length,
-				Resources: users.map((user) => {
-					const account = accounts.find((a) => a.userId === user.id);
-					return createUserResource(ctx.context.baseURL, user, account);
-				}),
+				Resources: resources,
 			});
 		},
 	);
@@ -506,13 +1318,12 @@ export const getSCIMUser = (authMiddleware: AuthMiddleware) =>
 		},
 		async (ctx) => {
 			const userId = ctx.params.userId;
-			const providerId = ctx.context.scimProvider.providerId;
 			const organizationId = ctx.context.scimProvider.organizationId;
+			const accountProviderId = scimAccountProviderId(ctx.context.scimProvider);
 
 			const { user, account } = await findUserById(ctx.context.adapter, {
 				userId,
-				providerId,
-				organizationId,
+				providerId: accountProviderId,
 			});
 
 			if (!user) {
@@ -521,7 +1332,16 @@ export const getSCIMUser = (authMiddleware: AuthMiddleware) =>
 				});
 			}
 
-			return ctx.json(createUserResource(ctx.context.baseURL, user, account));
+			const groups = organizationId
+				? await listUserSCIMGroupReferences(ctx, user.id)
+				: undefined;
+			const active = organizationId
+				? !!(await findOrganizationMember(ctx, user.id, organizationId))
+				: undefined;
+
+			return ctx.json(
+				createUserResource(ctx.context.baseURL, user, account, groups, active),
+			);
 		},
 	);
 
@@ -573,11 +1393,11 @@ export const patchSCIMUser = (authMiddleware: AuthMiddleware) =>
 			const userId = ctx.params.userId;
 			const organizationId = ctx.context.scimProvider.organizationId;
 			const providerId = ctx.context.scimProvider.providerId;
+			const accountProviderId = scimAccountProviderId(ctx.context.scimProvider);
 
 			const { user, account } = await findUserById(ctx.context.adapter, {
 				userId,
-				providerId,
-				organizationId,
+				providerId: accountProviderId,
 			});
 
 			if (!user) {
@@ -591,30 +1411,388 @@ export const patchSCIMUser = (authMiddleware: AuthMiddleware) =>
 				ctx.body.Operations,
 			);
 
+			// Org-scoped `active` changes membership, not a global ban.
+			let orgActive: boolean | undefined;
+			if (organizationId && "banned" in userPatch) {
+				orgActive = userPatch.banned !== true;
+				// biome-ignore lint/performance/noDelete: drop the field so an org update never writes a global ban.
+				delete userPatch.banned;
+			}
+
 			if (
 				Object.keys(userPatch).length === 0 &&
-				Object.keys(accountPatch).length === 0
+				Object.keys(accountPatch).length === 0 &&
+				orgActive === undefined
 			) {
 				throw new SCIMAPIError("BAD_REQUEST", {
 					detail: "No valid fields to update",
 				});
 			}
 
-			await Promise.all([
-				Object.keys(userPatch).length > 0
-					? ctx.context.internalAdapter.updateUser(userId, {
-							...userPatch,
-							updatedAt: new Date(),
-						})
-					: Promise.resolve(),
-				Object.keys(accountPatch).length > 0
-					? ctx.context.internalAdapter.updateAccount(account.id, {
-							...accountPatch,
-							updatedAt: new Date(),
-						})
-					: Promise.resolve(),
-			]);
+			if (
+				typeof userPatch.email === "string" &&
+				userPatch.email !== user.email
+			) {
+				await assertSCIMEmailAvailable(ctx, userPatch.email, userId);
+				userPatch.emailVerified = false;
+			}
 
+			const deactivating = organizationId
+				? false
+				: resolveSCIMActiveDeactivation(ctx, userPatch);
+			const userUpdate =
+				Object.keys(userPatch).length > 0
+					? { ...userPatch, updatedAt: new Date() }
+					: {};
+			const accountUpdate =
+				Object.keys(accountPatch).length > 0
+					? { ...accountPatch, updatedAt: new Date() }
+					: {};
+			const orgMembershipChange =
+				organizationId && orgActive === false
+					? await getOrgMembershipChangeContext(ctx, user, organizationId)
+					: null;
+
+			if (orgMembershipChange?.member && orgMembershipChange.organization) {
+				await orgMembershipChange.orgOptions?.organizationHooks?.beforeRemoveMember?.(
+					{
+						member: orgMembershipChange.member,
+						user,
+						organization: orgMembershipChange.organization,
+					},
+				);
+			}
+
+			await ctx.context.adapter.transaction(async (trx) => {
+				if (organizationId) {
+					if (orgActive === false) {
+						await removeOrgProvisioningState(trx, {
+							member: orgMembershipChange?.member ?? null,
+							account,
+							userId,
+							organizationId,
+							providerId,
+							unlinkAccount: false,
+							removeSCIMGroupState: false,
+							removeTeamState: false,
+						});
+					} else if (orgActive === true) {
+						await ensureOrgMembership(trx, userId, organizationId);
+					}
+				}
+				await updateSCIMUserAndAccount(trx, {
+					userId,
+					accountId: account.id,
+					userUpdate,
+					accountUpdate,
+				});
+			});
+
+			if (orgMembershipChange?.member && orgMembershipChange.organization) {
+				await orgMembershipChange.orgOptions?.organizationHooks?.afterRemoveMember?.(
+					{
+						member: orgMembershipChange.member,
+						user,
+						organization: orgMembershipChange.organization,
+					},
+				);
+			}
+
+			if (organizationId && orgActive === false) {
+				await revokeSessionsIfSoleOrgMembership(ctx, userId);
+			} else if (!organizationId && deactivating) {
+				await ctx.context.internalAdapter.deleteUserSessions(userId);
+			}
+
+			ctx.setStatus(204);
+			return;
+		},
+	);
+
+const listSCIMGroupsQuerySchema = z
+	.object({
+		filter: z.string().optional(),
+		startIndex: z.coerce.number().int().positive().optional(),
+		count: z.coerce.number().int().nonnegative().optional(),
+	})
+	.optional();
+
+const patchSCIMGroupBodySchema = z.object({
+	schemas: z
+		.array(z.string())
+		.refine(
+			(s) => s.includes("urn:ietf:params:scim:api:messages:2.0:PatchOp"),
+			{
+				message: "Invalid schemas for PatchOp",
+			},
+		),
+	Operations: z.array(
+		z.object({
+			op: z
+				.string()
+				.toLowerCase()
+				.default("replace")
+				.pipe(z.enum(["replace", "add", "remove"])),
+			path: z.string().optional(),
+			value: z.unknown().optional(),
+		}),
+	),
+});
+
+export const createSCIMGroup = (
+	authMiddleware: AuthMiddleware,
+	opts: SCIMOptions,
+) =>
+	createAuthEndpoint(
+		"/scim/v2/Groups",
+		{
+			method: "POST",
+			body: APIGroupSchema,
+			metadata: {
+				...HIDE_METADATA,
+				allowedMediaTypes: supportedMediaTypes,
+				openapi: {
+					summary: "Create SCIM group.",
+					description:
+						"Provision a durable SCIM Group into the linked organization.",
+					responses: {
+						"201": {
+							description: "SCIM group resource",
+							content: {
+								"application/json": {
+									schema: OpenAPIGroupResourceSchema,
+								},
+							},
+						},
+						...SCIMErrorOpenAPISchemas,
+					},
+				},
+			},
+			use: [authMiddleware],
+		},
+		async (ctx) => {
+			const groupView = await createSCIMGroupResource(ctx, opts, ctx.body);
+			const groupResource = createGroupResource(
+				ctx.context.baseURL,
+				groupView.group,
+				groupView.members,
+			);
+
+			ctx.setStatus(201);
+			ctx.setHeader("location", groupResource.meta.location);
+			return ctx.json(groupResource);
+		},
+	);
+
+export const listSCIMGroups = (authMiddleware: AuthMiddleware) =>
+	createAuthEndpoint(
+		"/scim/v2/Groups",
+		{
+			method: "GET",
+			query: listSCIMGroupsQuerySchema,
+			metadata: {
+				...HIDE_METADATA,
+				allowedMediaTypes: supportedMediaTypes,
+				openapi: {
+					summary: "List SCIM groups",
+					description:
+						"Returns durable SCIM Groups provisioned for the linked organization.",
+					responses: {
+						"200": {
+							description: "SCIM group list",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											totalResults: { type: "number" },
+											itemsPerPage: { type: "number" },
+											startIndex: { type: "number" },
+											Resources: {
+												type: "array",
+												items: OpenAPIGroupResourceSchema,
+											},
+										},
+									},
+								},
+							},
+						},
+						...SCIMErrorOpenAPISchemas,
+					},
+				},
+			},
+			use: [authMiddleware],
+		},
+		async (ctx) => {
+			const listResponse = await listSCIMGroupResources(ctx, ctx.query);
+			return ctx.json({
+				...listResponse,
+				Resources: listResponse.Resources.map((groupView) =>
+					createGroupResource(
+						ctx.context.baseURL,
+						groupView.group,
+						groupView.members,
+					),
+				),
+			});
+		},
+	);
+
+export const getSCIMGroup = (authMiddleware: AuthMiddleware) =>
+	createAuthEndpoint(
+		"/scim/v2/Groups/:groupId",
+		{
+			method: "GET",
+			metadata: {
+				...HIDE_METADATA,
+				allowedMediaTypes: supportedMediaTypes,
+				openapi: {
+					summary: "Get SCIM group details",
+					description: "Returns a provisioned SCIM Group resource.",
+					responses: {
+						"200": {
+							description: "SCIM group resource",
+							content: {
+								"application/json": {
+									schema: OpenAPIGroupResourceSchema,
+								},
+							},
+						},
+						...SCIMErrorOpenAPISchemas,
+					},
+				},
+			},
+			use: [authMiddleware],
+		},
+		async (ctx) => {
+			const groupView = await findSCIMGroupResource(ctx, ctx.params.groupId);
+			return ctx.json(
+				createGroupResource(
+					ctx.context.baseURL,
+					groupView.group,
+					groupView.members,
+				),
+			);
+		},
+	);
+
+export const updateSCIMGroup = (
+	authMiddleware: AuthMiddleware,
+	opts: SCIMOptions,
+) =>
+	createAuthEndpoint(
+		"/scim/v2/Groups/:groupId",
+		{
+			method: "PUT",
+			body: APIGroupSchema,
+			metadata: {
+				...HIDE_METADATA,
+				allowedMediaTypes: supportedMediaTypes,
+				openapi: {
+					summary: "Update SCIM group.",
+					description: "Replace a durable SCIM Group resource.",
+					responses: {
+						"200": {
+							description: "SCIM group resource",
+							content: {
+								"application/json": {
+									schema: OpenAPIGroupResourceSchema,
+								},
+							},
+						},
+						...SCIMErrorOpenAPISchemas,
+					},
+				},
+			},
+			use: [authMiddleware],
+		},
+		async (ctx) => {
+			const groupView = await replaceSCIMGroupResource(
+				ctx,
+				opts,
+				ctx.params.groupId,
+				ctx.body,
+			);
+			return ctx.json(
+				createGroupResource(
+					ctx.context.baseURL,
+					groupView.group,
+					groupView.members,
+				),
+			);
+		},
+	);
+
+export const patchSCIMGroup = (
+	authMiddleware: AuthMiddleware,
+	opts: SCIMOptions,
+) =>
+	createAuthEndpoint(
+		"/scim/v2/Groups/:groupId",
+		{
+			method: "PATCH",
+			body: patchSCIMGroupBodySchema,
+			metadata: {
+				...HIDE_METADATA,
+				allowedMediaTypes: supportedMediaTypes,
+				openapi: {
+					summary: "Patch SCIM group",
+					description: "Applies an atomic SCIM PATCH to a Group resource.",
+					responses: {
+						"200": {
+							description: "SCIM group resource",
+							content: {
+								"application/json": {
+									schema: OpenAPIGroupResourceSchema,
+								},
+							},
+						},
+						...SCIMErrorOpenAPISchemas,
+					},
+				},
+			},
+			use: [authMiddleware],
+		},
+		async (ctx) => {
+			const groupView = await applySCIMGroupPatch(
+				ctx,
+				opts,
+				ctx.params.groupId,
+				ctx.body,
+			);
+			return ctx.json(
+				createGroupResource(
+					ctx.context.baseURL,
+					groupView.group,
+					groupView.members,
+				),
+			);
+		},
+	);
+
+export const deleteSCIMGroup = (authMiddleware: AuthMiddleware) =>
+	createAuthEndpoint(
+		"/scim/v2/Groups/:groupId",
+		{
+			method: "DELETE",
+			metadata: {
+				...HIDE_METADATA,
+				allowedMediaTypes: [...supportedMediaTypes, ""],
+				openapi: {
+					summary: "Delete SCIM group",
+					description: "Deletes a SCIM Group resource and its role grants.",
+					responses: {
+						"204": {
+							description: "Delete applied successfully",
+						},
+						...SCIMErrorOpenAPISchemas,
+					},
+				},
+			},
+			use: [authMiddleware],
+		},
+		async (ctx) => {
+			await deleteSCIMGroupResource(ctx, ctx.params.groupId);
 			ctx.setStatus(204);
 			return;
 		},
@@ -646,11 +1824,11 @@ export const deleteSCIMUser = (authMiddleware: AuthMiddleware) =>
 			const userId = ctx.params.userId;
 			const providerId = ctx.context.scimProvider.providerId;
 			const organizationId = ctx.context.scimProvider.organizationId;
+			const accountProviderId = scimAccountProviderId(ctx.context.scimProvider);
 
-			const { user } = await findUserById(ctx.context.adapter, {
+			const { user, account } = await findUserById(ctx.context.adapter, {
 				userId,
-				providerId,
-				organizationId,
+				providerId: accountProviderId,
 			});
 
 			if (!user) {
@@ -659,6 +1837,31 @@ export const deleteSCIMUser = (authMiddleware: AuthMiddleware) =>
 				});
 			}
 
+			if (organizationId) {
+				await removeUserFromOrg(ctx, {
+					user,
+					account,
+					organizationId,
+					providerId,
+					unlinkAccount: true,
+					removeSCIMGroupState: true,
+					removeTeamState: true,
+				});
+				await revokeSessionsIfSoleOrgMembership(ctx, userId);
+				ctx.setStatus(204);
+				return;
+			}
+
+			const accounts = await ctx.context.internalAdapter.findAccounts(userId);
+			const hasOtherAccounts = accounts.some((a) => a.id !== account.id);
+
+			if (hasOtherAccounts) {
+				await ctx.context.internalAdapter.deleteAccount(account.id);
+				ctx.setStatus(204);
+				return;
+			}
+
+			await ctx.context.internalAdapter.deleteUserSessions(userId);
 			await ctx.context.internalAdapter.deleteUser(userId);
 
 			ctx.setStatus(204);
@@ -916,11 +2119,7 @@ export const getSCIMResourceType = createAuthEndpoint(
 
 const findUserById = async (
 	adapter: DBAdapter,
-	{
-		userId,
-		providerId,
-		organizationId,
-	}: { userId: string; providerId: string; organizationId?: string },
+	{ userId, providerId }: { userId: string; providerId: string },
 ) => {
 	const account = await adapter.findOne<Account>({
 		model: "account",
@@ -930,28 +2129,7 @@ const findUserById = async (
 		],
 	});
 
-	// Disallows access to the resource
-	// Account is not associated to the provider
-
 	if (!account) {
-		return { user: null, account: null };
-	}
-
-	let member: Member | null = null;
-	if (organizationId) {
-		member = await adapter.findOne<Member>({
-			model: "member",
-			where: [
-				{ field: "organizationId", value: organizationId },
-				{ field: "userId", value: userId },
-			],
-		});
-	}
-
-	// Disallows access to the resource
-	// Token is restricted to an org and the member is not part of it
-
-	if (organizationId && !member) {
 		return { user: null, account: null };
 	}
 
@@ -968,7 +2146,7 @@ const findUserById = async (
 };
 
 const parseSCIMAPIUserFilter = (filter?: string) => {
-	let filters: DBFilter[] = [];
+	let filters: SCIMFilterWhere[] = [];
 
 	try {
 		filters = filter ? parseSCIMUserFilter(filter) : [];

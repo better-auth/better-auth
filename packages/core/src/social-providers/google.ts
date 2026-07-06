@@ -1,10 +1,12 @@
 import { betterFetch } from "@better-fetch/fetch";
+import type { JWTPayload } from "jose";
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
+	getPrimaryClientId,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
@@ -37,7 +39,7 @@ export interface GoogleProfile {
 }
 
 export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
-	clientId: string;
+	clientId: string | string[];
 	/**
 	 * The access type to use for the authorization code request
 	 */
@@ -47,10 +49,102 @@ export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
 	 */
 	display?: ("page" | "popup" | "touch" | "wap") | undefined;
 	/**
-	 * The hosted domain of the user
+	 * The hosted domain (Google Workspace) the user must belong to.
+	 *
+	 * This is sent to Google as the `hd` authorization hint and, when set, is
+	 * also enforced against the `hd` claim of the returned id token/profile.
+	 * Set `hd: "*"` to require any Workspace hosted-domain claim. Sign-in is
+	 * rejected when the claim is missing or does not satisfy this restriction.
 	 */
 	hd?: string | undefined;
+	/**
+	 * Whether to send `include_granted_scopes=true` to Google's authorization
+	 * endpoint, which lets new access tokens cover scopes from prior grants
+	 * in addition to the ones requested for this flow. Set to `false` when
+	 * each OAuth flow should request only its own scopes.
+	 *
+	 * Defaults to `true`.
+	 *
+	 * @see https://developers.google.com/identity/protocols/oauth2/web-server#incrementalAuth
+	 */
+	includeGrantedScopes?: boolean | undefined;
 }
+
+const GOOGLE_ID_TOKEN_MAX_AGE = "1h";
+const GOOGLE_ID_TOKEN_ALGORITHM = "RS256";
+type GoogleIdTokenAlgorithm = typeof GOOGLE_ID_TOKEN_ALGORITHM;
+const GOOGLE_ID_TOKEN_ALGORITHMS: GoogleIdTokenAlgorithm[] = [
+	GOOGLE_ID_TOKEN_ALGORITHM,
+];
+
+function isGoogleIdTokenAlgorithm(
+	algorithm: unknown,
+): algorithm is GoogleIdTokenAlgorithm {
+	return GOOGLE_ID_TOKEN_ALGORITHMS.includes(
+		algorithm as GoogleIdTokenAlgorithm,
+	);
+}
+
+export interface VerifyGoogleIdTokenOptions {
+	token: string;
+	audience: string | string[];
+	nonce?: string | undefined;
+}
+
+/**
+ * Verifies a Google ID token against Google's issuer, audience, signature,
+ * expiry, and maximum token age.
+ */
+export const verifyGoogleIdToken = async ({
+	token,
+	audience,
+	nonce,
+}: VerifyGoogleIdTokenOptions): Promise<JWTPayload | null> => {
+	try {
+		const { kid, alg } = decodeProtectedHeader(token);
+		if (!isGoogleIdTokenAlgorithm(alg)) return null;
+
+		const publicKeys = await getGooglePublicKeys(kid);
+		for (const publicKey of publicKeys) {
+			try {
+				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
+					algorithms: GOOGLE_ID_TOKEN_ALGORITHMS,
+					issuer: ["https://accounts.google.com", "accounts.google.com"],
+					audience,
+					maxTokenAge: GOOGLE_ID_TOKEN_MAX_AGE,
+				});
+
+				if (nonce && jwtClaims.nonce !== nonce) {
+					return null;
+				}
+
+				return jwtClaims;
+			} catch {
+				continue;
+			}
+		}
+
+		return null;
+	} catch {
+		return null;
+	}
+};
+
+/**
+ * Checks whether Google's verified `hd` claim satisfies the configured hosted
+ * domain restriction. `hd: "*"` accepts any Google Workspace hosted domain.
+ */
+export const isGoogleHostedDomainAllowed = (
+	configuredHostedDomain: string | undefined,
+	tokenHostedDomain: unknown,
+) => {
+	if (!configuredHostedDomain) return true;
+	if (typeof tokenHostedDomain !== "string" || !tokenHostedDomain) {
+		return false;
+	}
+	if (configuredHostedDomain === "*") return true;
+	return tokenHostedDomain === configuredHostedDomain;
+};
 
 export const google = (options: GoogleOptions) => {
 	return {
@@ -63,8 +157,9 @@ export const google = (options: GoogleOptions) => {
 			redirectURI,
 			loginHint,
 			display,
+			additionalParams,
 		}) {
-			if (!options.clientId || !options.clientSecret) {
+			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
 				logger.error(
 					"Client Id and Client Secret is required for Google. Make sure to provide them in the options.",
 				);
@@ -81,7 +176,7 @@ export const google = (options: GoogleOptions) => {
 			const url = await createAuthorizationURL({
 				id: "google",
 				options,
-				authorizationEndpoint: "https://accounts.google.com/o/oauth2/auth",
+				authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
 				scopes: _scopes,
 				state,
 				codeVerifier,
@@ -92,7 +187,10 @@ export const google = (options: GoogleOptions) => {
 				loginHint,
 				hd: options.hd,
 				additionalParams: {
-					include_granted_scopes: "true",
+					...(options.includeGrantedScopes === false
+						? {}
+						: { include_granted_scopes: "true" }),
+					...(additionalParams ?? {}),
 				},
 			});
 			return url;
@@ -116,36 +214,23 @@ export const google = (options: GoogleOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://www.googleapis.com/oauth2/v4/token",
+						tokenEndpoint: "https://oauth2.googleapis.com/token",
 					});
 				},
-		async verifyIdToken(token, nonce) {
-			if (options.disableIdTokenSignIn) {
-				return false;
-			}
-			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
-			}
-
-			// Verify JWT integrity
-			// See https://developers.google.com/identity/sign-in/web/backend-auth#verify-the-integrity-of-the-id-token
-
-			const { kid, alg: jwtAlg } = decodeProtectedHeader(token);
-			if (!kid || !jwtAlg) return false;
-
-			const publicKey = await getGooglePublicKey(kid);
-			const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
-				algorithms: [jwtAlg],
-				issuer: ["https://accounts.google.com", "accounts.google.com"],
-				audience: options.clientId,
-				maxTokenAge: "1h",
-			});
-
-			if (nonce && jwtClaims.nonce !== nonce) {
-				return false;
-			}
-
-			return true;
+		idToken: {
+			// https://developers.google.com/identity/sign-in/web/backend-auth#verify-the-integrity-of-the-id-token
+			jwks: (header) => getGooglePublicKey(header.kid!),
+			issuer: ["https://accounts.google.com", "accounts.google.com"],
+			audience: options.clientId,
+			maxTokenAge: GOOGLE_ID_TOKEN_MAX_AGE,
+			// Google's `hd` authorization parameter is only a UI hint and can be
+			// removed or changed by the user. When a hosted domain is configured,
+			// the `hd` claim in the verified id token is the authoritative value
+			// and must satisfy the configured restriction, otherwise accounts
+			// outside the workspace domain would be accepted on the id_token path.
+			verifyClaims: options.hd
+				? (claims) => isGoogleHostedDomainAllowed(options.hd, claims.hd)
+				: undefined,
 		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
@@ -155,6 +240,17 @@ export const google = (options: GoogleOptions) => {
 				return null;
 			}
 			const user = decodeJwt(token.idToken) as GoogleProfile;
+			// Enforce the configured hosted domain on the callback profile path.
+			// The authorization-time `hd` value is only a UI hint; the verified
+			// token/profile claim is the authoritative Workspace signal.
+			if (!isGoogleHostedDomainAllowed(options.hd, user.hd)) {
+				logger.error(
+					`Google sign-in rejected: id token hosted domain (hd) "${
+						user.hd ?? "<missing>"
+					}" does not satisfy the configured "hd" option "${options.hd}".`,
+				);
+				return null;
+			}
 			const userMap = await options.mapProfileToUser?.(user);
 			return {
 				user: {
@@ -173,10 +269,18 @@ export const google = (options: GoogleOptions) => {
 };
 
 export const getGooglePublicKey = async (kid: string) => {
+	const [publicKey] = await getGooglePublicKeys(kid);
+	if (!publicKey) {
+		throw new Error(`JWK with kid ${kid} not found`);
+	}
+	return publicKey;
+};
+
+const getGooglePublicKeys = async (kid?: string) => {
 	const { data } = await betterFetch<{
 		keys: Array<{
 			kid: string;
-			alg: string;
+			alg?: string;
 			kty: string;
 			use: string;
 			n: string;
@@ -190,10 +294,12 @@ export const getGooglePublicKey = async (kid: string) => {
 		});
 	}
 
-	const jwk = data.keys.find((key) => key.kid === kid);
-	if (!jwk) {
+	const jwks = kid ? data.keys.filter((key) => key.kid === kid) : data.keys;
+	if (!jwks.length) {
 		throw new Error(`JWK with kid ${kid} not found`);
 	}
 
-	return await importJWK(jwk, jwk.alg);
+	return Promise.all(
+		jwks.map((jwk) => importJWK(jwk, GOOGLE_ID_TOKEN_ALGORITHM)),
+	);
 };

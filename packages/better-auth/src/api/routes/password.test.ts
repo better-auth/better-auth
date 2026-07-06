@@ -1,9 +1,9 @@
 import { APIError } from "better-call";
-import { describe, expect, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { getTestInstance } from "../../test-utils";
 import type { Account } from "../../types";
 
-describe("forget password", async (it) => {
+describe("forgot password", async () => {
 	const mockSendEmail = vi.fn();
 	const mockOnPasswordReset = vi.fn();
 	let token = "";
@@ -25,12 +25,36 @@ describe("forget password", async (it) => {
 			testWith: "sqlite",
 		},
 	);
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("should send a reset password email when enabled", async () => {
 		await client.requestPasswordReset({
 			email: testUser.email,
 			redirectTo: "http://localhost:3000",
 		});
 		expect(token.length).toBeGreaterThan(10);
+	});
+
+	it("should reject untrusted redirectTo", async () => {
+		const { client, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword() {},
+			},
+			trustedOrigins: ["http://localhost:3000"],
+			advanced: {
+				disableOriginCheck: false,
+			},
+		});
+		const res = await client.requestPasswordReset({
+			email: testUser.email,
+			redirectTo: "http://malicious.com",
+		});
+
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.message).toBe("Invalid redirectURL");
 	});
 
 	it("should fail on invalid password", async () => {
@@ -182,6 +206,61 @@ describe("forget password", async (it) => {
 		expect(res.error?.status).toBe(400);
 	});
 
+	// A single reset token is single-use: two requests racing the same valid
+	// token must yield exactly one password change. Otherwise a leaked token
+	// could still be replayed during the window between validating and deleting
+	// the verification row, letting an attacker overwrite the chosen password.
+	it("should reject a concurrent reset using the same token", async () => {
+		const email = "race-reset@email.com";
+		await client.signUp.email({
+			name: "Race Reset User",
+			email,
+			password: "originalPassword123",
+		});
+
+		await client.requestPasswordReset({
+			email,
+			redirectTo: "http://localhost:3000",
+		});
+		const raceToken = token;
+
+		const attackerPassword = "attacker-password-123";
+		const legitimatePassword = "legitimate-password-123";
+		const [first, second] = await Promise.all([
+			client.resetPassword(
+				{ newPassword: legitimatePassword },
+				{ query: { token: raceToken } },
+			),
+			client.resetPassword(
+				{ newPassword: attackerPassword },
+				{ query: { token: raceToken } },
+			),
+		]);
+
+		const results = [first, second];
+		const succeeded = results.filter((res) => res.data?.status === true);
+		const rejected = results.filter((res) => res.error?.status === 400);
+		expect(succeeded).toHaveLength(1);
+		expect(rejected).toHaveLength(1);
+
+		const winningPassword =
+			first.data?.status === true ? legitimatePassword : attackerPassword;
+		const losingPassword =
+			first.data?.status === true ? attackerPassword : legitimatePassword;
+
+		const winSignIn = await client.signIn.email({
+			email,
+			password: winningPassword,
+		});
+		expect(winSignIn.data?.user).toBeDefined();
+
+		const loseSignIn = await client.signIn.email({
+			email,
+			password: losingPassword,
+		});
+		expect(loseSignIn.error?.status).toBe(401);
+	});
+
 	it("should expire", async () => {
 		const { client, signInWithTestUser, testUser } = await getTestInstance({
 			emailAndPassword: {
@@ -318,7 +397,7 @@ describe("forget password", async (it) => {
 	});
 });
 
-describe("revoke sessions on password reset", async (it) => {
+describe("revoke sessions on password reset", async () => {
 	const mockSendEmail = vi.fn();
 	let token = "";
 
@@ -404,7 +483,7 @@ describe("revoke sessions on password reset", async (it) => {
 	});
 });
 
-describe("verify password", async (it) => {
+describe("verify password", async () => {
 	const { testUser, auth } = await getTestInstance({
 		emailAndPassword: {
 			enabled: true,

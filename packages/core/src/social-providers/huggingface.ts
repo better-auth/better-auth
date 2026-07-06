@@ -43,10 +43,17 @@ export interface HuggingFaceOptions
 }
 
 export const huggingface = (options: HuggingFaceOptions) => {
+	const tokenEndpoint = "https://huggingface.co/oauth/token";
 	return {
 		id: "huggingface",
 		name: "Hugging Face",
-		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["openid", "profile", "email"];
@@ -60,6 +67,7 @@ export const huggingface = (options: HuggingFaceOptions) => {
 				state,
 				codeVerifier,
 				redirectURI,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
@@ -68,7 +76,7 @@ export const huggingface = (options: HuggingFaceOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://huggingface.co/oauth/token",
+				tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -81,7 +89,7 @@ export const huggingface = (options: HuggingFaceOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://huggingface.co/oauth/token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
@@ -104,7 +112,7 @@ export const huggingface = (options: HuggingFaceOptions) => {
 			return {
 				user: {
 					id: profile.sub,
-					name: profile.name || profile.preferred_username,
+					name: profile.name || profile.preferred_username || "",
 					email: profile.email,
 					image: profile.picture,
 					emailVerified: profile.email_verified ?? false,

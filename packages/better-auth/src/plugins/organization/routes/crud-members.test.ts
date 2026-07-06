@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { AuthQueryAtom } from "../../../client";
 import { createAuthClient } from "../../../client";
 import { getTestInstance } from "../../../test-utils/test-instance";
 import { organizationClient } from "../client";
@@ -138,6 +139,51 @@ describe("listMembers", async () => {
 				filterField: "role",
 				filterOperator: "ne",
 				filterValue: "owner",
+			},
+		});
+		expect(members.data?.members.length).toBe(10);
+		expect(members.data?.total).toBe(10);
+	});
+
+	it("should filter the members with 'in' operator", async () => {
+		const members = await client.organization.listMembers({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				filterField: "role",
+				filterOperator: "in",
+				filterValue: ["member", "owner"],
+			},
+		});
+		expect(members.data?.members.length).toBe(11);
+		expect(members.data?.total).toBe(11);
+	});
+
+	it("should filter the members with 'not_in' operator", async () => {
+		const members = await client.organization.listMembers({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				filterField: "role",
+				filterOperator: "not_in",
+				filterValue: ["owner"],
+			},
+		});
+		expect(members.data?.members.length).toBe(10);
+		expect(members.data?.total).toBe(10);
+	});
+
+	it("should filter the members with 'starts_with' operator", async () => {
+		const members = await client.organization.listMembers({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				filterField: "role",
+				filterOperator: "starts_with",
+				filterValue: "mem",
 			},
 		});
 		expect(members.data?.members.length).toBe(10);
@@ -361,6 +407,166 @@ describe("updateMemberRole", async () => {
 				.message,
 		);
 	});
+
+	it("should not allow a comma-delimited role string", async () => {
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const org = await client.organization.create({
+			name: "escalation",
+			slug: "escalation",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const adminUser = await auth.api.signUpEmail({
+			body: {
+				email: "admin-escalation@test.com",
+				name: "admin",
+				password: "password",
+			},
+		});
+
+		const adminMember = await auth.api.addMember({
+			body: {
+				organizationId: org.data?.id as string,
+				userId: adminUser.user.id,
+				role: "admin",
+			},
+		});
+
+		const adminHeaders = new Headers({
+			authorization: `Bearer ${adminUser.token}`,
+		});
+
+		const escalated = await client.organization.updateMemberRole(
+			{
+				organizationId: org.data?.id as string,
+				memberId: adminMember?.id as string,
+				role: "admin,owner" as "admin",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+
+		expect(escalated.error?.status).toBe(403);
+		expect(escalated.data).toBeNull();
+
+		const ctx = await auth.$context;
+		const persisted = await ctx.adapter.findOne<{ role: string }>({
+			model: "member",
+			where: [{ field: "id", value: adminMember?.id as string }],
+		});
+		expect(persisted?.role).toBe("admin");
+	});
+
+	it("should reject updating a member to an unknown role", async () => {
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const org = await client.organization.create({
+			name: "unknown-role",
+			slug: "unknown-role",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "unknown-role@test.com",
+				name: "test",
+				password: "password",
+			},
+		});
+
+		const member = await auth.api.addMember({
+			body: {
+				organizationId: org.data?.id as string,
+				userId: newUser.user.id,
+				role: "member",
+			},
+		});
+
+		const updated = await client.organization.updateMemberRole(
+			{
+				organizationId: org.data?.id as string,
+				memberId: member?.id as string,
+				role: "superadmin" as "admin",
+			},
+			{
+				headers,
+			},
+		);
+
+		expect(updated.error?.status).toBe(400);
+		expect(updated.error?.message).toContain(
+			ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+		);
+	});
+
+	it("should reject updating a member to an empty role list", async () => {
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const org = await client.organization.create({
+			name: "empty-role",
+			slug: "empty-role",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "empty-role@test.com",
+				name: "test",
+				password: "password",
+			},
+		});
+
+		const member = await auth.api.addMember({
+			body: {
+				organizationId: org.data?.id as string,
+				userId: newUser.user.id,
+				role: "member",
+			},
+		});
+
+		for (const role of [[], ","] as ("admin" | "admin"[])[]) {
+			const updated = await client.organization.updateMemberRole(
+				{
+					organizationId: org.data?.id as string,
+					memberId: member?.id as string,
+					role,
+				},
+				{
+					headers,
+				},
+			);
+			expect(updated.error?.status).toBe(400);
+		}
+	});
 });
 
 describe("activeMemberRole", async () => {
@@ -458,7 +664,81 @@ describe("activeMemberRole", async () => {
 
 		expect(activeMember.data?.role).toBe("member");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8595
+	 */
+	it("should clear active member role hook data after sign out", async () => {
+		const originalWindow = global.window;
+		global.window = {} as unknown as Window & typeof globalThis;
+		try {
+			const { headers: signOutHeaders } = await signInWithTestUser();
+			const signOutClient = createAuthClient({
+				plugins: [organizationClient()],
+				baseURL: "http://localhost:3000/api/auth",
+				fetchOptions: {
+					customFetchImpl: async (url, init) => {
+						return auth.handler(new Request(url, init));
+					},
+					headers: signOutHeaders,
+				},
+			});
+			const signOutOrg = await signOutClient.organization.create({
+				name: "sign-out-role-test",
+				slug: "sign-out-role-test",
+			});
+			await signOutClient.organization.setActive({
+				organizationId: signOutOrg.data?.id as string,
+			});
+
+			const activeRole = await waitForAuthQueryAtom(
+				signOutClient.useActiveMemberRole,
+				(value) => value.data?.role === "owner",
+			);
+			expect(activeRole.data?.role).toBe("owner");
+			await nextTick();
+
+			await signOutClient.signOut();
+
+			const roleAfterSignOut = await waitForAuthQueryAtom(
+				signOutClient.useActiveMemberRole,
+				(value) => value.data === null,
+			);
+			expect(roleAfterSignOut.data).toBeNull();
+		} finally {
+			global.window = originalWindow;
+		}
+	});
 });
+
+type AuthQueryValue<Result> = ReturnType<AuthQueryAtom<Result>["get"]>;
+
+async function waitForAuthQueryAtom<Result>(
+	atom: AuthQueryAtom<Result>,
+	predicate: (value: AuthQueryValue<Result>) => boolean,
+) {
+	return await new Promise<AuthQueryValue<Result>>((resolve, reject) => {
+		let settled = false;
+		const timeout = setTimeout(() => {
+			if (settled) return;
+			settled = true;
+			reject(new Error("Timed out waiting for auth query atom state"));
+		}, 1000);
+
+		atom.subscribe((value) => {
+			if (settled || value.isPending || value.isRefetching) return;
+			if (!predicate(value)) return;
+			settled = true;
+			clearTimeout(timeout);
+			resolve(value);
+		});
+		atom.get();
+	});
+}
+
+async function nextTick() {
+	await new Promise((resolve) => setTimeout(resolve, 25));
+}
 
 describe("inviteMember role validation", async () => {
 	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
@@ -497,7 +777,7 @@ describe("inviteMember role validation", async () => {
 		expect(error).toBeTruthy();
 		expect(error?.status).toBe(400);
 		expect(error?.message).toContain(
-			ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.message,
+			ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code,
 		);
 	});
 

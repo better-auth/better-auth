@@ -3,6 +3,7 @@ import { Check, Copy } from "lucide-react";
 import type {
 	ButtonHTMLAttributes,
 	ComponentProps,
+	CSSProperties,
 	HTMLAttributes,
 	ReactElement,
 	ReactNode,
@@ -75,13 +76,15 @@ export function Pre(props: ComponentProps<"pre">) {
 	);
 }
 
+const EMPTY_VIEWPORT_PROPS = {};
+
 export function CodeBlock({
 	ref,
 	title,
 	allowCopy,
 	keepBackground = false,
 	icon,
-	viewportProps = {},
+	viewportProps = EMPTY_VIEWPORT_PROPS,
 	children,
 	Actions = (props) => (
 		<div {...props} className={cn("empty:hidden", props.className)} />
@@ -160,7 +163,7 @@ export function CodeBlock({
 							? `line ${Number(props["data-line-numbers-start"] ?? 1) - 1}`
 							: undefined,
 						...viewportProps.style,
-					} as object
+					} as CSSProperties
 				}
 			>
 				{children}

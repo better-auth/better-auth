@@ -1,5 +1,18 @@
 import { defineErrorCodes } from "../utils/error-codes";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		/**
+		 * This plugin does not exist, do not use it in runtime.
+		 */
+		"$internal:base": {
+			creator: () => {
+				$ERROR_CODES: typeof BASE_ERROR_CODES;
+			};
+		};
+	}
+}
+
 export const BASE_ERROR_CODES = defineErrorCodes({
 	USER_NOT_FOUND: "User not found",
 	FAILED_TO_CREATE_USER: "Failed to create user",
@@ -24,6 +37,7 @@ export const BASE_ERROR_CODES = defineErrorCodes({
 	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
 		"User already exists. Use another email.",
 	EMAIL_CAN_NOT_BE_UPDATED: "Email can not be updated",
+	CHANGE_EMAIL_DISABLED: "Change email is disabled",
 	CREDENTIAL_ACCOUNT_NOT_FOUND: "Credential account not found",
 	SESSION_EXPIRED: "Session expired. Re-authenticate to perform this action.",
 	FAILED_TO_UNLINK_LAST_ACCOUNT: "You can't unlink your last account",
@@ -49,6 +63,10 @@ export const BASE_ERROR_CODES = defineErrorCodes({
 	ASYNC_VALIDATION_NOT_SUPPORTED: "Async validation is not supported",
 	VALIDATION_ERROR: "Validation Error",
 	MISSING_FIELD: "Field is required",
+	METHOD_NOT_ALLOWED_DEFER_SESSION_REQUIRED:
+		"POST method requires deferSessionRefresh to be enabled in session config",
+	BODY_MUST_BE_AN_OBJECT: "Body must be an object",
+	PASSWORD_ALREADY_SET: "User already has a password set",
 });
 
 export type APIErrorCode = keyof typeof BASE_ERROR_CODES;

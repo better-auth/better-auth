@@ -1,4 +1,13 @@
-interface CookieAttributes {
+function tryDecode(str: string): string {
+	if (str.indexOf("%") === -1) return str;
+	try {
+		return decodeURIComponent(str);
+	} catch {
+		return str;
+	}
+}
+
+export interface CookieAttributes {
 	value: string;
 	"max-age"?: number | undefined;
 	expires?: Date | undefined;
@@ -6,8 +15,22 @@ interface CookieAttributes {
 	path?: string | undefined;
 	secure?: boolean | undefined;
 	httponly?: boolean | undefined;
+	partitioned?: boolean | undefined;
 	samesite?: ("strict" | "lax" | "none") | undefined;
+	// TODO: tighten to `string | number | boolean | Date | undefined`.
+	// Kept as `any` for now to preserve the public type surface.
 	[key: string]: any;
+}
+
+interface ParsedCookieOptions {
+	maxAge?: number | undefined;
+	expires?: Date | undefined;
+	domain?: string | undefined;
+	path?: string | undefined;
+	secure?: boolean | undefined;
+	httpOnly?: boolean | undefined;
+	partitioned?: boolean | undefined;
+	sameSite?: CookieAttributes["samesite"];
 }
 
 export const SECURE_COOKIE_PREFIX = "__Secure-";
@@ -26,24 +49,67 @@ export function stripSecureCookiePrefix(cookieName: string): string {
 	return cookieName;
 }
 
+/**
+ * Split a comma-joined `Set-Cookie` header string into individual cookies.
+ */
+export function splitSetCookieHeader(setCookie: string): string[] {
+	if (!setCookie) return [];
+
+	const result: string[] = [];
+	let start = 0;
+	let i = 0;
+
+	while (i < setCookie.length) {
+		if (setCookie[i] === ",") {
+			let j = i + 1;
+			while (j < setCookie.length && setCookie[j] === " ") j++;
+			while (
+				j < setCookie.length &&
+				setCookie[j] !== "=" &&
+				setCookie[j] !== ";" &&
+				setCookie[j] !== ","
+			) {
+				j++;
+			}
+
+			if (j < setCookie.length && setCookie[j] === "=") {
+				const part = setCookie.slice(start, i).trim();
+				if (part) result.push(part);
+				start = i + 1;
+				while (start < setCookie.length && setCookie[start] === " ") start++;
+				i = start;
+				continue;
+			}
+		}
+
+		i++;
+	}
+
+	const last = setCookie.slice(start).trim();
+	if (last) result.push(last);
+
+	return result;
+}
+
 export function parseSetCookieHeader(
 	setCookie: string,
 ): Map<string, CookieAttributes> {
 	const cookies = new Map<string, CookieAttributes>();
-	const cookieArray = setCookie.split(", ");
+	const cookieArray = splitSetCookieHeader(setCookie);
 
 	cookieArray.forEach((cookieString) => {
 		const parts = cookieString.split(";").map((part) => part.trim());
 		const [nameValue, ...attributes] = parts;
 		const [name, ...valueParts] = (nameValue || "").split("=");
 
-		const value = valueParts.join("=");
+		const value = unquoteCookieValue(valueParts.join("="));
 
-		if (!name || value === undefined) {
+		if (!name) {
 			return;
 		}
 
-		const attrObj: CookieAttributes = { value };
+		const decodedValue = tryDecode(value);
+		const attrObj: CookieAttributes = { value: decodedValue };
 
 		attributes.forEach((attribute) => {
 			const [attrName, ...attrValueParts] = attribute!.split("=");
@@ -77,6 +143,9 @@ export function parseSetCookieHeader(
 						? (attrValue.trim().toLowerCase() as "strict" | "lax" | "none")
 						: undefined;
 					break;
+				case "partitioned":
+					attrObj.partitioned = true;
+					break;
 				default:
 					// Handle any other attributes
 					attrObj[normalizedAttrName] = attrValue ? attrValue.trim() : true;
@@ -90,34 +159,152 @@ export function parseSetCookieHeader(
 	return cookies;
 }
 
+export function toCookieOptions(
+	attributes: CookieAttributes,
+): ParsedCookieOptions {
+	return {
+		maxAge: attributes["max-age"],
+		expires: attributes.expires,
+		domain: attributes.domain,
+		path: attributes.path,
+		secure: attributes.secure,
+		httpOnly: attributes.httponly,
+		sameSite: attributes.samesite,
+		partitioned: attributes.partitioned,
+	};
+}
+
+/**
+ * Cookie-name token char set per RFC 7230 §3.2.6.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc7230#section-3.2.6
+ */
+export const cookieNameRegex =
+	/^[\x21\x23-\x27\x2A\x2B\x2D\x2E\x30-\x39\x41-\x5A\x5E\x5F\x60\x61-\x7A\x7C\x7E]+$/;
+
+/**
+ * Cookie-value char set per RFC 6265 §4.1.1, plus space and comma.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6265#section-4.1.1
+ * @see https://github.com/golang/go/issues/7243
+ */
+const cookieValueRegex = /^[\x20\x21\x23-\x3A\x3C-\x5B\x5D-\x7E]*$/;
+
+/**
+ * Strip surrounding double-quotes per RFC 6265 §4.1.1 quoted-string form.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6265#section-4.1.1
+ */
+function unquoteCookieValue(value: string): string {
+	if (value.length < 2 || !value.startsWith('"') || !value.endsWith('"')) {
+		return value;
+	}
+	return value.slice(1, -1);
+}
+
+/**
+ * Trim leading/trailing OWS (space / horizontal tab) per RFC 7230 §3.2.3.
+ * Narrower than `String.prototype.trim()`, which strips CR/LF and other
+ * whitespace and would let CTLs escape `cookieValueRegex`.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc7230#section-3.2.3
+ */
+function trimOWS(s: string): string {
+	let start = 0;
+	let end = s.length;
+	while (start < end) {
+		const c = s.charCodeAt(start);
+		if (c !== 0x20 && c !== 0x09) break;
+		start++;
+	}
+	while (end > start) {
+		const c = s.charCodeAt(end - 1);
+		if (c !== 0x20 && c !== 0x09) break;
+		end--;
+	}
+	return start === 0 && end === s.length ? s : s.slice(start, end);
+}
+
+/**
+ * Tolerates `;` separators without the SP that RFC 6265 §4.2.1 mandates,
+ * since proxies and runtimes commonly strip it. Silently drops entries
+ * whose name violates RFC 7230 token or whose value violates RFC 6265
+ * cookie-octet (plus space and comma). Strips optional surrounding
+ * double-quotes per RFC 6265 §4.1.1.
+ */
+export function parseCookies(cookie: string): Map<string, string> {
+	const cookieMap = new Map<string, string>();
+	if (cookie.length < 2) return cookieMap;
+	for (const chunk of cookie.split(";")) {
+		const eq = chunk.indexOf("=");
+		if (eq === -1) continue;
+		const key = trimOWS(chunk.slice(0, eq));
+		const val = unquoteCookieValue(trimOWS(chunk.slice(eq + 1)));
+		// Validate wire-format octets, then decode to the semantic value.
+		if (cookieNameRegex.test(key) && cookieValueRegex.test(val)) {
+			cookieMap.set(key, tryDecode(val));
+		}
+	}
+	return cookieMap;
+}
+
+/**
+ * Add or replace a cookie in the request `Cookie` header.
+ *
+ * Cookie pairs are joined with `; `, but `headers.append("cookie", ...)`
+ * joins with `, ` in some runtimes (e.g. Deno, Cloudflare Workers) and
+ * breaks downstream cookie parsing. This builds the header value via
+ * parse-mutate-serialize.
+ */
+export function setRequestCookie(
+	headers: Headers,
+	name: string,
+	value: string,
+): void {
+	const cookieMap = parseCookies(headers.get("cookie") || "");
+	if (cookieNameRegex.test(name)) {
+		cookieMap.set(name, value);
+	}
+	headers.set(
+		"cookie",
+		Array.from(cookieMap, ([k, v]) => `${k}=${encodeURIComponent(v)}`).join(
+			"; ",
+		),
+	);
+}
+
+/**
+ * Merge `Set-Cookie` header values into the target's `Cookie` header.
+ * Mutates `target`.
+ *
+ * Name/value-level merge only. RFC 6265 §5 user-agent semantics
+ * (expiration, domain/path scoping, ordering) are out of scope. Suitable
+ * for single-request proxy, middleware, and test contexts.
+ */
+export function applySetCookies(
+	target: Headers,
+	setCookieValues: Iterable<string>,
+): void {
+	const cookieMap = parseCookies(target.get("cookie") || "");
+	for (const setCookie of setCookieValues) {
+		for (const [name, attr] of parseSetCookieHeader(setCookie)) {
+			if (cookieNameRegex.test(name)) {
+				cookieMap.set(name, attr.value);
+			}
+		}
+	}
+	target.set(
+		"cookie",
+		Array.from(cookieMap, ([k, v]) => `${k}=${encodeURIComponent(v)}`).join(
+			"; ",
+		),
+	);
+}
+
 export function setCookieToHeader(headers: Headers) {
 	return (context: { response: Response }) => {
 		const setCookieHeader = context.response.headers.get("set-cookie");
-		if (!setCookieHeader) {
-			return;
-		}
-
-		const cookieMap = new Map<string, string>();
-
-		const existingCookiesHeader = headers.get("cookie") || "";
-		existingCookiesHeader.split(";").forEach((cookie) => {
-			const [name, ...rest] = cookie!.trim().split("=");
-			if (name && rest.length > 0) {
-				cookieMap.set(name, rest.join("="));
-			}
-		});
-
-		const setCookieHeaders = setCookieHeader.split(",");
-		setCookieHeaders.forEach((header) => {
-			const cookies = parseSetCookieHeader(header);
-			cookies.forEach((value, name) => {
-				cookieMap.set(name, value.value);
-			});
-		});
-
-		const updatedCookies = Array.from(cookieMap.entries())
-			.map(([name, value]) => `${name}=${value}`)
-			.join("; ");
-		headers.set("cookie", updatedCookies);
+		if (!setCookieHeader) return;
+		applySetCookies(headers, [setCookieHeader]);
 	};
 }

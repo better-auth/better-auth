@@ -28,6 +28,19 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		schema: getAuthTables(options),
 		usePlural: false,
 	});
+	const isMigrationDisabled = (model: string) =>
+		Object.entries(tables).some(([tableKey, table]) => {
+			if (table.disableMigrations !== true) {
+				return false;
+			}
+			const customModelName = table.modelName || tableKey;
+			return (
+				model === tableKey ||
+				model === customModelName ||
+				model === getModelName(tableKey) ||
+				model === getModelName(customModelName)
+			);
+		});
 
 	let schemaPrisma = "";
 	if (schemaPrismaExist) {
@@ -39,7 +52,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		schemaPrisma = getNewPrisma(provider, process.cwd());
 	}
 
-	// Update generator block for Prisma v7+ in existing schemas
+	// Update generator and datasource blocks for Prisma v7+ in existing schemas
 	const prismaVersion = getPrismaVersion(process.cwd());
 	if (prismaVersion && prismaVersion >= 7 && schemaPrismaExist) {
 		schemaPrisma = produceSchema(schemaPrisma, (builder) => {
@@ -54,17 +67,35 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					providerProp.value = '"prisma-client"';
 				}
 			}
+			// Remove url from datasource block (now configured in prisma.config.ts)
+			const datasource: any = builder.findByType("datasource", {
+				name: "db",
+			});
+			if (datasource && datasource.properties) {
+				const urlIndex = datasource.properties.findIndex(
+					(prop: any) => prop.type === "assignment" && prop.key === "url",
+				);
+				if (urlIndex !== -1) {
+					datasource.properties.splice(urlIndex, 1);
+				}
+			}
 		});
 	}
 
 	const manyToManyRelations = new Map();
 
 	for (const table in tables) {
+		if (isMigrationDisabled(table)) {
+			continue;
+		}
 		const fields = tables[table]?.fields;
 		for (const field in fields) {
 			const attr = fields[field]!;
 			if (attr.references) {
 				const referencedOriginalModel = attr.references.model;
+				if (isMigrationDisabled(referencedOriginalModel)) {
+					continue;
+				}
 				const referencedCustomModel =
 					tables[referencedOriginalModel]?.modelName || referencedOriginalModel;
 				const referencedModelNameCap = capitalizeFirstLetter(
@@ -105,6 +136,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 	const schema = produceSchema(schemaPrisma, (builder) => {
 		for (const table in tables) {
+			if (isMigrationDisabled(table)) {
+				continue;
+			}
 			const originalTableName = table;
 			const customModelName = tables[table]?.modelName || table;
 			const modelName = capitalizeFirstLetter(getModelName(customModelName));
@@ -156,6 +190,15 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					return "Int[]";
 				}
 			}
+			function getFieldTypeParts(type: string) {
+				const isArray = type.endsWith("[]");
+				const typeWithoutArray = isArray ? type.slice(0, -2) : type;
+				const isOptional = typeWithoutArray.endsWith("?");
+				const fieldType = isOptional
+					? typeWithoutArray.slice(0, -1)
+					: typeWithoutArray;
+				return { fieldType, isArray, isOptional };
+			}
 
 			const prismaModel = builder.findByType("model", {
 				name: modelName,
@@ -171,7 +214,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						.attribute(`map("_id")`);
 				} else {
 					const useNumberId =
-						options.advanced?.database?.useNumberId ||
 						options.advanced?.database?.generateId === "serial";
 					const useUUIDs = options.advanced?.database?.generateId === "uuid";
 					if (useNumberId) {
@@ -196,22 +238,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			for (const field in fields) {
 				const attr = fields[field]!;
 				const fieldName = attr.fieldName || field;
-
-				if (prismaModel) {
-					const isAlreadyExist = builder.findByType("field", {
-						name: fieldName,
-						within: prismaModel.properties,
-					});
-					if (isAlreadyExist) {
-						continue;
-					}
-				}
 				const useUUIDs = options.advanced?.database?.generateId === "uuid";
-				const useNumberId =
-					options.advanced?.database?.useNumberId ||
-					options.advanced?.database?.generateId === "serial";
-				const fieldBuilder = builder.model(modelName).field(
-					fieldName,
+				const useNumberId = options.advanced?.database?.generateId === "serial";
+				const fieldType =
 					field === "id" && useNumberId
 						? getType({
 								isBigint: false,
@@ -220,15 +249,53 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							})
 						: getType({
 								isBigint: attr?.bigint || false,
-								isOptional: !attr?.required,
+								isOptional: attr?.required === false,
 								type:
 									attr.references?.field === "id"
 										? useNumberId
 											? "number"
 											: "string"
 										: attr.type,
-							}),
-				);
+							});
+
+				if (prismaModel) {
+					const isAlreadyExist = builder.findByType("field", {
+						name: fieldName,
+						within: prismaModel.properties,
+					});
+					if (isAlreadyExist) {
+						if (fieldType && typeof isAlreadyExist.fieldType === "string") {
+							const fieldTypeParts = getFieldTypeParts(fieldType);
+							const existingFieldTypeParts = getFieldTypeParts(
+								isAlreadyExist.fieldType,
+							);
+							const isExistingNumericField =
+								existingFieldTypeParts.fieldType === "Int" ||
+								existingFieldTypeParts.fieldType === "BigInt";
+							if (
+								isExistingNumericField &&
+								(fieldTypeParts.fieldType === "Int" ||
+									fieldTypeParts.fieldType === "BigInt")
+							) {
+								isAlreadyExist.fieldType = fieldTypeParts.fieldType;
+								isAlreadyExist.optional =
+									fieldTypeParts.isOptional || undefined;
+								isAlreadyExist.array = fieldTypeParts.isArray || undefined;
+							}
+						}
+						continue;
+					}
+				}
+				if (!fieldType) {
+					throw new Error(
+						`Unsupported Prisma field type for model "${modelName}", field "${fieldName}"${
+							attr.type ? ` (source type: "${attr.type}")` : ""
+						}.`,
+					);
+				}
+				const fieldBuilder = builder
+					.model(modelName)
+					.field(fieldName, fieldType);
 				if (field === "id") {
 					fieldBuilder.attribute("id");
 					if (provider === "mongodb") {
@@ -254,7 +321,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 								);
 								continue;
 							}
-							let jsonArray = [];
+							const jsonArray = [];
 							for (const value of attr.defaultValue) jsonArray.push(value);
 							fieldBuilder.attribute(
 								`default("${JSON.stringify(jsonArray).replace(/"/g, '\\"')}")`,
@@ -269,12 +336,12 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							typeof attr.defaultValue[0] === "string" &&
 							attr.type === "string[]"
 						) {
-							let valueArray = [];
+							const valueArray = [];
 							for (const value of attr.defaultValue)
 								valueArray.push(JSON.stringify(value));
 							fieldBuilder.attribute(`default([${valueArray}])`);
 						} else if (typeof attr.defaultValue[0] === "number") {
-							let valueArray = [];
+							const valueArray = [];
 							for (const value of attr.defaultValue)
 								valueArray.push(`${value}`);
 							fieldBuilder.attribute(`default([${valueArray}])`);
@@ -326,6 +393,15 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 
 				if (attr.references) {
+					const referencedOriginalModelName = getModelName(
+						attr.references.model,
+					);
+					if (
+						isMigrationDisabled(referencedOriginalModelName) ||
+						isMigrationDisabled(attr.references.model)
+					) {
+						continue;
+					}
 					if (
 						useUUIDs &&
 						provider === "postgresql" &&
@@ -334,9 +410,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						builder.model(modelName).field(fieldName).attribute(`db.Uuid`);
 					}
 
-					const referencedOriginalModelName = getModelName(
-						attr.references.model,
-					);
 					const referencedCustomModelName =
 						tables[referencedOriginalModelName]?.modelName ||
 						referencedOriginalModelName;
@@ -353,7 +426,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						.field(
 							referencedCustomModelName.toLowerCase(),
 							`${capitalizeFirstLetter(referencedCustomModelName)}${
-								!attr.required ? "?" : ""
+								attr.required === false ? "?" : ""
 							}`,
 						)
 						.attribute(relationField);
@@ -427,7 +500,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					let indexField = fieldName;
 					if (provider === "mysql" && field && field.type === "string") {
 						const useNumberId =
-							options.advanced?.database?.useNumberId ||
 							options.advanced?.database?.generateId === "serial";
 						const useUUIDs = options.advanced?.database?.generateId === "uuid";
 						if (field.references?.field === "id" && (useNumberId || useUUIDs)) {
@@ -468,9 +540,20 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 const getNewPrisma = (provider: string, cwd?: string) => {
 	const prismaVersion = getPrismaVersion(cwd);
+	const isV7 = prismaVersion && prismaVersion >= 7;
 	// Use "prisma-client" for Prisma v7+, otherwise use "prisma-client-js"
-	const clientProvider =
-		prismaVersion && prismaVersion >= 7 ? "prisma-client" : "prisma-client-js";
+	const clientProvider = isV7 ? "prisma-client" : "prisma-client-js";
+
+	// In Prisma v7+, the url is configured in prisma.config.ts instead of the schema
+	if (isV7) {
+		return `generator client {
+    provider = "${clientProvider}"
+  }
+
+  datasource db {
+    provider = "${provider}"
+  }`;
+	}
 
 	return `generator client {
     provider = "${clientProvider}"

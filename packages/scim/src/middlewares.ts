@@ -1,8 +1,10 @@
 import { base64Url } from "@better-auth/utils/base64";
-import { createAuthMiddleware } from "better-auth/plugins";
+import { createAuthMiddleware } from "better-auth/api";
+import { constantTimeEqual } from "better-auth/crypto";
+import { scimProviderKey } from "./mappings";
 import { SCIMAPIError } from "./scim-error";
 import { verifySCIMToken } from "./scim-tokens";
-import type { SCIMOptions, SCIMProvider } from "./types";
+import type { SCIMOptions, SCIMProvider, StaticSCIMProvider } from "./types";
 
 export type AuthMiddleware = ReturnType<typeof authMiddlewareFactory>;
 
@@ -33,21 +35,15 @@ export const authMiddlewareFactory = (opts: SCIMOptions) =>
 			});
 		}
 
-		let scimProvider: Omit<SCIMProvider, "id"> | null =
-			opts.defaultSCIM?.find((p) => {
-				if (p.providerId === providerId && !organizationId) {
-					return true;
-				}
-
-				return !!(
-					p.providerId === providerId &&
-					organizationId &&
-					p.organizationId === organizationId
-				);
+		let scimProvider: SCIMProvider | StaticSCIMProvider | null =
+			opts.staticProviders?.find((p) => {
+				if (p.providerId !== providerId) return false;
+				if (!organizationId) return !p.organizationId;
+				return p.organizationId === organizationId;
 			}) ?? null;
 
 		if (scimProvider) {
-			if (scimProvider.scimToken === scimToken) {
+			if (constantTimeEqual(scimProvider.scimToken, scimToken)) {
 				return { authSCIMToken: scimProvider.scimToken, scimProvider };
 			} else {
 				throw new SCIMAPIError("UNAUTHORIZED", {
@@ -56,13 +52,19 @@ export const authMiddlewareFactory = (opts: SCIMOptions) =>
 			}
 		}
 
+		if (!organizationId) {
+			throw new SCIMAPIError("UNAUTHORIZED", {
+				detail: "Invalid SCIM token",
+			});
+		}
+
 		scimProvider = await ctx.context.adapter.findOne<SCIMProvider>({
 			model: "scimProvider",
 			where: [
-				{ field: "providerId", value: providerId },
-				...(organizationId
-					? [{ field: "organizationId", value: organizationId }]
-					: []),
+				{
+					field: "providerKey",
+					value: scimProviderKey({ providerId, organizationId }),
+				},
 			],
 		});
 

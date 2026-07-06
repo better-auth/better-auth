@@ -1,34 +1,48 @@
 "use client";
 import { cn } from "@/lib/utils";
 
-function Method({ method }: { method: "POST" | "GET" | "DELETE" | "PUT" }) {
+type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
+
+const methodColors: Record<HttpMethod, string> = {
+	GET: "text-green-600 dark:text-green-500",
+	POST: "text-yellow-600 dark:text-yellow-600",
+	PUT: "text-blue-600 dark:text-blue-400",
+	DELETE: "text-red-600 dark:text-red-400",
+};
+
+function Method({ method }: { method: HttpMethod }) {
 	return (
-		<div className="flex items-center justify-center h-6 px-2 text-sm font-semibold uppercase border rounded-lg select-none w-fit font-display bg-background">
+		<span
+			className={cn(
+				"text-xs font-bold font-mono uppercase",
+				methodColors[method],
+			)}
+		>
 			{method}
-		</div>
+		</span>
 	);
 }
 
 export function Endpoint({
 	path,
 	method,
-	isServerOnly,
 	className,
 }: {
 	path: string;
-	method: "POST" | "GET" | "DELETE" | "PUT";
-	isServerOnly?: boolean;
+	method: HttpMethod;
 	className?: string;
 }) {
 	return (
 		<div
 			className={cn(
-				"relative flex items-center w-full gap-2 p-2 border-t border-x border-border bg-fd-secondary/50 group",
+				"relative flex items-center w-full gap-2 px-3.5 py-1 border-b border-border bg-fd-muted/80 group",
 				className,
 			)}
 		>
 			<Method method={method} />
-			<span className="font-mono text-sm text-muted-foreground">{path}</span>
+			<span className="font-mono text-[13px] text-foreground/80 font-medium">
+				{path}
+			</span>
 		</div>
 	);
 }
