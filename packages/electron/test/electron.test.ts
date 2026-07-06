@@ -179,6 +179,36 @@ describe("Electron", () => {
 		expect(data!.electron_authorization_code).toBeTypeOf("string");
 	});
 
+	it("/electron/init-oauth-proxy should forward each Set-Cookie from the inner sign-in response as a separate header", async () => {
+		const innerHeaders = new Headers();
+		innerHeaders.append("set-cookie", "first.cookie=one; Path=/; HttpOnly");
+		innerHeaders.append("set-cookie", "second.cookie=two; Path=/; HttpOnly");
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					url: "https://provider.example/oauth/authorize",
+					redirect: true,
+				}),
+				{ status: 200, headers: innerHeaders },
+			),
+		);
+
+		const res = (await (auth.api as any).electronInitOAuthProxy({
+			query: {
+				provider: "google",
+				state: "x",
+				code_challenge: "y",
+				code_challenge_method: "S256",
+			},
+			asResponse: true,
+		})) as Response;
+
+		const setCookies = res.headers.getSetCookie();
+		expect(setCookies).toHaveLength(2);
+		expect(setCookies[0]).toMatch(/^first\.cookie=one/);
+		expect(setCookies[1]).toMatch(/^second\.cookie=two/);
+	});
+
 	it("should exchange token", async ({ setProcessType }) => {
 		setProcessType("browser");
 
