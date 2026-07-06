@@ -250,6 +250,20 @@ describe("drizzle-adapter", () => {
 				result: [{ affectedRows: 2 }],
 				expected: 2,
 			},
+			// postgres-js / bun-sql return an Array subclass carrying `count`;
+			// a non-RETURNING write has length 0, so the count must be read off
+			// the array itself, not from `result.length`.
+			{
+				provider: "pg" as const,
+				result: Object.assign([], { count: 2 }),
+				expected: 2,
+			},
+			// Cloudflare D1 nests the affected-row count under `meta.changes`.
+			{
+				provider: "sqlite" as const,
+				result: { meta: { changes: 2 } },
+				expected: 2,
+			},
 		])("returns the affected-row count for $provider ($expected)", async ({
 			provider,
 			result,

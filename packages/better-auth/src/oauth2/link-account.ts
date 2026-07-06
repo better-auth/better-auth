@@ -2,6 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { isDevelopment } from "@better-auth/core/env";
 import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
+import { parseAdditionalUserInputFromProviderProfile } from "../db";
 import type { Account, User } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { redirectOnError } from "./errors";
@@ -166,10 +167,24 @@ export async function handleOAuthUserInfo(
 			}
 		}
 		if (overrideUserInfo) {
-			const { id: _, ...restUserInfo } = userInfo;
+			const {
+				id: _id,
+				email: _email,
+				emailVerified: _emailVerified,
+				name,
+				image,
+				...providerProfile
+			} = userInfo;
+			const additionalUserFields = parseAdditionalUserInputFromProviderProfile(
+				c.context.options,
+				providerProfile,
+				"update",
+			);
 			// update user info from the provider if overrideUserInfo is true
 			user = await c.context.internalAdapter.updateUser(dbUser.user.id, {
-				...restUserInfo,
+				name,
+				image,
+				...additionalUserFields,
 				email: userInfo.email.toLowerCase(),
 				emailVerified:
 					userInfo.email.toLowerCase() === dbUser.user.email
@@ -186,7 +201,19 @@ export async function handleOAuthUserInfo(
 			};
 		}
 		try {
-			const { id: _, ...restUserInfo } = userInfo;
+			const {
+				id: _id,
+				email: _email,
+				emailVerified: _emailVerified,
+				name,
+				image,
+				...providerProfile
+			} = userInfo;
+			const additionalUserFields = parseAdditionalUserInputFromProviderProfile(
+				c.context.options,
+				providerProfile,
+				"create",
+			);
 			const accountData = {
 				accessToken: await setTokenUtil(account.accessToken, c.context),
 				refreshToken: await setTokenUtil(account.refreshToken, c.context),
@@ -200,8 +227,11 @@ export async function handleOAuthUserInfo(
 			const { user: createdUser, account: createdAccount } =
 				await c.context.internalAdapter.createOAuthUser(
 					{
-						...restUserInfo,
+						name,
+						image,
+						...additionalUserFields,
 						email: userInfo.email.toLowerCase(),
+						emailVerified: userInfo.emailVerified,
 					},
 					accountData,
 				);
@@ -314,14 +344,25 @@ export async function applyUpdateUserInfoOnLink(
 	) {
 		return undefined;
 	}
-	const {
-		id: _id,
-		email: _email,
-		emailVerified: _emailVerified,
-		...profile
-	} = userInfo;
 	try {
-		return await c.context.internalAdapter.updateUser(userId, profile);
+		const {
+			id: _id,
+			email: _email,
+			emailVerified: _emailVerified,
+			name,
+			image,
+			...providerProfile
+		} = userInfo;
+		const additionalUserFields = parseAdditionalUserInputFromProviderProfile(
+			c.context.options,
+			providerProfile,
+			"update",
+		);
+		return await c.context.internalAdapter.updateUser(userId, {
+			name,
+			image,
+			...additionalUserFields,
+		});
 	} catch (e) {
 		c.context.logger.warn("Could not update user info on account link", e);
 		return undefined;
