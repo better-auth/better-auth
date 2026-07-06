@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/memory-adapter",
-  "version": "1.6.14",
+  "version": "1.6.23",
   "description": "Memory adapter for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -27,7 +27,8 @@
     "lint:package": "publint run --strict --pack false",
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest"
+    "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul"
   },
   "files": [
     "dist"

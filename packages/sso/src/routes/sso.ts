@@ -49,6 +49,7 @@ import type {
 import {
 	domainMatches,
 	normalizePem,
+	parseProviderEmailVerified,
 	safeJsonParse,
 	validateEmailDomain,
 } from "../utils";
@@ -61,6 +62,15 @@ import {
 } from "./helpers";
 import { hasOrgAdminRole } from "./providers";
 import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
+
+const BUILT_IN_ACCOUNT_PROVIDER_IDS = [
+	"credential",
+	"email-otp",
+	"magic-link",
+	"phone-number",
+	"anonymous",
+	"siwe",
+] as const;
 
 /**
  * Builds the OIDC redirect URI. Uses the shared `redirectURI` option
@@ -658,6 +668,48 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				}
 			}
 
+			// SSO provider ids currently share the account-linking provider namespace.
+			// Reject collisions so a user-registered SSO provider cannot be confused
+			// with another account-producing provider.
+			// TODO(next): replace providerId account-link ownership with immutable
+			// SSO provider instance ids, then remove this cross-plugin slug coupling.
+			// Trust for SSO providers is established separately via
+			// verified domain ownership, never by this shared namespace.
+			const reservedProviderIds = new Set<string>([
+				...BUILT_IN_ACCOUNT_PROVIDER_IDS,
+				...Object.keys(ctx.context.options.socialProviders ?? {}),
+				...ctx.context.socialProviders.map((p) => p.id),
+				...ctx.context.trustedProviders,
+				...(options?.defaultSSO?.map((p) => p.providerId) ?? []),
+			]);
+			if (reservedProviderIds.has(body.providerId)) {
+				ctx.context.logger.warn(
+					`SSO provider registration rejected for reserved providerId: ${body.providerId}`,
+				);
+				throw new APIError("UNPROCESSABLE_ENTITY", {
+					message:
+						"This providerId is reserved and cannot be used for an SSO provider",
+				});
+			}
+
+			if (ctx.context.hasPlugin("scim")) {
+				const existingSCIMProvider = await ctx.context.adapter.findOne<{
+					id: string;
+				}>({
+					model: "scimProvider",
+					where: [{ field: "providerId", value: body.providerId }],
+				});
+				if (existingSCIMProvider) {
+					ctx.context.logger.warn(
+						`SSO provider registration rejected for SCIM providerId: ${body.providerId}`,
+					);
+					throw new APIError("UNPROCESSABLE_ENTITY", {
+						message:
+							"This providerId is already used by a SCIM provider and cannot be used for an SSO provider",
+					});
+				}
+			}
+
 			const existingProvider = await ctx.context.adapter.findOne({
 				model: "ssoProvider",
 				where: [
@@ -1077,7 +1129,8 @@ export const signInSSO = (options?: SSOOptions) => {
 							(defaultProvider) => defaultProvider.providerId === providerId,
 						)
 					: options.defaultSSO.find(
-							(defaultProvider) => defaultProvider.domain === domain,
+							(defaultProvider) =>
+								domain && domainMatches(domain, defaultProvider.domain),
 						);
 
 				if (matchingDefault) {
@@ -1566,6 +1619,7 @@ async function handleOIDCCallback(
 				headers: {
 					Authorization: `Bearer ${tokenResponse.accessToken}`,
 				},
+				redirect: "error",
 			},
 		);
 		if (userInfoResponse.error) {
@@ -1586,9 +1640,9 @@ async function handleOIDCCallback(
 			id: rawUserInfo[mapping.id || "sub"] as string | undefined,
 			email: rawUserInfo[mapping.email || "email"] as string | undefined,
 			emailVerified: options?.trustEmailVerified
-				? (rawUserInfo[mapping.emailVerified || "email_verified"] as
-						| boolean
-						| undefined)
+				? parseProviderEmailVerified(
+						rawUserInfo[mapping.emailVerified || "email_verified"],
+					)
 				: false,
 			name: rawUserInfo[mapping.name || "name"] as string | undefined,
 			image: rawUserInfo[mapping.image || "picture"] as string | undefined,
@@ -1631,7 +1685,9 @@ async function handleOIDCCallback(
 			id: idToken[mapping.id || "sub"],
 			email: idToken[mapping.email || "email"],
 			emailVerified: options?.trustEmailVerified
-				? idToken[mapping.emailVerified || "email_verified"]
+				? parseProviderEmailVerified(
+						idToken[mapping.emailVerified || "email_verified"],
+					)
 				: false,
 			name: idToken[mapping.name || "name"],
 			image: idToken[mapping.image || "picture"],
@@ -1688,6 +1744,11 @@ async function handleOIDCCallback(
 			disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
 			overrideUserInfo: config.overrideUserInfo,
 			isTrustedProvider,
+			// SSO provider ids are user-controlled and live in the same namespace
+			// as social providers. Never inherit trust from the global
+			// `trustedProviders` list by name — rely solely on the SSO-specific
+			// `isTrustedProvider` (verified domain ownership) computed above.
+			trustProviderByName: false,
 		});
 	} catch (e) {
 		if (isAPIError(e) && e.body?.code) {

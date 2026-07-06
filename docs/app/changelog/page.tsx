@@ -16,30 +16,45 @@ interface GitHubRelease {
 	published_at: string;
 }
 
+const GITHUB_USERNAME_REGEX =
+	/(?:^|[^\w.+-])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)(?![A-Za-z0-9-]|[./][A-Za-z])/g;
+
+function getMentionUsernames(line: string) {
+	return Array.from(
+		new Set(
+			Array.from(line.matchAll(GITHUB_USERNAME_REGEX), (match) => match[1]),
+		),
+	);
+}
+
+function getContributorAvatarLinks(usernames: string[]) {
+	return usernames
+		.map((username) => {
+			const avatarUrl = `https://github.com/${username}.png?size=48`;
+			return `[![${username}](${avatarUrl})](https://github.com/${username})`;
+		})
+		.join("");
+}
+
 function getContent(content: string) {
 	const lines = content.split("\n");
+	let inContributorsSection = false;
 	const newContext = lines.map((line) => {
 		if (line.trim().startsWith("## ") || line.trim().startsWith("### ")) {
-			return line.split("date=")[0].trim();
+			const heading = line.split("date=")[0].trim();
+			if (heading.startsWith("## ")) {
+				inContributorsSection = heading.toLowerCase().includes("contributors");
+			}
+			return heading;
+		}
+		if (inContributorsSection) {
+			const usernames = getMentionUsernames(line);
+			if (usernames.length > 0) {
+				return getContributorAvatarLinks(usernames);
+			}
 		}
 		if (line.trim().startsWith("- ")) {
-			const mainContent = line.split(";")[0];
-			const context = line.split(";")[2];
-			const mentionMatches =
-				(context ?? line)?.match(/@([A-Za-z0-9-]+)/g) ?? [];
-			if (mentionMatches.length === 0) {
-				return (mainContent || line).replace(/&nbsp/g, "");
-			}
-			const mentions = mentionMatches.map((match) => {
-				const username = match.slice(1);
-				const avatarUrl = `https://github.com/${username}.png`;
-				return `[![${match}](${avatarUrl})](https://github.com/${username})`;
-			});
-			return (
-				(mainContent || line).replace(/&nbsp/g, "") +
-				" \u2013 " +
-				mentions.join(" ")
-			);
+			return line.replace(/&nbsp/g, "");
 		}
 		return line;
 	});

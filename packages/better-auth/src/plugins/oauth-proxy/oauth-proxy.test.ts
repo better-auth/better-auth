@@ -1,7 +1,15 @@
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { parseJSON } from "../../client/parser";
 import { signJWT, symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -561,11 +569,8 @@ describe("oauth-proxy", async () => {
 			// Production instance - handles OAuth callback
 			const production = await getTestInstance(
 				{
-					plugins: [
-						oAuthProxy({
-							currentURL: "http://preview.example.com",
-						}),
-					],
+					baseURL: "http://localhost:3000",
+					plugins: [oAuthProxy()],
 					socialProviders: {
 						google: {
 							clientId: "test",
@@ -582,7 +587,11 @@ describe("oauth-proxy", async () => {
 			const preview = await getTestInstance(
 				{
 					baseURL: "http://preview.example.com",
-					plugins: [oAuthProxy()],
+					plugins: [
+						oAuthProxy({
+							productionURL: "http://localhost:3000",
+						}),
+					],
 					socialProviders: {
 						google: {
 							clientId: "test",
@@ -595,8 +604,8 @@ describe("oauth-proxy", async () => {
 				},
 			);
 
-			// Step 1: Start OAuth on production
-			const res = await production.client.signIn.social(
+			// Step 1: Start OAuth on preview
+			const res = await preview.client.signIn.social(
 				{
 					provider: "google",
 					callbackURL: "/dashboard",
@@ -670,11 +679,8 @@ describe("oauth-proxy", async () => {
 		it("should forward result.error verbatim instead of collapsing to user_creation_failed", async () => {
 			const production = await getTestInstance(
 				{
-					plugins: [
-						oAuthProxy({
-							currentURL: "http://preview.example.com",
-						}),
-					],
+					baseURL: "http://localhost:3000",
+					plugins: [oAuthProxy()],
 					socialProviders: {
 						google: {
 							clientId: "test",
@@ -689,7 +695,11 @@ describe("oauth-proxy", async () => {
 			const preview = await getTestInstance(
 				{
 					baseURL: "http://preview.example.com",
-					plugins: [oAuthProxy()],
+					plugins: [
+						oAuthProxy({
+							productionURL: "http://localhost:3000",
+						}),
+					],
 					socialProviders: {
 						google: {
 							clientId: "test",
@@ -700,7 +710,7 @@ describe("oauth-proxy", async () => {
 				{ disableTestUser: true },
 			);
 
-			const res = await production.client.signIn.social(
+			const res = await preview.client.signIn.social(
 				{
 					provider: "google",
 					callbackURL: "/dashboard",
@@ -1032,9 +1042,9 @@ describe("oauth-proxy", async () => {
 
 			const production = await getTestInstance(
 				{
+					baseURL: "http://localhost:3000",
 					plugins: [
 						oAuthProxy({
-							currentURL: "http://preview.example.com",
 							secret: dedicatedSecret,
 						}),
 					],
@@ -1055,6 +1065,7 @@ describe("oauth-proxy", async () => {
 					baseURL: "http://preview.example.com",
 					plugins: [
 						oAuthProxy({
+							productionURL: "http://localhost:3000",
 							secret: dedicatedSecret,
 						}),
 					],
@@ -1070,8 +1081,8 @@ describe("oauth-proxy", async () => {
 				},
 			);
 
-			// Step 1: Start OAuth on production
-			const res = await production.client.signIn.social(
+			// Step 1: Start OAuth on preview
+			const res = await preview.client.signIn.social(
 				{
 					provider: "google",
 					callbackURL: "/dashboard",
@@ -1134,7 +1145,7 @@ describe("oauth-proxy", async () => {
 			expect(users[0]?.email).toBe("user@email.com");
 		});
 
-		it("should handle existing user on preview", async () => {
+		it("should reject a profile payload whose OAuth state was never issued", async () => {
 			// Preview instance
 			const preview = await getTestInstance(
 				{
@@ -1192,22 +1203,19 @@ describe("oauth-proxy", async () => {
 					onError(context) {
 						expect(context.response.status).toBe(302);
 						const location = context.response.headers.get("location");
-						expect(location).toContain("/dashboard");
+						expect(location).toContain("error=state_mismatch");
 					},
 				},
 			);
 
-			// User count should still be 1 (linked account, not new user)
 			const users = await previewCtx.internalAdapter.listUsers();
 			expect(users.length).toBe(1);
 			expect(users[0]?.email).toBe("user@email.com");
 
-			// Should have linked the google account
 			const accounts = await previewCtx.internalAdapter.findAccounts(
 				users[0]!.id,
 			);
-			expect(accounts.length).toBe(1);
-			expect(accounts[0]?.providerId).toBe("google");
+			expect(accounts.length).toBe(0);
 		});
 	});
 
@@ -1311,8 +1319,7 @@ describe("oauth-proxy", async () => {
 			expect(users[0]?.email).toBe("user@email.com");
 		});
 
-		it("should handle state cleanup gracefully when verification is already deleted", async () => {
-			// This tests that parseGenericState errors are caught and don't break the flow
+		it("should reject the callback when the OAuth state is not found in the database", async () => {
 			const { client, auth } = await getTestInstance(
 				{
 					plugins: [
@@ -1357,22 +1364,18 @@ describe("oauth-proxy", async () => {
 				data: JSON.stringify(payload),
 			});
 
-			// The callback should still succeed even if state cleanup fails
 			await client.$fetch(
 				`/oauth-proxy-callback?callbackURL=/dashboard&profile=${encodeURIComponent(encryptedProfile)}`,
 				{
 					onError(context) {
 						const location = context.response.headers.get("location");
-						// Should redirect to dashboard, not error
-						expect(location).not.toContain("error=state_mismatch");
-						expect(location).toContain("/dashboard");
+						expect(location).toContain("error=state_mismatch");
 					},
 				},
 			);
 
-			// Verify user was created
 			const users = await internalAdapter.listUsers();
-			expect(users.length).toBe(1);
+			expect(users.length).toBe(0);
 		});
 	});
 
@@ -1576,6 +1579,130 @@ describe("oauth-proxy", async () => {
 			const users = await previewCtx.internalAdapter.listUsers();
 			expect(users.length).toBe(1);
 			expect(users[0]?.email).toBe("user@email.com");
+
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL!)}&profile=${encodeURIComponent(encryptedProfile!)}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toContain("error=state_mismatch");
+					},
+				},
+			);
+		});
+	});
+
+	describe("cookie state strategy", () => {
+		it("should validate the state cookie during proxy callback", async () => {
+			const proxySecret = "shared-oauth-proxy-secret-for-stateless";
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					database: undefined,
+					secret: "preview-main-secret-for-stateless",
+					plugins: [
+						oAuthProxy({
+							productionURL: "http://localhost:3000",
+							secret: proxySecret,
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+			const production = await getTestInstance(
+				{
+					baseURL: "http://localhost:3000",
+					database: undefined,
+					secret: "production-main-secret-for-stateless",
+					plugins: [
+						oAuthProxy({
+							secret: proxySecret,
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const previewHeaders = new Headers();
+			const res = await preview.client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+					onSuccess: preview.cookieSetter(previewHeaders),
+				},
+			);
+
+			const encryptedState = new URL(res.url!).searchParams.get("state");
+			expect(encryptedState).toBeTruthy();
+
+			let encryptedProfile: string | null = null;
+			let callbackURL: string | null = null;
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${encryptedState}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toContain("/oauth-proxy-callback");
+						if (location) {
+							const url = new URL(location);
+							encryptedProfile = url.searchParams.get("profile");
+							callbackURL = url.searchParams.get("callbackURL");
+						}
+					},
+				},
+			);
+
+			expect(encryptedProfile).toBeTruthy();
+			expect(callbackURL).toBeTruthy();
+
+			const previewCtx = await preview.auth.$context;
+
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL!)}&profile=${encodeURIComponent(encryptedProfile!)}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toContain("error=state_mismatch");
+					},
+				},
+			);
+			expect((await previewCtx.internalAdapter.listUsers()).length).toBe(0);
+
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL!)}&profile=${encodeURIComponent(encryptedProfile!)}`,
+				{
+					headers: previewHeaders,
+					onError(context) {
+						preview.cookieSetter(previewHeaders)(context);
+						const location = context.response.headers.get("location");
+						expect(location).not.toContain("error=");
+						expect(location).toContain("/dashboard");
+					},
+				},
+			);
+
+			const users = await previewCtx.internalAdapter.listUsers();
+			expect(users.length).toBe(1);
+			expect(users[0]?.email).toBe("user@email.com");
 		});
 	});
 
@@ -1630,5 +1757,115 @@ describe("oauth-proxy", async () => {
 				expect(location).toContain("profile");
 			},
 		});
+	});
+});
+
+describe("oauth-proxy current URL trust", () => {
+	it("does not use an untrusted request origin as the proxy callback receiver", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: "https://myapp.com",
+			plugins: [oAuthProxy({ productionURL: "https://login.myapp.com" })],
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test" },
+			},
+		});
+
+		// Sign-in initiated from a request host that is not
+		// a trusted origin.
+		const signInResponse = await auth.handler(
+			new Request("https://untrusted.example/api/auth/sign-in/social", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ provider: "google", callbackURL: "/dashboard" }),
+			}),
+		);
+		const { url } = (await signInResponse.json()) as { url: string };
+		const state = new URL(url).searchParams.get("state");
+
+		const callbackResponse = await auth.handler(
+			new Request(
+				`https://login.myapp.com/api/auth/callback/google?code=test&state=${state}`,
+				{ method: "GET" },
+			),
+		);
+		const location = callbackResponse.headers.get("location");
+		expect(location).toBeTruthy();
+		// Falls back to the configured base URL, never the untrusted request origin.
+		expect(location).not.toContain("untrusted.example");
+		expect(location).toContain(
+			"https://myapp.com/api/auth/oauth-proxy-callback",
+		);
+	});
+
+	it("uses an explicitly trusted request origin as the proxy callback receiver", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: "https://myapp.com",
+			trustedOrigins: ["https://preview.myapp.com"],
+			plugins: [oAuthProxy({ productionURL: "https://login.myapp.com" })],
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test" },
+			},
+		});
+
+		const signInResponse = await auth.handler(
+			new Request("https://preview.myapp.com/api/auth/sign-in/social", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ provider: "google", callbackURL: "/dashboard" }),
+			}),
+		);
+		const { url } = (await signInResponse.json()) as { url: string };
+		const state = new URL(url).searchParams.get("state");
+
+		const callbackResponse = await auth.handler(
+			new Request(
+				`https://login.myapp.com/api/auth/callback/google?code=test&state=${state}`,
+				{ method: "GET" },
+			),
+		);
+		const location = callbackResponse.headers.get("location");
+		expect(location).toContain(
+			"https://preview.myapp.com/api/auth/oauth-proxy-callback",
+		);
+	});
+
+	it("falls back to the base URL when the platform vendor value is not a URL", async () => {
+		// AWS Lambda / GCP / Azure expose a bare function name, not a URL.
+		vi.stubEnv("AWS_LAMBDA_FUNCTION_NAME", "my-lambda-function");
+		try {
+			const { auth } = await getTestInstance({
+				baseURL: "https://myapp.com",
+				plugins: [oAuthProxy({ productionURL: "https://login.myapp.com" })],
+				socialProviders: {
+					google: { clientId: "test", clientSecret: "test" },
+				},
+			});
+
+			const signInResponse = await auth.handler(
+				new Request("https://untrusted.example/api/auth/sign-in/social", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						provider: "google",
+						callbackURL: "/dashboard",
+					}),
+				}),
+			);
+			const { url } = (await signInResponse.json()) as { url: string };
+			const state = new URL(url).searchParams.get("state");
+
+			const callbackResponse = await auth.handler(
+				new Request(
+					`https://login.myapp.com/api/auth/callback/google?code=test&state=${state}`,
+					{ method: "GET" },
+				),
+			);
+			const location = callbackResponse.headers.get("location");
+			expect(location).toContain(
+				"https://myapp.com/api/auth/oauth-proxy-callback",
+			);
+		} finally {
+			vi.unstubAllEnvs();
+		}
 	});
 });

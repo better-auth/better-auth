@@ -46,6 +46,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
+		if (table.disableMigrations) {
+			continue;
+		}
 		const modelName = getModelName(tableKey);
 		const fields = table.fields;
 
@@ -247,7 +250,22 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 										// custom logic within that function that might not work in drizzle's context.
 									}
 								} else if (typeof attr.defaultValue === "string") {
-									type += `.default("${attr.defaultValue}")`;
+									// Serialize through JSON.stringify so a value with quotes or
+									// backslashes emits valid TypeScript instead of a broken literal.
+									type += `.default(${JSON.stringify(attr.defaultValue)})`;
+								} else if (Array.isArray(attr.defaultValue)) {
+									// Stringify each element so a `["customer"]` default emits
+									// `.default(["customer"])` rather than `.default(customer)`
+									// from JS's implicit Array#toString.
+									const elements = attr.defaultValue
+										.map((value) => JSON.stringify(value))
+										.join(", ");
+									type += `.default([${elements}])`;
+								} else if (
+									typeof attr.defaultValue === "object" &&
+									attr.defaultValue !== null
+								) {
+									type += `.default(${JSON.stringify(attr.defaultValue)})`;
 								} else {
 									type += `.default(${attr.defaultValue})`;
 								}
@@ -280,6 +298,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	let relationsString: string = "";
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
+		if (table.disableMigrations) {
+			continue;
+		}
 		const modelName = getModelName(tableKey);
 
 		type Relation = {

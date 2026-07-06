@@ -2,7 +2,7 @@
  * @see {@link https://github.com/dylanblokhuis/kysely-bun-sqlite} - Fork of the original kysely-bun-sqlite package by @dylanblokhuis
  */
 
-import type { Database } from "bun:sqlite";
+import type { Database, SQLQueryBindings } from "bun:sqlite";
 import type {
 	DatabaseConnection,
 	DatabaseIntrospector,
@@ -20,7 +20,7 @@ import { CompiledQuery, DefaultQueryCompiler, sql } from "kysely";
 import {
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
-} from "kysely/migration";
+} from "./kysely-migration-tables";
 
 class BunSqliteAdapter implements DialectAdapter {
 	get supportsCreateIfNotExists(): boolean {
@@ -130,10 +130,28 @@ class BunSqliteConnection implements DatabaseConnection {
 
 	executeQuery<O>(compiledQuery: CompiledQuery): Promise<QueryResult<O>> {
 		const { sql, parameters } = compiledQuery;
-		const stmt = this.#db.prepare(sql);
+		const stmt = this.#db.prepare<O, SQLQueryBindings[]>(sql);
+		const params = parameters as SQLQueryBindings[];
+
+		// Row-producing statements (SELECT, RETURNING) expose column names, so
+		// they must read through `all()`. Plain mutations expose none; running
+		// them through `all()` would discard Bun's change metadata, leaving
+		// Kysely to report zero affected rows even when writes occurred.
+		if (stmt.columnNames.length > 0) {
+			return Promise.resolve({
+				rows: stmt.all(...params),
+			});
+		}
+
+		const { changes, lastInsertRowid } = stmt.run(...params);
 
 		return Promise.resolve({
-			rows: stmt.all(parameters as any) as O[],
+			rows: [],
+			numAffectedRows: BigInt(changes),
+			insertId:
+				typeof lastInsertRowid === "bigint"
+					? lastInsertRowid
+					: BigInt(lastInsertRowid),
 		});
 	}
 
