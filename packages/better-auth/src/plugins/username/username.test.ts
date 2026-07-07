@@ -924,3 +924,80 @@ describe("username sign-in verify-email callbackURL", async () => {
 		);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10312
+ */
+describe("username with displayUsername disabled", async () => {
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				username({
+					displayUsername: false,
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [usernameClient({ displayUsername: false })],
+			},
+		},
+	);
+
+	it("should sign up and normalize username without writing displayUsername", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "no-display@example.com",
+				username: "No_Display_User",
+				password: "new-password",
+				name: "No Display",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("no_display_user");
+		expect("displayUsername" in (session?.user ?? {})).toBe(false);
+		// @ts-expect-error displayUsername should be excluded from inferred types
+		expect(session?.user.displayUsername).toBeUndefined();
+	});
+
+	it("should update username without writing displayUsername", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "no-display-update@example.com",
+				username: "update_no_display",
+				password: "new-password",
+				name: "Update No Display",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.updateUser({
+			username: "Updated_No_Display",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.error).toBeNull();
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("updated_no_display");
+		expect("displayUsername" in (session?.user ?? {})).toBe(false);
+	});
+});
