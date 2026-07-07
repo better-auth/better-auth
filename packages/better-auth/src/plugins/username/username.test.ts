@@ -1001,3 +1001,40 @@ describe("username with displayUsername disabled", async () => {
 		expect("displayUsername" in (session?.user ?? {})).toBe(false);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10312
+ */
+describe("username with displayUsername disabled and a validator", async () => {
+	const { client } = await getTestInstance(
+		{
+			plugins: [
+				username({
+					displayUsername: false,
+					displayUsernameValidator: (displayUsername) =>
+						/^[a-zA-Z0-9_-]+$/.test(displayUsername),
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [usernameClient({ displayUsername: false })],
+			},
+		},
+	);
+
+	it("should not validate displayUsername from the body when the field is disabled", async () => {
+		const res = await client.signUp.email({
+			email: "disabled-validator@example.com",
+			username: "disabled_validator_user",
+			password: "new-password",
+			name: "Disabled Validator",
+			// displayUsername is disabled, so an invalid value must not be rejected
+			displayUsername: "Invalid Display!",
+		} as Parameters<typeof client.signUp.email>[0]);
+
+		expect(res.error).toBeNull();
+		expect(res.data?.user.username).toBe("disabled_validator_user");
+		expect("displayUsername" in (res.data?.user ?? {})).toBe(false);
+	});
+});

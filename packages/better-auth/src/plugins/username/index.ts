@@ -731,6 +731,10 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 							}
 						}
 
+						if (!includeDisplayUsername) {
+							return;
+						}
+
 						const displayUsername =
 							typeof ctx.body.displayUsername === "string" &&
 							options?.validationOrder?.displayUsername === "post-normalization"
