@@ -291,4 +291,14 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/SulimanAbdulrazzaq.png",
 		},
 	},
+	{
+		name: "better-auth-instagram",
+		url: "https://github.com/rajatsandeepsen/better-auth-instagram",
+		description: "Instagram Provider for Better-Auth",
+		author: {
+			name: "Rajat Sandeep",
+			github: "rajatsandeepsen",
+			avatar: "https://github.com/rajatsandeepsen.png",
+		},
+	},
 ];
