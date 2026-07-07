@@ -1,0 +1,260 @@
+---
+title: Sign In With Solana (SIWS)
+description: Sign in with Solana plugin for Better Auth
+---
+
+The Sign in with Solana (SIWS) plugin allows users to authenticate with Solana wallets using the wallet-standard sign-in flow. The recommended setup is to verify signatures with `@solana/wallet-standard-util`, while Better Auth handles nonce binding, account creation, and session issuance.
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Add the Server Plugin
+
+    Install the verifier utility and add the SIWS plugin to your auth configuration:
+
+    ```package-install
+    pnpm add @solana/wallet-standard-util
+    ```
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { generateRandomString } from "better-auth/crypto";
+    import { siws } from "better-auth/plugins"; // [!code highlight]
+    import { verifySignIn as verifySolanaSignIn } from "@solana/wallet-standard-util";
+
+    export const auth = betterAuth({
+      plugins: [
+        siws({
+          domain: "example.com",
+          emailDomainName: "example.com", // optional
+          anonymous: false, // optional, default is true
+          getNonce: async () => {
+            return generateRandomString(32, "a-z", "A-Z", "0-9");
+          },
+          verifySignIn: async ({ input, output }) => {
+            return verifySolanaSignIn(input, output);
+          },
+        }),
+      ],
+    });
+    ```
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```package-install
+        npx auth migrate
+        ```
+      </Tab>
+
+      <Tab value="generate">
+        ```package-install
+        npx auth generate
+        ```
+      </Tab>
+    </Tabs>
+
+    See the [Schema](#schema) section to add the fields manually.
+  </Step>
+
+  <Step>
+    ### Add the Client Plugin
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client";
+    import { siwsClient } from "better-auth/client/plugins"; // [!code highlight]
+
+    export const authClient = createAuthClient({
+      plugins: [
+        siwsClient(), // [!code highlight]
+      ],
+    });
+    ```
+  </Step>
+</Steps>
+
+## Usage
+
+### Generate a Nonce
+
+Before asking the wallet to sign in, generate a nonce for the Solana address:
+
+```ts
+import { authClient } from "@/lib/auth-client";
+
+const { data, error } = await authClient.siws.nonce({
+  address: "So11111111111111111111111111111111111111112",
+});
+
+if (data) {
+  console.log("Nonce:", data.nonce);
+}
+```
+
+### Sign In with Solana
+
+After generating a nonce, pass the wallet-standard sign-in payload back to Better Auth:
+
+```ts
+import { authClient } from "@/lib/auth-client";
+
+const { data, error } = await authClient.siws.verify({
+  address: "So11111111111111111111111111111111111111112",
+  input: {
+    domain: window.location.host,
+    address: "So11111111111111111111111111111111111111112",
+    statement: "Sign in to Example App.",
+    nonce: "server-issued-nonce",
+    issuedAt: new Date().toISOString(),
+  },
+  output: {
+    account: {
+      address: "So11111111111111111111111111111111111111112",
+      publicKey: "base64-encoded-public-key",
+    },
+    signature: "base64-encoded-signature",
+    signedMessage: "base64-encoded-signed-message",
+  },
+  email: "user@example.com", // optional, required when anonymous is false
+});
+
+if (data) {
+  console.log("Authentication successful:", data.user);
+}
+```
+
+<Callout type="warning">
+  `input.nonce` must match the server-issued nonce from `authClient.siws.nonce()`. If `input.domain` is provided, it must match your configured `domain`, and if `input.address` is provided, it must match the request `address`. The plugin also enforces `expirationTime` and `notBefore` when present.
+</Callout>
+
+<Callout type="warning">
+  The `output` object is sent over the wire as strings. `account.publicKey`, `signature`, and `signedMessage` must be base64-encoded, because the server decodes them into `Uint8Array` before calling your `verifySignIn` implementation. You only send `account.address` and `account.publicKey`; Better Auth fills the wallet-standard account metadata it passes to the verifier.
+</Callout>
+
+<Callout type="warning">
+  A Solana signature proves control of the wallet, not ownership of the `email` you pass. When `anonymous` is `false`, the plugin only binds the supplied email if it is not already used by another account. Otherwise it falls back to a wallet-derived email address.
+</Callout>
+
+### Client-Side Example with a Solana Wallet
+
+This pattern matches the demo app and works with standard wallets such as Phantom or Solflare:
+
+```ts
+import { authClient } from "@/lib/auth-client";
+
+function toBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+async function signInWithSolana(publicKey: Uint8Array, address: string, signIn: (input: {
+  domain?: string;
+  address?: string;
+  statement?: string;
+  nonce?: string;
+  issuedAt?: string;
+}) => Promise<{ signature: Uint8Array; signedMessage: Uint8Array }>) {
+  const { data: nonceData, error: nonceError } = await authClient.siws.nonce({
+    address,
+  });
+
+  if (nonceError || !nonceData?.nonce) {
+    throw new Error(nonceError?.message ?? "Failed to get nonce");
+  }
+
+  const input = {
+    domain: window.location.host,
+    address,
+    statement: "Sign in to Example App.",
+    nonce: nonceData.nonce,
+    issuedAt: new Date().toISOString(),
+  };
+
+  const output = await signIn(input);
+
+  return authClient.siws.verify({
+    address,
+    input,
+    output: {
+      account: {
+        address,
+        publicKey: toBase64(publicKey),
+      },
+      signature: toBase64(output.signature),
+      signedMessage: toBase64(output.signedMessage),
+    },
+  });
+}
+```
+
+## Configuration Options
+
+### Server Options
+
+The SIWS plugin accepts the following configuration options:
+
+* **domain**: The domain name of your application. If the wallet supplies `input.domain`, it must match this value
+* **emailDomainName**: Domain used for generated placeholder emails. Defaults to the base URL origin
+* **anonymous**: Whether to allow wallet sign-ins without an email. Default is `true`
+* **getNonce**: Function that returns a unique nonce for each sign-in attempt as a `Promise<string>`
+* **verifySignIn**: Function that verifies the wallet-standard sign-in payload and returns `Promise<boolean>`. The recommended implementation is `verifySignIn` from `@solana/wallet-standard-util`
+* **schema**: Optional schema overrides for the plugin tables
+
+### Client Options
+
+The SIWS client plugin does not require configuration:
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { siwsClient } from "better-auth/client/plugins";
+
+export const authClient = createAuthClient({
+  plugins: [siwsClient()],
+});
+```
+
+## Schema
+
+The SIWS plugin adds a `solanaWalletAddress` table to store user wallet associations:
+
+| Field     | Type    | Description                               |
+| --------- | ------- | ----------------------------------------- |
+| userId    | string  | Reference to `user.id`                    |
+| address   | string  | Solana wallet address                     |
+| isPrimary | boolean | Whether this is the user's primary wallet |
+| createdAt | date    | Creation timestamp                        |
+
+## Example Implementation
+
+Here is a complete server setup using `@solana/wallet-standard-util`:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { generateRandomString } from "better-auth/crypto";
+import { siws } from "better-auth/plugins";
+import { verifySignIn as verifySolanaSignIn } from "@solana/wallet-standard-util";
+
+export const auth = betterAuth({
+  database: {
+    // your database configuration
+  },
+  plugins: [
+    siws({
+      domain: "myapp.com",
+      emailDomainName: "myapp.com",
+      anonymous: true,
+      getNonce: async () => generateRandomString(32, "a-z", "A-Z", "0-9"),
+      verifySignIn: async ({ input, output }) => {
+        return verifySolanaSignIn(input, output);
+      },
+    }),
+  ],
+});
+```

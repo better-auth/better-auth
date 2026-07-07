@@ -1,5 +1,14 @@
 allowBuilds:
+  # Temporary allowances added while testing Solana wallet adapter deps. Keep an
+  # eye on these, especially if the adapter package set is narrowed later.
+  '@stellar/stellar-sdk': true
+  blake-hash: true
+  bufferutil: true
+  protobufjs: true
   sharp: true
+  tiny-secp256k1: true
+  usb: true
+  utf-8-validate: true
 
 overrides:
   path-to-regexp@>=8: ^8.4.0

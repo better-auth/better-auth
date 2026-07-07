@@ -11,6 +11,7 @@
     "username",
     "one-tap",
     "siwe",
+    "siws",
     "generic-oauth",
     "multi-session",
     "last-login-method",

@@ -6,6 +6,7 @@ import { scim } from "@better-auth/scim";
 import { sso } from "@better-auth/sso";
 import { stripe } from "@better-auth/stripe";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
+import { verifySignIn as verifySolanaSignIn } from "@solana/wallet-standard-util";
 import type { BetterAuthOptions } from "better-auth";
 import { APIError, betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
@@ -22,6 +23,7 @@ import {
 	oneTap,
 	openAPI,
 	organization,
+	siws,
 	twoFactor,
 } from "better-auth/plugins";
 import { MysqlDialect } from "kysely";
@@ -59,6 +61,12 @@ const authOptions = {
 	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
+			// Wallet-derived emails are placeholders, no inbox to verify
+			if (
+				/^(0x[a-fA-F0-9]{40}|[1-9A-HJ-NP-Za-km-z]{32,44})@/.test(user.email)
+			) {
+				return;
+			}
 			await sendEmail({
 				to: user.email,
 				subject: "Verify your email address",
@@ -347,6 +355,28 @@ const authOptions = {
 			interval: "5s",
 		}),
 		lastLoginMethod(),
+		siws({
+			domain:
+				process.env.NODE_ENV === "development"
+					? "localhost:3000"
+					: new URL(
+							process.env.BETTER_AUTH_URL || "https://demo.better-auth.com",
+						).host,
+			async getNonce() {
+				// Use the Web Crypto API — available in Node 18+, Bun, Deno, CF Workers.
+				const array = new Uint8Array(12);
+				crypto.getRandomValues(array);
+				return Array.from(array, (b) => b.toString(36)).join("");
+			},
+			async verifySignIn({ input, output }) {
+				try {
+					return verifySolanaSignIn(input, output);
+				} catch (e) {
+					console.error("[SIWS verifySignIn]", e);
+					return false;
+				}
+			},
+		}),
 		jwt({
 			jwt: {
 				issuer: process.env.BETTER_AUTH_URL,
