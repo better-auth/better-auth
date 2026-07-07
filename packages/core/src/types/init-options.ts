@@ -1151,6 +1151,22 @@ export type BetterAuthOptions = {
 				 * @default 1 day (60 * 60 * 24)
 				 */
 				freshAge?: number;
+				/**
+				 * Called when Better Auth detects that a session has expired during
+				 * validation and is performing expiry-related cleanup.
+				 *
+				 * This is invoked from `getSession` when the session record exists
+				 * but its `expiresAt` timestamp has passed. The expired session is
+				 * deleted after this hook completes (unless `deferSessionRefresh`
+				 * defers deletion on GET requests).
+				 *
+				 * Useful for logging, analytics, or setting response indicators so
+				 * the application can inform the user their session expired.
+				 */
+				onSessionExpired?: (
+					data: { session: Session; user: User },
+					ctx: GenericEndpointContext,
+				) => Awaitable<void>;
 		  })
 		| undefined;
 	account?:

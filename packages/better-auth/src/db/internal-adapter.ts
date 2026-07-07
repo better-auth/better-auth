@@ -21,6 +21,7 @@ import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
+import { notifySessionExpiredFromFindSession } from "../utils/session-expired";
 import {
 	assertValidUserInfo,
 	assertValidUserInfoSource,
@@ -514,6 +515,11 @@ export const createInternalAdapter = (
 			session: Session & Record<string, any>;
 			user: User & Record<string, any>;
 		} | null> => {
+			let sessionResult: {
+				session: Session & Record<string, any>;
+				user: User & Record<string, any>;
+			} | null = null;
+
 			if (secondaryStorage) {
 				const sessionStringified = await secondaryStorage.get(token);
 				// When preserveSessionInDatabase is enabled, revoked sessions
@@ -543,38 +549,43 @@ export const createInternalAdapter = (
 						createdAt: new Date(s.user.createdAt),
 						updatedAt: new Date(s.user.updatedAt),
 					});
-					return {
+					sessionResult = {
 						session: parsedSession,
 						user: parsedUser,
 					};
 				}
 			}
 
-			const currentAdapter = await getCurrentAdapter(adapter);
-			const result = await currentAdapter.findOne<
-				Session & { user: User | null }
-			>({
-				model: "session",
-				where: [
-					{
-						value: token,
-						field: "token",
+			if (!sessionResult) {
+				const currentAdapter = await getCurrentAdapter(adapter);
+				const result = await currentAdapter.findOne<
+					Session & { user: User | null }
+				>({
+					model: "session",
+					where: [
+						{
+							value: token,
+							field: "token",
+						},
+					],
+					join: {
+						user: true,
 					},
-				],
-				join: {
-					user: true,
-				},
-			});
-			if (!result) return null;
+				});
+				if (!result) return null;
 
-			const { user, ...session } = result;
-			if (!user) return null;
-			const parsedSession = parseSessionOutput(ctx.options, session);
-			const parsedUser = parseUserOutput(ctx.options, user);
-			return {
-				session: parsedSession,
-				user: parsedUser,
-			};
+				const { user, ...session } = result;
+				if (!user) return null;
+				const parsedSession = parseSessionOutput(ctx.options, session);
+				const parsedUser = parseUserOutput(ctx.options, user);
+				sessionResult = {
+					session: parsedSession,
+					user: parsedUser,
+				};
+			}
+
+			await notifySessionExpiredFromFindSession(sessionResult);
+			return sessionResult;
 		},
 		findSessions: async (
 			sessionTokens: string[],

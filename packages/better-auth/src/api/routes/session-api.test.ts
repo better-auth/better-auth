@@ -2710,3 +2710,205 @@ describe("forced strict session validation", async () => {
 		});
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10061
+ */
+describe("onSessionExpired", async () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("should call onSessionExpired when a session expires", async () => {
+		const onSessionExpired = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			session: {
+				expiresIn: 60,
+				onSessionExpired,
+			},
+		});
+
+		const headers = new Headers();
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			returnHeaders: true,
+		});
+		headers.set("cookie", signInRes.headers.getSetCookie()[0]!);
+
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(61 * 1000);
+
+		const sessionRes = await auth.api.getSession({
+			headers,
+		});
+
+		expect(sessionRes).toBeNull();
+		expect(onSessionExpired).toHaveBeenCalledOnce();
+		expect(onSessionExpired).toHaveBeenCalledWith(
+			{
+				session: expect.objectContaining({
+					token: expect.any(String),
+				}),
+				user: expect.objectContaining({
+					email: testUser.email,
+				}),
+			},
+			expect.objectContaining({
+				context: expect.anything(),
+			}),
+		);
+	});
+
+	it("should call onSessionExpired on GET when deferSessionRefresh is enabled without deleting the session", async () => {
+		const onSessionExpired = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			session: {
+				deferSessionRefresh: true,
+				expiresIn: 60,
+				onSessionExpired,
+			},
+		});
+		const ctx = await auth.$context;
+		const deleteFn = vi.spyOn(ctx.internalAdapter, "deleteSession");
+
+		const headers = new Headers();
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			returnHeaders: true,
+		});
+		headers.set("cookie", signInRes.headers.getSetCookie()[0]!);
+
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(61 * 1000);
+
+		const sessionRes = await auth.api.getSession({
+			headers,
+		});
+
+		expect(sessionRes).toBeNull();
+		expect(onSessionExpired).toHaveBeenCalledOnce();
+		expect(deleteFn).not.toHaveBeenCalled();
+	});
+
+	it("should not call onSessionExpired when the user signs out", async () => {
+		const onSessionExpired = vi.fn();
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				onSessionExpired,
+			},
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		await client.signOut({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(onSessionExpired).not.toHaveBeenCalled();
+	});
+
+	it("should still clean up when onSessionExpired throws", async () => {
+		const onSessionExpired = vi.fn(async () => {
+			throw new Error("hook failed");
+		});
+		const { auth, testUser } = await getTestInstance({
+			session: {
+				expiresIn: 60,
+				onSessionExpired,
+			},
+		});
+		const ctx = await auth.$context;
+		const deleteFn = vi.spyOn(ctx.internalAdapter, "deleteSession");
+
+		const headers = new Headers();
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			returnHeaders: true,
+		});
+		headers.set("cookie", signInRes.headers.getSetCookie()[0]!);
+
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(61 * 1000);
+
+		const sessionRes = await auth.api.getSession({
+			headers,
+		});
+
+		expect(sessionRes).toBeNull();
+		expect(onSessionExpired).toHaveBeenCalledOnce();
+		expect(deleteFn).toHaveBeenCalledOnce();
+	});
+
+	it("should call onSessionExpired when findSession returns an expired session", async () => {
+		const onSessionExpired = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			session: {
+				expiresIn: 60,
+				onSessionExpired,
+			},
+		});
+
+		const headers = new Headers();
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			returnHeaders: true,
+		});
+		headers.set("cookie", signInRes.headers.getSetCookie()[0]!);
+
+		const activeSession = await auth.api.getSession({ headers });
+		const sessionToken = activeSession?.session.token;
+		expect(sessionToken).toBeDefined();
+
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(61 * 1000);
+
+		const ctx = await auth.$context;
+		const endpointCtx = {
+			context: ctx,
+			headers: new Headers(),
+			query: {},
+		} as unknown as GenericEndpointContext;
+
+		await runWithRequestState(new WeakMap(), async () => {
+			await runWithEndpointContext(endpointCtx, async () => {
+				await ctx.internalAdapter.findSession(sessionToken!);
+			});
+		});
+
+		expect(onSessionExpired).toHaveBeenCalledOnce();
+		expect(onSessionExpired).toHaveBeenCalledWith(
+			{
+				session: expect.objectContaining({
+					token: sessionToken,
+				}),
+				user: expect.objectContaining({
+					email: testUser.email,
+				}),
+			},
+			endpointCtx,
+		);
+	});
+});
