@@ -301,4 +301,14 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/rajatsandeepsen.png",
 		},
 	},
+	{
+		name: "better-auth-zoho",
+		url: "https://github.com/rajatsandeepsen/better-auth-zoho",
+		description: "Zoho Provider for Better-Auth",
+		author: {
+			name: "Rajat Sandeep",
+			github: "rajatsandeepsen",
+			avatar: "https://github.com/rajatsandeepsen.png",
+		},
+	},
 ];
