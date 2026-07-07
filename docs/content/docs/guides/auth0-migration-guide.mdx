@@ -426,7 +426,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
                             let rolePage = await auth0Client.organizations.members.roles.list(
                                 org.id,
                                 member.user_id,
-                                { per_page: 100, page: 0 }
+                                { per_page: 50, page: 0 }
                             );
                             userRoles.push(...(rolePage.data || []));
                             while (rolePage.hasNextPage()) {
