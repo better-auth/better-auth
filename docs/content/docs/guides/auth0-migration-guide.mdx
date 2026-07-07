@@ -346,7 +346,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
                         tokenType: identity.token_type,
                         refreshToken: identity.refresh_token,
                         accessTokenExpiresAt: identity.expires_in ? new Date(Date.now() + identity.expires_in * 1000) : undefined,
-                        // if you are enterprise user, you can get the refresh tokens or all the tokensets - auth0Client.users.getAllTokensets 
+                        // if you are enterprise user, you can get the refresh tokens or all the tokensets - auth0Client.users.federatedConnectionsTokensets.list(auth0User.user_id)
                         refreshTokenExpiresAt: identity.refresh_token_expires_in ? new Date(Date.now() + identity.refresh_token_expires_in * 1000) : undefined,
 
                         scope: identity.scope,
@@ -709,7 +709,7 @@ The script includes a basic role mapping function (`mapAuth0RoleToBetterAuthRole
 
 ### Rate Limiting
 
-The migration script includes pagination to handle large numbers of users. Adjust the `perPage` value based on your needs and Auth0's rate limits.
+The migration script includes pagination to handle large numbers of users. Adjust the `per_page` (offset pagination) and `take` (checkpoint pagination) values passed to the Auth0 `list()` calls based on your needs and Auth0's rate limits.
 
 ## Wrapping Up
 
