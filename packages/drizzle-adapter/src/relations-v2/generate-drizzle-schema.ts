@@ -35,6 +35,29 @@ function convertToSnakeCase(str: string, camelCase?: boolean) {
 		.toLowerCase();
 }
 
+/**
+ * Convert a schema namespace into a valid JavaScript identifier so it can be
+ * used as the `const <name>Schema = pgSchema(...)` variable name.
+ * e.g. "my-auth" -> "myAuth", "123schema" -> "_123schema".
+ */
+function toValidIdentifier(str: string): string {
+	// camelCase across any separator (hyphen, underscore, space, etc.), drop any
+	// remaining invalid characters, then prefix a leading digit last so the
+	// identifier stays valid.
+	let result = str
+		.replace(/[^a-zA-Z0-9]+([a-zA-Z0-9])/g, (_, char: string) =>
+			char.toUpperCase(),
+		)
+		.replace(/[^a-zA-Z0-9]/g, "")
+		.replace(/^[0-9]/, "_$&");
+
+	if (result.length > 0 && /[A-Z]/.test(result[0]!)) {
+		result = result[0]!.toLowerCase() + result.slice(1);
+	}
+
+	return result || "schema";
+}
+
 export const generateDrizzleSchema: SchemaGenerator = async ({
 	options,
 	file,
@@ -47,6 +70,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	const filePath = file || "./auth-schema.ts";
 	const databaseType: "sqlite" | "mysql" | "pg" | undefined = provider;
 
+	const schemaName = adapterConfig?.schemaName;
+
 	if (!databaseType) {
 		throw new Error(
 			`Database provider type is undefined during Drizzle schema generation. Please define a \`provider\` in the Drizzle adapter config. Read more at https://better-auth.com/docs/adapters/drizzle`,
@@ -58,7 +83,27 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		databaseType,
 		tables,
 		options,
+		schemaName,
 	});
+
+	// Add schema declaration for PostgreSQL when schemaName is provided.
+	// Relations only reference the exported table consts, so the namespace has
+	// no effect on the generated defineRelationsPart block.
+	let schemaVarName: string | undefined;
+	if (databaseType === "pg" && schemaName) {
+		schemaVarName = `${toValidIdentifier(schemaName)}Schema`;
+		if (schemaVarName === "pgSchema") {
+			schemaVarName = "pgCustomSchema";
+		}
+		code += `\nconst ${schemaVarName} = pgSchema(${JSON.stringify(schemaName)});\n`;
+	}
+
+	// Table function to use: namespaced schema table for pg + schemaName,
+	// otherwise the plain dialect table helper.
+	const tableFunction =
+		databaseType === "pg" && schemaName && schemaVarName
+			? `${schemaVarName}.table`
+			: `${databaseType}Table`;
 
 	const getModelName = initGetModelName({
 		schema: tables,
@@ -233,7 +278,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			return code.join("\n");
 		};
 
-		const schema = `export const ${modelName} = ${databaseType}Table("${convertToSnakeCase(
+		const schema = `export const ${modelName} = ${tableFunction}("${convertToSnakeCase(
 			modelName,
 			camelCase,
 		)}", {
@@ -550,13 +595,24 @@ function generateImport({
 	databaseType,
 	tables,
 	options,
+	schemaName,
 }: {
 	databaseType: "sqlite" | "mysql" | "pg";
 	tables: BetterAuthDBSchema;
 	options: BetterAuthOptions;
+	schemaName?: string;
 }) {
 	const rootImports: string[] = ["defineRelationsPart"];
 	const coreImports: string[] = [];
+
+	// Import pgSchema for PostgreSQL when a custom schema namespace is provided.
+	if (databaseType === "pg" && schemaName) {
+		coreImports.push("pgSchema");
+	}
+
+	if (!(databaseType === "pg" && schemaName)) {
+		coreImports.push(`${databaseType}Table`);
+	}
 
 	let hasBigint = false;
 	let hasJson = false;
@@ -578,7 +634,6 @@ function generateImport({
 
 	const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
-	coreImports.push(`${databaseType}Table`);
 	coreImports.push(
 		databaseType === "mysql"
 			? "varchar, text"
