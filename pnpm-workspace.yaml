@@ -5,7 +5,6 @@ packages:
   - test
 
 overrides:
-  '@better-fetch/fetch': 1.3.0
   kysely: 0.28.17
   zod@>=4: 4.3.6
   axios: '>=1.15.2 <2'
@@ -18,7 +17,7 @@ overrides:
   cookie@<0.7.0: '>=0.7.2 <0.8'
   '@xmldom/xmldom@<0.8.13': '>=0.8.13 <0.9'
   'devalue@>=5.6.3 <=5.8.0': 5.8.1
-  esbuild@<=0.24.2: ^0.25.4
+  esbuild@<0.28.1: '>=0.28.1 <0.29'
   fast-uri@<=3.1.1: 3.1.2
   fast-xml-builder@<=1.1.6: '>=1.1.7 <2'
   fast-xml-parser@<5.7.0: '>=5.8.0 <6'
@@ -55,29 +54,31 @@ overrides:
   shell-quote@<=1.8.3: 1.8.4
 
 catalog:
-  '@better-auth/utils': 0.4.1
-  '@better-fetch/fetch': 1.3.0
-  better-call: 1.3.6
+  '@better-auth/utils': 0.4.2
+  '@better-fetch/fetch': 1.3.1
+  better-call: 1.3.7
   kysely: ^0.28.17 || ^0.29.0
+  nanostores: ^1.3.0
   tsdown: 0.21.1
   typescript: ^5.9.3
 
 catalogs:
   peer:
     kysely: ^0.28.5 || ^0.29.0
+    nanostores: ^1.0.1
   react19:
-    '@types/react': ^19.2.14
+    '@types/react': ^19.2.17
     '@types/react-dom': ^19.2.3
-    react: ^19.2.4
-    react-dom: ^19.2.4
+    react: ^19.2.7
+    react-dom: ^19.2.7
   tailwind:
-    '@tailwindcss/postcss': ^4.2.1
-    tailwindcss: ^4.2.1
+    '@tailwindcss/postcss': ^4.3.1
+    tailwindcss: ^4.3.1
     tailwindcss-animate: ^1.0.7
   vitest:
-    '@vitest/coverage-istanbul': ^4.1.5
-    '@vitest/ui': ^4.1.5
-    vitest: ^4.1.5
+    '@vitest/coverage-istanbul': ^4.1.9
+    '@vitest/ui': ^4.1.9
+    vitest: ^4.1.9
 
 allowBuilds:
   '@parcel/watcher': true
@@ -103,6 +104,13 @@ minimumReleaseAgeExclude:
   - '@better-auth/*'
   - '@better-fetch/fetch'
   - 'better-call'
+
+packageExtensions:
+  # drizzle-kit has no drizzle-orm peer, so a monorepo can feed it the wrong version.
+  # https://github.com/drizzle-team/drizzle-orm/issues/5573
+  drizzle-kit:
+    peerDependencies:
+      drizzle-orm: '*'
 
 patchedDependencies:
   '@changesets/assemble-release-plan': patches/@changesets__assemble-release-plan.patch

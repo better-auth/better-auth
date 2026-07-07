@@ -192,7 +192,7 @@ This allows most endpoint-related fields in `oidcConfig` to be **optional** — 
        */
       issuer: string = "https://your-org.okta.com"
       /**
-       * Email domain for this provider
+       * Bare email domain, or comma-separated bare email domains, for this provider
        */
       domain: string = "yourcompany.com"
       /**
@@ -287,6 +287,12 @@ trustedOrigins: async (request) => {
 
 See the [`trustedOrigins`](/docs/reference/security#trusted-origins) docs for more information.
 
+#### Redirecting OIDC endpoints
+
+Better Auth does not follow redirects for server-side OIDC requests. Configure the final canonical URL for the discovery, token, userinfo, and JWKS endpoints.
+
+If one of those endpoints returns a `3xx` response, registration or sign-in fails with `oidc_endpoint_redirect`. This keeps endpoint validation tied to the exact URL that Better Auth fetches.
+
 #### Why Discovery Can Fail
 
 Better Auth validates that the IdP's metadata is correct and complete **before** allowing registration. This prevents subtle runtime failures during sign-in or token validation.
@@ -309,6 +315,7 @@ If the Identity Provider is misconfigured or unreachable, registration will fail
 | `discovery_invalid_url`         | The discovery URL is malformed or uses an unsupported protocol                                                                      |
 | `discovery_untrusted_origin`    | The discovery URL or one of the URLs discovered as part of this process was not trusted by your app's trusted origins configuration |
 | `discovery_invalid_json`        | The discovery response is empty or not valid JSON                                                                                   |
+| `oidc_endpoint_redirect`        | The discovery, token, userinfo, or JWKS endpoint returned a redirect; configure the final endpoint URL instead                      |
 | `unsupported_token_auth_method` | The IdP only supports token auth methods that Better Auth doesn't support                                                           |
 
 **Supported token auth methods:**
@@ -1368,7 +1375,7 @@ See the [Schema](#if-you-have-enabled-domain-verification) section to add the fi
 ### Verify your domain
 
 When domain verification is enabled, every new SSO provider will be untrusted at first.
-This means that new sign-ups or sign-ins will be allowed until the domain ownership has been verified.
+This means that new sign-ups or sign-ins will not be allowed until domain ownership has been verified.
 
 To verify your ownership over a domain, follow these steps:
 
@@ -1387,6 +1394,8 @@ To verify your ownership over a domain, follow these steps:
 
     * **Host:** `_better-auth-token-{your-provider-id}` (**Note:** An underscore is automatically prepended to follow DNS infrastructure subdomain conventions. The `better-auth-token` part can be customized through the `domainVerification.tokenPrefix` option)
     * **Value:** The verification token you were given.
+
+    If the SSO provider lists multiple comma-separated domains, add this `TXT` record under every listed domain. For example, a provider with `domain: "company.com,subsidiary.com"` must publish the record for both `company.com` and `subsidiary.com`.
 
     **Save the record and wait for it to propagate.** This can take up to 48 hours, but it's usually much faster.
   </Step>
@@ -1449,6 +1458,8 @@ The SAML ACS endpoint (`/api/auth/sso/saml2/sp/acs/{providerId}`) handles both *
 * **IdP-initiated**: User clicks app icon in IdP dashboard (Okta, Azure AD, etc.) → IdP POSTs SAMLResponse to callback
 
 Better Auth derives the ACS URL automatically from your `baseURL` and `providerId`, so no SP-side configuration is required.
+
+Your IdP must include an `AudienceRestriction` for this SP. The accepted audience is the SP entity ID, or the explicit `audience` value in `samlConfig` when you need to match an IdP-specific SP identifier. Better Auth also checks bearer `Recipient` and response `Destination` values against this provider's ACS endpoints.
 
 The post-login redirect destination is controlled by the `callbackURL` parameter in the client-side `signIn.sso()` call:
 
@@ -1694,7 +1705,7 @@ export const ssoOptionsType = {
 			type: "object",
 			properties: {
 				domain: {
-					description: "The domain to match for this default provider.",
+					description: "The bare email domain, or comma-separated bare email domains, to match for this default provider.",
 					type: "string",
 					required: true,
 				},

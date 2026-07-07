@@ -12,6 +12,7 @@ export const OAUTH_CALLBACK_ERROR_CODES = {
 	ISSUER_MISSING: "issuer_missing",
 	ISSUER_MISMATCH: "issuer_mismatch",
 	INVALID_CODE: "invalid_code",
+	NONCE_BINDING_MISSING: "nonce_binding_missing",
 	UNABLE_TO_GET_USER_INFO: "unable_to_get_user_info",
 	NO_CALLBACK_URL: "no_callback_url",
 	UNABLE_TO_LINK_ACCOUNT: "unable_to_link_account",

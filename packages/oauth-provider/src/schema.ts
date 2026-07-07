@@ -141,6 +141,11 @@ export const schema = {
 				type: "boolean",
 				required: false,
 			},
+			dpopBoundAccessTokens: {
+				type: "boolean",
+				required: false,
+				defaultValue: false,
+			},
 			// All other metadata
 			referenceId: {
 				type: "string",
@@ -205,6 +210,11 @@ export const schema = {
 			customClaims: {
 				type: "json",
 				required: false,
+			},
+			dpopBoundAccessTokensRequired: {
+				type: "boolean",
+				required: false,
+				defaultValue: false,
 			},
 			// Lifecycle: disabled → no new issuance, existing tokens still verify.
 			disabled: {
@@ -341,7 +351,16 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			authorizationCodeId: {
+				type: "string",
+				required: false,
+				index: true,
+			},
 			resources: {
+				type: "string[]",
+				required: false,
+			},
+			requestedUserInfoClaims: {
 				type: "string[]",
 				required: false,
 			},
@@ -355,8 +374,26 @@ export const schema = {
 				type: "date",
 				required: false,
 			},
+			rotatedAt: {
+				type: "date",
+				required: false,
+			},
+			rotationReplayResponse: {
+				type: "string",
+				required: false,
+			},
+			rotationReplayExpiresAt: {
+				type: "date",
+				required: false,
+			},
 			authTime: {
 				type: "date",
+				required: false,
+			},
+			// RFC 7800 `cnf` confirmation that sender-constrains this refresh-token
+			// family (for example DPoP `{ jkt }`). Carried forward on rotation.
+			confirmation: {
+				type: "json",
 				required: false,
 			},
 			// Immutable
@@ -420,7 +457,16 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			authorizationCodeId: {
+				type: "string",
+				required: false,
+				index: true,
+			},
 			resources: {
+				type: "string[]",
+				required: false,
+			},
+			requestedUserInfoClaims: {
 				type: "string[]",
 				required: false,
 			},
@@ -441,6 +487,12 @@ export const schema = {
 			},
 			revoked: {
 				type: "date",
+				required: false,
+			},
+			// RFC 7800 `cnf` confirmation that sender-constrains this access token
+			// (for example DPoP `{ jkt }`). Surfaced as `cnf` at introspection.
+			confirmation: {
+				type: "json",
 				required: false,
 			},
 			// Shall be same as refreshId.scopes if using refreshId
@@ -476,6 +528,10 @@ export const schema = {
 				required: false,
 			},
 			resources: {
+				type: "string[]",
+				required: false,
+			},
+			requestedUserInfoClaims: {
 				type: "string[]",
 				required: false,
 			},

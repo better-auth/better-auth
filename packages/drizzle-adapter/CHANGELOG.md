@@ -1,5 +1,43 @@
 # @better-auth/drizzle-adapter
 
+## 1.7.0-rc.1
+
+## 1.7.0-rc.0
+
+## 1.7.0-beta.10
+
+### Minor Changes
+
+- [#9489](https://github.com/better-auth/better-auth/pull/9489) [`ea06c5a`](https://github.com/better-auth/better-auth/commit/ea06c5a71f448dfc600f1c2f7b0de732730c79cd) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Add a new `@better-auth/drizzle-adapter/relations-v2` entry point for projects using Drizzle Relations v2. The schema generator now emits relations using `defineRelationsPart` so the generated auth schema can be merged alongside your app's relations without changing your database structure.
+
+## 1.7.0-beta.9
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-beta.9
+
+## 1.7.0-beta.8
+
+### Patch Changes
+
+- Updated dependencies [[`7c7313c`](https://github.com/better-auth/better-auth/commit/7c7313c8189baabd11a2ecb681bd2b16eb40fa4d), [`97903c9`](https://github.com/better-auth/better-auth/commit/97903c9cca47f5fa62cf1d2ab86f6228db04aff0), [`3a79aff`](https://github.com/better-auth/better-auth/commit/3a79aff58ed82e45caf04c2ee4acaf0f4d09a86c)]:
+  - @better-auth/core@1.7.0-beta.8
+
+## 1.7.0-beta.7
+
+### Patch Changes
+
+- Updated dependencies [[`3d04fab`](https://github.com/better-auth/better-auth/commit/3d04fababbf3efd4c46a4012f46ed9397715c2e3), [`de8394d`](https://github.com/better-auth/better-auth/commit/de8394de207bae2fe9d0b8d7e901a196c1dc08d0)]:
+  - @better-auth/core@1.7.0-beta.7
+
+## 1.7.0-beta.6
+
+### Patch Changes
+
+- Updated dependencies [[`aedcb97`](https://github.com/better-auth/better-auth/commit/aedcb974f055c3514fe0464dc53d71d45a8a1725), [`2196ea6`](https://github.com/better-auth/better-auth/commit/2196ea65e724830d9f1066c6593210579de586b9)]:
+  - @better-auth/core@1.7.0-beta.6
+
 ## 1.7.0-beta.5
 
 ### Patch Changes
@@ -8,6 +46,47 @@
   - @better-auth/core@1.7.0-beta.5
 
 ## 1.7.0-beta.4
+
+## 1.6.23
+
+### Patch Changes
+
+- [#10257](https://github.com/better-auth/better-auth/pull/10257) [`930b260`](https://github.com/better-auth/better-auth/commit/930b260cfd402e9f8886719a3ced503b9ceff7f6) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix `updateMany` and `deleteMany` reporting 0 affected rows on Cloudflare D1 and on the postgres-js / bun-sql drivers.
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.23
+
+## 1.6.22
+
+### Patch Changes
+
+- Updated dependencies [[`8bd43d9`](https://github.com/better-auth/better-auth/commit/8bd43d9d8312fd9ddbfb8fb5c827cf0a0e55132d)]:
+  - @better-auth/core@1.6.22
+
+## 1.6.21
+
+### Patch Changes
+
+- Updated dependencies [[`90d509e`](https://github.com/better-auth/better-auth/commit/90d509e0b9f72614170ad7124ae9d3a7a97d7d3a), [`816d7f9`](https://github.com/better-auth/better-auth/commit/816d7f92522518e90d437c2a366d75db56690f86), [`570267c`](https://github.com/better-auth/better-auth/commit/570267cd5e782f018933ce3af4f51dbd250bf7de), [`5953157`](https://github.com/better-auth/better-auth/commit/5953157acf619bcb8233c91952b1e4072202f055)]:
+  - @better-auth/core@1.6.21
+
+## 1.6.20
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.20
+
+## 1.6.19
+
+### Patch Changes
+
+- [#10081](https://github.com/better-auth/better-auth/pull/10081) [`0895993`](https://github.com/better-auth/better-auth/commit/08959936d29de8a37d469e42d9077859b643d6b3) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Password reset tokens now work with the Drizzle MySQL adapter after they are consumed during reset.
+
+  Adapter auth-flow tests now cover password reset and replay rejection, and wrapped adapters exercise their native single-use consume and guarded increment behavior when available.
+
+- Updated dependencies [[`5bd5e1c`](https://github.com/better-auth/better-auth/commit/5bd5e1cc73d2c9c38e69011f03038b61a4312a63), [`a787e0b`](https://github.com/better-auth/better-auth/commit/a787e0b66b368a1af0b4ba17c9750c2839668246)]:
+  - @better-auth/core@1.6.19
 
 ## 1.6.18
 

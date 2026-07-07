@@ -1,9 +1,14 @@
+import {
+	DPOP_SIGNING_ALGORITHMS,
+	isDpopBindingError,
+	parseAccessTokenAuthorization,
+} from "better-auth/oauth2";
 import type {
 	McpResourceClient,
 	McpResourceClientOptions,
 	McpSession,
 } from "./index";
-import { createMcpResourceClient } from "./index";
+import { createMcpResourceClient, makeDpopWWWAuthenticate } from "./index";
 
 interface HonoContext {
 	req: { header: (name: string) => string | undefined; raw: Request };
@@ -59,42 +64,46 @@ export function mcpAuthHono(options: McpResourceClientOptions): {
 		options.resource ?? client.authURL,
 	);
 
+	const dpopChallenge = makeDpopWWWAuthenticate(
+		options.dpop?.signingAlgorithms ?? DPOP_SIGNING_ALGORITHMS,
+	);
+
+	const unauthorized = (c: HonoContext, challenge: string, message: string) => {
+		c.header("WWW-Authenticate", challenge);
+		return c.json(
+			{
+				jsonrpc: "2.0",
+				error: { code: -32000, message },
+				id: null,
+			},
+			401,
+		);
+	};
+
 	const middleware: HonoMiddleware = async (c, next) => {
 		const authHeader = c.req.header("Authorization");
-		const token = authHeader?.startsWith("Bearer ")
-			? authHeader.slice(7)
-			: undefined;
-		if (!token) {
-			c.header(
-				"WWW-Authenticate",
-				`Bearer resource_metadata="${resourceMetadata}"`,
-			);
-			return c.json(
-				{
-					jsonrpc: "2.0",
-					error: {
-						code: -32000,
-						message: "Unauthorized: Authentication required",
-					},
-					id: null,
-				},
-				401,
-			);
+		let session: McpSession | null;
+		try {
+			session = await client.verifyRequest(c.req.raw);
+		} catch (error) {
+			if (isDpopBindingError(error)) {
+				return unauthorized(c, dpopChallenge, "Invalid or expired token");
+			}
+			throw error;
 		}
-
-		const session = await client.verifyToken(token);
 		if (!session) {
-			c.header(
-				"WWW-Authenticate",
-				`Bearer resource_metadata="${resourceMetadata}"`,
-			);
-			return c.json(
-				{
-					jsonrpc: "2.0",
-					error: { code: -32000, message: "Invalid or expired token" },
-					id: null,
-				},
-				401,
+			const usedDpop =
+				parseAccessTokenAuthorization(authHeader)?.scheme === "DPoP" ||
+				!!c.req.header("DPoP");
+			const challenge = usedDpop
+				? dpopChallenge
+				: `Bearer resource_metadata="${resourceMetadata}"`;
+			return unauthorized(
+				c,
+				challenge,
+				authHeader
+					? "Invalid or expired token"
+					: "Unauthorized: Authentication required",
 			);
 		}
 
@@ -249,4 +258,4 @@ function normalizeURL(url: string | undefined | null): string | undefined {
 	return url.endsWith("/") ? url.slice(0, -1) : url;
 }
 
-export type { McpSession, McpResourceClient, McpResourceClientOptions };
+export type { McpResourceClient, McpResourceClientOptions, McpSession };

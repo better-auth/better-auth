@@ -256,6 +256,118 @@ describe("SSO", async () => {
 		expect(callbackURL).toContain("/dashboard");
 	});
 
+	it("should redirect with the token endpoint error description when code exchange fails", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "token-error.com",
+				providerId: "token-error-provider",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+				},
+			},
+			headers,
+		});
+
+		const tokenErrorHandler = (tokenEndpointResponse: {
+			body: Record<string, unknown>;
+			statusCode: number;
+		}) => {
+			tokenEndpointResponse.body = {
+				error: "invalid_client",
+				error_description: "client rejected by issuer",
+			};
+			tokenEndpointResponse.statusCode = 401;
+		};
+		server.service.once("beforeResponse", tokenErrorHandler);
+
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "token-error-provider",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+
+		try {
+			const { callbackURL } = await simulateOAuthFlow(res.url, signInHeaders);
+			const redirectURL = new URL(callbackURL, "http://localhost:3000");
+			expect(redirectURL.searchParams.get("error")).toBe("invalid_provider");
+			expect(redirectURL.searchParams.get("error_description")).toBe(
+				"client rejected by issuer",
+			);
+		} finally {
+			server.service.removeListener("beforeResponse", tokenErrorHandler);
+		}
+	});
+
+	it("should redirect with an encoded invalid request when callback has no code", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "missing-code.com",
+				providerId: "missing-code-provider",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+				},
+			},
+			headers,
+		});
+
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "missing-code-provider",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+
+		let callbackLocation: string | null = null;
+		await betterFetch(res.url, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				callbackLocation = context.response.headers.get("location");
+			},
+		});
+		if (!callbackLocation) throw new Error("No callback location found");
+
+		const callbackWithoutCode = new URL(callbackLocation);
+		callbackWithoutCode.searchParams.delete("code");
+
+		let redirectLocation = "";
+		await betterFetch(callbackWithoutCode.toString(), {
+			method: "GET",
+			customFetchImpl,
+			headers: signInHeaders,
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		const redirectURL = new URL(redirectLocation, "http://localhost:3000");
+		expect(redirectURL.searchParams.get("error")).toBe("invalid_request");
+		expect(redirectURL.searchParams.get("error_description")).toBe(
+			"authorization_code_not_found",
+		);
+	});
+
 	it("should forward additionalParams to the SSO authorization URL", async () => {
 		const res = await authClient.signIn.sso({
 			providerId: "test",
@@ -1295,6 +1407,22 @@ describe("OIDC SSO with defaultSSO array", async () => {
 								"http://localhost:8080/.well-known/openid-configuration",
 						},
 					},
+					{
+						domain:
+							"https://default-oidc-normalized.com/path,default-oidc-secondary.com",
+						providerId: "default-oidc-provider-normalized",
+						oidcConfig: {
+							issuer: "http://localhost:8080",
+							clientId: "normalized-client",
+							clientSecret: "normalized-secret",
+							pkce: false,
+							authorizationEndpoint: "http://localhost:8080/authorize",
+							tokenEndpoint: "http://localhost:8080/token",
+							jwksEndpoint: "http://localhost:8080/jwks",
+							discoveryEndpoint:
+								"http://localhost:8080/.well-known/openid-configuration",
+						},
+					},
 				],
 			}),
 			organization(),
@@ -1324,10 +1452,17 @@ describe("OIDC SSO with defaultSSO array", async () => {
 
 	const tokenHandler = (token: any) => {
 		const isExplicit = token.payload.aud === "explicit-client";
-		currentEmail = isExplicit
-			? "default-sso-user@default-oidc-explicit.com"
-			: "default-sso-user@default-oidc.com";
-		currentSub = isExplicit ? "explicit-sso-sub" : "default-sso-sub";
+		const isNormalized = token.payload.aud === "normalized-client";
+		currentEmail = isNormalized
+			? "default-sso-user@default-oidc-secondary.com"
+			: isExplicit
+				? "default-sso-user@default-oidc-explicit.com"
+				: "default-sso-user@default-oidc.com";
+		currentSub = isNormalized
+			? "normalized-sso-sub"
+			: isExplicit
+				? "explicit-sso-sub"
+				: "default-sso-sub";
 		token.payload.email = currentEmail;
 		token.payload.email_verified = true;
 		token.payload.name = "Default SSO User";
@@ -1420,6 +1555,36 @@ describe("OIDC SSO with defaultSSO array", async () => {
 
 		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain("/dashboard");
+	});
+
+	it("should sign in via defaultSSO OIDC using normalized domain matching", async () => {
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "someone@default-oidc-secondary.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(res.url).toContain("http://localhost:8080/authorize");
+		expect(res.url).toContain(
+			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Fdefault-oidc-provider-normalized",
+		);
+
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+			res.url,
+			headers,
+		);
+		expect(callbackURL).toContain("/dashboard");
+
+		const session = await authClient.getSession({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(session.data?.user.email).toBe(
+			"default-sso-user@default-oidc-secondary.com",
+		);
 	});
 
 	it("should sign in via defaultSSO OIDC with all endpoints explicit (no discovery needed)", async () => {

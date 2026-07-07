@@ -1,5 +1,7 @@
 import { decodeProtectedHeader, jwtVerify } from "jose";
-import type { ProviderOptions, UpstreamProvider } from "./oauth-provider";
+import type { OAuthProvider, ProviderOptions } from "./oauth-provider";
+
+type ProviderWithIdTokenConfig = Pick<OAuthProvider, "idToken" | "options">;
 
 async function sha256Hex(value: string) {
 	const data = new TextEncoder().encode(value);
@@ -29,12 +31,12 @@ async function nonceMatches(
 /**
  * Whether a provider can verify a client-submitted id_token.
  *
- * A provider supports id_token sign-in when it declares an {@link UpstreamProvider.idToken}
+ * A provider supports id_token sign-in when it declares an {@link OAuthProvider.idToken}
  * verification config, or when the integrator supplies a `verifyIdToken` override on the
  * provider options. A provider whose options set `disableIdTokenSignIn`, or that declares
  * neither, rejects the client id_token sign-in path with `ID_TOKEN_NOT_SUPPORTED`.
  */
-export function supportsIdTokenSignIn(provider: UpstreamProvider<any, any>) {
+export function supportsIdTokenSignIn(provider: ProviderWithIdTokenConfig) {
 	const options = (provider.options ?? {}) as Partial<ProviderOptions>;
 	if (options.disableIdTokenSignIn) {
 		return false;
@@ -46,7 +48,7 @@ export function supportsIdTokenSignIn(provider: UpstreamProvider<any, any>) {
  * Verify a client-submitted id_token against a provider's verification config.
  *
  * This is the single id_token verifier for every social provider. Providers no longer
- * implement their own boolean `verifyIdToken`; they declare an {@link UpstreamProvider.idToken}
+ * implement their own boolean `verifyIdToken`; they declare an {@link OAuthProvider.idToken}
  * config and this function performs the cryptographic check. The contract is fail-closed: a
  * provider without a config (and without an integrator `verifyIdToken` override) returns
  * `false`, so a forged token can never be accepted by omission.
@@ -54,7 +56,7 @@ export function supportsIdTokenSignIn(provider: UpstreamProvider<any, any>) {
  * @returns `true` only when the token is authentic for the provider.
  */
 export async function verifyProviderIdToken(
-	provider: UpstreamProvider<any, any>,
+	provider: ProviderWithIdTokenConfig,
 	token: string,
 	nonce?: string,
 ): Promise<boolean> {
@@ -79,6 +81,8 @@ export async function verifyProviderIdToken(
 		// Opaque (non-JWS) tokens carry no signature to check. They are accepted only when the
 		// provider opts in, in which case getUserInfo resolves identity from the access token via
 		// the provider's userinfo endpoint, which validates it (e.g. Facebook Graph access tokens).
+		// An expected `nonce` is not enforced here: an opaque token carries no `nonce` claim, and the
+		// access-token-backed userinfo exchange (not the token itself) is the identity source.
 		if (token.split(".").length !== 3) {
 			return config.allowOpaqueToken === true;
 		}

@@ -1,5 +1,8 @@
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import type { GoogleProfile } from "@better-auth/core/social-providers";
+import type {
+	CognitoProfile,
+	GoogleProfile,
+} from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import type { MockInstance } from "vitest";
@@ -196,6 +199,59 @@ describe("account", async () => {
 			expect(accessToken.error).toBeNull();
 			expect(accessToken.data?.accessToken).toBe("test");
 		});
+	});
+
+	it("should not expose empty scope tokens from stored empty account scope", async () => {
+		const {
+			auth,
+			client: scopedClient,
+			testUser,
+			cookieSetter,
+		} = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+		});
+		const headers = new Headers();
+		await scopedClient.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const session = await scopedClient.getSession({
+			fetchOptions: { headers },
+		});
+		const accountId = "empty-scope-google-account";
+		const testCtx = await auth.$context;
+		await testCtx.internalAdapter.createAccount({
+			userId: session.data!.user.id,
+			providerId: "google",
+			accountId,
+			accessToken: "access-token",
+			scope: "",
+		});
+
+		const accounts = await scopedClient.listAccounts({
+			fetchOptions: { headers },
+		});
+		const googleAccount = accounts.data?.find(
+			(account) => account.accountId === accountId,
+		);
+		expect(googleAccount?.scopes).toEqual([]);
+
+		const accessToken = await scopedClient.getAccessToken(
+			{
+				providerId: "google",
+				accountId,
+			},
+			{ headers },
+		);
+		expect(accessToken.data?.scopes).toEqual([]);
 	});
 
 	/**
@@ -625,6 +681,35 @@ describe("account", async () => {
 			});
 			expect(linkAccountRes.error?.status).toBe(400);
 		});
+	});
+
+	it("should pass idTokenNonce to providers that require redirect nonce binding", async () => {
+		const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
+		const previousRequiresIdTokenNonce = googleProvider.requiresIdTokenNonce;
+		googleProvider.requiresIdTokenNonce = true;
+		const createAuthorizationURLSpy = vi.spyOn(
+			googleProvider,
+			"createAuthorizationURL",
+		);
+
+		try {
+			const { runWithUser: runWithClient2 } = await signInWithTestUser();
+			await runWithClient2(async () => {
+				const linkAccountRes = await client.linkSocial({
+					provider: "google",
+					callbackURL: "/callback",
+				});
+				expect(linkAccountRes.error).toBeNull();
+				expect(createAuthorizationURLSpy).toHaveBeenCalledWith(
+					expect.objectContaining({
+						idTokenNonce: expect.any(String),
+					}),
+				);
+			});
+		} finally {
+			googleProvider.requiresIdTokenNonce = previousRequiresIdTokenNonce;
+			createAuthorizationURLSpy.mockRestore();
+		}
 	});
 
 	it("should link second account from the same provider", async () => {
@@ -1500,123 +1585,170 @@ describe("account", async () => {
 		expect(refreshTokenCalls).toBeGreaterThan(0);
 	});
 
-	it("refreshes the account cookie with the rotated token and the preserved grant after a narrower refresh response", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8562
+	 */
+	it("should preserve the Cognito refresh token when getAccessToken auto-refresh receives no replacement", async () => {
+		const cognitoDomain = "test.auth.us-east-1.amazoncognito.com";
+		const cognitoIssuer =
+			"https://cognito-idp.us-east-1.amazonaws.com/us-east-1_testpool";
+		const signCognitoIdToken = (jti: string) => {
+			const now = Math.floor(Date.now() / 1000);
+			return signJWT(
+				{
+					email: "cognito-refresh@test.com",
+					email_verified: true,
+					name: "Cognito User",
+					exp: now + 3600,
+					sub: "cognito-user-sub",
+					iat: now,
+					aud: "cognito-client",
+					iss: cognitoIssuer,
+					jti,
+				} satisfies CognitoProfile,
+				DEFAULT_SECRET,
+			);
+		};
+
 		const { auth, client, cookieSetter } = await getTestInstance({
+			database: undefined,
 			socialProviders: {
-				google: {
-					clientId: "test",
-					clientSecret: "test",
-					enabled: true,
+				cognito: {
+					clientId: "cognito-client",
+					clientSecret: "cognito-secret",
+					domain: cognitoDomain,
+					region: "us-east-1",
+					userPoolId: "us-east-1_testpool",
 				},
 			},
 			account: {
 				storeAccountCookie: true,
 			},
 		});
-		const ctx = await auth.$context;
-		const accountDataCookieName = ctx.authCookies.accountData.name;
+		const authContext = await auth.$context;
+		const accountDataCookieName = authContext.authCookies.accountData.name;
+		const refreshGrantRefreshTokens: string[] = [];
+		const initialIdToken = await signCognitoIdToken("initial-cognito-id-token");
+		const refreshedIdToken = await signCognitoIdToken(
+			"refreshed-cognito-id-token",
+		);
+
+		server.use(
+			http.post(
+				`https://${cognitoDomain}/oauth2/token`,
+				async ({ request }) => {
+					const params = new URLSearchParams(await request.text());
+					const grantType = params.get("grant_type");
+
+					if (grantType === "refresh_token") {
+						const refreshToken = params.get("refresh_token");
+						refreshGrantRefreshTokens.push(refreshToken || "");
+						return HttpResponse.json({
+							access_token: "refreshed-cognito-access-token",
+							expires_in: 3600,
+							id_token: refreshedIdToken,
+							token_type: "Bearer",
+						});
+					}
+
+					return HttpResponse.json({
+						access_token: "initial-cognito-access-token",
+						expires_in: 1,
+						id_token: initialIdToken,
+						refresh_token: "cognito-refresh-token",
+						token_type: "Bearer",
+					});
+				},
+			),
+		);
 
 		const headers = new Headers();
-		email = "stale-cookie-refresh@test.com";
-		const idToken = await signJWT(
-			{
-				email,
-				email_verified: true,
-				name: "First Last",
-				picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
-				exp: 1234567890,
-				sub: "stale-cookie-refresh",
-				iat: 1234567890,
-				aud: "test",
-				azp: "test",
-				nbf: 1234567890,
-				iss: "test",
-				locale: "en",
-				jti: "test",
-				given_name: "First",
-				family_name: "Last",
-			} satisfies GoogleProfile,
-			DEFAULT_SECRET,
-		);
-
-		// Initial sign-in echoes the full grant.
-		server.use(
-			http.post("https://oauth2.googleapis.com/token", async ({ request }) => {
-				const grantType = new URLSearchParams(await request.text()).get(
-					"grant_type",
-				);
-				if (grantType === "refresh_token") {
-					// Refresh rotates the access token but echoes a narrower scope.
-					return HttpResponse.json({
-						access_token: "rotated-access-token",
-						refresh_token: "rotated-refresh-token",
-						token_type: "Bearer",
-						expires_in: 3600,
-						scope: "openid email",
-					});
-				}
-				return HttpResponse.json({
-					access_token: "initial-access-token",
-					refresh_token: "initial-refresh-token",
-					token_type: "Bearer",
-					expires_in: 3600,
-					id_token: idToken,
-					scope:
-						"openid email profile https://www.googleapis.com/auth/drive.readonly",
-				});
-			}),
-		);
-
 		const signInRes = await client.signIn.social({
-			provider: "google",
+			provider: "cognito",
 			callbackURL: "/callback",
-			fetchOptions: { onSuccess: cookieSetter(headers) },
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining(cognitoDomain),
+			redirect: true,
 		});
 		const state =
 			signInRes.data && "url" in signInRes.data && signInRes.data.url
 				? new URL(signInRes.data.url).searchParams.get("state") || ""
 				: "";
-		await client.$fetch("/callback/google", {
-			query: { state, code: "test" },
+
+		await client.$fetch("/callback/cognito", {
+			query: {
+				state,
+				code: "test",
+			},
 			headers,
 			method: "GET",
 			onError(context) {
-				cookieSetter(headers)({ response: context.response } as any);
+				expect(context.response.status).toBe(302);
+				cookieSetter(headers)({ response: context.response });
 			},
 		});
 
 		let refreshedAccountCookie: string | undefined;
-		const accounts = await ctx.internalAdapter.findAccounts(
-			(await client.getSession({ fetchOptions: { headers } })).data!.user.id,
+		const accessTokenResponse = await client.getAccessToken(
+			{
+				providerId: "cognito",
+			},
+			{
+				headers,
+				onSuccess(context) {
+					cookieSetter(headers)(context);
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					refreshedAccountCookie =
+						cookies.get(accountDataCookieName)?.value || undefined;
+				},
+			},
 		);
-		await client.$fetch("/refresh-token", {
-			body: {
-				accountId: accounts[0]!.accountId,
-				providerId: "google",
-			},
-			headers,
-			method: "POST",
-			onSuccess(context) {
-				cookieSetter(headers)(context as any);
-				const cookies = parseSetCookieHeader(
-					context.response.headers.get("set-cookie") || "",
-				);
-				refreshedAccountCookie =
-					cookies.get(accountDataCookieName)?.value || undefined;
-			},
+
+		expect(accessTokenResponse.error).toBeFalsy();
+		expect(accessTokenResponse.data?.accessToken).toBe(
+			"refreshed-cognito-access-token",
+		);
+		expect(accessTokenResponse.data?.idToken).toBe(refreshedIdToken);
+		expect(refreshGrantRefreshTokens).toEqual(["cognito-refresh-token"]);
+		expect(refreshedAccountCookie).toBeDefined();
+		await expect(
+			symmetricDecodeJWT(
+				refreshedAccountCookie!,
+				authContext.secret,
+				"better-auth-account",
+			),
+		).resolves.toMatchObject({
+			accessToken: "refreshed-cognito-access-token",
+			idToken: refreshedIdToken,
+			refreshToken: "cognito-refresh-token",
 		});
 
-		// The cookie is rewritten (not stale): it carries the rotated token and the
-		// full grant from sign-in survives the narrower refresh echo.
-		expect(refreshedAccountCookie).toBeDefined();
-		const decoded = (await symmetricDecodeJWT(
-			refreshedAccountCookie!,
-			ctx.secret,
-			"better-auth-account",
-		)) as { accessToken?: string; grantedScopes?: string[] };
-		expect(decoded.grantedScopes).toContain(
-			"https://www.googleapis.com/auth/drive.readonly",
+		const refreshTokenResponse = await client.$fetch<{ refreshToken?: string }>(
+			"/refresh-token",
+			{
+				body: {
+					providerId: "cognito",
+				},
+				headers,
+				method: "POST",
+			},
 		);
+
+		expect(refreshTokenResponse.error).toBeFalsy();
+		expect(refreshTokenResponse.data?.refreshToken).toBe(
+			"cognito-refresh-token",
+		);
+		expect(refreshGrantRefreshTokens).toEqual([
+			"cognito-refresh-token",
+			"cognito-refresh-token",
+		]);
 	});
 
 	it("should NOT chunk account data cookies when exceeding 4KB", async () => {

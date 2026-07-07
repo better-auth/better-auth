@@ -4,6 +4,7 @@ import { generateRandomString } from "better-auth/crypto";
 import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
+	DPOP_SIGNING_ALGORITHMS,
 	refreshAccessTokenRequest,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -140,12 +141,14 @@ describe("mcp plugin", async () => {
 				authorization_servers: string[];
 				scopes_supported?: string[];
 				bearer_methods_supported: string[];
+				dpop_signing_alg_values_supported?: string[];
 			};
 
 			expect(metadata).toMatchObject({
 				resource: baseURL,
 				authorization_servers: [baseURL],
 				bearer_methods_supported: ["header"],
+				dpop_signing_alg_values_supported: [...DPOP_SIGNING_ALGORITHMS],
 			});
 			expect(metadata.scopes_supported).toBeUndefined();
 		});
@@ -183,6 +186,7 @@ describe("mcp plugin", async () => {
 				authorization_servers: string[];
 				scopes_supported?: string[];
 				bearer_methods_supported: string[];
+				dpop_signing_alg_values_supported?: string[];
 			};
 
 			expect(metadata).toMatchObject({
@@ -190,6 +194,7 @@ describe("mcp plugin", async () => {
 				authorization_servers: [resourceBaseURL],
 				scopes_supported: ["mcp:read"],
 				bearer_methods_supported: ["header"],
+				dpop_signing_alg_values_supported: [...DPOP_SIGNING_ALGORITHMS],
 			});
 		});
 
@@ -270,7 +275,7 @@ describe("mcp plugin", async () => {
 
 		it("mints an access token through authorize + consent + token exchange", async () => {
 			const codeVerifier = generateRandomString(64);
-			const { url: authUrl } = await createAuthorizationURL({
+			const authUrl = await createAuthorizationURL({
 				id: providerId,
 				options: {
 					clientId: publicClientId,
@@ -332,6 +337,8 @@ describe("mcp plugin", async () => {
 			});
 			const tokens = (await tokenResponse.json()) as {
 				access_token?: string;
+				expires_at?: number;
+				expires_in?: number;
 				id_token?: string;
 				refresh_token?: string;
 				token_type?: string;
@@ -343,6 +350,50 @@ describe("mcp plugin", async () => {
 			expect(tokens.refresh_token).toBeDefined();
 			expect(tokens.token_type?.toLowerCase()).toBe("bearer");
 			expect(tokens.scope).toBe("openid offline_access");
+
+			const { body: firstRefreshBody, headers: firstRefreshHeaders } =
+				await refreshAccessTokenRequest({
+					refreshToken: tokens.refresh_token!,
+					options: {
+						clientId: publicClientId,
+						redirectURI: redirectUri,
+					},
+				});
+			const firstRefreshResponse = await customFetchImpl(
+				`${baseURL}/oauth2/token`,
+				{
+					method: "POST",
+					body: firstRefreshBody.toString(),
+					headers: firstRefreshHeaders,
+				},
+			);
+			const firstRefresh = (await firstRefreshResponse.json()) as typeof tokens;
+			expect(firstRefresh.access_token).toBeDefined();
+			expect(firstRefresh.refresh_token).toBeDefined();
+
+			const { body: replayBody, headers: replayHeaders } =
+				await refreshAccessTokenRequest({
+					refreshToken: tokens.refresh_token!,
+					options: {
+						clientId: publicClientId,
+						redirectURI: redirectUri,
+					},
+				});
+			const replayResponse = await customFetchImpl(`${baseURL}/oauth2/token`, {
+				method: "POST",
+				body: replayBody.toString(),
+				headers: replayHeaders,
+			});
+			const replay = (await replayResponse.json()) as typeof tokens;
+			expect(replay).toMatchObject({
+				access_token: firstRefresh.access_token,
+				expires_at: firstRefresh.expires_at,
+				refresh_token: firstRefresh.refresh_token,
+				token_type: firstRefresh.token_type,
+				scope: firstRefresh.scope,
+				id_token: firstRefresh.id_token,
+			});
+			expect(replay.expires_in).toBeLessThanOrEqual(firstRefresh.expires_in!);
 		});
 	});
 });
@@ -410,7 +461,7 @@ describe("mcp refresh_token grant client authentication", async () => {
 	/** Runs the real authorize + consent + token exchange to mint a refresh token. */
 	async function mintRefreshToken(): Promise<string> {
 		const codeVerifier = generateRandomString(64);
-		const { url: authUrl } = await createAuthorizationURL({
+		const authUrl = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient.client_id,

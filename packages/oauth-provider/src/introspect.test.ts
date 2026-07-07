@@ -62,7 +62,7 @@ describe("oauth introspect", async () => {
 			throw Error("beforeAll not run properly");
 		}
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient?.client_id,
@@ -248,7 +248,29 @@ describe("oauth introspect", async () => {
 				},
 			},
 		);
-		expect(introspection.data?.active).toBeFalsy();
+		expect(introspection.data).toEqual({ active: false });
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9949
+	 */
+	it("should return inactive for an unknown access token", async () => {
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: "this-is-not-a-valid-access-token",
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+
+		expect(introspection.data).toEqual({ active: false });
 	});
 
 	it("should pass with token_type_hint refresh_token and sent refresh_token", async () => {
@@ -669,7 +691,7 @@ describe("oauth introspect - config", async () => {
 		overrides?: Partial<Parameters<typeof createAuthorizationURL>[0]>,
 	) {
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient?.client_id,
@@ -1064,7 +1086,7 @@ describe("oauth introspect - rejects non-OAuth same-issuer JWTs", async () => {
 
 	async function getOAuthJwtAccessToken() {
 		const codeVerifier = generateRandomString(32);
-		const { url: authUrl } = await createAuthorizationURL({
+		const authUrl = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient!.client_id!,

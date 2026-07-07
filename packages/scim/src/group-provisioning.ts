@@ -7,6 +7,7 @@ import type {
 } from "better-auth";
 import { generateRandomString } from "better-auth/crypto";
 import type { Member } from "better-auth/plugins";
+import { scimAccountProviderId } from "./mappings";
 import { SCIMAPIError } from "./scim-error";
 import type { SCIMFilterWhere } from "./scim-filters";
 import { parseSCIMGroupFilter, SCIMParseError } from "./scim-filters";
@@ -212,7 +213,13 @@ async function validateGroupMembers(
 		adapter.findMany<Account>({
 			model: "account",
 			where: [
-				{ field: "providerId", value: input.providerId },
+				{
+					field: "providerId",
+					value: scimAccountProviderId({
+						providerId: input.providerId,
+						organizationId: input.organizationId,
+					}),
+				},
 				{ field: "userId", value: input.userIds, operator: "in" },
 			],
 		}),

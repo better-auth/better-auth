@@ -41,15 +41,38 @@ export interface DB {
 	[key: string]: any;
 }
 
+/**
+ * Derive the number of affected rows from a Drizzle write result.
+ *
+ * Drizzle returns the raw per-driver result for a non-returning write, so the
+ * count lives under a different field per driver: node-postgres / neon expose
+ * `rowCount`, postgres-js / bun-sql carry `count` on an Array subclass, mysql2
+ * reports `affectedRows` (in a result-header array), planetscale and other
+ * serverless drivers use `rowsAffected`, better-sqlite3 uses `changes`, and
+ * Cloudflare D1 nests the count under `meta.changes`. This normalizes them so
+ * write methods that depend on affected rows honor the adapter contract instead
+ * of leaking the raw driver result.
+ */
 function getAffectedRowCount(
 	result: unknown,
-	operation: "updateMany" | "deleteMany",
+	operation: "updateMany" | "deleteMany" | "consumeOne",
 	context: { model: string; where: Where[] },
 ): number {
 	let count: unknown = 0;
 	if (result && typeof result === "object" && "rowCount" in result) {
+		// node-postgres / neon expose `rowCount`.
 		count = (result as { rowCount: unknown }).rowCount;
+	} else if (
+		result &&
+		typeof result === "object" &&
+		typeof (result as { count?: unknown }).count === "number"
+	) {
+		// postgres-js / bun-sql return an Array subclass carrying `count`.
+		// A non-returning write has length 0, so read this before the Array
+		// branch falls back to `result.length`.
+		count = (result as { count: number }).count;
 	} else if (Array.isArray(result)) {
+		// mysql2 returns a `[ResultSetHeader]` tuple.
 		count =
 			result.length > 0 && hasDriverRowCount(result[0])
 				? readDriverRowCount(result[0])
@@ -69,23 +92,27 @@ function getAffectedRowCount(
 	return count;
 }
 
-function hasDriverRowCount(result: unknown): boolean {
-	return (
-		!!result &&
-		typeof result === "object" &&
-		("affectedRows" in result ||
-			"rowsAffected" in result ||
-			"changes" in result)
-	);
+function readDriverRowCount(result: unknown): unknown {
+	if (!result || typeof result !== "object") return undefined;
+	const driverResult = result as Record<string, unknown>;
+	if ("affectedRows" in driverResult) return driverResult.affectedRows;
+	if ("rowsAffected" in driverResult) return driverResult.rowsAffected;
+	if ("changes" in driverResult) return driverResult.changes;
+
+	// Cloudflare D1 nests the affected-row count under `meta.changes`.
+	// @see https://developers.cloudflare.com/d1/worker-api/return-object/
+	if ("meta" in driverResult) {
+		const meta = driverResult.meta;
+		if (meta && typeof meta === "object" && "changes" in meta) {
+			return meta.changes;
+		}
+	}
+
+	return undefined;
 }
 
-function readDriverRowCount(result: unknown): unknown {
-	const r = result as {
-		affectedRows?: unknown;
-		rowsAffected?: unknown;
-		changes?: unknown;
-	};
-	return r.affectedRows ?? r.rowsAffected ?? r.changes;
+function hasDriverRowCount(result: unknown): boolean {
+	return readDriverRowCount(result) !== undefined;
 }
 
 export interface DrizzleAdapterConfig {
@@ -124,6 +151,22 @@ export interface DrizzleAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
+	/**
+	 * Database schema namespace, used during the Better Auth CLI to generate the schema.
+	 *
+	 * Only applies to PostgreSQL. It will generate something like this:
+	 *
+	 * ```ts
+	 * const authSchema = pgSchema("auth");
+	 *
+	 * export const user = authSchema.table("user", {...});
+	 * export const session = authSchema.table("session", {...});
+	 * ```
+	 *
+	 * @example "auth"
+	 * @default undefined
+	 */
+	schemaName?: string | undefined;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
@@ -978,12 +1021,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								.delete(schemaModel)
 								.where(eq(idColumn, targetId))
 								.execute();
-							const count =
-								(delRes &&
-									(delRes.rowsAffected ??
-										delRes.affectedRows ??
-										delRes.changes)) ??
-								0;
+							const count = getAffectedRowCount(delRes, "consumeOne", {
+								model,
+								where,
+							});
 							return count > 0 ? (target as any) : null;
 						};
 						return inTransaction

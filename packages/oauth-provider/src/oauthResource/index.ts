@@ -26,6 +26,7 @@ const resourceBodySchema = z.object({
 	signingKeyId: z.string().nullable().optional(),
 	allowedScopes: z.array(z.string()).nullable().optional(),
 	customClaims: z.record(z.string(), z.unknown()).nullable().optional(),
+	dpopBoundAccessTokensRequired: z.boolean().optional(),
 	disabled: z.boolean().optional(),
 	metadata: z.record(z.string(), z.unknown()).nullable().optional(),
 });

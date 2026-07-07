@@ -27,27 +27,53 @@ export {
 	RESERVED_AUTHORIZATION_PARAMS_SET,
 } from "./create-authorization-url";
 export type {
-	AuthorizationURLResult,
-	GrantAuthority,
+	AccessTokenAuthorization,
+	AccessTokenAuthorizationScheme,
+	DpopBindingError,
+	DpopBindingErrorCode,
+	DpopProofError,
+	DpopProofErrorCode,
+	DpopReplayReservation,
+	DpopReplayReservations,
+	DpopReplayStore,
+	DpopSigningAlgorithm,
+	EnforceDpopBindingParams,
+	VerifiedDpopProof,
+	VerifyDpopProofOptions,
+} from "./dpop";
+export {
+	BEARER_AUTHORIZATION_SCHEME,
+	createDpopBindingError,
+	createDpopProofError,
+	createDpopReplayStore,
+	createInMemoryDpopReplayStore,
+	DPOP_AUTHORIZATION_SCHEME,
+	DPOP_PROOF_TYPE,
+	DPOP_SIGNING_ALGORITHMS,
+	deriveDpopAth,
+	deriveDpopJkt,
+	enforceDpopBinding,
+	getConfirmationJkt,
+	getDpopJktFromPayload,
+	isDpopBindingError,
+	isDpopProofError,
+	normalizeDpopHtu,
+	parseAccessTokenAuthorization,
+	stripAccessTokenAuthorizationScheme,
+	verifyDpopProof,
+} from "./dpop";
+export type {
 	OAuth2Tokens,
 	OAuth2UserInfo,
 	OAuthIdTokenConfig,
-	ProviderGrantAuthority,
+	OAuthProvider,
+	OAuthRefreshContext,
 	ProviderOptions,
-	UpstreamProvider,
 } from "./oauth-provider";
 export {
 	refreshAccessToken,
 	refreshAccessTokenRequest,
 } from "./refresh-access-token";
-export {
-	includesGrantedScope,
-	normalizeScopes,
-	parseScopeField,
-	readGrantedScopes,
-	resolveRequestedScopes,
-	unionGrantedScopes,
-} from "./scopes";
 export type {
 	TokenEndpointAuth,
 	TokenEndpointAuthMethod,
@@ -58,15 +84,23 @@ export {
 	generateCodeChallenge,
 	getOAuth2Tokens,
 	getPrimaryClientId,
+	mergeScopes,
 } from "./utils";
 export {
 	authorizationCodeRequest,
 	validateAuthorizationCode,
 	validateToken,
 } from "./validate-authorization-code";
+export type {
+	ResourceRequestInput,
+	VerifyAccessTokenOptions,
+	VerifyAccessTokenRequestOptions,
+} from "./verify";
 export {
 	getJwks,
-	verifyAccessToken,
+	requestToResourceInput,
+	verifyAccessTokenRequest,
+	verifyBearerToken,
 	verifyJwsAccessToken,
 } from "./verify";
 export {

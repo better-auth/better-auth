@@ -1,7 +1,19 @@
 import type { Awaitable } from "@better-auth/core";
-import { ResourceUriSchema } from "@better-auth/oauth-provider";
-import { verifyAccessToken } from "better-auth/oauth2";
+import {
+	ResourceUriSchema,
+	raiseResourceServerChallenge,
+} from "@better-auth/oauth-provider";
+import type {
+	DpopReplayReservations,
+	DpopReplayStore,
+} from "better-auth/oauth2";
+import {
+	createDpopReplayStore,
+	requestToResourceInput,
+	verifyAccessTokenRequest,
+} from "better-auth/oauth2";
 import type { BetterAuthOptions } from "better-auth/types";
+import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 
 interface RequireMcpAuthOptions {
@@ -25,29 +37,36 @@ interface RequireMcpAuthOptions {
 	 * (RFC 6750), hinting which scopes the client should request.
 	 */
 	scope?: string;
+	/**
+	 * Maps a non-URL `resource` (an RFC 8707 `urn:` identifier or a client id) to
+	 * the URL of its protected resource metadata. Required when `resource` is not
+	 * an origin-based URL, so the `WWW-Authenticate` challenge can point at it.
+	 */
+	resourceMetadataMappings?: Record<string, string>;
+	/**
+	 * DPoP proof validation settings. By default the replay store is backed by
+	 * the auth instance's database adapter, so anti-replay holds across multiple
+	 * server instances. Override `replayStore` only to point at a different store.
+	 */
+	dpop?: {
+		proofMaxAgeSeconds?: number;
+		signingAlgorithms?: readonly string[];
+		replayStore?: DpopReplayStore;
+	};
 }
 
-const unauthorized = (
-	message: string,
-	resourceMetadata: string,
-	scope?: string,
-): Response => {
-	let challenge = `Bearer resource_metadata="${resourceMetadata}"`;
-	if (scope) {
-		challenge += `, scope="${scope}"`;
-	}
+const unauthorized = (error: APIError): Response => {
+	const headers = new Headers(error.headers as HeadersInit);
+	headers.set("Content-Type", "application/json");
 	return new Response(
 		JSON.stringify({
 			jsonrpc: "2.0",
-			error: { code: -32000, message },
+			error: { code: -32000, message: error.message },
 			id: null,
 		}),
 		{
-			status: 401,
-			headers: {
-				"Content-Type": "application/json",
-				"WWW-Authenticate": challenge,
-			},
+			status: error.statusCode,
+			headers,
 		},
 	);
 };
@@ -68,7 +87,10 @@ const unauthorized = (
 export const requireMcpAuth = <
 	Auth extends {
 		options: BetterAuthOptions;
-		$context: Promise<{ baseURL: string }>;
+		$context: Promise<{
+			baseURL: string;
+			internalAdapter: DpopReplayReservations;
+		}>;
 	},
 >(
 	auth: Auth,
@@ -87,7 +109,7 @@ export const requireMcpAuth = <
 		// the auth context so the verified issuer and audience match what the
 		// provider issued. Override via `opts` for a custom `jwt.issuer`, a
 		// distinct resource, or a non-default JWKS location.
-		const { baseURL } = await auth.$context;
+		const { baseURL, internalAdapter } = await auth.$context;
 		if (!baseURL) {
 			throw new Error(
 				"requireMcpAuth requires a resolvable base URL. For dynamic base URLs use `mcpHandler` with explicit verify options.",
@@ -96,38 +118,35 @@ export const requireMcpAuth = <
 		const issuer = opts?.issuer ?? baseURL;
 		const resource = opts?.resource ?? baseURL;
 		const jwksUrl = opts?.jwksUrl ?? `${baseURL}/jwks`;
-		// RFC 9728: insert the resource path after the well-known segment. The
-		// provider serves the document at this root-mounted location.
-		const resourceUrl = new URL(resource);
-		const resourcePath =
-			resourceUrl.pathname === "/"
-				? ""
-				: resourceUrl.pathname.replace(/\/$/, "");
-		const resourceMetadata = `${resourceUrl.origin}/.well-known/oauth-protected-resource${resourcePath}${resourceUrl.search}`;
-
-		const authorization = req.headers?.get("authorization") ?? undefined;
-		const accessToken = authorization?.startsWith("Bearer ")
-			? authorization.slice("Bearer ".length)
-			: authorization;
-		if (!accessToken?.length) {
-			return unauthorized(
-				"Unauthorized: Authentication required",
-				resourceMetadata,
-				opts?.scope,
-			);
-		}
 		try {
-			const jwt = await verifyAccessToken(accessToken, {
+			const jwt = await verifyAccessTokenRequest(requestToResourceInput(req), {
 				verifyOptions: { issuer, audience: resource },
 				jwksUrl,
+				dpop: {
+					proofMaxAgeSeconds: opts?.dpop?.proofMaxAgeSeconds,
+					signingAlgorithms: opts?.dpop?.signingAlgorithms,
+					// Default to the database-backed store so proof replay is
+					// rejected across instances, not just within one process.
+					replayStore:
+						opts?.dpop?.replayStore ?? createDpopReplayStore(internalAdapter),
+				},
 			});
 			return handler(req, jwt);
-		} catch {
-			return unauthorized(
-				"Unauthorized: invalid token",
-				resourceMetadata,
-				opts?.scope,
-			);
+		} catch (error) {
+			try {
+				raiseResourceServerChallenge(error, resource, {
+					scope: opts?.scope,
+					resourceMetadataMappings: opts?.resourceMetadataMappings,
+					dpopSigningAlgorithms: opts?.dpop?.signingAlgorithms,
+				});
+			} catch (challengeError) {
+				if (challengeError instanceof APIError) {
+					return unauthorized(challengeError);
+				}
+				if (challengeError instanceof Error) throw challengeError;
+				throw new Error(String(challengeError));
+			}
+			throw new Error(String(error));
 		}
 	};
 };

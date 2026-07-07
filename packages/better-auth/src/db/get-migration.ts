@@ -82,58 +82,7 @@ export function matchType(
 		return type.toLowerCase().split("(")[0]!.trim();
 	}
 	if (fieldType === "string[]" || fieldType === "number[]") {
-		// Kysely stores array fields in the dialect's JSON column type: jsonb on
-		// Postgres, json on MySQL, text on SQLite, varchar on MSSQL. On the three
-		// non-Postgres dialects string[] and number[] share that one scalar
-		// column, so they cannot be told apart and any of them matches.
-		const normalized = normalize(columnDataType);
-		if (map[dbType].json.map((t) => t.toLowerCase()).includes(normalized)) {
-			return true;
-		}
-		// Postgres can also use a real array column (e.g. a Drizzle-created
-		// `text[]`/`int[]`). pg introspection reports the element type prefixed
-		// with "_" ("_text", "_int4") or as "<element>[]"; match it exactly
-		// against the field's element type so a string[] field is not satisfied
-		// by a number[] column (and a type like `interval` does not pass as a
-		// number by prefix).
-		if (dbType === "postgres") {
-			const element = columnDataType
-				.toLowerCase()
-				.replace(/^_/, "")
-				.replace(/\[\]$/, "")
-				.trim();
-			const stringElements = new Set([
-				"text",
-				"varchar",
-				"character varying",
-				"char",
-				"character",
-				"bpchar",
-				"name",
-				"uuid",
-				"citext",
-			]);
-			const numberElements = new Set([
-				"int",
-				"int2",
-				"int4",
-				"int8",
-				"integer",
-				"smallint",
-				"bigint",
-				"numeric",
-				"decimal",
-				"real",
-				"float4",
-				"float8",
-				"double precision",
-				"money",
-			]);
-			return (fieldType === "string[]" ? stringElements : numberElements).has(
-				element,
-			);
-		}
-		return false;
+		return columnDataType.toLowerCase().includes("json");
 	}
 	const types = map[dbType]!;
 	const expected = Array.isArray(fieldType)
@@ -275,6 +224,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 	}[] = [];
 
 	for (const [key, value] of Object.entries(betterAuthSchema)) {
+		if (value.disableMigrations) {
+			continue;
+		}
 		const table = tableMetadata.find((t) => t.name === key);
 		if (!table) {
 			const tIndex = toBeCreated.findIndex((t) => t.table === key);
@@ -483,15 +435,34 @@ export async function getMigrations(config: BetterAuthOptions) {
 				const type = getType(field, fieldName);
 				const builder = db.schema.alterTable(table.table);
 
-				if (field.index) {
+				// SQLite cannot add a column with an inline UNIQUE constraint, so a
+				// unique field is enforced with a separate index in the ALTER path.
+				if (field.index || field.unique) {
 					const indexName = `${table.table}_${fieldName}_${field.unique ? "uidx" : "idx"}`;
-					const indexBuilder = db.schema
+					let indexBuilder = db.schema
 						.createIndex(indexName)
 						.on(table.table)
 						.columns([fieldName]);
-					deferredIndexes.push(
-						field.unique ? indexBuilder.unique() : indexBuilder,
-					);
+					if (field.unique) {
+						indexBuilder = indexBuilder.unique();
+						if (field.required === false && dbType === "mssql") {
+							// MSSQL unique indexes treat NULLs as duplicates, so the
+							// NULL backfill on existing rows would abort the index
+							// build. Filtering NULLs matches the other dialects.
+							indexBuilder = indexBuilder.where(fieldName, "is not", null);
+						}
+						if (
+							field.required !== false &&
+							field.defaultValue !== undefined &&
+							field.defaultValue !== null &&
+							typeof field.defaultValue !== "function"
+						) {
+							logger.warn(
+								`Adding unique column "${fieldName}" to existing table "${table.table}" backfills every existing row with its default value. If the table has more than one row, creating the unique index "${indexName}" will fail; backfill distinct values manually, then re-run the migration or create the index yourself.`,
+							);
+						}
+					}
+					deferredIndexes.push(indexBuilder);
 				}
 
 				const built = builder.addColumn(fieldName, type, (col) => {
@@ -506,9 +477,6 @@ export async function getMigrations(config: BetterAuthOptions) {
 							)
 							.onDelete(field.references.onDelete || "cascade");
 					}
-					if (field.unique) {
-						col = col.unique();
-					}
 					if (
 						field.type === "date" &&
 						typeof field.defaultValue === "function" &&
@@ -519,6 +487,30 @@ export async function getMigrations(config: BetterAuthOptions) {
 						} else {
 							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
 						}
+					} else if (
+						!(field.unique && field.required === false) &&
+						(field.type === "string" ||
+							field.type === "number" ||
+							field.type === "boolean") &&
+						field.defaultValue !== undefined &&
+						field.defaultValue !== null &&
+						typeof field.defaultValue !== "function"
+					) {
+						// A required column added to a populated table needs a SQL
+						// default, or the NOT NULL add fails. Nullable unique columns
+						// are excluded: NULL is their only unique-safe backfill. A
+						// required unique column keeps its default; on a table with
+						// more than one row the unique index then rejects the shared
+						// backfill, which no generated migration can avoid.
+						// Booleans map to 1/0 on engines without a native boolean type.
+						col = col.defaultTo(
+							typeof field.defaultValue === "boolean" &&
+								(dbType === "sqlite" || dbType === "mssql")
+								? field.defaultValue
+									? 1
+									: 0
+								: field.defaultValue,
+						);
 					}
 					return col;
 				});

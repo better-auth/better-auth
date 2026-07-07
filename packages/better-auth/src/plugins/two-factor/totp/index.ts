@@ -8,13 +8,19 @@ import { symmetricDecrypt } from "../../../crypto";
 import { shouldRequirePassword } from "../../../utils/password";
 import { PACKAGE_VERSION } from "../../../version";
 import type { BackupCodeOptions } from "../backup-codes";
+import { DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS } from "../constant";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type {
 	TwoFactorProvider,
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
-import { verifyTwoFactor } from "../verify-two-factor";
+import {
+	assertTwoFactorNotLocked,
+	recordTwoFactorFailure,
+	resetTwoFactorFailures,
+	verifyTwoFactor,
+} from "../verify-two-factor";
 
 export type TOTPOptions = {
 	/**
@@ -258,7 +264,8 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					code: "TOTP_NOT_CONFIGURED",
 				});
 			}
-			const { session, valid, invalid } = await verifyTwoFactor(ctx);
+			const { session, valid, invalid, beginAttempt } =
+				await verifyTwoFactor(ctx);
 			const user = session.user as UserWithTwoFactor;
 			const isSignIn = !session.session;
 			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
@@ -281,16 +288,38 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
 				);
 			}
-			const decrypted = await symmetricDecrypt({
-				key: ctx.context.secretConfig,
-				data: twoFactor.secret,
-			});
-			const status = await createOTP(decrypted, {
-				period: opts.period,
-				digits: opts.digits,
-			}).verify(ctx.body.code);
+			if (isSignIn) {
+				await assertTwoFactorNotLocked(ctx, twoFactorTable, twoFactor);
+			}
+			// Enforce the per-challenge attempt budget on the sign-in path. The
+			// re-verify branch (already authenticated) is not gated.
+			const attempt = isSignIn
+				? await beginAttempt(DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS)
+				: null;
+			let status: boolean;
+			try {
+				const decrypted = await symmetricDecrypt({
+					key: ctx.context.secretConfig,
+					data: twoFactor.secret,
+				});
+				status = await createOTP(decrypted, {
+					period: opts.period,
+					digits: opts.digits,
+				}).verify(ctx.body.code);
+			} catch (error) {
+				// A server error before the code is checked must not spend the slot.
+				await attempt?.restore();
+				throw error;
+			}
 			if (!status) {
+				await attempt?.recordFailure();
+				if (isSignIn) {
+					await recordTwoFactorFailure(ctx, twoFactorTable, twoFactor);
+				}
 				return invalid("INVALID_CODE");
+			}
+			if (isSignIn) {
+				await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
 			}
 
 			// Enrollment mode: TOTP row exists but hasn't been verified yet.

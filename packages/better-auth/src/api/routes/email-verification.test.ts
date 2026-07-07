@@ -1,3 +1,4 @@
+import { APIError } from "@better-auth/core/error";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 
@@ -149,6 +150,45 @@ describe("Email Verification", async () => {
 			testUser.email,
 			expect.any(String),
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8757
+	 */
+	it("should return APIError status when sendVerificationEmail throws (e.g. rate limit)", async () => {
+		let sendCalls = 0;
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail() {
+					sendCalls += 1;
+					if (sendCalls >= 2) {
+						throw APIError.from("TOO_MANY_REQUESTS", {
+							code: "RATE_LIMIT_EXCEEDED",
+							message: "Too many requests. Please try again later.",
+						});
+					}
+				},
+			},
+		});
+
+		try {
+			await auth.api.sendVerificationEmail({
+				body: {
+					email: testUser.email,
+				},
+			});
+			expect.fail("Expected sendVerificationEmail to throw");
+		} catch (error) {
+			expect(error).toBeInstanceOf(APIError);
+			if (error instanceof APIError) {
+				expect(error.status).toBe("TOO_MANY_REQUESTS");
+				expect(error.body?.code).toBe("RATE_LIMIT_EXCEEDED");
+			}
+		}
 	});
 
 	it("should send a verification email if verification is required and user is not verified", async () => {
@@ -465,6 +505,77 @@ describe("Email Verification", async () => {
 
 		expect(res.data?.status).toBe(true);
 		expect(mockSendEmailLocal).not.toHaveBeenCalled();
+	});
+});
+
+describe("Email Verification - Timing-safe unauthenticated path", () => {
+	it("should enforce a constant-time floor for both existing and non-existing emails", async () => {
+		const mockSendEmail = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail({ user }) {
+					mockSendEmail(user.email);
+				},
+			},
+		});
+
+		const startExisting = Date.now();
+		await auth.api.sendVerificationEmail({
+			body: { email: testUser.email },
+		});
+		const elapsedExisting = Date.now() - startExisting;
+
+		const startMissing = Date.now();
+		await auth.api.sendVerificationEmail({
+			body: { email: "nonexistent@example.com" },
+		});
+		const elapsedMissing = Date.now() - startMissing;
+
+		expect(elapsedExisting).toBeGreaterThanOrEqual(450);
+		expect(elapsedMissing).toBeGreaterThanOrEqual(450);
+
+		expect(mockSendEmail).toHaveBeenCalledWith(testUser.email);
+		expect(mockSendEmail).not.toHaveBeenCalledWith("nonexistent@example.com");
+	});
+
+	it("should still surface errors from sendVerificationEmail after the minimum delay", async () => {
+		let calls = 0;
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail() {
+					calls += 1;
+					if (calls >= 2) {
+						throw APIError.from("TOO_MANY_REQUESTS", {
+							code: "RATE_LIMIT_EXCEEDED",
+							message: "Too many requests.",
+						});
+					}
+				},
+			},
+		});
+
+		const start = Date.now();
+		try {
+			await auth.api.sendVerificationEmail({
+				body: { email: testUser.email },
+			});
+			expect.fail("Expected to throw");
+		} catch (error) {
+			expect(error).toBeInstanceOf(APIError);
+			if (error instanceof APIError) {
+				expect(error.status).toBe("TOO_MANY_REQUESTS");
+			}
+		}
+		const elapsed = Date.now() - start;
+		expect(elapsed).toBeGreaterThanOrEqual(450);
 	});
 });
 

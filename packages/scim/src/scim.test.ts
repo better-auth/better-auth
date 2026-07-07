@@ -71,15 +71,30 @@ const createTestInstance = (scimOptions?: SCIMOptions) => {
 		return headers;
 	}
 
+	let defaultOrgPromise: Promise<string | undefined> | undefined;
+	function ensureDefaultOrg(headers: Headers) {
+		if (!defaultOrgPromise) {
+			defaultOrgPromise = auth.api
+				.createOrganization({
+					body: { slug: "default-org", name: "Default Org" },
+					headers,
+				})
+				.then((org) => org?.id);
+		}
+		return defaultOrgPromise;
+	}
+
 	async function getSCIMToken(
 		providerId: string = "the-saml-provider-1",
 		organizationId?: string,
 	) {
 		const headers = await getAuthCookieHeaders();
+		const orgId = organizationId ?? (await ensureDefaultOrg(headers));
+		if (!orgId) throw new Error("Default organization not found");
 		const { scimToken } = await auth.api.generateSCIMToken({
 			body: {
 				providerId,
-				organizationId,
+				organizationId: orgId,
 			},
 			headers,
 		});
@@ -126,6 +141,7 @@ const _createSqlTestInstance = async (
 		organizationId?: string,
 	) {
 		const { headers } = await signInWithTestUser();
+		if (!organizationId) throw new Error("SCIM token requires an organization");
 		const { scimToken } = await auth.api.generateSCIMToken({
 			body: {
 				providerId,
@@ -250,7 +266,7 @@ describe("SCIM", () => {
 				        {
 				          "description": "A Boolean value indicating the User's administrative status.",
 				          "multiValued": false,
-				          "mutability": "readOnly",
+				          "mutability": "readWrite",
 				          "name": "active",
 				          "required": false,
 				          "returned": "default",
@@ -503,7 +519,7 @@ describe("SCIM", () => {
 				    {
 				      "description": "A Boolean value indicating the User's administrative status.",
 				      "multiValued": false,
-				      "mutability": "readOnly",
+				      "mutability": "readWrite",
 				      "name": "active",
 				      "required": false,
 				      "returned": "default",
@@ -765,8 +781,6 @@ describe("SCIM", () => {
 		});
 
 		it("should create a new account linked to an existing user", async () => {
-			// Linking a pre-existing user by email is opt-in via
-			// `linkExistingUsers`; enable the legacy behavior for this test.
 			const { auth, authClient, getSCIMToken } = createTestInstance({
 				linkExistingUsers: true,
 			});
@@ -843,7 +857,6 @@ describe("SCIM", () => {
 					},
 				});
 
-			// Must not silently link to the existing account.
 			await expect(createUser()).rejects.toThrowError(
 				expect.objectContaining({
 					message: "User already exists",
@@ -855,29 +868,31 @@ describe("SCIM", () => {
 			);
 		});
 
-		it("should only link a pre-existing user whose email domain is trusted", async () => {
-			const { auth, authClient, getSCIMToken } = createTestInstance({
-				linkExistingUsers: { trustedDomains: ["trusted.com"] },
+		it("only links a pre-existing user who belongs to the token's organization", async () => {
+			const { auth, authClient, getAuthCookieHeaders } = createTestInstance({
+				linkExistingUsers: { requireExistingOrgMembership: true },
 			});
-			const scimToken = await getSCIMToken();
-
-			await authClient.signUp.email({
-				email: "user@other.com",
-				password: "the password",
-				name: "other",
+			const ownerHeaders = await getAuthCookieHeaders();
+			const org = await auth.api.createOrganization({
+				body: { slug: "link-org", name: "Link Org" },
+				headers: ownerHeaders,
 			});
-			await authClient.signUp.email({
-				email: "user@trusted.com",
-				password: "the password",
-				name: "trusted",
+			const { scimToken } = await auth.api.generateSCIMToken({
+				body: { providerId: "member-link", organizationId: org!.id },
+				headers: ownerHeaders,
 			});
 
-			// Domain not in trustedDomains: rejected.
+			await authClient.signUp.email({
+				email: "outsider@company.com",
+				password: "the password",
+				name: "outsider",
+			});
+
 			await expect(
 				auth.api.createSCIMUser({
 					body: {
-						userName: "other",
-						emails: [{ value: "user@other.com" }],
+						userName: "outsider",
+						emails: [{ value: "outsider@company.com" }],
 					},
 					headers: { authorization: `Bearer ${scimToken}` },
 				}),
@@ -885,18 +900,37 @@ describe("SCIM", () => {
 				expect.objectContaining({ message: "User already exists" }),
 			);
 
-			// Trusted domain: linked.
+			const memberHeaders = new Headers();
+			await authClient.signUp.email({
+				email: "member@company.com",
+				password: "the password",
+				name: "member",
+			});
+			await authClient.signIn.email(
+				{ email: "member@company.com", password: "the password" },
+				{ throw: true, onSuccess: setCookieToHeader(memberHeaders) },
+			);
+			const memberSession = await auth.api.getSession({
+				headers: memberHeaders,
+			});
+			await auth.api.addMember({
+				body: {
+					organizationId: org!.id,
+					userId: memberSession!.user.id,
+					role: "member",
+				},
+				headers: ownerHeaders,
+			});
+
 			const linked = await auth.api.createSCIMUser({
 				body: {
-					userName: "trusted",
-					emails: [{ value: "user@trusted.com" }],
+					userName: "member",
+					emails: [{ value: "member@company.com" }],
 				},
 				headers: { authorization: `Bearer ${scimToken}` },
 			});
-			expect(linked.id).toBeTruthy();
-			expect(linked.emails).toEqual([
-				{ primary: true, value: "user@trusted.com" },
-			]);
+
+			expect(linked.id).toBe(memberSession!.user.id);
 		});
 
 		it("should create a new user with external id", async () => {

@@ -284,6 +284,36 @@ describe("device authorization flow", async () => {
 	});
 
 	describe("device approval flow", () => {
+		// RFC 8628 §3.2: the device authorization response must not be cached.
+		it("sends no-store on the device code response", async () => {
+			const response = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+				asResponse: true,
+			});
+			expect(response.headers.get("Cache-Control")).toBe("no-store");
+			expect(response.headers.get("Pragma")).toBe("no-cache");
+		});
+
+		// The device token response carries live credentials.
+		it("sends no-store on the device token response", async () => {
+			const { headers } = await signInWithTestUser();
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			await auth.api.deviceVerify({ query: { user_code }, headers });
+			await auth.api.deviceApprove({ body: { userCode: user_code }, headers });
+			const response = await auth.api.deviceToken({
+				body: {
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code,
+					client_id: "test-client",
+				},
+				asResponse: true,
+			});
+			expect(response.headers.get("Cache-Control")).toBe("no-store");
+			expect(response.headers.get("Pragma")).toBe("no-cache");
+		});
+
 		it("should approve device and create session", async () => {
 			// First, sign in as a user
 			const { headers } = await signInWithTestUser();
@@ -678,9 +708,6 @@ describe("device authorization flow", async () => {
 describe("device authorization ownership gate", () => {
 	const ATTACKER_EMAIL = "attacker@example.test";
 	const ATTACKER_PASSWORD = "attacker-password-123";
-	type AdapterUpdateData = Parameters<
-		DBAdapter<BetterAuthOptions>["update"]
-	>[0];
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-cq3f-vc6p-68fh
@@ -890,6 +917,152 @@ describe("device authorization ownership gate", () => {
 		});
 	});
 
+	it("rejects approve from a different user if the code was generated for a different user_id", async () => {
+		const { auth, client, signInWithTestUser, signInWithUser } =
+			await getTestInstance(
+				{
+					plugins: [
+						deviceAuthorization({
+							expiresIn: "5min",
+							interval: "2s",
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [deviceAuthorizationClient()],
+					},
+				},
+			);
+
+		const { user } = await signInWithTestUser();
+
+		await client.signUp.email({
+			email: ATTACKER_EMAIL,
+			password: ATTACKER_PASSWORD,
+			name: "attacker",
+		});
+		const { headers: attackerHeaders } = await signInWithUser(
+			ATTACKER_EMAIL,
+			ATTACKER_PASSWORD,
+		);
+
+		const { user_code } = await auth.api.deviceCode({
+			body: {
+				client_id: "test-client",
+				user_id: user.id,
+			},
+		});
+
+		await expect(
+			auth.api.deviceApprove({
+				body: { userCode: user_code },
+				headers: attackerHeaders,
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: { error: "access_denied" },
+		});
+
+		await expect(
+			auth.api.deviceDeny({
+				body: { userCode: user_code },
+				headers: attackerHeaders,
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: { error: "access_denied" },
+		});
+	});
+
+	it("allows approve when the pre-bound user matches the current user", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					expiresIn: "5min",
+					interval: "2s",
+				}),
+			],
+		});
+
+		const { headers: legitHeaders, user } = await signInWithTestUser();
+
+		const { user_code } = await auth.api.deviceCode({
+			body: {
+				client_id: "test-client",
+				user_id: user.id,
+			},
+		});
+
+		const approve = await auth.api.deviceApprove({
+			body: { userCode: user_code },
+			headers: legitHeaders,
+		});
+		expect(approve).toMatchObject({ success: true });
+	});
+
+	it("allows deny when the pre-bound user matches the current user", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					expiresIn: "5min",
+					interval: "2s",
+				}),
+			],
+		});
+
+		const { headers: legitHeaders, user } = await signInWithTestUser();
+
+		const { user_code } = await auth.api.deviceCode({
+			body: {
+				client_id: "test-client",
+				user_id: user.id,
+			},
+		});
+
+		const deny = await auth.api.deviceDeny({
+			body: { userCode: user_code },
+			headers: legitHeaders,
+		});
+
+		expect(deny).toMatchObject({ success: true });
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc8628#section-3.1
+	 */
+	it("treats an empty user_id as omitted and leaves the code unbound", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					expiresIn: "5min",
+					interval: "2s",
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		const { user_code } = await auth.api.deviceCode({
+			body: {
+				client_id: "test-client",
+				user_id: "",
+			},
+		});
+
+		// The unbound code is claimable by any signed-in user via verify
+		await auth.api.deviceVerify({
+			query: { user_code },
+			headers,
+		});
+
+		const approve = await auth.api.deviceApprove({
+			body: { userCode: user_code },
+			headers,
+		});
+		expect(approve).toMatchObject({ success: true });
+	});
+
 	it("does not overwrite a device code claimed after verify reads it", async () => {
 		let adapter: DBAdapter<BetterAuthOptions> | null = null;
 		let concurrentOwnerId: string | undefined;
@@ -907,12 +1080,14 @@ describe("device authorization ownership gate", () => {
 			const baseAdapter = memoryAdapter(memoryDB)(options);
 			adapter = {
 				...baseAdapter,
-				update: async <T>(data: AdapterUpdateData) => {
+				incrementOne: async <T>(
+					data: Parameters<DBAdapter<BetterAuthOptions>["incrementOne"]>[0],
+				) => {
 					if (
 						simulateConcurrentClaim &&
 						concurrentOwnerId &&
 						data.model === "deviceCode" &&
-						data.update.userId
+						(data.set as { userId?: string } | undefined)?.userId
 					) {
 						simulateConcurrentClaim = false;
 						const deviceCodeId = data.where.find(
@@ -926,7 +1101,7 @@ describe("device authorization ownership gate", () => {
 							});
 						}
 					}
-					return baseAdapter.update<T>(data);
+					return baseAdapter.incrementOne<T>(data);
 				},
 			};
 			return adapter;

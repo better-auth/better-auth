@@ -11,14 +11,14 @@ import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
-import { generateRandomString } from "../../crypto";
 import { parseUserOutput } from "../../db/schema";
 import {
 	missingEmailLogMessage,
 	OAUTH_CALLBACK_ERROR_CODES,
 } from "../../oauth2/errors";
-import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identity";
-import { generateState } from "../../utils";
+import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { getOAuthCallbackPath } from "../../oauth2/utils";
+import { generateIdTokenNonce, generateState } from "../../utils";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
@@ -124,15 +124,6 @@ const socialSignInBodySchema = z.object({
 				})
 				.optional(),
 			/**
-			 * The scopes granted alongside the id token.
-			 */
-			scopes: z
-				.array(z.string())
-				.meta({
-					description: "The scopes granted alongside the id token",
-				})
-				.optional(),
-			/**
 			 * The user object from the provider.
 			 * This is only available for some providers like Apple.
 			 */
@@ -186,7 +177,7 @@ const socialSignInBodySchema = z.object({
 	/**
 	 * Extra query parameters to append to the provider authorization URL.
 	 * Reserved OAuth keys (state, client_id, redirect_uri, response_type,
-	 * code_challenge, code_challenge_method, scope) are rejected.
+	 * code_challenge, code_challenge_method, nonce, scope) are rejected.
 	 */
 	additionalParams: additionalAuthorizationParamsSchema,
 	/**
@@ -321,7 +312,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
 					);
 				}
-				const data = await signInWithOAuthIdentity(c, {
+				const data = await handleOAuthUserInfo(c, {
 					userInfo: {
 						...userInfo.user,
 						email: userInfo.user.email,
@@ -330,17 +321,11 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						image: userInfo.user.image,
 						emailVerified: userInfo.user.emailVerified || false,
 					},
-					providerId: provider.id,
-					accountId: String(userInfo.user.id),
-					tokens: {
-						idToken: token,
+					account: {
+						providerId: provider.id,
+						accountId: String(userInfo.user.id),
 						accessToken: c.body.idToken.accessToken,
-						refreshToken: c.body.idToken.refreshToken,
 					},
-					// No `requestedScopes`: an id_token flow never built a server-side
-					// authorization URL, so there is no provider-verified requested set
-					// to fall back to (RFC 6749 §5.1). Recording the caller-supplied
-					// `idToken.scopes` would inflate `grantedScopes` with unverified scopes.
 					callbackURL: c.body.callbackURL,
 					disableSignUp:
 						(provider.disableImplicitSignUp && !c.body.requestSignUp) ||
@@ -374,21 +359,19 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 				});
 			}
 
-			const state = generateRandomString(32);
-			const codeVerifier = generateRandomString(128);
-			const { url, requestedScopes } = await provider.createAuthorizationURL({
+			const idTokenNonce = generateIdTokenNonce(provider);
+			const { codeVerifier, state } = await generateState(c, {
+				additionalData: c.body.additionalData,
+				idTokenNonce,
+			});
+			const url = await provider.createAuthorizationURL({
 				state,
 				codeVerifier,
-				redirectURI: `${c.context.baseURL}${provider.callbackPath}`,
+				idTokenNonce,
+				redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
 				scopes: c.body.scopes,
 				loginHint: c.body.loginHint,
 				additionalParams: c.body.additionalParams,
-			});
-			await generateState(c, {
-				additionalData: c.body.additionalData,
-				requestedScopes,
-				state,
-				codeVerifier,
 			});
 
 			if (!c.body.disableRedirect) {

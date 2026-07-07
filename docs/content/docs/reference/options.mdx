@@ -342,7 +342,7 @@ export const auth = betterAuth({
 * `clientSecret`: OAuth client secret from the provider
 * `clientKey`: Client key (used by some providers like TikTok instead of clientId) (optional)
 * `redirectURI`: Custom redirect URI for the OAuth callback (optional)
-* `scope`: Extra OAuth scopes to request, added on top of the provider's default scopes (optional). The scopes a user actually grants are accumulated on the account's `grantedScopes` array. For union-only providers (generic OAuth, most social providers, and Google with `includeGrantedScopes: false`), the stored grant only grows: a narrower sign-in or refresh response never shrinks it. The one exception is Google with the default `includeGrantedScopes: true`, where each sign-in resyncs `grantedScopes` to Google's authoritative combined grant, so a scope the user revoked at Google drops on the next sign-in. Token refresh never changes the grant for any provider. Use `signIn.social({ scopes })` or `linkSocial({ scopes })` to request additional scopes per request, which are also additive to the defaults.
+* `scope`: Additional OAuth scopes to request (optional)
 * `mapProfileToUser`: Custom function to map the provider profile to a user (optional)
 * `disableSignUp`: Disable sign up for new users (optional)
 * `disableImplicitSignUp`: Disable implicit sign up for new users (optional)
@@ -351,12 +351,11 @@ export const auth = betterAuth({
 * `prompt`: The prompt to use for the authorization code request (`"select_account"`, `"consent"`, `"login"`, `"none"`, `"select_account consent"`) (optional)
 * `responseMode`: The response mode to use (`"query"`, `"form_post"`) (optional)
 * `getUserInfo`: Custom function to get user info from the provider (optional)
-* `refreshAccessToken`: Custom function to refresh a token (optional)
+* `refreshAccessToken`: Custom function to refresh a token. Receives the stored refresh token and returns new OAuth tokens. (optional)
 * `verifyIdToken`: Custom function to verify the ID token (optional)
 * `disableIdTokenSignIn`: Disable sign in with ID token sent from the client (optional)
 * `disableDefaultScope`: Disable the provider's default scopes (optional)
 * `authorizationEndpoint`: Custom authorization endpoint URL (optional)
-* `includeGrantedScopes`: (Google only) Controls Google's server-side incremental authorization via `include_granted_scopes` (default: `true`). When enabled, Google's token response is the authoritative combined grant for the project, so on each sign-in the account's `grantedScopes` is resynced (replaced) to it: scopes the user revoked at Google are reflected and the stored grant can shrink. Set to `false` to authorize only the scopes requested in the current flow; the stored grant then becomes union-only and only ever grows.
 
 ## `plugins`
 
@@ -482,7 +481,7 @@ export const auth = betterAuth({
 		},
 		encryptOAuthTokens: true, // Encrypt OAuth tokens before storing them in the database
 		storeStateStrategy: "database", // Store OAuth state payload in verification storage
-		storeAccountCookie: true, // Store account data after OAuth flow in a cookie (useful for database-less flows)
+		storeAccountCookie: true, // Store provider account data after OAuth flow in an encrypted cookie (useful for database-less flows)
 		accountLinking: {
 			enabled: true,
 			trustedProviders: ["google", "github", "email-password"], // or async (request) => ["google", "github"]
@@ -515,10 +514,14 @@ Defaults to `"database"` when a database or `secondaryStorage` is configured, an
 
 ### `storeAccountCookie`
 
-Store account data after OAuth flow in a cookie. This is useful for database-less flows where you want to store account information (access tokens, refresh tokens, etc.) in a cookie instead of the database.
+Store provider account data after an OAuth flow in an encrypted cookie. This is useful for database-less flows where OAuth token material, such as access tokens, refresh tokens, ID tokens, scopes, and token expiry, must be available without an account table.
 
 * Default: `false`
 * Automatically set to `true` if no database is provided
+
+The account cookie has a five-minute max age and is refreshed when Better Auth writes updated provider account data, for example after `getAccessToken` or `/refresh-token` refreshes provider tokens. When this happens in server-side code, forward the returned `Set-Cookie` header to the browser so the refreshed account cookie is retained.
+
+Better Auth chunks oversized account cookies, but browsers and proxies can still enforce total cookie or header limits. Prefer database-backed account storage for providers that issue large JWTs or for production flows that need durable token storage.
 
 When this option is enabled, you can read the decrypted account cookie in hooks or middleware using `getAccountCookie` from `better-auth/cookies`:
 
@@ -536,9 +539,11 @@ const hook = createAuthMiddleware(async (ctx) => {
 Configuration for account linking.
 
 * `enabled`: Enable account linking (default: `true`)
+* `disableImplicitLinking`: Disable automatic account linking on OAuth sign-in. When `true`, a same-email OAuth sign-in for an existing user is rejected with `account_not_linked` instead of being implicitly linked (even for verified emails or `trustedProviders`). New users can still sign up via OAuth, and authenticated users can still link providers explicitly via `linkSocial()`. (default: `false`)
 * `trustedProviders`: List of trusted providers. Can be a static array or an async function that returns providers dynamically based on the request (similar to `trustedOrigins`)
 * `allowDifferentEmails`: Allow users to link accounts with different email addresses
 * `allowUnlinkingAll`: Allow users to unlink all accounts
+* `updateUserInfoOnLink`: When linking, copy the provider's profile (`name`, `image`, and any `mapProfileToUser` fields) onto the local user. The local `email` and `emailVerified` are never changed. (default: `false`)
 
 ## `verification`
 
@@ -605,7 +610,7 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	advanced: {
 		ipAddress: {
-			ipAddressHeaders: ["x-client-ip", "x-forwarded-for"],
+			ipAddressHeaders: ["x-client-ip", "x-real-ip"],
 			disableIpTracking: false
 		},
 		useSecureCookies: true,
@@ -654,6 +659,9 @@ export const auth = betterAuth({
 ```
 
 * `ipAddress`: IP address configuration for rate limiting and session tracking
+  * `disableIpTracking`: Disable IP address tracking.
+  * `ipAddressHeaders`: Trusted header names to read client IP addresses from.
+  * `trustedProxies`: Reverse-proxy IPs or CIDR ranges. The forwarded chain is walked right to left, trusted hops are skipped, and the first untrusted address is used as the client IP.
 * `useSecureCookies`: By default, cookies are secure in production environments. Set this to `true` to force the `Secure` cookie attribute in all environments.
 * `disableCSRFCheck`: Disable all CSRF protection including origin header validation and Fetch Metadata checks (⚠️ security risk)
 * `disableOriginCheck`: Disable URL validation for `callbackURL`, `redirectTo`, and other redirect URLs (⚠️ security risk)
