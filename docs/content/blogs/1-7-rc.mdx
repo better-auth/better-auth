@@ -1,0 +1,372 @@
+---
+title: "Better Auth 1.7 RC"
+description: "OAuth and OpenID Connect fixes, protected resources, DPoP, MCP package migration, SAML and SCIM updates, safer defaults, and more."
+date: 2026-06-26
+author:
+  name: "Gustavo Valverde"
+  avatar: ""
+tags: ["1.7", "OAuth", "OpenID Connect", "MCP", "SAML", "SCIM", "security"]
+---
+
+# Better Auth 1.7 RC
+
+We've put a lot into Better Auth 1.7. It's a big release, and some of it means migration work. We wanted to support a wider range of login flows, make the system more robust, and ship security fixes that needed structural changes.
+
+Here's what this release brings.
+
+**Your app can be the login provider for other apps.** If other apps sign in through your app, Better Auth now handles more OAuth and OpenID Connect rules. This includes DPoP tokens, single sign-out, forced re-login, per-API token rules, and safer token checks.
+
+**More login providers work.** Better Auth now supports login setups that did not work well before: Amazon Cognito, Microsoft Entra ID with certificate login, standard OpenID providers, and school-login providers like Clever.
+
+**More secure by default.** We hardened flows that were previously unsafe. As security keeps moving to the foreground, we would rather disclose a security gap and fix it quickly than keep it in place for backward compatibility.
+
+***
+
+## Highlights
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Better Auth as an identity provider
+
+This is the biggest area of the release. The OAuth provider grows from "it issues tokens" into a standards-based authorization server that other apps can sign in through.
+
+* **Protected resources:** describe each API behind your login server as its own resource, with its own token lifetime, scopes, and claims. A token is locked to the API it was issued for and can no longer be replayed against another. This replaces the flat `validAudiences` list.
+* **DPoP-bound tokens:** an access token binds to a key held by the client, so a stolen token is not enough to call the API.
+* **Single sign-out:** OIDC Back-Channel Logout tells every app a user signed into to end its own session when they sign out of your provider.
+* **Forced re-login:** `max_age` is now honored instead of ignored.
+* **Consistent introspection:** opaque tokens return the same claims as JWTs, and a separate API service can introspect a token issued to another client.
+* **Protocol-safe ID tokens:** custom claims can no longer overwrite reserved protocol claims such as issuer, subject, and audience.
+* **Self-service and machine clients:** a backend registers without a logged-in user using a pre-shared token, and **Client ID Metadata Documents** (`@better-auth/cimd`) let a client identify itself by a hosted URL, which is how MCP clients connect without being registered ahead of time. Real MCP clients like Claude and Codex now keep the authentication method they register with, confidential by default rather than forced to public.
+* **Request specific user details:** a client can ask for individual user claims through the standard `claims.userinfo` parameter, and the request becomes part of the user's consent.
+* **An extension surface:** `extendOAuthProvider` lets a companion plugin add grant types, client-authentication methods, discovery metadata, and claims without changing core.
+* **Conformance polish:** standard `{ error, error_description }` envelopes, `no-store` on credential responses, an `at_hash` claim on ID tokens, form-encoded requests, and a refresh-retry window for native clients.
+
+The old `oidcProvider` plugin, deprecated in 1.6, is removed. Move OpenID provider setups to `@better-auth/oauth-provider`.
+
+***
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Connecting to more identity providers
+
+The other half of the OAuth work is about Better Auth as the app receiving a login.
+
+* **Generic OAuth is rebuilt** on the same path as built-in social providers, with PKCE on by default and automatic issuer validation through discovery. The API you call and the callback URL both change.
+* **Identity tokens are verified consistently** against a provider's published keys, including for mobile and single-page apps. Custom providers move from a `verifyIdToken` method to an `idToken` config.
+* **Granted scopes are preserved** across re-login and token refresh instead of being overwritten, and Google's `includeGrantedScopes` is now configurable (still on by default).
+* **Google One Tap** validates identity tokens more strictly, rejecting malformed tokens and honoring `requireEmailVerification`.
+* **Per-request login options** (`additionalParams`) unlock Cognito upstream routing, Microsoft Entra ID `domain_hint`, and offline or incremental Google access. **Certificate and signed-assertion login** (`clientAssertion`, `tokenEndpointAuth`) add Entra ID certificate login and generic `private_key_jwt`.
+* **Provider-started login** restarts safely with `allowIdpInitiated: true`, **per-provider email verification** (`requireEmailVerification`) withholds the session until the email is verified, and **anonymous account linking** now works in Expo and other in-app browsers.
+
+***
+
+<HeaderLabel variant="info">New</HeaderLabel>
+
+### New integrations unlocked
+
+These setups were impossible, broken, or unsafe before, and work now.
+
+**Logging your users in with an external provider**
+
+| Provider or setup                                         | What was blocked                                                      | How it works now                                                         |
+| --------------------------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| **Amazon Cognito** federated login                        | You could not route a user to a specific upstream provider per login. | Use typed `identityProvider` and per-request `additionalParams`.         |
+| **Microsoft Entra ID** certificate login                  | Only shared-secret login was supported.                               | Use `clientAssertion` for certificate login and `domain_hint` per login. |
+| **Google** offline and incremental access                 | Options were global, and granted scopes were overwritten each login.  | Use per-request options, preserved scopes, and `includeGrantedScopes`.   |
+| **Any OpenID provider** via discovery                     | The provider identity token was not verified.                         | Point at a discovery URL, and tokens are verified automatically.         |
+| **Zitadel, Auth0, and other multi-tenant OIDC providers** | No way to send extra parameters when refreshing a token.              | Use `refreshTokenParams` on refresh, without a full redirect.            |
+| **Providers needing signed-assertion login**              | Only secret-based login was supported.                                | Use `tokenEndpointAuth` with a signed JWT.                               |
+| **Clever and similar education providers**                | A login started by the provider failed.                               | Use `allowIdpInitiated: true` to restart the flow safely.                |
+
+**Other apps logging in through you**
+
+| Setup                                          | What was blocked                        | How it works now                                                             |
+| ---------------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------- |
+| **APIs needing theft-resistant tokens**        | Only plain bearer tokens.               | Use DPoP tokens bound to the client's key.                                   |
+| **Several APIs behind one login server**       | One token could be used on any API.     | Use per-API resources, so tokens are locked to the API they were issued for. |
+| **Machine clients registering themselves**     | Registration required a logged-in user. | Use pre-shared registration tokens.                                          |
+| **MCP clients (Claude, Codex, Factory Droid)** | Their registration was rejected.        | They are accepted automatically, with Client ID Metadata Document support.   |
+| **Single sign-out across apps**                | Sign-out did not notify other apps.     | Use OIDC Back-Channel Logout.                                                |
+| **Forced re-login**                            | The request was ignored.                | `max_age` is enforced.                                                       |
+
+**Enterprise SSO**
+
+| Setup                                | What was blocked                      | How it works now                                    |
+| ------------------------------------ | ------------------------------------- | --------------------------------------------------- |
+| **SAML certificate rotation**        | Only one certificate was accepted.    | A list of certificates is accepted during rotation. |
+| **SCIM group provisioning**          | No durable group resources.           | Groups have first-class lifecycle endpoints.        |
+| **OpenID SSO on Cloudflare Workers** | Redirecting endpoints broke the flow. | They fail with a clear configuration error.         |
+
+***
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Enterprise SSO, SAML, and SCIM
+
+* **Rotate SAML certificates without downtime:** signing certificates can now be a list, so an administrator publishes a new certificate next to the old one. The management endpoints return the certificate as a list, or omit it when certs live in an `idpMetadata` document.
+* **Unsolicited SAML logins are off by default:** `allowIdpInitiated` now defaults to `false`, so a provider-started login is rejected unless you opt in with `allowIdpInitiated: true`.
+* **Simpler SAML configuration:** the callback URL is derived automatically, service-provider metadata is generated, several unused fields are removed, and Single Logout ends the session correctly. One endpoint path changes.
+* **SCIM groups and organization scoping:** SCIM gains durable group resources, and every connection is now bound to an organization through a required `organizationId`, with the old per-user ownership option removed. This needs a migration and one manual reclaim of pre-1.7 connections that have no organization.
+
+***
+
+<HeaderLabel variant="info">New</HeaderLabel>
+
+### Drizzle Relations v2
+
+Drizzle ORM v1 is now in release candidate, bringing its new relations API. Better Auth supports it through a new adapter entry point, so the generated auth relations slot in alongside your app's own relations.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth/minimal";
+import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2"; // [!code highlight]
+import { db } from "./db";
+import * as schema from "./schema";
+
+export const auth = betterAuth({
+  database: drizzleAdapter(db, { provider: "pg", schema }),
+});
+```
+
+***
+
+<HeaderLabel variant="info">New</HeaderLabel>
+
+### Built-in i18n for 22 languages
+
+`@better-auth/i18n` ships built-in translations for 22 languages, and the English fallback is fixed. Drop it in to localize Better Auth's user-facing messages without maintaining your own translation table.
+
+***
+
+<HeaderLabel variant="warning">Breaking</HeaderLabel>
+
+### Secure by default
+
+* **Forwarded proxy headers are not trusted by default:** your app reads its own address from the `Host` header and ignores `x-forwarded-*` unless you opt in with `advanced.trustedProxyHeaders: true`. Platforms like nginx, Vercel, Cloudflare, and Netlify usually need no change.
+* **Atomic state, no more races:** "check, then write" database logic is replaced with single atomic operations, so a one-time token cannot be used twice, a team cannot exceed its limit, and a rate limit holds under load. Custom adapters and storage backends gain required methods.
+* **Electron requires modern PKCE:** the Electron flow now requires S256 PKCE and no longer trusts a custom origin header. Upgrade the client and server together.
+* **Captcha matches full paths:** replace a partial path like `/sign-in` with `/sign-in/*` or `/sign-in/**`.
+* **Stricter custom-scheme origins:** a host-bearing `trustedOrigins` entry like `myapp://callback` now matches that host exactly and no longer accepts `myapp://callback.attacker.tld`.
+* **Passwordless sign-in clears unproven credentials:** when an account email was never confirmed, proven mailbox control wins, so an unproven password and any other linked accounts are removed before sign-in.
+* **A gate for new identities:** the new `user.validateUserInfo` hook can reject an identity before a user is created or an account is linked, across every sign-up method.
+
+***
+
+## Important changes
+
+### Breaking changes
+
+| Change                                                    | What to do                                                                                                                                         |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Protected resources replace `validAudiences`              | Move each audience into `resources`, link clients to resources, and run the schema migration.                                                      |
+| DPoP changes token verification                           | Rename the bearer-token helper, use the DPoP request verifier where needed, and run the schema migration.                                          |
+| Back-channel logout revokes session-bound tokens          | Run the schema migration and expect tokens tied to a signed-out session to become inactive.                                                        |
+| Generic OAuth uses the social-provider path               | Update sign-in calls, link calls, callback URLs, and client plugins.                                                                               |
+| Custom social providers use one identity-token verifier   | Replace a provider's `verifyIdToken` method with an `idToken` config.                                                                              |
+| The old `oidcProvider` plugin is removed                  | Move provider setups to `@better-auth/oauth-provider`.                                                                                             |
+| MCP moves to `@better-auth/mcp`                           | Update imports, endpoint paths, helper names, config shape, and schema.                                                                            |
+| SAML defaults and config change                           | Update removed fields, update callback URLs, and review IdP-initiated flows.                                                                       |
+| SCIM connections need a manual reclaim                    | Assign an `organizationId` to pre-1.7 connections, or delete unowned rows, before regenerating their tokens.                                       |
+| Proxy headers are not trusted by default                  | Opt in with `advanced.trustedProxyHeaders: true` only when your proxy requires it.                                                                 |
+| Custom adapters and storage need atomic methods           | Implement `incrementOne` and `consumeOne` (adapters), `increment` and `getAndDelete` (secondary storage), or `consume` (rate-limit storage).       |
+| Captcha rules match full paths                            | Replace partial paths like `/sign-in` with `/sign-in/*` or `/sign-in/**`.                                                                          |
+| Custom-scheme trusted origins match by host               | A host-bearing entry like `myapp://callback` no longer accepts `myapp://callback.attacker.tld`. Re-check native and mobile `trustedOrigins`.       |
+| Electron requires S256 PKCE                               | Upgrade the Electron client and server together.                                                                                                   |
+| OIDC ID tokens drop profile/email scope claims            | Read profile and email claims from the UserInfo endpoint, not the ID token.                                                                        |
+| Synchronous OAuth2 request builders removed               | Replace `createAuthorizationCodeRequest`, `createRefreshAccessTokenRequest`, and `createClientCredentialsTokenRequest` with the async equivalents. |
+| `jwt.sign` callbacks must match `keyPairConfig.alg`       | Align your custom ID-token signing alg with the configured key pair, or issuance is rejected.                                                      |
+| Stricter Dynamic Client Registration validation           | Send reciprocal `response_types`/`grant_types` (a `code` response type requires the `authorization_code` grant).                                   |
+| Unauthenticated registration keeps the client auth method | Registrations are confidential by default. Set `token_endpoint_auth_method: "none"` for clients that must stay public.                             |
+| `/oauth2/revoke` rejects valid JWT access tokens          | Expect `400 unsupported_token_type`. Revoke refresh or opaque tokens instead.                                                                      |
+| OAuth callback error code renamed                         | Update handling of `email_doesn't_match` to `email_does_not_match`.                                                                                |
+| `generateState()` signature changed                       | Call it with the new options object instead of positional `(c, link, additionalData)`.                                                             |
+| SCIM connections are scoped to an organization            | `organizationId` is required, `userId` is removed, `defaultSCIM` becomes `staticProviders`, `trustedDomains` is removed. Run the migration.        |
+| SCIM requires the organization plugin                     | SCIM no longer initializes without it, and every token must be tied to an organization.                                                            |
+| SCIM account IDs are namespaced per organization          | Migrate existing SCIM-linked accounts to the `scim:{organizationId}:{providerId}` provider-id form.                                                |
+| SSO SAML config registration changes                      | Provide a signing-cert source and expect the full lowercased ACS error-redirect code, not the short alias.                                         |
+| `/sso/update-provider` rejects partial mappings           | Send a complete OIDC/SAML mapping object, not a partial one.                                                                                       |
+| auth CLI requires Node.js 22.12+                          | Upgrade the Node.js used to run the CLI.                                                                                                           |
+| New organization columns                                  | Run the migration for `team.memberCount` and `teamMember.membershipKey`.                                                                           |
+| Stripe org subscriptions need `organization.enabled`      | `referenceMiddleware` rejects org-scoped subscriptions unless `organization: { enabled: true }` is set in the Stripe plugin config.                |
+| Default Drizzle schema uses singular relation keys        | Regenerate and review your Drizzle schema relations.                                                                                               |
+| Stripe `onSubscriptionCancel` event is required           | Update the callback to expect a non-optional `event`.                                                                                              |
+| Two-factor OTP-only enablement                            | `enableTwoFactor` takes a new `method` param and returns a discriminated response. Update callers.                                                 |
+| Public export `getIp` renamed to `getIP`                  | Update imports of the IP helper.                                                                                                                   |
+
+### Behavior changes
+
+| Change                                                          | What changes                                                                                                                        |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `max_age` is enforced                                           | Clients that ask for fresh login now get it instead of being ignored.                                                               |
+| Token introspection is consistent                               | Opaque tokens return the same claims as a JWT, and a resource server can introspect another client's token.                         |
+| ID-token claims stay protocol-safe                              | Custom claims can no longer overwrite reserved protocol claims, and ID tokens report `acr: "0"`.                                    |
+| Granted scopes are preserved                                    | Later logins no longer erase scopes granted earlier.                                                                                |
+| Google One Tap validates tokens more strictly                   | Malformed identity tokens are rejected with `400`, and `requireEmailVerification` returns `403`.                                    |
+| Magic-link and email-OTP sign-in can clear unproven credentials | Proven mailbox control wins over an unconfirmed password on the same account.                                                       |
+| userinfo rejects bad access tokens with 401                     | Invalid tokens get `401 invalid_token` with a `WWW-Authenticate` header.                                                            |
+| OAuth authorize redirects missing-`response_type` errors        | The error goes to the verified client `redirect_uri` instead of a generic error.                                                    |
+| OAuth client creation returns `201`                             | Creating a client returns `201 Created` instead of `200 OK`, and registration enforces the same permission checks.                  |
+| Drizzle adapter validates affected-row counts                   | An invalid affected-row count throws instead of returning `0`.                                                                      |
+| `organization.updateTeam` ignores immutable fields              | `id`, `createdAt`, and `updatedAt` are no longer accepted in the request body.                                                      |
+| `updateMemberRole` checks authorization first                   | Role-existence validation runs after authorization checks.                                                                          |
+| CLI `generate --output` to a directory                          | Picks an adapter-specific default filename.                                                                                         |
+| Generated schema skips migration-disabled models                | References to models with migrations disabled are omitted.                                                                          |
+| Cookie-cache session is bound to its cookie                     | The cached session is tied to the `session_token` cookie.                                                                           |
+| SSRF host checks cover more reserved ranges                     | Outbound-host classification now blocks additional reserved ranges (6to4 relay anycast, site-local IPv6, and IPv4-compatible IPv6). |
+| OAuth token-redemption errors use standard codes                | Authorization-code redemption failures return `400 invalid_grant` instead of `401 invalid_client` or `invalid_request`.             |
+| Sign-out runs session-delete hooks with external session stores | `session.delete` hooks now run on sign-out even with `secondaryStorage` and `preserveSessionInDatabase`.                            |
+| Two-factor invalidation failure has its own error code          | A failed two-factor challenge cleanup now returns `FAILED_TO_INVALIDATE_TWO_FACTOR_CHALLENGE`.                                      |
+
+### New additions
+
+| Change                                   | What is available now                                                                                |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Refresh-token retries for native clients | Replay the same refresh response during a short reuse window.                                        |
+| OAuth provider extension surface         | Add grant types, client-authentication methods, discovery metadata, and claims.                      |
+| Client ID Metadata Documents             | Let clients identify themselves with a hosted metadata document.                                     |
+| Per-request login options                | Pass provider-specific login options from one sign-in request.                                       |
+| Certificate and signed-assertion login   | Use certificate login for Microsoft Entra ID and signed JWTs for generic OAuth.                      |
+| Private-key-JWT client auth              | Authenticate OAuth provider and SSO clients with a signed JWT (RFC 7523) instead of a shared secret. |
+| SCIM groups                              | Manage SCIM groups with durable lifecycle endpoints.                                                 |
+| Request specific user claims             | Ask for individual user details with the `claims.userinfo` parameter.                                |
+| Drizzle Relations v2 support             | A new `@better-auth/drizzle-adapter/relations-v2` entry point merges with your app's relations.      |
+| Sessions and tools                       | Use public-key session verification, `hydrateSession`, i18n, and `create-admin`.                     |
+
+### Deprecations and removals
+
+| Change                                     | Replacement                          |
+| ------------------------------------------ | ------------------------------------ |
+| `oidcProvider` plugin removed              | Use `@better-auth/oauth-provider`.   |
+| MCP plugin path moved out of `better-auth` | Use `@better-auth/mcp`.              |
+| Generic OAuth client APIs changed          | Use the standard social client APIs. |
+
+***
+
+## Migrating to v1.7
+
+Because this release carries large changes, we're shipping it as a release candidate first, so there's a window to migrate. We'll keep watching feedback and release the stable 1.7 from there.
+
+Install it from the `rc` tag, and do the same for any `@better-auth/*` packages you use:
+
+```package-install
+better-auth@rc
+```
+
+Then run `npx auth@rc generate` for any schema changes; the unscoped `npx auth` still resolves the 1.6 CLI until 1.7 is stable. The table below shows whether these changes affect you. For the detailed migration guide, see the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide).
+
+| If you use                                     | What to expect                                                                                       |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Basic Better Auth setup                        | Usually just the `@rc` install and any generated schema changes                                      |
+| Social login, generic OAuth, One Tap, or SSO   | New login-client behavior, especially generic OAuth, identity-token verification, and Google One Tap |
+| `@better-auth/oauth-provider`                  | The largest set of changes: resources, DPoP, back-channel logout, `max_age`, and safer OAuth checks  |
+| MCP                                            | A package move to `@better-auth/mcp`, new imports, new endpoint paths, and a schema migration        |
+| SAML or SCIM                                   | Safer SAML and SSO checks, and a manual SCIM ownership cleanup                                       |
+| Magic links or email OTP                       | Safer handling for accounts whose email was never confirmed                                          |
+| Custom adapters, storage, or rate-limit stores | New atomic methods are required                                                                      |
+| Custom proxy or TLS termination                | Check how your app computes its public origin before relying on DPoP or identity-provider redirects  |
+
+***
+
+## What's next?
+
+We're planning Better Auth 1.7 as the last feature release on the v1 line. Once it is stable, v1 moves into maintenance, where security, bug, and compatibility fixes continue while our focus shifts to v2. v1 stays maintained and remains a solid base to build on. v2 is our chance to improve the foundation. We're making it more modular and focused. More soon.
+
+***
+
+## Contributors
+
+Thanks to all the contributors for making this release possible!
+
+export const releaseContributorUsernames = [
+	// cspell:disable
+	"0-Sandy",
+	"aarmful",
+	"adityachaudhary99",
+	"adrianmxb",
+	"ahmedivy",
+	"allandelmare",
+	"Andrew1326",
+	"arnnvv",
+	"baptisteArno",
+	"Bekacru",
+	"Bekione",
+	"bennettdams",
+	"benpsnyder",
+	"brentmitchell25",
+	"brone1323",
+	"bytaesu",
+	"Byte-Biscuit",
+	"cb-alish",
+	"chdanielmueller",
+	"ChrisMGeo",
+	"Craga89",
+	"cyphercodes",
+	"demhadais",
+	"dipan-ck",
+	"DougInAMug",
+	"dvanmali",
+	"ejirocodes",
+	"ElGauchooooo",
+	"elliotBraem",
+	"eluce2",
+	"erquhart",
+	"FaryalRizwaan",
+	"florianamette",
+	"formatlos",
+	"frankeld",
+	"GautamBytes",
+	"GoPro16",
+	"gustavovalverde",
+	"himself65",
+	"IcanDivideBy0",
+	"IdrisGit",
+	"ItalyPaleAle",
+	"Jadenstanton",
+	"jaydeep-pipaliya",
+	"jjluzgin",
+	"jonathansamines",
+	"jsj",
+	"kgarg2468",
+	"Kinfe123",
+	"Kvizas",
+	"lubiah",
+	"mausic",
+	"moonevm",
+	"MuzzaiyyanHussain",
+	"nphlp",
+	"Oluwatobi-Mustapha",
+	"onmax",
+	"OscarCornish",
+	"ouwargui",
+	"Paola3stefania",
+	"pbacza",
+	"peyremorgan",
+	"pi0",
+	"ping-maxwell",
+	"programming-with-ia",
+	"rachit367",
+	"ramonclaudio",
+	"reslear",
+	"ruban-s",
+	"Saiyaswanthpasupuleti",
+	"seanfilimon",
+	"seebykilian",
+	"SferaDev",
+	"skalkii",
+	"sleepe229",
+	"sovetski",
+	"stewartjarod",
+	"TanishValesha",
+	"terijaki",
+	"tonytkachenko",
+	"tsushanth",
+	"Tushar-Khandelwal-2004",
+	"Vishesh-Verma-07",
+	"WilsonnnTan",
+	"wobedi",
+	"yordis",
+	"zeroknowledge0x",
+	"zllovesuki",
+	// cspell:enable
+];
+
+<Contributors usernames={releaseContributorUsernames} />
