@@ -348,6 +348,12 @@ function resolvesMissingOutputModule(
 		"requireStack" in error && Array.isArray(error.requireStack)
 			? (error.requireStack as unknown[])
 			: [];
+	// requireStack[0] is the file that directly required the missing
+	// specifier. Falling back to configFilePath only matters when jiti
+	// omits requireStack; if the failing import is transitive (config ->
+	// helper -> ./schema) this fallback resolves against the wrong
+	// directory, but the exact-match check below still guards against a
+	// false positive in that case.
 	const importedFrom =
 		typeof requireStack[0] === "string" ? requireStack[0] : configFilePath;
 
