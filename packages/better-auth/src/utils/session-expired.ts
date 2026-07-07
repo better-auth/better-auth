@@ -80,6 +80,31 @@ export async function notifySessionExpiredIfNeeded(
 }
 
 /**
+ * When a session row has naturally expired, invoke the expiry hook and clean
+ * up cookies and storage. Returns whether the session was expired.
+ */
+export async function handleExpiredSessionIfNeeded(
+	ctx: GenericEndpointContext,
+	session: Session | null | undefined,
+	opts?: { deleteFromStore?: boolean },
+): Promise<boolean> {
+	if (!session || !isSessionExpired(session)) {
+		return false;
+	}
+
+	const user = await ctx.context.internalAdapter.findUserById(session.userId);
+	if (!user) {
+		if (opts?.deleteFromStore !== false) {
+			await ctx.context.internalAdapter.deleteSession(session.token);
+		}
+		return true;
+	}
+
+	await handleExpiredSession(ctx, { session, user }, opts);
+	return true;
+}
+
+/**
  * Notifies from adapter code paths that already have session and user loaded.
  */
 export async function notifySessionExpiredFromFindSession(

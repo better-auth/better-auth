@@ -23,6 +23,7 @@ import { admin } from "../../plugins/admin";
 import { organization } from "../../plugins/organization";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { getDate } from "../../utils/date";
+import { handleExpiredSessionIfNeeded } from "../../utils/session-expired";
 import {
 	freshSessionMiddleware,
 	getAuthoritativeSessionFromCtx,
@@ -2910,5 +2911,54 @@ describe("onSessionExpired", async () => {
 			},
 			endpointCtx,
 		);
+	});
+
+	it("should not call onSessionExpired twice after handleExpiredSessionIfNeeded deletes the session", async () => {
+		const onSessionExpired = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			session: {
+				expiresIn: 60,
+				onSessionExpired,
+			},
+		});
+
+		const headers = new Headers();
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			returnHeaders: true,
+		});
+		headers.set("cookie", signInRes.headers.getSetCookie()[0]!);
+
+		const activeSession = await auth.api.getSession({ headers });
+		const sessionToken = activeSession?.session.token;
+		expect(sessionToken).toBeDefined();
+
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(61 * 1000);
+
+		const ctx = await auth.$context;
+		const endpointCtx = {
+			context: ctx,
+			headers: new Headers(),
+			query: {},
+			setCookie: vi.fn(),
+		} as unknown as GenericEndpointContext;
+
+		for (let i = 0; i < 2; i++) {
+			await runWithRequestState(new WeakMap(), async () => {
+				await runWithEndpointContext(endpointCtx, async () => {
+					const session = await ctx.adapter.findOne({
+						model: "session",
+						where: [{ field: "token", value: sessionToken! }],
+					});
+					await handleExpiredSessionIfNeeded(endpointCtx, session);
+				});
+			});
+		}
+
+		expect(onSessionExpired).toHaveBeenCalledOnce();
 	});
 });

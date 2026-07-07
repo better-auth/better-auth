@@ -1,6 +1,7 @@
 export * from "@better-auth/core/db";
 export {
 	handleExpiredSession,
+	handleExpiredSessionIfNeeded,
 	isSessionExpired,
 	notifySessionExpired,
 	notifySessionExpiredIfNeeded,
