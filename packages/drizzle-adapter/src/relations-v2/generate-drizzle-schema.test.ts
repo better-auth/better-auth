@@ -145,4 +145,96 @@ describe("relations-v2 schema generator", () => {
 		expect(code).not.toContain("[object Object]");
 		expect(typeErrors(code)).toEqual([]);
 	});
+
+	describe("schemaName (PostgreSQL namespace)", () => {
+		it("declares a pgSchema and uses schema.table() when schemaName is set", async () => {
+			const { code = "" } = await generateDrizzleSchema({
+				options: {},
+				provider: "pg",
+				adapterConfig: { provider: "pg", schemaName: "auth" },
+			});
+
+			expect(code).toContain('const authSchema = pgSchema("auth")');
+			expect(code).toMatch(
+				/import\s*\{[^}]*\bpgSchema\b[^}]*\}\s*from\s*["']drizzle-orm\/pg-core["']/,
+			);
+			// Tables are namespaced; no bare pgTable() table definitions remain.
+			expect(code).toMatch(/export const \w+ = authSchema\.table\(/);
+			expect(code).not.toMatch(/export const \w+ = pgTable\(/);
+			// Relations still reference the exported table consts unchanged.
+			expect(code).toContain("defineRelationsPart(");
+			expect(typeErrors(code)).toEqual([]);
+		});
+
+		it("does not emit pgSchema when schemaName is undefined", async () => {
+			const { code = "" } = await generateDrizzleSchema({
+				options: {},
+				provider: "pg",
+				adapterConfig: { provider: "pg" },
+			});
+
+			expect(code).not.toContain("pgSchema(");
+			expect(code).toMatch(/export const \w+ = pgTable\(/);
+		});
+
+		it("ignores schemaName for non-pg providers", async () => {
+			for (const provider of ["sqlite", "mysql"] as const) {
+				const { code = "" } = await generateDrizzleSchema({
+					options: {},
+					provider,
+					adapterConfig: { provider, schemaName: "auth" },
+				});
+				expect(code).not.toContain("pgSchema");
+				expect(code).toMatch(
+					new RegExp(`export const \\w+ = ${provider}Table\\(`),
+				);
+			}
+		});
+
+		it("converts a hyphenated schemaName into a valid identifier", async () => {
+			const { code = "" } = await generateDrizzleSchema({
+				options: {},
+				provider: "pg",
+				adapterConfig: { provider: "pg", schemaName: "my-auth" },
+			});
+
+			expect(code).toContain('const myAuthSchema = pgSchema("my-auth")');
+			expect(code).toContain("myAuthSchema.table");
+			expect(typeErrors(code)).toEqual([]);
+		});
+
+		it("does not import pgTable when schemaName is set", async () => {
+			const { code = "" } = await generateDrizzleSchema({
+				options: {},
+				provider: "pg",
+				adapterConfig: { provider: "pg", schemaName: "auth" },
+			});
+
+			expect(code).not.toContain("pgTable");
+		});
+
+		it("avoids variable collision when schemaName is 'pg'", async () => {
+			const { code = "" } = await generateDrizzleSchema({
+				options: {},
+				provider: "pg",
+				adapterConfig: { provider: "pg", schemaName: "pg" },
+			});
+
+			expect(code).toContain('pgSchema("pg")');
+			expect(code).not.toMatch(/const pgSchema\s*=/);
+			expect(code).toContain("pgCustomSchema");
+			expect(typeErrors(code)).toEqual([]);
+		});
+
+		it("escapes quotes and backslashes in schemaName", async () => {
+			const { code = "" } = await generateDrizzleSchema({
+				options: {},
+				provider: "pg",
+				adapterConfig: { provider: "pg", schemaName: 'auth"schema' },
+			});
+
+			expect(code).toContain('pgSchema("auth\\"schema")');
+			expect(typeErrors(code)).toEqual([]);
+		});
+	});
 });
