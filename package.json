@@ -8,7 +8,7 @@
     "url": "git+https://github.com/better-auth/better-auth.git"
   },
   "scripts": {
-    "prepare": "lefthook install --reset-hooks-path",
+    "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && lefthook install --reset-hooks-path || echo \"skipping lefthook (not a git repo)\"",
     "build": "turbo build --filter=./packages/*",
     "dev": "turbo dev --filter=./packages/* --filter=!./packages/cli",
     "clean": "turbo clean --filter=./packages/* && rm -rf node_modules",

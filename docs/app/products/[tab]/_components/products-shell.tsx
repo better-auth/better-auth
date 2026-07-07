@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import Footer from "@/components/landing/footer";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
+import { SignatureMark } from "@/components/landing/signature-mark";
 
 function FrameworkHero() {
 	const highlights = [{ label: "License", value: "MIT" }];
@@ -234,6 +235,9 @@ export function ProductsShell({
 								</motion.div>
 							)}
 						</AnimatePresence>
+						<div className="absolute left-10 right-6 bottom-4 z-[3]">
+							<SignatureMark compact />
+						</div>
 					</div>
 
 					{/* Right side — Content */}
@@ -277,7 +281,9 @@ export function ProductsShell({
 						</div>
 
 						{children}
-						<Footer />
+						<div className="lg:hidden">
+							<Footer />
+						</div>
 					</div>
 				</div>
 			</div>

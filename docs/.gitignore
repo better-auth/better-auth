@@ -9,3 +9,4 @@ next-env.d.ts
 content/docs-beta/*
 !content/docs-beta/.gitkeep
 .beta-sync-tmp/
+.vercel
