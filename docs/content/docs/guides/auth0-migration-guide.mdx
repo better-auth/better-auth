@@ -422,12 +422,18 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
                     for (const member of members) {
                         try {
-                            const userRoles = await auth0Client.organizations.members.roles.list(
+                            const userRoles: any[] = [];
+                            let rolePage = await auth0Client.organizations.members.roles.list(
                                 org.id,
                                 member.user_id,
                                 { per_page: 100, page: 0 }
                             );
-                            const role = mapAuth0RoleToBetterAuthRole(userRoles.data?.map(r => r.name) || []);
+                            userRoles.push(...(rolePage.data || []));
+                            while (rolePage.hasNextPage()) {
+                                rolePage = await rolePage.getNextPage();
+                                userRoles.push(...(rolePage.data || []));
+                            }
+                            const role = mapAuth0RoleToBetterAuthRole(userRoles.map(r => r.name));
                             await ctx.adapter.create({
                                 model: "member",
                                 data: {
