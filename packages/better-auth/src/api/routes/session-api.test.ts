@@ -4,6 +4,7 @@ import {
 	runWithEndpointContext,
 	runWithRequestState,
 } from "@better-auth/core/context";
+import type { Session } from "@better-auth/core/db";
 import type { MemoryDB } from "@better-auth/memory-adapter";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
@@ -2950,7 +2951,7 @@ describe("onSessionExpired", async () => {
 		for (let i = 0; i < 2; i++) {
 			await runWithRequestState(new WeakMap(), async () => {
 				await runWithEndpointContext(endpointCtx, async () => {
-					const session = await ctx.adapter.findOne({
+					const session = await ctx.adapter.findOne<Session>({
 						model: "session",
 						where: [{ field: "token", value: sessionToken! }],
 					});
