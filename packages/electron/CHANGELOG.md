@@ -1,5 +1,15 @@
 # @better-auth/electron
 
+## 1.6.24
+
+### Patch Changes
+
+- [#9672](https://github.com/better-auth/better-auth/pull/9672) [`d7c41ba`](https://github.com/better-auth/better-auth/commit/d7c41baa1fdd2f088a6f09b4aea422174bad0acc) Thanks [@swithek](https://github.com/swithek)! - `/electron/init-oauth-proxy` now forwards each Set-Cookie from the inner sign-in response separately. The previous `Headers.get("set-cookie")` returned them as one comma-joined string, so the browser silently dropped the transfer-token cookie that the desktop deep-link handoff needs.
+
+- Updated dependencies [[`46d2bf0`](https://github.com/better-auth/better-auth/commit/46d2bf02c98902da7b344753372d48cfe0e5ebb3)]:
+  - better-auth@1.6.24
+  - @better-auth/core@1.6.24
+
 ## 1.6.23
 
 ### Patch Changes

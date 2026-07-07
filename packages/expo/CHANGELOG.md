@@ -1,5 +1,13 @@
 # @better-auth/expo
 
+## 1.6.24
+
+### Patch Changes
+
+- Updated dependencies [[`46d2bf0`](https://github.com/better-auth/better-auth/commit/46d2bf02c98902da7b344753372d48cfe0e5ebb3)]:
+  - better-auth@1.6.24
+  - @better-auth/core@1.6.24
+
 ## 1.6.23
 
 ### Patch Changes
