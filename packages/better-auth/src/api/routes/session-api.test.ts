@@ -2433,3 +2433,76 @@ describe("forced strict session validation", async () => {
 		});
 	});
 });
+
+describe("get-session cache headers", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10217
+	 */
+	it("sets Cache-Control: no-store on authenticated GET /get-session responses", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance();
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+
+		const res = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				headers: { cookie: headers.get("cookie") || "" },
+			}),
+		);
+
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as { user?: { id: string } } | null;
+		expect(body?.user?.id).toBeTruthy();
+		expect(res.headers.get("cache-control")).toContain("no-store");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10217
+	 */
+	it("sets Cache-Control: no-store on unauthenticated GET /get-session responses", async () => {
+		const { auth } = await getTestInstance();
+
+		const res = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session"),
+		);
+
+		expect(res.status).toBe(200);
+		expect(await res.json()).toBeNull();
+		expect(res.headers.get("cache-control")).toContain("no-store");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10222
+	 */
+	it("does not set Cache-Control: no-store on session-gated endpoints", async () => {
+		const sessionGatedPlugin = {
+			id: "session-gated-cache-test",
+			endpoints: {
+				sessionGatedCheck: createAuthEndpoint(
+					"/session-gated-cache-check",
+					{
+						method: "GET",
+						use: [freshSessionMiddleware],
+					},
+					async () => ({ status: true }),
+				),
+			},
+		};
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sessionGatedPlugin],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const res = await auth.handler(
+			new Request("http://localhost:3000/api/auth/session-gated-cache-check", {
+				headers: { cookie: headers.get("cookie") || "" },
+			}),
+		);
+
+		expect(res.status).toBe(200);
+		expect(res.headers.get("cache-control")).toBeNull();
+	});
+});
