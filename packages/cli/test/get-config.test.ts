@@ -1943,6 +1943,48 @@ describe("SvelteKit virtual modules and Vite asset imports (user-reported scenar
 	);
 
 	/**
+	 * `$app/env/{private,public}` are the explicit-environment-variables form
+	 * (opt-in via `experimental.explicitEnvironmentVariables`). Their exports are
+	 * arbitrary names declared in `src/env.ts`, so the stub must resolve *any*
+	 * imported name to its live `process.env` value rather than an enumerated set.
+	 * @see https://svelte.dev/docs/kit/environment-variables#Explicit-environment-variables
+	 */
+	tmpdirTest(
+		"resolves arbitrary $app/env/private and $app/env/public imports",
+		async ({ tmpdir, expect }) => {
+			vi.stubEnv("MY_SECRET_KEY", "secret");
+			vi.stubEnv("MY_PUBLIC_KEY", "public");
+
+			await writeTree(tmpdir, {
+				"package.json": sveltekitPackageJson,
+				"src/lib/server/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import { MY_SECRET_KEY } from "$app/env/private";
+					import { MY_PUBLIC_KEY } from "$app/env/public";
+					export const auth = betterAuth({
+						appName:
+							MY_SECRET_KEY === "secret" && MY_PUBLIC_KEY === "public"
+								? "ok"
+								: "bad",
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: tmpdir,
+				configPath: "src/lib/server/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: "ok",
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+
+	/**
 	 * Vite `?worker` resolves to a constructor and `.wasm?init` to an init
 	 * function; both must load without a file on disk.
 	 */
