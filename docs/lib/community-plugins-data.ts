@@ -294,7 +294,7 @@ export const communityPlugins: CommunityPlugin[] = [
 	{
 		name: "better-auth-instagram",
 		url: "https://github.com/rajatsandeepsen/better-auth-instagram",
-		description: "Instagram Provider for Better-Auth",
+		description: "Instagram Provider for Better Auth",
 		author: {
 			name: "Rajat Sandeep",
 			github: "rajatsandeepsen",
@@ -304,7 +304,17 @@ export const communityPlugins: CommunityPlugin[] = [
 	{
 		name: "better-auth-zoho",
 		url: "https://github.com/rajatsandeepsen/better-auth-zoho",
-		description: "Zoho Provider for Better-Auth",
+		description: "Zoho Provider for Better Auth",
+		author: {
+			name: "Rajat Sandeep",
+			github: "rajatsandeepsen",
+			avatar: "https://github.com/rajatsandeepsen.png",
+		},
+	},
+	{
+		name: "better-auth-snapchat",
+		url: "https://github.com/rajatsandeepsen/better-auth-snapchat",
+		description: "Snapchat Provider for Better Auth",
 		author: {
 			name: "Rajat Sandeep",
 			github: "rajatsandeepsen",
