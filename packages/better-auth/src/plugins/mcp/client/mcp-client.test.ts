@@ -4,7 +4,7 @@ import { toNodeHandler } from "../../../integrations/node";
 import { getTestInstance } from "../../../test-utils/test-instance";
 import { jwt } from "../../jwt";
 import { mcp } from "../index";
-import { mcpAuthMcpUse } from "./adapters";
+import { mcpAuthHono, mcpAuthMcpUse } from "./adapters";
 import type { McpSession } from "./index";
 import { createMcpAuthClient } from "./index";
 
@@ -401,13 +401,16 @@ describe("mcp-client", async () => {
 			const mockReq = { headers: {} };
 			const mockRes = {
 				set: (_key: string, _value: string) => {},
+				get: (key: string) => mockRes._headers[key],
 				status: (code: number) => ({
 					json: (body: unknown) => {
 						mockRes._status = code;
 						mockRes._body = body;
 					},
 				}),
-				_headers: {} as Record<string, string>,
+				_headers: {
+					"Access-Control-Expose-Headers": "set-auth-token",
+				} as Record<string, string>,
 				_status: 0,
 				_body: null as unknown,
 			};
@@ -422,6 +425,12 @@ describe("mcp-client", async () => {
 			expect(nextCalled).toBe(false);
 			expect(mockRes._status).toBe(401);
 			expect(mockRes._headers["WWW-Authenticate"]).toContain("Bearer");
+			expect(mockRes._headers["Access-Control-Allow-Origin"]).toBe(
+				new URL(authURL).origin,
+			);
+			expect(mockRes._headers["Access-Control-Expose-Headers"]).toBe(
+				"set-auth-token, WWW-Authenticate",
+			);
 		});
 
 		it("should return 401 for invalid token via middleware", async () => {
@@ -458,6 +467,89 @@ describe("mcp-client", async () => {
 
 			expect(nextCalled).toBe(false);
 			expect(mockRes._status).toBe(401);
+			expect(mockRes._headers["WWW-Authenticate"]).toContain("Bearer");
+			expect(mockRes._headers["Access-Control-Allow-Origin"]).toBe(
+				new URL(authURL).origin,
+			);
+			expect(mockRes._headers["Access-Control-Expose-Headers"]).toBe(
+				"WWW-Authenticate",
+			);
+		});
+	});
+
+	describe("mcpAuthHono", () => {
+		const makeHonoContext = (
+			authorization?: string,
+			initialHeaders: Record<string, string> = {},
+		) => {
+			const headers: Record<string, string> = { ...initialHeaders };
+			const responseHeaders = new Headers(initialHeaders);
+			return {
+				headers,
+				context: {
+					req: {
+						header: (name: string) =>
+							name === "Authorization" ? authorization : undefined,
+						raw: new Request("http://localhost/mcp"),
+					},
+					set: () => {},
+					header: (name: string, value: string) => {
+						headers[name] = value;
+						responseHeaders.set(name, value);
+					},
+					res: { headers: responseHeaders },
+					json: (data: unknown, status?: number) => {
+						return Response.json(data, { status, headers });
+					},
+				},
+			};
+		};
+
+		it("should expose WWW-Authenticate for missing auth header", async () => {
+			const { middleware } = mcpAuthHono({
+				authURL,
+				fetch: customFetchImpl as typeof fetch,
+			});
+			const { context, headers } = makeHonoContext();
+
+			const response = await middleware(context, async () => {});
+
+			expect(response?.status).toBe(401);
+			expect(headers["WWW-Authenticate"]).toContain("Bearer");
+			expect(headers["Access-Control-Expose-Headers"]).toBe("WWW-Authenticate");
+		});
+
+		it("should preserve exposed headers for missing auth header", async () => {
+			const { middleware } = mcpAuthHono({
+				authURL,
+				fetch: customFetchImpl as typeof fetch,
+			});
+			const { context, headers } = makeHonoContext(undefined, {
+				"Access-Control-Expose-Headers": "set-auth-token",
+			});
+
+			const response = await middleware(context, async () => {});
+
+			expect(response?.status).toBe(401);
+			expect(headers["Access-Control-Expose-Headers"]).toBe(
+				"set-auth-token, WWW-Authenticate",
+			);
+		});
+
+		it("should expose WWW-Authenticate for invalid token", async () => {
+			const { middleware } = mcpAuthHono({
+				authURL,
+				fetch: customFetchImpl as typeof fetch,
+			});
+			const { context, headers } = makeHonoContext(
+				"Bearer invalid-token-for-test",
+			);
+
+			const response = await middleware(context, async () => {});
+
+			expect(response?.status).toBe(401);
+			expect(headers["WWW-Authenticate"]).toContain("Bearer");
+			expect(headers["Access-Control-Expose-Headers"]).toBe("WWW-Authenticate");
 		});
 	});
 });
