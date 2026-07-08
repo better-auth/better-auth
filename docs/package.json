@@ -92,6 +92,7 @@
     "react-markdown": "^10.1.0",
     "react-remove-scroll": "^2.7.2",
     "react-resizable-panels": "^4.5.2",
+    "react-tweet": "^3.3.1",
     "recharts": "^3.7.0",
     "rehype-highlight": "^7.0.2",
     "remark": "^15.0.1",

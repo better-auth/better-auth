@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import Footer from "@/components/landing/footer";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
+import { SignatureMark } from "@/components/landing/signature-mark";
 import type { GemJobPost } from "@/lib/gem";
 import { formatGemEnum } from "@/lib/gem";
 
@@ -205,6 +206,9 @@ export function CareersPageClient({ roles }: { roles: Role[] }) {
 							<HalftoneBackground />
 						</div>
 						<CareersHero openRoles={roles.length} />
+						<div className="absolute left-10 right-6 bottom-4 z-[3]">
+							<SignatureMark compact />
+						</div>
 					</div>
 
 					{/* Right side */}
@@ -289,7 +293,9 @@ export function CareersPageClient({ roles }: { roles: Role[] }) {
 								)}
 							</motion.div>
 						</div>
-						<Footer />
+						<div className="lg:hidden">
+							<Footer />
+						</div>
 					</div>
 				</div>
 			</div>
