@@ -222,12 +222,6 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 									name: `${modelName}_${fieldName}_idx`,
 									on: fieldName,
 								});
-							} else if (attr.index && attr.unique) {
-								indexes.push({
-									type: "uniqueIndex",
-									name: `${modelName}_${fieldName}_uidx`,
-									on: fieldName,
-								});
 							}
 
 							if (
@@ -662,14 +656,8 @@ function generateImport({
 	const hasIndexes = Object.values(tables).some((table) =>
 		Object.values(table.fields).some((field) => field.index && !field.unique),
 	);
-	const hasUniqueIndexes = Object.values(tables).some((table) =>
-		Object.values(table.fields).some((field) => field.unique && field.index),
-	);
 	if (hasIndexes) {
 		coreImports.push("index");
-	}
-	if (hasUniqueIndexes) {
-		coreImports.push("uniqueIndex");
 	}
 
 	return `${rootImports.length > 0 ? `import { ${rootImports.join(", ")} } from "drizzle-orm";\n` : ""}import { ${coreImports
