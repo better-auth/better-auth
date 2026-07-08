@@ -31,6 +31,7 @@ export const SOCIAL_PROVIDERS = [
 	"twitter",
 	"vercel",
 	"vk",
+	"withings",
 	"zoom",
 ] as const;
 
@@ -241,6 +242,12 @@ export const SOCIAL_PROVIDER_CONFIGS: Record<SocialProvider, ProviderConfig> = {
 		options: [
 			{ name: "clientId", envVar: "VK_CLIENT_ID" },
 			{ name: "clientSecret", envVar: "VK_CLIENT_SECRET" },
+		],
+	},
+	withings: {
+		options: [
+			{ name: "clientId", envVar: "WITHINGS_CLIENT_ID" },
+			{ name: "clientSecret", envVar: "WITHINGS_CLIENT_SECRET" },
 		],
 	},
 	zoom: {

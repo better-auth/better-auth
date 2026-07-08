@@ -1162,6 +1162,23 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
+				title: "Withings",
+				href: "/docs/authentication/withings",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2m0 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5m0 13c-2.03 0-3.86-.86-5.16-2.24.02-1.72 3.44-2.66 5.16-2.66s5.14.94 5.16 2.66A7.12 7.12 0 0 1 12 18.5"
+						/>
+					</svg>
+				),
+			},
+			{
 				title: "Zoom",
 				href: "/docs/authentication/zoom",
 				icon: (props?: SVGProps<any>) => (
