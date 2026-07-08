@@ -51,9 +51,10 @@ describe("initGetDefaultModelName", () => {
 	 * @see https://github.com/better-auth/better-auth/issues/8111
 	 *
 	 * When a user remaps `user.modelName = "account"`, the string "account"
-	 * collides with the built-in account schema key. The user's explicit
-	 * `modelName` choice must win, so resolving "account" should return the
-	 * user schema key, not the OAuth account schema key.
+	 * collides with the built-in account schema key. Internal callers (and
+	 * `references.model`, see get-tables.ts) always pass canonical schema
+	 * keys, so an exact schema-key match must win: resolving "account" must
+	 * return the OAuth account schema key, not the remapped user table.
 	 */
 	describe("user.modelName collision with account schema key", () => {
 		const schema = getAuthTables({
@@ -61,13 +62,13 @@ describe("initGetDefaultModelName", () => {
 			account: { modelName: "identity" },
 		});
 
-		it("resolves the user's modelName alias to the user schema key", () => {
+		it("resolves a schema key to itself even when a modelName collides with it", () => {
 			const getDefaultModelName = initGetDefaultModelName({
 				schema,
 				usePlural: false,
 			});
 
-			expect(getDefaultModelName("account")).toBe("user");
+			expect(getDefaultModelName("account")).toBe("account");
 		});
 
 		it("resolves the account's modelName alias to the account schema key", () => {
