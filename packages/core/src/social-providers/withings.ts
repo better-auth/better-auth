@@ -58,15 +58,31 @@ export const withings = (options: WithingsOptions) => {
 		error: unknown,
 		context: string,
 	): OAuth2Tokens => {
+		const fail = (reason: string): never => {
+			throw new Error(`Failed to ${context}: ${reason}`);
+		};
+
 		if (error || !data || data.status !== 0 || !data.body) {
-			throw new Error(
-				`Failed to ${context}: ${
-					data?.error ||
-					(error instanceof Error ? error.message : "Unknown error")
-				}`,
+			return fail(
+				data?.error ||
+					(error instanceof Error ? error.message : "Unknown error"),
 			);
 		}
 		const body = data.body;
+		// Withings returns HTTP 200 with `status: 0` even for incomplete payloads.
+		// Reject envelopes missing the fields the OAuth flow depends on so failures
+		// surface here rather than as `Bearer undefined` requests or a `null`
+		// `getUserInfo` result later.
+		if (!body.access_token) {
+			return fail("missing access token in response");
+		}
+		if (
+			body.userid === undefined ||
+			body.userid === null ||
+			body.userid === ""
+		) {
+			return fail("missing user id in response");
+		}
 		return {
 			tokenType: body.token_type || "Bearer",
 			accessToken: body.access_token,
@@ -75,10 +91,12 @@ export const withings = (options: WithingsOptions) => {
 				? new Date(Date.now() + body.expires_in * 1000)
 				: undefined,
 			scopes: body.scope ? body.scope.split(",") : undefined,
-			// Withings only returns the account id during the token exchange, so
-			// we carry it on the token for `getUserInfo`.
-			userid: body.userid,
-		} as OAuth2Tokens & { userid?: string | number };
+			// Withings only returns the account id during the token exchange.
+			// Keep it inside the provider-specific `raw` field (rather than as a
+			// top-level token property) so `getUserInfo` can resolve it without
+			// leaking an unexpected field into persisted account data.
+			raw: body,
+		};
 	};
 
 	return {
@@ -163,8 +181,7 @@ export const withings = (options: WithingsOptions) => {
 				return options.getUserInfo(token);
 			}
 
-			const userid = (token as OAuth2Tokens & { userid?: string | number })
-				.userid;
+			const userid = token.raw?.userid as string | number | undefined;
 
 			if (userid === undefined || userid === null || userid === "") {
 				return null;

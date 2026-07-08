@@ -24,7 +24,7 @@ describe("withings.getUserInfo (no provider email)", () => {
 		const provider = withings(options);
 		const res = await provider.getUserInfo({
 			accessToken: "access-token",
-			userid: 123456,
+			raw: { userid: 123456 },
 		} as any);
 
 		expect(res?.user.id).toBe("123456");
@@ -40,7 +40,7 @@ describe("withings.getUserInfo (no provider email)", () => {
 		});
 		const res = await provider.getUserInfo({
 			accessToken: "access-token",
-			userid: "789",
+			raw: { userid: "789" },
 		} as any);
 
 		expect(res?.user.email).toBe("real@example.com");
@@ -50,6 +50,7 @@ describe("withings.getUserInfo (no provider email)", () => {
 		const provider = withings(options);
 		const res = await provider.getUserInfo({
 			accessToken: "access-token",
+			raw: {},
 		} as any);
 
 		expect(res).toBeNull();
@@ -61,7 +62,7 @@ describe("withings.validateAuthorizationCode", () => {
 		mockedBetterFetch.mockReset();
 	});
 
-	it("unwraps the { status, body } envelope and carries userid", async () => {
+	it("unwraps the { status, body } envelope and keeps userid in raw", async () => {
 		mockedBetterFetch.mockResolvedValue({
 			data: {
 				status: 0,
@@ -86,8 +87,37 @@ describe("withings.validateAuthorizationCode", () => {
 		expect(tokens.accessToken).toBe("at");
 		expect(tokens.refreshToken).toBe("rt");
 		expect(tokens.scopes).toEqual(["user.info", "user.metrics"]);
-		expect((tokens as any).userid).toBe(42);
+		expect(tokens.raw?.userid).toBe(42);
+		// userid must not leak onto the token as a top-level property, since the
+		// OAuth callback spreads tokens into persisted account data.
+		expect((tokens as any).userid).toBeUndefined();
 		expect(tokens.accessTokenExpiresAt).toBeInstanceOf(Date);
+	});
+
+	it("resolves the placeholder email from a token produced by the exchange", async () => {
+		mockedBetterFetch.mockResolvedValue({
+			data: {
+				status: 0,
+				body: {
+					userid: 42,
+					access_token: "at",
+					refresh_token: "rt",
+					expires_in: 10800,
+					token_type: "Bearer",
+				},
+			},
+			error: null,
+		} as any);
+
+		const provider = withings(options);
+		const tokens = await provider.validateAuthorizationCode({
+			code: "code",
+			redirectURI: "https://example.com/callback",
+		} as any);
+		const res = await provider.getUserInfo(tokens as any);
+
+		expect(res?.user.id).toBe("42");
+		expect(res?.user.email).toBe("42@withings.invalid");
 	});
 
 	it("throws when Withings returns a non-zero status", async () => {
@@ -103,5 +133,35 @@ describe("withings.validateAuthorizationCode", () => {
 				redirectURI: "https://example.com/callback",
 			} as any),
 		).rejects.toThrow(/invalid_grant/);
+	});
+
+	it("throws when a success envelope is missing the access token", async () => {
+		mockedBetterFetch.mockResolvedValue({
+			data: { status: 0, body: { userid: 42 } },
+			error: null,
+		} as any);
+
+		const provider = withings(options);
+		await expect(
+			provider.validateAuthorizationCode({
+				code: "partial",
+				redirectURI: "https://example.com/callback",
+			} as any),
+		).rejects.toThrow(/access token/);
+	});
+
+	it("throws when a success envelope is missing the user id", async () => {
+		mockedBetterFetch.mockResolvedValue({
+			data: { status: 0, body: { access_token: "at" } },
+			error: null,
+		} as any);
+
+		const provider = withings(options);
+		await expect(
+			provider.validateAuthorizationCode({
+				code: "partial",
+				redirectURI: "https://example.com/callback",
+			} as any),
+		).rejects.toThrow(/user id/);
 	});
 });
