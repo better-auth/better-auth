@@ -463,6 +463,42 @@ describe("generate", async () => {
 		expect(schema.code).toContain(String.raw`.default('say "hi"\\done')`);
 	});
 
+	it("should not emit duplicate unique indexes for unique indexed fields", async () => {
+		const pluginWithUniqueIndexedField = (): BetterAuthPlugin => ({
+			id: "unique-index-test",
+			schema: {
+				testTable: {
+					fields: {
+						slug: {
+							type: "string",
+							index: true,
+							unique: true,
+						},
+					},
+				},
+			},
+		});
+
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "pg",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				plugins: [pluginWithUniqueIndexedField()],
+			} as BetterAuthOptions,
+		});
+
+		expect(schema.code).toContain('slug: text("slug").notNull().unique()');
+		expect(schema.code).not.toContain("uniqueIndex");
+		expect(schema.code).not.toContain("slug_uidx");
+	});
+
 	it("should treat fields with omitted required as non-optional in prisma schema", async () => {
 		const originalCwd = process.cwd();
 		const tmpDir = fs.mkdtempSync(
