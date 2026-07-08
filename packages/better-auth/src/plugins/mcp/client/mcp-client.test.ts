@@ -4,7 +4,7 @@ import { toNodeHandler } from "../../../integrations/node";
 import { getTestInstance } from "../../../test-utils/test-instance";
 import { jwt } from "../../jwt";
 import { mcp } from "../index";
-import { mcpAuthHono, mcpAuthMcpUse } from "./adapters";
+import { mcpAuthMcpUse } from "./adapters";
 import type { McpSession } from "./index";
 import { createMcpAuthClient } from "./index";
 
@@ -474,82 +474,6 @@ describe("mcp-client", async () => {
 			expect(mockRes._headers["Access-Control-Expose-Headers"]).toBe(
 				"WWW-Authenticate",
 			);
-		});
-	});
-
-	describe("mcpAuthHono", () => {
-		const makeHonoContext = (
-			authorization?: string,
-			initialHeaders: Record<string, string> = {},
-		) => {
-			const headers: Record<string, string> = { ...initialHeaders };
-			const responseHeaders = new Headers(initialHeaders);
-			return {
-				headers,
-				context: {
-					req: {
-						header: (name: string) =>
-							name === "Authorization" ? authorization : undefined,
-						raw: new Request("http://localhost/mcp"),
-					},
-					set: () => {},
-					header: (name: string, value: string) => {
-						headers[name] = value;
-						responseHeaders.set(name, value);
-					},
-					res: { headers: responseHeaders },
-					json: (data: unknown, status?: number) => {
-						return Response.json(data, { status, headers });
-					},
-				},
-			};
-		};
-
-		it("should expose WWW-Authenticate for missing auth header", async () => {
-			const { middleware } = mcpAuthHono({
-				authURL,
-				fetch: customFetchImpl as typeof fetch,
-			});
-			const { context, headers } = makeHonoContext();
-
-			const response = await middleware(context, async () => {});
-
-			expect(response?.status).toBe(401);
-			expect(headers["WWW-Authenticate"]).toContain("Bearer");
-			expect(headers["Access-Control-Expose-Headers"]).toBe("WWW-Authenticate");
-		});
-
-		it("should preserve exposed headers for missing auth header", async () => {
-			const { middleware } = mcpAuthHono({
-				authURL,
-				fetch: customFetchImpl as typeof fetch,
-			});
-			const { context, headers } = makeHonoContext(undefined, {
-				"Access-Control-Expose-Headers": "set-auth-token",
-			});
-
-			const response = await middleware(context, async () => {});
-
-			expect(response?.status).toBe(401);
-			expect(headers["Access-Control-Expose-Headers"]).toBe(
-				"set-auth-token, WWW-Authenticate",
-			);
-		});
-
-		it("should expose WWW-Authenticate for invalid token", async () => {
-			const { middleware } = mcpAuthHono({
-				authURL,
-				fetch: customFetchImpl as typeof fetch,
-			});
-			const { context, headers } = makeHonoContext(
-				"Bearer invalid-token-for-test",
-			);
-
-			const response = await middleware(context, async () => {});
-
-			expect(response?.status).toBe(401);
-			expect(headers["WWW-Authenticate"]).toContain("Bearer");
-			expect(headers["Access-Control-Expose-Headers"]).toBe("WWW-Authenticate");
 		});
 	});
 });

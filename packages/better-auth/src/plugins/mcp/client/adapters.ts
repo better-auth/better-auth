@@ -14,7 +14,6 @@ interface HonoContext {
 		headers?: Record<string, string>,
 	) => Response;
 	header: (name: string, value: string) => void;
-	res?: { headers?: Headers };
 }
 type HonoNext = () => Promise<void>;
 type HonoMiddleware = (
@@ -24,48 +23,6 @@ type HonoMiddleware = (
 
 interface HonoApp {
 	get: (path: string, handler: (c: HonoContext) => Promise<Response>) => void;
-}
-
-function addExposeHeaderValue(
-	exposedHeaders: string | null | undefined,
-	headerName: string,
-): string {
-	if (!exposedHeaders) {
-		return headerName;
-	}
-	const alreadyExposed = exposedHeaders
-		.split(",")
-		.some((header) => header.trim().toLowerCase() === headerName.toLowerCase());
-	return alreadyExposed ? exposedHeaders : `${exposedHeaders}, ${headerName}`;
-}
-
-function makeHono401Response(
-	c: HonoContext,
-	resourceBase: string,
-	message: string,
-): Response {
-	c.header(
-		"WWW-Authenticate",
-		`Bearer resource_metadata="${resourceBase}/.well-known/oauth-protected-resource"`,
-	);
-	c.header(
-		"Access-Control-Expose-Headers",
-		addExposeHeaderValue(
-			c.res?.headers?.get("Access-Control-Expose-Headers"),
-			"WWW-Authenticate",
-		),
-	);
-	return c.json(
-		{
-			jsonrpc: "2.0",
-			error: {
-				code: -32000,
-				message,
-			},
-			id: null,
-		},
-		401,
-	);
 }
 
 export function mcpAuthHono(options: McpAuthClientOptions): {
@@ -83,16 +40,37 @@ export function mcpAuthHono(options: McpAuthClientOptions): {
 			? authHeader.slice(7)
 			: undefined;
 		if (!token) {
-			return makeHono401Response(
-				c,
-				resourceBase,
-				"Unauthorized: Authentication required",
+			c.header(
+				"WWW-Authenticate",
+				`Bearer resource_metadata="${resourceBase}/.well-known/oauth-protected-resource"`,
+			);
+			return c.json(
+				{
+					jsonrpc: "2.0",
+					error: {
+						code: -32000,
+						message: "Unauthorized: Authentication required",
+					},
+					id: null,
+				},
+				401,
 			);
 		}
 
 		const session = await client.verifyToken(token);
 		if (!session) {
-			return makeHono401Response(c, resourceBase, "Invalid or expired token");
+			c.header(
+				"WWW-Authenticate",
+				`Bearer resource_metadata="${resourceBase}/.well-known/oauth-protected-resource"`,
+			);
+			return c.json(
+				{
+					jsonrpc: "2.0",
+					error: { code: -32000, message: "Invalid or expired token" },
+					id: null,
+				},
+				401,
+			);
 		}
 
 		c.set("mcpSession", session);
