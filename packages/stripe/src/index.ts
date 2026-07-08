@@ -262,8 +262,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							}
 						: afterUpdateStripeOrg,
 					beforeDeleteOrganization: existingHooks.beforeDeleteOrganization
-						? async (data) => {
-								await existingHooks.beforeDeleteOrganization!(data);
+						? async (data, ctx) => {
+								await existingHooks.beforeDeleteOrganization!(data, ctx);
 								await beforeDeleteStripeOrg(data);
 							}
 						: beforeDeleteStripeOrg,

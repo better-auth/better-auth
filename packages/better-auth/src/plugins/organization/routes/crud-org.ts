@@ -605,17 +605,23 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				throw APIError.fromStatus("BAD_REQUEST");
 			}
 			if (options?.organizationHooks?.beforeDeleteOrganization) {
-				await options.organizationHooks.beforeDeleteOrganization({
-					organization: org,
-					user: session.user,
-				});
+				await options.organizationHooks.beforeDeleteOrganization(
+					{
+						organization: org,
+						user: session.user,
+					},
+					ctx,
+				);
 			}
 			await adapter.deleteOrganization(organizationId);
 			if (options?.organizationHooks?.afterDeleteOrganization) {
-				await options.organizationHooks.afterDeleteOrganization({
-					organization: org,
-					user: session.user,
-				});
+				await options.organizationHooks.afterDeleteOrganization(
+					{
+						organization: org,
+						user: session.user,
+					},
+					ctx,
+				);
 			}
 			return ctx.json(org);
 		},
