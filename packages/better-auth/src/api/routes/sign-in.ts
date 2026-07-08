@@ -10,6 +10,7 @@ import { parseUserOutput } from "../../db/schema";
 import { missingEmailLogMessage } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState } from "../../utils";
+import { safeCloneRequest } from "../../utils/request";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
@@ -557,7 +558,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 								url,
 								token,
 							},
-							ctx.request?.clone(),
+							safeCloneRequest(ctx.request),
 						),
 					);
 				}
