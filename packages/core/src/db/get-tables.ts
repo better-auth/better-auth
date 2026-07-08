@@ -142,7 +142,18 @@ export const getAuthTables = (
 					type: "string",
 					fieldName: options.session?.fields?.userId || "userId",
 					references: {
-						model: options.user?.modelName || "user",
+						// Use the canonical user schema key here rather than
+						// `options.user.modelName`. Downstream consumers (e.g.
+						// `getSchema`, `getMigrations`, and the runtime adapter
+						// resolvers) treat `references.model` as a schema key
+						// and look it up via `tables[references.model]` /
+						// `getDefaultModelName`. Writing the modelName alias
+						// here would collide when a user picks a modelName that
+						// matches another schema key (for example
+						// `user.modelName = "account"`), causing the FK to
+						// resolve to the wrong table.
+						// @see https://github.com/better-auth/better-auth/issues/8111
+						model: "user",
 						field: "id",
 						onDelete: "cascade",
 					},
@@ -225,7 +236,11 @@ export const getAuthTables = (
 				userId: {
 					type: "string",
 					references: {
-						model: options.user?.modelName || "user",
+						// See note on `session.userId.references.model` above:
+						// always use the canonical user schema key so the FK
+						// target survives `user.modelName` aliasing.
+						// @see https://github.com/better-auth/better-auth/issues/8111
+						model: "user",
 						field: "id",
 						onDelete: "cascade",
 					},

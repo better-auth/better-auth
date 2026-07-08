@@ -161,4 +161,35 @@ describe("getAuthTables", () => {
 
 		expect(tables.shared!.disableMigrations).toBe(true);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8111
+	 */
+	describe("user.modelName collision with account schema key", () => {
+		it("should point session.userId at the user table when user.modelName='account' and account.modelName='identity'", () => {
+			const tables = getAuthTables({
+				user: { modelName: "account" },
+				account: { modelName: "identity" },
+			});
+
+			const sessionUserIdRef = tables.session!.fields.userId!.references;
+			expect(sessionUserIdRef).toBeDefined();
+			expect(tables[sessionUserIdRef!.model]).toBeDefined();
+			expect(tables[sessionUserIdRef!.model]!.modelName).toBe("account");
+			expect(tables[sessionUserIdRef!.model]!.fields.email).toBeDefined();
+		});
+
+		it("should point account.userId at the user table when user.modelName='account' and account.modelName='identity'", () => {
+			const tables = getAuthTables({
+				user: { modelName: "account" },
+				account: { modelName: "identity" },
+			});
+
+			const accountUserIdRef = tables.account!.fields.userId!.references;
+			expect(accountUserIdRef).toBeDefined();
+			expect(tables[accountUserIdRef!.model]).toBeDefined();
+			expect(tables[accountUserIdRef!.model]!.modelName).toBe("account");
+			expect(tables[accountUserIdRef!.model]!.fields.email).toBeDefined();
+		});
+	});
 });
