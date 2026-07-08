@@ -1,0 +1,8 @@
+# Dart tooling
+.dart_tool/
+.packages
+build/
+pubspec.lock
+**/doc/api/
+*.iml
+.idea/

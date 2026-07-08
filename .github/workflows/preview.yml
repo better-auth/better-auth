@@ -13,7 +13,40 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      packages: ${{ steps.filter.outputs.packages }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            packages:
+              - 'packages/**'
+              - '!packages/flutter/**'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'package.json'
+              - 'turbo.json'
+              - '.github/workflows/preview.yml'
+
   build:
+    needs: changes
+    # pkg-pr-new requires the GitHub App on the repo (upstream better-auth only).
+    # Skip on forks / private mirrors to avoid 404 failures and wasted builds.
+    if: >
+      needs.changes.outputs.packages == 'true' &&
+      github.repository == 'better-auth/better-auth'
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-24.04' || 'ubuntu-24.04' }}
     permissions:
       contents: read
@@ -39,11 +72,33 @@ jobs:
           node-version-file: '.nvmrc'
           registry-url: 'https://registry.npmjs.org'
           cache: pnpm
-      
+
       - name: Install
         run: pnpm install
 
       - name: Build
         run: pnpm build
-          
+
       - run: pnpm dlx pkg-pr-new publish --pnpm './packages/*'
+
+  # Keep the workflow green on forks where pkg-pr-new is not installed.
+  preview:
+    needs: [changes, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report status
+        env:
+          CHANGES: ${{ needs.changes.outputs.packages }}
+          BUILD: ${{ needs.build.result }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "packages changed: $CHANGES"
+          echo "build result: ${BUILD:-skipped}"
+          echo "repository: $REPO"
+          if [ "$REPO" != "better-auth/better-auth" ]; then
+            echo "pkg-pr-new publish skipped (GitHub App not required on this fork)."
+          fi
+          if [ "$BUILD" = "failure" ] || [ "$BUILD" = "cancelled" ]; then
+            exit 1
+          fi

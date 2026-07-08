@@ -51,6 +51,7 @@
 # ── Platform ──
 /packages/expo/                                    @better-auth/platform
 /packages/electron/                                @better-auth/platform
+/packages/flutter/                                 @better-auth/platform
 /packages/better-auth/src/integrations/            @better-auth/platform
 
 # ── Documentation ──

@@ -16,7 +16,48 @@ env:
   TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      demo: ${{ steps.flags.outputs.demo }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            demo_paths:
+              - 'demo/**'
+              - 'packages/**'
+              - '!packages/flutter/**'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'package.json'
+              - 'turbo.json'
+              - '.github/workflows/demo.yml'
+
+      - id: flags
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MATCH: ${{ steps.filter.outputs.demo_paths }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ] || [ "$MATCH" = "true" ]; then
+            echo "demo=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "demo=false" >> "$GITHUB_OUTPUT"
+          fi
+
   demo:
+    needs: changes
+    if: needs.changes.outputs.demo == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read

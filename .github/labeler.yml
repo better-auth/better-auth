@@ -92,6 +92,7 @@ platform:
     - any-glob-to-any-file:
       - 'packages/expo/**'
       - 'packages/electron/**'
+      - 'packages/flutter/**'
       - 'packages/better-auth/src/integrations/**'
 
 devtools:

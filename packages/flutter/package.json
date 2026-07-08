@@ -1,0 +1,65 @@
+{
+  "name": "@better-auth/flutter",
+  "version": "1.6.23",
+  "description": "Better Auth integration for Flutter and Dart applications.",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://www.better-auth.com/docs/integrations/flutter",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/2keyapp/better-auth.git",
+    "directory": "packages/flutter"
+  },
+  "keywords": [
+    "auth",
+    "flutter",
+    "dart",
+    "typescript",
+    "better-auth"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint:package": "publint run --strict --pack false",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.ts"
+      ]
+    }
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "better-auth": "workspace:*",
+    "tsdown": "catalog:"
+  },
+  "peerDependencies": {
+    "@better-auth/core": "workspace:^",
+    "better-auth": "workspace:^"
+  }
+}

@@ -213,3 +213,6 @@ state.txt
 .claude/worktrees
 
 .deepsec
+
+# Dart / Flutter tooling
+.dart_tool/

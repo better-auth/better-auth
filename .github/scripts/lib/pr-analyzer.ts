@@ -75,6 +75,7 @@ const SCOPE_TO_DOMAIN: Record<string, string> = {
 	// platform
 	expo: "platform",
 	electron: "platform",
+	flutter: "platform",
 
 	// devtools
 	cli: "devtools",
@@ -135,6 +136,7 @@ const PATH_TO_DOMAIN: [string, string][] = [
 	["packages/memory-adapter/", "database"],
 	["packages/expo/", "platform"],
 	["packages/electron/", "platform"],
+	["packages/flutter/", "platform"],
 	["packages/better-auth/src/integrations/", "platform"],
 	["packages/cli/", "devtools"],
 	["packages/better-auth/src/plugins/open-api/", "devtools"],
@@ -263,6 +265,7 @@ const SCOPE_TO_PACKAGE: Record<string, string> = {
 	"api-key": "@better-auth/api-key",
 	expo: "@better-auth/expo",
 	electron: "@better-auth/electron",
+	flutter: "@better-auth/flutter",
 	i18n: "@better-auth/i18n",
 	"test-utils": "@better-auth/test-utils",
 	"drizzle-adapter": "@better-auth/drizzle-adapter",
@@ -288,6 +291,7 @@ const PATH_TO_PACKAGE: [string, string][] = [
 	["packages/api-key/", "@better-auth/api-key"],
 	["packages/expo/", "@better-auth/expo"],
 	["packages/electron/", "@better-auth/electron"],
+	["packages/flutter/", "@better-auth/flutter"],
 	["packages/i18n/", "@better-auth/i18n"],
 	["packages/redis-storage/", "@better-auth/redis-storage"],
 	["packages/test-utils/", "@better-auth/test-utils"],

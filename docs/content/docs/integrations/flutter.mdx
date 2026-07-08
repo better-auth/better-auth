@@ -1,0 +1,251 @@
+---
+title: Flutter Integration
+description: Integrate Better Auth with Flutter and Dart.
+---
+
+Flutter is a cross-platform UI toolkit for building apps for Android, iOS, web, and desktop from a single Dart codebase. Better Auth supports Flutter clients talking to a Better Auth backend over HTTP.
+
+## Installation
+
+<Steps>
+  <Step>
+    ## Configure a Better Auth Backend
+
+    Before using Better Auth with Flutter, make sure you have a Better Auth backend set up.
+
+    To get started, check out our [installation](/docs/installation) guide.
+  </Step>
+
+  <Step>
+    ## Install Server Dependencies
+
+    Install Better Auth and the Flutter server plugin from GitHub (git release branches):
+
+    ```json title="package.json"
+    {
+      "dependencies": {
+        "better-auth": "github:2keyapp/better-auth#release",
+        "@better-auth/flutter": "github:2keyapp/better-auth#release-flutter"
+      }
+    }
+    ```
+  </Step>
+
+  <Step>
+    ## Install Client Dependencies
+
+    Add the Dart client from the same GitHub repository:
+
+    ```yaml title="pubspec.yaml"
+    dependencies:
+      better_auth:
+        git:
+          url: https://github.com/2keyapp/better-auth.git
+          ref: main # or a release tag / commit
+          path: packages/flutter/dart
+    ```
+
+    Prefer `flutter_secure_storage` (or similar) for production storage — inject it via `AuthStorage`.
+  </Step>
+
+  <Step>
+    ## Add the Flutter Plugin on Your Server
+
+    ```ts title="lib/auth.ts"
+    import { betterAuth } from "better-auth";
+    import { flutter } from "@better-auth/flutter";
+
+    export const auth = betterAuth({
+        plugins: [flutter()],
+        emailAndPassword: {
+            enabled: true
+        },
+        // Replace "myapp" with your Flutter deep-link scheme
+        trustedOrigins: ["myapp://"]
+    });
+    ```
+  </Step>
+
+  <Step>
+    ## Scheme and Trusted Origins
+
+    Better Auth uses deep links to redirect users back to your app after authentication. Add your app's scheme to `trustedOrigins`.
+
+    ```ts title="auth.ts"
+    export const auth = betterAuth({
+        trustedOrigins: ["myapp://"]
+    })
+    ```
+
+    Register the same scheme in your Flutter app (Android intent filters / iOS URL types, or packages such as `app_links`).
+  </Step>
+
+  <Step>
+    ## Initialize the Dart Client
+
+    ```dart title="lib/auth_client.dart"
+    import 'package:better_auth/better_auth.dart';
+
+    final storage = MemoryAuthStorage(); // use secure storage in production
+
+    final authClient = createAuthClient(
+      baseUrl: 'https://api.example.com',
+      plugin: flutterClient(
+        FlutterClientOptions(
+          scheme: 'myapp',
+          storage: storage,
+          storagePrefix: 'myapp',
+          // Required for social / OAuth sign-in (e.g. wrap flutter_web_auth_2)
+          sessionLauncher: myAuthSessionLauncher,
+        ),
+      ),
+    );
+    ```
+
+    Prefer `flutter_secure_storage` (or similar) for production storage — inject it via `AuthStorage`.
+  </Step>
+</Steps>
+
+## Usage
+
+### Email and password
+
+```dart
+await authClient.signUpEmail(
+  email: 'user@example.com',
+  password: 'password1234',
+  name: 'Jane Doe',
+);
+
+await authClient.signInEmail(
+  email: 'user@example.com',
+  password: 'password1234',
+);
+
+final session = await authClient.getSession();
+print(session.data?.user.email);
+
+await authClient.signOut();
+```
+
+Use `authClient.getCookie()` when calling your own backend APIs that expect the Better Auth session cookie.
+
+### Social sign-in
+
+Provide a `sessionLauncher` that opens an auth session in the system / in-app browser and returns the redirect URL (for example via `flutter_web_auth_2`). Relative `callbackURL` values are converted to deep links using your scheme.
+
+```dart
+await authClient.signInSocial(
+  provider: 'google',
+  callbackURL: '/dashboard',
+);
+```
+
+After a successful social sign-in, the Flutter plugin persists the session cookie from the deep-link callback and refreshes the local session.
+
+### Session refresh
+
+```dart
+final authClient = createAuthClient(
+  baseUrl: 'https://api.example.com',
+  plugin: flutterClient(...),
+  sessionOptions: SessionOptions(
+    refetchInterval: Duration(minutes: 5),
+    refetchOnAppResume: true,
+  ),
+);
+
+// Call when your app returns to the foreground (e.g. WidgetsBindingObserver).
+authClient.onAppResumed();
+```
+
+### Client plugins
+
+Pass optional client plugins via `plugins` (same idea as the TypeScript client). Common helpers:
+
+```dart
+final storage = MemoryAuthStorage();
+
+final authClient = createAuthClient(
+  baseUrl: 'https://api.example.com',
+  plugin: flutterClient(
+    FlutterClientOptions(scheme: 'myapp', storage: storage),
+  ),
+  plugins: [
+    lastLoginMethodClient(
+      LastLoginMethodOptions(storage: storage, storagePrefix: 'myapp'),
+    ),
+    organizationClient(),
+    twoFactorClient(
+      TwoFactorClientOptions(
+        onTwoFactorRedirect: ({twoFactorMethods}) async {
+          // Navigate to your 2FA screen.
+        },
+      ),
+    ),
+  ],
+);
+
+// Last login method
+await authClient.lastLoginMethod?.getLastUsedLoginMethod();
+
+// Organization
+await authClient.organization?.create(name: 'Acme', slug: 'acme');
+await authClient.organization?.list();
+await authClient.organization?.setActive(organizationSlug: 'acme');
+
+// Two-factor
+await authClient.twoFactor?.verifyTotp(code: '123456');
+```
+
+Enable matching server plugins (`organization`, `twoFactor`, `lastLoginMethod`) in your Better Auth config. See the [organization](/docs/plugins/organization), [two-factor](/docs/plugins/2fa), and [last login method](/docs/plugins/last-login-method) docs.
+
+## Session handoff (Flutter → web)
+
+Native apps and browsers store cookies separately, so a Flutter session is not visible to a web app on its own. Use a **session handoff**: the app mints a short-lived one-time token from the existing session, opens the web URL with that token, and the browser verifies it to establish its own cookie.
+
+This is the usual pattern for “continue in browser”, app → web upgrades, and other native-to-web flows. Better Auth provides it via the [one-time-token](/docs/plugins/one-time-token) plugin.
+
+### 1. Enable the plugin on your server
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { flutter } from "@better-auth/flutter";
+import { oneTimeToken } from "better-auth/plugins/one-time-token";
+
+export const auth = betterAuth({
+  plugins: [flutter(), oneTimeToken()],
+  trustedOrigins: ["myapp://", "https://app.example.com"],
+});
+```
+
+### 2. Create a handoff URL in Flutter
+
+```dart
+final result = await authClient.createSessionHandoffUrl(
+  targetUrl: 'https://app.example.com/auth/handoff',
+);
+// Open `result.data` with url_launcher (or equivalent).
+```
+
+`createSessionHandoffUrl` calls `/one-time-token/generate` with the Flutter session cookie and appends `?token=...` to `targetUrl`.
+
+### 3. Verify on the web and establish a browser session
+
+On the receiving web page, call the Better Auth client (or a server route that wraps it):
+
+```ts title="app/auth/handoff/page.tsx"
+import { authClient } from "@/lib/auth-client";
+
+// token from the URL search params
+await authClient.oneTimeToken.verify({
+  token,
+});
+// Browser now has a Better Auth session cookie — redirect into the app.
+```
+
+<Callout type="info">
+  Tokens expire quickly (default: 3 minutes) and are single-use. Prefer HTTPS handoff URLs and avoid putting long-lived credentials in the query string.
+</Callout>
+
+If both surfaces are **browsers** on the same parent domain (not a native Flutter app), you can share cookies with [crossSubDomainCookies](/docs/concepts/cookies#cross-subdomain-cookies) instead of a session handoff.

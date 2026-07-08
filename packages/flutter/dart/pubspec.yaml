@@ -1,0 +1,18 @@
+name: better_auth
+description: Better Auth client SDK for Dart and Flutter applications.
+version: 0.1.0
+homepage: https://www.better-auth.com/docs/integrations/flutter
+repository: https://github.com/2keyapp/better-auth/tree/main/packages/flutter/dart
+# Consumed via GitHub (`git` + `path`); not published to pub.dev.
+publish_to: none
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  http: ^1.2.2
+  meta: ^1.15.0
+
+dev_dependencies:
+  lints: ^5.0.0
+  test: ^1.25.8
