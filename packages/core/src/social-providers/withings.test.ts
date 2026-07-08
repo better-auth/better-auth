@@ -165,3 +165,43 @@ describe("withings.validateAuthorizationCode", () => {
 		).rejects.toThrow(/user id/);
 	});
 });
+
+describe("withings.refreshAccessToken", () => {
+	beforeEach(() => {
+		mockedBetterFetch.mockReset();
+	});
+
+	it("accepts a refresh response that omits userid", async () => {
+		mockedBetterFetch.mockResolvedValue({
+			data: {
+				status: 0,
+				body: {
+					access_token: "new-at",
+					refresh_token: "new-rt",
+					expires_in: 10800,
+					token_type: "Bearer",
+				},
+			},
+			error: null,
+		} as any);
+
+		const provider = withings(options);
+		const tokens = await provider.refreshAccessToken!("old-rt");
+
+		expect(tokens.accessToken).toBe("new-at");
+		expect(tokens.refreshToken).toBe("new-rt");
+		expect(tokens.accessTokenExpiresAt).toBeInstanceOf(Date);
+	});
+
+	it("still rejects a refresh response missing the access token", async () => {
+		mockedBetterFetch.mockResolvedValue({
+			data: { status: 0, body: { refresh_token: "new-rt" } },
+			error: null,
+		} as any);
+
+		const provider = withings(options);
+		await expect(provider.refreshAccessToken!("old-rt")).rejects.toThrow(
+			/access token/,
+		);
+	});
+});

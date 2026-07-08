@@ -57,6 +57,7 @@ export const withings = (options: WithingsOptions) => {
 		data: WithingsTokenResponse | null,
 		error: unknown,
 		context: string,
+		{ requireUserId }: { requireUserId: boolean },
 	): OAuth2Tokens => {
 		const fail = (reason: string): never => {
 			throw new Error(`Failed to ${context}: ${reason}`);
@@ -76,10 +77,13 @@ export const withings = (options: WithingsOptions) => {
 		if (!body.access_token) {
 			return fail("missing access token in response");
 		}
+		// `userid` is only mandatory during the authorization-code exchange, which
+		// is where `getUserInfo` derives the account id. Refresh responses may omit
+		// it (the id was already persisted on sign-in) and refresh never re-runs
+		// `getUserInfo`, so requiring it there would break otherwise-valid refreshes.
 		if (
-			body.userid === undefined ||
-			body.userid === null ||
-			body.userid === ""
+			requireUserId &&
+			(body.userid === undefined || body.userid === null || body.userid === "")
 		) {
 			return fail("missing user id in response");
 		}
@@ -147,7 +151,9 @@ export const withings = (options: WithingsOptions) => {
 				},
 			);
 
-			return parseTokenResponse(data, error, "validate authorization code");
+			return parseTokenResponse(data, error, "validate authorization code", {
+				requireUserId: true,
+			});
 		},
 
 		refreshAccessToken: options.refreshAccessToken
@@ -173,7 +179,9 @@ export const withings = (options: WithingsOptions) => {
 						},
 					);
 
-					return parseTokenResponse(data, error, "refresh access token");
+					return parseTokenResponse(data, error, "refresh access token", {
+						requireUserId: false,
+					});
 				},
 
 		async getUserInfo(token) {
