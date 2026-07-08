@@ -663,6 +663,44 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).not.toEqual(newTokens.data?.refresh_token);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10309
+	 */
+	it("persists unrevoked refresh token rows with explicit null revoked value", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const context = await authorizationServer.$context;
+		const existingRefreshRows = await context.adapter.findMany<{
+			id: string;
+		}>({
+			model: "oauthRefreshToken",
+			where: [{ field: "clientId", value: oauthClient.client_id }],
+		});
+		const existingRefreshIds = new Set(
+			existingRefreshRows.map((row) => row.id),
+		);
+
+		const scopes = ["openid", "profile", "offline_access"];
+		const tokens = await authorizeForRefreshToken(scopes);
+		expect(tokens?.refresh_token).toBeDefined();
+
+		const refreshRows = await context.adapter.findMany<{
+			id: string;
+			revoked: Date | null;
+		}>({
+			model: "oauthRefreshToken",
+			where: [{ field: "clientId", value: oauthClient.client_id }],
+		});
+		const newRefreshRows = refreshRows.filter(
+			(row) => !existingRefreshIds.has(row.id),
+		);
+
+		expect(newRefreshRows).toHaveLength(1);
+		expect(newRefreshRows[0]?.revoked).toBeNull();
+	});
+
 	it("should preserve auth_time in id_token after refresh (OIDC Core 1.0 Section 12.2)", async ({
 		expect,
 	}) => {
