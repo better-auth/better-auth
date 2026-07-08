@@ -160,6 +160,38 @@ describe("mcp-client", async () => {
 				"https://myapp.com",
 			);
 		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10272
+		 */
+		it("exposes the WWW-Authenticate challenge on CORS 401 responses", async () => {
+			const client = createMcpAuthClient({
+				authURL: "https://auth.example.com",
+				resource: "https://mcp.example.com",
+			});
+
+			const protectedHandler = client.handler(async () => {
+				return new Response("ok");
+			});
+
+			const response = await protectedHandler(
+				new Request("https://mcp.example.com/mcp", {
+					method: "POST",
+					headers: { Origin: "https://auth.example.com" },
+				}),
+			);
+
+			expect(response.status).toBe(401);
+			expect(response.headers.get("WWW-Authenticate")).toBe(
+				'Bearer resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource"',
+			);
+			expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
+				"https://auth.example.com",
+			);
+			expect(response.headers.get("Access-Control-Expose-Headers")).toBe(
+				"WWW-Authenticate",
+			);
+		});
 	});
 
 	describe("happy path - verifyToken + handler with valid session", () => {
@@ -369,13 +401,16 @@ describe("mcp-client", async () => {
 			const mockReq = { headers: {} };
 			const mockRes = {
 				set: (_key: string, _value: string) => {},
+				get: (key: string) => mockRes._headers[key],
 				status: (code: number) => ({
 					json: (body: unknown) => {
 						mockRes._status = code;
 						mockRes._body = body;
 					},
 				}),
-				_headers: {} as Record<string, string>,
+				_headers: {
+					"Access-Control-Expose-Headers": "set-auth-token",
+				} as Record<string, string>,
 				_status: 0,
 				_body: null as unknown,
 			};
@@ -390,6 +425,12 @@ describe("mcp-client", async () => {
 			expect(nextCalled).toBe(false);
 			expect(mockRes._status).toBe(401);
 			expect(mockRes._headers["WWW-Authenticate"]).toContain("Bearer");
+			expect(mockRes._headers["Access-Control-Allow-Origin"]).toBe(
+				new URL(authURL).origin,
+			);
+			expect(mockRes._headers["Access-Control-Expose-Headers"]).toBe(
+				"set-auth-token, WWW-Authenticate",
+			);
 		});
 
 		it("should return 401 for invalid token via middleware", async () => {
@@ -426,6 +467,13 @@ describe("mcp-client", async () => {
 
 			expect(nextCalled).toBe(false);
 			expect(mockRes._status).toBe(401);
+			expect(mockRes._headers["WWW-Authenticate"]).toContain("Bearer");
+			expect(mockRes._headers["Access-Control-Allow-Origin"]).toBe(
+				new URL(authURL).origin,
+			);
+			expect(mockRes._headers["Access-Control-Expose-Headers"]).toBe(
+				"WWW-Authenticate",
+			);
 		});
 	});
 });
