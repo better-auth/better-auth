@@ -291,4 +291,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/SulimanAbdulrazzaq.png",
 		},
 	},
+	{
+		name: "better-inbox",
+		url: "https://github.com/better-inbox/better-inbox",
+		description:
+			"In-app notifications for Better Auth apps. One plugin, one migration, one component — notifications live in your database, addressed to your users.",
+		author: {
+			name: "stewartjarod",
+			github: "stewartjarod",
+			avatar: "https://github.com/stewartjarod.png",
+		},
+	},
 ];
