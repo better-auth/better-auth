@@ -57,6 +57,10 @@ type OpenAPIMediaTypeObject = {
 	schema?: OpenAPISchema;
 };
 
+type OpenAPIRequestMediaTypeObject = {
+	schema: OpenAPISchema;
+};
+
 type OpenAPIResponseContent = {
 	"application/json"?: OpenAPIMediaTypeObject;
 	"text/plain"?: OpenAPIMediaTypeObject;
@@ -72,9 +76,8 @@ type OpenAPIResponse = {
 type OpenAPIRequestBody = {
 	required?: boolean;
 	content: {
-		"application/json": {
-			schema: OpenAPISchema;
-		};
+		"application/json": OpenAPIRequestMediaTypeObject;
+		[contentType: string]: OpenAPIRequestMediaTypeObject | undefined;
 	};
 };
 
@@ -397,8 +400,26 @@ function mergeObjectSchemas(
 function getRequestBody(
 	options: EndpointOptions,
 ): OpenAPIRequestBody | undefined {
+	const contentTypes = options.metadata?.allowedMediaTypes?.filter(
+		(type) => type.length > 0,
+	) || ["application/json"];
 	if (options.metadata?.openapi?.requestBody) {
-		return options.metadata.openapi.requestBody;
+		const requestBody = options.metadata.openapi.requestBody;
+		const mediaType =
+			requestBody.content["application/json"] ||
+			Object.values(requestBody.content).find((value) => value !== undefined);
+		if (!mediaType) {
+			return requestBody;
+		}
+		return {
+			...requestBody,
+			content: Object.fromEntries(
+				contentTypes.map((contentType) => [
+					contentType,
+					cloneOpenAPIValue(mediaType),
+				]),
+			) as OpenAPIRequestBody["content"],
+		};
 	}
 	if (!options.body) return undefined;
 	const requestBodySchemaInfo = getRequestBodySchemaInfo(
@@ -407,11 +428,9 @@ function getRequestBody(
 	const schema = toOpenApiSchema(requestBodySchemaInfo.schema);
 	return {
 		required: requestBodySchemaInfo.required,
-		content: {
-			"application/json": {
-				schema,
-			},
-		},
+		content: Object.fromEntries(
+			contentTypes.map((contentType) => [contentType, { schema }]),
+		) as OpenAPIRequestBody["content"],
 	};
 }
 

@@ -267,6 +267,25 @@ const wrapperSemanticsPlugin = {
 	},
 } satisfies BetterAuthPlugin;
 
+const formEncodedBodyPlugin = {
+	id: "form-encoded-body-test",
+	endpoints: {
+		formEncodedBody: createAuthEndpoint(
+			"/test/form-encoded-body",
+			{
+				method: "POST",
+				body: z.object({
+					token: z.string(),
+				}),
+				metadata: {
+					allowedMediaTypes: ["application/x-www-form-urlencoded"],
+				},
+			},
+			async () => ({ success: true }),
+		),
+	},
+} satisfies BetterAuthPlugin;
+
 describe("open-api", async () => {
 	const { auth } = await getTestInstance({
 		plugins: [openAPI()],
@@ -312,6 +331,9 @@ describe("open-api", async () => {
 	});
 	const { auth: authWithWrapperSemantics } = await getTestInstance({
 		plugins: [openAPI(), wrapperSemanticsPlugin],
+	});
+	const { auth: authWithFormEncodedBody } = await getTestInstance({
+		plugins: [openAPI(), formEncodedBodyPlugin],
 	});
 
 	it("should generate OpenAPI schema", async () => {
@@ -875,5 +897,24 @@ describe("open-api", async () => {
 		expect(getSchemaProperty(requestBodySchema, "unionOptional").type).toBe(
 			"string",
 		);
+	});
+
+	it("should document generated request bodies with allowed media types", async () => {
+		const schema = await authWithFormEncodedBody.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+
+		const requestBody = getPostRequestBody(paths, "/test/form-encoded-body");
+		expect(requestBody.content["application/json"]).toBeUndefined();
+		expect(
+			requestBody.content["application/x-www-form-urlencoded"]?.schema,
+		).toEqual({
+			type: "object",
+			properties: {
+				token: {
+					type: "string",
+				},
+			},
+			required: ["token"],
+		});
 	});
 });
