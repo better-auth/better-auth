@@ -15,4 +15,13 @@ export const DEVICE_AUTHORIZATION_ERROR_CODES = defineErrorCodes({
 	FAILED_TO_CREATE_SESSION: "Failed to create session",
 	INVALID_DEVICE_CODE_STATUS: "Invalid device code status",
 	AUTHENTICATION_REQUIRED: "Authentication required",
+	RESOURCE_NOT_ALLOWED:
+		"The requested resource is not in the list of allowed resources",
+	RESOURCE_NOT_ABSOLUTE_URI: "The resource parameter must be an absolute URI",
+	RESOURCE_HAS_FRAGMENT:
+		"The resource parameter must not contain a fragment component",
+	RESOURCE_EXCEEDS_GRANT:
+		"The requested resource exceeds the resource authorized for this device code",
+	JWT_PLUGIN_REQUIRED:
+		"The jwt plugin is required to issue JWT access tokens for a requested resource",
 });

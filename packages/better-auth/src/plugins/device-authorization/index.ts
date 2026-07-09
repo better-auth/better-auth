@@ -1,6 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import * as z from "zod";
 import { mergeSchema } from "../../db";
+import type { User } from "../../types";
 import type { InferOptionSchema } from "../../types/plugins";
 import type { TimeString } from "../../utils/time";
 import { ms } from "../../utils/time";
@@ -104,7 +105,11 @@ export const deviceAuthorizationOptionsSchema = z.object({
 		),
 	onDeviceAuthRequest: z
 		.custom<
-			(clientId: string, scope: string | undefined) => void | Promise<void>
+			(
+				clientId: string,
+				scope: string | undefined,
+				resource?: string | string[] | undefined,
+			) => void | Promise<void>
 		>((val) => typeof val === "function", {
 			message:
 				"onDeviceAuthRequest must be a function that returns void or a promise that resolves to void.",
@@ -113,6 +118,25 @@ export const deviceAuthorizationOptionsSchema = z.object({
 		.describe(
 			"Function to handle device authorization requests. If not provided, no additional actions will be taken.",
 		),
+	allowedResources: z
+		.array(z.string())
+		.optional()
+		.describe(
+			"Allow-list of RFC 8707 resource indicator URIs clients may request. A resource outside this list is rejected with `invalid_target`. When unset/empty, any `resource` request is rejected. Each entry must be an absolute URI without a fragment.",
+		),
+	customAccessTokenClaims: z
+		.custom<
+			(params: {
+				user: User;
+				scopes: string[];
+				resource: string | string[];
+				clientId: string;
+			}) => Record<string, unknown> | Promise<Record<string, unknown>>
+		>((val) => typeof val === "function", {
+			message: "customAccessTokenClaims must be a function.",
+		})
+		.optional()
+		.describe("Hook to add custom claims to the issued JWT access token."),
 	verificationUri: z
 		.string()
 		.optional()

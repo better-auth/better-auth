@@ -38,6 +38,16 @@ describe("device authorization plugin input validation", () => {
 			}
 		`);
 	});
+
+	it("preserves resource options through the schema", () => {
+		const claims = () => ({ tenant: "acme" });
+		const options = deviceAuthorizationOptionsSchema.parse({
+			allowedResources: ["https://api.example.com"],
+			customAccessTokenClaims: claims,
+		});
+		expect(options.allowedResources).toEqual(["https://api.example.com"]);
+		expect(options.customAccessTokenClaims).toBe(claims);
+	});
 });
 
 describe("client validation", async () => {
