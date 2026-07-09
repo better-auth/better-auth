@@ -294,10 +294,17 @@ export async function processSAMLResponse(
 
 	const extract = parsedFromExecutor.extract;
 	const samlContent = parsedFromExecutor.samlContent;
-	const entityId = parsedFromExecutor.entityId;
-	const assertionConsumerServiceUrl =
-		parsedFromExecutor.assertionConsumerServiceUrl;
-	const idpEntityId = parsedFromExecutor.idpEntityId;
+	// SP identity for audience/recipient checks is derived from local config so a
+	// thin/buggy executor cannot supply the assertion's audience as entityId.
+	const localEntityId =
+		parsedSamlConfig.spMetadata?.entityID || parsedSamlConfig.issuer;
+	const localAcsUrl =
+		parsedSamlConfig.callbackUrl ||
+		`${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`;
+	const idpEntityId =
+		parsedFromExecutor.idpEntityId ||
+		parsedSamlConfig.idpMetadata?.entityID ||
+		parsedSamlConfig.issuer;
 	let samlBindingContent: string;
 
 	// 10a. Cryptographic verification must have happened (executor or samlify).
@@ -323,14 +330,15 @@ export async function processSAMLResponse(
 		logger: ctx.context.logger,
 	});
 
-	// 11b. Response binding validation
-	const expectedAudiences = [entityId, parsedSamlConfig.audience];
+	// 11b. Response binding validation (audiences/recipients from local SP config)
+	const expectedAudiences = [localEntityId, parsedSamlConfig.audience];
 	const expectedRecipients = getExpectedSAMLRecipients(
 		parsedSamlConfig,
 		ctx.context.baseURL,
 		providerId,
 		currentCallbackPath,
-		assertionConsumerServiceUrl,
+		// Prefer local ACS; executor ACS is only an extra candidate if present.
+		parsedFromExecutor.assertionConsumerServiceUrl ?? localAcsUrl,
 	);
 	try {
 		if (hasCustomExecutor) {
