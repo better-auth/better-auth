@@ -33,7 +33,7 @@ const RESERVED_CLAIMS = new Set([
  * de-duplicated, non-empty array, or `undefined` when absent/empty. Duplicate
  * entries are collapsed so a repeated single resource resolves to one audience.
  */
-export function normalizeResource(
+function normalizeResource(
 	resource: string | string[] | undefined,
 ): string[] | undefined {
 	if (resource === undefined) return undefined;
@@ -53,7 +53,7 @@ function invalidTarget(message: string): APIError {
  * (RFC 8707 §2) and a member of `opts.allowedResources`. Throws `invalid_target`
  * otherwise. An unset/empty allow-list rejects all resources.
  */
-export function assertValidResources(
+function assertValidResources(
 	opts: DeviceAuthorizationOptions,
 	resources: string[],
 ): void {

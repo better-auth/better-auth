@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DeviceAuthorizationOptions } from ".";
 import {
-	normalizeResource,
 	parseStoredResource,
 	resolveResourceAudience,
 	serializeResource,
@@ -19,21 +18,6 @@ const errorOf = (fn: () => unknown): string | undefined => {
 	return undefined;
 };
 
-describe("normalizeResource", () => {
-	it("wraps a string, passes arrays, drops empty", () => {
-		expect(normalizeResource("https://a")).toEqual(["https://a"]);
-		expect(normalizeResource(["https://a", "https://b"])).toEqual([
-			"https://a",
-			"https://b",
-		]);
-		expect(normalizeResource(undefined)).toBeUndefined();
-		expect(normalizeResource([])).toBeUndefined();
-		expect(normalizeResource(["https://a", "https://a"])).toEqual([
-			"https://a",
-		]);
-	});
-});
-
 describe("resolveResourceAudience", () => {
 	const allowed = ["https://api.example.com", "https://other.example.com"];
 
@@ -43,6 +27,14 @@ describe("resolveResourceAudience", () => {
 				opts: opts(allowed),
 				boundResource: undefined,
 				requestedResource: undefined,
+			}),
+		).toBeUndefined();
+		// An empty array normalizes to "no resource" (opaque-token path).
+		expect(
+			resolveResourceAudience({
+				opts: opts(allowed),
+				boundResource: undefined,
+				requestedResource: [],
 			}),
 		).toBeUndefined();
 	});
