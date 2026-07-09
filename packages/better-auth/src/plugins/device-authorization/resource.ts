@@ -81,17 +81,25 @@ export function assertValidResources(
 }
 
 /**
- * Resolve the effective audience from the resource bound at `/device/code` and
- * the resource requested at `/device/token`, applying the RFC 8707 §2.2 subset
- * rule. Returns a single string for one resource, an array for many, or
- * `undefined` when no resource is involved (opaque-token path).
+ * Resolve the effective audience from the resource bound at `/device/code`
+ * (`boundResource`) and the resource requested at `/device/token`
+ * (`requestedResource`), applying the RFC 8707 §2.2 subset rule. Returns a
+ * single string for one resource, an array for many, or `undefined` when no
+ * resource is involved (opaque-token path).
+ *
+ * `requireBinding` (set at the token endpoint) rejects a `requestedResource`
+ * that was never authorized at the device-authorization request, so the issued
+ * token's audience is always tied to what the user's approval covered. RFC 8707
+ * §2.2 permits this stricter policy. It is left unset at the authorization
+ * request itself, since that is where a resource is first declared.
  */
 export function resolveResourceAudience(params: {
 	opts: DeviceAuthorizationOptions;
 	boundResource: string | string[] | undefined;
 	requestedResource: string | string[] | undefined;
+	requireBinding?: boolean;
 }): string | string[] | undefined {
-	const { opts, boundResource, requestedResource } = params;
+	const { opts, boundResource, requestedResource, requireBinding } = params;
 	const bound = normalizeResource(boundResource);
 	const requested = normalizeResource(requestedResource);
 
@@ -99,6 +107,7 @@ export function resolveResourceAudience(params: {
 
 	let effective: string[];
 	if (bound && requested) {
+		// Token-time resource(s) must equal or be a subset of the bound set.
 		const boundSet = new Set(bound);
 		for (const resource of requested) {
 			if (!boundSet.has(resource)) {
@@ -108,9 +117,18 @@ export function resolveResourceAudience(params: {
 			}
 		}
 		effective = requested;
+	} else if (bound) {
+		effective = bound;
 	} else {
-		// exactly one of bound/requested is defined here
-		effective = (requested ?? bound) as string[];
+		// A resource requested with nothing bound at the authorization request:
+		// rejected at the token endpoint (`requireBinding`); the normal
+		// first-declaration path at `/device/code`.
+		if (requireBinding) {
+			throw invalidTarget(
+				DEVICE_AUTHORIZATION_ERROR_CODES.RESOURCE_NOT_AUTHORIZED.message,
+			);
+		}
+		effective = requested as string[];
 	}
 
 	assertValidResources(opts, effective);

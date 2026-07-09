@@ -1472,9 +1472,30 @@ describe("device authorization resource indicators", async () => {
 			expect(session).toBeFalsy();
 		});
 
-		it("issues a JWT when the resource is requested at /device/token", async () => {
+		it("rejects a token-time resource that was not authorized at /device/code", async () => {
 			const { device_code, user_code } = await auth.api.deviceCode({
 				body: { client_id: "test-client" },
+			});
+			await approve(user_code);
+
+			await expect(
+				auth.api.deviceToken({
+					body: {
+						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+						device_code,
+						client_id: "test-client",
+						resource: "https://api.example.com",
+					},
+				}),
+			).rejects.toMatchObject({ body: { error: "invalid_target" } });
+		});
+
+		it("honors a token-time resource that matches the code-time binding", async () => {
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: {
+					client_id: "test-client",
+					resource: "https://api.example.com",
+				},
 			});
 			await approve(user_code);
 
@@ -1515,7 +1536,8 @@ describe("device authorization resource indicators", async () => {
 			});
 			await approve(user_code);
 
-			// A disallowed resource is rejected WITHOUT burning the approved code.
+			// An invalid token-time resource is rejected WITHOUT burning the
+			// approved code (validation runs before the code is consumed).
 			await expect(
 				auth.api.deviceToken({
 					body: {

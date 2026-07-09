@@ -655,7 +655,7 @@ export const auth = betterAuth({
 });
 ```
 
-You may pass `resource` when requesting the device code (recommended, since it binds the audience to the user's consent) and/or when exchanging the device code for a token. When it's supplied at both steps, the resource requested at token time must equal or be a subset of the resource bound at code-request time, or the exchange fails with `invalid_target`.
+Pass `resource` when **requesting the device code** — this binds the audience to what the user approves. At the **token exchange** the `resource` is optional: when supplied it must equal or be a subset of the resource bound at code-request time. A `resource` sent at the token exchange that was never bound at the device-code request is rejected with `invalid_target`, so the issued token's audience always reflects what was authorized.
 
 ```http
 POST /device/code

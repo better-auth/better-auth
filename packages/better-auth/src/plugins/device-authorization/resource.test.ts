@@ -135,6 +135,19 @@ describe("resolveResourceAudience", () => {
 			}),
 		).toBe("https://api.example.com");
 	});
+
+	it("rejects a requested resource with no binding when requireBinding is set", () => {
+		expect(
+			errorOf(() =>
+				resolveResourceAudience({
+					opts: opts(allowed),
+					boundResource: undefined,
+					requestedResource: "https://api.example.com",
+					requireBinding: true,
+				}),
+			),
+		).toBe("invalid_target");
+	});
 });
 
 describe("serializeResource / parseStoredResource round-trip", () => {

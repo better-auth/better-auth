@@ -452,6 +452,9 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					opts,
 					boundResource: parseStoredResource(deviceCodeRecord.resource),
 					requestedResource: ctx.body.resource,
+					// Token-endpoint policy: a resource must have been authorized at
+					// `/device/code`; reject a token-time-only resource.
+					requireBinding: true,
 				});
 
 				// Atomically claim the approved code as the single race gate:

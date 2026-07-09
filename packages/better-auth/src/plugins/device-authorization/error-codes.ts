@@ -20,6 +20,8 @@ export const DEVICE_AUTHORIZATION_ERROR_CODES = defineErrorCodes({
 	RESOURCE_NOT_ABSOLUTE_URI: "The resource parameter must be an absolute URI",
 	RESOURCE_HAS_FRAGMENT:
 		"The resource parameter must not contain a fragment component",
+	RESOURCE_NOT_AUTHORIZED:
+		"A resource was requested at the token endpoint but none was authorized at the device authorization request",
 	RESOURCE_EXCEEDS_GRANT:
 		"The requested resource exceeds the resource authorized for this device code",
 	JWT_PLUGIN_REQUIRED:
