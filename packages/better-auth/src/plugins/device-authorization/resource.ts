@@ -162,7 +162,7 @@ export async function createDeviceJwtAccessToken(params: {
 		type: "at+jwt",
 		payload: {
 			...customClaims,
-			iss: jwtOptions?.jwt?.issuer ?? (ctx.context.options.baseURL as string),
+			// `iss` is derived by signJWT (options.jwt.issuer ?? baseURL origin).
 			sub: user.id,
 			aud: audience,
 			client_id: clientId,
