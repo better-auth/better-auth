@@ -14,7 +14,6 @@ import {
 	validateSAMLResponseBinding,
 	validateSingleAssertion,
 } from "../saml";
-// hasSAMLEncryptedAssertion: custom executors must return decrypted XML
 import { resolveSAMLExecutor } from "../saml/executor";
 import type { SAMLConditions } from "../saml/timestamp";
 import { validateSAMLTimestamp } from "../saml/timestamp";
