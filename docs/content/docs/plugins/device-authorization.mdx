@@ -121,6 +121,12 @@ To initiate device authorization, call `device.code` with the client ID:
        * Pass this from trusted server-side code only. (optional)
        */
       user_id?: string;
+      /**
+       * RFC 8707 resource indicator(s) the issued access token should be
+       * scoped to. Requesting a valid resource yields a JWT access token
+       * whose audience is that resource, instead of an opaque token. (optional)
+       */
+      resource?: string | string[];
   }
   ```
 </APIMethod>
@@ -181,6 +187,12 @@ After displaying the user code, poll for the access token:
        * The OAuth client identifier
        */
       client_id: string;
+      /**
+       * RFC 8707 resource indicator(s). Must equal or be a subset of the
+       * resource bound at /device/code. A valid resource yields a JWT
+       * access token. (optional)
+       */
+      resource?: string | string[];
   }
   ```
 </APIMethod>
@@ -434,13 +446,14 @@ deviceAuthorization({
 
 The device flow defines specific error codes:
 
-| Error Code              | Description                                 |
-| ----------------------- | ------------------------------------------- |
-| `authorization_pending` | User hasn't approved yet (continue polling) |
-| `slow_down`             | Polling too frequently (increase interval)  |
-| `expired_token`         | Device code has expired                     |
-| `access_denied`         | User denied the authorization               |
-| `invalid_grant`         | Invalid device code or client ID            |
+| Error Code              | Description                                                                  |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| `authorization_pending` | User hasn't approved yet (continue polling)                                  |
+| `slow_down`             | Polling too frequently (increase interval)                                   |
+| `expired_token`         | Device code has expired                                                      |
+| `access_denied`         | User denied the authorization                                                |
+| `invalid_grant`         | Invalid device code or client ID                                             |
+| `invalid_target`        | Requested `resource` is unknown, disallowed, malformed, or exceeds the grant |
 
 ## Example: CLI Application
 
@@ -604,7 +617,11 @@ authenticateCLI().catch((err) => {
 
 **validateClient**: Function to validate client IDs. Takes a clientId and returns boolean or `Promise<boolean>`.
 
-**onDeviceAuthRequest**: Hook called when device authorization is requested. Takes clientId and optional scope.
+**onDeviceAuthRequest**: Hook called when device authorization is requested. Takes clientId, optional scope, and the optional requested `resource`.
+
+**allowedResources**: Allow-list of RFC 8707 resource indicator URIs clients may request via `resource`. See [Requesting a JWT Access Token](#requesting-a-jwt-access-token-resource-indicators) below.
+
+**customAccessTokenClaims**: Hook to add custom claims to the JWT access token issued when a `resource` is requested. See [Requesting a JWT Access Token](#requesting-a-jwt-access-token-resource-indicators) below.
 
 ### Client
 
@@ -615,6 +632,56 @@ No client-specific configuration options. The plugin adds the following methods:
 * **device.token()**: Poll for access token
 * **device.approve()**: Approve device (requires authentication)
 * **device.deny()**: Deny device (requires authentication)
+
+## Requesting a JWT Access Token (Resource Indicators)
+
+By default the device flow returns an **opaque** access token. To obtain a JWT-formatted access token ([RFC 9068](https://datatracker.ietf.org/doc/html/rfc9068)) that a resource server can validate locally, request an [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707) `resource` indicator and configure the allow-list.
+
+This requires the [JWT plugin](/docs/plugins/jwt) to be enabled: its signing key signs the token, and its `/jwks` endpoint is what resource servers call to verify it. If a `resource` is requested while the JWT plugin isn't registered, the token exchange (`POST /device/token`) fails with a `server_error`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { jwt, deviceAuthorization } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  plugins: [
+    jwt(),
+    deviceAuthorization({
+      // Only these resource URIs may be requested; anything else is
+      // rejected with `invalid_target`.
+      allowedResources: ["https://api.example.com"],
+    }),
+  ],
+});
+```
+
+You may pass `resource` when requesting the device code (recommended, since it binds the audience to the user's consent) and/or when exchanging the device code for a token. When it's supplied at both steps, the resource requested at token time must equal or be a subset of the resource bound at code-request time, or the exchange fails with `invalid_target`.
+
+```http
+POST /device/code
+client_id=my-client&scope=read&resource=https://api.example.com
+```
+
+```http
+POST /device/token
+grant_type=urn:ietf:params:oauth:grant-type:device_code&device_code=...&client_id=my-client
+```
+
+When a valid `resource` is present, `access_token` in the `/device/token` response is a signed JWT whose `aud` claim is the requested resource (an array if multiple were requested). With no `resource` at all, behavior is unchanged: `access_token` is the existing opaque session token.
+
+### Options
+
+**allowedResources**: Allow-list of absolute-URI resource indicators (RFC 8707). A requested resource outside this list — or one that isn't an absolute URI, or contains a fragment — is rejected with `invalid_target`. When unset or empty, any `resource` request is rejected.
+
+**customAccessTokenClaims**: Adds custom claims to the issued JWT access token. Receives `{ user, scopes, resource, clientId }` and returns a claims object, or a `Promise` of one.
+
+<Callout type="info">
+  The JWT access token is stateless: it isn't stored, and it can't be revoked before it expires. Keep the JWT plugin's `expirationTime` short. Requesting a `resource` does not create a Better Auth session.
+</Callout>
+
+<Callout type="warn">
+  After upgrading, re-run the schema migration or generation (`npx auth migrate` or `npx auth generate`) so the `deviceCode` table gains the new, nullable `resource` column.
+</Callout>
 
 ## Schema
 
@@ -677,6 +744,12 @@ export const deviceCodeTableFields = [
 		name: "pollingInterval",
 		type: "number",
 		description: "Minimum seconds between polls",
+		isOptional: true,
+	},
+	{
+		name: "resource",
+		type: "string",
+		description: "RFC 8707 resource indicator(s) bound to this device code (JSON-encoded when there are multiple)",
 		isOptional: true,
 	},
 ];
