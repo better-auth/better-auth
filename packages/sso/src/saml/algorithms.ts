@@ -368,10 +368,22 @@ export function enforceSAMLCryptoPolicy(
 
 	validateSignatureAlgorithm(report.signatureAlgorithm, options);
 
-	if (report.encryption !== null) {
+	// Treat null and undefined the same (malformed reports must not throw TypeError).
+	if (report.encryption != null) {
+		if (typeof report.encryption !== "object") {
+			throw new APIError("BAD_REQUEST", {
+				message: "SAML crypto report encryption metadata is invalid",
+				code: "SAML_ENCRYPTION_METADATA_INCOMPLETE",
+			});
+		}
 		const key = report.encryption.keyTransportAlgorithm;
 		const data = report.encryption.dataEncryptionAlgorithm;
-		if (!key || key.length === 0 || !data || data.length === 0) {
+		if (
+			typeof key !== "string" ||
+			key.length === 0 ||
+			typeof data !== "string" ||
+			data.length === 0
+		) {
 			throw new APIError("BAD_REQUEST", {
 				message:
 					"SAML crypto report encryption metadata is incomplete (key and data algorithms required)",

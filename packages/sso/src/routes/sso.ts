@@ -53,7 +53,7 @@ import {
 } from "../utils";
 import { getVerificationIdentifier } from "./domain-verification";
 import {
-	assertAllowedIdpSsoRedirectUrl,
+	assertAllowedIdPSSORedirectURL,
 	createIdP,
 	createSAMLPostForm,
 	createSP,
@@ -1347,7 +1347,7 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 				}
 				// Host owns the provider registry: reject executor open redirects.
-				assertAllowedIdpSsoRedirectUrl(
+				assertAllowedIdPSSORedirectURL(
 					loginRequest.redirectUrl,
 					parsedSamlConfig,
 				);

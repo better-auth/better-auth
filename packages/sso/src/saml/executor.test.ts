@@ -184,4 +184,15 @@ describe("SAML executor", () => {
 			}),
 		).toThrow(/encryption metadata is incomplete/i);
 	});
+
+	it("enforceSAMLCryptoPolicy treats undefined encryption as not encrypted", () => {
+		expect(() =>
+			enforceSAMLCryptoPolicy({
+				signatureVerified: true,
+				signatureAlgorithm: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+				// @ts-expect-error malformed payload
+				encryption: undefined,
+			}),
+		).not.toThrow();
+	});
 });

@@ -32,7 +32,7 @@ import {
 	safeJsonParse,
 	validateEmailDomain,
 } from "../utils";
-import { createSP, findSAMLProvider, resolveSpEntityId } from "./helpers";
+import { createSP, findSAMLProvider, resolveSPEntityID } from "./helpers";
 
 type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
 
@@ -296,7 +296,7 @@ export async function processSAMLResponse(
 	const samlContent = parsedFromExecutor.samlContent;
 	// SP identity for audience checks is derived from local SP config/metadata
 	// (same resolution as ServiceProvider construction) — never from the executor.
-	const localEntityId = resolveSpEntityId(parsedSamlConfig);
+	const localEntityId = resolveSPEntityID(parsedSamlConfig);
 	const localAcsUrl =
 		parsedSamlConfig.callbackUrl ||
 		`${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`;

@@ -9,7 +9,7 @@ import { normalizePem, safeJsonParse } from "../utils";
  * Resolve the SP entityID the same way ServiceProvider construction does:
  * explicit spMetadata.entityID → entityID inside spMetadata.metadata → issuer.
  */
-export function resolveSpEntityId(config: SAMLConfig): string {
+export function resolveSPEntityID(config: SAMLConfig): string {
 	if (config.spMetadata?.entityID) {
 		return config.spMetadata.entityID;
 	}
@@ -41,7 +41,7 @@ function extractEntityIdFromMetadata(
 }
 
 /** Configured IdP SSO endpoints (entryPoint + singleSignOnService locations). */
-export function getConfiguredIdpSsoLocations(config: SAMLConfig): string[] {
+export function getConfiguredIdPSSOLocations(config: SAMLConfig): string[] {
 	const locations = new Set<string>();
 	if (config.entryPoint) {
 		locations.add(config.entryPoint);
@@ -93,7 +93,7 @@ export function getConfiguredIdpSsoLocations(config: SAMLConfig): string[] {
  * Ensure an executor-supplied AuthnRequest redirect URL targets a configured
  * IdP SSO endpoint (absolute http(s); query string allowed for Redirect binding).
  */
-export function assertAllowedIdpSsoRedirectUrl(
+export function assertAllowedIdPSSORedirectURL(
 	redirectUrl: string,
 	config: SAMLConfig,
 ): void {
@@ -112,8 +112,15 @@ export function assertAllowedIdpSsoRedirectUrl(
 			code: "SAML_REDIRECT_URL_INVALID",
 		});
 	}
+	// Fragment must never appear on IdP redirect (open-redirect / leakage surface).
+	if (target.hash) {
+		throw new APIError("BAD_REQUEST", {
+			message: "Invalid SAML request",
+			code: "SAML_REDIRECT_URL_INVALID",
+		});
+	}
 
-	const allowed = getConfiguredIdpSsoLocations(config);
+	const allowed = getConfiguredIdPSSOLocations(config);
 	if (allowed.length === 0) {
 		throw new APIError("BAD_REQUEST", {
 			message: "Invalid SAML request",
@@ -121,14 +128,12 @@ export function assertAllowedIdpSsoRedirectUrl(
 		});
 	}
 
+	// Exact origin + pathname only (query OK for Redirect binding).
+	// Avoid startsWith — /sso would incorrectly allow /sso-evil.
 	const matches = allowed.some((location) => {
 		try {
 			const base = new URL(location);
-			if (target.origin !== base.origin) return false;
-			const basePath = location.split("?")[0] ?? location;
-			return (
-				target.pathname === base.pathname || target.href.startsWith(basePath)
-			);
+			return target.origin === base.origin && target.pathname === base.pathname;
 		} catch {
 			return false;
 		}
@@ -199,7 +204,7 @@ export function createSP(
 		config.callbackUrl || `${baseURL}/sso/saml2/sp/acs/${providerId}`;
 
 	return saml.ServiceProvider({
-		entityID: resolveSpEntityId(config),
+		entityID: resolveSPEntityID(config),
 		assertionConsumerService: spData?.metadata
 			? undefined
 			: [
