@@ -113,11 +113,30 @@ async function generateAction(opts: any) {
 		}
 	}
 
+	// Always resolve --output against the CLI `--cwd`, never process.cwd().
+	// getConfig stubs against this same path; the final write and abort
+	// cleanup must target it too.
+	const resolvedOutputPath = options.output
+		? path.resolve(cwd, options.output)
+		: undefined;
+	const outputExistedBefore = resolvedOutputPath
+		? existsSync(resolvedOutputPath)
+		: true;
+	const removeGeneratedStub = async () => {
+		if (!resolvedOutputPath || outputExistedBefore) return;
+		await fs.rm(resolvedOutputPath, { force: true }).catch(() => {});
+	};
+
 	const config = await getConfig({
 		cwd,
 		configPath: options.config,
+		// Recovers from first-run templates (e.g. the Convex integration guide)
+		// whose config imports the schema file this command is about to
+		// generate. @see https://github.com/better-auth/better-auth/issues/10136
+		outputPath: options.output,
 	});
 	if (!config) {
+		await removeGeneratedStub();
 		console.error(
 			"No configuration file found. Add a `auth.ts` file to your project or pass the path to the configuration file using the `--config` flag.",
 		);
@@ -130,8 +149,9 @@ async function generateAction(opts: any) {
 		adapter = createMockAdapter(options.adapter, options.dialect);
 	} else {
 		// Get adapter from config (existing behavior)
-		adapter = await getAdapter(config).catch((e) => {
+		adapter = await getAdapter(config).catch(async (e) => {
 			console.error(e.message);
+			await removeGeneratedStub();
 			process.exit(1);
 		});
 	}
@@ -140,12 +160,13 @@ async function generateAction(opts: any) {
 
 	const schema = await generateSchema({
 		adapter,
-		file: options.output,
+		file: resolvedOutputPath ?? options.output,
 		options: config,
 	});
 
 	spinner.stop();
 	if (!schema.code) {
+		await removeGeneratedStub();
 		console.log("Your schema is already up to date.");
 		// telemetry: track generate attempted, no changes
 		try {
@@ -180,16 +201,19 @@ async function generateAction(opts: any) {
 		}
 
 		if (confirm) {
-			const exist = existsSync(path.join(cwd, schema.fileName));
+			const schemaPath = path.isAbsolute(schema.fileName)
+				? schema.fileName
+				: path.join(cwd, schema.fileName);
+			const exist = existsSync(schemaPath);
 			if (!exist) {
-				await fs.mkdir(path.dirname(path.join(cwd, schema.fileName)), {
+				await fs.mkdir(path.dirname(schemaPath), {
 					recursive: true,
 				});
 			}
 			if (schema.overwrite) {
-				await fs.writeFile(path.join(cwd, schema.fileName), schema.code);
+				await fs.writeFile(schemaPath, schema.code);
 			} else {
-				await fs.appendFile(path.join(cwd, schema.fileName), schema.code);
+				await fs.appendFile(schemaPath, schema.code);
 			}
 			console.log(
 				`🚀 Schema was ${
@@ -210,6 +234,7 @@ async function generateAction(opts: any) {
 			process.exit(0);
 		} else {
 			console.error("Schema generation aborted.");
+			await removeGeneratedStub();
 			// telemetry: track generate aborted
 			try {
 				const telemetry = await createTelemetry(config);
@@ -245,6 +270,7 @@ async function generateAction(opts: any) {
 
 	if (!confirm) {
 		console.error("Schema generation aborted.");
+		await removeGeneratedStub();
 		// telemetry: track generate aborted before write
 		try {
 			const telemetry = await createTelemetry(config);
@@ -259,18 +285,14 @@ async function generateAction(opts: any) {
 		process.exit(1);
 	}
 
-	if (!options.output) {
-		const dirExist = existsSync(path.dirname(path.join(cwd, schema.fileName)));
-		if (!dirExist) {
-			await fs.mkdir(path.dirname(path.join(cwd, schema.fileName)), {
-				recursive: true,
-			});
-		}
+	const writePath = resolvedOutputPath ?? path.join(cwd, schema.fileName);
+	const dirExist = existsSync(path.dirname(writePath));
+	if (!dirExist) {
+		await fs.mkdir(path.dirname(writePath), {
+			recursive: true,
+		});
 	}
-	await fs.writeFile(
-		options.output || path.join(cwd, schema.fileName),
-		schema.code,
-	);
+	await fs.writeFile(writePath, schema.code);
 	console.log(`🚀 Schema was generated successfully!`);
 	// telemetry: track generate success
 	try {

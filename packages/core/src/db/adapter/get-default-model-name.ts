@@ -23,19 +23,21 @@ export const initGetDefaultModelName = ({
 		// Resolve a model string (either a schema key or a user-defined
 		// `modelName`) back to its canonical schema key.
 		//
-		// Prefer a `modelName` match over a schema-key match. When a user
-		// remaps a built-in table (e.g. `user.modelName = "account"`), the
-		// string `"account"` is both an alias for the user table and the
-		// schema key of the OAuth account table. The user's explicit
-		// `modelName` choice must win, otherwise references and adapter
-		// joins silently resolve to the wrong table.
+		// An exact schema-key match must win over a `modelName` match.
+		// Better-auth internals (and `references.model`, see get-tables.ts)
+		// always pass canonical schema keys, so when a user remaps a
+		// built-in table onto another table's schema key (e.g.
+		// `user.modelName = "account"`), preferring the modelName alias
+		// would silently reroute every internal "account" query to the
+		// user table. The modelName lookup is only a fallback for
+		// externally supplied physical table names.
 		// @see https://github.com/better-auth/better-auth/issues/8111
+		// @see https://github.com/better-auth/better-auth/issues/10136
 		const resolve = (candidate: string): string | undefined => {
-			const byModelName = Object.entries(schema).find(
+			if (schema[candidate]) return candidate;
+			return Object.entries(schema).find(
 				([_, f]) => f.modelName === candidate,
 			)?.[0];
-			if (byModelName) return byModelName;
-			return schema[candidate] ? candidate : undefined;
 		};
 
 		// It's possible this `model` could had applied `usePlural`.
