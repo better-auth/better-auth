@@ -290,6 +290,14 @@ export const auth = betterAuth({
 * Whether to store the last login method in the database
 * Default: `false`
 * When enabled, adds a `lastLoginMethod` field to the user table
+* To store the method only in the database (no cookie), combine with `beforeStoreCookie: () => false`:
+
+```ts title="auth.ts"
+lastLoginMethod({
+    storeInDatabase: true,
+    beforeStoreCookie: () => false, // never set the non-essential cookie
+})
+```
 
 **customResolveMethod**: `(ctx: GenericEndpointContext) => string | null`
 
@@ -420,14 +428,12 @@ export const auth = betterAuth({
                     const userConsent = await checkUserConsent(session.user.id)
                     return userConsent?.allowsNonEssentialCookies ?? false
                 }
-                
+
                 // Example 2: Check consent from request headers (cookie banner)
+                // parseConsentCookie should return false/null/undefined when no consent is present
                 const consentCookie = ctx.request?.headers?.get("cookie")
                 const hasConsent = parseConsentCookie(consentCookie)
-                return hasConsent
-                
-                // Default: don't store cookie if consent cannot be determined
-                return false
+                return !!hasConsent
             }
         })
     ]

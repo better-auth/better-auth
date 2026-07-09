@@ -45,7 +45,7 @@ export interface LastLoginMethodOptions {
 	 *
 	 * @param ctx - The context from the hook
 	 * @param lastUsedLoginMethod - The last login method
-	 * @returns Whether to continue the flow
+	 * @returns `true` to store the cookie, `false` to skip storing it (authentication continues either way)
 	 */
 	beforeStoreCookie?:
 		| ((
