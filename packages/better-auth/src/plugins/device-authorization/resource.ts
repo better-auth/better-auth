@@ -1,4 +1,9 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
+import { generateRandomString } from "../../crypto";
+import type { User } from "../../types";
+import { signJWT, toExpJWT } from "../jwt";
+import type { JwtOptions } from "../jwt/types";
 import type { DeviceAuthorizationOptions } from ".";
 import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
 
@@ -110,4 +115,64 @@ export function parseStoredResource(
 		}
 	}
 	return stored;
+}
+
+/**
+ * Mint an RFC 9068 JWT access token audience-restricted to `audience`.
+ * Requires the `jwt` plugin (for JWKS signing + the /jwks verification
+ * endpoint). Returns the compact JWT and its lifetime in seconds.
+ */
+export async function createDeviceJwtAccessToken(params: {
+	ctx: GenericEndpointContext;
+	opts: DeviceAuthorizationOptions;
+	user: User;
+	clientId: string;
+	scope: string;
+	audience: string | string[];
+}): Promise<{ token: string; expiresIn: number }> {
+	const { ctx, opts, user, clientId, scope, audience } = params;
+
+	const jwtPlugin = ctx.context.getPlugin("jwt");
+	if (!jwtPlugin) {
+		ctx.context.logger.error(
+			"device-authorization: a `resource` was requested but the jwt plugin is not registered. Add the jwt() plugin to issue JWT access tokens.",
+		);
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "server_error",
+			error_description:
+				DEVICE_AUTHORIZATION_ERROR_CODES.JWT_PLUGIN_REQUIRED.message,
+		});
+	}
+	const jwtOptions = jwtPlugin.options as JwtOptions | undefined;
+
+	const iat = Math.floor(Date.now() / 1000);
+	const exp = toExpJWT(jwtOptions?.jwt?.expirationTime ?? "15m", iat);
+	const scopes = scope ? scope.split(" ") : [];
+	const customClaims = opts.customAccessTokenClaims
+		? await opts.customAccessTokenClaims({
+				user,
+				scopes,
+				resource: audience,
+				clientId,
+			})
+		: {};
+
+	const token = await signJWT(ctx, {
+		options: jwtOptions,
+		type: "at+jwt",
+		payload: {
+			...customClaims,
+			iss: jwtOptions?.jwt?.issuer ?? (ctx.context.options.baseURL as string),
+			sub: user.id,
+			aud: audience,
+			client_id: clientId,
+			azp: clientId,
+			scope: scopes.length ? scopes.join(" ") : undefined,
+			iat,
+			exp,
+			jti: generateRandomString(32, "a-z", "A-Z", "0-9"),
+		},
+	});
+
+	return { token, expiresIn: exp - iat };
 }

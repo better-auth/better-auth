@@ -6,7 +6,12 @@ import { generateRandomString } from "../../crypto";
 import { ms } from "../../utils/time";
 import type { DeviceAuthorizationOptions } from ".";
 import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
-import { resolveResourceAudience, serializeResource } from "./resource";
+import {
+	createDeviceJwtAccessToken,
+	parseStoredResource,
+	resolveResourceAudience,
+	serializeResource,
+} from "./resource";
 import type { DeviceCode } from "./schema";
 
 /* cspell:disable-next-line */
@@ -220,6 +225,13 @@ const deviceTokenBodySchema = z.object({
 	client_id: z.string().meta({
 		description: "The client ID of the application",
 	}),
+	resource: z
+		.union([z.string(), z.array(z.string())])
+		.meta({
+			description:
+				"RFC 8707 resource indicator(s). Must equal or be a subset of the resource bound at /device/code. A valid resource yields a JWT access token.",
+		})
+		.optional(),
 });
 
 const deviceTokenErrorSchema = z.object({
@@ -231,6 +243,7 @@ const deviceTokenErrorSchema = z.object({
 			"access_denied",
 			"invalid_request",
 			"invalid_grant",
+			"invalid_target",
 		])
 		.meta({
 			description: "Error code",
@@ -261,12 +274,14 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 									schema: {
 										type: "object",
 										properties: {
-											session: {
-												$ref: "#/components/schemas/Session",
+											access_token: {
+												type: "string",
+												description:
+													"The access token. An opaque session token by default, or an RFC 9068 JWT when a valid `resource` was requested.",
 											},
-											user: {
-												$ref: "#/components/schemas/User",
-											},
+											token_type: { type: "string", enum: ["Bearer"] },
+											expires_in: { type: "number" },
+											scope: { type: "string" },
 										},
 									},
 								},
@@ -288,6 +303,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 													"access_denied",
 													"invalid_request",
 													"invalid_grant",
+													"invalid_target",
 												],
 											},
 											error_description: {
@@ -434,6 +450,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					id: string;
 					userId?: string | undefined;
 					scope?: string | undefined;
+					resource?: string | undefined;
 				}>({
 					model: "deviceCode",
 					where: [
@@ -461,6 +478,38 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						error_description:
 							DEVICE_AUTHORIZATION_ERROR_CODES.USER_NOT_FOUND.message,
 					});
+				}
+
+				// RFC 8707 / RFC 9068: when a resource resolves, issue a stateless
+				// JWT access token scoped to that audience instead of an opaque session.
+				const audience = resolveResourceAudience({
+					opts,
+					boundResource: parseStoredResource(claimedDeviceCode.resource),
+					requestedResource: ctx.body.resource,
+				});
+				if (audience) {
+					const { token, expiresIn } = await createDeviceJwtAccessToken({
+						ctx,
+						opts,
+						user,
+						clientId: client_id,
+						scope: claimedDeviceCode.scope || "",
+						audience,
+					});
+					return ctx.json(
+						{
+							access_token: token,
+							token_type: "Bearer",
+							expires_in: expiresIn,
+							scope: claimedDeviceCode.scope || "",
+						},
+						{
+							headers: {
+								"Cache-Control": "no-store",
+								Pragma: "no-cache",
+							},
+						},
+					);
 				}
 
 				const session = await ctx.context.internalAdapter.createSession(

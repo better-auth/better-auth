@@ -1370,13 +1370,11 @@ describe("device authorization resource indicators", async () => {
 		{ clientOptions: { plugins: [deviceAuthorizationClient()] } },
 	);
 
-	// biome-ignore lint/correctness/noUnusedVariables: shared scaffolding consumed by the /device/token tests added in a follow-up task
 	const decode = async (token: string) => {
 		const jwks = await auth.api.getJwks();
 		return jwtVerify(token, createLocalJWKSet(jwks));
 	};
 
-	// biome-ignore lint/correctness/noUnusedVariables: shared scaffolding consumed by the /device/token tests added in a follow-up task
 	const approve = async (userCode: string) => {
 		const { headers } = await signInWithTestUser();
 		await auth.api.deviceVerify({ query: { user_code: userCode }, headers });
@@ -1415,6 +1413,195 @@ describe("device authorization resource indicators", async () => {
 					body: { client_id: "test-client", resource: "not-a-uri" },
 				}),
 			).rejects.toMatchObject({ body: { error: "invalid_target" } });
+		});
+	});
+
+	describe("/device/token JWT issuance", () => {
+		it("issues a JWT access token when a resource is bound at /device/code", async () => {
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: {
+					client_id: "test-client",
+					scope: "read",
+					resource: "https://api.example.com",
+				},
+			});
+			await approve(user_code);
+
+			const res = await auth.api.deviceToken({
+				body: {
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code,
+					client_id: "test-client",
+				},
+			});
+			if (!("access_token" in res)) throw new Error("expected access_token");
+			expect(res.token_type).toBe("Bearer");
+
+			const { payload, protectedHeader } = await decode(res.access_token);
+			expect(protectedHeader.typ).toBe("at+jwt");
+			expect(payload.aud).toBe("https://api.example.com");
+			expect(payload.client_id).toBe("test-client");
+			expect(payload.azp).toBe("test-client");
+			expect(payload.scope).toBe("read");
+			expect(payload.sub).toBeDefined();
+			expect(payload.jti).toBeDefined();
+
+			// JWT path is stateless: the token is NOT a session token
+			const session = await db.findOne({
+				model: "session",
+				where: [{ field: "token", value: res.access_token }],
+			});
+			expect(session).toBeFalsy();
+		});
+
+		it("issues a JWT when the resource is requested at /device/token", async () => {
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			await approve(user_code);
+
+			const res = await auth.api.deviceToken({
+				body: {
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code,
+					client_id: "test-client",
+					resource: "https://api.example.com",
+				},
+			});
+			if (!("access_token" in res)) throw new Error("expected access_token");
+			const { payload } = await decode(res.access_token);
+			expect(payload.aud).toBe("https://api.example.com");
+		});
+
+		it("enforces the subset rule at the token endpoint", async () => {
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client", resource: "https://api.example.com" },
+			});
+			await approve(user_code);
+
+			await expect(
+				auth.api.deviceToken({
+					body: {
+						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+						device_code,
+						client_id: "test-client",
+						resource: "https://api.other.com",
+					},
+				}),
+			).rejects.toMatchObject({ body: { error: "invalid_target" } });
+		});
+
+		it("issues an array aud for multiple resources", async () => {
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: {
+					client_id: "test-client",
+					resource: ["https://api.example.com", "https://api.other.com"],
+				},
+			});
+			await approve(user_code);
+
+			const res = await auth.api.deviceToken({
+				body: {
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code,
+					client_id: "test-client",
+				},
+			});
+			if (!("access_token" in res)) throw new Error("expected access_token");
+			const { payload } = await decode(res.access_token);
+			expect(payload.aud).toEqual([
+				"https://api.example.com",
+				"https://api.other.com",
+			]);
+		});
+
+		it("reflects customAccessTokenClaims in the JWT", async () => {
+			const { auth: authWithClaims, signInWithTestUser: signIn } =
+				await getTestInstance(
+					{
+						plugins: [
+							jwt(),
+							deviceAuthorization({
+								allowedResources,
+								customAccessTokenClaims: () => ({ tenant: "acme" }),
+							}),
+						],
+					},
+					{ clientOptions: { plugins: [deviceAuthorizationClient()] } },
+				);
+			const { device_code, user_code } = await authWithClaims.api.deviceCode({
+				body: { client_id: "test-client", resource: "https://api.example.com" },
+			});
+			const { headers } = await signIn();
+			await authWithClaims.api.deviceVerify({
+				query: { user_code },
+				headers,
+			});
+			await authWithClaims.api.deviceApprove({
+				body: { userCode: user_code },
+				headers,
+			});
+			const res = await authWithClaims.api.deviceToken({
+				body: {
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code,
+					client_id: "test-client",
+				},
+			});
+			if (!("access_token" in res)) throw new Error("expected access_token");
+			const jwks = await authWithClaims.api.getJwks();
+			const { payload } = await jwtVerify(
+				res.access_token,
+				createLocalJWKSet(jwks),
+			);
+			expect(payload.tenant).toBe("acme");
+		});
+
+		it("errors when a resource is requested without the jwt plugin", async () => {
+			const { auth: authNoJwt, signInWithTestUser: signIn } =
+				await getTestInstance(
+					{ plugins: [deviceAuthorization({ allowedResources })] },
+					{ clientOptions: { plugins: [deviceAuthorizationClient()] } },
+				);
+			const { device_code, user_code } = await authNoJwt.api.deviceCode({
+				body: { client_id: "test-client", resource: "https://api.example.com" },
+			});
+			const { headers } = await signIn();
+			await authNoJwt.api.deviceVerify({ query: { user_code }, headers });
+			await authNoJwt.api.deviceApprove({
+				body: { userCode: user_code },
+				headers,
+			});
+			await expect(
+				authNoJwt.api.deviceToken({
+					body: {
+						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+						device_code,
+						client_id: "test-client",
+					},
+				}),
+			).rejects.toMatchObject({ body: { error: "server_error" } });
+		});
+
+		it("returns an opaque session token when no resource is requested (regression)", async () => {
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			await approve(user_code);
+			const res = await auth.api.deviceToken({
+				body: {
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code,
+					client_id: "test-client",
+				},
+			});
+			if (!("access_token" in res)) throw new Error("expected access_token");
+			// The opaque path DOES create a session keyed by the returned token
+			const session = await db.findOne({
+				model: "session",
+				where: [{ field: "token", value: res.access_token }],
+			});
+			expect(session).toBeTruthy();
 		});
 	});
 });
