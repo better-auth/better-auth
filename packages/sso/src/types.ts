@@ -1,5 +1,6 @@
 import type { Awaitable, OAuth2Tokens, User } from "better-auth";
 import type { AlgorithmValidationOptions } from "./saml/algorithms";
+import type { SAMLExecutor } from "./saml/executor";
 
 export interface OIDCMapping {
 	id?: string | undefined;
@@ -115,6 +116,7 @@ export interface SAMLAssertionExtract {
 		notBefore?: string;
 		notOnOrAfter?: string;
 	};
+	attributes?: Record<string, string | string[] | undefined>;
 }
 
 type BaseSSOProvider = {
@@ -406,6 +408,33 @@ export interface SSOOptions {
 		 * @default 102400 (100KB)
 		 */
 		maxMetadataSize?: number;
+		/**
+		 * Pluggable SAML crypto executor (optional).
+		 *
+		 * Transport-agnostic: plug in any implementation (in-process, HTTP,
+		 * RPC, queue worker, WASM, …). When omitted, Better Auth uses the
+		 * built-in samlify path via {@link createLocalSAMLExecutor}.
+		 *
+		 * Better Auth always owns: SSO provider registry / domain discovery,
+		 * InResponseTo + assertion replay storage, user provisioning, sessions.
+		 * The executor only builds AuthnRequests and parses/verifies Responses.
+		 *
+		 * Custom executors should set `signatureValidated: true` after verifying
+		 * signatures, or return `rawParsedResponse` for local algorithm checks.
+		 *
+		 * @example
+		 * ```ts
+		 * sso({
+		 *   saml: {
+		 *     executor: {
+		 *       createLoginRequest: (input) => bridge.rpc("createLoginRequest", input),
+		 *       parseLoginResponse: (input) => bridge.rpc("parseLoginResponse", input),
+		 *     },
+		 *   },
+		 * })
+		 * ```
+		 */
+		executor?: SAMLExecutor;
 		/**
 		 * Enable SAML Single Logout
 		 * @default false

@@ -11,6 +11,15 @@ export {
 } from "./algorithms";
 export { validateSingleAssertion } from "./assertions";
 export {
+	createLocalSAMLExecutor,
+	resolveSAMLExecutor,
+	type SAMLCreateLoginRequestInput,
+	type SAMLExecutor,
+	type SAMLLoginRequestResult,
+	type SAMLParseLoginResponseInput,
+	type SAMLParseLoginResponseResult,
+} from "./executor";
+export {
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
 	SAML_HTTP_POST_BINDING,

@@ -4,18 +4,17 @@ import { APIError } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { XMLParser } from "fast-xml-parser";
-import type { FlowResult } from "samlify/types/src/flow";
 
 import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
 import {
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
-	SAML_HTTP_POST_BINDING,
 	validateSAMLAlgorithms,
 	validateSAMLResponseBinding,
 	validateSingleAssertion,
 } from "../saml";
+import { resolveSAMLExecutor } from "../saml/executor";
 import type { SAMLConditions } from "../saml/timestamp";
 import { validateSAMLTimestamp } from "../saml/timestamp";
 import { parseRelayState } from "../saml-state";
@@ -33,7 +32,7 @@ import {
 	safeJsonParse,
 	validateEmailDomain,
 } from "../utils";
-import { createIdP, createSP, findSAMLProvider } from "./helpers";
+import { createSP, findSAMLProvider } from "./helpers";
 
 type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
 
@@ -248,12 +247,6 @@ export async function processSAMLResponse(
 		});
 	}
 
-	// 7. SP/IdP construction via helpers
-	const sp = createSP(parsedSamlConfig, ctx.context.baseURL, providerId, {
-		clockSkew: options?.saml?.clockSkew,
-	});
-	const idp = createIdP(parsedSamlConfig);
-
 	const samlRedirectUrl = getSafeRedirectUrl(
 		relayState?.callbackURL || parsedSamlConfig.callbackUrl,
 		params.currentCallbackPath,
@@ -267,20 +260,27 @@ export async function processSAMLResponse(
 	// with the SAMLResponse, not a flow-level error.
 	validateSingleAssertion(SAMLResponse);
 
-	// 9. Response parsing
-	let parsedResponse: FlowResult;
-	try {
-		parsedResponse = await sp.parseLoginResponse(idp, "post", {
-			body: {
-				SAMLResponse,
-				RelayState: params.RelayState || undefined,
-			},
-		});
+	// 9. Response parsing (default local samlify or pluggable executor)
+	const executor = resolveSAMLExecutor(options?.saml?.executor);
+	const hasCustomExecutor = options?.saml?.executor !== undefined;
 
-		if (!parsedResponse?.extract) {
+	let parsedFromExecutor: Awaited<
+		ReturnType<typeof executor.parseLoginResponse>
+	>;
+	try {
+		parsedFromExecutor = await executor.parseLoginResponse({
+			providerId,
+			samlConfig: parsedSamlConfig,
+			baseURL: ctx.context.baseURL,
+			SAMLResponse,
+			RelayState: params.RelayState,
+			clockSkew: options?.saml?.clockSkew,
+		});
+		if (!parsedFromExecutor?.extract) {
 			throw new Error("Invalid SAML response structure");
 		}
 	} catch (error) {
+		if (isAPIError(error)) throw error;
 		ctx.context.logger.error("SAML response validation failed", {
 			error,
 			samlResponsePreview: SAMLResponse.slice(0, 200),
@@ -291,11 +291,29 @@ export async function processSAMLResponse(
 		});
 	}
 
-	const { extract } = parsedResponse!;
-	const samlContent = parsedResponse.samlContent;
+	const extract = parsedFromExecutor.extract;
+	const samlContent = parsedFromExecutor.samlContent;
+	const entityId = parsedFromExecutor.entityId;
+	const assertionConsumerServiceUrl =
+		parsedFromExecutor.assertionConsumerServiceUrl;
+	const idpEntityId = parsedFromExecutor.idpEntityId;
+	let samlBindingContent: string;
 
 	// 10. Algorithm validation
-	validateSAMLAlgorithms(parsedResponse, options?.saml?.algorithms);
+	// Custom executors must set signatureValidated=true or return rawParsedResponse.
+	if (!parsedFromExecutor.signatureValidated) {
+		if (parsedFromExecutor.rawParsedResponse) {
+			validateSAMLAlgorithms(
+				parsedFromExecutor.rawParsedResponse,
+				options?.saml?.algorithms,
+			);
+		} else {
+			throw new APIError("BAD_REQUEST", {
+				message:
+					"SAML executor must set signatureValidated or return rawParsedResponse",
+			});
+		}
+	}
 
 	// 11. Timestamp validation
 	validateSAMLTimestamp((extract as SAMLAssertionExtract).conditions, {
@@ -305,13 +323,7 @@ export async function processSAMLResponse(
 	});
 
 	// 11b. Response binding validation
-	const expectedAudiences = [
-		sp.entityMeta.getEntityID(),
-		parsedSamlConfig.audience,
-	];
-	const assertionConsumerServiceUrl = sp.entityMeta.getAssertionConsumerService(
-		SAML_HTTP_POST_BINDING,
-	);
+	const expectedAudiences = [entityId, parsedSamlConfig.audience];
 	const expectedRecipients = getExpectedSAMLRecipients(
 		parsedSamlConfig,
 		ctx.context.baseURL,
@@ -319,9 +331,16 @@ export async function processSAMLResponse(
 		currentCallbackPath,
 		assertionConsumerServiceUrl,
 	);
-	let samlBindingContent: string;
 	try {
-		samlBindingContent = await getSAMLResponseBindingContent(sp, samlContent);
+		if (hasCustomExecutor) {
+			// Custom executors return binding-ready content (decrypt if needed).
+			samlBindingContent = samlContent;
+		} else {
+			const sp = createSP(parsedSamlConfig, ctx.context.baseURL, providerId, {
+				clockSkew: options?.saml?.clockSkew,
+			});
+			samlBindingContent = await getSAMLResponseBindingContent(sp, samlContent);
+		}
 		validateSAMLResponseBinding(samlBindingContent, {
 			expectedAudiences,
 			expectedRecipients,
@@ -436,7 +455,7 @@ export async function processSAMLResponse(
 	const assertionId = extractAssertionId(samlBindingContent);
 
 	if (assertionId) {
-		const issuer = idp.entityMeta.getEntityID();
+		const issuer = idpEntityId;
 		const conditions = (extract as SAMLAssertionExtract).conditions as
 			| SAMLConditions
 			| undefined;
