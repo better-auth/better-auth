@@ -8,6 +8,27 @@ import type { DeviceAuthorizationOptions } from ".";
 import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
 
 /**
+ * Registered / protocol claims a `customAccessTokenClaims` hook must not be
+ * able to override: they are set authoritatively when minting the access token
+ * (or, for `iss`, derived by `signJWT`). Filtering these keeps the issued token
+ * RFC 9068-conformant regardless of what the hook returns.
+ */
+const RESERVED_CLAIMS = new Set([
+	"iss",
+	"sub",
+	"aud",
+	"exp",
+	"nbf",
+	"iat",
+	"jti",
+	"client_id",
+	"azp",
+	"scope",
+	"typ",
+	"cnf",
+]);
+
+/**
  * Normalize an RFC 8707 `resource` value (string or repeated string) into a
  * de-duplicated, non-empty array, or `undefined` when absent/empty. Duplicate
  * entries are collapsed so a repeated single resource resolves to one audience.
@@ -148,7 +169,7 @@ export async function createDeviceJwtAccessToken(params: {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = toExpJWT(jwtOptions?.jwt?.expirationTime ?? "15m", iat);
 	const scopes = scope ? scope.split(" ") : [];
-	const customClaims = opts.customAccessTokenClaims
+	const rawCustomClaims = opts.customAccessTokenClaims
 		? await opts.customAccessTokenClaims({
 				user,
 				scopes,
@@ -156,10 +177,20 @@ export async function createDeviceJwtAccessToken(params: {
 				clientId,
 			})
 		: {};
+	// Strip reserved/registered claims so the hook can never forge protocol
+	// claims (e.g. `iss`, `sub`, `aud`); those are set authoritatively below.
+	const customClaims = Object.fromEntries(
+		Object.entries(rawCustomClaims).filter(
+			([claim]) => !RESERVED_CLAIMS.has(claim),
+		),
+	);
 
 	const token = await signJWT(ctx, {
 		options: jwtOptions,
-		type: "at+jwt",
+		// RFC 9068 §2.1: access tokens use the `at+jwt` media type. `signJWT`
+		// merges this into the JWS protected header and forwards it to custom
+		// remote signers.
+		header: { typ: "at+jwt" },
 		payload: {
 			...customClaims,
 			// `iss` is derived by signJWT (options.jwt.issuer ?? baseURL origin).

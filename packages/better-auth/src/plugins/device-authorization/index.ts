@@ -119,7 +119,26 @@ export const deviceAuthorizationOptionsSchema = z.object({
 			"Function to handle device authorization requests. If not provided, no additional actions will be taken.",
 		),
 	allowedResources: z
-		.array(z.string())
+		.array(
+			z.string().refine(
+				(value) => {
+					// RFC 8707 §2: an absolute URI with no fragment. Validated at
+					// config-parse time so a misconfigured allow-list fails fast at
+					// `betterAuth()` init rather than silently at request time.
+					let url: URL;
+					try {
+						url = new URL(value);
+					} catch {
+						return false;
+					}
+					return url.hash === "";
+				},
+				{
+					message:
+						"allowedResources entries must be absolute URIs without a fragment (RFC 8707 §2).",
+				},
+			),
+		)
 		.optional()
 		.describe(
 			"Allow-list of RFC 8707 resource indicator URIs clients may request. A resource outside this list is rejected with `invalid_target`. When unset/empty, any `resource` request is rejected. Each entry must be an absolute URI without a fragment.",

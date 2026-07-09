@@ -50,6 +50,24 @@ describe("device authorization plugin input validation", () => {
 		expect(options.allowedResources).toEqual(["https://api.example.com"]);
 		expect(options.customAccessTokenClaims).toBe(claims);
 	});
+
+	it("rejects invalid allowedResources entries at parse time", () => {
+		expect(() =>
+			deviceAuthorizationOptionsSchema.parse({
+				allowedResources: ["not-a-uri"],
+			}),
+		).toThrow();
+		expect(() =>
+			deviceAuthorizationOptionsSchema.parse({
+				allowedResources: ["https://api.example.com#frag"],
+			}),
+		).toThrow();
+		expect(
+			deviceAuthorizationOptionsSchema.parse({
+				allowedResources: ["https://api.example.com"],
+			}).allowedResources,
+		).toEqual(["https://api.example.com"]);
+	});
 });
 
 describe("client validation", async () => {
@@ -1491,6 +1509,32 @@ describe("device authorization resource indicators", async () => {
 			).rejects.toMatchObject({ body: { error: "invalid_target" } });
 		});
 
+		it("does not consume the approved code when the token-time resource is invalid", async () => {
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			await approve(user_code);
+
+			// A disallowed resource is rejected WITHOUT burning the approved code.
+			await expect(
+				auth.api.deviceToken({
+					body: {
+						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+						device_code,
+						client_id: "test-client",
+						resource: "https://evil.example.com",
+					},
+				}),
+			).rejects.toMatchObject({ body: { error: "invalid_target" } });
+
+			// The approved code survives in the database (was not consumed).
+			const record = await db.findOne<{ status?: string }>({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: device_code }],
+			});
+			expect(record?.status).toBe("approved");
+		});
+
 		it("issues an array aud for multiple resources", async () => {
 			const { device_code, user_code } = await auth.api.deviceCode({
 				body: {
@@ -1523,7 +1567,13 @@ describe("device authorization resource indicators", async () => {
 							jwt(),
 							deviceAuthorization({
 								allowedResources,
-								customAccessTokenClaims: () => ({ tenant: "acme" }),
+								customAccessTokenClaims: () => ({
+									tenant: "acme",
+									// Attempts to override reserved claims must be ignored.
+									iss: "https://evil.example.com",
+									sub: "evil-user",
+									aud: "https://evil.example.com",
+								}),
 							}),
 						],
 					},
@@ -1555,6 +1605,10 @@ describe("device authorization resource indicators", async () => {
 				createLocalJWKSet(jwks),
 			);
 			expect(payload.tenant).toBe("acme");
+			// Reserved claims returned by the hook are stripped, not honored.
+			expect(payload.sub).not.toBe("evil-user");
+			expect(payload.aud).toBe("https://api.example.com");
+			expect(payload.iss).not.toBe("https://evil.example.com");
 		});
 
 		it("errors when a resource is requested without the jwt plugin", async () => {

@@ -342,6 +342,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				pollingInterval?: number | undefined;
 				clientId?: string | undefined;
 				scope?: string | undefined;
+				resource?: string | undefined;
 			}>({
 				model: "deviceCode",
 				where: [
@@ -442,15 +443,25 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			}
 
 			if (deviceCodeRecord.status === "approved" && deviceCodeRecord.userId) {
+				// Resolve/validate the requested resource BEFORE consuming the code.
+				// Validation is read-only and idempotent, so a malformed or
+				// disallowed `resource` (or an `allowedResources` change after the
+				// code was issued) returns `invalid_target` without burning the
+				// approved code and forcing a full device-flow restart (RFC 8707 §2.2).
+				const audience = resolveResourceAudience({
+					opts,
+					boundResource: parseStoredResource(deviceCodeRecord.resource),
+					requestedResource: ctx.body.resource,
+				});
+
 				// Atomically claim the approved code as the single race gate:
 				// concurrent polls contend on this delete-and-return, and only the
-				// caller that removes the row may issue a session. Losers receive
+				// caller that removes the row may issue a token. Losers receive
 				// null and are rejected, so the code is redeemed at most once.
 				const claimedDeviceCode = await ctx.context.adapter.consumeOne<{
 					id: string;
 					userId?: string | undefined;
 					scope?: string | undefined;
-					resource?: string | undefined;
 				}>({
 					model: "deviceCode",
 					where: [
@@ -480,13 +491,8 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					});
 				}
 
-				// RFC 8707 / RFC 9068: when a resource resolves, issue a stateless
+				// RFC 8707 / RFC 9068: when a resource resolved, issue a stateless
 				// JWT access token scoped to that audience instead of an opaque session.
-				const audience = resolveResourceAudience({
-					opts,
-					boundResource: parseStoredResource(claimedDeviceCode.resource),
-					requestedResource: ctx.body.resource,
-				});
 				if (audience) {
 					const { token, expiresIn } = await createDeviceJwtAccessToken({
 						ctx,
@@ -496,20 +502,14 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						scope: claimedDeviceCode.scope || "",
 						audience,
 					});
-					return ctx.json(
-						{
-							access_token: token,
-							token_type: "Bearer",
-							expires_in: expiresIn,
-							scope: claimedDeviceCode.scope || "",
-						},
-						{
-							headers: {
-								"Cache-Control": "no-store",
-								Pragma: "no-cache",
-							},
-						},
-					);
+					ctx.setHeader("Cache-Control", "no-store");
+					ctx.setHeader("Pragma", "no-cache");
+					return ctx.json({
+						access_token: token,
+						token_type: "Bearer",
+						expires_in: expiresIn,
+						scope: claimedDeviceCode.scope || "",
+					});
 				}
 
 				const session = await ctx.context.internalAdapter.createSession(
