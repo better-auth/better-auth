@@ -8,9 +8,9 @@ import { XMLParser } from "fast-xml-parser";
 import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
 import {
+	enforceSAMLCryptoPolicy,
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
-	validateSAMLAlgorithms,
 	validateSAMLResponseBinding,
 	validateSingleAssertion,
 } from "../saml";
@@ -307,25 +307,15 @@ export async function processSAMLResponse(
 		parsedSamlConfig.issuer;
 	let samlBindingContent: string;
 
-	// 10a. Cryptographic verification must have happened (executor or samlify).
-	if (!parsedFromExecutor.signatureValidated) {
+	// 10. First-class crypto report + host-side operator algorithm policy.
+	// Same path for local and custom executors (no special-case allowlists).
+	if (!parsedFromExecutor.crypto) {
 		throw new APIError("BAD_REQUEST", {
-			message:
-				"SAML executor must set signatureValidated after verifying the Response",
+			message: "SAML executor must return a crypto verification report",
+			code: "SAML_CRYPTO_REPORT_MISSING",
 		});
 	}
-
-	// 10b. Always enforce operator algorithm policy on the Better Auth host so
-	// custom executors cannot silently bypass allowedSignatureAlgorithms /
-	// encryption allowlists. For custom executors, samlContent is decrypted, so
-	// encryption allowlists use reported key/data encryption algorithm fields.
-	const algorithmSource = parsedFromExecutor.rawParsedResponse ?? {
-		samlContent,
-		sigAlg: parsedFromExecutor.sigAlg ?? null,
-		keyEncryptionAlgorithm: parsedFromExecutor.keyEncryptionAlgorithm ?? null,
-		dataEncryptionAlgorithm: parsedFromExecutor.dataEncryptionAlgorithm ?? null,
-	};
-	validateSAMLAlgorithms(algorithmSource, options?.saml?.algorithms);
+	enforceSAMLCryptoPolicy(parsedFromExecutor.crypto, options?.saml?.algorithms);
 
 	// 11. Timestamp validation
 	validateSAMLTimestamp((extract as SAMLAssertionExtract).conditions, {

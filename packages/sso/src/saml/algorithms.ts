@@ -253,34 +253,117 @@ function validateEncryptionAlgorithms(
 	}
 }
 
+/**
+ * First-class crypto verification report from a SAML executor.
+ *
+ * Better Auth uses this to apply operator algorithm policy without relying on
+ * whether `samlContent` is still encrypted. Every executor (local or remote)
+ * returns the same shape so the host path stays uniform.
+ */
+export interface SAMLCryptoReport {
+	/** Executor cryptographically verified the Response signature. */
+	signatureVerified: boolean;
+	/** Signature method Algorithm URI from the Response (if present). */
+	signatureAlgorithm?: string | null;
+	/**
+	 * Encryption metadata for the assertion before decryption.
+	 * - `null` — assertion was not encrypted
+	 * - object — was encrypted; record algorithms so host allowlists still apply
+	 *   after the executor returns decrypted XML
+	 */
+	encryption: null | {
+		keyTransportAlgorithm?: string | null;
+		dataEncryptionAlgorithm?: string | null;
+	};
+}
+
+/**
+ * Build a {@link SAMLCryptoReport} for an executor implementation.
+ *
+ * Pass `sourceXml` (original Response XML, possibly still encrypted) to auto-fill
+ * encryption algorithms. Or set `encryption` explicitly.
+ */
+export function createSAMLCryptoReport(input: {
+	signatureVerified: boolean;
+	signatureAlgorithm?: string | null;
+	/** Original Response XML before decryption (optional). */
+	sourceXml?: string | null;
+	/** Explicit encryption metadata; overrides auto-detect from sourceXml. */
+	encryption?: SAMLCryptoReport["encryption"];
+}): SAMLCryptoReport {
+	let encryption: SAMLCryptoReport["encryption"] =
+		input.encryption === undefined ? null : input.encryption;
+
+	if (input.encryption === undefined && input.sourceXml) {
+		if (hasEncryptedAssertion(input.sourceXml)) {
+			const enc = extractEncryptionAlgorithms(input.sourceXml);
+			encryption = {
+				keyTransportAlgorithm: enc.keyEncryption,
+				dataEncryptionAlgorithm: enc.dataEncryption,
+			};
+		} else {
+			encryption = null;
+		}
+	}
+
+	return {
+		signatureVerified: input.signatureVerified,
+		signatureAlgorithm: input.signatureAlgorithm ?? null,
+		encryption,
+	};
+}
+
+/**
+ * Apply operator algorithm policy to an executor's crypto report.
+ * Call this on the Better Auth host after every successful parse.
+ */
+export function enforceSAMLCryptoPolicy(
+	report: SAMLCryptoReport,
+	options?: AlgorithmValidationOptions,
+): void {
+	if (!report.signatureVerified) {
+		throw new APIError("BAD_REQUEST", {
+			message: "SAML Response signature was not verified by the executor",
+			code: "SAML_SIGNATURE_NOT_VERIFIED",
+		});
+	}
+
+	validateSignatureAlgorithm(report.signatureAlgorithm, options);
+
+	if (report.encryption) {
+		validateEncryptionAlgorithms(
+			{
+				keyEncryption: report.encryption.keyTransportAlgorithm ?? null,
+				dataEncryption: report.encryption.dataEncryptionAlgorithm ?? null,
+			},
+			options,
+		);
+	}
+}
+
+/**
+ * Validate algorithms from raw Response XML (and optional sigAlg).
+ * Used when the XML may still contain EncryptedAssertion (local samlify path).
+ */
 export function validateSAMLAlgorithms(
 	response: {
 		sigAlg?: string | null;
 		samlContent: string;
-		/**
-		 * When samlContent is already decrypted (custom executor path), the
-		 * original key/data encryption algorithm URIs can be supplied so
-		 * operator allowlists still apply.
-		 */
-		keyEncryptionAlgorithm?: string | null;
-		dataEncryptionAlgorithm?: string | null;
 	},
 	options?: AlgorithmValidationOptions,
 ): void {
-	validateSignatureAlgorithm(response.sigAlg, options);
-
-	if (hasEncryptedAssertion(response.samlContent)) {
-		const encAlgs = extractEncryptionAlgorithms(response.samlContent);
-		validateEncryptionAlgorithms(encAlgs, options);
-	} else if (
-		response.keyEncryptionAlgorithm ||
-		response.dataEncryptionAlgorithm
-	) {
-		// Decrypted content from a custom executor: honor reported algorithms.
+	const report = createSAMLCryptoReport({
+		signatureVerified: true,
+		signatureAlgorithm: response.sigAlg,
+		sourceXml: response.samlContent,
+	});
+	// Signature presence is optional in XML-only checks (sigAlg may be null).
+	validateSignatureAlgorithm(report.signatureAlgorithm, options);
+	if (report.encryption) {
 		validateEncryptionAlgorithms(
 			{
-				keyEncryption: response.keyEncryptionAlgorithm ?? null,
-				dataEncryption: response.dataEncryptionAlgorithm ?? null,
+				keyEncryption: report.encryption.keyTransportAlgorithm ?? null,
+				dataEncryption: report.encryption.dataEncryptionAlgorithm ?? null,
 			},
 			options,
 		);

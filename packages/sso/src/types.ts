@@ -419,10 +419,10 @@ export interface SSOOptions {
 		 * InResponseTo + assertion replay storage, user provisioning, sessions.
 		 * The executor only builds AuthnRequests and parses/verifies Responses.
 		 *
-		 * Custom executors must set `signatureValidated: true` after verifying
-		 * signatures and return decrypted `samlContent`. Better Auth still applies
-		 * operator algorithm allowlists on the host. Pass `algorithms` is included
-		 * on parse input for executors that also enforce policy remotely.
+		 * Executors return a structured `crypto` report
+		 * ({@link createSAMLCryptoReport}); Better Auth applies operator algorithm
+		 * policy via {@link enforceSAMLCryptoPolicy}. Decrypted `samlContent` is
+		 * required so assertion-id replay works.
 		 *
 		 * @example
 		 * ```ts

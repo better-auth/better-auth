@@ -1,10 +1,13 @@
 export {
 	type AlgorithmValidationOptions,
 	type ConfigAlgorithmValidationOptions,
+	createSAMLCryptoReport,
 	DataEncryptionAlgorithm,
 	type DeprecatedAlgorithmBehavior,
 	DigestAlgorithm,
+	enforceSAMLCryptoPolicy,
 	KeyEncryptionAlgorithm,
+	type SAMLCryptoReport,
 	SignatureAlgorithm,
 	validateConfigAlgorithms,
 	validateSAMLAlgorithms,

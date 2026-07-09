@@ -14,24 +14,27 @@ For full documentation, visit [better-auth.com/docs/plugins/sso](https://www.bet
 
 ## Pluggable SAML executor
 
-By default, SAML AuthnRequest construction and Response parsing run in-process via [samlify](https://github.com/tngan/samlify).
+By default, AuthnRequest construction and Response parsing run in-process via [samlify](https://github.com/tngan/samlify).
 
-For constrained runtimes (for example Cloudflare Workers with a tight CPU budget), you can supply a **transport-agnostic** `saml.executor` that implements the same two operations anywhere else (HTTP, RPC, a Node process, WASM, …). Better Auth still owns domain discovery, provider registry, InResponseTo / replay storage, user provisioning, session cookies, and **operator algorithm allowlists**.
+On constrained runtimes (e.g. Cloudflare Workers), plug in a **transport-agnostic** `saml.executor`. Better Auth still owns domain discovery, provider registry, InResponseTo / replay, user provisioning, sessions, and **operator algorithm policy**.
 
 ```ts
-import { betterAuth } from "better-auth";
-import { createLocalSAMLExecutor, sso } from "@better-auth/sso";
-
-// Reference implementation (Node-capable hosts / default path):
-// const local = createLocalSAMLExecutor();
+import {
+  betterAuth,
+} from "better-auth";
+import {
+  createLocalSAMLExecutor,
+  createSAMLCryptoReport,
+  sso,
+} from "@better-auth/sso";
 
 export const auth = betterAuth({
   plugins: [
     sso({
       saml: {
         executor: {
-          createLoginRequest: (input) => myBridge.rpc("createLoginRequest", input),
-          parseLoginResponse: (input) => myBridge.rpc("parseLoginResponse", input),
+          createLoginRequest: (input) => bridge.rpc("createLoginRequest", input),
+          parseLoginResponse: (input) => bridge.rpc("parseLoginResponse", input),
         },
       },
     }),
@@ -39,22 +42,40 @@ export const auth = betterAuth({
 });
 ```
 
-**Contract**
+### Library contract
 
-| Side | Responsibility |
-|------|----------------|
-| Better Auth | Provider lookup by domain, state / InResponseTo, replay, sessions, algorithm allowlists |
-| `SAMLExecutor` | Build AuthnRequest (`redirectUrl` + `id`); cryptographically parse/verify Response → extract |
+| Piece | Role |
+|-------|------|
+| `SAMLExecutor` | Build AuthnRequest; parse/verify Response |
+| `SAMLCryptoReport` | First-class crypto report from every parse |
+| `createSAMLCryptoReport()` | Helper to build the report (auto-fills encryption algs from source XML) |
+| `enforceSAMLCryptoPolicy()` | Host applies `SSOOptions.saml.algorithms` allowlists |
+| Better Auth routes | Domain discovery, state, replay, sessions |
 
-Custom executors must:
+Custom executor parse result (shape):
 
-1. Set `signatureValidated: true` after verifying signatures  
-2. Return **decrypted** `samlContent` (no `EncryptedAssertion`) so assertion-id replay works  
-3. Return `sigAlg` (and `keyEncryptionAlgorithm` / `dataEncryptionAlgorithm` when the original assertion was encrypted) so host allowlists still apply after decryption  
+```ts
+{
+  extract: { nameID, attributes, … },
+  samlContent: "<Assertion…/>", // decrypted — no EncryptedAssertion
+  entityId: "…",
+  idpEntityId: "…",
+  crypto: createSAMLCryptoReport({
+    signatureVerified: true,
+    signatureAlgorithm: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+    // If the assertion was encrypted, either pass sourceXml before decrypt:
+    // sourceXml: originalResponseXml,
+    // or set encryption explicitly:
+    encryption: {
+      keyTransportAlgorithm: "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p",
+      dataEncryptionAlgorithm: "http://www.w3.org/2009/xmlenc11#aes256-gcm",
+    },
+    // encryption: null  // when the assertion was never encrypted
+  }),
+}
+```
 
-`SAMLParseLoginResponseInput.algorithms` carries the operator policy for executors that also enforce it remotely; Better Auth **always** re-applies allowlists on the host using returned metadata.
-
-Use `createLocalSAMLExecutor()` on any Node-capable host if you want crypto to match the default path.
+Default path: `createLocalSAMLExecutor()` — same samlify behavior, same report shape.
 
 ## License
 

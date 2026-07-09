@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SAMLConfig } from "../types";
+import { createSAMLCryptoReport, enforceSAMLCryptoPolicy } from "./algorithms";
 import type { SAMLExecutor } from "./executor";
 import { createLocalSAMLExecutor, resolveSAMLExecutor } from "./executor";
 
 const baseSamlConfig = (): SAMLConfig => ({
 	issuer: "https://sp.example.com",
 	entryPoint: "https://idp.example.com/sso",
-	// Placeholder cert material for AuthnRequest construction tests only.
 	cert: "TESTCERT",
 	callbackUrl: "https://sp.example.com/api/auth/sso/saml2/sp/acs/acme",
 	spMetadata: {
@@ -75,22 +75,28 @@ describe("SAML executor", () => {
 		});
 	});
 
-	it("remote executor is invoked for parseLoginResponse when configured", async () => {
+	it("remote executor returns a first-class crypto report", async () => {
+		const crypto = createSAMLCryptoReport({
+			signatureVerified: true,
+			signatureAlgorithm: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+			encryption: {
+				keyTransportAlgorithm:
+					"http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p",
+				dataEncryptionAlgorithm: "http://www.w3.org/2009/xmlenc11#aes256-gcm",
+			},
+		});
 		const parseLoginResponse = vi.fn(async () => ({
 			extract: {
 				nameID: "user@acme.com",
 				attributes: { email: "user@acme.com" },
 				inResponseTo: "_req-1",
 			},
-			samlContent: "<Response/>",
+			samlContent: "<Assertion/>",
 			entityId: "https://sp.example.com",
 			idpEntityId: "https://idp.example.com",
 			assertionConsumerServiceUrl:
 				"https://sp.example.com/api/auth/sso/saml2/sp/acs/acme",
-			signatureValidated: true,
-			sigAlg: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
-			keyEncryptionAlgorithm: "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p",
-			dataEncryptionAlgorithm: "http://www.w3.org/2009/xmlenc11#aes256-gcm",
+			crypto,
 		}));
 		const remote: SAMLExecutor = {
 			createLoginRequest: vi.fn(),
@@ -114,10 +120,45 @@ describe("SAML executor", () => {
 		expect(parseLoginResponse).toHaveBeenCalledWith(
 			expect.objectContaining({ algorithms }),
 		);
-		expect(result.extract.nameID).toBe("user@acme.com");
-		expect(result.signatureValidated).toBe(true);
-		expect(result.sigAlg).toContain("rsa-sha256");
-		expect(result.keyEncryptionAlgorithm).toContain("rsa-oaep");
-		expect(result.dataEncryptionAlgorithm).toContain("aes256-gcm");
+		expect(result.crypto.signatureVerified).toBe(true);
+		expect(result.crypto.encryption?.keyTransportAlgorithm).toContain(
+			"rsa-oaep",
+		);
+		// Host policy accepts the report (same function the pipeline uses).
+		expect(() =>
+			enforceSAMLCryptoPolicy(result.crypto, algorithms),
+		).not.toThrow();
+	});
+
+	it("createSAMLCryptoReport auto-detects encryption from source XML", () => {
+		const encryptedXml = `
+			<Response>
+				<EncryptedAssertion>
+					<EncryptedData>
+						<EncryptionMethod Algorithm="http://www.w3.org/2009/xmlenc11#aes256-gcm"/>
+					</EncryptedData>
+					<EncryptedKey>
+						<EncryptionMethod Algorithm="http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p"/>
+					</EncryptedKey>
+				</EncryptedAssertion>
+			</Response>
+		`;
+		const report = createSAMLCryptoReport({
+			signatureVerified: true,
+			signatureAlgorithm: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+			sourceXml: encryptedXml,
+		});
+		expect(report.encryption).not.toBeNull();
+		expect(report.encryption?.dataEncryptionAlgorithm).toContain("aes256-gcm");
+		expect(report.encryption?.keyTransportAlgorithm).toContain("rsa-oaep");
+	});
+
+	it("enforceSAMLCryptoPolicy rejects unverified signatures", () => {
+		expect(() =>
+			enforceSAMLCryptoPolicy({
+				signatureVerified: false,
+				encryption: null,
+			}),
+		).toThrow(/not verified/i);
 	});
 });
