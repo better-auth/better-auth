@@ -264,7 +264,8 @@ export async function processSAMLResponse(
 
 	// 9. Response parsing (default local samlify or pluggable executor)
 	const executor = resolveSAMLExecutor(options?.saml?.executor);
-	const hasCustomExecutor = options?.saml?.executor !== undefined;
+	// Match resolveSAMLExecutor nullish fallback (null/undefined → local).
+	const hasCustomExecutor = options?.saml?.executor != null;
 
 	let parsedFromExecutor: Awaited<
 		ReturnType<typeof executor.parseLoginResponse>

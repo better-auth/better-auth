@@ -153,6 +153,24 @@ describe("SAML executor", () => {
 		expect(report.encryption?.keyTransportAlgorithm).toContain("rsa-oaep");
 	});
 
+	it("createSAMLCryptoReport rejects missing encryption without sourceXml", () => {
+		expect(() =>
+			createSAMLCryptoReport({
+				signatureVerified: true,
+				signatureAlgorithm: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+			}),
+		).toThrow(/missing encryption metadata/i);
+	});
+
+	it("createSAMLCryptoReport accepts explicit encryption null", () => {
+		const report = createSAMLCryptoReport({
+			signatureVerified: true,
+			signatureAlgorithm: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+			encryption: null,
+		});
+		expect(report.encryption).toBeNull();
+	});
+
 	it("enforceSAMLCryptoPolicy rejects unverified signatures", () => {
 		expect(() =>
 			enforceSAMLCryptoPolicy({
@@ -205,5 +223,16 @@ describe("SAML executor", () => {
 				encryption: null,
 			}),
 		).toThrow(/not verified/i);
+	});
+
+	it("enforceSAMLCryptoPolicy rejects non-string signatureAlgorithm", () => {
+		expect(() =>
+			enforceSAMLCryptoPolicy({
+				signatureVerified: true,
+				// @ts-expect-error malformed transport payload
+				signatureAlgorithm: 0,
+				encryption: null,
+			}),
+		).toThrow(/signatureAlgorithm/i);
 	});
 });

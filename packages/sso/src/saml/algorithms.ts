@@ -305,13 +305,19 @@ export function createSAMLCryptoReport(input: {
 	signatureAlgorithm?: string | null;
 	/** Original Response XML before decryption (optional). */
 	sourceXml?: string | null;
-	/** Explicit encryption metadata; overrides auto-detect from sourceXml. */
+	/**
+	 * Explicit encryption metadata; overrides auto-detect from sourceXml.
+	 * Pass `null` when the assertion was unencrypted and sourceXml is unavailable.
+	 * Omitting both `encryption` and `sourceXml` fails closed.
+	 */
 	encryption?: SAMLCryptoReport["encryption"];
 }): SAMLCryptoReport {
-	let encryption: SAMLCryptoReport["encryption"] =
-		input.encryption === undefined ? null : input.encryption;
-
-	if (input.encryption === undefined && input.sourceXml) {
+	// Fail closed: defaulting omitted encryption to null would let custom
+	// executors skip encryption allowlists. Require sourceXml or explicit value.
+	let encryption: SAMLCryptoReport["encryption"];
+	if (input.encryption !== undefined) {
+		encryption = input.encryption;
+	} else if (input.sourceXml) {
 		if (hasEncryptedAssertion(input.sourceXml)) {
 			const enc = extractEncryptionAlgorithms(input.sourceXml);
 			encryption = {
@@ -321,6 +327,12 @@ export function createSAMLCryptoReport(input: {
 		} else {
 			encryption = null;
 		}
+	} else {
+		throw new APIError("BAD_REQUEST", {
+			message:
+				"SAML crypto report is missing encryption metadata (use null when unencrypted)",
+			code: "SAML_ENCRYPTION_METADATA_MISSING",
+		});
 	}
 
 	let signatureAlgorithm = input.signatureAlgorithm ?? null;
@@ -356,9 +368,9 @@ export function enforceSAMLCryptoPolicy(
 		});
 	}
 
+	// Require a non-empty string (reject falsy non-strings from transport JSON).
 	if (
-		report.signatureAlgorithm === undefined ||
-		report.signatureAlgorithm === null ||
+		typeof report.signatureAlgorithm !== "string" ||
 		report.signatureAlgorithm.length === 0
 	) {
 		throw new APIError("BAD_REQUEST", {
