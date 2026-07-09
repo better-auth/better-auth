@@ -16,6 +16,7 @@ import { kAPIErrorHeaderSymbol, toResponse } from "better-call";
 import { createDefu } from "defu";
 import { isAPIError } from "../utils/is-api-error";
 import { isRequestLike } from "../utils/url";
+import { isHttpRootSpan } from "./http-root-span";
 
 /**
  * Input accepted by {@link dispatchAuthEndpoint}. `context` must already be a
@@ -349,7 +350,9 @@ export async function dispatchAuthEndpoint(
 
 	const { trace } = getOpenTelemetryAPI();
 	const parentSpan = trace.getActiveSpan?.();
-	if (parentSpan) {
+	// Only rename the provisional root HTTP span owned by the router handler.
+	// Direct `auth.api.*` calls may run under a caller-owned active span.
+	if (isHttpRootSpan(parentSpan)) {
 		parentSpan.updateName(`${methodName} ${route}`);
 		parentSpan.setAttribute(ATTR_HTTP_ROUTE, route);
 	}

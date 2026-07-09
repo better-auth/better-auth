@@ -12,6 +12,8 @@ import {
 	ATTR_HTTP_RESPONSE_STATUS_CODE,
 	ATTR_HTTP_ROUTE,
 	getOpenTelemetryAPI,
+	INSTRUMENTATION_SCOPE,
+	INSTRUMENTATION_VERSION,
 	withSpan,
 } from "@better-auth/core/instrumentation";
 import { normalizePathname } from "@better-auth/core/utils/url";
@@ -19,6 +21,7 @@ import type { Endpoint, Middleware } from "better-call";
 import { createRouter } from "better-call";
 import type { OverrideMerge, UnionToIntersection } from "../types";
 import { isAPIError } from "../utils/is-api-error";
+import { markHttpRootSpan } from "./http-root-span";
 import { originCheckMiddleware } from "./middlewares";
 import { onRequestRateLimit } from "./rate-limiter";
 import {
@@ -271,9 +274,6 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		middlewares,
 	};
 }
-const INSTRUMENTATION_SCOPE = "better-auth";
-const INSTRUMENTATION_VERSION = import.meta.env?.BETTER_AUTH_VERSION ?? "1.0.0";
-
 export const router = <Option extends BetterAuthOptions>(
 	ctx: AuthContext,
 	options: Option,
@@ -419,6 +419,7 @@ export const router = <Option extends BetterAuthOptions>(
 					attributes: {},
 				},
 				async (span) => {
+					markHttpRootSpan(span);
 					try {
 						const response = await innerHandler(request);
 						span.setAttribute(ATTR_HTTP_RESPONSE_STATUS_CODE, response.status);
