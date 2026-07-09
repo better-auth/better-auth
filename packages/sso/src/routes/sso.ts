@@ -53,6 +53,7 @@ import {
 } from "../utils";
 import { getVerificationIdentifier } from "./domain-verification";
 import {
+	assertAllowedIdpSsoRedirectUrl,
 	createIdP,
 	createSAMLPostForm,
 	createSP,
@@ -1345,6 +1346,11 @@ export const signInSSO = (options?: SSOOptions) => {
 						message: "Invalid SAML request",
 					});
 				}
+				// Host owns the provider registry: reject executor open redirects.
+				assertAllowedIdpSsoRedirectUrl(
+					loginRequest.redirectUrl,
+					parsedSamlConfig,
+				);
 
 				const shouldSaveRequest =
 					loginRequest.id &&

@@ -6,6 +6,7 @@ export {
 	type DeprecatedAlgorithmBehavior,
 	DigestAlgorithm,
 	enforceSAMLCryptoPolicy,
+	extractSignatureAlgorithmFromXml,
 	KeyEncryptionAlgorithm,
 	type SAMLCryptoReport,
 	SignatureAlgorithm,

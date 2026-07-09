@@ -161,4 +161,27 @@ describe("SAML executor", () => {
 			}),
 		).toThrow(/not verified/i);
 	});
+
+	it("enforceSAMLCryptoPolicy rejects missing signatureAlgorithm", () => {
+		expect(() =>
+			enforceSAMLCryptoPolicy({
+				signatureVerified: true,
+				signatureAlgorithm: null,
+				encryption: null,
+			}),
+		).toThrow(/signatureAlgorithm/i);
+	});
+
+	it("enforceSAMLCryptoPolicy rejects incomplete encryption metadata", () => {
+		expect(() =>
+			enforceSAMLCryptoPolicy({
+				signatureVerified: true,
+				signatureAlgorithm: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+				encryption: {
+					keyTransportAlgorithm: null,
+					dataEncryptionAlgorithm: null,
+				},
+			}),
+		).toThrow(/encryption metadata is incomplete/i);
+	});
 });

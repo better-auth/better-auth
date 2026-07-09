@@ -141,6 +141,23 @@ function extractEncryptionAlgorithms(xml: string): {
 	}
 }
 
+/** Extract SignatureMethod/@Algorithm from Response/Assertion XML when present. */
+export function extractSignatureAlgorithmFromXml(xml: string): string | null {
+	try {
+		const parsed = xmlParser.parse(xml);
+		const method = findNode(parsed, "SignatureMethod") as Record<
+			string,
+			unknown
+		> | null;
+		const algorithm = method?.["@_Algorithm"];
+		return typeof algorithm === "string" && algorithm.length > 0
+			? algorithm
+			: null;
+	} catch {
+		return null;
+	}
+}
+
 function hasEncryptedAssertion(xml: string): boolean {
 	try {
 		const parsed = xmlParser.parse(xml);
@@ -306,9 +323,14 @@ export function createSAMLCryptoReport(input: {
 		}
 	}
 
+	let signatureAlgorithm = input.signatureAlgorithm ?? null;
+	if (!signatureAlgorithm && input.sourceXml) {
+		signatureAlgorithm = extractSignatureAlgorithmFromXml(input.sourceXml);
+	}
+
 	return {
 		signatureVerified: input.signatureVerified,
-		signatureAlgorithm: input.signatureAlgorithm ?? null,
+		signatureAlgorithm,
 		encryption,
 	};
 }
@@ -316,6 +338,11 @@ export function createSAMLCryptoReport(input: {
 /**
  * Apply operator algorithm policy to an executor's crypto report.
  * Call this on the Better Auth host after every successful parse.
+ *
+ * Fail-closed rules:
+ * - signatureVerified must be true
+ * - signatureAlgorithm must be present (prevents allowlist bypass via omission)
+ * - if encryption is non-null, both key and data algorithms must be present
  */
 export function enforceSAMLCryptoPolicy(
 	report: SAMLCryptoReport,
@@ -328,13 +355,33 @@ export function enforceSAMLCryptoPolicy(
 		});
 	}
 
+	if (
+		report.signatureAlgorithm === undefined ||
+		report.signatureAlgorithm === null ||
+		report.signatureAlgorithm.length === 0
+	) {
+		throw new APIError("BAD_REQUEST", {
+			message: "SAML crypto report is missing signatureAlgorithm",
+			code: "SAML_SIGNATURE_ALGORITHM_MISSING",
+		});
+	}
+
 	validateSignatureAlgorithm(report.signatureAlgorithm, options);
 
-	if (report.encryption) {
+	if (report.encryption !== null) {
+		const key = report.encryption.keyTransportAlgorithm;
+		const data = report.encryption.dataEncryptionAlgorithm;
+		if (!key || key.length === 0 || !data || data.length === 0) {
+			throw new APIError("BAD_REQUEST", {
+				message:
+					"SAML crypto report encryption metadata is incomplete (key and data algorithms required)",
+				code: "SAML_ENCRYPTION_METADATA_INCOMPLETE",
+			});
+		}
 		validateEncryptionAlgorithms(
 			{
-				keyEncryption: report.encryption.keyTransportAlgorithm ?? null,
-				dataEncryption: report.encryption.dataEncryptionAlgorithm ?? null,
+				keyEncryption: key,
+				dataEncryption: data,
 			},
 			options,
 		);

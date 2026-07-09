@@ -1,7 +1,11 @@
 import { APIError } from "better-auth/api";
 import { describe, expect, it } from "vitest";
 import type { SAMLConfig } from "../types";
-import { createSAMLPostForm, resolveSpEntityId } from "./helpers";
+import {
+	assertAllowedIdpSsoRedirectUrl,
+	createSAMLPostForm,
+	resolveSpEntityId,
+} from "./helpers";
 
 const invalidSAMLBindingLocationMessage =
 	"SAML POST binding location must be an absolute http or https URL";
@@ -70,5 +74,41 @@ describe("resolveSpEntityId", () => {
 
 	it("falls back to issuer", () => {
 		expect(resolveSpEntityId(base())).toBe("https://issuer.example");
+	});
+});
+
+describe("assertAllowedIdpSsoRedirectUrl", () => {
+	const config = (): SAMLConfig => ({
+		issuer: "https://sp.example",
+		entryPoint: "https://idp.example.com/sso",
+		cert: "CERT",
+		callbackUrl: "https://sp.example/acs",
+		spMetadata: {},
+		idpMetadata: {
+			singleSignOnService: [
+				{
+					Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+					Location: "https://idp.example.com/sso",
+				},
+			],
+		},
+	});
+
+	it("allows redirect to configured IdP SSO with SAMLRequest query", () => {
+		expect(() =>
+			assertAllowedIdpSsoRedirectUrl(
+				"https://idp.example.com/sso?SAMLRequest=abc&RelayState=x",
+				config(),
+			),
+		).not.toThrow();
+	});
+
+	it("rejects open redirect to unrelated host", () => {
+		expect(() =>
+			assertAllowedIdpSsoRedirectUrl(
+				"https://evil.example/phish?SAMLRequest=abc",
+				config(),
+			),
+		).toThrow(/Invalid SAML request/);
 	});
 });
