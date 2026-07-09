@@ -121,6 +121,15 @@ describe("assertAllowedIdPSSORedirectURL", () => {
 		).toThrow(/Invalid SAML request/);
 	});
 
+	it("rejects URL with bare trailing hash", () => {
+		expect(() =>
+			assertAllowedIdPSSORedirectURL(
+				"https://idp.example.com/sso?SAMLRequest=abc#",
+				config(),
+			),
+		).toThrow(/Invalid SAML request/);
+	});
+
 	it("rejects pathname prefix sibling (sso-evil)", () => {
 		expect(() =>
 			assertAllowedIdPSSORedirectURL(

@@ -348,7 +348,8 @@ export function enforceSAMLCryptoPolicy(
 	report: SAMLCryptoReport,
 	options?: AlgorithmValidationOptions,
 ): void {
-	if (!report.signatureVerified) {
+	// Require the literal boolean true (transport payloads may send "true"/1).
+	if (report.signatureVerified !== true) {
 		throw new APIError("BAD_REQUEST", {
 			message: "SAML Response signature was not verified by the executor",
 			code: "SAML_SIGNATURE_NOT_VERIFIED",
@@ -368,8 +369,17 @@ export function enforceSAMLCryptoPolicy(
 
 	validateSignatureAlgorithm(report.signatureAlgorithm, options);
 
-	// Treat null and undefined the same (malformed reports must not throw TypeError).
-	if (report.encryption != null) {
+	// Fail closed: encryption must be explicit null (unencrypted) or a complete object.
+	// Omitting the field (undefined) must not bypass encryption algorithm policy.
+	if (report.encryption === undefined) {
+		throw new APIError("BAD_REQUEST", {
+			message:
+				"SAML crypto report is missing encryption metadata (use null when unencrypted)",
+			code: "SAML_ENCRYPTION_METADATA_MISSING",
+		});
+	}
+
+	if (report.encryption !== null) {
 		if (typeof report.encryption !== "object") {
 			throw new APIError("BAD_REQUEST", {
 				message: "SAML crypto report encryption metadata is invalid",

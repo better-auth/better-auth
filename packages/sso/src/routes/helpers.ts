@@ -113,7 +113,8 @@ export function assertAllowedIdPSSORedirectURL(
 		});
 	}
 	// Fragment must never appear on IdP redirect (open-redirect / leakage surface).
-	if (target.hash) {
+	// Check raw input too: URL.hash is empty for a bare trailing "#".
+	if (target.hash || redirectUrl.includes("#")) {
 		throw new APIError("BAD_REQUEST", {
 			message: "Invalid SAML request",
 			code: "SAML_REDIRECT_URL_INVALID",

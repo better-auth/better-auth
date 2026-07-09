@@ -152,16 +152,18 @@ function extractAssertionId(samlContent: string): string | null {
 		});
 		const parsed = parser.parse(samlContent);
 
+		// Support full Response wrappers and bare Assertion roots (custom executors).
 		const response = parsed.Response || parsed["samlp:Response"];
-		if (!response) return null;
-
-		const rawAssertion = response.Assertion || response["saml:Assertion"];
+		const rawAssertion = response
+			? response.Assertion || response["saml:Assertion"]
+			: parsed.Assertion || parsed["saml:Assertion"];
 		const assertion = Array.isArray(rawAssertion)
 			? rawAssertion[0]
 			: rawAssertion;
-		if (!assertion) return null;
+		if (!assertion || typeof assertion !== "object") return null;
 
-		return assertion["@_ID"] || null;
+		const id = (assertion as Record<string, unknown>)["@_ID"];
+		return typeof id === "string" && id.length > 0 ? id : null;
 	} catch {
 		return null;
 	}
@@ -325,13 +327,13 @@ export async function processSAMLResponse(
 
 	// 11b. Response binding validation (audiences/recipients from local SP config)
 	const expectedAudiences = [localEntityId, parsedSamlConfig.audience];
+	// Recipients are host-owned (local SP config only) — never executor-supplied.
 	const expectedRecipients = getExpectedSAMLRecipients(
 		parsedSamlConfig,
 		ctx.context.baseURL,
 		providerId,
 		currentCallbackPath,
-		// Prefer local ACS; executor ACS is only an extra candidate if present.
-		parsedFromExecutor.assertionConsumerServiceUrl ?? localAcsUrl,
+		localAcsUrl,
 	);
 	try {
 		if (hasCustomExecutor) {

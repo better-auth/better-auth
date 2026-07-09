@@ -185,7 +185,7 @@ describe("SAML executor", () => {
 		).toThrow(/encryption metadata is incomplete/i);
 	});
 
-	it("enforceSAMLCryptoPolicy treats undefined encryption as not encrypted", () => {
+	it("enforceSAMLCryptoPolicy rejects undefined encryption as missing metadata", () => {
 		expect(() =>
 			enforceSAMLCryptoPolicy({
 				signatureVerified: true,
@@ -193,6 +193,17 @@ describe("SAML executor", () => {
 				// @ts-expect-error malformed payload
 				encryption: undefined,
 			}),
-		).not.toThrow();
+		).toThrow(/missing encryption metadata/i);
+	});
+
+	it("enforceSAMLCryptoPolicy requires literal boolean true for signatureVerified", () => {
+		expect(() =>
+			enforceSAMLCryptoPolicy({
+				// @ts-expect-error transport may send strings
+				signatureVerified: "true",
+				signatureAlgorithm: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+				encryption: null,
+			}),
+		).toThrow(/not verified/i);
 	});
 });
