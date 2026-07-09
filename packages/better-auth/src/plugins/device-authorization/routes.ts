@@ -6,6 +6,7 @@ import { generateRandomString } from "../../crypto";
 import { ms } from "../../utils/time";
 import type { DeviceAuthorizationOptions } from ".";
 import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
+import { resolveResourceAudience, serializeResource } from "./resource";
 import type { DeviceCode } from "./schema";
 
 /* cspell:disable-next-line */
@@ -27,10 +28,17 @@ const deviceCodeBodySchema = z.object({
 			description: "Space-separated list of scopes",
 		})
 		.optional(),
+	resource: z
+		.union([z.string(), z.array(z.string())])
+		.meta({
+			description:
+				"RFC 8707 resource indicator(s) the issued access token is intended for. Requesting a valid resource yields a JWT access token audienced at it.",
+		})
+		.optional(),
 });
 
 const deviceCodeErrorSchema = z.object({
-	error: z.enum(["invalid_request", "invalid_client"]).meta({
+	error: z.enum(["invalid_request", "invalid_client", "invalid_target"]).meta({
 		description: "Error code",
 	}),
 	error_description: z.string().meta({
@@ -114,7 +122,11 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 										properties: {
 											error: {
 												type: "string",
-												enum: ["invalid_request", "invalid_client"],
+												enum: [
+													"invalid_request",
+													"invalid_client",
+													"invalid_target",
+												],
 											},
 											error_description: {
 												type: "string",
@@ -139,8 +151,22 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				}
 			}
 
+			let resourceToStore: string | null = null;
+			if (ctx.body.resource !== undefined) {
+				const audience = resolveResourceAudience({
+					opts,
+					boundResource: undefined,
+					requestedResource: ctx.body.resource,
+				});
+				resourceToStore = audience ? serializeResource(audience) : null;
+			}
+
 			if (opts.onDeviceAuthRequest) {
-				await opts.onDeviceAuthRequest(ctx.body.client_id, ctx.body.scope);
+				await opts.onDeviceAuthRequest(
+					ctx.body.client_id,
+					ctx.body.scope,
+					ctx.body.resource,
+				);
 			}
 
 			const deviceCode = await generateDeviceCode();
@@ -159,6 +185,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					pollingInterval: ms(opts.interval),
 					clientId: ctx.body.client_id,
 					scope: ctx.body.scope,
+					resource: resourceToStore,
 				},
 			});
 

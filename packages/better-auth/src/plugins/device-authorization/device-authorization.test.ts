@@ -3,8 +3,10 @@ import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import type { MemoryDB } from "@better-auth/memory-adapter";
 import { memoryAdapter } from "@better-auth/memory-adapter";
+import { createLocalJWKSet, jwtVerify } from "jose";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { jwt } from "../jwt";
 import { deviceAuthorization, deviceAuthorizationOptionsSchema } from ".";
 import { deviceAuthorizationClient } from "./client";
 import type { DeviceCode } from "./schema";
@@ -1355,5 +1357,64 @@ describe("verificationUri option", async () => {
 		expect(response.verification_uri_complete).toContain(
 			`user_code=${response.user_code}`,
 		);
+	});
+});
+
+/** @see https://github.com/better-auth/better-auth/issues/10345 */
+describe("device authorization resource indicators", async () => {
+	const allowedResources = ["https://api.example.com", "https://api.other.com"];
+	const { auth, signInWithTestUser, db } = await getTestInstance(
+		{
+			plugins: [jwt(), deviceAuthorization({ allowedResources })],
+		},
+		{ clientOptions: { plugins: [deviceAuthorizationClient()] } },
+	);
+
+	// biome-ignore lint/correctness/noUnusedVariables: shared scaffolding consumed by the /device/token tests added in a follow-up task
+	const decode = async (token: string) => {
+		const jwks = await auth.api.getJwks();
+		return jwtVerify(token, createLocalJWKSet(jwks));
+	};
+
+	// biome-ignore lint/correctness/noUnusedVariables: shared scaffolding consumed by the /device/token tests added in a follow-up task
+	const approve = async (userCode: string) => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.deviceVerify({ query: { user_code: userCode }, headers });
+		await auth.api.deviceApprove({ body: { userCode }, headers });
+	};
+
+	describe("/device/code resource binding", () => {
+		it("stores a valid resource on the device code", async () => {
+			const { device_code } = await auth.api.deviceCode({
+				body: {
+					client_id: "test-client",
+					resource: "https://api.example.com",
+				},
+			});
+			const record = await db.findOne<{ resource?: string }>({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: device_code }],
+			});
+			expect(record?.resource).toBe("https://api.example.com");
+		});
+
+		it("rejects a resource not in allowedResources", async () => {
+			await expect(
+				auth.api.deviceCode({
+					body: {
+						client_id: "test-client",
+						resource: "https://evil.example.com",
+					},
+				}),
+			).rejects.toMatchObject({ body: { error: "invalid_target" } });
+		});
+
+		it("rejects a non-absolute-URI resource", async () => {
+			await expect(
+				auth.api.deviceCode({
+					body: { client_id: "test-client", resource: "not-a-uri" },
+				}),
+			).rejects.toMatchObject({ body: { error: "invalid_target" } });
+		});
 	});
 });
