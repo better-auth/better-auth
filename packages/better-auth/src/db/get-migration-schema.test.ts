@@ -686,4 +686,28 @@ describe("index generation for columns added to existing tables", () => {
 
 		await expect(runMigrations()).resolves.not.toThrow();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10306
+	 */
+	it("should not detect migration changes for SQLite bigint fields on subsequent runs", async () => {
+		const config: BetterAuthOptions = {
+			database: new DatabaseSync(":memory:"),
+			rateLimit: {
+				storage: "database",
+			},
+		};
+
+		const initial = await getMigrations(config);
+		await initial.runMigrations();
+
+		const second = await getMigrations(config);
+		const { toBeCreated, toBeAdded } = second;
+
+		expect(toBeCreated.length).toBe(0);
+		expect(toBeAdded.length).toBe(0);
+
+		const sql = await second.compileMigrations();
+		expect(sql).toBe(";");
+	});
 });
