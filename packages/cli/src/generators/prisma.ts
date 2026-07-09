@@ -18,7 +18,13 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		adapter.options?.provider || "postgresql";
 	const tables = getAuthTables(options);
 	const filePath = file || "./prisma/schema.prisma";
-	const schemaPrismaExist = existsSync(path.join(process.cwd(), filePath));
+	// `generate` may pass an absolute path resolved against `--cwd`. Do not
+	// re-join absolute paths with process.cwd() or existence/overwrite checks
+	// look at the wrong file.
+	const resolvedFilePath = path.isAbsolute(filePath)
+		? filePath
+		: path.join(process.cwd(), filePath);
+	const schemaPrismaExist = existsSync(resolvedFilePath);
 
 	const getModelName = initGetModelName({
 		schema: getAuthTables(options),
@@ -31,10 +37,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 	let schemaPrisma = "";
 	if (schemaPrismaExist) {
-		schemaPrisma = await fs.readFile(
-			path.join(process.cwd(), filePath),
-			"utf-8",
-		);
+		schemaPrisma = await fs.readFile(resolvedFilePath, "utf-8");
 	} else {
 		schemaPrisma = getNewPrisma(provider, process.cwd());
 	}
