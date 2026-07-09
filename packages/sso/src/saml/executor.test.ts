@@ -89,6 +89,8 @@ describe("SAML executor", () => {
 				"https://sp.example.com/api/auth/sso/saml2/sp/acs/acme",
 			signatureValidated: true,
 			sigAlg: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+			keyEncryptionAlgorithm: "http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p",
+			dataEncryptionAlgorithm: "http://www.w3.org/2009/xmlenc11#aes256-gcm",
 		}));
 		const remote: SAMLExecutor = {
 			createLoginRequest: vi.fn(),
@@ -97,6 +99,9 @@ describe("SAML executor", () => {
 		const algorithms = {
 			allowedSignatureAlgorithms: [
 				"http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+			],
+			allowedKeyEncryptionAlgorithms: [
+				"http://www.w3.org/2001/04/xmlenc#rsa-oaep-mgf1p",
 			],
 		};
 		const result = await resolveSAMLExecutor(remote).parseLoginResponse({
@@ -112,5 +117,7 @@ describe("SAML executor", () => {
 		expect(result.extract.nameID).toBe("user@acme.com");
 		expect(result.signatureValidated).toBe(true);
 		expect(result.sigAlg).toContain("rsa-sha256");
+		expect(result.keyEncryptionAlgorithm).toContain("rsa-oaep");
+		expect(result.dataEncryptionAlgorithm).toContain("aes256-gcm");
 	});
 });

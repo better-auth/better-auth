@@ -316,10 +316,14 @@ export async function processSAMLResponse(
 	}
 
 	// 10b. Always enforce operator algorithm policy on the Better Auth host so
-	// custom executors cannot silently bypass allowedSignatureAlgorithms etc.
+	// custom executors cannot silently bypass allowedSignatureAlgorithms /
+	// encryption allowlists. For custom executors, samlContent is decrypted, so
+	// encryption allowlists use reported key/data encryption algorithm fields.
 	const algorithmSource = parsedFromExecutor.rawParsedResponse ?? {
 		samlContent,
 		sigAlg: parsedFromExecutor.sigAlg ?? null,
+		keyEncryptionAlgorithm: parsedFromExecutor.keyEncryptionAlgorithm ?? null,
+		dataEncryptionAlgorithm: parsedFromExecutor.dataEncryptionAlgorithm ?? null,
 	};
 	validateSAMLAlgorithms(algorithmSource, options?.saml?.algorithms);
 

@@ -56,8 +56,21 @@ export interface SAMLParseLoginResponseResult {
 	 */
 	sigAlg?: string | null;
 	/**
+	 * Key encryption algorithm URI from the original Response (when the
+	 * assertion was encrypted). Required for host-side
+	 * `allowedKeyEncryptionAlgorithms` after decryption.
+	 */
+	keyEncryptionAlgorithm?: string | null;
+	/**
+	 * Data encryption algorithm URI from the original Response (when the
+	 * assertion was encrypted). Required for host-side
+	 * `allowedDataEncryptionAlgorithms` after decryption.
+	 */
+	dataEncryptionAlgorithm?: string | null;
+	/**
 	 * Optional raw samlify FlowResult (local executor). When present, Better
-	 * Auth uses it for algorithm checks; otherwise uses samlContent + sigAlg.
+	 * Auth uses it for algorithm checks; otherwise uses samlContent + sigAlg
+	 * (+ encryption algorithm fields when provided).
 	 */
 	rawParsedResponse?: FlowResult;
 }

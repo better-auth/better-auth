@@ -254,7 +254,17 @@ function validateEncryptionAlgorithms(
 }
 
 export function validateSAMLAlgorithms(
-	response: { sigAlg?: string | null; samlContent: string },
+	response: {
+		sigAlg?: string | null;
+		samlContent: string;
+		/**
+		 * When samlContent is already decrypted (custom executor path), the
+		 * original key/data encryption algorithm URIs can be supplied so
+		 * operator allowlists still apply.
+		 */
+		keyEncryptionAlgorithm?: string | null;
+		dataEncryptionAlgorithm?: string | null;
+	},
 	options?: AlgorithmValidationOptions,
 ): void {
 	validateSignatureAlgorithm(response.sigAlg, options);
@@ -262,6 +272,18 @@ export function validateSAMLAlgorithms(
 	if (hasEncryptedAssertion(response.samlContent)) {
 		const encAlgs = extractEncryptionAlgorithms(response.samlContent);
 		validateEncryptionAlgorithms(encAlgs, options);
+	} else if (
+		response.keyEncryptionAlgorithm ||
+		response.dataEncryptionAlgorithm
+	) {
+		// Decrypted content from a custom executor: honor reported algorithms.
+		validateEncryptionAlgorithms(
+			{
+				keyEncryption: response.keyEncryptionAlgorithm ?? null,
+				dataEncryption: response.dataEncryptionAlgorithm ?? null,
+			},
+			options,
+		);
 	}
 }
 

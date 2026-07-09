@@ -50,9 +50,9 @@ Custom executors must:
 
 1. Set `signatureValidated: true` after verifying signatures  
 2. Return **decrypted** `samlContent` (no `EncryptedAssertion`) so assertion-id replay works  
-3. Optionally return `sigAlg` so host allowlists can check signature algorithms  
+3. Return `sigAlg` (and `keyEncryptionAlgorithm` / `dataEncryptionAlgorithm` when the original assertion was encrypted) so host allowlists still apply after decryption  
 
-`SAMLParseLoginResponseInput.algorithms` carries the operator policy for executors that also enforce it remotely; Better Auth **always** re-applies allowlists on the host using returned content.
+`SAMLParseLoginResponseInput.algorithms` carries the operator policy for executors that also enforce it remotely; Better Auth **always** re-applies allowlists on the host using returned metadata.
 
 Use `createLocalSAMLExecutor()` on any Node-capable host if you want crypto to match the default path.
 
