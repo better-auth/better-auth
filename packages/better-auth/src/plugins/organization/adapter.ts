@@ -220,6 +220,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				}),
 			]);
 			// Prisma/Drizzle default findMany to ~100 when limit is omitted.
+			// Bound by the members result so every joined user row is fetched.
 			const users = await adapter.findMany<User>({
 				model: "user",
 				where: [
@@ -229,12 +230,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						operator: "in",
 					},
 				],
-				limit:
-					data.limit ||
-					(typeof options?.membershipLimit === "number"
-						? options.membershipLimit
-						: 100) ||
-					100,
+				limit: members[0].length,
 			});
 			return {
 				members: members[0].map((member) => {
