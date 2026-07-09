@@ -101,7 +101,7 @@ describe("request-state", () => {
 			const betterAuthGlobalSymbol = Symbol.for("better-auth:global");
 			const betterAuthGlobal = (globalThis as any)[betterAuthGlobalSymbol];
 			if (betterAuthGlobal?.context) {
-				delete betterAuthGlobal.context.requestStateAsyncStorage;
+				betterAuthGlobal.context.requestStateAsyncStorage = undefined;
 			}
 			const mod = await import("./request-state");
 
