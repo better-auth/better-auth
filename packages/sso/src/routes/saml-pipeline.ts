@@ -264,8 +264,6 @@ export async function processSAMLResponse(
 
 	// 9. Response parsing (default local samlify or pluggable executor)
 	const executor = resolveSAMLExecutor(options?.saml?.executor);
-	// Match resolveSAMLExecutor nullish fallback (null/undefined → local).
-	const hasCustomExecutor = options?.saml?.executor != null;
 
 	let parsedFromExecutor: Awaited<
 		ReturnType<typeof executor.parseLoginResponse>
@@ -337,9 +335,15 @@ export async function processSAMLResponse(
 		localAcsUrl,
 	);
 	try {
-		if (hasCustomExecutor) {
-			// Custom executors must return decrypted, binding-ready XML so
-			// assertion-id replay protection can run.
+		// Local samlify path (including explicit createLocalSAMLExecutor()) returns
+		// rawParsedResponse so the host can decrypt EncryptedAssertion. Remote
+		// custom executors omit it and must return decrypted samlContent.
+		if (parsedFromExecutor.rawParsedResponse != null) {
+			const sp = createSP(parsedSamlConfig, ctx.context.baseURL, providerId, {
+				clockSkew: options?.saml?.clockSkew,
+			});
+			samlBindingContent = await getSAMLResponseBindingContent(sp, samlContent);
+		} else {
 			if (hasSAMLEncryptedAssertion(samlContent)) {
 				throw new APIError("BAD_REQUEST", {
 					message:
@@ -347,11 +351,6 @@ export async function processSAMLResponse(
 				});
 			}
 			samlBindingContent = samlContent;
-		} else {
-			const sp = createSP(parsedSamlConfig, ctx.context.baseURL, providerId, {
-				clockSkew: options?.saml?.clockSkew,
-			});
-			samlBindingContent = await getSAMLResponseBindingContent(sp, samlContent);
 		}
 		validateSAMLResponseBinding(samlBindingContent, {
 			expectedAudiences,

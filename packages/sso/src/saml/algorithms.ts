@@ -141,18 +141,63 @@ function extractEncryptionAlgorithms(xml: string): {
 	}
 }
 
-/** Extract SignatureMethod/@Algorithm from Response/Assertion XML when present. */
+/**
+ * Read SignatureMethod/@Algorithm only from Signature → SignedInfo → SignatureMethod.
+ * Ignores SignatureMethod nodes that appear outside a real XML-DSig structure
+ * (e.g. untrusted extension elements).
+ */
+function signatureMethodFromSignatureNode(signature: unknown): string | null {
+	if (!signature || typeof signature !== "object") return null;
+	const sig = signature as Record<string, unknown>;
+	const signedInfo = (sig.SignedInfo ?? sig["ds:SignedInfo"]) as
+		| Record<string, unknown>
+		| undefined;
+	if (!signedInfo || typeof signedInfo !== "object") return null;
+	const method = (signedInfo.SignatureMethod ??
+		signedInfo["ds:SignatureMethod"]) as Record<string, unknown> | undefined;
+	const algorithm = method?.["@_Algorithm"];
+	return typeof algorithm === "string" && algorithm.length > 0
+		? algorithm
+		: null;
+}
+
+/**
+ * Extract SignatureMethod/@Algorithm from Response or Assertion signatures only.
+ * Prefers Response-level Signature, then Assertion-level. Does not take the first
+ * SignatureMethod anywhere in the document (which could be an unsigned extension).
+ */
 export function extractSignatureAlgorithmFromXml(xml: string): string | null {
 	try {
-		const parsed = xmlParser.parse(xml);
-		const method = findNode(parsed, "SignatureMethod") as Record<
-			string,
-			unknown
-		> | null;
-		const algorithm = method?.["@_Algorithm"];
-		return typeof algorithm === "string" && algorithm.length > 0
-			? algorithm
-			: null;
+		const parsed = xmlParser.parse(xml) as Record<string, unknown>;
+		const response = (parsed.Response ??
+			parsed["samlp:Response"] ??
+			parsed) as Record<string, unknown>;
+
+		// Response-level Signature (direct child of Response)
+		const responseSig = response.Signature ?? response["ds:Signature"];
+		const fromResponse = Array.isArray(responseSig)
+			? signatureMethodFromSignatureNode(responseSig[0])
+			: signatureMethodFromSignatureNode(responseSig);
+		if (fromResponse) return fromResponse;
+
+		// Assertion-level Signature
+		const rawAssertion =
+			response.Assertion ??
+			response["saml:Assertion"] ??
+			parsed.Assertion ??
+			parsed["saml:Assertion"];
+		const assertion = (
+			Array.isArray(rawAssertion) ? rawAssertion[0] : rawAssertion
+		) as Record<string, unknown> | undefined;
+		if (assertion && typeof assertion === "object") {
+			const assertionSig = assertion.Signature ?? assertion["ds:Signature"];
+			const fromAssertion = Array.isArray(assertionSig)
+				? signatureMethodFromSignatureNode(assertionSig[0])
+				: signatureMethodFromSignatureNode(assertionSig);
+			if (fromAssertion) return fromAssertion;
+		}
+
+		return null;
 	} catch {
 		return null;
 	}
@@ -285,12 +330,12 @@ export interface SAMLCryptoReport {
 	/**
 	 * Encryption metadata for the assertion before decryption.
 	 * - `null` — assertion was not encrypted
-	 * - object — was encrypted; record algorithms so host allowlists still apply
-	 *   after the executor returns decrypted XML
+	 * - object — was encrypted; both algorithm fields are required so typed
+	 *   integrations cannot omit them and fail only at runtime
 	 */
 	encryption: null | {
-		keyTransportAlgorithm?: string | null;
-		dataEncryptionAlgorithm?: string | null;
+		keyTransportAlgorithm: string;
+		dataEncryptionAlgorithm: string;
 	};
 }
 
@@ -320,9 +365,10 @@ export function createSAMLCryptoReport(input: {
 	} else if (input.sourceXml) {
 		if (hasEncryptedAssertion(input.sourceXml)) {
 			const enc = extractEncryptionAlgorithms(input.sourceXml);
+			// Incomplete extraction fails later in enforceSAMLCryptoPolicy.
 			encryption = {
-				keyTransportAlgorithm: enc.keyEncryption,
-				dataEncryptionAlgorithm: enc.dataEncryption,
+				keyTransportAlgorithm: enc.keyEncryption ?? "",
+				dataEncryptionAlgorithm: enc.dataEncryption ?? "",
 			};
 		} else {
 			encryption = null;

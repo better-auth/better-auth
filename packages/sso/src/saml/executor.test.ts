@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SAMLConfig } from "../types";
-import { createSAMLCryptoReport, enforceSAMLCryptoPolicy } from "./algorithms";
+import {
+	createSAMLCryptoReport,
+	enforceSAMLCryptoPolicy,
+	extractSignatureAlgorithmFromXml,
+} from "./algorithms";
 import type { SAMLExecutor } from "./executor";
 import { createLocalSAMLExecutor, resolveSAMLExecutor } from "./executor";
 
@@ -196,8 +200,8 @@ describe("SAML executor", () => {
 				signatureVerified: true,
 				signatureAlgorithm: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
 				encryption: {
-					keyTransportAlgorithm: null,
-					dataEncryptionAlgorithm: null,
+					keyTransportAlgorithm: "",
+					dataEncryptionAlgorithm: "",
 				},
 			}),
 		).toThrow(/encryption metadata is incomplete/i);
@@ -234,5 +238,42 @@ describe("SAML executor", () => {
 				encryption: null,
 			}),
 		).toThrow(/signatureAlgorithm/i);
+	});
+
+	it("extractSignatureAlgorithmFromXml scopes to Signature/SignedInfo only", () => {
+		const xml = `
+			<Response>
+				<Extension>
+					<SignatureMethod Algorithm="http://evil.example/unsigned-sha1"/>
+				</Extension>
+				<Signature>
+					<SignedInfo>
+						<SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>
+					</SignedInfo>
+				</Signature>
+				<Assertion>
+					<Signature>
+						<SignedInfo>
+							<SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha512"/>
+						</SignedInfo>
+					</Signature>
+				</Assertion>
+			</Response>
+		`;
+		// Prefers Response-level Signature over Assertion and ignores Extension.
+		expect(extractSignatureAlgorithmFromXml(xml)).toBe(
+			"http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+		);
+	});
+
+	it("extractSignatureAlgorithmFromXml ignores stray SignatureMethod without Signature", () => {
+		const xml = `
+			<Response>
+				<Extension>
+					<SignatureMethod Algorithm="http://evil.example/unsigned-sha1"/>
+				</Extension>
+			</Response>
+		`;
+		expect(extractSignatureAlgorithmFromXml(xml)).toBeNull();
 	});
 });
