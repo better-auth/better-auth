@@ -1,10 +1,13 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { defineRequestState } from "@better-auth/core/context";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
+import type { DispatchContext } from "better-auth/api";
 import {
 	APIError,
 	createAuthEndpoint,
 	createAuthMiddleware,
+	dispatchAuthEndpoint,
 	getOAuthState,
 	sessionMiddleware,
 } from "better-auth/api";
@@ -12,12 +15,17 @@ import { parseSetCookieHeader } from "better-auth/cookies";
 import { mergeSchema } from "better-auth/db";
 import type { BetterAuthPlugin } from "better-auth/types";
 import * as z from "zod";
+import type { AuthorizeEndpointSettings } from "./authorize";
 import { authorizeEndpoint } from "./authorize";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { introspectEndpoint } from "./introspect";
 import { rpInitiatedLogoutEndpoint } from "./logout";
-import { authServerMetadata, oidcServerMetadata } from "./metadata";
+import {
+	authServerMetadata,
+	metadataResponse,
+	oidcServerMetadata,
+} from "./metadata";
 import * as oauthClientEndpoints from "./oauthClient";
 import * as oauthConsentEndpoints from "./oauthConsent";
 import { registerEndpoint } from "./register";
@@ -169,6 +177,247 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		);
 	}
 
+	const handleIssuerMetadataRequest: NonNullable<
+		BetterAuthPlugin["onRequest"]
+	> = async (request, ctx) => {
+		const requestPathname = new URL(request.url).pathname;
+		const requestPath = ctx.options.advanced?.skipTrailingSlashes
+			? requestPathname.replace(/\/+$/, "") || "/"
+			: requestPathname;
+		const issuer = opts.disableJwtPlugin
+			? ctx.baseURL
+			: (getJwtPlugin(ctx)?.options?.jwt?.issuer ?? ctx.baseURL);
+		let issuerPath = "/";
+		try {
+			issuerPath = new URL(issuer).pathname.replace(/\/$/, "") || "";
+		} catch {
+			issuerPath = new URL(ctx.baseURL).pathname.replace(/\/$/, "") || "";
+		}
+
+		const endpointCtx = { context: ctx } as GenericEndpointContext;
+		// RFC 8414 uses path insertion; some clients derive discovery from the
+		// issuer URL directly, so keep both public aliases equivalent.
+		const authServerMetadataPaths = new Set([
+			`/.well-known/oauth-authorization-server${issuerPath}`,
+			`${issuerPath}/.well-known/oauth-authorization-server`,
+		]);
+		const openIdConfigPath = `${issuerPath}/.well-known/openid-configuration`;
+		const isAuthServerMetadataRequest =
+			authServerMetadataPaths.has(requestPath);
+		const isOpenIdConfigRequest =
+			opts.scopes?.includes("openid") && requestPath === openIdConfigPath;
+		const createMetadataResponse = (metadata: unknown) => {
+			const response = metadataResponse(metadata);
+			if (request.method === "HEAD") {
+				return new Response(null, {
+					status: response.status,
+					headers: response.headers,
+				});
+			}
+			return response;
+		};
+		if (isAuthServerMetadataRequest || isOpenIdConfigRequest) {
+			if (request.method !== "GET" && request.method !== "HEAD") {
+				return {
+					response: new Response(null, {
+						status: 405,
+						headers: {
+							Allow: "GET, HEAD",
+						},
+					}),
+				};
+			}
+		}
+
+		if (isAuthServerMetadataRequest) {
+			if (opts.scopes?.includes("openid")) {
+				return {
+					response: createMetadataResponse(
+						oidcServerMetadata(endpointCtx, opts),
+					),
+				};
+			}
+			const jwtPluginOptions = opts.disableJwtPlugin
+				? undefined
+				: getJwtPlugin(ctx)?.options;
+			const metadata = authServerMetadata(endpointCtx, jwtPluginOptions, {
+				scopes_supported:
+					opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+				dynamic_client_registration_supported:
+					opts.allowDynamicClientRegistration,
+				public_client_supported: opts.allowUnauthenticatedClientRegistration,
+				grant_types_supported: opts.grantTypes,
+				jwt_disabled: opts.disableJwtPlugin,
+			});
+			return {
+				response: createMetadataResponse(metadata),
+			};
+		}
+
+		if (isOpenIdConfigRequest) {
+			return {
+				response: createMetadataResponse(oidcServerMetadata(endpointCtx, opts)),
+			};
+		}
+	};
+	type OAuth2AuthorizeContext = GenericEndpointContext & {
+		authorizeSettings?: AuthorizeEndpointSettings | undefined;
+	};
+	type OAuth2AuthorizeResult = Awaited<ReturnType<typeof authorizeEndpoint>>;
+
+	const oauth2AuthorizeEndpoint = createAuthEndpoint(
+		"/oauth2/authorize",
+		{
+			method: "GET",
+			query: z.object({
+				response_type: z.enum(["code"]).optional(),
+				client_id: z.string(),
+				redirect_uri: SafeUrlSchema.optional(),
+				scope: z.string().optional(),
+				state: z.string().optional(),
+				request_uri: z.string().optional(),
+				code_challenge: z.string().optional(),
+				code_challenge_method: z.enum(["S256"]).optional(),
+				nonce: z.string().optional(),
+				prompt: z
+					.enum([
+						"none",
+						"consent",
+						"login",
+						"create",
+						"select_account",
+						"login consent",
+						"select_account consent",
+					])
+					.optional(),
+			}),
+			metadata: {
+				openapi: {
+					description: "Authorize an OAuth2 request",
+					parameters: [
+						{
+							name: "response_type",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "OAuth2 response type (e.g., 'code')",
+						},
+						{
+							name: "client_id",
+							in: "query",
+							required: true,
+							schema: { type: "string" },
+							description: "OAuth2 client ID",
+						},
+						{
+							name: "redirect_uri",
+							in: "query",
+							required: false,
+							schema: { type: "string", format: "uri" },
+							description: "OAuth2 redirect URI",
+						},
+						{
+							name: "scope",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "OAuth2 scopes (space-separated)",
+						},
+						{
+							name: "state",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "OAuth2 state parameter",
+						},
+						{
+							name: "request_uri",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description:
+								"Pushed Authorization Request URI referencing stored parameters",
+						},
+						{
+							name: "code_challenge",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "PKCE code challenge",
+						},
+						{
+							name: "code_challenge_method",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "PKCE code challenge method",
+						},
+						{
+							name: "nonce",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "OpenID Connect nonce",
+						},
+						{
+							name: "prompt",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description: "OAuth2 prompt parameter",
+						},
+					],
+					responses: {
+						"302": {
+							description: "Redirect to client with code or error",
+							headers: {
+								Location: {
+									description: "Redirect URI with code or error",
+									schema: { type: "string", format: "uri" },
+								},
+							},
+						},
+						"400": {
+							description: "Invalid request",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											error: { type: "string" },
+											error_description: { type: "string" },
+											state: { type: "string" },
+										},
+										required: ["error"],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx): Promise<OAuth2AuthorizeResult> => {
+			const settings = (ctx as OAuth2AuthorizeContext).authorizeSettings ?? {
+				isAuthorize: true,
+			};
+			return authorizeEndpoint(ctx, opts, settings);
+		},
+	);
+
+	const runOAuth2Authorize = (
+		ctx: GenericEndpointContext,
+		settings?: AuthorizeEndpointSettings,
+	): Promise<OAuth2AuthorizeResult> =>
+		dispatchAuthEndpoint(oauth2AuthorizeEndpoint, {
+			...ctx,
+			asResponse: false,
+			returnHeaders: false,
+			returnStatus: false,
+			authorizeSettings: settings ?? {},
+		} as DispatchContext &
+			OAuth2AuthorizeContext) as Promise<OAuth2AuthorizeResult>;
+
 	return {
 		id: "oauth-provider",
 		version: PACKAGE_VERSION,
@@ -228,6 +477,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				}
 			}
 		},
+		onRequest: handleIssuerMetadataRequest,
 		hooks: {
 			before: [
 				{
@@ -318,7 +568,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						ctx.query = searchParamsToQuery(
 							removePromptFromQuery(query, "login"),
 						);
-						return await authorizeEndpoint(ctx, opts);
+						return await runOAuth2Authorize(ctx);
 					}),
 				},
 			],
@@ -350,6 +600,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 							scopes_supported:
 								opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+							dynamic_client_registration_supported:
+								opts.allowDynamicClientRegistration,
 							public_client_supported:
 								opts.allowUnauthenticatedClientRegistration,
 							grant_types_supported: opts.grantTypes,
@@ -382,144 +634,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					return metadata;
 				},
 			),
-			oauth2Authorize: createAuthEndpoint(
-				"/oauth2/authorize",
-				{
-					method: "GET",
-					query: z.object({
-						response_type: z.enum(["code"]).optional(),
-						client_id: z.string(),
-						redirect_uri: SafeUrlSchema.optional(),
-						scope: z.string().optional(),
-						state: z.string().optional(),
-						request_uri: z.string().optional(),
-						code_challenge: z.string().optional(),
-						code_challenge_method: z.enum(["S256"]).optional(),
-						nonce: z.string().optional(),
-						prompt: z
-							.enum([
-								"none",
-								"consent",
-								"login",
-								"create",
-								"select_account",
-								"login consent",
-								"select_account consent",
-							])
-							.optional(),
-					}),
-					metadata: {
-						openapi: {
-							description: "Authorize an OAuth2 request",
-							parameters: [
-								{
-									name: "response_type",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "OAuth2 response type (e.g., 'code')",
-								},
-								{
-									name: "client_id",
-									in: "query",
-									required: true,
-									schema: { type: "string" },
-									description: "OAuth2 client ID",
-								},
-								{
-									name: "redirect_uri",
-									in: "query",
-									required: false,
-									schema: { type: "string", format: "uri" },
-									description: "OAuth2 redirect URI",
-								},
-								{
-									name: "scope",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "OAuth2 scopes (space-separated)",
-								},
-								{
-									name: "state",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "OAuth2 state parameter",
-								},
-								{
-									name: "request_uri",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description:
-										"Pushed Authorization Request URI referencing stored parameters",
-								},
-								{
-									name: "code_challenge",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "PKCE code challenge",
-								},
-								{
-									name: "code_challenge_method",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "PKCE code challenge method",
-								},
-								{
-									name: "nonce",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "OpenID Connect nonce",
-								},
-								{
-									name: "prompt",
-									in: "query",
-									required: false,
-									schema: { type: "string" },
-									description: "OAuth2 prompt parameter",
-								},
-							],
-							responses: {
-								"302": {
-									description: "Redirect to client with code or error",
-									headers: {
-										Location: {
-											description: "Redirect URI with code or error",
-											schema: { type: "string", format: "uri" },
-										},
-									},
-								},
-								"400": {
-									description: "Invalid request",
-									content: {
-										"application/json": {
-											schema: {
-												type: "object",
-												properties: {
-													error: { type: "string" },
-													error_description: { type: "string" },
-													state: { type: "string" },
-												},
-												required: ["error"],
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-				async (ctx) => {
-					return authorizeEndpoint(ctx, opts, {
-						isAuthorize: true,
-					});
-				},
-			),
+			oauth2Authorize: oauth2AuthorizeEndpoint,
 			oauth2Consent: createAuthEndpoint(
 				"/oauth2/consent",
 				{
@@ -565,7 +680,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
-					return consentEndpoint(ctx, opts);
+					return consentEndpoint(ctx, opts, runOAuth2Authorize);
 				},
 			),
 			oauth2Continue: createAuthEndpoint(
@@ -616,7 +731,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
-					return continueEndpoint(ctx, opts);
+					return continueEndpoint(ctx, runOAuth2Authorize);
 				},
 			),
 			oauth2Token: createAuthEndpoint(
@@ -997,7 +1112,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			oauth2UserInfo: createAuthEndpoint(
 				"/oauth2/userinfo",
 				{
-					method: "GET",
+					method: ["GET", "POST"],
 					metadata: {
 						openapi: {
 							description:

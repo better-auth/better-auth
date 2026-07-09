@@ -8,6 +8,7 @@ import {
 } from "@better-auth/core/api";
 import { getCurrentAuthContext } from "@better-auth/core/context";
 import { deprecate } from "@better-auth/core/utils/deprecate";
+import { isSafeUrlScheme } from "@better-auth/core/utils/url";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { OpenAPIParameter } from "better-call";
@@ -144,10 +145,22 @@ const oAuthConsentBodySchema = z.object({
 const oAuth2TokenBodySchema = z.record(z.any(), z.any());
 
 const registerOAuthApplicationBodySchema = z.object({
-	redirect_uris: z.array(z.string()).meta({
-		description:
-			'A list of redirect URIs. Eg: ["https://client.example.com/callback"]',
-	}),
+	// This plugin is deprecated and removed in the next major. It gets only the
+	// non-breaking guard that rejects code-execution schemes (javascript:, data:,
+	// vbscript:). The stricter https-or-loopback policy lives in
+	// @better-auth/oauth-provider via SafeUrlSchema; migrating there is the path to
+	// full parity, so we do not tighten this plugin further.
+	redirect_uris: z
+		.array(
+			z.string().refine(isSafeUrlScheme, {
+				message:
+					"redirect_uri cannot use a javascript:, data:, or vbscript: scheme",
+			}),
+		)
+		.meta({
+			description:
+				'A list of redirect URIs. Eg: ["https://client.example.com/callback"]',
+		}),
 	token_endpoint_auth_method: z
 		.enum(["none", "client_secret_basic", "client_secret_post"])
 		.meta({
@@ -867,13 +880,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 					// caller receives the row; concurrent racers receive `null`
 					// and fall through to the `invalid_grant` error path.
 					//
-					// TODO(legacy-hardening-coordinate): in-flight follow-ups at
-					// https://github.com/better-auth/better-auth/security/advisories/GHSA-9h47-pqcx-hjr4
-					// and https://github.com/better-auth/better-auth/security/advisories/GHSA-pw9m-5jxm-xr6h
-					// touch this same surface. Whoever lands second must rebase
-					// to keep the atomic consume + `invalid_grant` semantics in
-					// place; do not regress to a `findVerificationValue` +
-					// delete pair.
+					// TODO(legacy-hardening-coordinate): follow-up hardening touches
+					// this same surface. Whoever lands second must rebase to keep
+					// the atomic consume + `invalid_grant` semantics in place; do
+					// not regress to a `findVerificationValue` + delete pair.
 					const verificationValue =
 						await ctx.context.internalAdapter.consumeVerificationValue(
 							code.toString(),
@@ -881,12 +891,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 					if (!verificationValue) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "invalid code",
-							error: "invalid_grant",
-						});
-					}
-					if (verificationValue.expiresAt < new Date()) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "code expired",
 							error: "invalid_grant",
 						});
 					}
@@ -1788,9 +1792,45 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 					const session = await getSessionFromCtx(ctx);
 
+					// Logout deletes the user's session and OAuth tokens, so on an HTTP
+					// request it must be proven intentional: the request is same-site (or
+					// from a trusted origin), or it carries an id_token_hint for the
+					// session being ended. Otherwise a cross-site GET could log the user
+					// out and revoke their tokens, which the global origin check does not
+					// prevent because it skips GET. A request whose site cannot be
+					// established, or a valid id_token_hint for a different user, does not
+					// authorize ending this session.
+					if (ctx.request && (validatedUserId || session)) {
+						const fetchSite = ctx.request.headers.get("Sec-Fetch-Site");
+						const originHeader =
+							ctx.request.headers.get("origin") ||
+							ctx.request.headers.get("referer");
+						const isSameSiteRequest =
+							fetchSite === "same-origin" ||
+							fetchSite === "same-site" ||
+							fetchSite === "none" ||
+							(!!originHeader &&
+								ctx.context.isTrustedOrigin(originHeader, {
+									allowRelativePaths: false,
+								}));
+						const hintMatchesSession =
+							!!validatedUserId && validatedUserId === session?.user.id;
+						if (!isSameSiteRequest && !hintMatchesSession) {
+							throw new APIError("FORBIDDEN", {
+								error: "invalid_request",
+								error_description:
+									"Logout must be same-site or carry an id_token_hint for the current session",
+							});
+						}
+					}
+
 					if (validatedUserId || session) {
 						const userId = validatedUserId || session?.user.id;
 						if (userId) {
+							// FIXME(next): scope deletion to the session/token family
+							// represented by the validated id_token_hint (sid) instead of
+							// every access token for the user. The successor
+							// @better-auth/oauth-provider logout already deletes by sid.
 							await ctx.context.adapter.deleteMany({
 								model: modelName.oauthAccessToken,
 								where: [{ field: "userId", value: userId }],

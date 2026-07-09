@@ -9,6 +9,7 @@ import {
 } from "@better-auth/core/api";
 import { isProduction, logger } from "@better-auth/core/env";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { isSafeUrlScheme } from "@better-auth/core/utils/url";
 import { getWebcryptoSubtle } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
@@ -129,7 +130,16 @@ export const getMCPProtectedResourceMetadata = (
 };
 
 const registerMcpClientBodySchema = z.object({
-	redirect_uris: z.array(z.string()),
+	// This plugin is migrating to @better-auth/oauth-provider (see the deprecation
+	// notice in docs/plugins/mcp). It gets only the non-breaking guard that rejects
+	// code-execution schemes here; full https-or-loopback parity comes from
+	// @better-auth/oauth-provider's SafeUrlSchema, not from tightening this plugin.
+	redirect_uris: z.array(
+		z.string().refine(isSafeUrlScheme, {
+			message:
+				"redirect_uri cannot use a javascript:, data:, or vbscript: scheme",
+		}),
+	),
 	token_endpoint_auth_method: z
 		.enum(["none", "client_secret_basic", "client_secret_post"])
 		.default("client_secret_basic")
@@ -439,6 +449,17 @@ export const mcp = (options: MCPOptions) => {
 								error: "invalid_grant",
 							});
 						}
+						// A refresh token is only legitimate when the original grant
+						// included offline_access. Rejecting redemption otherwise makes a
+						// refresh token that was stored without offline_access (and may be
+						// exposed to its access-token holder) unusable for escalation.
+						if (!token.scopes?.split(" ").includes("offline_access")) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description:
+									"refresh token was not issued for the offline_access scope",
+								error: "invalid_grant",
+							});
+						}
 						const refreshClient = await ctx.context.adapter
 							.findOne<Record<string, any>>({
 								model: modelName.oauthClient,
@@ -534,13 +555,10 @@ export const mcp = (options: MCPOptions) => {
 					// caller receives the row; concurrent racers receive `null`
 					// and fall through to the `invalid_grant` error path.
 					//
-					// TODO(legacy-hardening-coordinate): in-flight follow-ups at
-					// https://github.com/better-auth/better-auth/security/advisories/GHSA-9h47-pqcx-hjr4
-					// and https://github.com/better-auth/better-auth/security/advisories/GHSA-pw9m-5jxm-xr6h
-					// touch this same surface. Whoever lands second must rebase
-					// to keep the atomic consume + `invalid_grant` semantics in
-					// place; do not regress to a `findVerificationValue` +
-					// delete pair.
+					// TODO(legacy-hardening-coordinate): follow-up hardening touches
+					// this same surface. Whoever lands second must rebase to keep
+					// the atomic consume + `invalid_grant` semantics in place; do
+					// not regress to a `findVerificationValue` + delete pair.
 					const verificationValue =
 						await ctx.context.internalAdapter.consumeVerificationValue(
 							code.toString(),
@@ -548,12 +566,6 @@ export const mcp = (options: MCPOptions) => {
 					if (!verificationValue) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "invalid code",
-							error: "invalid_grant",
-						});
-					}
-					if (verificationValue.expiresAt < new Date()) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "code expired",
 							error: "invalid_grant",
 						});
 					}
@@ -1025,6 +1037,14 @@ export const mcp = (options: MCPOptions) => {
 							],
 						});
 					if (!accessTokenData) {
+						return c.json(null);
+					}
+					// An access token authorizes a protected resource only while it is
+					// unexpired. Without this gate an expired bearer token keeps
+					// authorizing handlers until its row is deleted (RFC 6750 §3.1
+					// treats an expired token as `invalid_token`).
+					if (accessTokenData.accessTokenExpiresAt < new Date()) {
+						c.headers?.set("WWW-Authenticate", "Bearer");
 						return c.json(null);
 					}
 					return c.json(accessTokenData);

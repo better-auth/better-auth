@@ -1,7 +1,7 @@
 import { base64 } from "@better-auth/utils/base64";
-import { betterFetch } from "@better-fetch/fetch";
 import type { AwaitableFunction } from "../types";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
+import { fetchRefusingRedirects } from "./reject-redirects";
 
 export async function refreshAccessTokenRequest({
 	refreshToken,
@@ -115,7 +115,7 @@ export async function refreshAccessToken({
 		extraParams,
 	});
 
-	const { data, error } = await betterFetch<{
+	const { data, error } = await fetchRefusingRedirects<{
 		access_token: string;
 		refresh_token?: string | undefined;
 		expires_in?: number | undefined;
