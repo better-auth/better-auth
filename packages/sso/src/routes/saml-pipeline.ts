@@ -32,7 +32,7 @@ import {
 	safeJsonParse,
 	validateEmailDomain,
 } from "../utils";
-import { createSP, findSAMLProvider } from "./helpers";
+import { createSP, findSAMLProvider, resolveSpEntityId } from "./helpers";
 
 type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
 
@@ -282,22 +282,21 @@ export async function processSAMLResponse(
 		}
 	} catch (error) {
 		if (isAPIError(error)) throw error;
+		// Log internal details; keep client message generic (no remote leak).
 		ctx.context.logger.error("SAML response validation failed", {
 			error,
 			samlResponsePreview: SAMLResponse.slice(0, 200),
 		});
 		throw new APIError("BAD_REQUEST", {
 			message: "Invalid SAML response",
-			details: error instanceof Error ? error.message : String(error),
 		});
 	}
 
 	const extract = parsedFromExecutor.extract;
 	const samlContent = parsedFromExecutor.samlContent;
-	// SP identity for audience/recipient checks is derived from local config so a
-	// thin/buggy executor cannot supply the assertion's audience as entityId.
-	const localEntityId =
-		parsedSamlConfig.spMetadata?.entityID || parsedSamlConfig.issuer;
+	// SP identity for audience checks is derived from local SP config/metadata
+	// (same resolution as ServiceProvider construction) — never from the executor.
+	const localEntityId = resolveSpEntityId(parsedSamlConfig);
 	const localAcsUrl =
 		parsedSamlConfig.callbackUrl ||
 		`${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`;

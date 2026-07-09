@@ -1,6 +1,7 @@
 import { APIError } from "better-auth/api";
 import { describe, expect, it } from "vitest";
-import { createSAMLPostForm } from "./helpers";
+import type { SAMLConfig } from "../types";
+import { createSAMLPostForm, resolveSpEntityId } from "./helpers";
 
 const invalidSAMLBindingLocationMessage =
 	"SAML POST binding location must be an absolute http or https URL";
@@ -41,5 +42,33 @@ describe("createSAMLPostForm", () => {
 
 	it("rejects a data: form action", () => {
 		expectInvalidSAMLBindingLocation("data:text/html,<script>1</script>");
+	});
+});
+
+describe("resolveSpEntityId", () => {
+	const base = (): SAMLConfig => ({
+		issuer: "https://issuer.example",
+		entryPoint: "https://idp.example/sso",
+		cert: "CERT",
+		callbackUrl: "https://sp.example/acs",
+		spMetadata: {},
+	});
+
+	it("prefers explicit spMetadata.entityID", () => {
+		const config = base();
+		config.spMetadata = { entityID: "https://sp.example/explicit" };
+		expect(resolveSpEntityId(config)).toBe("https://sp.example/explicit");
+	});
+
+	it("reads entityID from spMetadata.metadata XML when entityID field is absent", () => {
+		const config = base();
+		config.spMetadata = {
+			metadata: `<EntityDescriptor entityID="https://sp.example/from-metadata" xmlns="urn:oasis:names:tc:SAML:2.0:metadata"><SPSSODescriptor/></EntityDescriptor>`,
+		};
+		expect(resolveSpEntityId(config)).toBe("https://sp.example/from-metadata");
+	});
+
+	it("falls back to issuer", () => {
+		expect(resolveSpEntityId(base())).toBe("https://issuer.example");
 	});
 });

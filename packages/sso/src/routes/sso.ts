@@ -1329,13 +1329,15 @@ export const signInSSO = (options?: SSOOptions) => {
 						relayState,
 					});
 				} catch (error) {
-					// Preserve structured APIError from custom executors (e.g. 503 remote down).
+					// Preserve structured APIError from custom executors (e.g. 503).
+					// Do not leak raw remote/transport error text to the browser.
 					if (isAPIError(error)) throw error;
+					ctx.context.logger.error("SAML AuthnRequest executor failed", {
+						error,
+						providerId: provider.providerId,
+					});
 					throw new APIError("BAD_REQUEST", {
-						message:
-							error instanceof Error
-								? error.message
-								: "Invalid SAML AuthnRequest",
+						message: "Invalid SAML request",
 					});
 				}
 				if (!loginRequest?.redirectUrl || !loginRequest.id) {

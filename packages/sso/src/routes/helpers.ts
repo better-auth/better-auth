@@ -1,8 +1,44 @@
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { APIError } from "better-auth/api";
+import { findNode, xmlParser } from "../saml/parser";
 import { saml } from "../samlify";
 import type { SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { normalizePem, safeJsonParse } from "../utils";
+
+/**
+ * Resolve the SP entityID the same way ServiceProvider construction does:
+ * explicit spMetadata.entityID → entityID inside spMetadata.metadata → issuer.
+ */
+export function resolveSpEntityId(config: SAMLConfig): string {
+	if (config.spMetadata?.entityID) {
+		return config.spMetadata.entityID;
+	}
+	const fromMetadata = extractEntityIdFromMetadata(config.spMetadata?.metadata);
+	if (fromMetadata) {
+		return fromMetadata;
+	}
+	return config.issuer;
+}
+
+function extractEntityIdFromMetadata(
+	metadata: string | undefined,
+): string | null {
+	if (!metadata) return null;
+	try {
+		const parsed = xmlParser.parse(metadata);
+		const descriptor = findNode(parsed, "EntityDescriptor") as
+			| Record<string, unknown>
+			| Array<Record<string, unknown>>
+			| null;
+		const node = Array.isArray(descriptor) ? descriptor[0] : descriptor;
+		const entityId = node?.["@_entityID"];
+		return typeof entityId === "string" && entityId.length > 0
+			? entityId
+			: null;
+	} catch {
+		return null;
+	}
+}
 
 export async function findSAMLProvider(
 	providerId: string,
@@ -61,7 +97,7 @@ export function createSP(
 		config.callbackUrl || `${baseURL}/sso/saml2/sp/acs/${providerId}`;
 
 	return saml.ServiceProvider({
-		entityID: spData?.entityID || config.issuer,
+		entityID: resolveSpEntityId(config),
 		assertionConsumerService: spData?.metadata
 			? undefined
 			: [
