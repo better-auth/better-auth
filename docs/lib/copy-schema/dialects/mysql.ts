@@ -49,9 +49,14 @@ const formatForeignKey = (field: DBFieldAttribute) => {
 
 const escapeSqlString = (value: string) => value.replace(/'/g, "''");
 
+const formatIndexedColumn = (field: DBFieldAttribute) =>
+	field.type === "string"
+		? `\`${field.fieldName}\`(255)`
+		: `\`${field.fieldName}\``;
+
 const formatIndex = (field: DBFieldAttribute, tableName: string) => {
 	const indexName = getIndexName(tableName, field);
-	const createIndex = `CREATE ${field.unique ? "UNIQUE " : ""}INDEX \`${indexName}\` ON \`${tableName}\` (\`${field.fieldName}\`)`;
+	const createIndex = `CREATE ${field.unique ? "UNIQUE " : ""}INDEX \`${indexName}\` ON \`${tableName}\` (${formatIndexedColumn(field)})`;
 	return [
 		`SET @table_exists = (SELECT COUNT(1) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = '${escapeSqlString(tableName)}');`,
 		`SET @index_exists = (SELECT COUNT(1) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = '${escapeSqlString(tableName)}' AND index_name = '${escapeSqlString(indexName)}');`,
