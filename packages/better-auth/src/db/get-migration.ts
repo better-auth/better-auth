@@ -52,7 +52,7 @@ const mysqlMap = {
 
 const sqliteMap = {
 	string: ["TEXT"],
-	number: ["INTEGER", "REAL"],
+	number: ["INTEGER", "REAL", "BIGINT"],
 	boolean: ["INTEGER", "BOOLEAN"], // 0 or 1
 	date: ["DATE", "INTEGER"],
 	json: ["TEXT"],

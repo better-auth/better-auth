@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, test, vi } from "vitest";
@@ -1252,6 +1253,225 @@ describe("getConfig", async () => {
 			emailAndPassword: { enabled: true },
 		});
 	});
+
+	/**
+	 * The Convex integration guide's `auth.ts` template imports the schema
+	 * file that `auth generate --output <path>` is responsible for creating
+	 * (`import schema from "./schema"`). On a first run that file doesn't
+	 * exist yet, so loading the config throws `Cannot find module './schema'`
+	 * before generation ever gets a chance to run.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10136
+	 */
+	it("should recover when the config imports its own not-yet-generated --output file", async () => {
+		const authDir = path.join(tmpDir, "convex", "betterAuth");
+		await fs.mkdir(authDir, { recursive: true });
+
+		await fs.writeFile(
+			path.join(authDir, "auth.ts"),
+			`import schema from "./schema";
+
+			 export const options = {
+					appName: "ok",
+					emailAndPassword: { enabled: true },
+			 };
+
+			 // referenced so the import isn't optimized away before evaluation
+			 export const __schema = schema;`,
+		);
+
+		const outputPath = path.join(authDir, "schema.ts");
+		expect(existsSync(outputPath)).toBe(false);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+			configPath: "convex/betterAuth/auth.ts",
+			outputPath,
+			shouldThrowOnError: true,
+		});
+
+		expect(config).toMatchObject({
+			appName: "ok",
+			emailAndPassword: { enabled: true },
+		});
+
+		// getConfig only needs to make the file resolvable; generateAction's
+		// existing overwrite-confirmation flow takes over from here once the
+		// real schema is generated.
+		expect(existsSync(outputPath)).toBe(true);
+		expect(await fs.readFile(outputPath, "utf-8")).toBe("");
+	});
+
+	it("should not silently stub an unrelated missing relative import", async () => {
+		const authDir = path.join(tmpDir, "convex", "betterAuth");
+		await fs.mkdir(authDir, { recursive: true });
+
+		await fs.writeFile(
+			path.join(authDir, "auth.ts"),
+			`import unrelated from "./does-not-exist";
+
+			 export const options = {
+					appName: "ok",
+					emailAndPassword: { enabled: true },
+			 };
+
+			 export const __unrelated = unrelated;`,
+		);
+
+		const outputPath = path.join(authDir, "schema.ts");
+
+		await expect(
+			getConfig({
+				cwd: tmpDir,
+				configPath: "convex/betterAuth/auth.ts",
+				outputPath,
+				shouldThrowOnError: true,
+			}),
+		).rejects.toThrow(/Cannot find module/);
+
+		// Only the exact --output target may ever be auto-stubbed.
+		expect(existsSync(outputPath)).toBe(false);
+		expect(existsSync(path.join(authDir, "does-not-exist.ts"))).toBe(false);
+	});
+
+	it("should not stub a missing bare package import even if its specifier matches the output basename", async () => {
+		const authDir = path.join(tmpDir, "convex", "betterAuth");
+		await fs.mkdir(authDir, { recursive: true });
+
+		await fs.writeFile(
+			path.join(authDir, "auth.ts"),
+			`import schema from "schema";
+
+			 export const options = {
+					appName: "ok",
+					emailAndPassword: { enabled: true },
+			 };
+
+			 export const __schema = schema;`,
+		);
+
+		const outputPath = path.join(authDir, "schema.ts");
+
+		await expect(
+			getConfig({
+				cwd: tmpDir,
+				configPath: "convex/betterAuth/auth.ts",
+				outputPath,
+				shouldThrowOnError: true,
+			}),
+		).rejects.toThrow(/Cannot find (package|module)/);
+
+		expect(existsSync(outputPath)).toBe(false);
+	});
+
+	/**
+	 * `generate.ts` resolves `--output` via `path.resolve(cwd, options.output)`
+	 * and passes the (possibly still-relative) result straight through as
+	 * `outputPath`. `getConfig` must resolve a relative `outputPath` against
+	 * that same `cwd` for its placeholder existence-check and write — not
+	 * against `process.cwd()`, which can differ (e.g. `--cwd` points elsewhere
+	 * than the directory the CLI process was launched from).
+	 *
+	 * @see https://github.com/better-auth/better-auth/pull/10302
+	 */
+	it("should resolve a relative outputPath against the getConfig cwd, not process.cwd()", async () => {
+		const authDir = path.join(tmpDir, "convex", "betterAuth");
+		await fs.mkdir(authDir, { recursive: true });
+
+		await fs.writeFile(
+			path.join(authDir, "auth.ts"),
+			`import schema from "./schema";
+
+			 export const options = {
+					appName: "ok",
+					emailAndPassword: { enabled: true },
+			 };
+
+			 // referenced so the import isn't optimized away before evaluation
+			 export const __schema = schema;`,
+		);
+
+		const relativeOutputPath = path.join("convex", "betterAuth", "schema.ts");
+		const expectedOutputPath = path.join(tmpDir, relativeOutputPath);
+
+		// Simulates the process actually being launched from a directory other
+		// than the `cwd` given to getConfig/generate — a real decoy directory
+		// (not just a mocked `process.cwd()` getter) so a buggy implementation
+		// that hands relative paths straight to `fs`/`path.resolve` is caught
+		// exactly the way it would be in production.
+		const realProcessCwd = process.cwd();
+		const decoyCwd = await fs.mkdtemp(
+			path.join(realProcessCwd, "getConfig_test-decoy-"),
+		);
+		const decoyOutputPath = path.join(decoyCwd, relativeOutputPath);
+
+		process.chdir(decoyCwd);
+		try {
+			await expect(
+				getConfig({
+					cwd: tmpDir,
+					configPath: "convex/betterAuth/auth.ts",
+					outputPath: relativeOutputPath,
+					shouldThrowOnError: true,
+				}),
+			).resolves.toMatchObject({
+				appName: "ok",
+				emailAndPassword: { enabled: true },
+			});
+
+			// The placeholder — and therefore the resolvable schema import — must
+			// land under the `cwd` getConfig/generate.ts actually use.
+			expect(existsSync(expectedOutputPath)).toBe(true);
+			// It must never land relative to process.cwd() instead.
+			expect(existsSync(decoyOutputPath)).toBe(false);
+		} finally {
+			process.chdir(realProcessCwd);
+			await fs.rm(decoyCwd, { recursive: true, force: true });
+		}
+	});
+
+	/**
+	 * If the retry after stubbing the placeholder fails for a genuinely
+	 * unrelated reason (a different missing module), the empty placeholder
+	 * `getConfig` created must not be left behind on disk.
+	 *
+	 * @see https://github.com/better-auth/better-auth/pull/10302
+	 */
+	it("should remove the placeholder file it created if the retry fails for an unrelated reason", async () => {
+		const authDir = path.join(tmpDir, "convex", "betterAuth");
+		await fs.mkdir(authDir, { recursive: true });
+
+		await fs.writeFile(
+			path.join(authDir, "auth.ts"),
+			`import schema from "./schema";
+			 import other from "./does-not-exist-either";
+
+			 export const options = {
+					appName: "ok",
+					emailAndPassword: { enabled: true },
+			 };
+
+			 export const __schema = schema;
+			 export const __other = other;`,
+		);
+
+		const outputPath = path.join(authDir, "schema.ts");
+		expect(existsSync(outputPath)).toBe(false);
+
+		await expect(
+			getConfig({
+				cwd: tmpDir,
+				configPath: "convex/betterAuth/auth.ts",
+				outputPath,
+				shouldThrowOnError: true,
+			}),
+		).rejects.toThrow(/Cannot find module ['"]\.\/does-not-exist-either['"]/);
+
+		// getConfig stubbed the placeholder to recover the "./schema" self
+		// import, but the retry still failed for an unrelated missing module —
+		// the placeholder it created must not be left behind.
+		expect(existsSync(outputPath)).toBe(false);
+	});
 });
 
 /**
@@ -1922,6 +2142,48 @@ describe("SvelteKit virtual modules and Vite asset imports (user-reported scenar
 							pub.BA_ENV_TEST_SECRET === undefined &&
 							priv.BA_ENV_TEST_SECRET === "secret" &&
 							priv.PUBLIC_BA_ENV_TEST === undefined
+								? "ok"
+								: "bad",
+						emailAndPassword: { enabled: true },
+					});
+				`,
+			});
+
+			const config = await getConfig({
+				cwd: tmpdir,
+				configPath: "src/lib/server/auth.ts",
+				shouldThrowOnError: true,
+			});
+
+			expect(config).toMatchObject({
+				appName: "ok",
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
+
+	/**
+	 * `$app/env/{private,public}` are the explicit-environment-variables form
+	 * (opt-in via `experimental.explicitEnvironmentVariables`). Their exports are
+	 * arbitrary names declared in `src/env.ts`, so the stub must resolve *any*
+	 * imported name to its live `process.env` value rather than an enumerated set.
+	 * @see https://svelte.dev/docs/kit/environment-variables#Explicit-environment-variables
+	 */
+	tmpdirTest(
+		"resolves arbitrary $app/env/private and $app/env/public imports",
+		async ({ tmpdir, expect }) => {
+			vi.stubEnv("MY_SECRET_KEY", "secret");
+			vi.stubEnv("MY_PUBLIC_KEY", "public");
+
+			await writeTree(tmpdir, {
+				"package.json": sveltekitPackageJson,
+				"src/lib/server/auth.ts": `
+					import { betterAuth } from "better-auth";
+					import { MY_SECRET_KEY } from "$app/env/private";
+					import { MY_PUBLIC_KEY } from "$app/env/public";
+					export const auth = betterAuth({
+						appName:
+							MY_SECRET_KEY === "secret" && MY_PUBLIC_KEY === "public"
 								? "ok"
 								: "bad",
 						emailAndPassword: { enabled: true },
