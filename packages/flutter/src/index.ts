@@ -94,7 +94,11 @@ export const flutter = (options?: FlutterOptions | undefined) => {
 						const isHttpRedirect =
 							redirectURL.protocol === "http:" ||
 							redirectURL.protocol === "https:";
-						if (isHttpRedirect) {
+						const isLoopbackHttpRedirect =
+							isHttpRedirect &&
+							(redirectURL.hostname === "localhost" ||
+								redirectURL.hostname === "127.0.0.1");
+						if (isHttpRedirect && !isLoopbackHttpRedirect) {
 							return;
 						}
 						const isTrustedOrigin = ctx.context.isTrustedOrigin(location);
