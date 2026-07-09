@@ -617,6 +617,31 @@ describe("generate", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8849
+	 */
+	it("should disambiguate duplicate relations when usePlural is enabled", async () => {
+		const database = drizzleAdapter(
+			{},
+			{
+				provider: "sqlite",
+				schema: {},
+				usePlural: true,
+			},
+		);
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: database({} as BetterAuthOptions),
+			options: {
+				database,
+				plugins: [testPlugin()],
+			},
+		});
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-drizzle-use-plural-duplicate-relations.txt",
+		);
+	});
+
 	// Plugin that tests multiple relations to different models (should be combined)
 	const multiRelationPlugin = (): BetterAuthPlugin => {
 		return {

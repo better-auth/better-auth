@@ -313,39 +313,53 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			 */
 			type: "one" | "many";
 			/**
+			 * Disambiguates multiple relations between the same two tables.
+			 */
+			relationName?: string;
+			/**
 			 * Foreign key field name and reference details (only for "one" relations).
 			 */
 			reference?: {
 				field: string;
 				references: string;
-				fieldName: string; // Original field name for generating unique relation export names
 			};
 		};
 
 		const oneRelations: Relation[] = [];
 		const manyRelations: Relation[] = [];
-		// Set to track "many" relations by key to prevent duplicates
-		const manyRelationsSet = new Set<string>();
 
 		// 1. Find all foreign keys in THIS table (creates "one" relations)
 		const fields = Object.entries(table.fields);
 		const foreignFields = fields.filter(([_, field]) => field.references);
+		const foreignFieldCounts = new Map<string, number>();
+		for (const [_, field] of foreignFields) {
+			const referencedModel = getModelName(field.references!.model);
+			foreignFieldCounts.set(
+				referencedModel,
+				(foreignFieldCounts.get(referencedModel) ?? 0) + 1,
+			);
+		}
 
 		for (const [fieldName, field] of foreignFields) {
 			const referencedModel = field.references!.model;
-			const relationKey = getModelName(referencedModel);
+			const hasMultipleRelations =
+				(foreignFieldCounts.get(getModelName(referencedModel)) ?? 0) > 1;
+			const relationKey = hasMultipleRelations
+				? fieldName.replace(/Id$/, "")
+				: getModelName(referencedModel);
 			const fieldRef = `${getModelName(tableKey)}.${getFieldName({ model: tableKey, field: fieldName })}`;
 			const referenceRef = `${getModelName(referencedModel)}.${getFieldName({ model: referencedModel, field: field.references!.field || "id" })}`;
 
-			// Create a separate relation for each foreign key
 			oneRelations.push({
 				key: relationKey,
 				model: getModelName(referencedModel),
 				type: "one",
+				relationName: hasMultipleRelations
+					? `${getModelName(tableKey)}_${fieldName}`
+					: undefined,
 				reference: {
 					field: fieldRef,
 					references: referenceRef,
-					fieldName: fieldName,
 				},
 			});
 		}
@@ -354,16 +368,6 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		const otherModels = Object.entries(tables).filter(
 			([modelName]) => modelName !== tableKey,
 		);
-
-		// Map to track relations by model name to determine if unique or many
-		const modelRelationsMap = new Map<
-			string,
-			{
-				modelName: string;
-				hasUnique: boolean;
-				hasMany: boolean;
-			}
-		>();
 
 		for (const [modelName, otherTable] of otherModels) {
 			const foreignKeysPointingHere = Object.entries(otherTable.fields).filter(
@@ -374,95 +378,37 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 			if (foreignKeysPointingHere.length === 0) continue;
 
-			// Check if any foreign key is unique
-			const hasUnique = foreignKeysPointingHere.some(
-				([_, field]) => !!field.unique,
-			);
-			const hasMany = foreignKeysPointingHere.some(
-				([_, field]) => !field.unique,
-			);
+			for (const [fieldName, field] of foreignKeysPointingHere) {
+				const relationType = field.unique ? "one" : "many";
+				let relationKey = getModelName(modelName);
 
-			modelRelationsMap.set(modelName, {
-				modelName,
-				hasUnique,
-				hasMany,
-			});
-		}
+				// We have to apply this after checking if they have usePlural because otherwise they will end up seeing:
+				/* cspell:disable-next-line */
+				// "sesionss", or "accountss" - double s's.
+				if (
+					!adapter.options?.adapterConfig?.usePlural &&
+					relationType === "many"
+				) {
+					relationKey = `${relationKey}s`;
+				}
 
-		// Add relations, deduplicating by relationKey
-		for (const { modelName, hasMany } of modelRelationsMap.values()) {
-			// Determine relation type: if all are unique, it's "one", otherwise "many"
-			const relationType = hasMany ? "many" : "one";
-			let relationKey = getModelName(modelName);
+				const hasMultipleRelations = foreignKeysPointingHere.length > 1;
+				if (hasMultipleRelations) {
+					relationKey = `${relationKey}By${fieldName.charAt(0).toUpperCase()}${fieldName.slice(1)}`;
+				}
 
-			// We have to apply this after checking if they have usePlural because otherwise they will end up seeing:
-			/* cspell:disable-next-line */
-			// "sesionss", or "accountss" - double s's.
-			if (
-				!adapter.options?.adapterConfig?.usePlural &&
-				relationType === "many"
-			) {
-				relationKey = `${relationKey}s`;
-			}
-
-			// Only add if we haven't seen this key before
-			if (!manyRelationsSet.has(relationKey)) {
-				manyRelationsSet.add(relationKey);
 				manyRelations.push({
 					key: relationKey,
 					model: getModelName(modelName),
 					type: relationType,
+					relationName: hasMultipleRelations
+						? `${getModelName(modelName)}_${fieldName}`
+						: undefined,
 				});
 			}
 		}
 
-		// Group "one" relations by referenced model to detect duplicates
-		const relationsByModel = new Map<string, Relation[]>();
-		for (const relation of oneRelations) {
-			if (relation.reference) {
-				const modelKey = relation.key;
-				if (!relationsByModel.has(modelKey)) {
-					relationsByModel.set(modelKey, []);
-				}
-				relationsByModel.get(modelKey)!.push(relation);
-			}
-		}
-
-		// Separate relations with duplicates (same model) from those without
-		const duplicateRelations: Relation[] = [];
-		const singleRelations: Relation[] = [];
-
-		for (const [_modelKey, relations] of relationsByModel.entries()) {
-			if (relations.length > 1) {
-				// Multiple relations to the same model - these need field-specific naming
-				duplicateRelations.push(...relations);
-			} else {
-				// Single relation to this model - can be combined with others
-				singleRelations.push(relations[0]!);
-			}
-		}
-
-		// Generate field-specific exports for duplicate relations
-		for (const relation of duplicateRelations) {
-			if (relation.reference) {
-				const fieldName = relation.reference.fieldName;
-				const relationExportName = `${modelName}${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)}Relations`;
-
-				const tableRelation = `export const ${relationExportName} = relations(${getModelName(
-					table.modelName,
-				)}, ({ one }) => ({
-				${relation.key}: one(${relation.model}, {
-					fields: [${relation.reference.field}],
-					references: [${relation.reference.references}],
-				})
-			}))`;
-
-				relationsString += `\n${tableRelation}\n`;
-			}
-		}
-
-		// Combine all single "one" relations and "many" relations into exports
-		const hasOne = singleRelations.length > 0;
+		const hasOne = oneRelations.length > 0;
 		const hasMany = manyRelations.length > 0;
 
 		if (hasOne && hasMany) {
@@ -470,21 +416,25 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			const tableRelation = `export const ${modelName}Relations = relations(${getModelName(
 				table.modelName,
 			)}, ({ one, many }) => ({
-				${singleRelations
+				${oneRelations
 					.map((relation) =>
 						relation.reference
 							? ` ${relation.key}: one(${relation.model}, {
 					fields: [${relation.reference.field}],
 					references: [${relation.reference.references}],
+					${relation.relationName ? `relationName: "${relation.relationName}",` : ""}
 				})`
 							: "",
 					)
 					.filter((x) => x !== "")
 					.join(",\n ")}${
-					singleRelations.length > 0 && manyRelations.length > 0 ? "," : ""
+					oneRelations.length > 0 && manyRelations.length > 0 ? "," : ""
 				}
 				${manyRelations
-					.map(({ key, model }) => ` ${key}: many(${model})`)
+					.map(
+						({ key, model, relationName }) =>
+							` ${key}: many(${model}${relationName ? `, { relationName: "${relationName}" }` : ""})`,
+					)
 					.join(",\n ")}
 			}))`;
 
@@ -494,12 +444,13 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			const tableRelation = `export const ${modelName}Relations = relations(${getModelName(
 				table.modelName,
 			)}, ({ one }) => ({
-				${singleRelations
+				${oneRelations
 					.map((relation) =>
 						relation.reference
 							? ` ${relation.key}: one(${relation.model}, {
 					fields: [${relation.reference.field}],
 					references: [${relation.reference.references}],
+					${relation.relationName ? `relationName: "${relation.relationName}",` : ""}
 				})`
 							: "",
 					)
@@ -514,7 +465,10 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				table.modelName,
 			)}, ({ many }) => ({
 				${manyRelations
-					.map(({ key, model }) => ` ${key}: many(${model})`)
+					.map(
+						({ key, model, relationName }) =>
+							` ${key}: many(${model}${relationName ? `, { relationName: "${relationName}" }` : ""})`,
+					)
 					.join(",\n ")}
 			}))`;
 
