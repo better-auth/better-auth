@@ -1,0 +1,113 @@
+import { APIError } from "@better-auth/core/error";
+import type { DeviceAuthorizationOptions } from ".";
+import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
+
+/**
+ * Normalize an RFC 8707 `resource` value (string or repeated string) into a
+ * de-duplicated, non-empty array, or `undefined` when absent/empty. Duplicate
+ * entries are collapsed so a repeated single resource resolves to one audience.
+ */
+export function normalizeResource(
+	resource: string | string[] | undefined,
+): string[] | undefined {
+	if (resource === undefined) return undefined;
+	const arr = [...new Set(Array.isArray(resource) ? resource : [resource])];
+	return arr.length ? arr : undefined;
+}
+
+function invalidTarget(message: string): APIError {
+	return new APIError("BAD_REQUEST", {
+		error: "invalid_target",
+		error_description: message,
+	});
+}
+
+/**
+ * Validate every resource: must be an absolute URI without a fragment
+ * (RFC 8707 §2) and a member of `opts.allowedResources`. Throws `invalid_target`
+ * otherwise. An unset/empty allow-list rejects all resources.
+ */
+export function assertValidResources(
+	opts: DeviceAuthorizationOptions,
+	resources: string[],
+): void {
+	const allowed = new Set(opts.allowedResources ?? []);
+	for (const resource of resources) {
+		let url: URL;
+		try {
+			url = new URL(resource);
+		} catch {
+			throw invalidTarget(
+				DEVICE_AUTHORIZATION_ERROR_CODES.RESOURCE_NOT_ABSOLUTE_URI.message,
+			);
+		}
+		if (url.hash) {
+			throw invalidTarget(
+				DEVICE_AUTHORIZATION_ERROR_CODES.RESOURCE_HAS_FRAGMENT.message,
+			);
+		}
+		if (!allowed.has(resource)) {
+			throw invalidTarget(
+				DEVICE_AUTHORIZATION_ERROR_CODES.RESOURCE_NOT_ALLOWED.message,
+			);
+		}
+	}
+}
+
+/**
+ * Resolve the effective audience from the resource bound at `/device/code` and
+ * the resource requested at `/device/token`, applying the RFC 8707 §2.2 subset
+ * rule. Returns a single string for one resource, an array for many, or
+ * `undefined` when no resource is involved (opaque-token path).
+ */
+export function resolveResourceAudience(params: {
+	opts: DeviceAuthorizationOptions;
+	boundResource: string | string[] | undefined;
+	requestedResource: string | string[] | undefined;
+}): string | string[] | undefined {
+	const { opts, boundResource, requestedResource } = params;
+	const bound = normalizeResource(boundResource);
+	const requested = normalizeResource(requestedResource);
+
+	if (!bound && !requested) return undefined;
+
+	let effective: string[];
+	if (bound && requested) {
+		const boundSet = new Set(bound);
+		for (const resource of requested) {
+			if (!boundSet.has(resource)) {
+				throw invalidTarget(
+					DEVICE_AUTHORIZATION_ERROR_CODES.RESOURCE_EXCEEDS_GRANT.message,
+				);
+			}
+		}
+		effective = requested;
+	} else {
+		// exactly one of bound/requested is defined here
+		effective = (requested ?? bound) as string[];
+	}
+
+	assertValidResources(opts, effective);
+	return effective.length === 1 ? effective[0] : effective;
+}
+
+/** Serialize a resolved audience for storage on the deviceCode row. */
+export function serializeResource(audience: string | string[]): string {
+	return Array.isArray(audience) ? JSON.stringify(audience) : audience;
+}
+
+/** Parse a stored resource value back into a string or string[]. */
+export function parseStoredResource(
+	stored: string | null | undefined,
+): string | string[] | undefined {
+	if (!stored) return undefined;
+	if (stored.startsWith("[")) {
+		try {
+			const parsed = JSON.parse(stored);
+			if (Array.isArray(parsed)) return parsed as string[];
+		} catch {
+			// fall through to treat as a single opaque string
+		}
+	}
+	return stored;
+}
