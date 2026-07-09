@@ -9,6 +9,7 @@ import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
 import {
 	createDeviceJwtAccessToken,
 	parseStoredResource,
+	requireJwtOptions,
 	resolveResourceAudience,
 	serializeResource,
 } from "./resource";
@@ -456,6 +457,13 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					// `/device/code`; reject a token-time-only resource.
 					requireBinding: true,
 				});
+
+				// If a JWT will be minted, confirm the jwt plugin is available
+				// BEFORE consuming the code, so a misconfigured server (resource
+				// allowed but jwt() not registered) doesn't burn the approval.
+				if (audience) {
+					requireJwtOptions(ctx);
+				}
 
 				// Atomically claim the approved code as the single race gate:
 				// concurrent polls contend on this delete-and-return, and only the

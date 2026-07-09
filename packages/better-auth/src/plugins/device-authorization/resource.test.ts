@@ -104,6 +104,16 @@ describe("resolveResourceAudience", () => {
 				}),
 			),
 		).toBe("invalid_target");
+		// A bare trailing `#` (empty fragment) is also rejected.
+		expect(
+			errorOf(() =>
+				resolveResourceAudience({
+					opts: opts(["https://api.example.com/#"]),
+					boundResource: undefined,
+					requestedResource: "https://api.example.com/#",
+				}),
+			),
+		).toBe("invalid_target");
 	});
 
 	it("enforces the subset rule when bound and requested both present", () => {

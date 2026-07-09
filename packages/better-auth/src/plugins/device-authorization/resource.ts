@@ -67,7 +67,9 @@ export function assertValidResources(
 				DEVICE_AUTHORIZATION_ERROR_CODES.RESOURCE_NOT_ABSOLUTE_URI.message,
 			);
 		}
-		if (url.hash) {
+		// `url.hash` is "" for a bare trailing `#`, but RFC 8707 forbids any
+		// fragment component (empty or not), so also check the raw string.
+		if (url.hash || resource.includes("#")) {
 			throw invalidTarget(
 				DEVICE_AUTHORIZATION_ERROR_CODES.RESOURCE_HAS_FRAGMENT.message,
 			);
@@ -157,6 +159,29 @@ export function parseStoredResource(
 }
 
 /**
+ * Resolve the `jwt` plugin's options, throwing `server_error` if the plugin is
+ * not registered (it is required to sign JWT access tokens and to expose the
+ * `/jwks` verification endpoint). Call this before consuming the device code so
+ * a misconfigured server does not burn the user's approval.
+ */
+export function requireJwtOptions(
+	ctx: GenericEndpointContext,
+): JwtOptions | undefined {
+	const jwtPlugin = ctx.context.getPlugin("jwt");
+	if (!jwtPlugin) {
+		ctx.context.logger.error(
+			"device-authorization: a `resource` was requested but the jwt plugin is not registered. Add the jwt() plugin to issue JWT access tokens.",
+		);
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "server_error",
+			error_description:
+				DEVICE_AUTHORIZATION_ERROR_CODES.JWT_PLUGIN_REQUIRED.message,
+		});
+	}
+	return jwtPlugin.options as JwtOptions | undefined;
+}
+
+/**
  * Mint an RFC 9068 JWT access token audience-restricted to `audience`.
  * Requires the `jwt` plugin (for JWKS signing + the /jwks verification
  * endpoint). Returns the compact JWT and its lifetime in seconds.
@@ -171,18 +196,7 @@ export async function createDeviceJwtAccessToken(params: {
 }): Promise<{ token: string; expiresIn: number }> {
 	const { ctx, opts, user, clientId, scope, audience } = params;
 
-	const jwtPlugin = ctx.context.getPlugin("jwt");
-	if (!jwtPlugin) {
-		ctx.context.logger.error(
-			"device-authorization: a `resource` was requested but the jwt plugin is not registered. Add the jwt() plugin to issue JWT access tokens.",
-		);
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			error: "server_error",
-			error_description:
-				DEVICE_AUTHORIZATION_ERROR_CODES.JWT_PLUGIN_REQUIRED.message,
-		});
-	}
-	const jwtOptions = jwtPlugin.options as JwtOptions | undefined;
+	const jwtOptions = requireJwtOptions(ctx);
 
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = toExpJWT(jwtOptions?.jwt?.expirationTime ?? "15m", iat);

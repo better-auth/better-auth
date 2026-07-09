@@ -131,7 +131,9 @@ export const deviceAuthorizationOptionsSchema = z.object({
 					} catch {
 						return false;
 					}
-					return url.hash === "";
+					// A bare trailing `#` yields url.hash === "" but is still a
+					// fragment component (RFC 3986), so also check the raw string.
+					return url.hash === "" && !value.includes("#");
 				},
 				{
 					message:

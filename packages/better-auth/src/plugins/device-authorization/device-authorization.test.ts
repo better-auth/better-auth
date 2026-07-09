@@ -62,6 +62,12 @@ describe("device authorization plugin input validation", () => {
 				allowedResources: ["https://api.example.com#frag"],
 			}),
 		).toThrow();
+		// A bare trailing `#` (empty fragment) is still a fragment component.
+		expect(() =>
+			deviceAuthorizationOptionsSchema.parse({
+				allowedResources: ["https://api.example.com/#"],
+			}),
+		).toThrow();
 		expect(
 			deviceAuthorizationOptionsSchema.parse({
 				allowedResources: ["https://api.example.com"],
@@ -1633,12 +1639,15 @@ describe("device authorization resource indicators", async () => {
 			expect(payload.iss).not.toBe("https://evil.example.com");
 		});
 
-		it("errors when a resource is requested without the jwt plugin", async () => {
-			const { auth: authNoJwt, signInWithTestUser: signIn } =
-				await getTestInstance(
-					{ plugins: [deviceAuthorization({ allowedResources })] },
-					{ clientOptions: { plugins: [deviceAuthorizationClient()] } },
-				);
+		it("errors without consuming the code when a resource is requested but the jwt plugin is missing", async () => {
+			const {
+				auth: authNoJwt,
+				signInWithTestUser: signIn,
+				db: dbNoJwt,
+			} = await getTestInstance(
+				{ plugins: [deviceAuthorization({ allowedResources })] },
+				{ clientOptions: { plugins: [deviceAuthorizationClient()] } },
+			);
 			const { device_code, user_code } = await authNoJwt.api.deviceCode({
 				body: { client_id: "test-client", resource: "https://api.example.com" },
 			});
@@ -1657,6 +1666,14 @@ describe("device authorization resource indicators", async () => {
 					},
 				}),
 			).rejects.toMatchObject({ body: { error: "server_error" } });
+
+			// The misconfiguration is caught before the code is consumed, so the
+			// approval survives once the jwt plugin is registered.
+			const record = await dbNoJwt.findOne<{ status?: string }>({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: device_code }],
+			});
+			expect(record?.status).toBe("approved");
 		});
 
 		it("returns an opaque session token when no resource is requested (regression)", async () => {
