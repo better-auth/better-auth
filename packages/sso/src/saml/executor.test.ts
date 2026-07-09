@@ -88,19 +88,29 @@ describe("SAML executor", () => {
 			assertionConsumerServiceUrl:
 				"https://sp.example.com/api/auth/sso/saml2/sp/acs/acme",
 			signatureValidated: true,
+			sigAlg: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
 		}));
 		const remote: SAMLExecutor = {
 			createLoginRequest: vi.fn(),
 			parseLoginResponse,
+		};
+		const algorithms = {
+			allowedSignatureAlgorithms: [
+				"http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+			],
 		};
 		const result = await resolveSAMLExecutor(remote).parseLoginResponse({
 			providerId: "acme",
 			samlConfig: baseSamlConfig(),
 			baseURL: "https://sp.example.com/api/auth",
 			SAMLResponse: "YmFzZTY0",
+			algorithms,
 		});
-		expect(parseLoginResponse).toHaveBeenCalledOnce();
+		expect(parseLoginResponse).toHaveBeenCalledWith(
+			expect.objectContaining({ algorithms }),
+		);
 		expect(result.extract.nameID).toBe("user@acme.com");
 		expect(result.signatureValidated).toBe(true);
+		expect(result.sigAlg).toContain("rsa-sha256");
 	});
 });

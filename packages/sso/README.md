@@ -16,7 +16,7 @@ For full documentation, visit [better-auth.com/docs/plugins/sso](https://www.bet
 
 By default, SAML AuthnRequest construction and Response parsing run in-process via [samlify](https://github.com/tngan/samlify).
 
-For constrained runtimes (for example Cloudflare Workers with a tight CPU budget), you can supply a **transport-agnostic** `saml.executor` that implements the same two operations anywhere else (HTTP, RPC, a Node process, WASM, …). Better Auth still owns domain discovery, provider registry, InResponseTo / replay storage, user provisioning, and session cookies.
+For constrained runtimes (for example Cloudflare Workers with a tight CPU budget), you can supply a **transport-agnostic** `saml.executor` that implements the same two operations anywhere else (HTTP, RPC, a Node process, WASM, …). Better Auth still owns domain discovery, provider registry, InResponseTo / replay storage, user provisioning, session cookies, and **operator algorithm allowlists**.
 
 ```ts
 import { betterAuth } from "better-auth";
@@ -43,10 +43,18 @@ export const auth = betterAuth({
 
 | Side | Responsibility |
 |------|----------------|
-| Better Auth | Provider lookup by domain, state / InResponseTo, replay keys, session |
-| `SAMLExecutor` | Build AuthnRequest redirect URL + id; parse/verify Response → extract |
+| Better Auth | Provider lookup by domain, state / InResponseTo, replay, sessions, algorithm allowlists |
+| `SAMLExecutor` | Build AuthnRequest (`redirectUrl` + `id`); cryptographically parse/verify Response → extract |
 
-Custom executors must set `signatureValidated: true` after verifying signatures, or return `rawParsedResponse` so Better Auth can run its algorithm checks. Use `createLocalSAMLExecutor()` on any Node-capable host if you want crypto to match the default path.
+Custom executors must:
+
+1. Set `signatureValidated: true` after verifying signatures  
+2. Return **decrypted** `samlContent` (no `EncryptedAssertion`) so assertion-id replay works  
+3. Optionally return `sigAlg` so host allowlists can check signature algorithms  
+
+`SAMLParseLoginResponseInput.algorithms` carries the operator policy for executors that also enforce it remotely; Better Auth **always** re-applies allowlists on the host using returned content.
+
+Use `createLocalSAMLExecutor()` on any Node-capable host if you want crypto to match the default path.
 
 ## License
 

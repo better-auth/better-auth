@@ -4,6 +4,7 @@ import { createIdP, createSP } from "../routes/helpers";
 import { saml } from "../samlify";
 import type { SAMLAssertionExtract, SAMLConfig } from "../types";
 import { normalizePem } from "../utils";
+import type { AlgorithmValidationOptions } from "./algorithms";
 
 /**
  * Result of building an SP-initiated AuthnRequest (HTTP-Redirect binding).
@@ -44,15 +45,19 @@ export interface SAMLParseLoginResponseResult {
 	/** IdP entity ID used for replay / issuer records. */
 	idpEntityId: string;
 	/**
-	 * When true, the executor already validated signature algorithms and
-	 * Better Auth skips local algorithm checks that require a full FlowResult.
-	 * Local default executor sets this after running the same checks path
-	 * via returning enough of the samlify parse result.
+	 * When true, the executor cryptographically verified the SAML Response
+	 * signature (and decrypted assertions if needed). Better Auth still runs
+	 * operator algorithm allowlists against {@link samlContent} / {@link sigAlg}.
 	 */
 	signatureValidated: boolean;
 	/**
-	 * Optional raw samlify FlowResult for local algorithm validation.
-	 * Remote executors typically omit this and set signatureValidated=true.
+	 * Signature algorithm URI from the Response (when known).
+	 * Used with operator `allowedSignatureAlgorithms` on the Better Auth host.
+	 */
+	sigAlg?: string | null;
+	/**
+	 * Optional raw samlify FlowResult (local executor). When present, Better
+	 * Auth uses it for algorithm checks; otherwise uses samlContent + sigAlg.
 	 */
 	rawParsedResponse?: FlowResult;
 }
@@ -73,6 +78,12 @@ export interface SAMLParseLoginResponseInput {
 	SAMLResponse: string;
 	RelayState?: string;
 	clockSkew?: number;
+	/**
+	 * Operator algorithm policy from `SSOOptions.saml.algorithms`.
+	 * Executors that perform their own algorithm checks should honor this.
+	 * Better Auth also re-applies these allowlists on the returned content.
+	 */
+	algorithms?: AlgorithmValidationOptions;
 }
 
 /**
@@ -85,10 +96,9 @@ export interface SAMLParseLoginResponseInput {
  * Implementations may run in-process, over HTTP, RPC, a queue worker, WASM,
  * or any other host — Better Auth only requires these two async functions.
  *
- * Custom executors that verify signatures must set
- * `signatureValidated: true` on {@link SAMLParseLoginResponseResult}.
- * Alternatively return `rawParsedResponse` so Better Auth can run its local
- * algorithm checks (used by {@link createLocalSAMLExecutor}).
+ * Custom executors that cryptographically verify signatures must set
+ * `signatureValidated: true` (and return decrypted `samlContent`).
+ * Better Auth always re-applies operator algorithm allowlists on the host.
  *
  * @example Any remote transport
  * ```ts
@@ -239,8 +249,13 @@ export function createLocalSAMLExecutor(): SAMLExecutor {
 				entityId: sp.entityMeta.getEntityID(),
 				assertionConsumerServiceUrl,
 				idpEntityId: idp.entityMeta.getEntityID(),
-				// Local path still runs BA algorithm validation on rawParsedResponse.
-				signatureValidated: false,
+				// samlify verified the signature; host still enforces algorithm policy.
+				signatureValidated: true,
+				sigAlg:
+					typeof (parsedResponse as { sigAlg?: string | null }).sigAlg ===
+					"string"
+						? (parsedResponse as { sigAlg?: string | null }).sigAlg
+						: null,
 				rawParsedResponse: parsedResponse,
 			};
 		},

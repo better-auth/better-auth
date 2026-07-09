@@ -14,6 +14,7 @@ import {
 	validateSAMLResponseBinding,
 	validateSingleAssertion,
 } from "../saml";
+// hasSAMLEncryptedAssertion: custom executors must return decrypted XML
 import { resolveSAMLExecutor } from "../saml/executor";
 import type { SAMLConditions } from "../saml/timestamp";
 import { validateSAMLTimestamp } from "../saml/timestamp";
@@ -275,6 +276,7 @@ export async function processSAMLResponse(
 			SAMLResponse,
 			RelayState: params.RelayState,
 			clockSkew: options?.saml?.clockSkew,
+			algorithms: options?.saml?.algorithms,
 		});
 		if (!parsedFromExecutor?.extract) {
 			throw new Error("Invalid SAML response structure");
@@ -299,21 +301,21 @@ export async function processSAMLResponse(
 	const idpEntityId = parsedFromExecutor.idpEntityId;
 	let samlBindingContent: string;
 
-	// 10. Algorithm validation
-	// Custom executors must set signatureValidated=true or return rawParsedResponse.
+	// 10a. Cryptographic verification must have happened (executor or samlify).
 	if (!parsedFromExecutor.signatureValidated) {
-		if (parsedFromExecutor.rawParsedResponse) {
-			validateSAMLAlgorithms(
-				parsedFromExecutor.rawParsedResponse,
-				options?.saml?.algorithms,
-			);
-		} else {
-			throw new APIError("BAD_REQUEST", {
-				message:
-					"SAML executor must set signatureValidated or return rawParsedResponse",
-			});
-		}
+		throw new APIError("BAD_REQUEST", {
+			message:
+				"SAML executor must set signatureValidated after verifying the Response",
+		});
 	}
+
+	// 10b. Always enforce operator algorithm policy on the Better Auth host so
+	// custom executors cannot silently bypass allowedSignatureAlgorithms etc.
+	const algorithmSource = parsedFromExecutor.rawParsedResponse ?? {
+		samlContent,
+		sigAlg: parsedFromExecutor.sigAlg ?? null,
+	};
+	validateSAMLAlgorithms(algorithmSource, options?.saml?.algorithms);
 
 	// 11. Timestamp validation
 	validateSAMLTimestamp((extract as SAMLAssertionExtract).conditions, {
@@ -333,7 +335,14 @@ export async function processSAMLResponse(
 	);
 	try {
 		if (hasCustomExecutor) {
-			// Custom executors return binding-ready content (decrypt if needed).
+			// Custom executors must return decrypted, binding-ready XML so
+			// assertion-id replay protection can run.
+			if (hasSAMLEncryptedAssertion(samlContent)) {
+				throw new APIError("BAD_REQUEST", {
+					message:
+						"SAML executor must return decrypted samlContent (EncryptedAssertion is not allowed)",
+				});
+			}
 			samlBindingContent = samlContent;
 		} else {
 			const sp = createSP(parsedSamlConfig, ctx.context.baseURL, providerId, {

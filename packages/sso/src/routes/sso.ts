@@ -1329,6 +1329,8 @@ export const signInSSO = (options?: SSOOptions) => {
 						relayState,
 					});
 				} catch (error) {
+					// Preserve structured APIError from custom executors (e.g. 503 remote down).
+					if (isAPIError(error)) throw error;
 					throw new APIError("BAD_REQUEST", {
 						message:
 							error instanceof Error

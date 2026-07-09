@@ -419,8 +419,10 @@ export interface SSOOptions {
 		 * InResponseTo + assertion replay storage, user provisioning, sessions.
 		 * The executor only builds AuthnRequests and parses/verifies Responses.
 		 *
-		 * Custom executors should set `signatureValidated: true` after verifying
-		 * signatures, or return `rawParsedResponse` for local algorithm checks.
+		 * Custom executors must set `signatureValidated: true` after verifying
+		 * signatures and return decrypted `samlContent`. Better Auth still applies
+		 * operator algorithm allowlists on the host. Pass `algorithms` is included
+		 * on parse input for executors that also enforce policy remotely.
 		 *
 		 * @example
 		 * ```ts
