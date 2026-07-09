@@ -13,6 +13,10 @@ const legalPages = [
 		name: "Terms of Service",
 		href: "/legal/terms",
 	},
+	{
+		name: "Data Processing Addendum",
+		href: "/legal/dpa",
+	},
 ];
 
 export function LegalSidebar() {
@@ -36,14 +40,7 @@ export function LegalSidebar() {
 						<span className="text-[11px] uppercase tracking-wider">
 							{page.name}
 						</span>
-						<span
-							className={cn(
-								"text-[11px] font-mono transition-opacity",
-								active ? "opacity-100" : "opacity-0",
-							)}
-						>
-							→
-						</span>
+						{active && <span className="text-[11px] font-mono">→</span>}
 					</Link>
 				);
 			})}

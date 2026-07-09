@@ -38,7 +38,7 @@ const baseOrganizationSchema = z.object({
 		.meta({
 			description: "The logo of the organization",
 		})
-		.optional(),
+		.nullish(),
 	metadata: z
 		.record(z.string(), z.any())
 		.meta({
@@ -353,7 +353,7 @@ const baseUpdateOrganizationSchema = z.object({
 		.meta({
 			description: "The logo of the organization",
 		})
-		.optional(),
+		.nullish(),
 	metadata: z
 		.record(z.string(), z.any())
 		.meta({
@@ -373,7 +373,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 		data: {
 			name?: string | undefined;
 			slug?: string | undefined;
-			logo?: string | undefined;
+			logo?: string | null | undefined;
 			metadata?: Record<string, any> | undefined;
 		} & Partial<InferAdditionalFieldsFromPluginOptions<"organization", O>>;
 		organizationId?: string | undefined;
@@ -605,17 +605,23 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				throw APIError.fromStatus("BAD_REQUEST");
 			}
 			if (options?.organizationHooks?.beforeDeleteOrganization) {
-				await options.organizationHooks.beforeDeleteOrganization({
-					organization: org,
-					user: session.user,
-				});
+				await options.organizationHooks.beforeDeleteOrganization(
+					{
+						organization: org,
+						user: session.user,
+					},
+					ctx,
+				);
 			}
 			await adapter.deleteOrganization(organizationId);
 			if (options?.organizationHooks?.afterDeleteOrganization) {
-				await options.organizationHooks.afterDeleteOrganization({
-					organization: org,
-					user: session.user,
-				});
+				await options.organizationHooks.afterDeleteOrganization(
+					{
+						organization: org,
+						user: session.user,
+					},
+					ctx,
+				);
 			}
 			return ctx.json(org);
 		},

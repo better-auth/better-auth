@@ -155,7 +155,7 @@ describe("initAction", () => {
 					return { value: true };
 				}
 				if (question.name === "providedSecret") {
-					return { providedSecret: "test-secret-123" };
+					return { providedSecret: "" };
 				}
 				if (question.name === "providedURL") {
 					return { providedURL: "http://localhost:3000" };
@@ -256,6 +256,20 @@ describe("initAction", () => {
 				.then(() => true)
 				.catch(() => false);
 			expect(envExists).toBe(true);
+
+			const envContent = await fs.readFile(envPath, "utf-8");
+
+			const line = envContent
+				.toString()
+				.split("\n")
+				.find((l) => l.startsWith("BETTER_AUTH_SECRET="));
+
+			expect(line).toBeDefined();
+
+			const secret = line!.split("=")[1]?.replaceAll('"', "").trim();
+
+			expect(secret).toBeDefined();
+			expect(secret!.length).toBeGreaterThanOrEqual(64); // 64 characters 32 hex bytes
 		},
 	);
 
@@ -696,6 +710,94 @@ describe("initAction", () => {
 		expect(mockGeneratePrismaSchema).not.toHaveBeenCalled();
 		expect(mockExec).not.toHaveBeenCalled();
 	});
+
+	for (const db of [
+		{
+			database: "postgresql",
+			expectedPool: "const database = new Pool",
+			legacyType: 'type: "postgresql"',
+		},
+		{
+			database: "mysql",
+			expectedPool: "const database = createPool",
+			legacyType: 'type: "mysql"',
+		},
+	]) {
+		testWithTmpDir(
+			/**
+			 * @see https://github.com/better-auth/better-auth/issues/9367
+			 */
+			`should generate a working Kysely ${db.database} auth config`,
+			async ({ tmp }) => {
+				await fs.writeFile(
+					path.join(tmp, "package.json"),
+					JSON.stringify({ name: "test-project", version: "1.0.0" }),
+				);
+
+				mockPrompts.mockImplementation(async (questions: any) => {
+					const question = Array.isArray(questions) ? questions[0] : questions;
+
+					if (question.message?.includes("install better-auth")) {
+						return { value: false };
+					}
+					if (question.message?.includes("set environment variables")) {
+						return { value: false };
+					}
+					if (
+						question.name === "filePath" &&
+						question.message?.includes("auth instance")
+					) {
+						return { filePath: "auth.ts" };
+					}
+					if (
+						question.name === "filePath" &&
+						question.message?.includes("route handler")
+					) {
+						return { filePath: "src/app/api/auth/[...all]/route.ts" };
+					}
+					if (question.message?.includes("configure a database")) {
+						return { value: "yes" };
+					}
+					if (question.message?.includes("Select the database")) {
+						return { value: db.database };
+					}
+					if (question.name === "shouldInstallDeps") {
+						return { shouldInstallDeps: false };
+					}
+					if (question.name === "shouldMigrate") {
+						return { shouldMigrate: false };
+					}
+					if (question.message?.includes("email & password")) {
+						return { value: true };
+					}
+					if (question.message?.includes("setup social providers")) {
+						return { value: false };
+					}
+					if (question.message?.includes("auth client configuration")) {
+						return { value: false };
+					}
+					if (question.name === "connect") {
+						return { connect: false };
+					}
+
+					return {};
+				});
+
+				await initAction({ cwd: tmp });
+
+				const authConfigContent = await fs.readFile(
+					path.join(tmp, "auth.ts"),
+					"utf-8",
+				);
+
+				expect(authConfigContent).toContain(db.expectedPool);
+				expect(authConfigContent).toContain("database: database");
+				expect(authConfigContent).not.toContain("const dialect");
+				expect(authConfigContent).not.toContain("database: {");
+				expect(authConfigContent).not.toContain(db.legacyType);
+			},
+		);
+	}
 
 	testWithTmpDir(
 		"should setup social providers (Google and GitHub)",

@@ -8,6 +8,7 @@ import type {
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import { logger } from "@better-auth/core/env";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
 	InsertQueryBuilder,
@@ -28,6 +29,19 @@ import type { KyselyDatabaseType } from "./types";
 interface KyselyAdapterConfig {
 	/**
 	 * Database type.
+	 *
+	 * For `"mysql"`, this adapter depends on the driver returning
+	 * "rows matched" counts from `UPDATE`/`DELETE` operations (in
+	 * mysql2: `affectedRows`, exposed by Kysely as `numUpdatedRows`).
+	 * By default, `mysql2` enables this via the `FOUND_ROWS` client
+	 * flag.
+	 *
+	 * Do not disable this flag. If you remove it (e.g. with
+	 * `flags: '-FOUND_ROWS'` in your pool config), MySQL will report
+	 * "rows changed" semantics: an idempotent `UPDATE` (where the new
+	 * value equals the old value) will show zero affected rows, causing
+	 * adapter methods like `update`, `incrementOne`, or `updateMany` to
+	 * return `null` or `0` even if a row matched the predicate.
 	 */
 	type?: KyselyDatabaseType | undefined;
 	/**
@@ -57,8 +71,10 @@ export const kyselyAdapter = (
 	config?: KyselyAdapterConfig | undefined,
 ) => {
 	let lazyOptions: BetterAuthOptions | null = null;
+	let mysqlNoIdWarned = false;
 	const createCustomAdapter = (
 		db: Kysely<any>,
+		inTransaction = false,
 	): AdapterFactoryCustomizeAdapterCreator => {
 		return ({
 			getFieldName,
@@ -67,7 +83,21 @@ export const kyselyAdapter = (
 			getDefaultModelName,
 			getFieldAttributes,
 			getModelName,
+			options,
 		}) => {
+			if (
+				config?.type === "mysql" &&
+				options.advanced?.database?.generateId === false &&
+				!mysqlNoIdWarned
+			) {
+				mysqlNoIdWarned = true;
+				logger.warn(
+					"[Kysely Adapter] MySQL does not support INSERT...RETURNING. " +
+						"With generateId set to false, the adapter uses best-effort fallback " +
+						"strategies (unique columns, full-field match) to retrieve inserted rows. " +
+						'For reliable behavior, use Better Auth\'s default ID generation, a custom generateId function, or generateId: "serial" for auto-increment.',
+				);
+			}
 			const selectAllJoins = (join: JoinConfig | undefined) => {
 				// Use selectAll which will handle column naming appropriately
 				const allSelects: RawBuilder<unknown>[] = [];
@@ -108,48 +138,149 @@ export const kyselyAdapter = (
 				model: string,
 				where: Where[],
 			) => {
-				let res: any;
 				if (config?.type === "mysql") {
-					// This isn't good, but kysely doesn't support returning in mysql and it doesn't return the inserted id.
-					// Change this if there is a better way.
-					await builder.execute();
-					const field = values.id
-						? "id"
-						: where.length > 0 && where[0]?.field
-							? where[0].field
-							: "id";
+					// MySQL has no `UPDATE ... RETURNING`. Execute the update
+					// first, then re-select only after the row count confirms
+					// that the predicate matched. This keeps guarded updates
+					// from reporting success after zero rows matched.
+					//
+					// The gate assumes "rows matched" semantics in
+					// `numUpdatedRows` (mysql2 default via `CLIENT_FOUND_ROWS`).
+					// See `KyselyAdapterConfig.type` JSDoc. Disabling that
+					// flag swaps to "rows changed" and surfaces idempotent
+					// updates as null.
+					if (where.length > 0) {
+						type Builder = UpdateQueryBuilder<any, string, string, any>;
+						const updateResult = await (builder as Builder).executeTakeFirst();
+						if (
+							!updateResult ||
+							Number(updateResult.numUpdatedRows ?? 0) === 0
+						) {
+							return null;
+						}
 
-					if (!values.id && where.length === 0) {
-						res = await db
+						// The row count proves a match, not which row to return.
+						// Prefer a safe id equality from the update or guard
+						// before falling back to the first predicate.
+						//
+						// `incrementOne` remains the portable primitive for
+						// race-safe guarded state transitions.
+						const idEqualityWhere = where.find(
+							(w) =>
+								w.field === "id" &&
+								(w.operator === undefined || w.operator === "eq") &&
+								w.connector !== "OR" &&
+								w.value !== undefined &&
+								w.value !== null,
+						);
+						let reselectField: string;
+						let reselectValue: Where["value"];
+						if (values.id !== undefined && values.id !== null) {
+							reselectField = "id";
+							reselectValue = values.id;
+						} else if (idEqualityWhere) {
+							reselectField = "id";
+							reselectValue = idEqualityWhere.value;
+						} else if (where[0]?.field) {
+							reselectField = where[0].field;
+							reselectValue =
+								values[reselectField] !== undefined
+									? values[reselectField]
+									: where[0].value;
+						} else {
+							return null;
+						}
+
+						return await db
 							.selectFrom(model)
 							.selectAll()
-							.orderBy(getFieldName({ model, field }), "desc")
+							.where(
+								getFieldName({ model, field: reselectField }),
+								reselectValue === null ? "is" : "=",
+								reselectValue,
+							)
 							.limit(1)
 							.executeTakeFirst();
-						return res;
 					}
 
-					const value =
-						values[field] !== undefined ? values[field] : where[0]?.value;
-					res = await db
-						.selectFrom(model)
-						.selectAll()
-						.orderBy(getFieldName({ model, field }), "desc")
-						.where(
-							getFieldName({ model, field }),
-							value === null ? "is" : "=",
-							value,
-						)
-						.limit(1)
-						.executeTakeFirst();
-					return res;
+					await builder.execute();
+					// Inserts: cascading strategy inside a transaction
+					const fetchInserted = async (trx: any) => {
+						// 1. Known id from the data
+						if (values.id) {
+							return await trx
+								.selectFrom(model)
+								.selectAll()
+								.where(getFieldName({ model, field: "id" }), "=", values.id)
+								.limit(1)
+								.executeTakeFirst();
+						}
+
+						// 2. Serial auto-increment: LAST_INSERT_ID()
+						if (options.advanced?.database?.generateId === "serial") {
+							const lastIdResult =
+								await sql`SELECT LAST_INSERT_ID() as id`.execute(trx);
+							const lastId = (lastIdResult.rows[0] as any)?.id;
+							if (lastId) {
+								return await trx
+									.selectFrom(model)
+									.selectAll()
+									.where(getFieldName({ model, field: "id" }), "=", lastId)
+									.limit(1)
+									.executeTakeFirst();
+							}
+						}
+
+						// 3. Unique column lookup via Better Auth schema
+						const defaultModel = getDefaultModelName(model);
+						const modelSchema = schema[defaultModel]?.fields;
+						if (modelSchema) {
+							for (const [fieldKey, fieldAttr] of Object.entries(modelSchema)) {
+								if (!fieldAttr.unique) continue;
+								const dbFieldName = getFieldName({
+									model,
+									field: fieldKey,
+								});
+								const val = values[dbFieldName];
+								if (val === undefined || val === null) continue;
+								const row = await trx
+									.selectFrom(model)
+									.selectAll()
+									.where(dbFieldName, "=", val)
+									.limit(1)
+									.executeTakeFirst();
+								if (row) return row;
+							}
+						}
+
+						// 4. Full-field match (last resort) — LIMIT 2 to detect ambiguity
+						let query = trx.selectFrom(model).selectAll();
+						let hasConditions = false;
+						for (const [key, val] of Object.entries(values)) {
+							if (val === undefined) continue;
+							query = query.where(key, val === null ? "is" : "=", val);
+							hasConditions = true;
+						}
+						if (hasConditions) {
+							const rows = await query.limit(2).execute();
+							if (rows.length === 1) return rows[0];
+						}
+
+						logger.warn(
+							`[Kysely Adapter] Unable to safely identify the inserted "${model}" row on MySQL. ` +
+								'Enable Better Auth ID generation or use generateId: "serial" for reliable behavior.',
+						);
+						return null;
+					};
+
+					return inTransaction
+						? fetchInserted(db)
+						: db.transaction().execute(fetchInserted);
 				}
 				if (config?.type === "mssql") {
-					res = await builder.outputAll("inserted").executeTakeFirst();
-					return res;
+					return await builder.outputAll("inserted").executeTakeFirst();
 				}
-				res = await builder.returningAll().executeTakeFirst();
-				return res;
+				return await builder.returningAll().executeTakeFirst();
 			};
 			function convertWhereClause(model: string, w?: Where[] | undefined) {
 				if (!w)
@@ -590,6 +721,14 @@ export const kyselyAdapter = (
 					return res;
 				},
 				async update({ model, where, update: values }) {
+					// `update` is the single-row variant; an empty `where`
+					// would otherwise compile to `UPDATE table SET ...` with
+					// no predicate and mutate every row in the table. Treat
+					// it as an invalid call and return null on every dialect.
+					// Use `updateMany` if a bulk update is actually intended.
+					if (where.length === 0) {
+						return null;
+					}
 					const { and, or } = convertWhereClause(model, where);
 
 					let query = db.updateTable(model).set(values as any);
@@ -662,6 +801,170 @@ export const kyselyAdapter = (
 						? Number.MAX_SAFE_INTEGER
 						: Number(res);
 				},
+				async consumeOne({ model, where }) {
+					const { and, or } = convertWhereClause(model, where);
+					const applyWhere = (query: any) => {
+						if (and) {
+							query = query.where((eb: any) =>
+								eb.and(and.map((expr) => expr(eb))),
+							);
+						}
+						if (or) {
+							query = query.where((eb: any) =>
+								eb.or(or.map((expr) => expr(eb))),
+							);
+						}
+						return query;
+					};
+					const idField = getFieldName({ model, field: "id" });
+					const deleteSelectedRow = async (db: any, row: any) => {
+						const targetId = row[idField] ?? row.id;
+						if (targetId === undefined || targetId === null) {
+							return null;
+						}
+						const query: any = db
+							.deleteFrom(model)
+							.where(`${model}.${idField}`, "=", targetId);
+
+						if (config?.type === "mysql") {
+							const result = await query.executeTakeFirst();
+							return Number(result.numDeletedRows) > 0 ? row : null;
+						}
+
+						if (config?.type === "mssql") {
+							return (
+								(await query.outputAll("deleted").executeTakeFirst()) ?? null
+							);
+						}
+
+						return (await query.returningAll().executeTakeFirst()) ?? null;
+					};
+					const deleteWithReturning = async (query: any) => {
+						if (config?.type === "mssql") {
+							return (
+								(await query.outputAll("deleted").executeTakeFirst()) ?? null
+							);
+						}
+						return (await query.returningAll().executeTakeFirst()) ?? null;
+					};
+
+					if (config?.type === "mysql") {
+						// MySQL does not support `DELETE ... RETURNING`. Hold the row
+						// under `SELECT ... FOR UPDATE`, then delete inside the same
+						// transaction. Concurrent claimants block until the lock
+						// releases, at which point the row is gone and they observe
+						// nothing.
+						const claimFromTransaction = async (trx: any) => {
+							const row = await applyWhere(
+								trx.selectFrom(model).selectAll().forUpdate(),
+							)
+								.limit(1)
+								.executeTakeFirst();
+							if (!row) return null;
+							return deleteSelectedRow(trx, row);
+						};
+						return inTransaction
+							? claimFromTransaction(db)
+							: db.transaction().execute(claimFromTransaction);
+					}
+
+					const selectIds = applyWhere(
+						db.selectFrom(model).select(`${model}.${idField}`),
+					);
+					// SQL Server has no `LIMIT`; a `top(1)` subquery is the
+					// server-correct single-row form. Every other dialect uses
+					// `limit(1)`.
+					const targetIds =
+						config?.type === "mssql" ? selectIds.top(1) : selectIds.limit(1);
+					const query = db
+						.deleteFrom(model)
+						.where(`${model}.${idField}`, "in", targetIds);
+					return deleteWithReturning(query);
+				},
+				async incrementOne({ model, where, increment, set }) {
+					const { and, or } = convertWhereClause(model, where);
+					const applyWhere = (query: any) => {
+						if (and) {
+							query = query.where((eb: any) =>
+								eb.and(and.map((expr) => expr(eb))),
+							);
+						}
+						if (or) {
+							query = query.where((eb: any) =>
+								eb.or(or.map((expr) => expr(eb))),
+							);
+						}
+						return query;
+					};
+					// Each increment field becomes a self-referential assignment
+					// (`field = field + delta`) so the database, not the
+					// application, performs the arithmetic atomically. Absolute
+					// `set` assignments are applied in the same statement.
+					const assignments: Record<string, any> = { ...(set ?? {}) };
+					for (const [field, delta] of Object.entries(increment)) {
+						assignments[field] = sql`${sql.ref(field)} + ${delta}`;
+					}
+					const idField = getFieldName({ model, field: "id" });
+
+					if (config?.type === "mysql") {
+						// MySQL does not support `UPDATE ... RETURNING`. Hold the
+						// target row under `SELECT ... FOR UPDATE`, apply the guarded
+						// update inside the same transaction, then read the row back.
+						// Concurrent claimants block on the lock; a racer that
+						// invalidated the guard observes zero updated rows.
+						const incrementInTransaction = async (trx: any) => {
+							const target = await applyWhere(
+								trx.selectFrom(model).select(`${model}.${idField}`).forUpdate(),
+							)
+								.limit(1)
+								.executeTakeFirst();
+							if (!target) return null;
+							const targetId = target[idField] ?? target.id;
+							if (targetId === undefined || targetId === null) return null;
+							const updated = await applyWhere(
+								trx.updateTable(model).set(assignments),
+							)
+								.where(`${model}.${idField}`, "=", targetId)
+								.executeTakeFirst();
+							if (Number(updated.numUpdatedRows) === 0) return null;
+							return (
+								(await trx
+									.selectFrom(model)
+									.selectAll()
+									.where(`${model}.${idField}`, "=", targetId)
+									.limit(1)
+									.executeTakeFirst()) ?? null
+							);
+						};
+						return inTransaction
+							? incrementInTransaction(db)
+							: db.transaction().execute(incrementInTransaction);
+					}
+
+					// Scope the update to a single matching row by targeting
+					// `id IN (SELECT id WHERE guard LIMIT 1)`, mirroring consumeOne. A
+					// bare guarded UPDATE would mutate every matching row, violating the
+					// single-row contract when the guard is non-unique.
+					const selectIds = applyWhere(
+						db.selectFrom(model).select(`${model}.${idField}`),
+					);
+					// SQL Server has no `LIMIT`; a `top(1)` subquery is the
+					// server-correct single-row form. Every other dialect uses
+					// `limit(1)`.
+					const targetIds =
+						config?.type === "mssql" ? selectIds.top(1) : selectIds.limit(1);
+					const updateQuery = db
+						.updateTable(model)
+						.set(assignments)
+						.where(`${model}.${idField}`, "in", targetIds);
+					if (config?.type === "mssql") {
+						return (
+							(await updateQuery.outputAll("inserted").executeTakeFirst()) ??
+							null
+						);
+					}
+					return (await updateQuery.returningAll().executeTakeFirst()) ?? null;
+				},
 				options: config,
 			};
 		};
@@ -694,8 +997,11 @@ export const kyselyAdapter = (
 				? (cb) =>
 						db.transaction().execute((trx) => {
 							const adapter = createAdapterFactory({
-								config: adapterOptions!.config,
-								adapter: createCustomAdapter(trx),
+								config: {
+									...adapterOptions!.config,
+									transaction: false,
+								},
+								adapter: createCustomAdapter(trx, true),
 							})(lazyOptions!);
 							return cb(adapter);
 						})

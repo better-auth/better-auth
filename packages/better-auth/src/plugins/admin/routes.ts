@@ -7,7 +7,7 @@ import type { Where } from "@better-auth/core/db/adapter";
 import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../api";
+import { getAuthoritativeSessionFromCtx, getSessionFromCtx } from "../../api";
 import {
 	deleteSessionCookie,
 	expireCookie,
@@ -31,7 +31,7 @@ import type {
  * Will also provide additional types on the user to include role types.
  */
 const adminMiddleware = createAuthMiddleware(async (ctx) => {
-	const session = await getSessionFromCtx(ctx);
+	const session = await getAuthoritativeSessionFromCtx(ctx);
 	if (!session) {
 		throw APIError.fromStatus("UNAUTHORIZED");
 	}
@@ -153,6 +153,14 @@ export const setRole = <O extends AdminOptions>(opts: O) =>
 					}
 				}
 			}
+
+			const isUserExist = await ctx.context.internalAdapter.findUserById(
+				ctx.body.userId,
+			);
+			if (!isUserExist) {
+				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
+			}
+
 			const updatedUser = await ctx.context.internalAdapter.updateUser(
 				ctx.body.userId,
 				{
@@ -325,7 +333,9 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 			},
 		},
 		async (ctx) => {
-			const session = await getSessionFromCtx<{ role: string }>(ctx);
+			const session = await getAuthoritativeSessionFromCtx<{ role: string }>(
+				ctx,
+			);
 			if (!session && (ctx.request || ctx.headers)) {
 				throw ctx.error("UNAUTHORIZED");
 			}
@@ -346,6 +356,70 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				}
 			}
 
+			// `data.role` must go through the same authorization and validation as
+			// the top-level `role` field, otherwise spreading it into the create
+			// payload would let `user:create` callers assign arbitrary roles.
+			const { role: dataRole, ...userData } = ctx.body.data ?? {};
+			const requestedRole = ctx.body.role ?? dataRole;
+
+			if (requestedRole !== undefined) {
+				if (session) {
+					const canSetRole = hasPermission({
+						userId: session.user.id,
+						role: session.user.role,
+						options: opts,
+						permissions: {
+							user: ["set-role"],
+						},
+					});
+					if (!canSetRole) {
+						throw APIError.from(
+							"FORBIDDEN",
+							ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE,
+						);
+					}
+				}
+				const inputRoles = Array.isArray(requestedRole)
+					? requestedRole
+					: [requestedRole];
+				for (const role of inputRoles) {
+					if (typeof role !== "string") {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ADMIN_ERROR_CODES.INVALID_ROLE_TYPE,
+						);
+					}
+					if (opts.roles && !opts.roles[role as keyof typeof opts.roles]) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
+						);
+					}
+				}
+			}
+
+			if (
+				session &&
+				["banned", "banReason", "banExpires"].some((key) =>
+					Object.prototype.hasOwnProperty.call(userData, key),
+				)
+			) {
+				const canBanUser = hasPermission({
+					userId: session.user.id,
+					role: session.user.role,
+					options: opts,
+					permissions: {
+						user: ["ban"],
+					},
+				});
+				if (!canBanUser) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_BAN_USERS,
+					);
+				}
+			}
+
 			const email = ctx.body.email.toLowerCase();
 			const isValidEmail = z.email().safeParse(email);
 			if (!isValidEmail.success) {
@@ -361,13 +435,13 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				);
 			}
 			const user = await ctx.context.internalAdapter.createUser<UserWithRole>({
+				...userData,
 				email: email,
 				name: ctx.body.name,
 				role:
-					(ctx.body.role && parseRoles(ctx.body.role)) ??
-					opts?.defaultRole ??
-					"user",
-				...ctx.body.data,
+					requestedRole !== undefined
+						? parseRoles(requestedRole as string | string[])
+						: (opts?.defaultRole ?? "user"),
 			});
 
 			if (!user) {
@@ -470,6 +544,19 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 				throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.NO_DATA_TO_UPDATE);
 			}
 
+			const updateData = ctx.body.data as Record<string, any>;
+			const hasDataKey = (key: string) =>
+				Object.prototype.hasOwnProperty.call(updateData, key);
+
+			// Passwords are hashed and stored on the credential account, never on
+			// the user model — writing one here would persist it in plaintext.
+			if (hasDataKey("password")) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ADMIN_ERROR_CODES.PASSWORD_CANNOT_BE_UPDATED_VIA_UPDATE_USER,
+				);
+			}
+
 			// Role changes must be guarded by `user:set-role` and validated against the role allow-list.
 			if (Object.prototype.hasOwnProperty.call(ctx.body.data, "role")) {
 				const canSetRole = hasPermission({
@@ -507,10 +594,84 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 					inputRoles as string[],
 				);
 			}
+
+			// Ban fields are guarded by `user:ban`, mirroring the ban/unban endpoints.
+			if (["banned", "banReason", "banExpires"].some(hasDataKey)) {
+				const canBanUser = hasPermission({
+					userId: ctx.context.session.user.id,
+					role: ctx.context.session.user.role,
+					options: opts,
+					permissions: {
+						user: ["ban"],
+					},
+				});
+				if (!canBanUser) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_BAN_USERS,
+					);
+				}
+				if (
+					updateData.banned === true &&
+					ctx.body.userId === ctx.context.session.user.id
+				) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ADMIN_ERROR_CODES.YOU_CANNOT_BAN_YOURSELF,
+					);
+				}
+			}
+
+			// Email and verification changes require the `user:set-email` permission.
+			if (hasDataKey("email") || hasDataKey("emailVerified")) {
+				const canSetEmail = hasPermission({
+					userId: ctx.context.session.user.id,
+					role: ctx.context.session.user.role,
+					options: opts,
+					permissions: {
+						user: ["set-email"],
+					},
+				});
+				if (!canSetEmail) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_USERS_EMAIL,
+					);
+				}
+				if (hasDataKey("email")) {
+					const email = String(updateData.email).toLowerCase();
+					const isValidEmail = z.email().safeParse(email);
+					if (!isValidEmail.success) {
+						throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
+					}
+					const existUser =
+						await ctx.context.internalAdapter.findUserByEmail(email);
+					if (existUser && existUser.user.id !== ctx.body.userId) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
+						);
+					}
+					updateData.email = email;
+				}
+			}
+
+			const isUserExist = await ctx.context.internalAdapter.findUserById(
+				ctx.body.userId,
+			);
+			if (!isUserExist) {
+				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
+			}
+
 			const updatedUser = await ctx.context.internalAdapter.updateUser(
 				ctx.body.userId,
 				ctx.body.data,
 			);
+
+			// Match the ban-user endpoint: banning a user must revoke their sessions.
+			if (updateData.banned === true) {
+				await ctx.context.internalAdapter.deleteUserSessions(ctx.body.userId);
+			}
 
 			return ctx.json(
 				parseUserOutput(ctx.context.options, updatedUser) as UserWithRole,
@@ -851,6 +1012,13 @@ export const unbanUser = (opts: AdminOptions) =>
 				);
 			}
 
+			const isUserExist = await ctx.context.internalAdapter.findUserById(
+				ctx.body.userId,
+			);
+			if (!isUserExist) {
+				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
+			}
+
 			const user = await ctx.context.internalAdapter.updateUser(
 				ctx.body.userId,
 				{
@@ -983,7 +1151,7 @@ export const banUser = (opts: AdminOptions) =>
 				},
 			);
 			//revoke all sessions
-			await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
+			await ctx.context.internalAdapter.deleteUserSessions(ctx.body.userId);
 			return ctx.json({
 				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
 			});
@@ -1367,7 +1535,7 @@ export const revokeUserSessions = (opts: AdminOptions) =>
 				);
 			}
 
-			await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
+			await ctx.context.internalAdapter.deleteUserSessions(ctx.body.userId);
 			return ctx.json({
 				success: true,
 			});
@@ -1460,6 +1628,7 @@ export const removeUser = (opts: AdminOptions) =>
 				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 
+			await ctx.context.internalAdapter.deleteUserSessions(ctx.body.userId);
 			await ctx.context.internalAdapter.deleteUser(ctx.body.userId);
 			return ctx.json({
 				success: true,
@@ -1542,16 +1711,36 @@ export const setUserPassword = (opts: AdminOptions) =>
 			const { newPassword, userId } = ctx.body;
 			const minPasswordLength = ctx.context.password.config.minPasswordLength;
 			if (newPassword.length < minPasswordLength) {
-				ctx.context.logger.error("Password is too short");
+				ctx.context.logger.warn("Password is too short");
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
 			}
 			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
 			if (newPassword.length > maxPasswordLength) {
-				ctx.context.logger.error("Password is too long");
+				ctx.context.logger.warn("Password is too long");
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 			}
+			const user = await ctx.context.internalAdapter.findUserById(userId);
+			if (!user) {
+				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
+			}
 			const hashedPassword = await ctx.context.password.hash(newPassword);
-			await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
+			const accounts = await ctx.context.internalAdapter.findAccounts(userId);
+			const credentialAccount = accounts.find(
+				(account) => account.providerId === "credential",
+			);
+			if (credentialAccount) {
+				await ctx.context.internalAdapter.updatePassword(
+					userId,
+					hashedPassword,
+				);
+			} else {
+				await ctx.context.internalAdapter.createAccount({
+					userId,
+					providerId: "credential",
+					accountId: userId,
+					password: hashedPassword,
+				});
+			}
 			return ctx.json({
 				status: true,
 			});
@@ -1669,7 +1858,7 @@ export const userHasPermission = <O extends AdminOptions>(opts: O) => {
 					message: "invalid permission check. no permission(s) were passed.",
 				});
 			}
-			const session = await getSessionFromCtx(ctx);
+			const session = await getAuthoritativeSessionFromCtx(ctx);
 
 			if (!session && (ctx.request || ctx.headers)) {
 				throw new APIError("UNAUTHORIZED");

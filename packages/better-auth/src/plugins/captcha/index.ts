@@ -1,5 +1,5 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { getIp } from "../../utils/get-request-ip";
+import { getIp } from "@better-auth/core/utils/ip";
 import { middlewareResponse } from "../../utils/middleware-response";
 import { PACKAGE_VERSION } from "../../version";
 import { defaultEndpoints, Providers, siteVerifyMap } from "./constants";
@@ -29,8 +29,36 @@ export const captcha = (options: CaptchaOptions) =>
 					? options.endpoints
 					: defaultEndpoints;
 
-				if (!endpoints.some((endpoint) => request.url.includes(endpoint)))
+				const url = new URL(request.url);
+				const basePath = ctx.options.basePath ?? "/api/auth";
+				let pathname = url.pathname.replace(basePath, "");
+
+				// remove trailing or leading slashes & add leading slash if not present
+				if (pathname.endsWith("//")) pathname = pathname.slice(0, -1);
+				if (pathname.startsWith("//")) pathname = pathname.slice(1);
+				if (!pathname.startsWith("/")) pathname = "/" + pathname;
+
+				// we don't want to accidentally block email-otp endpoint.
+				const exemptPaths = ["/sign-in/email-otp"].reduce<string[]>(
+					(acc, curr) => {
+						// if custom endpoints include an exempt path, we don't include the exempt path in the exempt paths array
+						if (options.endpoints?.length && options.endpoints.includes(curr)) {
+							return acc;
+						}
+						return [...acc, curr];
+					},
+					[],
+				);
+				const match = endpoints.some((endpoint) => {
+					return (
+						pathname.includes(endpoint) &&
+						!exemptPaths.some((p) => pathname.includes(p))
+					);
+				});
+
+				if (!match) {
 					return undefined;
+				}
 
 				if (!options.secretKey) {
 					throw new Error(INTERNAL_ERROR_CODES.MISSING_SECRET_KEY.message);
@@ -58,13 +86,19 @@ export const captcha = (options: CaptchaOptions) =>
 				};
 
 				if (options.provider === Providers.CLOUDFLARE_TURNSTILE) {
-					return await verifyHandlers.cloudflareTurnstile(handlerParams);
+					return await verifyHandlers.cloudflareTurnstile({
+						...handlerParams,
+						expectedAction: options.expectedAction,
+						allowedHostnames: options.allowedHostnames,
+					});
 				}
 
 				if (options.provider === Providers.GOOGLE_RECAPTCHA) {
 					return await verifyHandlers.googleRecaptcha({
 						...handlerParams,
 						minScore: options.minScore,
+						expectedAction: options.expectedAction,
+						allowedHostnames: options.allowedHostnames,
 					});
 				}
 

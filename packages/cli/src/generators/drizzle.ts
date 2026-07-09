@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { toSnakeCase } from "@better-auth/core/utils/string";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
@@ -7,14 +8,7 @@ import prettier from "prettier";
 import type { SchemaGenerator } from "./types";
 
 function convertToSnakeCase(str: string, camelCase?: boolean) {
-	if (camelCase) {
-		return str;
-	}
-	// Handle consecutive capitals (like ID, URL, API) by treating them as a single word
-	return str
-		.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2") // Handle AABb -> AA_Bb
-		.replace(/([a-z\d])([A-Z])/g, "$1_$2") // Handle aBb -> a_Bb
-		.toLowerCase();
+	return camelCase ? str : toSnakeCase(str);
 }
 
 export const generateDrizzleSchema: SchemaGenerator = async ({
@@ -52,6 +46,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
+		if (table.disableMigrations) {
+			continue;
+		}
 		const modelName = getModelName(tableKey);
 		const fields = table.fields;
 
@@ -225,12 +222,6 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 									name: `${modelName}_${fieldName}_idx`,
 									on: fieldName,
 								});
-							} else if (attr.index && attr.unique) {
-								indexes.push({
-									type: "uniqueIndex",
-									name: `${modelName}_${fieldName}_uidx`,
-									on: fieldName,
-								});
 							}
 
 							if (
@@ -253,7 +244,22 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 										// custom logic within that function that might not work in drizzle's context.
 									}
 								} else if (typeof attr.defaultValue === "string") {
-									type += `.default("${attr.defaultValue}")`;
+									// Serialize through JSON.stringify so a value with quotes or
+									// backslashes emits valid TypeScript instead of a broken literal.
+									type += `.default(${JSON.stringify(attr.defaultValue)})`;
+								} else if (Array.isArray(attr.defaultValue)) {
+									// Stringify each element so a `["customer"]` default emits
+									// `.default(["customer"])` rather than `.default(customer)`
+									// from JS's implicit Array#toString.
+									const elements = attr.defaultValue
+										.map((value) => JSON.stringify(value))
+										.join(", ");
+									type += `.default([${elements}])`;
+								} else if (
+									typeof attr.defaultValue === "object" &&
+									attr.defaultValue !== null
+								) {
+									type += `.default(${JSON.stringify(attr.defaultValue)})`;
 								} else {
 									type += `.default(${attr.defaultValue})`;
 								}
@@ -286,6 +292,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	let relationsString: string = "";
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
+		if (table.disableMigrations) {
+			continue;
+		}
 		const modelName = getModelName(tableKey);
 
 		type Relation = {
@@ -647,14 +656,8 @@ function generateImport({
 	const hasIndexes = Object.values(tables).some((table) =>
 		Object.values(table.fields).some((field) => field.index && !field.unique),
 	);
-	const hasUniqueIndexes = Object.values(tables).some((table) =>
-		Object.values(table.fields).some((field) => field.unique && field.index),
-	);
 	if (hasIndexes) {
 		coreImports.push("index");
-	}
-	if (hasUniqueIndexes) {
-		coreImports.push("uniqueIndex");
 	}
 
 	return `${rootImports.length > 0 ? `import { ${rootImports.join(", ")} } from "drizzle-orm";\n` : ""}import { ${coreImports

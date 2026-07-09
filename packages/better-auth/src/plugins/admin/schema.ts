@@ -31,6 +31,7 @@ export const schema = {
 			impersonatedBy: {
 				type: "string",
 				required: false,
+				input: false,
 			},
 		},
 	},

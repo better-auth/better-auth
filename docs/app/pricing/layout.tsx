@@ -1,5 +1,6 @@
 import Footer from "@/components/landing/footer";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
+import { SignatureMark } from "@/components/landing/signature-mark";
 
 export default function PricingLayout({
 	children,
@@ -13,6 +14,9 @@ export default function PricingLayout({
 					{/* Left side — Hero */}
 					<div className="hidden lg:block relative w-full shrink-0 lg:w-[30%] lg:h-dvh border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-clip px-5 sm:px-6 lg:px-10 lg:sticky lg:top-0">
 						<HalftoneBackground />
+						<div className="absolute left-10 right-6 bottom-4 z-[3]">
+							<SignatureMark compact />
+						</div>
 						<div className="relative w-full pt-6 md:pt-10 pb-6 lg:pb-0 flex flex-col justify-center lg:h-full">
 							<div className="space-y-6">
 								<div className="space-y-2">
@@ -31,7 +35,7 @@ export default function PricingLayout({
 								<div className="border-t border-foreground/10 pt-4 space-y-0">
 									{[
 										{ label: "Starter", value: "Free" },
-										{ label: "Pro", value: "$20/mo" },
+										{ label: "Pro", value: "$20/month" },
 										{ label: "Enterprise", value: "Custom" },
 									].map((item) => (
 										<div
@@ -47,21 +51,12 @@ export default function PricingLayout({
 										</div>
 									))}
 								</div>
-
-								<div className="flex items-center gap-3 pt-1">
-									<a
-										href="https://dash.better-auth.com/sign-in"
-										className="inline-flex items-center gap-1.5 px-5 py-2 bg-foreground text-background text-sm font-medium hover:opacity-90 transition-colors"
-									>
-										Get Started
-									</a>
-								</div>
 							</div>
 						</div>
 					</div>
 
 					{/* Right side — Content */}
-					<div className="relative w-full lg:w-[70%] overflow-x-hidden no-scrollbar">
+					<div className="relative w-full lg:w-[70%] overflow-x-clip no-scrollbar">
 						<div className="px-5 lg:px-8 lg:pt-20">
 							{/* Mobile header */}
 							<div className="lg:hidden relative border-b border-foreground/[0.06] overflow-hidden -mx-5 sm:-mx-6 px-5 sm:px-6 mb-5">
@@ -82,7 +77,9 @@ export default function PricingLayout({
 						</div>
 
 						{children}
-						<Footer />
+						<div className="lg:hidden">
+							<Footer />
+						</div>
 					</div>
 				</div>
 			</div>

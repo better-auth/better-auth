@@ -2081,6 +2081,16 @@ export const getNormalTestSuiteTests = (
 			findResult!.updatedAt = user.updatedAt;
 			expect(findResult).toEqual(expectedResult);
 		},
+		"update - should return null when where is empty": async () => {
+			const result = await adapter.update<User>({
+				model: "user",
+				where: [],
+				update: { name: "test-name" },
+			});
+
+			expect(result).toBeNull();
+		},
+
 		"updateMany - should update all models when where is empty": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			await adapter.updateMany({
@@ -2137,6 +2147,45 @@ export const getNormalTestSuiteTests = (
 					name: "test-name",
 					updatedAt: result!.updatedAt,
 				});
+			},
+		// A guarded single-row transition: set a field only while a non-unique
+		// guard field still holds. This is the portable, race-safe replacement
+		// for a multi-clause `update` whose return was read as a winner/loser
+		// signal (issue #10082); the guard miss must return null without mutating,
+		// on every adapter.
+		"incrementOne - guarded set transition returns the row on a matching guard and null on a guard miss":
+			async () => {
+				const [transitionUser] = await insertRandom("user");
+				const image = "https://example.com/avatar.png";
+
+				const won = await adapter.incrementOne<User>({
+					model: "user",
+					where: [
+						{ field: "id", value: transitionUser.id },
+						{ field: "name", value: transitionUser.name },
+					],
+					increment: {},
+					set: { image },
+				});
+				expect(won).not.toBeNull();
+				expect(won!.image).toBe(image);
+
+				const lost = await adapter.incrementOne<User>({
+					model: "user",
+					where: [
+						{ field: "id", value: transitionUser.id },
+						{ field: "name", value: "name-that-does-not-match" },
+					],
+					increment: {},
+					set: { image: "https://example.com/should-not-apply.png" },
+				});
+				expect(lost).toBeNull();
+
+				const after = await adapter.findOne<User>({
+					model: "user",
+					where: [{ field: "id", value: transitionUser.id }],
+				});
+				expect(after!.image).toBe(image);
 			},
 		"delete - should delete a model": async () => {
 			const [user] = await insertRandom("user");
@@ -3338,6 +3387,57 @@ export const getNormalTestSuiteTests = (
 				expect(result).toBeDefined();
 				expect(result!.id).toBe(withNull.id);
 				expect(result!.name).toBe("null-where-updated");
+			},
+
+		// `update` must surface a zero-row UPDATE as a null return on every
+		// adapter, the same way SQLite/Postgres/MSSQL `RETURNING`/`OUTPUT`
+		// paths naturally do. Without this contract the Kysely MySQL
+		// `withReturning` path silently re-SELECTs the row by `where[0]`
+		// alone, dropping every predicate past the first and making any
+		// caller that reads the result as a compare-and-swap winner/loser
+		// signal fail open on MySQL only. `incrementOne` is still the
+		// recommended portable CAS primitive (it serializes concurrent
+		// writers via `SELECT ... FOR UPDATE` on MySQL), but `update` must
+		// not lie to callers about whether the UPDATE matched.
+		"update - should return null when a multi-predicate where matches no row":
+			async () => {
+				const [user] = await insertRandom("user");
+
+				// First update: the guard (`emailVerified` matches the
+				// current value) holds, so the UPDATE matches exactly one
+				// row and the new emailVerified value sticks.
+				const winner = await adapter.update<User>({
+					model: "user",
+					where: [
+						{ field: "id", value: user.id },
+						{ field: "emailVerified", value: user.emailVerified },
+					],
+					update: { emailVerified: !user.emailVerified },
+				});
+				expect(winner).not.toBeNull();
+				expect(winner!.id).toBe(user.id);
+				expect(winner!.emailVerified).toBe(!user.emailVerified);
+
+				// Second update with the same guard: the row's
+				// `emailVerified` was just flipped, so the predicate no
+				// longer holds. The UPDATE must match zero rows and the
+				// adapter must report that as `null` — not silently return
+				// the row anyway.
+				const loser = await adapter.update<User>({
+					model: "user",
+					where: [
+						{ field: "id", value: user.id },
+						{ field: "emailVerified", value: user.emailVerified },
+					],
+					update: { emailVerified: user.emailVerified },
+				});
+				expect(loser).toBeNull();
+
+				const after = await adapter.findOne<User>({
+					model: "user",
+					where: [{ field: "id", value: user.id }],
+				});
+				expect(after!.emailVerified).toBe(!user.emailVerified);
 			},
 	};
 };
