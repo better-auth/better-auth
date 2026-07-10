@@ -687,57 +687,98 @@ describe("generate", async () => {
 	});
 
 	it("should avoid colliding one-side relation keys after Id stripping", async () => {
-		const collidingFkPlugin = (): BetterAuthPlugin => ({
+		const collidingFkPlugin = (
+			fieldOrder: "owner-first" | "ownerId-first",
+		): BetterAuthPlugin => ({
 			id: "colliding-fk",
 			schema: {
 				project: {
-					fields: {
-						owner: {
-							type: "string",
-							required: false,
-							references: {
-								model: "user",
-								field: "id",
-								onDelete: "set null",
-							},
-						},
-						ownerId: {
-							type: "string",
-							required: false,
-							references: {
-								model: "user",
-								field: "id",
-								onDelete: "set null",
-							},
-						},
-					},
+					fields:
+						fieldOrder === "owner-first"
+							? {
+									owner: {
+										type: "string",
+										required: false,
+										references: {
+											model: "user",
+											field: "id",
+											onDelete: "set null",
+										},
+									},
+									ownerId: {
+										type: "string",
+										required: false,
+										references: {
+											model: "user",
+											field: "id",
+											onDelete: "set null",
+										},
+									},
+								}
+							: {
+									ownerId: {
+										type: "string",
+										required: false,
+										references: {
+											model: "user",
+											field: "id",
+											onDelete: "set null",
+										},
+									},
+									owner: {
+										type: "string",
+										required: false,
+										references: {
+											model: "user",
+											field: "id",
+											onDelete: "set null",
+										},
+									},
+								},
 				},
 			},
 		});
-		const schema = await generateDrizzleSchema({
-			file: "test.drizzle",
-			adapter: drizzleAdapter(
-				{},
-				{
-					provider: "sqlite",
-					schema: {},
-				},
-			)({} as BetterAuthOptions),
-			options: {
-				database: drizzleAdapter(
+
+		for (const fieldOrder of ["owner-first", "ownerId-first"] as const) {
+			const schema = await generateDrizzleSchema({
+				file: "test.drizzle",
+				adapter: drizzleAdapter(
 					{},
 					{
 						provider: "sqlite",
 						schema: {},
 					},
-				),
-				plugins: [collidingFkPlugin()],
-			},
-		});
-		expect(schema.code).toContain("owner: one(user,");
-		expect(schema.code).toContain("ownerId: one(user,");
-		expect(schema.code).toContain('relationName: "project_owner"');
-		expect(schema.code).toContain('relationName: "project_ownerId"');
+				)({} as BetterAuthOptions),
+				options: {
+					database: drizzleAdapter(
+						{},
+						{
+							provider: "sqlite",
+							schema: {},
+						},
+					),
+					plugins: [collidingFkPlugin(fieldOrder)],
+				},
+			});
+			expect(schema.code).toContain('relationName: "project_owner"');
+			expect(schema.code).toContain('relationName: "project_ownerId"');
+			const projectRelations = schema.code.match(
+				/export const projectRelations = relations\([\s\S]*?\n\}\)\);/,
+			)?.[0];
+			expect(projectRelations).toBeTruthy();
+			const oneKeys = [
+				...projectRelations!.matchAll(/^\s+(\w+):\s+one\(user,/gm),
+			].map((match) => match[1]);
+			expect(oneKeys).toHaveLength(2);
+			expect(new Set(oneKeys).size).toBe(2);
+			if (fieldOrder === "owner-first") {
+				expect(oneKeys).toEqual(expect.arrayContaining(["owner", "ownerId"]));
+			} else {
+				// ownerId is stripped to `owner` first, so the later `owner`
+				// field needs a unique fallback key.
+				expect(oneKeys).toEqual(expect.arrayContaining(["owner", "owner_2"]));
+			}
+		}
 	});
 
 	// Plugin that tests multiple relations to different models (should be combined)

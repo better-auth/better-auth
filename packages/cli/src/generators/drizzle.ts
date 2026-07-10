@@ -349,9 +349,17 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				? fieldName.replace(/Id$/, "")
 				: getModelName(referencedModel);
 			// Avoid silent overwrites when stripping `Id` collides
-			// (e.g. `owner` and `ownerId` both become `owner`).
+			// (e.g. `owner` and `ownerId` both become `owner`), including
+			// when field insertion order is `ownerId` then `owner`.
 			if (usedOneRelationKeys.has(relationKey)) {
 				relationKey = fieldName;
+			}
+			if (usedOneRelationKeys.has(relationKey)) {
+				let suffix = 2;
+				while (usedOneRelationKeys.has(`${relationKey}_${suffix}`)) {
+					suffix++;
+				}
+				relationKey = `${relationKey}_${suffix}`;
 			}
 			usedOneRelationKeys.add(relationKey);
 			const fieldRef = `${getModelName(tableKey)}.${getFieldName({ model: tableKey, field: fieldName })}`;
