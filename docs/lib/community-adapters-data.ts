@@ -187,4 +187,15 @@ export const communityAdapters: CommunityAdapter[] = [
 			avatar: "https://github.com/octet-stream.png",
 		},
 	},
+	{
+		name: "@datar-platform/better-auth-dynamodb",
+		url: "https://github.com/datar-platform/better-auth-dynamodb",
+		database: "DynamoDB",
+		databaseUrl: "https://aws.amazon.com/dynamodb/",
+		author: {
+			name: "joesome-git",
+			url: "https://github.com/joesome-git",
+			avatar: "https://github.com/joesome-git.png",
+		},
+	},
 ];
