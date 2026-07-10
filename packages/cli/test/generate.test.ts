@@ -760,9 +760,10 @@ describe("generate", async () => {
 					plugins: [collidingFkPlugin(fieldOrder)],
 				},
 			});
+			expect(schema.code).toBeTruthy();
 			expect(schema.code).toContain('relationName: "project_owner"');
 			expect(schema.code).toContain('relationName: "project_ownerId"');
-			const projectRelations = schema.code.match(
+			const projectRelations = schema.code!.match(
 				/export const projectRelations = relations\([\s\S]*?\n\}\)\);/,
 			)?.[0];
 			expect(projectRelations).toBeTruthy();
