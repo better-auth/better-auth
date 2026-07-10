@@ -1,7 +1,7 @@
 /**
  * Shared instrumentation scope identity.
  *
- * Kept in a dependency-free module so both the OTEL and pure (workerd/Convex)
+ * Kept in a dependency-free module so both the OTEL and pure (edge/Convex)
  * entry points can export the same public surface without pulling in
  * `@opentelemetry/api`.
  */
