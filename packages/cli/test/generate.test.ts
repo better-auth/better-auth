@@ -642,6 +642,104 @@ describe("generate", async () => {
 		);
 	});
 
+	it("should emit one() for unique reverse relations", async () => {
+		const uniqueProfilePlugin = (): BetterAuthPlugin => ({
+			id: "unique-profile",
+			schema: {
+				profile: {
+					fields: {
+						userId: {
+							type: "string",
+							required: true,
+							unique: true,
+							references: {
+								model: "user",
+								field: "id",
+								onDelete: "cascade",
+							},
+						},
+					},
+				},
+			},
+		});
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "sqlite",
+					schema: {},
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "sqlite",
+						schema: {},
+					},
+				),
+				plugins: [uniqueProfilePlugin()],
+			},
+		});
+		expect(schema.code).toContain("profile: one(profile)");
+		expect(schema.code).not.toMatch(/profile:\s*many\(profile\)/);
+	});
+
+	it("should avoid colliding one-side relation keys after Id stripping", async () => {
+		const collidingFkPlugin = (): BetterAuthPlugin => ({
+			id: "colliding-fk",
+			schema: {
+				project: {
+					fields: {
+						owner: {
+							type: "string",
+							required: false,
+							references: {
+								model: "user",
+								field: "id",
+								onDelete: "set null",
+							},
+						},
+						ownerId: {
+							type: "string",
+							required: false,
+							references: {
+								model: "user",
+								field: "id",
+								onDelete: "set null",
+							},
+						},
+					},
+				},
+			},
+		});
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "sqlite",
+					schema: {},
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "sqlite",
+						schema: {},
+					},
+				),
+				plugins: [collidingFkPlugin()],
+			},
+		});
+		expect(schema.code).toContain("owner: one(user,");
+		expect(schema.code).toContain("ownerId: one(user,");
+		expect(schema.code).toContain('relationName: "project_owner"');
+		expect(schema.code).toContain('relationName: "project_ownerId"');
+	});
+
 	// Plugin that tests multiple relations to different models (should be combined)
 	const multiRelationPlugin = (): BetterAuthPlugin => {
 		return {

@@ -340,13 +340,20 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			);
 		}
 
+		const usedOneRelationKeys = new Set<string>();
 		for (const [fieldName, field] of foreignFields) {
 			const referencedModel = field.references!.model;
 			const hasMultipleRelations =
 				(foreignFieldCounts.get(getModelName(referencedModel)) ?? 0) > 1;
-			const relationKey = hasMultipleRelations
+			let relationKey = hasMultipleRelations
 				? fieldName.replace(/Id$/, "")
 				: getModelName(referencedModel);
+			// Avoid silent overwrites when stripping `Id` collides
+			// (e.g. `owner` and `ownerId` both become `owner`).
+			if (usedOneRelationKeys.has(relationKey)) {
+				relationKey = fieldName;
+			}
+			usedOneRelationKeys.add(relationKey);
 			const fieldRef = `${getModelName(tableKey)}.${getFieldName({ model: tableKey, field: fieldName })}`;
 			const referenceRef = `${getModelName(referencedModel)}.${getFieldName({ model: referencedModel, field: field.references!.field || "id" })}`;
 
@@ -408,68 +415,48 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			}
 		}
 
-		const hasOne = oneRelations.length > 0;
-		const hasMany = manyRelations.length > 0;
+		const hasForwardOne = oneRelations.length > 0;
+		const hasReverseOne = manyRelations.some(
+			(relation) => relation.type === "one",
+		);
+		const hasReverseMany = manyRelations.some(
+			(relation) => relation.type === "many",
+		);
+		const hasOne = hasForwardOne || hasReverseOne;
+		const hasMany = hasReverseMany;
 
-		if (hasOne && hasMany) {
-			// Both "one" and "many" relations exist - combine in one export
-			const tableRelation = `export const ${modelName}Relations = relations(${getModelName(
-				table.modelName,
-			)}, ({ one, many }) => ({
-				${oneRelations
-					.map((relation) =>
-						relation.reference
-							? ` ${relation.key}: one(${relation.model}, {
+		const renderOneRelation = (relation: Relation) =>
+			relation.reference
+				? ` ${relation.key}: one(${relation.model}, {
 					fields: [${relation.reference.field}],
 					references: [${relation.reference.references}],
 					${relation.relationName ? `relationName: "${relation.relationName}",` : ""}
 				})`
-							: "",
-					)
-					.filter((x) => x !== "")
-					.join(",\n ")}${
-					oneRelations.length > 0 && manyRelations.length > 0 ? "," : ""
-				}
-				${manyRelations
-					.map(
-						({ key, model, relationName }) =>
-							` ${key}: many(${model}${relationName ? `, { relationName: "${relationName}" }` : ""})`,
-					)
-					.join(",\n ")}
-			}))`;
+				: "";
 
-			relationsString += `\n${tableRelation}\n`;
-		} else if (hasOne) {
-			// Only "one" relations exist
+		const renderReverseRelation = ({
+			key,
+			model,
+			type,
+			relationName,
+		}: Relation) => {
+			const relationFn = type === "one" ? "one" : "many";
+			return ` ${key}: ${relationFn}(${model}${relationName ? `, { relationName: "${relationName}" }` : ""})`;
+		};
+
+		if (hasOne || hasMany) {
+			const helpers = [hasOne ? "one" : null, hasMany ? "many" : null]
+				.filter(Boolean)
+				.join(", ");
+			const relationEntries = [
+				...oneRelations.map(renderOneRelation).filter((x) => x !== ""),
+				...manyRelations.map(renderReverseRelation),
+			].join(",\n ");
+
 			const tableRelation = `export const ${modelName}Relations = relations(${getModelName(
 				table.modelName,
-			)}, ({ one }) => ({
-				${oneRelations
-					.map((relation) =>
-						relation.reference
-							? ` ${relation.key}: one(${relation.model}, {
-					fields: [${relation.reference.field}],
-					references: [${relation.reference.references}],
-					${relation.relationName ? `relationName: "${relation.relationName}",` : ""}
-				})`
-							: "",
-					)
-					.filter((x) => x !== "")
-					.join(",\n ")}
-			}))`;
-
-			relationsString += `\n${tableRelation}\n`;
-		} else if (hasMany) {
-			// Only "many" relations exist
-			const tableRelation = `export const ${modelName}Relations = relations(${getModelName(
-				table.modelName,
-			)}, ({ many }) => ({
-				${manyRelations
-					.map(
-						({ key, model, relationName }) =>
-							` ${key}: many(${model}${relationName ? `, { relationName: "${relationName}" }` : ""})`,
-					)
-					.join(",\n ")}
+			)}, ({ ${helpers} }) => ({
+				${relationEntries}
 			}))`;
 
 			relationsString += `\n${tableRelation}\n`;

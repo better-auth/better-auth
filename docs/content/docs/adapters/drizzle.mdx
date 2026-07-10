@@ -87,7 +87,11 @@ export const auth = betterAuth({
 When a table has multiple foreign keys to the same table, each relation pair
 must use a matching [`relationName`](https://orm.drizzle.team/docs/relations#disambiguating-relations).
 The CLI generates these names automatically. If you generated your schema with
-an older CLI, regenerate it or add matching names to both sides:
+an older CLI, regenerate it or add matching names to both sides.
+
+The `relationName` prefix follows your table naming: with `usePlural: true` it
+is plural (`tests_userId`), otherwise singular (`test_userId`). Keep both sides
+identical.
 
 ```ts title="schema.ts"
 export const usersRelations = relations(users, ({ many }) => ({
