@@ -46,4 +46,6 @@ encoredev
 korthout
 esac
 elif
+anthropics
+nextjs
 
