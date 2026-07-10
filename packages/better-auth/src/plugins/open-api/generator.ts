@@ -75,10 +75,7 @@ type OpenAPIResponse = {
 
 type OpenAPIRequestBody = {
 	required?: boolean;
-	content: {
-		"application/json": OpenAPIRequestMediaTypeObject;
-		[contentType: string]: OpenAPIRequestMediaTypeObject | undefined;
-	};
+	content: Record<string, OpenAPIRequestMediaTypeObject | undefined>;
 };
 
 type OpenAPIOperation = {
@@ -400,25 +397,33 @@ function mergeObjectSchemas(
 function getRequestBody(
 	options: EndpointOptions,
 ): OpenAPIRequestBody | undefined {
-	const contentTypes = options.metadata?.allowedMediaTypes?.filter(
+	const allowedContentTypes = options.metadata?.allowedMediaTypes?.filter(
 		(type) => type.length > 0,
-	) || ["application/json"];
+	);
+	const contentTypes = allowedContentTypes?.length
+		? allowedContentTypes
+		: ["application/json"];
 	if (options.metadata?.openapi?.requestBody) {
 		const requestBody = options.metadata.openapi.requestBody;
-		const mediaType =
-			requestBody.content["application/json"] ||
-			Object.values(requestBody.content).find((value) => value !== undefined);
-		if (!mediaType) {
-			return requestBody;
-		}
+		const requestBodyContent =
+			requestBody.content as OpenAPIRequestBody["content"];
+		const fallbackMediaType =
+			requestBodyContent["application/json"] ??
+			Object.values(requestBodyContent).find((value) => value !== undefined);
+		const content = Object.fromEntries(
+			contentTypes
+				.map((contentType) => {
+					const mediaType =
+						requestBodyContent[contentType] ?? fallbackMediaType;
+					return mediaType
+						? ([contentType, cloneOpenAPIValue(mediaType)] as const)
+						: undefined;
+				})
+				.filter((entry) => entry !== undefined),
+		);
 		return {
 			...requestBody,
-			content: Object.fromEntries(
-				contentTypes.map((contentType) => [
-					contentType,
-					cloneOpenAPIValue(mediaType),
-				]),
-			) as OpenAPIRequestBody["content"],
+			content,
 		};
 	}
 	if (!options.body) return undefined;
