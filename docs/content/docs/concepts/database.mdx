@@ -1019,10 +1019,24 @@ Since Better-Auth version `1.4` we've introduced database joins support.
 This allows Better-Auth to perform multiple database queries in a single request, reducing the number of database roundtrips.
 Over 50 endpoints support joins, and we're constantly adding more.
 
-Joins are enabled by default. Under the hood, our adapter system supports joins natively.
-If an adapter cannot return joined data for a query, Better-Auth falls back to making multiple database queries and combining the results.
+Under the hood, our adapter system supports joins natively. When joins are disabled (the default),
+Better-Auth falls back to making multiple database queries and combining the results.
 
-Be sure your DrizzleORM or PrismaORM schema includes the necessary relationships — run our migrate or generate CLI commands to stay up-to-date.
+To enable joins, update your auth config with the following:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  advanced: {
+    database: {
+      joins: true,
+    },
+  },
+});
+```
+
+Make sure your DrizzleORM or PrismaORM schema includes the necessary relationships — run our migrate or generate CLI commands to stay up-to-date.
 
 Read the documentation regarding joins for your given adapter:
 

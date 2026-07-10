@@ -49,7 +49,9 @@ describe("drizzle relations-v2 adapter: plural db.query keys", () => {
 	const adapter = drizzleAdapter(db, {
 		schema: { user: users, session: sessions, relations },
 		provider: "sqlite",
-	})({});
+	})({
+		advanced: { database: { joins: true } },
+	});
 
 	beforeEach(() => {
 		sqliteDb.exec("DROP TABLE IF EXISTS session;");
@@ -128,7 +130,9 @@ describe("drizzle relations-v2 adapter: missing relational query namespace", () 
 	const adapter = drizzleAdapter(db, {
 		schema: { user: users, session: sessions, relations },
 		provider: "sqlite",
-	})({});
+	})({
+		advanced: { database: { joins: true } },
+	});
 
 	beforeEach(() => {
 		sqliteDb.exec("DROP TABLE IF EXISTS user;");
@@ -174,7 +178,9 @@ describe("drizzle relations-v2 adapter: query key via relations internal", () =>
 	const adapter = drizzleAdapter(db, {
 		schema: { user: users, session: sessions, relations },
 		provider: "sqlite",
-	})({});
+	})({
+		advanced: { database: { joins: true } },
+	});
 
 	beforeEach(() => {
 		sqliteDb.exec("DROP TABLE IF EXISTS session;");

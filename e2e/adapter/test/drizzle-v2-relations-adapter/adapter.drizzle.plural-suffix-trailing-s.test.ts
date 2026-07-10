@@ -53,6 +53,7 @@ describe("drizzle relations-v2 adapter: join model name ending in 's'", () => {
 		schema: { user: users, address, relations },
 		provider: "sqlite",
 	})({
+		advanced: { database: { joins: true } },
 		plugins: [
 			{
 				id: "test-address",

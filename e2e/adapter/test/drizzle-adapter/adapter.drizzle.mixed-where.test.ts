@@ -218,7 +218,9 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 			schema: adapterSchema,
 			provider: "sqlite",
 		});
-		const adapter = adapterFactory({});
+		const adapter = adapterFactory({
+			advanced: { database: { joins: true } },
+		});
 
 		const result = await adapter.findMany<User>({
 			model: "user",
@@ -231,6 +233,7 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 					connector: "OR",
 				},
 			],
+			join: { session: true },
 		});
 
 		expect(result).toHaveLength(1);
@@ -260,7 +263,9 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 			schema: adapterSchema,
 			provider: "sqlite",
 		});
-		const adapter = adapterFactory({});
+		const adapter = adapterFactory({
+			advanced: { database: { joins: true } },
+		});
 
 		const result = await adapter.findOne<User>({
 			model: "user",
@@ -273,6 +278,7 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 					connector: "OR",
 				},
 			],
+			join: { session: true },
 		});
 
 		expect(result).not.toBeNull();
@@ -296,7 +302,9 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 			schema: adapterSchema,
 			provider: "sqlite",
 		});
-		const adapter = adapterFactory({});
+		const adapter = adapterFactory({
+			advanced: { database: { joins: true } },
+		});
 
 		const result = await adapter.findMany<User>({
 			model: "user",
@@ -309,6 +317,7 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 					connector: "OR",
 				},
 			],
+			join: { session: true },
 		});
 
 		expect(result).toHaveLength(0);
@@ -330,7 +339,9 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 			schema: adapterSchema,
 			provider: "sqlite",
 		});
-		const adapter = adapterFactory({});
+		const adapter = adapterFactory({
+			advanced: { database: { joins: true } },
+		});
 
 		const result = await adapter.findMany<User>({
 			model: "user",
@@ -350,6 +361,7 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 					connector: "OR",
 				},
 			],
+			join: { session: true },
 		});
 
 		expect(result).toHaveLength(3);
@@ -374,7 +386,9 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 			schema: adapterSchema,
 			provider: "sqlite",
 		});
-		const adapter = adapterFactory({});
+		const adapter = adapterFactory({
+			advanced: { database: { joins: true } },
+		});
 
 		const result = await adapter.findOne<User>({
 			model: "user",
@@ -387,6 +401,7 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 					connector: "OR",
 				},
 			],
+			join: { session: true },
 		});
 
 		expect(result).toBeNull();

@@ -454,6 +454,21 @@ export type BetterAuthAdvancedOptions = {
 				 * function.
 				 */
 				generateId?: GenerateIdFn | false | "serial" | "uuid";
+				/**
+				 * Enable database joins for adapters that support them.
+				 *
+				 * When disabled (default), related data is fetched via
+				 * separate queries. When enabled, adapters that support
+				 * native joins use them; otherwise Better Auth falls back
+				 * to separate queries.
+				 *
+				 * Please read the adapter documentation for more
+				 * information regarding joins before enabling this.
+				 * Not all adapters support joins.
+				 *
+				 * @default false
+				 */
+				joins?: boolean;
 		  }
 		| undefined;
 	/**

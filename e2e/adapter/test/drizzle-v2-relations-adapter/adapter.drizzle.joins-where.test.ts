@@ -31,7 +31,9 @@ describe("drizzle relations-v2 adapter: joins path honors insensitive mode", () 
 	const adapter = drizzleAdapter(db, {
 		schema,
 		provider: "sqlite",
-	})({});
+	})({
+		advanced: { database: { joins: true } },
+	});
 
 	beforeEach(() => {
 		sqliteDb.exec("DROP TABLE IF EXISTS user;");

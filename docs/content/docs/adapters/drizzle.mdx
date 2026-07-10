@@ -65,7 +65,20 @@ Database joins is useful when Better-Auth needs to fetch related data from multi
 Endpoints like `/get-session`, `/get-full-organization` and many others benefit greatly from this feature,
 seeing upwards of 2x to 3x performance improvements depending on database latency.
 
-The Drizzle adapter supports joins out of the box since version `1.4.0`. Joins are enabled by default.
+The Drizzle adapter supports joins out of the box since version `1.4.0`.
+To enable this feature, set `advanced.database.joins` to `true` in your auth configuration.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  advanced: {
+    database: {
+      joins: true,
+    },
+  },
+});
+```
 
 <Callout type="warn">
   Please make sure that your Drizzle schema has the necessary relations defined.

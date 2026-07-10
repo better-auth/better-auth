@@ -1762,6 +1762,13 @@ describe("Fallback JoinOption System", async () => {
 				config: {
 					debugLogs: {},
 				},
+				options: {
+					advanced: {
+						database: {
+							joins: true,
+						},
+					},
+				},
 				adapter: () =>
 					({
 						async findOne({ model, where, join }: any) {
@@ -1820,6 +1827,13 @@ describe("Fallback JoinOption System", async () => {
 			const adapter = await createTestAdapter({
 				config: {
 					debugLogs: {},
+				},
+				options: {
+					advanced: {
+						database: {
+							joins: true,
+						},
+					},
 				},
 				adapter: () =>
 					({
@@ -1890,13 +1904,20 @@ describe("Fallback JoinOption System", async () => {
 		});
 	});
 
-	describe("native join support", () => {
+	describe("native join support (advanced.database.joins: true)", () => {
 		test("findOne: Should pass join to adapter and use nested data when present", async () => {
 			let joinPassedToAdapter = null;
 
 			const adapter = await createTestAdapter({
 				config: {
 					debugLogs: {},
+				},
+				options: {
+					advanced: {
+						database: {
+							joins: true,
+						},
+					},
 				},
 				adapter: () =>
 					({
@@ -1940,6 +1961,13 @@ describe("Fallback JoinOption System", async () => {
 				config: {
 					debugLogs: {},
 				},
+				options: {
+					advanced: {
+						database: {
+							joins: true,
+						},
+					},
+				},
 				adapter: () =>
 					({
 						async findMany({ model, join }: any) {
@@ -1979,8 +2007,8 @@ describe("Fallback JoinOption System", async () => {
 		});
 	});
 
-	describe("default behavior (joins always on)", () => {
-		test("Should pass join to adapter by default", async () => {
+	describe("default behavior (joins disabled)", () => {
+		test("Should not pass join to adapter by default", async () => {
 			let joinPassedToAdapter = null;
 
 			const adapter = await createTestAdapter({
@@ -1998,8 +2026,13 @@ describe("Fallback JoinOption System", async () => {
 								createdAt: new Date(),
 								updatedAt: new Date(),
 								name: "Test User",
-								session: [],
 							};
+						},
+						async findMany({ model }: any) {
+							if (model === "session") {
+								return [];
+							}
+							return [];
 						},
 					}) as any,
 			});
@@ -2010,8 +2043,7 @@ describe("Fallback JoinOption System", async () => {
 				join: { session: true },
 			});
 
-			expect(joinPassedToAdapter).not.toBeUndefined();
-			expect(joinPassedToAdapter).toHaveProperty("session");
+			expect(joinPassedToAdapter).toBeUndefined();
 		});
 	});
 });

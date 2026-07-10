@@ -33,7 +33,9 @@ describe("drizzle relations-v2 adapter: LIKE escaping on the joins path", () => 
 	const adapter = drizzleAdapter(db, {
 		schema: { ...tables, relations },
 		provider: "sqlite",
-	})({});
+	})({
+		advanced: { database: { joins: true } },
+	});
 
 	beforeEach(() => {
 		sqliteDb.exec("DROP TABLE IF EXISTS user;");

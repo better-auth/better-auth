@@ -37,12 +37,19 @@ export const schemaRefTestSuite = createTestSuite(
 );
 
 /**
- * Same as the normal standard notation test suite, exercising the joins path.
+ * Same as the normal standard notation test suite, but with joins enabled.
  */
 export const schemaRefJoinTestSuite = createTestSuite(
 	"schema-reference-join",
 	{
-		defaultBetterAuthOptions: DEFAULT_BETTER_AUTH_OPTIONS,
+		defaultBetterAuthOptions: {
+			...DEFAULT_BETTER_AUTH_OPTIONS,
+			advanced: {
+				database: {
+					joins: true,
+				},
+			},
+		},
 		alwaysMigrate: true,
 		prefixTests: "schema-reference-join",
 	},
