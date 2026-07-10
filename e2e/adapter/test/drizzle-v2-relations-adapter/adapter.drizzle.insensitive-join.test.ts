@@ -1,7 +1,7 @@
 /**
  * The adapter skipped the relational query for case-insensitive where clauses,
- * falling back to the non-relational path. Under `experimental.joins` that
- * returned empty joins, so insensitive conditions are now routed through `RAW`.
+ * falling back to the non-relational path and returning empty joins.
+ * Insensitive conditions are now routed through `RAW`.
  */
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 import Database from "better-sqlite3";
@@ -46,7 +46,7 @@ describe("drizzle relations-v2 adapter: case-insensitive where on the joins path
 	const adapter = drizzleAdapter(db, {
 		schema: { ...tables, relations },
 		provider: "sqlite",
-	})({ experimental: { joins: true } });
+	})({});
 
 	beforeEach(() => {
 		sqliteDb.exec("DROP TABLE IF EXISTS session;");

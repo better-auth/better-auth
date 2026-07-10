@@ -425,19 +425,17 @@ export const createAdapterFactory =
 				joinConfig,
 			} of requiredModels) {
 				let joinedData = await (async () => {
-					if (options.experimental?.joins) {
-						const result = data[modelName];
-						return result;
-					} else {
-						// doesn't support joins, so fallback to handleFallbackJoin
-						const result = await handleFallbackJoin({
-							baseModel: unsafe_model,
-							baseData: transformedData,
-							joinModel: modelName,
-							specificJoinConfig: joinConfig,
-						});
-						return result;
+					// Use native joined data when the adapter included the key;
+					// otherwise fall back to separate queries.
+					if (modelName in data) {
+						return data[modelName];
 					}
+					return await handleFallbackJoin({
+						baseModel: unsafe_model,
+						baseData: transformedData,
+						joinModel: modelName,
+						specificJoinConfig: joinConfig,
+					});
 				})();
 
 				// If joinedData is undefined, initialize it based on relationship type
@@ -1111,17 +1109,11 @@ export const createAdapterFactory =
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				let join: JoinConfig | undefined;
-				let passJoinToAdapter = true;
 				if (!config.disableTransformJoin) {
 					const result = transformJoinClause(unsafeModel, unsafeJoin, select);
 					if (result) {
 						join = result.join;
 						select = result.select;
-					}
-					// If adapter doesn't support joins and we have joins, don't pass them to the adapter
-					const experimentalJoins = options.experimental?.joins;
-					if (!experimentalJoins && join && Object.keys(join).length > 0) {
-						passJoinToAdapter = false;
 					}
 				} else {
 					// assume it's already transformed if transformation is disabled
@@ -1145,7 +1137,7 @@ export const createAdapterFactory =
 							model,
 							where,
 							select,
-							join: passJoinToAdapter ? join : undefined,
+							join,
 						}),
 				);
 				debugLog(
@@ -1199,17 +1191,11 @@ export const createAdapterFactory =
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				let join: JoinConfig | undefined;
-				let passJoinToAdapter = true;
 				if (!config.disableTransformJoin) {
 					const result = transformJoinClause(unsafeModel, unsafeJoin, select);
 					if (result) {
 						join = result.join;
 						select = result.select;
-					}
-					// If adapter doesn't support joins and we have joins, don't pass them to the adapter
-					const experimentalJoins = options.experimental?.joins;
-					if (!experimentalJoins && join && Object.keys(join).length > 0) {
-						passJoinToAdapter = false;
 					}
 				} else {
 					// assume it's already transformed if transformation is disabled
@@ -1235,7 +1221,7 @@ export const createAdapterFactory =
 							select,
 							sortBy,
 							offset,
-							join: passJoinToAdapter ? join : undefined,
+							join,
 						}),
 				);
 				debugLog(

@@ -1013,34 +1013,23 @@ To add new tables and columns to your database, you have two options:
 
 Both methods ensure your database schema stays up to date with your plugins' requirements.
 
-## Experimental Joins
+## Joins
 
-Since Better-Auth version `1.4` we've introduced experimental database joins support.
+Since Better-Auth version `1.4` we've introduced database joins support.
 This allows Better-Auth to perform multiple database queries in a single request, reducing the number of database roundtrips.
 Over 50 endpoints support joins, and we're constantly adding more.
 
-Under the hood, our adapter system supports joins natively, meaning even if you don't enable experimental joins,
-it will still fallback to making multiple database queries and combining the results.
+Joins are enabled by default. Under the hood, our adapter system supports joins natively.
+If an adapter cannot return joined data for a query, Better-Auth falls back to making multiple database queries and combining the results.
 
-To enable joins, update your auth config with the following:
+Be sure your DrizzleORM or PrismaORM schema includes the necessary relationships — run our migrate or generate CLI commands to stay up-to-date.
 
-```ts title="auth.ts"
-import { betterAuth } from "better-auth";
+Read the documentation regarding joins for your given adapter:
 
-export const auth = betterAuth({
-  experimental: { joins: true }
-});
-```
-
-The Better-Auth `1.4` CLI will generate DrizzleORM and PrismaORM relationships for you so if you do not have those already
-be sure to update your schema by running our migrate or generate CLI commands to be up-to-date with the latest required schema.
-
-It's very important to read the documentation regarding experimental joins for your given adapter:
-
-* [DrizzleORM](/docs/adapters/drizzle#joins-experimental)
-* [PrismaORM](/docs/adapters/prisma#joins-experimental)
-* [SQLite](/docs/adapters/sqlite#joins-experimental)
-* [MySQL](/docs/adapters/mysql#joins-experimental)
-* [PostgreSQL](/docs/adapters/postgresql#joins-experimental)
-* [MSSQL](/docs/adapters/mssql#joins-experimental)
-* [MongoDB](/docs/adapters/mongo#joins-experimental)
+* [DrizzleORM](/docs/adapters/drizzle#joins)
+* [PrismaORM](/docs/adapters/prisma#joins)
+* [SQLite](/docs/adapters/sqlite#joins)
+* [MySQL](/docs/adapters/mysql#joins)
+* [PostgreSQL](/docs/adapters/postgresql#joins)
+* [MSSQL](/docs/adapters/mssql#joins)
+* [MongoDB](/docs/adapters/mongo#joins)

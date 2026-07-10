@@ -117,7 +117,7 @@ const adapterSchema = {
 
 // ── Tests ──
 
-describe("drizzle adapter: singular config.schema keys with plural db.query keys + experimental.joins", () => {
+describe("drizzle adapter: singular config.schema keys with plural db.query keys + joins", () => {
 	let sqliteDb: InstanceType<typeof Database>;
 	let db: ReturnType<typeof drizzle>;
 
@@ -183,9 +183,7 @@ describe("drizzle adapter: singular config.schema keys with plural db.query keys
 			// usePlural is NOT set (default: false) — this is the common config
 		});
 
-		const adapter = adapterFactory({
-			experimental: { joins: true },
-		});
+		const adapter = adapterFactory({});
 
 		const now = new Date();
 		const nowTs = now.getTime();
@@ -237,9 +235,7 @@ describe("drizzle adapter: singular config.schema keys with plural db.query keys
 			provider: "sqlite",
 		});
 
-		const adapter = adapterFactory({
-			experimental: { joins: true },
-		});
+		const adapter = adapterFactory({});
 
 		// findMany with join — exercises the findMany join path
 		const allUsers = await adapter.findMany<User & { session: Session[] }>({

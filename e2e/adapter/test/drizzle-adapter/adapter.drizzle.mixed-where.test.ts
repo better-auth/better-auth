@@ -208,7 +208,7 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/7271
 	 *
-	 * Same query on the experimental joins path.
+	 * Same query on the joins path.
 	 * The bug: `clause[0]` is used, dropping the OR group entirely.
 	 * Only the AND clause (email LIKE '%company.com%') is applied,
 	 * returning u1 AND u2 instead of just u1.
@@ -218,9 +218,7 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 			schema: adapterSchema,
 			provider: "sqlite",
 		});
-		const adapter = adapterFactory({
-			experimental: { joins: true },
-		});
+		const adapter = adapterFactory({});
 
 		const result = await adapter.findMany<User>({
 			model: "user",
@@ -262,9 +260,7 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 			schema: adapterSchema,
 			provider: "sqlite",
 		});
-		const adapter = adapterFactory({
-			experimental: { joins: true },
-		});
+		const adapter = adapterFactory({});
 
 		const result = await adapter.findOne<User>({
 			model: "user",
@@ -300,9 +296,7 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 			schema: adapterSchema,
 			provider: "sqlite",
 		});
-		const adapter = adapterFactory({
-			experimental: { joins: true },
-		});
+		const adapter = adapterFactory({});
 
 		const result = await adapter.findMany<User>({
 			model: "user",
@@ -336,9 +330,7 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 			schema: adapterSchema,
 			provider: "sqlite",
 		});
-		const adapter = adapterFactory({
-			experimental: { joins: true },
-		});
+		const adapter = adapterFactory({});
 
 		const result = await adapter.findMany<User>({
 			model: "user",
@@ -382,9 +374,7 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 			schema: adapterSchema,
 			provider: "sqlite",
 		});
-		const adapter = adapterFactory({
-			experimental: { joins: true },
-		});
+		const adapter = adapterFactory({});
 
 		const result = await adapter.findOne<User>({
 			model: "user",

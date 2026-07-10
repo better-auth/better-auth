@@ -648,7 +648,6 @@ export const auth = betterAuth({
 				return "my-super-unique-id";
 			})) | false | "serial" | "uuid",
 			defaultFindManyLimit: 100,
-			experimentalJoins: false,
 		},
 		backgroundTasks: {
 			handler: (promise) => { /* e.g. waitUntil(promise) */ }
