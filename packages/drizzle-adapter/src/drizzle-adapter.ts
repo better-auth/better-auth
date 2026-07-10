@@ -722,6 +722,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			 *    corresponds to the same table object
 			 */
 			function getQueryModel(model: string): string | null {
+				if (!db.query) return null;
 				if (db.query[model]) return model;
 
 				if (config.usePlural) {
@@ -845,7 +846,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 
 					if (join) {
 						const queryModel = getQueryModel(model);
-						if (!queryModel) {
+						if (!db.query || !queryModel) {
 							logger.error(
 								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx auth@latest generate".`,
 							);
