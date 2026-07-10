@@ -23,7 +23,7 @@ export const auth = betterAuth({
 
 All cookies are `httpOnly` and `secure` when the server is running in production mode.
 
-If you want to set custom cookie names and attributes, you can do so by setting `cookieOptions` in the `advanced` object of the auth options.
+If you want to set custom cookie names and attributes, you can do so by setting `cookies` in the `advanced` object of the auth options.
 
 By default, Better Auth uses the following cookies:
 
@@ -138,7 +138,7 @@ https://domainA.com/api/auth/*
 you can call:
 
 ```
-https://app.domainA.com/api/auth/*
+https://app.domainB.com/api/auth/*
 ```
 
 Then configure your hosting provider to proxy the request to your actual API server.
