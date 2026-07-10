@@ -11,6 +11,8 @@ export function markHttpRootSpan(span: object): void {
 	httpRootSpans.add(span);
 }
 
-export function isHttpRootSpan(span: object | undefined | null): boolean {
+export function isHttpRootSpan<T extends object>(
+	span: T | undefined | null,
+): span is T {
 	return span != null && httpRootSpans.has(span);
 }
