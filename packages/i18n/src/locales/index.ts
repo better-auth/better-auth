@@ -42,6 +42,8 @@ import { passkeyTranslations } from "./plugins/passkey";
 import { stripeTranslations } from "./plugins/stripe";
 import { ssoTranslations } from "./plugins/sso";
 
+import { electronTranslations } from "./plugins/electron";
+
 // ─── Core locales merged with plugin translations ─────────────────────────────
 
 export const ar = {
@@ -63,6 +65,7 @@ export const ar = {
 	...passkeyTranslations.ar,
 	...stripeTranslations.ar,
 	...ssoTranslations.ar,
+	...electronTranslations.ar,
 };
 
 export const bn = {
@@ -84,6 +87,7 @@ export const bn = {
 	...passkeyTranslations.bn,
 	...stripeTranslations.bn,
 	...ssoTranslations.bn,
+	...electronTranslations.bn,
 };
 
 export const de = {
@@ -105,6 +109,7 @@ export const de = {
 	...passkeyTranslations.de,
 	...stripeTranslations.de,
 	...ssoTranslations.de,
+	...electronTranslations.de,
 };
 
 export const en = {
@@ -126,6 +131,7 @@ export const en = {
 	...passkeyTranslations.en,
 	...stripeTranslations.en,
 	...ssoTranslations.en,
+	...electronTranslations.en,
 };
 
 export const es = {
@@ -147,6 +153,7 @@ export const es = {
 	...passkeyTranslations.es,
 	...stripeTranslations.es,
 	...ssoTranslations.es,
+	...electronTranslations.es,
 };
 
 export const fa = {
@@ -168,6 +175,7 @@ export const fa = {
 	...passkeyTranslations.fa,
 	...stripeTranslations.fa,
 	...ssoTranslations.fa,
+	...electronTranslations.fa,
 };
 
 export const fr = {
@@ -189,6 +197,7 @@ export const fr = {
 	...passkeyTranslations.fr,
 	...stripeTranslations.fr,
 	...ssoTranslations.fr,
+	...electronTranslations.fr,
 };
 
 export const hi = {
@@ -210,6 +219,7 @@ export const hi = {
 	...passkeyTranslations.hi,
 	...stripeTranslations.hi,
 	...ssoTranslations.hi,
+	...electronTranslations.hi,
 };
 
 export const id = {
@@ -231,6 +241,7 @@ export const id = {
 	...passkeyTranslations.id,
 	...stripeTranslations.id,
 	...ssoTranslations.id,
+	...electronTranslations.id,
 };
 
 export const it = {
@@ -252,6 +263,7 @@ export const it = {
 	...passkeyTranslations.it,
 	...stripeTranslations.it,
 	...ssoTranslations.it,
+	...electronTranslations.it,
 };
 
 export const ja = {
@@ -273,6 +285,7 @@ export const ja = {
 	...passkeyTranslations.ja,
 	...stripeTranslations.ja,
 	...ssoTranslations.ja,
+	...electronTranslations.ja,
 };
 
 export const ko = {
@@ -294,6 +307,7 @@ export const ko = {
 	...passkeyTranslations.ko,
 	...stripeTranslations.ko,
 	...ssoTranslations.ko,
+	...electronTranslations.ko,
 };
 
 export const nl = {
@@ -315,6 +329,7 @@ export const nl = {
 	...passkeyTranslations.nl,
 	...stripeTranslations.nl,
 	...ssoTranslations.nl,
+	...electronTranslations.nl,
 };
 
 export const pl = {
@@ -336,6 +351,7 @@ export const pl = {
 	...passkeyTranslations.pl,
 	...stripeTranslations.pl,
 	...ssoTranslations.pl,
+	...electronTranslations.pl,
 };
 
 export const pt = {
@@ -357,6 +373,7 @@ export const pt = {
 	...passkeyTranslations.pt,
 	...stripeTranslations.pt,
 	...ssoTranslations.pt,
+	...electronTranslations.pt,
 };
 
 export const ru = {
@@ -378,6 +395,7 @@ export const ru = {
 	...passkeyTranslations.ru,
 	...stripeTranslations.ru,
 	...ssoTranslations.ru,
+	...electronTranslations.ru,
 };
 
 export const sv = {
@@ -399,6 +417,7 @@ export const sv = {
 	...passkeyTranslations.sv,
 	...stripeTranslations.sv,
 	...ssoTranslations.sv,
+	...electronTranslations.sv,
 };
 
 export const th = {
@@ -420,6 +439,7 @@ export const th = {
 	...passkeyTranslations.th,
 	...stripeTranslations.th,
 	...ssoTranslations.th,
+	...electronTranslations.th,
 };
 
 export const tr = {
@@ -441,6 +461,7 @@ export const tr = {
 	...passkeyTranslations.tr,
 	...stripeTranslations.tr,
 	...ssoTranslations.tr,
+	...electronTranslations.tr,
 };
 
 export const uk = {
@@ -462,6 +483,7 @@ export const uk = {
 	...passkeyTranslations.uk,
 	...stripeTranslations.uk,
 	...ssoTranslations.uk,
+	...electronTranslations.uk,
 };
 
 export const vi = {
@@ -483,6 +505,7 @@ export const vi = {
 	...passkeyTranslations.vi,
 	...stripeTranslations.vi,
 	...ssoTranslations.vi,
+	...electronTranslations.vi,
 };
 
 export const zh = {
@@ -504,4 +527,5 @@ export const zh = {
 	...passkeyTranslations.zh,
 	...stripeTranslations.zh,
 	...ssoTranslations.zh,
+	...electronTranslations.zh,
 };

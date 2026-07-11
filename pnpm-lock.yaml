@@ -1311,6 +1311,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/electron':
+        specifier: workspace:*
+        version: link:../electron
       '@better-auth/passkey':
         specifier: workspace:*
         version: link:../passkey

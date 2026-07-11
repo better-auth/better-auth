@@ -1,5 +1,6 @@
 import { apiKey } from "@better-auth/api-key";
 import { apiKeyClient } from "@better-auth/api-key/client";
+import { electron } from "@better-auth/electron";
 import { passkey } from "@better-auth/passkey";
 import { passkeyClient } from "@better-auth/passkey/client";
 import { sso } from "@better-auth/sso";
@@ -427,6 +428,34 @@ describe("i18n plugin - Plugins", async () => {
 			expect(error!.message).toBe(
 				"La déconnexion unique (Single Logout) n'est pas activée",
 			);
+		});
+
+		it("should translate electron errors to French when Accept-Language is fr", async () => {
+			const { client } = (await getTestInstance({
+				plugins: [
+					electron(),
+					i18n({
+						translations: locales,
+						defaultLocale: "en",
+						detection: ["header"],
+					}),
+				],
+			})) as any;
+
+			const { error } = await client.$fetch("/electron/token", {
+				method: "POST",
+				body: {
+					token: "fake-token",
+					state: "fake-state",
+					code_verifier: "fake-verifier",
+				},
+				headers: {
+					"Accept-Language": "fr",
+				},
+			});
+
+			expect(error!.code).toBe("INVALID_TOKEN");
+			expect(error!.message).toBe("Jeton invalide ou expiré.");
 		});
 	});
 });
