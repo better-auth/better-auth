@@ -31,6 +31,8 @@ import type {
 	UserWithAnonymous,
 } from "./types";
 
+export * from "./error-codes";
+
 /**
  * Resolves the anonymous session being upgraded during an account-link callback.
  *

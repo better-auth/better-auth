@@ -26,6 +26,8 @@ import { emailOtpTranslations } from "./plugins/email-otp";
 import { phoneNumberTranslations } from "./plugins/phone-number";
 import { twoFactorTranslations } from "./plugins/two-factor";
 import { usernameTranslations } from "./plugins/username";
+import { anonymousTranslations } from "./plugins/anonymous";
+import { adminTranslations } from "./plugins/admin";
 
 // ─── Core locales merged with plugin translations ─────────────────────────────
 
@@ -35,6 +37,8 @@ export const ar = {
 	...emailOtpTranslations.ar,
 	...twoFactorTranslations.ar,
 	...usernameTranslations.ar,
+	...anonymousTranslations.ar,
+	...adminTranslations.ar,
 };
 
 export const bn = {
@@ -43,6 +47,8 @@ export const bn = {
 	...emailOtpTranslations.bn,
 	...twoFactorTranslations.bn,
 	...usernameTranslations.bn,
+	...anonymousTranslations.bn,
+	...adminTranslations.bn,
 };
 
 export const de = {
@@ -51,6 +57,8 @@ export const de = {
 	...emailOtpTranslations.de,
 	...twoFactorTranslations.de,
 	...usernameTranslations.de,
+	...anonymousTranslations.de,
+	...adminTranslations.de,
 };
 
 export const en = {
@@ -59,6 +67,8 @@ export const en = {
 	...emailOtpTranslations.en,
 	...twoFactorTranslations.en,
 	...usernameTranslations.en,
+	...anonymousTranslations.en,
+	...adminTranslations.en,
 };
 
 export const es = {
@@ -67,6 +77,8 @@ export const es = {
 	...emailOtpTranslations.es,
 	...twoFactorTranslations.es,
 	...usernameTranslations.es,
+	...anonymousTranslations.es,
+	...adminTranslations.es,
 };
 
 export const fa = {
@@ -75,6 +87,8 @@ export const fa = {
 	...emailOtpTranslations.fa,
 	...twoFactorTranslations.fa,
 	...usernameTranslations.fa,
+	...anonymousTranslations.fa,
+	...adminTranslations.fa,
 };
 
 export const fr = {
@@ -83,6 +97,8 @@ export const fr = {
 	...emailOtpTranslations.fr,
 	...twoFactorTranslations.fr,
 	...usernameTranslations.fr,
+	...anonymousTranslations.fr,
+	...adminTranslations.fr,
 };
 
 export const hi = {
@@ -91,6 +107,8 @@ export const hi = {
 	...emailOtpTranslations.hi,
 	...twoFactorTranslations.hi,
 	...usernameTranslations.hi,
+	...anonymousTranslations.hi,
+	...adminTranslations.hi,
 };
 
 export const id = {
@@ -99,6 +117,8 @@ export const id = {
 	...emailOtpTranslations.id,
 	...twoFactorTranslations.id,
 	...usernameTranslations.id,
+	...anonymousTranslations.id,
+	...adminTranslations.id,
 };
 
 export const it = {
@@ -107,6 +127,8 @@ export const it = {
 	...emailOtpTranslations.it,
 	...twoFactorTranslations.it,
 	...usernameTranslations.it,
+	...anonymousTranslations.it,
+	...adminTranslations.it,
 };
 
 export const ja = {
@@ -115,6 +137,8 @@ export const ja = {
 	...emailOtpTranslations.ja,
 	...twoFactorTranslations.ja,
 	...usernameTranslations.ja,
+	...anonymousTranslations.ja,
+	...adminTranslations.ja,
 };
 
 export const ko = {
@@ -123,6 +147,8 @@ export const ko = {
 	...emailOtpTranslations.ko,
 	...twoFactorTranslations.ko,
 	...usernameTranslations.ko,
+	...anonymousTranslations.ko,
+	...adminTranslations.ko,
 };
 
 export const nl = {
@@ -131,6 +157,8 @@ export const nl = {
 	...emailOtpTranslations.nl,
 	...twoFactorTranslations.nl,
 	...usernameTranslations.nl,
+	...anonymousTranslations.nl,
+	...adminTranslations.nl,
 };
 
 export const pl = {
@@ -139,6 +167,8 @@ export const pl = {
 	...emailOtpTranslations.pl,
 	...twoFactorTranslations.pl,
 	...usernameTranslations.pl,
+	...anonymousTranslations.pl,
+	...adminTranslations.pl,
 };
 
 export const pt = {
@@ -147,6 +177,8 @@ export const pt = {
 	...emailOtpTranslations.pt,
 	...twoFactorTranslations.pt,
 	...usernameTranslations.pt,
+	...anonymousTranslations.pt,
+	...adminTranslations.pt,
 };
 
 export const ru = {
@@ -155,6 +187,8 @@ export const ru = {
 	...emailOtpTranslations.ru,
 	...twoFactorTranslations.ru,
 	...usernameTranslations.ru,
+	...anonymousTranslations.ru,
+	...adminTranslations.ru,
 };
 
 export const sv = {
@@ -163,6 +197,8 @@ export const sv = {
 	...emailOtpTranslations.sv,
 	...twoFactorTranslations.sv,
 	...usernameTranslations.sv,
+	...anonymousTranslations.sv,
+	...adminTranslations.sv,
 };
 
 export const th = {
@@ -171,6 +207,8 @@ export const th = {
 	...emailOtpTranslations.th,
 	...twoFactorTranslations.th,
 	...usernameTranslations.th,
+	...anonymousTranslations.th,
+	...adminTranslations.th,
 };
 
 export const tr = {
@@ -179,6 +217,8 @@ export const tr = {
 	...emailOtpTranslations.tr,
 	...twoFactorTranslations.tr,
 	...usernameTranslations.tr,
+	...anonymousTranslations.tr,
+	...adminTranslations.tr,
 };
 
 export const uk = {
@@ -187,6 +227,8 @@ export const uk = {
 	...emailOtpTranslations.uk,
 	...twoFactorTranslations.uk,
 	...usernameTranslations.uk,
+	...anonymousTranslations.uk,
+	...adminTranslations.uk,
 };
 
 export const vi = {
@@ -195,6 +237,8 @@ export const vi = {
 	...emailOtpTranslations.vi,
 	...twoFactorTranslations.vi,
 	...usernameTranslations.vi,
+	...anonymousTranslations.vi,
+	...adminTranslations.vi,
 };
 
 export const zh = {
@@ -203,4 +247,6 @@ export const zh = {
 	...emailOtpTranslations.zh,
 	...twoFactorTranslations.zh,
 	...usernameTranslations.zh,
+	...anonymousTranslations.zh,
+	...adminTranslations.zh,
 };
