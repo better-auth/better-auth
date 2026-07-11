@@ -1,3 +1,11 @@
+import { apiKey } from "@better-auth/api-key";
+import { apiKeyClient } from "@better-auth/api-key/client";
+import { passkey } from "@better-auth/passkey";
+import { passkeyClient } from "@better-auth/passkey/client";
+import { sso } from "@better-auth/sso";
+import { ssoClient } from "@better-auth/sso/client";
+import { stripe } from "@better-auth/stripe";
+import { stripeClient } from "@better-auth/stripe/client";
 import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
 import { admin } from "../../better-auth/src/plugins/admin";
@@ -270,6 +278,155 @@ describe("i18n plugin - Plugins", async () => {
 
 			expect(error!.code).toBe("INVALID_SESSION_TOKEN");
 			expect(error!.message).toBe("Jeton de session invalide");
+		});
+
+		it("should translate passkey errors to German when Accept-Language is de", async () => {
+			const { client } = (await getTestInstance(
+				{
+					plugins: [
+						passkey({
+							registration: {
+								requireSession: false,
+							},
+						}),
+						i18n({
+							translations: locales,
+							defaultLocale: "en",
+							detection: ["header"],
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [passkeyClient()],
+					},
+				},
+			)) as any;
+
+			const { error } = await client.$fetch(
+				"/passkey/generate-register-options",
+				{
+					method: "GET",
+					headers: {
+						"Accept-Language": "de",
+					},
+				},
+			);
+
+			expect(error!.code).toBe("RESOLVE_USER_REQUIRED");
+			expect(error!.message).toBe(
+				"Die Passkey-Registrierung erfordert entweder eine authentifizierte Sitzung oder einen resolveUser-Callback, wenn requireSession false ist",
+			);
+		});
+
+		it("should translate api-key errors to French when Accept-Language is fr", async () => {
+			const { client } = await getTestInstance(
+				{
+					plugins: [
+						apiKey(),
+						i18n({
+							translations: locales,
+							defaultLocale: "en",
+							detection: ["header"],
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [apiKeyClient()],
+					},
+				},
+			);
+
+			const { error } = await client.apiKey.create(
+				{
+					name: "test",
+				},
+				{
+					headers: {
+						"Accept-Language": "fr",
+					},
+				},
+			);
+
+			expect(error!.code).toBe("UNAUTHORIZED_SESSION");
+			expect(error!.message).toBe("Session non autorisée ou invalide");
+		});
+
+		it("should translate stripe errors to French when Accept-Language is fr", async () => {
+			const { client } = await getTestInstance(
+				{
+					plugins: [
+						stripe({
+							stripeClient: {} as any,
+							stripeWebhookSecret: "mock-secret",
+							subscription: {
+								enabled: true,
+								plans: [],
+							},
+						}),
+						i18n({
+							translations: locales,
+							defaultLocale: "en",
+							detection: ["header"],
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const { error } = await client.subscription.upgrade(
+				{
+					plan: "premium",
+				},
+				{
+					headers: {
+						"Accept-Language": "fr",
+					},
+				},
+			);
+
+			expect(error!.code).toBe("UNAUTHORIZED");
+			expect(error!.message).toBe("Accès non autorisé");
+		});
+
+		it("should translate sso errors to French when Accept-Language is fr", async () => {
+			const { client } = (await getTestInstance(
+				{
+					plugins: [
+						sso(),
+						i18n({
+							translations: locales,
+							defaultLocale: "en",
+							detection: ["header"],
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [ssoClient()],
+					},
+				},
+			)) as any;
+
+			const { error } = await client.$fetch(
+				"/sso/saml2/sp/slo/nonexistent-provider",
+				{
+					method: "POST",
+					headers: {
+						"Accept-Language": "fr",
+					},
+				},
+			);
+
+			expect(error!.code).toBe("SINGLE_LOGOUT_NOT_ENABLED");
+			expect(error!.message).toBe(
+				"La déconnexion unique (Single Logout) n'est pas activée",
+			);
 		});
 	});
 });

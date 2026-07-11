@@ -39,6 +39,9 @@ import { oauthPopupTranslations } from "./plugins/oauth-popup";
 import { apiKeyTranslations } from "./plugins/api-key";
 import { passkeyTranslations } from "./plugins/passkey";
 
+import { stripeTranslations } from "./plugins/stripe";
+import { ssoTranslations } from "./plugins/sso";
+
 // ─── Core locales merged with plugin translations ─────────────────────────────
 
 export const ar = {
@@ -58,6 +61,8 @@ export const ar = {
 	...oauthPopupTranslations.ar,
 	...apiKeyTranslations.ar,
 	...passkeyTranslations.ar,
+	...stripeTranslations.ar,
+	...ssoTranslations.ar,
 };
 
 export const bn = {
@@ -77,6 +82,8 @@ export const bn = {
 	...oauthPopupTranslations.bn,
 	...apiKeyTranslations.bn,
 	...passkeyTranslations.bn,
+	...stripeTranslations.bn,
+	...ssoTranslations.bn,
 };
 
 export const de = {
@@ -96,6 +103,8 @@ export const de = {
 	...oauthPopupTranslations.de,
 	...apiKeyTranslations.de,
 	...passkeyTranslations.de,
+	...stripeTranslations.de,
+	...ssoTranslations.de,
 };
 
 export const en = {
@@ -115,6 +124,8 @@ export const en = {
 	...oauthPopupTranslations.en,
 	...apiKeyTranslations.en,
 	...passkeyTranslations.en,
+	...stripeTranslations.en,
+	...ssoTranslations.en,
 };
 
 export const es = {
@@ -134,6 +145,8 @@ export const es = {
 	...oauthPopupTranslations.es,
 	...apiKeyTranslations.es,
 	...passkeyTranslations.es,
+	...stripeTranslations.es,
+	...ssoTranslations.es,
 };
 
 export const fa = {
@@ -153,6 +166,8 @@ export const fa = {
 	...oauthPopupTranslations.fa,
 	...apiKeyTranslations.fa,
 	...passkeyTranslations.fa,
+	...stripeTranslations.fa,
+	...ssoTranslations.fa,
 };
 
 export const fr = {
@@ -172,6 +187,8 @@ export const fr = {
 	...oauthPopupTranslations.fr,
 	...apiKeyTranslations.fr,
 	...passkeyTranslations.fr,
+	...stripeTranslations.fr,
+	...ssoTranslations.fr,
 };
 
 export const hi = {
@@ -191,6 +208,8 @@ export const hi = {
 	...oauthPopupTranslations.hi,
 	...apiKeyTranslations.hi,
 	...passkeyTranslations.hi,
+	...stripeTranslations.hi,
+	...ssoTranslations.hi,
 };
 
 export const id = {
@@ -210,6 +229,8 @@ export const id = {
 	...oauthPopupTranslations.id,
 	...apiKeyTranslations.id,
 	...passkeyTranslations.id,
+	...stripeTranslations.id,
+	...ssoTranslations.id,
 };
 
 export const it = {
@@ -229,6 +250,8 @@ export const it = {
 	...oauthPopupTranslations.it,
 	...apiKeyTranslations.it,
 	...passkeyTranslations.it,
+	...stripeTranslations.it,
+	...ssoTranslations.it,
 };
 
 export const ja = {
@@ -248,6 +271,8 @@ export const ja = {
 	...oauthPopupTranslations.ja,
 	...apiKeyTranslations.ja,
 	...passkeyTranslations.ja,
+	...stripeTranslations.ja,
+	...ssoTranslations.ja,
 };
 
 export const ko = {
@@ -267,6 +292,8 @@ export const ko = {
 	...oauthPopupTranslations.ko,
 	...apiKeyTranslations.ko,
 	...passkeyTranslations.ko,
+	...stripeTranslations.ko,
+	...ssoTranslations.ko,
 };
 
 export const nl = {
@@ -286,6 +313,8 @@ export const nl = {
 	...oauthPopupTranslations.nl,
 	...apiKeyTranslations.nl,
 	...passkeyTranslations.nl,
+	...stripeTranslations.nl,
+	...ssoTranslations.nl,
 };
 
 export const pl = {
@@ -305,6 +334,8 @@ export const pl = {
 	...oauthPopupTranslations.pl,
 	...apiKeyTranslations.pl,
 	...passkeyTranslations.pl,
+	...stripeTranslations.pl,
+	...ssoTranslations.pl,
 };
 
 export const pt = {
@@ -324,6 +355,8 @@ export const pt = {
 	...oauthPopupTranslations.pt,
 	...apiKeyTranslations.pt,
 	...passkeyTranslations.pt,
+	...stripeTranslations.pt,
+	...ssoTranslations.pt,
 };
 
 export const ru = {
@@ -343,6 +376,8 @@ export const ru = {
 	...oauthPopupTranslations.ru,
 	...apiKeyTranslations.ru,
 	...passkeyTranslations.ru,
+	...stripeTranslations.ru,
+	...ssoTranslations.ru,
 };
 
 export const sv = {
@@ -362,6 +397,8 @@ export const sv = {
 	...oauthPopupTranslations.sv,
 	...apiKeyTranslations.sv,
 	...passkeyTranslations.sv,
+	...stripeTranslations.sv,
+	...ssoTranslations.sv,
 };
 
 export const th = {
@@ -381,6 +418,8 @@ export const th = {
 	...oauthPopupTranslations.th,
 	...apiKeyTranslations.th,
 	...passkeyTranslations.th,
+	...stripeTranslations.th,
+	...ssoTranslations.th,
 };
 
 export const tr = {
@@ -400,6 +439,8 @@ export const tr = {
 	...oauthPopupTranslations.tr,
 	...apiKeyTranslations.tr,
 	...passkeyTranslations.tr,
+	...stripeTranslations.tr,
+	...ssoTranslations.tr,
 };
 
 export const uk = {
@@ -419,6 +460,8 @@ export const uk = {
 	...oauthPopupTranslations.uk,
 	...apiKeyTranslations.uk,
 	...passkeyTranslations.uk,
+	...stripeTranslations.uk,
+	...ssoTranslations.uk,
 };
 
 export const vi = {
@@ -438,6 +481,8 @@ export const vi = {
 	...oauthPopupTranslations.vi,
 	...apiKeyTranslations.vi,
 	...passkeyTranslations.vi,
+	...stripeTranslations.vi,
+	...ssoTranslations.vi,
 };
 
 export const zh = {
@@ -457,4 +502,6 @@ export const zh = {
 	...oauthPopupTranslations.zh,
 	...apiKeyTranslations.zh,
 	...passkeyTranslations.zh,
+	...stripeTranslations.zh,
+	...ssoTranslations.zh,
 };
