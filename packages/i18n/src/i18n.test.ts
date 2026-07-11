@@ -5,6 +5,8 @@ import { adminClient } from "../../better-auth/src/plugins/admin/client";
 import { anonymous } from "../../better-auth/src/plugins/anonymous";
 import { anonymousClient } from "../../better-auth/src/plugins/anonymous/client";
 import { emailOTP } from "../../better-auth/src/plugins/email-otp";
+import { multiSession } from "../../better-auth/src/plugins/multi-session";
+import { multiSessionClient } from "../../better-auth/src/plugins/multi-session/client";
 import { organization } from "../../better-auth/src/plugins/organization";
 import { organizationClient } from "../../better-auth/src/plugins/organization/client";
 import { phoneNumber } from "../../better-auth/src/plugins/phone-number";
@@ -682,6 +684,42 @@ describe("i18n plugin", async () => {
 
 			expect(error!.code).toBe("INVITATION_NOT_FOUND");
 			expect(error!.message).toBe("Invitation non trouvée");
+		});
+
+		it("should translate multi-session errors to French when Accept-Language is fr", async () => {
+			const { client } = (await getTestInstance(
+				{
+					plugins: [
+						multiSession(),
+						i18n({
+							translations: locales,
+							defaultLocale: "en",
+							detection: ["header"],
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [multiSessionClient() as any],
+					},
+				},
+			)) as any;
+
+			const { error } = await client.multiSession.setActive({
+				sessionToken: "invalid-token",
+				fetchOptions: {
+					headers: {
+						"Accept-Language": "fr",
+					},
+				},
+			});
+
+			expect(error!.code).toBe("INVALID_SESSION_TOKEN");
+			expect(error!.message).toBe("Jeton de session invalide");
+		});
+
+		it("should export device-authorization translations in French", () => {
+			expect(locales.fr.INVALID_DEVICE_CODE).toBe("Code d'appareil invalide");
 		});
 	});
 });

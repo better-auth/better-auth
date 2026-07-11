@@ -29,6 +29,8 @@ import { usernameTranslations } from "./plugins/username";
 import { anonymousTranslations } from "./plugins/anonymous";
 import { adminTranslations } from "./plugins/admin";
 import { organizationTranslations } from "./plugins/organization";
+import { multiSessionTranslations } from "./plugins/multi-session";
+import { deviceAuthorizationTranslations } from "./plugins/device-authorization";
 
 // ─── Core locales merged with plugin translations ─────────────────────────────
 
@@ -41,6 +43,8 @@ export const ar = {
 	...anonymousTranslations.ar,
 	...adminTranslations.ar,
 	...organizationTranslations.ar,
+	...multiSessionTranslations.ar,
+	...deviceAuthorizationTranslations.ar,
 };
 
 export const bn = {
@@ -52,6 +56,8 @@ export const bn = {
 	...anonymousTranslations.bn,
 	...adminTranslations.bn,
 	...organizationTranslations.bn,
+	...multiSessionTranslations.bn,
+	...deviceAuthorizationTranslations.bn,
 };
 
 export const de = {
@@ -63,6 +69,8 @@ export const de = {
 	...anonymousTranslations.de,
 	...adminTranslations.de,
 	...organizationTranslations.de,
+	...multiSessionTranslations.de,
+	...deviceAuthorizationTranslations.de,
 };
 
 export const en = {
@@ -74,6 +82,8 @@ export const en = {
 	...anonymousTranslations.en,
 	...adminTranslations.en,
 	...organizationTranslations.en,
+	...multiSessionTranslations.en,
+	...deviceAuthorizationTranslations.en,
 };
 
 export const es = {
@@ -85,6 +95,8 @@ export const es = {
 	...anonymousTranslations.es,
 	...adminTranslations.es,
 	...organizationTranslations.es,
+	...multiSessionTranslations.es,
+	...deviceAuthorizationTranslations.es,
 };
 
 export const fa = {
@@ -96,6 +108,8 @@ export const fa = {
 	...anonymousTranslations.fa,
 	...adminTranslations.fa,
 	...organizationTranslations.fa,
+	...multiSessionTranslations.fa,
+	...deviceAuthorizationTranslations.fa,
 };
 
 export const fr = {
@@ -107,6 +121,8 @@ export const fr = {
 	...anonymousTranslations.fr,
 	...adminTranslations.fr,
 	...organizationTranslations.fr,
+	...multiSessionTranslations.fr,
+	...deviceAuthorizationTranslations.fr,
 };
 
 export const hi = {
@@ -118,6 +134,8 @@ export const hi = {
 	...anonymousTranslations.hi,
 	...adminTranslations.hi,
 	...organizationTranslations.hi,
+	...multiSessionTranslations.hi,
+	...deviceAuthorizationTranslations.hi,
 };
 
 export const id = {
@@ -129,6 +147,8 @@ export const id = {
 	...anonymousTranslations.id,
 	...adminTranslations.id,
 	...organizationTranslations.id,
+	...multiSessionTranslations.id,
+	...deviceAuthorizationTranslations.id,
 };
 
 export const it = {
@@ -140,6 +160,8 @@ export const it = {
 	...anonymousTranslations.it,
 	...adminTranslations.it,
 	...organizationTranslations.it,
+	...multiSessionTranslations.it,
+	...deviceAuthorizationTranslations.it,
 };
 
 export const ja = {
@@ -151,6 +173,8 @@ export const ja = {
 	...anonymousTranslations.ja,
 	...adminTranslations.ja,
 	...organizationTranslations.ja,
+	...multiSessionTranslations.ja,
+	...deviceAuthorizationTranslations.ja,
 };
 
 export const ko = {
@@ -162,6 +186,8 @@ export const ko = {
 	...anonymousTranslations.ko,
 	...adminTranslations.ko,
 	...organizationTranslations.ko,
+	...multiSessionTranslations.ko,
+	...deviceAuthorizationTranslations.ko,
 };
 
 export const nl = {
@@ -173,6 +199,8 @@ export const nl = {
 	...anonymousTranslations.nl,
 	...adminTranslations.nl,
 	...organizationTranslations.nl,
+	...multiSessionTranslations.nl,
+	...deviceAuthorizationTranslations.nl,
 };
 
 export const pl = {
@@ -184,6 +212,8 @@ export const pl = {
 	...anonymousTranslations.pl,
 	...adminTranslations.pl,
 	...organizationTranslations.pl,
+	...multiSessionTranslations.pl,
+	...deviceAuthorizationTranslations.pl,
 };
 
 export const pt = {
@@ -195,6 +225,8 @@ export const pt = {
 	...anonymousTranslations.pt,
 	...adminTranslations.pt,
 	...organizationTranslations.pt,
+	...multiSessionTranslations.pt,
+	...deviceAuthorizationTranslations.pt,
 };
 
 export const ru = {
@@ -206,6 +238,8 @@ export const ru = {
 	...anonymousTranslations.ru,
 	...adminTranslations.ru,
 	...organizationTranslations.ru,
+	...multiSessionTranslations.ru,
+	...deviceAuthorizationTranslations.ru,
 };
 
 export const sv = {
@@ -217,6 +251,8 @@ export const sv = {
 	...anonymousTranslations.sv,
 	...adminTranslations.sv,
 	...organizationTranslations.sv,
+	...multiSessionTranslations.sv,
+	...deviceAuthorizationTranslations.sv,
 };
 
 export const th = {
@@ -228,6 +264,8 @@ export const th = {
 	...anonymousTranslations.th,
 	...adminTranslations.th,
 	...organizationTranslations.th,
+	...multiSessionTranslations.th,
+	...deviceAuthorizationTranslations.th,
 };
 
 export const tr = {
@@ -239,6 +277,8 @@ export const tr = {
 	...anonymousTranslations.tr,
 	...adminTranslations.tr,
 	...organizationTranslations.tr,
+	...multiSessionTranslations.tr,
+	...deviceAuthorizationTranslations.tr,
 };
 
 export const uk = {
@@ -250,6 +290,8 @@ export const uk = {
 	...anonymousTranslations.uk,
 	...adminTranslations.uk,
 	...organizationTranslations.uk,
+	...multiSessionTranslations.uk,
+	...deviceAuthorizationTranslations.uk,
 };
 
 export const vi = {
@@ -261,6 +303,8 @@ export const vi = {
 	...anonymousTranslations.vi,
 	...adminTranslations.vi,
 	...organizationTranslations.vi,
+	...multiSessionTranslations.vi,
+	...deviceAuthorizationTranslations.vi,
 };
 
 export const zh = {
@@ -272,4 +316,6 @@ export const zh = {
 	...anonymousTranslations.zh,
 	...adminTranslations.zh,
 	...organizationTranslations.zh,
+	...multiSessionTranslations.zh,
+	...deviceAuthorizationTranslations.zh,
 };
