@@ -31,6 +31,10 @@ import { adminTranslations } from "./plugins/admin";
 import { organizationTranslations } from "./plugins/organization";
 import { multiSessionTranslations } from "./plugins/multi-session";
 import { deviceAuthorizationTranslations } from "./plugins/device-authorization";
+import { captchaTranslations } from "./plugins/captcha";
+import { genericOAuthTranslations } from "./plugins/generic-oauth";
+import { haveIBeenPwnedTranslations } from "./plugins/haveibeenpwned";
+import { oauthPopupTranslations } from "./plugins/oauth-popup";
 
 // ─── Core locales merged with plugin translations ─────────────────────────────
 
@@ -45,6 +49,10 @@ export const ar = {
 	...organizationTranslations.ar,
 	...multiSessionTranslations.ar,
 	...deviceAuthorizationTranslations.ar,
+	...captchaTranslations.ar,
+	...genericOAuthTranslations.ar,
+	...haveIBeenPwnedTranslations.ar,
+	...oauthPopupTranslations.ar,
 };
 
 export const bn = {
@@ -58,6 +66,10 @@ export const bn = {
 	...organizationTranslations.bn,
 	...multiSessionTranslations.bn,
 	...deviceAuthorizationTranslations.bn,
+	...captchaTranslations.bn,
+	...genericOAuthTranslations.bn,
+	...haveIBeenPwnedTranslations.bn,
+	...oauthPopupTranslations.bn,
 };
 
 export const de = {
@@ -71,6 +83,10 @@ export const de = {
 	...organizationTranslations.de,
 	...multiSessionTranslations.de,
 	...deviceAuthorizationTranslations.de,
+	...captchaTranslations.de,
+	...genericOAuthTranslations.de,
+	...haveIBeenPwnedTranslations.de,
+	...oauthPopupTranslations.de,
 };
 
 export const en = {
@@ -84,6 +100,10 @@ export const en = {
 	...organizationTranslations.en,
 	...multiSessionTranslations.en,
 	...deviceAuthorizationTranslations.en,
+	...captchaTranslations.en,
+	...genericOAuthTranslations.en,
+	...haveIBeenPwnedTranslations.en,
+	...oauthPopupTranslations.en,
 };
 
 export const es = {
@@ -97,6 +117,10 @@ export const es = {
 	...organizationTranslations.es,
 	...multiSessionTranslations.es,
 	...deviceAuthorizationTranslations.es,
+	...captchaTranslations.es,
+	...genericOAuthTranslations.es,
+	...haveIBeenPwnedTranslations.es,
+	...oauthPopupTranslations.es,
 };
 
 export const fa = {
@@ -110,6 +134,10 @@ export const fa = {
 	...organizationTranslations.fa,
 	...multiSessionTranslations.fa,
 	...deviceAuthorizationTranslations.fa,
+	...captchaTranslations.fa,
+	...genericOAuthTranslations.fa,
+	...haveIBeenPwnedTranslations.fa,
+	...oauthPopupTranslations.fa,
 };
 
 export const fr = {
@@ -123,6 +151,10 @@ export const fr = {
 	...organizationTranslations.fr,
 	...multiSessionTranslations.fr,
 	...deviceAuthorizationTranslations.fr,
+	...captchaTranslations.fr,
+	...genericOAuthTranslations.fr,
+	...haveIBeenPwnedTranslations.fr,
+	...oauthPopupTranslations.fr,
 };
 
 export const hi = {
@@ -136,6 +168,10 @@ export const hi = {
 	...organizationTranslations.hi,
 	...multiSessionTranslations.hi,
 	...deviceAuthorizationTranslations.hi,
+	...captchaTranslations.hi,
+	...genericOAuthTranslations.hi,
+	...haveIBeenPwnedTranslations.hi,
+	...oauthPopupTranslations.hi,
 };
 
 export const id = {
@@ -149,6 +185,10 @@ export const id = {
 	...organizationTranslations.id,
 	...multiSessionTranslations.id,
 	...deviceAuthorizationTranslations.id,
+	...captchaTranslations.id,
+	...genericOAuthTranslations.id,
+	...haveIBeenPwnedTranslations.id,
+	...oauthPopupTranslations.id,
 };
 
 export const it = {
@@ -162,6 +202,10 @@ export const it = {
 	...organizationTranslations.it,
 	...multiSessionTranslations.it,
 	...deviceAuthorizationTranslations.it,
+	...captchaTranslations.it,
+	...genericOAuthTranslations.it,
+	...haveIBeenPwnedTranslations.it,
+	...oauthPopupTranslations.it,
 };
 
 export const ja = {
@@ -175,6 +219,10 @@ export const ja = {
 	...organizationTranslations.ja,
 	...multiSessionTranslations.ja,
 	...deviceAuthorizationTranslations.ja,
+	...captchaTranslations.ja,
+	...genericOAuthTranslations.ja,
+	...haveIBeenPwnedTranslations.ja,
+	...oauthPopupTranslations.ja,
 };
 
 export const ko = {
@@ -188,6 +236,10 @@ export const ko = {
 	...organizationTranslations.ko,
 	...multiSessionTranslations.ko,
 	...deviceAuthorizationTranslations.ko,
+	...captchaTranslations.ko,
+	...genericOAuthTranslations.ko,
+	...haveIBeenPwnedTranslations.ko,
+	...oauthPopupTranslations.ko,
 };
 
 export const nl = {
@@ -201,6 +253,10 @@ export const nl = {
 	...organizationTranslations.nl,
 	...multiSessionTranslations.nl,
 	...deviceAuthorizationTranslations.nl,
+	...captchaTranslations.nl,
+	...genericOAuthTranslations.nl,
+	...haveIBeenPwnedTranslations.nl,
+	...oauthPopupTranslations.nl,
 };
 
 export const pl = {
@@ -214,6 +270,10 @@ export const pl = {
 	...organizationTranslations.pl,
 	...multiSessionTranslations.pl,
 	...deviceAuthorizationTranslations.pl,
+	...captchaTranslations.pl,
+	...genericOAuthTranslations.pl,
+	...haveIBeenPwnedTranslations.pl,
+	...oauthPopupTranslations.pl,
 };
 
 export const pt = {
@@ -227,6 +287,10 @@ export const pt = {
 	...organizationTranslations.pt,
 	...multiSessionTranslations.pt,
 	...deviceAuthorizationTranslations.pt,
+	...captchaTranslations.pt,
+	...genericOAuthTranslations.pt,
+	...haveIBeenPwnedTranslations.pt,
+	...oauthPopupTranslations.pt,
 };
 
 export const ru = {
@@ -240,6 +304,10 @@ export const ru = {
 	...organizationTranslations.ru,
 	...multiSessionTranslations.ru,
 	...deviceAuthorizationTranslations.ru,
+	...captchaTranslations.ru,
+	...genericOAuthTranslations.ru,
+	...haveIBeenPwnedTranslations.ru,
+	...oauthPopupTranslations.ru,
 };
 
 export const sv = {
@@ -253,6 +321,10 @@ export const sv = {
 	...organizationTranslations.sv,
 	...multiSessionTranslations.sv,
 	...deviceAuthorizationTranslations.sv,
+	...captchaTranslations.sv,
+	...genericOAuthTranslations.sv,
+	...haveIBeenPwnedTranslations.sv,
+	...oauthPopupTranslations.sv,
 };
 
 export const th = {
@@ -266,6 +338,10 @@ export const th = {
 	...organizationTranslations.th,
 	...multiSessionTranslations.th,
 	...deviceAuthorizationTranslations.th,
+	...captchaTranslations.th,
+	...genericOAuthTranslations.th,
+	...haveIBeenPwnedTranslations.th,
+	...oauthPopupTranslations.th,
 };
 
 export const tr = {
@@ -279,6 +355,10 @@ export const tr = {
 	...organizationTranslations.tr,
 	...multiSessionTranslations.tr,
 	...deviceAuthorizationTranslations.tr,
+	...captchaTranslations.tr,
+	...genericOAuthTranslations.tr,
+	...haveIBeenPwnedTranslations.tr,
+	...oauthPopupTranslations.tr,
 };
 
 export const uk = {
@@ -292,6 +372,10 @@ export const uk = {
 	...organizationTranslations.uk,
 	...multiSessionTranslations.uk,
 	...deviceAuthorizationTranslations.uk,
+	...captchaTranslations.uk,
+	...genericOAuthTranslations.uk,
+	...haveIBeenPwnedTranslations.uk,
+	...oauthPopupTranslations.uk,
 };
 
 export const vi = {
@@ -305,6 +389,10 @@ export const vi = {
 	...organizationTranslations.vi,
 	...multiSessionTranslations.vi,
 	...deviceAuthorizationTranslations.vi,
+	...captchaTranslations.vi,
+	...genericOAuthTranslations.vi,
+	...haveIBeenPwnedTranslations.vi,
+	...oauthPopupTranslations.vi,
 };
 
 export const zh = {
@@ -318,4 +406,8 @@ export const zh = {
 	...organizationTranslations.zh,
 	...multiSessionTranslations.zh,
 	...deviceAuthorizationTranslations.zh,
+	...captchaTranslations.zh,
+	...genericOAuthTranslations.zh,
+	...haveIBeenPwnedTranslations.zh,
+	...oauthPopupTranslations.zh,
 };

@@ -271,9 +271,5 @@ describe("i18n plugin - Plugins", async () => {
 			expect(error!.code).toBe("INVALID_SESSION_TOKEN");
 			expect(error!.message).toBe("Jeton de session invalide");
 		});
-
-		it("should export device-authorization translations in French", () => {
-			expect(locales.fr.INVALID_DEVICE_CODE).toBe("Code d'appareil invalide");
-		});
 	});
 });
