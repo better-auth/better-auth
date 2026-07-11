@@ -1,7 +1,9 @@
 import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
 import { emailOTP } from "../../better-auth/src/plugins/email-otp";
+import { phoneNumber } from "../../better-auth/src/plugins/phone-number";
 import { twoFactor } from "../../better-auth/src/plugins/two-factor";
+import { username } from "../../better-auth/src/plugins/username";
 import { i18n } from ".";
 import * as locales from "./locales";
 
@@ -480,9 +482,7 @@ describe("i18n plugin", async () => {
 
 			const body = await response.json();
 			expect(body.code).toBe("INVALID_OTP");
-			expect(body.message).toBe(
-				"Le code que vous avez entré est invalide. Veuillez vérifier et réessayer.",
-			);
+			expect(body.message).toBe("Code OTP invalide");
 		});
 
 		it("should translate two-factor cookie errors to German when Accept-Language is de", async () => {
@@ -510,6 +510,64 @@ describe("i18n plugin", async () => {
 			const body = await response.json();
 			expect(body.code).toBe("INVALID_TWO_FACTOR_COOKIE");
 			expect(body.message).toBe("Ungültiges Zwei-Faktor-Cookie");
+		});
+
+		it("should translate username errors to French when Accept-Language is fr", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					username(),
+					i18n({
+						translations: locales,
+						defaultLocale: "en",
+						detection: ["header"],
+					}),
+				],
+			});
+
+			const response = await auth.api.signInUsername({
+				body: {
+					username: "nonexistent",
+					password: "wrongpassword",
+				},
+				headers: {
+					"Accept-Language": "fr",
+				},
+				asResponse: true,
+			});
+
+			const body = await response.json();
+			expect(body.code).toBe("INVALID_USERNAME_OR_PASSWORD");
+			expect(body.message).toBe("Nom d'utilisateur ou mot de passe invalide");
+		});
+
+		it("should translate phone-number errors to French when Accept-Language is fr", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					phoneNumber({
+						sendOTP: async () => {},
+					}),
+					i18n({
+						translations: locales,
+						defaultLocale: "en",
+						detection: ["header"],
+					}),
+				],
+			});
+
+			const response = await auth.api.signInPhoneNumber({
+				body: {
+					phoneNumber: "+1234567890",
+					password: "wrongpassword",
+				},
+				headers: {
+					"Accept-Language": "fr",
+				},
+				asResponse: true,
+			});
+
+			const body = await response.json();
+			expect(body.code).toBe("INVALID_PHONE_NUMBER_OR_PASSWORD");
+			expect(body.message).toBe("Numéro de téléphone ou mot de passe invalide");
 		});
 	});
 });
