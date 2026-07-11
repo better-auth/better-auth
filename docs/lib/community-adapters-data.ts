@@ -134,7 +134,7 @@ export const communityAdapters: CommunityAdapter[] = [
 	},
 	{
 		name: "@zenstackhq/better-auth",
-		url: "https://github.com/zenstackhq/zenstack-v3/tree/main/packages/auth-adapters/better-auth",
+		url: "https://github.com/zenstackhq/zenstack/tree/main/packages/auth-adapters/better-auth",
 		database: "ZenStack",
 		databaseUrl: "https://zenstack.dev",
 		author: {
