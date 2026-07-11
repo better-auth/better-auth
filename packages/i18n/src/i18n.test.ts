@@ -5,6 +5,8 @@ import { adminClient } from "../../better-auth/src/plugins/admin/client";
 import { anonymous } from "../../better-auth/src/plugins/anonymous";
 import { anonymousClient } from "../../better-auth/src/plugins/anonymous/client";
 import { emailOTP } from "../../better-auth/src/plugins/email-otp";
+import { organization } from "../../better-auth/src/plugins/organization";
+import { organizationClient } from "../../better-auth/src/plugins/organization/client";
 import { phoneNumber } from "../../better-auth/src/plugins/phone-number";
 import { twoFactor } from "../../better-auth/src/plugins/two-factor";
 import { username } from "../../better-auth/src/plugins/username";
@@ -647,6 +649,39 @@ describe("i18n plugin", async () => {
 			expect(error!.message).toBe(
 				"Vous n'êtes pas autorisé à usurper l'identité d'utilisateurs",
 			);
+		});
+
+		it("should translate organization errors to French when Accept-Language is fr", async () => {
+			const { client, signInWithTestUser } = (await getTestInstance(
+				{
+					plugins: [
+						organization(),
+						i18n({
+							translations: locales,
+							defaultLocale: "en",
+							detection: ["header"],
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [organizationClient() as any],
+					},
+				},
+			)) as any;
+
+			const { headers } = await signInWithTestUser();
+			headers.set("Accept-Language", "fr");
+
+			const { error } = await client.organization.acceptInvitation({
+				invitationId: "non-existent-id",
+				fetchOptions: {
+					headers,
+				},
+			});
+
+			expect(error!.code).toBe("INVITATION_NOT_FOUND");
+			expect(error!.message).toBe("Invitation non trouvée");
 		});
 	});
 });

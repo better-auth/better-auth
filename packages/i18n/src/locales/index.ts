@@ -28,6 +28,7 @@ import { twoFactorTranslations } from "./plugins/two-factor";
 import { usernameTranslations } from "./plugins/username";
 import { anonymousTranslations } from "./plugins/anonymous";
 import { adminTranslations } from "./plugins/admin";
+import { organizationTranslations } from "./plugins/organization";
 
 // ─── Core locales merged with plugin translations ─────────────────────────────
 
@@ -39,6 +40,7 @@ export const ar = {
 	...usernameTranslations.ar,
 	...anonymousTranslations.ar,
 	...adminTranslations.ar,
+	...organizationTranslations.ar,
 };
 
 export const bn = {
@@ -49,6 +51,7 @@ export const bn = {
 	...usernameTranslations.bn,
 	...anonymousTranslations.bn,
 	...adminTranslations.bn,
+	...organizationTranslations.bn,
 };
 
 export const de = {
@@ -59,6 +62,7 @@ export const de = {
 	...usernameTranslations.de,
 	...anonymousTranslations.de,
 	...adminTranslations.de,
+	...organizationTranslations.de,
 };
 
 export const en = {
@@ -69,6 +73,7 @@ export const en = {
 	...usernameTranslations.en,
 	...anonymousTranslations.en,
 	...adminTranslations.en,
+	...organizationTranslations.en,
 };
 
 export const es = {
@@ -79,6 +84,7 @@ export const es = {
 	...usernameTranslations.es,
 	...anonymousTranslations.es,
 	...adminTranslations.es,
+	...organizationTranslations.es,
 };
 
 export const fa = {
@@ -89,6 +95,7 @@ export const fa = {
 	...usernameTranslations.fa,
 	...anonymousTranslations.fa,
 	...adminTranslations.fa,
+	...organizationTranslations.fa,
 };
 
 export const fr = {
@@ -99,6 +106,7 @@ export const fr = {
 	...usernameTranslations.fr,
 	...anonymousTranslations.fr,
 	...adminTranslations.fr,
+	...organizationTranslations.fr,
 };
 
 export const hi = {
@@ -109,6 +117,7 @@ export const hi = {
 	...usernameTranslations.hi,
 	...anonymousTranslations.hi,
 	...adminTranslations.hi,
+	...organizationTranslations.hi,
 };
 
 export const id = {
@@ -119,6 +128,7 @@ export const id = {
 	...usernameTranslations.id,
 	...anonymousTranslations.id,
 	...adminTranslations.id,
+	...organizationTranslations.id,
 };
 
 export const it = {
@@ -129,6 +139,7 @@ export const it = {
 	...usernameTranslations.it,
 	...anonymousTranslations.it,
 	...adminTranslations.it,
+	...organizationTranslations.it,
 };
 
 export const ja = {
@@ -139,6 +150,7 @@ export const ja = {
 	...usernameTranslations.ja,
 	...anonymousTranslations.ja,
 	...adminTranslations.ja,
+	...organizationTranslations.ja,
 };
 
 export const ko = {
@@ -149,6 +161,7 @@ export const ko = {
 	...usernameTranslations.ko,
 	...anonymousTranslations.ko,
 	...adminTranslations.ko,
+	...organizationTranslations.ko,
 };
 
 export const nl = {
@@ -159,6 +172,7 @@ export const nl = {
 	...usernameTranslations.nl,
 	...anonymousTranslations.nl,
 	...adminTranslations.nl,
+	...organizationTranslations.nl,
 };
 
 export const pl = {
@@ -169,6 +183,7 @@ export const pl = {
 	...usernameTranslations.pl,
 	...anonymousTranslations.pl,
 	...adminTranslations.pl,
+	...organizationTranslations.pl,
 };
 
 export const pt = {
@@ -179,6 +194,7 @@ export const pt = {
 	...usernameTranslations.pt,
 	...anonymousTranslations.pt,
 	...adminTranslations.pt,
+	...organizationTranslations.pt,
 };
 
 export const ru = {
@@ -189,6 +205,7 @@ export const ru = {
 	...usernameTranslations.ru,
 	...anonymousTranslations.ru,
 	...adminTranslations.ru,
+	...organizationTranslations.ru,
 };
 
 export const sv = {
@@ -199,6 +216,7 @@ export const sv = {
 	...usernameTranslations.sv,
 	...anonymousTranslations.sv,
 	...adminTranslations.sv,
+	...organizationTranslations.sv,
 };
 
 export const th = {
@@ -209,6 +227,7 @@ export const th = {
 	...usernameTranslations.th,
 	...anonymousTranslations.th,
 	...adminTranslations.th,
+	...organizationTranslations.th,
 };
 
 export const tr = {
@@ -219,6 +238,7 @@ export const tr = {
 	...usernameTranslations.tr,
 	...anonymousTranslations.tr,
 	...adminTranslations.tr,
+	...organizationTranslations.tr,
 };
 
 export const uk = {
@@ -229,6 +249,7 @@ export const uk = {
 	...usernameTranslations.uk,
 	...anonymousTranslations.uk,
 	...adminTranslations.uk,
+	...organizationTranslations.uk,
 };
 
 export const vi = {
@@ -239,6 +260,7 @@ export const vi = {
 	...usernameTranslations.vi,
 	...anonymousTranslations.vi,
 	...adminTranslations.vi,
+	...organizationTranslations.vi,
 };
 
 export const zh = {
@@ -249,4 +271,5 @@ export const zh = {
 	...usernameTranslations.zh,
 	...anonymousTranslations.zh,
 	...adminTranslations.zh,
+	...organizationTranslations.zh,
 };
