@@ -36,6 +36,9 @@ import { genericOAuthTranslations } from "./plugins/generic-oauth";
 import { haveIBeenPwnedTranslations } from "./plugins/haveibeenpwned";
 import { oauthPopupTranslations } from "./plugins/oauth-popup";
 
+import { apiKeyTranslations } from "./plugins/api-key";
+import { passkeyTranslations } from "./plugins/passkey";
+
 // ─── Core locales merged with plugin translations ─────────────────────────────
 
 export const ar = {
@@ -53,6 +56,8 @@ export const ar = {
 	...genericOAuthTranslations.ar,
 	...haveIBeenPwnedTranslations.ar,
 	...oauthPopupTranslations.ar,
+	...apiKeyTranslations.ar,
+	...passkeyTranslations.ar,
 };
 
 export const bn = {
@@ -70,6 +75,8 @@ export const bn = {
 	...genericOAuthTranslations.bn,
 	...haveIBeenPwnedTranslations.bn,
 	...oauthPopupTranslations.bn,
+	...apiKeyTranslations.bn,
+	...passkeyTranslations.bn,
 };
 
 export const de = {
@@ -87,6 +94,8 @@ export const de = {
 	...genericOAuthTranslations.de,
 	...haveIBeenPwnedTranslations.de,
 	...oauthPopupTranslations.de,
+	...apiKeyTranslations.de,
+	...passkeyTranslations.de,
 };
 
 export const en = {
@@ -104,6 +113,8 @@ export const en = {
 	...genericOAuthTranslations.en,
 	...haveIBeenPwnedTranslations.en,
 	...oauthPopupTranslations.en,
+	...apiKeyTranslations.en,
+	...passkeyTranslations.en,
 };
 
 export const es = {
@@ -121,6 +132,8 @@ export const es = {
 	...genericOAuthTranslations.es,
 	...haveIBeenPwnedTranslations.es,
 	...oauthPopupTranslations.es,
+	...apiKeyTranslations.es,
+	...passkeyTranslations.es,
 };
 
 export const fa = {
@@ -138,6 +151,8 @@ export const fa = {
 	...genericOAuthTranslations.fa,
 	...haveIBeenPwnedTranslations.fa,
 	...oauthPopupTranslations.fa,
+	...apiKeyTranslations.fa,
+	...passkeyTranslations.fa,
 };
 
 export const fr = {
@@ -155,6 +170,8 @@ export const fr = {
 	...genericOAuthTranslations.fr,
 	...haveIBeenPwnedTranslations.fr,
 	...oauthPopupTranslations.fr,
+	...apiKeyTranslations.fr,
+	...passkeyTranslations.fr,
 };
 
 export const hi = {
@@ -172,6 +189,8 @@ export const hi = {
 	...genericOAuthTranslations.hi,
 	...haveIBeenPwnedTranslations.hi,
 	...oauthPopupTranslations.hi,
+	...apiKeyTranslations.hi,
+	...passkeyTranslations.hi,
 };
 
 export const id = {
@@ -189,6 +208,8 @@ export const id = {
 	...genericOAuthTranslations.id,
 	...haveIBeenPwnedTranslations.id,
 	...oauthPopupTranslations.id,
+	...apiKeyTranslations.id,
+	...passkeyTranslations.id,
 };
 
 export const it = {
@@ -206,6 +227,8 @@ export const it = {
 	...genericOAuthTranslations.it,
 	...haveIBeenPwnedTranslations.it,
 	...oauthPopupTranslations.it,
+	...apiKeyTranslations.it,
+	...passkeyTranslations.it,
 };
 
 export const ja = {
@@ -223,6 +246,8 @@ export const ja = {
 	...genericOAuthTranslations.ja,
 	...haveIBeenPwnedTranslations.ja,
 	...oauthPopupTranslations.ja,
+	...apiKeyTranslations.ja,
+	...passkeyTranslations.ja,
 };
 
 export const ko = {
@@ -240,6 +265,8 @@ export const ko = {
 	...genericOAuthTranslations.ko,
 	...haveIBeenPwnedTranslations.ko,
 	...oauthPopupTranslations.ko,
+	...apiKeyTranslations.ko,
+	...passkeyTranslations.ko,
 };
 
 export const nl = {
@@ -257,6 +284,8 @@ export const nl = {
 	...genericOAuthTranslations.nl,
 	...haveIBeenPwnedTranslations.nl,
 	...oauthPopupTranslations.nl,
+	...apiKeyTranslations.nl,
+	...passkeyTranslations.nl,
 };
 
 export const pl = {
@@ -274,6 +303,8 @@ export const pl = {
 	...genericOAuthTranslations.pl,
 	...haveIBeenPwnedTranslations.pl,
 	...oauthPopupTranslations.pl,
+	...apiKeyTranslations.pl,
+	...passkeyTranslations.pl,
 };
 
 export const pt = {
@@ -291,6 +322,8 @@ export const pt = {
 	...genericOAuthTranslations.pt,
 	...haveIBeenPwnedTranslations.pt,
 	...oauthPopupTranslations.pt,
+	...apiKeyTranslations.pt,
+	...passkeyTranslations.pt,
 };
 
 export const ru = {
@@ -308,6 +341,8 @@ export const ru = {
 	...genericOAuthTranslations.ru,
 	...haveIBeenPwnedTranslations.ru,
 	...oauthPopupTranslations.ru,
+	...apiKeyTranslations.ru,
+	...passkeyTranslations.ru,
 };
 
 export const sv = {
@@ -325,6 +360,8 @@ export const sv = {
 	...genericOAuthTranslations.sv,
 	...haveIBeenPwnedTranslations.sv,
 	...oauthPopupTranslations.sv,
+	...apiKeyTranslations.sv,
+	...passkeyTranslations.sv,
 };
 
 export const th = {
@@ -342,6 +379,8 @@ export const th = {
 	...genericOAuthTranslations.th,
 	...haveIBeenPwnedTranslations.th,
 	...oauthPopupTranslations.th,
+	...apiKeyTranslations.th,
+	...passkeyTranslations.th,
 };
 
 export const tr = {
@@ -359,6 +398,8 @@ export const tr = {
 	...genericOAuthTranslations.tr,
 	...haveIBeenPwnedTranslations.tr,
 	...oauthPopupTranslations.tr,
+	...apiKeyTranslations.tr,
+	...passkeyTranslations.tr,
 };
 
 export const uk = {
@@ -376,6 +417,8 @@ export const uk = {
 	...genericOAuthTranslations.uk,
 	...haveIBeenPwnedTranslations.uk,
 	...oauthPopupTranslations.uk,
+	...apiKeyTranslations.uk,
+	...passkeyTranslations.uk,
 };
 
 export const vi = {
@@ -393,6 +436,8 @@ export const vi = {
 	...genericOAuthTranslations.vi,
 	...haveIBeenPwnedTranslations.vi,
 	...oauthPopupTranslations.vi,
+	...apiKeyTranslations.vi,
+	...passkeyTranslations.vi,
 };
 
 export const zh = {
@@ -410,4 +455,6 @@ export const zh = {
 	...genericOAuthTranslations.zh,
 	...haveIBeenPwnedTranslations.zh,
 	...oauthPopupTranslations.zh,
+	...apiKeyTranslations.zh,
+	...passkeyTranslations.zh,
 };

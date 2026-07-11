@@ -1305,9 +1305,15 @@ importers:
 
   packages/i18n:
     devDependencies:
+      '@better-auth/api-key':
+        specifier: workspace:*
+        version: link:../api-key
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/passkey':
+        specifier: workspace:*
+        version: link:../passkey
       better-auth:
         specifier: workspace:*
         version: link:../better-auth

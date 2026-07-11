@@ -67,7 +67,9 @@
     }
   },
   "devDependencies": {
+    "@better-auth/api-key": "workspace:*",
     "@better-auth/core": "workspace:*",
+    "@better-auth/passkey": "workspace:*",
     "better-auth": "workspace:*",
     "tsdown": "catalog:"
   },
