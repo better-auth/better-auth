@@ -1,76 +1,160 @@
-/**
- * Built-in default translations for the i18n plugin.
- *
- * Each locale exports a {@link TranslationDictionary} covering the core
- * Better Auth error codes. Additional locales can be added by following the
- * same pattern.
- *
- * @example Basic usage — enable all built-in locales
- * ```ts
- * import { i18n, locales } from "@better-auth/i18n";
- *
- * export const auth = betterAuth({
- *   plugins: [
- *     i18n({ translations: locales }),
- *   ],
- * });
- * ```
- *
- * @example Selective usage — only a subset of locales
- * ```ts
- * import { i18n, locales } from "@better-auth/i18n";
- *
- * export const auth = betterAuth({
- *   plugins: [
- *     i18n({
- *       translations: {
- *         en: locales.en,
- *         fr: locales.fr,
- *       },
- *     }),
- *   ],
- * });
- * ```
- *
- * @example Override specific messages for a locale
- * ```ts
- * import { i18n, locales } from "@better-auth/i18n";
- *
- * export const auth = betterAuth({
- *   plugins: [
- *     i18n({
- *       translations: {
- *         ...locales,
- *         fr: {
- *           ...locales.fr,
- *           USER_NOT_FOUND: "Membre introuvable",
- *         },
- *       },
- *     }),
- *   ],
- * });
- * ```
- */
+// biome-ignore-all assist/source/organizeImports: plugin translation imports must follow core locale imports
+import { ar as coreAr } from "./ar";
+import { bn as coreBn } from "./bn";
+import { de as coreDe } from "./de";
+import { en as coreEn } from "./en";
+import { es as coreEs } from "./es";
+import { fa as coreFa } from "./fa";
+import { fr as coreFr } from "./fr";
+import { hi as coreHi } from "./hi";
+import { id as coreId } from "./id";
+import { it as coreIt } from "./it";
+import { ja as coreJa } from "./ja";
+import { ko as coreKo } from "./ko";
+import { nl as coreNl } from "./nl";
+import { pl as corePl } from "./pl";
+import { pt as corePt } from "./pt";
+import { ru as coreRu } from "./ru";
+import { sv as coreSv } from "./sv";
+import { th as coreTh } from "./th";
+import { tr as coreTr } from "./tr";
+import { uk as coreUk } from "./uk";
+import { vi as coreVi } from "./vi";
+import { zh as coreZh } from "./zh";
+// Plugin translations appended last — merged with core messages
+import { emailOtpTranslations } from "./plugins/email-otp";
+import { twoFactorTranslations } from "./plugins/two-factor";
 
-export { ar } from "./ar";
-export { bn } from "./bn";
-export { de } from "./de";
-export { en } from "./en";
-export { es } from "./es";
-export { fa } from "./fa";
-export { fr } from "./fr";
-export { hi } from "./hi";
-export { id } from "./id";
-export { it } from "./it";
-export { ja } from "./ja";
-export { ko } from "./ko";
-export { nl } from "./nl";
-export { pl } from "./pl";
-export { pt } from "./pt";
-export { ru } from "./ru";
-export { sv } from "./sv";
-export { th } from "./th";
-export { tr } from "./tr";
-export { uk } from "./uk";
-export { vi } from "./vi";
-export { zh } from "./zh";
+// ─── Core locales merged with plugin translations ─────────────────────────────
+
+export const ar = {
+	...coreAr,
+	...emailOtpTranslations.ar,
+	...twoFactorTranslations.ar,
+};
+
+export const bn = {
+	...coreBn,
+	...emailOtpTranslations.bn,
+	...twoFactorTranslations.bn,
+};
+
+export const de = {
+	...coreDe,
+	...emailOtpTranslations.de,
+	...twoFactorTranslations.de,
+};
+
+export const en = {
+	...coreEn,
+	...emailOtpTranslations.en,
+	...twoFactorTranslations.en,
+};
+
+export const es = {
+	...coreEs,
+	...emailOtpTranslations.es,
+	...twoFactorTranslations.es,
+};
+
+export const fa = {
+	...coreFa,
+	...emailOtpTranslations.fa,
+	...twoFactorTranslations.fa,
+};
+
+export const fr = {
+	...coreFr,
+	...emailOtpTranslations.fr,
+	...twoFactorTranslations.fr,
+};
+
+export const hi = {
+	...coreHi,
+	...emailOtpTranslations.hi,
+	...twoFactorTranslations.hi,
+};
+
+export const id = {
+	...coreId,
+	...emailOtpTranslations.id,
+	...twoFactorTranslations.id,
+};
+
+export const it = {
+	...coreIt,
+	...emailOtpTranslations.it,
+	...twoFactorTranslations.it,
+};
+
+export const ja = {
+	...coreJa,
+	...emailOtpTranslations.ja,
+	...twoFactorTranslations.ja,
+};
+
+export const ko = {
+	...coreKo,
+	...emailOtpTranslations.ko,
+	...twoFactorTranslations.ko,
+};
+
+export const nl = {
+	...coreNl,
+	...emailOtpTranslations.nl,
+	...twoFactorTranslations.nl,
+};
+
+export const pl = {
+	...corePl,
+	...emailOtpTranslations.pl,
+	...twoFactorTranslations.pl,
+};
+
+export const pt = {
+	...corePt,
+	...emailOtpTranslations.pt,
+	...twoFactorTranslations.pt,
+};
+
+export const ru = {
+	...coreRu,
+	...emailOtpTranslations.ru,
+	...twoFactorTranslations.ru,
+};
+
+export const sv = {
+	...coreSv,
+	...emailOtpTranslations.sv,
+	...twoFactorTranslations.sv,
+};
+
+export const th = {
+	...coreTh,
+	...emailOtpTranslations.th,
+	...twoFactorTranslations.th,
+};
+
+export const tr = {
+	...coreTr,
+	...emailOtpTranslations.tr,
+	...twoFactorTranslations.tr,
+};
+
+export const uk = {
+	...coreUk,
+	...emailOtpTranslations.uk,
+	...twoFactorTranslations.uk,
+};
+
+export const vi = {
+	...coreVi,
+	...emailOtpTranslations.vi,
+	...twoFactorTranslations.vi,
+};
+
+export const zh = {
+	...coreZh,
+	...emailOtpTranslations.zh,
+	...twoFactorTranslations.zh,
+};

@@ -30,6 +30,7 @@ declare module "@better-auth/core" {
 	}
 }
 
+export * from "./error-codes";
 export type { EmailOTPOptions } from "./types";
 
 const defaultOTPGenerator = (options: EmailOTPOptions) =>

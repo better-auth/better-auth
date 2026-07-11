@@ -5,6 +5,35 @@ import type {
 	UnionToIntersection,
 } from "@better-auth/core";
 
+export const SUPPORTED_LOCALES = [
+	"en",
+	"fr",
+	"ar",
+	"de",
+	"es",
+	"zh",
+	"ja",
+	"ko",
+	"pt",
+	"it",
+	"ru",
+	"tr",
+	"nl",
+	"pl",
+	"sv",
+	"vi",
+	"hi",
+	"id",
+	"uk",
+	"bn",
+	"th",
+	"fa",
+] as const;
+export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
+
+export type PluginErrorTranslations<ErrorCodes extends Record<string, any>> =
+	Record<SupportedLocale, Record<keyof ErrorCodes, string>>;
+
 type ALL_PLUGIN_ERROR_CODE_KEYS = keyof UnionToIntersection<
 	{
 		[Key in Exclude<

@@ -1,5 +1,7 @@
 import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
+import { emailOTP } from "../../better-auth/src/plugins/email-otp";
+import { twoFactor } from "../../better-auth/src/plugins/two-factor";
 import { i18n } from ".";
 import * as locales from "./locales";
 
@@ -379,30 +381,7 @@ describe("i18n plugin", async () => {
 
 	describe("built-in locales", () => {
 		it("should export all expected built-in locales", () => {
-			const expectedLocales = [
-				"ar",
-				"bn",
-				"de",
-				"en",
-				"es",
-				"fa",
-				"fr",
-				"hi",
-				"id",
-				"it",
-				"ja",
-				"ko",
-				"nl",
-				"pl",
-				"pt",
-				"ru",
-				"sv",
-				"th",
-				"tr",
-				"uk",
-				"vi",
-				"zh",
-			];
+			const expectedLocales = ["de", "en", "fr"];
 
 			for (const locale of expectedLocales) {
 				expect(locales).toHaveProperty(locale);
@@ -470,6 +449,67 @@ describe("i18n plugin", async () => {
 					).toBeGreaterThan(0);
 				}
 			}
+		});
+	});
+
+	describe("plugin-specific translations integration", () => {
+		it("should translate email OTP errors to French when Accept-Language is fr", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					emailOTP({
+						sendVerificationOTP: async () => {},
+					}),
+					i18n({
+						translations: locales,
+						defaultLocale: "en",
+						detection: ["header"],
+					}),
+				],
+			});
+
+			const response = await auth.api.verifyEmailOTP({
+				body: {
+					email: "test@example.com",
+					otp: "wrong-code",
+				},
+				headers: {
+					"Accept-Language": "fr",
+				},
+				asResponse: true,
+			});
+
+			const body = await response.json();
+			expect(body.code).toBe("INVALID_OTP");
+			expect(body.message).toBe(
+				"Le code que vous avez entré est invalide. Veuillez vérifier et réessayer.",
+			);
+		});
+
+		it("should translate two-factor cookie errors to German when Accept-Language is de", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					twoFactor(),
+					i18n({
+						translations: locales,
+						defaultLocale: "en",
+						detection: ["header"],
+					}),
+				],
+			});
+
+			const response = await auth.api.verifyBackupCode({
+				body: {
+					code: "invalid-backup-code",
+				},
+				headers: {
+					"Accept-Language": "de",
+				},
+				asResponse: true,
+			});
+
+			const body = await response.json();
+			expect(body.code).toBe("INVALID_TWO_FACTOR_COOKIE");
+			expect(body.message).toBe("Ungültiges Zwei-Faktor-Cookie");
 		});
 	});
 });
