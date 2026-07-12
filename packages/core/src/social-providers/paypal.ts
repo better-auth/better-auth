@@ -5,6 +5,7 @@ import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL } from "../oauth2";
+import type { GenericEndpointContext } from "../types";
 
 /**
  * ID token signing algorithms advertised by PayPal's OpenID configuration.
@@ -217,12 +218,16 @@ export const paypal = (options: PayPalOptions) => {
 					}
 				},
 
-		async verifyIdToken(token, nonce) {
+		async verifyIdToken(
+			token: string,
+			nonce?: string,
+			ctx?: GenericEndpointContext,
+		) {
 			if (options.disableIdTokenSignIn) {
 				return false;
 			}
 			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
+				return options.verifyIdToken(token, nonce, ctx);
 			}
 
 			// Cryptographically verify the ID token. Decoding alone is not enough:

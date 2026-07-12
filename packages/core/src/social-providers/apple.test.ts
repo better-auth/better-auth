@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import type { JWK } from "jose";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { GenericEndpointContext } from "../types";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
@@ -95,5 +96,29 @@ describe("apple.verifyIdToken", () => {
 		await expect(
 			provider.verifyIdToken(token, "different-nonce"),
 		).resolves.toBe(false);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/1214
+	 */
+	it("forwards request ctx to a custom verifyIdToken option", async () => {
+		const ctx = {
+			headers: new Headers({ "x-platform": "ios" }),
+		} as GenericEndpointContext;
+		let seenPlatform: string | null = null;
+
+		const provider = apple({
+			clientId: "service.example.app",
+			clientSecret: "test-secret",
+			verifyIdToken: async (_token, _nonce, requestCtx) => {
+				seenPlatform = requestCtx?.headers?.get("x-platform") ?? null;
+				return seenPlatform === "ios";
+			},
+		});
+
+		await expect(provider.verifyIdToken("token", "nonce", ctx)).resolves.toBe(
+			true,
+		);
+		expect(seenPlatform).toBe("ios");
 	});
 });

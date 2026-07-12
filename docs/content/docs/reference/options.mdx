@@ -351,7 +351,7 @@ export const auth = betterAuth({
 * `responseMode`: The response mode to use (`"query"`, `"form_post"`) (optional)
 * `getUserInfo`: Custom function to get user info from the provider (optional)
 * `refreshAccessToken`: Custom function to refresh a token. Receives the stored refresh token and returns new OAuth tokens. (optional)
-* `verifyIdToken`: Custom function to verify the ID token (optional)
+* `verifyIdToken`: Custom function to verify the ID token. Receives `(token, nonce?, ctx?)` where `ctx` is the request endpoint context (optional). Replaces the provider's built-in verification when set.
 * `disableIdTokenSignIn`: Disable sign in with ID token sent from the client (optional)
 * `disableDefaultScope`: Disable the provider's default scopes (optional)
 * `authorizationEndpoint`: Custom authorization endpoint URL (optional)
