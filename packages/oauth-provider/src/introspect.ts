@@ -40,6 +40,23 @@ const INVALID_ACCESS_TOKEN_ERROR_DESCRIPTION = "Invalid access token";
 const INVALID_ACCESS_TOKEN_WWW_AUTHENTICATE = `Bearer error="invalid_token", error_description="${INVALID_ACCESS_TOKEN_ERROR_DESCRIPTION}"`;
 
 /**
+ * The result of validating an access token: the RFC 7662 introspection-format
+ * payload, plus the OIDC `claims.userinfo` names the UserInfo endpoint resolves
+ * for this token. The requested claims travel beside the payload, never inside
+ * it, so UserInfo can read them while an introspection response and a resource
+ * server never see them.
+ */
+interface ValidatedAccessToken {
+	payload: JWTPayload;
+	/** Empty for JWT access tokens, which resolve UserInfo claims by scope. */
+	requestedUserInfoClaims: string[];
+}
+
+function inactiveAccessToken(): ValidatedAccessToken {
+	return { payload: { active: false }, requestedUserInfoClaims: [] };
+}
+
+/**
  * IMPORTANT NOTES:
  * Introspection follows RFC7662
  * https://datatracker.ietf.org/doc/html/rfc7662
@@ -241,7 +258,7 @@ async function validateOpaqueAccessToken(
 	opts: OAuthOptions<Scope[]>,
 	token: string,
 	clientId?: string,
-) {
+): Promise<ValidatedAccessToken> {
 	let tokenValue = token;
 	if (opts.prefix?.opaqueAccessToken) {
 		if (tokenValue.startsWith(opts.prefix.opaqueAccessToken)) {
@@ -276,14 +293,10 @@ async function validateOpaqueAccessToken(
 		});
 	}
 	if (!accessToken.expiresAt || accessToken.expiresAt < new Date()) {
-		return {
-			active: false,
-		};
+		return inactiveAccessToken();
 	}
 	if (accessToken.revoked) {
-		return {
-			active: false,
-		};
+		return inactiveAccessToken();
 	}
 
 	const resources = Array.isArray(accessToken.resources)
@@ -294,9 +307,7 @@ async function validateOpaqueAccessToken(
 	if (accessToken.clientId) {
 		client = await getClient(ctx, opts, accessToken.clientId);
 		if (!client || client?.disabled) {
-			return {
-				active: false,
-			};
+			return inactiveAccessToken();
 		}
 		// RFC 7662 §2.1/§4: allow the issuer, or a resource server linked to one
 		// of the token's audience resources; otherwise report inactive.
@@ -307,7 +318,7 @@ async function validateOpaqueAccessToken(
 				audienceResources: resources ?? [],
 			}))
 		) {
-			return { active: false };
+			return inactiveAccessToken();
 		}
 	}
 
@@ -327,7 +338,7 @@ async function validateOpaqueAccessToken(
 			],
 		});
 		if (!session || session.expiresAt < new Date()) {
-			return { active: false };
+			return inactiveAccessToken();
 		}
 	}
 
@@ -346,7 +357,7 @@ async function validateOpaqueAccessToken(
 		resources?.length &&
 		!(await isAudienceClaimAllowed(ctx, opts, resources, [userInfoEndpoint]))
 	) {
-		return { active: false };
+		return inactiveAccessToken();
 	}
 
 	const audienceClaim = resources ? [...resources] : undefined;
@@ -376,6 +387,7 @@ async function validateOpaqueAccessToken(
 				client,
 				scopes: accessToken.scopes ?? [],
 				grantType: undefined,
+				sessionId: undefined,
 				resources,
 				referenceId: accessToken.referenceId,
 				metadata: parseClientMetadata(client.metadata),
@@ -391,20 +403,23 @@ async function validateOpaqueAccessToken(
 		: getJwtPlugin(ctx.context);
 	const jwtPluginOptions = jwtPlugin?.options;
 	return {
-		...accessTokenClaims,
-		active: true,
-		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
-		aud: toAudienceClaim(audienceClaim),
-		client_id: accessToken.clientId,
-		azp: accessToken.clientId,
-		sub: user?.id,
-		sid: sessionId,
-		exp: Math.floor(new Date(accessToken.expiresAt).getTime() / 1000),
-		iat: Math.floor(new Date(accessToken.createdAt).getTime() / 1000),
-		scope: accessToken.scopes?.join(" "),
-		token_type: confirmationTokenType(accessToken.confirmation),
-		...(accessToken.confirmation ? { cnf: accessToken.confirmation } : {}),
-	} as JWTPayload;
+		payload: {
+			...accessTokenClaims,
+			active: true,
+			iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
+			aud: toAudienceClaim(audienceClaim),
+			client_id: accessToken.clientId,
+			azp: accessToken.clientId,
+			sub: user?.id,
+			sid: sessionId,
+			exp: Math.floor(new Date(accessToken.expiresAt).getTime() / 1000),
+			iat: Math.floor(new Date(accessToken.createdAt).getTime() / 1000),
+			scope: accessToken.scopes?.join(" "),
+			token_type: confirmationTokenType(accessToken.confirmation),
+			...(accessToken.confirmation ? { cnf: accessToken.confirmation } : {}),
+		} as JWTPayload,
+		requestedUserInfoClaims: accessToken.requestedUserInfoClaims ?? [],
+	};
 }
 
 /**
@@ -516,21 +531,20 @@ function isInactiveTokenError(error: APIError) {
 }
 
 /**
- * We don't know the access token format so we try to validate it
- * as a JWT first, then as an opaque token.
- *
- * @returns RFC7662 introspection format
- *
- * @internal
+ * We don't know the access token format so we try to validate it as a JWT
+ * first, then as an opaque token. Returns the RFC 7662 introspection payload
+ * alongside the per-issuance UserInfo claims the opaque row persisted (empty for
+ * a JWT access token, which resolves UserInfo claims by scope).
  */
-export async function validateAccessToken(
+async function resolveAccessTokenValidation(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	token: string,
 	clientId?: string,
-) {
+): Promise<ValidatedAccessToken> {
 	try {
-		return await validateJwtAccessToken(ctx, opts, token, clientId);
+		const payload = await validateJwtAccessToken(ctx, opts, token, clientId);
+		return { payload, requestedUserInfoClaims: [] };
 	} catch (err) {
 		if (err instanceof APIError) {
 			// continue
@@ -554,6 +568,22 @@ export async function validateAccessToken(
 	throw createInvalidAccessTokenError();
 }
 
+/**
+ * Validates an access token (JWT or opaque) and returns its RFC 7662
+ * introspection-format payload.
+ *
+ * @internal
+ */
+export async function validateAccessToken(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	token: string,
+	clientId?: string,
+): Promise<JWTPayload> {
+	return (await resolveAccessTokenValidation(ctx, opts, token, clientId))
+		.payload;
+}
+
 export async function requireActiveAccessToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -562,6 +592,32 @@ export async function requireActiveAccessToken(
 ): Promise<ActiveAccessTokenPayload> {
 	const payload = await validateAccessToken(ctx, opts, token, clientId);
 	if (payload.active) return payload as ActiveAccessTokenPayload;
+	throw createInvalidAccessTokenError();
+}
+
+/**
+ * UserInfo entry point: validates the access token, requires it active, and
+ * returns the introspection payload together with the OIDC `claims.userinfo`
+ * names persisted for the token. Opaque tokens carry the names on their row;
+ * JWT access tokens return an empty list and resolve UserInfo claims by scope.
+ */
+export async function requireActiveAccessTokenWithClaims(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	token: string,
+	clientId?: string,
+): Promise<{
+	payload: ActiveAccessTokenPayload;
+	requestedUserInfoClaims: string[];
+}> {
+	const { payload, requestedUserInfoClaims } =
+		await resolveAccessTokenValidation(ctx, opts, token, clientId);
+	if (payload.active) {
+		return {
+			payload: payload as ActiveAccessTokenPayload,
+			requestedUserInfoClaims,
+		};
+	}
 	throw createInvalidAccessTokenError();
 }
 

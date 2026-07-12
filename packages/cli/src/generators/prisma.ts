@@ -28,6 +28,19 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		schema: getAuthTables(options),
 		usePlural: false,
 	});
+	const isMigrationDisabled = (model: string) =>
+		Object.entries(tables).some(([tableKey, table]) => {
+			if (table.disableMigrations !== true) {
+				return false;
+			}
+			const customModelName = table.modelName || tableKey;
+			return (
+				model === tableKey ||
+				model === customModelName ||
+				model === getModelName(tableKey) ||
+				model === getModelName(customModelName)
+			);
+		});
 
 	let schemaPrisma = "";
 	if (schemaPrismaExist) {
@@ -72,11 +85,17 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	const manyToManyRelations = new Map();
 
 	for (const table in tables) {
+		if (isMigrationDisabled(table)) {
+			continue;
+		}
 		const fields = tables[table]?.fields;
 		for (const field in fields) {
 			const attr = fields[field]!;
 			if (attr.references) {
 				const referencedOriginalModel = attr.references.model;
+				if (isMigrationDisabled(referencedOriginalModel)) {
+					continue;
+				}
 				const referencedCustomModel =
 					tables[referencedOriginalModel]?.modelName || referencedOriginalModel;
 				const referencedModelNameCap = capitalizeFirstLetter(
@@ -117,6 +136,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 	const schema = produceSchema(schemaPrisma, (builder) => {
 		for (const table in tables) {
+			if (isMigrationDisabled(table)) {
+				continue;
+			}
 			const originalTableName = table;
 			const customModelName = tables[table]?.modelName || table;
 			const modelName = capitalizeFirstLetter(getModelName(customModelName));
@@ -285,18 +307,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					builder.model(modelName).blockAttribute(`unique([${fieldName}])`);
 				}
 
-				// Native scalar lists (Postgres/CockroachDB `String[]`/`Int[]`)
-				// default to an empty list. Emit `@default([])` explicitly so
-				// account-creation paths that omit the field (e.g. credential
-				// accounts that never set `grantedScopes`) don't fail validation.
-				const emitsNativeArray =
-					(attr.type === "string[]" || attr.type === "number[]") &&
-					provider !== "sqlite" &&
-					provider !== "mysql";
-				if (emitsNativeArray && attr.defaultValue === undefined) {
-					fieldBuilder.attribute("default([])");
-				}
-
 				if (attr.defaultValue !== undefined) {
 					if (Array.isArray(attr.defaultValue)) {
 						// for json objects and array of object
@@ -383,6 +393,15 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 
 				if (attr.references) {
+					const referencedOriginalModelName = getModelName(
+						attr.references.model,
+					);
+					if (
+						isMigrationDisabled(referencedOriginalModelName) ||
+						isMigrationDisabled(attr.references.model)
+					) {
+						continue;
+					}
 					if (
 						useUUIDs &&
 						provider === "postgresql" &&
@@ -391,9 +410,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						builder.model(modelName).field(fieldName).attribute(`db.Uuid`);
 					}
 
-					const referencedOriginalModelName = getModelName(
-						attr.references.model,
-					);
 					const referencedCustomModelName =
 						tables[referencedOriginalModelName]?.modelName ||
 						referencedOriginalModelName;

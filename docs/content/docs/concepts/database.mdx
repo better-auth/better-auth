@@ -492,10 +492,9 @@ export const accountTableFields = [
 		isOptional: true,
 	},
 	{
-		name: "grantedScopes",
-		type: "string[]",
-		description:
-			"The OAuth scopes the user has granted to this account (accumulated; see the OAuth scopes docs).",
+		name: "scope",
+		type: "string",
+		description: "The scope of the account. Returned by the provider",
 		isOptional: true,
 	},
 	{
@@ -678,7 +677,9 @@ res.user.lang; // > "fr"
   client side.
 </Callout>
 
-If you're using social / OAuth providers, you may want to provide `mapProfileToUser` to map the profile data to the user object. So, you can populate additional fields from the provider's profile.
+If you're using social / OAuth providers, you may want to provide `mapProfileToUser` to map the profile data to the user object. This can populate additional fields from the provider's profile when those fields allow input.
+
+Fields marked `input: false` stay server-owned during OAuth provisioning. Provider profile values for those fields are ignored, and configured `defaultValue` values still apply when OAuth creates a user.
 
 **Example: Mapping Profile to User For `firstName` and `lastName`**
 

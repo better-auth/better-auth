@@ -18,6 +18,7 @@ import type { BetterAuthPlugin } from "better-auth/types";
 import * as z from "zod";
 import type { AuthorizeEndpointSettings } from "./authorize";
 import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
+import { claimsRequestParameterSchema } from "./claims-request";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { validateOAuthProviderExtensions } from "./extensions";
@@ -44,10 +45,10 @@ import {
 } from "./resources";
 import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
+import { STANDARD_CLAIM_NAMES, STANDARD_CLAIMS } from "./standard-claims";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import {
-	authorizationQuerySchema,
 	clientRegistrationRequestSchema,
 	ResourceUriSchema,
 	SafeUrlSchema,
@@ -147,7 +148,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		}
 	}
 
-	// Validate claims
+	// Discovery `claims_supported`: protocol claims that are always present, plus
+	// the standard identity claims whose backing scope is configured. The
+	// identity set is derived from the one claim registry so the advertisement
+	// cannot drift from what UserInfo actually resolves.
 	const claims = new Set([
 		"sub",
 		"iss",
@@ -157,10 +161,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		"sid",
 		"scope",
 		"azp",
-		...(scopes.has("email") ? ["email", "email_verified"] : []),
-		...(scopes.has("profile")
-			? ["name", "picture", "family_name", "given_name"]
-			: []),
+		...STANDARD_CLAIM_NAMES.filter((name) =>
+			scopes.has(STANDARD_CLAIMS[name].scope),
+		),
 	]);
 
 	const opts: O & { claims?: string[] } = {
@@ -168,6 +171,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		accessTokenExpiresIn: 3600, // 1 hour
 		m2mAccessTokenExpiresIn: 3600, // 1 hour
 		refreshTokenExpiresIn: 2592000, // 30 days
+		refreshTokenReuseInterval: 0,
 		allowUnauthenticatedClientRegistration: false,
 		allowDynamicClientRegistration: false,
 		disableJwtPlugin: false,
@@ -303,51 +307,49 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 	const oauth2AuthorizeEndpoint = createOAuthEndpoint(
 		"/oauth2/authorize",
 		{
-			method: "GET",
-			query: authorizationQuerySchema,
+			method: ["GET", "POST"],
+			body: z.object({}).passthrough(),
 			redirectOnError: authorizeRedirectOnError(opts),
-			errorCodesByField: {
-				response_type: { invalid: "unsupported_response_type" },
-				resource: { invalid: "invalid_target" },
-			},
 			metadata: {
+				allowedMediaTypes: ["application/x-www-form-urlencoded"],
 				openapi: {
-					description: "Authorize an OAuth2 request",
+					description:
+						"Authorize an OAuth 2.1 request from query parameters or an application/x-www-form-urlencoded POST body",
 					parameters: [
 						{
 							name: "response_type",
 							in: "query",
 							required: false,
 							schema: { type: "string" },
-							description: "OAuth2 response type (e.g., 'code')",
+							description: "OAuth 2.1 response type (e.g., 'code')",
 						},
 						{
 							name: "client_id",
 							in: "query",
 							required: true,
 							schema: { type: "string" },
-							description: "OAuth2 client ID",
+							description: "OAuth 2.1 client ID",
 						},
 						{
 							name: "redirect_uri",
 							in: "query",
 							required: false,
 							schema: { type: "string", format: "uri" },
-							description: "OAuth2 redirect URI",
+							description: "OAuth 2.1 redirect URI",
 						},
 						{
 							name: "scope",
 							in: "query",
 							required: false,
 							schema: { type: "string" },
-							description: "OAuth2 scopes (space-separated)",
+							description: "OAuth 2.1 scopes (space-separated)",
 						},
 						{
 							name: "state",
 							in: "query",
 							required: false,
 							schema: { type: "string" },
-							description: "OAuth2 state parameter",
+							description: "OAuth 2.1 state parameter",
 						},
 						{
 							name: "request_uri",
@@ -733,6 +735,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						scope: z.string().optional().meta({
 							description:
 								"List of accept of accepted space-separated scopes. If none is provided, then all originally requested scopes are accepted.",
+						}),
+						claims: claimsRequestParameterSchema.optional().meta({
+							description:
+								"Accepted OIDC claims request object. If none is provided, then all originally requested claims are accepted.",
 						}),
 						oauth_query: z.string().optional().meta({
 							description: "The redirected page's query parameters",
@@ -1247,8 +1253,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/userinfo",
 				{
 					method: ["GET", "POST"],
+					body: z
+						.object({
+							access_token: z.string().optional(),
+						})
+						.passthrough()
+						.optional(),
 					metadata: {
 						noStore: true,
+						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
 							description:
 								"Get OpenID Connect user information (UserInfo endpoint)",

@@ -1,7 +1,7 @@
 import type { AuthContext } from "@better-auth/core";
 import { describe, expect, it } from "vitest";
 import { symmetricEncrypt } from "../crypto";
-import { decryptOAuthToken, setTokenUtil } from "./token-encryption";
+import { decryptOAuthToken, setTokenUtil } from "./utils";
 
 // Mock minimal AuthContext for testing
 function createMockContext(encryptOAuthTokens: boolean): AuthContext {

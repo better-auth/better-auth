@@ -5,15 +5,14 @@ import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
 import type {
 	ClientAssertionGetter,
+	OAuthProvider,
 	ProviderOptions,
 	TokenEndpointAuth,
-	UpstreamProvider,
 } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getPrimaryClientId,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -161,14 +160,6 @@ export interface MicrosoftOptions
 	disableProfilePhoto?: boolean;
 }
 
-const MICROSOFT_ENTRA_ID_DEFAULT_SCOPES = [
-	"openid",
-	"profile",
-	"email",
-	"User.Read",
-	"offline_access",
-];
-
 export const microsoft = (options: MicrosoftOptions) => {
 	const tenant = options.tenantId || "common";
 	// Trim any trailing slash so endpoint URLs and the issuer comparison below
@@ -196,7 +187,6 @@ export const microsoft = (options: MicrosoftOptions) => {
 	return {
 		id: "microsoft",
 		name: "Microsoft EntraID",
-		callbackPath: "/callback/microsoft",
 		createAuthorizationURL(data) {
 			// Microsoft Entra supports public clients (SPA / native apps with
 			// PKCE only), so clientSecret is intentionally not required here.
@@ -207,18 +197,18 @@ export const microsoft = (options: MicrosoftOptions) => {
 				);
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				MICROSOFT_ENTRA_ID_DEFAULT_SCOPES,
-				data.scopes,
-			);
+			const scopes = options.disableDefaultScope
+				? []
+				: ["openid", "profile", "email", "User.Read", "offline_access"];
+			if (options.scope) scopes.push(...options.scope);
+			if (data.scopes) scopes.push(...data.scopes);
 			return createAuthorizationURL({
 				id: "microsoft",
 				options,
 				authorizationEndpoint,
 				state: data.state,
 				codeVerifier: data.codeVerifier,
-				scopes: requestedScopes,
+				scopes,
 				redirectURI: data.redirectURI,
 				prompt: options.prompt,
 				loginHint: data.loginHint,
@@ -361,7 +351,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 					});
 				},
 		options,
-	} satisfies UpstreamProvider;
+	} satisfies OAuthProvider;
 };
 
 export const getMicrosoftPublicKey = async (

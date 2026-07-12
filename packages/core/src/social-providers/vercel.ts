@@ -1,11 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
-import {
-	createAuthorizationURL,
-	resolveRequestedScopes,
-	validateAuthorizationCode,
-} from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 
 export interface VercelProfile {
 	sub: string;
@@ -20,13 +16,10 @@ export interface VercelOptions extends ProviderOptions<VercelProfile> {
 	clientId: string;
 }
 
-const VERCEL_DEFAULT_SCOPES: string[] = [];
-
 export const vercel = (options: VercelOptions) => {
 	return {
 		id: "vercel",
 		name: "Vercel",
-		callbackPath: "/callback/vercel",
 		createAuthorizationURL({
 			state,
 			scopes,
@@ -38,17 +31,18 @@ export const vercel = (options: VercelOptions) => {
 				throw new BetterAuthError("codeVerifier is required for Vercel");
 			}
 
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				VERCEL_DEFAULT_SCOPES,
-				scopes,
-			);
+			let _scopes: string[] | undefined = undefined;
+			if (options.scope !== undefined || scopes !== undefined) {
+				_scopes = [];
+				if (options.scope) _scopes.push(...options.scope);
+				if (scopes) _scopes.push(...scopes);
+			}
 
 			return createAuthorizationURL({
 				id: "vercel",
 				options,
 				authorizationEndpoint: "https://vercel.com/oauth/authorize",
-				scopes: requestedScopes,
+				scopes: _scopes,
 				state,
 				codeVerifier,
 				redirectURI,
@@ -96,5 +90,5 @@ export const vercel = (options: VercelOptions) => {
 			};
 		},
 		options,
-	} satisfies UpstreamProvider<VercelProfile>;
+	} satisfies OAuthProvider<VercelProfile>;
 };

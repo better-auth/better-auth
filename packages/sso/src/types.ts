@@ -81,6 +81,11 @@ export interface SAMLConfig {
 	 */
 	cert?: string | string[];
 	audience?: string | undefined;
+	/**
+	 * Provider-level post-auth redirect URL for IdP-initiated or fallback SAML
+	 * flows when no RelayState callback URL is available.
+	 */
+	callbackUrl?: string | undefined;
 	idpMetadata?:
 		| {
 				metadata?: string;

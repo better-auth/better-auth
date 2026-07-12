@@ -1,5 +1,6 @@
 import { SafeUrlSchema } from "@better-auth/core/utils/redirect-uri";
 import * as z from "zod";
+import { claimsRequestParameterSchema } from "../claims-request";
 
 /**
  * Re-exported from `@better-auth/core` so every OAuth provider plugin shares one
@@ -111,11 +112,12 @@ export const authorizationQuerySchema = z
 			.string()
 			.pipe(z.enum(["code"]))
 			.optional(),
+		request: z.string().optional(),
 		request_uri: z.string().optional(),
 		redirect_uri: SafeUrlSchema.optional(),
 		scope: z.string().optional(),
 		state: z.string().optional(),
-		client_id: z.string(),
+		client_id: z.string().min(1, "client_id is required"),
 		prompt: authorizationPromptSchema.optional(),
 		display: z.string().optional(),
 		ui_locales: z.string().optional(),
@@ -129,6 +131,7 @@ export const authorizationQuerySchema = z
 			.pipe(z.enum(["S256"]))
 			.optional(),
 		nonce: z.string().optional(),
+		claims: claimsRequestParameterSchema.optional(),
 		dpop_jkt: dpopJktSchema.optional(),
 		resource: z
 			.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
@@ -136,8 +139,14 @@ export const authorizationQuerySchema = z
 	})
 	.passthrough();
 
+// redirect_uri stays optional in the stored code: a headless authorization
+// request (e.g. first-party-apps / device-style flows) legitimately omits it,
+// and RFC 6749 §4.1.3 only requires it at the token endpoint when the
+// authorization request carried one. The token endpoint enforces that
+// conditional match; forcing it here would reject valid headless codes as
+// "malformed verification value".
 const storedAuthorizationQuerySchema = authorizationQuerySchema.extend({
-	redirect_uri: SafeUrlSchema,
+	redirect_uri: SafeUrlSchema.optional(),
 });
 
 /**

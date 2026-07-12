@@ -5,7 +5,7 @@ import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
 import type { OrganizationOptions } from "better-auth/plugins";
 import { bearer, organization } from "better-auth/plugins";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { scim } from ".";
 import { scimClient } from "./client";
 import type { SCIMOptions } from "./types";
@@ -74,16 +74,31 @@ const createTestInstance = (
 		return headers;
 	}
 
+	let defaultOrgPromise: Promise<string | undefined> | undefined;
+	function ensureDefaultOrg(headers: Headers) {
+		if (!defaultOrgPromise) {
+			defaultOrgPromise = auth.api
+				.createOrganization({
+					body: { slug: "default-org", name: "Default Org" },
+					headers,
+				})
+				.then((org) => org!.id);
+		}
+		return defaultOrgPromise;
+	}
+
 	async function getSCIMToken(
 		providerId: string = "the-saml-provider-1",
 		organizationId?: string,
 		userHeaders?: Headers,
 	) {
 		const headers = userHeaders ?? (await getAuthCookieHeaders());
+		const orgId = organizationId ?? (await ensureDefaultOrg(headers));
+		if (!orgId) throw new Error("Default organization not found");
 		const { scimToken } = await auth.api.generateSCIMToken({
 			body: {
 				providerId,
-				organizationId,
+				organizationId: orgId,
 			},
 			headers,
 		});
@@ -108,6 +123,7 @@ const createTestInstance = (
 		registerOrganization,
 		getSCIMToken,
 		getAuthCookieHeaders,
+		ensureDefaultOrg,
 	};
 };
 
@@ -128,7 +144,9 @@ describe("SCIM provider management", () => {
 		it("should require user session", async () => {
 			const { auth } = createTestInstance();
 			const generateSCIMToken = () =>
-				auth.api.generateSCIMToken({ body: { providerId: "the id" } });
+				auth.api.generateSCIMToken({
+					body: { providerId: "the id", organizationId: "the-org" },
+				});
 
 			await expect(generateSCIMToken()).rejects.toThrowError(
 				expect.objectContaining({
@@ -137,45 +155,21 @@ describe("SCIM provider management", () => {
 			);
 		});
 
-		it("should deny personal token creation when canGenerateToken returns false", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance({
-				canGenerateToken: ({ organizationId }) => !!organizationId,
-			});
+		it("should reject a token mint without an organization", async () => {
+			const { auth, getAuthCookieHeaders } = createTestInstance();
 			const headers = await getAuthCookieHeaders();
 
-			const generateSCIMToken = () =>
+			await expect(
 				auth.api.generateSCIMToken({
-					body: { providerId: "personal-provider" },
+					// @ts-expect-error Testing request validation for a missing required field.
+					body: { providerId: "no-org-provider" },
 					headers,
-				});
-
-			await expect(generateSCIMToken()).rejects.toThrowError(
+				}),
+			).rejects.toThrowError(
 				expect.objectContaining({
-					message: "You are not allowed to generate a SCIM token",
+					message: expect.stringContaining("[body.organizationId]"),
 				}),
 			);
-		});
-
-		it("should allow token creation when canGenerateToken returns true (member is null for personal)", async () => {
-			let received: { providerId: string; member: unknown } | null = null;
-			const { auth, getAuthCookieHeaders } = createTestInstance({
-				canGenerateToken: ({ providerId, member }) => {
-					received = { providerId, member };
-					return true;
-				},
-			});
-			const headers = await getAuthCookieHeaders();
-
-			const { scimToken } = await auth.api.generateSCIMToken({
-				body: { providerId: "personal-provider" },
-				headers,
-			});
-
-			expect(scimToken).toBeTruthy();
-			expect(received).toEqual({
-				providerId: "personal-provider",
-				member: null,
-			});
 		});
 
 		it("should fail if the authenticated user does not belong to the given org", async () => {
@@ -199,10 +193,14 @@ describe("SCIM provider management", () => {
 				storeSCIMToken: "plain",
 			});
 			const headers = await getAuthCookieHeaders();
+			const org = await auth.api.createOrganization({
+				body: { slug: "provider-validation", name: "Provider Validation" },
+				headers,
+			});
 
-			const generateSCIMToken = (providerId: string, organizationId?: string) =>
+			const generateSCIMToken = (providerId: string) =>
 				auth.api.generateSCIMToken({
-					body: { providerId, organizationId },
+					body: { providerId, organizationId: org!.id },
 					headers,
 				});
 
@@ -213,116 +211,15 @@ describe("SCIM provider management", () => {
 			);
 		});
 
-		/**
-		 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-2g28-66mv-wghh
-		 */
-		it("rejects providerId values that collide with built-in account providers", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance();
-			const headers = await getAuthCookieHeaders();
-			const generateSCIMToken = (providerId: string) =>
-				auth.api.generateSCIMToken({ body: { providerId }, headers });
-
-			for (const reserved of [
-				"credential",
-				"email-otp",
-				"magic-link",
-				"phone-number",
-				"anonymous",
-				"siwe",
-			]) {
-				await expect(generateSCIMToken(reserved)).rejects.toThrowError(
-					expect.objectContaining({
-						message:
-							"Provider id collides with a built-in account provider and cannot be used for SCIM",
-					}),
-				);
-			}
-		});
-
-		/**
-		 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-2g28-66mv-wghh
-		 */
-		it("rejects providerId values that collide with configured social providers", async () => {
-			const data = {
-				user: [],
-				session: [],
-				verification: [],
-				account: [],
-				ssoProvider: [],
-				scimProvider: [],
-				scimGroup: [],
-				scimGroupMember: [],
-				scimGroupRole: [],
-				scimGroupRoleGrant: [],
-				organization: [],
-				member: [],
-			};
-			const memory = memoryAdapter(data);
-			const auth = betterAuth({
-				database: memory,
-				baseURL: "http://localhost:3000",
-				emailAndPassword: { enabled: true },
-				socialProviders: {
-					google: {
-						clientId: "google-client-id",
-						clientSecret: "google-client-secret",
-						enabled: true,
-					},
-					github: {
-						clientId: "github-client-id",
-						clientSecret: "github-client-secret",
-						enabled: true,
-					},
-					// Disabled providers must still be rejected: a previously
-					// enabled provider can have leftover account rows in the DB.
-					discord: {
-						clientId: "discord-client-id",
-						clientSecret: "discord-client-secret",
-						enabled: false,
-					},
-				},
-				plugins: [scim()],
-			});
-			const authClient = createAuthClient({
-				baseURL: "http://localhost:3000",
-				plugins: [bearer(), scimClient()],
-				fetchOptions: {
-					customFetchImpl: async (url, init) =>
-						auth.handler(new Request(url, init)),
-				},
-			});
-			const headers = new Headers();
-			await authClient.signUp.email({
-				email: "social@email.com",
-				password: "password",
-				name: "Social User",
-			});
-			await authClient.signIn.email(
-				{ email: "social@email.com", password: "password" },
-				{ throw: true, onSuccess: setCookieToHeader(headers) },
-			);
-			for (const reserved of ["google", "github", "discord"]) {
-				await expect(
-					auth.api.generateSCIMToken({
-						body: { providerId: reserved },
-						headers,
-					}),
-				).rejects.toThrowError(
-					expect.objectContaining({
-						message:
-							"Provider id collides with a built-in account provider and cannot be used for SCIM",
-					}),
-				);
-			}
-		});
-
 		it("should generate a new scim token (client)", async () => {
-			const { auth, authClient, getAuthCookieHeaders } = createTestInstance();
+			const { auth, authClient, getAuthCookieHeaders, ensureDefaultOrg } =
+				createTestInstance();
 
 			const headers = await getAuthCookieHeaders();
 			const response = await authClient.scim.generateToken(
 				{
 					providerId: "the id",
+					organizationId: (await ensureDefaultOrg(headers))!,
 				},
 				{ headers },
 			);
@@ -350,8 +247,12 @@ describe("SCIM provider management", () => {
 			});
 			const headers = await getAuthCookieHeaders();
 
+			const org = await auth.api.createOrganization({
+				body: { slug: "gen-org", name: "Gen Org" },
+				headers,
+			});
 			const response = await auth.api.generateSCIMToken({
-				body: { providerId: "the id" },
+				body: { providerId: "the id", organizationId: org!.id },
 				headers,
 			});
 
@@ -378,8 +279,12 @@ describe("SCIM provider management", () => {
 			});
 			const headers = await getAuthCookieHeaders();
 
+			const org = await auth.api.createOrganization({
+				body: { slug: "gen-org", name: "Gen Org" },
+				headers,
+			});
 			const response = await auth.api.generateSCIMToken({
-				body: { providerId: "the id" },
+				body: { providerId: "the id", organizationId: org!.id },
 				headers,
 			});
 
@@ -406,8 +311,12 @@ describe("SCIM provider management", () => {
 			});
 
 			const headers = await getAuthCookieHeaders();
+			const org = await auth.api.createOrganization({
+				body: { slug: "gen-org", name: "Gen Org" },
+				headers,
+			});
 			const response = await auth.api.generateSCIMToken({
-				body: { providerId: "the id" },
+				body: { providerId: "the id", organizationId: org!.id },
 				headers,
 			});
 
@@ -430,8 +339,12 @@ describe("SCIM provider management", () => {
 			});
 
 			const headers = await getAuthCookieHeaders();
+			const org = await auth.api.createOrganization({
+				body: { slug: "gen-org", name: "Gen Org" },
+				headers,
+			});
 			const response = await auth.api.generateSCIMToken({
-				body: { providerId: "the id" },
+				body: { providerId: "the id", organizationId: org!.id },
 				headers,
 			});
 
@@ -457,8 +370,12 @@ describe("SCIM provider management", () => {
 			});
 
 			const headers = await getAuthCookieHeaders();
+			const org = await auth.api.createOrganization({
+				body: { slug: "gen-org", name: "Gen Org" },
+				headers,
+			});
 			const response = await auth.api.generateSCIMToken({
-				body: { providerId: "the id" },
+				body: { providerId: "the id", organizationId: org!.id },
 				headers,
 			});
 
@@ -481,8 +398,12 @@ describe("SCIM provider management", () => {
 			});
 			const headers = await getAuthCookieHeaders();
 
+			const org = await auth.api.createOrganization({
+				body: { slug: "gen-org", name: "Gen Org" },
+				headers,
+			});
 			const response = await auth.api.generateSCIMToken({
-				body: { providerId: "the id" },
+				body: { providerId: "the id", organizationId: org!.id },
 				headers,
 			});
 
@@ -519,7 +440,7 @@ describe("SCIM provider management", () => {
 			const headers = await getAuthCookieHeaders();
 
 			const response = await auth.api.generateSCIMToken({
-				body: { providerId: "the id", organizationId: orgA?.id },
+				body: { providerId: "the id", organizationId: orgA!.id },
 				headers,
 			});
 
@@ -545,7 +466,7 @@ describe("SCIM provider management", () => {
 
 			const generateSCIMToken = () =>
 				auth.api.generateSCIMToken({
-					body: { providerId: "the id", organizationId: orgA?.id },
+					body: { providerId: "the id", organizationId: orgA!.id },
 					headers,
 				});
 
@@ -570,40 +491,17 @@ describe("SCIM provider management", () => {
 			});
 			const headers = await getAuthCookieHeaders();
 
+			const org = await auth.api.createOrganization({
+				body: { slug: "gen-org", name: "Gen Org" },
+				headers,
+			});
 			const response = await auth.api.generateSCIMToken({
-				body: { providerId: "the id" },
+				body: { providerId: "the id", organizationId: org!.id },
 				headers,
 			});
 
 			expect(response).toMatchObject({
 				scimToken: expect.any(String),
-			});
-		});
-
-		/**
-		 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-j8v8-g9cx-5qf4
-		 */
-		it("should deny regenerate when user is not the owner of a personal provider", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance();
-
-			const [headersUserA, headersUserB] = await Promise.all([
-				getAuthCookieHeaders(policyUserA),
-				getAuthCookieHeaders(policyUserB),
-			]);
-
-			await auth.api.generateSCIMToken({
-				body: { providerId: "user-a-owned-provider" },
-				headers: headersUserA,
-			});
-
-			await expect(
-				auth.api.generateSCIMToken({
-					body: { providerId: "user-a-owned-provider" },
-					headers: headersUserB,
-				}),
-			).rejects.toMatchObject({
-				status: "FORBIDDEN",
-				message: "You must be the owner to access this provider",
 			});
 		});
 
@@ -622,20 +520,19 @@ describe("SCIM provider management", () => {
 			]);
 
 			await auth.api.generateSCIMToken({
-				body: { providerId: "other-org", organizationId: org1?.id },
+				body: { providerId: "other-org", organizationId: org1!.id },
 				headers: headers1,
 			});
 
-			// User B omits organizationId - tries to replace org1's provider
+			// User B targets org1's provider but is not a member of org1.
 			await expect(
 				auth.api.generateSCIMToken({
-					body: { providerId: "other-org" },
+					body: { providerId: "other-org", organizationId: org1!.id },
 					headers: headers2,
 				}),
 			).rejects.toMatchObject({
 				status: "FORBIDDEN",
-				message:
-					"You must be a member of the organization to access this provider",
+				message: "You are not a member of the organization",
 			});
 		});
 	});
@@ -693,32 +590,54 @@ describe("SCIM provider management", () => {
 			});
 		});
 
-		it("should return owned non-org providers in list for the owner", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance();
+		it("should query providers only from the user's organizations", async () => {
+			const { auth, getAuthCookieHeaders, registerOrganization, getSCIMToken } =
+				createTestInstance();
 
 			const [headersUserA, headersUserB] = await Promise.all([
 				getAuthCookieHeaders(policyUserA),
 				getAuthCookieHeaders(policyUserB),
 			]);
+			const [orgA, orgB] = await Promise.all([
+				registerOrganization("filtered-org-a", headersUserA),
+				registerOrganization("filtered-org-b", headersUserB),
+			]);
 
-			await auth.api.generateSCIMToken({
-				body: { providerId: "user-a-personal-provider" },
-				headers: headersUserA,
-			});
+			await Promise.all([
+				getSCIMToken("filtered-provider-a", orgA!.id, headersUserA),
+				getSCIMToken("filtered-provider-b", orgB!.id, headersUserB),
+			]);
 
-			const resUserA = await auth.api.listSCIMProviderConnections({
-				headers: headersUserA,
-			});
-			expect(resUserA.providers).toHaveLength(1);
-			expect(resUserA.providers?.[0]).toMatchObject({
-				providerId: "user-a-personal-provider",
-				organizationId: null,
-			});
+			const ctx = await auth.$context;
+			const findManySpy = vi.spyOn(ctx.adapter, "findMany");
 
-			const resUserB = await auth.api.listSCIMProviderConnections({
-				headers: headersUserB,
-			});
-			expect(resUserB.providers).toHaveLength(0);
+			try {
+				const res = await auth.api.listSCIMProviderConnections({
+					headers: headersUserA,
+				});
+
+				expect(res.providers?.map((p) => p.providerId)).toEqual([
+					"filtered-provider-a",
+				]);
+
+				const scimProviderCall = findManySpy.mock.calls.find(
+					([query]) => query.model === "scimProvider",
+				)?.[0];
+				expect(scimProviderCall).toEqual(
+					expect.objectContaining({
+						model: "scimProvider",
+						where: [
+							{
+								field: "organizationId",
+								value: [orgA!.id],
+								operator: "in",
+							},
+						],
+					}),
+				);
+			} finally {
+				findManySpy.mockRestore();
+			}
 		});
 	});
 
@@ -732,7 +651,7 @@ describe("SCIM provider management", () => {
 			await getSCIMToken("my-provider", org!.id);
 
 			const res = await auth.api.getSCIMProviderConnection({
-				query: { providerId: "my-provider" },
+				query: { providerId: "my-provider", organizationId: org!.id },
 				headers,
 			});
 
@@ -740,50 +659,6 @@ describe("SCIM provider management", () => {
 				id: expect.any(String),
 				providerId: "my-provider",
 				organizationId: org!.id,
-			});
-		});
-
-		it("should return own non-org provider", async () => {
-			const { auth, getAuthCookieHeaders, getSCIMToken } = createTestInstance();
-			const headers = await getAuthCookieHeaders();
-
-			await getSCIMToken("no-org-provider");
-
-			const res = await auth.api.getSCIMProviderConnection({
-				query: { providerId: "no-org-provider" },
-				headers,
-			});
-
-			expect(res).toMatchObject({
-				providerId: "no-org-provider",
-				organizationId: null,
-			});
-		});
-
-		/**
-		 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-j8v8-g9cx-5qf4
-		 */
-		it("should deny access to non-org provider when user is not the owner", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance();
-
-			const [headersUserA, headersUserB] = await Promise.all([
-				getAuthCookieHeaders(policyUserA),
-				getAuthCookieHeaders(policyUserB),
-			]);
-
-			await auth.api.generateSCIMToken({
-				body: { providerId: "user-a-owned-provider" },
-				headers: headersUserA,
-			});
-
-			await expect(
-				auth.api.getSCIMProviderConnection({
-					query: { providerId: "user-a-owned-provider" },
-					headers: headersUserB,
-				}),
-			).rejects.toMatchObject({
-				status: "FORBIDDEN",
-				message: "You must be the owner to access this provider",
 			});
 		});
 
@@ -802,19 +677,21 @@ describe("SCIM provider management", () => {
 			]);
 
 			await auth.api.generateSCIMToken({
-				body: { providerId: "other-org-provider", organizationId: org1?.id },
+				body: { providerId: "other-org-provider", organizationId: org1!.id },
 				headers: headers1,
 			});
 
 			await expect(
 				auth.api.getSCIMProviderConnection({
-					query: { providerId: "other-org-provider" },
+					query: {
+						providerId: "other-org-provider",
+						organizationId: org1!.id,
+					},
 					headers: headers2,
 				}),
 			).rejects.toMatchObject({
 				status: "FORBIDDEN",
-				message:
-					"You must be a member of the organization to access this provider",
+				message: "You are not a member of the organization",
 			});
 		});
 
@@ -829,7 +706,7 @@ describe("SCIM provider management", () => {
 
 			const org = await registerOrganization("owner-removed-org", headersUserA);
 			await auth.api.generateSCIMToken({
-				body: { providerId: "owner-removed-provider", organizationId: org?.id },
+				body: { providerId: "owner-removed-provider", organizationId: org!.id },
 				headers: headersUserA,
 			});
 
@@ -854,13 +731,15 @@ describe("SCIM provider management", () => {
 
 			await expect(
 				auth.api.getSCIMProviderConnection({
-					query: { providerId: "owner-removed-provider" },
+					query: {
+						providerId: "owner-removed-provider",
+						organizationId: org!.id,
+					},
 					headers: headersUserA,
 				}),
 			).rejects.toMatchObject({
 				status: "FORBIDDEN",
-				message:
-					"You must be a member of the organization to access this provider",
+				message: "You are not a member of the organization",
 			});
 
 			const listRes = await auth.api.listSCIMProviderConnections({
@@ -874,12 +753,14 @@ describe("SCIM provider management", () => {
 		});
 
 		it("should return 404 for unknown providerId", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance();
+			const { auth, getAuthCookieHeaders, ensureDefaultOrg } =
+				createTestInstance();
 			const headers = await getAuthCookieHeaders();
+			const organizationId = (await ensureDefaultOrg(headers))!;
 
 			await expect(
 				auth.api.getSCIMProviderConnection({
-					query: { providerId: "unknown" },
+					query: { providerId: "unknown", organizationId },
 					headers,
 				}),
 			).rejects.toMatchObject({
@@ -905,7 +786,7 @@ describe("SCIM provider management", () => {
 			).toBe(true);
 
 			const deleteRes = await auth.api.deleteSCIMProviderConnection({
-				body: { providerId: "my-provider" },
+				body: { providerId: "my-provider", organizationId: org!.id },
 				headers,
 			});
 			expect(deleteRes).toMatchObject({ success: true });
@@ -940,60 +821,34 @@ describe("SCIM provider management", () => {
 			]);
 
 			await auth.api.generateSCIMToken({
-				body: { providerId: "other-org-del", organizationId: org1?.id },
+				body: { providerId: "other-org-del", organizationId: org1!.id },
 				headers: headers1,
 			});
 
 			await expect(
 				auth.api.deleteSCIMProviderConnection({
-					body: { providerId: "other-org-del" },
+					body: { providerId: "other-org-del", organizationId: org1!.id },
 					headers: headers2,
 				}),
 			).rejects.toMatchObject({
 				status: "FORBIDDEN",
-				message:
-					"You must be a member of the organization to access this provider",
+				message: "You are not a member of the organization",
 			});
 		});
 
 		it("should return 404 for unknown providerId", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance();
+			const { auth, getAuthCookieHeaders, ensureDefaultOrg } =
+				createTestInstance();
 			const headers = await getAuthCookieHeaders();
+			const organizationId = (await ensureDefaultOrg(headers))!;
 
 			await expect(
 				auth.api.deleteSCIMProviderConnection({
-					body: { providerId: "unknown" },
+					body: { providerId: "unknown", organizationId },
 					headers,
 				}),
 			).rejects.toMatchObject({
 				message: "SCIM provider not found",
-			});
-		});
-
-		/**
-		 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-j8v8-g9cx-5qf4
-		 */
-		it("should deny delete of non-org provider when user is not the owner", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance();
-
-			const [headersUserA, headersUserB] = await Promise.all([
-				getAuthCookieHeaders(policyUserA),
-				getAuthCookieHeaders(policyUserB),
-			]);
-
-			await auth.api.generateSCIMToken({
-				body: { providerId: "user-a-delete-provider" },
-				headers: headersUserA,
-			});
-
-			await expect(
-				auth.api.deleteSCIMProviderConnection({
-					body: { providerId: "user-a-delete-provider" },
-					headers: headersUserB,
-				}),
-			).rejects.toMatchObject({
-				status: "FORBIDDEN",
-				message: "You must be the owner to access this provider",
 			});
 		});
 	});
@@ -1027,7 +882,7 @@ describe("SCIM provider management", () => {
 				auth.api.generateSCIMToken({
 					body: {
 						providerId: "member-attempt",
-						organizationId: org?.id,
+						organizationId: org!.id,
 					},
 					headers: headersMember,
 				}),
@@ -1064,7 +919,7 @@ describe("SCIM provider management", () => {
 			const result = await auth.api.generateSCIMToken({
 				body: {
 					providerId: "admin-attempt",
-					organizationId: org?.id,
+					organizationId: org!.id,
 				},
 				headers: headersAdmin,
 			});
@@ -1098,7 +953,7 @@ describe("SCIM provider management", () => {
 			const result = await auth.api.generateSCIMToken({
 				body: {
 					providerId: "multi-role-provider",
-					organizationId: org?.id,
+					organizationId: org!.id,
 				},
 				headers: headersPrivilegedMember,
 			});
@@ -1116,7 +971,7 @@ describe("SCIM provider management", () => {
 			).toBe(true);
 
 			const provider = await auth.api.getSCIMProviderConnection({
-				query: { providerId: "multi-role-provider" },
+				query: { providerId: "multi-role-provider", organizationId: org!.id },
 				headers: headersPrivilegedMember,
 			});
 			expect(provider).toMatchObject({
@@ -1151,7 +1006,7 @@ describe("SCIM provider management", () => {
 				auth.api.generateSCIMToken({
 					body: {
 						providerId: "custom-role-attempt",
-						organizationId: org?.id,
+						organizationId: org!.id,
 					},
 					headers: headersAdmin,
 				}),
@@ -1164,12 +1019,38 @@ describe("SCIM provider management", () => {
 			const result = await auth.api.generateSCIMToken({
 				body: {
 					providerId: "custom-role-attempt",
-					organizationId: org?.id,
+					organizationId: org!.id,
 				},
 				headers: headersOwner,
 			});
 			expect(result).toMatchObject({
 				scimToken: expect.any(String),
+			});
+		});
+
+		it("should not let a custom requiredRole resolver bypass organization membership", async () => {
+			const { auth, getAuthCookieHeaders, registerOrganization } =
+				createTestInstance({ requiredRole: () => true });
+
+			const headersOwner = await getAuthCookieHeaders(policyUserA);
+			const headersOutsider = await getAuthCookieHeaders(policyUserB);
+
+			const org = await registerOrganization(
+				"resolver-membership-org",
+				headersOwner,
+			);
+
+			await expect(
+				auth.api.generateSCIMToken({
+					body: {
+						providerId: "resolver-membership-provider",
+						organizationId: org!.id,
+					},
+					headers: headersOutsider,
+				}),
+			).rejects.toMatchObject({
+				status: "FORBIDDEN",
+				message: "You are not a member of the organization",
 			});
 		});
 
@@ -1188,7 +1069,7 @@ describe("SCIM provider management", () => {
 			const result = await auth.api.generateSCIMToken({
 				body: {
 					providerId: "custom-creator-role-provider",
-					organizationId: org?.id,
+					organizationId: org!.id,
 				},
 				headers: headersCreator,
 			});
@@ -1230,7 +1111,7 @@ describe("SCIM provider management", () => {
 			await auth.api.generateSCIMToken({
 				body: {
 					providerId: "list-role-provider",
-					organizationId: org?.id,
+					organizationId: org!.id,
 				},
 				headers: headersOwner,
 			});

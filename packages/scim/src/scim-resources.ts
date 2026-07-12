@@ -13,6 +13,7 @@ export const createUserResource = (
 	user: User,
 	account?: Account | null,
 	groups?: SCIMUserGroupReference[],
+	active?: boolean,
 ) => {
 	return {
 		// Common attributes
@@ -35,7 +36,10 @@ export const createUserResource = (
 			formatted: user.name,
 		},
 		displayName: user.name,
-		active: true,
+		// `active` reflects the disabled-user state. App-level deactivation uses
+		// the admin plugin's `banned` field; org-scoped callers pass an explicit
+		// value (membership presence). Absent both, the user reads as active.
+		active: active ?? !(user as User & { banned?: boolean | null }).banned,
 		emails: [{ primary: true, value: user.email }],
 		...(groups && groups.length > 0 ? { groups } : {}),
 		schemas: [SCIMUserResourceSchema.id],

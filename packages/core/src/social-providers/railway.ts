@@ -1,9 +1,8 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -26,30 +25,27 @@ export interface RailwayOptions extends ProviderOptions<RailwayProfile> {
 	clientId: string;
 }
 
-const RAILWAY_DEFAULT_SCOPES = ["openid", "email", "profile"];
-
 export const railway = (options: RailwayOptions) => {
 	return {
 		id: "railway",
 		name: "Railway",
-		callbackPath: "/callback/railway",
-		async createAuthorizationURL({
+		createAuthorizationURL({
 			state,
 			scopes,
 			codeVerifier,
 			redirectURI,
 			additionalParams,
 		}) {
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				RAILWAY_DEFAULT_SCOPES,
-				scopes,
-			);
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["openid", "email", "profile"];
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "railway",
 				options,
 				authorizationEndpoint,
-				scopes: requestedScopes,
+				scopes: _scopes,
 				state,
 				codeVerifier,
 				redirectURI,
@@ -107,5 +103,5 @@ export const railway = (options: RailwayOptions) => {
 			};
 		},
 		options,
-	} satisfies UpstreamProvider<RailwayProfile>;
+	} satisfies OAuthProvider<RailwayProfile>;
 };

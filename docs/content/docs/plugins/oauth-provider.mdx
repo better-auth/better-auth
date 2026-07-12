@@ -405,7 +405,7 @@ Revokes a user's consent for a specific client.
 
 Once installed, you can utilize the OAuth Provider to manage authentication flows within your application.
 
-After the client is created, you will receive a `client_id` and `client_secret` that you can display to the user. The `client_secret` can only be provided once, ensure the user saves it.
+After a confidential client is created, you will receive a `client_id` and `client_secret` that you can display to the user. The `client_secret` can only be provided once, ensure the user saves it. Public clients receive only a `client_id`.
 
 #### Setup
 
@@ -418,10 +418,10 @@ oauthProvider({
 })
 ```
 
-To enable unauthenticated client registration which allows for dynamically registered public clients, additionally set `allowUnauthenticatedClientRegistration: true` in your auth config.
+To enable open client registration without a Better Auth session, additionally set `allowUnauthenticatedClientRegistration: true` in your auth config. Public clients are registered with `token_endpoint_auth_method: "none"`. Confidential clients receive a one-time `client_secret` in the registration response.
 
 <Callout type="info">
-  For MCP, [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991) are [available](/docs/plugins/cimd). [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) may be added as an alternative for public client identification in the future.
+  For MCP public-client identity, [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991) are [available](/docs/plugins/cimd).
 </Callout>
 
 ```ts title="auth.ts"
@@ -543,22 +543,24 @@ const response = await auth.api.adminCreateOAuthClient({
   body: {
     redirect_uris: ["https://app.example.com/callback"],
     token_endpoint_auth_method: "private_key_jwt",
-    jwks: [
-      {
-        kty: "RSA",
-        kid: "my-key-1",
-        alg: "RS256",
-        use: "sig",
-        n: "...",
-        e: "...",
-      },
-    ],
+    jwks: {
+      keys: [
+        {
+          kty: "RSA",
+          kid: "my-key-1",
+          alg: "RS256",
+          use: "sig",
+          n: "...",
+          e: "...",
+        },
+      ],
+    },
   },
 });
 ```
 
 <Callout type="info">
-  `jwks` and `jwks_uri` are mutually exclusive. When using `jwks_uri`, it must be an HTTPS URL pointing to a public (non-private) host.
+  `jwks` and `jwks_uri` are general OIDC client key metadata and are mutually exclusive. Inline `jwks` must contain only public asymmetric keys. When using `jwks_uri`, it must be an HTTPS URL pointing to a public (non-private) host.
 </Callout>
 
 When exchanging tokens, the client sends a `client_assertion` JWT instead of a `client_secret`:
@@ -602,6 +604,18 @@ The refresh token grant enables clients to update their access token without nee
 
 This implementation currently issues a new refresh token for every refresh request.
 
+Set `refreshTokenReuseInterval` to allow a rotated refresh token to be reused for a short interval and receive the same token response. This helps native and public clients recover from duplicate refresh requests, lost responses, or retrying requests without minting another token pair.
+
+```ts title="auth.ts"
+oauthProvider({
+  refreshTokenReuseInterval: 30, // seconds
+})
+```
+
+The default is `0`, which keeps strict replay detection. During the interval, Better Auth replays the cached response only when the reused refresh token is from the same client and the request resolves to the same effective scopes, requested resources, and sender constraint (for example the same DPoP key). A mismatch during the interval returns `invalid_grant` without invalidating the whole family; once the interval expires, using the old refresh token is treated as replay and invalidates the refresh-token family.
+
+The cached response is stored encrypted on the consumed refresh-token row and includes the replacement refresh token. `expires_in` is recalculated from the cached `expires_at` each time the response is replayed.
+
 ### Consent Endpoint
 
 Accept or deny user consent for a set of scopes. Note that when denying scopes, the consent cancels and pre-existing consent remains. To remove consent, delete that user's "oauthConsent" for that client.
@@ -617,6 +631,10 @@ Accept or deny user consent for a set of scopes. Note that when denying scopes, 
      * Space-separated list of accepted scopes. If not provided, the originally requested scopes are accepted.
      */
     scope?: string,
+    /**
+     * Accepted OIDC claims request object. If not provided, the originally requested claims are accepted.
+     */
+    claims?: string | Record<string, unknown>,
   }
   ```
 </APIMethod>
@@ -731,7 +749,7 @@ await auth.api.adminCreateOAuthClient({
 
 When `backchannel_logout_session_required` is `true`, the RP requires a `sid` claim in every Logout Token. Every Logout Token the OP sends already includes `sid`, so such clients are always served.
 
-The `backchannel_logout_uri` is validated at registration. It must be an absolute URL with no fragment, and must use `https` for confidential clients (loopback `http` such as `http://127.0.0.1:<port>` is allowed for local development). It is also rejected when its host is private, reserved, tunneled (NAT64, 6to4, IPv4-mapped IPv6), or a cloud-metadata name. This host check is syntactic: it does not resolve DNS, so pin or re-check the resolved address if you need protection against DNS rebinding. The same host check guards a `private_key_jwt` client's `jwks_uri`, which separately requires `https` unconditionally and a trusted origin. A URI that fails validation is rejected with `invalid_client_metadata`.
+The `backchannel_logout_uri` is validated at registration. It must be an absolute URL with no fragment, and must use `https` for confidential clients (loopback `http` such as `http://127.0.0.1:<port>` is allowed for local development). It is also rejected when its host is private, reserved, tunneled (NAT64, 6to4, IPv4-mapped IPv6), or a cloud-metadata name. This host check is syntactic: it does not resolve DNS, so pin or re-check the resolved address if you need protection against DNS rebinding. The same host check guards a client's `jwks_uri`, which separately requires `https` unconditionally and a trusted origin. A URI that fails validation is rejected with `invalid_client_metadata`.
 
 The OP enumerates clients with active tokens bound to the ending session and POSTs one `logout_token` to each in parallel (5s per-RP timeout, no retry per spec §2.5). It then revokes the session's tokens:
 
@@ -774,7 +792,11 @@ The UserInfo endpoint returns different claims based on the scopes that were gra
 * `profile`: Returns `name`, `picture`, `given_name`, `family_name`
 * `email`: Returns `email` and `email_verified`
 
-The `customUserInfoClaims` function receives the user object, requested scopes array, and the passed access token, allowing you to add additional information to the response.
+The endpoint also honors the OIDC `claims` request parameter for UserInfo. Claims listed under `claims.userinfo` are added to the scope-requested claims when Better Auth or your custom claim logic can supply them, bounded to the names advertised in `claims_supported`. Missing values are omitted from the JSON response rather than returned as `null` or an empty string.
+
+Per-claim selection through `claims.userinfo` applies to opaque access tokens. A JWT access token resolves UserInfo claims from its granted scopes, so an individually requested claim without its backing scope is omitted (OIDC Core §5.5.1). Request the backing scope, or issue an opaque access token, when a client needs a claim that no granted scope covers.
+
+The `customUserInfoClaims` function receives the user object, requested scopes array, requested UserInfo claim names, and the passed access token, allowing you to add additional information to the response.
 
 ### Well-Known
 
@@ -998,15 +1020,20 @@ oauthProvider({
 })
 ```
 
-The plugin will redirect the user to the specified path with `client_id` and `scope` query parameters. You can use this information to display a custom consent screen. Once the user consents, you can call `oauth2.consent` to complete the authorization.
+The plugin will redirect the user to the specified path with `client_id`, `scope`, and, when requested, `claims` query parameters. Use `scope` and `claims.userinfo` to display the complete access request on your consent screen. Once the user consents, you can call `oauth2.consent` to complete the authorization.
 
 ```ts title="consent-page.ts"
 import { authClient } from "@/lib/auth-client"
 
+const claims = new URLSearchParams(window.location.search).get("claims");
+const requestedClaims = claims ? JSON.parse(claims) : undefined;
+
 const res = await authClient.oauth2.consent({
 	accept: true,
   // optional scopes accepted (if not sent, accepted scopes matches the original request)
-  scope: "openid profile email"
+  scope: "openid profile email",
+  // optional claims accepted (if not sent, accepted claims match the original request)
+  claims: requestedClaims
 });
 ```
 
@@ -1164,8 +1191,8 @@ Scopes allow clients specific access to specific resources.
 By default, we support the following scopes are supported:
 
 * `openid`: Returns the user's ID (`sub` claim).
-* `profile`: Returns name, picture, given\_name, family\_name
-* `email`: Returns email and email\_verified
+* `profile`: Returns name, picture, given\_name, family\_name from UserInfo
+* `email`: Returns email and email\_verified from UserInfo
 * `offline_access`: Returns a refresh token
 
 The scopes configuration can contain as many or as few scopes as you wish! Note that `openid` is required to be considered an OIDC server, otherwise this is a standard OAuth 2.1 server. All supported scopes must be in this array.
@@ -1178,9 +1205,11 @@ oauthProvider({
 
 ### Claims
 
-Internally, we support the following claims are supported: \["sub", "iss", "aud", "exp", "iat", "sid", "scope", "azp"].
+Internally supported claims include \["sub", "iss", "aud", "exp", "iat", "sid", "scope", "azp"].
 
-Id token and user info claims should be namespaced when possible to avoid potential future conflicts.
+ID token and UserInfo claims should be namespaced when possible to avoid potential future conflicts. In the authorization code flow, `profile`, `email`, and `claims.userinfo` request UserInfo claims; they are not added to the ID token unless you add them with `customIdTokenClaims`.
+
+`customIdTokenClaims` is additive for protocol-owned ID token claims. Reserved names such as `iss`, `sub`, `aud`, token lifetime claims, `nonce`, `sid`, hash claims, `auth_time`, `acr`, `amr`, and `azp` are stripped at issuance with a warning log. Use namespaced claim names such as `https://example.com/org` for application-specific data.
 
 Claims added inside `customIdTokenClaims` and `customUserInfoClaims` should be added to the `advertisedMetadata.claims_supported` so clients can validate that claim received. In the following example, it would be the base claims plus `locale` and `https://example.com/org`.
 
@@ -1203,9 +1232,12 @@ oauthProvider({
     };
   },
   // Additional user info claims
-  customUserInfoClaims: ({ user, scopes, jwt }) => {
+  customUserInfoClaims: ({ user, scopes, requestedClaims, jwt }) => {
     return {
       locale: "en-GB",
+      ...(requestedClaims.includes("website")
+        ? { website: "https://example.com" }
+        : {}),
     };
   },
 })
@@ -1237,6 +1269,7 @@ Each token type and grant type can independently can set a default expiration.
 * `m2mAccessTokenExpiresIn` defaults 1 hour
 * `idTokenExpiresIn` defaults 10 hours
 * `refreshTokenExpiresIn` defaults 30 days
+* `refreshTokenReuseInterval` defaults 0 seconds
 * `codeExpiresIn` defaults 10 minutes
 * `assertionMaxLifetime` defaults 5 minutes — maximum allowed lifetime for `private_key_jwt` client assertions
 
@@ -1263,7 +1296,7 @@ oauthProvider({
 })
 ```
 
-Unauthenticated client registration additionally allows for public clients (never confidential) to register without an authorization header. This is especially useful for an MCP to dynamically register themselves as a public client without an active session. For MCP auth support, the recommended approach is via the [CIMD plugin](/docs/plugins/cimd) which maintains the identity of the public client.
+Unauthenticated client registration additionally allows clients to register without an authorization header. Public clients are registered with `token_endpoint_auth_method: "none"`. Confidential clients receive a one-time `client_secret` in the registration response. For MCP auth support, the recommended approach is via the [CIMD plugin](/docs/plugins/cimd) which maintains the identity of public clients.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -1273,7 +1306,7 @@ oauthProvider({
 ```
 
 <Callout type="info">
-  For MCP, [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) may be added as an alternative for public client identification in the future.
+  For MCP public-client identity, use the [CIMD plugin](/docs/plugins/cimd).
 </Callout>
 
 Protected dynamic client registration allows machine callers to register public or confidential clients without a Better Auth user session. Issue an RFC 7591 initial access token out of band, then validate the token from the `Authorization: Bearer <token>` header. Defining `validateInitialAccessToken` enables this path; while it is undefined, a Bearer token sent to the registration endpoint is rejected.
@@ -1350,15 +1383,15 @@ By default, PKCE is required for all clients. This provides maximum security and
 **PKCE is always required for:**
 
 * Public clients (native/user-agent-based applications)
-* Any authorization request with the `offline_access` scope (refresh tokens)
+* Authorization requests with the `offline_access` scope, unless a confidential client has opted out of PKCE and the OIDC request includes both `openid` and `nonce`
 
 #### Per-Client PKCE Configuration
 
-Individual clients can opt-out of PKCE requirement during registration if needed for compatibility:
+Admin-created confidential clients can opt out of the PKCE requirement if needed for compatibility:
 
-```ts title="register-client.ts"
+```ts title="admin-create-oauth.ts"
 // Register a confidential client that doesn't support PKCE
-const response = await auth.api.createOAuthClient({
+const response = await auth.api.adminCreateOAuthClient({
   headers,
   body: {
     client_name: 'Legacy Backend Service',
@@ -1375,7 +1408,20 @@ The `require_pkce` field:
 * Defaults to `true` (PKCE required)
 * Only applies to confidential clients
 * Ignored for public clients (PKCE always required)
-* Ignored for `offline_access` scope (PKCE always required)
+* Requires an OIDC request with both `openid` and `nonce` when `offline_access` is requested without PKCE
+
+#### Dynamic Client Registration PKCE Configuration
+
+Dynamic client registration does not accept `require_pkce` from client requests. To change the server-owned default for dynamically registered confidential clients, set `clientRegistrationRequirePKCE`.
+
+```ts title="auth.ts"
+oauthProvider({
+  allowDynamicClientRegistration: true,
+  clientRegistrationRequirePKCE: false,
+})
+```
+
+This only applies to confidential clients created through dynamic client registration. Public clients still require PKCE. Confidential OIDC clients that request `offline_access` without PKCE must send both `openid` and `nonce`.
 
 **When to use `require_pkce: false`:**
 
@@ -1399,7 +1445,7 @@ Only disable PKCE for confidential clients when absolutely necessary for legacy 
 
 Some clients (notably MCP clients) need to connect to your authorization server without being registered in advance. The OAuth Provider plugin supports this through two mechanisms:
 
-* **`allowUnauthenticatedClientRegistration`**: lets anonymous callers hit `/oauth2/register` to create a public client at request time.
+* **`allowUnauthenticatedClientRegistration`**: lets anonymous callers hit `/oauth2/register` to create a client at request time. Confidential registrations receive a one-time `client_secret`; public registrations use `token_endpoint_auth_method: "none"`.
 * **[`@better-auth/cimd`](/docs/plugins/cimd)**: an optional plugin that lets clients identify themselves by hosting a metadata document at an HTTPS URL. The URL itself becomes the `client_id`; the server fetches and validates the document. This is the pattern MCP calls [Client ID Metadata Documents](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/).
 
 ### Provider extensions
@@ -1475,13 +1521,13 @@ authenticate: async ({ ctx, opts, assertion, expectedAudience }) => {
 
 #### Claim precedence
 
-Three claim surfaces resolve contributions in a fixed order. Across all three, third-party extension claims are strictly additive, while the operator's own first-party callbacks may override identity claims; subject identity is always pinned by the provider.
+Three claim surfaces resolve contributions in a fixed order. Across all three, third-party extension claims are strictly additive, while the operator's own first-party callbacks may override profile-style identity claims; protocol-owned identity, lifetime, binding, and authentication-context claims are always pinned or reserved by the provider.
 
-| Token        | Order (lowest to highest authority)                                                                                                                 | Always provider-owned                                                                                                                        |
-| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Access token | extension `claims.accessToken` \< per-issuance `accessTokenClaims` \< `customAccessTokenClaims` \< per-resource `customClaims`                      | reserved RFC 9068 names (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `client_id`, `scope`, `auth_time`, `acr`, `amr`), stripped before signing |
-| ID token     | base identity claims \< `auth_time`/`acr` \< `customIdTokenClaims`; extension and per-issuance `idTokenClaims` are additive (fill absent keys only) | `at_hash`, `iss`, `sub`, `aud`, `nonce`, `iat`, `exp`, `sid`                                                                                 |
-| UserInfo     | base identity claims \< extension `claims.userInfo` (additive only) \< `customUserInfoClaims`                                                       | `sub` (re-pinned last)                                                                                                                       |
+| Token        | Order (lowest to highest authority)                                                                                                   | Pinned or reserved by provider                                                                                                                                                                    |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Access token | extension `claims.accessToken` \< per-issuance `accessTokenClaims` \< `customAccessTokenClaims` \< per-resource `customClaims`        | reserved RFC 9068 names (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `client_id`, `scope`, `auth_time`, `acr`, `amr`), stripped before signing                                                      |
+| ID token     | subject/authentication claims \< `customIdTokenClaims`; extension and per-issuance `idTokenClaims` are reserved-filtered and additive | reserved OIDC/JWT names (`iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`, `amr`, `azp`) and scope-derived UserInfo claim names |
+| UserInfo     | scope and `claims.userinfo` identity claims \< extension `claims.userInfo` (additive only) \< `customUserInfoClaims`                  | `sub` (re-pinned last)                                                                                                                                                                            |
 
 Per-issuance `accessTokenClaims` are JWT-only: an opaque access token persists no per-issuance claims, so they do not reappear at introspection. A claim that must be visible at opaque-token introspection belongs in a grant-type-stable `claims.accessToken` contributor, which the introspection path re-derives.
 
@@ -1646,6 +1692,9 @@ const auth = betterAuth({
 The metadata endpoint can be customized so that the publicized scopes and claims differ from those which the server can deliver. This can prevent showcasing all your supported scopes and claims on your metadata endpoint.
 
 All scopes inside the advertisedMetadata section MUST be listed in `scopes` otherwise initialization will fail.
+
+Better Auth advertises `acr_values_supported: ["0"]`, which is the unspecified authentication context. Custom ACR policies are not currently supported; authorization requests for other
+`acr_values` are rejected with `invalid_request`.
 
 #### Scopes
 
@@ -2180,7 +2229,26 @@ export const oauthRefreshTokenTableFields = [
   {
     name: "revoked",
     type: "Date",
-    description: "Timestamp when the token was revoked",
+    description: "Timestamp when the token stopped being active",
+    isOptional: true,
+  },
+  {
+    name: "rotatedAt",
+    type: "Date",
+    description: "Timestamp when the token was consumed by rotation",
+    isOptional: true,
+  },
+  {
+    name: "rotationReplayResponse",
+    type: "string",
+    description:
+      "Encrypted token response and request fingerprint replayed during the configured refresh-token reuse interval",
+    isOptional: true,
+  },
+  {
+    name: "rotationReplayExpiresAt",
+    type: "Date",
+    description: "Timestamp when the cached rotation response stops being replayable",
     isOptional: true,
   },
   {
@@ -2334,6 +2402,12 @@ export const oauthConsentTableFields = [
     name: "scopes",
     type: "string[]",
     description: "Array of scopes consented to",
+  },
+  {
+    name: "requestedUserInfoClaims",
+    type: "string[]",
+    description: "Array of OIDC UserInfo claim names consented to",
+    isOptional: true,
   },
   {
     name: "createdAt",

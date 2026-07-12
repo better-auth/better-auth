@@ -1782,9 +1782,8 @@ describe("oauth - prompt", async () => {
 		);
 		expect(tokens.data?.accessToken).toBeDefined();
 
-		// grantedScopes is normalized (deduped + sorted) per RFC 6749 §3.3.
-		expect(tokens.data?.grantedScopes).toEqual(["email", "openid", "profile"]);
-		expect(tokens.data?.grantedScopes).not.toContain("read:posts");
+		expect(tokens.data?.scopes).toEqual(["openid", "profile", "email"]);
+		expect(tokens.data?.scopes).not.toContain("read:posts");
 	});
 
 	it("select_account - should sign in requesting account selection", async ({

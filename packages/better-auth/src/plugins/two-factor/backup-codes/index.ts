@@ -9,13 +9,19 @@ import { generateRandomString } from "../../../crypto/random";
 import { parseUserOutput } from "../../../db/schema";
 import { shouldRequirePassword } from "../../../utils/password";
 import { PACKAGE_VERSION } from "../../../version";
+import { DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS } from "../constant";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type {
 	TwoFactorProvider,
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
-import { verifyTwoFactor } from "../verify-two-factor";
+import {
+	assertTwoFactorNotLocked,
+	recordTwoFactorFailure,
+	resetTwoFactorFailures,
+	verifyTwoFactor,
+} from "../verify-two-factor";
 
 export interface BackupCodeOptions {
 	/**
@@ -318,8 +324,9 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { session, valid } = await verifyTwoFactor(ctx);
+					const { session, valid, beginAttempt } = await verifyTwoFactor(ctx);
 					const user = session.user as UserWithTwoFactor;
+					const isSignIn = !session.session;
 					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 						model: twoFactorTable,
 						where: [
@@ -335,15 +342,34 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 							TWO_FACTOR_ERROR_CODES.BACKUP_CODES_NOT_ENABLED,
 						);
 					}
-					const validate = await verifyBackupCode(
-						{
-							backupCodes: twoFactor.backupCodes,
-							code: ctx.body.code,
-						},
-						ctx.context.secretConfig,
-						opts,
-					);
+					if (isSignIn) {
+						await assertTwoFactorNotLocked(ctx, twoFactorTable, twoFactor);
+					}
+					// Enforce the per-challenge attempt budget on the sign-in path.
+					// The re-verify branch (already authenticated) is not gated.
+					const attempt = isSignIn
+						? await beginAttempt(DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS)
+						: null;
+					let validate: Awaited<ReturnType<typeof verifyBackupCode>>;
+					try {
+						validate = await verifyBackupCode(
+							{
+								backupCodes: twoFactor.backupCodes,
+								code: ctx.body.code,
+							},
+							ctx.context.secretConfig,
+							opts,
+						);
+					} catch (error) {
+						// A server error before the code is checked must not spend the slot.
+						await attempt?.restore();
+						throw error;
+					}
 					if (!validate.status || !validate.updated) {
+						await attempt?.recordFailure();
+						if (isSignIn) {
+							await recordTwoFactorFailure(ctx, twoFactorTable, twoFactor);
+						}
 						throw APIError.from(
 							"UNAUTHORIZED",
 							TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
@@ -378,6 +404,9 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						});
 					}
 
+					if (isSignIn) {
+						await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
+					}
 					if (!ctx.body.disableSession) {
 						return valid(ctx);
 					}
