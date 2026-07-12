@@ -84,6 +84,39 @@ export const auth = betterAuth({
   Additionally, you're required to pass each [relation](https://orm.drizzle.team/docs/relations) through the drizzle adapter schema object.
 </Callout>
 
+When a table has multiple foreign keys to the same table, each relation pair
+must use a matching [`relationName`](https://orm.drizzle.team/docs/relations#disambiguating-relations).
+The CLI generates these names automatically. If you generated your schema with
+an older CLI, regenerate it or add matching names to both sides.
+
+The `relationName` prefix follows your table naming: with `usePlural: true` it
+is plural (`tests_userId`), otherwise singular (`test_userId`). Keep both sides
+identical.
+
+```ts title="schema.ts"
+export const usersRelations = relations(users, ({ many }) => ({
+  testsByUserId: many(tests, { relationName: "tests_userId" }),
+  testsByManagerId: many(tests, { relationName: "tests_managerId" }),
+}));
+
+export const testsRelations = relations(tests, ({ one }) => ({
+  user: one(users, {
+    fields: [tests.userId],
+    references: [users.id],
+    relationName: "tests_userId",
+  }),
+  manager: one(users, {
+    fields: [tests.managerId],
+    references: [users.id],
+    relationName: "tests_managerId",
+  }),
+}));
+```
+
+Do not keep both singular and plural aliases for the same foreign key (for
+example, both `user` and `users`). Drizzle treats those as separate relations
+and cannot infer which reverse relation a join should use.
+
 ## Modifying Table Names
 
 The Drizzle adapter expects the schema you define to match the table names. For example, if your Drizzle schema maps the `user` table to `users`, you need to manually pass the schema and map it to the user table.
