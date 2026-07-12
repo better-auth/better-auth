@@ -4,15 +4,35 @@ import { __getBetterAuthGlobal } from "./global";
 
 export type RequestStateWeakMap = WeakMap<object, any>;
 
+// Memoizes the in-flight AsyncLocalStorage initialization so concurrent
+// first-callers share a single instance instead of each constructing one.
+let asyncStorageInit: Promise<AsyncLocalStorage<RequestStateWeakMap>> | null =
+	null;
+
 const ensureAsyncStorage = async () => {
 	const betterAuthGlobal = __getBetterAuthGlobal();
-	if (!betterAuthGlobal.context.requestStateAsyncStorage) {
-		const AsyncLocalStorage = await getAsyncLocalStorage();
-		betterAuthGlobal.context.requestStateAsyncStorage =
-			new AsyncLocalStorage<RequestStateWeakMap>();
+	const existing = betterAuthGlobal.context.requestStateAsyncStorage;
+	if (existing) {
+		return existing as AsyncLocalStorage<RequestStateWeakMap>;
 	}
-	return betterAuthGlobal.context
-		.requestStateAsyncStorage as AsyncLocalStorage<RequestStateWeakMap>;
+	// Without memoizing the init, several concurrent callers can each pass the
+	// check above, each `await getAsyncLocalStorage()`, and each assign a fresh
+	// instance — last write wins. `runWithRequestState().run()` then executes on
+	// one instance while a nested `getCurrentRequestState()` reads the
+	// overwritten one, throwing "No request state found". This shows up
+	// intermittently on serverless cold start (e.g. Cloudflare Workers), where
+	// the first requests hit before the lazy `node:async_hooks` import settles.
+	// The idempotent `??=` keeps the global singleton stable even if multiple
+	// BetterAuth copies (Dual Module Hazard) race here.
+	if (!asyncStorageInit) {
+		asyncStorageInit = getAsyncLocalStorage().then((AsyncLocalStorage) => {
+			betterAuthGlobal.context.requestStateAsyncStorage ??=
+				new AsyncLocalStorage<RequestStateWeakMap>();
+			return betterAuthGlobal.context
+				.requestStateAsyncStorage as AsyncLocalStorage<RequestStateWeakMap>;
+		});
+	}
+	return asyncStorageInit;
 };
 
 export async function getRequestStateAsyncLocalStorage() {
