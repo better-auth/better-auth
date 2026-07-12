@@ -1,4 +1,8 @@
-import type { Awaitable, LiteralString } from "../types";
+import type {
+	Awaitable,
+	GenericEndpointContext,
+	LiteralString,
+} from "../types";
 
 export interface OAuth2Tokens {
 	tokenType?: string | undefined;
@@ -74,10 +78,15 @@ export interface OAuthProvider<
 	 * Verify the id token
 	 * @param token - The id token
 	 * @param nonce - The nonce
+	 * @param ctx - Request endpoint context (headers via `ctx.headers`)
 	 * @returns True if the id token is valid, false otherwise
 	 */
 	verifyIdToken?:
-		| ((token: string, nonce?: string) => Promise<boolean>)
+		| ((
+				token: string,
+				nonce?: string,
+				ctx?: GenericEndpointContext,
+		  ) => Promise<boolean>)
 		| undefined;
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
@@ -137,10 +146,17 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 */
 	disableIdTokenSignIn?: boolean | undefined;
 	/**
-	 * verifyIdToken function to verify the id token
+	 * Custom function to verify the id token.
+	 * @param token - The id token
+	 * @param nonce - The nonce
+	 * @param ctx - Request endpoint context (headers via `ctx.headers`)
 	 */
 	verifyIdToken?:
-		| ((token: string, nonce?: string) => Promise<boolean>)
+		| ((
+				token: string,
+				nonce?: string,
+				ctx?: GenericEndpointContext,
+		  ) => Promise<boolean>)
 		| undefined;
 	/**
 	 * Custom function to get user info from the provider
