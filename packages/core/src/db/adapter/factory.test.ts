@@ -248,9 +248,11 @@ describe("createAdapterFactory where value coercion", () => {
 			},
 			adapter: () =>
 				createCustomAdapter({
-					findMany: async <T>({ where }) => {
-						if (where) {
-							seenWhere.push(where);
+					findMany: async <T>(
+						params: Parameters<CustomAdapter["findMany"]>[0],
+					) => {
+						if (params.where) {
+							seenWhere.push(params.where);
 						}
 						return [] as T[];
 					},
