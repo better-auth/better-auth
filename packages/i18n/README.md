@@ -51,12 +51,18 @@ export const auth = betterAuth({
 });
 ```
 
-### Use a subset of locales
+> [!WARNING]
+> Importing from `@better-auth/i18n/locales` directly will bundle all 22 languages. To keep your bundle lean, it is recommended to import individual locales from their specific subpaths.
+
+### Use a subset of locales (Recommended)
+
+To keep your bundle lean and enable tree-shaking, import only the locales you need from their subpath exports:
 
 ```ts
 import { betterAuth } from "better-auth";
 import { i18n } from "@better-auth/i18n";
-import { en, fr } from "@better-auth/i18n/locales";
+import { en } from "@better-auth/i18n/locales/en";
+import { fr } from "@better-auth/i18n/locales/fr";
 
 export const auth = betterAuth({
   plugins: [

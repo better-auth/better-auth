@@ -1,0 +1,60 @@
+import type { BASE_ERROR_CODES } from "@better-auth/core/error";
+import type { LocalizedTranslations } from "../../types";
+
+export const deCore: LocalizedTranslations<typeof BASE_ERROR_CODES> = {
+	ACCOUNT_NOT_FOUND: "Konto nicht gefunden",
+	ASYNC_VALIDATION_NOT_SUPPORTED: "Async validation is not supported",
+	BODY_MUST_BE_AN_OBJECT: "Body must be an object",
+	CALLBACK_URL_REQUIRED: "callbackURL is required",
+	CHANGE_EMAIL_DISABLED: "Change email is disabled",
+	CREDENTIAL_ACCOUNT_NOT_FOUND: "Anmeldekonto nicht gefunden",
+	CROSS_SITE_NAVIGATION_LOGIN_BLOCKED:
+		"Cross-site navigation login blocked. This request appears to be a CSRF attack.",
+	EMAIL_ALREADY_VERIFIED: "E-Mail-Adresse ist bereits verifiziert",
+	EMAIL_CAN_NOT_BE_UPDATED: "E-Mail-Adresse kann nicht aktualisiert werden",
+	EMAIL_MISMATCH: "E-Mail-Adressen stimmen nicht überein",
+	EMAIL_NOT_VERIFIED: "E-Mail-Adresse nicht verifiziert",
+	FAILED_TO_CREATE_SESSION: "Sitzung konnte nicht erstellt werden",
+	FAILED_TO_CREATE_USER: "Benutzer konnte nicht erstellt werden",
+	FAILED_TO_CREATE_VERIFICATION: "Unable to create verification",
+	FAILED_TO_GET_SESSION: "Sitzung konnte nicht abgerufen werden",
+	FAILED_TO_GET_USER_INFO:
+		"Benutzerinformationen konnten nicht abgerufen werden",
+	FAILED_TO_UNLINK_LAST_ACCOUNT: "Sie können Ihr letztes Konto nicht trennen",
+	FAILED_TO_UPDATE_USER: "Benutzer konnte nicht aktualisiert werden",
+	FIELD_NOT_ALLOWED: "Field not allowed to be set",
+	ID_TOKEN_NOT_SUPPORTED: "id_token not supported",
+	INVALID_CALLBACK_URL: "Invalid callbackURL",
+	INVALID_EMAIL: "Ungültige E-Mail-Adresse",
+	INVALID_EMAIL_OR_PASSWORD: "Ungültige E-Mail-Adresse oder Passwort",
+	INVALID_ERROR_CALLBACK_URL: "Invalid errorCallbackURL",
+	INVALID_NEW_USER_CALLBACK_URL: "Invalid newUserCallbackURL",
+	INVALID_ORIGIN: "Invalid origin",
+	INVALID_PASSWORD: "Ungültiges Passwort",
+	INVALID_REDIRECT_URL: "Invalid redirectURL",
+	INVALID_TOKEN: "Ungültiges Token",
+	INVALID_USER: "Ungültiger Benutzer",
+	LINKED_ACCOUNT_ALREADY_EXISTS: "Verknüpftes Konto existiert bereits",
+	METHOD_NOT_ALLOWED_DEFER_SESSION_REQUIRED:
+		"POST method requires deferSessionRefresh to be enabled in session config",
+	MISSING_FIELD: "Dieses Feld ist erforderlich",
+	MISSING_OR_NULL_ORIGIN: "Missing or null Origin",
+	PASSWORD_ALREADY_SET: "Benutzer hat bereits ein Passwort festgelegt",
+	PASSWORD_TOO_LONG: "Passwort zu lang",
+	PASSWORD_TOO_SHORT: "Passwort zu kurz",
+	PROVIDER_NOT_FOUND: "Anbieter nicht gefunden",
+	SESSION_EXPIRED:
+		"Sitzung abgelaufen. Bitte authentifizieren Sie sich erneut, um diese Aktion durchzuführen.",
+	SESSION_NOT_FRESH: "Sitzung is nicht aktuell",
+	SOCIAL_ACCOUNT_ALREADY_LINKED: "Social-Media-Konto bereits verknüpft",
+	TOKEN_EXPIRED: "Token abgelaufen",
+	USER_ALREADY_EXISTS: "Benutzer existiert bereits",
+	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
+		"Benutzer existiert bereits. Bitte verwenden Sie eine andere E-Mail-Adresse.",
+	USER_ALREADY_HAS_PASSWORD:
+		"Der Benutzer hat bereits ein Passwort. Geben Sie dieses an, um das Konto zu löschen.",
+	USER_EMAIL_NOT_FOUND: "Benutzer-E-Mail nicht gefunden",
+	USER_NOT_FOUND: "Benutzer nicht gefunden",
+	VALIDATION_ERROR: "Validierungsfehler",
+	VERIFICATION_EMAIL_NOT_ENABLED: "Bestätigungs-E-Mail ist nicht aktiviert",
+};

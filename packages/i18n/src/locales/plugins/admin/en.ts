@@ -1,0 +1,37 @@
+import type { ADMIN_ERROR_CODES } from "better-auth/plugins/admin";
+import type { LocalizedTranslations } from "../../../types";
+
+export const enAdmin: LocalizedTranslations<typeof ADMIN_ERROR_CODES> = {
+	FAILED_TO_CREATE_USER: "Failed to create user",
+	USER_ALREADY_EXISTS: "User already exists.",
+	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
+		"User already exists. Use another email.",
+	YOU_CANNOT_BAN_YOURSELF: "You cannot ban yourself",
+	YOU_ARE_NOT_ALLOWED_TO_CHANGE_USERS_ROLE:
+		"You are not allowed to change users role",
+	YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS: "You are not allowed to create users",
+	YOU_ARE_NOT_ALLOWED_TO_LIST_USERS: "You are not allowed to list users",
+	YOU_ARE_NOT_ALLOWED_TO_LIST_USERS_SESSIONS:
+		"You are not allowed to list users sessions",
+	YOU_ARE_NOT_ALLOWED_TO_BAN_USERS: "You are not allowed to ban users",
+	YOU_ARE_NOT_ALLOWED_TO_IMPERSONATE_USERS:
+		"You are not allowed to impersonate users",
+	YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS:
+		"You are not allowed to revoke users sessions",
+	YOU_ARE_NOT_ALLOWED_TO_DELETE_USERS: "You are not allowed to delete users",
+	YOU_ARE_NOT_ALLOWED_TO_SET_USERS_PASSWORD:
+		"You are not allowed to set users password",
+	BANNED_USER: "You have been banned from this application",
+	YOU_ARE_NOT_ALLOWED_TO_GET_USER: "You are not allowed to get user",
+	NO_DATA_TO_UPDATE: "No data to update",
+	YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS: "You are not allowed to update users",
+	YOU_CANNOT_REMOVE_YOURSELF: "You cannot remove yourself",
+	YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE:
+		"You are not allowed to set a non-existent role value",
+	YOU_CANNOT_IMPERSONATE_ADMINS: "You cannot impersonate admins",
+	INVALID_ROLE_TYPE: "Invalid role type",
+	YOU_ARE_NOT_ALLOWED_TO_SET_USERS_EMAIL:
+		"You are not allowed to update users email",
+	PASSWORD_CANNOT_BE_UPDATED_VIA_UPDATE_USER:
+		"Password cannot be updated through update-user. Use the set-user-password endpoint instead",
+};

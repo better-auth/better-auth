@@ -31,10 +31,8 @@ export const SUPPORTED_LOCALES = [
 ] as const;
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
-export type ErrorTranslations<ErrorCodes extends Record<string, any>> = Record<
-	SupportedLocale,
-	Record<keyof ErrorCodes, string>
->;
+export type LocalizedTranslations<ErrorCodes extends Record<string, any>> =
+	Record<keyof ErrorCodes, string>;
 
 type ALL_PLUGIN_ERROR_CODE_KEYS = keyof UnionToIntersection<
 	{

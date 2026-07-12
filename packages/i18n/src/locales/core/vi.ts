@@ -1,0 +1,60 @@
+import type { BASE_ERROR_CODES } from "@better-auth/core/error";
+import type { LocalizedTranslations } from "../../types";
+
+export const viCore: LocalizedTranslations<typeof BASE_ERROR_CODES> = {
+	ACCOUNT_NOT_FOUND: "Không tìm thấy tài khoản",
+	ASYNC_VALIDATION_NOT_SUPPORTED: "Async validation is not supported",
+	BODY_MUST_BE_AN_OBJECT: "Body must be an object",
+	CALLBACK_URL_REQUIRED: "callbackURL is required",
+	CHANGE_EMAIL_DISABLED: "Change email is disabled",
+	CREDENTIAL_ACCOUNT_NOT_FOUND: "Không tìm thấy tài khoản đăng nhập",
+	CROSS_SITE_NAVIGATION_LOGIN_BLOCKED:
+		"Cross-site navigation login blocked. This request appears to be a CSRF attack.",
+	EMAIL_ALREADY_VERIFIED: "Email đã được xác thực",
+	EMAIL_CAN_NOT_BE_UPDATED: "Không thể cập nhật email",
+	EMAIL_MISMATCH: "Email không trùng khớp",
+	EMAIL_NOT_VERIFIED: "Email chưa được xác thực",
+	FAILED_TO_CREATE_SESSION: "Tạo phiên đăng nhập thất bại",
+	FAILED_TO_CREATE_USER: "Tạo người dùng thất bại",
+	FAILED_TO_CREATE_VERIFICATION: "Unable to create verification",
+	FAILED_TO_GET_SESSION: "Lấy thông tin phiên thất bại",
+	FAILED_TO_GET_USER_INFO: "Lấy thông tin người dùng thất bại",
+	FAILED_TO_UNLINK_LAST_ACCOUNT:
+		"Bạn không thể hủy liên kết tài khoản cuối cùng của mình",
+	FAILED_TO_UPDATE_USER: "Cập nhật người dùng thất bại",
+	FIELD_NOT_ALLOWED: "Field not allowed to be set",
+	ID_TOKEN_NOT_SUPPORTED: "id_token not supported",
+	INVALID_CALLBACK_URL: "Invalid callbackURL",
+	INVALID_EMAIL: "Email không hợp lệ",
+	INVALID_EMAIL_OR_PASSWORD: "Email hoặc mật khẩu không hợp lệ",
+	INVALID_ERROR_CALLBACK_URL: "Invalid errorCallbackURL",
+	INVALID_NEW_USER_CALLBACK_URL: "Invalid newUserCallbackURL",
+	INVALID_ORIGIN: "Invalid origin",
+	INVALID_PASSWORD: "Mật khẩu không hợp lệ",
+	INVALID_REDIRECT_URL: "Invalid redirectURL",
+	INVALID_TOKEN: "Token không hợp lệ",
+	INVALID_USER: "Người dùng không hợp lệ",
+	LINKED_ACCOUNT_ALREADY_EXISTS: "Tài khoản liên kết đã tồn tại",
+	METHOD_NOT_ALLOWED_DEFER_SESSION_REQUIRED:
+		"POST method requires deferSessionRefresh to be enabled in session config",
+	MISSING_FIELD: "Trường này là bắt buộc",
+	MISSING_OR_NULL_ORIGIN: "Missing or null Origin",
+	PASSWORD_ALREADY_SET: "Người dùng đã được thiết lập mật khẩu",
+	PASSWORD_TOO_LONG: "Mật khẩu quá dài",
+	PASSWORD_TOO_SHORT: "Mật khẩu quá ngắn",
+	PROVIDER_NOT_FOUND: "Không tìm thấy nhà cung cấp",
+	SESSION_EXPIRED:
+		"Phiên đã hết hạn. Vui lòng xác thực lại để thực hiện hành động này.",
+	SESSION_NOT_FRESH: "Phiên làm việc đã hết hạn",
+	SOCIAL_ACCOUNT_ALREADY_LINKED: "Tài khoản mạng xã hội đã được liên kết",
+	TOKEN_EXPIRED: "Mã xác thực đã hết hạn",
+	USER_ALREADY_EXISTS: "Người dùng đã tồn tại",
+	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
+		"Người dùng đã tồn tại. Sử dụng email khác.",
+	USER_ALREADY_HAS_PASSWORD:
+		"Người dùng đã có mật khẩu. Hãy cung cấp mật khẩu để xóa tài khoản.",
+	USER_EMAIL_NOT_FOUND: "Không tìm thấy email người dùng",
+	USER_NOT_FOUND: "Không tìm thấy người dùng",
+	VALIDATION_ERROR: "Lỗi xác thực",
+	VERIFICATION_EMAIL_NOT_ENABLED: "Email xác thực chưa được kích hoạt",
+};
