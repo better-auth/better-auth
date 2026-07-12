@@ -17,16 +17,13 @@ export default defineConfig([
 		format: ["esm"],
 		entry: ["./src/preload.ts"],
 		deps: {
-			neverBundle: (id, _, isResolved) => {
-				if (isResolved) return false;
-				return (
-					!id.startsWith(".") &&
-					!id.startsWith("better-call") &&
-					!id.startsWith("@better-auth/core")
-				);
+			// Bundle Better Auth runtime dependencies into the preload output.
+			alwaysBundle: [/^@better-auth\/core(?:\/|$)/, /^better-call(?:\/|$)/],
+			onlyBundle: ["better-call"],
+			dts: {
+				// Keep peer dependency types external instead of inlining them.
+				neverBundle: [/^@better-auth\/core(?:\/|$)/, /^better-call(?:\/|$)/],
 			},
-			alwaysBundle: [/^@better-auth\/core/, /^better-call/],
-			onlyAllowBundle: ["better-call", "@standard-schema/spec"],
 		},
 		treeshake: true,
 	},
