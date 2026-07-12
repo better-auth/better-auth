@@ -787,6 +787,7 @@ describe("magic link single-use semantics", async () => {
  * @see https://github.com/better-auth/better-auth/issues/10304
  */
 describe("magic link send origin/CSRF protection", async () => {
+	const sendMagicLink = vi.fn(async () => {});
 	const { auth, testUser } = await getTestInstance({
 		trustedOrigins: ["http://localhost:3000"],
 		advanced: {
@@ -795,12 +796,13 @@ describe("magic link send origin/CSRF protection", async () => {
 		},
 		plugins: [
 			magicLink({
-				async sendMagicLink() {},
+				sendMagicLink,
 			}),
 		],
 	});
 
 	it("should block cross-site navigation to the send endpoint (no cookies)", async () => {
+		sendMagicLink.mockClear();
 		const maliciousRequest = new Request(
 			"http://localhost:3000/api/auth/sign-in/magic-link",
 			{
@@ -818,9 +820,11 @@ describe("magic link send origin/CSRF protection", async () => {
 
 		const response = await auth.handler(maliciousRequest);
 		expect(response.status).toBe(403);
+		expect(sendMagicLink).not.toHaveBeenCalled();
 	});
 
 	it("should reject a cookieless cross-origin POST to the send endpoint", async () => {
+		sendMagicLink.mockClear();
 		const maliciousRequest = new Request(
 			"http://localhost:3000/api/auth/sign-in/magic-link",
 			{
@@ -835,9 +839,11 @@ describe("magic link send origin/CSRF protection", async () => {
 
 		const response = await auth.handler(maliciousRequest);
 		expect(response.status).toBe(403);
+		expect(sendMagicLink).not.toHaveBeenCalled();
 	});
 
 	it("should still allow a cookieless request with no Origin (server-to-server)", async () => {
+		sendMagicLink.mockClear();
 		const legitimateRequest = new Request(
 			"http://localhost:3000/api/auth/sign-in/magic-link",
 			{
@@ -848,6 +854,7 @@ describe("magic link send origin/CSRF protection", async () => {
 		);
 
 		const response = await auth.handler(legitimateRequest);
-		expect(response.status).not.toBe(403);
+		expect(response.status).toBe(200);
+		expect(sendMagicLink).toHaveBeenCalledTimes(1);
 	});
 });

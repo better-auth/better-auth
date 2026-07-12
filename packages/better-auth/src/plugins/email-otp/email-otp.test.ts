@@ -2491,6 +2491,7 @@ describe("email-otp verify-email cookie cache isolation", async () => {
  * @see https://github.com/better-auth/better-auth/issues/10304
  */
 describe("email-otp send origin/CSRF protection", async () => {
+	const sendVerificationOTP = vi.fn(async () => {});
 	const { auth, testUser } = await getTestInstance({
 		trustedOrigins: ["http://localhost:3000"],
 		advanced: {
@@ -2499,12 +2500,13 @@ describe("email-otp send origin/CSRF protection", async () => {
 		},
 		plugins: [
 			emailOTP({
-				async sendVerificationOTP() {},
+				sendVerificationOTP,
 			}),
 		],
 	});
 
 	it("should block cross-site navigation to the send endpoint (no cookies)", async () => {
+		sendVerificationOTP.mockClear();
 		const maliciousRequest = new Request(
 			"http://localhost:3000/api/auth/email-otp/send-verification-otp",
 			{
@@ -2518,16 +2520,18 @@ describe("email-otp send origin/CSRF protection", async () => {
 				},
 				body: JSON.stringify({
 					email: "attacker@evil.com",
-					type: "email-verification",
+					type: "sign-in",
 				}),
 			},
 		);
 
 		const response = await auth.handler(maliciousRequest);
 		expect(response.status).toBe(403);
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
 	});
 
 	it("should reject a cookieless cross-origin POST to the send endpoint", async () => {
+		sendVerificationOTP.mockClear();
 		const maliciousRequest = new Request(
 			"http://localhost:3000/api/auth/email-otp/send-verification-otp",
 			{
@@ -2538,16 +2542,18 @@ describe("email-otp send origin/CSRF protection", async () => {
 				},
 				body: JSON.stringify({
 					email: "attacker@evil.com",
-					type: "email-verification",
+					type: "sign-in",
 				}),
 			},
 		);
 
 		const response = await auth.handler(maliciousRequest);
 		expect(response.status).toBe(403);
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
 	});
 
 	it("should still allow a cookieless request with no Origin (server-to-server)", async () => {
+		sendVerificationOTP.mockClear();
 		const legitimateRequest = new Request(
 			"http://localhost:3000/api/auth/email-otp/send-verification-otp",
 			{
@@ -2561,6 +2567,7 @@ describe("email-otp send origin/CSRF protection", async () => {
 		);
 
 		const response = await auth.handler(legitimateRequest);
-		expect(response.status).not.toBe(403);
+		expect(response.status).toBe(200);
+		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
 	});
 });
