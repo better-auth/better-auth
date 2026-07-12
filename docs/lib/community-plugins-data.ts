@@ -292,6 +292,16 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
+		name: "@marinedotsh/better-auth-referral",
+		url: "https://github.com/marinedotsh/better-auth-referral",
+		description: "A Better Auth plugin for adding user referrals to your app.",
+		author: {
+			name: "Shivam Gupta",
+			github: "shivamrun",
+			avatar: "https://github.com/shivamrun.png",
+		},
+	},
+	{
 		name: "better-auth-instagram",
 		url: "https://github.com/rajatsandeepsen/better-auth-instagram",
 		description: "Instagram Provider for Better Auth",
