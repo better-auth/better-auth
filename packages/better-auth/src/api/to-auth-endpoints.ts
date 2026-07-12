@@ -1,4 +1,5 @@
 import type { AuthContext } from "@better-auth/core";
+import type { RequestStateWeakMap } from "@better-auth/core/context";
 import {
 	hasRequestState,
 	runWithRequestState,
@@ -105,7 +106,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 			if (await hasRequestState()) {
 				return run();
 			}
-			const store = new WeakMap();
+			const store: RequestStateWeakMap = new WeakMap();
 			return runWithRequestState(store, run);
 		};
 		api[key].path = endpoint.path;
