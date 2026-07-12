@@ -1,7 +1,7 @@
 import type { MULTI_SESSION_ERROR_CODES } from "better-auth/plugins/multi-session";
-import type { PluginErrorTranslations } from "../../types";
+import type { ErrorTranslations } from "../../types";
 
-export const multiSessionTranslations: PluginErrorTranslations<
+export const multiSessionTranslations: ErrorTranslations<
 	typeof MULTI_SESSION_ERROR_CODES
 > = {
 	ar: {

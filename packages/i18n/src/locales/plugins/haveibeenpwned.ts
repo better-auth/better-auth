@@ -1,11 +1,11 @@
 import type { haveIBeenPwned } from "better-auth/plugins";
-import type { PluginErrorTranslations } from "../../types";
+import type { ErrorTranslations } from "../../types";
 
 type HaveIBeenPwnedErrorCodes = ReturnType<
 	typeof haveIBeenPwned
 >["$ERROR_CODES"];
 
-export const haveIBeenPwnedTranslations: PluginErrorTranslations<HaveIBeenPwnedErrorCodes> =
+export const haveIBeenPwnedTranslations: ErrorTranslations<HaveIBeenPwnedErrorCodes> =
 	{
 		ar: {
 			PASSWORD_COMPROMISED:

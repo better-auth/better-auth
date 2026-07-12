@@ -1,9 +1,7 @@
 import type { ADMIN_ERROR_CODES } from "better-auth/plugins/admin";
-import type { PluginErrorTranslations } from "../../types";
+import type { ErrorTranslations } from "../../types";
 
-export const adminTranslations: PluginErrorTranslations<
-	typeof ADMIN_ERROR_CODES
-> = {
+export const adminTranslations: ErrorTranslations<typeof ADMIN_ERROR_CODES> = {
 	ar: {
 		FAILED_TO_CREATE_USER: "فشل في إنشاء المستخدم",
 		USER_ALREADY_EXISTS: "المستخدم موجود بالفعل.",

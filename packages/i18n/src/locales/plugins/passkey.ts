@@ -1,7 +1,7 @@
 import type { PASSKEY_ERROR_CODES } from "@better-auth/passkey";
-import type { PluginErrorTranslations } from "../../types";
+import type { ErrorTranslations } from "../../types";
 
-export const passkeyTranslations: PluginErrorTranslations<
+export const passkeyTranslations: ErrorTranslations<
 	typeof PASSKEY_ERROR_CODES
 > = {
 	ar: {

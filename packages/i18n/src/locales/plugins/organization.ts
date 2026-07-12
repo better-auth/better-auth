@@ -1,7 +1,7 @@
 import type { ORGANIZATION_ERROR_CODES } from "better-auth/plugins/organization";
-import type { PluginErrorTranslations } from "../../types";
+import type { ErrorTranslations } from "../../types";
 
-export const organizationTranslations: PluginErrorTranslations<
+export const organizationTranslations: ErrorTranslations<
 	typeof ORGANIZATION_ERROR_CODES
 > = {
 	ar: {

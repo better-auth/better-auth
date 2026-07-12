@@ -1,7 +1,7 @@
 import type { USERNAME_ERROR_CODES } from "better-auth/plugins/username";
-import type { PluginErrorTranslations } from "../../types";
+import type { ErrorTranslations } from "../../types";
 
-export const usernameTranslations: PluginErrorTranslations<
+export const usernameTranslations: ErrorTranslations<
 	typeof USERNAME_ERROR_CODES
 > = {
 	ar: {

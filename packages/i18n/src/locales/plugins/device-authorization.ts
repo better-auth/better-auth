@@ -1,7 +1,7 @@
 import type { DEVICE_AUTHORIZATION_ERROR_CODES } from "better-auth/plugins/device-authorization";
-import type { PluginErrorTranslations } from "../../types";
+import type { ErrorTranslations } from "../../types";
 
-export const deviceAuthorizationTranslations: PluginErrorTranslations<
+export const deviceAuthorizationTranslations: ErrorTranslations<
 	typeof DEVICE_AUTHORIZATION_ERROR_CODES
 > = {
 	ar: {

@@ -1,7 +1,7 @@
 import type { EMAIL_OTP_ERROR_CODES } from "better-auth/plugins/email-otp";
-import type { PluginErrorTranslations } from "../../types";
+import type { ErrorTranslations } from "../../types";
 
-export const emailOtpTranslations: PluginErrorTranslations<
+export const emailOtpTranslations: ErrorTranslations<
 	typeof EMAIL_OTP_ERROR_CODES
 > = {
 	ar: {

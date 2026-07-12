@@ -1,9 +1,9 @@
 import type { captcha } from "better-auth/plugins";
-import type { PluginErrorTranslations } from "../../types";
+import type { ErrorTranslations } from "../../types";
 
 type CaptchaErrorCodes = ReturnType<typeof captcha>["$ERROR_CODES"];
 
-export const captchaTranslations: PluginErrorTranslations<CaptchaErrorCodes> = {
+export const captchaTranslations: ErrorTranslations<CaptchaErrorCodes> = {
 	ar: {
 		VERIFICATION_FAILED: "فشل التحقق من الكابتشا",
 		MISSING_RESPONSE: "استجابة CAPTCHA مفقودة",

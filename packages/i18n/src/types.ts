@@ -31,8 +31,10 @@ export const SUPPORTED_LOCALES = [
 ] as const;
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
-export type PluginErrorTranslations<ErrorCodes extends Record<string, any>> =
-	Record<SupportedLocale, Record<keyof ErrorCodes, string>>;
+export type ErrorTranslations<ErrorCodes extends Record<string, any>> = Record<
+	SupportedLocale,
+	Record<keyof ErrorCodes, string>
+>;
 
 type ALL_PLUGIN_ERROR_CODE_KEYS = keyof UnionToIntersection<
 	{
@@ -53,9 +55,9 @@ type ALL_PLUGIN_ERROR_CODE_KEYS = keyof UnionToIntersection<
 	}[Exclude<BetterAuthPluginRegistryIdentifier, "i18n">]
 >;
 
-type InternalTranslationDictionary = Partial<{
+type InternalTranslationDictionary = {
 	[Key in ALL_PLUGIN_ERROR_CODE_KEYS]: string;
-}>;
+};
 
 /**
  * Translation dictionary mapping error codes to translated messages
@@ -85,7 +87,7 @@ export interface I18nOptions<Locales extends string[]> {
 	 * }
 	 */
 	translations: {
-		[Locale in Locales[number]]: TranslationDictionary;
+		[Locale in Locales[number]]: Partial<TranslationDictionary>;
 	};
 
 	/**

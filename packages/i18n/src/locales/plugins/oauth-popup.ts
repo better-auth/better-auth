@@ -1,7 +1,7 @@
 import type { OAUTH_POPUP_ERROR_CODES } from "better-auth/plugins";
-import type { PluginErrorTranslations } from "../../types";
+import type { ErrorTranslations } from "../../types";
 
-export const oauthPopupTranslations: PluginErrorTranslations<
+export const oauthPopupTranslations: ErrorTranslations<
 	typeof OAUTH_POPUP_ERROR_CODES
 > = {
 	ar: {

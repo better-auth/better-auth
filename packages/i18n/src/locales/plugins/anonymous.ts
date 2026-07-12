@@ -1,7 +1,7 @@
 import type { ANONYMOUS_ERROR_CODES } from "better-auth/plugins/anonymous";
-import type { PluginErrorTranslations } from "../../types";
+import type { ErrorTranslations } from "../../types";
 
-export const anonymousTranslations: PluginErrorTranslations<
+export const anonymousTranslations: ErrorTranslations<
 	typeof ANONYMOUS_ERROR_CODES
 > = {
 	ar: {

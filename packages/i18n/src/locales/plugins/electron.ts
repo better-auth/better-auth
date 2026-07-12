@@ -1,7 +1,7 @@
 import type { ELECTRON_ERROR_CODES } from "@better-auth/electron";
-import type { PluginErrorTranslations } from "../../types";
+import type { ErrorTranslations } from "../../types";
 
-export const electronTranslations: PluginErrorTranslations<
+export const electronTranslations: ErrorTranslations<
 	typeof ELECTRON_ERROR_CODES
 > = {
 	ar: {

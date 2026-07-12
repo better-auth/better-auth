@@ -1,7 +1,7 @@
 import type { TWO_FACTOR_ERROR_CODES } from "better-auth/plugins/two-factor";
-import type { PluginErrorTranslations } from "../../types";
+import type { ErrorTranslations } from "../../types";
 
-export const twoFactorTranslations: PluginErrorTranslations<
+export const twoFactorTranslations: ErrorTranslations<
 	typeof TWO_FACTOR_ERROR_CODES
 > = {
 	ar: {

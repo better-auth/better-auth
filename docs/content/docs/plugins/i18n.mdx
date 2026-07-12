@@ -49,7 +49,7 @@ Better Auth already provides English error messages by default, so you only need
 
 ## Built-in Translations
 
-The package ships with ready-to-use translations for 22 languages, so you don't need to write translations from scratch. Import `locales` from `@better-auth/i18n` to use them.
+The package ships with ready-to-use translations for 22 languages, so you don't need to write translations from scratch. Import them from `@better-auth/i18n/locales` to use them.
 
 | Code | Language             |
 | ---- | -------------------- |
@@ -80,7 +80,8 @@ The package ships with ready-to-use translations for 22 languages, so you don't 
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { i18n, locales } from "@better-auth/i18n"
+import { i18n } from "@better-auth/i18n"
+import * as locales from "@better-auth/i18n/locales"
 
 export const auth = betterAuth({
     plugins: [
@@ -95,14 +96,15 @@ To keep your bundle lean, you can import only the locales you need:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { i18n, locales } from "@better-auth/i18n"
+import { i18n } from "@better-auth/i18n"
+import { en, fr } from "@better-auth/i18n/locales"
 
 export const auth = betterAuth({
     plugins: [
         i18n({
             translations: {
-                en: locales.en,
-                fr: locales.fr,
+                en,
+                fr,
             },
         }),
     ],
@@ -115,7 +117,8 @@ You can spread a built-in locale and override only the messages you want to cust
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { i18n, locales } from "@better-auth/i18n"
+import { i18n } from "@better-auth/i18n"
+import * as locales from "@better-auth/i18n/locales"
 
 export const auth = betterAuth({
     plugins: [
@@ -138,7 +141,8 @@ You can mix built-in locales with your own custom ones:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { i18n, locales } from "@better-auth/i18n"
+import { i18n } from "@better-auth/i18n"
+import * as locales from "@better-auth/i18n/locales"
 import type { TranslationDictionary } from "@better-auth/i18n"
 
 const myLocale: TranslationDictionary = {

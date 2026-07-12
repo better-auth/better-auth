@@ -1,7 +1,7 @@
 import type { PHONE_NUMBER_ERROR_CODES } from "better-auth/plugins/phone-number";
-import type { PluginErrorTranslations } from "../../types";
+import type { ErrorTranslations } from "../../types";
 
-export const phoneNumberTranslations: PluginErrorTranslations<
+export const phoneNumberTranslations: ErrorTranslations<
 	typeof PHONE_NUMBER_ERROR_CODES
 > = {
 	ar: {

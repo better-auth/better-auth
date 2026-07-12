@@ -1,7 +1,7 @@
 import type { GENERIC_OAUTH_ERROR_CODES } from "better-auth/plugins/generic-oauth";
-import type { PluginErrorTranslations } from "../../types";
+import type { ErrorTranslations } from "../../types";
 
-export const genericOAuthTranslations: PluginErrorTranslations<
+export const genericOAuthTranslations: ErrorTranslations<
 	typeof GENERIC_OAUTH_ERROR_CODES
 > = {
 	ar: {
