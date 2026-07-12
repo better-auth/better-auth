@@ -5,7 +5,7 @@ import type {
 } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
-import { originCheck } from "../../api";
+import { formCsrfMiddleware, originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import {
@@ -208,6 +208,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 				{
 					method: "POST",
 					requireHeaders: true,
+					use: [formCsrfMiddleware],
 					body: signInMagicLinkBodySchema,
 					metadata: {
 						openapi: {

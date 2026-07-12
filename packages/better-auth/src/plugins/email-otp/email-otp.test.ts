@@ -2481,3 +2481,93 @@ describe("email-otp verify-email cookie cache isolation", async () => {
 		expect(session.data?.user.emailVerified).toBe(false);
 	});
 });
+
+/**
+ * The built-in `/sign-in/email` and `/sign-up/email` routes force-validate the
+ * request `Origin` even on cookieless requests (via `formCsrfMiddleware`). The
+ * email-otp send endpoint must match that behavior so a cookieless cross-origin
+ * POST cannot trigger an outbound verification OTP email to an arbitrary address.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10304
+ */
+describe("email-otp send origin/CSRF protection", async () => {
+	const sendVerificationOTP = vi.fn(async () => {});
+	const { auth, testUser } = await getTestInstance({
+		trustedOrigins: ["http://localhost:3000"],
+		advanced: {
+			disableCSRFCheck: false,
+			disableOriginCheck: false,
+		},
+		plugins: [
+			emailOTP({
+				sendVerificationOTP,
+			}),
+		],
+	});
+
+	it("should block cross-site navigation to the send endpoint (no cookies)", async () => {
+		sendVerificationOTP.mockClear();
+		const maliciousRequest = new Request(
+			"http://localhost:3000/api/auth/email-otp/send-verification-otp",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Sec-Fetch-Site": "cross-site",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "https://evil.com",
+				},
+				body: JSON.stringify({
+					email: "attacker@evil.com",
+					type: "sign-in",
+				}),
+			},
+		);
+
+		const response = await auth.handler(maliciousRequest);
+		expect(response.status).toBe(403);
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
+	});
+
+	it("should reject a cookieless cross-origin POST to the send endpoint", async () => {
+		sendVerificationOTP.mockClear();
+		const maliciousRequest = new Request(
+			"http://localhost:3000/api/auth/email-otp/send-verification-otp",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: "https://evil.com",
+				},
+				body: JSON.stringify({
+					email: "attacker@evil.com",
+					type: "sign-in",
+				}),
+			},
+		);
+
+		const response = await auth.handler(maliciousRequest);
+		expect(response.status).toBe(403);
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
+	});
+
+	it("should still allow a cookieless request with no Origin (server-to-server)", async () => {
+		sendVerificationOTP.mockClear();
+		const legitimateRequest = new Request(
+			"http://localhost:3000/api/auth/email-otp/send-verification-otp",
+			{
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					email: testUser.email,
+					type: "email-verification",
+				}),
+			},
+		);
+
+		const response = await auth.handler(legitimateRequest);
+		expect(response.status).toBe(200);
+		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
+	});
+});
