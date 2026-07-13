@@ -780,6 +780,9 @@ importers:
 
   e2e/smoke/test/fixtures/esbuild:
     dependencies:
+      '@better-auth/kysely-adapter':
+        specifier: workspace:*
+        version: link:../../../../../packages/kysely-adapter
       better-auth:
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
@@ -787,6 +790,9 @@ importers:
       esbuild:
         specifier: ^0.28.1
         version: 0.28.1
+      kysely-029:
+        specifier: npm:kysely@0.29.3
+        version: kysely@0.29.3
 
   e2e/smoke/test/fixtures/ipv6:
     dependencies:
@@ -10022,6 +10028,10 @@ packages:
   kysely@0.28.17:
     resolution: {integrity: sha512-nbD8lB9EB3wNdMhOCdx5Li8DxnLbvKByylRLcJ1h+4SkrowVeECAyZlyiKMThF7xFdRz0jSQ2MoJr+wXux2y0Q==}
     engines: {node: '>=20.0.0'}
+
+  kysely@0.29.3:
+    resolution: {integrity: sha512-VHtBdW6XB/pgoTSqraM3UAa2rYoYdNXqnNPpX+8XXP+cwYbVEFuAp3HyPt1vpNfU9l7Y2kpUrA9QDPsy8uUqOQ==}
+    engines: {node: '>=22.0.0'}
 
   lan-network@0.1.7:
     resolution: {integrity: sha512-mnIlAEMu4OyEvUNdzco9xpuB9YVcPkQec+QsgycBCtPZvEqWPCDPfbAE4OJMdBBWpZWtpCn1xw9jJYlwjWI5zQ==}
@@ -23008,6 +23018,8 @@ snapshots:
       postgres: 3.4.8
 
   kysely@0.28.17: {}
+
+  kysely@0.29.3: {}
 
   lan-network@0.1.7: {}
 

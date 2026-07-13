@@ -18,13 +18,11 @@ import type {
 	SchemaMetadata,
 	TableMetadata,
 } from "kysely";
+import { CompiledQuery, DefaultQueryCompiler, sql } from "kysely";
 import {
-	CompiledQuery,
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
-	DefaultQueryCompiler,
-	sql,
-} from "kysely";
+} from "./kysely-migration-tables";
 
 class NodeSqliteAdapter implements DialectAdapterBase {
 	get supportsCreateIfNotExists(): boolean {

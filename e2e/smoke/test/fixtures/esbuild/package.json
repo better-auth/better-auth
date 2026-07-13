@@ -2,9 +2,11 @@
   "name": "@better-auth-test/fixtures-esbuild",
   "private": true,
   "dependencies": {
+    "@better-auth/kysely-adapter": "workspace:*",
     "better-auth": "workspace:*"
   },
   "devDependencies": {
-    "esbuild": "^0.28.1"
+    "esbuild": "^0.28.1",
+    "kysely-029": "npm:kysely@0.29.3"
   }
 }

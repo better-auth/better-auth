@@ -67,3 +67,37 @@ it("build minimal without unexpected imports", async () => {
 		"Built output should not contain 'kysely' imports",
 	);
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10366
+ */
+it("bundles the Kysely adapter with Kysely 0.29", async () => {
+	const esbuildDir = join(fixturesDir, "esbuild");
+	const buildProcess = spawn(
+		"pnpm",
+		[
+			"exec",
+			"esbuild",
+			"src/kysely-adapter.ts",
+			"--bundle",
+			"--platform=node",
+			"--alias:kysely=kysely-029",
+			"--outfile=dist/kysely-adapter.js",
+		],
+		{
+			cwd: esbuildDir,
+			stdio: "pipe",
+		},
+	);
+	await new Promise<void>((resolve, reject) => {
+		buildProcess.on("close", (code) => {
+			if (code === 0) {
+				resolve();
+			} else {
+				reject(
+					new Error(`esbuild Kysely adapter build failed with code ${code}`),
+				);
+			}
+		});
+	});
+});
