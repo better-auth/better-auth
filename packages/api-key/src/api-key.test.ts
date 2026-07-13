@@ -5382,4 +5382,58 @@ describe("api key creation uses a fresh session", async () => {
 		expect(second.data).toBeNull();
 		expect(second.error?.status).toBe(401);
 	});
+
+	/**
+	 * Same hook-memoization bypass as above, on the update surface: a revoked
+	 * session must not be able to mutate an existing key either.
+	 *
+	 * @see https://github.com/better-auth/better-auth/pull/10187
+	 */
+	it("rejects update with a revoked session when an earlier hook already resolved it", async () => {
+		const sessionReadingPlugin = {
+			id: "session-reading-hook",
+			hooks: {
+				before: [
+					{
+						matcher: (ctx) => ctx.path === "/api-key/update",
+						handler: createAuthMiddleware(async (ctx) => {
+							// Pins `ctx.context.session` to the cookie-cached session.
+							await getSessionFromCtx(ctx);
+						}),
+					},
+				],
+			},
+		} satisfies BetterAuthPlugin;
+
+		const { auth, client, testUser } = await getTestInstance(
+			{
+				session: { cookieCache: { enabled: true, maxAge: 60 * 5 } },
+				plugins: [apiKey(), sessionReadingPlugin],
+			},
+			{ clientOptions: { plugins: [apiKeyClient()] } },
+		);
+
+		const headers = new Headers();
+		const signIn = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: { onSuccess: captureCookies(headers) },
+		});
+		const userId = signIn.data?.user.id;
+		expect(userId).toBeDefined();
+		expect(headers.get("cookie")).toContain("better-auth.session_data");
+
+		const created = await client.apiKey.create({}, { headers });
+		expect(created.data?.id).toBeDefined();
+
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteUserSessions(userId!);
+
+		const updated = await client.apiKey.update(
+			{ keyId: created.data!.id, name: "Renamed By Revoked Session" },
+			{ headers },
+		);
+		expect(updated.data).toBeNull();
+		expect(updated.error?.status).toBe(401);
+	});
 });
