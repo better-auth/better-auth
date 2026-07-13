@@ -145,12 +145,20 @@ export const useAuthQuery = <T>(
 		? initializedAtom
 		: [initializedAtom];
 	let isMountFetchPending = false;
+	let isMounted = false;
+	let shouldRefetchAfterPending = false;
 
 	const fetchOnMount = () => {
-		if (isMountFetchPending) return;
+		if (isMountFetchPending) {
+			shouldRefetchAfterPending = true;
+			return;
+		}
 		isMountFetchPending = true;
 		void fn().finally(() => {
 			isMountFetchPending = false;
+			const shouldRefetch = shouldRefetchAfterPending && isMounted;
+			shouldRefetchAfterPending = false;
+			if (shouldRefetch) fetchOnMount();
 		});
 	};
 
@@ -160,6 +168,7 @@ export const useAuthQuery = <T>(
 			return;
 		}
 
+		isMounted = true;
 		let isInitialized = false;
 		let timeoutId: ReturnType<typeof setTimeout>;
 		const cleanups = initializedAtom.map((initAtom) =>
@@ -179,6 +188,7 @@ export const useAuthQuery = <T>(
 		}, 0);
 
 		return () => {
+			isMounted = false;
 			for (const cleanup of cleanups) cleanup();
 			clearTimeout(timeoutId);
 		};
