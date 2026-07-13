@@ -163,7 +163,7 @@ export const admin = <
 		endpoints: {
 			setRole: setRole(opts),
 			getUser: getUser<M["user"]>(opts),
-			createUser: createUser(opts),
+			createUser: createUser<typeof opts, M["user"]>(opts),
 			adminUpdateUser: adminUpdateUser(opts),
 			listUsers: listUsers(opts),
 			listUserSessions: listUserSessions(opts),

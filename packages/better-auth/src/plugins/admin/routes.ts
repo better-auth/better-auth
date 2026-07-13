@@ -291,7 +291,9 @@ const createUserBodySchema = z.object({
  *
  * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-create-user)
  */
-export const createUser = <O extends AdminOptions>(opts: O) =>
+export const createUser = <O extends AdminOptions, TUser extends User>(
+	opts: O,
+) =>
 	createAuthEndpoint(
 		"/admin/create-user",
 		{
@@ -435,7 +437,7 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				);
 			}
-			const user = await ctx.context.internalAdapter.createUser<UserWithRole>({
+			const user = await ctx.context.internalAdapter.createUser<TUser>({
 				...userData,
 				email: email,
 				name: ctx.body.name,
@@ -464,7 +466,7 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				});
 			}
 			return ctx.json({
-				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
+				user: parseUserOutput(ctx.context.options, user),
 			});
 		},
 	);
