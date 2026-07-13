@@ -14,6 +14,7 @@ import {
 	setSessionCookie,
 } from "../../cookies";
 import { parseSessionOutput, parseUserOutput } from "../../db/schema";
+import type { User } from "../../types";
 import { getDate } from "../../utils/date";
 import type { AccessControl, ArrayElement } from "../access";
 import type { defaultStatements } from "./access";
@@ -179,7 +180,7 @@ const getUserQuerySchema = z.object({
 	}),
 });
 
-export const getUser = (opts: AdminOptions) =>
+export const getUser = <TUser extends User = User>(opts: AdminOptions) =>
 	createAuthEndpoint(
 		"/admin/get-user",
 		{
@@ -211,7 +212,7 @@ export const getUser = (opts: AdminOptions) =>
 				},
 			},
 		},
-		async (ctx) => {
+		async (ctx): Promise<TUser & UserWithRole> => {
 			const { id } = ctx.query;
 
 			const canGetUser = hasPermission({
@@ -236,7 +237,7 @@ export const getUser = (opts: AdminOptions) =>
 				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 
-			return parseUserOutput(ctx.context.options, user) as UserWithRole;
+			return parseUserOutput(ctx.context.options, user) as TUser & UserWithRole;
 		},
 	);
 

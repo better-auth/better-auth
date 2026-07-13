@@ -1,7 +1,8 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { mergeSchema } from "../../db/schema";
+import type { User } from "../../types";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { PACKAGE_VERSION } from "../../version";
 import { defaultRoles } from "./access";
@@ -34,11 +35,23 @@ declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		admin: {
 			creator: typeof admin;
+			resolvedEndpoints: AuthOptions extends infer AO extends BetterAuthOptions
+				? Options extends infer PO extends AdminOptions
+					? ReturnType<
+							typeof admin<PO, { user: User<AO["user"], AO["plugins"]> }>
+						>["endpoints"]
+					: never
+				: never;
 		};
 	}
 }
 
-export const admin = <O extends AdminOptions>(options?: O | undefined) => {
+export const admin = <
+	O extends AdminOptions,
+	M extends { user: User } = { user: User },
+>(
+	options?: O | undefined,
+) => {
 	const opts = {
 		...(options || {}),
 		defaultRole: options?.defaultRole ?? "user",
@@ -149,7 +162,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 		},
 		endpoints: {
 			setRole: setRole(opts),
-			getUser: getUser(opts),
+			getUser: getUser<M["user"]>(opts),
 			createUser: createUser(opts),
 			adminUpdateUser: adminUpdateUser(opts),
 			listUsers: listUsers(opts),
