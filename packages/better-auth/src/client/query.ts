@@ -144,35 +144,44 @@ export const useAuthQuery = <T>(
 	initializedAtom = Array.isArray(initializedAtom)
 		? initializedAtom
 		: [initializedAtom];
-	let isInitialized = false;
+	let isMountFetchPending = false;
 
-	const cleanups: (() => void)[] = [];
-
-	for (const initAtom of initializedAtom) {
-		const unbind = initAtom.subscribe(async () => {
-			if (isServer()) {
-				// On server, don't trigger fetch
-				return;
-			}
-			if (isInitialized) {
-				await fn();
-			} else {
-				onMount(value, () => {
-					const timeoutId = setTimeout(async () => {
-						if (!isInitialized) {
-							// Must set to `true` immediately; see https://github.com/better-auth/better-auth/issues/9077
-							isInitialized = true;
-							await fn();
-						}
-					}, 0);
-					return () => {
-						for (const u of cleanups) u();
-						clearTimeout(timeoutId);
-					};
-				});
-			}
+	const fetchOnMount = () => {
+		if (isMountFetchPending) return;
+		isMountFetchPending = true;
+		void fn().finally(() => {
+			isMountFetchPending = false;
 		});
-		cleanups.push(unbind);
-	}
+	};
+
+	onMount(value, () => {
+		if (isServer()) {
+			// On server, don't trigger fetch
+			return;
+		}
+
+		let isInitialized = false;
+		let timeoutId: ReturnType<typeof setTimeout>;
+		const cleanups = initializedAtom.map((initAtom) =>
+			initAtom.listen(() => {
+				if (isInitialized) {
+					void fn();
+				} else {
+					isInitialized = true;
+					clearTimeout(timeoutId);
+					fetchOnMount();
+				}
+			}),
+		);
+		timeoutId = setTimeout(() => {
+			isInitialized = true;
+			fetchOnMount();
+		}, 0);
+
+		return () => {
+			for (const cleanup of cleanups) cleanup();
+			clearTimeout(timeoutId);
+		};
+	});
 	return value;
 };
