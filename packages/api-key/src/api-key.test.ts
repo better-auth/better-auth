@@ -1,5 +1,8 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthMiddleware } from "@better-auth/core/api";
 import type { SecondaryStorage } from "@better-auth/core/db";
 import type { APIError } from "@better-auth/core/error";
+import { getSessionFromCtx } from "better-auth/api";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
@@ -5322,6 +5325,59 @@ describe("api key creation uses a fresh session", async () => {
 
 		// Creation must re-check the authoritative store and reject, rather than
 		// minting a fresh key from the stale cookie-cache session.
+		const second = await client.apiKey.create({}, { headers });
+		expect(second.data).toBeNull();
+		expect(second.error?.status).toBe(401);
+	});
+
+	/**
+	 * Resolving the session from a `before` hook is a documented plugin pattern,
+	 * and it memoizes the cookie-cached session on `ctx.context.session`. The
+	 * authoritative re-read must not be satisfied by that memoized value, or a
+	 * revoked session can still mint a key that outlives it.
+	 *
+	 * @see https://github.com/better-auth/better-auth/pull/10187
+	 */
+	it("rejects creation with a revoked session when an earlier hook already resolved it", async () => {
+		const sessionReadingPlugin = {
+			id: "session-reading-hook",
+			hooks: {
+				before: [
+					{
+						matcher: (ctx) => ctx.path === "/api-key/create",
+						handler: createAuthMiddleware(async (ctx) => {
+							// Pins `ctx.context.session` to the cookie-cached session.
+							await getSessionFromCtx(ctx);
+						}),
+					},
+				],
+			},
+		} satisfies BetterAuthPlugin;
+
+		const { auth, client, testUser } = await getTestInstance(
+			{
+				session: { cookieCache: { enabled: true, maxAge: 60 * 5 } },
+				plugins: [apiKey(), sessionReadingPlugin],
+			},
+			{ clientOptions: { plugins: [apiKeyClient()] } },
+		);
+
+		const headers = new Headers();
+		const signIn = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: { onSuccess: captureCookies(headers) },
+		});
+		const userId = signIn.data?.user.id;
+		expect(userId).toBeDefined();
+		expect(headers.get("cookie")).toContain("better-auth.session_data");
+
+		const first = await client.apiKey.create({}, { headers });
+		expect(first.data?.key).toBeDefined();
+
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteUserSessions(userId!);
+
 		const second = await client.apiKey.create({}, { headers });
 		expect(second.data).toBeNull();
 		expect(second.error?.status).toBe(401);
