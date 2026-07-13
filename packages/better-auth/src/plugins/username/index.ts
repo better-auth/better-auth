@@ -574,7 +574,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 					});
 				},
 			),
-			sendVerificationEmail: createAuthEndpoint(
+			sendUsernameVerificationEmail: createAuthEndpoint(
 				"/username/send-verification-email",
 				{
 					method: "POST",

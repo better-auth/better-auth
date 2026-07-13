@@ -832,7 +832,10 @@ describe("username send-verification-email (POST /username/send-verification-ema
 				emailVerification: {
 					sendOnSignIn: false,
 					async sendVerificationEmail(data) {
-						captured = { url: data.url, user: data.user };
+						captured = {
+							url: data.url,
+							user: data.user as unknown as { username: string },
+						};
 					},
 				},
 				plugins: [username()],
@@ -856,7 +859,7 @@ describe("username send-verification-email (POST /username/send-verification-ema
 
 		expect(res.data?.success).toBe(true);
 		expect(captured).not.toBeNull();
-		expect(captured?.user.username).toBe("resend_user");
+		expect(captured!.user.username).toBe("resend_user");
 		expect(new URL(captured!.url).searchParams.get("callbackURL")).toBe("/");
 	});
 
