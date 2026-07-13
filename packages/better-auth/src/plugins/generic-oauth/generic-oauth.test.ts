@@ -9,6 +9,7 @@ import { getAwaitableValue } from "../../context/helpers";
 import { parseSetCookieHeader } from "../../cookies";
 import { symmetricDecodeJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
+import type { User } from "../../types";
 import { genericOAuth } from ".";
 import { genericOAuthClient } from "./client";
 import { auth0 } from "./providers/auth0";
@@ -1552,14 +1553,131 @@ describe("oauth2", async () => {
 		});
 	});
 
-	it("creates distinct users for multiple providers that return no email", async () => {
-		// Regression for the unique+required email column: two email-less sign-ups
-		// must not collide on a shared "" placeholder. @see #9124
+	it("treats a whitespace-only provider email as missing", async () => {
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "whitespace-email-test",
+							authorizationUrl: `http://localhost:${port}/authorize`,
+							tokenUrl: `http://localhost:${port}/token`,
+							clientId,
+							clientSecret,
+							pkce: true,
+							allowSignUpWithoutEmail: true,
+							getUserInfo: async () => ({
+								id: "whitespace-email-user",
+								email: "   ",
+								name: "Whitespace Email User",
+								emailVerified: false,
+							}),
+						},
+					],
+				}),
+			],
+		});
+		const headers = new Headers();
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+
+		const signIn = await authClient.signIn.oauth2({
+			providerId: "whitespace-email-test",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const flow = await simulateOAuthFlow(
+			signIn.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		const session = await authClient.getSession({
+			fetchOptions: { headers: flow.headers },
+		});
+
+		expect(session.data?.user.email).toMatch(
+			/^no-email\+[a-f0-9]{40}@better-auth\.invalid$/,
+		);
+	});
+
+	it("preserves a linked user's email when the provider later returns whitespace", async () => {
+		let providerEmail = "preserved@example.com";
+		let providerEmailVerified = true;
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
 			plugins: [
 				genericOAuth({
-					config: ["a", "b"].map((suffix) => ({
-						providerId: `no-email-multi-${suffix}`,
+					config: [
+						{
+							providerId: "whitespace-override-test",
+							authorizationUrl: `http://localhost:${port}/authorize`,
+							tokenUrl: `http://localhost:${port}/token`,
+							clientId,
+							clientSecret,
+							pkce: true,
+							allowSignUpWithoutEmail: true,
+							overrideUserInfo: true,
+							getUserInfo: async () => ({
+								id: "whitespace-override-user",
+								email: providerEmail,
+								name: "Whitespace Override User",
+								emailVerified: providerEmailVerified,
+							}),
+						},
+					],
+				}),
+			],
+		});
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+		const signIn = async () => {
+			const headers = new Headers();
+			const response = await authClient.signIn.oauth2({
+				providerId: "whitespace-override-test",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			await simulateOAuthFlow(
+				response.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+		};
+
+		await signIn();
+		providerEmail = "   ";
+		providerEmailVerified = false;
+		await signIn();
+
+		const ctx = await auth.$context;
+		const user = await ctx.adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: "preserved@example.com" }],
+		});
+		expect(user).toMatchObject({
+			email: "preserved@example.com",
+			emailVerified: true,
+		});
+	});
+
+	it("creates distinct users for multiple providers that return no email", async () => {
+		// Regression for the unique+required email column: two email-less sign-ups
+		// must not collide even when their provider/account pairs have the same
+		// delimiter-joined representation. @see #9124
+		const identities = [
+			{ providerId: "no-email-a-b", accountId: "c" },
+			{ providerId: "no-email-a", accountId: "b-c" },
+		];
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: identities.map(({ providerId, accountId }) => ({
+						providerId,
 						authorizationUrl: `http://localhost:${port}/authorize`,
 						tokenUrl: `http://localhost:${port}/token`,
 						clientId: clientId,
@@ -1567,8 +1685,8 @@ describe("oauth2", async () => {
 						pkce: true,
 						allowSignUpWithoutEmail: true,
 						getUserInfo: async () => ({
-							id: `no-email-multi-${suffix}`,
-							name: `No Email ${suffix}`,
+							id: accountId,
+							name: `No Email ${accountId}`,
 							emailVerified: false,
 						}),
 					})),
@@ -1583,10 +1701,10 @@ describe("oauth2", async () => {
 		});
 
 		const emails: (string | undefined)[] = [];
-		for (const suffix of ["a", "b"]) {
+		for (const { providerId } of identities) {
 			const headers = new Headers();
 			const signIn = await authClient.signIn.oauth2({
-				providerId: `no-email-multi-${suffix}`,
+				providerId,
 				callbackURL: "http://localhost:3000/dashboard",
 				newUserCallbackURL: "http://localhost:3000/new_user",
 				fetchOptions: { onSuccess: cookieSetter(headers) },

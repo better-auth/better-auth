@@ -288,7 +288,10 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
 					);
 				}
-				if (!userInfo.user.email && !provider.options?.allowSignUpWithoutEmail) {
+				if (
+					!userInfo.user.email?.trim() &&
+					!provider.options?.allowSignUpWithoutEmail
+				) {
 					c.context.logger.error(
 						missingEmailLogMessage(c.body.provider, { source: "id_token" }),
 						{ provider: c.body.provider },
@@ -316,6 +319,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					disableSignUp:
 						(provider.disableImplicitSignUp && !c.body.requestSignUp) ||
 						provider.disableSignUp,
+					allowSignUpWithoutEmail: provider.options?.allowSignUpWithoutEmail,
 				});
 				if (data.error) {
 					throw APIError.from("UNAUTHORIZED", {

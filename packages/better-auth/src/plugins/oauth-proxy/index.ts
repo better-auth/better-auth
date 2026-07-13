@@ -98,13 +98,16 @@ type OAuthProxyStatePackage = {
  * @internal
  */
 type PassthroughPayload = {
-	userInfo: Omit<User, "createdAt" | "updatedAt">;
+	userInfo: Omit<User, "createdAt" | "updatedAt" | "email"> & {
+		email?: string | null | undefined;
+	};
 	account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
 	state: string;
 	callbackURL: string;
 	newUserURL?: string;
 	errorURL?: string;
 	disableSignUp?: boolean;
+	allowSignUpWithoutEmail?: boolean;
 	timestamp: number;
 };
 
@@ -268,6 +271,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							account: payload.account,
 							callbackURL: payload.callbackURL,
 							disableSignUp: payload.disableSignUp,
+							allowSignUpWithoutEmail: payload.allowSignUpWithoutEmail,
 						});
 					} catch (e) {
 						if (isAPIError(e) && e.body?.code) {
@@ -479,7 +483,10 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							throw redirectOnError(ctx, errorURL, "unable_to_get_user_info");
 						}
 
-						if (!userInfo.email) {
+						if (
+							!userInfo.email?.trim() &&
+							!provider.options?.allowSignUpWithoutEmail
+						) {
 							ctx.context.logger.error("Provider did not return email");
 							throw redirectOnError(ctx, errorURL, "email_not_found");
 						}
@@ -514,6 +521,8 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							disableSignUp:
 								(provider.disableImplicitSignUp && !stateData.requestSignUp) ||
 								provider.options?.disableSignUp,
+							allowSignUpWithoutEmail:
+								provider.options?.allowSignUpWithoutEmail,
 							timestamp: Date.now(),
 						};
 

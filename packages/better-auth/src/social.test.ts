@@ -1069,9 +1069,9 @@ describe("Google Provider — multiple client IDs", async () => {
 	const iosClientId = "456-ios.googleusercontent.com";
 	const androidClientId = "789-android.googleusercontent.com";
 
-	const signIdToken = (audience: string) =>
+	const signIdToken = (audience: string, email = "mobile-user@example.com") =>
 		new SignJWT({
-			email: "mobile-user@example.com",
+			...(email ? { email } : {}),
 			email_verified: true,
 			name: "Mobile User",
 			sub: "google-sub-999",
@@ -1118,6 +1118,34 @@ describe("Google Provider — multiple client IDs", async () => {
 		expect(res.data!.redirect).toBe(false);
 		const data = res.data as { user: { email: string } };
 		expect(data.user.email).toBe("mobile-user@example.com");
+	});
+
+	it("accepts an email-less id token when the provider opts in", async () => {
+		const idToken = await signIdToken(webClientId, "");
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: webClientId,
+						clientSecret: "test-secret",
+						allowSignUpWithoutEmail: true,
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: { token: idToken },
+		});
+
+		expect(res.error).toBeNull();
+		expect(res.data?.redirect).toBe(false);
+		const data = res.data as { user: { email: string } };
+		expect(data.user.email).toMatch(
+			/^no-email\+[a-f0-9]{40}@better-auth\.invalid$/,
+		);
 	});
 
 	it("rejects an id token whose audience is not configured", async () => {
