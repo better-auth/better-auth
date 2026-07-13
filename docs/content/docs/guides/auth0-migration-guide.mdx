@@ -6,7 +6,7 @@ description: A step-by-step guide to transitioning from Auth0 to Better Auth.
 In this guide, we'll walk through the steps to migrate a project from Auth0 to Better Auth — including email/password with proper hashing, social/external accounts, two-factor authentication, and more.
 
 <Callout type="warn">
-  This migration will invalidate all active sessions. This guide doesn't currently show you how to migrate Organizations but it should be possible with additional steps and the [Organization](/docs/plugins/organization) Plugin.
+  This migration will invalidate all active sessions. When the [Organization](/docs/plugins/organization) plugin is enabled, the script will also attempt a best-effort migration of Auth0 Organizations, their members, and per-member roles. Invitations and enabled-connection configuration are not migrated and should be reconfigured manually in Better Auth.
 </Callout>
 
 ## Before You Begin
@@ -346,7 +346,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
                         tokenType: identity.token_type,
                         refreshToken: identity.refresh_token,
                         accessTokenExpiresAt: identity.expires_in ? new Date(Date.now() + identity.expires_in * 1000) : undefined,
-                        // if you are enterprise user, you can get the refresh tokens or all the tokensets - auth0Client.users.getAllTokensets 
+                        // if you are enterprise user, you can get the refresh tokens or all the tokensets - auth0Client.users.federatedConnectionsTokensets.list(auth0User.user_id)
                         refreshTokenExpiresAt: identity.refresh_token_expires_in ? new Date(Date.now() + identity.refresh_token_expires_in * 1000) : undefined,
 
                         scope: identity.scope,
@@ -363,7 +363,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
                         data: {
                             id: `${auth0User.user_id}|${identity.provider}|${identity.user_id}`,
                             userId: userId,
-                            password: migratePassword(auth0User),
+                            password: await migratePassword(auth0User),
                             providerId: providerId,
                             accountId: identity.user_id,
                             accessToken: identity.access_token,
@@ -389,8 +389,15 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
     async function migrateOrganizations(ctx: any) {
         try {
-            const organizations = await auth0Client.organizations.getAll();
-            for (const org of organizations.data || []) {
+            const organizations: any[] = [];
+            let orgPage = await auth0Client.organizations.list({ take: 50 });
+            organizations.push(...orgPage.data);
+            while (orgPage.hasNextPage()) {
+                orgPage = await orgPage.getNextPage();
+                organizations.push(...orgPage.data);
+            }
+
+            for (const org of organizations) {
                 try {
                     await ctx.adapter.create({
                         model: "organization",
@@ -404,14 +411,29 @@ Before starting the migration process, set up Better Auth in your project. Follo
                         },
                         forceAllowId: true
                     });
-                    const members = await auth0Client.organizations.getMembers({ id: org.id });
-                    for (const member of members.data || []) {
+
+                    const members: any[] = [];
+                    let memberPage = await auth0Client.organizations.members.list(org.id, { take: 50 });
+                    members.push(...memberPage.data);
+                    while (memberPage.hasNextPage()) {
+                        memberPage = await memberPage.getNextPage();
+                        members.push(...memberPage.data);
+                    }
+
+                    for (const member of members) {
                         try {
-                            const userRoles = await auth0Client.organizations.getMemberRoles({
-                                id: org.id,
-                                user_id: member.user_id
-                            });
-                            const role = mapAuth0RoleToBetterAuthRole(userRoles.data?.map(r => r.name) || []);
+                            const userRoles: any[] = [];
+                            let rolePage = await auth0Client.organizations.members.roles.list(
+                                org.id,
+                                member.user_id,
+                                { per_page: 50, page: 0 }
+                            );
+                            userRoles.push(...(rolePage.data || []));
+                            while (rolePage.hasNextPage()) {
+                                rolePage = await rolePage.getNextPage();
+                                userRoles.push(...(rolePage.data || []));
+                            }
+                            const role = mapAuth0RoleToBetterAuthRole(userRoles.map(r => r.name));
                             await ctx.adapter.create({
                                 model: "member",
                                 data: {
@@ -447,28 +469,21 @@ Before starting the migration process, set up Better Auth in your project. Follo
             const isAdminEnabled = ctx.options?.plugins?.find(plugin => plugin.id === "admin");
             const isUsernameEnabled = ctx.options?.plugins?.find(plugin => plugin.id === "username");
             const isOrganizationEnabled = ctx.options?.plugins?.find(plugin => plugin.id === "organization");
-            const perPage = 100;
             const auth0Users: any[] = [];
-            let pageNumber = 0;
 
-            while (true) {
-                try {
-                    const params = {
-                        per_page: perPage,
-                        page: pageNumber,
-                        include_totals: true,
-                    };
-                    const response = (await auth0Client.users.getAll(params)).data as any;
-                    const users = response.users || [];
-                    if (users.length === 0) break;
-                    auth0Users.push(...users);
-                    pageNumber++;
-
-                    if (users.length < perPage) break;
-                } catch (error) {
-                    console.error('Error fetching users:', error);
-                    break;
+            try {
+                let userPage = await auth0Client.users.list({
+                    per_page: 100,
+                    page: 0,
+                    include_totals: true,
+                });
+                auth0Users.push(...userPage.data);
+                while (userPage.hasNextPage()) {
+                    userPage = await userPage.getNextPage();
+                    auth0Users.push(...userPage.data);
                 }
+            } catch (error) {
+                console.error('Error fetching users:', error);
             }
 
 
@@ -520,7 +535,6 @@ Before starting the migration process, set up Better Auth in your project. Follo
             if (isOrganizationEnabled) {
                 await migrateOrganizations(ctx);
             }
-            // the reset of migration will be here.
             console.log('Migration completed successfully');
         } catch (error) {
             console.error('Migration failed:', error);
@@ -695,7 +709,7 @@ The script includes a basic role mapping function (`mapAuth0RoleToBetterAuthRole
 
 ### Rate Limiting
 
-The migration script includes pagination to handle large numbers of users. Adjust the `perPage` value based on your needs and Auth0's rate limits.
+The migration script includes pagination to handle large numbers of users. Adjust the `per_page` (offset pagination) and `take` (checkpoint pagination) values passed to the Auth0 `list()` calls based on your needs and Auth0's rate limits.
 
 ## Wrapping Up
 

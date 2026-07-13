@@ -10,6 +10,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import type { GenericEndpointContext } from "../types";
 
 export interface GoogleProfile {
 	aud: string;
@@ -181,12 +182,16 @@ export const google = (options: GoogleOptions) => {
 						tokenEndpoint: "https://oauth2.googleapis.com/token",
 					});
 				},
-		async verifyIdToken(token, nonce) {
+		async verifyIdToken(
+			token: string,
+			nonce?: string,
+			ctx?: GenericEndpointContext,
+		) {
 			if (options.disableIdTokenSignIn) {
 				return false;
 			}
 			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
+				return options.verifyIdToken(token, nonce, ctx);
 			}
 
 			const jwtClaims = await verifyGoogleIdToken({
