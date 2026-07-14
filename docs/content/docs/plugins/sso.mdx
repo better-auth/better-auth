@@ -1441,6 +1441,8 @@ await authClient.signIn.sso({
 });
 ```
 
+For unsolicited **IdP-initiated** flows where `signIn.sso()` is not used (and therefore no client-side `callbackURL` is set), the redirect uses `idpInitiatedCallbackUrl` configured in `samlConfig` for the provider, or the global plugin option. If neither is configured, the existing redirect fallback behavior is preserved.
+
 The callback route supports both GET and POST methods automatically, so you don't need to create any additional route handlers in your framework.
 
 ## Schema
@@ -1528,7 +1530,7 @@ Better Auth supports **IdP-initiated SSO flows**, where users access your applic
 **No additional configuration required** - the callback route automatically handles both GET and POST requests.
 
 <Callout type="warn">
-  IdP-initiated flows do not carry a RelayState, so the post-login redirect falls back to your application's base URL. To control where users land after SP-initiated SSO, pass the destination via `callbackURL` in the `signIn.sso()` call.
+  IdP-initiated flows do not carry a Better Auth-generated RelayState containing a client-side callback URL, so the post-login redirect falls back to your application's base URL. In split-origin setups (where the app frontend is on a different origin than the Better Auth server), this redirect collapses to the auth server origin (resulting in a 404). To prevent this, you can configure `idpInitiatedCallbackUrl` either globally under `saml` plugin options or per-provider under `samlConfig` (e.g., `https://app.example.com/dashboard`).
 </Callout>
 
 <Callout type="info">
