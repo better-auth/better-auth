@@ -658,12 +658,6 @@ export async function processSAMLResponse(
 			);
 	}
 
-	// 20. Compute safe redirect URL
-	return getSafeRedirectUrl(
-		redirectCandidate,
-		currentCallbackPath,
-		appOrigin,
-		(url: string, settings?: { allowRelativePaths: boolean }) =>
-			ctx.context.isTrustedOrigin(url, settings),
-	);
+	// 20. Return precomputed safe redirect URL
+	return samlRedirectUrl;
 }
