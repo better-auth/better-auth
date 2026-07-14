@@ -107,7 +107,7 @@ overrides:
   uuid@<11.1.1: '>=11.1.1 <12'
   shell-quote@<=1.8.3: 1.8.4
 
-packageExtensionsChecksum: sha256-CGrIxUxwVsS4NUc5kVffV7wPJyz72rcofMmCW8mlNgo=
+packageExtensionsChecksum: sha256-cX1laHnAcMMdOXVmjthaDi7iH9suQXcE1QM/hILndGo=
 
 patchedDependencies:
   '@changesets/assemble-release-plan': 0599486e3d3f68b6f30d0f55a524ccac93e7fe24b273f0f5691b59685498605f
@@ -187,7 +187,7 @@ importers:
         version: 1.3.1
       '@hookform/resolvers':
         specifier: ^5.4.0
-        version: 5.4.0(react-hook-form@7.79.0(react@19.2.7))
+        version: 5.4.0(react-hook-form@7.79.0(react@19.2.7))(zod@4.3.6)
       '@openrouter/ai-sdk-provider':
         specifier: ^2.9.1
         version: 2.9.1(ai@6.0.208(zod@4.3.6))(zod@4.3.6)
@@ -3251,6 +3251,10 @@ packages:
     resolution: {integrity: sha512-EIsqr/t/qbinPIhGjMdtvutIN1Kk4uwbROE9/UQ93CAVGR7GkA7Y92+fX80OzXi/OB67jVFYwKGO1WzkxmkFZw==}
     peerDependencies:
       react-hook-form: ^7.55.0
+      zod: 4.3.6
+    peerDependenciesMeta:
+      zod:
+        optional: true
 
   '@iconify/types@2.0.0':
     resolution: {integrity: sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg==}
@@ -15959,10 +15963,12 @@ snapshots:
     dependencies:
       hono: 4.12.25
 
-  '@hookform/resolvers@5.4.0(react-hook-form@7.79.0(react@19.2.7))':
+  '@hookform/resolvers@5.4.0(react-hook-form@7.79.0(react@19.2.7))(zod@4.3.6)':
     dependencies:
       '@standard-schema/utils': 0.3.0
       react-hook-form: 7.79.0(react@19.2.7)
+    optionalDependencies:
+      zod: 4.3.6
 
   '@iconify/types@2.0.0': {}
 

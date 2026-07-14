@@ -379,7 +379,7 @@ const authOptions = {
 				},
 			],
 		}),
-		...(scimDemoPlugin ? [scimDemoPlugin] : []),
+		scimDemoPlugin,
 		deviceAuthorization({
 			expiresIn: "3min",
 			interval: "5s",

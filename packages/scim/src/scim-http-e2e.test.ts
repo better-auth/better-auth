@@ -23,16 +23,15 @@ describe("SCIM HTTP end-to-end", () => {
 			body: new Blob([]),
 		});
 
-		const result = await plugin.onRequest?.(request, undefined as never);
+		const result = await plugin.onRequest?.(request);
+		if (!result || !("request" in result) || !result.request) {
+			throw new Error("Expected SCIM DELETE normalization to return a request");
+		}
 
-		expect(
-			result && "request" in result ? result.request.body : undefined,
-		).toBe(null);
-		expect(
-			result && "request" in result
-				? result.request.headers.get("authorization")
-				: undefined,
-		).toBe("Bearer streaming-token");
+		expect(result.request.body).toBe(null);
+		expect(result.request.headers.get("authorization")).toBe(
+			"Bearer streaming-token",
+		);
 	});
 
 	/**

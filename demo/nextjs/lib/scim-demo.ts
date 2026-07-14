@@ -1,5 +1,9 @@
 import { scim } from "@better-auth/scim";
-import type { BetterAuthOptions, DBAdapter } from "better-auth";
+import type {
+	BetterAuthOptions,
+	BetterAuthPlugin,
+	DBAdapter,
+} from "better-auth";
 import type {
 	SCIMDemoCheckpoint,
 	SCIMDemoCheckpointId,
@@ -14,6 +18,10 @@ const SCIM_PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
 export const SCIM_DEMO_CONNECTION_ID = "demo-directory";
 export const SCIM_DEMO_PROVISIONING_DOMAIN_ID = "scim-demo";
 export const SCIM_DEMO_ROLE = "billing-manager";
+
+const disabledSCIMDemoPlugin = {
+	id: "scim-demo-disabled",
+} satisfies BetterAuthPlugin;
 
 interface SCIMDemoUserRow {
 	id: string;
@@ -286,7 +294,7 @@ export function getSCIMDemoBaseURL() {
 }
 
 export function createSCIMDemoPlugin() {
-	if (!isSCIMDemoEnabled()) return undefined;
+	if (!isSCIMDemoEnabled()) return disabledSCIMDemoPlugin;
 
 	return scim({
 		connections: [
