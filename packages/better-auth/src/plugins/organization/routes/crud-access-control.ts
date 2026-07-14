@@ -1,5 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import type { Where } from "@better-auth/core/db/adapter";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
@@ -1086,34 +1090,48 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					? { permission: JSON.stringify(updateData.permission) }
 					: {}),
 			};
-			// Scoped by organization + role: updateMany applies the multi-clause
-			// filter portably, where a multi-clause `update` does not across adapters.
-			await ctx.context.adapter.updateMany({
-				model: "organizationRole",
-				where: [
-					{
-						field: "organizationId",
-						value: organizationId,
-						operator: "eq",
-						connector: "AND",
-					},
-					condition,
-				],
-				update,
-			});
-
-			// Members and invitations store role names as strings. Cascade the
-			// rename so they stay attached to the updated organizationRole.
 			const oldRoleName = role.role;
 			const renamedRoleName = updateData.role;
-			if (renamedRoleName && renamedRoleName !== oldRoleName) {
-				await cascadeRoleNameRename({
-					ctx,
-					organizationId,
-					oldRoleName,
-					newRoleName: renamedRoleName,
+			const shouldCascadeRename =
+				!!renamedRoleName && renamedRoleName !== oldRoleName;
+
+			// Keep organizationRole rename + member/invitation cascade atomic so a
+			// mid-cascade failure cannot leave orphaned role-name references.
+			await runWithTransaction(ctx.context.adapter, async () => {
+				const adapter = await getCurrentAdapter(ctx.context.adapter);
+				// Scoped by organization + role: updateMany applies the multi-clause
+				// filter portably, where a multi-clause `update` does not across adapters.
+				await adapter.updateMany({
+					model: "organizationRole",
+					where: [
+						{
+							field: "organizationId",
+							value: organizationId,
+							operator: "eq",
+							connector: "AND",
+						},
+						condition,
+					],
+					update,
 				});
-			}
+
+				if (shouldCascadeRename) {
+					await cascadeRoleNameRename({
+						organizationId,
+						oldRoleName,
+						newRoleName: renamedRoleName,
+						adapter,
+					});
+					// Re-scan once so concurrent assignments that became visible under
+					// read-committed isolation are still rewritten before commit.
+					await cascadeRoleNameRename({
+						organizationId,
+						oldRoleName,
+						newRoleName: renamedRoleName,
+						adapter,
+					});
+				}
+			});
 
 			// -----
 			// Return the updated role
@@ -1130,17 +1148,17 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 };
 
 async function cascadeRoleNameRename({
-	ctx,
 	organizationId,
 	oldRoleName,
 	newRoleName,
+	adapter,
 }: {
-	ctx: GenericEndpointContext;
 	organizationId: string;
 	oldRoleName: string;
 	newRoleName: string;
+	adapter: Awaited<ReturnType<typeof getCurrentAdapter>>;
 }) {
-	const members = await ctx.context.adapter.findMany<Member>({
+	const members = await adapter.findMany<Member>({
 		model: "member",
 		where: [
 			{
@@ -1159,7 +1177,7 @@ async function cascadeRoleNameRename({
 	for (const member of members) {
 		const memberRoles = member.role.split(",").map((r) => r.trim());
 		if (!memberRoles.includes(oldRoleName)) continue;
-		await ctx.context.adapter.update({
+		await adapter.update({
 			model: "member",
 			where: [
 				{
@@ -1173,7 +1191,7 @@ async function cascadeRoleNameRename({
 		});
 	}
 
-	const invitations = await ctx.context.adapter.findMany<Invitation>({
+	const invitations = await adapter.findMany<Invitation>({
 		model: "invitation",
 		where: [
 			{
@@ -1192,7 +1210,7 @@ async function cascadeRoleNameRename({
 	for (const invitation of invitations) {
 		const invitationRoles = invitation.role.split(",").map((r) => r.trim());
 		if (!invitationRoles.includes(oldRoleName)) continue;
-		await ctx.context.adapter.update({
+		await adapter.update({
 			model: "invitation",
 			where: [
 				{
