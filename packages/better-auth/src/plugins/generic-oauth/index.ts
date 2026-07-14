@@ -3,7 +3,8 @@ import { APIError } from "@better-auth/core/error";
 import type {
 	OAuth2Tokens,
 	OAuthIdTokenConfig,
-	UpstreamProvider,
+	OAuthProvider,
+	OAuthRefreshContext,
 } from "@better-auth/core/oauth2";
 import {
 	applyDefaultAccessTokenExpiry,
@@ -210,7 +211,7 @@ export const genericOAuth = <const ID extends string>(
 		id: "generic-oauth",
 		version: PACKAGE_VERSION,
 		init: async (ctx: AuthContext) => {
-			const genericProviders: UpstreamProvider[] = [];
+			const genericProviders: OAuthProvider[] = [];
 
 			for (const c of options.config) {
 				let authorizationUrl = c.authorizationUrl;
@@ -293,12 +294,14 @@ export const genericOAuth = <const ID extends string>(
 					);
 				}
 
-				const provider: UpstreamProvider = {
+				const provider: OAuthProvider = {
 					id: c.providerId,
 					name: c.name ?? c.providerId,
-					callbackPath: `/callback/${c.providerId}`,
 					issuer,
 					idToken: idTokenConfig,
+					requiresIdTokenNonce:
+						idTokenConfig !== undefined &&
+						c.disableIdTokenNonceBinding !== true,
 					allowIdpInitiated: c.allowIdpInitiated,
 					createAuthorizationURL(data) {
 						if (!authorizationUrl) {
@@ -329,6 +332,7 @@ export const genericOAuth = <const ID extends string>(
 							accessType: c.accessType,
 							responseType: c.responseType,
 							responseMode: c.responseMode,
+							nonce: data.idTokenNonce,
 							additionalParams: {
 								...(c.authorizationUrlParams ?? {}),
 								...(data.additionalParams ?? {}),
@@ -370,23 +374,25 @@ export const genericOAuth = <const ID extends string>(
 						);
 					},
 					async getUserInfo(tokens) {
+						const { expectedIdTokenNonce, ...oauthTokens } = tokens;
 						// Fail closed: when discovery published a JWKS, an id_token
 						// that cannot be verified must not become an identity source.
-						if (tokens.idToken && provider.idToken) {
+						if (oauthTokens.idToken && provider.idToken) {
 							const verified = await verifyProviderIdToken(
 								provider,
-								tokens.idToken,
+								oauthTokens.idToken,
+								expectedIdTokenNonce,
 							);
 							if (!verified) {
 								ctx.logger.error(
-									`Provider "${c.providerId}": id_token failed verification against the discovery JWKS`,
+									`Provider "${c.providerId}": id_token failed verification against the discovery JWKS or expected nonce`,
 								);
 								return null;
 							}
 						}
 						const raw = c.getUserInfo
-							? await c.getUserInfo(tokens)
-							: await fetchUserInfo(tokens, userInfoUrl);
+							? await c.getUserInfo(oauthTokens)
+							: await fetchUserInfo(oauthTokens, userInfoUrl);
 						if (!raw) {
 							return null;
 						}
@@ -421,6 +427,7 @@ export const genericOAuth = <const ID extends string>(
 					},
 					async refreshAccessToken(
 						refreshToken: string,
+						refreshCtx?: OAuthRefreshContext,
 					): Promise<OAuth2Tokens> {
 						if (!tokenUrl) {
 							throw APIError.from(
@@ -428,6 +435,10 @@ export const genericOAuth = <const ID extends string>(
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							);
 						}
+						const resolvedRefreshParams =
+							typeof c.refreshTokenParams === "function"
+								? await c.refreshTokenParams(refreshCtx)
+								: c.refreshTokenParams;
 						const tokens = await refreshAccessToken({
 							refreshToken,
 							options: {
@@ -437,6 +448,7 @@ export const genericOAuth = <const ID extends string>(
 							authentication: c.authentication,
 							tokenEndpointAuth,
 							tokenEndpoint: tokenUrl,
+							extraParams: resolvedRefreshParams,
 						});
 						return applyDefaultAccessTokenExpiry(
 							tokens,

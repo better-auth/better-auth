@@ -14,21 +14,12 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { OAuth2Server } from "oauth2-mock-server";
-import {
-	afterAll,
-	afterEach,
-	beforeAll,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createAuthMiddleware } from "./api";
 import { getOAuthState } from "./api/state/oauth";
 import { parseSetCookieHeader } from "./cookies";
 import { signJWT } from "./crypto";
 import { getMigrations } from "./db/get-migration";
-import { persistOAuthAccount } from "./oauth2";
 import { getTestInstance } from "./test-utils/test-instance";
 import { DEFAULT_SECRET } from "./utils/constants";
 
@@ -922,7 +913,6 @@ describe("signin", async () => {
 			invitedBy: "user-123",
 			errorURL: "http://localhost:3000/auth/error",
 			oauthState: state,
-			requestedScopes: expect.any(Array),
 		});
 	});
 
@@ -3151,680 +3141,6 @@ describe("validateUserInfo callback", async () => {
 });
 
 /**
- * `account.grantedScopes` is the user's accumulated grant set, not the latest
- * token's `scope` claim. `linkSocial` unions newly granted scopes; sign-in
- * re-authentication and refresh-token responses never narrow the stored set,
- * regardless of what the provider echoes (RFC 6749 §1.5). Every write routes
- * through the `persistOAuthAccount` seam, the single account writer.
- *
- * Generalizes the Google `include_granted_scopes=true` band-aid from #3013
- * into a provider-agnostic invariant.
- *
- * @see https://github.com/better-auth/better-auth/pull/3013
- * @see https://www.rfc-editor.org/rfc/rfc6749#section-1.5
- */
-describe("grantedScopes path-dependent semantics", async () => {
-	// `includeGrantedScopes: false` so Google's token response is a per-request
-	// projection (not the authoritative combined grant). This is the regime where
-	// the stored grant accumulates as a union and a narrower echo never shrinks
-	// it. The authoritative full-grant regime (resync) is covered separately.
-	const { client, cookieSetter, auth } = await getTestInstance(
-		{
-			socialProviders: {
-				google: {
-					clientId: "test",
-					clientSecret: "test",
-					includeGrantedScopes: false,
-				},
-			},
-		},
-		{ disableTestUser: true },
-	);
-	const ctx = await auth.$context;
-
-	const buildIdToken = (sub: string) =>
-		signJWT(
-			{
-				email: `${sub}@email.com`,
-				email_verified: true,
-				name: "Scope User",
-				picture: "https://test.com/picture.png",
-				exp: 1234567890,
-				sub,
-				iat: 1234567890,
-				aud: "test",
-				azp: "test",
-				nbf: 1234567890,
-				iss: "test",
-				locale: "en",
-				jti: "test",
-				given_name: "Scope",
-				family_name: "User",
-			} satisfies GoogleProfile,
-			DEFAULT_SECRET,
-		);
-
-	function mockGoogleTokenResponse(
-		idToken: string,
-		responseScope: string | undefined,
-	) {
-		mswServer.use(
-			http.post("https://oauth2.googleapis.com/token", () =>
-				HttpResponse.json({
-					access_token: "test-access-token",
-					refresh_token: "test-refresh-token",
-					id_token: idToken,
-					token_type: "Bearer",
-					expires_in: 3600,
-					...(responseScope !== undefined ? { scope: responseScope } : {}),
-				}),
-			),
-		);
-	}
-
-	async function completeSignIn(headers: Headers, scopes?: string[]) {
-		const signInRes = await client.signIn.social({
-			provider: "google",
-			callbackURL: "/callback",
-			...(scopes ? { scopes } : {}),
-			fetchOptions: { onSuccess: cookieSetter(headers) },
-		});
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
-		await client.$fetch("/callback/google", {
-			query: { state, code: "test" },
-			method: "GET",
-			headers,
-			onError(c) {
-				cookieSetter(headers)(c as any);
-			},
-		});
-	}
-
-	it("preserves the stored grant on sign-in re-authentication when the token echo is narrower", async () => {
-		const headers = new Headers();
-		const idToken = await buildIdToken("scope-reauth-sub");
-
-		// Initial sign-in echoing the full granted scope set.
-		mockGoogleTokenResponse(
-			idToken,
-			"openid email profile https://www.googleapis.com/auth/drive.readonly",
-		);
-		await completeSignIn(headers);
-
-		const session = await client.getSession({ fetchOptions: { headers } });
-		const userId = session.data!.user.id;
-		const initial = await ctx.internalAdapter.findAccounts(userId);
-		expect(initial[0]!.grantedScopes).toContain(
-			"https://www.googleapis.com/auth/drive.readonly",
-		);
-
-		// Re-sign-in echoing only a subset; the union must keep the wider grant.
-		mockGoogleTokenResponse(idToken, "openid email");
-		await completeSignIn(headers);
-
-		const after = await ctx.internalAdapter.findAccounts(userId);
-		expect(after[0]!.grantedScopes).toContain(
-			"https://www.googleapis.com/auth/drive.readonly",
-		);
-	});
-
-	it("unions the stored grant with newly granted scopes on linkSocial incremental authorization", async () => {
-		const headers = new Headers();
-		const idToken = await buildIdToken("scope-link-sub");
-
-		mockGoogleTokenResponse(idToken, "openid email profile");
-		await completeSignIn(headers);
-
-		const session = await client.getSession({ fetchOptions: { headers } });
-		const userId = session.data!.user.id;
-		const initial = await ctx.internalAdapter.findAccounts(userId);
-		expect([...(initial[0]!.grantedScopes ?? [])].sort()).toEqual([
-			"email",
-			"openid",
-			"profile",
-		]);
-
-		// linkSocial requesting a new scope; provider echoes only that scope.
-		mockGoogleTokenResponse(
-			idToken,
-			"https://www.googleapis.com/auth/drive.readonly",
-		);
-		const linkRes = await client.linkSocial(
-			{
-				provider: "google",
-				callbackURL: "/callback",
-				scopes: ["https://www.googleapis.com/auth/drive.readonly"],
-			},
-			{ headers, onSuccess: cookieSetter(headers) },
-		);
-		if (!linkRes.data || !("url" in linkRes.data) || !linkRes.data.url) {
-			throw new Error(
-				`linkSocial did not return an authorization URL: ${JSON.stringify(linkRes)}`,
-			);
-		}
-		const linkState = new URL(linkRes.data.url).searchParams.get("state") || "";
-		await client.$fetch("/callback/google", {
-			query: { state: linkState, code: "test" },
-			method: "GET",
-			headers,
-			onError(c) {
-				cookieSetter(headers)(c as any);
-			},
-		});
-
-		const after = await ctx.internalAdapter.findAccounts(userId);
-		const merged = after[0]!.grantedScopes ?? [];
-		expect(merged).toContain("openid");
-		expect(merged).toContain("email");
-		expect(merged).toContain("profile");
-		expect(merged).toContain("https://www.googleapis.com/auth/drive.readonly");
-	});
-
-	it("persists the requested scopes on linkSocial when the provider omits the scope echo (RFC 6749 §5.1)", async () => {
-		const headers = new Headers();
-		const idToken = await buildIdToken("scope-link-omit-sub");
-
-		mockGoogleTokenResponse(idToken, "openid email");
-		await completeSignIn(headers);
-
-		const session = await client.getSession({ fetchOptions: { headers } });
-		const userId = session.data!.user.id;
-
-		// linkSocial requesting a new scope; provider omits `scope` entirely, so
-		// the §5.1 fallback treats the requested set as granted.
-		mockGoogleTokenResponse(idToken, undefined);
-		const linkRes = await client.linkSocial(
-			{
-				provider: "google",
-				callbackURL: "/callback",
-				scopes: ["https://www.googleapis.com/auth/drive.readonly"],
-			},
-			{ headers, onSuccess: cookieSetter(headers) },
-		);
-		if (!linkRes.data || !("url" in linkRes.data) || !linkRes.data.url) {
-			throw new Error(
-				`linkSocial did not return an authorization URL: ${JSON.stringify(linkRes)}`,
-			);
-		}
-		const linkState = new URL(linkRes.data.url).searchParams.get("state") || "";
-		await client.$fetch("/callback/google", {
-			query: { state: linkState, code: "test" },
-			method: "GET",
-			headers,
-			onError(c) {
-				cookieSetter(headers)(c as any);
-			},
-		});
-
-		const after = await ctx.internalAdapter.findAccounts(userId);
-		expect(after[0]!.grantedScopes).toContain(
-			"https://www.googleapis.com/auth/drive.readonly",
-		);
-		// The original grant is preserved alongside the newly requested scope.
-		expect(after[0]!.grantedScopes).toContain("openid");
-		expect(after[0]!.grantedScopes).toContain("email");
-	});
-
-	it("persists the requested scopes on first sign-in when the provider omits the scope echo (RFC 6749 §5.1)", async () => {
-		const headers = new Headers();
-		const idToken = await buildIdToken("scope-signin-omit-sub");
-
-		// First sign-in, provider omits `scope`; the §5.1 fallback records the
-		// requested scopes as the grant.
-		mockGoogleTokenResponse(idToken, undefined);
-		await completeSignIn(headers, [
-			"https://www.googleapis.com/auth/calendar.readonly",
-		]);
-
-		const session = await client.getSession({ fetchOptions: { headers } });
-		const userId = session.data!.user.id;
-		const after = await ctx.internalAdapter.findAccounts(userId);
-		expect(after[0]!.grantedScopes).toContain(
-			"https://www.googleapis.com/auth/calendar.readonly",
-		);
-	});
-
-	it("preserves the stored grant on /refresh-token when the refresh response is narrower (RFC 6749 §6)", async () => {
-		const headers = new Headers();
-		const idToken = await buildIdToken("scope-refresh-sub");
-
-		mockGoogleTokenResponse(
-			idToken,
-			"openid email profile https://www.googleapis.com/auth/drive.readonly",
-		);
-		await completeSignIn(headers);
-
-		const session = await client.getSession({ fetchOptions: { headers } });
-		const userId = session.data!.user.id;
-		const accounts = await ctx.internalAdapter.findAccounts(userId);
-		expect(accounts[0]!.grantedScopes).toContain(
-			"https://www.googleapis.com/auth/drive.readonly",
-		);
-
-		// Refresh response narrower than stored: a downscoped projection, not a
-		// grant change.
-		mswServer.use(
-			http.post("https://oauth2.googleapis.com/token", () =>
-				HttpResponse.json({
-					access_token: "refreshed-access-token",
-					refresh_token: "refreshed-refresh-token",
-					token_type: "Bearer",
-					expires_in: 3600,
-					scope: "openid email",
-				}),
-			),
-		);
-		await client.$fetch("/refresh-token", {
-			body: {
-				accountId: accounts[0]!.accountId,
-				providerId: "google",
-			},
-			headers,
-			method: "POST",
-			onError(c) {
-				cookieSetter(headers)(c as any);
-			},
-		});
-
-		const after = await ctx.internalAdapter.findAccounts(userId);
-		expect(after[0]!.grantedScopes).toContain(
-			"https://www.googleapis.com/auth/drive.readonly",
-		);
-	});
-});
-
-/**
- * The legacy `account.scope` column was a comma-joined string; `grantedScopes`
- * is a normalized array. The migration splits the legacy string on "," into the
- * array. Once stored as an array, the seam unions subsequent grants onto it.
- *
- * @see https://www.rfc-editor.org/rfc/rfc6749#section-3.3
- */
-describe("grantedScopes legacy migration", async () => {
-	const { auth } = await getTestInstance({}, { disableTestUser: true });
-	const ctx = await auth.$context;
-
-	it("normalizes the migrated array and unions later grants through the seam", async () => {
-		const user = await ctx.internalAdapter.createUser(
-			{
-				email: "legacy-scope@email.com",
-				name: "Legacy Scope",
-				emailVerified: true,
-			},
-			{ method: "test" },
-		);
-
-		// The migration has split the legacy "openid,email,profile" string into
-		// this array; store it the post-migration way.
-		await runWithEndpointContext(
-			{ context: ctx } as GenericEndpointContext,
-			() =>
-				ctx.internalAdapter.createAccount({
-					userId: user.id,
-					providerId: "google",
-					accountId: "legacy-scope-sub",
-					grantedScopes: ["openid", "email", "profile"],
-				}),
-		);
-
-		// A subsequent seam write unions the freshly observed scopes onto the
-		// migrated value and normalizes the result into a deduped, sorted array.
-		await runWithEndpointContext(
-			{ context: ctx } as GenericEndpointContext,
-			() =>
-				persistOAuthAccount({ context: ctx } as GenericEndpointContext, {
-					userId: user.id,
-					providerId: "google",
-					accountId: "legacy-scope-sub",
-					tokens: {
-						accessToken: "access",
-						refreshToken: "refresh",
-						scopes: ["email", "https://www.googleapis.com/auth/drive.readonly"],
-					},
-					mode: "sign-in",
-				}),
-		);
-
-		const accounts = await ctx.internalAdapter.findAccounts(user.id);
-		const granted = accounts[0]!.grantedScopes ?? [];
-		expect(Array.isArray(granted)).toBe(true);
-		expect([...granted].sort()).toEqual([
-			"email",
-			"https://www.googleapis.com/auth/drive.readonly",
-			"openid",
-			"profile",
-		]);
-	});
-});
-
-/**
- * `persistOAuthAccount` is the only path that may narrow the grant, and only
- * when `resync` is set (Google `include_granted_scopes`, an explicit
- * re-consent, or token introspection report the full combined grant). A
- * normal write always unions and can only grow the stored set.
- *
- * @see https://www.rfc-editor.org/rfc/rfc6749#section-3.3
- */
-describe("grantedScopes resync", async () => {
-	const { auth } = await getTestInstance({}, { disableTestUser: true });
-	const ctx = await auth.$context;
-
-	async function seedAccount(accountId: string, grantedScopes: string[]) {
-		const user = await ctx.internalAdapter.createUser(
-			{
-				email: `${accountId}@email.com`,
-				name: "Resync User",
-				emailVerified: true,
-			},
-			{ method: "test" },
-		);
-		await runWithEndpointContext(
-			{ context: ctx } as GenericEndpointContext,
-			() =>
-				ctx.internalAdapter.createAccount({
-					userId: user.id,
-					providerId: "google",
-					accountId,
-					grantedScopes,
-				}),
-		);
-		return user.id;
-	}
-
-	it("a normal write never shrinks the grant even when the observed set is narrower", async () => {
-		const userId = await seedAccount("resync-normal-sub", [
-			"openid",
-			"email",
-			"profile",
-			"https://www.googleapis.com/auth/drive.readonly",
-		]);
-
-		await runWithEndpointContext(
-			{ context: ctx } as GenericEndpointContext,
-			() =>
-				persistOAuthAccount({ context: ctx } as GenericEndpointContext, {
-					userId,
-					providerId: "google",
-					accountId: "resync-normal-sub",
-					tokens: {
-						accessToken: "access",
-						refreshToken: "refresh",
-						scopes: ["openid", "email"],
-					},
-					mode: "sign-in",
-				}),
-		);
-
-		const accounts = await ctx.internalAdapter.findAccounts(userId);
-		expect(accounts[0]!.grantedScopes).toContain(
-			"https://www.googleapis.com/auth/drive.readonly",
-		);
-		expect(accounts[0]!.grantedScopes).toContain("profile");
-	});
-
-	it("a resync write replaces the grant with the freshly observed set, dropping revoked scopes", async () => {
-		const userId = await seedAccount("resync-shrink-sub", [
-			"openid",
-			"email",
-			"profile",
-			"https://www.googleapis.com/auth/drive.readonly",
-		]);
-
-		// The provider reports the full combined grant after the user revoked the
-		// Drive scope; resync makes the observed set authoritative.
-		await runWithEndpointContext(
-			{ context: ctx } as GenericEndpointContext,
-			() =>
-				persistOAuthAccount({ context: ctx } as GenericEndpointContext, {
-					userId,
-					providerId: "google",
-					accountId: "resync-shrink-sub",
-					tokens: {
-						accessToken: "access",
-						refreshToken: "refresh",
-						scopes: ["openid", "email"],
-					},
-					mode: "sign-in",
-					grantAuthority: "full-grant",
-				}),
-		);
-
-		const accounts = await ctx.internalAdapter.findAccounts(userId);
-		expect([...(accounts[0]!.grantedScopes ?? [])].sort()).toEqual([
-			"email",
-			"openid",
-		]);
-		expect(accounts[0]!.grantedScopes).not.toContain(
-			"https://www.googleapis.com/auth/drive.readonly",
-		);
-	});
-
-	it("a resync write with an empty/omitted scope echo preserves the stored grant instead of shrinking it", async () => {
-		const userId = await seedAccount("resync-empty-echo-sub", [
-			"openid",
-			"email",
-			"profile",
-			"https://www.googleapis.com/auth/drive.readonly",
-		]);
-
-		// resync is honored only when the provider actually echoed scopes. An
-		// empty/omitted echo is not an authoritative full grant, so the write
-		// falls back to a union and the stored grant is preserved (never narrowed
-		// to this flow's request).
-		await runWithEndpointContext(
-			{ context: ctx } as GenericEndpointContext,
-			() =>
-				persistOAuthAccount({ context: ctx } as GenericEndpointContext, {
-					userId,
-					providerId: "google",
-					accountId: "resync-empty-echo-sub",
-					tokens: {
-						accessToken: "a",
-					},
-					mode: "sign-in",
-					grantAuthority: "full-grant",
-				}),
-		);
-
-		const accounts = await ctx.internalAdapter.findAccounts(userId);
-		expect([...(accounts[0]!.grantedScopes ?? [])].sort()).toEqual([
-			"email",
-			"https://www.googleapis.com/auth/drive.readonly",
-			"openid",
-			"profile",
-		]);
-		expect(accounts[0]!.grantedScopes).toContain(
-			"https://www.googleapis.com/auth/drive.readonly",
-		);
-	});
-});
-
-describe("grantedScopes resync auto-trigger (Google include_granted_scopes)", async () => {
-	// Default Google has includeGrantedScopes enabled, so its token response is
-	// the authoritative combined grant and the seam resyncs (the only path that
-	// may shrink). A scope the user revoked at Google therefore drops on the next
-	// sign-in, instead of lingering forever.
-	const { client, cookieSetter, auth } = await getTestInstance(
-		{
-			socialProviders: {
-				google: { clientId: "test", clientSecret: "test" },
-			},
-		},
-		{ disableTestUser: true },
-	);
-	const ctx = await auth.$context;
-
-	const idTokenFor = (sub: string) =>
-		signJWT(
-			{
-				email: `${sub}@email.com`,
-				email_verified: true,
-				name: "Resync User",
-				picture: "https://test.com/p.png",
-				exp: 1234567890,
-				sub,
-				iat: 1234567890,
-				aud: "test",
-				azp: "test",
-				nbf: 1234567890,
-				iss: "test",
-				locale: "en",
-				jti: "test",
-				given_name: "Resync",
-				family_name: "User",
-			} satisfies GoogleProfile,
-			DEFAULT_SECRET,
-		);
-
-	function mockToken(idToken: string, scope: string) {
-		mswServer.use(
-			http.post("https://oauth2.googleapis.com/token", () =>
-				HttpResponse.json({
-					access_token: "a",
-					refresh_token: "r",
-					id_token: idToken,
-					token_type: "Bearer",
-					expires_in: 3600,
-					scope,
-				}),
-			),
-		);
-	}
-
-	async function signIn(headers: Headers) {
-		const res = await client.signIn.social({
-			provider: "google",
-			callbackURL: "/callback",
-			fetchOptions: { onSuccess: cookieSetter(headers) },
-		});
-		const state = new URL(res.data!.url!).searchParams.get("state") || "";
-		await client.$fetch("/callback/google", {
-			query: { state, code: "test" },
-			method: "GET",
-			headers,
-			onError(c) {
-				cookieSetter(headers)(c as any);
-			},
-		});
-	}
-
-	it("drops a revoked scope on the next sign-in when the combined grant no longer lists it", async () => {
-		const headers = new Headers();
-		const idToken = await idTokenFor("resync-auto-sub");
-
-		// First sign-in: the combined grant includes Drive.
-		mockToken(
-			idToken,
-			"openid email profile https://www.googleapis.com/auth/drive.readonly",
-		);
-		await signIn(headers);
-
-		const userId = (await client.getSession({ fetchOptions: { headers } }))
-			.data!.user.id;
-		const initial = await ctx.internalAdapter.findAccounts(userId);
-		expect(initial[0]!.grantedScopes).toContain(
-			"https://www.googleapis.com/auth/drive.readonly",
-		);
-
-		// User revoked Drive at Google; the combined grant now omits it. Resync
-		// makes the authoritative set win, so the stored grant shrinks.
-		mockToken(idToken, "openid email profile");
-		await signIn(headers);
-
-		const after = await ctx.internalAdapter.findAccounts(userId);
-		expect(after[0]!.grantedScopes).not.toContain(
-			"https://www.googleapis.com/auth/drive.readonly",
-		);
-		expect([...(after[0]!.grantedScopes ?? [])].sort()).toEqual([
-			"email",
-			"openid",
-			"profile",
-		]);
-	});
-});
-
-describe("new-user OAuth sign-in atomicity", async () => {
-	const { client, cookieSetter, auth, db } = await getTestInstance(
-		{
-			socialProviders: {
-				google: { clientId: "test", clientSecret: "test" },
-			},
-		},
-		{ disableTestUser: true },
-	);
-	const ctx = await auth.$context;
-
-	// A brand-new user's row and OAuth account are written in one transaction, so
-	// a failing account write must roll back the just-created user rather than
-	// leave it orphaned without a way to ever link the provider.
-	it("rolls back the new user when the account write fails", async ({
-		skip,
-	}) => {
-		if (!ctx.adapter.options?.adapterConfig.transaction) {
-			skip();
-		}
-
-		const idToken = await signJWT(
-			{
-				email: "atomic-sub@email.com",
-				email_verified: true,
-				name: "Atomic User",
-				picture: "https://test.com/p.png",
-				exp: 1234567890,
-				sub: "atomic-sub",
-				iat: 1234567890,
-				aud: "test",
-				azp: "test",
-				nbf: 1234567890,
-				iss: "test",
-				locale: "en",
-				jti: "test",
-				given_name: "Atomic",
-				family_name: "User",
-			} satisfies GoogleProfile,
-			DEFAULT_SECRET,
-		);
-		mswServer.use(
-			http.post("https://oauth2.googleapis.com/token", () =>
-				HttpResponse.json({
-					access_token: "a",
-					id_token: idToken,
-					token_type: "Bearer",
-					expires_in: 3600,
-					scope: "openid email profile",
-				}),
-			),
-		);
-
-		const originalCreateAccount = ctx.internalAdapter.createAccount;
-		ctx.internalAdapter.createAccount = vi
-			.fn()
-			.mockRejectedValue(new Error("account write failed"));
-
-		const headers = new Headers();
-		const res = await client.signIn.social({
-			provider: "google",
-			callbackURL: "/callback",
-			fetchOptions: { onSuccess: cookieSetter(headers) },
-		});
-		const state = new URL(res.data!.url!).searchParams.get("state") || "";
-		await client.$fetch("/callback/google", {
-			query: { state, code: "test" },
-			method: "GET",
-			headers,
-			onError() {},
-		});
-
-		ctx.internalAdapter.createAccount = originalCreateAccount;
-
-		const users = await db.findMany<{ email: string }>({ model: "user" });
-		expect(
-			users.find((u) => u.email === "atomic-sub@email.com"),
-		).toBeUndefined();
-	});
-});
-
-/**
  * Regression tests for the Reddit provider profile mapping. Reddit's `identity`
  * scope does not return an email; previously the provider mapped the shared
  * `oauth_client_id` (which identifies the OAuth app, not the user) to
@@ -3887,5 +3203,389 @@ describe("Reddit Provider — profile email mapping", async () => {
 		// The synthetic "verified email" flag must not be applied to the mapped
 		// email unless the integrator opts in.
 		expect(result?.user.emailVerified).toBe(false);
+	});
+});
+
+/**
+ * `account.scope` is the user's accumulated grant set: linkSocial unions
+ * new scopes; re-auth and refresh-token responses never narrow the stored
+ * set, regardless of what the provider echoes.
+ *
+ * @see https://github.com/better-auth/better-auth/pull/3013
+ */
+describe("account.scope path-dependent semantics", async () => {
+	const { client, cookieSetter, auth } = await getTestInstance(
+		{
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+		},
+		{ disableTestUser: true },
+	);
+	const ctx = await auth.$context;
+
+	const buildIdToken = (sub: string) =>
+		signJWT(
+			{
+				email: `${sub}@email.com`,
+				email_verified: true,
+				name: "Scope User",
+				picture: "https://test.com/picture.png",
+				exp: 1234567890,
+				sub,
+				iat: 1234567890,
+				aud: "test",
+				azp: "test",
+				nbf: 1234567890,
+				iss: "test",
+				locale: "en",
+				jti: "test",
+				given_name: "Scope",
+				family_name: "User",
+			} satisfies GoogleProfile,
+			DEFAULT_SECRET,
+		);
+
+	function mockGoogleTokenResponse(
+		idToken: string,
+		responseScope: string | undefined,
+	) {
+		mswServer.use(
+			http.post("https://oauth2.googleapis.com/token", () =>
+				HttpResponse.json({
+					access_token: "test-access-token",
+					refresh_token: "test-refresh-token",
+					id_token: idToken,
+					token_type: "Bearer",
+					expires_in: 3600,
+					...(responseScope !== undefined ? { scope: responseScope } : {}),
+				}),
+			),
+		);
+	}
+
+	async function completeSignIn(headers: Headers) {
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			method: "GET",
+			headers,
+			onError(c) {
+				cookieSetter(headers)(c as any);
+			},
+		});
+	}
+
+	it("preserves stored scope on sign-in re-authentication when token claim is narrower", async () => {
+		const headers = new Headers();
+		const idToken = await buildIdToken("scope-reauth-sub");
+
+		// Initial sign-in with full granted scope set.
+		mockGoogleTokenResponse(
+			idToken,
+			"openid email profile https://www.googleapis.com/auth/drive.readonly",
+		);
+		await completeSignIn(headers);
+
+		const session = await client.getSession({ fetchOptions: { headers } });
+		const userId = session.data!.user.id;
+		const initial = await ctx.internalAdapter.findAccounts(userId);
+		expect(initial[0]!.scope).toContain(
+			"https://www.googleapis.com/auth/drive.readonly",
+		);
+
+		// Re-sign-in echoing only a subset.
+		mockGoogleTokenResponse(idToken, "openid email");
+		await completeSignIn(headers);
+
+		const after = await ctx.internalAdapter.findAccounts(userId);
+		expect(after[0]!.scope).toContain(
+			"https://www.googleapis.com/auth/drive.readonly",
+		);
+	});
+
+	it("unions stored scope with newly granted scopes on linkSocial incremental authorization", async () => {
+		const headers = new Headers();
+		const idToken = await buildIdToken("scope-link-sub");
+
+		mockGoogleTokenResponse(idToken, "openid email profile");
+		await completeSignIn(headers);
+
+		const session = await client.getSession({ fetchOptions: { headers } });
+		const userId = session.data!.user.id;
+		const initial = await ctx.internalAdapter.findAccounts(userId);
+		expect(initial[0]!.scope?.split(",").sort()).toEqual([
+			"email",
+			"openid",
+			"profile",
+		]);
+
+		// linkSocial requesting a new scope; provider echoes only that scope.
+		mockGoogleTokenResponse(
+			idToken,
+			"https://www.googleapis.com/auth/drive.readonly",
+		);
+		const linkRes = await client.linkSocial(
+			{
+				provider: "google",
+				callbackURL: "/callback",
+				scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+			},
+			{ headers, onSuccess: cookieSetter(headers) },
+		);
+		if (!linkRes.data || !("url" in linkRes.data) || !linkRes.data.url) {
+			throw new Error(
+				`linkSocial did not return an authorization URL: ${JSON.stringify(linkRes)}`,
+			);
+		}
+		const linkState = new URL(linkRes.data.url).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: { state: linkState, code: "test" },
+			method: "GET",
+			headers,
+			onError(c) {
+				cookieSetter(headers)(c as any);
+			},
+		});
+
+		const after = await ctx.internalAdapter.findAccounts(userId);
+		const merged = after[0]!.scope?.split(",") ?? [];
+		expect(merged).toContain("openid");
+		expect(merged).toContain("email");
+		expect(merged).toContain("profile");
+		expect(merged).toContain("https://www.googleapis.com/auth/drive.readonly");
+	});
+
+	it("preserves stored scope on /refresh-token when the refresh response is narrower", async () => {
+		const headers = new Headers();
+		const idToken = await buildIdToken("scope-refresh-sub");
+
+		mockGoogleTokenResponse(
+			idToken,
+			"openid email profile https://www.googleapis.com/auth/drive.readonly",
+		);
+		await completeSignIn(headers);
+
+		const session = await client.getSession({ fetchOptions: { headers } });
+		const userId = session.data!.user.id;
+		const accounts = await ctx.internalAdapter.findAccounts(userId);
+		expect(accounts[0]!.scope).toContain(
+			"https://www.googleapis.com/auth/drive.readonly",
+		);
+
+		// Refresh response narrower than stored (RFC 6749 Section 1.5).
+		mswServer.use(
+			http.post("https://oauth2.googleapis.com/token", () =>
+				HttpResponse.json({
+					access_token: "refreshed-access-token",
+					refresh_token: "refreshed-refresh-token",
+					token_type: "Bearer",
+					expires_in: 3600,
+					scope: "openid email",
+				}),
+			),
+		);
+		const refresh = await client.$fetch<{ scope?: string }>("/refresh-token", {
+			body: {
+				accountId: accounts[0]!.accountId,
+				providerId: "google",
+			},
+			headers,
+			method: "POST",
+			onError(c) {
+				cookieSetter(headers)(c as any);
+			},
+		});
+		expect(refresh.data?.scope).toContain(
+			"https://www.googleapis.com/auth/drive.readonly",
+		);
+
+		const after = await ctx.internalAdapter.findAccounts(userId);
+		expect(after[0]!.scope).toContain(
+			"https://www.googleapis.com/auth/drive.readonly",
+		);
+	});
+
+	it("does not write stale account cookie scope on /refresh-token", async () => {
+		const headers = new Headers();
+		const idToken = await buildIdToken("scope-refresh-cookie-sub");
+
+		mockGoogleTokenResponse(idToken, "openid email");
+		await completeSignIn(headers);
+
+		const session = await client.getSession({ fetchOptions: { headers } });
+		const userId = session.data!.user.id;
+		const accounts = await ctx.internalAdapter.findAccounts(userId);
+		const accumulatedScope =
+			"openid,email,profile,https://www.googleapis.com/auth/drive.readonly";
+		await ctx.internalAdapter.updateAccount(accounts[0]!.id, {
+			scope: accumulatedScope,
+		});
+
+		// The account cookie still has the original narrower scope. Refresh must
+		// not write that stale cookie scope back over the stored accumulated grant.
+		mswServer.use(
+			http.post("https://oauth2.googleapis.com/token", () =>
+				HttpResponse.json({
+					access_token: "cookie-refreshed-access-token",
+					refresh_token: "cookie-refreshed-refresh-token",
+					token_type: "Bearer",
+					expires_in: 3600,
+					scope: "openid email",
+				}),
+			),
+		);
+		const refresh = await client.$fetch<{ scope?: string }>("/refresh-token", {
+			body: {
+				accountId: accounts[0]!.accountId,
+				providerId: "google",
+			},
+			headers,
+			method: "POST",
+			onError(c) {
+				cookieSetter(headers)(c as any);
+			},
+		});
+
+		expect(refresh.data?.scope).toBe(accumulatedScope);
+		const after = await ctx.internalAdapter.findAccounts(userId);
+		expect(after[0]!.scope).toBe(accumulatedScope);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9326
+ */
+describe("Google Provider - includeGrantedScopes", async () => {
+	it("includes `include_granted_scopes=true` in the authorization URL by default", async () => {
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+		});
+
+		const authUrl = new URL(signInRes.data!.url!);
+		expect(authUrl.searchParams.get("include_granted_scopes")).toBe("true");
+	});
+
+	it("includes `include_granted_scopes=true` when explicitly enabled", async () => {
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						includeGrantedScopes: true,
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+		});
+
+		const authUrl = new URL(signInRes.data!.url!);
+		expect(authUrl.searchParams.get("include_granted_scopes")).toBe("true");
+	});
+
+	it("lets additionalParams disable `include_granted_scopes` for a single flow", async () => {
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			additionalParams: {
+				include_granted_scopes: "false",
+			},
+		});
+
+		const authUrl = new URL(signInRes.data!.url!);
+		expect(authUrl.searchParams.get("include_granted_scopes")).toBe("false");
+	});
+
+	it("omits `include_granted_scopes` from the authorization URL when disabled", async () => {
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						includeGrantedScopes: false,
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			scopes: ["https://www.googleapis.com/auth/drive.file"],
+		});
+
+		const authUrl = new URL(signInRes.data!.url!);
+		expect(authUrl.searchParams.has("include_granted_scopes")).toBe(false);
+		expect(authUrl.searchParams.get("scope")).toContain("openid");
+		expect(authUrl.searchParams.get("scope")).toContain(
+			"https://www.googleapis.com/auth/drive.file",
+		);
+	});
+
+	it("lets additionalParams re-enable `include_granted_scopes` for a single flow", async () => {
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						includeGrantedScopes: false,
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			additionalParams: {
+				include_granted_scopes: "true",
+			},
+		});
+
+		const authUrl = new URL(signInRes.data!.url!);
+		expect(authUrl.searchParams.get("include_granted_scopes")).toBe("true");
 	});
 });

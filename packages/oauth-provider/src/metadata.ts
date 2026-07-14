@@ -4,6 +4,7 @@ import {
 	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 } from "@better-auth/core/oauth2";
 import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
+import { UNSPECIFIED_ACR } from "./authentication-context";
 import { validateIssuerUrl } from "./authorize";
 import {
 	applyOAuthProviderMetadataExtensions,
@@ -11,6 +12,7 @@ import {
 	getSupportedAuthMethods,
 	getSupportedGrantTypes,
 } from "./extensions";
+import { getSupportedClaims } from "./standard-claims";
 import type { OAuthOptions, Scope } from "./types";
 import type {
 	AuthServerMetadata,
@@ -170,12 +172,13 @@ export function oidcServerMetadata(
 		id_token_signing_alg_values_supported: JWSAlgorithms[] | ["HS256"];
 	} = {
 		...authMetadata,
-		claims_supported:
-			opts?.advertisedMetadata?.claims_supported ?? opts?.claims ?? [],
+		claims_supported: getSupportedClaims(opts),
+		claims_parameter_supported: true,
 		userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 		subject_types_supported: opts.pairwiseSecret
 			? ["public", "pairwise"]
 			: ["public"],
+		acr_values_supported: [UNSPECIFIED_ACR],
 		id_token_signing_alg_values_supported: (() => {
 			if (opts.disableJwtPlugin) return ["HS256" as const];
 			// Advertise every algorithm the plugin can sign with: the primary
@@ -188,7 +191,8 @@ export function oidcServerMetadata(
 			return Array.from(new Set<JWSAlgorithms>([primary, ...extras]));
 		})(),
 		end_session_endpoint: `${baseURL}/oauth2/end-session`,
-		acr_values_supported: ["urn:mace:incommon:iap:bronze"],
+		request_parameter_supported: false,
+		request_uri_parameter_supported: false,
 		prompt_values_supported: [
 			"login",
 			"consent",

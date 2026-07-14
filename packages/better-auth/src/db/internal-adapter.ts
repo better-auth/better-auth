@@ -15,12 +15,12 @@ import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
+import { getIP } from "@better-auth/core/utils/ip";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
-import { getIp } from "../utils/get-request-ip";
 import {
 	assertValidUserInfo,
 	assertValidUserInfoSource,
@@ -153,6 +153,45 @@ export const createInternalAdapter = (
 	}
 
 	return {
+		createOAuthUser: async (
+			user: Omit<User, "id" | "createdAt" | "updatedAt">,
+			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
+				Partial<Account>,
+		) => {
+			return runWithTransaction(adapter, async () => {
+				const createdUser = await createWithHooks(
+					{
+						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						...user,
+						email: user.email?.toLowerCase(),
+					},
+					"user",
+					undefined,
+				);
+				if (!createdUser) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Failed to create user",
+					});
+				}
+				const createdAccount = await createWithHooks(
+					{
+						...account,
+						userId: createdUser.id,
+						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+					"account",
+					undefined,
+				);
+				return {
+					user: createdUser,
+					account: createdAccount,
+				};
+			});
+		},
 		createUser: async <T>(
 			user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 				Partial<User> &
@@ -376,7 +415,7 @@ export const createInternalAdapter = (
 			const defaultAdditionalFields = getSessionDefaultFields(options);
 			const data = {
 				...(sessionId ? { id: sessionId } : {}),
-				ipAddress: headers ? getIp(headers, options) || "" : "",
+				ipAddress: headers ? getIP(headers, options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
 				/**

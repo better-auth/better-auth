@@ -1,3 +1,4 @@
+import { runWithTransaction } from "@better-auth/core/context";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type {
 	PrivateKeyJwtSigningAlgorithm,
@@ -26,7 +27,7 @@ import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import {
 	additionalAuthorizationParamsSchema,
-	signInWithOAuthIdentity,
+	handleOAuthUserInfo,
 } from "better-auth/oauth2";
 import { decodeJwt } from "jose";
 import type { BindingContext } from "samlify/types/src/entity";
@@ -74,12 +75,22 @@ import {
 import {
 	filterSSOProviderAdditionalFields,
 	hasOrgAdminRole,
+	lockSSOProviderForAccountLink,
 } from "./providers";
 import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
 import {
 	getRegisterSSOProviderBodySchema,
 	parseSSOProviderAdditionalFields,
 } from "./schemas";
+
+const BUILT_IN_ACCOUNT_PROVIDER_IDS = [
+	"credential",
+	"email-otp",
+	"magic-link",
+	"phone-number",
+	"anonymous",
+	"siwe",
+] as const;
 
 /**
  * Builds the OIDC redirect URI. Uses the shared `redirectURI` option
@@ -446,16 +457,19 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				}
 			}
 
-			// SSO provider ids share the account-linking provider namespace with
-			// social/OAuth providers. Reject ids that collide with a configured
-			// social provider, a trusted provider, or a reserved built-in id so a
-			// user-registered SSO provider can't be confused with one of them.
+			// SSO provider ids currently share the account-linking provider namespace.
+			// Reject collisions so a user-registered SSO provider cannot be confused
+			// with another account-producing provider.
+			// TODO(next): replace providerId account-link ownership with immutable
+			// SSO provider instance ids, then remove this cross-plugin slug coupling.
 			// Trust for SSO providers is established separately via
 			// verified domain ownership, never by this shared namespace.
 			const reservedProviderIds = new Set<string>([
-				"credential",
+				...BUILT_IN_ACCOUNT_PROVIDER_IDS,
+				...Object.keys(ctx.context.options.socialProviders ?? {}),
 				...ctx.context.socialProviders.map((p) => p.id),
 				...ctx.context.trustedProviders,
+				...(options?.defaultSSO?.map((p) => p.providerId) ?? []),
 			]);
 			if (reservedProviderIds.has(body.providerId)) {
 				ctx.context.logger.warn(
@@ -465,6 +479,24 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					message:
 						"This providerId is reserved and cannot be used for an SSO provider",
 				});
+			}
+
+			if (ctx.context.hasPlugin("scim")) {
+				const existingSCIMProvider = await ctx.context.adapter.findOne<{
+					id: string;
+				}>({
+					model: "scimProvider",
+					where: [{ field: "providerId", value: body.providerId }],
+				});
+				if (existingSCIMProvider) {
+					ctx.context.logger.warn(
+						`SSO provider registration rejected for SCIM providerId: ${body.providerId}`,
+					);
+					throw new APIError("UNPROCESSABLE_ENTITY", {
+						message:
+							"This providerId is already used by a SCIM provider and cannot be used for an SSO provider",
+					});
+				}
 			}
 
 			const existingProvider = await ctx.context.adapter.findOne({
@@ -660,6 +692,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 								entryPoint: body.samlConfig.entryPoint,
 								cert: body.samlConfig.cert,
 								audience: body.samlConfig.audience,
+								callbackUrl: body.samlConfig.callbackUrl,
 								idpMetadata: body.samlConfig.idpMetadata,
 								spMetadata: body.samlConfig.spMetadata,
 								wantAssertionsSigned: body.samlConfig.wantAssertionsSigned,
@@ -962,7 +995,8 @@ export const signInSSO = (options?: SSOOptions) => {
 							(defaultProvider) => defaultProvider.providerId === providerId,
 						)
 					: options.defaultSSO.find(
-							(defaultProvider) => defaultProvider.domain === domain,
+							(defaultProvider) =>
+								domain && domainMatches(domain, defaultProvider.domain),
 						);
 
 				if (matchingDefault) {
@@ -1090,8 +1124,6 @@ export const signInSSO = (options?: SSOOptions) => {
 						message: "Invalid OIDC configuration. Authorization URL not found.",
 					});
 				}
-				const requestedScopes = ctx.body.scopes ||
-					config.scopes || ["openid", "email", "profile", "offline_access"];
 				if (options?.redirectURI?.trim()) {
 					// The shared OIDC callback resolves the provider from server-only
 					// state, so it must not be client-spoofable.
@@ -1099,13 +1131,13 @@ export const signInSSO = (options?: SSOOptions) => {
 						ssoProviderId: provider.providerId,
 					});
 				}
-				const state = await generateState(ctx, { requestedScopes });
+				const state = await generateState(ctx);
 				const redirectURI = getOIDCRedirectURI(
 					ctx.context.baseURL,
 					provider.providerId,
 					options,
 				);
-				const { url: authorizationURL } = await createAuthorizationURL({
+				const authorizationURL = await createAuthorizationURL({
 					id: provider.issuer,
 					options: {
 						clientId: config.clientId,
@@ -1114,7 +1146,8 @@ export const signInSSO = (options?: SSOOptions) => {
 					redirectURI,
 					state: state.state,
 					codeVerifier: config.pkce ? state.codeVerifier : undefined,
-					scopes: requestedScopes,
+					scopes: ctx.body.scopes ||
+						config.scopes || ["openid", "email", "profile", "offline_access"],
 					loginHint: ctx.body.loginHint || email,
 					authorizationEndpoint: config.authorizationEndpoint,
 					additionalParams: ctx.body.additionalParams,
@@ -1267,8 +1300,7 @@ async function handleOIDCCallback(
 		const errorURL = getUIErrorURL(ctx.context);
 		throw ctx.redirect(`${errorURL}?error=invalid_state`);
 	}
-	const { callbackURL, errorURL, newUserURL, requestSignUp, requestedScopes } =
-		stateData;
+	const { callbackURL, errorURL, newUserURL, requestSignUp } = stateData;
 	const redirectOIDCError = (error: string, description: string): never => {
 		const baseURL = errorURL || callbackURL;
 		const params = new URLSearchParams({
@@ -1596,40 +1628,51 @@ async function handleOIDCCallback(
 			}?error=invalid_provider&error_description=missing_user_info`,
 		);
 	}
+	const userInfoEmail = userInfo.email;
+	const userInfoId = userInfo.id;
 	const isTrustedProvider =
 		"domainVerified" in provider &&
 		(provider as { domainVerified?: boolean }).domainVerified === true &&
-		validateEmailDomain(userInfo.email, provider.domain);
+		validateEmailDomain(userInfoEmail, provider.domain);
 
-	let linked: Awaited<ReturnType<typeof signInWithOAuthIdentity>>;
+	let linked: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 	try {
-		linked = await signInWithOAuthIdentity(ctx, {
-			userInfo: {
-				email: userInfo.email,
-				name: userInfo.name || "",
-				id: userInfo.id,
-				image: userInfo.image,
-				emailVerified: options?.trustEmailVerified
-					? userInfo.emailVerified || false
-					: false,
-			},
-			providerId: provider.providerId,
-			accountId: userInfo.id,
-			tokens: tokenResponse,
-			requestedScopes,
-			callbackURL,
-			disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
-			overrideUserInfo: config.overrideUserInfo,
-			source: {
-				method: "sso-oidc",
-				sso: { providerId: provider.providerId, profile: rawProfile },
-			},
-			isTrustedProvider,
-			// SSO provider ids are user-controlled and live in the same namespace
-			// as social providers. Never inherit trust from the global
-			// `trustedProviders` list by name — rely solely on the SSO-specific
-			// `isTrustedProvider` (verified domain ownership) computed above.
-			trustProviderByName: false,
+		linked = await runWithTransaction(ctx.context.adapter, async () => {
+			await lockSSOProviderForAccountLink(ctx, provider);
+			return handleOAuthUserInfo(ctx, {
+				userInfo: {
+					email: userInfoEmail,
+					name: userInfo.name || "",
+					id: userInfoId,
+					image: userInfo.image,
+					emailVerified: options?.trustEmailVerified
+						? userInfo.emailVerified || false
+						: false,
+				},
+				account: {
+					idToken: tokenResponse.idToken,
+					accessToken: tokenResponse.accessToken,
+					refreshToken: tokenResponse.refreshToken,
+					accountId: userInfoId,
+					providerId: provider.providerId,
+					accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
+					refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
+					scope: tokenResponse.scopes?.join(","),
+				},
+				callbackURL,
+				disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
+				overrideUserInfo: config.overrideUserInfo,
+				source: {
+					method: "sso-oidc",
+					sso: { providerId: provider.providerId, profile: rawProfile },
+				},
+				isTrustedProvider,
+				// SSO provider ids are user-controlled and live in the same namespace
+				// as social providers. Never inherit trust from the global
+				// `trustedProviders` list by name — rely solely on the SSO-specific
+				// `isTrustedProvider` (verified domain ownership) computed above.
+				trustProviderByName: false,
+			});
 		});
 	} catch (e) {
 		if (isAPIError(e) && e.body?.code) {
@@ -1666,8 +1709,8 @@ async function handleOIDCCallback(
 		profile: {
 			providerType: "oidc",
 			providerId: provider.providerId,
-			accountId: userInfo.id,
-			email: userInfo.email,
+			accountId: userInfoId,
+			email: userInfoEmail,
 			emailVerified: Boolean(userInfo.emailVerified),
 			rawAttributes: userInfo,
 		},
@@ -1786,20 +1829,13 @@ async function bounceIfIdpInitiated(
 		// so it must not be client-spoofable.
 		await addOAuthServerContext({ ssoProviderId: provider.providerId });
 	}
-	const state = await generateState(ctx, {
-		requestedScopes: config.scopes || [
-			"openid",
-			"email",
-			"profile",
-			"offline_access",
-		],
-	});
+	const state = await generateState(ctx);
 	const redirectURI = getOIDCRedirectURI(
 		ctx.context.baseURL,
 		provider.providerId,
 		options,
 	);
-	const { url: authorizationURL } = await createAuthorizationURL({
+	const authorizationURL = await createAuthorizationURL({
 		id: provider.issuer,
 		options: {
 			clientId: config.clientId,

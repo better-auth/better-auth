@@ -132,7 +132,7 @@ describe("private_key_jwt authentication", async () => {
 		codeVerifier: string,
 		scopes = ["openid", "profile"],
 	) {
-		const { url: authUrl } = await createAuthorizationURL({
+		const authUrl = await createAuthorizationURL({
 			id: "test",
 			options: { clientId, redirectURI: redirectUri },
 			redirectURI: "",
@@ -759,7 +759,7 @@ describe("private_key_jwt registration validation", async () => {
 		expect(result.status).toBeGreaterThanOrEqual(400);
 	});
 
-	it("should reject jwks on non-private_key_jwt client", async () => {
+	it("should accept jwks on client_secret clients", async () => {
 		const result = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
@@ -769,6 +769,6 @@ describe("private_key_jwt registration validation", async () => {
 			},
 			asResponse: true,
 		});
-		expect(result.status).toBeGreaterThanOrEqual(400);
+		expect(result.status).toBe(201);
 	});
 });

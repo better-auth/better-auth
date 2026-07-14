@@ -5,6 +5,7 @@ import {
 	createAuthorizationURL,
 	deriveDpopAth,
 	deriveDpopJkt,
+	refreshAccessTokenRequest,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
@@ -69,7 +70,7 @@ describe("oauth userinfo", async () => {
 			throw Error("beforeAll not run properly");
 		}
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient?.client_id,
@@ -185,6 +186,34 @@ describe("oauth userinfo", async () => {
 			code: url.searchParams.get("code")!,
 			codeVerifier,
 			resource,
+		});
+	}
+
+	async function refreshAccessToken(refreshToken: string) {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const { body, headers } = await refreshAccessTokenRequest({
+			refreshToken,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+		return client.$fetch<{
+			access_token?: string;
+			id_token?: string;
+			refresh_token?: string;
+			expires_in?: number;
+			expires_at?: number;
+			token_type?: string;
+			scope?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers,
 		});
 	}
 
@@ -318,6 +347,51 @@ describe("oauth userinfo", async () => {
 		expect(userinfo.data).toMatchObject({ sub: user.id });
 	});
 
+	it("should accept POST with the bearer token in the form body", async () => {
+		const tokens = await getTokens();
+		expect(tokens.data?.access_token).toBeDefined();
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					access_token: tokens.data?.access_token ?? "",
+				}),
+			},
+		);
+		expect(userinfo.data).toMatchObject({ sub: user.id });
+	});
+
+	it("should reject UserInfo requests with bearer tokens in both header and body", async () => {
+		const tokens = await getTokens();
+		expect(tokens.data?.access_token).toBeDefined();
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				method: "POST",
+				headers: {
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					access_token: tokens.data?.access_token ?? "",
+				}),
+			},
+		);
+
+		expect(userinfo.error?.status).toBe(400);
+		expect(
+			(userinfo.error as { error?: string } | null | undefined)?.error,
+		).toBe("invalid_request");
+		expect(
+			(userinfo.error as { error_description?: string } | null | undefined)
+				?.error_description,
+		).toBe("Multiple access token transport methods are not allowed");
+	});
+
 	/**
 	 * Programmatic callers have no `ctx.request`, so userinfo must resolve the
 	 * bearer token from `ctx.headers` for both transports.
@@ -351,7 +425,7 @@ describe("oauth userinfo", async () => {
 			expect(err.statusCode).toBe(401);
 			expect(err.body).toMatchObject({
 				error: "invalid_request",
-				error_description: "authorization header not found",
+				error_description: "access token not found",
 			});
 		}
 	});
@@ -417,6 +491,36 @@ describe("oauth userinfo", async () => {
 		);
 		expect(bearerUserinfo.error?.status).toBe(401);
 
+		const bodyTokenUserinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					access_token: tokens.data?.access_token ?? "",
+				}),
+			},
+		);
+		expect(bodyTokenUserinfo.error?.status).toBe(401);
+		expect(
+			(
+				bodyTokenUserinfo.error as {
+					error?: string;
+					error_description?: string;
+				} | null
+			)?.error,
+		).toBe("invalid_token");
+		expect(
+			(
+				bodyTokenUserinfo.error as {
+					error?: string;
+					error_description?: string;
+				} | null
+			)?.error_description,
+		).toBe("DPoP-bound access token requires the DPoP authorization scheme");
+
 		const userinfoDpopProof = await createDpopProof({
 			privateKey: dpopKey.privateKey,
 			publicJwk: dpopKey.publicJwk,
@@ -463,6 +567,128 @@ describe("oauth userinfo", async () => {
 		expect(userinfo.data?.family_name).toBeUndefined();
 		expect(userinfo.data?.email).toBeUndefined();
 		expect(userinfo.data?.email_verified).toBeUndefined();
+	});
+
+	it("returns explicitly requested UserInfo claims without granting the full scope bundle", async () => {
+		const tokens = await getTokens({
+			scopes: ["openid"],
+			additionalParams: {
+				claims: JSON.stringify({
+					userinfo: {
+						name: { essential: true },
+						email: null,
+					},
+				}),
+			},
+		});
+		expect(tokens.data?.access_token).toBeDefined();
+		const accessToken = tokens.data?.access_token;
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: {
+					authorization: accessToken ?? "",
+				},
+			},
+		);
+
+		expect(userinfo.data).toMatchObject({
+			sub: user.id,
+			name: user.name,
+			email: user.email,
+		});
+		expect(userinfo.data?.given_name).toBeUndefined();
+		expect(userinfo.data?.family_name).toBeUndefined();
+		expect(userinfo.data?.email_verified).toBeUndefined();
+
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: accessToken!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(introspection.data?.active).toBe(true);
+		// Requested UserInfo claims resolve only at /userinfo; they never surface
+		// in the RFC 7662 introspection response shown to a resource server.
+		const introspectionClaims = introspection.data as
+			| Record<string, unknown>
+			| undefined;
+		expect(introspectionClaims?.name).toBeUndefined();
+		expect(introspectionClaims?.email).toBeUndefined();
+	});
+
+	it("preserves requested UserInfo claims across refresh-token rotation", async () => {
+		const tokens = await getTokens({
+			scopes: ["openid", "offline_access"],
+			additionalParams: {
+				claims: JSON.stringify({
+					userinfo: {
+						name: { essential: true },
+					},
+				}),
+			},
+		});
+		expect(tokens.data?.refresh_token).toBeDefined();
+
+		const refreshedTokens = await refreshAccessToken(
+			tokens.data?.refresh_token ?? "",
+		);
+		expect(refreshedTokens.data?.access_token).toBeDefined();
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: {
+					authorization: refreshedTokens.data?.access_token ?? "",
+				},
+			},
+		);
+
+		expect(userinfo.data).toMatchObject({
+			sub: user.id,
+			name: user.name,
+		});
+		expect(userinfo.data?.given_name).toBeUndefined();
+		expect(userinfo.data?.email).toBeUndefined();
+	});
+
+	it("resolves JWT access-token UserInfo claims by scope, omitting individually requested claims", async () => {
+		const tokens = await getTokens(
+			{
+				scopes: ["openid"],
+				additionalParams: {
+					claims: JSON.stringify({
+						userinfo: {
+							name: { essential: true },
+						},
+					}),
+				},
+			},
+			validResource,
+		);
+		expect(tokens.data?.access_token).toBeDefined();
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: {
+					authorization: tokens.data?.access_token ?? "",
+				},
+			},
+		);
+
+		// A JWT access token has no per-issuance row, so a claim requested through
+		// `claims.userinfo` without its backing scope is omitted (OIDC Core
+		// §5.5.1). UserInfo claims for a JWT token come from granted scopes only.
+		expect(userinfo.data).toMatchObject({ sub: user.id });
+		expect(userinfo.data?.name).toBeUndefined();
+		expect(userinfo.data?.email).toBeUndefined();
 	});
 
 	it("should pass provide scoped user information - profile only", async () => {

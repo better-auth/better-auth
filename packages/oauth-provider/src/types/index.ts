@@ -132,6 +132,13 @@ export interface OAuthTokenIssueParams {
 	/** Full original authorized resources for the grant, used to seed refresh tokens. */
 	originalResources?: string[];
 	/**
+	 * OIDC UserInfo claim names requested by the authorization request's
+	 * `claims.userinfo` object. The authorization server persists these names so
+	 * refresh-token rotation and opaque access tokens continue honoring the same
+	 * UserInfo request contract.
+	 */
+	requestedUserInfoClaims?: string[];
+	/**
 	 * Additional JWT access-token claims for this single issuance.
 	 *
 	 * JWT-only: these are baked into the signed token at mint. Opaque access
@@ -330,6 +337,13 @@ export interface OAuthClaimExtensionInput {
 	scopes: string[];
 	grantType?: GrantType;
 	referenceId?: string;
+	/**
+	 * Session the tokens are issued for, when one is available. Best-effort:
+	 * set on the session-backed grants (authorization_code, refresh_token),
+	 * undefined otherwise (client_credentials, introspection, or a session that
+	 * was deleted or unlinked). Treat as possibly undefined.
+	 */
+	sessionId?: string;
 	resources?: string[];
 	/** Parsed client metadata, as returned by `parseClientMetadata`. */
 	metadata?: Record<string, unknown>;
@@ -342,6 +356,11 @@ export interface OAuthUserInfoExtensionInput {
 	scopes: string[];
 	jwt: JWTPayload;
 	client?: SchemaClient<Scope[]>;
+	/**
+	 * Claim names explicitly requested through the OIDC `claims.userinfo`
+	 * authorization request parameter.
+	 */
+	requestedClaims: string[];
 }
 
 /**
@@ -578,6 +597,18 @@ export interface OAuthOptions<
 	 */
 	refreshTokenExpiresIn?: number;
 	/**
+	 * Seconds that a rotated refresh token can be reused to receive the same
+	 * token response for the same effective scopes, requested resources, and
+	 * sender constraint.
+	 *
+	 * Matching reuse inside this interval is treated as refresh-response replay,
+	 * not refresh-token replay. Set to `0` to treat any rotated refresh token
+	 * reuse as replay.
+	 *
+	 * @default 0
+	 */
+	refreshTokenReuseInterval?: number;
+	/**
 	 * The amount of time in seconds that the authorization code is valid for.
 	 *
 	 * @default 600 (10 minutes) - Recommended by the OIDC spec
@@ -616,8 +647,9 @@ export interface OAuthOptions<
 	 * Allow unauthenticated dynamic client registration.
 	 *
 	 * When enabled, the `/oauth2/register` endpoint accepts requests
-	 * without a session, but only for public clients
-	 * (`token_endpoint_auth_method: "none"`).
+	 * without a session. Public clients use
+	 * `token_endpoint_auth_method: "none"`; confidential clients receive a
+	 * one-time `client_secret` in the registration response.
 	 *
 	 * For verified client discovery (MCP), consider installing the
 	 * `@better-auth/cimd` plugin, which verifies client identity through
@@ -634,8 +666,8 @@ export interface OAuthOptions<
 	 * - session-backed: a logged-in user with client-create privileges.
 	 * - token-backed: a valid initial access token, when
 	 *   {@link OAuthOptions.validateInitialAccessToken} is defined.
-	 * - open public-only: unauthenticated registration constrained to public
-	 *   clients, when {@link OAuthOptions.allowUnauthenticatedClientRegistration}
+	 * - open: unauthenticated registration, when
+	 *   {@link OAuthOptions.allowUnauthenticatedClientRegistration}
 	 *   is enabled.
 	 *
 	 * @default false
@@ -704,6 +736,17 @@ export interface OAuthOptions<
 	 * @default - clientRegistrationDefaultScopes
 	 */
 	clientRegistrationAllowedScopes?: Scopes;
+	/**
+	 * Whether dynamically registered confidential clients require PKCE by default.
+	 *
+	 * This is server-owned registration policy. Dynamic client registration does
+	 * not accept `require_pkce` from the client request, and public clients or
+	 * authorization requests with `offline_access` still require PKCE unless the
+	 * confidential OIDC request includes both `openid` and `nonce`.
+	 *
+	 * @default true
+	 */
+	clientRegistrationRequirePKCE?: boolean;
 	/**
 	 * How long a dynamically created confidential client
 	 * should last for.
@@ -789,11 +832,16 @@ export interface OAuthOptions<
 	 *
 	 * - `client_id` - The ID of the client.
 	 * - `scope` - The requested scopes.
+	 * - `claims` - The OIDC claims request, when the client requested specific
+	 *   claims. Consent pages should surface `claims.userinfo` names alongside
+	 *   scopes because accepted UserInfo claims can affect the UserInfo response.
 	 * - `code` - The authorization code.
 	 *
 	 * once the user consents, you need to call the `/oauth2/consent` endpoint
-	 * with the code and `accept: true` to complete the authorization. Which will
-	 * then return the client to the `redirect_uri` with the authorization code.
+	 * with the code and `accept: true` to complete the authorization. Include a
+	 * `claims` object if the user accepted only some requested UserInfo claims.
+	 * The endpoint will then return the client to the `redirect_uri` with the
+	 * authorization code.
 	 *
 	 * @example
 	 * ```ts
@@ -995,6 +1043,11 @@ export interface OAuthOptions<
 		scopes: Scopes;
 		/** The access token payload used in the /userinfo request */
 		jwt: JWTPayload;
+		/**
+		 * Claim names explicitly requested through the OIDC `claims.userinfo`
+		 * authorization request parameter.
+		 */
+		requestedClaims: string[];
 	}) => Awaitable<Record<string, any>>;
 	/**
 	 * Custom claims attached to OIDC id tokens.
@@ -1003,6 +1056,11 @@ export interface OAuthOptions<
 	 * namespaced with a URI. For example, a site
 	 * example.com should namespace an organization at
 	 * https://example.com/organization.
+	 *
+	 * Reserved ID token claim names (`iss`, `sub`, `aud`, `exp`, `nbf`, `iat`,
+	 * `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`,
+	 * `amr`, `azp`) are stripped at issuance with a warning log. The
+	 * authorization server owns these values.
 	 *
 	 * @param info - context that may be useful when creating custom claims
 	 */
@@ -1293,8 +1351,15 @@ export interface OAuthAuthorizationQuery {
 	 * - "code": authorization code flow.
 	 * Optional in the query when using request_uri (PAR) — resolved from stored params.
 	 */
-	// NEVER SUPPORT "token" or "id_token" - depreciated in oAuth2.1
+	// NEVER SUPPORT "token" or "id_token" - deprecated in OAuth 2.1
 	response_type?: "code";
+	/**
+	 * OpenID Connect Request Object by value.
+	 *
+	 * The parameter is parsed so unsupported use can be rejected with
+	 * `request_not_supported`; Better Auth does not process Request Objects yet.
+	 */
+	request?: string;
 	/**
 	 * PAR request_uri. When present, other params are resolved from the stored request.
 	 */
@@ -1403,6 +1468,14 @@ export interface OAuthAuthorizationQuery {
 	 */
 	nonce?: string;
 	/**
+	 * OIDC Claims request parameter. In an authorization request it is a
+	 * form-encoded JSON string; Request Object resolvers may provide the parsed
+	 * object form.
+	 *
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#ClaimsParameter
+	 */
+	claims?: string | Record<string, unknown>;
+	/**
 	 * RFC 9449 authorization request parameter. When present, the authorization
 	 * code is bound to this JWK thumbprint and the token request must present a
 	 * matching DPoP proof.
@@ -1501,6 +1574,19 @@ export interface OAuthClientResource {
 }
 
 /**
+ * The authorization request as persisted alongside a minted code. Identical to
+ * {@link OAuthAuthorizationQuery} except `redirect_uri` is optional: a headless
+ * authorization request (first-party-apps / device-style) carries none, and
+ * RFC 6749 §4.1.3 only binds `redirect_uri` at the token endpoint when the
+ * authorization request included one. Mirrors the runtime
+ * `storedAuthorizationQuerySchema`.
+ */
+export interface StoredAuthorizationQuery
+	extends Omit<OAuthAuthorizationQuery, "redirect_uri"> {
+	redirect_uri?: string;
+}
+
+/**
  * Stored within the verification.value field
  * in JSON format.
  *
@@ -1509,7 +1595,7 @@ export interface OAuthClientResource {
  */
 export interface VerificationValue {
 	type: "authorization_code";
-	query: OAuthAuthorizationQuery;
+	query: StoredAuthorizationQuery;
 	sessionId: string;
 	userId: string;
 	resource?: string[];
@@ -1608,7 +1694,7 @@ export interface SchemaClient<
 	tokenEndpointAuthMethod?: TokenEndpointAuthMethod;
 	grantTypes?: GrantType[];
 	responseTypes?: "code"[];
-	/** Client's JSON Web Key Set for `private_key_jwt` authentication. Mutually exclusive with `jwksUri`. */
+	/** Client's JSON Web Key Set metadata. Mutually exclusive with `jwksUri`. */
 	jwks?: string;
 	/** URI for the client's JSON Web Key Set. Mutually exclusive with `jwks`. Must be HTTPS. */
 	jwksUri?: string;
@@ -1697,6 +1783,11 @@ export interface OAuthOpaqueAccessToken<
 	 */
 	referenceId?: string;
 	/**
+	 * Stored authorization-code identifier that produced this token family.
+	 * Used to revoke tokens after authorization-code replay is detected.
+	 */
+	authorizationCodeId?: string;
+	/**
 	 * The refresh token the access token is associated with.
 	 *
 	 * Not available without the "offline_access" scope
@@ -1723,6 +1814,11 @@ export interface OAuthOpaqueAccessToken<
 	 */
 	resources?: string[];
 	/**
+	 * OIDC UserInfo claim names requested by the authorization request's
+	 * `claims.userinfo` object.
+	 */
+	requestedUserInfoClaims?: string[];
+	/**
 	 * RFC 7800 `cnf` confirmation that sender-constrains this access token (for
 	 * example DPoP `{ jkt }`). Surfaced as the `cnf` claim at introspection.
 	 */
@@ -1739,13 +1835,30 @@ export interface OAuthRefreshToken<
 	sessionId?: string;
 	userId: string;
 	referenceId?: string;
+	authorizationCodeId?: string;
 	clientId?: string;
 	expiresAt: Date;
 	createdAt: Date;
 	/**
-	 * When token was revoked. If set, token is considered a replay attack.
+	 * When this token stopped being active.
+	 *
+	 * A token can be revoked by /oauth2/revoke or consumed by rotation. Use
+	 * `rotatedAt` to distinguish rotation from explicit revocation.
 	 */
 	revoked?: Date;
+	/**
+	 * When this refresh token was consumed by rotation.
+	 */
+	rotatedAt?: Date;
+	/**
+	 * Encrypted token endpoint response and request fingerprint to replay during
+	 * the configured refresh-token reuse interval.
+	 */
+	rotationReplayResponse?: string;
+	/**
+	 * When the cached rotation response stops being replayable.
+	 */
+	rotationReplayExpiresAt?: Date;
 	/**
 	 * The time the user originally authenticated.
 	 * Persisted so refreshed ID tokens can include a correct `auth_time` claim.
@@ -1761,6 +1874,11 @@ export interface OAuthRefreshToken<
 	 * Resources allowed for this refresh token
 	 */
 	resources?: string[];
+	/**
+	 * OIDC UserInfo claim names requested by the authorization request's
+	 * `claims.userinfo` object. Carried forward on rotation.
+	 */
+	requestedUserInfoClaims?: string[];
 	/**
 	 * RFC 7800 `cnf` confirmation that sender-constrains this refresh-token
 	 * family (for example DPoP `{ jkt }`). Carried forward on rotation.
@@ -1779,6 +1897,11 @@ export type OAuthConsent<
 	userId: string;
 	resources?: string[];
 	referenceId?: string;
+	/**
+	 * OIDC UserInfo claim names consented from the authorization request's
+	 * `claims.userinfo` object.
+	 */
+	requestedUserInfoClaims?: string[];
 	scopes: Scopes;
 	createdAt: Date;
 	updatedAt: Date;

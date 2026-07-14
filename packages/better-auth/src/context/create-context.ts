@@ -8,10 +8,11 @@ import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
-import type { UpstreamProvider } from "@better-auth/core/oauth2";
+import type { OAuthProvider } from "@better-auth/core/oauth2";
 import type { SocialProviders } from "@better-auth/core/social-providers";
 import { socialProviders } from "@better-auth/core/social-providers";
 import { generateId } from "@better-auth/core/utils/id";
+import { findInvalidTrustedProxies } from "@better-auth/core/utils/ip";
 import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";
@@ -199,6 +200,17 @@ Most of the features of Better Auth will not work correctly.`,
 	};
 
 	checkEndpointConflicts(options, logger);
+
+	const trustedProxies = options.advanced?.ipAddress?.trustedProxies;
+	if (trustedProxies && trustedProxies.length > 0) {
+		const invalid = findInvalidTrustedProxies(trustedProxies);
+		if (invalid.length > 0) {
+			logger.warn(
+				`Ignoring invalid \`advanced.ipAddress.trustedProxies\` entries: ${invalid.join(", ")}. Each entry must be an IP address or CIDR range.`,
+			);
+		}
+	}
+
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
 	// TODO(#9294): allow registering the same provider multiple times under
@@ -231,9 +243,9 @@ Most of the features of Better Auth will not work correctly.`,
 					);
 				}
 				const provider = socialProviders[key](config as never);
-				(provider as UpstreamProvider).disableImplicitSignUp =
+				(provider as OAuthProvider).disableImplicitSignUp =
 					config.disableImplicitSignUp;
-				return provider as UpstreamProvider;
+				return provider as OAuthProvider;
 			}),
 		)
 	).filter((x) => x !== null);

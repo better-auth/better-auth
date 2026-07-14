@@ -1,11 +1,12 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { AwaitableFunction } from "../types";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
+import { fetchRefusingRedirects } from "./reject-redirects";
 import type {
 	TokenEndpointAuth,
 	TokenEndpointSecretAuthentication,
 } from "./token-endpoint-auth";
 import { applyTokenEndpointAuth } from "./token-endpoint-auth";
+import { parseScopeField } from "./utils";
 
 interface RefreshAccessTokenRequestInput {
 	refreshToken: string;
@@ -28,6 +29,21 @@ interface RefreshAccessTokenInput extends RefreshAccessTokenRequestInput {
 	options: Partial<ProviderOptions>;
 	tokenEndpoint: string;
 }
+
+/**
+ * Body keys owned by the refresh-token flow or unsafe to copy from caller input.
+ */
+const BLOCKED_REFRESH_TOKEN_PARAMS = [
+	"grant_type",
+	"refresh_token",
+	"__proto__",
+	"constructor",
+	"prototype",
+] as const;
+
+const BLOCKED_REFRESH_TOKEN_PARAMS_SET: ReadonlySet<string> = new Set(
+	BLOCKED_REFRESH_TOKEN_PARAMS,
+);
 
 export async function refreshAccessTokenRequest({
 	refreshToken,
@@ -59,6 +75,17 @@ export async function refreshAccessTokenRequest({
 	return request;
 }
 
+function applyRefreshExtraParams(
+	body: URLSearchParams,
+	extraParams: Record<string, string> | undefined,
+) {
+	if (!extraParams) return;
+	for (const [key, value] of Object.entries(extraParams)) {
+		if (BLOCKED_REFRESH_TOKEN_PARAMS_SET.has(key)) continue;
+		body.set(key, value);
+	}
+}
+
 function buildRefreshAccessTokenRequest({
 	refreshToken,
 	options,
@@ -83,9 +110,7 @@ function buildRefreshAccessTokenRequest({
 		}
 	}
 	if (extraParams) {
-		for (const [key, value] of Object.entries(extraParams)) {
-			body.set(key, value);
-		}
+		applyRefreshExtraParams(body, extraParams);
 	}
 
 	return {
@@ -113,13 +138,13 @@ export async function refreshAccessToken({
 		resource,
 	});
 
-	const { data, error } = await betterFetch<{
+	const { data, error } = await fetchRefusingRedirects<{
 		access_token: string;
 		refresh_token?: string | undefined;
 		expires_in?: number | undefined;
 		refresh_token_expires_in?: number | undefined;
 		token_type?: string | undefined;
-		scope?: (string | string[]) | undefined;
+		scope?: unknown;
 		id_token?: string | undefined;
 	}>(tokenEndpoint, {
 		method: "POST",
@@ -133,7 +158,7 @@ export async function refreshAccessToken({
 		accessToken: data.access_token,
 		refreshToken: data.refresh_token,
 		tokenType: data.token_type,
-		scopes: Array.isArray(data.scope) ? data.scope : data.scope?.split(" "),
+		scopes: parseScopeField(data.scope),
 		idToken: data.id_token,
 	};
 

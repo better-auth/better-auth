@@ -25,7 +25,7 @@ export async function tryCatch<T, E = Error>(
 }
 
 export const generateSecretHash = () => {
-	return Crypto.randomBytes(16).toString("hex");
+	return Crypto.randomBytes(32).toString("hex");
 };
 
 export const spawnCommand = (cmd: string, cwd: string = process.cwd()) =>

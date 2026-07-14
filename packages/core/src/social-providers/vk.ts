@@ -1,9 +1,8 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -26,33 +25,28 @@ export interface VkOption extends ProviderOptions {
 	scheme?: ("light" | "dark") | undefined;
 }
 
-const VK_DEFAULT_SCOPES = ["email", "phone"];
-
 export const vk = (options: VkOption) => {
 	const tokenEndpoint = "https://id.vk.com/oauth2/auth";
 	return {
 		id: "vk",
 		name: "VK",
-		callbackPath: "/callback/vk",
-		createAuthorizationURL({
+		async createAuthorizationURL({
 			state,
 			scopes,
 			codeVerifier,
 			redirectURI,
 			additionalParams,
 		}) {
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				VK_DEFAULT_SCOPES,
-				scopes,
-			);
+			const _scopes = options.disableDefaultScope ? [] : ["email", "phone"];
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			const authorizationEndpoint = "https://id.vk.com/authorize";
 
 			return createAuthorizationURL({
 				id: "vk",
 				options,
 				authorizationEndpoint,
-				scopes: requestedScopes,
+				scopes: _scopes,
 				state,
 				redirectURI,
 				codeVerifier,
@@ -134,5 +128,5 @@ export const vk = (options: VkOption) => {
 			};
 		},
 		options,
-	} satisfies UpstreamProvider<VkProfile>;
+	} satisfies OAuthProvider<VkProfile>;
 };

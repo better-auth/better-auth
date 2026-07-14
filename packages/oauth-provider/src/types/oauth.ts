@@ -258,19 +258,16 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	 */
 	userinfo_endpoint: string;
 	/**
-	 * acr_values supported.
+	 * Authentication Context Class Reference values supported.
 	 *
-	 * - `urn:mace:incommon:iap:silver`: Silver level of assurance
-	 * - `urn:mace:incommon:iap:bronze`: Bronze level of assurance
-	 *
-	 * Determination of acr_value is considered bronze by default.
-	 * Silver level determination coming soon.
+	 * Better Auth does not advertise this field by default because it does not
+	 * currently evaluate requested Authentication Context Class References.
 	 *
 	 * @default
-	 * ["urn:mace:incommon:iap:bronze"]
-	 * @see https://incommon.org/federation/attributes.html
+	 * undefined
+	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
 	 */
-	acr_values_supported: string[];
+	acr_values_supported?: string[];
 	/**
 	 * Supported subject types.
 	 *
@@ -299,11 +296,35 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	 */
 	claims_supported: string[];
 	/**
+	 * Whether the OP supports the OIDC `claims` request parameter.
+	 *
+	 * @default true
+	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	 */
+	claims_parameter_supported?: boolean;
+	/**
 	 * RP-Initiated Logout Endpoint
 	 *
 	 * @see https://openid.net/specs/openid-connect-rpinitiated-1_0.html
 	 */
 	end_session_endpoint: string;
+	/**
+	 * Whether the OP supports OpenID Connect Request Objects by value.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	 */
+	request_parameter_supported?: boolean;
+	/**
+	 * Whether the OP supports OpenID Connect Request Objects by reference.
+	 *
+	 * Discovery defaults this field to true when omitted, so providers that do
+	 * not support it should advertise false explicitly.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	 */
+	request_uri_parameter_supported?: boolean;
 	/**
 	 * Prompt values supported by this OIDC server
 	 *
@@ -335,7 +356,7 @@ export interface OAuthClient {
 	contacts?: string[];
 	tos_uri?: string;
 	policy_uri?: string;
-	//---- Jwks (only one can be used) ----//
+	//---- Client key metadata (only one can be used) ----//
 	/** JWK Set — accepts either a bare key array or an RFC 7517 JWKS object `{"keys":[...]}` */
 	jwks?: Record<string, unknown>[] | { keys: Record<string, unknown>[] };
 	jwks_uri?: string;
@@ -365,7 +386,7 @@ export interface OAuthClient {
 	token_endpoint_auth_method?: TokenEndpointAuthMethod;
 	grant_types?: GrantType[];
 	response_types?: "code"[];
-	// | "token" // NEVER SUPPORT - depreciated in oAuth2.1
+	// | "token" // NEVER SUPPORT - deprecated in OAuth 2.1
 	//---- RFC6749 Spec ----//
 	public?: boolean;
 	type?: "web" | "native" | "user-agent-based";
@@ -378,8 +399,9 @@ export interface OAuthClient {
 	 *
 	 * @default true
 	 *
-	 * Note: PKCE is always required for public clients and when
-	 * requesting offline_access scope, regardless of this setting.
+	 * Note: PKCE is always required for public clients. When requesting
+	 * offline_access without PKCE, confidential OIDC clients must send both
+	 * `openid` and `nonce`.
 	 */
 	require_pkce?: boolean;
 	/**

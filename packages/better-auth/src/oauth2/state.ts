@@ -4,32 +4,37 @@ import { getOAuthServerContext, setOAuthState } from "../api/state/oauth";
 import { generateRandomString } from "../crypto";
 import type { StateData } from "../state";
 import { generateGenericState, parseGenericState, StateError } from "../state";
-import { redirectOnError } from "./errors";
 import { getUIErrorURL } from "../ui";
+import { redirectOnError } from "./errors";
+
+/**
+ * Mint the OIDC `nonce` for the redirect flow, or `undefined` when the provider
+ * does not require ID-token nonce binding. Every redirect entrypoint (social
+ * sign-in, account linking, IDP-initiated bounce, and the OAuth popup) mints
+ * through this helper, so the value sent on the authorization URL and the value
+ * persisted in state are produced one way and cannot drift apart.
+ */
+export function generateIdTokenNonce(provider: {
+	requiresIdTokenNonce?: boolean | undefined;
+}): string | undefined {
+	return provider.requiresIdTokenNonce ? generateRandomString(32) : undefined;
+}
 
 /**
  * Inputs for {@link generateState}. Grouped into one object so call sites read
  * by name instead of by position.
- *
- * `requestedScopes` is the effective scope set encoded in the authorization
- * URL, persisted into OAuth state so the callback can fall back to the request
- * when the provider omits `scope` from its token response (RFC 6749 §5.1).
- * Because that set is only known after `createAuthorizationURL` runs, the
- * redirect-initiating routes build the URL first, then pass the URL's `state`
- * and `codeVerifier` here so state is still written exactly once. Flows that do
- * not need the URL first (e.g. SSO) omit both and let fresh values be minted.
  */
 export interface GenerateStateOptions {
 	/** Link target when this flow links a provider identity to an existing user. */
 	link?: { email: string; userId: string } | undefined;
 	/** Extra data to round-trip through state; `false` writes none. */
 	additionalData?: Record<string, any> | false | undefined;
-	/** The effective scopes encoded in the authorization URL (the §5.1 fallback). */
-	requestedScopes?: string[] | undefined;
 	/** The `state` nonce already used to build the authorization URL. Minted when omitted. */
 	state?: string | undefined;
 	/** The PKCE `codeVerifier` already used to build the authorization URL. Minted when omitted. */
 	codeVerifier?: string | undefined;
+	/** The OIDC nonce already sent as the authorization URL `nonce` parameter. */
+	idTokenNonce?: string | undefined;
 }
 
 export async function generateState(
@@ -61,15 +66,13 @@ export async function generateState(
 		serverContext,
 		expiresAt: Date.now() + 10 * 60 * 1000,
 		requestSignUp: c.body?.requestSignUp,
-		requestedScopes: options?.requestedScopes,
+		idTokenNonce: options?.idTokenNonce,
 	};
 
 	await setOAuthState(stateData);
 
 	try {
-		return generateGenericState(c, stateData, {
-			oauthState: options?.state,
-		});
+		return generateGenericState(c, stateData);
 	} catch (error) {
 		c.context.logger.error("Failed to create verification", error);
 		throw new APIError("INTERNAL_SERVER_ERROR", {

@@ -1,9 +1,8 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -42,30 +41,22 @@ export interface SlackOptions extends ProviderOptions<SlackProfile> {
 	clientId: string;
 }
 
-const SLACK_DEFAULT_SCOPES = ["openid", "profile", "email"];
-
 export const slack = (options: SlackOptions) => {
 	const tokenEndpoint = "https://slack.com/api/openid.connect.token";
 	return {
 		id: "slack",
 		name: "Slack",
-		callbackPath: "/callback/slack",
-		async createAuthorizationURL({
-			state,
-			scopes,
-			redirectURI,
-			additionalParams,
-		}) {
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				SLACK_DEFAULT_SCOPES,
-				scopes,
-			);
+		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["openid", "profile", "email"];
+			if (scopes) _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
 			return createAuthorizationURL({
 				id: "slack",
 				options,
 				authorizationEndpoint: "https://slack.com/openid/connect/authorize",
-				scopes: requestedScopes,
+				scopes: _scopes,
 				state,
 				redirectURI,
 				additionalParams,
@@ -123,5 +114,5 @@ export const slack = (options: SlackOptions) => {
 			};
 		},
 		options,
-	} satisfies UpstreamProvider<SlackProfile>;
+	} satisfies OAuthProvider<SlackProfile>;
 };

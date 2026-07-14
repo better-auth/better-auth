@@ -414,22 +414,6 @@ import { authClient } from "@/lib/auth-client"
 const accounts = await authClient.listAccounts();
 ```
 
-#### Granted Scopes
-
-Each account exposes a `grantedScopes` field: a `string[]` of the OAuth scopes the user has **accumulated** for that provider over time. It is not the latest token's `scope` claim. Every API that surfaces scopes returns this same array shape, including `listAccounts`, `getAccessToken`, and `refreshToken`.
-
-To check whether an account holds a particular scope, use the `includesGrantedScope` helper instead of inspecting the array yourself:
-
-```ts
-import { includesGrantedScope } from "better-auth/oauth2";
-
-const google = accounts.find((account) => account.providerId === "google");
-const canReadDrive = includesGrantedScope(
-    google?.grantedScopes,
-    "https://www.googleapis.com/auth/drive.readonly",
-);
-```
-
 ### Token Encryption
 
 Better Auth doesn’t encrypt tokens by default and that’s intentional. We want you to have full control over how encryption and decryption are handled, rather than baking in behavior that could be confusing or limiting. If you need to store encrypted tokens (like accessToken or refreshToken), you can use databaseHooks to encrypt them before they’re saved to your database.
@@ -498,6 +482,28 @@ export const auth = betterAuth({
 });
 ```
 
+#### Disable Implicit Linking
+
+By default, when a user signs in with an OAuth provider whose email matches an existing user (and either the provider verified the email or it is in `trustedProviders`), Better Auth automatically links the OAuth account to that user. Set `disableImplicitLinking: true` to turn this off. With this option enabled:
+
+* Same-email OAuth sign-ins for an existing user are rejected with the [`account_not_linked`](/docs/reference/errors/account_not_linked) error instead of being silently linked, even when the provider is in `trustedProviders` or the email is verified.
+* New users (no existing user with that email) can still sign up via OAuth.
+* An already-authenticated user can still link providers explicitly via [`linkSocial()`](#manually-linking-accounts).
+
+Use this when you want users to confirm linking from a settings page rather than implicitly on sign-in.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    account: {
+        accountLinking: {
+            disableImplicitLinking: true,
+        }
+    },
+});
+```
+
 #### Manually Linking Accounts
 
 Users already signed in can manually link their account to additional social providers or credential-based accounts.
@@ -513,7 +519,7 @@ Users already signed in can manually link their account to additional social pro
   });
   ```
 
-  You can also request specific scopes when linking a social account. The `scopes` you pass are **added** to the provider's default scopes; they don't replace them. This is how you perform incremental authorization: each `linkSocial` call asks for more access, and the newly granted scopes **accumulate** into the account's stored `grantedScopes` rather than overwriting it.
+  You can also request specific scopes when linking a social account, which can be different from the scopes used during the initial authentication:
 
   ```ts
   import { authClient } from "@/lib/auth-client"
@@ -521,12 +527,12 @@ Users already signed in can manually link their account to additional social pro
   await authClient.linkSocial({
       provider: "google",
       callbackURL: "/callback",
-      scopes: ["https://www.googleapis.com/auth/drive.readonly"] // Added on top of the provider defaults
+      scopes: ["https://www.googleapis.com/auth/drive.readonly"] // Request additional scopes
   });
   ```
 
   <Callout type="info">
-    `signIn.social({ scopes })` works the same way: the scopes are additive to the provider defaults. Token refresh never changes the stored grant, and for most providers a narrower sign-in never shrinks it either. Google with the default `includeGrantedScopes: true` is the exception: it resyncs `grantedScopes` to Google's authoritative combined grant on each sign-in, so a scope revoked at Google drops on the next sign-in (see [OAuth scopes](/docs/concepts/oauth#how-granted-scopes-accumulate)).
+    Newly granted scopes are merged into `account.scope`, so prior grants survive incremental authorization. Sign-in re-authentication and refresh-token responses do not modify `account.scope`.
   </Callout>
 
   You can also link accounts using ID tokens directly, without redirecting to the provider's OAuth flow:
@@ -567,7 +573,7 @@ Users already signed in can manually link their account to additional social pro
   });
   ```
 
-  By default, linking an account leaves the existing user profile untouched. Enable `updateUserInfoOnLink` to copy the provider's profile onto the user each time an account is linked. The synced fields are the same ones persisted on sign-up (`name`, `image`, and any fields your `mapProfileToUser` adds). The user's `email` and `emailVerified` are never changed on a link, so linking a provider can't rebind the account's identity.
+  By default, linking an account leaves the existing user profile untouched. Enable `updateUserInfoOnLink` to copy the provider's profile onto the user each time an account is linked. The synced fields are the same ones persisted on sign-up (`name`, `image`, and any input-allowed fields your `mapProfileToUser` adds). The user's `email` and `emailVerified` are never changed on a link, so linking a provider can't rebind the account's identity.
 
   ```ts title="auth.ts"
   import { betterAuth } from "better-auth";

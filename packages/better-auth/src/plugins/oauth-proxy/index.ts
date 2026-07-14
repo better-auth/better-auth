@@ -8,7 +8,6 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
-import { unionGrantedScopes } from "@better-auth/core/oauth2";
 import { defu } from "defu";
 import * as z from "zod";
 import { originCheck } from "../../api";
@@ -17,7 +16,8 @@ import { setSessionCookie } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { redirectOnError } from "../../oauth2/errors";
-import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identity";
+import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { getOAuthCallbackPath } from "../../oauth2/utils";
 import type { StateData } from "../../state";
 import { parseGenericState } from "../../state";
 import type { Account, User } from "../../types";
@@ -110,6 +110,21 @@ type PassthroughPayload = {
 	errorURL?: string;
 	disableSignUp?: boolean;
 	timestamp: number;
+};
+
+const consumeOAuthProxyState = async (
+	ctx: GenericEndpointContext,
+	state: string,
+) => {
+	try {
+		await parseGenericState(ctx, state, {
+			skipStateCookieCheck: true,
+		});
+		return true;
+	} catch (e) {
+		ctx.context.logger.warn("OAuth proxy state missing or invalid", e);
+		return false;
+	}
 };
 
 const oauthProxyQuerySchema = z.object({
@@ -217,6 +232,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						typeof payload.timestamp !== "number" ||
 						!payload.userInfo ||
 						!payload.account ||
+						!payload.state ||
 						!payload.callbackURL
 					) {
 						ctx.context.logger.error("Failed to parse OAuth proxy payload");
@@ -235,47 +251,19 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						throw redirectOnError(ctx, errorURL, "payload_expired");
 					}
 
-					// Clean up OAuth state
-					try {
-						await parseGenericState(ctx, payload.state, {
-							skipStateCookieCheck: true,
-						});
-					} catch (e) {
-						ctx.context.logger.warn("Failed to clean up OAuth state", e);
+					const stateConsumed = await consumeOAuthProxyState(
+						ctx,
+						payload.state,
+					);
+					if (!stateConsumed) {
+						throw redirectOnError(ctx, errorURL, "state_mismatch");
 					}
 
-					// The granted-scope set was already accumulated on the production
-					// side (RFC 6749 §5.1 fallback applied there); pass it as both the
-					// echoed and requested set so the seam re-resolves to the same value.
-					const grantedScopes = payload.account.grantedScopes ?? undefined;
-					const tokens: OAuth2Tokens = {
-						accessToken: payload.account.accessToken ?? undefined,
-						refreshToken: payload.account.refreshToken ?? undefined,
-						idToken: payload.account.idToken ?? undefined,
-						accessTokenExpiresAt:
-							payload.account.accessTokenExpiresAt ?? undefined,
-						refreshTokenExpiresAt:
-							payload.account.refreshTokenExpiresAt ?? undefined,
-						scopes: grantedScopes,
-					};
-
-					// Match the direct callback: when the provider declares full-grant
-					// authority, the relayed set is authoritative, so it lets a scope
-					// revoked at the provider shrink the stored grant on a proxied
-					// sign-in too.
-					const provider = ctx.context.socialProviders.find(
-						(p) => p.id === payload.account.providerId,
-					);
-
-					let result: Awaited<ReturnType<typeof signInWithOAuthIdentity>>;
+					let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 					try {
-						result = await signInWithOAuthIdentity(ctx, {
+						result = await handleOAuthUserInfo(ctx, {
 							userInfo: payload.userInfo,
-							providerId: payload.account.providerId,
-							accountId: payload.account.accountId,
-							tokens,
-							requestedScopes: grantedScopes,
-							grantAuthority: provider?.grantAuthority,
+							account: payload.account,
 							callbackURL: payload.callbackURL,
 							disableSignUp: payload.disableSignUp,
 							source: {
@@ -467,7 +455,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							tokens = await provider.validateAuthorizationCode({
 								code,
 								codeVerifier: stateData.codeVerifier,
-								redirectURI: `${ctx.context.baseURL}/callback/${provider.id}`,
+								redirectURI: `${ctx.context.baseURL}${getOAuthCallbackPath(provider)}`,
 							});
 						} catch (e) {
 							ctx.context.logger.error(
@@ -517,11 +505,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								idToken: tokens.idToken,
 								accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 								refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
-								grantedScopes: unionGrantedScopes(
-									undefined,
-									tokens.scopes,
-									stateData.requestedScopes,
-								),
+								scope: tokens.scopes?.join(","),
 							},
 							state: statePackage.state,
 							callbackURL: finalCallbackURL,

@@ -276,7 +276,7 @@ describe("username", async () => {
 		await client.signUp.email(
 			{
 				email: "display-test@email.com",
-				displayUsername: "Test Username",
+				displayUsername: "Test_Username",
 				password: "test-password",
 				name: "test-name",
 			},
@@ -292,8 +292,47 @@ describe("username", async () => {
 			},
 		});
 
-		expect(session?.user.username).toBe("test username");
-		expect(session?.user.displayUsername).toBe("Test Username");
+		expect(session?.user.username).toBe("test_username");
+		expect(session?.user.displayUsername).toBe("Test_Username");
+	});
+
+	it("should not store an invalid displayUsername-only value as username", async () => {
+		const headers = new Headers();
+		const res = await client.signUp.email(
+			{
+				email: "invalid-display-username@email.com",
+				displayUsername: "Invalid Username",
+				password: "test-password",
+				name: "test-name",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		expect(res.error).toBeNull();
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+
+		expect(session?.user.username).toBeNull();
+		expect(session?.user.displayUsername).toBe("Invalid Username");
+	});
+
+	it("should not replace an explicit empty username with displayUsername", async () => {
+		const res = await client.signUp.email({
+			email: "empty-username@email.com",
+			username: "",
+			displayUsername: "valid_username",
+			password: "test-password",
+			name: "test-name",
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(USERNAME_ERROR_CODES.USERNAME_TOO_SHORT.code);
 	});
 
 	it("should preserve both username and displayUsername when both are provided", async () => {
@@ -439,11 +478,14 @@ describe("username with displayUsername validation", async () => {
 			name: "test-name",
 		});
 		expect(res.error).toBeNull();
+		expect(res.data?.user.username).toBeNull();
+		expect(res.data?.user.displayUsername).toBe("Valid_Display-123");
 	});
 
 	it("should reject invalid displayUsername", async () => {
 		const res = await client.signUp.email({
 			email: "display-invalid@email.com",
+			username: "invalid_display",
 			displayUsername: "Invalid Display!",
 			password: "test-password",
 			name: "test-name",
@@ -452,6 +494,19 @@ describe("username with displayUsername validation", async () => {
 		expect(res.error?.code).toBe(
 			USERNAME_ERROR_CODES.INVALID_DISPLAY_USERNAME.code,
 		);
+	});
+
+	it("should not validate inferred displayUsername during sign-up", async () => {
+		const res = await client.signUp.email({
+			email: "inferred-display@email.com",
+			username: "valid.username",
+			password: "test-password",
+			name: "test-name",
+		});
+
+		expect(res.error).toBeNull();
+		expect(res.data?.user.username).toBe("valid.username");
+		expect(res.data?.user.displayUsername).toBe("valid.username");
 	});
 
 	it("should update displayUsername with valid value", async () => {
@@ -501,6 +556,7 @@ describe("username with displayUsername validation", async () => {
 		await client.signUp.email(
 			{
 				email: "update-invalid@email.com",
+				username: "valid_name",
 				displayUsername: "Valid_Name",
 				password: "test-password",
 				name: "test-name",
