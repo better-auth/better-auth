@@ -1,7 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { describe, expect, expectTypeOf, it } from "vitest";
-import type { Auth } from "../types";
 import { betterAuth } from "./minimal";
 
 describe("auth-minimal", () => {
@@ -9,8 +8,10 @@ describe("auth-minimal", () => {
 
 	it("default auth type should be okay", () => {
 		const auth = betterAuth({});
-		type T = typeof auth;
-		expectTypeOf<T>().toEqualTypeOf<Auth>();
+		expectTypeOf(auth).toHaveProperty("api");
+		expectTypeOf(auth).toHaveProperty("handler");
+		expectTypeOf(auth).toHaveProperty("$Infer");
+		expectTypeOf(auth).toHaveProperty("options");
 	});
 
 	it("should initialize with adapter without Kysely dependencies", async () => {

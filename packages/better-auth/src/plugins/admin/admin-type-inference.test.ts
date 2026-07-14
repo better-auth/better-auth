@@ -39,15 +39,10 @@ describe("admin plugin auth-config type inference (prototype)", async () => {
 		expect(user.customField).toBe("hello");
 	});
 
-	it("infers additionalFields on client getUser via inferAdditionalFields", async () => {
+	it("infers additionalFields on client getUser via inferAdditionalFields", () => {
 		const client = createAuthClient({
 			plugins: [adminClient(), inferAdditionalFields<typeof auth>()],
 		});
-
-		const { data: user } = await client.admin.getUser({
-			query: { id: "test" },
-		});
-		user?.customField;
 
 		type ClientGetUserData = NonNullable<
 			Awaited<ReturnType<typeof client.admin.getUser>>["data"]

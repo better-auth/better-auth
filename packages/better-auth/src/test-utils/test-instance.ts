@@ -8,8 +8,9 @@ import type {
 import type { SuccessContext } from "@better-fetch/fetch";
 import { sql } from "kysely";
 import { afterAll } from "vitest";
-import { betterAuth } from "../auth/full";
+import { createBetterAuth } from "../auth/base";
 import { createAuthClient } from "../client";
+import { init } from "../context/init";
 import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
 import { getAdapter } from "../db/adapter-kysely";
 import { getMigrations } from "../db/get-migration";
@@ -147,12 +148,15 @@ export async function getTestInstance<
 		},
 	} satisfies BetterAuthOptions;
 
-	const auth = betterAuth({
-		baseURL: "http://localhost:" + (config?.port || 3000),
-		...opts,
-		...options,
-		plugins: [bearer(), ...(options?.plugins || [])],
-	} as unknown as O);
+	const auth = createBetterAuth(
+		{
+			baseURL: "http://localhost:" + (config?.port || 3000),
+			...opts,
+			...options,
+			plugins: [bearer(), ...(options?.plugins || [])],
+		} as unknown as O extends BetterAuthOptions ? O : O & BetterAuthOptions,
+		init,
+	);
 
 	const testUser = {
 		email: "test@test.com",
