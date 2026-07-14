@@ -362,8 +362,9 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							ux_mode: opts?.uxMode || "popup",
 							nonce: opts?.nonce,
 							itp_support: true,
-							use_fedcm_for_prompt: useFedCM,
 							...options.additionalOptions,
+							// Keep after additionalOptions so promptOptions.fedCM wins.
+							use_fedcm_for_prompt: useFedCM,
 						});
 
 						window.google?.accounts.id.renderButton(
@@ -431,8 +432,9 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 								 * @see {@link https://developers.google.com/identity/gsi/web/guides/overview}
 								 */
 								itp_support: true,
-								use_fedcm_for_prompt: useFedCM,
 								...options.additionalOptions,
+								// Keep after additionalOptions so promptOptions.fedCM wins.
+								use_fedcm_for_prompt: useFedCM,
 							});
 
 							const handlePrompt = (attempt: number) => {
