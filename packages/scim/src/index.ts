@@ -2,7 +2,13 @@ import type { BetterAuthPlugin, Status } from "better-auth";
 import { BetterAuthError } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { statusCodes } from "better-call";
-import { createSCIMConnectionMiddleware } from "./connection-authentication";
+import type { SCIMOptions } from "./configuration";
+import {
+	areValidSCIMScopes,
+	createSCIMConnectionMiddleware,
+	isValidSCIMCredentialId,
+} from "./connection-authentication";
+import { createDecommissionSCIMConnectionEndpoint } from "./connection-decommission";
 import {
 	getSCIMResourceType,
 	getSCIMResourceTypes,
@@ -20,12 +26,11 @@ import {
 } from "./group-provisioning";
 import { createSCIMIdentityCoordinator } from "./identity";
 import {
-	createDecommissionSCIMConnectionEndpoint,
 	createReconcileSCIMProjectionEndpoint,
 	createSCIMProjectionCoordinator,
 } from "./projection";
 import { createSCIMError } from "./scim-error";
-import type { SCIMOptions } from "./types";
+import { SCIM_MEDIA_TYPE } from "./scim-metadata";
 import {
 	createSCIMUser,
 	deleteSCIMUser,
@@ -38,7 +43,6 @@ import { PACKAGE_VERSION } from "./version";
 
 const SCIM_RESPONSE_MARKER = "x-better-auth-scim-response";
 const SCIM_ERROR_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:Error";
-const SCIM_MEDIA_TYPE = "application/scim+json";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -109,9 +113,9 @@ function validateConnections(options: SCIMOptions): void {
 				"SCIM connection ids must be trimmed and contain between 1 and 255 characters.",
 			);
 		}
-		if (connection.credentials.length === 0) {
+		if (connection.credentials.length === 0 && !options.authentication) {
 			throw new BetterAuthError(
-				"SCIM connections require at least one credential.",
+				"SCIM connections require a static credential or bearer token verifier.",
 			);
 		}
 		if (
@@ -130,10 +134,27 @@ function validateConnections(options: SCIMOptions): void {
 		}
 		connectionIds.add(connection.id);
 
+		const credentialIds = new Set<string>();
 		for (const credential of connection.credentials) {
+			if (!isValidSCIMCredentialId(credential.id)) {
+				throw new BetterAuthError(
+					"SCIM credential ids must be trimmed and contain between 1 and 255 characters.",
+				);
+			}
+			if (credentialIds.has(credential.id)) {
+				throw new BetterAuthError(
+					"SCIM credential ids must be unique within a connection.",
+				);
+			}
+			credentialIds.add(credential.id);
 			if (!credential.token || /\s/.test(credential.token)) {
 				throw new BetterAuthError(
 					"SCIM bearer tokens cannot be empty or contain whitespace.",
+				);
+			}
+			if (credential.scopes && !areValidSCIMScopes(credential.scopes)) {
+				throw new BetterAuthError(
+					"SCIM credential scopes must be non-empty, unique, and supported.",
 				);
 			}
 			if (
@@ -160,8 +181,7 @@ function validateConnections(options: SCIMOptions): void {
  * plugin does not require the organization plugin and never represents a
  * provisioned identity as an authentication account.
  */
-export function scim(options: SCIMOptions) {
-	validateConnections(options);
+function createSCIMPlugin(options: SCIMOptions) {
 	const connectionMiddleware = createSCIMConnectionMiddleware(options);
 	const identity = createSCIMIdentityCoordinator(options);
 	const projection = createSCIMProjectionCoordinator(options);
@@ -241,7 +261,7 @@ export function scim(options: SCIMOptions) {
 			if (response.headers.get(SCIM_RESPONSE_MARKER) !== "1") return;
 			const headers = new Headers(response.headers);
 			headers.delete(SCIM_RESPONSE_MARKER);
-			headers.set("content-type", "application/scim+json");
+			headers.set("content-type", SCIM_MEDIA_TYPE);
 			return {
 				response: new Response(response.body, {
 					status: response.status,
@@ -265,7 +285,12 @@ export function scim(options: SCIMOptions) {
 							isRecord(body) && typeof body.message === "string"
 								? body.message
 								: returned.message;
-						throw createSCIMError(returned.status, { detail });
+						throw createSCIMError(returned.status, {
+							detail,
+							...(returned.statusCode === 400
+								? { scimType: "invalidValue" as const }
+								: {}),
+						});
 					}),
 				},
 			],
@@ -669,12 +694,37 @@ export function scim(options: SCIMOptions) {
 	} satisfies BetterAuthPlugin;
 }
 
+/** The Better Auth plugin returned by {@link scim}. */
+export type SCIMPlugin = ReturnType<typeof createSCIMPlugin>;
+
+/** The server endpoints installed by the SCIM plugin. */
+export type SCIMEndpoints = SCIMPlugin["endpoints"];
+
+/**
+ * Adds an inbound SCIM 2.0 service provider to Better Auth.
+ *
+ * Every configured connection owns an isolated set of SCIM resources. The
+ * plugin does not require the organization plugin and never represents a
+ * provisioned identity as an authentication account.
+ */
+export function scim(options: SCIMOptions): SCIMPlugin {
+	validateConnections(options);
+	return createSCIMPlugin(options);
+}
+
 export type {
+	SCIMAuthenticationOptions,
 	SCIMAuthorizationSource,
 	SCIMBearerCredentialOptions,
+	SCIMBearerTokenVerificationInput,
+	SCIMBearerTokenVerificationResult,
+	SCIMCanonicalEmail,
+	SCIMCanonicalName,
+	SCIMCanonicalUser,
 	SCIMConnectionDecommissionStatus,
 	SCIMConnectionOptions,
 	SCIMEmail,
+	SCIMGroupAuthorizationSource,
 	SCIMIdentity,
 	SCIMIdentityResolution,
 	SCIMIdentityResolutionContext,
@@ -682,9 +732,16 @@ export type {
 	SCIMIdentitySource,
 	SCIMIdentityState,
 	SCIMName,
+	SCIMOAuthBearerPrincipal,
 	SCIMOptions,
+	SCIMPrincipal,
 	SCIMProjectedRoleGrant,
 	SCIMProjectedUserState,
 	SCIMProjection,
+	SCIMRoleExistenceInput,
+	SCIMRoleMappingInput,
+	SCIMRoleProjection,
+	SCIMScope,
+	SCIMStaticBearerPrincipal,
 	SCIMTransactionContext,
-} from "./types";
+} from "./configuration";

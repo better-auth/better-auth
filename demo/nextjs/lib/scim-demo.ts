@@ -61,7 +61,9 @@ export function createSCIMDemoPlugin() {
 			{
 				id: SCIM_DEMO_CONNECTION_ID,
 				provisioningDomainId: SCIM_DEMO_PROVISIONING_DOMAIN_ID,
-				credentials: [{ type: "bearer", token: getSCIMDemoToken() }],
+				credentials: [
+					{ type: "bearer", id: "demo-directory", token: getSCIMDemoToken() },
+				],
 			},
 		],
 		identity: {

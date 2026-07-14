@@ -3,36 +3,33 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import type { AuthContext, DBAdapter, DBTransactionAdapter } from "better-auth";
-import { BetterAuthError, generateId } from "better-auth";
+import { BetterAuthError } from "better-auth";
 import { createAuthEndpoint } from "better-auth/api";
 import * as z from "zod";
-import {
-	createSCIMConnectionKey,
-	findDecommissionedSCIMConnectionIds,
-} from "./connection-state";
-import type { SCIMIdentityCoordinator } from "./identity";
-import { runSCIMApplicationCallback } from "./scim-error";
-import { assertNativeSCIMTransactions } from "./transaction";
 import type {
 	SCIMAuthorizationSource,
-	SCIMConnectionBinding,
-	SCIMGroup,
-	SCIMGroupMember,
 	SCIMIdentitySource,
 	SCIMOptions,
 	SCIMProjectedRoleGrant,
+} from "./configuration";
+import { findDecommissionedSCIMConnectionIds } from "./connection-state";
+import type { SCIMIdentityCoordinator } from "./identity";
+import type {
+	SCIMGroup,
+	SCIMGroupMember,
 	SCIMProjectionGrant,
 	SCIMSubject,
 	SCIMUser,
-} from "./types";
-import { createScopedKey } from "./utils";
+} from "./persistence";
+import { createScopedKey } from "./resource-key";
+import { runSCIMApplicationCallback } from "./scim-error";
+import { assertNativeSCIMTransactions } from "./transaction";
 
 export type SCIMProjectionCoordinator = ReturnType<
 	typeof createSCIMProjectionCoordinator
 >;
 
 const SCIM_PROJECTION_BATCH_SIZE = 50;
-const SCIM_DECOMMISSION_LEASE_DURATION_MS = 5 * 60 * 1000;
 const SCIM_PROJECTION_SUBJECT_CONFLICT = Symbol(
 	"scim-projection-subject-conflict",
 );
@@ -43,10 +40,6 @@ type SCIMProjectionSubjectConflict = BetterAuthError & {
 
 const reconcileProjectionBodySchema = z.object({
 	provisioningDomainId: z.string().trim().min(1).max(255),
-});
-
-const decommissionConnectionBodySchema = z.object({
-	connectionId: z.string().trim().min(1).max(255),
 });
 
 function normalizeMappedRoles(roles?: readonly string[]): string[] {
@@ -155,7 +148,7 @@ async function acquireProjectionSubjectLocks(
 function createProjectionGrantKey(input: {
 	connectionId: string;
 	scimUserId: string;
-	sourceKind: SCIMAuthorizationSource["kind"];
+	sourceKind: SCIMAuthorizationSource["type"];
 	sourceId: string;
 	role: string;
 }) {
@@ -220,7 +213,9 @@ async function buildDesiredGrants(
 		);
 	const desiredGrants = new Map<
 		string,
-		Omit<SCIMProjectionGrant, "createdAt" | "id" | "updatedAt">
+		Omit<SCIMProjectionGrant, "createdAt" | "id" | "updatedAt"> & {
+			source: SCIMAuthorizationSource;
+		}
 	>();
 	const roleExistenceByKey = new Map<string, boolean>();
 
@@ -236,7 +231,7 @@ async function buildDesiredGrants(
 			continue;
 		}
 		const source = {
-			kind: "group",
+			type: "group",
 			id: group.id,
 			...(group.externalId ? { externalId: group.externalId } : {}),
 			displayName: group.displayName,
@@ -284,7 +279,7 @@ async function buildDesiredGrants(
 			const grantKey = createProjectionGrantKey({
 				connectionId: scimUser.connectionId,
 				scimUserId: scimUser.id,
-				sourceKind: source.kind,
+				sourceKind: source.type,
 				sourceId: source.id,
 				role,
 			});
@@ -293,9 +288,10 @@ async function buildDesiredGrants(
 				provisioningDomainId: input.provisioningDomainId,
 				scimUserId: scimUser.id,
 				userId: input.userId,
-				sourceKind: source.kind,
+				sourceKind: source.type,
 				sourceId: source.id,
 				sourceValue: source.externalId ?? source.displayName,
+				source,
 				role,
 				grantKey,
 			});
@@ -370,11 +366,12 @@ async function reconcileProjectionUserState(
 	const now = new Date();
 	for (const desiredGrant of desiredGrants) {
 		if (existingGrantByKey.has(desiredGrant.grantKey)) continue;
+		const { source: _source, ...grantRecord } = desiredGrant;
 		await database.create<Omit<SCIMProjectionGrant, "id">, SCIMProjectionGrant>(
 			{
 				model: "scimProjectionGrant",
 				data: {
-					...desiredGrant,
+					...grantRecord,
 					createdAt: now,
 					updatedAt: now,
 				},
@@ -383,14 +380,12 @@ async function reconcileProjectionUserState(
 	}
 	if (!projection) return;
 
-	const grants: SCIMProjectedRoleGrant[] = desiredGrants
+	const grants: SCIMProjectedRoleGrant[] = [...desiredGrants]
+		.sort((left, right) => left.grantKey.localeCompare(right.grantKey))
 		.map((grant) => ({
-			key: grant.grantKey,
-			sourceKind: grant.sourceKind,
-			sourceId: grant.sourceId,
+			source: grant.source,
 			role: grant.role,
-		}))
-		.sort((left, right) => left.key.localeCompare(right.key));
+		}));
 	const sources: SCIMIdentitySource[] = input.sourcesSCIMUsers
 		.map((scimUser) => ({
 			id: scimUser.id,
@@ -646,14 +641,14 @@ function requireConfiguredProjection(options: SCIMOptions): void {
 	);
 }
 
-type SCIMProjectionDomainBatch = {
+export type SCIMProjectionDomainBatch = {
 	scimUserIds: string[];
 	userIds: string[];
 	cursorUserId: string;
 	hasMore: boolean;
 };
 
-async function findProjectionDomainBatch(input: {
+export async function findSCIMProjectionDomainBatch(input: {
 	database: Pick<DBAdapter, "findMany">;
 	provisioningDomainId: string;
 	cursorUserId?: string | null;
@@ -697,7 +692,7 @@ async function findProjectionDomainBatch(input: {
 	};
 }
 
-async function reconcileProjectionDomainBatch(input: {
+export async function reconcileSCIMProjectionDomainBatch(input: {
 	database: DBTransactionAdapter;
 	auth: AuthContext;
 	projection: SCIMProjectionCoordinator;
@@ -749,7 +744,7 @@ async function reconcileProjectionDomain(input: {
 	let batches = 0;
 
 	while (true) {
-		const batch = await findProjectionDomainBatch({
+		const batch = await findSCIMProjectionDomainBatch({
 			database: input.database,
 			provisioningDomainId: input.provisioningDomainId,
 			cursorUserId: cursor,
@@ -757,7 +752,7 @@ async function reconcileProjectionDomain(input: {
 		if (!batch) break;
 		await runWithTransaction(input.database, async () => {
 			const trx = await getCurrentAdapter(input.database);
-			await reconcileProjectionDomainBatch({
+			await reconcileSCIMProjectionDomainBatch({
 				database: trx,
 				auth: input.auth,
 				provisioningDomainId: input.provisioningDomainId,
@@ -780,256 +775,6 @@ async function reconcileProjectionDomain(input: {
 	};
 }
 
-function createDecommissionResult(binding: SCIMConnectionBinding) {
-	if (binding.decommissionStatus === "active") {
-		throw new BetterAuthError(
-			`SCIM connection "${binding.connectionId}" has not started decommissioning.`,
-		);
-	}
-	return {
-		connectionId: binding.connectionId,
-		provisioningDomainId: binding.provisioningDomainId,
-		status: binding.decommissionStatus,
-		decommissionedAt: binding.decommissionedAt ?? null,
-		completedAt: binding.decommissionCompletedAt ?? null,
-		retryAfter:
-			binding.decommissionStatus === "reconciling"
-				? (binding.decommissionLeaseExpiresAt ?? null)
-				: null,
-		reconciledUsers: binding.decommissionReconciledUserCount,
-		batches: binding.decommissionBatchCount,
-	};
-}
-
-async function findConnectionBinding(
-	database: Pick<DBAdapter, "findOne">,
-	connectionId: string,
-): Promise<SCIMConnectionBinding> {
-	const binding = await database.findOne<SCIMConnectionBinding>({
-		model: "scimConnectionBinding",
-		where: [
-			{
-				field: "connectionKey",
-				value: createSCIMConnectionKey(connectionId),
-			},
-		],
-	});
-	if (binding) return binding;
-	throw new BetterAuthError(
-		`SCIM connection "${connectionId}" has no persisted binding.`,
-	);
-}
-
-async function acquireDecommissionLease(
-	database: DBAdapter,
-	connectionId: string,
-): Promise<{
-	binding: SCIMConnectionBinding;
-	leaseId?: string;
-}> {
-	const leaseId = generateId(32);
-	for (let attempt = 0; attempt < 10; attempt++) {
-		const binding = await findConnectionBinding(database, connectionId);
-		if (binding.decommissionStatus === "complete") return { binding };
-
-		const now = new Date();
-		const activeLease =
-			binding.decommissionStatus === "reconciling" &&
-			binding.decommissionLeaseId &&
-			binding.decommissionLeaseExpiresAt &&
-			binding.decommissionLeaseExpiresAt.getTime() > now.getTime();
-		if (activeLease) return { binding };
-
-		const acquired = await database.incrementOne<SCIMConnectionBinding>({
-			model: "scimConnectionBinding",
-			where: [
-				{ field: "id", value: binding.id },
-				{
-					field: "decommissionRevision",
-					value: binding.decommissionRevision,
-				},
-				{
-					field: "decommissionStatus",
-					value: binding.decommissionStatus,
-				},
-			],
-			increment: { decommissionRevision: 1 },
-			set: {
-				decommissionStatus: "reconciling",
-				decommissionedAt: binding.decommissionedAt ?? now,
-				decommissionCompletedAt: null,
-				decommissionLeaseId: leaseId,
-				decommissionLeaseExpiresAt: new Date(
-					now.getTime() + SCIM_DECOMMISSION_LEASE_DURATION_MS,
-				),
-			},
-		});
-		if (acquired) return { binding: acquired, leaseId };
-	}
-
-	throw new BetterAuthError(
-		`SCIM connection "${connectionId}" changed repeatedly while decommissioning; retry the operation.`,
-	);
-}
-
-async function releaseDecommissionLease(input: {
-	database: DBAdapter;
-	bindingId: string;
-	leaseId: string;
-}): Promise<void> {
-	for (let attempt = 0; attempt < 3; attempt++) {
-		const binding = await input.database.findOne<SCIMConnectionBinding>({
-			model: "scimConnectionBinding",
-			where: [{ field: "id", value: input.bindingId }],
-		});
-		if (
-			!binding ||
-			binding.decommissionStatus === "complete" ||
-			binding.decommissionLeaseId !== input.leaseId
-		) {
-			return;
-		}
-		const released = await input.database.incrementOne<SCIMConnectionBinding>({
-			model: "scimConnectionBinding",
-			where: [
-				{ field: "id", value: binding.id },
-				{
-					field: "decommissionRevision",
-					value: binding.decommissionRevision,
-				},
-				{ field: "decommissionLeaseId", value: input.leaseId },
-			],
-			increment: { decommissionRevision: 1 },
-			set: {
-				decommissionLeaseId: null,
-				decommissionLeaseExpiresAt: null,
-			},
-		});
-		if (released) return;
-	}
-}
-
-async function reconcileDecommissionedConnection(input: {
-	database: DBAdapter;
-	auth: AuthContext;
-	projection: SCIMProjectionCoordinator;
-	identity: SCIMIdentityCoordinator;
-	binding: SCIMConnectionBinding;
-	leaseId: string;
-}): Promise<SCIMConnectionBinding> {
-	try {
-		while (true) {
-			const checkpoint = await runWithTransaction(input.database, async () => {
-				const trx = await getCurrentAdapter(input.database);
-				const binding = await trx.findOne<SCIMConnectionBinding>({
-					model: "scimConnectionBinding",
-					where: [{ field: "id", value: input.binding.id }],
-				});
-				if (!binding) {
-					throw new BetterAuthError(
-						`SCIM connection "${input.binding.connectionId}" binding disappeared during decommissioning.`,
-					);
-				}
-				if (binding.decommissionStatus === "complete") return binding;
-				if (binding.decommissionLeaseId !== input.leaseId) {
-					throw new BetterAuthError(
-						`SCIM connection "${binding.connectionId}" decommission lease was taken over by another worker.`,
-					);
-				}
-
-				const batch = await findProjectionDomainBatch({
-					database: trx,
-					provisioningDomainId: binding.provisioningDomainId,
-					cursorUserId: binding.decommissionCursorUserId,
-				});
-				if (!batch) {
-					const completed = await trx.incrementOne<SCIMConnectionBinding>({
-						model: "scimConnectionBinding",
-						where: [
-							{ field: "id", value: binding.id },
-							{
-								field: "decommissionRevision",
-								value: binding.decommissionRevision,
-							},
-							{ field: "decommissionLeaseId", value: input.leaseId },
-						],
-						increment: { decommissionRevision: 1 },
-						set: {
-							decommissionStatus: "complete",
-							decommissionCompletedAt: new Date(),
-							decommissionLeaseId: null,
-							decommissionLeaseExpiresAt: null,
-						},
-					});
-					if (completed) return completed;
-					throw new BetterAuthError(
-						`SCIM connection "${binding.connectionId}" decommission checkpoint changed concurrently.`,
-					);
-				}
-
-				await reconcileProjectionDomainBatch({
-					database: trx,
-					auth: input.auth,
-					projection: input.projection,
-					identity: input.identity,
-					provisioningDomainId: binding.provisioningDomainId,
-					batch,
-				});
-				const now = new Date();
-				const set: Partial<SCIMConnectionBinding> = {
-					decommissionCursorUserId: batch.cursorUserId,
-					...(batch.hasMore
-						? {
-								decommissionLeaseExpiresAt: new Date(
-									now.getTime() + SCIM_DECOMMISSION_LEASE_DURATION_MS,
-								),
-							}
-						: {
-								decommissionStatus: "complete" as const,
-								decommissionCompletedAt: now,
-								decommissionLeaseId: null,
-								decommissionLeaseExpiresAt: null,
-							}),
-				};
-				const advanced = await trx.incrementOne<SCIMConnectionBinding>({
-					model: "scimConnectionBinding",
-					where: [
-						{ field: "id", value: binding.id },
-						{
-							field: "decommissionRevision",
-							value: binding.decommissionRevision,
-						},
-						{ field: "decommissionLeaseId", value: input.leaseId },
-					],
-					increment: {
-						decommissionRevision: 1,
-						decommissionReconciledUserCount: batch.userIds.length,
-						decommissionBatchCount: 1,
-					},
-					set,
-				});
-				if (advanced) return advanced;
-				throw new BetterAuthError(
-					`SCIM connection "${binding.connectionId}" decommission checkpoint changed concurrently.`,
-				);
-			});
-			if (checkpoint.decommissionStatus === "complete") return checkpoint;
-		}
-	} catch (error) {
-		try {
-			await releaseDecommissionLease({
-				database: input.database,
-				bindingId: input.binding.id,
-				leaseId: input.leaseId,
-			});
-		} catch {
-			// Preserve the operation error. An unreleased lease remains recoverable
-			// through its persisted expiry.
-		}
-		throw error;
-	}
-}
-
 /** Creates the trusted server API for replaying one provisioning domain. */
 export function createReconcileSCIMProjectionEndpoint(
 	options: SCIMOptions,
@@ -1050,38 +795,6 @@ export function createReconcileSCIMProjectionEndpoint(
 				provisioningDomainId: ctx.body.provisioningDomainId,
 			});
 			return ctx.json(result);
-		},
-	);
-}
-
-/** Creates the trusted server API for permanently retiring one connection. */
-export function createDecommissionSCIMConnectionEndpoint(
-	projection: SCIMProjectionCoordinator,
-	identity: SCIMIdentityCoordinator,
-) {
-	return createAuthEndpoint.serverOnly(
-		{
-			method: "POST",
-			body: decommissionConnectionBodySchema,
-		},
-		async (ctx) => {
-			assertNativeSCIMTransactions(ctx.context.adapter);
-			const acquired = await acquireDecommissionLease(
-				ctx.context.adapter,
-				ctx.body.connectionId,
-			);
-			if (!acquired.leaseId) {
-				return ctx.json(createDecommissionResult(acquired.binding));
-			}
-			const binding = await reconcileDecommissionedConnection({
-				database: ctx.context.adapter,
-				auth: ctx.context,
-				projection,
-				identity,
-				binding: acquired.binding,
-				leaseId: acquired.leaseId,
-			});
-			return ctx.json(createDecommissionResult(binding));
 		},
 	);
 }

@@ -3,15 +3,18 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
-import type { SCIMBearerCredentialOptions } from "./types";
+import type { SCIMBearerCredentialOptions } from "./configuration";
 
 const BASE_URL = "http://localhost:3000";
 const SCIM_ERROR_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:Error";
 const SCIM_MEDIA_TYPE = "application/scim+json";
 const SCIM_USERS_URL = `${BASE_URL}/api/auth/scim/v2/Users`;
+const SCIM_GROUPS_URL = `${BASE_URL}/api/auth/scim/v2/Groups`;
 const SCIM_USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User";
 const SCIM_GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
 const SCIM_PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
+const SCIM_ENTERPRISE_USER_SCHEMA =
+	"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User";
 
 interface SCIMUserResponse {
 	id: string;
@@ -29,7 +32,7 @@ interface SCIMErrorResponse {
 
 function createSCIMAuth(
 	credentials: readonly SCIMBearerCredentialOptions[] = [
-		{ type: "bearer", token: "active-scim-token" },
+		{ type: "bearer", id: "active-scim-token", token: "active-scim-token" },
 	],
 ) {
 	const data = {
@@ -146,6 +149,70 @@ describe("SCIM HTTP contract", () => {
 		await expectSCIMError(response, 400);
 	});
 
+	it("rejects an unsupported User extension schema", async () => {
+		const auth = createSCIMAuth();
+		const response = await auth.handler(
+			new Request(SCIM_USERS_URL, {
+				method: "POST",
+				headers: {
+					accept: SCIM_MEDIA_TYPE,
+					authorization: "Bearer active-scim-token",
+					"content-type": SCIM_MEDIA_TYPE,
+				},
+				body: JSON.stringify({
+					schemas: [SCIM_USER_SCHEMA, SCIM_ENTERPRISE_USER_SCHEMA],
+					userName: "enterprise@example.com",
+					[SCIM_ENTERPRISE_USER_SCHEMA]: { employeeNumber: "42" },
+				}),
+			}),
+		);
+
+		await expectSCIMError(response, 400, "invalidValue");
+	});
+
+	it("rejects duplicate User schema URNs", async () => {
+		const auth = createSCIMAuth();
+		const response = await auth.handler(
+			new Request(SCIM_USERS_URL, {
+				method: "POST",
+				headers: {
+					accept: SCIM_MEDIA_TYPE,
+					authorization: "Bearer active-scim-token",
+					"content-type": SCIM_MEDIA_TYPE,
+				},
+				body: JSON.stringify({
+					schemas: [SCIM_USER_SCHEMA, SCIM_USER_SCHEMA],
+					userName: "duplicate-schema@example.com",
+				}),
+			}),
+		);
+
+		await expectSCIMError(response, 400, "invalidValue");
+	});
+
+	it("rejects an unsupported Group extension schema", async () => {
+		const auth = createSCIMAuth();
+		const unsupportedGroupSchema =
+			"urn:example:params:scim:schemas:extension:2.0:Group";
+		const response = await auth.handler(
+			new Request(SCIM_GROUPS_URL, {
+				method: "POST",
+				headers: {
+					accept: SCIM_MEDIA_TYPE,
+					authorization: "Bearer active-scim-token",
+					"content-type": SCIM_MEDIA_TYPE,
+				},
+				body: JSON.stringify({
+					schemas: [SCIM_GROUP_SCHEMA, unsupportedGroupSchema],
+					displayName: "Engineering",
+					[unsupportedGroupSchema]: { code: "engineering" },
+				}),
+			}),
+		);
+
+		await expectSCIMError(response, 400, "invalidValue");
+	});
+
 	it("returns noTarget for a pathless Group remove", async () => {
 		const auth = createSCIMAuth();
 		const headers = { authorization: "Bearer active-scim-token" };
@@ -190,9 +257,10 @@ describe("SCIM HTTP contract", () => {
 		["expired", "Bearer expired-scim-token"],
 	] as const)("returns a challenged SCIM error for %s authentication", async (_kind, authorization) => {
 		const auth = createSCIMAuth([
-			{ type: "bearer", token: "active-scim-token" },
+			{ type: "bearer", id: "active-scim-token", token: "active-scim-token" },
 			{
 				type: "bearer",
+				id: "expired-scim-token",
 				token: "expired-scim-token",
 				expiresAt: new Date(Date.now() - 60_000),
 			},

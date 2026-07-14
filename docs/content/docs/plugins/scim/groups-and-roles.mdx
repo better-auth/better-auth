@@ -45,7 +45,9 @@ scim({
     {
       id: "workforce-acme",
       provisioningDomainId: "workspace-acme",
-      credentials: [{ type: "bearer", token: workforceToken }],
+      credentials: [
+        { type: "bearer", id: "workforce-primary", token: workforceToken },
+      ],
     },
   ],
   projection: {
@@ -122,9 +124,10 @@ scim({
     {
       id: "workforce-acme",
       credentials: [
-        { type: "bearer", token: currentToken },
+        { type: "bearer", id: "current", token: currentToken },
         {
           type: "bearer",
+          id: "retiring",
           token: retiringToken,
           expiresAt: rotationEndsAt,
         },

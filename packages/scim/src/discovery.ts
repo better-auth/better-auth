@@ -1,30 +1,29 @@
 import { HIDE_METADATA } from "better-auth";
 import { createAuthEndpoint } from "better-auth/api";
-import {
-	SCIMGroupResourceSchema,
-	SCIMGroupResourceType,
-} from "./group-schemas";
+import { SCIM_RESOURCE_SCHEMAS } from "./resource-schema-registry";
 import { createSCIMError, SCIMErrorOpenAPISchemas } from "./scim-error";
 import {
+	createSCIMOpenAPIContent,
+	defineSCIMEndpointMetadata,
+	getResourceURL,
 	ResourceTypeOpenAPISchema,
+	SCIM_REQUEST_MEDIA_TYPES,
 	SCIMSchemaOpenAPISchema,
 	ServiceProviderOpenAPISchema,
 } from "./scim-metadata";
-import { SCIMUserResourceSchema, SCIMUserResourceType } from "./user-schemas";
-import { getResourceURL } from "./utils";
 
 const SCIM_LIST_RESPONSE_SCHEMA =
 	"urn:ietf:params:scim:api:messages:2.0:ListResponse";
 const SCIM_SERVICE_PROVIDER_CONFIG_SCHEMA =
 	"urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig";
-const SCIM_MEDIA_TYPES = ["application/json", "application/scim+json"];
 const SCIM_FILTER_MAX_RESULTS = 100;
 
-const supportedSCIMSchemas = [SCIMUserResourceSchema, SCIMGroupResourceSchema];
-const supportedSCIMResourceTypes = [
-	SCIMUserResourceType,
-	SCIMGroupResourceType,
-];
+const supportedSCIMSchemas = SCIM_RESOURCE_SCHEMAS.map(
+	(resource) => resource.discoverySchema,
+);
+const supportedSCIMResourceTypes = SCIM_RESOURCE_SCHEMAS.map(
+	(resource) => resource.resourceType,
+);
 
 function createListResponseOpenAPISchema<T extends Record<string, unknown>>(
 	resourceSchema: T,
@@ -61,9 +60,9 @@ export const getSCIMServiceProviderConfig = createAuthEndpoint(
 	"/scim/v2/ServiceProviderConfig",
 	{
 		method: "GET",
-		metadata: {
+		metadata: defineSCIMEndpointMetadata({
 			...HIDE_METADATA,
-			allowedMediaTypes: SCIM_MEDIA_TYPES,
+			allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
 			openapi: {
 				summary: "Get SCIM service provider configuration",
 				description:
@@ -71,16 +70,12 @@ export const getSCIMServiceProviderConfig = createAuthEndpoint(
 				responses: {
 					"200": {
 						description: "SCIM service provider configuration",
-						content: {
-							"application/json": {
-								schema: ServiceProviderOpenAPISchema,
-							},
-						},
+						content: createSCIMOpenAPIContent(ServiceProviderOpenAPISchema),
 					},
 					...SCIMErrorOpenAPISchemas,
 				},
 			},
-		},
+		}),
 	},
 	async (ctx) => {
 		return ctx.json({
@@ -123,9 +118,9 @@ export const getSCIMSchemas = createAuthEndpoint(
 	"/scim/v2/Schemas",
 	{
 		method: "GET",
-		metadata: {
+		metadata: defineSCIMEndpointMetadata({
 			...HIDE_METADATA,
-			allowedMediaTypes: SCIM_MEDIA_TYPES,
+			allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
 			openapi: {
 				summary: "List SCIM schemas",
 				description:
@@ -133,18 +128,14 @@ export const getSCIMSchemas = createAuthEndpoint(
 				responses: {
 					"200": {
 						description: "SCIM schema ListResponse",
-						content: {
-							"application/json": {
-								schema: createListResponseOpenAPISchema(
-									SCIMSchemaOpenAPISchema,
-								),
-							},
-						},
+						content: createSCIMOpenAPIContent(
+							createListResponseOpenAPISchema(SCIMSchemaOpenAPISchema),
+						),
 					},
 					...SCIMErrorOpenAPISchemas,
 				},
 			},
-		},
+		}),
 	},
 	async (ctx) => {
 		const schemas = supportedSCIMSchemas.map((schema) => ({
@@ -163,9 +154,9 @@ export const getSCIMSchema = createAuthEndpoint(
 	"/scim/v2/Schemas/:schemaId",
 	{
 		method: "GET",
-		metadata: {
+		metadata: defineSCIMEndpointMetadata({
 			...HIDE_METADATA,
-			allowedMediaTypes: SCIM_MEDIA_TYPES,
+			allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
 			openapi: {
 				summary: "Get a SCIM schema",
 				description:
@@ -173,16 +164,12 @@ export const getSCIMSchema = createAuthEndpoint(
 				responses: {
 					"200": {
 						description: "SCIM schema",
-						content: {
-							"application/json": {
-								schema: SCIMSchemaOpenAPISchema,
-							},
-						},
+						content: createSCIMOpenAPIContent(SCIMSchemaOpenAPISchema),
 					},
 					...SCIMErrorOpenAPISchemas,
 				},
 			},
-		},
+		}),
 	},
 	async (ctx) => {
 		const schema = supportedSCIMSchemas.find(
@@ -208,9 +195,9 @@ export const getSCIMResourceTypes = createAuthEndpoint(
 	"/scim/v2/ResourceTypes",
 	{
 		method: "GET",
-		metadata: {
+		metadata: defineSCIMEndpointMetadata({
 			...HIDE_METADATA,
-			allowedMediaTypes: SCIM_MEDIA_TYPES,
+			allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
 			openapi: {
 				summary: "List SCIM resource types",
 				description:
@@ -218,18 +205,14 @@ export const getSCIMResourceTypes = createAuthEndpoint(
 				responses: {
 					"200": {
 						description: "SCIM resource type ListResponse",
-						content: {
-							"application/json": {
-								schema: createListResponseOpenAPISchema(
-									ResourceTypeOpenAPISchema,
-								),
-							},
-						},
+						content: createSCIMOpenAPIContent(
+							createListResponseOpenAPISchema(ResourceTypeOpenAPISchema),
+						),
 					},
 					...SCIMErrorOpenAPISchemas,
 				},
 			},
-		},
+		}),
 	},
 	async (ctx) => {
 		const resourceTypes = supportedSCIMResourceTypes.map((resourceType) => ({
@@ -251,9 +234,9 @@ export const getSCIMResourceType = createAuthEndpoint(
 	"/scim/v2/ResourceTypes/:resourceTypeId",
 	{
 		method: "GET",
-		metadata: {
+		metadata: defineSCIMEndpointMetadata({
 			...HIDE_METADATA,
-			allowedMediaTypes: SCIM_MEDIA_TYPES,
+			allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
 			openapi: {
 				summary: "Get a SCIM resource type",
 				description:
@@ -261,16 +244,12 @@ export const getSCIMResourceType = createAuthEndpoint(
 				responses: {
 					"200": {
 						description: "SCIM resource type",
-						content: {
-							"application/json": {
-								schema: ResourceTypeOpenAPISchema,
-							},
-						},
+						content: createSCIMOpenAPIContent(ResourceTypeOpenAPISchema),
 					},
 					...SCIMErrorOpenAPISchemas,
 				},
 			},
-		},
+		}),
 	},
 	async (ctx) => {
 		const resourceType = supportedSCIMResourceTypes.find(

@@ -1,18 +1,20 @@
 import * as z from "zod";
+import type {
+	SCIM_RESOURCE_SCHEMA_REGISTRY,
+	SCIMResourceType,
+} from "./resource-schema-registry";
+import { stripSCIMCoreAttributePrefix } from "./resource-schema-registry";
+
+export type { SCIMResourceType } from "./resource-schema-registry";
 
 /** Maximum number of resources returned by one classic SCIM page. */
 const SCIM_MAX_PAGE_SIZE = 100;
 
-export type SCIMResourceType = "User" | "Group";
-
 export type SCIMUserFilterAttribute =
-	| "id"
-	| "userName"
-	| "externalId"
-	| "emails.value"
-	| "emails.work.value";
+	(typeof SCIM_RESOURCE_SCHEMA_REGISTRY.User.filterAttributes)[number];
 
-export type SCIMGroupFilterAttribute = "id" | "displayName" | "externalId";
+export type SCIMGroupFilterAttribute =
+	(typeof SCIM_RESOURCE_SCHEMA_REGISTRY.Group.filterAttributes)[number];
 
 export interface SCIMEqualityFilter<Attribute extends string> {
 	attribute: Attribute;
@@ -118,19 +120,6 @@ export interface SCIMCollectionQuery<Attribute extends string> {
 
 type SCIMFilterAttribute = SCIMUserFilterAttribute | SCIMGroupFilterAttribute;
 
-function stripCoreSchemaPrefix(
-	resourceType: SCIMResourceType,
-	attribute: string,
-): string {
-	const schemaPrefix =
-		resourceType === "User"
-			? "urn:ietf:params:scim:schemas:core:2.0:user:"
-			: "urn:ietf:params:scim:schemas:core:2.0:group:";
-	return attribute.toLowerCase().startsWith(schemaPrefix)
-		? attribute.slice(schemaPrefix.length)
-		: attribute;
-}
-
 function parseInteger(
 	input: number | string | undefined,
 	parameter: "startIndex" | "count",
@@ -199,7 +188,10 @@ function canonicalizeFilterAttribute(
 	attribute: string,
 ): SCIMFilterAttribute | undefined {
 	// cspell:ignore typeeq
-	const normalizedAttribute = stripCoreSchemaPrefix(resourceType, attribute);
+	const normalizedAttribute = stripSCIMCoreAttributePrefix(
+		resourceType,
+		attribute,
+	);
 	const compactAttribute = normalizedAttribute
 		.replace(/\s+/g, "")
 		.toLowerCase();
@@ -456,7 +448,7 @@ function normalizeAttributeList(
 					},
 				};
 			}
-			const normalizedAttribute = stripCoreSchemaPrefix(
+			const normalizedAttribute = stripSCIMCoreAttributePrefix(
 				resourceType,
 				attribute,
 			);

@@ -15,10 +15,8 @@ const groupMemberSchema = z.object({
 
 export const APIGroupSchema = z.object({
 	schemas: z
-		.array(z.string())
-		.refine((schemas) => schemas.includes(SCIM_GROUP_SCHEMA), {
-			message: "schemas must include the core SCIM Group schema",
-		}),
+		.array(z.literal(SCIM_GROUP_SCHEMA))
+		.length(1, "schemas must contain only the core SCIM Group schema"),
 	externalId: z.string().min(1).optional(),
 	displayName: z.string().trim().min(1),
 	members: z.array(groupMemberSchema).max(SCIM_MAX_GROUP_MEMBERS).optional(),

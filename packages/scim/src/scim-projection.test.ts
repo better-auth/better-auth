@@ -1,7 +1,12 @@
 import type { Session, User } from "better-auth";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import type {
+	SCIMAuthorizationSource,
+	SCIMProjectedRoleGrant,
+	SCIMProjection,
+} from ".";
 import { scim } from ".";
 import { createSCIMConnectionKey } from "./connection-state";
 
@@ -25,7 +30,7 @@ type SCIMGroupMemberRow = {
 };
 
 type ProjectionSource = {
-	kind: "group";
+	type: "group";
 	id: string;
 	externalId?: string;
 	displayName: string;
@@ -66,9 +71,7 @@ type ReconcileUserInput = {
 		active: boolean;
 	}[];
 	grants: {
-		key: string;
-		sourceKind: "group";
-		sourceId: string;
+		source: ProjectionSource;
 		role: string;
 	}[];
 };
@@ -79,6 +82,15 @@ type ReconcileIdentityInput = {
 	profileSourceId?: string;
 	sources: ReconcileUserInput["sources"];
 };
+
+it("exposes source-aware projection contracts without persistence details", () => {
+	type RoleMapping = NonNullable<SCIMProjection["roles"]>["map"];
+	type Source = Parameters<RoleMapping>[0]["source"];
+
+	expectTypeOf<Source>().toEqualTypeOf<SCIMAuthorizationSource>();
+	expectTypeOf<Source["type"]>().toEqualTypeOf<"group">();
+	expectTypeOf<SCIMProjectedRoleGrant["source"]>().toEqualTypeOf<Source>();
+});
 
 type SCIMConnectionBindingRow = {
 	id: string;
@@ -126,7 +138,13 @@ describe("SCIM role projection", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 							provisioningDomainId: "workspace-acme",
 						},
 					],
@@ -191,9 +209,12 @@ describe("SCIM role projection", () => {
 			],
 			grants: [
 				{
-					key: projectionGrant?.grantKey,
-					sourceKind: "group",
-					sourceId: createdGroup.id,
+					source: {
+						type: "group",
+						id: createdGroup.id,
+						externalId: "finance-admins",
+						displayName: "Finance administrators",
+					},
 					role: "billing-manager",
 				},
 			],
@@ -255,7 +276,13 @@ describe("SCIM role projection", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 							provisioningDomainId: "workspace-acme",
 						},
 					],
@@ -324,7 +351,13 @@ describe("SCIM role projection", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 					projection: {
@@ -388,12 +421,16 @@ describe("SCIM role projection", () => {
 					connections: [
 						{
 							id: "workforce-a",
-							credentials: [{ type: "bearer", token: "token-a" }],
+							credentials: [
+								{ type: "bearer", id: "token-a", token: "token-a" },
+							],
 							provisioningDomainId: "workspace-acme",
 						},
 						{
 							id: "workforce-b",
-							credentials: [{ type: "bearer", token: "token-b" }],
+							credentials: [
+								{ type: "bearer", id: "token-b", token: "token-b" },
+							],
 							provisioningDomainId: "workspace-acme",
 						},
 					],
@@ -562,7 +599,13 @@ describe("SCIM role projection", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 							provisioningDomainId: "workspace-acme",
 						},
 					],
@@ -656,12 +699,16 @@ describe("SCIM role projection", () => {
 					connections: [
 						{
 							id: "workforce-a",
-							credentials: [{ type: "bearer", token: "token-a" }],
+							credentials: [
+								{ type: "bearer", id: "token-a", token: "token-a" },
+							],
 							provisioningDomainId: "workspace-acme",
 						},
 						{
 							id: "workforce-b",
-							credentials: [{ type: "bearer", token: "token-b" }],
+							credentials: [
+								{ type: "bearer", id: "token-b", token: "token-b" },
+							],
 							provisioningDomainId: "workspace-acme",
 						},
 					],
@@ -749,7 +796,13 @@ describe("SCIM role projection", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 							provisioningDomainId: "workspace-acme",
 						},
 					],
@@ -877,7 +930,13 @@ describe("SCIM role projection", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 							provisioningDomainId: "workspace-acme",
 						},
 					],
@@ -977,7 +1036,13 @@ describe("SCIM role projection", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 							provisioningDomainId: "workspace-acme",
 						},
 					],
@@ -1052,7 +1117,13 @@ describe("SCIM role projection", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 							provisioningDomainId: "workspace-acme",
 						},
 					],
@@ -1107,7 +1178,13 @@ describe("SCIM role projection", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 							provisioningDomainId: "workspace-acme",
 						},
 					],

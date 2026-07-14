@@ -6,24 +6,27 @@ import type {
 } from "better-auth";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import type { SCIMCanonicalUser, SCIMConnectionOptions, SCIMIdentity } from ".";
 import { scim } from ".";
 import type {
-	SCIMConnectionOptions,
-	SCIMIdentity,
 	SCIMIdentityTombstone,
 	SCIMSubject,
 	SCIMUser,
-} from "./types";
+} from "./persistence";
 
 const BASE_URL = "http://localhost:3000";
 const CONNECTION_A = {
 	id: "workforce-a",
-	credentials: [{ type: "bearer", token: "connection-a-token" }],
+	credentials: [
+		{ type: "bearer", id: "connection-a-token", token: "connection-a-token" },
+	],
 } as const satisfies SCIMConnectionOptions;
 const CONNECTION_B = {
 	id: "workforce-b",
-	credentials: [{ type: "bearer", token: "connection-b-token" }],
+	credentials: [
+		{ type: "bearer", id: "connection-b-token", token: "connection-b-token" },
+	],
 } as const satisfies SCIMConnectionOptions;
 
 function createBackingUser(id = "existing-user"): User {
@@ -132,6 +135,17 @@ function preserveExistingUser(userId: string): SCIMIdentity {
 }
 
 describe("SCIM explicit identity resolution", () => {
+	it("exposes the canonical User invariants to identity resolvers", () => {
+		type ResolveUser = NonNullable<SCIMIdentity["resolveUser"]>;
+		type CanonicalUser = Parameters<ResolveUser>[0]["resource"];
+
+		expectTypeOf<CanonicalUser>().toEqualTypeOf<SCIMCanonicalUser>();
+		expectTypeOf<CanonicalUser["name"]["formatted"]>().toEqualTypeOf<string>();
+		expectTypeOf<
+			CanonicalUser["emails"][number]["primary"]
+		>().toEqualTypeOf<boolean>();
+	});
+
 	it("defaults to creating a new Better Auth User when no resolver is configured", async () => {
 		const { auth, data } = createIdentityFixture();
 		const resource = await auth.api.createSCIMUser({

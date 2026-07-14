@@ -7,10 +7,8 @@ const scimEmailValueSchema = z.email().max(254);
 export const APIUserSchema = z
 	.object({
 		schemas: z
-			.array(z.string())
-			.refine((schemas) => schemas.includes(SCIM_USER_SCHEMA), {
-				message: "schemas must include the core SCIM User schema",
-			}),
+			.array(z.literal(SCIM_USER_SCHEMA))
+			.length(1, "schemas must contain only the core SCIM User schema"),
 		userName: z.string().trim().min(1),
 		externalId: z.string().min(1).optional(),
 		displayName: z.string().trim().min(1).optional(),

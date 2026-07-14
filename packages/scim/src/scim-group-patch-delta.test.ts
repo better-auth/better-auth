@@ -9,13 +9,9 @@ import { betterAuth } from "better-auth";
 import type { MemoryDB } from "better-auth/adapters/memory";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, it } from "vitest";
+import type { SCIMProjectedUserState } from ".";
 import { scim } from ".";
-import type {
-	SCIMGroupMember,
-	SCIMProjectedUserState,
-	SCIMSubject,
-	SCIMUser,
-} from "./types";
+import type { SCIMGroupMember, SCIMSubject, SCIMUser } from "./persistence";
 
 const BASE_URL = "http://localhost:3000";
 const PATCH_OP_SCHEMA =
@@ -174,7 +170,13 @@ describe("SCIM incremental Group PATCH", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 					projection: {
@@ -309,7 +311,13 @@ describe("SCIM incremental Group PATCH", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 					projection: {
@@ -417,7 +425,13 @@ describe("SCIM incremental Group PATCH", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 				}),
@@ -494,7 +508,13 @@ describe("SCIM incremental Group PATCH", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 				}),
@@ -561,7 +581,13 @@ describe("SCIM incremental Group PATCH", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 					projection: {

@@ -7,31 +7,68 @@ This reference describes the SCIM operations and configuration supported by `@be
 
 ## Plugin options
 
-| Option        | Type                               | Description                                                        |
-| ------------- | ---------------------------------- | ------------------------------------------------------------------ |
-| `connections` | `readonly SCIMConnectionOptions[]` | Required. Configures one or more provisioning connections.         |
-| `identity`    | `SCIMIdentity`                     | Optional. Links existing users and applies global lifecycle state. |
-| `projection`  | `SCIMProjection`                   | Optional. Maps Groups to roles and applies access state.           |
+| Option           | Type                               | Description                                                          |
+| ---------------- | ---------------------------------- | -------------------------------------------------------------------- |
+| `connections`    | `readonly SCIMConnectionOptions[]` | Required. Configures one or more provisioning connections.           |
+| `authentication` | `SCIMAuthenticationOptions`        | Optional. Verifies externally issued OAuth bearer access tokens.     |
+| `identity`       | `SCIMIdentity`                     | Optional. Links existing users and applies global lifecycle state.   |
+| `projection`     | `SCIMProjection`                   | Optional. Maps Groups to roles and applies application access state. |
 
 ### Connection options
 
 | Option                 | Type                                     | Description                                                                                                                                                                |
 | ---------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `id`                   | `string`                                 | Required connection identifier. It must be trimmed, unique, and no longer than 255 characters.                                                                             |
-| `credentials`          | `readonly SCIMBearerCredentialOptions[]` | Required. Contains at least one bearer credential.                                                                                                                         |
+| `credentials`          | `readonly SCIMBearerCredentialOptions[]` | Required list of static bearer credentials. The list may be empty when `authentication.verifyBearerToken` is configured.                                                   |
 | `provisioningDomainId` | `string`                                 | Optional application boundary. It must be trimmed, nonempty, and no longer than 255 characters. It defaults to the connection ID and may be shared by several connections. |
 
 A connection owns its Users, Groups, and memberships. Changing `provisioningDomainId` after the connection first authenticates returns `409 Conflict`.
 
 ### Bearer credential options
 
-| Option      | Type       | Description                                                                                    |
-| ----------- | ---------- | ---------------------------------------------------------------------------------------------- |
-| `type`      | `"bearer"` | Required credential type.                                                                      |
-| `token`     | `string`   | Required opaque token. It cannot contain whitespace and must be unique across all connections. |
-| `expiresAt` | `Date`     | Optional valid `Date` used as a hard expiry during credential rotation.                        |
+| Option      | Type                   | Description                                                                                                  |
+| ----------- | ---------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `type`      | `"bearer"`             | Required credential type.                                                                                    |
+| `id`        | `string`               | Required stable identifier included in the authenticated principal. It must be unique within the connection. |
+| `token`     | `string`               | Required opaque token. It cannot contain whitespace and must be unique across all connections.               |
+| `scopes`    | `readonly SCIMScope[]` | Optional operation scopes. Static credentials receive every scope when this option is omitted.               |
+| `expiresAt` | `Date`                 | Optional valid `Date` used as a hard expiry during credential rotation.                                      |
 
 Store tokens in a secret manager, use a different value for each connection, and require HTTPS in production.
+
+### OAuth bearer verification
+
+Use `authentication.verifyBearerToken` when an authorization server issues access tokens through OAuth client credentials or another OAuth grant. The verifier validates the token and returns the connection, credential, and operation scopes represented by its claims.
+
+```ts title="auth.ts"
+scim({
+  connections: [{ id: "workforce-acme", credentials: [] }],
+  authentication: {
+    async verifyBearerToken({ token }) {
+      const claims = await verifyDirectoryAccessToken(token);
+      if (!claims) return null;
+
+      return {
+        connectionId: "workforce-acme",
+        credentialId: claims.clientId,
+        scopes: claims.scopes,
+        expiresAt: claims.expiresAt,
+      };
+    },
+  },
+});
+```
+
+The plugin does not issue access tokens or run an OAuth token endpoint. The application-owned verifier must validate the signature or introspection response, issuer, audience, expiry, and client identity before returning a principal.
+
+| Scope               | Operations                                |
+| ------------------- | ----------------------------------------- |
+| `scim.users.read`   | List or retrieve Users.                   |
+| `scim.users.write`  | Create, replace, patch, or delete Users.  |
+| `scim.groups.read`  | List or retrieve Groups.                  |
+| `scim.groups.write` | Create, replace, patch, or delete Groups. |
+
+An authenticated token without the required scope receives `403 Forbidden`. An invalid or expired token receives `401 Unauthorized`.
 
 ## HTTP behavior
 
@@ -39,12 +76,12 @@ The SCIM base path is `/scim/v2` under your Better Auth base URL. User and Group
 
 Requests with a body may use `application/scim+json` or `application/json`. Responses use `application/scim+json`. Authentication, validation, uniqueness, missing-resource, and media-type failures use the SCIM Error schema.
 
-`POST` and `PUT` bodies must include the matching core schema URN:
+`POST` and `PUT` bodies must contain exactly one matching core schema URN:
 
 * User: `urn:ietf:params:scim:schemas:core:2.0:User`
 * Group: `urn:ietf:params:scim:schemas:core:2.0:Group`
 
-PATCH bodies must include `urn:ietf:params:scim:api:messages:2.0:PatchOp`. Extra schema URNs do not enable extensions.
+PATCH bodies must include `urn:ietf:params:scim:api:messages:2.0:PatchOp`. User and Group create or replace requests with unsupported or duplicate schema URNs return `400 Bad Request` with `scimType: "invalidValue"`.
 
 ## Users
 
@@ -224,8 +261,8 @@ type resolveUser = (
       userName: string;
       primaryEmail: string;
       displayName: string;
-      name: SCIMName;
-      emails: readonly SCIMEmail[];
+      name: SCIMCanonicalName;
+      emails: readonly SCIMCanonicalEmail[];
       active: boolean;
     };
   },
@@ -267,6 +304,8 @@ Confirms that a mapped role exists in the target provisioning domain. A rejected
 
 Receives the complete desired access state for one Better Auth User in one provisioning domain. The callback runs inside the SCIM transaction and must be idempotent.
 
+Each grant has a validated `role` and the canonical authorization `source` that produced it. A Group source has `type: "group"`, its immutable SCIM `id`, and its current `externalId` and `displayName` when available. Persistence keys and storage column names are not part of this callback contract.
+
 See [Groups and custom roles](/docs/plugins/scim/groups-and-roles) for a complete example.
 
 ## Trusted server APIs
@@ -307,7 +346,7 @@ The plugin does not support the following SCIM features:
 * Nested Groups or non-User Group members
 * Bulk requests, POST-based search, `/Me`, ETags, cursors, or sorting
 * Operators other than equality and logical `and`
-* OAuth client credentials, Basic authentication, or mutual TLS
+* A built-in OAuth token endpoint, Basic authentication, or mutual TLS
 * Dynamic connection management, audit events, or webhooks
 
 The package is server-only and does not export a client plugin. SCIM provisioning does not configure user authentication.

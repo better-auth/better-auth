@@ -1,9 +1,13 @@
+import { openAPI } from "better-auth/plugins";
+import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
+import { scim } from ".";
 import {
 	APIGroupSchema,
 	OpenAPIGroupResourceSchema,
 	SCIMGroupResourceSchema,
 } from "./group-schemas";
+import { SCIM_RESOURCE_SCHEMA_REGISTRY } from "./resource-schema-registry";
 import {
 	APIUserSchema,
 	OpenAPIUserResourceSchema,
@@ -32,6 +36,77 @@ function getSubAttribute(attribute: SchemaAttribute, name: string) {
 }
 
 describe("SCIM core schema conformance", () => {
+	it("uses one registry for validation, discovery, and query capabilities", () => {
+		expect(SCIM_RESOURCE_SCHEMA_REGISTRY.User).toMatchObject({
+			type: "User",
+			schemaId: "urn:ietf:params:scim:schemas:core:2.0:User",
+			filterAttributes: [
+				"id",
+				"userName",
+				"externalId",
+				"emails.value",
+				"emails.work.value",
+			],
+		});
+		expect(SCIM_RESOURCE_SCHEMA_REGISTRY.User.inputSchema).toBe(APIUserSchema);
+		expect(SCIM_RESOURCE_SCHEMA_REGISTRY.User.discoverySchema).toBe(
+			SCIMUserResourceSchema,
+		);
+		expect(SCIM_RESOURCE_SCHEMA_REGISTRY.Group).toMatchObject({
+			type: "Group",
+			schemaId: "urn:ietf:params:scim:schemas:core:2.0:Group",
+			filterAttributes: ["id", "displayName", "externalId"],
+		});
+		expect(SCIM_RESOURCE_SCHEMA_REGISTRY.Group.inputSchema).toBe(
+			APIGroupSchema,
+		);
+		expect(SCIM_RESOURCE_SCHEMA_REGISTRY.Group.discoverySchema).toBe(
+			SCIMGroupResourceSchema,
+		);
+	});
+
+	it("advertises the SCIM response media type through OpenAPI", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				scim({
+					connections: [
+						{
+							id: "open-api",
+							credentials: [
+								{
+									type: "bearer",
+									id: "open-api-token",
+									token: "open-api-token",
+								},
+							],
+						},
+					],
+				}),
+				openAPI(),
+			],
+		});
+
+		const openAPISchema = await auth.api.generateOpenAPISchema();
+		expect(openAPISchema.paths).toMatchObject({
+			"/scim/v2/Users": {
+				post: {
+					responses: {
+						"201": {
+							content: {
+								"application/scim+json": expect.any(Object),
+							},
+						},
+						"400": {
+							content: {
+								"application/scim+json": expect.any(Object),
+							},
+						},
+					},
+				},
+			},
+		});
+	});
+
 	it("advertises only the persisted User profile", () => {
 		expect(
 			SCIMUserResourceSchema.attributes.map((attribute) => attribute.name),

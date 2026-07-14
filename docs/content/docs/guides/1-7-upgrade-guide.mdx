@@ -355,7 +355,9 @@ scim({
     {
       id: "workforce-acme",
       provisioningDomainId: "workspace-acme",
-      credentials: [{ type: "bearer", token: workforceToken }],
+      credentials: [
+        { type: "bearer", id: "workforce-primary", token: workforceToken },
+      ],
     },
   ],
 });

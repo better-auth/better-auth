@@ -26,7 +26,13 @@ describe("SCIM SQLite integration", () => {
 						connections: [
 							{
 								id: "sqlite-workforce",
-								credentials: [{ type: "bearer", token: "sqlite-scim-token" }],
+								credentials: [
+									{
+										type: "bearer",
+										id: "sqlite-scim-token",
+										token: "sqlite-scim-token",
+									},
+								],
 							},
 						],
 					}),

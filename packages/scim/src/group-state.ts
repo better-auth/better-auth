@@ -4,10 +4,11 @@ import {
 } from "@better-auth/core/context";
 import type { DBAdapter, DBTransactionAdapter } from "better-auth";
 import { BetterAuthError } from "better-auth";
+import type { SCIMConnection } from "./configuration";
 import { isSCIMIdentityMutationConflict } from "./identity";
+import type { SCIMGroup } from "./persistence";
 import { isSCIMProjectionSubjectConflict } from "./projection";
 import { createSCIMError } from "./scim-error";
-import type { SCIMConnection, SCIMGroup } from "./types";
 
 const SCIM_GROUP_TRANSACTION_ATTEMPTS = 3;
 const SCIM_GROUP_MUTATION_CONFLICT = Symbol("scim-group-mutation-conflict");

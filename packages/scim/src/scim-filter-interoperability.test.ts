@@ -28,7 +28,13 @@ async function createFilterFixture() {
 				connections: [
 					{
 						id: "workforce",
-						credentials: [{ type: "bearer", token: "test-scim-token" }],
+						credentials: [
+							{
+								type: "bearer",
+								id: "test-scim-token",
+								token: "test-scim-token",
+							},
+						],
 					},
 				],
 			}),

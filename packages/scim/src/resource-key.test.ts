@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createScopedKey } from "./utils";
+import { createScopedKey } from "./resource-key";
 
 describe("SCIM persisted keys", () => {
 	it("remain fixed-size for provider-controlled identifiers", () => {

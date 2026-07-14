@@ -1,6 +1,7 @@
+import type { SCIMCanonicalEmail, SCIMEmail, SCIMName } from "./configuration";
+import type { SCIMUser } from "./persistence";
+import { createScopedKey } from "./resource-key";
 import { createSCIMError } from "./scim-error";
-import type { SCIMEmail, SCIMName, SCIMUser } from "./types";
-import { createScopedKey } from "./utils";
 
 interface SCIMProfileInput {
 	userName: string;
@@ -16,7 +17,7 @@ export interface CanonicalSCIMUserProfile {
 	formattedName: string;
 	givenName: string | undefined;
 	familyName: string | undefined;
-	emails: SCIMEmail[];
+	emails: SCIMCanonicalEmail[];
 	primaryEmail: string;
 }
 
@@ -39,7 +40,7 @@ function normalizeOptionalString(value?: string): string | undefined {
 export function normalizeSCIMEmails(
 	userName: string,
 	emails?: readonly SCIMEmail[],
-): SCIMEmail[] {
+): SCIMCanonicalEmail[] {
 	const normalized = (emails ?? []).map((email) => ({
 		value: email.value.trim().toLowerCase(),
 		...(email.type?.trim() ? { type: email.type.trim().toLowerCase() } : {}),
@@ -130,7 +131,7 @@ function invalidStoredEmailState(): never {
 }
 
 /** Read and validate the complete canonical email set from storage. */
-export function readSCIMEmails(user: SCIMUser): SCIMEmail[] {
+export function readSCIMEmails(user: SCIMUser): SCIMCanonicalEmail[] {
 	let parsed: unknown;
 	try {
 		parsed = JSON.parse(user.serializedEmails);
@@ -141,7 +142,7 @@ export function readSCIMEmails(user: SCIMUser): SCIMEmail[] {
 		return invalidStoredEmailState();
 	}
 
-	const emails: SCIMEmail[] = [];
+	const emails: SCIMCanonicalEmail[] = [];
 	for (const candidate of parsed) {
 		if (
 			typeof candidate !== "object" ||

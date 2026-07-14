@@ -14,34 +14,37 @@ import {
 	scimAttributeProjectionQuerySchema,
 	scimCollectionQuerySchema,
 } from "./collection-query";
+import type { SCIMConnection } from "./configuration";
 import type { SCIMConnectionMiddleware } from "./connection-authentication";
 import { fenceActiveSCIMConnection } from "./connection-state";
-import {
-	APIGroupSchema,
-	OpenAPIGroupResourceSchema,
-	SCIM_MAX_GROUP_MEMBERS,
-} from "./group-schemas";
+import { SCIM_MAX_GROUP_MEMBERS } from "./group-schemas";
 import {
 	acquireSCIMGroupMutationLock,
 	findSCIMGroup,
 	runGroupMutationTransaction,
 } from "./group-state";
+import type { SCIMGroup, SCIMGroupMember, SCIMUser } from "./persistence";
 import type { SCIMProjectionCoordinator } from "./projection";
 import { projectSCIMResourceAttributes } from "./resource-attribute-projection";
+import { createSCIMOrderKey, createScopedKey } from "./resource-key";
+import {
+	SCIM_RESOURCE_SCHEMA_REGISTRY,
+	stripSCIMCoreAttributePrefix,
+} from "./resource-schema-registry";
 import { createSCIMError, SCIMErrorOpenAPISchemas } from "./scim-error";
-import type {
-	SCIMConnection,
-	SCIMGroup,
-	SCIMGroupMember,
-	SCIMUser,
-} from "./types";
-import { createSCIMOrderKey, createScopedKey, getResourceURL } from "./utils";
+import {
+	createSCIMOpenAPIContent,
+	defineSCIMEndpointMetadata,
+	getResourceURL,
+	SCIM_REQUEST_MEDIA_TYPES,
+} from "./scim-metadata";
 
-const SCIM_GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
-const SCIM_GROUP_SCHEMA_PREFIX =
-	/^urn:ietf:params:scim:schemas:core:2\.0:group:/i;
+const {
+	inputSchema: APIGroupSchema,
+	openAPISchema: OpenAPIGroupResourceSchema,
+	schemaId: SCIM_GROUP_SCHEMA,
+} = SCIM_RESOURCE_SCHEMA_REGISTRY.Group;
 const SCIM_PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
-const SCIM_MEDIA_TYPES = ["application/json", "application/scim+json"];
 
 function requireGroupAttributeProjection(
 	input: SCIMCollectionQueryInput,
@@ -285,7 +288,7 @@ function readMemberIdFromValuePath(path: string): string | undefined {
 }
 
 function normalizeGroupPatchPath(path: string): string {
-	return path.trim().replace(SCIM_GROUP_SCHEMA_PREFIX, "");
+	return stripSCIMCoreAttributePrefix("Group", path.trim());
 }
 
 interface IncrementalMembershipPatch {
@@ -770,24 +773,20 @@ export function createSCIMGroup(
 			method: "POST",
 			body: APIGroupSchema,
 			query: scimAttributeProjectionQuerySchema.optional(),
-			metadata: {
+			metadata: defineSCIMEndpointMetadata({
 				...HIDE_METADATA,
-				allowedMediaTypes: SCIM_MEDIA_TYPES,
+				allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
 				openapi: {
 					summary: "Create SCIM Group",
 					responses: {
 						"201": {
 							description: "SCIM Group resource",
-							content: {
-								"application/json": {
-									schema: OpenAPIGroupResourceSchema,
-								},
-							},
+							content: createSCIMOpenAPIContent(OpenAPIGroupResourceSchema),
 						},
 						...SCIMErrorOpenAPISchemas,
 					},
 				},
-			},
+			}),
 			use: [authMiddleware],
 		},
 		async (ctx) => {
@@ -881,24 +880,20 @@ export function getSCIMGroup(authMiddleware: SCIMConnectionMiddleware) {
 		{
 			method: "GET",
 			query: scimAttributeProjectionQuerySchema.optional(),
-			metadata: {
+			metadata: defineSCIMEndpointMetadata({
 				...HIDE_METADATA,
-				allowedMediaTypes: SCIM_MEDIA_TYPES,
+				allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
 				openapi: {
 					summary: "Get SCIM Group",
 					responses: {
 						"200": {
 							description: "SCIM Group resource",
-							content: {
-								"application/json": {
-									schema: OpenAPIGroupResourceSchema,
-								},
-							},
+							content: createSCIMOpenAPIContent(OpenAPIGroupResourceSchema),
 						},
 						...SCIMErrorOpenAPISchemas,
 					},
 				},
-			},
+			}),
 			use: [authMiddleware],
 		},
 		async (ctx) => {
@@ -942,35 +937,31 @@ export function listSCIMGroups(authMiddleware: SCIMConnectionMiddleware) {
 		{
 			method: "GET",
 			query: scimCollectionQuerySchema.optional(),
-			metadata: {
+			metadata: defineSCIMEndpointMetadata({
 				...HIDE_METADATA,
-				allowedMediaTypes: SCIM_MEDIA_TYPES,
+				allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
 				openapi: {
 					summary: "List SCIM Groups",
 					responses: {
 						"200": {
 							description: "SCIM Group list",
-							content: {
-								"application/json": {
-									schema: {
-										type: "object",
-										properties: {
-											totalResults: { type: "number" },
-											itemsPerPage: { type: "number" },
-											startIndex: { type: "number" },
-											Resources: {
-												type: "array",
-												items: OpenAPIGroupResourceSchema,
-											},
-										},
+							content: createSCIMOpenAPIContent({
+								type: "object",
+								properties: {
+									totalResults: { type: "number" },
+									itemsPerPage: { type: "number" },
+									startIndex: { type: "number" },
+									Resources: {
+										type: "array",
+										items: OpenAPIGroupResourceSchema,
 									},
 								},
-							},
+							}),
 						},
 						...SCIMErrorOpenAPISchemas,
 					},
 				},
-			},
+			}),
 			use: [authMiddleware],
 		},
 		async (ctx) => {
@@ -1041,24 +1032,20 @@ export function replaceSCIMGroup(
 			method: "PUT",
 			body: APIGroupSchema,
 			query: scimAttributeProjectionQuerySchema.optional(),
-			metadata: {
+			metadata: defineSCIMEndpointMetadata({
 				...HIDE_METADATA,
-				allowedMediaTypes: SCIM_MEDIA_TYPES,
+				allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
 				openapi: {
 					summary: "Replace SCIM Group",
 					responses: {
 						"200": {
 							description: "SCIM Group resource",
-							content: {
-								"application/json": {
-									schema: OpenAPIGroupResourceSchema,
-								},
-							},
+							content: createSCIMOpenAPIContent(OpenAPIGroupResourceSchema),
 						},
 						...SCIMErrorOpenAPISchemas,
 					},
 				},
-			},
+			}),
 			use: [authMiddleware],
 		},
 		async (ctx) => {
@@ -1218,19 +1205,15 @@ export function patchSCIMGroup(
 			method: "PATCH",
 			body: patchSCIMGroupBodySchema,
 			query: scimAttributeProjectionQuerySchema.optional(),
-			metadata: {
+			metadata: defineSCIMEndpointMetadata({
 				...HIDE_METADATA,
-				allowedMediaTypes: SCIM_MEDIA_TYPES,
+				allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
 				openapi: {
 					summary: "Patch SCIM Group",
 					responses: {
 						"200": {
 							description: "Projected SCIM Group resource",
-							content: {
-								"application/json": {
-									schema: OpenAPIGroupResourceSchema,
-								},
-							},
+							content: createSCIMOpenAPIContent(OpenAPIGroupResourceSchema),
 						},
 						"204": {
 							description: "SCIM Group updated",
@@ -1238,7 +1221,7 @@ export function patchSCIMGroup(
 						...SCIMErrorOpenAPISchemas,
 					},
 				},
-			},
+			}),
 			use: [authMiddleware],
 		},
 		async (ctx) => {
@@ -1440,9 +1423,9 @@ export function deleteSCIMGroup(
 		"/scim/v2/Groups/:groupId",
 		{
 			method: "DELETE",
-			metadata: {
+			metadata: defineSCIMEndpointMetadata({
 				...HIDE_METADATA,
-				allowedMediaTypes: SCIM_MEDIA_TYPES,
+				allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
 				openapi: {
 					summary: "Delete SCIM Group",
 					responses: {
@@ -1452,7 +1435,7 @@ export function deleteSCIMGroup(
 						...SCIMErrorOpenAPISchemas,
 					},
 				},
-			},
+			}),
 			use: [authMiddleware],
 		},
 		async (ctx) => {

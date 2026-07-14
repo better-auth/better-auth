@@ -1,6 +1,8 @@
 import * as z from "zod";
+import type { SCIMEmail, SCIMName } from "./configuration";
+import type { SCIMUser } from "./persistence";
+import { stripSCIMCoreAttributePrefix } from "./resource-schema-registry";
 import { createSCIMError } from "./scim-error";
-import type { SCIMEmail, SCIMName, SCIMUser } from "./types";
 import {
 	createSCIMEmailTupleKey,
 	normalizeSCIMEmails,
@@ -9,8 +11,6 @@ import {
 } from "./user-profile";
 
 const SCIM_PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
-const SCIM_USER_SCHEMA_PREFIX =
-	/^urn:ietf:params:scim:schemas:core:2\.0:user:/i;
 const WORK_EMAIL_VALUE_PATH =
 	/^emails\s*\[\s*type\s+eq\s+"work"\s*\]\s*\.\s*value$/i;
 const scimEmailValueSchema = z.email().max(254);
@@ -275,9 +275,7 @@ function replaceSelectedEmail(
 }
 
 function normalizePatchPath(path: string): string {
-	return path
-		.trim()
-		.replace(SCIM_USER_SCHEMA_PREFIX, "")
+	return stripSCIMCoreAttributePrefix("User", path.trim())
 		.replace(/\s+/g, "")
 		.toLowerCase();
 }
@@ -304,7 +302,10 @@ export function applySCIMUserPatch(
 		path: string,
 		value: unknown,
 	): void {
-		const schemaRelativePath = path.trim().replace(SCIM_USER_SCHEMA_PREFIX, "");
+		const schemaRelativePath = stripSCIMCoreAttributePrefix(
+			"User",
+			path.trim(),
+		);
 		const normalizedPath = normalizePatchPath(path);
 		if (
 			normalizedPath === "id" ||

@@ -11,7 +11,7 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
 import { SCIM_MAX_GROUP_MEMBERS } from "./group-schemas";
-import type { SCIMSubject } from "./types";
+import type { SCIMSubject } from "./persistence";
 
 const USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User";
 const GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
@@ -164,7 +164,13 @@ function createFixture() {
 				connections: [
 					{
 						id: "workforce",
-						credentials: [{ type: "bearer", token: "test-scim-token" }],
+						credentials: [
+							{
+								type: "bearer",
+								id: "test-scim-token",
+								token: "test-scim-token",
+							},
+						],
 					},
 				],
 			}),
@@ -374,7 +380,13 @@ describe("SCIM Group direct-member cardinality", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 				}),

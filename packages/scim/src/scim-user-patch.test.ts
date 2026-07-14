@@ -3,7 +3,7 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
-import type { SCIMUser } from "./types";
+import type { SCIMUser } from "./persistence";
 
 const PATCH_OP_SCHEMA =
 	"urn:ietf:params:scim:api:messages:2.0:PatchOp" as const;
@@ -29,7 +29,13 @@ function createTestContext() {
 				connections: [
 					{
 						id: "workforce",
-						credentials: [{ type: "bearer", token: "test-scim-token" }],
+						credentials: [
+							{
+								type: "bearer",
+								id: "test-scim-token",
+								token: "test-scim-token",
+							},
+						],
 					},
 				],
 			}),

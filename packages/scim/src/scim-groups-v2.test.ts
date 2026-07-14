@@ -53,7 +53,13 @@ describe("SCIM connection-owned Groups", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 				}),
@@ -140,7 +146,13 @@ describe("SCIM connection-owned Groups", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 				}),
@@ -211,11 +223,23 @@ describe("SCIM connection-owned Groups", () => {
 					connections: [
 						{
 							id: "workforce-a",
-							credentials: [{ type: "bearer", token: "connection-a-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "connection-a-token",
+									token: "connection-a-token",
+								},
+							],
 						},
 						{
 							id: "workforce-b",
-							credentials: [{ type: "bearer", token: "connection-b-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "connection-b-token",
+									token: "connection-b-token",
+								},
+							],
 						},
 					],
 				}),
@@ -286,7 +310,13 @@ describe("SCIM connection-owned Groups", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 				}),
@@ -382,7 +412,13 @@ describe("SCIM connection-owned Groups", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 				}),
@@ -472,7 +508,13 @@ describe("SCIM connection-owned Groups", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 				}),
@@ -595,7 +637,13 @@ describe("SCIM connection-owned Groups", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 				}),
@@ -678,7 +726,13 @@ describe("SCIM connection-owned Groups", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 				}),
@@ -747,7 +801,13 @@ describe("SCIM connection-owned Groups", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 				}),
@@ -831,11 +891,23 @@ describe("SCIM connection-owned Groups", () => {
 					connections: [
 						{
 							id: "workforce-a",
-							credentials: [{ type: "bearer", token: "connection-a-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "connection-a-token",
+									token: "connection-a-token",
+								},
+							],
 						},
 						{
 							id: "workforce-b",
-							credentials: [{ type: "bearer", token: "connection-b-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "connection-b-token",
+									token: "connection-b-token",
+								},
+							],
 						},
 					],
 				}),

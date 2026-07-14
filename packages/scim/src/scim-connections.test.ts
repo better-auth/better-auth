@@ -2,6 +2,7 @@ import type { User } from "better-auth";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, it } from "vitest";
+import type { SCIMBearerTokenVerificationResult } from ".";
 import { scim } from ".";
 
 type SCIMUserRow = {
@@ -40,7 +41,9 @@ describe("SCIM connection provisioning", () => {
 				connections: [
 					{
 						id: " workforce ",
-						credentials: [{ type: "bearer", token: "valid-token" }],
+						credentials: [
+							{ type: "bearer", id: "valid-token", token: "valid-token" },
+						],
 					},
 				],
 			}),
@@ -50,7 +53,9 @@ describe("SCIM connection provisioning", () => {
 				connections: [
 					{
 						id: "workforce",
-						credentials: [{ type: "bearer", token: "invalid token" }],
+						credentials: [
+							{ type: "bearer", id: "invalid-token", token: "invalid token" },
+						],
 					},
 				],
 			}),
@@ -80,7 +85,13 @@ describe("SCIM connection provisioning", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 				}),
@@ -138,7 +149,13 @@ describe("SCIM connection provisioning", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 				}),
@@ -195,11 +212,23 @@ describe("SCIM connection provisioning", () => {
 					connections: [
 						{
 							id: "workforce-a",
-							credentials: [{ type: "bearer", token: "connection-a-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "connection-a-token",
+									token: "connection-a-token",
+								},
+							],
 						},
 						{
 							id: "workforce-b",
-							credentials: [{ type: "bearer", token: "connection-b-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "connection-b-token",
+									token: "connection-b-token",
+								},
+							],
 						},
 					],
 				}),
@@ -262,7 +291,13 @@ describe("SCIM connection provisioning", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 				}),
@@ -341,7 +376,13 @@ describe("SCIM connection provisioning", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 				}),
@@ -407,7 +448,13 @@ describe("SCIM connection provisioning", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 				}),
@@ -501,9 +548,14 @@ describe("SCIM connection provisioning", () => {
 						{
 							id: "workforce",
 							credentials: [
-								{ type: "bearer", token: "rotating-token-a" },
 								{
 									type: "bearer",
+									id: "rotating-token-a",
+									token: "rotating-token-a",
+								},
+								{
+									type: "bearer",
+									id: "rotating-token-b",
 									token: "rotating-token-b",
 									expiresAt: futureDate,
 								},
@@ -555,6 +607,7 @@ describe("SCIM connection provisioning", () => {
 							credentials: [
 								{
 									type: "bearer",
+									id: "expired-token",
 									token: "expired-token",
 									expiresAt: new Date(Date.now() - 60 * 1000),
 								},
@@ -574,6 +627,94 @@ describe("SCIM connection provisioning", () => {
 		expect(expiredResponse.headers.get("www-authenticate")).toBe(
 			'Bearer realm="SCIM"',
 		);
+	});
+
+	it("authenticates verified OAuth bearer principals and enforces their scopes", async () => {
+		const data = {
+			user: [] as User[],
+			session: [] as { id: string }[],
+			verification: [] as { id: string }[],
+			account: [] as { id: string }[],
+			scimConnectionBinding: [] as { id: string }[],
+			scimIdentityTombstone: [] as { id: string }[],
+			scimSubject: [] as { id: string; userId: string }[],
+			scimUser: [] as SCIMUserRow[],
+			scimGroupMember: [] as { id: string }[],
+			scimProjectionGrant: [] as { id: string }[],
+		};
+		const verifiedRequests: { method: string; path: string; token: string }[] =
+			[];
+		const auth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: memoryAdapter(data),
+			plugins: [
+				scim({
+					connections: [{ id: "workforce", credentials: [] }],
+					authentication: {
+						verifyBearerToken(input) {
+							verifiedRequests.push({
+								method: input.method,
+								path: input.path,
+								token: input.token,
+							});
+							if (input.token === "malformed-oauth-token") {
+								return {
+									connectionId: "workforce",
+									credentialId: "oauth-client-1",
+									scopes: ["administrator"],
+								} as unknown as SCIMBearerTokenVerificationResult;
+							}
+							if (input.token !== "oauth-write-token") return null;
+							return {
+								connectionId: "workforce",
+								credentialId: "oauth-client-1",
+								scopes: ["scim.users.write"],
+							};
+						},
+					},
+				}),
+			],
+		});
+		const authorization = { authorization: "Bearer oauth-write-token" };
+
+		const created = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "oauth@example.com",
+			},
+			headers: authorization,
+		});
+		const listResponse = await auth.handler(
+			new Request("http://localhost:3000/api/auth/scim/v2/Users", {
+				headers: authorization,
+			}),
+		);
+		const malformedResponse = await auth.handler(
+			new Request("http://localhost:3000/api/auth/scim/v2/Users", {
+				headers: { authorization: "Bearer malformed-oauth-token" },
+			}),
+		);
+
+		expect(created.userName).toBe("oauth@example.com");
+		expect(listResponse.status).toBe(403);
+		expect(malformedResponse.status).toBe(401);
+		expect(verifiedRequests).toEqual([
+			{
+				method: "POST",
+				path: "/scim/v2/Users",
+				token: "oauth-write-token",
+			},
+			{
+				method: "GET",
+				path: "/scim/v2/Users",
+				token: "oauth-write-token",
+			},
+			{
+				method: "GET",
+				path: "/scim/v2/Users",
+				token: "malformed-oauth-token",
+			},
+		]);
 	});
 
 	it("rejects provisioning before any write when the adapter lacks native transactions", async () => {
@@ -597,7 +738,13 @@ describe("SCIM connection provisioning", () => {
 					connections: [
 						{
 							id: "workforce",
-							credentials: [{ type: "bearer", token: "test-scim-token" }],
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
 						},
 					],
 				}),

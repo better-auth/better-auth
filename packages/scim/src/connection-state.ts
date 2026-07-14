@@ -1,7 +1,7 @@
 import type { DBAdapter, DBTransactionAdapter } from "better-auth";
+import type { SCIMConnectionBinding } from "./persistence";
+import { createScopedKey } from "./resource-key";
 import { createSCIMError } from "./scim-error";
-import type { SCIMConnectionBinding } from "./types";
-import { createScopedKey } from "./utils";
 
 /** Creates the stable lookup key for a code-defined connection id. */
 export function createSCIMConnectionKey(connectionId: string): string {

@@ -3,7 +3,7 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
-import type { SCIMConnectionBinding, SCIMGroup, SCIMUser } from "./types";
+import type { SCIMConnectionBinding, SCIMGroup, SCIMUser } from "./persistence";
 
 const USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User";
 const GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
@@ -33,7 +33,13 @@ describe("SCIM provisioning domain immutability", () => {
 							{
 								id: "workforce",
 								provisioningDomainId,
-								credentials: [{ type: "bearer", token: "test-scim-token" }],
+								credentials: [
+									{
+										type: "bearer",
+										id: "test-scim-token",
+										token: "test-scim-token",
+									},
+								],
 							},
 						],
 					}),
@@ -94,7 +100,13 @@ describe("SCIM provisioning domain immutability", () => {
 							{
 								id: "workforce",
 								provisioningDomainId,
-								credentials: [{ type: "bearer", token: "test-scim-token" }],
+								credentials: [
+									{
+										type: "bearer",
+										id: "test-scim-token",
+										token: "test-scim-token",
+									},
+								],
 							},
 						],
 					}),

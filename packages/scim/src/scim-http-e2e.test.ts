@@ -5,7 +5,7 @@ import { getMigrations } from "better-auth/db/migration";
 import { getHttpTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
-import type { SCIMProjectedUserState } from "./types";
+import type { SCIMProjectedUserState } from "./configuration";
 
 describe("SCIM HTTP end-to-end", () => {
 	it("normalizes SCIM DELETE requests from runtimes with empty body streams", async () => {
@@ -13,7 +13,9 @@ describe("SCIM HTTP end-to-end", () => {
 			connections: [
 				{
 					id: "streaming-runtime",
-					credentials: [{ type: "bearer", token: "streaming-token" }],
+					credentials: [
+						{ type: "bearer", id: "streaming-token", token: "streaming-token" },
+					],
 				},
 			],
 		});
@@ -62,7 +64,13 @@ describe("SCIM HTTP end-to-end", () => {
 							{
 								id: "sqlite-workforce",
 								provisioningDomainId: "workspace-sqlite",
-								credentials: [{ type: "bearer", token: "sqlite-scim-token" }],
+								credentials: [
+									{
+										type: "bearer",
+										id: "sqlite-scim-token",
+										token: "sqlite-scim-token",
+									},
+								],
 							},
 						],
 						projection: {
@@ -181,7 +189,8 @@ describe("SCIM HTTP end-to-end", () => {
 		const grantedAt = projectedStates.findIndex((state) =>
 			state.grants.some(
 				(grant) =>
-					grant.role === "billing-manager" && grant.sourceId === result.groupId,
+					grant.role === "billing-manager" &&
+					grant.source.id === result.groupId,
 			),
 		);
 		const revokedAt = projectedStates.findIndex(

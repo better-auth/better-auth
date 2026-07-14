@@ -13,6 +13,7 @@ import {
 	scimAttributeProjectionQuerySchema,
 	scimCollectionQuerySchema,
 } from "./collection-query";
+import type { SCIMConnection } from "./configuration";
 import type { SCIMConnectionMiddleware } from "./connection-authentication";
 import { fenceActiveSCIMConnection } from "./connection-state";
 import {
@@ -23,16 +24,23 @@ import {
 } from "./group-state";
 import type { SCIMIdentityCoordinator } from "./identity";
 import { runIdentityMutationTransaction } from "./identity";
-import type { SCIMProjectionCoordinator } from "./projection";
-import { projectSCIMResourceAttributes } from "./resource-attribute-projection";
-import { createSCIMError, SCIMErrorOpenAPISchemas } from "./scim-error";
 import type {
-	SCIMConnection,
 	SCIMGroup,
 	SCIMGroupMember,
 	SCIMSubject,
 	SCIMUser,
-} from "./types";
+} from "./persistence";
+import type { SCIMProjectionCoordinator } from "./projection";
+import { projectSCIMResourceAttributes } from "./resource-attribute-projection";
+import { createSCIMOrderKey, createScopedKey } from "./resource-key";
+import { SCIM_RESOURCE_SCHEMA_REGISTRY } from "./resource-schema-registry";
+import { createSCIMError, SCIMErrorOpenAPISchemas } from "./scim-error";
+import {
+	createSCIMOpenAPIContent,
+	defineSCIMEndpointMetadata,
+	getResourceURL,
+	SCIM_REQUEST_MEDIA_TYPES,
+} from "./scim-metadata";
 import {
 	applySCIMUserPatch,
 	patchSCIMUserBodySchema,
@@ -45,11 +53,12 @@ import {
 	readSCIMEmails,
 	serializeSCIMEmails,
 } from "./user-profile";
-import { APIUserSchema, OpenAPIUserResourceSchema } from "./user-schemas";
-import { createSCIMOrderKey, createScopedKey, getResourceURL } from "./utils";
 
-const SCIM_USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User";
-const SCIM_MEDIA_TYPES = ["application/json", "application/scim+json"];
+const {
+	inputSchema: APIUserSchema,
+	openAPISchema: OpenAPIUserResourceSchema,
+	schemaId: SCIM_USER_SCHEMA,
+} = SCIM_RESOURCE_SCHEMA_REGISTRY.User;
 
 function requireUserAttributeProjection(
 	input: SCIMCollectionQueryInput,
@@ -357,24 +366,20 @@ export function createSCIMUser(
 			method: "POST",
 			body: APIUserSchema,
 			query: scimAttributeProjectionQuerySchema.optional(),
-			metadata: {
+			metadata: defineSCIMEndpointMetadata({
 				...HIDE_METADATA,
-				allowedMediaTypes: SCIM_MEDIA_TYPES,
+				allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
 				openapi: {
 					summary: "Create SCIM User",
 					responses: {
 						"201": {
 							description: "SCIM User resource",
-							content: {
-								"application/json": {
-									schema: OpenAPIUserResourceSchema,
-								},
-							},
+							content: createSCIMOpenAPIContent(OpenAPIUserResourceSchema),
 						},
 						...SCIMErrorOpenAPISchemas,
 					},
 				},
-			},
+			}),
 			use: [authMiddleware],
 		},
 		async (ctx) => {
@@ -553,24 +558,20 @@ export function getSCIMUser(authMiddleware: SCIMConnectionMiddleware) {
 		{
 			method: "GET",
 			query: scimAttributeProjectionQuerySchema.optional(),
-			metadata: {
+			metadata: defineSCIMEndpointMetadata({
 				...HIDE_METADATA,
-				allowedMediaTypes: SCIM_MEDIA_TYPES,
+				allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
 				openapi: {
 					summary: "Get SCIM User",
 					responses: {
 						"200": {
 							description: "SCIM User resource",
-							content: {
-								"application/json": {
-									schema: OpenAPIUserResourceSchema,
-								},
-							},
+							content: createSCIMOpenAPIContent(OpenAPIUserResourceSchema),
 						},
 						...SCIMErrorOpenAPISchemas,
 					},
 				},
-			},
+			}),
 			use: [authMiddleware],
 		},
 		async (ctx) => {
@@ -606,35 +607,31 @@ export function listSCIMUsers(authMiddleware: SCIMConnectionMiddleware) {
 		{
 			method: "GET",
 			query: scimCollectionQuerySchema.optional(),
-			metadata: {
+			metadata: defineSCIMEndpointMetadata({
 				...HIDE_METADATA,
-				allowedMediaTypes: SCIM_MEDIA_TYPES,
+				allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
 				openapi: {
 					summary: "List SCIM Users",
 					responses: {
 						"200": {
 							description: "SCIM User list",
-							content: {
-								"application/json": {
-									schema: {
-										type: "object",
-										properties: {
-											totalResults: { type: "number" },
-											itemsPerPage: { type: "number" },
-											startIndex: { type: "number" },
-											Resources: {
-												type: "array",
-												items: OpenAPIUserResourceSchema,
-											},
-										},
+							content: createSCIMOpenAPIContent({
+								type: "object",
+								properties: {
+									totalResults: { type: "number" },
+									itemsPerPage: { type: "number" },
+									startIndex: { type: "number" },
+									Resources: {
+										type: "array",
+										items: OpenAPIUserResourceSchema,
 									},
 								},
-							},
+							}),
 						},
 						...SCIMErrorOpenAPISchemas,
 					},
 				},
-			},
+			}),
 			use: [authMiddleware],
 		},
 		async (ctx) => {
@@ -703,24 +700,20 @@ export function replaceSCIMUser(
 			method: "PUT",
 			body: APIUserSchema,
 			query: scimAttributeProjectionQuerySchema.optional(),
-			metadata: {
+			metadata: defineSCIMEndpointMetadata({
 				...HIDE_METADATA,
-				allowedMediaTypes: SCIM_MEDIA_TYPES,
+				allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
 				openapi: {
 					summary: "Replace SCIM User",
 					responses: {
 						"200": {
 							description: "SCIM User resource",
-							content: {
-								"application/json": {
-									schema: OpenAPIUserResourceSchema,
-								},
-							},
+							content: createSCIMOpenAPIContent(OpenAPIUserResourceSchema),
 						},
 						...SCIMErrorOpenAPISchemas,
 					},
 				},
-			},
+			}),
 			use: [authMiddleware],
 		},
 		async (ctx) => {
@@ -865,9 +858,9 @@ export function patchSCIMUser(
 			method: "PATCH",
 			body: patchSCIMUserBodySchema,
 			query: scimAttributeProjectionQuerySchema.optional(),
-			metadata: {
+			metadata: defineSCIMEndpointMetadata({
 				...HIDE_METADATA,
-				allowedMediaTypes: SCIM_MEDIA_TYPES,
+				allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
 				openapi: {
 					summary: "Patch SCIM User",
 					responses: {
@@ -876,16 +869,12 @@ export function patchSCIMUser(
 						},
 						"200": {
 							description: "Projected SCIM User resource",
-							content: {
-								"application/json": {
-									schema: OpenAPIUserResourceSchema,
-								},
-							},
+							content: createSCIMOpenAPIContent(OpenAPIUserResourceSchema),
 						},
 						...SCIMErrorOpenAPISchemas,
 					},
 				},
-			},
+			}),
 			use: [authMiddleware],
 		},
 		async (ctx) => {
@@ -1045,9 +1034,9 @@ export function deleteSCIMUser(
 		"/scim/v2/Users/:userId",
 		{
 			method: "DELETE",
-			metadata: {
+			metadata: defineSCIMEndpointMetadata({
 				...HIDE_METADATA,
-				allowedMediaTypes: SCIM_MEDIA_TYPES,
+				allowedMediaTypes: SCIM_REQUEST_MEDIA_TYPES,
 				openapi: {
 					summary: "Delete SCIM User",
 					responses: {
@@ -1057,7 +1046,7 @@ export function deleteSCIMUser(
 						...SCIMErrorOpenAPISchemas,
 					},
 				},
-			},
+			}),
 			use: [authMiddleware],
 		},
 		async (ctx) => {

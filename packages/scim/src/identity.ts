@@ -3,19 +3,21 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import type { AuthContext, DBAdapter, DBTransactionAdapter } from "better-auth";
-import { findDecommissionedSCIMConnectionIds } from "./connection-state";
-import { createSCIMError, runSCIMApplicationCallback } from "./scim-error";
 import type {
 	SCIMIdentityResolution,
 	SCIMIdentityResolutionInput,
 	SCIMIdentitySource,
 	SCIMIdentityState,
-	SCIMIdentityTombstone,
 	SCIMOptions,
+} from "./configuration";
+import { findDecommissionedSCIMConnectionIds } from "./connection-state";
+import type {
+	SCIMIdentityTombstone,
 	SCIMSubject,
 	SCIMUser,
-} from "./types";
-import { createScopedKey } from "./utils";
+} from "./persistence";
+import { createScopedKey } from "./resource-key";
+import { createSCIMError, runSCIMApplicationCallback } from "./scim-error";
 
 export type SCIMIdentityCoordinator = ReturnType<
 	typeof createSCIMIdentityCoordinator
