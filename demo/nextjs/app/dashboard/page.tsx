@@ -52,7 +52,7 @@ export default async function Page() {
 							<div className="space-y-1">
 								<CardTitle>SCIM provisioning</CardTitle>
 								<CardDescription>
-									Run the live User and Group provisioning workflow
+									Manage directory users and inspect live SCIM effects
 								</CardDescription>
 							</div>
 						</div>
@@ -60,7 +60,7 @@ export default async function Page() {
 					<CardContent>
 						<Button asChild>
 							<Link href="/dashboard/scim">
-								Open workflow
+								Open directory workspace
 								<ArrowRight className="size-4" aria-hidden="true" />
 							</Link>
 						</Button>
