@@ -10,6 +10,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import type { GenericEndpointContext } from "../types";
 export interface AppleProfile {
 	/**
 	 * The subject registered claim identifies the principal that’s the subject
@@ -131,12 +132,16 @@ export const apple = (options: AppleOptions) => {
 				tokenEndpoint,
 			});
 		},
-		async verifyIdToken(token, nonce) {
+		async verifyIdToken(
+			token: string,
+			nonce?: string,
+			ctx?: GenericEndpointContext,
+		) {
 			if (options.disableIdTokenSignIn) {
 				return false;
 			}
 			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
+				return options.verifyIdToken(token, nonce, ctx);
 			}
 			try {
 				const decodedHeader = decodeProtectedHeader(token);

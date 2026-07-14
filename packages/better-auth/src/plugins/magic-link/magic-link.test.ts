@@ -777,3 +777,84 @@ describe("magic link single-use semantics", async () => {
 		expect(sessionTokens).toHaveLength(1);
 	});
 });
+
+/**
+ * The built-in `/sign-in/email` and `/sign-up/email` routes force-validate the
+ * request `Origin` even on cookieless requests (via `formCsrfMiddleware`). The
+ * magic-link send endpoint must match that behavior so a cookieless cross-origin
+ * POST cannot trigger an outbound magic-link email to an arbitrary address.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10304
+ */
+describe("magic link send origin/CSRF protection", async () => {
+	const sendMagicLink = vi.fn(async () => {});
+	const { auth, testUser } = await getTestInstance({
+		trustedOrigins: ["http://localhost:3000"],
+		advanced: {
+			disableCSRFCheck: false,
+			disableOriginCheck: false,
+		},
+		plugins: [
+			magicLink({
+				sendMagicLink,
+			}),
+		],
+	});
+
+	it("should block cross-site navigation to the send endpoint (no cookies)", async () => {
+		sendMagicLink.mockClear();
+		const maliciousRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/magic-link",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Sec-Fetch-Site": "cross-site",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "https://evil.com",
+				},
+				body: JSON.stringify({ email: "attacker@evil.com" }),
+			},
+		);
+
+		const response = await auth.handler(maliciousRequest);
+		expect(response.status).toBe(403);
+		expect(sendMagicLink).not.toHaveBeenCalled();
+	});
+
+	it("should reject a cookieless cross-origin POST to the send endpoint", async () => {
+		sendMagicLink.mockClear();
+		const maliciousRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/magic-link",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: "https://evil.com",
+				},
+				body: JSON.stringify({ email: "attacker@evil.com" }),
+			},
+		);
+
+		const response = await auth.handler(maliciousRequest);
+		expect(response.status).toBe(403);
+		expect(sendMagicLink).not.toHaveBeenCalled();
+	});
+
+	it("should still allow a cookieless request with no Origin (server-to-server)", async () => {
+		sendMagicLink.mockClear();
+		const legitimateRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/magic-link",
+			{
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ email: testUser.email }),
+			},
+		);
+
+		const response = await auth.handler(legitimateRequest);
+		expect(response.status).toBe(200);
+		expect(sendMagicLink).toHaveBeenCalledTimes(1);
+	});
+});
