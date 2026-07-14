@@ -72,6 +72,54 @@ describe("decidePromptNotification", () => {
 		).toBe("retry");
 	});
 
+	it("without FedCM stops on terminal skip reasons", () => {
+		const notification: OneTapPromptNotification = {
+			isSkippedMoment: () => true,
+			getSkippedReason: () => "user_cancel",
+		};
+
+		expect(
+			decidePromptNotification({
+				useFedCM: false,
+				attempt: 0,
+				maxAttempts: 5,
+				notification,
+			}),
+		).toBe("stop");
+	});
+
+	it("stops retryable dismissals when maxAttempts is exhausted", () => {
+		const notification: OneTapPromptNotification = {
+			isDismissedMoment: () => true,
+			getDismissedReason: () => "flow_restarted",
+		};
+
+		expect(
+			decidePromptNotification({
+				useFedCM: true,
+				attempt: 5,
+				maxAttempts: 5,
+				notification,
+			}),
+		).toBe("stop");
+	});
+
+	it("without FedCM stops retryable skips when maxAttempts is exhausted", () => {
+		const notification: OneTapPromptNotification = {
+			isSkippedMoment: () => true,
+			getSkippedReason: () => "auto_cancel",
+		};
+
+		expect(
+			decidePromptNotification({
+				useFedCM: false,
+				attempt: 5,
+				maxAttempts: 5,
+				notification,
+			}),
+		).toBe("stop");
+	});
+
 	it("under FedCM never calls isNotDisplayed", () => {
 		const isNotDisplayed = vi.fn(() => true);
 		const notification: OneTapPromptNotification = {
