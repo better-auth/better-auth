@@ -49,7 +49,13 @@ export function scimHttpTestSuite(options: SCIMHttpTestSuiteOptions) {
 				connections: [
 					{
 						id: options.connectionId,
-						credentials: [{ type: "bearer", token: options.token }],
+						credentials: [
+							{
+								id: `${options.testId}-primary`,
+								type: "bearer",
+								token: options.token,
+							},
+						],
 					},
 				],
 				projection: {

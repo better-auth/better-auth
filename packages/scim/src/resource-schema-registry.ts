@@ -53,7 +53,7 @@ export const SCIM_RESOURCE_SCHEMAS = [
 ] as const;
 
 /** Return the case-insensitive prefix accepted on core attribute paths. */
-export function getSCIMCoreAttributePrefix(resourceType: SCIMResourceType) {
+function getSCIMCoreAttributePrefix(resourceType: SCIMResourceType) {
 	return `${SCIM_RESOURCE_SCHEMA_REGISTRY[resourceType].schemaId}:`;
 }
 

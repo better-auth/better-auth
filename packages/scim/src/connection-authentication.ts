@@ -17,7 +17,7 @@ export type SCIMConnectionMiddleware = ReturnType<
 	typeof createSCIMConnectionMiddleware
 >;
 
-export const SCIM_SCOPES = [
+const SCIM_SCOPES = [
 	"scim.users.read",
 	"scim.users.write",
 	"scim.groups.read",
