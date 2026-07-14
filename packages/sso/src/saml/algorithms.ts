@@ -414,18 +414,26 @@ export function enforceSAMLCryptoPolicy(
 		});
 	}
 
-	// Require a non-empty string (reject falsy non-strings from transport JSON).
-	if (
-		typeof report.signatureAlgorithm !== "string" ||
-		report.signatureAlgorithm.length === 0
-	) {
+	// Require a non-empty string if present, but allow null for unsigned assertions.
+	if (report.signatureAlgorithm === undefined) {
 		throw new APIError("BAD_REQUEST", {
 			message: "SAML crypto report is missing signatureAlgorithm",
 			code: "SAML_SIGNATURE_ALGORITHM_MISSING",
 		});
 	}
 
-	validateSignatureAlgorithm(report.signatureAlgorithm, options);
+	if (report.signatureAlgorithm !== null) {
+		if (
+			typeof report.signatureAlgorithm !== "string" ||
+			report.signatureAlgorithm.length === 0
+		) {
+			throw new APIError("BAD_REQUEST", {
+				message: "SAML crypto report is missing signatureAlgorithm",
+				code: "SAML_SIGNATURE_ALGORITHM_MISSING",
+			});
+		}
+		validateSignatureAlgorithm(report.signatureAlgorithm, options);
+	}
 
 	// Fail closed: encryption must be explicit null (unencrypted) or a complete object.
 	// Omitting the field (undefined) must not bypass encryption algorithm policy.

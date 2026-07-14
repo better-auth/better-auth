@@ -184,14 +184,24 @@ describe("SAML executor", () => {
 		).toThrow(/not verified/i);
 	});
 
-	it("enforceSAMLCryptoPolicy rejects missing signatureAlgorithm", () => {
+	it("enforceSAMLCryptoPolicy rejects omitted signatureAlgorithm (undefined)", () => {
+		expect(() =>
+			enforceSAMLCryptoPolicy({
+				signatureVerified: true,
+				signatureAlgorithm: undefined,
+				encryption: null,
+			}),
+		).toThrow(/signatureAlgorithm/i);
+	});
+
+	it("enforceSAMLCryptoPolicy accepts null signatureAlgorithm when unsigned", () => {
 		expect(() =>
 			enforceSAMLCryptoPolicy({
 				signatureVerified: true,
 				signatureAlgorithm: null,
 				encryption: null,
 			}),
-		).toThrow(/signatureAlgorithm/i);
+		).not.toThrow();
 	});
 
 	it("enforceSAMLCryptoPolicy rejects incomplete encryption metadata", () => {
