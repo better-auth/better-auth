@@ -8,6 +8,12 @@ import type {
 } from "./config-types";
 
 export type { BetterAuthOptions };
+export type {
+	AuthModelsSlice,
+	BetterAuthConfigInput,
+	ResolvedAuthOptions,
+	WritableTuple,
+} from "./config-types";
 
 /**
  * Better Auth initializer for minimal mode (without Kysely)
