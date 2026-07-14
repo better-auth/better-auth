@@ -44,7 +44,7 @@ const samlConfigSchema = z.object({
 	entryPoint: z.string().url().optional(),
 	cert: z.string().optional(),
 	callbackUrl: z.string().url().optional(),
-	idpInitiatedCallbackURL: z.string().url().optional(),
+	idpInitiatedCallbackUrl: z.string().url().optional(),
 	audience: z.string().optional(),
 	idpMetadata: z
 		.object({

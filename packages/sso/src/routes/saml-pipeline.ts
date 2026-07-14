@@ -254,13 +254,13 @@ export async function processSAMLResponse(
 	});
 	const idp = createIdP(parsedSamlConfig);
 
-	const idpInitiatedCallbackURL =
-		parsedSamlConfig.idpInitiatedCallbackURL ||
-		options?.saml?.idpInitiatedCallbackURL;
+	const idpInitiatedCallbackUrl =
+		parsedSamlConfig.idpInitiatedCallbackUrl ||
+		options?.saml?.idpInitiatedCallbackUrl;
 
 	const redirectCandidate =
 		relayState?.callbackURL ||
-		idpInitiatedCallbackURL ||
+		idpInitiatedCallbackUrl ||
 		parsedSamlConfig.callbackUrl;
 
 	const samlRedirectUrl = getSafeRedirectUrl(

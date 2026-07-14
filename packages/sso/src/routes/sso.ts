@@ -300,7 +300,7 @@ const ssoProviderBodySchema = z.object({
 			callbackUrl: z.string({}).meta({
 				description: "The callback URL of the provider",
 			}),
-			idpInitiatedCallbackURL: z
+			idpInitiatedCallbackUrl: z
 				.string()
 				.url()
 				.meta({
@@ -871,8 +871,8 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 								entryPoint: body.samlConfig.entryPoint,
 								cert: body.samlConfig.cert,
 								callbackUrl: body.samlConfig.callbackUrl,
-								idpInitiatedCallbackURL:
-									body.samlConfig.idpInitiatedCallbackURL,
+								idpInitiatedCallbackUrl:
+									body.samlConfig.idpInitiatedCallbackUrl,
 								audience: body.samlConfig.audience,
 								idpMetadata: body.samlConfig.idpMetadata,
 								spMetadata: body.samlConfig.spMetadata,
@@ -2064,9 +2064,9 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						ctx.context.adapter,
 					);
 					const parsedSamlConfig = provider?.samlConfig;
-					const idpInitiatedCallbackURL =
-						parsedSamlConfig?.idpInitiatedCallbackURL ||
-						options?.saml?.idpInitiatedCallbackURL;
+					const idpInitiatedCallbackUrl =
+						parsedSamlConfig?.idpInitiatedCallbackUrl ||
+						options?.saml?.idpInitiatedCallbackUrl;
 					const rawRelayState = ctx.body.RelayState;
 					const isTrustedRelayState =
 						rawRelayState &&
@@ -2076,7 +2076,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 									allowRelativePaths: false,
 								}));
 					const redirectUrl = getSafeRedirectUrl(
-						isTrustedRelayState ? rawRelayState : idpInitiatedCallbackURL,
+						isTrustedRelayState ? rawRelayState : idpInitiatedCallbackUrl,
 						currentCallbackPath,
 						appOrigin,
 						(url, settings) => ctx.context.isTrustedOrigin(url, settings),

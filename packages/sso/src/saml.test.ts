@@ -6488,7 +6488,7 @@ describe("SAML SSO Hardening", () => {
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/10329
 		 */
-		it("should redirect to provider-level idpInitiatedCallbackURL when RelayState is missing (IdP-initiated)", async () => {
+		it("should redirect to provider-level idpInitiatedCallbackUrl when RelayState is missing (IdP-initiated)", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
 				plugins: [
 					sso({
@@ -6500,7 +6500,7 @@ describe("SAML SSO Hardening", () => {
 			});
 			const { headers } = await signInWithTestUser();
 
-			// Provider with provider-level idpInitiatedCallbackURL
+			// Provider with provider-level idpInitiatedCallbackUrl
 			await auth.api.registerSSOProvider({
 				body: {
 					providerId: "split-origin-provider",
@@ -6511,7 +6511,7 @@ describe("SAML SSO Hardening", () => {
 						cert: certificate,
 						callbackUrl:
 							"http://localhost:3000/api/auth/sso/saml2/callback/split-origin-provider",
-						idpInitiatedCallbackURL:
+						idpInitiatedCallbackUrl:
 							"http://localhost:3000/provider-idp-redirect",
 						idpMetadata: { metadata: idpMetadata },
 						spMetadata: { metadata: spMetadata },
@@ -6546,13 +6546,13 @@ describe("SAML SSO Hardening", () => {
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/10329
 		 */
-		it("should redirect to global idpInitiatedCallbackURL when RelayState is missing (IdP-initiated fallback)", async () => {
+		it("should redirect to global idpInitiatedCallbackUrl when RelayState is missing (IdP-initiated fallback)", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
 				plugins: [
 					sso({
 						saml: {
 							allowIdpInitiated: true,
-							idpInitiatedCallbackURL:
+							idpInitiatedCallbackUrl:
 								"http://localhost:3000/global-idp-redirect",
 						},
 					}),
@@ -6560,7 +6560,7 @@ describe("SAML SSO Hardening", () => {
 			});
 			const { headers } = await signInWithTestUser();
 
-			// Provider without provider-level idpInitiatedCallbackURL (should fall back to global plugin option)
+			// Provider without provider-level idpInitiatedCallbackUrl (should fall back to global plugin option)
 			await auth.api.registerSSOProvider({
 				body: {
 					providerId: "global-fallback-provider",
@@ -6604,13 +6604,13 @@ describe("SAML SSO Hardening", () => {
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/10329
 		 */
-		it("should prioritize SP-initiated RelayState over idpInitiatedCallbackURL", async () => {
+		it("should prioritize SP-initiated RelayState over idpInitiatedCallbackUrl", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
 				plugins: [
 					sso({
 						saml: {
 							allowIdpInitiated: true,
-							idpInitiatedCallbackURL:
+							idpInitiatedCallbackUrl:
 								"http://localhost:3000/global-idp-redirect",
 						},
 					}),
@@ -6628,7 +6628,7 @@ describe("SAML SSO Hardening", () => {
 						cert: certificate,
 						callbackUrl:
 							"http://localhost:3000/api/auth/sso/saml2/callback/priority-test-provider",
-						idpInitiatedCallbackURL:
+						idpInitiatedCallbackUrl:
 							"http://localhost:3000/provider-idp-redirect",
 						idpMetadata: { metadata: idpMetadata },
 						spMetadata: { metadata: spMetadata },
@@ -6675,13 +6675,13 @@ describe("SAML SSO Hardening", () => {
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/10329
 		 */
-		it("should prevent open redirect attacks on idpInitiatedCallbackURL", async () => {
+		it("should prevent open redirect attacks on idpInitiatedCallbackUrl", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
 				plugins: [
 					sso({
 						saml: {
 							allowIdpInitiated: true,
-							idpInitiatedCallbackURL: "http://attacker.com/malicious",
+							idpInitiatedCallbackUrl: "http://attacker.com/malicious",
 						},
 					}),
 				],
@@ -6731,13 +6731,13 @@ describe("SAML SSO Hardening", () => {
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/10329
 		 */
-		it("should redirect to idpInitiatedCallbackURL on SAML validation error", async () => {
+		it("should redirect to idpInitiatedCallbackUrl on SAML validation error", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
 				plugins: [
 					sso({
 						saml: {
 							allowIdpInitiated: true,
-							idpInitiatedCallbackURL:
+							idpInitiatedCallbackUrl:
 								"http://localhost:3000/global-idp-redirect",
 						},
 					}),
@@ -6755,7 +6755,7 @@ describe("SAML SSO Hardening", () => {
 						cert: certificate,
 						callbackUrl:
 							"http://localhost:3000/api/auth/sso/saml2/callback/error-provider",
-						idpInitiatedCallbackURL:
+						idpInitiatedCallbackUrl:
 							"http://localhost:3000/provider-idp-redirect",
 						idpMetadata: { metadata: idpMetadata },
 						spMetadata: { metadata: spMetadata },
