@@ -46,20 +46,9 @@ export type BetterAuthConfigInput<
 } & Omit<Options, "databaseHooks">;
 
 /**
- * True for `const` plugin/model slices (tuples / concrete objects). False for
- * widened `BetterAuthOptions` property types so `betterAuth(x as BetterAuthOptions)`
- * still returns `Auth`-compatible options.
- */
-type IsConcreteSlice<T, Wide> = [T] extends [undefined]
-	? false
-	: [Wide] extends [T]
-		? false
-		: true;
-
-/**
- * Resolved options stored on `Auth`. Starts from `Options` and only overrides
- * model slices that were provided as concrete config, so wide
- * `BetterAuthOptions` inputs stay assignable to `Auth`.
+ * Resolved options stored on `Auth`. Reconstructs model slices from the const
+ * type params so plugin / additionalFields inference is preserved on
+ * `auth.options`.
  */
 export type ResolvedAuthOptions<
 	Plugins,
@@ -68,34 +57,23 @@ export type ResolvedAuthOptions<
 	AccountConfig,
 	VerificationConfig,
 	Options extends BetterAuthOptions,
-> = Options &
-	(IsConcreteSlice<
-		Plugins,
-		NonNullable<BetterAuthOptions["plugins"]>
-	> extends true
-		? { plugins: WritableTuple<Plugins> }
-		: {}) &
-	(IsConcreteSlice<
-		UserConfig,
-		NonNullable<BetterAuthOptions["user"]>
-	> extends true
-		? { user: UserConfig }
-		: {}) &
-	(IsConcreteSlice<
-		SessionConfig,
-		NonNullable<BetterAuthOptions["session"]>
-	> extends true
-		? { session: SessionConfig }
-		: {}) &
-	(IsConcreteSlice<
-		AccountConfig,
-		NonNullable<BetterAuthOptions["account"]>
-	> extends true
-		? { account: AccountConfig }
-		: {}) &
-	(IsConcreteSlice<
-		VerificationConfig,
-		NonNullable<BetterAuthOptions["verification"]>
-	> extends true
-		? { verification: VerificationConfig }
-		: {});
+> = Omit<
+	Options,
+	"plugins" | "user" | "session" | "account" | "verification" | "databaseHooks"
+> &
+	(undefined extends Plugins
+		? Pick<Options, "plugins">
+		: { plugins: WritableTuple<Plugins> }) &
+	(undefined extends UserConfig
+		? Pick<Options, "user">
+		: { user: UserConfig }) &
+	(undefined extends SessionConfig
+		? Pick<Options, "session">
+		: { session: SessionConfig }) &
+	(undefined extends AccountConfig
+		? Pick<Options, "account">
+		: { account: AccountConfig }) &
+	(undefined extends VerificationConfig
+		? Pick<Options, "verification">
+		: { verification: VerificationConfig }) &
+	Pick<Options, "databaseHooks">;
