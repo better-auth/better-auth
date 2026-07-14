@@ -10,7 +10,7 @@ import type { AccessControl } from "../../access";
 import { orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
-import type { Member, OrganizationRole } from "../schema";
+import type { Invitation, Member, OrganizationRole } from "../schema";
 import type { OrganizationOptions } from "../types";
 
 type IsExactlyEmptyObject<T> = keyof T extends never // no keys
@@ -23,6 +23,21 @@ type IsExactlyEmptyObject<T> = keyof T extends never // no keys
 
 const normalizeRoleName = (role: string) => role.toLowerCase();
 const DEFAULT_MAXIMUM_ROLES_PER_ORGANIZATION = Number.POSITIVE_INFINITY;
+
+/**
+ * Replace a single role token inside a comma-separated role field.
+ * Uses exact token match so renaming `admin` does not affect `superadmin`.
+ */
+const replaceRoleNameInField = (
+	roleField: string,
+	oldRoleName: string,
+	newRoleName: string,
+) =>
+	roleField
+		.split(",")
+		.map((role) => role.trim())
+		.map((role) => (role === oldRoleName ? newRoleName : role))
+		.join(",");
 
 const getAdditionalFields = <
 	O extends OrganizationOptions,
@@ -1087,6 +1102,19 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				update,
 			});
 
+			// Members and invitations store role names as strings. Cascade the
+			// rename so they stay attached to the updated organizationRole.
+			const oldRoleName = role.role;
+			const renamedRoleName = updateData.role;
+			if (renamedRoleName && renamedRoleName !== oldRoleName) {
+				await cascadeRoleNameRename({
+					ctx,
+					organizationId,
+					oldRoleName,
+					newRoleName: renamedRoleName,
+				});
+			}
+
 			// -----
 			// Return the updated role
 			return ctx.json({
@@ -1100,6 +1128,84 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 		},
 	);
 };
+
+async function cascadeRoleNameRename({
+	ctx,
+	organizationId,
+	oldRoleName,
+	newRoleName,
+}: {
+	ctx: GenericEndpointContext;
+	organizationId: string;
+	oldRoleName: string;
+	newRoleName: string;
+}) {
+	const members = await ctx.context.adapter.findMany<Member>({
+		model: "member",
+		where: [
+			{
+				field: "organizationId",
+				value: organizationId,
+				operator: "eq",
+				connector: "AND",
+			},
+			{
+				field: "role",
+				value: oldRoleName,
+				operator: "contains",
+			},
+		],
+	});
+	for (const member of members) {
+		const memberRoles = member.role.split(",").map((r) => r.trim());
+		if (!memberRoles.includes(oldRoleName)) continue;
+		await ctx.context.adapter.update({
+			model: "member",
+			where: [
+				{
+					field: "id",
+					value: member.id,
+				},
+			],
+			update: {
+				role: replaceRoleNameInField(member.role, oldRoleName, newRoleName),
+			},
+		});
+	}
+
+	const invitations = await ctx.context.adapter.findMany<Invitation>({
+		model: "invitation",
+		where: [
+			{
+				field: "organizationId",
+				value: organizationId,
+				operator: "eq",
+				connector: "AND",
+			},
+			{
+				field: "role",
+				value: oldRoleName,
+				operator: "contains",
+			},
+		],
+	});
+	for (const invitation of invitations) {
+		const invitationRoles = invitation.role.split(",").map((r) => r.trim());
+		if (!invitationRoles.includes(oldRoleName)) continue;
+		await ctx.context.adapter.update({
+			model: "invitation",
+			where: [
+				{
+					field: "id",
+					value: invitation.id,
+				},
+			],
+			update: {
+				role: replaceRoleNameInField(invitation.role, oldRoleName, newRoleName),
+			},
+		});
+	}
+}
 
 async function checkForInvalidResources({
 	ac,
