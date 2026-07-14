@@ -492,10 +492,9 @@ export const accountTableFields = [
 		isOptional: true,
 	},
 	{
-		name: "grantedScopes",
-		type: "string[]",
-		description:
-			"The OAuth scopes the user has granted to this account (accumulated; see the OAuth scopes docs).",
+		name: "scope",
+		type: "string",
+		description: "The scope of the account. Returned by the provider",
 		isOptional: true,
 	},
 	{
@@ -678,7 +677,9 @@ res.user.lang; // > "fr"
   client side.
 </Callout>
 
-If you're using social / OAuth providers, you may want to provide `mapProfileToUser` to map the profile data to the user object. So, you can populate additional fields from the provider's profile.
+If you're using social / OAuth providers, you may want to provide `mapProfileToUser` to map the profile data to the user object. This can populate additional fields from the provider's profile when those fields allow input.
+
+Fields marked `input: false` stay server-owned during OAuth provisioning. Provider profile values for those fields are ignored, and configured `defaultValue` values still apply when OAuth creates a user.
 
 **Example: Mapping Profile to User For `firstName` and `lastName`**
 
@@ -1012,14 +1013,14 @@ To add new tables and columns to your database, you have two options:
 
 Both methods ensure your database schema stays up to date with your plugins' requirements.
 
-## Experimental Joins
+## Joins
 
-Since Better-Auth version `1.4` we've introduced experimental database joins support.
+Since Better-Auth version `1.4` we've introduced database joins support.
 This allows Better-Auth to perform multiple database queries in a single request, reducing the number of database roundtrips.
 Over 50 endpoints support joins, and we're constantly adding more.
 
-Under the hood, our adapter system supports joins natively, meaning even if you don't enable experimental joins,
-it will still fallback to making multiple database queries and combining the results.
+Under the hood, our adapter system supports joins natively. When joins are disabled (the default),
+Better-Auth falls back to making multiple database queries and combining the results.
 
 To enable joins, update your auth config with the following:
 
@@ -1027,19 +1028,22 @@ To enable joins, update your auth config with the following:
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-  experimental: { joins: true }
+  advanced: {
+    database: {
+      joins: true,
+    },
+  },
 });
 ```
 
-The Better-Auth `1.4` CLI will generate DrizzleORM and PrismaORM relationships for you so if you do not have those already
-be sure to update your schema by running our migrate or generate CLI commands to be up-to-date with the latest required schema.
+Make sure your DrizzleORM or PrismaORM schema includes the necessary relationships — run our migrate or generate CLI commands to stay up-to-date.
 
-It's very important to read the documentation regarding experimental joins for your given adapter:
+Read the documentation regarding joins for your given adapter:
 
-* [DrizzleORM](/docs/adapters/drizzle#joins-experimental)
-* [PrismaORM](/docs/adapters/prisma#joins-experimental)
-* [SQLite](/docs/adapters/sqlite#joins-experimental)
-* [MySQL](/docs/adapters/mysql#joins-experimental)
-* [PostgreSQL](/docs/adapters/postgresql#joins-experimental)
-* [MSSQL](/docs/adapters/mssql#joins-experimental)
-* [MongoDB](/docs/adapters/mongo#joins-experimental)
+* [DrizzleORM](/docs/adapters/drizzle#joins)
+* [PrismaORM](/docs/adapters/prisma#joins)
+* [SQLite](/docs/adapters/sqlite#joins)
+* [MySQL](/docs/adapters/mysql#joins)
+* [PostgreSQL](/docs/adapters/postgresql#joins)
+* [MSSQL](/docs/adapters/mssql#joins)
+* [MongoDB](/docs/adapters/mongo#joins)

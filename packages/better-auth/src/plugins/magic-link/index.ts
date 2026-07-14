@@ -8,7 +8,11 @@ import * as z from "zod";
 import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
-import { parseSessionOutput, parseUserOutput } from "../../db";
+import {
+	parseSessionOutput,
+	parseUserOutput,
+	revokeUnprovenAccountAccess,
+} from "../../db";
 import { isAPIError } from "../../utils/is-api-error";
 import { PACKAGE_VERSION } from "../../version";
 import { defaultKeyHasher } from "./utils";
@@ -33,9 +37,9 @@ export interface MagicLinkOptions {
 	 * @deprecated Multi-attempt verification is no longer supported. Each
 	 * magic link token is consumed atomically on the first verification call,
 	 * so a given token mints at most one session regardless of this value
-	 * (see GHSA-hc7v-rggr-4hvx). The option is kept for source compatibility
-	 * and may be removed in a future major; any value other than `1` is
-	 * ignored and emits a `console.warn` at plugin construction.
+	 * The option is kept for source compatibility and may be removed in a future
+	 * major; any value other than `1` is ignored and emits a `console.warn` at
+	 * plugin construction.
 	 *
 	 * @default 1
 	 */
@@ -163,7 +167,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 
 	if (options.allowedAttempts !== undefined && options.allowedAttempts !== 1) {
 		console.warn(
-			"[better-auth/magic-link] `allowedAttempts` is ignored: tokens are consumed atomically on the first verification call (GHSA-hc7v-rggr-4hvx). Any value other than `1` has no effect; remove the option to silence this warning.",
+			"[better-auth/magic-link] `allowedAttempts` is ignored: tokens are consumed atomically on the first verification call. Any value other than `1` has no effect; remove the option to silence this warning.",
 		);
 	}
 
@@ -429,9 +433,14 @@ export const magicLink = (options: MagicLinkOptions) => {
 					}
 
 					if (!user.emailVerified) {
-						user = await ctx.context.internalAdapter.updateUser(user.id, {
-							emailVerified: true,
-						});
+						const promotedUser = await revokeUnprovenAccountAccess(
+							ctx,
+							user.id,
+						);
+						if (!promotedUser) {
+							redirectWithError("user_not_found");
+						}
+						user = promotedUser;
 					}
 
 					const session = await ctx.context.internalAdapter.createSession(

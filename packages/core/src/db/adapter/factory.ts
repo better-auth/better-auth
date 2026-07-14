@@ -29,15 +29,15 @@ import type {
 } from "./types";
 import { withApplyDefault } from "./utils";
 
-export {
-	initGetDefaultModelName,
-	initGetDefaultFieldName,
-	initGetModelName,
-	initGetFieldName,
-	initGetFieldAttributes,
-	initGetIdField,
-};
 export * from "./types";
+export {
+	initGetDefaultFieldName,
+	initGetDefaultModelName,
+	initGetFieldAttributes,
+	initGetFieldName,
+	initGetIdField,
+	initGetModelName,
+};
 
 let debugLogs: { instance: string; args: any[] }[] = [];
 let transactionId = -1;
@@ -425,19 +425,19 @@ export const createAdapterFactory =
 				joinConfig,
 			} of requiredModels) {
 				let joinedData = await (async () => {
-					if (options.experimental?.joins) {
-						const result = data[modelName];
-						return result;
-					} else {
-						// doesn't support joins, so fallback to handleFallbackJoin
-						const result = await handleFallbackJoin({
-							baseModel: unsafe_model,
-							baseData: transformedData,
-							joinModel: modelName,
-							specificJoinConfig: joinConfig,
-						});
-						return result;
+					if (options.advanced?.database?.joins) {
+						// Use native joined data when the adapter included the key;
+						// otherwise fall back to separate queries.
+						if (modelName in data) {
+							return data[modelName];
+						}
 					}
+					return await handleFallbackJoin({
+						baseModel: unsafe_model,
+						baseData: transformedData,
+						joinModel: modelName,
+						specificJoinConfig: joinConfig,
+					});
 				})();
 
 				// If joinedData is undefined, initialize it based on relationship type
@@ -963,6 +963,11 @@ export const createAdapterFactory =
 					where: unsafeWhere,
 					action: "update",
 				});
+				// `update` targets a single row. Empty predicates have no
+				// target, so fail closed and leave bulk writes to `updateMany`.
+				if (where.length === 0) {
+					return null;
+				}
 				debugLog(
 					{ method: "update" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 4)}`,
@@ -1113,9 +1118,12 @@ export const createAdapterFactory =
 						join = result.join;
 						select = result.select;
 					}
-					// If adapter doesn't support joins and we have joins, don't pass them to the adapter
-					const experimentalJoins = options.experimental?.joins;
-					if (!experimentalJoins && join && Object.keys(join).length > 0) {
+					// If joins are disabled and we have joins, don't pass them to the adapter
+					if (
+						!options.advanced?.database?.joins &&
+						join &&
+						Object.keys(join).length > 0
+					) {
 						passJoinToAdapter = false;
 					}
 				} else {
@@ -1201,9 +1209,12 @@ export const createAdapterFactory =
 						join = result.join;
 						select = result.select;
 					}
-					// If adapter doesn't support joins and we have joins, don't pass them to the adapter
-					const experimentalJoins = options.experimental?.joins;
-					if (!experimentalJoins && join && Object.keys(join).length > 0) {
+					// If joins are disabled and we have joins, don't pass them to the adapter
+					if (
+						!options.advanced?.database?.joins &&
+						join &&
+						Object.keys(join).length > 0
+					) {
 						passJoinToAdapter = false;
 					}
 				} else {
@@ -1403,6 +1414,16 @@ export const createAdapterFactory =
 				increment: Record<string, number>;
 				set?: Record<string, unknown> | undefined;
 			}): Promise<T | null> => {
+				const hasIncrement = Object.keys(unsafeIncrement).length > 0;
+				const hasSet = !!unsafeSet && Object.keys(unsafeSet).length > 0;
+				if (!hasIncrement && !hasSet) {
+					// An empty `increment` and empty `set` compiles to `UPDATE ... SET `
+					// with no assignments, which is a syntax error on kysely, drizzle, and
+					// Prisma. Fail fast with an actionable message instead.
+					throw new BetterAuthError(
+						"incrementOne requires a non-empty `increment` or `set`; both were empty.",
+					);
+				}
 				transactionId++;
 				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
@@ -1436,6 +1457,14 @@ export const createAdapterFactory =
 					set = await transformInput(unsafeSet, unsafeModel, "update");
 				} else {
 					set = unsafeSet;
+				}
+				if (
+					Object.keys(increment).length === 0 &&
+					(!set || Object.keys(set).length === 0)
+				) {
+					throw new BetterAuthError(
+						"incrementOne resolved to an empty update: every increment/set field was unknown to the schema or transformed away.",
+					);
 				}
 				const res = await withSpan(
 					`db incrementOne ${model}`,

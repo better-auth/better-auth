@@ -29,6 +29,15 @@ export interface CimdOptions {
 	 */
 	originBoundFields?: string[];
 	/**
+	 * Permit loopback `client_id` URLs (`localhost`, `127.0.0.0/8`, `::1`,
+	 * `*.localhost`), including plain HTTP, so an auth server can fetch a
+	 * metadata document hosted on the same machine. Off by default; enable
+	 * only for local development.
+	 *
+	 * @default false
+	 */
+	allowLoopback?: boolean;
+	/**
 	 * Pre-fetch gate called before a metadata document is requested. Return
 	 * `false` to reject the `client_id` URL.
 	 *

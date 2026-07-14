@@ -3,16 +3,24 @@ import { generateRandomString } from "better-auth/crypto";
 import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
+	deriveDpopAth,
+	deriveDpopJkt,
+	refreshAccessTokenRequest,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { APIError } from "better-call";
+import type { JWK } from "jose";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import type { OAuthClient } from "./types/oauth";
 
 type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
+
+const INVALID_ACCESS_TOKEN_CHALLENGE =
+	'Bearer error="invalid_token", error_description="Invalid access token"';
 
 describe("oauth userinfo", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
@@ -62,7 +70,7 @@ describe("oauth userinfo", async () => {
 			throw Error("beforeAll not run properly");
 		}
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient?.client_id,
@@ -87,6 +95,7 @@ describe("oauth userinfo", async () => {
 			Partial<Parameters<typeof authorizationCodeRequest>[0]>,
 			"code"
 		>,
+		extraHeaders?: HeadersInit,
 	) {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
@@ -102,6 +111,13 @@ describe("oauth userinfo", async () => {
 			},
 		});
 
+		const tokenHeaders = new Headers(headers);
+		if (extraHeaders) {
+			for (const [key, value] of new Headers(extraHeaders)) {
+				tokenHeaders.set(key, value);
+			}
+		}
+
 		const tokens = await client.$fetch<{
 			access_token?: string;
 			id_token?: string;
@@ -114,10 +130,44 @@ describe("oauth userinfo", async () => {
 		}>("/oauth2/token", {
 			method: "POST",
 			body: body,
-			headers: headers,
+			headers: tokenHeaders,
 		});
 
 		return tokens;
+	}
+
+	async function createDpopKey() {
+		const { privateKey, publicKey } = await generateKeyPair("ES256", {
+			extractable: true,
+		});
+		const publicJwk = await exportJWK(publicKey);
+		const jkt = await deriveDpopJkt(publicJwk);
+		return { privateKey, publicJwk, jkt };
+	}
+
+	async function createDpopProof(params: {
+		privateKey: CryptoKey;
+		publicJwk: JWK;
+		method: string;
+		url: string;
+		jti: string;
+		accessToken?: string;
+	}) {
+		return new SignJWT({
+			jti: params.jti,
+			htm: params.method,
+			htu: params.url,
+			iat: Math.floor(Date.now() / 1000),
+			...(params.accessToken
+				? { ath: await deriveDpopAth(params.accessToken) }
+				: {}),
+		})
+			.setProtectedHeader({
+				typ: "dpop+jwt",
+				alg: "ES256",
+				jwk: params.publicJwk,
+			})
+			.sign(params.privateKey);
 	}
 
 	async function getTokens(
@@ -136,6 +186,34 @@ describe("oauth userinfo", async () => {
 			code: url.searchParams.get("code")!,
 			codeVerifier,
 			resource,
+		});
+	}
+
+	async function refreshAccessToken(refreshToken: string) {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		const { body, headers } = await refreshAccessTokenRequest({
+			refreshToken,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+		return client.$fetch<{
+			access_token?: string;
+			id_token?: string;
+			refresh_token?: string;
+			expires_in?: number;
+			expires_at?: number;
+			token_type?: string;
+			scope?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers,
 		});
 	}
 
@@ -160,6 +238,31 @@ describe("oauth userinfo", async () => {
 		expect(tokens.data?.access_token).toBeDefined();
 		const userinfo = await client.oauth2.userinfo();
 		expect(userinfo.error?.status).toBe(401);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9949
+	 */
+	it("should return an invalid_token challenge for an unknown bearer token", async () => {
+		let wwwAuthenticate = "";
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: {
+					authorization: "Bearer this-is-not-a-valid-access-token",
+				},
+				onError(context) {
+					wwwAuthenticate =
+						context.response.headers.get("WWW-Authenticate") ?? "";
+				},
+			},
+		);
+
+		expect(userinfo.error?.status).toBe(401);
+		expect(
+			(userinfo.error as { error?: string; error_description?: string }).error,
+		).toBe("invalid_token");
+		expect(wwwAuthenticate).toBe(INVALID_ACCESS_TOKEN_CHALLENGE);
 	});
 
 	it("should fail without the openid scope", async () => {
@@ -199,8 +302,12 @@ describe("oauth userinfo", async () => {
 			expect.unreachable();
 		} catch (error) {
 			const err = error as APIError;
+			const headers = new Headers(err.headers);
 			expect(err.statusCode).toBe(401);
 			expect(err.body).toMatchObject({ error: "invalid_token" });
+			expect(headers.get("WWW-Authenticate")).toBe(
+				INVALID_ACCESS_TOKEN_CHALLENGE,
+			);
 		}
 	});
 
@@ -240,6 +347,51 @@ describe("oauth userinfo", async () => {
 		expect(userinfo.data).toMatchObject({ sub: user.id });
 	});
 
+	it("should accept POST with the bearer token in the form body", async () => {
+		const tokens = await getTokens();
+		expect(tokens.data?.access_token).toBeDefined();
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					access_token: tokens.data?.access_token ?? "",
+				}),
+			},
+		);
+		expect(userinfo.data).toMatchObject({ sub: user.id });
+	});
+
+	it("should reject UserInfo requests with bearer tokens in both header and body", async () => {
+		const tokens = await getTokens();
+		expect(tokens.data?.access_token).toBeDefined();
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				method: "POST",
+				headers: {
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					access_token: tokens.data?.access_token ?? "",
+				}),
+			},
+		);
+
+		expect(userinfo.error?.status).toBe(400);
+		expect(
+			(userinfo.error as { error?: string } | null | undefined)?.error,
+		).toBe("invalid_request");
+		expect(
+			(userinfo.error as { error_description?: string } | null | undefined)
+				?.error_description,
+		).toBe("Multiple access token transport methods are not allowed");
+	});
+
 	/**
 	 * Programmatic callers have no `ctx.request`, so userinfo must resolve the
 	 * bearer token from `ctx.headers` for both transports.
@@ -273,7 +425,7 @@ describe("oauth userinfo", async () => {
 			expect(err.statusCode).toBe(401);
 			expect(err.body).toMatchObject({
 				error: "invalid_request",
-				error_description: "authorization header not found",
+				error_description: "access token not found",
 			});
 		}
 	});
@@ -299,6 +451,101 @@ describe("oauth userinfo", async () => {
 		});
 	});
 
+	it("enforces DPoP proof for DPoP-bound userinfo access", async () => {
+		const dpopKey = await createDpopKey();
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			additionalParams: { dpop_jkt: dpopKey.jkt },
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const callbackUrl = new URL(callbackRedirectUrl);
+		const tokenDpopProof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: `${authServerBaseUrl}/api/auth/oauth2/token`,
+			jti: "token-proof",
+		});
+		const tokens = await validateAuthCode(
+			{
+				code: callbackUrl.searchParams.get("code")!,
+				codeVerifier,
+				resource: validResource,
+			},
+			{ DPoP: tokenDpopProof },
+		);
+		expect(tokens.data?.token_type).toBe("DPoP");
+		expect(tokens.data?.access_token).toBeDefined();
+
+		const bearerUserinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: {
+					authorization: `Bearer ${tokens.data?.access_token ?? ""}`,
+				},
+			},
+		);
+		expect(bearerUserinfo.error?.status).toBe(401);
+
+		const bodyTokenUserinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					access_token: tokens.data?.access_token ?? "",
+				}),
+			},
+		);
+		expect(bodyTokenUserinfo.error?.status).toBe(401);
+		expect(
+			(
+				bodyTokenUserinfo.error as {
+					error?: string;
+					error_description?: string;
+				} | null
+			)?.error,
+		).toBe("invalid_token");
+		expect(
+			(
+				bodyTokenUserinfo.error as {
+					error?: string;
+					error_description?: string;
+				} | null
+			)?.error_description,
+		).toBe("DPoP-bound access token requires the DPoP authorization scheme");
+
+		const userinfoDpopProof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "GET",
+			url: `${authServerBaseUrl}/api/auth/oauth2/userinfo`,
+			jti: "userinfo-proof",
+			accessToken: tokens.data?.access_token,
+		});
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: {
+					authorization: `DPoP ${tokens.data?.access_token ?? ""}`,
+					DPoP: userinfoDpopProof,
+				},
+			},
+		);
+
+		expect(userinfo.data).toMatchObject({
+			sub: user.id,
+			name: user.name,
+			email: user.email,
+		});
+	});
+
 	it("should pass provide scoped user information - sub only", async () => {
 		const tokens = await getTokens({
 			scopes: ["openid"],
@@ -320,6 +567,128 @@ describe("oauth userinfo", async () => {
 		expect(userinfo.data?.family_name).toBeUndefined();
 		expect(userinfo.data?.email).toBeUndefined();
 		expect(userinfo.data?.email_verified).toBeUndefined();
+	});
+
+	it("returns explicitly requested UserInfo claims without granting the full scope bundle", async () => {
+		const tokens = await getTokens({
+			scopes: ["openid"],
+			additionalParams: {
+				claims: JSON.stringify({
+					userinfo: {
+						name: { essential: true },
+						email: null,
+					},
+				}),
+			},
+		});
+		expect(tokens.data?.access_token).toBeDefined();
+		const accessToken = tokens.data?.access_token;
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: {
+					authorization: accessToken ?? "",
+				},
+			},
+		);
+
+		expect(userinfo.data).toMatchObject({
+			sub: user.id,
+			name: user.name,
+			email: user.email,
+		});
+		expect(userinfo.data?.given_name).toBeUndefined();
+		expect(userinfo.data?.family_name).toBeUndefined();
+		expect(userinfo.data?.email_verified).toBeUndefined();
+
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: accessToken!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(introspection.data?.active).toBe(true);
+		// Requested UserInfo claims resolve only at /userinfo; they never surface
+		// in the RFC 7662 introspection response shown to a resource server.
+		const introspectionClaims = introspection.data as
+			| Record<string, unknown>
+			| undefined;
+		expect(introspectionClaims?.name).toBeUndefined();
+		expect(introspectionClaims?.email).toBeUndefined();
+	});
+
+	it("preserves requested UserInfo claims across refresh-token rotation", async () => {
+		const tokens = await getTokens({
+			scopes: ["openid", "offline_access"],
+			additionalParams: {
+				claims: JSON.stringify({
+					userinfo: {
+						name: { essential: true },
+					},
+				}),
+			},
+		});
+		expect(tokens.data?.refresh_token).toBeDefined();
+
+		const refreshedTokens = await refreshAccessToken(
+			tokens.data?.refresh_token ?? "",
+		);
+		expect(refreshedTokens.data?.access_token).toBeDefined();
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: {
+					authorization: refreshedTokens.data?.access_token ?? "",
+				},
+			},
+		);
+
+		expect(userinfo.data).toMatchObject({
+			sub: user.id,
+			name: user.name,
+		});
+		expect(userinfo.data?.given_name).toBeUndefined();
+		expect(userinfo.data?.email).toBeUndefined();
+	});
+
+	it("resolves JWT access-token UserInfo claims by scope, omitting individually requested claims", async () => {
+		const tokens = await getTokens(
+			{
+				scopes: ["openid"],
+				additionalParams: {
+					claims: JSON.stringify({
+						userinfo: {
+							name: { essential: true },
+						},
+					}),
+				},
+			},
+			validResource,
+		);
+		expect(tokens.data?.access_token).toBeDefined();
+		const userinfo = await client.$fetch<Record<string, string>>(
+			"/oauth2/userinfo",
+			{
+				headers: {
+					authorization: tokens.data?.access_token ?? "",
+				},
+			},
+		);
+
+		// A JWT access token has no per-issuance row, so a claim requested through
+		// `claims.userinfo` without its backing scope is omitted (OIDC Core
+		// §5.5.1). UserInfo claims for a JWT token come from granted scopes only.
+		expect(userinfo.data).toMatchObject({ sub: user.id });
+		expect(userinfo.data?.name).toBeUndefined();
+		expect(userinfo.data?.email).toBeUndefined();
 	});
 
 	it("should pass provide scoped user information - profile only", async () => {

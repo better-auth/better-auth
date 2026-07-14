@@ -1,6 +1,9 @@
 {
   "name": "@better-auth/drizzle-adapter",
-  "version": "1.7.0-beta.5",
+  "version": "1.7.0-rc.1",
+  "bugs": {
+    "url": "https://github.com/better-auth/better-auth/issues"
+  },
   "description": "Drizzle adapter for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -37,15 +40,20 @@
   "types": "./dist/index.d.mts",
   "exports": {
     ".": {
-      "dev-source": "./src/index.ts",
       "types": "./dist/index.d.mts",
+      "dev-source": "./src/index.ts",
       "default": "./dist/index.mjs"
+    },
+    "./relations-v2": {
+      "types": "./dist/relations-v2/index.d.mts",
+      "dev-source": "./src/relations-v2/index.ts",
+      "default": "./dist/relations-v2/index.mjs"
     }
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:^",
     "@better-auth/utils": "catalog:",
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.2 || >=1.0.0-rc.1 <2.0.0"
   },
   "peerDependenciesMeta": {
     "drizzle-orm": {

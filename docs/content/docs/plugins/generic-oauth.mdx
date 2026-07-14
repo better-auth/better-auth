@@ -67,11 +67,8 @@ Generic OAuth providers are used through the standard social sign-in flow:
 await authClient.signIn.social({
     provider: "provider-id",
     callbackURL: "/dashboard",
-    scopes: ["my-scope"], // optional, additive
 })
 ```
-
-The `scopes` parameter is additive: appended to the provider's configured scopes, not a replacement. Whatever the user consents to accumulates into the account's `grantedScopes`. Re-authenticating never narrows previously granted scopes.
 
 You can also pass `additionalData` (a `Record<string, any>`) to round-trip client data through the flow; read it back on the callback with `getOAuthState()` and treat it as untrusted. See [Passing Additional Data Through OAuth Flow](/docs/concepts/oauth#passing-additional-data-through-oauth-flow).
 
@@ -96,11 +93,8 @@ Providers configured with explicit endpoints instead of `discoveryUrl` do not su
 await authClient.linkSocial({
     provider: "provider-id",
     callbackURL: "/settings",
-    scopes: ["repo"], // optional, additive
 })
 ```
-
-Additional scopes requested when linking accumulate into the account's `grantedScopes`; existing granted scopes are never removed.
 
 ### Handle OAuth Callback
 
@@ -162,6 +156,7 @@ Better Auth provides pre-configured helper functions for popular OAuth providers
 * **Okta** - `okta(options)`
 * **Slack** - `slack(options)`
 * **Patreon** - `patreon(options)`
+* **Yandex** - `yandex(options)`
 
 ### Example: Using Pre-configured Providers
 
@@ -180,6 +175,7 @@ import {
 	okta,
 	slack,
 	patreon,
+	yandex,
 } from 'better-auth/plugins';
 
 export const auth = betterAuth({
@@ -234,6 +230,10 @@ export const auth = betterAuth({
 					clientId: process.env.PATREON_CLIENT_ID,
 					clientSecret: process.env.PATREON_CLIENT_SECRET,
 				}),
+				yandex({
+					clientId: process.env.YANDEX_CLIENT_ID,
+					clientSecret: process.env.YANDEX_CLIENT_SECRET,
+				}),
 			],
 		}),
 	],
@@ -250,6 +250,7 @@ Each provider helper accepts common OAuth options (extending `BaseOAuthProviderO
 * **Okta**: Requires `issuer` (e.g., `https://dev-xxxxx.okta.com/oauth2/default`)
 * **Slack**: No additional required fields
 * **Patreon**: No additional required fields
+* **Yandex**: No additional required fields
 
 All providers support the same optional fields:
 
@@ -297,7 +298,9 @@ interface GenericOAuthConfig {
 
 **providerId**: A unique string to identify the OAuth provider configuration.
 
-**discoveryUrl**: (Optional) URL to fetch the provider's OAuth 2.0/OIDC configuration. If provided, endpoints like `authorizationUrl`, `tokenUrl`, and `userInfoUrl` will be auto-discovered at server startup. When the discovery document publishes a `jwks_uri`, `id_token`s returned by the provider are verified against it (signature, issuer, audience, and advertised signing algorithms) before their claims are used; a token that fails verification rejects the sign-in.
+**discoveryUrl**: (Optional) URL to fetch the provider's OAuth 2.0/OIDC configuration. If provided, endpoints like `authorizationUrl`, `tokenUrl`, and `userInfoUrl` will be auto-discovered at server startup. When the discovery document publishes a `jwks_uri`, `id_token`s returned by the provider are verified against it (signature, issuer, audience, and advertised signing algorithms) before their claims are used; a token that fails verification rejects the sign-in. Discovery providers also bind the `id_token` to the authorization request with a server-generated OIDC `nonce` and reject a callback whose `id_token` does not echo it.
+
+**disableIdTokenNonceBinding**: (Optional) Turn off OIDC `nonce` binding for a discovery provider's `id_token`. Binding is on by default and rejects an `id_token` that does not echo the server-generated `nonce` (OIDC Core 1.0 §3.1.3.7). Set this to `true` only for providers that do not return the `nonce` claim in the authorization-code flow; it removes `id_token` replay protection for the provider.
 
 **authorizationUrl**: (Optional) The OAuth provider's authorization endpoint. Not required if using `discoveryUrl`.
 
@@ -311,7 +314,7 @@ interface GenericOAuthConfig {
 
 **tokenEndpointAuth**: (Optional) Client authentication configuration for token endpoint requests. Use `{ method: "private_key_jwt", getClientAssertion }` for RFC 7523 client assertions, `{ method: "client_secret_basic" }` or `{ method: "client_secret_post" }` for secret-based clients, and `{ method: "none" }` for public clients. Secret-based methods require `clientSecret`; do not combine `clientSecret` with `private_key_jwt` or `none`. If omitted, Better Auth sends secret-based token requests when `clientSecret` is configured and public-client token requests when it is not.
 
-**scopes**: (Optional) An array of scopes to request from the provider (e.g., `["openid", "email", "profile"]`). These are the default scopes requested at sign-in; the `scopes` passed to a sign-in or link request are added on top. Whatever the user consents to accumulates into the account's `grantedScopes`, and re-authenticating or refreshing tokens never narrows that set.
+**scopes**: (Optional) An array of scopes to request from the provider (e.g., `["openid", "email", "profile"]`).
 
 **redirectURI**: (Optional) The redirect URI to use for the OAuth flow. If not set, a default is constructed based on your app's base URL. Must include the `:providerId` placeholder (e.g., `https://example.com/api/auth/callback/my-provider`).
 
@@ -333,9 +336,28 @@ interface GenericOAuthConfig {
 
 **mapProfileToUser**: (Optional) A function to map the provider's user profile to your app's user object. Useful for custom field mapping or transformations.
 
-**authorizationUrlParams**: (Optional) Additional query parameters to add to the authorization URL. These can override default parameters.
+**authorizationUrlParams**: (Optional) Additional query parameters to add to the authorization URL. Reserved OAuth keys (`state`, `client_id`, `redirect_uri`, `response_type`, `code_challenge`, `code_challenge_method`, `nonce`, `scope`) are ignored so they cannot replace the values Better Auth manages for the flow; any other key overrides the default.
 
 **tokenUrlParams**: (Optional) Additional query parameters to add to the token URL. Parameters already set by Better Auth are preserved. Configure token endpoint client authentication with `clientId`, `clientSecret`, and `tokenEndpointAuth`.
+
+**refreshTokenParams**: (Optional) Additional body parameters merged into the token endpoint request when refreshing an access token. Accepts a plain object or a (sync or async) function that runs at refresh time, which makes it possible to inject dynamic values such as a `scope`, `audience`, `resource`, or tenant identifier without forcing a new authorization redirect. Examples: Zitadel's `urn:zitadel:iam:org:id:{orgId}` scope on workspace switch or Auth0 `audience` rotation. The function form receives request metadata (headers and cookies) from the triggering request, so request-scoped data can be read directly — callers MUST validate any header- or cookie-derived value against the authenticated user's entitlements before using it as a scope, audience, or tenant claim. `grant_type` and `refresh_token` cannot be overridden, and `client_id` is set by the configured token-endpoint authentication after the merge so it cannot be overridden here either.
+
+```ts
+genericOAuth({
+  config: [
+    {
+      providerId: "zitadel",
+      // ...
+      refreshTokenParams: (ctx) => {
+        const activeOrg = ctx?.headers?.get("x-active-org");
+        return activeOrg
+          ? { scope: `openid profile email urn:zitadel:iam:org:id:${activeOrg}` }
+          : undefined;
+      },
+    },
+  ],
+});
+```
 
 **disableImplicitSignUp**: (Optional) If true, disables automatic sign-up for new users. Sign-in must be explicitly requested with sign-up intent.
 

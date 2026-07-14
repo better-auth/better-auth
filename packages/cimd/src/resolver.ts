@@ -70,8 +70,9 @@ function isStale(
  * Build the `resolve` function for a CIMD {@link ClientDiscovery}.
  *
  * Exposed for advanced composition. Most users should call
- * {@link cimdClientDiscovery} (to pass a complete discovery to
- * `oauthProvider({ clientDiscovery })`) or install the `cimd()` plugin.
+ * {@link cimdClientDiscovery} (to contribute a complete discovery through
+ * `oauthProvider({ extensions: [{ clientDiscovery }] })`) or install the
+ * `cimd()` plugin.
  */
 export function createCimdResolver(
 	cimdOptions: CimdOptions = {},
@@ -79,7 +80,9 @@ export function createCimdResolver(
 	const refreshRate = cimdOptions.refreshRate ?? "60m";
 
 	return async (ctx, clientId, existing) => {
-		if (!isUrlClientId(clientId)) {
+		if (
+			!isUrlClientId(clientId, { allowLoopback: cimdOptions.allowLoopback })
+		) {
 			return null;
 		}
 

@@ -1,9 +1,8 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -74,8 +73,6 @@ const issuerToEndpoints = (issuer?: string | undefined) => {
 	};
 };
 
-const GITLAB_DEFAULT_SCOPES = ["read_user"];
-
 export const gitlab = (options: GitlabOptions) => {
 	const { authorizationEndpoint, tokenEndpoint, userinfoEndpoint } =
 		issuerToEndpoints(options.issuer);
@@ -84,8 +81,7 @@ export const gitlab = (options: GitlabOptions) => {
 	return {
 		id: issuerId,
 		name: issuerName,
-		callbackPath: "/callback/gitlab",
-		createAuthorizationURL: ({
+		createAuthorizationURL: async ({
 			state,
 			scopes,
 			codeVerifier,
@@ -93,16 +89,14 @@ export const gitlab = (options: GitlabOptions) => {
 			redirectURI,
 			additionalParams,
 		}) => {
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				GITLAB_DEFAULT_SCOPES,
-				scopes,
-			);
-			return createAuthorizationURL({
+			const _scopes = options.disableDefaultScope ? [] : ["read_user"];
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
+			return await createAuthorizationURL({
 				id: issuerId,
 				options,
 				authorizationEndpoint,
-				scopes: requestedScopes,
+				scopes: _scopes,
 				state,
 				redirectURI,
 				codeVerifier,
@@ -159,5 +153,5 @@ export const gitlab = (options: GitlabOptions) => {
 			};
 		},
 		options,
-	} satisfies UpstreamProvider<GitlabProfile>;
+	} satisfies OAuthProvider<GitlabProfile>;
 };

@@ -18,6 +18,9 @@ export const APIUserSchema = z.object({
 			}),
 		)
 		.optional(),
+	// `false` deactivates the user. Organization-scoped tokens remove membership;
+	// app-level tokens use the admin plugin's `banned` state.
+	active: z.boolean().optional(),
 });
 
 export const OpenAPIUserResourceSchema = {
@@ -109,7 +112,7 @@ export const SCIMUserResourceSchema = {
 			description:
 				"A Boolean value indicating the User's administrative status.",
 			required: false,
-			mutability: "readOnly",
+			mutability: "readWrite",
 			returned: "default",
 		},
 		{

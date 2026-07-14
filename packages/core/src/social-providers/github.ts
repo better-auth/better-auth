@@ -1,11 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../env";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getOAuth2Tokens,
 	refreshAccessToken,
-	resolveRequestedScopes,
 } from "../oauth2";
 import { authorizationCodeRequest } from "../oauth2/validate-authorization-code";
 
@@ -59,14 +58,11 @@ export interface GithubProfile {
 export interface GithubOptions extends ProviderOptions<GithubProfile> {
 	clientId: string;
 }
-const GITHUB_DEFAULT_SCOPES = ["read:user", "user:email"];
-
 export const github = (options: GithubOptions) => {
 	const tokenEndpoint = "https://github.com/login/oauth/access_token";
 	return {
 		id: "github",
 		name: "GitHub",
-		callbackPath: "/callback/github",
 		createAuthorizationURL({
 			state,
 			scopes,
@@ -75,16 +71,16 @@ export const github = (options: GithubOptions) => {
 			redirectURI,
 			additionalParams,
 		}) {
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				GITHUB_DEFAULT_SCOPES,
-				scopes,
-			);
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["read:user", "user:email"];
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "github",
 				options,
 				authorizationEndpoint: "https://github.com/login/oauth/authorize",
-				scopes: requestedScopes,
+				scopes: _scopes,
 				state,
 				codeVerifier,
 				redirectURI,
@@ -186,5 +182,5 @@ export const github = (options: GithubOptions) => {
 			};
 		},
 		options,
-	} satisfies UpstreamProvider<GithubProfile>;
+	} satisfies OAuthProvider<GithubProfile>;
 };

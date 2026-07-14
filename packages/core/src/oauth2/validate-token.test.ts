@@ -154,6 +154,32 @@ describe("validateToken", () => {
 		).rejects.toBeDefined();
 	});
 
+	/**
+	 * The JWKS endpoint is reached via OIDC discovery, so its URL is influenced by
+	 * data an authenticated user can register; following a redirect could bounce
+	 * the server-side request to an internal address.
+	 */
+	it("refuses a redirecting JWKS endpoint and fetches with redirects disabled", async () => {
+		const { privateKey, kid } = await createTestJWKS("RS256");
+		const token = await createSignedToken(privateKey, "RS256", kid);
+		mockedFetch.mockClear();
+		mockedFetch.mockResolvedValueOnce(
+			new Response("", {
+				status: 302,
+				headers: { location: "http://169.254.169.254/" },
+			}),
+		);
+
+		await expect(
+			validateToken(token, "https://example.com/.well-known/jwks"),
+		).rejects.toThrow(/refuse redirects to prevent SSRF/);
+
+		expect(mockedFetch).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({ redirect: "manual" }),
+		);
+	});
+
 	it("should verify token with matching audience", async () => {
 		const { publicJWK, privateKey, kid } = await createTestJWKS("RS256");
 		const token = await createSignedToken(privateKey, "RS256", kid);

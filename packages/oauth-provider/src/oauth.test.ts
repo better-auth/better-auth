@@ -1782,9 +1782,8 @@ describe("oauth - prompt", async () => {
 		);
 		expect(tokens.data?.accessToken).toBeDefined();
 
-		// grantedScopes is normalized (deduped + sorted) per RFC 6749 §3.3.
-		expect(tokens.data?.grantedScopes).toEqual(["email", "openid", "profile"]);
-		expect(tokens.data?.grantedScopes).not.toContain("read:posts");
+		expect(tokens.data?.scopes).toEqual(["openid", "profile", "email"]);
+		expect(tokens.data?.scopes).not.toContain("read:posts");
 	});
 
 	it("select_account - should sign in requesting account selection", async ({
@@ -3359,7 +3358,7 @@ describe("oauth - config", () => {
 		expect(tokens.data?.accessToken).toBeDefined();
 		if (publicClient && !(resource && !disableJwtPlugin)) {
 			await expect(
-				client.verifyAccessToken(tokens.data?.accessToken!, {
+				client.verifyBearerToken(tokens.data?.accessToken!, {
 					verifyOptions: {
 						audience: validResource,
 						issuer: authServerUrl,
@@ -3368,7 +3367,7 @@ describe("oauth - config", () => {
 				}),
 			).rejects.toThrowError();
 		} else {
-			const payload = await client.verifyAccessToken(
+			const payload = await client.verifyBearerToken(
 				tokens.data?.accessToken!,
 				{
 					verifyOptions: {

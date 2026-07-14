@@ -1,11 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	assertEndpointResolvesPublic,
-	assertOIDCEndpointsResolvePublic,
+	assertServerFetchedOIDCEndpointsAllowed,
 	computeDiscoveryUrl,
 	discoverOIDCConfig,
 	ensureRuntimeDiscovery,
 	fetchDiscoveryDocument,
+	fetchOIDCEndpointResponse,
 	needsRuntimeDiscovery,
 	normalizeDiscoveryUrls,
 	normalizeUrl,
@@ -24,6 +25,16 @@ const { lookupMock } = vi.hoisted(() => ({ lookupMock: vi.fn() }));
 vi.mock("node:dns/promises", () => ({ lookup: lookupMock }));
 
 import { betterFetch } from "@better-fetch/fetch";
+
+beforeEach(() => {
+	vi.mocked(betterFetch).mockReset();
+	lookupMock.mockReset();
+	lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+});
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+});
 
 /**
  * Mock OIDC Discovery Document
@@ -1385,10 +1396,10 @@ describe("resolved-address guard", () => {
 		});
 	});
 
-	describe("assertOIDCEndpointsResolvePublic", () => {
+	describe("assertServerFetchedOIDCEndpointsAllowed", () => {
 		it("checks token, userinfo, and jwks endpoints", async () => {
 			lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
-			await assertOIDCEndpointsResolvePublic(
+			await assertServerFetchedOIDCEndpointsAllowed(
 				{
 					tokenEndpoint: "https://idp.example.com/token",
 					userInfoEndpoint: "https://idp.example.com/userinfo",
@@ -1402,7 +1413,7 @@ describe("resolved-address guard", () => {
 		it("rejects when the userinfo endpoint resolves internally", async () => {
 			lookupMock.mockResolvedValue([{ address: "10.1.2.3", family: 4 }]);
 			await expect(
-				assertOIDCEndpointsResolvePublic(
+				assertServerFetchedOIDCEndpointsAllowed(
 					{ userInfoEndpoint: "https://idp.internal.example/userinfo" },
 					notTrusted,
 				),
@@ -1413,7 +1424,7 @@ describe("resolved-address guard", () => {
 
 		it("rejects a syntactically-private endpoint before any DNS lookup", async () => {
 			await expect(
-				assertOIDCEndpointsResolvePublic(
+				assertServerFetchedOIDCEndpointsAllowed(
 					{ tokenEndpoint: "https://169.254.169.254/token" },
 					notTrusted,
 				),
@@ -1433,10 +1444,62 @@ describe("fetchDiscoveryDocument redirect handling", () => {
 		});
 		await fetchDiscoveryDocument(
 			"https://idp.example.com/.well-known/openid-configuration",
+			undefined,
+			() => true,
 		);
 		expect(betterFetch).toHaveBeenCalledWith(
 			"https://idp.example.com/.well-known/openid-configuration",
-			expect.objectContaining({ redirect: "error" }),
+			expect.objectContaining({ redirect: "manual" }),
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10052
+	 */
+	it("rejects redirect responses after using manual redirect mode", async () => {
+		vi.mocked(betterFetch).mockResolvedValueOnce({
+			data: null,
+			error: { status: 302, statusText: "Found", message: "Found" },
+		});
+		await expect(
+			fetchDiscoveryDocument(
+				"https://idp.example.com/.well-known/openid-configuration",
+				undefined,
+				() => true,
+			),
+		).rejects.toThrow(
+			expect.objectContaining({
+				code: "oidc_endpoint_redirect",
+			}),
+		);
+	});
+});
+
+describe("fetchOIDCEndpointResponse redirect handling", () => {
+	it("uses manual redirect mode and rejects redirect responses", async () => {
+		const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+			new Response(null, {
+				status: 302,
+				headers: { location: "https://idp.example.com/final-jwks" },
+			}),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(
+			fetchOIDCEndpointResponse(
+				"jwksEndpoint",
+				"https://idp.example.com/jwks",
+				{ method: "GET" },
+				() => true,
+			),
+		).rejects.toThrow(
+			expect.objectContaining({
+				code: "oidc_endpoint_redirect",
+			}),
+		);
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://idp.example.com/jwks",
+			expect.objectContaining({ redirect: "manual" }),
 		);
 	});
 });

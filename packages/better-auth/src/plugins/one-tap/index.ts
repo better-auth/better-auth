@@ -1,13 +1,17 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
+import {
+	isGoogleHostedDomainAllowed,
+	verifyGoogleIdToken,
+} from "@better-auth/core/social-providers";
 import * as z from "zod";
 import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
 import { OAUTH_CALLBACK_ERROR_CODES } from "../../oauth2/errors";
-import { signInWithOAuthIdentity } from "../../oauth2/sign-in-with-oauth-identity";
+import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { toBoolean } from "../../utils/boolean";
 import { PACKAGE_VERSION } from "../../version";
 
@@ -112,21 +116,32 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 								"Google client ID is required for One Tap. Set it on the oneTap plugin (clientId) or on socialProviders.google.",
 						});
 					}
-					let payload: any;
-					try {
-						const JWKS = createRemoteJWKSet(
-							new URL("https://www.googleapis.com/oauth2/v3/certs"),
+					const payload = (await verifyGoogleIdToken({
+						token: idToken,
+						audience,
+					})) as Partial<GoogleProfile> | null;
+					if (!payload) {
+						throw new APIError("BAD_REQUEST", {
+							message: "invalid id token",
+						});
+					}
+					if (!payload.sub) {
+						throw new APIError("BAD_REQUEST", {
+							message: "invalid id token",
+						});
+					}
+					// Apply the configured Google hosted domain (`hd`) so One Tap
+					// matches the redirect sign-in flow, which rejects tokens whose
+					// `hd` claim is missing or outside the configured restriction.
+					const configuredHostedDomain = googleProvider?.hd;
+					if (
+						!isGoogleHostedDomainAllowed(configuredHostedDomain, payload.hd)
+					) {
+						ctx.context.logger.error(
+							`Google One Tap sign-in rejected: id token hosted domain (hd) "${
+								payload.hd ?? "<missing>"
+							}" does not satisfy the configured "hd" option "${configuredHostedDomain}".`,
 						);
-						const { payload: verifiedPayload } = await jwtVerify(
-							idToken,
-							JWKS,
-							{
-								issuer: ["https://accounts.google.com", "accounts.google.com"],
-								audience,
-							},
-						);
-						payload = verifiedPayload;
-					} catch {
 						throw new APIError("BAD_REQUEST", {
 							message: "invalid id token",
 						});
@@ -138,8 +153,15 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						picture,
 						sub,
 					} = payload;
-					if (!rawEmail) {
-						return ctx.json({ error: "Email not available in token" });
+					if (typeof rawEmail !== "string" || !rawEmail) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Email not available in token",
+						});
+					}
+					if (typeof sub !== "string" || !sub) {
+						throw new APIError("BAD_REQUEST", {
+							message: "invalid id token",
+						});
 					}
 					const email = rawEmail.toLowerCase();
 
@@ -151,19 +173,21 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					// Resolve identity through the shared OAuth path so One Tap matches
 					// the redirect and `signIn.social` flows: the account that owns the
 					// Google `sub` wins, never whichever local user happens to share the
-					// token's email. One Tap is a fixed-grant credential flow, so the
-					// recorded grant is the ID token's openid/profile/email.
-					const result = await signInWithOAuthIdentity(ctx, {
+					// token's email.
+					const result = await handleOAuthUserInfo(ctx, {
 						userInfo: {
 							id: sub,
 							email,
 							emailVerified,
-							name: name ?? "",
-							image: picture,
+							name: typeof name === "string" ? name : "",
+							image: typeof picture === "string" ? picture : undefined,
 						},
-						providerId: "google",
-						accountId: sub,
-						tokens: { idToken, scopes: ["openid", "profile", "email"] },
+						account: {
+							providerId: "google",
+							accountId: sub,
+							idToken,
+							scope: "openid,profile,email",
+						},
 						disableSignUp: options?.disableSignup,
 						source: {
 							method: "oauth",

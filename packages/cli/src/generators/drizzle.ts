@@ -11,6 +11,23 @@ function convertToSnakeCase(str: string, camelCase?: boolean) {
 	return camelCase ? str : toSnakeCase(str);
 }
 
+function toValidIdentifier(str: string): string {
+	// Convert schema name to a valid JavaScript identifier
+	// Replace hyphens and other non-alphanumeric characters (except underscore) with nothing
+	// Then convert to camelCase
+	let result = str
+		.replace(/[^a-zA-Z0-9_]/g, "")
+		.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
+		.replace(/_/g, "") // Remove remaining underscores
+		.replace(/^[0-9]/, "_$&"); // Can't start with a number - must be after underscore removal
+
+	// Ensure first character is lowercase
+	if (result.length > 0 && result[0]!.match(/[A-Z]/)) {
+		result = result[0]!.toLowerCase() + result.slice(1);
+	}
+
+	return result || "schema"; // Fallback if result is empty
+}
 export const generateDrizzleSchema: SchemaGenerator = async ({
 	options,
 	file,
@@ -20,6 +37,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	const filePath = file || "./auth-schema.ts";
 	const databaseType: "sqlite" | "mysql" | "pg" | undefined =
 		adapter.options?.provider;
+
+	const schemaName = adapter.options?.schemaName;
 
 	if (!databaseType) {
 		throw new Error(
@@ -32,20 +51,52 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		databaseType,
 		tables,
 		options,
+		schemaName,
 	});
+
+	// Add schema declaration for PostgreSQL when schemaName is provided
+	let schemaVarName: string | undefined;
+	if (databaseType === "pg" && schemaName) {
+		schemaVarName = `${toValidIdentifier(schemaName)}Schema`;
+		if (schemaVarName === "pgSchema") {
+			schemaVarName = "pgCustomSchema";
+		}
+		code += `\nconst ${schemaVarName} = pgSchema(${JSON.stringify(schemaName)});\n\n`;
+	}
 
 	const getModelName = initGetModelName({
 		schema: tables,
 		usePlural: adapter.options?.adapterConfig?.usePlural,
 	});
 
+	const getSingularModelName = initGetModelName({
+		schema: tables,
+		usePlural: false,
+	});
+
 	const getFieldName = initGetFieldName({
 		schema: tables,
 		usePlural: adapter.options?.adapterConfig?.usePlural,
 	});
+	const isMigrationDisabled = (model: string) =>
+		Object.entries(tables).some(([tableKey, table]) => {
+			if (table.disableMigrations !== true) {
+				return false;
+			}
+			const customModelName = table.modelName || tableKey;
+			return (
+				model === tableKey ||
+				model === customModelName ||
+				model === getModelName(tableKey) ||
+				model === getModelName(customModelName)
+			);
+		});
 
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
+		if (isMigrationDisabled(tableKey)) {
+			continue;
+		}
 		const modelName = getModelName(tableKey);
 		const fields = table.fields;
 
@@ -84,9 +135,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			if (typeof type !== "string") {
 				if (Array.isArray(type) && type.every((x) => typeof x === "string")) {
 					return {
-						sqlite: `text({ enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
+						sqlite: `text('${name}', { enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
 						pg: `text('${name}', { enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
-						mysql: `mysqlEnum([${type.map((x) => `'${x}'`).join(", ")}])`,
+						mysql: `mysqlEnum('${name}', [${type.map((x) => `'${x}'`).join(", ")}])`,
 					}[databaseType];
 				} else {
 					throw new TypeError(
@@ -202,7 +253,13 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			return code.join("\n");
 		};
 
-		const schema = `export const ${modelName} = ${databaseType}Table("${convertToSnakeCase(
+		// Determine table function to use based on schema support
+		const tableFunction =
+			databaseType === "pg" && schemaName && schemaVarName
+				? `${schemaVarName}.table`
+				: `${databaseType}Table`;
+
+		const schema = `export const ${modelName} = ${tableFunction}("${convertToSnakeCase(
 			modelName,
 			adapter.options?.camelCase,
 		)}", {
@@ -247,7 +304,22 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 										// custom logic within that function that might not work in drizzle's context.
 									}
 								} else if (typeof attr.defaultValue === "string") {
-									type += `.default("${attr.defaultValue}")`;
+									// Serialize through JSON.stringify so a value with quotes or
+									// backslashes emits valid TypeScript instead of a broken literal.
+									type += `.default(${JSON.stringify(attr.defaultValue)})`;
+								} else if (Array.isArray(attr.defaultValue)) {
+									// Stringify each element so a `["customer"]` default emits
+									// `.default(["customer"])` rather than `.default(customer)`
+									// from JS's implicit Array#toString.
+									const elements = attr.defaultValue
+										.map((value) => JSON.stringify(value))
+										.join(", ");
+									type += `.default([${elements}])`;
+								} else if (
+									typeof attr.defaultValue === "object" &&
+									attr.defaultValue !== null
+								) {
+									type += `.default(${JSON.stringify(attr.defaultValue)})`;
 								} else {
 									type += `.default(${attr.defaultValue})`;
 								}
@@ -259,11 +331,13 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 									type += `.$onUpdate(${attr.onUpdate})`;
 								}
 							}
+							const referencesDisabledModel =
+								attr.references && isMigrationDisabled(attr.references.model);
 
 							return `${fieldName}: ${type}${attr.required !== false ? ".notNull()" : ""}${
 								attr.unique ? ".unique()" : ""
 							}${
-								attr.references
+								attr.references && !referencesDisabledModel
 									? `.references(()=> ${getModelName(
 											attr.references.model,
 										)}.${getFieldName({ model: attr.references.model, field: attr.references.field })}, { onDelete: '${
@@ -280,6 +354,9 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	let relationsString: string = "";
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
+		if (isMigrationDisabled(tableKey)) {
+			continue;
+		}
 		const modelName = getModelName(tableKey);
 
 		type Relation = {
@@ -318,7 +395,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		for (const [fieldName, field] of foreignFields) {
 			const referencedModel = field.references!.model;
-			const relationKey = getModelName(referencedModel);
+			if (isMigrationDisabled(referencedModel)) {
+				continue;
+			}
+			// Use singular form for many-to-one relation keys
+			const relationKey = getSingularModelName(referencedModel);
 			const fieldRef = `${getModelName(tableKey)}.${getFieldName({ model: tableKey, field: fieldName })}`;
 			const referenceRef = `${getModelName(referencedModel)}.${getFieldName({ model: referencedModel, field: field.references!.field || "id" })}`;
 
@@ -337,7 +418,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		// 2. Find all OTHER tables that reference THIS table (creates "many" relations)
 		const otherModels = Object.entries(tables).filter(
-			([modelName]) => modelName !== tableKey,
+			([modelName, otherTable]) =>
+				modelName !== tableKey && !otherTable.disableMigrations,
 		);
 
 		// Map to track relations by model name to determine if unique or many
@@ -522,10 +604,12 @@ function generateImport({
 	databaseType,
 	tables,
 	options,
+	schemaName,
 }: {
 	databaseType: "sqlite" | "mysql" | "pg";
 	tables: BetterAuthDBSchema;
 	options: BetterAuthOptions;
+	schemaName?: string;
 }) {
 	const rootImports: string[] = ["relations"];
 	const coreImports: string[] = [];
@@ -545,7 +629,14 @@ function generateImport({
 
 	const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
-	coreImports.push(`${databaseType}Table`);
+	// Import pgSchema for PostgreSQL when schemaName is provided
+	if (databaseType === "pg" && schemaName) {
+		coreImports.push("pgSchema");
+	}
+
+	if (!(databaseType === "pg" && schemaName)) {
+		coreImports.push(`${databaseType}Table`);
+	}
 	coreImports.push(
 		databaseType === "mysql"
 			? "varchar, text"

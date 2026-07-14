@@ -255,15 +255,14 @@ export const createTestSuite = <
 
 			let adapter = await helpers.adapter();
 			const wrapperAdapter = (
-				overrideOptions?: BetterAuthOptions | undefined,
+				resolvedOptions?: BetterAuthOptions | undefined,
 			) => {
-				const options = deepmerge(
+				const options =
+					resolvedOptions ??
 					deepmerge(
-						helpers.getBetterAuthOptions(),
 						config?.defaultBetterAuthOptions || {},
-					),
-					overrideOptions || {},
-				);
+						helpers.getBetterAuthOptions(),
+					);
 				const adapterConfig = {
 					adapterId: helpers.adapterDisplayName,
 					...(adapter.options?.adapterConfig || {}),
@@ -272,27 +271,26 @@ export const createTestSuite = <
 					disableTransformInput: true,
 					disableTransformJoin: true,
 				};
+				// Snapshot the real adapter's transaction here so the wrapper always
+				// delegates to it, even when subsequent helper calls reassign
+				// `adapter` (e.g. `adapter = await helpers.adapter()` inside the
+				// proxied methods below). Previously this code mutated
+				// `adapter.transaction = undefined`, which left later
+				// `wrapperAdapter()` invocations with a snapshot of `undefined` and
+				// silently degraded `wrapper.transaction(cb)` to the no-op
+				// `createAsIsTransaction` path — breaking real rollback semantics
+				// for adapters that opt into `transaction: true`.
+				const adapterTransaction = adapter.transaction;
 				const adapterCreator = (
 					options: BetterAuthOptions,
 				): DBAdapter<BetterAuthOptions> =>
 					createAdapterFactory({
 						config: {
 							...adapterConfig,
-							transaction: adapter.transaction,
+							transaction: adapterTransaction,
 						},
 						adapter: ({ getDefaultModelName }) => {
-							adapter.transaction = undefined as any;
 							return {
-								consumeOne: async (args) => {
-									adapter = await helpers.adapter();
-									const res = await adapter.consumeOne(args);
-									return res as any;
-								},
-								incrementOne: async (args) => {
-									adapter = await helpers.adapter();
-									const res = await adapter.incrementOne(args);
-									return res as any;
-								},
 								count: async (args: any) => {
 									adapter = await helpers.adapter();
 									const res = await adapter.count(args);
@@ -327,6 +325,22 @@ export const createTestSuite = <
 									adapter = await helpers.adapter();
 									const res = await adapter.updateMany(args);
 									return res as any;
+								},
+								consumeOne: async <T>(
+									args: Parameters<
+										DBAdapter<BetterAuthOptions>["consumeOne"]
+									>[0],
+								) => {
+									adapter = await helpers.adapter();
+									return adapter.consumeOne<T>(args);
+								},
+								incrementOne: async <T>(
+									args: Parameters<
+										DBAdapter<BetterAuthOptions>["incrementOne"]
+									>[0],
+								) => {
+									adapter = await helpers.adapter();
+									return adapter.incrementOne<T>(args);
 								},
 								createSchema: adapter.createSchema as any,
 								async create({ data, model, select }) {
@@ -516,7 +530,7 @@ export const createTestSuite = <
 						idToken: generateId(),
 						accessTokenExpiresAt: new Date(),
 						refreshTokenExpiresAt: new Date(),
-						grantedScopes: ["test"],
+						scope: "test",
 					};
 					return account as any;
 				}
@@ -635,9 +649,12 @@ export const createTestSuite = <
 					}),
 					getAuth: async () => {
 						adapter = await helpers.adapter();
+						const options = deepmerge(
+							config?.defaultBetterAuthOptions || {},
+							helpers.getBetterAuthOptions(),
+						);
 						const auth = betterAuth({
-							...helpers.getBetterAuthOptions(),
-							...(config?.defaultBetterAuthOptions || {}),
+							...options,
 							database: (options: BetterAuthOptions) => {
 								const adapter = wrapperAdapter(options);
 								return adapter;

@@ -303,7 +303,7 @@ export type BetterAuthAdvancedOptions = {
 				 * @example ["x-client-ip", "x-forwarded-for", "cf-connecting-ip"]
 				 *
 				 * @default
-				 * @link https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/utils/get-request-ip.ts#L8
+				 * @link https://github.com/better-auth/better-auth/blob/main/packages/core/src/utils/ip.ts
 				 */
 				ipAddressHeaders?: string[];
 				/**
@@ -320,6 +320,21 @@ export type BetterAuthAdvancedOptions = {
 				 * @default 64
 				 */
 				ipv6Subnet?: number;
+				/**
+				 * Trusted reverse-proxy IPs or CIDR ranges. When set, a forwarded IP
+				 * chain is walked right to left, trusted hops are skipped, and the
+				 * first untrusted address is the client IP. Unset trusts only
+				 * single-value IP headers. Use the actual address or subnet of your
+				 * proxies, not a broad private range that also covers clients.
+				 *
+				 * This only interprets the forwarded header chain and cannot verify
+				 * the direct sender. It is safe only when your origin is reachable
+				 * through these proxies and clients cannot set forwarded headers
+				 * directly.
+				 *
+				 * @example ["192.0.2.10", "10.0.0.0/24"]
+				 */
+				trustedProxies?: string[];
 		  }
 		| undefined;
 	/**
@@ -439,6 +454,21 @@ export type BetterAuthAdvancedOptions = {
 				 * function.
 				 */
 				generateId?: GenerateIdFn | false | "serial" | "uuid";
+				/**
+				 * Enable database joins for adapters that support them.
+				 *
+				 * When disabled (default), related data is fetched via
+				 * separate queries. When enabled, adapters that support
+				 * native joins use them; otherwise Better Auth falls back
+				 * to separate queries.
+				 *
+				 * Please read the adapter documentation for more
+				 * information regarding joins before enabling this.
+				 * Not all adapters support joins.
+				 *
+				 * @default false
+				 */
+				joins?: boolean;
 		  }
 		| undefined;
 	/**
@@ -1281,9 +1311,13 @@ export type BetterAuthOptions = {
 				 */
 				storeStateStrategy?: "database" | "cookie";
 				/**
-				 * Store account data after oauth flow on a cookie
+				 * Store provider account data after an OAuth flow in an encrypted
+				 * cookie. This includes OAuth token material such as access tokens,
+				 * refresh tokens, ID tokens, scopes, and token expiry.
 				 *
-				 * This is useful for database-less flow
+				 * This is useful for database-less flows, but large provider tokens can
+				 * still hit browser or proxy cookie/header limits even though Better Auth
+				 * chunks oversized account cookies.
 				 *
 				 * @default false
 				 *
@@ -1764,18 +1798,4 @@ export type BetterAuthOptions = {
 				debug?: boolean;
 		  }
 		| undefined;
-	/**
-	 * Experimental features
-	 */
-	experimental?: {
-		/**
-		 * Enable experimental joins for your database adapter.
-		 *
-		 * 	Please read the adapter documentation for more information regarding joins before enabling this.
-		 * 	Not all adapters support joins.
-		 *
-		 * @default false
-		 */
-		joins?: boolean;
-	};
 };

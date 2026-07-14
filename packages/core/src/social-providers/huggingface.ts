@@ -1,9 +1,8 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -43,14 +42,11 @@ export interface HuggingFaceOptions
 	clientId: string;
 }
 
-const HUGGINGFACE_DEFAULT_SCOPES = ["openid", "profile", "email"];
-
 export const huggingface = (options: HuggingFaceOptions) => {
 	const tokenEndpoint = "https://huggingface.co/oauth/token";
 	return {
 		id: "huggingface",
 		name: "Hugging Face",
-		callbackPath: "/callback/huggingface",
 		createAuthorizationURL({
 			state,
 			scopes,
@@ -58,16 +54,16 @@ export const huggingface = (options: HuggingFaceOptions) => {
 			redirectURI,
 			additionalParams,
 		}) {
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				HUGGINGFACE_DEFAULT_SCOPES,
-				scopes,
-			);
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["openid", "profile", "email"];
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "huggingface",
 				options,
 				authorizationEndpoint: "https://huggingface.co/oauth/authorize",
-				scopes: requestedScopes,
+				scopes: _scopes,
 				state,
 				codeVerifier,
 				redirectURI,
@@ -126,5 +122,5 @@ export const huggingface = (options: HuggingFaceOptions) => {
 			};
 		},
 		options,
-	} satisfies UpstreamProvider<HuggingFaceProfile>;
+	} satisfies OAuthProvider<HuggingFaceProfile>;
 };
