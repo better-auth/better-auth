@@ -693,7 +693,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
 
-					if (options.experimental?.joins) {
+					if (join) {
 						const queryModel = getQueryModel(model);
 						if (!db.query || !queryModel) {
 							logger.error(
@@ -706,20 +706,18 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| undefined;
 
 							const pluralJoinResults: { key: string; target: string }[] = [];
-							if (join) {
-								includes = {};
-								const joinEntries = Object.entries(join);
-								for (const [model, joinAttr] of joinEntries) {
-									const limit =
-										joinAttr.limit ??
-										options.advanced?.database?.defaultFindManyLimit ??
-										100;
-									const isUnique = joinAttr.relation === "one-to-one";
-									const relationKey = getJoinRelationKey(model, isUnique);
-									includes[relationKey] = isUnique ? true : { limit };
-									if (!isUnique) {
-										pluralJoinResults.push({ key: relationKey, target: model });
-									}
+							includes = {};
+							const joinEntries = Object.entries(join);
+							for (const [model, joinAttr] of joinEntries) {
+								const limit =
+									joinAttr.limit ??
+									options.advanced?.database?.defaultFindManyLimit ??
+									100;
+								const isUnique = joinAttr.relation === "one-to-one";
+								const relationKey = getJoinRelationKey(model, isUnique);
+								includes[relationKey] = isUnique ? true : { limit };
+								if (!isUnique) {
+									pluralJoinResults.push({ key: relationKey, target: model });
 								}
 							}
 							const clause = convertNewWhereClause(where, model);
@@ -775,7 +773,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const clause = where ? convertWhereClause(where, model) : [];
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
 
-					if (options.experimental?.joins) {
+					if (join) {
 						const queryModel = getQueryModel(model);
 						if (!db.query || !queryModel) {
 							logger.error(
@@ -788,20 +786,18 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| undefined;
 
 							const pluralJoinResults: { key: string; target: string }[] = [];
-							if (join) {
-								includes = {};
-								const joinEntries = Object.entries(join);
-								for (const [model, joinAttr] of joinEntries) {
-									const isUnique = joinAttr.relation === "one-to-one";
-									const limit =
-										joinAttr.limit ??
-										options.advanced?.database?.defaultFindManyLimit ??
-										100;
-									const relationKey = getJoinRelationKey(model, isUnique);
-									includes[relationKey] = isUnique ? true : { limit };
-									if (!isUnique)
-										pluralJoinResults.push({ key: relationKey, target: model });
-								}
+							includes = {};
+							const joinEntries = Object.entries(join);
+							for (const [model, joinAttr] of joinEntries) {
+								const isUnique = joinAttr.relation === "one-to-one";
+								const limit =
+									joinAttr.limit ??
+									options.advanced?.database?.defaultFindManyLimit ??
+									100;
+								const relationKey = getJoinRelationKey(model, isUnique);
+								includes[relationKey] = isUnique ? true : { limit };
+								if (!isUnique)
+									pluralJoinResults.push({ key: relationKey, target: model });
 							}
 							let orderBy: Record<string, "asc" | "desc"> | undefined =
 								undefined;
