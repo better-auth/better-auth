@@ -300,6 +300,7 @@ const ssoProviderBodySchema = z.object({
 			callbackUrl: z.string({}).meta({
 				description: "The callback URL of the provider",
 			}),
+			idpInitiatedCallbackURL: z.string().optional(),
 			audience: z.string().optional(),
 			idpMetadata: z
 				.object({
@@ -863,6 +864,8 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 								entryPoint: body.samlConfig.entryPoint,
 								cert: body.samlConfig.cert,
 								callbackUrl: body.samlConfig.callbackUrl,
+								idpInitiatedCallbackURL:
+									body.samlConfig.idpInitiatedCallbackURL,
 								audience: body.samlConfig.audience,
 								idpMetadata: body.samlConfig.idpMetadata,
 								spMetadata: body.samlConfig.spMetadata,
@@ -2048,8 +2051,25 @@ export const acsEndpoint = (options?: SSOOptions) => {
 							: internalCode === "SAML_NO_ASSERTION"
 								? "no_assertion"
 								: internalCode.toLowerCase() || "saml_error";
+					const provider = await findSAMLProvider(
+						providerId,
+						options,
+						ctx.context.adapter,
+					);
+					const parsedSamlConfig = provider?.samlConfig;
+					const idpInitiatedCallbackURL =
+						parsedSamlConfig?.idpInitiatedCallbackURL ||
+						options?.saml?.idpInitiatedCallbackURL;
+					const rawRelayState = ctx.body.RelayState;
+					const isTrustedRelayState =
+						rawRelayState &&
+						(rawRelayState.startsWith("/")
+							? !rawRelayState.startsWith("//")
+							: ctx.context.isTrustedOrigin(rawRelayState, {
+									allowRelativePaths: false,
+								}));
 					const redirectUrl = getSafeRedirectUrl(
-						ctx.body.RelayState || undefined,
+						isTrustedRelayState ? rawRelayState : idpInitiatedCallbackURL,
 						currentCallbackPath,
 						appOrigin,
 						(url, settings) => ctx.context.isTrustedOrigin(url, settings),
