@@ -2,7 +2,7 @@
  * Drizzle keys `db.query` by the schema export names, commonly plural ("users"),
  * while Better Auth passes singular model names. The adapter read
  * `db.query[model]` directly, so a plural-keyed schema fell back to the
- * non-relational query, returning empty joins under `experimental.joins`.
+ * non-relational query, returning empty joins.
  */
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 import Database from "better-sqlite3";
@@ -49,7 +49,9 @@ describe("drizzle relations-v2 adapter: plural db.query keys", () => {
 	const adapter = drizzleAdapter(db, {
 		schema: { user: users, session: sessions, relations },
 		provider: "sqlite",
-	})({ experimental: { joins: true } });
+	})({
+		advanced: { database: { joins: true } },
+	});
 
 	beforeEach(() => {
 		sqliteDb.exec("DROP TABLE IF EXISTS session;");
@@ -128,7 +130,9 @@ describe("drizzle relations-v2 adapter: missing relational query namespace", () 
 	const adapter = drizzleAdapter(db, {
 		schema: { user: users, session: sessions, relations },
 		provider: "sqlite",
-	})({ experimental: { joins: true } });
+	})({
+		advanced: { database: { joins: true } },
+	});
 
 	beforeEach(() => {
 		sqliteDb.exec("DROP TABLE IF EXISTS user;");
@@ -174,7 +178,9 @@ describe("drizzle relations-v2 adapter: query key via relations internal", () =>
 	const adapter = drizzleAdapter(db, {
 		schema: { user: users, session: sessions, relations },
 		provider: "sqlite",
-	})({ experimental: { joins: true } });
+	})({
+		advanced: { database: { joins: true } },
+	});
 
 	beforeEach(() => {
 		sqliteDb.exec("DROP TABLE IF EXISTS session;");
