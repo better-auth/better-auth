@@ -1,6 +1,9 @@
 import { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
-import { runWithEndpointContext } from "@better-auth/core/context";
+import {
+	runWithEndpointContext,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import type { SecondaryStorage } from "@better-auth/core/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -1000,6 +1003,41 @@ describe("internal adapter test", async () => {
 		expect(sessions.map((s) => s.token).sort()).toEqual(
 			[session1.token, session3.token].sort(),
 		);
+	});
+
+	it("defers secondary session deletion until commit and discards it on rollback", async () => {
+		const testMap = new Map<string, string>();
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(testMap),
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "transactional-session-user",
+				email: "transactional-session@example.com",
+			},
+			{ method: "test" },
+		);
+		const session = await testCtx.internalAdapter.createSession(user.id);
+
+		await expect(
+			runWithTransaction(testCtx.adapter, async () => {
+				await testCtx.internalAdapter.deleteUserSessions(user.id);
+				expect(testMap.has(session.token)).toBe(true);
+				throw new Error("rollback");
+			}),
+		).rejects.toThrow("rollback");
+		expect(testMap.has(session.token)).toBe(true);
+		expect(testMap.has(`active-sessions-${user.id}`)).toBe(true);
+
+		await runWithTransaction(testCtx.adapter, async () => {
+			await testCtx.internalAdapter.deleteUserSessions(user.id);
+			expect(testMap.has(session.token)).toBe(true);
+		});
+		expect(testMap.has(session.token)).toBe(false);
+		expect(testMap.has(`active-sessions-${user.id}`)).toBe(false);
 	});
 
 	it("listSessions should skip malformed session data (valid JSON but wrong structure)", async () => {

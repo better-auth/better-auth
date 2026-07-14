@@ -1,9 +1,10 @@
+import { DatabaseSync } from "node:sqlite";
 import { cimd } from "@better-auth/cimd";
 import { electron } from "@better-auth/electron";
 import { dash, sendEmail, sentinel } from "@better-auth/infra";
+import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
-import { scim } from "@better-auth/scim";
 import { sso } from "@better-auth/sso";
 import { stripe } from "@better-auth/stripe";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -28,35 +29,71 @@ import {
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { Stripe } from "stripe";
+import { createSCIMDemoPlugin } from "./scim-demo.ts";
 
-const dialect = (() => {
+const database = (() => {
+	if (process.env.DEMO_SQLITE_PATH) {
+		return {
+			dialect: new NodeSqliteDialect({
+				database: new DatabaseSync(process.env.DEMO_SQLITE_PATH),
+			}),
+			type: "sqlite" as const,
+			transaction: true,
+		};
+	}
 	if (process.env.USE_MYSQL) {
 		if (!process.env.MYSQL_DATABASE_URL) {
 			throw new Error(
 				"Using MySQL dialect without MYSQL_DATABASE_URL. Please set it in your environment variables.",
 			);
 		}
-		return new MysqlDialect(createPool(process.env.MYSQL_DATABASE_URL || ""));
+		return {
+			dialect: new MysqlDialect(
+				createPool(process.env.MYSQL_DATABASE_URL || ""),
+			),
+			type: "mysql" as const,
+			transaction: true,
+		};
 	} else {
 		if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
-			return new LibsqlDialect({
-				url: process.env.TURSO_DATABASE_URL,
-				authToken: process.env.TURSO_AUTH_TOKEN,
-			});
+			return {
+				dialect: new LibsqlDialect({
+					url: process.env.TURSO_DATABASE_URL,
+					authToken: process.env.TURSO_AUTH_TOKEN,
+				}),
+				type: "sqlite" as const,
+				transaction: true,
+			};
 		}
 	}
 	return null;
 })();
 
-if (!dialect) {
+if (!database) {
 	throw new Error("No dialect found");
 }
 
+const scimDemoPlugin = createSCIMDemoPlugin();
+
 const authOptions = {
 	appName: "Better Auth Demo",
-	database: {
-		dialect,
-		type: "sqlite",
+	database,
+	user: {
+		additionalFields: {
+			scimDemoActive: {
+				type: "boolean",
+				required: false,
+				defaultValue: false,
+				input: false,
+				returned: false,
+			},
+			scimDemoRole: {
+				type: "string",
+				required: false,
+				input: false,
+				returned: false,
+			},
+		},
 	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
@@ -147,7 +184,7 @@ const authOptions = {
 	plugins: [
 		organization({
 			async sendInvitationEmail(data) {
-				sendEmail({
+				await sendEmail({
 					to: data.email,
 					subject: "You've been invited to join an organization",
 					template: "invitation",
@@ -342,7 +379,7 @@ const authOptions = {
 				},
 			],
 		}),
-		scim(),
+		...(scimDemoPlugin ? [scimDemoPlugin] : []),
 		deviceAuthorization({
 			expiresIn: "3min",
 			interval: "5s",

@@ -9,6 +9,7 @@ import type {
 import {
 	getCurrentAdapter,
 	getCurrentAuthContext,
+	queueAfterTransactionHook,
 	runWithTransaction,
 } from "@better-auth/core/context";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
@@ -128,6 +129,20 @@ export const createInternalAdapter = (
 				);
 			}),
 		);
+	}
+
+	async function deleteCachedUserSessions(userId: string) {
+		if (!secondaryStorage) return;
+		const activeSession = await secondaryStorage.get(
+			`active-sessions-${userId}`,
+		);
+		const sessions = activeSession
+			? safeJSONParse<{ token: string }[]>(activeSession)
+			: [];
+		for (const session of sessions ?? []) {
+			await secondaryStorage.delete(session.token);
+		}
+		await secondaryStorage.delete(`active-sessions-${userId}`);
 	}
 
 	async function withVerificationConsumeLock<T>(
@@ -851,17 +866,17 @@ export const createInternalAdapter = (
 		},
 		deleteUserSessions: async (userId: string) => {
 			if (secondaryStorage) {
-				const activeSession = await secondaryStorage.get(
-					`active-sessions-${userId}`,
+				await queueAfterTransactionHook(
+					() => deleteCachedUserSessions(userId),
+					{
+						onError(error) {
+							logger.error(
+								"Failed to delete committed user sessions from secondary storage",
+								error,
+							);
+						},
+					},
 				);
-				const sessions = activeSession
-					? safeJSONParse<{ token: string }[]>(activeSession)
-					: [];
-				if (!sessions) return;
-				for (const session of sessions) {
-					await secondaryStorage.delete(session.token);
-				}
-				await secondaryStorage.delete(`active-sessions-${userId}`);
 
 				if (!options.session?.storeSessionInDatabase) {
 					return;
@@ -1068,7 +1083,14 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
-			await refreshUserSessions(user);
+			await queueAfterTransactionHook(() => refreshUserSessions(user), {
+				onError(error) {
+					logger.error(
+						"Failed to refresh committed user sessions in secondary storage",
+						error,
+					);
+				},
+			});
 			return user;
 		},
 		updateUserByEmail: async (
@@ -1089,7 +1111,14 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
-			await refreshUserSessions(user);
+			await queueAfterTransactionHook(() => refreshUserSessions(user), {
+				onError(error) {
+					logger.error(
+						"Failed to refresh committed user sessions in secondary storage",
+						error,
+					);
+				},
+			});
 			return user;
 		},
 		updatePassword: async (userId: string, password: string) => {

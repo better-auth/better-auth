@@ -1,6 +1,16 @@
+import { ArrowRight, Network } from "lucide-react";
 import { headers } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import AccountSwitcher from "@/components/account-switch";
+import { Button } from "@/components/ui/button";
+import {
+	Card,
+	CardContent,
+	CardDescription,
+	CardHeader,
+	CardTitle,
+} from "@/components/ui/card";
 import { auth } from "@/lib/auth";
 import OrganizationCard from "./_components/organization-card";
 import SubscriptionCard from "./_components/subscription-card";
@@ -33,6 +43,29 @@ export default async function Page() {
 					initialSession={session}
 				/>
 				<UserCard session={session} activeSessions={activeSessions} />
+				<Card>
+					<CardHeader>
+						<div className="flex items-start gap-3">
+							<div className="border bg-muted p-2" aria-hidden="true">
+								<Network className="size-5" />
+							</div>
+							<div className="space-y-1">
+								<CardTitle>SCIM provisioning</CardTitle>
+								<CardDescription>
+									Run the live User and Group provisioning workflow
+								</CardDescription>
+							</div>
+						</div>
+					</CardHeader>
+					<CardContent>
+						<Button asChild>
+							<Link href="/dashboard/scim">
+								Open workflow
+								<ArrowRight className="size-4" aria-hidden="true" />
+							</Link>
+						</Button>
+					</CardContent>
+				</Card>
 				<OrganizationCard session={session} />
 				<SubscriptionCard />
 			</div>

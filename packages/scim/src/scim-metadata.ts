@@ -5,14 +5,40 @@ const MetadataFieldSupportOpenAPISchema = {
 			type: "boolean",
 		},
 	},
+	required: ["supported"],
+};
+
+const BulkSupportOpenAPISchema = {
+	type: "object",
+	properties: {
+		...MetadataFieldSupportOpenAPISchema.properties,
+		maxOperations: {
+			type: "integer",
+		},
+		maxPayloadSize: {
+			type: "integer",
+		},
+	},
+	required: ["supported", "maxOperations", "maxPayloadSize"],
+};
+
+const FilterSupportOpenAPISchema = {
+	type: "object",
+	properties: {
+		...MetadataFieldSupportOpenAPISchema.properties,
+		maxResults: {
+			type: "integer",
+		},
+	},
+	required: ["supported", "maxResults"],
 };
 
 export const ServiceProviderOpenAPISchema = {
 	type: "object",
 	properties: {
 		patch: MetadataFieldSupportOpenAPISchema,
-		bulk: MetadataFieldSupportOpenAPISchema,
-		filter: MetadataFieldSupportOpenAPISchema,
+		bulk: BulkSupportOpenAPISchema,
+		filter: FilterSupportOpenAPISchema,
 		changePassword: MetadataFieldSupportOpenAPISchema,
 		sort: MetadataFieldSupportOpenAPISchema,
 		etag: MetadataFieldSupportOpenAPISchema,
@@ -30,6 +56,9 @@ export const ServiceProviderOpenAPISchema = {
 					specUri: {
 						type: "string",
 					},
+					documentationUri: {
+						type: "string",
+					},
 					type: {
 						type: "string",
 					},
@@ -37,6 +66,7 @@ export const ServiceProviderOpenAPISchema = {
 						type: "boolean",
 					},
 				},
+				required: ["type", "name", "description"],
 			},
 		},
 		schemas: {
@@ -51,9 +81,22 @@ export const ServiceProviderOpenAPISchema = {
 				resourceType: {
 					type: "string",
 				},
+				location: {
+					type: "string",
+				},
 			},
 		},
 	},
+	required: [
+		"schemas",
+		"patch",
+		"bulk",
+		"filter",
+		"changePassword",
+		"sort",
+		"etag",
+		"authenticationSchemes",
+	] as string[],
 } as const;
 
 export const ResourceTypeOpenAPISchema = {
@@ -68,6 +111,17 @@ export const ResourceTypeOpenAPISchema = {
 		endpoint: { type: "string" },
 		description: { type: "string" },
 		schema: { type: "string" },
+		schemaExtensions: {
+			type: "array",
+			items: {
+				type: "object",
+				properties: {
+					schema: { type: "string" },
+					required: { type: "boolean" },
+				},
+				required: ["schema", "required"],
+			},
+		},
 		meta: {
 			type: "object",
 			properties: {
@@ -76,6 +130,7 @@ export const ResourceTypeOpenAPISchema = {
 			},
 		},
 	},
+	required: ["schemas", "name", "endpoint", "schema"] as string[],
 } as const;
 
 const SCIMSchemaAttributesOpenAPISchema = {
@@ -90,6 +145,14 @@ const SCIMSchemaAttributesOpenAPISchema = {
 		mutability: { type: "string" },
 		returned: { type: "string" },
 		uniqueness: { type: "string" },
+		canonicalValues: {
+			type: "array",
+			items: { type: "string" },
+		},
+		referenceTypes: {
+			type: "array",
+			items: { type: "string" },
+		},
 	},
 } as const;
 
@@ -125,4 +188,5 @@ export const SCIMSchemaOpenAPISchema = {
 			required: ["resourceType", "location"],
 		},
 	},
+	required: ["schemas", "id", "attributes"] as string[],
 } as const;

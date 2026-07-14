@@ -13,6 +13,7 @@ import {
 	transactionsTestSuite,
 	uuidTestSuite,
 } from "../adapter-factory";
+import { scimHttpTestSuite } from "../adapter-factory/scim-http-test-suite";
 import {
 	DEFAULT_SCHEMA_REFERENCE,
 	schemaRefJoinTestSuite,
@@ -39,6 +40,7 @@ const { execute } = await testAdapter({
 		kyselyAdapter(kyselyDB, {
 			type: "postgres",
 			debugLogs: { isRunningAdapterTests: true },
+			transaction: true,
 		}),
 	prefixTests: "pg",
 	async runMigrations(betterAuthOptions) {
@@ -51,7 +53,7 @@ const { execute } = await testAdapter({
 	},
 	tests: [
 		normalTestSuite(),
-		transactionsTestSuite({ disableTests: { ALL: true } }),
+		transactionsTestSuite(),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
 		joinsTestSuite(),
@@ -59,6 +61,11 @@ const { execute } = await testAdapter({
 		caseInsensitiveTestSuite(),
 		schemaRefTestSuite(),
 		schemaRefJoinTestSuite(),
+		scimHttpTestSuite({
+			connectionId: "kysely-postgres-workforce",
+			token: "kysely-postgres-scim-token",
+			testId: "kysely-postgres",
+		}),
 	],
 	async onFinish() {
 		await pgDB.end();

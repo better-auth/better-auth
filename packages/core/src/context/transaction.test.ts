@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { DBAdapter, DBTransactionAdapter } from "../db/adapter";
 import {
 	getCurrentAdapter,
@@ -80,5 +80,52 @@ describe("runWithTransaction", () => {
 		expect(getTransactionCalls()).toBe(1);
 		expect(hookRunsInsideTransaction).toBe(0);
 		expect(hookRuns).toBe(1);
+	});
+
+	it("discards queued hooks when the transaction rolls back", async () => {
+		const { adapter } = createTransactionHarness();
+		let hookRuns = 0;
+
+		await expect(
+			runWithTransaction(adapter, async () => {
+				await queueAfterTransactionHook(async () => {
+					hookRuns += 1;
+				});
+				throw new Error("rollback");
+			}),
+		).rejects.toThrow("rollback");
+
+		expect(hookRuns).toBe(0);
+	});
+
+	it("reports a handled after-commit hook failure without rejecting committed work", async () => {
+		const { adapter } = createTransactionHarness();
+		const onError = vi.fn();
+
+		await expect(
+			runWithTransaction(adapter, async () => {
+				await queueAfterTransactionHook(
+					async () => {
+						throw new Error("cache unavailable");
+					},
+					{ onError },
+				);
+				return "committed";
+			}),
+		).resolves.toBe("committed");
+		expect(onError).toHaveBeenCalledWith(
+			expect.objectContaining({ message: "cache unavailable" }),
+		);
+	});
+
+	it("does not retry an immediately executed hook when it fails", async () => {
+		const hook = vi.fn(async () => {
+			throw new Error("hook failed");
+		});
+
+		await expect(queueAfterTransactionHook(hook)).rejects.toThrow(
+			"hook failed",
+		);
+		expect(hook).toHaveBeenCalledOnce();
 	});
 });
