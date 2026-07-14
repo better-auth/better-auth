@@ -300,7 +300,14 @@ const ssoProviderBodySchema = z.object({
 			callbackUrl: z.string({}).meta({
 				description: "The callback URL of the provider",
 			}),
-			idpInitiatedCallbackURL: z.string().optional(),
+			idpInitiatedCallbackURL: z
+				.string()
+				.url()
+				.meta({
+					description:
+						"Callback URL to redirect to after successful IdP-initiated SAML login",
+				})
+				.optional(),
 			audience: z.string().optional(),
 			idpMetadata: z
 				.object({
