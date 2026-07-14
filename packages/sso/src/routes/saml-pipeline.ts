@@ -548,7 +548,7 @@ export async function processSAMLResponse(
 		!!(provider as { domainVerified?: boolean }).domainVerified &&
 		validateEmailDomain(userInfo.email as string, provider.domain);
 
-	const callbackUrl = redirectCandidate || ctx.context.baseURL;
+	const callbackUrl = redirectCandidate ? samlRedirectUrl : ctx.context.baseURL;
 	const errorUrl = relayState?.errorURL || samlRedirectUrl;
 
 	let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
