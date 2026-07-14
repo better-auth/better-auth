@@ -183,7 +183,7 @@ await authClient.oneTap({
 * `promptOptions`: Configuration for the prompt behavior and exponential backoff:
   * `baseDelay`: Base delay in milliseconds for retries. Default is 1000.
   * `maxAttempts`: Maximum number of prompt attempts before invoking the `onPromptNotification` callback. Default is 5.
-  * `fedCM`: When enabled, calls [`navigator.credentials.preventSilentAccess()`](https://developer.mozilla.org/en-US/docs/Web/API/CredentialsContainer/preventSilentAccess) on sign-out to clear the browser's FedCM credential state. FedCM itself is managed by the Google Identity Services library and cannot be disabled. Default is true.
+  * `fedCM`: Opt into Google Identity Services FedCM for the One Tap prompt (`use_fedcm_for_prompt`) and call [`navigator.credentials.preventSilentAccess()`](https://developer.mozilla.org/en-US/docs/Web/API/CredentialsContainer/preventSilentAccess) on sign-out. When enabled, display-moment APIs and `getSkippedReason` are not used. Default is true. Set to `false` only if you need non-FedCM prompt behavior (for example `cancelOnTapOutside`). Google's GSI library may still log a FedCM migration warning whenever a `prompt()` moment listener is registered; that warning is a known GSI false positive and does not mean FedCM is disabled.
 
 ### Button Mode Options
 
