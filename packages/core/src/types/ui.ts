@@ -150,6 +150,11 @@ export type UIContext<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	params: Record<string, string>;
 	query: URLSearchParams;
 	theme: ThemeConfig;
+	locale: string;
+	/** Resolved message dictionary (English defaults merged with overrides). */
+	messages: Record<string, string>;
+	/** Look up a translated UI string by key. */
+	t: (key: string, fallback?: string) => string;
 	slots: (slot: string) => UIExtension[];
 	capability: <T extends UIPluginCapability = UIPluginCapability>(
 		id: string,
@@ -257,4 +262,15 @@ export type BetterAuthUIOptions = {
 	 */
 	privacyPolicyURL?: string | undefined;
 	csp?: false | UIContentSecurityPolicyOptions | undefined;
+	/**
+	 * Locale tag for the Auth UI (e.g. `"en"`, `"fr"`, `"ja"`).
+	 * Falls back to the request `Accept-Language` header, then `"en"`.
+	 */
+	locale?: string | undefined;
+	/**
+	 * Override individual Auth UI strings. Keys use dot-notation
+	 * (e.g. `"signIn.title"`, `"error.somethingWentWrong"`).
+	 * Provided values are merged on top of the built-in English defaults.
+	 */
+	messages?: Partial<Record<string, string>> | undefined;
 };

@@ -954,6 +954,8 @@ export const auth = betterAuth({
 * `termsOfServiceURL`: Optional Terms of Service URL. When set, sign-in and sign-up show a legal notice with a link to this page.
 * `privacyPolicyURL`: Optional Privacy Policy URL. When set, sign-in and sign-up show a legal notice with a link to this page.
 * `theme`: Shared theme tokens used by Better Auth UI pages
+* `locale`: BCP 47 locale tag for the HTML `lang` attribute and future locale-aware behavior (falls back to `Accept-Language`, then `"en"`)
+* `messages`: Partial string dictionary to override built-in Auth UI labels, buttons, and toasts
 * `csp`: Content Security Policy options for UI responses, or `false` to disable UI CSP handling
 
 ### UI Redirects
@@ -1012,6 +1014,34 @@ export const auth = betterAuth({
 	}
 })
 ```
+
+### UI Localization
+
+Better Auth's built-in Auth UI pages support localization through `ui.locale` and `ui.messages`. No locale files are required — English is built in, and you can override any string via the `messages` map.
+
+```ts
+export const auth = betterAuth({
+	ui: {
+		locale: "en",
+		messages: {
+			"signIn.title": "Welcome back",
+			"signIn.description": "Sign in with your email to continue.",
+			"signIn.submit": "Sign in",
+			"signUp.title": "Create an account",
+			"signUp.submit": "Create account",
+			"field.email": "Email address",
+			"field.password": "Password",
+			"action.forgotPassword": "Forgot password?",
+			"action.rememberMe": "Keep me signed in",
+		}
+	}
+})
+```
+
+* `locale`: BCP 47 locale tag (e.g. `"en"`, `"fr"`, `"ja"`). When not set, Better Auth reads the request `Accept-Language` header, falling back to `"en"`. The value is used for the HTML `lang` attribute.
+* `messages`: Partial dictionary of UI strings keyed by dot-notation (e.g. `"signIn.title"`, `"error.somethingWentWrong"`). Provided values are merged on top of the built-in English defaults. See the [default message keys](https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/ui/messages.ts) for the full list.
+
+The `UIContext` exposes a `t(key, fallback?)` helper that plugin authors can use in custom UI pages to look up translated strings.
 
 ### UI Theme
 

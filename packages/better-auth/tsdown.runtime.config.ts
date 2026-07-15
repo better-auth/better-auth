@@ -24,4 +24,8 @@ export default defineConfig({
 	dts: false,
 	clean: true,
 	outDir: "dist-runtime",
+	deps: {
+		// Browser runtime must be self-contained — no CDN/globals for these.
+		alwaysBundle: ["uqr", "@simplewebauthn/browser"],
+	},
 });

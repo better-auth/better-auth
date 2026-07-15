@@ -630,6 +630,16 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							path: "/two-factor/verify-totp",
 							method: "POST",
 						},
+						verifyOtp: {
+							type: "auth-route",
+							path: "/two-factor/verify-otp",
+							method: "POST",
+						},
+						verifyBackupCode: {
+							type: "auth-route",
+							path: "/two-factor/verify-backup-code",
+							method: "POST",
+						},
 						sendOtp: {
 							type: "auth-route",
 							path: "/two-factor/send-otp",
@@ -638,6 +648,21 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						enable: {
 							type: "auth-route",
 							path: "/two-factor/enable",
+							method: "POST",
+						},
+						disable: {
+							type: "auth-route",
+							path: "/two-factor/disable",
+							method: "POST",
+						},
+						getTotpUri: {
+							type: "auth-route",
+							path: "/two-factor/get-totp-uri",
+							method: "POST",
+						},
+						generateBackupCodes: {
+							type: "auth-route",
+							path: "/two-factor/generate-backup-codes",
 							method: "POST",
 						},
 					},

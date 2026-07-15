@@ -192,6 +192,40 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				max: opts.rateLimit?.max || 3,
 			},
 		],
+		ui: {
+			capabilities: {
+				"email-otp": {
+					id: "email-otp",
+					enabled: true,
+					metadata: {
+						disableSignUp: Boolean(opts.disableSignUp),
+						otpLength: opts.otpLength ?? 6,
+					},
+					routes: {
+						sendVerificationOtp: {
+							type: "auth-route",
+							path: "/email-otp/send-verification-otp",
+							method: "POST",
+						},
+						signIn: {
+							type: "auth-route",
+							path: "/sign-in/email-otp",
+							method: "POST",
+						},
+						requestPasswordReset: {
+							type: "auth-route",
+							path: "/email-otp/request-password-reset",
+							method: "POST",
+						},
+						resetPassword: {
+							type: "auth-route",
+							path: "/email-otp/reset-password",
+							method: "POST",
+						},
+					},
+				},
+			},
+		},
 		options,
 		$ERROR_CODES: EMAIL_OTP_ERROR_CODES,
 	} satisfies BetterAuthPlugin;

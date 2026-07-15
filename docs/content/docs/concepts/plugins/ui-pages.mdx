@@ -266,6 +266,15 @@ return (
 
 This keeps the page understandable. The Auth UI page decides how passkey, two-factor, last-login-method, captcha, or magic-link should appear together instead of letting every plugin inject arbitrary UI into the page.
 
+### Built-in Auth UI surfaces
+
+The first-party Auth UI plugin (`authUI`) already composes these capability-driven surfaces:
+
+* **Sign-in / sign-up** — tabbed credentials card, Email/Username segment, magic-link and email-OTP modes, phone page at `/sign-in/phone`, social/OAuth provider buttons, passkey, and two-factor challenge/enrollment dialogs
+* **Account settings** — `/settings` hub plus profile, password, email, linked accounts, passkeys, and two-factor pages (session-gated)
+* **Captcha** — when the `captcha` capability is present, Auth UI loads a widget (Turnstile when configured) and sends `x-captcha-response` on protected form posts
+* **Localization** — override copy with `ui.locale` and `ui.messages` (English defaults built in)
+
 The built-in Auth UI uses this same model for provider buttons. Passkey sign-in appears when the `passkey` capability exposes authentication and verification routes. Social providers configured on the auth instance appear as provider buttons automatically. Generic OAuth providers can expose a `generic-oauth` capability with provider metadata so Auth UI can render them without importing plugin internals:
 
 ```ts

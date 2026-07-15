@@ -84,6 +84,16 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 							path: "/passkey/verify-authentication",
 							method: "POST",
 						},
+						listUserPasskeys: {
+							type: "auth-route",
+							path: "/passkey/list-user-passkeys",
+							method: "GET",
+						},
+						deletePasskey: {
+							type: "auth-route",
+							path: "/passkey/delete-passkey",
+							method: "POST",
+						},
 					},
 				},
 			},

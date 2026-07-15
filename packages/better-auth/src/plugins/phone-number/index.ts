@@ -109,6 +109,45 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 				max: 10,
 			},
 		],
+		ui: {
+			capabilities: {
+				"phone-number": {
+					id: "phone-number",
+					enabled: true,
+					metadata: {
+						signUpOnVerification: Boolean(opts.signUpOnVerification),
+						otpLength: opts.otpLength,
+					},
+					routes: {
+						signIn: {
+							type: "auth-route",
+							path: "/sign-in/phone-number",
+							method: "POST",
+						},
+						sendOtp: {
+							type: "auth-route",
+							path: "/phone-number/send-otp",
+							method: "POST",
+						},
+						verify: {
+							type: "auth-route",
+							path: "/phone-number/verify",
+							method: "POST",
+						},
+						requestPasswordReset: {
+							type: "auth-route",
+							path: "/phone-number/request-password-reset",
+							method: "POST",
+						},
+						resetPassword: {
+							type: "auth-route",
+							path: "/phone-number/reset-password",
+							method: "POST",
+						},
+					},
+				},
+			},
+		},
 		options,
 		$ERROR_CODES: PHONE_NUMBER_ERROR_CODES,
 	} satisfies BetterAuthPlugin;

@@ -22,6 +22,7 @@ import {
 } from "@better-auth/ui";
 import { getSafeUIRedirectTo } from "../../ui";
 import { PACKAGE_VERSION } from "../../version";
+import { createSettingsPages } from "./settings";
 import { KNOWN_PROVIDER_ICONS } from "./social-provider-icons";
 
 declare module "@better-auth/core" {
@@ -38,10 +39,18 @@ type AuthUIOptions = {
 		Record<
 			| "signIn"
 			| "signInUsername"
+			| "signInPhone"
 			| "signUp"
 			| "forgotPassword"
 			| "resetPassword"
-			| "verifyEmail",
+			| "verifyEmail"
+			| "settings"
+			| "settingsProfile"
+			| "settingsPassword"
+			| "settingsEmail"
+			| "settingsAccounts"
+			| "settingsPasskeys"
+			| "settingsTwoFactor",
 			UIPage
 		>
 	>;
@@ -65,6 +74,13 @@ function readCookie(request: Request, name: string) {
 
 function getRedirectTo(ctx: UIContext) {
 	return getSafeUIRedirectTo(ctx);
+}
+
+function isSignUpDisabled(ctx: UIContext, options?: AuthUIOptions | undefined) {
+	return Boolean(
+		options?.disableSignUp ||
+			ctx.context.options.emailAndPassword?.disableSignUp,
+	);
 }
 
 function getNumberMetadata(
@@ -238,33 +254,39 @@ function AuthLegalNotice(props: {
 	ctx: UIContext;
 	action: "signing in" | "signing up";
 }) {
+	const { t } = props.ctx;
 	const termsOfServiceURL = props.ctx.context.options.ui?.termsOfServiceURL;
 	const privacyPolicyURL = props.ctx.context.options.ui?.privacyPolicyURL;
 	if (!termsOfServiceURL && !privacyPolicyURL) return <></>;
 
+	const byAction =
+		props.action === "signing up"
+			? t("legal.bySigningUp")
+			: t("legal.bySigningIn");
+
 	const termsLink = termsOfServiceURL ? (
 		<Link href={termsOfServiceURL} target="_blank" rel="noopener noreferrer">
-			Terms of Service
+			{t("legal.termsOfService")}
 		</Link>
 	) : null;
 	const privacyLink = privacyPolicyURL ? (
 		<Link href={privacyPolicyURL} target="_blank" rel="noopener noreferrer">
-			Privacy Policy
+			{t("legal.privacyPolicy")}
 		</Link>
 	) : null;
 
 	const notice =
 		termsLink && privacyLink ? (
 			<>
-				By {props.action}, you agree to the {termsLink} and {privacyLink}.
+				{byAction} {termsLink} {t("legal.and")} {privacyLink}.
 			</>
 		) : termsLink ? (
 			<>
-				By {props.action}, you agree to the {termsLink}.
+				{byAction} {termsLink}.
 			</>
 		) : (
 			<>
-				By {props.action}, you agree to the {privacyLink}.
+				{byAction} {privacyLink}.
 			</>
 		);
 
@@ -275,19 +297,66 @@ function AuthLegalNotice(props: {
 	);
 }
 
+function AuthLegalCheckbox(props: { ctx: UIContext }) {
+	const { t } = props.ctx;
+	const termsOfServiceURL = props.ctx.context.options.ui?.termsOfServiceURL;
+	const privacyPolicyURL = props.ctx.context.options.ui?.privacyPolicyURL;
+	if (!termsOfServiceURL && !privacyPolicyURL) return <></>;
+
+	const termsLink = termsOfServiceURL ? (
+		<Link href={termsOfServiceURL} target="_blank" rel="noopener noreferrer">
+			{t("legal.termsOfService")}
+		</Link>
+	) : null;
+	const privacyLink = privacyPolicyURL ? (
+		<Link href={privacyPolicyURL} target="_blank" rel="noopener noreferrer">
+			{t("legal.privacyPolicy")}
+		</Link>
+	) : null;
+
+	const text =
+		termsLink && privacyLink ? (
+			<>
+				{t("legal.agreeTo")} {termsLink} {t("legal.and")} {privacyLink}.
+			</>
+		) : termsLink ? (
+			<>
+				{t("legal.agreeTo")} {termsLink}.
+			</>
+		) : (
+			<>
+				{t("legal.agreeTo")} {privacyLink}.
+			</>
+		);
+
+	return (
+		<label class="ba-checkbox ba-auth-legal-checkbox">
+			<input
+				type="checkbox"
+				name="agreeToLegal"
+				class="ba-checkbox-input"
+				required
+			/>
+			<span>{text}</span>
+		</label>
+	);
+}
+
 function PasswordField(props: {
+	ctx: UIContext;
 	name: string;
 	autocomplete: string;
 	placeholder: string;
 	forgotPasswordHref?: string | undefined;
 }) {
+	const { t } = props.ctx;
 	return (
 		<div class="ba-field">
 			<div class="ba-field-label-row">
-				<span class="ba-field-label">Password</span>
+				<span class="ba-field-label">{t("field.password")}</span>
 				{props.forgotPasswordHref ? (
 					<Link href={props.forgotPasswordHref} class="ba-field-label-action">
-						Forgot your password?
+						{t("action.forgotPassword")}
 					</Link>
 				) : null}
 			</div>
@@ -377,20 +446,20 @@ function AuthCard(props: {
 				<nav class="ba-auth-tabs" aria-label="Authentication">
 					{props.tabs === "sign-in" ? (
 						<span class="ba-auth-tab" aria-current="page">
-							Sign In
+							{props.ctx.t("tabs.signIn")}
 						</span>
 					) : (
 						<Link href="./sign-in" class="ba-auth-tab">
-							Sign In
+							{props.ctx.t("tabs.signIn")}
 						</Link>
 					)}
 					{props.tabs === "sign-up" ? (
 						<span class="ba-auth-tab" aria-current="page">
-							Sign Up
+							{props.ctx.t("tabs.signUp")}
 						</span>
 					) : (
 						<Link href="./sign-up" class="ba-auth-tab">
-							Sign Up
+							{props.ctx.t("tabs.signUp")}
 						</Link>
 					)}
 				</nav>
@@ -421,15 +490,74 @@ function AuthCard(props: {
 	);
 }
 
+function AuthCardShim(props: {
+	ctx: UIContext;
+	title: string;
+	description: string;
+}) {
+	return (
+		<main class="ba-auth-page">
+			<Card class="ba-auth-card">
+				<header class="ba-auth-header" data-align="center">
+					<h1 class="ba-auth-title">{props.title}</h1>
+					<p class="ba-auth-description">{props.description}</p>
+				</header>
+				<Link href="./sign-in" class="ba-button ba-button-full">
+					{props.ctx.t("action.backToSignIn")}
+				</Link>
+			</Card>
+		</main>
+	);
+}
+
+function CaptchaConfig(props: { ctx: UIContext }) {
+	const captcha = props.ctx.capability("captcha");
+	if (!captcha) return <></>;
+	const provider =
+		typeof captcha.metadata?.provider === "string"
+			? captcha.metadata.provider
+			: "";
+	const siteKey =
+		typeof captcha.metadata?.siteKey === "string"
+			? captcha.metadata.siteKey
+			: "";
+	const headerName =
+		typeof captcha.metadata?.headerName === "string"
+			? captcha.metadata.headerName
+			: "x-captcha-response";
+	const endpoints = Array.isArray(captcha.metadata?.endpoints)
+		? JSON.stringify(
+				(captcha.metadata.endpoints as unknown[]).filter(
+					(value): value is string => typeof value === "string",
+				),
+			)
+		: "[]";
+	return (
+		<div
+			class="ba-captcha"
+			data-ba-captcha-widget
+			data-ba-captcha-provider={provider}
+			data-ba-captcha-sitekey={siteKey}
+			data-ba-captcha-header={headerName}
+			data-ba-captcha-endpoints={endpoints}
+			aria-live="polite"
+		/>
+	);
+}
+
 function ProviderButtons(props: {
 	ctx: UIContext;
 	mode: "signIn" | "signUp";
 	providers: AuthProvider[];
 }) {
+	const { t } = props.ctx;
 	const redirectTo = getRedirectTo(props.ctx);
 	if (props.providers.length === 0) return <></>;
 	const stacked = props.providers.length <= 2;
-	const prefix = props.mode === "signUp" ? "Sign up with" : "Sign in with";
+	const prefix =
+		props.mode === "signUp"
+			? t("provider.signUpWith")
+			: t("provider.signInWith");
 	return (
 		<section
 			class="ba-auth-providers"
@@ -444,10 +572,16 @@ function ProviderButtons(props: {
 							? routes.signIn.oauth2
 							: routes.signIn.social
 					}
-					pending={`Redirecting to ${provider.label}...`}
+					pending={t("provider.redirecting").replace(
+						"{provider}",
+						provider.label,
+					)}
 					error={[
 						effects.toastFromError({
-							fallback: `Could not continue with ${provider.label}.`,
+							fallback: t("provider.error").replace(
+								"{provider}",
+								provider.label,
+							),
 						}),
 					]}
 				>
@@ -479,6 +613,7 @@ function ProviderButtons(props: {
 }
 
 function PasskeySignInButton(props: { ctx: UIContext }) {
+	const { t } = props.ctx;
 	const redirectTo = getRedirectTo(props.ctx);
 	const passkey = props.ctx.capability("passkey");
 	const generateAuthenticateOptions =
@@ -492,17 +627,17 @@ function PasskeySignInButton(props: { ctx: UIContext }) {
 		<Form
 			class="ba-provider-form ba-passkey-form"
 			action={generateAuthenticateOptions}
-			pending="Starting passkey sign in..."
+			pending={t("passkey.startingSignIn")}
 			success={[
 				effects.toast({
 					level: "success",
-					message: "Signed in with passkey.",
+					message: t("passkey.signInSuccess"),
 				}),
 				effects.navigate(redirectTo),
 			]}
 			error={[
 				effects.toastFromError({
-					fallback: "Could not sign in with passkey.",
+					fallback: t("passkey.signInError"),
 				}),
 			]}
 			data-ba-passkey-auth
@@ -531,7 +666,7 @@ function PasskeySignInButton(props: { ctx: UIContext }) {
 					<path d="M8.65 22c.21-.66.45-1.32.57-2"></path>
 					<path d="M9 6.8a6 6 0 0 1 9 5.2v2"></path>
 				</svg>
-				Sign in with Passkey
+				{t("passkey.signIn")}
 			</Button>
 		</Form>
 	);
@@ -541,632 +676,1369 @@ function LastLoginMethodHint(props: {
 	ctx: UIContext;
 	capability: UIPluginCapability;
 }) {
+	const { t } = props.ctx;
 	const cookieName = props.capability.metadata?.cookieName;
 	const lastMethod =
 		typeof cookieName === "string"
 			? readCookie(props.ctx.request, cookieName)
 			: null;
 	if (!lastMethod) {
-		return (
-			<Text>
-				Better Auth can remember the last sign-in method used on this device.
-			</Text>
-		);
+		return <Text>{t("lastLogin.hint")}</Text>;
 	}
-	return <Text>Last used sign-in method: {lastMethod}.</Text>;
+	return <Text>{t("lastLogin.lastUsed").replace("{method}", lastMethod)}</Text>;
 }
 
 function PasskeyRegistrationPanel(props: {
+	ctx: UIContext;
 	capability: UIPluginCapability;
 	redirectTo: string;
+	nextDialog?: string | undefined;
 }) {
+	const { t } = props.ctx;
 	const registerRoute = props.capability.routes?.generateRegisterOptions;
 	const verifyRegistration = props.capability.routes?.verifyRegistration;
 	const verifyRegistrationPath =
 		verifyRegistration?.type === "auth-route"
 			? verifyRegistration.path
 			: undefined;
+	const afterPasskey = props.nextDialog
+		? [
+				effects.closeDialog("passkey-registration"),
+				effects.openDialog(props.nextDialog),
+			]
+		: [
+				effects.toast({
+					level: "success",
+					message: t("passkey.registered"),
+				}),
+				effects.navigate(props.redirectTo),
+			];
+	const skip = props.nextDialog ? (
+		<button
+			type="button"
+			class="ba-button ba-button-secondary"
+			data-ba-unstyled
+			data-ba-dialog-close="passkey-registration"
+			data-ba-open-dialog={props.nextDialog}
+		>
+			{t("passkey.skipForNow")}
+		</button>
+	) : (
+		<Link href={props.redirectTo} class="ba-button ba-button-secondary">
+			{t("passkey.skipForNow")}
+		</Link>
+	);
 	return (
 		<Dialog
 			id="passkey-registration"
-			title="Add a passkey"
-			description="Your account was created. Add a passkey now for faster, safer sign-ins."
+			title={t("passkey.addTitle")}
+			description={t("passkey.addDescription")}
 		>
 			<div class="ba-dialog-actions">
 				{registerRoute ? (
 					<Form
 						action={registerRoute}
-						pending="Starting passkey registration..."
-						success={[
-							effects.toast({
-								level: "success",
-								message: "Passkey registered.",
-							}),
-							effects.navigate(props.redirectTo),
-						]}
+						pending={t("passkey.startingRegistration")}
+						success={afterPasskey}
 						error={[
 							effects.toastFromError({
-								fallback: "Could not register passkey.",
+								fallback: t("passkey.registerError"),
 							}),
 						]}
 						data-ba-passkey-register
 						data-ba-passkey-verify={verifyRegistrationPath}
 					>
 						<Button type="submit" class="ba-button-full">
-							Add passkey
+							{t("passkey.addSubmit")}
 						</Button>
 					</Form>
 				) : null}
-				<Link href={props.redirectTo} class="ba-button ba-button-secondary">
-					Skip for now
-				</Link>
+				{skip}
 			</div>
 		</Dialog>
 	);
 }
 
 function TwoFactorEnrollmentPanel(props: {
+	ctx: UIContext;
 	capability: UIPluginCapability;
 	redirectTo: string;
 }) {
+	const { t } = props.ctx;
 	const enableRoute = props.capability.routes?.enable;
+	const verifyTotpRoute = props.capability.routes?.verifyTotp;
+	const allowPasswordless =
+		props.capability.metadata?.allowPasswordless === true;
 	const supportsTotp = props.capability.metadata?.supportsTotp !== false;
-	const supportsOtp = props.capability.metadata?.supportsOtp === true;
+	if (!enableRoute || !supportsTotp) return <></>;
 	return (
 		<Dialog
 			id="two-factor-enrollment"
-			title="Secure your account"
-			description={`Add an extra verification step before continuing.${supportsTotp ? " Authenticator apps are supported." : ""}${supportsOtp ? " One-time codes are supported." : ""}`}
+			title={t("twoFactor.enrollTitle")}
+			description={t("twoFactor.enrollDescription")}
 		>
-			<div class="ba-dialog-actions">
+			<div class="ba-two-factor-step" data-ba-panel="two-factor-enroll-start">
 				{enableRoute ? (
 					<Form
 						action={enableRoute}
-						pending="Preparing two-factor setup..."
+						pending={t("twoFactor.preparingSetup")}
+						success={[
+							effects.hide("two-factor-enroll-start"),
+							effects.show("two-factor-enroll-setup"),
+						]}
+						error={[
+							effects.toastFromError({
+								fallback: t("twoFactor.setupError"),
+							}),
+						]}
+						data-ba-two-factor-enable
+					>
+						<input type="hidden" name="method" value="totp" />
+						{allowPasswordless ? null : (
+							<Input
+								name="password"
+								label={t("twoFactor.currentPassword")}
+								type="password"
+								autocomplete="current-password"
+								required
+							/>
+						)}
+						<Button type="submit" class="ba-button-full">
+							{t("twoFactor.setupSubmit")}
+						</Button>
+					</Form>
+				) : null}
+				<Link href={props.redirectTo} class="ba-button ba-button-outline">
+					{t("passkey.skipForNow")}
+				</Link>
+			</div>
+			<div
+				class="ba-two-factor-step"
+				data-ba-panel="two-factor-enroll-setup"
+				hidden
+			>
+				<p class="ba-dialog-description">{t("twoFactor.scanQRCode")}</p>
+				<div class="ba-totp-qr" data-ba-totp-qr aria-live="polite"></div>
+				<pre class="ba-backup-codes" data-ba-backup-codes hidden></pre>
+				{verifyTotpRoute ? (
+					<Form
+						action={verifyTotpRoute}
+						pending={t("twoFactor.verifyingAuthenticator")}
 						success={[
 							effects.toast({
 								level: "success",
-								message: "Two-factor setup started.",
+								message: t("twoFactor.enabled"),
 							}),
 							effects.navigate(props.redirectTo),
 						]}
 						error={[
 							effects.toastFromError({
-								fallback: "Could not start two-factor setup.",
+								fallback: t("twoFactor.verifyAuthenticatorError"),
 							}),
 						]}
 					>
+						<Input
+							name="code"
+							label={t("twoFactor.authenticatorCode")}
+							autocomplete="one-time-code"
+							required
+						/>
 						<Button type="submit" class="ba-button-full">
-							Set up two-factor
+							{t("twoFactor.confirmAndContinue")}
 						</Button>
 					</Form>
 				) : null}
 				<Link href={props.redirectTo} class="ba-button ba-button-outline">
-					Skip for now
+					{t("passkey.skipForNow")}
 				</Link>
 			</div>
 		</Dialog>
 	);
 }
 
-function TwoFactorChallengePanel(props: { capability: UIPluginCapability }) {
+function TwoFactorChallengePanel(props: {
+	ctx: UIContext;
+	capability: UIPluginCapability;
+}) {
+	const { t } = props.ctx;
 	const verifyTotpRoute = props.capability.routes?.verifyTotp;
+	const verifyOtpRoute = props.capability.routes?.verifyOtp;
+	const verifyBackupRoute = props.capability.routes?.verifyBackupCode;
 	const sendOtpRoute = props.capability.routes?.sendOtp;
+	const supportsTotp = props.capability.metadata?.supportsTotp !== false;
+	const supportsOtp = props.capability.metadata?.supportsOtp === true;
+	const trustDeviceField = () => (
+		<label class="ba-checkbox">
+			<input type="checkbox" name="trustDevice" class="ba-checkbox-input" />
+			<span>{t("twoFactor.trustDevice")}</span>
+		</label>
+	);
 	return (
 		<Dialog
 			id="two-factor-challenge"
-			title="Two-factor verification"
-			description="Enter your authenticator code or request a one-time code to continue."
+			title={t("twoFactor.verificationTitle")}
+			description={t("twoFactor.verificationDescription")}
 		>
-			{verifyTotpRoute ? (
-				<Form
-					action={verifyTotpRoute}
-					pending="Verifying code..."
-					success={[
-						effects.toast({
-							level: "success",
-							message: "Two-factor code verified.",
-						}),
-						effects.reload(),
-					]}
-					error={[
-						effects.toastFromError({
-							fallback: "Could not verify two-factor code.",
-						}),
-					]}
-				>
-					<Input
-						name="code"
-						label="Authenticator code"
-						autocomplete="one-time-code"
-						required
-					/>
-					<Button type="submit">Verify code</Button>
-				</Form>
-			) : null}
-			{sendOtpRoute ? (
-				<Form
-					action={sendOtpRoute}
-					pending="Sending code..."
-					success={[
-						effects.toast({
-							level: "success",
-							message: "One-time code sent.",
-						}),
-					]}
-					error={[
-						effects.toastFromError({
-							fallback: "Could not send one-time code.",
-						}),
-					]}
-				>
-					<Button type="submit">Send one-time code</Button>
-				</Form>
-			) : null}
+			<div class="ba-two-factor-challenge">
+				{supportsTotp && verifyTotpRoute ? (
+					<section class="ba-two-factor-method" data-ba-2fa-method="totp">
+						<h3 class="ba-two-factor-method-title">
+							{t("twoFactor.authenticatorApp")}
+						</h3>
+						<Form
+							action={verifyTotpRoute}
+							pending={t("twoFactor.verifyingCode")}
+							success={[
+								effects.toast({
+									level: "success",
+									message: t("twoFactor.codeVerified"),
+								}),
+								effects.reload(),
+							]}
+							error={[
+								effects.toastFromError({
+									fallback: t("twoFactor.codeError"),
+								}),
+							]}
+						>
+							<Input
+								name="code"
+								label={t("twoFactor.authenticatorCode")}
+								autocomplete="one-time-code"
+								required
+							/>
+							{trustDeviceField()}
+							<Button type="submit" class="ba-button-full">
+								{t("twoFactor.verifyCode")}
+							</Button>
+						</Form>
+					</section>
+				) : null}
+				{supportsOtp && sendOtpRoute && verifyOtpRoute ? (
+					<section class="ba-two-factor-method" data-ba-2fa-method="otp">
+						<h3 class="ba-two-factor-method-title">
+							{t("twoFactor.oneTimeCode")}
+						</h3>
+						<Form
+							action={sendOtpRoute}
+							pending={t("twoFactor.sendingCode")}
+							success={[
+								effects.toast({
+									level: "success",
+									message: t("twoFactor.oneTimeCodeSent"),
+								}),
+							]}
+							error={[
+								effects.toastFromError({
+									fallback: t("twoFactor.oneTimeCodeError"),
+								}),
+							]}
+						>
+							<Button type="submit" class="ba-button-secondary ba-button-full">
+								{t("twoFactor.sendOneTimeCode")}
+							</Button>
+						</Form>
+						<Form
+							action={verifyOtpRoute}
+							pending={t("twoFactor.verifyingCode")}
+							success={[
+								effects.toast({
+									level: "success",
+									message: t("twoFactor.codeVerified"),
+								}),
+								effects.reload(),
+							]}
+							error={[
+								effects.toastFromError({
+									fallback: t("twoFactor.oneTimeCodeVerifyError"),
+								}),
+							]}
+						>
+							<Input
+								name="code"
+								label={t("twoFactor.oneTimeCode")}
+								autocomplete="one-time-code"
+								required
+							/>
+							{trustDeviceField()}
+							<Button type="submit" class="ba-button-full">
+								{t("twoFactor.verifyOneTimeCode")}
+							</Button>
+						</Form>
+					</section>
+				) : null}
+				{verifyBackupRoute ? (
+					<section class="ba-two-factor-method" data-ba-2fa-method="backup">
+						<h3 class="ba-two-factor-method-title">
+							{t("twoFactor.backupCode")}
+						</h3>
+						<Form
+							action={verifyBackupRoute}
+							pending={t("twoFactor.verifyingBackupCode")}
+							success={[
+								effects.toast({
+									level: "success",
+									message: t("twoFactor.backupCodeVerified"),
+								}),
+								effects.reload(),
+							]}
+							error={[
+								effects.toastFromError({
+									fallback: t("twoFactor.backupCodeError"),
+								}),
+							]}
+						>
+							<Input name="code" label={t("twoFactor.backupCode")} required />
+							{trustDeviceField()}
+							<Button type="submit" class="ba-button-full">
+								{t("twoFactor.verifyBackupCode")}
+							</Button>
+						</Form>
+					</section>
+				) : null}
+			</div>
 		</Dialog>
 	);
 }
 
-export const authUI = (options?: AuthUIOptions) =>
-	({
-		id: "auth-ui",
-		version: PACKAGE_VERSION,
-		ui: {
-			pages: {
-				signIn: createUIPage({
-					id: "auth-ui.sign-in",
-					path: "/sign-in",
-					title: "Sign In",
-					render(ctx) {
-						const passkey = ctx.capability("passkey");
-						const twoFactor = ctx.capability("two-factor");
-						const lastMethod = ctx.capability("last-login-method");
-						const username = ctx.capability("username");
-						const providers = getAuthProviders(ctx);
-						const redirectTo = getRedirectTo(ctx);
-						const hasPasskeyAuth = Boolean(
-							passkey?.routes?.generateAuthenticateOptions &&
-								passkey.routes.verifyAuthentication,
-						);
-						const showTabs = !options?.disableSignUp;
-						return (
-							<AuthCard
+function CredentialSegment(props: {
+	ctx: UIContext;
+	hasUsername: boolean;
+	children: UIChild;
+}) {
+	const { t } = props.ctx;
+	if (!props.hasUsername) {
+		return <div data-ba-credential-scope>{props.children}</div>;
+	}
+	return (
+		<div data-ba-credential-scope>
+			<div
+				class="ba-auth-segment"
+				role="tablist"
+				aria-label="Sign-in identifier"
+			>
+				<button
+					type="button"
+					class="ba-auth-segment-btn"
+					data-ba-unstyled
+					data-ba-credential-mode="email"
+					aria-pressed="true"
+					role="tab"
+				>
+					{t("credential.email")}
+				</button>
+				<button
+					type="button"
+					class="ba-auth-segment-btn"
+					data-ba-unstyled
+					data-ba-credential-mode="username"
+					aria-pressed="false"
+					role="tab"
+				>
+					{t("credential.username")}
+				</button>
+			</div>
+			{props.children}
+		</div>
+	);
+}
+
+function EmailSignInForm(props: { ctx: UIContext }) {
+	const { t } = props.ctx;
+	const redirectTo = getRedirectTo(props.ctx);
+	return (
+		<div data-ba-credential-panel="email">
+			<Form
+				action={routes.signIn.email}
+				pending={t("signIn.signingIn")}
+				success={[
+					effects.toast({
+						level: "success",
+						message: t("signIn.success"),
+					}),
+					effects.navigate(redirectTo),
+				]}
+				error={[
+					effects.toastFromError({
+						fallback: t("signIn.error"),
+					}),
+				]}
+			>
+				<Input
+					name="email"
+					label={t("field.email")}
+					type="email"
+					autocomplete="email"
+					placeholder={t("placeholder.email")}
+					required
+				/>
+				<PasswordField
+					ctx={props.ctx}
+					name="password"
+					autocomplete="current-password"
+					placeholder={t("placeholder.password")}
+					forgotPasswordHref="./forgot-password"
+				/>
+				<label class="ba-checkbox">
+					<input type="checkbox" name="rememberMe" class="ba-checkbox-input" />
+					<span>{t("action.rememberMe")}</span>
+				</label>
+				<Button type="submit" class="ba-button-full">
+					{t("signIn.submit")}
+				</Button>
+			</Form>
+		</div>
+	);
+}
+
+function UsernameSignInForm(props: {
+	ctx: UIContext;
+	capability: UIPluginCapability;
+	hidden?: boolean | undefined;
+}) {
+	const { t } = props.ctx;
+	const redirectTo = getRedirectTo(props.ctx);
+	const minUsernameLength = getNumberMetadata(
+		props.capability,
+		"minUsernameLength",
+		3,
+	);
+	const maxUsernameLength = getNumberMetadata(
+		props.capability,
+		"maxUsernameLength",
+		30,
+	);
+	return (
+		<div data-ba-credential-panel="username" hidden={props.hidden}>
+			<Form
+				action={routes.signIn.username}
+				pending={t("signIn.signingIn")}
+				success={[
+					effects.toast({
+						level: "success",
+						message: t("signIn.success"),
+					}),
+					effects.navigate(redirectTo),
+				]}
+				error={[
+					effects.toastFromError({
+						fallback: t("signIn.username.error"),
+					}),
+				]}
+			>
+				<Input
+					name="username"
+					label={t("field.username")}
+					autocomplete="username"
+					minlength={minUsernameLength}
+					maxlength={maxUsernameLength}
+					placeholder={t("placeholder.enterUsername")}
+					required
+				/>
+				<PasswordField
+					ctx={props.ctx}
+					name="password"
+					autocomplete="current-password"
+					placeholder={t("placeholder.password")}
+					forgotPasswordHref="./forgot-password"
+				/>
+				<label class="ba-checkbox">
+					<input type="checkbox" name="rememberMe" class="ba-checkbox-input" />
+					<span>{t("action.rememberMe")}</span>
+				</label>
+				<Button type="submit" class="ba-button-full">
+					{t("signIn.username.submit")}
+				</Button>
+			</Form>
+		</div>
+	);
+}
+
+function MagicLinkPanel(props: {
+	ctx: UIContext;
+	capability: UIPluginCapability;
+}) {
+	const { t } = props.ctx;
+	const signInRoute = props.capability.routes?.signIn;
+	const redirectTo = getRedirectTo(props.ctx);
+	return (
+		<div data-ba-method-panel="magic-link" hidden>
+			<Form
+				action={signInRoute}
+				pending={t("magicLink.sending")}
+				success={[
+					effects.toast({
+						level: "success",
+						message: t("magicLink.success"),
+					}),
+				]}
+				error={[
+					effects.toastFromError({
+						fallback: t("magicLink.error"),
+					}),
+				]}
+			>
+				<Input
+					name="email"
+					label={t("field.email")}
+					type="email"
+					autocomplete="email"
+					placeholder={t("placeholder.email")}
+					required
+				/>
+				<input type="hidden" name="callbackURL" value={redirectTo} />
+				<Button type="submit" class="ba-button-full">
+					{t("magicLink.sendSubmit")}
+				</Button>
+			</Form>
+		</div>
+	);
+}
+
+function EmailOtpPanel(props: {
+	ctx: UIContext;
+	capability: UIPluginCapability;
+}) {
+	const { t } = props.ctx;
+	const sendRoute = props.capability.routes?.sendVerificationOtp;
+	const signInRoute = props.capability.routes?.signIn;
+	const redirectTo = getRedirectTo(props.ctx);
+	const otpLength = getNumberMetadata(props.capability, "otpLength", 6);
+	return (
+		<div data-ba-method-panel="email-otp" hidden data-ba-otp-scope>
+			<div data-ba-panel="email-otp-request">
+				<Form
+					action={sendRoute}
+					pending={t("emailOtp.sendingCode")}
+					success={[
+						effects.toast({
+							level: "success",
+							message: t("emailOtp.codeSent"),
+						}),
+						effects.hide("email-otp-request"),
+						effects.show("email-otp-verify"),
+					]}
+					error={[
+						effects.toastFromError({
+							fallback: t("emailOtp.sendError"),
+						}),
+					]}
+					data-ba-otp-request
+				>
+					<Input
+						name="email"
+						label={t("field.email")}
+						type="email"
+						autocomplete="email"
+						placeholder={t("placeholder.email")}
+						required
+					/>
+					<input type="hidden" name="type" value="sign-in" />
+					<Button type="submit" class="ba-button-full">
+						{t("emailOtp.sendSubmit")}
+					</Button>
+				</Form>
+			</div>
+			<div data-ba-panel="email-otp-verify" hidden>
+				<Form
+					action={signInRoute}
+					pending={t("emailOtp.verifyingCode")}
+					success={[
+						effects.toast({
+							level: "success",
+							message: t("signIn.success"),
+						}),
+						effects.navigate(redirectTo),
+					]}
+					error={[
+						effects.toastFromError({
+							fallback: t("emailOtp.verifyError"),
+						}),
+					]}
+					data-ba-otp-verify
+				>
+					<Input
+						name="email"
+						label={t("field.email")}
+						type="email"
+						autocomplete="email"
+						placeholder={t("placeholder.email")}
+						required
+						data-ba-otp-email-echo
+					/>
+					<Input
+						name="otp"
+						label={t("emailOtp.verificationCode")}
+						autocomplete="one-time-code"
+						inputmode="numeric"
+						minlength={otpLength}
+						maxlength={otpLength}
+						required
+					/>
+					<Button type="submit" class="ba-button-full">
+						{t("emailOtp.verifySubmit")}
+					</Button>
+				</Form>
+				<button
+					type="button"
+					class="ba-button ba-button-outline"
+					data-ba-unstyled
+					data-ba-otp-back
+				>
+					{t("emailOtp.useADifferentEmail")}
+				</button>
+			</div>
+		</div>
+	);
+}
+
+function MethodSwitcher(props: {
+	ctx: UIContext;
+	hasPassword: boolean;
+	hasMagicLink: boolean;
+	hasEmailOtp: boolean;
+}) {
+	const { t } = props.ctx;
+	const methods: { id: string; label: string }[] = [];
+	if (props.hasPassword)
+		methods.push({ id: "password", label: t("method.password") });
+	if (props.hasMagicLink)
+		methods.push({ id: "magic-link", label: t("method.magicLink") });
+	if (props.hasEmailOtp)
+		methods.push({ id: "email-otp", label: t("method.emailCode") });
+	if (methods.length <= 1) return <></>;
+	return (
+		<div class="ba-auth-methods" role="tablist" aria-label="Sign-in method">
+			{methods.map((method, index) => (
+				<button
+					type="button"
+					class="ba-auth-method-btn"
+					data-ba-unstyled
+					data-ba-method={method.id}
+					aria-pressed={index === 0 ? "true" : "false"}
+					role="tab"
+				>
+					{method.label}
+				</button>
+			))}
+		</div>
+	);
+}
+
+function EmailSignUpForm(props: {
+	ctx: UIContext;
+	username: UIPluginCapability | null;
+	passkey: UIPluginCapability | null;
+	twoFactor: UIPluginCapability | null;
+	additionalUserFields: UIChild;
+}) {
+	const { t } = props.ctx;
+	const redirectTo = getRedirectTo(props.ctx);
+	const minUsernameLength = getNumberMetadata(
+		props.username,
+		"minUsernameLength",
+		3,
+	);
+	const maxUsernameLength = getNumberMetadata(
+		props.username,
+		"maxUsernameLength",
+		30,
+	);
+	return (
+		<Form
+			action={routes.signUp.email}
+			pending={t("signUp.creatingAccount")}
+			success={[
+				effects.toast({
+					level: "success",
+					message: t("signUp.success"),
+				}),
+				props.passkey
+					? effects.openDialog("passkey-registration")
+					: props.twoFactor
+						? effects.openDialog("two-factor-enrollment")
+						: effects.navigate(redirectTo),
+			]}
+			error={[
+				effects.toastFromError({
+					fallback: t("signUp.error"),
+				}),
+			]}
+		>
+			<Input
+				name="name"
+				label={t("field.name")}
+				autocomplete="name"
+				placeholder={t("placeholder.name")}
+				required
+			/>
+			{props.username ? (
+				<>
+					<Input
+						name="username"
+						label={t("field.username")}
+						autocomplete="username"
+						minlength={minUsernameLength}
+						maxlength={maxUsernameLength}
+						placeholder={t("placeholder.username")}
+						required
+					/>
+					{supportsDisplayUsername(props.username) ? (
+						<Input
+							name="displayUsername"
+							label={t("field.displayName")}
+							autocomplete="nickname"
+							placeholder={t("placeholder.displayName")}
+						/>
+					) : null}
+				</>
+			) : null}
+			<Input
+				name="email"
+				label={t("field.email")}
+				type="email"
+				autocomplete="email"
+				placeholder={t("placeholder.email")}
+				required
+			/>
+			{props.additionalUserFields}
+			<PasswordField
+				ctx={props.ctx}
+				name="password"
+				autocomplete="new-password"
+				placeholder={t("placeholder.password")}
+			/>
+			<AuthLegalCheckbox ctx={props.ctx} />
+			<Button type="submit" class="ba-button-full">
+				{t("signUp.submit")}
+			</Button>
+		</Form>
+	);
+}
+
+export const authUI = (options?: AuthUIOptions) => {
+	const pages: NonNullable<AuthUIOptions["pages"]> = {
+		signIn: createUIPage({
+			id: "auth-ui.sign-in",
+			path: "/sign-in",
+			title: "Sign In",
+			render(ctx) {
+				const { t } = ctx;
+				const passkey = ctx.capability("passkey");
+				const twoFactor = ctx.capability("two-factor");
+				const lastMethod = ctx.capability("last-login-method");
+				const username = ctx.capability("username");
+				const magicLink = ctx.capability("magic-link");
+				const emailOtp = ctx.capability("email-otp");
+				const phoneNumber = ctx.capability("phone-number");
+				const providers = getAuthProviders(ctx);
+				const hasPasskeyAuth = Boolean(
+					passkey?.routes?.generateAuthenticateOptions &&
+						passkey.routes.verifyAuthentication,
+				);
+				const signUpDisabled = isSignUpDisabled(ctx, options);
+				const hasPassword =
+					ctx.context.options.emailAndPassword?.enabled !== false;
+				const hasMagicLink = Boolean(magicLink?.routes?.signIn);
+				const hasEmailOtp = Boolean(
+					emailOtp?.routes?.sendVerificationOtp && emailOtp?.routes?.signIn,
+				);
+				return (
+					<AuthCard
+						ctx={ctx}
+						title={t("signIn.title")}
+						description={t("signIn.description")}
+						tabs={signUpDisabled ? undefined : "sign-in"}
+						legalAction="signing in"
+					>
+						{lastMethod ? (
+							<LastLoginMethodHint ctx={ctx} capability={lastMethod} />
+						) : null}
+						<section class="ba-auth-credentials" data-ba-method-scope>
+							<MethodSwitcher
 								ctx={ctx}
-								title="Sign In"
-								description="Enter your email below to login to your account."
-								tabs={showTabs ? "sign-in" : undefined}
-								legalAction="signing in"
+								hasPassword={hasPassword}
+								hasMagicLink={hasMagicLink}
+								hasEmailOtp={hasEmailOtp}
+							/>
+							{hasPassword ? (
+								<div data-ba-method-panel="password">
+									<CredentialSegment ctx={ctx} hasUsername={Boolean(username)}>
+										<EmailSignInForm ctx={ctx} />
+										{username ? (
+											<UsernameSignInForm
+												ctx={ctx}
+												capability={username}
+												hidden
+											/>
+										) : null}
+									</CredentialSegment>
+								</div>
+							) : null}
+							{hasMagicLink && magicLink ? (
+								<MagicLinkPanel ctx={ctx} capability={magicLink} />
+							) : null}
+							{hasEmailOtp && emailOtp ? (
+								<EmailOtpPanel ctx={ctx} capability={emailOtp} />
+							) : null}
+							{phoneNumber ? (
+								<div class="ba-auth-links">
+									<Link href="./sign-in/phone">
+										{t("action.signInWithPhone")}
+									</Link>
+								</div>
+							) : null}
+							{hasPasskeyAuth ? <PasskeySignInButton ctx={ctx} /> : null}
+						</section>
+						{providers.length > 0 ? (
+							<ProviderButtons ctx={ctx} mode="signIn" providers={providers} />
+						) : null}
+						<CaptchaConfig ctx={ctx} />
+						{twoFactor ? (
+							<TwoFactorChallengePanel ctx={ctx} capability={twoFactor} />
+						) : null}
+					</AuthCard>
+				);
+			},
+		}),
+		signInUsername: createUIPage({
+			id: "auth-ui.sign-in-username",
+			path: "/sign-in/username",
+			title: "Sign In With Username",
+			render(ctx) {
+				const { t } = ctx;
+				const username = ctx.capability("username");
+				const twoFactor = ctx.capability("two-factor");
+				const redirectTo = getRedirectTo(ctx);
+				const minUsernameLength = getNumberMetadata(
+					username,
+					"minUsernameLength",
+					3,
+				);
+				const maxUsernameLength = getNumberMetadata(
+					username,
+					"maxUsernameLength",
+					30,
+				);
+				const signUpDisabled = isSignUpDisabled(ctx, options);
+				return (
+					<AuthCard
+						ctx={ctx}
+						title={t("signIn.username.title")}
+						description={t("signIn.username.description")}
+						tabs={signUpDisabled ? undefined : "sign-in"}
+						legalAction="signing in"
+						footer={
+							<>
+								{t("signIn.username.preferEmail")}{" "}
+								<Link href="../sign-in">
+									{t("signIn.username.signInWithEmail")}
+								</Link>
+							</>
+						}
+					>
+						<section class="ba-auth-credentials">
+							<Form
+								action={routes.signIn.username}
+								pending={t("signIn.signingIn")}
+								success={[
+									effects.toast({
+										level: "success",
+										message: t("signIn.success"),
+									}),
+									effects.navigate(redirectTo),
+								]}
+								error={[
+									effects.toastFromError({
+										fallback: t("signIn.username.error"),
+									}),
+								]}
 							>
-								{lastMethod ? (
-									<LastLoginMethodHint ctx={ctx} capability={lastMethod} />
-								) : null}
-								<section class="ba-auth-credentials">
+								<Input
+									name="username"
+									label={t("field.username")}
+									autocomplete="username"
+									minlength={minUsernameLength}
+									maxlength={maxUsernameLength}
+									placeholder={t("placeholder.enterUsername")}
+									required
+								/>
+								<PasswordField
+									ctx={ctx}
+									name="password"
+									autocomplete="current-password"
+									placeholder={t("placeholder.password")}
+									forgotPasswordHref="../forgot-password"
+								/>
+								<div class="ba-auth-links">
+									<Link href="../sign-in">
+										{t("signIn.username.useEmailInstead")}
+									</Link>
+								</div>
+								<label class="ba-checkbox">
+									<input
+										type="checkbox"
+										name="rememberMe"
+										class="ba-checkbox-input"
+									/>
+									<span>{t("action.rememberMe")}</span>
+								</label>
+								<Button type="submit" class="ba-button-full">
+									{t("signIn.username.submit")}
+								</Button>
+							</Form>
+						</section>
+						<CaptchaConfig ctx={ctx} />
+						{twoFactor ? (
+							<TwoFactorChallengePanel ctx={ctx} capability={twoFactor} />
+						) : null}
+					</AuthCard>
+				);
+			},
+		}),
+		signInPhone: createUIPage({
+			id: "auth-ui.sign-in-phone",
+			path: "/sign-in/phone",
+			title: "Sign In With Phone",
+			render(ctx) {
+				const { t } = ctx;
+				const phone = ctx.capability("phone-number");
+				const twoFactor = ctx.capability("two-factor");
+				const redirectTo = getRedirectTo(ctx);
+				const signUpDisabled = isSignUpDisabled(ctx, options);
+				if (!phone) {
+					return (
+						<AuthCardShim
+							ctx={ctx}
+							title={t("signIn.phone.unavailableTitle")}
+							description={t("signIn.phone.unavailableDescription")}
+						/>
+					);
+				}
+				const signInRoute = phone.routes?.signIn;
+				const sendOtpRoute = phone.routes?.sendOtp;
+				const verifyRoute = phone.routes?.verify;
+				const otpLength = getNumberMetadata(phone, "otpLength", 6);
+				return (
+					<AuthCard
+						ctx={ctx}
+						title={t("signIn.phone.title")}
+						description={t("signIn.phone.description")}
+						tabs={signUpDisabled ? undefined : "sign-in"}
+						legalAction="signing in"
+						footer={
+							<>
+								{t("signIn.phone.preferEmail")}{" "}
+								<Link href="../sign-in">
+									{t("signIn.phone.signInWithEmail")}
+								</Link>
+							</>
+						}
+					>
+						<section class="ba-auth-credentials" data-ba-method-scope>
+							<div
+								class="ba-auth-methods"
+								role="tablist"
+								aria-label="Sign-in method"
+							>
+								<button
+									type="button"
+									class="ba-auth-method-btn"
+									data-ba-unstyled
+									data-ba-method="password"
+									aria-pressed="true"
+									role="tab"
+								>
+									{t("method.password")}
+								</button>
+								<button
+									type="button"
+									class="ba-auth-method-btn"
+									data-ba-unstyled
+									data-ba-method="phone-otp"
+									aria-pressed="false"
+									role="tab"
+								>
+									{t("method.oneTimeCode")}
+								</button>
+							</div>
+							{signInRoute ? (
+								<div data-ba-method-panel="password">
 									<Form
-										action={routes.signIn.email}
-										pending="Signing in..."
+										action={signInRoute}
+										pending={t("signIn.signingIn")}
 										success={[
 											effects.toast({
 												level: "success",
-												message: "Signed in successfully.",
+												message: t("signIn.success"),
 											}),
 											effects.navigate(redirectTo),
 										]}
 										error={[
 											effects.toastFromError({
-												fallback: "Could not sign in.",
+												fallback: t("signIn.phone.error"),
 											}),
 										]}
 									>
 										<Input
-											name="email"
-											label="Email"
-											type="email"
-											autocomplete="email"
-											placeholder="m@example.com"
+											name="phoneNumber"
+											label={t("field.phoneNumber")}
+											type="tel"
+											autocomplete="tel"
+											placeholder={t("placeholder.phoneNumber")}
 											required
 										/>
 										<PasswordField
+											ctx={ctx}
 											name="password"
 											autocomplete="current-password"
-											placeholder="password"
-											forgotPasswordHref="./forgot-password"
+											placeholder={t("placeholder.password")}
+											forgotPasswordHref="../forgot-password"
 										/>
-										{username ? (
-											<div class="ba-auth-links">
-												<Link href="./sign-in/username">
-													Use username instead
-												</Link>
-											</div>
-										) : null}
 										<label class="ba-checkbox">
 											<input
 												type="checkbox"
 												name="rememberMe"
 												class="ba-checkbox-input"
 											/>
-											<span>Remember me</span>
+											<span>{t("action.rememberMe")}</span>
 										</label>
 										<Button type="submit" class="ba-button-full">
-											Login
+											{t("signIn.submit")}
 										</Button>
 									</Form>
-									{hasPasskeyAuth ? <PasskeySignInButton ctx={ctx} /> : null}
-								</section>
-								{providers.length > 0 ? (
-									<ProviderButtons
-										ctx={ctx}
-										mode="signIn"
-										providers={providers}
-									/>
-								) : null}
-								{twoFactor ? (
-									<TwoFactorChallengePanel capability={twoFactor} />
-								) : null}
-							</AuthCard>
-						);
-					},
-				}),
-				signInUsername: createUIPage({
-					id: "auth-ui.sign-in-username",
-					path: "/sign-in/username",
-					title: "Sign In With Username",
-					render(ctx) {
-						const username = ctx.capability("username");
-						const twoFactor = ctx.capability("two-factor");
-						const redirectTo = getRedirectTo(ctx);
-						const minUsernameLength = getNumberMetadata(
-							username,
-							"minUsernameLength",
-							3,
-						);
-						const maxUsernameLength = getNumberMetadata(
-							username,
-							"maxUsernameLength",
-							30,
-						);
-						return (
-							<AuthCard
-								ctx={ctx}
-								title="Sign in with username"
-								description="Use your username and password to continue."
-								footer={
-									<>
-										Prefer email?{" "}
-										<Link href="../sign-in">Sign in with email</Link>
-									</>
-								}
-							>
-								<Form
-									action={routes.signIn.username}
-									pending="Signing in..."
-									success={[
-										effects.toast({
-											level: "success",
-											message: "Signed in successfully.",
-										}),
-										effects.navigate(redirectTo),
-									]}
-									error={[
-										effects.toastFromError({
-											fallback: "Could not sign in with username.",
-										}),
-									]}
-								>
-									<Input
-										name="username"
-										label="Username"
-										autocomplete="username"
-										minlength={minUsernameLength}
-										maxlength={maxUsernameLength}
-										placeholder="Enter your username"
-										required
-									/>
-									<Input
-										name="password"
-										label="Password"
-										type="password"
-										autocomplete="current-password"
-										placeholder="password"
-										required
-									/>
-									<div class="ba-auth-links">
-										<Link href="../sign-in">Use email instead</Link>
-										<Link href="../forgot-password">Forgot password?</Link>
+								</div>
+							) : null}
+							{sendOtpRoute && verifyRoute ? (
+								<div data-ba-method-panel="phone-otp" hidden data-ba-otp-scope>
+									<div data-ba-panel="phone-otp-request">
+										<Form
+											action={sendOtpRoute}
+											pending={t("twoFactor.sendingCode")}
+											success={[
+												effects.toast({
+													level: "success",
+													message: t("phoneOtp.codeSent"),
+												}),
+												effects.hide("phone-otp-request"),
+												effects.show("phone-otp-verify"),
+											]}
+											error={[
+												effects.toastFromError({
+													fallback: t("phoneOtp.sendError"),
+												}),
+											]}
+											data-ba-otp-request
+										>
+											<Input
+												name="phoneNumber"
+												label={t("field.phoneNumber")}
+												type="tel"
+												autocomplete="tel"
+												placeholder={t("placeholder.phoneNumber")}
+												required
+											/>
+											<Button type="submit" class="ba-button-full">
+												{t("phoneOtp.sendSubmit")}
+											</Button>
+										</Form>
 									</div>
-									<label class="ba-checkbox">
-										<input
-											type="checkbox"
-											name="rememberMe"
-											class="ba-checkbox-input"
-										/>
-										<span>Remember me</span>
-									</label>
-									<Button type="submit" class="ba-button-full">
-										Login
-									</Button>
-								</Form>
-								{twoFactor ? (
-									<TwoFactorChallengePanel capability={twoFactor} />
-								) : null}
-							</AuthCard>
-						);
-					},
-				}),
-				signUp: createUIPage({
-					id: "auth-ui.sign-up",
-					path: "/sign-up",
-					title: "Sign Up",
-					render(ctx) {
-						const passkey = ctx.capability("passkey");
-						const twoFactor = ctx.capability("two-factor");
-						const lastMethod = ctx.capability("last-login-method");
-						const username = ctx.capability("username");
-						const redirectTo = getRedirectTo(ctx);
-						const providers = getAuthProviders(ctx);
-						const hasOtherMethods = providers.length > 0;
-						const additionalUserFields = renderAdditionalUserFields(ctx);
-						const minUsernameLength = getNumberMetadata(
-							username,
-							"minUsernameLength",
-							3,
-						);
-						const maxUsernameLength = getNumberMetadata(
-							username,
-							"maxUsernameLength",
-							30,
-						);
-						return (
-							<AuthCard
-								ctx={ctx}
-								title="Sign Up"
-								description="Enter your information to create an account."
-								tabs="sign-up"
-								legalAction="signing up"
-							>
-								{lastMethod ? (
-									<LastLoginMethodHint ctx={ctx} capability={lastMethod} />
-								) : null}
-								<section class="ba-auth-credentials">
-									<Form
-										action={routes.signUp.email}
-										pending="Creating your account..."
-										success={[
-											effects.toast({
-												level: "success",
-												message: "Account created successfully.",
-											}),
-											passkey
-												? effects.openDialog("passkey-registration")
-												: twoFactor
-													? effects.openDialog("two-factor-enrollment")
-													: effects.navigate(redirectTo),
-										]}
-										error={[
-											effects.toastFromError({
-												fallback: "Could not create your account.",
-											}),
-										]}
-									>
-										<Input
-											name="name"
-											label="Name"
-											autocomplete="name"
-											placeholder="Enter your name"
-											required
-										/>
-										{username ? (
-											<>
-												<Input
-													name="username"
-													label="Username"
-													autocomplete="username"
-													minlength={minUsernameLength}
-													maxlength={maxUsernameLength}
-													placeholder="Choose a username"
-													required
-												/>
-												{supportsDisplayUsername(username) ? (
-													<Input
-														name="displayUsername"
-														label="Display name"
-														autocomplete="nickname"
-														placeholder="How your name should appear"
-													/>
-												) : null}
-											</>
-										) : null}
-										<Input
-											name="email"
-											label="Email"
-											type="email"
-											autocomplete="email"
-											placeholder="m@example.com"
-											required
-										/>
-										{additionalUserFields}
-										<PasswordField
-											name="password"
-											autocomplete="new-password"
-											placeholder="password"
-										/>
-										<Button type="submit" class="ba-button-full">
-											Create account
-										</Button>
-									</Form>
-								</section>
-								{hasOtherMethods ? (
-									<ProviderButtons
-										ctx={ctx}
-										mode="signUp"
-										providers={providers}
-									/>
-								) : null}
-								{passkey ? (
-									<PasskeyRegistrationPanel
-										capability={passkey}
-										redirectTo={redirectTo}
-									/>
-								) : null}
-								{twoFactor ? (
-									<TwoFactorEnrollmentPanel
-										capability={twoFactor}
-										redirectTo={redirectTo}
-									/>
-								) : null}
-							</AuthCard>
-						);
-					},
-				}),
-				forgotPassword: createUIPage({
-					id: "auth-ui.forgot-password",
-					path: "/forgot-password",
-					title: "Forgot Password",
-					render(ctx) {
-						return (
-							<AuthCard
-								ctx={ctx}
-								title="Reset your password"
-								description="Enter your email and we'll send you a reset link."
-								footer={
-									<>
-										Remember your password?{" "}
-										<Link href="./sign-in">Sign in</Link>
-									</>
-								}
-							>
-								<Form
-									action={routes.password.requestReset}
-									pending="Sending reset link..."
-									success={[
-										effects.toast({
-											level: "success",
-											message:
-												"If this email exists, a reset link has been sent.",
-										}),
-									]}
-									error={[
-										effects.toastFromError({
-											fallback: "Could not send reset link.",
-										}),
-									]}
-								>
-									<Input
-										name="email"
-										label="Email"
-										type="email"
-										autocomplete="email"
-										placeholder="Enter your email address"
-										required
-									/>
-									<Button type="submit" class="ba-button-full">
-										Send reset link
-									</Button>
-								</Form>
-							</AuthCard>
-						);
-					},
-				}),
-				resetPassword: createUIPage({
-					id: "auth-ui.reset-password",
-					path: "/reset-password",
-					title: "Reset Password",
-					render(ctx) {
-						return (
-							<AuthCard
-								ctx={ctx}
-								title="Choose a new password"
-								description="Use a new password that you have not used before."
-								footer={
-									<>
-										Back to <Link href="./sign-in">sign in</Link>
-									</>
-								}
-							>
-								<Form
-									action={routes.password.reset}
-									pending="Resetting password..."
-									success={[
-										effects.toast({
-											level: "success",
-											message: "Password reset successfully.",
-										}),
-									]}
-									error={[
-										effects.toastFromError({
-											fallback: "Could not reset password.",
-										}),
-									]}
-								>
-									<input
-										name="token"
-										type="hidden"
-										value={ctx.query.get("token") || ""}
-									/>
-									<Input
-										name="newPassword"
-										label="New password"
-										type="password"
-										autocomplete="new-password"
-										placeholder="Enter your new password"
-										required
-									/>
-									<Button type="submit" class="ba-button-full">
-										Reset password
-									</Button>
-								</Form>
-							</AuthCard>
-						);
-					},
-				}),
-				verifyEmail: createUIPage({
-					id: "auth-ui.verify-email",
-					path: "/verify-email",
-					title: "Verify Email",
-					render(ctx) {
-						return (
-							<AuthCard
-								ctx={ctx}
-								title="Verify your email"
-								description="Send a fresh verification link to your inbox."
-								footer={
-									<>
-										Back to <Link href="./sign-in">sign in</Link>
-									</>
-								}
-							>
-								<Form
-									action={routes.email.sendVerification}
-									pending="Sending verification email..."
-									success={[
-										effects.toast({
-											level: "success",
-											message: "Verification email sent.",
-										}),
-									]}
-									error={[
-										effects.toastFromError({
-											fallback: "Could not send verification email.",
-										}),
-									]}
-								>
-									<Input
-										name="email"
-										label="Email"
-										type="email"
-										autocomplete="email"
-										placeholder="Enter your email address"
-										required
-									/>
-									<Button type="submit" class="ba-button-full">
-										Send verification email
-									</Button>
-								</Form>
-							</AuthCard>
-						);
-					},
-				}),
-				...options?.pages,
+									<div data-ba-panel="phone-otp-verify" hidden>
+										<Form
+											action={verifyRoute}
+											pending={t("emailOtp.verifyingCode")}
+											success={[
+												effects.toast({
+													level: "success",
+													message: t("signIn.success"),
+												}),
+												effects.navigate(redirectTo),
+											]}
+											error={[
+												effects.toastFromError({
+													fallback: t("phoneOtp.verifyError"),
+												}),
+											]}
+											data-ba-otp-verify
+										>
+											<Input
+												name="phoneNumber"
+												label={t("field.phoneNumber")}
+												type="tel"
+												autocomplete="tel"
+												placeholder={t("placeholder.phoneNumber")}
+												required
+												data-ba-otp-phone-echo
+											/>
+											<Input
+												name="code"
+												label={t("phoneOtp.verificationCode")}
+												autocomplete="one-time-code"
+												inputmode="numeric"
+												minlength={otpLength}
+												maxlength={otpLength}
+												required
+											/>
+											<Button type="submit" class="ba-button-full">
+												{t("phoneOtp.verifySubmit")}
+											</Button>
+										</Form>
+										<button
+											type="button"
+											class="ba-button ba-button-outline"
+											data-ba-unstyled
+											data-ba-otp-back
+										>
+											{t("signIn.phone.useADifferentPhoneNumber")}
+										</button>
+									</div>
+								</div>
+							) : null}
+						</section>
+						<CaptchaConfig ctx={ctx} />
+						{twoFactor ? (
+							<TwoFactorChallengePanel ctx={ctx} capability={twoFactor} />
+						) : null}
+					</AuthCard>
+				);
 			},
+		}),
+		forgotPassword: createUIPage({
+			id: "auth-ui.forgot-password",
+			path: "/forgot-password",
+			title: "Forgot Password",
+			render(ctx) {
+				const { t } = ctx;
+				return (
+					<AuthCard
+						ctx={ctx}
+						title={t("forgotPassword.title")}
+						description={t("forgotPassword.description")}
+						footer={
+							<>
+								{t("forgotPassword.rememberPassword")}{" "}
+								<Link href="./sign-in">{t("action.signIn")}</Link>
+							</>
+						}
+					>
+						<Form
+							action={routes.password.requestReset}
+							pending={t("forgotPassword.sending")}
+							success={[
+								effects.toast({
+									level: "success",
+									message: t("forgotPassword.success"),
+								}),
+							]}
+							error={[
+								effects.toastFromError({
+									fallback: t("forgotPassword.error"),
+								}),
+							]}
+						>
+							<Input
+								name="email"
+								label={t("field.email")}
+								type="email"
+								autocomplete="email"
+								placeholder={t("placeholder.emailAddress")}
+								required
+							/>
+							<Button type="submit" class="ba-button-full">
+								{t("forgotPassword.submit")}
+							</Button>
+						</Form>
+						<CaptchaConfig ctx={ctx} />
+					</AuthCard>
+				);
+			},
+		}),
+		resetPassword: createUIPage({
+			id: "auth-ui.reset-password",
+			path: "/reset-password",
+			title: "Reset Password",
+			render(ctx) {
+				const { t } = ctx;
+				return (
+					<AuthCard
+						ctx={ctx}
+						title={t("resetPassword.title")}
+						description={t("resetPassword.description")}
+						footer={
+							<>
+								{t("resetPassword.backTo")}{" "}
+								<Link href="./sign-in">{t("action.signIn")}</Link>
+							</>
+						}
+					>
+						<Form
+							action={routes.password.reset}
+							pending={t("resetPassword.resetting")}
+							success={[
+								effects.toast({
+									level: "success",
+									message: t("resetPassword.success"),
+								}),
+								effects.navigate("./sign-in"),
+							]}
+							error={[
+								effects.toastFromError({
+									fallback: t("resetPassword.error"),
+								}),
+							]}
+						>
+							<input
+								name="token"
+								type="hidden"
+								value={ctx.query.get("token") || ""}
+							/>
+							<Input
+								name="newPassword"
+								label={t("field.newPassword")}
+								type="password"
+								autocomplete="new-password"
+								placeholder={t("placeholder.newPassword")}
+								required
+							/>
+							<Button type="submit" class="ba-button-full">
+								{t("resetPassword.submit")}
+							</Button>
+						</Form>
+					</AuthCard>
+				);
+			},
+		}),
+		verifyEmail: createUIPage({
+			id: "auth-ui.verify-email",
+			path: "/verify-email",
+			title: "Verify Email",
+			render(ctx) {
+				const { t } = ctx;
+				return (
+					<AuthCard
+						ctx={ctx}
+						title={t("verifyEmail.title")}
+						description={t("verifyEmail.description")}
+						footer={
+							<>
+								{t("resetPassword.backTo")}{" "}
+								<Link href="./sign-in">{t("action.signIn")}</Link>
+							</>
+						}
+					>
+						<Form
+							action={routes.email.sendVerification}
+							pending={t("verifyEmail.sending")}
+							success={[
+								effects.toast({
+									level: "success",
+									message: t("verifyEmail.success"),
+								}),
+								effects.navigate("./sign-in"),
+							]}
+							error={[
+								effects.toastFromError({
+									fallback: t("verifyEmail.error"),
+								}),
+							]}
+						>
+							<Input
+								name="email"
+								label={t("field.email")}
+								type="email"
+								autocomplete="email"
+								placeholder={t("placeholder.emailAddress")}
+								required
+							/>
+							<Button type="submit" class="ba-button-full">
+								{t("verifyEmail.submit")}
+							</Button>
+						</Form>
+						<CaptchaConfig ctx={ctx} />
+					</AuthCard>
+				);
+			},
+		}),
+	};
+
+	if (!options?.disableSignUp) {
+		pages.signUp = createUIPage({
+			id: "auth-ui.sign-up",
+			path: "/sign-up",
+			title: "Sign Up",
+			render(ctx) {
+				const { t } = ctx;
+				const passkey = ctx.capability("passkey");
+				const twoFactor = ctx.capability("two-factor");
+				const lastMethod = ctx.capability("last-login-method");
+				const username = ctx.capability("username");
+				const providers = getAuthProviders(ctx);
+				const hasOtherMethods = providers.length > 0;
+				const additionalUserFields = renderAdditionalUserFields(ctx);
+
+				if (ctx.context.options.emailAndPassword?.disableSignUp) {
+					return (
+						<AuthCardShim
+							ctx={ctx}
+							title={t("signUp.disabledTitle")}
+							description={t("signUp.disabledDescription")}
+						/>
+					);
+				}
+
+				return (
+					<AuthCard
+						ctx={ctx}
+						title={t("signUp.title")}
+						description={t("signUp.description")}
+						tabs="sign-up"
+						legalAction="signing up"
+					>
+						{lastMethod ? (
+							<LastLoginMethodHint ctx={ctx} capability={lastMethod} />
+						) : null}
+						<section class="ba-auth-credentials">
+							<EmailSignUpForm
+								ctx={ctx}
+								username={username}
+								passkey={passkey}
+								twoFactor={twoFactor}
+								additionalUserFields={additionalUserFields}
+							/>
+						</section>
+						{hasOtherMethods ? (
+							<ProviderButtons ctx={ctx} mode="signUp" providers={providers} />
+						) : null}
+						<CaptchaConfig ctx={ctx} />
+						{passkey ? (
+							<PasskeyRegistrationPanel
+								ctx={ctx}
+								capability={passkey}
+								redirectTo={getRedirectTo(ctx)}
+								nextDialog={twoFactor ? "two-factor-enrollment" : undefined}
+							/>
+						) : null}
+						{twoFactor ? (
+							<TwoFactorEnrollmentPanel
+								ctx={ctx}
+								capability={twoFactor}
+								redirectTo={getRedirectTo(ctx)}
+							/>
+						) : null}
+					</AuthCard>
+				);
+			},
+		});
+	}
+
+	Object.assign(pages, createSettingsPages(), options?.pages ?? {});
+
+	return {
+		id: "auth-ui",
+		version: PACKAGE_VERSION,
+		ui: {
+			pages,
 		},
 		options,
-	}) satisfies BetterAuthPlugin;
+	} satisfies BetterAuthPlugin;
+};

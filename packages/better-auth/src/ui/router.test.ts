@@ -821,7 +821,10 @@ describe("ui router", async () => {
 			new Request("http://localhost:3000/auth/sign-in"),
 		);
 		const signInHTML = await signInRes.text();
-		expect(signInHTML).toContain('href="./sign-in/username"');
+		expect(signInHTML).toContain('data-ba-credential-mode="email"');
+		expect(signInHTML).toContain('data-ba-credential-mode="username"');
+		expect(signInHTML).toContain('data-ba-credential-panel="username"');
+		expect(signInHTML).toContain('action="/sign-in/username"');
 
 		const usernameRes = await auth.ui.handler(
 			new Request("http://localhost:3000/auth/sign-in/username"),
@@ -832,6 +835,111 @@ describe("ui router", async () => {
 		expect(usernameHTML).toContain('name="username"');
 		expect(usernameHTML).toContain('autocomplete="username"');
 		expect(usernameHTML).toContain('href="../sign-in"');
+	});
+
+	it("renders the settings hub with navigation links", async () => {
+		const { auth } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [authUI()],
+		});
+		const res = await auth.ui.handler(
+			new Request("http://localhost:3000/auth/settings"),
+		);
+		expect(res.status).toBe(200);
+		const html = await res.text();
+		expect(html).toContain("Account Settings");
+		expect(html).toContain("settings/profile");
+		expect(html).toContain("settings/password");
+		expect(html).toContain("data-ba-require-session");
+		expect(html).toContain("ba-settings-nav");
+	});
+
+	it("renders the change password settings page", async () => {
+		const { auth } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [authUI()],
+		});
+		const res = await auth.ui.handler(
+			new Request("http://localhost:3000/auth/settings/password"),
+		);
+		expect(res.status).toBe(200);
+		const html = await res.text();
+		expect(html).toContain("Change Password");
+		expect(html).toContain('action="/change-password"');
+		expect(html).toContain('name="currentPassword"');
+		expect(html).toContain('name="newPassword"');
+	});
+
+	it("renders the profile settings page", async () => {
+		const { auth } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [authUI()],
+		});
+		const res = await auth.ui.handler(
+			new Request("http://localhost:3000/auth/settings/profile"),
+		);
+		expect(res.status).toBe(200);
+		const html = await res.text();
+		expect(html).toContain("Profile");
+		expect(html).toContain('action="/update-user"');
+		expect(html).toContain('name="name"');
+	});
+
+	it("renders the email settings page only when changeEmail is enabled", async () => {
+		const { auth: authWithoutEmail } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [authUI()],
+		});
+		const resDisabled = await authWithoutEmail.ui.handler(
+			new Request("http://localhost:3000/auth/settings/email"),
+		);
+		expect(resDisabled.status).toBe(200);
+		const htmlDisabled = await resDisabled.text();
+		expect(htmlDisabled).toContain("Email change unavailable");
+
+		const { auth: authWithEmail } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+				},
+			},
+			plugins: [authUI()],
+		});
+		const resEnabled = await authWithEmail.ui.handler(
+			new Request("http://localhost:3000/auth/settings/email"),
+		);
+		expect(resEnabled.status).toBe(200);
+		const htmlEnabled = await resEnabled.text();
+		expect(htmlEnabled).toContain("Change Email");
+		expect(htmlEnabled).toContain('action="/change-email"');
+		expect(htmlEnabled).toContain('name="newEmail"');
+	});
+
+	it("renders the accounts settings page with runtime loading", async () => {
+		const { auth } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [authUI()],
+		});
+		const res = await auth.ui.handler(
+			new Request("http://localhost:3000/auth/settings/accounts"),
+		);
+		expect(res.status).toBe(200);
+		const html = await res.text();
+		expect(html).toContain("Linked Accounts");
+		expect(html).toContain("data-ba-settings-accounts");
 	});
 
 	it("serves runtime support for staged UI effects", async () => {

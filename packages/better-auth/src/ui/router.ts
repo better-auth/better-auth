@@ -12,6 +12,7 @@ import { logger } from "@better-auth/core/env";
 import type { Endpoint } from "better-call";
 import { createRouter } from "better-call";
 import { isAPIError } from "../utils/is-api-error";
+import { getUIMessages, resolveUILocale, t } from "./i18n";
 import { renderDocument } from "./render";
 import { uiRuntime } from "./runtime.generated";
 import { getTheme, getUIBasePath, getUIRuntimePath } from "./utils";
@@ -115,6 +116,8 @@ function createUIContext(options: {
 	capabilities: Map<string, UIPluginCapability>;
 }): UIContext {
 	const url = new URL(options.request.url);
+	const messages = getUIMessages(options.ctx.options);
+	const locale = resolveUILocale(options.ctx.options, options.request);
 	return {
 		context: options.ctx,
 		request: options.request,
@@ -122,6 +125,9 @@ function createUIContext(options: {
 		params: options.params,
 		query: url.searchParams,
 		theme: getTheme(options.ctx.options),
+		locale,
+		messages,
+		t: (key: string, fallback?: string) => t(messages, key, fallback),
 		slots(slot) {
 			return options.slots.get(slot) ?? [];
 		},
@@ -200,6 +206,7 @@ function createPageEndpoint(
 					apiBaseURL: c.context.baseURL,
 					uiBasePath: getUIBasePath(c.context.options),
 					background: c.context.options.ui?.background,
+					locale: uiContext.locale,
 				}),
 				{
 					headers: {

@@ -11,6 +11,7 @@ const pages = [
 	{ href: "/auth/forgot-password", label: "Forgot password" },
 	{ href: "/auth/reset-password", label: "Reset password" },
 	{ href: "/auth/verify-email", label: "Verify email" },
+	{ href: "/auth/settings", label: "Settings" },
 	{ href: "/auth/error?error=demo_error", label: "Error" },
 ];
 
@@ -72,17 +73,22 @@ function UserCard() {
 					<span className="user-email">{user.email}</span>
 				</div>
 			</div>
-			<button
-				type="button"
-				className="user-card-action user-card-action--danger"
-				onClick={() =>
-					authClient.signOut({
-						fetchOptions: { onSuccess: () => window.location.reload() },
-					})
-				}
-			>
-				Sign out
-			</button>
+			<div className="user-card-actions">
+				<Link href="/auth/settings" className="user-card-action">
+					Settings
+				</Link>
+				<button
+					type="button"
+					className="user-card-action user-card-action--danger"
+					onClick={() =>
+						authClient.signOut({
+							fetchOptions: { onSuccess: () => window.location.reload() },
+						})
+					}
+				>
+					Sign out
+				</button>
+			</div>
 		</div>
 	);
 }

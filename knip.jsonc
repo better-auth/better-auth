@@ -59,7 +59,8 @@
 			],
 			"ignoreDependencies": [
 				// bundled into the UI browser runtime IIFE
-				"@simplewebauthn/browser"
+				"@simplewebauthn/browser",
+				"uqr"
 			]
 		},
 		"packages/ui": {

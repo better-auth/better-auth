@@ -11,6 +11,12 @@
  */
 
 import {
+	getCaptchaHeader,
+	initCaptcha,
+	resetCaptcha,
+	shouldAttachCaptcha,
+} from "./captcha";
+import {
 	clearFieldError,
 	clearLegacyFormStatus,
 	closeDialog,
@@ -29,6 +35,13 @@ import {
 	validateForm,
 } from "./forms";
 import { handlePasskeyRegister, handlePasskeySubmit } from "./passkey";
+import { mountQr } from "./qr";
+import {
+	initSessionGate,
+	initSettingsAccounts,
+	initSettingsPasskeys,
+	initSettingsSession,
+} from "./settings";
 
 function read(
 	el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
@@ -37,6 +50,105 @@ function read(
 		return el.checked;
 	return el.value;
 }
+
+function applyTwoFactorEnableResult(
+	form: HTMLFormElement,
+	payload: unknown,
+): void {
+	const data =
+		payload && typeof payload === "object"
+			? (payload as Record<string, unknown>)
+			: null;
+	const dialog =
+		form.closest(".ba-modal") ||
+		document.getElementById("two-factor-enrollment");
+	const qrHost = dialog?.querySelector<HTMLElement>("[data-ba-totp-qr]");
+	const backupHost = dialog?.querySelector<HTMLElement>(
+		"[data-ba-backup-codes]",
+	);
+	const totpURI = typeof data?.totpURI === "string" ? data.totpURI : null;
+	if (qrHost && totpURI) mountQr(qrHost, totpURI);
+	const backupCodes = Array.isArray(data?.backupCodes)
+		? data.backupCodes.filter(
+				(code): code is string => typeof code === "string",
+			)
+		: [];
+	if (backupHost && backupCodes.length > 0) {
+		backupHost.hidden = false;
+		backupHost.textContent = backupCodes.join("\n");
+	}
+}
+
+function updatePressedState(
+	scope: Element,
+	dataAttr: string,
+	value: string,
+): void {
+	scope.querySelectorAll<HTMLElement>(`[${dataAttr}]`).forEach((btn) => {
+		btn.setAttribute(
+			"aria-pressed",
+			btn.getAttribute(dataAttr) === value ? "true" : "false",
+		);
+	});
+}
+
+function switchPanel(
+	trigger: Element,
+	dataAttr: string,
+	scopeAttr: string,
+	panelAttr: string,
+): void {
+	const value = trigger.getAttribute(dataAttr);
+	if (!value) return;
+	const scope = trigger.closest(`[${scopeAttr}]`) || document.body;
+	updatePressedState(scope, dataAttr, value);
+	scope.querySelectorAll<HTMLElement>(`[${panelAttr}]`).forEach((panel) => {
+		// Skip nested scopes: only toggle panels that live inside this scope
+		// and not inside a deeper scope of the same name.
+		if (panel.closest(`[${scopeAttr}]`) !== scope) return;
+		panel.hidden = panel.getAttribute(panelAttr) !== value;
+	});
+}
+
+function copyOtpEcho(form: HTMLFormElement): void {
+	const scope = form.closest<HTMLElement>("[data-ba-otp-scope]");
+	if (!scope) return;
+	const requestForm = scope.querySelector<HTMLFormElement>(
+		"[data-ba-otp-request]",
+	);
+	const verifyForm = scope.querySelector<HTMLFormElement>(
+		"[data-ba-otp-verify]",
+	);
+	if (!requestForm || !verifyForm) return;
+	const emailInput = requestForm.querySelector<HTMLInputElement>(
+		"input[name='email']",
+	);
+	const phoneInput = requestForm.querySelector<HTMLInputElement>(
+		"input[name='phoneNumber']",
+	);
+	if (emailInput) {
+		const target = verifyForm.querySelector<HTMLInputElement>(
+			"[data-ba-otp-email-echo]",
+		);
+		if (target && emailInput.value) target.value = emailInput.value;
+	}
+	if (phoneInput) {
+		const target = verifyForm.querySelector<HTMLInputElement>(
+			"[data-ba-otp-phone-echo]",
+		);
+		if (target && phoneInput.value) target.value = phoneInput.value;
+	}
+}
+
+function resetOtpFlow(scope: HTMLElement): void {
+	scope.querySelectorAll<HTMLElement>("[data-ba-panel]").forEach((panel) => {
+		const name = panel.getAttribute("data-ba-panel") || "";
+		if (name.endsWith("-request")) panel.hidden = false;
+		if (name.endsWith("-verify")) panel.hidden = true;
+	});
+}
+
+initCaptcha();
 
 document.querySelectorAll<HTMLElement>("[data-ba-bind]").forEach((el) => {
 	const key = el.getAttribute("data-ba-bind");
@@ -103,6 +215,62 @@ document.addEventListener("click", async (event) => {
 		);
 		passwordToggle.setAttribute("data-visible", show ? "true" : "false");
 		return;
+	}
+
+	const credentialToggle =
+		event.target instanceof Element
+			? event.target.closest("[data-ba-credential-mode]")
+			: null;
+	if (credentialToggle) {
+		event.preventDefault();
+		switchPanel(
+			credentialToggle,
+			"data-ba-credential-mode",
+			"data-ba-credential-scope",
+			"data-ba-credential-panel",
+		);
+		return;
+	}
+
+	const methodToggle =
+		event.target instanceof Element
+			? event.target.closest("[data-ba-method]")
+			: null;
+	if (methodToggle) {
+		event.preventDefault();
+		switchPanel(
+			methodToggle,
+			"data-ba-method",
+			"data-ba-method-scope",
+			"data-ba-method-panel",
+		);
+		return;
+	}
+
+	const otpBack =
+		event.target instanceof Element
+			? event.target.closest("[data-ba-otp-back]")
+			: null;
+	if (otpBack) {
+		event.preventDefault();
+		const scope = otpBack.closest<HTMLElement>("[data-ba-otp-scope]");
+		if (scope) resetOtpFlow(scope);
+		return;
+	}
+
+	const openDialogTarget =
+		event.target instanceof Element
+			? event.target.closest("[data-ba-open-dialog]")
+			: null;
+	if (openDialogTarget) {
+		const next = openDialogTarget.getAttribute("data-ba-open-dialog");
+		const close = openDialogTarget.getAttribute("data-ba-dialog-close");
+		if (close) closeDialog(close);
+		if (next) {
+			event.preventDefault();
+			openDialog(next);
+			return;
+		}
 	}
 	const closeTarget =
 		event.target instanceof Element
@@ -204,6 +372,11 @@ document.addEventListener("submit", async (event) => {
 			},
 		};
 
+		if (shouldAttachCaptcha(action)) {
+			const header = getCaptchaHeader();
+			if (header) init.headers[header.name] = header.value;
+		}
+
 		if (method === "GET") {
 			const body = formToJSON(form);
 			for (const [key, value] of Object.entries(body)) {
@@ -225,6 +398,7 @@ document.addEventListener("submit", async (event) => {
 		if (!response.ok) {
 			const message = getMessage(payload, errorMessage);
 			await executeEffects(errorEffects, payload, "error", message);
+			resetCaptcha();
 			return;
 		}
 
@@ -245,6 +419,12 @@ document.addEventListener("submit", async (event) => {
 		}
 
 		const message = getMessage(payload, successMessage);
+		if (form.matches("[data-ba-two-factor-enable]")) {
+			applyTwoFactorEnableResult(form, payload);
+		}
+		if (form.matches("[data-ba-otp-request]")) {
+			copyOtpEcho(form);
+		}
 		await executeEffects(successEffects, payload, "success", message);
 		form.dispatchEvent(
 			new CustomEvent("better-auth:form-success", {
@@ -255,9 +435,15 @@ document.addEventListener("submit", async (event) => {
 	} catch (error) {
 		const message = error instanceof Error ? error.message : errorMessage;
 		showToast("error", message);
+		resetCaptcha();
 	} finally {
 		form.removeAttribute("aria-busy");
 		if (submitter && "disabled" in submitter)
 			(submitter as HTMLButtonElement).disabled = false;
 	}
 });
+
+initSessionGate();
+initSettingsSession();
+initSettingsAccounts();
+initSettingsPasskeys();
