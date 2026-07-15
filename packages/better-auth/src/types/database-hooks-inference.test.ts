@@ -47,15 +47,12 @@ describe("databaseHooks auth-config type inference", () => {
 				user: {
 					create: {
 						before: async (user) => {
+							type Expected = string | null | undefined;
 							expectTypeOf(user).not.toBeAny();
 							expectTypeOf(user).toHaveProperty("username");
 							expectTypeOf(user).toHaveProperty("displayUsername");
-							expectTypeOf(user.username).toEqualTypeOf<
-								string | null | undefined
-							>();
-							expectTypeOf(user.displayUsername).toEqualTypeOf<
-								string | null | undefined
-							>();
+							expectTypeOf(user.username).toEqualTypeOf<Expected>();
+							expectTypeOf(user.displayUsername).toEqualTypeOf<Expected>();
 							return { data: user };
 						},
 						after: async (user) => {
