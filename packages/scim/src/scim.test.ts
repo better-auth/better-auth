@@ -928,6 +928,52 @@ describe("SCIM", () => {
 			});
 		});
 
+		it("should create a new user using displayName when name is not provided", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			const user = await auth.api.createSCIMUser({
+				body: {
+					userName: "the-username",
+					displayName: "Juan Perez",
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(user).toMatchObject({
+				displayName: "Juan Perez",
+				name: {
+					formatted: "Juan Perez",
+				},
+				userName: "the-username",
+			});
+		});
+
+		it("should prefer name.formatted over displayName when both are provided", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			const user = await auth.api.createSCIMUser({
+				body: {
+					userName: "the-username",
+					name: { formatted: "Juan Perez" },
+					displayName: "Ignored Display Name",
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(user).toMatchObject({
+				displayName: "Juan Perez",
+				name: {
+					formatted: "Juan Perez",
+				},
+			});
+		});
+
 		it("should create a new user with a primary email", async () => {
 			const { auth, getSCIMToken } = createTestInstance();
 			const scimToken = await getSCIMToken();
@@ -1130,6 +1176,41 @@ describe("SCIM", () => {
 					"urn:ietf:params:scim:schemas:core:2.0:User",
 				]),
 				userName: "other-email@test.com",
+			});
+		});
+
+		it("should update the name via displayName when name is not provided", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			const user = await auth.api.createSCIMUser({
+				body: {
+					userName: "the-username",
+					name: { formatted: "Juan Perez" },
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			const updatedUser = await auth.api.updateSCIMUser({
+				params: {
+					userId: user.id,
+				},
+				body: {
+					userName: "the-username",
+					displayName: "Daniel Lopez",
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(updatedUser).toMatchObject({
+				displayName: "Daniel Lopez",
+				name: {
+					formatted: "Daniel Lopez",
+				},
 			});
 		});
 

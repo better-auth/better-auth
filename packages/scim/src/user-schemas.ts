@@ -10,6 +10,11 @@ export const APIUserSchema = z.object({
 			familyName: z.string().optional(),
 		})
 		.optional(),
+	// Falls back for the underlying name field when no structured `name` is
+	// provided - schema-aware clients see `displayName: readWrite` and will
+	// send it on its own. `name.formatted`/`name.givenName`+`familyName` take
+	// precedence when also present.
+	displayName: z.string().optional(),
 	emails: z
 		.array(
 			z.object({
