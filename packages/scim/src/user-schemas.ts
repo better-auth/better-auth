@@ -78,8 +78,22 @@ export const SCIMUserResourceSchema = {
 			required: false,
 			caseExact: true,
 			mutability: "readOnly",
-			returned: "default",
+			// RFC 7643 §3: the `id` common attribute MUST have a `returned`
+			// characteristic of "always".
+			returned: "always",
 			uniqueness: "server",
+		},
+		{
+			name: "externalId",
+			type: "string",
+			multiValued: false,
+			description:
+				"A String that is an identifier for the resource as defined by the provisioning client.",
+			required: false,
+			caseExact: true,
+			mutability: "readWrite",
+			returned: "default",
+			uniqueness: "none",
 		},
 		{
 			name: "userName",
@@ -101,7 +115,10 @@ export const SCIMUserResourceSchema = {
 				"The name of the User, suitable for display to end-users.  The name SHOULD be the full name of the User being described, if known.",
 			required: false,
 			caseExact: true,
-			mutability: "readOnly",
+			// RFC 7643 §2.2: readWrite is the default mutability when an
+			// attribute has no explicit override, and §4.1.1 defines no
+			// override for displayName.
+			mutability: "readWrite",
 			returned: "default",
 			uniqueness: "none",
 		},
