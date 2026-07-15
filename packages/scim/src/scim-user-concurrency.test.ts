@@ -9,8 +9,9 @@ import { betterAuth } from "better-auth";
 import type { MemoryDB } from "better-auth/adapters/memory";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, it } from "vitest";
-import { scim } from ".";
+import { acquireActiveSCIMUserLink, scim } from ".";
 import type {
+	SCIMConnectionBinding,
 	SCIMGroup,
 	SCIMGroupMember,
 	SCIMIdentityTombstone,
@@ -26,6 +27,7 @@ const headers = { authorization: "Bearer test-scim-token" };
 
 interface UserDeletionData extends MemoryDB {
 	user: User[];
+	scimConnectionBinding: SCIMConnectionBinding[];
 	scimIdentityTombstone: SCIMIdentityTombstone[];
 	scimSubject: SCIMSubject[];
 	scimUser: SCIMUser[];
@@ -41,6 +43,7 @@ interface IncrementOneInput {
 }
 
 type CreateInput = Parameters<DBTransactionAdapter["create"]>[0];
+type FindOneInput = Parameters<DBTransactionAdapter["findOne"]>[0];
 
 function createData(): UserDeletionData {
 	return {
@@ -68,6 +71,13 @@ function createDeferred() {
 
 function findWhereValue(where: readonly Where[], field: string): unknown {
 	return where.find((clause) => clause.field === field)?.value;
+}
+
+function getIdentityRevisions(data: UserDeletionData) {
+	return {
+		subjectRevision: data.scimSubject[0]?.revision,
+		connectionRevision: data.scimConnectionBinding[0]?.decommissionRevision,
+	};
 }
 
 function createAuth(database: BetterAuthOptions["database"]) {
@@ -616,5 +626,195 @@ describe("SCIM User concurrency", () => {
 		expect(data.scimGroup.every((group) => group.updatedAt.getTime() > 0)).toBe(
 			true,
 		);
+	});
+
+	it("aborts active-link acquisition when the subject disappears", async () => {
+		const data = createData();
+		const auth = createAuth(memoryAdapter(data));
+		await auth.api.createSCIMUser({
+			body: {
+				schemas: [USER_SCHEMA],
+				userName: "acquisition-race@example.com",
+				externalId: "acquisition-race",
+			},
+			headers,
+		});
+		const revisionsBeforeRace = getIdentityRevisions(data);
+		const context = await auth.$context;
+		if (!context.adapter.transaction) {
+			throw new Error("Expected native transaction support");
+		}
+
+		await expect(
+			context.adapter.transaction((transaction) => {
+				const incrementOne: DBTransactionAdapter["incrementOne"] = async <Row>(
+					input: IncrementOneInput,
+				) => {
+					if (input.model === "scimSubject") return null;
+					return transaction.incrementOne<Row>(input);
+				};
+				return acquireActiveSCIMUserLink(
+					{
+						connectionId: "workforce",
+						externalId: "acquisition-race",
+					},
+					{ database: { findOne: transaction.findOne, incrementOne } },
+				);
+			}),
+		).rejects.toMatchObject({
+			statusCode: 409,
+			body: expect.objectContaining({ status: "409" }),
+		});
+		expect(getIdentityRevisions(data)).toEqual(revisionsBeforeRace);
+	});
+
+	it("allows concurrent valid acquisitions of the same active User link", async () => {
+		const data = createData();
+		const auth = createAuth(memoryAdapter(data));
+		const resource = await auth.api.createSCIMUser({
+			body: {
+				schemas: [USER_SCHEMA],
+				userName: "concurrent-acquisition@example.com",
+				externalId: "concurrent-acquisition",
+			},
+			headers,
+		});
+		const revisionsBeforeAcquisitions = getIdentityRevisions(data);
+		if (
+			revisionsBeforeAcquisitions.subjectRevision === undefined ||
+			revisionsBeforeAcquisitions.connectionRevision === undefined
+		) {
+			throw new Error("Expected identity revision state");
+		}
+		const context = await auth.$context;
+		const subjectIncrementsReady = createDeferred();
+		let pendingSubjectIncrements = 0;
+		const incrementOne: DBTransactionAdapter["incrementOne"] = async <Row>(
+			input: IncrementOneInput,
+		) => {
+			if (input.model === "scimSubject") {
+				pendingSubjectIncrements += 1;
+				if (pendingSubjectIncrements === 2) subjectIncrementsReady.resolve();
+				else await subjectIncrementsReady.promise;
+			}
+			return context.adapter.incrementOne<Row>(input);
+		};
+		const database = { findOne: context.adapter.findOne, incrementOne };
+
+		const links = await Promise.all([
+			acquireActiveSCIMUserLink(
+				{
+					connectionId: "workforce",
+					externalId: "concurrent-acquisition",
+				},
+				{ database },
+			),
+			acquireActiveSCIMUserLink(
+				{
+					connectionId: "workforce",
+					externalId: "concurrent-acquisition",
+				},
+				{ database },
+			),
+		]);
+
+		const expectedLink = {
+			scimUserId: resource.id,
+			userId: data.scimUser[0]?.userId,
+		};
+		expect(links).toEqual([expectedLink, expectedLink]);
+		expect(getIdentityRevisions(data)).toEqual({
+			subjectRevision: revisionsBeforeAcquisitions.subjectRevision + 2,
+			connectionRevision: revisionsBeforeAcquisitions.connectionRevision + 2,
+		});
+	});
+
+	it("aborts when the source changes after subject acquisition", async () => {
+		const data = createData();
+		const auth = createAuth(memoryAdapter(data));
+		await auth.api.createSCIMUser({
+			body: {
+				schemas: [USER_SCHEMA],
+				userName: "post-acquisition-race@example.com",
+				externalId: "post-acquisition-race",
+			},
+			headers,
+		});
+		const revisionsBeforeRace = getIdentityRevisions(data);
+		const context = await auth.$context;
+		if (!context.adapter.transaction) {
+			throw new Error("Expected native transaction support");
+		}
+
+		await expect(
+			context.adapter.transaction((transaction) => {
+				let subjectAcquired = false;
+				const incrementOne: DBTransactionAdapter["incrementOne"] = async <Row>(
+					input: IncrementOneInput,
+				) => {
+					const updated = await transaction.incrementOne<Row>(input);
+					if (input.model === "scimSubject" && updated) subjectAcquired = true;
+					return updated;
+				};
+				const findOne: DBTransactionAdapter["findOne"] = async <Row>(
+					input: FindOneInput,
+				) => {
+					if (subjectAcquired && input.model === "scimUser") return null;
+					const row = await transaction.findOne<Row>(input);
+					return row;
+				};
+				return acquireActiveSCIMUserLink(
+					{
+						connectionId: "workforce",
+						externalId: "post-acquisition-race",
+					},
+					{ database: { findOne, incrementOne } },
+				);
+			}),
+		).rejects.toMatchObject({
+			statusCode: 409,
+			body: expect.objectContaining({ status: "409" }),
+		});
+		expect(getIdentityRevisions(data)).toEqual(revisionsBeforeRace);
+	});
+
+	it("aborts when connection decommissioning wins the final fence", async () => {
+		const data = createData();
+		const auth = createAuth(memoryAdapter(data));
+		await auth.api.createSCIMUser({
+			body: {
+				schemas: [USER_SCHEMA],
+				userName: "connection-race@example.com",
+				externalId: "connection-race",
+			},
+			headers,
+		});
+		const revisionsBeforeRace = getIdentityRevisions(data);
+		const context = await auth.$context;
+		if (!context.adapter.transaction) {
+			throw new Error("Expected native transaction support");
+		}
+
+		await expect(
+			context.adapter.transaction((transaction) => {
+				const incrementOne: DBTransactionAdapter["incrementOne"] = async <Row>(
+					input: IncrementOneInput,
+				) => {
+					if (input.model === "scimConnectionBinding") return null;
+					return transaction.incrementOne<Row>(input);
+				};
+				return acquireActiveSCIMUserLink(
+					{
+						connectionId: "workforce",
+						externalId: "connection-race",
+					},
+					{ database: { findOne: transaction.findOne, incrementOne } },
+				);
+			}),
+		).rejects.toMatchObject({
+			statusCode: 409,
+			body: expect.objectContaining({ status: "409" }),
+		});
+		expect(getIdentityRevisions(data)).toEqual(revisionsBeforeRace);
 	});
 });

@@ -2,7 +2,12 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
-import type { AuthContext, DBAdapter, DBTransactionAdapter } from "better-auth";
+import type {
+	AuthContext,
+	DBAdapter,
+	DBTransactionAdapter,
+	User,
+} from "better-auth";
 import type {
 	SCIMIdentityResolution,
 	SCIMIdentityResolutionInput,
@@ -10,18 +15,159 @@ import type {
 	SCIMIdentityState,
 	SCIMOptions,
 } from "./configuration";
-import { findDecommissionedSCIMConnectionIds } from "./connection-state";
+import {
+	createSCIMConnectionKey,
+	findDecommissionedSCIMConnectionIds,
+	tryFenceActiveSCIMConnection,
+} from "./connection-state";
 import type {
+	SCIMConnectionBinding,
 	SCIMIdentityTombstone,
 	SCIMSubject,
 	SCIMUser,
 } from "./persistence";
-import { createScopedKey } from "./resource-key";
+import { createSCIMUserExternalIdKey } from "./resource-key";
 import { createSCIMError, runSCIMApplicationCallback } from "./scim-error";
 
 export type SCIMIdentityCoordinator = ReturnType<
 	typeof createSCIMIdentityCoordinator
 >;
+
+/** Exact external directory reference for one connection-owned SCIM User. */
+export interface SCIMExternalUserReference {
+	connectionId: string;
+	externalId: string;
+}
+
+/** Exact Better Auth User link acquired from an active SCIM source. */
+export interface SCIMActiveUserLink {
+	scimUserId: string;
+	userId: string;
+}
+
+/** Transaction-bound database capabilities required to acquire an active link. */
+export interface SCIMActiveUserLinkContext {
+	database: Pick<DBTransactionAdapter, "findOne" | "incrementOne">;
+}
+
+/**
+ * Acquires an active provisioned User link inside the caller's transaction.
+ *
+ * The lookup is scoped to the exact SCIM connection and externalId. It never
+ * falls back to userName, email, or deleted identity tombstones.
+ */
+export async function acquireActiveSCIMUserLink(
+	reference: SCIMExternalUserReference,
+	context: SCIMActiveUserLinkContext,
+): Promise<SCIMActiveUserLink | null> {
+	const externalIdKey = createSCIMUserExternalIdKey(
+		reference.connectionId,
+		reference.externalId,
+	);
+	const source = await context.database.findOne<SCIMUser>({
+		model: "scimUser",
+		where: [
+			{ field: "connectionId", value: reference.connectionId },
+			{ field: "externalIdKey", value: externalIdKey },
+			{ field: "externalId", value: reference.externalId },
+			{ field: "active", value: true },
+		],
+	});
+	if (!source) return null;
+	const binding = await context.database.findOne<SCIMConnectionBinding>({
+		model: "scimConnectionBinding",
+		where: [
+			{
+				field: "connectionKey",
+				value: createSCIMConnectionKey(reference.connectionId),
+			},
+			{ field: "connectionId", value: reference.connectionId },
+			{ field: "decommissionStatus", value: "active" },
+		],
+	});
+	if (
+		!binding ||
+		binding.provisioningDomainId !== source.provisioningDomainId
+	) {
+		return null;
+	}
+	const tombstone = await context.database.findOne<SCIMIdentityTombstone>({
+		model: "scimIdentityTombstone",
+		where: [
+			{ field: "connectionId", value: reference.connectionId },
+			{ field: "externalIdKey", value: externalIdKey },
+			{ field: "externalId", value: reference.externalId },
+		],
+	});
+	if (tombstone) return null;
+	const subject = await context.database.findOne<SCIMSubject>({
+		model: "scimSubject",
+		where: [{ field: "userId", value: source.userId }],
+	});
+	if (!subject) return null;
+	const user = await context.database.findOne<User>({
+		model: "user",
+		where: [{ field: "id", value: source.userId }],
+	});
+	if (!user) return null;
+	const acquiredSubject = await context.database.incrementOne<SCIMSubject>({
+		model: "scimSubject",
+		where: [
+			{ field: "id", value: subject.id },
+			{ field: "userId", value: source.userId },
+		],
+		increment: { revision: 1 },
+		set: { updatedAt: new Date() },
+	});
+	if (!acquiredSubject) concurrentIdentityMutation();
+	const acquiredSource = await context.database.findOne<SCIMUser>({
+		model: "scimUser",
+		where: [
+			{ field: "id", value: source.id },
+			{ field: "connectionId", value: reference.connectionId },
+			{ field: "provisioningDomainId", value: binding.provisioningDomainId },
+			{ field: "userId", value: source.userId },
+			{ field: "connectionUserKey", value: source.connectionUserKey },
+			{ field: "externalIdKey", value: externalIdKey },
+			{ field: "externalId", value: reference.externalId },
+			{ field: "active", value: true },
+		],
+	});
+	if (
+		!acquiredSource ||
+		!acquiredSource.active ||
+		acquiredSource.userId !== acquiredSubject.userId
+	) {
+		concurrentIdentityMutation();
+	}
+	const acquiredUser = await context.database.findOne<User>({
+		model: "user",
+		where: [{ field: "id", value: acquiredSource.userId }],
+	});
+	if (!acquiredUser) concurrentIdentityMutation();
+	const acquiredTombstone =
+		await context.database.findOne<SCIMIdentityTombstone>({
+			model: "scimIdentityTombstone",
+			where: [
+				{ field: "connectionId", value: reference.connectionId },
+				{ field: "externalIdKey", value: externalIdKey },
+				{ field: "externalId", value: reference.externalId },
+			],
+		});
+	if (acquiredTombstone) concurrentIdentityMutation();
+	const acquiredBinding = await tryFenceActiveSCIMConnection(
+		context.database,
+		reference.connectionId,
+	);
+	if (
+		!acquiredBinding ||
+		acquiredBinding.id !== binding.id ||
+		acquiredBinding.provisioningDomainId !== acquiredSource.provisioningDomainId
+	) {
+		concurrentIdentityMutation();
+	}
+	return { scimUserId: source.id, userId: source.userId };
+}
 
 const SCIM_IDENTITY_MUTATION_CONFLICT = Symbol(
 	"scim-identity-mutation-conflict",
@@ -142,11 +288,10 @@ export function createSCIMIdentityCoordinator(options: SCIMOptions) {
 			tombstoneId?: string;
 		}> {
 			if (input.resource.externalId) {
-				const externalIdKey = createScopedKey([
-					"scim-user-external-id",
+				const externalIdKey = createSCIMUserExternalIdKey(
 					input.connectionId,
 					input.resource.externalId,
-				]);
+				);
 				const tombstone = await context.database.findOne<SCIMIdentityTombstone>(
 					{
 						model: "scimIdentityTombstone",

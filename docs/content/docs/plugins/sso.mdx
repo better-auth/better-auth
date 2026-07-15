@@ -725,6 +725,8 @@ The callback receives the canonical Identity namespace and provider subject that
   `resolveUser` selects or rejects a User before authentication. `provisionUser` runs after successful authentication and cannot change which User was authenticated.
 </Callout>
 
+When SCIM provisions Users, resolve them with `acquireActiveSCIMUserLink` from `@better-auth/scim`. The helper matches the verified provider subject exactly to an active SCIM `externalId` inside this transaction, which lets `resolveUser` link the User with `profile: "preserve"` or reject the login. See [Authenticate provisioned users with SSO](/docs/plugins/scim#authenticate-provisioned-users-with-sso) for the complete configuration.
+
 ### User Provisioning
 
 User provisioning allows you to run custom logic when a user signs in through an SSO provider. By default, `provisionUser` only runs for new users (on registration). To run it on every login, set `provisionUserOnEveryLogin` to `true`. This is useful for:

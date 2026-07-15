@@ -1583,12 +1583,18 @@ importers:
       '@better-auth/kysely-adapter':
         specifier: workspace:*
         version: link:../kysely-adapter
+      '@better-auth/sso':
+        specifier: workspace:*
+        version: link:../sso
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../test-utils
       kysely:
         specifier: 0.28.17
         version: 0.28.17
+      oauth2-mock-server:
+        specifier: ^9.0.0
+        version: 9.0.0
       tsdown:
         specifier: 'catalog:'
         version: 0.21.1(@arethetypeswrong/core@0.18.3)(oxc-resolver@11.21.3)(publint@0.3.21)(typescript@5.9.3)

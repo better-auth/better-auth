@@ -24,7 +24,10 @@ import {
 	patchSCIMGroup,
 	replaceSCIMGroup,
 } from "./group-provisioning";
-import { createSCIMIdentityCoordinator } from "./identity";
+import {
+	acquireActiveSCIMUserLink,
+	createSCIMIdentityCoordinator,
+} from "./identity";
 import {
 	createReconcileSCIMProjectionEndpoint,
 	createSCIMProjectionCoordinator,
@@ -772,3 +775,10 @@ export type {
 	SCIMStaticBearerPrincipal,
 	SCIMTransactionContext,
 } from "./configuration";
+
+export type {
+	SCIMActiveUserLink,
+	SCIMActiveUserLinkContext,
+	SCIMExternalUserReference,
+} from "./identity";
+export { acquireActiveSCIMUserLink };

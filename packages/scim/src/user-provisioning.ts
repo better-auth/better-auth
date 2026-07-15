@@ -32,7 +32,11 @@ import type {
 } from "./persistence";
 import type { SCIMProjectionCoordinator } from "./projection";
 import { projectSCIMResourceAttributes } from "./resource-attribute-projection";
-import { createSCIMOrderKey, createScopedKey } from "./resource-key";
+import {
+	createSCIMOrderKey,
+	createSCIMUserExternalIdKey,
+	createScopedKey,
+} from "./resource-key";
 import { SCIM_RESOURCE_SCHEMA_REGISTRY } from "./resource-schema-registry";
 import { runSCIMCreateWithUniquenessCheck } from "./resource-uniqueness";
 import { createSCIMError, SCIMErrorOpenAPISchemas } from "./scim-error";
@@ -91,7 +95,7 @@ function createExternalIdKey(
 	externalId?: string,
 ): string | undefined {
 	if (!externalId) return undefined;
-	return createScopedKey(["scim-user-external-id", connectionId, externalId]);
+	return createSCIMUserExternalIdKey(connectionId, externalId);
 }
 
 function createConnectionUserKey(connectionId: string, userId: string): string {
