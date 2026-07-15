@@ -4,6 +4,7 @@ import { APIError } from "@better-auth/core/error";
 import { mergeSchema } from "../../db/schema";
 import { PACKAGE_VERSION } from "../../version";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
+import { resolveMaskPhoneNumberOption, shouldRevealPhoneNumber } from "./mask";
 import type { RequiredPhoneNumberOptions } from "./routes";
 import {
 	requestPasswordResetPhoneNumber,
@@ -16,6 +17,10 @@ import { schema } from "./schema";
 import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
 
 export type { PhoneNumberOptions, UserWithPhoneNumber };
+export {
+	defaultMaskPhoneNumber,
+	PHONE_NUMBER_REVEAL_PATHS,
+} from "./mask";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -35,10 +40,27 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 		code: "code",
 		createdAt: "createdAt",
 	};
+	const phoneMask = resolveMaskPhoneNumberOption(options?.maskPhoneNumber);
 
 	return {
 		id: "phone-number",
 		version: PACKAGE_VERSION,
+		$maskUserOutput(user, meta) {
+			if (!phoneMask.enabled) {
+				return user;
+			}
+			if (shouldRevealPhoneNumber(meta)) {
+				return user;
+			}
+			const phoneNumber = user.phoneNumber;
+			if (typeof phoneNumber !== "string" || phoneNumber.length === 0) {
+				return user;
+			}
+			return {
+				...user,
+				phoneNumber: phoneMask.mask(phoneNumber),
+			};
+		},
 		init() {
 			return {
 				options: {

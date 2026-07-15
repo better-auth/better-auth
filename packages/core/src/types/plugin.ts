@@ -139,6 +139,24 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 	 */
 	options?: Record<string, any> | undefined;
 	/**
+	 * Mask sensitive fields on user objects returned via `parseUserOutput`.
+	 *
+	 * Called after `returned: false` filtering. Skip with `{ skipMask: true }`
+	 * for server-internal loads; force with `{ forCookie: true }` for cookie cache.
+	 */
+	$maskUserOutput?:
+		| ((
+				user: Record<string, unknown>,
+				meta?:
+					| {
+							skipMask?: boolean | undefined;
+							forCookie?: boolean | undefined;
+							path?: string | undefined;
+					  }
+					| undefined,
+		  ) => Record<string, unknown>)
+		| undefined;
+	/**
 	 * types to be inferred
 	 */
 	$Infer?: Record<string, any> | undefined;

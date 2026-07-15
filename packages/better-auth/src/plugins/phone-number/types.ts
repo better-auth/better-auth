@@ -127,4 +127,24 @@ export interface PhoneNumberOptions {
 	 * @default 3
 	 */
 	allowedAttempts?: number | undefined;
+	/**
+	 * Mask `phoneNumber` in client-facing user payloads and the session cookie cache.
+	 *
+	 * When enabled, the full number is still returned on admin routes and on
+	 * `/sign-in/phone-number` / `/phone-number/verify`. Server-internal session
+	 * loads keep the full value.
+	 *
+	 * @default false
+	 */
+	maskPhoneNumber?:
+		| boolean
+		| {
+				/**
+				 * Custom mask function.
+				 *
+				 * @default keep `+` prefix and last 4 digits
+				 */
+				mask?: (phoneNumber: string) => string;
+		  }
+		| undefined;
 }

@@ -57,12 +57,40 @@ function getFields(
 	return schema;
 }
 
+export type ParseUserOutputMeta = {
+	/**
+	 * Skip all plugin output masks (server-internal session loads).
+	 */
+	skipMask?: boolean | undefined;
+	/**
+	 * Always apply masks (session cookie cache).
+	 */
+	forCookie?: boolean | undefined;
+	/**
+	 * Request path used for reveal allowlisting.
+	 */
+	path?: string | undefined;
+};
+
 export function parseUserOutput<T extends User>(
 	options: BetterAuthOptions,
 	user: T,
+	meta?: ParseUserOutputMeta | undefined,
 ) {
 	const schema = getFields(options, "user", "output");
-	return filterOutputFields(user, schema);
+	let output = filterOutputFields(user, schema) as T;
+	if (meta?.skipMask) {
+		return output;
+	}
+	for (const plugin of options.plugins || []) {
+		if (typeof plugin.$maskUserOutput === "function") {
+			output = plugin.$maskUserOutput(
+				output as Record<string, unknown>,
+				meta,
+			) as T;
+		}
+	}
+	return output;
 }
 
 /**

@@ -471,11 +471,15 @@ export const createInternalAdapter = (
 						createdAt: new Date(s.session.createdAt),
 						updatedAt: new Date(s.session.updatedAt),
 					});
-					const parsedUser = parseUserOutput(ctx.options, {
-						...s.user,
-						createdAt: new Date(s.user.createdAt),
-						updatedAt: new Date(s.user.updatedAt),
-					});
+					const parsedUser = parseUserOutput(
+						ctx.options,
+						{
+							...s.user,
+							createdAt: new Date(s.user.createdAt),
+							updatedAt: new Date(s.user.updatedAt),
+						},
+						{ skipMask: true },
+					);
 					return {
 						session: parsedSession,
 						user: parsedUser,
@@ -503,7 +507,9 @@ export const createInternalAdapter = (
 			const { user, ...session } = result;
 			if (!user) return null;
 			const parsedSession = parseSessionOutput(ctx.options, session);
-			const parsedUser = parseUserOutput(ctx.options, user);
+			const parsedUser = parseUserOutput(ctx.options, user, {
+				skipMask: true,
+			});
 			return {
 				session: parsedSession,
 				user: parsedUser,
