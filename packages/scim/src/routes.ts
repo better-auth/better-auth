@@ -1730,7 +1730,8 @@ const parseSCIMAPIUserFilter = (
 
 	try {
 		const parsed = parseSCIMFilter(filter);
-		if (parsed.attribute === "externalId") {
+		// RFC 7644 §3.4.2.2: attribute names are case-insensitive.
+		if (parsed.attribute.toLowerCase() === "externalid") {
 			return { externalId: parsed.value.replaceAll('"', ""), apiFilters: [] };
 		}
 		return { apiFilters: parseSCIMUserFilter(filter) };

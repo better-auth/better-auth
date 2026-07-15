@@ -459,6 +459,31 @@ describe("SCIM", () => {
 				Resources: [],
 			});
 		});
+
+		it("treats the externalId attribute name as case-insensitive", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			const user = await auth.api.createSCIMUser({
+				body: { userName: "user-a", externalId: "ext-a" },
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+
+			const users = await auth.api.listSCIMUsers({
+				query: {
+					filter: 'ExternalId eq "ext-a"',
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(users).toMatchObject({
+				itemsPerPage: 1,
+				totalResults: 1,
+				Resources: [user],
+			});
+		});
 	});
 
 	describe("GET /scim/v2/Users/:userId", () => {
