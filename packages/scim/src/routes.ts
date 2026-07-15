@@ -1140,13 +1140,17 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 				sortBy: { field: "id", direction: "asc" },
 			});
 
+			const accountsByUserId = new Map(
+				accounts.map((account) => [account.userId, account]),
+			);
+
 			return ctx.json({
 				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
 				totalResults,
 				startIndex,
 				itemsPerPage: users.length,
 				Resources: users.map((user) => {
-					const account = accounts.find((a) => a.userId === user.id);
+					const account = accountsByUserId.get(user.id);
 					return createUserResource(ctx.context.baseURL, user, account);
 				}),
 			});
