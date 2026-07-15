@@ -484,6 +484,51 @@ describe("SCIM", () => {
 				Resources: [user],
 			});
 		});
+
+		it("renders the matched account's externalId when a user has more than one SCIM account for this provider", async () => {
+			const { auth, authClient, getSCIMToken } = createTestInstance({
+				linkExistingUsers: true,
+			});
+			const scimToken = await getSCIMToken();
+
+			await authClient.signUp.email({
+				email: "shared@email.com",
+				password: "the password",
+				name: "Shared User",
+			});
+
+			await auth.api.createSCIMUser({
+				body: {
+					userName: "user-1",
+					externalId: "ext-a",
+					emails: [{ value: "shared@email.com" }],
+				},
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+			await auth.api.createSCIMUser({
+				body: {
+					userName: "user-2",
+					externalId: "ext-b",
+					emails: [{ value: "shared@email.com" }],
+				},
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+
+			const users = await auth.api.listSCIMUsers({
+				query: {
+					filter: 'externalId eq "ext-b"',
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(users).toMatchObject({
+				itemsPerPage: 1,
+				totalResults: 1,
+				Resources: [{ externalId: "ext-b" }],
+			});
+		});
 	});
 
 	describe("GET /scim/v2/Users/:userId", () => {

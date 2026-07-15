@@ -1110,7 +1110,11 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 				startIndex: 1,
 				itemsPerPage: users.length,
 				Resources: users.map((user) => {
-					const account = accounts.find((a) => a.userId === user.id);
+					// Use `scopedAccounts` (not `accounts`) so that if a user ever has
+					// more than one SCIM account row for this provider, an `externalId`
+					// filter renders the matched account's externalId - not just
+					// whichever of the user's accounts happens to be found first.
+					const account = scopedAccounts.find((a) => a.userId === user.id);
 					return createUserResource(ctx.context.baseURL, user, account);
 				}),
 			});
