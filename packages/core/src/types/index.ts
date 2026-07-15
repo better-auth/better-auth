@@ -52,4 +52,8 @@ export type {
 	ClientFetchOption,
 	ClientStore,
 } from "./plugin-client";
+export type {
+	ProviderUserProfile,
+	ProviderUserResolution,
+} from "./provider-user";
 export type { SecretConfig } from "./secret";

@@ -1,10 +1,13 @@
 import type {
 	AuthenticatedProviderAccountBinding,
 	GenericEndpointContext,
+	ProviderUserProfile,
+	ProviderUserResolution,
 	UserProvisioningSource,
 } from "@better-auth/core";
 import type { IdentityKey } from "@better-auth/core/db";
 import { isDevelopment } from "@better-auth/core/env";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
 import { parseAdditionalUserInputFromProviderProfile } from "../db";
@@ -14,13 +17,13 @@ import { assertValidUserInfo } from "../utils/validate-user-info";
 import { OAUTH_CALLBACK_ERROR_CODES, redirectOnError } from "./errors";
 import { setTokenUtil } from "./utils";
 
-// TODO(#9124): v2 widens `User.email` to nullable; every `userInfo.email.toLowerCase()`
+// TODO(#9124): v2 widens `User.email` to nullable; every `providerUser.email.toLowerCase()`
 // call below needs null-safety before account recognition can be fully
 // independent from email-based implicit linking.
 export async function authenticateProviderUser(
 	c: GenericEndpointContext,
 	opts: {
-		userInfo: Omit<User, "createdAt" | "updatedAt">;
+		providerUser: ProviderUserProfile;
 		identity: IdentityKey;
 		account: Pick<
 			Account,
@@ -39,16 +42,30 @@ export async function authenticateProviderUser(
 		isTrustedProvider?: boolean | undefined;
 		trustProviderByName?: boolean | undefined;
 		source?: UserProvisioningSource | undefined;
+		resolution?: ProviderUserResolution | undefined;
 	},
 ) {
 	const {
-		userInfo,
+		providerUser,
 		identity,
 		account,
 		callbackURL,
 		disableSignUp,
 		overrideUserInfo,
 	} = opts;
+	const resolution = opts.resolution ?? { action: "default" };
+	if (resolution.action === "reject") {
+		throw new APIError("FORBIDDEN", {
+			code: resolution.code,
+			...(resolution.message === undefined
+				? {}
+				: { message: resolution.message }),
+		});
+	}
+	const shouldApplyProviderProfile =
+		resolution.action === "link"
+			? resolution.profile === "provider"
+			: overrideUserInfo === true;
 	const source = opts.source ?? {
 		method: "oauth",
 		oauth: { providerId: account.providerId },
@@ -75,6 +92,15 @@ export async function authenticateProviderUser(
 	}
 	const dbUser = await (async () => {
 		if (identityOwner?.kind === "owned") {
+			if (
+				resolution.action === "link" &&
+				identityOwner.user.id !== resolution.userId
+			) {
+				throw new APIError("CONFLICT", {
+					code: "identity_already_linked",
+					message: "Identity is already linked to another user",
+				});
+			}
 			const linkedAccount = await c.context.internalAdapter.findAccountByKey({
 				identityId: identityOwner.identity.id,
 				providerInstanceId: account.providerInstanceId,
@@ -84,11 +110,28 @@ export async function authenticateProviderUser(
 				identity: identityOwner.identity,
 				linkedAccount,
 				matchedByIdentity: true,
+				selectedByResolution: resolution.action === "link",
+			};
+		}
+		const selectedUser =
+			resolution.action === "link"
+				? await c.context.internalAdapter.findUserById(resolution.userId)
+				: null;
+		if (resolution.action === "link" && !selectedUser) {
+			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
+		}
+		if (selectedUser) {
+			return {
+				user: selectedUser,
+				identity: null,
+				linkedAccount: null,
+				matchedByIdentity: false,
+				selectedByResolution: true,
 			};
 		}
 
 		const emailMatch = await c.context.internalAdapter.findUserByEmail(
-			userInfo.email.toLowerCase(),
+			providerUser.email.toLowerCase(),
 			{ includeAccounts: false },
 		);
 		if (!emailMatch) return null;
@@ -97,8 +140,12 @@ export async function authenticateProviderUser(
 			identity: null,
 			linkedAccount: null,
 			matchedByIdentity: false,
+			selectedByResolution: false,
 		};
 	})().catch((e) => {
+		if (isAPIError(e)) {
+			throw e;
+		}
 		c.context.logger.error(
 			"Better auth was unable to query your database.\nError: ",
 			e,
@@ -119,8 +166,9 @@ export async function authenticateProviderUser(
 				(opts.trustProviderByName !== false &&
 					c.context.trustedProviders.includes(account.providerId));
 			const implicitLinkingRejected =
+				!dbUser.selectedByResolution &&
 				!dbUser.matchedByIdentity &&
-				((!isTrustedProvider && !userInfo.emailVerified) ||
+				((!isTrustedProvider && !providerUser.emailVerified) ||
 					!dbUser.user.emailVerified ||
 					accountLinking?.enabled === false ||
 					accountLinking?.disableImplicitLinking === true);
@@ -136,12 +184,11 @@ export async function authenticateProviderUser(
 				};
 			}
 			try {
-				const { id: _providerAccountId, ...providerUserInfo } = userInfo;
 				await assertValidUserInfo(c, {
 					user: {
-						...providerUserInfo,
+						...providerUser,
 						id: dbUser.user.id,
-						email: userInfo.email.toLowerCase(),
+						email: providerUser.email.toLowerCase(),
 					},
 					source: { ...source, action: "link-account" },
 				});
@@ -175,15 +222,17 @@ export async function authenticateProviderUser(
 					data: null,
 				};
 			}
-			user =
-				(await applyUpdateUserInfoOnLink(c, dbUser.user.id, userInfo)) ?? user;
+			if (resolution.action === "default") {
+				user =
+					(await applyUpdateUserInfoOnLink(c, dbUser.user.id, providerUser)) ??
+					user;
+			}
 		} else {
-			const { id: _providerAccountId, ...providerUserInfo } = userInfo;
 			await assertValidUserInfo(c, {
 				user: {
-					...providerUserInfo,
+					...providerUser,
 					id: dbUser.user.id,
-					email: userInfo.email.toLowerCase(),
+					email: providerUser.email.toLowerCase(),
 				},
 				source: { ...source, action: "sign-in" },
 			});
@@ -227,41 +276,42 @@ export async function authenticateProviderUser(
 			}
 
 			if (
-				userInfo.emailVerified &&
+				resolution.action === "default" &&
+				providerUser.emailVerified &&
 				!dbUser.user.emailVerified &&
-				userInfo.email.toLowerCase() === dbUser.user.email
+				providerUser.email.toLowerCase() === dbUser.user.email
 			) {
 				await c.context.internalAdapter.updateUser(dbUser.user.id, {
 					emailVerified: true,
 				});
 			}
 		}
-		if (overrideUserInfo) {
+		if (shouldApplyProviderProfile) {
 			const {
-				id: _id,
 				email: _email,
 				emailVerified: _emailVerified,
 				name,
 				image,
 				...providerProfile
-			} = userInfo;
+			} = providerUser;
 			const additionalUserFields = parseAdditionalUserInputFromProviderProfile(
 				c.context.options,
 				providerProfile,
 				"update",
 			);
-			// update user info from the provider if overrideUserInfo is true
 			const updatedUser = await c.context.internalAdapter.updateUser(
 				dbUser.user.id,
 				{
 					name,
 					image,
 					...additionalUserFields,
-					email: userInfo.email.toLowerCase(),
+					email: providerUser.email.toLowerCase(),
 					emailVerified:
-						userInfo.email.toLowerCase() === dbUser.user.email
-							? dbUser.user.emailVerified || userInfo.emailVerified
-							: userInfo.emailVerified,
+						resolution.action === "link"
+							? providerUser.emailVerified
+							: providerUser.email.toLowerCase() === dbUser.user.email
+								? dbUser.user.emailVerified || providerUser.emailVerified
+								: providerUser.emailVerified,
 				},
 			);
 			if (updatedUser == null) {
@@ -281,13 +331,12 @@ export async function authenticateProviderUser(
 		}
 		try {
 			const {
-				id: _id,
 				email: _email,
 				emailVerified: _emailVerified,
 				name,
 				image,
 				...providerProfile
-			} = userInfo;
+			} = providerUser;
 			const additionalUserFields = parseAdditionalUserInputFromProviderProfile(
 				c.context.options,
 				providerProfile,
@@ -308,8 +357,8 @@ export async function authenticateProviderUser(
 					name,
 					image,
 					...additionalUserFields,
-					email: userInfo.email.toLowerCase(),
-					emailVerified: userInfo.emailVerified,
+					email: providerUser.email.toLowerCase(),
+					emailVerified: providerUser.emailVerified,
 				},
 				{
 					source,

@@ -3315,6 +3315,416 @@ describe("SAML SSO", async () => {
 	});
 });
 
+function createUserResolutionSAMLProvider(providerId: string) {
+	return {
+		domain: "example.com",
+		providerId,
+		samlConfig: {
+			issuer: "http://localhost:8081",
+			entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+			cert: certificate,
+			wantAssertionsSigned: false,
+			signatureAlgorithm: "sha256",
+			digestAlgorithm: "sha256",
+			idpMetadata: { metadata: idpMetadata },
+			spMetadata: { metadata: spMetadata },
+			identifierFormat:
+				"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+		},
+	};
+}
+
+async function fetchMockSAMLResponse(signInUrl: string): Promise<string> {
+	const response = await fetch(signInUrl);
+	const body: unknown = await response.json();
+	if (
+		!body ||
+		typeof body !== "object" ||
+		!("samlResponse" in body) ||
+		typeof body.samlResponse !== "string"
+	) {
+		throw new Error("Mock SAML provider did not return a SAML response");
+	}
+	return body.samlResponse;
+}
+
+async function completeUserResolutionSAMLSignIn(
+	handler: (request: Request) => Promise<Response>,
+	providerId: string,
+): Promise<Response> {
+	const signInResponse = await handler(
+		new Request("http://localhost:3000/api/auth/sign-in/sso", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				origin: "http://localhost:3000",
+			},
+			body: JSON.stringify({
+				providerId,
+				callbackURL: "http://localhost:3000/employee",
+			}),
+		}),
+	);
+	const signInBody: unknown = await signInResponse.json();
+	if (
+		!signInBody ||
+		typeof signInBody !== "object" ||
+		!("url" in signInBody) ||
+		typeof signInBody.url !== "string"
+	) {
+		throw new Error("SAML sign-in did not return an identity provider URL");
+	}
+	const signInUrl = new URL(signInBody.url);
+	return handler(
+		new Request(
+			`http://localhost:3000/api/auth/sso/saml2/sp/acs/${providerId}`,
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					cookie: signInResponse.headers.get("set-cookie") ?? "",
+				},
+				body: new URLSearchParams({
+					SAMLResponse: await fetchMockSAMLResponse(signInBody.url),
+					RelayState: signInUrl.searchParams.get("RelayState") ?? "",
+				}),
+			},
+		),
+	);
+}
+
+describe("SAML SSO user resolution", () => {
+	it("links an exact local user without treating the provider subject as its user ID", async () => {
+		const providerId = "saml-user-resolution";
+		const providerInstanceId = `sso:config:${providerId}`;
+		const identityIssuer = `${providerInstanceId}:saml`;
+		const localUserEmail = "test@test.com";
+		let resolutionCount = 0;
+		const { auth, db } = await getTestInstance({
+			plugins: [
+				sso({
+					disableImplicitSignUp: true,
+					defaultSSO: [createUserResolutionSAMLProvider(providerId)],
+					saml: { enableInResponseToValidation: false },
+					resolveUser: async (input, context) => {
+						resolutionCount += 1;
+						expect(input).toMatchObject({
+							protocol: "saml",
+							providerId,
+							providerInstanceId,
+							identity: {
+								issuer: identityIssuer,
+								providerAccountId: "test@email.com",
+							},
+							providerUser: {
+								email: "test@email.com",
+							},
+							providerClaims: {
+								email: "test@email.com",
+							},
+						});
+						expect(input.providerUser).not.toHaveProperty("id");
+						const user = await context.database.findOne<{ id: string }>({
+							model: "user",
+							where: [{ field: "email", value: localUserEmail }],
+						});
+						return user
+							? { action: "link", userId: user.id, profile: "preserve" }
+							: { action: "reject", code: "SCIM_USER_NOT_PROVISIONED" };
+					},
+				}),
+			],
+		});
+		const localUser = await db.findOne<{
+			id: string;
+			name: string;
+			email: string;
+			emailVerified: boolean;
+			image: string | null;
+		}>({
+			model: "user",
+			where: [{ field: "email", value: localUserEmail }],
+		});
+		if (!localUser) throw new Error("Local test user was not created");
+		const sessionsBeforeSignIn = await db.findMany({
+			model: "session",
+			where: [{ field: "userId", value: localUser.id }],
+		});
+
+		const callback = await completeUserResolutionSAMLSignIn(
+			auth.handler,
+			providerId,
+		);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toBe(
+			"http://localhost:3000/employee",
+		);
+		const sessionToken = parseSetCookieHeader(
+			callback.headers.get("set-cookie") ?? "",
+		).get("better-auth.session_token")?.value;
+		if (!sessionToken)
+			throw new Error("SAML callback did not create a session");
+		const sessionResponse = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				headers: {
+					cookie: `better-auth.session_token=${sessionToken}`,
+				},
+			}),
+		);
+		expect(sessionResponse.status).toBe(200);
+		expect(await sessionResponse.json()).toEqual({
+			session: expect.objectContaining({ userId: localUser.id }),
+			user: {
+				createdAt: expect.any(String),
+				email: localUser.email,
+				emailVerified: localUser.emailVerified,
+				id: localUser.id,
+				image: localUser.image,
+				name: localUser.name,
+				updatedAt: expect.any(String),
+			},
+		});
+		expect(resolutionCount).toBe(1);
+		expect(await db.findMany({ model: "user", where: [] })).toHaveLength(1);
+		const identities = await db.findMany<{ id: string; userId: string }>({
+			model: "identity",
+			where: [
+				{ field: "issuer", value: identityIssuer },
+				{ field: "providerAccountId", value: "test@email.com" },
+			],
+		});
+		const linkedIdentity = identities[0];
+		if (!linkedIdentity) throw new Error("SAML identity was not linked");
+		expect(identities).toEqual([
+			expect.objectContaining({ userId: localUser.id }),
+		]);
+		expect(
+			await db.findMany({
+				model: "account",
+				where: [
+					{ field: "identityId", value: linkedIdentity.id },
+					{ field: "providerInstanceId", value: providerInstanceId },
+				],
+			}),
+		).toHaveLength(1);
+		expect(
+			await db.findMany({
+				model: "session",
+				where: [{ field: "userId", value: localUser.id }],
+			}),
+		).toHaveLength(sessionsBeforeSignIn.length + 1);
+	});
+
+	it("gates a returning identity and rejects it without authentication writes", async () => {
+		const providerId = "saml-returning-user-resolution";
+		const providerInstanceId = `sso:config:${providerId}`;
+		const localUserEmail = "test@test.com";
+		let isActive = true;
+		let resolutionCount = 0;
+		const { auth, db } = await getTestInstance({
+			plugins: [
+				sso({
+					disableImplicitSignUp: true,
+					defaultSSO: [createUserResolutionSAMLProvider(providerId)],
+					saml: { enableInResponseToValidation: false },
+					resolveUser: async (_input, context) => {
+						resolutionCount += 1;
+						const user = await context.database.findOne<{ id: string }>({
+							model: "user",
+							where: [{ field: "email", value: localUserEmail }],
+						});
+						if (!user) {
+							return {
+								action: "reject",
+								code: "SCIM_USER_NOT_PROVISIONED",
+							};
+						}
+						if (!isActive) {
+							await context.database.update({
+								model: "user",
+								where: [{ field: "id", value: user.id }],
+								update: { name: "This resolver update must roll back" },
+							});
+							return {
+								action: "reject",
+								code: "SCIM_USER_INACTIVE",
+								message: "The provisioned user is inactive",
+							};
+						}
+						return {
+							action: "link",
+							userId: user.id,
+							profile: "preserve",
+						};
+					},
+				}),
+			],
+		});
+
+		const completeSignIn = async () => {
+			return completeUserResolutionSAMLSignIn(auth.handler, providerId);
+		};
+
+		const firstCallback = await completeSignIn();
+		expect(firstCallback.headers.get("location")).toBe(
+			"http://localhost:3000/employee",
+		);
+		const recordsBeforeRejection = {
+			accounts: await db.findMany({ model: "account", where: [] }),
+			identities: await db.findMany({ model: "identity", where: [] }),
+			sessions: await db.findMany({ model: "session", where: [] }),
+			users: await db.findMany({ model: "user", where: [] }),
+		};
+
+		isActive = false;
+		const rejectedCallback = await completeSignIn();
+		const rejectionLocation = new URL(
+			rejectedCallback.headers.get("location") ?? "http://localhost:3000",
+		);
+		expect(rejectionLocation.searchParams.get("error")).toBe(
+			"SCIM_USER_INACTIVE",
+		);
+		expect(rejectionLocation.searchParams.get("error_description")).toBe(
+			"The provisioned user is inactive",
+		);
+		expect(resolutionCount).toBe(2);
+		expect(
+			await db.findMany({
+				model: "account",
+				where: [{ field: "providerInstanceId", value: providerInstanceId }],
+			}),
+		).toHaveLength(1);
+		expect(await db.findMany({ model: "account", where: [] })).toEqual(
+			recordsBeforeRejection.accounts,
+		);
+		expect(await db.findMany({ model: "identity", where: [] })).toEqual(
+			recordsBeforeRejection.identities,
+		);
+		expect(await db.findMany({ model: "session", where: [] })).toEqual(
+			recordsBeforeRejection.sessions,
+		);
+		expect(await db.findMany({ model: "user", where: [] })).toEqual(
+			recordsBeforeRejection.users,
+		);
+	});
+
+	it("rolls back resolver writes when authentication returns a failure", async () => {
+		const providerId = "saml-signup-disabled-user-resolution";
+		let existingUserId = "";
+		const { auth, db } = await getTestInstance({
+			plugins: [
+				sso({
+					disableImplicitSignUp: true,
+					defaultSSO: [createUserResolutionSAMLProvider(providerId)],
+					saml: { enableInResponseToValidation: false },
+					resolveUser: async (_input, context) => {
+						await context.database.update({
+							model: "user",
+							where: [{ field: "id", value: existingUserId }],
+							update: { name: "This resolver update must roll back" },
+						});
+						return { action: "default" };
+					},
+				}),
+			],
+		});
+		const existingUser = await db.findOne<{ id: string; name: string }>({
+			model: "user",
+			where: [{ field: "email", value: "test@test.com" }],
+		});
+		if (!existingUser) throw new Error("Local test user was not created");
+		existingUserId = existingUser.id;
+		const recordCountsBefore = {
+			users: (await db.findMany({ model: "user", where: [] })).length,
+			identities: (await db.findMany({ model: "identity", where: [] })).length,
+			accounts: (await db.findMany({ model: "account", where: [] })).length,
+			sessions: (await db.findMany({ model: "session", where: [] })).length,
+		};
+
+		const callback = await completeUserResolutionSAMLSignIn(
+			auth.handler,
+			providerId,
+		);
+
+		expect(callback.status).toBe(302);
+		const errorRedirect = new URL(
+			callback.headers.get("location") ?? "http://localhost:3000",
+		);
+		expect(errorRedirect.searchParams.get("error")).toBe("signup_disabled");
+		expect({
+			users: (await db.findMany({ model: "user", where: [] })).length,
+			identities: (await db.findMany({ model: "identity", where: [] })).length,
+			accounts: (await db.findMany({ model: "account", where: [] })).length,
+			sessions: (await db.findMany({ model: "session", where: [] })).length,
+		}).toEqual(recordCountsBefore);
+		expect(
+			await db.findOne<{ name: string }>({
+				model: "user",
+				where: [{ field: "id", value: existingUser.id }],
+			}),
+		).toMatchObject({ name: existingUser.name });
+	});
+
+	it.each([
+		{
+			name: "throws",
+			resolveUser: async () => {
+				throw new Error("sensitive resolver failure");
+			},
+		},
+		{
+			name: "returns a malformed result",
+			resolveUser: async () => ({}) as never,
+		},
+	])("uses a stable failure when the resolver $name", async ({
+		resolveUser,
+	}) => {
+		const providerId = `saml-failed-user-resolution-${randomUUID()}`;
+		const { auth, db } = await getTestInstance({
+			plugins: [
+				sso({
+					defaultSSO: [createUserResolutionSAMLProvider(providerId)],
+					saml: { enableInResponseToValidation: false },
+					resolveUser,
+				}),
+			],
+		});
+		const recordsBeforeCallback = {
+			accounts: await db.findMany({ model: "account", where: [] }),
+			identities: await db.findMany({ model: "identity", where: [] }),
+			sessions: await db.findMany({ model: "session", where: [] }),
+			users: await db.findMany({ model: "user", where: [] }),
+		};
+
+		const callback = await completeUserResolutionSAMLSignIn(
+			auth.handler,
+			providerId,
+		);
+		const failureLocation = new URL(
+			callback.headers.get("location") ?? "http://localhost:3000",
+		);
+		expect(failureLocation.searchParams.get("error")).toBe(
+			"SSO_USER_RESOLUTION_FAILED",
+		);
+		expect(failureLocation.searchParams.get("error_description")).toBe(
+			"Unable to resolve the SSO user",
+		);
+		expect(await db.findMany({ model: "account", where: [] })).toEqual(
+			recordsBeforeCallback.accounts,
+		);
+		expect(await db.findMany({ model: "identity", where: [] })).toEqual(
+			recordsBeforeCallback.identities,
+		);
+		expect(await db.findMany({ model: "session", where: [] })).toEqual(
+			recordsBeforeCallback.sessions,
+		);
+		expect(await db.findMany({ model: "user", where: [] })).toEqual(
+			recordsBeforeCallback.users,
+		);
+	});
+});
+
 describe("SAML SSO with custom fields", () => {
 	const ssoOptions = {
 		modelName: "sso_provider",

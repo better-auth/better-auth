@@ -1,4 +1,7 @@
-import { runWithTransaction } from "@better-auth/core/context";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type { User } from "better-auth";
 import { APIError } from "better-auth/api";
@@ -35,6 +38,12 @@ import type {
 	SAMLSessionRecord,
 	SSOOptions,
 } from "../types";
+import {
+	assertSSOUserResolutionNativeTransactionSupport,
+	getFailedSSOAuthenticationResult,
+	requireSuccessfulSSOAuthentication,
+	resolveSSOUser,
+} from "../user-resolution";
 import {
 	parseProviderEmailVerified,
 	safeJsonParse,
@@ -538,6 +547,16 @@ export async function processSAMLResponse(
 		"domainVerified" in provider &&
 		!!(provider as { domainVerified?: boolean }).domainVerified &&
 		validateEmailDomain(userInfo.email as string, provider.domain);
+	const { id: _providerSubject, ...providerUserAttributes } = userInfo;
+	const providerUser = {
+		...providerUserAttributes,
+		email: userInfo.email as string,
+		name: (userInfo.name || userInfo.email) as string,
+	};
+	const identity = {
+		issuer: resolveSSOIdentityIssuer(provider, "saml"),
+		providerAccountId: userInfo.id as string,
+	};
 
 	// TODO: split callbackUrl into separate ACS URL and post-auth redirect
 	// fields. Currently callbackUrl serves both purposes, which means
@@ -551,19 +570,29 @@ export async function processSAMLResponse(
 
 	let result: Awaited<ReturnType<typeof authenticateProviderUser>>;
 	try {
+		if (options?.resolveUser) {
+			assertSSOUserResolutionNativeTransactionSupport(ctx.context.adapter);
+		}
 		result = await runWithTransaction(ctx.context.adapter, async () => {
 			await lockSSOProviderForAccountLink(ctx, provider);
-			return authenticateProviderUser(ctx, {
-				userInfo: {
-					email: userInfo.email as string,
-					name: (userInfo.name || userInfo.email) as string,
-					id: userInfo.id as string,
-					emailVerified: userInfo.emailVerified,
-				},
-				identity: {
-					issuer: resolveSSOIdentityIssuer(provider, "saml"),
-					providerAccountId: userInfo.id as string,
-				},
+			const resolution = options?.resolveUser
+				? await resolveSSOUser(
+						options.resolveUser,
+						{
+							protocol: "saml",
+							providerId: provider.providerId,
+							providerInstanceId: provider.instance.providerInstanceId,
+							identity,
+							providerUser,
+							providerClaims: attributes,
+						},
+						await getCurrentAdapter(ctx.context.adapter),
+						ctx.context.logger,
+					)
+				: undefined;
+			const authentication = await authenticateProviderUser(ctx, {
+				providerUser,
+				identity,
 				account: {
 					providerId: provider.providerId,
 					providerInstanceId: provider.instance.providerInstanceId,
@@ -578,18 +607,26 @@ export async function processSAMLResponse(
 				},
 				isTrustedProvider,
 				trustProviderByName: false,
+				resolution,
 			});
+			return options?.resolveUser
+				? requireSuccessfulSSOAuthentication(authentication)
+				: authentication;
 		});
 	} catch (e) {
-		if (isAPIError(e) && e.body?.code) {
+		const failedAuthentication = getFailedSSOAuthenticationResult(e);
+		if (failedAuthentication) {
+			result = failedAuthentication;
+		} else if (isAPIError(e) && e.body?.code) {
 			throw ctx.redirect(
 				buildSAMLRedirectUrl(errorUrl, {
 					error: e.body.code,
 					...(e.body.message ? { error_description: e.body.message } : {}),
 				}),
 			);
+		} else {
+			throw e;
 		}
-		throw e;
 	}
 
 	if (result.error) {

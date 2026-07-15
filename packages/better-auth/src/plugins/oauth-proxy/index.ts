@@ -1,6 +1,7 @@
 import type {
 	BetterAuthPlugin,
 	GenericEndpointContext,
+	ProviderUserProfile,
 	SecretConfig,
 } from "@better-auth/core";
 import {
@@ -25,7 +26,7 @@ import { authenticateProviderUser } from "../../oauth2/provider-user";
 import { getOAuthCallbackPath } from "../../oauth2/utils";
 import type { StateData } from "../../state";
 import { parseGenericState } from "../../state";
-import type { Account, User } from "../../types";
+import type { Account } from "../../types";
 import { isAPIError } from "../../utils/is-api-error";
 import { getOrigin } from "../../utils/url";
 import { PACKAGE_VERSION } from "../../version";
@@ -104,7 +105,7 @@ type OAuthProxyStatePackage = {
  * @internal
  */
 type PassthroughPayload = {
-	userInfo: Omit<User, "createdAt" | "updatedAt">;
+	providerUser: ProviderUserProfile;
 	identity: IdentityKey;
 	account: Pick<
 		Account,
@@ -251,7 +252,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 					// Validate required payload fields
 					if (
 						typeof payload.timestamp !== "number" ||
-						!payload.userInfo ||
+						!payload.providerUser ||
 						!payload.identity ||
 						typeof payload.identity.issuer !== "string" ||
 						typeof payload.identity.providerAccountId !== "string" ||
@@ -293,7 +294,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 					let result: Awaited<ReturnType<typeof authenticateProviderUser>>;
 					try {
 						result = await authenticateProviderUser(ctx, {
-							userInfo: payload.userInfo,
+							providerUser: payload.providerUser,
 							identity: payload.identity,
 							account: payload.account,
 							callbackURL: payload.callbackURL,
@@ -540,8 +541,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							stateData.callbackURL;
 
 						const payload: PassthroughPayload = {
-							userInfo: {
-								id: identityKey.providerAccountId,
+							providerUser: {
 								email: userInfo.email,
 								name: userInfo.name || "",
 								image: userInfo.image,

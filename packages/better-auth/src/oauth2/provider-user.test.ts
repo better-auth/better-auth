@@ -1,5 +1,11 @@
 import { DatabaseSync } from "node:sqlite";
 import type {
+	AuthContext,
+	GenericEndpointContext,
+	ProviderUserProfile,
+	ProviderUserResolution,
+} from "@better-auth/core";
+import type {
 	DiscordProfile,
 	GoogleProfile,
 } from "@better-auth/core/social-providers";
@@ -26,6 +32,7 @@ import { getMigrations } from "../db/get-migration";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { User } from "../types";
 import { DEFAULT_SECRET } from "../utils/constants";
+import { authenticateProviderUser } from "./provider-user";
 
 let mockEmail = "";
 let mockEmailVerified = true;
@@ -41,6 +48,321 @@ afterEach(() => {
 });
 
 afterAll(() => server.close());
+
+describe("authenticateProviderUser - explicit user resolution", () => {
+	const providerUser = {
+		email: "provider@example.com",
+		emailVerified: false,
+		name: "Provider User",
+		image: null,
+	} satisfies ProviderUserProfile;
+
+	async function createLocalUser(
+		context: Promise<unknown>,
+		user: Pick<User, "id" | "email" | "name"> &
+			Partial<Pick<User, "emailVerified" | "image">>,
+	) {
+		const authContext = (await context) as AuthContext;
+		await authContext.adapter.create({
+			model: "user",
+			forceAllowId: true,
+			data: {
+				...user,
+				emailVerified: user.emailVerified ?? true,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		return authContext;
+	}
+
+	async function authenticate(
+		context: Promise<unknown>,
+		options: {
+			providerAccountId?: string | undefined;
+			providerUser?: ProviderUserProfile | undefined;
+			resolution: ProviderUserResolution;
+			disableSignUp?: boolean | undefined;
+			overrideUserInfo?: boolean | undefined;
+		},
+	) {
+		const authContext = (await context) as AuthContext;
+		return authenticateProviderUser(
+			{ context: authContext } as unknown as GenericEndpointContext,
+			{
+				providerUser: options.providerUser ?? providerUser,
+				identity: {
+					issuer: "https://idp.example.com",
+					providerAccountId: options.providerAccountId ?? "provider-subject",
+				},
+				account: {
+					providerId: "enterprise-sso",
+					providerInstanceId: "enterprise-connection",
+				},
+				resolution: options.resolution,
+				disableSignUp: options.disableSignUp,
+				overrideUserInfo: options.overrideUserInfo,
+			},
+		);
+	}
+
+	it("links the provider identity to the selected user when sign-up and implicit linking are disabled", async () => {
+		const { auth } = await getTestInstance(
+			{
+				account: {
+					accountLinking: {
+						enabled: false,
+						disableImplicitLinking: true,
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const context = await createLocalUser(auth.$context, {
+			id: "selected-user",
+			email: "local@example.com",
+			name: "Local User",
+		});
+
+		const result = await authenticate(auth.$context, {
+			resolution: {
+				action: "link",
+				userId: "selected-user",
+				profile: "preserve",
+			},
+			disableSignUp: true,
+		});
+
+		expect(result).toMatchObject({
+			error: null,
+			isRegister: false,
+			data: { user: { id: "selected-user", email: "local@example.com" } },
+		});
+		const links =
+			await context.internalAdapter.listUserAccounts("selected-user");
+		expect(links).toEqual([
+			expect.objectContaining({
+				identity: expect.objectContaining({
+					issuer: "https://idp.example.com",
+					providerAccountId: "provider-subject",
+				}),
+				account: expect.objectContaining({
+					providerInstanceId: "enterprise-connection",
+				}),
+			}),
+		]);
+	});
+
+	it("rejects before querying or writing authentication records", async () => {
+		const { auth } = await getTestInstance(undefined, {
+			disableTestUser: true,
+		});
+		const context = await auth.$context;
+		const identityLookup = vi.spyOn(
+			context.internalAdapter,
+			"findUserByIdentityKey",
+		);
+		const accountLink = vi.spyOn(context.internalAdapter, "linkAccount");
+		const sessionCreation = vi.spyOn(context.internalAdapter, "createSession");
+
+		await expect(
+			authenticate(auth.$context, {
+				resolution: {
+					action: "reject",
+					code: "scim_subject_inactive",
+					message: "The provisioned user is inactive",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				code: "scim_subject_inactive",
+				message: "The provisioned user is inactive",
+			},
+		});
+		expect(identityLookup).not.toHaveBeenCalled();
+		expect(accountLink).not.toHaveBeenCalled();
+		expect(sessionCreation).not.toHaveBeenCalled();
+	});
+
+	it("rejects a missing selected user with USER_NOT_FOUND", async () => {
+		const { auth } = await getTestInstance(undefined, {
+			disableTestUser: true,
+		});
+		const context = await auth.$context;
+
+		await expect(
+			authenticate(auth.$context, {
+				resolution: {
+					action: "link",
+					userId: "missing-user",
+					profile: "preserve",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: { code: "USER_NOT_FOUND" },
+		});
+		expect(
+			await context.internalAdapter.findIdentityByKey({
+				issuer: "https://idp.example.com",
+				providerAccountId: "provider-subject",
+			}),
+		).toBeNull();
+	});
+
+	it("rejects an identity already owned by a different user", async () => {
+		const { auth } = await getTestInstance(undefined, {
+			disableTestUser: true,
+		});
+		const context = await createLocalUser(auth.$context, {
+			id: "first-user",
+			email: "first@example.com",
+			name: "First User",
+		});
+		await createLocalUser(auth.$context, {
+			id: "second-user",
+			email: "second@example.com",
+			name: "Second User",
+		});
+		await authenticate(auth.$context, {
+			providerAccountId: "shared-provider-subject",
+			resolution: {
+				action: "link",
+				userId: "first-user",
+				profile: "preserve",
+			},
+		});
+
+		await expect(
+			authenticate(auth.$context, {
+				providerAccountId: "shared-provider-subject",
+				resolution: {
+					action: "link",
+					userId: "second-user",
+					profile: "preserve",
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "CONFLICT",
+			body: { code: "identity_already_linked" },
+		});
+		expect(
+			await context.internalAdapter.listUserAccounts("second-user"),
+		).toEqual([]);
+		expect(
+			await context.internalAdapter.findUserByIdentityKey({
+				issuer: "https://idp.example.com",
+				providerAccountId: "shared-provider-subject",
+			}),
+		).toMatchObject({ user: { id: "first-user" } });
+	});
+
+	it("preserves the local profile when ambient settings request provider updates", async () => {
+		const { auth } = await getTestInstance(
+			{
+				account: {
+					accountLinking: {
+						updateUserInfoOnLink: true,
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const context = await createLocalUser(auth.$context, {
+			id: "application-profile-user",
+			email: "application@example.com",
+			emailVerified: false,
+			name: "Application Name",
+			image: "https://application.example.com/avatar.png",
+		});
+		const providerProfile = {
+			email: "application@example.com",
+			emailVerified: true,
+			name: "Provider Name",
+			image: "https://provider.example.com/avatar.png",
+		} satisfies ProviderUserProfile;
+		const resolution = {
+			action: "link",
+			userId: "application-profile-user",
+			profile: "preserve",
+		} satisfies ProviderUserResolution;
+
+		await authenticate(auth.$context, {
+			providerUser: providerProfile,
+			resolution,
+			overrideUserInfo: true,
+		});
+		await authenticate(auth.$context, {
+			providerUser: providerProfile,
+			resolution,
+			overrideUserInfo: true,
+		});
+
+		expect(
+			await context.internalAdapter.findUserById("application-profile-user"),
+		).toMatchObject({
+			email: "application@example.com",
+			emailVerified: false,
+			name: "Application Name",
+			image: "https://application.example.com/avatar.png",
+		});
+	});
+
+	it("applies the exact provider profile when ambient settings preserve the local user", async () => {
+		const { auth } = await getTestInstance(
+			{
+				account: {
+					accountLinking: {
+						updateUserInfoOnLink: false,
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const context = await createLocalUser(auth.$context, {
+			id: "provider-profile-user",
+			email: "local-profile@example.com",
+			emailVerified: true,
+			name: "Local Name",
+			image: "https://local.example.com/avatar.png",
+		});
+		const providerProfile = {
+			email: "provider-profile@example.com",
+			emailVerified: false,
+			name: "Provider Name",
+			image: "https://provider.example.com/avatar.png",
+		} satisfies ProviderUserProfile;
+
+		const result = await authenticate(auth.$context, {
+			providerUser: providerProfile,
+			resolution: {
+				action: "link",
+				userId: "provider-profile-user",
+				profile: "provider",
+			},
+			overrideUserInfo: false,
+		});
+
+		expect(result).toMatchObject({
+			error: null,
+			data: {
+				user: {
+					email: "provider-profile@example.com",
+					emailVerified: false,
+					name: "Provider Name",
+					image: "https://provider.example.com/avatar.png",
+				},
+			},
+		});
+		expect(
+			await context.internalAdapter.findUserById("provider-profile-user"),
+		).toMatchObject({
+			email: "provider-profile@example.com",
+			emailVerified: false,
+			name: "Provider Name",
+			image: "https://provider.example.com/avatar.png",
+		});
+	});
+});
 
 describe("oauth2 - email verification on link", async () => {
 	const { auth, client, cookieSetter } = await getTestInstance({

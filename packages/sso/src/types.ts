@@ -1,11 +1,22 @@
-import type { Awaitable, OAuth2Tokens, User } from "better-auth";
+import type {
+	Awaitable,
+	DBTransactionAdapter,
+	OAuth2Tokens,
+	ProviderUserProfile,
+	ProviderUserResolution,
+	User,
+} from "better-auth";
 import type {
 	DBFieldAttribute,
 	FieldAttributeToObject,
+	IdentityKey,
 	InferAdditionalFieldsFromPluginOptions,
 	RemoveFieldsWithReturnedFalse,
 } from "better-auth/db";
 import type { AlgorithmValidationOptions } from "./saml/algorithms";
+
+/** Decision returned by an SSO user resolver. */
+export type SSOUserResolution = ProviderUserResolution;
 
 export interface OIDCMapping {
 	email?: string | undefined;
@@ -276,7 +287,46 @@ export type SSOProviderSchema<O extends SSOOptions> = {
 	};
 };
 
+/** Verified provider data available to an application's SSO user resolver. */
+export interface SSOUserResolutionInput<
+	AdditionalFields extends Record<string, unknown> = Record<string, unknown>,
+> {
+	/** The authentication protocol that verified the provider identity. */
+	protocol: "oidc" | "saml";
+	/** The public routing identifier configured for the SSO provider. */
+	providerId: string;
+	/** The immutable identifier for this specific SSO provider configuration. */
+	providerInstanceId: string;
+	/** The canonical Identity namespace and provider subject Better Auth persists. */
+	identity: IdentityKey;
+	/** Normalized user attributes, including custom mapped provider fields. */
+	providerUser: ProviderUserProfile<AdditionalFields>;
+	/** Raw verified claims supplied by the identity provider. */
+	providerClaims: Record<string, unknown>;
+}
+
+/** Transaction-bound capabilities available while resolving an SSO user. */
+export interface SSOUserResolutionContext {
+	/** The active database transaction used for the complete authentication flow. */
+	database: DBTransactionAdapter;
+}
+
 export interface SSOOptions {
+	/**
+	 * Resolve a verified provider identity to an existing Better Auth user.
+	 *
+	 * The callback runs for every sign-in inside the same native transaction as
+	 * identity linking and session creation. `default` applies Better Auth's
+	 * standard identity, email-linking, and sign-up behavior. `link` selects an
+	 * exact local User with an explicit profile-ownership policy. `reject` stops
+	 * authentication before any Identity, Account, User, or Session write.
+	 */
+	resolveUser?:
+		| ((
+				input: SSOUserResolutionInput,
+				context: SSOUserResolutionContext,
+		  ) => Awaitable<SSOUserResolution>)
+		| undefined;
 	/**
 	 * custom function to provision a user when they sign in with an SSO provider.
 	 */

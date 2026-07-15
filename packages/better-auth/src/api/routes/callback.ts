@@ -253,8 +253,6 @@ export const callbackOAuth = createAuthEndpoint(
 				OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_GET_USER_INFO,
 			);
 		}
-		const { providerAccountId } = identityKey;
-
 		if (!callbackURL) {
 			c.context.logger.error("No callback URL found");
 			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.NO_CALLBACK_URL);
@@ -404,6 +402,7 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.error(missingEmailLogMessage(provider.id));
 			return redirectOnError(OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_FOUND);
 		}
+		const { id: _providerSubject, ...providerUser } = userInfo;
 		const accountData = {
 			providerId: provider.id,
 			providerInstanceId: provider.id,
@@ -413,9 +412,8 @@ export const callbackOAuth = createAuthEndpoint(
 		let result: Awaited<ReturnType<typeof authenticateProviderUser>>;
 		try {
 			result = await authenticateProviderUser(c, {
-				userInfo: {
-					...userInfo,
-					id: providerAccountId,
+				providerUser: {
+					...providerUser,
 					email: userInfo.email,
 					name: userInfo.name || "",
 				},

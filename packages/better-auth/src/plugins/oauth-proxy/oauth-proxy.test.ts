@@ -544,8 +544,7 @@ describe("oauth-proxy", async () => {
 				data: encryptedProfile!,
 			});
 			const payload = parseJSON<{
-				userInfo: {
-					id: string;
+				providerUser: {
 					email: string;
 					name?: string;
 					emailVerified: boolean;
@@ -564,8 +563,8 @@ describe("oauth-proxy", async () => {
 				timestamp: number;
 			}>(decrypted);
 
-			expect(payload.userInfo).toBeDefined();
-			expect(payload.userInfo.email).toBe("user@email.com");
+			expect(payload.providerUser).toBeDefined();
+			expect(payload.providerUser.email).toBe("user@email.com");
 			expect(payload.account).toBeDefined();
 			expect(payload.account.providerId).toBe("google");
 			expect(payload.identity).toEqual({
@@ -916,8 +915,7 @@ describe("oauth-proxy", async () => {
 
 			// Create expired profile payload
 			const payload = {
-				userInfo: {
-					id: "123",
+				providerUser: {
 					email: "user@email.com",
 					name: "Test User",
 					emailVerified: true,
@@ -970,8 +968,7 @@ describe("oauth-proxy", async () => {
 
 			// Create payload that's 10 seconds old (older than maxAge of 5)
 			const payload = {
-				userInfo: {
-					id: "123",
+				providerUser: {
 					email: "user@email.com",
 					name: "Test User",
 					emailVerified: true,
@@ -1069,13 +1066,13 @@ describe("oauth-proxy", async () => {
 				data: encryptedProfile!,
 			});
 			const payload = parseJSON<{
-				userInfo: unknown;
+				providerUser: unknown;
 				account: {
 					providerId: string;
 				};
 			}>(decrypted);
 
-			expect(payload.userInfo).toBeDefined();
+			expect(payload.providerUser).toBeDefined();
 			expect(payload.account).toBeDefined();
 			expect(payload.account.providerId).toBe("google");
 		});
@@ -1098,8 +1095,7 @@ describe("oauth-proxy", async () => {
 
 			// Test missing timestamp
 			const payloadMissingTimestamp = {
-				userInfo: {
-					id: "123",
+				providerUser: {
 					email: "user@email.com",
 					name: "Test User",
 					emailVerified: true,
@@ -1132,8 +1128,8 @@ describe("oauth-proxy", async () => {
 				},
 			);
 
-			// Test missing userInfo
-			const payloadMissingUserInfo = {
+			// Test missing providerUser
+			const payloadMissingProviderUser = {
 				account: {
 					providerId: "google",
 					accessToken: "test",
@@ -1149,7 +1145,7 @@ describe("oauth-proxy", async () => {
 
 			const encrypted2 = await symmetricEncrypt({
 				key: secret,
-				data: JSON.stringify(payloadMissingUserInfo),
+				data: JSON.stringify(payloadMissingProviderUser),
 			});
 
 			await client.$fetch(
@@ -1164,8 +1160,7 @@ describe("oauth-proxy", async () => {
 
 			// Test non-numeric timestamp (should not bypass validation)
 			const payloadStringTimestamp = {
-				userInfo: {
-					id: "123",
+				providerUser: {
 					email: "user@email.com",
 					name: "Test User",
 					emailVerified: true,
@@ -1355,8 +1350,7 @@ describe("oauth-proxy", async () => {
 
 			// Create profile payload for the SAME email
 			const payload = {
-				userInfo: {
-					id: "google-user-id",
+				providerUser: {
 					email: "user@email.com",
 					name: "New Name",
 					emailVerified: true,
@@ -1525,8 +1519,7 @@ describe("oauth-proxy", async () => {
 
 			// Create a valid payload with a state that doesn't exist in DB
 			const payload = {
-				userInfo: {
-					id: "123",
+				providerUser: {
 					email: "test@email.com",
 					name: "Test User",
 					emailVerified: true,

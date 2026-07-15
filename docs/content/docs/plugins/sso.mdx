@@ -638,7 +638,7 @@ const res = await auth.api.signInSSO({
 
 Note: If email is provided and loginHint is not specified, email will be sent as the login\_hint to OIDC providers automatically. SAML flows do not support login\_hint.
 
-When a user is authenticated, if the user does not exist, the user will be provisioned using the `provisionUser` function. By default, `provisionUser` only runs when a new user is registered. If you want to run it on every login (e.g. to sync upstream identity provider profile changes), set `provisionUserOnEveryLogin` to `true`. If the organization provisioning is enabled and a provider is associated with an organization, the user will be added to the organization.
+After authentication creates or finds a User, the `provisionUser` callback can create application resources or synchronize external systems. By default, it runs only when Better Auth creates a User. Set `provisionUserOnEveryLogin` to `true` to run it after every successful SSO login. If organization provisioning is enabled and the provider belongs to an organization, Better Auth also adds the User to that organization.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -666,6 +666,64 @@ const auth = betterAuth({
 ## Provisioning
 
 The SSO plugin provides powerful provisioning capabilities to automatically set up users and manage their organization memberships when they sign in through SSO providers.
+
+### Resolve an existing User
+
+Use `resolveUser` when an external provisioning system creates the Better Auth User before their first SSO login. The callback runs for every OIDC and SAML login after Better Auth verifies and locks the provider, but before it resolves or writes the Identity, Account, User, or Session.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+import { directoryUsers } from "./directory-users";
+
+export const auth = betterAuth({
+  plugins: [
+    sso({
+      resolveUser: async (
+        { providerInstanceId, identity },
+        { database },
+      ) => {
+        const directoryUser = await directoryUsers.findBySSOIdentity(
+          {
+            providerInstanceId,
+            identityIssuer: identity.issuer,
+            providerSubject: identity.providerAccountId,
+          },
+          database,
+        );
+
+        if (!directoryUser?.active) {
+          return {
+            action: "reject",
+            code: "DIRECTORY_USER_NOT_ACTIVE",
+          };
+        }
+
+        return {
+          action: "link",
+          userId: directoryUser.userId,
+          profile: "preserve",
+        };
+      },
+    }),
+  ],
+});
+```
+
+Return one of these decisions:
+
+* `{ action: "default" }` uses Better Auth's standard Identity match, trusted email linking, and implicit sign-up behavior.
+* `{ action: "link", userId, profile: "preserve" }` selects that exact User and keeps the existing User profile. Use this when SCIM or your application owns profile fields.
+* `{ action: "link", userId, profile: "provider" }` selects that exact User and updates their mutable profile from the verified provider data for this login.
+* `{ action: "reject", code, message? }` rejects authentication before it creates or changes authentication records.
+
+The callback receives the canonical Identity namespace and provider subject that Better Auth will persist, the normalized provider User, the raw verified provider claims, and the exact provider-instance ID. Resolve users with stable, verified identifiers. Do not link by an unverified email address.
+
+`database` is the active transaction adapter. Resolver reads and application writes made through it commit or roll back with the complete authentication flow. Configuring `resolveUser` therefore requires a database adapter with native interactive transactions, including for providers declared in `defaultSSO`.
+
+<Callout type="info">
+  `resolveUser` selects or rejects a User before authentication. `provisionUser` runs after successful authentication and cannot change which User was authenticated.
+</Callout>
 
 ### User Provisioning
 
@@ -1643,6 +1701,8 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
 
 ### Server
 
+**resolveUser**: Resolve a verified OIDC or SAML identity before authentication. The callback can use Better Auth's default behavior, link an exact User with an explicit profile policy, or reject the login. Requires native interactive transactions.
+
 **provisionUser**: A custom function to provision a user when they sign in with an SSO provider.
 
 **provisionUserOnEveryLogin**: If `true`, the `provisionUser` callback runs on every login, not just on registration. Defaults to `false`.
@@ -1656,6 +1716,10 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
 If you want to allow account linking for specific trusted providers, enable the `accountLinking` option in your auth config and specify those providers in the `trustedProviders` list.
 
 export const ssoOptionsType = {
+	resolveUser: {
+		description: "Resolve a verified provider identity before SSO authentication.",
+		type: "function",
+	},
 	provisionUser: {
 		description: "A custom function to provision a user when they sign in with an SSO provider.",
 		type: "function",

@@ -323,11 +323,11 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					userInfo.data,
 				);
 				const providerProfile = toOAuthProfileRecord(userInfo.data);
+				const { id: _providerSubject, ...providerUser } = userInfo.user;
 				const data = await authenticateProviderUser(c, {
-					userInfo: {
-						...userInfo.user,
+					providerUser: {
+						...providerUser,
 						email: userInfo.user.email,
-						id: identityKey.providerAccountId,
 						name: userInfo.user.name || "",
 						image: userInfo.user.image,
 						emailVerified: userInfo.user.emailVerified || false,

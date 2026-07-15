@@ -1,4 +1,7 @@
-import { runWithTransaction } from "@better-auth/core/context";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type {
 	PrivateKeyJwtSigningAlgorithm,
@@ -65,6 +68,12 @@ import type {
 	SSOProvider,
 	SSOProviderAdditionalFieldsInput,
 } from "../types";
+import {
+	assertSSOUserResolutionNativeTransactionSupport,
+	getFailedSSOAuthenticationResult,
+	requireSuccessfulSSOAuthentication,
+	resolveSSOUser,
+} from "../user-resolution";
 import {
 	domainMatches,
 	parseProviderEmailVerified,
@@ -1659,25 +1668,46 @@ async function handleOIDCCallback(
 		"domainVerified" in provider &&
 		(provider as { domainVerified?: boolean }).domainVerified === true &&
 		validateEmailDomain(userInfoEmail, provider.domain);
+	const { id: _providerSubject, ...providerUserAttributes } = userInfo;
+	const providerUser = {
+		...providerUserAttributes,
+		email: userInfoEmail,
+		name: userInfo.name || "",
+		image: userInfo.image,
+		emailVerified: options?.trustEmailVerified
+			? userInfo.emailVerified || false
+			: false,
+	};
+	const identity = {
+		issuer: identityIssuer,
+		providerAccountId: userInfoId,
+	};
 
 	let linked: Awaited<ReturnType<typeof authenticateProviderUser>>;
 	try {
+		if (options?.resolveUser) {
+			assertSSOUserResolutionNativeTransactionSupport(ctx.context.adapter);
+		}
 		linked = await runWithTransaction(ctx.context.adapter, async () => {
 			await lockSSOProviderForAccountLink(ctx, provider);
-			return authenticateProviderUser(ctx, {
-				userInfo: {
-					email: userInfoEmail,
-					name: userInfo.name || "",
-					id: userInfoId,
-					image: userInfo.image,
-					emailVerified: options?.trustEmailVerified
-						? userInfo.emailVerified || false
-						: false,
-				},
-				identity: {
-					issuer: identityIssuer,
-					providerAccountId: userInfoId,
-				},
+			const resolution = options?.resolveUser
+				? await resolveSSOUser(
+						options.resolveUser,
+						{
+							protocol: "oidc",
+							providerId: provider.providerId,
+							providerInstanceId: provider.instance.providerInstanceId,
+							identity,
+							providerUser,
+							providerClaims: rawProfile ?? {},
+						},
+						await getCurrentAdapter(ctx.context.adapter),
+						ctx.context.logger,
+					)
+				: undefined;
+			const authentication = await authenticateProviderUser(ctx, {
+				providerUser,
+				identity,
 				account: {
 					idToken: tokenResponse.idToken,
 					accessToken: tokenResponse.accessToken,
@@ -1699,17 +1729,25 @@ async function handleOIDCCallback(
 				// An SSO alias is only a routing label. Trust comes from the
 				// verified SSO authority, not another provider with the same name.
 				trustProviderByName: false,
+				resolution,
 			});
+			return options?.resolveUser
+				? requireSuccessfulSSOAuthentication(authentication)
+				: authentication;
 		});
 	} catch (e) {
-		if (isAPIError(e) && e.body?.code) {
+		const failedAuthentication = getFailedSSOAuthenticationResult(e);
+		if (failedAuthentication) {
+			linked = failedAuthentication;
+		} else if (isAPIError(e) && e.body?.code) {
 			const baseURL = errorURL || callbackURL;
 			const params = new URLSearchParams({ error: e.body.code });
 			if (e.body.message) params.set("error_description", e.body.message);
 			const sep = baseURL.includes("?") ? "&" : "?";
 			throw ctx.redirect(`${baseURL}${sep}${params.toString()}`);
+		} else {
+			throw e;
 		}
-		throw e;
 	}
 	if (linked.error) {
 		const baseURL = errorURL || callbackURL;

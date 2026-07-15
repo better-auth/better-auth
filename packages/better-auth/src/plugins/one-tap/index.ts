@@ -175,8 +175,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					// Google `sub` wins, never whichever local user happens to share the
 					// token's email.
 					const result = await authenticateProviderUser(ctx, {
-						userInfo: {
-							id: sub,
+						providerUser: {
 							email,
 							emailVerified,
 							name: typeof name === "string" ? name : "",
