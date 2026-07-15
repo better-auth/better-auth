@@ -752,8 +752,11 @@ describe("ui router", async () => {
 		expect(js).toContain('effect.type === "closeDialog"');
 		// Dialogs are plain z-index overlays (not native <dialog>/showModal), so
 		// extension UIs like 1Password's passkey picker can layer above them.
+		// They are moved to document.body on open so fixed positioning is not
+		// trapped by transformed ancestors such as .ba-auth-card.
 		expect(js).not.toContain("showModal");
 		expect(js).toContain("function openDialog(target)");
+		expect(js).toContain("document.body.appendChild(dialog)");
 		expect(js).toContain("dialog.hidden = false");
 		expect(js).toContain("dialog.hidden = true");
 		expect(js).toContain('event.key !== "Escape"');

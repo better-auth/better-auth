@@ -319,7 +319,12 @@ export function openDialog(target: string): void {
 	// Rendered as a plain z-index overlay rather than a native top-layer
 	// dialog. Top-layer dialogs cover browser-extension overlays such as
 	// 1Password's passkey account picker, so we avoid them here.
+	// Move to <body> so position:fixed covers the viewport even when the
+	// dialog was authored inside a transformed ancestor (e.g. .ba-auth-card).
 	lockBodyScroll();
+	if (dialog.parentElement !== document.body) {
+		document.body.appendChild(dialog);
+	}
 	dialog.hidden = false;
 	openDialogs.add(dialog);
 	document.body.style.overflow = "hidden";

@@ -195,12 +195,6 @@ function themeStyles(theme: ThemeConfig) {
 	};
 	const lightVariables = themeVariables(theme);
 	const darkVariables = themeVariables(dark);
-	if (theme.darkMode === false) {
-		return `:root{${lightVariables}}`;
-	}
-	if (theme.darkMode === true) {
-		return `:root{${darkVariables}}`;
-	}
 	return `
 :root{${lightVariables}}
 @media (prefers-color-scheme:dark){:root{${darkVariables}}}
@@ -227,7 +221,7 @@ body{margin:0;min-height:100vh;background:var(--ba-background);color:var(--ba-te
 a{color:var(--ba-primary);text-decoration:none}
 a:hover{text-decoration:underline}
 label{display:grid;gap:.5rem;color:var(--ba-text);font-size:.875rem;font-weight:500}
-.ba-ui-background{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;isolation:isolate;color:color-mix(in srgb,var(--ba-border) 78%,transparent)}
+.ba-ui-background{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;isolation:isolate;color:color-mix(in srgb,var(--ba-text-secondary) 42%,transparent)}@media (prefers-color-scheme:dark){.ba-ui-background{color:color-mix(in srgb,var(--ba-border) 65%,transparent)}}
 .ba-ui-background *{pointer-events:none!important}
 .ba-ui-background>*{position:absolute;inset:0;width:100%;height:100%}
 .ba-ui-root{position:relative;z-index:1;min-height:100vh}
@@ -347,18 +341,12 @@ export function renderDocument(options: {
 	const background = options.background
 		? `<div class="ba-ui-background" aria-hidden="true">${options.background}</div>`
 		: "";
-	const themeMode =
-		options.theme.darkMode === true
-			? "dark"
-			: options.theme.darkMode === false
-				? "light"
-				: "system";
 	const favicon = faviconLinks(options.theme);
 	const title = options.theme.appName
 		? `${options.title} - ${options.theme.appName}`
 		: options.title;
 	return `<!doctype html>
-<html lang="en" data-ba-theme-mode="${themeMode}" data-ba-api-base="${escapeHTML(options.apiBaseURL ?? "")}" data-ba-ui-base="${escapeHTML(options.uiBasePath ?? "")}">
+<html lang="en" data-ba-theme-mode="system" data-ba-api-base="${escapeHTML(options.apiBaseURL ?? "")}" data-ba-ui-base="${escapeHTML(options.uiBasePath ?? "")}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

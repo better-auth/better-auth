@@ -19,7 +19,6 @@ export const auth = betterAuth({
 				dark: "/better-auth-logo-dark.svg",
 				light: "/better-auth-logo-light.svg",
 			},
-			background: "#0a0a0a",
 		},
 	},
 	plugins: [twoFactor(), passkey(), phoneNumber()],
@@ -31,9 +30,6 @@ export const auth = betterAuth({
 		figma: socialProvider("figma"),
 		atlassian: socialProvider("atlassian"),
 	},
-	baseURL,
-	secret,
-	database,
 	databaseHooks: {
 		user: {
 			create: {
@@ -46,4 +42,7 @@ export const auth = betterAuth({
 			},
 		},
 	},
+	baseURL,
+	secret,
+	database,
 });

@@ -227,8 +227,11 @@ export type ThemeConfig = {
 	fontFamily?: string | undefined;
 	fontSize?: "sm" | "md" | "lg" | undefined;
 	borderRadius?: "none" | "sm" | "md" | "lg" | "full" | undefined;
-	darkMode?: boolean | "auto" | undefined;
-	dark?: Partial<Omit<ThemeConfig, "dark" | "darkMode">> | undefined;
+	/**
+	 * Dark-mode color overrides. Applied automatically when the user's
+	 * system preference is `prefers-color-scheme: dark`.
+	 */
+	dark?: Partial<Omit<ThemeConfig, "dark">> | undefined;
 };
 
 export type UIContentSecurityPolicyOptions = {

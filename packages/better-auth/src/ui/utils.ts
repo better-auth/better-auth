@@ -18,7 +18,6 @@ export const defaultTheme: ThemeConfig = {
 	error: "oklch(0.577 0.245 27.325)",
 	success: "#16a34a",
 	borderRadius: "md",
-	darkMode: "auto",
 	dark: {
 		primary: "oklch(0.985 0.001 106.423)",
 		background: "hsl(0 0% 0%)",

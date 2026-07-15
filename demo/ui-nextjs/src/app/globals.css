@@ -7,9 +7,41 @@
 	margin: 0;
 }
 
+:root {
+	color-scheme: light dark;
+	--home-background: #fafafa;
+	--home-foreground: #171717;
+	--home-muted: #737373;
+	--home-subtle: #a3a3a3;
+	--home-border: #e5e5e5;
+	--home-surface: #ffffff;
+	--home-surface-hover: #f5f5f5;
+	--home-accent: #f5f5f5;
+	--home-danger: #dc2626;
+	--home-danger-border: #fecaca;
+	--home-code: #525252;
+	--home-placeholder: #e5e5e5;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--home-background: #0a0a0a;
+		--home-foreground: #e5e5e5;
+		--home-muted: #888888;
+		--home-subtle: #666666;
+		--home-border: #2a2a2a;
+		--home-surface: #141414;
+		--home-surface-hover: #1a1a1a;
+		--home-accent: #1f1f1f;
+		--home-danger: #f87171;
+		--home-danger-border: #5c2020;
+		--home-code: #aaaaaa;
+		--home-placeholder: #1f1f1f;
+	}
+}
+
 html {
 	height: 100%;
-	color-scheme: dark;
 }
 
 body {
@@ -17,8 +49,8 @@ body {
 	font-family:
 		-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 	-webkit-font-smoothing: antialiased;
-	background: #0a0a0a;
-	color: #e5e5e5;
+	background: var(--home-background);
+	color: var(--home-foreground);
 }
 
 a {
@@ -36,26 +68,34 @@ a {
 	min-height: 100dvh;
 	padding: 3rem 1.5rem;
 	gap: 1.5rem;
+	background: var(--home-background);
 }
 
 .home-logo {
+	display: block;
 	width: 48px;
 	height: 48px;
-	margin-bottom: 0.25rem;
+	flex-shrink: 0;
+}
+
+.home-logo img {
+	display: block;
+	width: 100%;
+	height: 100%;
 }
 
 .home-title {
 	font-size: 1.5rem;
 	font-weight: 700;
 	letter-spacing: -0.025em;
-	color: #f5f5f5;
+	color: var(--home-foreground);
 }
 
 .home-subtitle {
 	max-width: 26rem;
 	text-align: center;
 	font-size: 0.9375rem;
-	color: #888;
+	color: var(--home-muted);
 	line-height: 1.5;
 }
 
@@ -70,20 +110,20 @@ a {
 	display: inline-flex;
 	align-items: center;
 	padding: 0.5rem 1rem;
-	border: 1px solid #2a2a2a;
+	border: 1px solid var(--home-border);
 	border-radius: 0.25rem;
 	font-size: 0.8125rem;
 	font-weight: 500;
-	color: #ccc;
-	background: #141414;
+	color: var(--home-foreground);
+	background: var(--home-surface);
 	transition:
 		border-color 0.15s,
 		background 0.15s;
 }
 
 .home-link:hover {
-	border-color: #444;
-	background: #1a1a1a;
+	border-color: var(--home-muted);
+	background: var(--home-surface-hover);
 }
 
 /* ── User card ── */
@@ -96,9 +136,9 @@ a {
 	width: 100%;
 	max-width: 24rem;
 	padding: 0.875rem 1rem;
-	border: 1px solid #2a2a2a;
+	border: 1px solid var(--home-border);
 	border-radius: 0.25rem;
-	background: #141414;
+	background: var(--home-surface);
 }
 
 .user-card-body {
@@ -120,8 +160,8 @@ a {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	background: #2a2a2a;
-	color: #ccc;
+	background: var(--home-accent);
+	color: var(--home-foreground);
 	font-size: 0.8125rem;
 	font-weight: 600;
 }
@@ -130,14 +170,14 @@ a {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	background: #1f1f1f;
-	color: #555;
+	background: var(--home-accent);
+	color: var(--home-subtle);
 	font-size: 0.875rem;
 	font-weight: 600;
 }
 
 .user-avatar--placeholder {
-	background: #1f1f1f;
+	background: var(--home-placeholder);
 	animation: pulse 1.5s ease-in-out infinite;
 }
 
@@ -151,7 +191,7 @@ a {
 .user-name {
 	font-size: 0.875rem;
 	font-weight: 600;
-	color: #f0f0f0;
+	color: var(--home-foreground);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -159,7 +199,7 @@ a {
 
 .user-email {
 	font-size: 0.75rem;
-	color: #666;
+	color: var(--home-subtle);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -170,7 +210,7 @@ a {
 	display: block;
 	height: 0.75rem;
 	border-radius: 0.125rem;
-	background: #1f1f1f;
+	background: var(--home-placeholder);
 	animation: pulse 1.5s ease-in-out infinite;
 }
 
@@ -186,10 +226,10 @@ a {
 .user-card-action {
 	flex-shrink: 0;
 	padding: 0.375rem 0.75rem;
-	border: 1px solid #2a2a2a;
+	border: 1px solid var(--home-border);
 	border-radius: 0.25rem;
 	background: transparent;
-	color: #999;
+	color: var(--home-muted);
 	font-family: inherit;
 	font-size: 0.75rem;
 	font-weight: 500;
@@ -200,13 +240,13 @@ a {
 }
 
 .user-card-action:hover {
-	border-color: #444;
-	color: #ddd;
+	border-color: var(--home-muted);
+	color: var(--home-foreground);
 }
 
 .user-card-action--danger:hover {
-	border-color: #5c2020;
-	color: #f87171;
+	border-color: var(--home-danger-border);
+	color: var(--home-danger);
 }
 
 @keyframes pulse {
@@ -224,28 +264,30 @@ a {
 .session-block {
 	width: 100%;
 	max-width: 44rem;
-	border: 1px solid #2a2a2a;
+	border: 1px solid var(--home-border);
 	border-radius: 0.25rem;
 	overflow: hidden;
+	background: var(--home-surface);
 }
 
 .session-header {
 	display: flex;
 	align-items: center;
 	padding: 0.625rem 1rem;
-	background: #141414;
-	border-bottom: 1px solid #2a2a2a;
+	background: var(--home-surface);
+	border-bottom: 1px solid var(--home-border);
 }
 
 .session-label {
 	font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 	font-size: 0.75rem;
-	color: #666;
+	color: var(--home-subtle);
 }
 
 .session-code {
 	overflow: auto;
 	max-height: 40rem;
+	background: var(--home-background);
 }
 
 .session-code pre {
@@ -258,5 +300,5 @@ a {
 
 .session-code code {
 	font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-	color: #aaa;
+	color: var(--home-code);
 }

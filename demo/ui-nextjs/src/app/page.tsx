@@ -106,21 +106,27 @@ function SessionBlock() {
 	);
 
 	useEffect(() => {
-		if (json === prev.current) return;
 		let stale = false;
-		codeToHtml(json, { lang: "json", theme: "github-dark" }).then((h) => {
-			if (!stale) {
-				setHtml(h);
-				prev.current = json;
-			}
-		});
+		const media = window.matchMedia("(prefers-color-scheme: dark)");
+		const render = () => {
+			const theme = media.matches ? "github-dark" : "github-light";
+			void codeToHtml(json, { lang: "json", theme }).then((h) => {
+				if (!stale) {
+					setHtml(h);
+					prev.current = json;
+				}
+			});
+		};
+		render();
+		media.addEventListener("change", render);
 		return () => {
 			stale = true;
+			media.removeEventListener("change", render);
 		};
 	}, [json]);
 
 	return (
-		<section className="session-block bg-[#0a0a0a]">
+		<section className="session-block">
 			<div className="session-header">
 				<code className="session-label">useSession()</code>
 			</div>
@@ -142,14 +148,20 @@ function SessionBlock() {
 
 export default function Home() {
 	return (
-		<main className="home relative h-screen bg-black">
+		<main className="home">
 			<div className="flex items-center justify-center gap-2 text-center">
-				<img
-					src="/better-auth-logo-dark.svg"
-					alt="Better Auth"
-					width={48}
-					height={48}
-				/>
+				<picture className="home-logo">
+					<source
+						media="(prefers-color-scheme: dark)"
+						srcSet="/better-auth-logo-dark.svg"
+					/>
+					<img
+						src="/better-auth-logo-light.svg"
+						alt="Better Auth"
+						width={48}
+						height={48}
+					/>
+				</picture>
 
 				<h1 className="home-title">Better Auth UI</h1>
 			</div>

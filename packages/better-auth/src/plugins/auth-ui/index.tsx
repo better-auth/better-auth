@@ -158,18 +158,6 @@ function providerIcon(provider: AuthProvider, ctx: UIContext): UIChild {
 	if (!isThemeProviderIcon(icon)) {
 		return resolveProviderIcon(icon, providerInitials(provider.label));
 	}
-	if (ctx.theme.darkMode === true) {
-		return resolveProviderIcon(
-			icon.dark ?? icon.light,
-			providerInitials(provider.label),
-		);
-	}
-	if (ctx.theme.darkMode === false) {
-		return resolveProviderIcon(
-			icon.light ?? icon.dark,
-			providerInitials(provider.label),
-		);
-	}
 	if (
 		isRenderableProviderIcon(icon.dark) &&
 		isRenderableProviderIcon(icon.light)
@@ -223,14 +211,10 @@ function AppBrand(props: { ctx: UIContext }) {
 	const logo =
 		typeof logoUrl === "string"
 			? { src: logoUrl }
-			: props.ctx.theme.darkMode === true
-				? { src: logoUrl?.dark }
-				: props.ctx.theme.darkMode === false
-					? { src: logoUrl?.light }
-					: {
-							src: logoUrl?.light,
-							dark: logoUrl?.dark,
-						};
+			: {
+					src: logoUrl?.light,
+					dark: logoUrl?.dark,
+				};
 	return (
 		<a class="ba-auth-brand" href="/" aria-label={`${appName} home`}>
 			{logo.src ? (

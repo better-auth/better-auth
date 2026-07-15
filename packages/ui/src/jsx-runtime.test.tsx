@@ -147,5 +147,8 @@ describe("jsx runtime", () => {
 		expect(backgrounds.dotGrid).toContain('data-ba-background="dot-grid"');
 		expect(backgrounds.dotGrid).toContain("radial-gradient(circle");
 		expect(backgrounds.dotGrid).toContain("currentColor");
+		expect(backgrounds.dotGrid).toContain(
+			"color-mix(in srgb,currentColor 70%,transparent)",
+		);
 	});
 });
