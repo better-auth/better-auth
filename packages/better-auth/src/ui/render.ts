@@ -155,7 +155,7 @@ function themeVariables(theme: ThemeConfig) {
 		md: "0.5rem",
 		lg: "0.75rem",
 		full: "9999px",
-	}[theme.borderRadius ?? "md"];
+	}[theme.borderRadius ?? "none"];
 	// Card/container radius is capped at 1.5rem so containers never become pill-shaped
 	// even when the user sets `borderRadius: "full"` for buttons and inputs.
 	const radiusCard = {
@@ -164,7 +164,7 @@ function themeVariables(theme: ThemeConfig) {
 		md: "0.75rem",
 		lg: "1rem",
 		full: "1.5rem",
-	}[theme.borderRadius ?? "md"];
+	}[theme.borderRadius ?? "none"];
 	const fontSize = {
 		sm: "14px",
 		md: "16px",
@@ -207,9 +207,14 @@ function faviconLinks(theme: ThemeConfig) {
 	if (typeof logoUrl === "string") {
 		return `<link rel="icon" href="${escapeHTML(logoUrl)}">`;
 	}
+	// Browsers inconsistently honor `media` on favicon <link> tags and often
+	// won't re-evaluate when the system theme changes. Use one link plus a
+	// matchMedia listener so light/dark icons actually switch.
+	const light = JSON.stringify(logoUrl.light);
+	const dark = JSON.stringify(logoUrl.dark);
 	return [
-		`<link rel="icon" media="(prefers-color-scheme: light)" href="${escapeHTML(logoUrl.light)}">`,
-		`<link rel="icon" media="(prefers-color-scheme: dark)" href="${escapeHTML(logoUrl.dark)}">`,
+		`<link rel="icon" id="ba-favicon" href="${escapeHTML(logoUrl.light)}">`,
+		`<script>(function(){var l=${light},d=${dark},el=document.getElementById("ba-favicon");if(!el)return;var m=window.matchMedia("(prefers-color-scheme: dark)");function a(){el.setAttribute("href",m.matches?d:l)}a();m.addEventListener("change",a)})();</script>`,
 	].join("\n");
 }
 
@@ -227,8 +232,15 @@ label{display:grid;gap:.5rem;color:var(--ba-text);font-size:.875rem;font-weight:
 .ba-ui-root{position:relative;z-index:1;min-height:100vh}
 .ba-page{min-height:100vh;padding:2rem;display:flex;align-items:center;justify-content:center}
 .ba-auth-page{position:relative;isolation:isolate;min-height:100vh;padding:2rem;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.25rem;overflow:hidden}
+.ba-auth-shell{width:100%;max-width:30rem;display:flex;flex-direction:column;transform:scale(.9);transform-origin:center}
+.ba-auth-tabs{display:flex;align-items:stretch;gap:0;position:relative;z-index:1}
+.ba-auth-tab{display:inline-flex;align-items:center;justify-content:center;padding:.7rem 1.1rem;border:1px solid transparent;border-bottom:0;background:transparent;color:var(--ba-text-secondary);font:inherit;font-size:.875rem;font-weight:500;line-height:1;text-decoration:none;cursor:pointer;user-select:none}
+.ba-auth-tab:hover{color:var(--ba-text);text-decoration:none}
+.ba-auth-tab[aria-current="page"]{color:var(--ba-text);background:color-mix(in srgb,var(--ba-surface) 96%,transparent);border-color:color-mix(in srgb,var(--ba-border) 88%,transparent);margin-bottom:-1px}
 .ba-card{width:100%;max-width:28rem;border:1px solid color-mix(in srgb,var(--ba-border) 88%,transparent);border-radius:var(--ba-radius-card);background:color-mix(in srgb,var(--ba-surface) 96%,transparent);padding:1.5rem;box-shadow:0 18px 60px rgba(0,0,0,.12);filter:drop-shadow(0 16px 32px rgba(0,0,0,.10));backdrop-filter:blur(16px)}
 .ba-auth-card{display:grid;gap:1.5rem;max-width:30rem;padding:2rem;border-radius:var(--ba-radius-card);transform:scale(.9);transform-origin:center}
+.ba-auth-shell .ba-auth-card{max-width:none;transform:none;filter:none}
+.ba-auth-shell .ba-auth-card.ba-auth-card--tabbed{border-top-left-radius:0}
 .ba-auth-brand-placement{width:100%;max-width:30rem;display:flex}
 .ba-auth-brand-position-top-left,.ba-auth-brand-position-top-right,.ba-auth-brand-position-bottom-left,.ba-auth-brand-position-bottom-right{position:absolute;z-index:2;width:auto;max-width:calc(100vw - 4rem)}
 .ba-auth-brand-position-top-left{top:2rem;left:2rem;justify-content:flex-start}
@@ -253,13 +265,36 @@ label{display:grid;gap:.5rem;color:var(--ba-text);font-size:.875rem;font-weight:
 .ba-dialog-description{margin:0;color:var(--ba-text-secondary);font-size:.875rem;line-height:1.5}
 .ba-dialog-actions{display:grid;gap:.75rem;margin-top:.25rem}
 .ba-auth-header{text-align:center;display:grid;gap:.5rem}
+.ba-auth-header[data-align="start"]{text-align:left}
 .ba-auth-title{margin:0;font-size:1.35rem;line-height:1.2;letter-spacing:-.02em}
 .ba-auth-description{margin:0;color:var(--ba-text-secondary);font-size:.875rem}
 .ba-auth-footer{margin:0;text-align:center;color:var(--ba-text-secondary);font-size:.875rem}
+.ba-auth-legal{display:grid;gap:1rem;padding-top:1rem;border-top:1px solid color-mix(in srgb,var(--ba-border) 88%,transparent)}
+.ba-auth-legal-text{margin:0;text-align:center;color:var(--ba-text-secondary);font-size:.75rem;line-height:1.5}
+.ba-auth-legal-text a{color:var(--ba-text);text-decoration:underline;text-underline-offset:.12em}
 .ba-auth-links{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-top:-.25rem;color:var(--ba-text-secondary);font-size:.8125rem}
 .ba-auth-links a{color:inherit}
 .ba-auth-credentials{display:grid;gap:.75rem}
-.ba-auth-providers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.625rem}
+.ba-field{display:grid;gap:.5rem}
+.ba-field-label-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;font-size:.875rem;font-weight:500;color:var(--ba-text)}
+.ba-field-label{color:var(--ba-text)}
+.ba-field-label-action{color:var(--ba-text);font-weight:400;font-size:.8125rem;text-decoration:underline;text-underline-offset:.12em}
+.ba-field-label-action:hover{text-decoration:underline}
+.ba-input-affix{position:relative;display:grid}
+.ba-input-affix .ba-input{padding-right:2.75rem}
+.ba-password-toggle{position:absolute;top:50%;right:.65rem;transform:translateY(-50%);display:inline-flex;align-items:center;justify-content:center;width:1.75rem;height:1.75rem;margin:0;padding:0;border:0;border-radius:var(--ba-radius);background:transparent;color:var(--ba-text-secondary);cursor:pointer}
+.ba-password-toggle:hover{color:var(--ba-text)}
+.ba-password-toggle svg{display:block;width:1rem;height:1rem}
+.ba-password-toggle[data-visible="true"] .ba-password-icon-show{display:none}
+.ba-password-toggle:not([data-visible="true"]) .ba-password-icon-hide{display:none}
+.ba-checkbox{display:inline-flex;align-items:center;gap:.625rem;color:var(--ba-text);font-size:.875rem;font-weight:400;cursor:pointer;user-select:none}
+.ba-checkbox-input,.ba-input[type="checkbox"]{appearance:none;-webkit-appearance:none;width:1rem;height:1rem;margin:0;padding:0;flex:0 0 auto;display:inline-grid;place-content:center;border:1px solid color-mix(in srgb,var(--ba-border) 82%,transparent);border-radius:var(--ba-radius);background:transparent;box-shadow:none;color:var(--ba-background);cursor:pointer}
+.ba-checkbox-input[hidden],.ba-input[type="checkbox"][hidden],input[type="checkbox"][hidden]{display:none!important}
+.ba-checkbox-input:checked,.ba-input[type="checkbox"]:checked{background:var(--ba-primary);border-color:var(--ba-primary)}
+.ba-checkbox-input:checked::before,.ba-input[type="checkbox"]:checked::before{content:"";width:.28rem;height:.5rem;border:solid currentColor;border-width:0 1.5px 1.5px 0;transform:rotate(45deg) translateY(-.05rem)}
+.ba-checkbox-input:focus-visible,.ba-input[type="checkbox"]:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--ba-primary) 18%,transparent)}
+.ba-auth-providers{display:grid;grid-template-columns:1fr;gap:.625rem}
+.ba-auth-providers[data-layout="grid"]{grid-template-columns:repeat(2,minmax(0,1fr))}
 .ba-auth-providers .ba-button{width:100%}
 .ba-auth-providers .ba-button:hover{border-color:color-mix(in srgb,var(--ba-primary) 38%,var(--ba-border));background:color-mix(in srgb,var(--ba-primary) 8%,var(--ba-surface));opacity:1}
 .ba-form.ba-provider-form{display:contents}
@@ -306,7 +341,7 @@ label{display:grid;gap:.5rem;color:var(--ba-text);font-size:.875rem;font-weight:
 .ba-toast[data-type="warning"] .ba-toast-icon{background:#d97706}
 .ba-toast[data-type="warning"] .ba-toast-icon::before{content:"!"}
 .ba-form-status,[data-ba-form-status]{display:none!important}
-@media (max-width:34rem){.ba-auth-page{padding:1rem}.ba-auth-card{padding:1.25rem}.ba-auth-providers{grid-template-columns:1fr}.ba-auth-links{align-items:flex-start;flex-direction:column}}
+@media (max-width:34rem){.ba-auth-page{padding:1rem}.ba-auth-card{padding:1.25rem}.ba-auth-providers[data-layout="grid"]{grid-template-columns:1fr}.ba-auth-links{align-items:flex-start;flex-direction:column}}
 `;
 }
 

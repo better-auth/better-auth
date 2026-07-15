@@ -86,6 +86,24 @@ document.addEventListener("change", (event) => {
 });
 
 document.addEventListener("click", async (event) => {
+	const passwordToggle =
+		event.target instanceof Element
+			? event.target.closest("[data-ba-toggle-password]")
+			: null;
+	if (passwordToggle) {
+		event.preventDefault();
+		const wrap = passwordToggle.closest(".ba-input-affix");
+		const input = wrap?.querySelector("input");
+		if (!(input instanceof HTMLInputElement)) return;
+		const show = input.type === "password";
+		input.type = show ? "text" : "password";
+		passwordToggle.setAttribute(
+			"aria-label",
+			show ? "Hide password" : "Show password",
+		);
+		passwordToggle.setAttribute("data-visible", show ? "true" : "false");
+		return;
+	}
 	const closeTarget =
 		event.target instanceof Element
 			? event.target.closest("[data-ba-dialog-close]")

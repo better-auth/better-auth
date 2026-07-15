@@ -13,6 +13,8 @@ export const auth = betterAuth({
 	ui: {
 		basePath: "/auth",
 		background: backgrounds.squaredGrid,
+		termsOfServiceURL: "https://example.com/terms",
+		privacyPolicyURL: "https://example.com/privacy",
 		theme: {
 			appName: "ACME",
 			logoUrl: {

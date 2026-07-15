@@ -234,11 +234,126 @@ function AppBrand(props: { ctx: UIContext }) {
 	);
 }
 
+function AuthLegalNotice(props: {
+	ctx: UIContext;
+	action: "signing in" | "signing up";
+}) {
+	const termsOfServiceURL = props.ctx.context.options.ui?.termsOfServiceURL;
+	const privacyPolicyURL = props.ctx.context.options.ui?.privacyPolicyURL;
+	if (!termsOfServiceURL && !privacyPolicyURL) return <></>;
+
+	const termsLink = termsOfServiceURL ? (
+		<Link href={termsOfServiceURL} target="_blank" rel="noopener noreferrer">
+			Terms of Service
+		</Link>
+	) : null;
+	const privacyLink = privacyPolicyURL ? (
+		<Link href={privacyPolicyURL} target="_blank" rel="noopener noreferrer">
+			Privacy Policy
+		</Link>
+	) : null;
+
+	const notice =
+		termsLink && privacyLink ? (
+			<>
+				By {props.action}, you agree to the {termsLink} and {privacyLink}.
+			</>
+		) : termsLink ? (
+			<>
+				By {props.action}, you agree to the {termsLink}.
+			</>
+		) : (
+			<>
+				By {props.action}, you agree to the {privacyLink}.
+			</>
+		);
+
+	return (
+		<div class="ba-auth-legal">
+			<p class="ba-auth-legal-text">{notice}</p>
+		</div>
+	);
+}
+
+function PasswordField(props: {
+	name: string;
+	autocomplete: string;
+	placeholder: string;
+	forgotPasswordHref?: string | undefined;
+}) {
+	return (
+		<div class="ba-field">
+			<div class="ba-field-label-row">
+				<span class="ba-field-label">Password</span>
+				{props.forgotPasswordHref ? (
+					<Link href={props.forgotPasswordHref} class="ba-field-label-action">
+						Forgot your password?
+					</Link>
+				) : null}
+			</div>
+			<div class="ba-input-affix">
+				<Input
+					name={props.name}
+					type="password"
+					autocomplete={props.autocomplete}
+					placeholder={props.placeholder}
+					required
+				/>
+				<button
+					type="button"
+					class="ba-password-toggle"
+					data-ba-toggle-password
+					data-ba-unstyled
+					aria-label="Show password"
+				>
+					<svg
+						class="ba-password-icon-show"
+						xmlns="http://www.w3.org/2000/svg"
+						width="16"
+						height="16"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true"
+					>
+						<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"></path>
+						<circle cx="12" cy="12" r="3"></circle>
+					</svg>
+					<svg
+						class="ba-password-icon-hide"
+						xmlns="http://www.w3.org/2000/svg"
+						width="16"
+						height="16"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						aria-hidden="true"
+					>
+						<path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"></path>
+						<path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"></path>
+						<path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-4.86"></path>
+						<path d="m2 2 20 20"></path>
+					</svg>
+				</button>
+			</div>
+		</div>
+	);
+}
+
 function AuthCard(props: {
 	ctx: UIContext;
 	title: string;
 	description: string;
 	footer?: UIChild | undefined;
+	tabs?: "sign-in" | "sign-up" | undefined;
+	align?: "start" | "center" | undefined;
+	legalAction?: "signing in" | "signing up" | undefined;
 	children: UIChild;
 }) {
 	const logoPlacement = props.ctx.theme.logoPlacement ?? "top-center";
@@ -252,17 +367,55 @@ function AuthCard(props: {
 		);
 	const brandBeforeCard = logoPlacement.startsWith("top-") ? brand : null;
 	const brandAfterCard = logoPlacement.startsWith("bottom-") ? brand : null;
-	return (
-		<main class="ba-auth-page">
-			{brandBeforeCard}
-			<Card class="ba-auth-card">
-				<header class="ba-auth-header">
+	const showTabs = Boolean(props.tabs);
+	const cardClass = showTabs
+		? "ba-auth-card ba-auth-card--tabbed"
+		: "ba-auth-card";
+	const content = (
+		<>
+			{showTabs ? (
+				<nav class="ba-auth-tabs" aria-label="Authentication">
+					{props.tabs === "sign-in" ? (
+						<span class="ba-auth-tab" aria-current="page">
+							Sign In
+						</span>
+					) : (
+						<Link href="./sign-in" class="ba-auth-tab">
+							Sign In
+						</Link>
+					)}
+					{props.tabs === "sign-up" ? (
+						<span class="ba-auth-tab" aria-current="page">
+							Sign Up
+						</span>
+					) : (
+						<Link href="./sign-up" class="ba-auth-tab">
+							Sign Up
+						</Link>
+					)}
+				</nav>
+			) : null}
+			<Card class={cardClass}>
+				<header
+					class="ba-auth-header"
+					data-align={props.align ?? (showTabs ? "start" : "center")}
+				>
 					<h1 class="ba-auth-title">{props.title}</h1>
 					<p class="ba-auth-description">{props.description}</p>
 				</header>
 				{props.children}
+				{props.legalAction ? (
+					<AuthLegalNotice ctx={props.ctx} action={props.legalAction} />
+				) : null}
 				{props.footer ? <p class="ba-auth-footer">{props.footer}</p> : null}
 			</Card>
+		</>
+	);
+
+	return (
+		<main class="ba-auth-page">
+			{brandBeforeCard}
+			{showTabs ? <div class="ba-auth-shell">{content}</div> : content}
 			{brandAfterCard}
 		</main>
 	);
@@ -275,8 +428,14 @@ function ProviderButtons(props: {
 }) {
 	const redirectTo = getRedirectTo(props.ctx);
 	if (props.providers.length === 0) return <></>;
+	const stacked = props.providers.length <= 2;
+	const prefix = props.mode === "signUp" ? "Sign up with" : "Sign in with";
 	return (
-		<section class="ba-auth-providers" aria-label="Other sign-in methods">
+		<section
+			class="ba-auth-providers"
+			data-layout={stacked ? "stack" : "grid"}
+			aria-label="Other sign-in methods"
+		>
 			{props.providers.map((provider) => (
 				<Form
 					class="ba-provider-form"
@@ -299,13 +458,19 @@ function ProviderButtons(props: {
 					/>
 					<input type="hidden" name="callbackURL" value={redirectTo} />
 					{props.mode === "signUp" ? (
-						<input type="checkbox" name="requestSignUp" checked hidden />
+						<input
+							type="checkbox"
+							name="requestSignUp"
+							checked
+							hidden
+							data-ba-unstyled
+						/>
 					) : null}
 					<Button type="submit" class="ba-button-outline">
 						<span class="ba-provider-icon">
 							{providerIcon(provider, props.ctx)}
 						</span>
-						{provider.label}
+						{stacked ? `${prefix} ${provider.label}` : provider.label}
 					</Button>
 				</Form>
 			))}
@@ -563,19 +728,14 @@ export const authUI = (options?: AuthUIOptions) =>
 							passkey?.routes?.generateAuthenticateOptions &&
 								passkey.routes.verifyAuthentication,
 						);
+						const showTabs = !options?.disableSignUp;
 						return (
 							<AuthCard
 								ctx={ctx}
-								title="Sign in to your account"
-								description="Welcome back. Please sign in to continue."
-								footer={
-									options?.disableSignUp ? null : (
-										<>
-											Don't have an account?{" "}
-											<Link href="./sign-up">Sign up</Link>
-										</>
-									)
-								}
+								title="Sign In"
+								description="Enter your email below to login to your account."
+								tabs={showTabs ? "sign-in" : undefined}
+								legalAction="signing in"
 							>
 								{lastMethod ? (
 									<LastLoginMethodHint ctx={ctx} capability={lastMethod} />
@@ -602,42 +762,42 @@ export const authUI = (options?: AuthUIOptions) =>
 											label="Email"
 											type="email"
 											autocomplete="email"
-											placeholder="Enter your email address"
+											placeholder="m@example.com"
 											required
 										/>
-										<Input
+										<PasswordField
 											name="password"
-											label="Password"
-											type="password"
 											autocomplete="current-password"
-											placeholder="Enter your password"
-											required
+											placeholder="password"
+											forgotPasswordHref="./forgot-password"
 										/>
-										<div class="ba-auth-links">
-											{username ? (
+										{username ? (
+											<div class="ba-auth-links">
 												<Link href="./sign-in/username">
 													Use username instead
 												</Link>
-											) : (
-												<span />
-											)}
-											<Link href="./forgot-password">Forgot password?</Link>
-										</div>
+											</div>
+										) : null}
+										<label class="ba-checkbox">
+											<input
+												type="checkbox"
+												name="rememberMe"
+												class="ba-checkbox-input"
+											/>
+											<span>Remember me</span>
+										</label>
 										<Button type="submit" class="ba-button-full">
-											Continue
+											Login
 										</Button>
 									</Form>
 									{hasPasskeyAuth ? <PasskeySignInButton ctx={ctx} /> : null}
 								</section>
 								{providers.length > 0 ? (
-									<>
-										<div class="ba-auth-divider">or</div>
-										<ProviderButtons
-											ctx={ctx}
-											mode="signIn"
-											providers={providers}
-										/>
-									</>
+									<ProviderButtons
+										ctx={ctx}
+										mode="signIn"
+										providers={providers}
+									/>
 								) : null}
 								{twoFactor ? (
 									<TwoFactorChallengePanel capability={twoFactor} />
@@ -706,15 +866,23 @@ export const authUI = (options?: AuthUIOptions) =>
 										label="Password"
 										type="password"
 										autocomplete="current-password"
-										placeholder="Enter your password"
+										placeholder="password"
 										required
 									/>
 									<div class="ba-auth-links">
 										<Link href="../sign-in">Use email instead</Link>
 										<Link href="../forgot-password">Forgot password?</Link>
 									</div>
+									<label class="ba-checkbox">
+										<input
+											type="checkbox"
+											name="rememberMe"
+											class="ba-checkbox-input"
+										/>
+										<span>Remember me</span>
+									</label>
 									<Button type="submit" class="ba-button-full">
-										Continue
+										Login
 									</Button>
 								</Form>
 								{twoFactor ? (
@@ -750,96 +918,88 @@ export const authUI = (options?: AuthUIOptions) =>
 						return (
 							<AuthCard
 								ctx={ctx}
-								title="Create your account"
-								description="Start with your email or continue with a provider."
-								footer={
-									<>
-										Already have an account?{" "}
-										<Link href="./sign-in">Sign in</Link>
-									</>
-								}
+								title="Sign Up"
+								description="Enter your information to create an account."
+								tabs="sign-up"
+								legalAction="signing up"
 							>
 								{lastMethod ? (
 									<LastLoginMethodHint ctx={ctx} capability={lastMethod} />
 								) : null}
-								<Form
-									action={routes.signUp.email}
-									pending="Creating your account..."
-									success={[
-										effects.toast({
-											level: "success",
-											message: "Account created successfully.",
-										}),
-										passkey
-											? effects.openDialog("passkey-registration")
-											: twoFactor
-												? effects.openDialog("two-factor-enrollment")
-												: effects.navigate(redirectTo),
-									]}
-									error={[
-										effects.toastFromError({
-											fallback: "Could not create your account.",
-										}),
-									]}
-								>
-									<Input
-										name="name"
-										label="Name"
-										autocomplete="name"
-										placeholder="Enter your name"
-										required
-									/>
-									{username ? (
-										<>
-											<Input
-												name="username"
-												label="Username"
-												autocomplete="username"
-												minlength={minUsernameLength}
-												maxlength={maxUsernameLength}
-												placeholder="Choose a username"
-												required
-											/>
-											{supportsDisplayUsername(username) ? (
-												<Input
-													name="displayUsername"
-													label="Display name"
-													autocomplete="nickname"
-													placeholder="How your name should appear"
-												/>
-											) : null}
-										</>
-									) : null}
-									<Input
-										name="email"
-										label="Email"
-										type="email"
-										autocomplete="email"
-										placeholder="Enter your email address"
-										required
-									/>
-									{additionalUserFields}
-									<Input
-										name="password"
-										label="Password"
-										type="password"
-										autocomplete="new-password"
-										placeholder="Create a password"
-										required
-									/>
-									<Button type="submit" class="ba-button-full">
-										Continue
-									</Button>
-								</Form>
-								{hasOtherMethods ? (
-									<>
-										<div class="ba-auth-divider">or</div>
-										<ProviderButtons
-											ctx={ctx}
-											mode="signUp"
-											providers={providers}
+								<section class="ba-auth-credentials">
+									<Form
+										action={routes.signUp.email}
+										pending="Creating your account..."
+										success={[
+											effects.toast({
+												level: "success",
+												message: "Account created successfully.",
+											}),
+											passkey
+												? effects.openDialog("passkey-registration")
+												: twoFactor
+													? effects.openDialog("two-factor-enrollment")
+													: effects.navigate(redirectTo),
+										]}
+										error={[
+											effects.toastFromError({
+												fallback: "Could not create your account.",
+											}),
+										]}
+									>
+										<Input
+											name="name"
+											label="Name"
+											autocomplete="name"
+											placeholder="Enter your name"
+											required
 										/>
-									</>
+										{username ? (
+											<>
+												<Input
+													name="username"
+													label="Username"
+													autocomplete="username"
+													minlength={minUsernameLength}
+													maxlength={maxUsernameLength}
+													placeholder="Choose a username"
+													required
+												/>
+												{supportsDisplayUsername(username) ? (
+													<Input
+														name="displayUsername"
+														label="Display name"
+														autocomplete="nickname"
+														placeholder="How your name should appear"
+													/>
+												) : null}
+											</>
+										) : null}
+										<Input
+											name="email"
+											label="Email"
+											type="email"
+											autocomplete="email"
+											placeholder="m@example.com"
+											required
+										/>
+										{additionalUserFields}
+										<PasswordField
+											name="password"
+											autocomplete="new-password"
+											placeholder="password"
+										/>
+										<Button type="submit" class="ba-button-full">
+											Create account
+										</Button>
+									</Form>
+								</section>
+								{hasOtherMethods ? (
+									<ProviderButtons
+										ctx={ctx}
+										mode="signUp"
+										providers={providers}
+									/>
 								) : null}
 								{passkey ? (
 									<PasskeyRegistrationPanel

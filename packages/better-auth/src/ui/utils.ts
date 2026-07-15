@@ -17,7 +17,7 @@ export const defaultTheme: ThemeConfig = {
 	border: "oklch(0.923 0.003 48.717)",
 	error: "oklch(0.577 0.245 27.325)",
 	success: "#16a34a",
-	borderRadius: "md",
+	borderRadius: "none",
 	dark: {
 		primary: "oklch(0.985 0.001 106.423)",
 		background: "hsl(0 0% 0%)",

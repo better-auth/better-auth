@@ -935,12 +935,14 @@ export const auth = betterAuth({
 		basePath: "/auth",
 		background: backgrounds.squaredGrid,
 		defaultRedirectTo: "/dashboard",
+		termsOfServiceURL: "https://example.com/terms",
+		privacyPolicyURL: "https://example.com/privacy",
 		theme: {
 			primary: "#6366f1",
 			appName: "My App",
 			logoUrl: "https://example.com/logo.svg",
 			logoPlacement: "top-center",
-			borderRadius: "md"
+			borderRadius: "none"
 		}
 	}
 })
@@ -949,6 +951,8 @@ export const auth = betterAuth({
 * `basePath`: Where UI pages are mounted (default: `/auth`)
 * `background`: Trusted stringified XML/HTML rendered behind UI pages. Use `backgrounds.blank`, `backgrounds.squaredGrid`, or a custom string.
 * `defaultRedirectTo`: Where built-in Auth UI pages redirect after successful auth actions when no query override is provided (default: `/`)
+* `termsOfServiceURL`: Optional Terms of Service URL. When set, sign-in and sign-up show a legal notice with a link to this page.
+* `privacyPolicyURL`: Optional Privacy Policy URL. When set, sign-in and sign-up show a legal notice with a link to this page.
 * `theme`: Shared theme tokens used by Better Auth UI pages
 * `csp`: Content Security Policy options for UI responses, or `false` to disable UI CSP handling
 
@@ -1034,10 +1038,10 @@ export const auth = betterAuth({
 })
 ```
 
-* `logoUrl`: A single image URL or `{ light: string; dark: string }` object rendered next to the app name and used as the UI favicon. When an object is provided, Better Auth renders the light logo by default, uses the dark logo for dark UI, and emits `prefers-color-scheme` favicon links so the browser can switch the favicon for light and dark CSS theme preferences.
+* `logoUrl`: A single image URL or `{ light: string; dark: string }` object rendered next to the app name and used as the UI favicon. When an object is provided, Better Auth renders the light logo by default, uses the dark logo for dark UI, and switches the favicon with the system `prefers-color-scheme` preference (including live changes).
 * `logoPlacement`: Where the app name and logo render on built-in Auth UI pages. Defaults to `"top-center"`, which places the brand above the form in the center of the screen. Supported values are `"hidden"`, `"top-left"`, `"top-center"`, `"top-right"`, `"bottom-left"`, `"bottom-center"`, and `"bottom-right"`.
 * `dark`: Optional dark-mode overrides for the same color tokens (`background`, `surface`, `text`, `textSecondary`, `border`, `primary`, `error`, `success`). Applied automatically when the user's system preference is `prefers-color-scheme: dark`.
-* `borderRadius`: Controls shared component radius tokens, including Auth UI inputs and buttons.
+* `borderRadius`: Controls shared component radius tokens, including Auth UI inputs and buttons. Defaults to `"none"` (squared). Supported values are `"none"`, `"sm"`, `"md"`, `"lg"`, and `"full"`.
 
 ## `hooks`
 

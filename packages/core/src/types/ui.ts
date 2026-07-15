@@ -246,5 +246,15 @@ export type BetterAuthUIOptions = {
 	background?: string | undefined;
 	defaultRedirectTo?: string | undefined;
 	theme?: Partial<ThemeConfig> | undefined;
+	/**
+	 * Optional Terms of Service URL. When set, sign-in and sign-up pages
+	 * show a legal notice linking to this policy.
+	 */
+	termsOfServiceURL?: string | undefined;
+	/**
+	 * Optional Privacy Policy URL. When set, sign-in and sign-up pages
+	 * show a legal notice linking to this policy.
+	 */
+	privacyPolicyURL?: string | undefined;
 	csp?: false | UIContentSecurityPolicyOptions | undefined;
 };

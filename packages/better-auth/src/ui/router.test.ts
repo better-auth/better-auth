@@ -470,6 +470,53 @@ describe("ui router", async () => {
 		expect(html).not.toContain("border-radius:calc(var(--ba-radius) + .5rem)");
 	});
 
+	it("defaults to squared border radius", async () => {
+		const { auth } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [authUI()],
+		});
+		const res = await auth.ui.handler(
+			new Request("http://localhost:3000/auth/sign-in"),
+		);
+		const html = await res.text();
+
+		expect(html).toContain("--ba-radius:0");
+		expect(html).toContain("--ba-radius-card:0");
+	});
+
+	it("opens the sign-up tab on the sign-up route and renders legal links", async () => {
+		const { auth } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			ui: {
+				termsOfServiceURL: "https://example.com/terms",
+				privacyPolicyURL: "https://example.com/privacy",
+			},
+			plugins: [authUI()],
+		});
+		const signUp = await auth.ui.handler(
+			new Request("http://localhost:3000/auth/sign-up"),
+		);
+		const signUpHtml = await signUp.text();
+
+		expect(signUpHtml).toContain('aria-current="page">Sign Up</span>');
+		expect(signUpHtml).toContain('href="./sign-in"');
+		expect(signUpHtml).toContain("By signing up, you agree to the");
+		expect(signUpHtml).toContain('href="https://example.com/terms"');
+		expect(signUpHtml).toContain('href="https://example.com/privacy"');
+
+		const signIn = await auth.ui.handler(
+			new Request("http://localhost:3000/auth/sign-in"),
+		);
+		const signInHtml = await signIn.text();
+		expect(signInHtml).toContain("By signing in, you agree to the");
+		expect(signInHtml).toContain("Terms of Service");
+		expect(signInHtml).toContain("Privacy Policy");
+	});
+
 	it("renders theme-specific auth UI logos", async () => {
 		const { auth } = await getTestInstance({
 			appName: "Multinite",
@@ -496,11 +543,11 @@ describe("ui router", async () => {
 		expect(html).toContain('srcset="https://example.com/logo-dark.svg"');
 		expect(html).toContain('src="https://example.com/logo-light.svg"');
 		expect(html).toContain(
-			'<link rel="icon" media="(prefers-color-scheme: light)" href="https://example.com/logo-light.svg">',
+			'<link rel="icon" id="ba-favicon" href="https://example.com/logo-light.svg">',
 		);
-		expect(html).toContain(
-			'<link rel="icon" media="(prefers-color-scheme: dark)" href="https://example.com/logo-dark.svg">',
-		);
+		expect(html).toContain('"https://example.com/logo-light.svg"');
+		expect(html).toContain('"https://example.com/logo-dark.svg"');
+		expect(html).toContain('matchMedia("(prefers-color-scheme: dark)")');
 		expect(html).toContain('alt="Multinite logo"');
 	});
 
@@ -532,15 +579,69 @@ describe("ui router", async () => {
 		expect(html).toContain(
 			'class="ba-button ba-button-secondary ba-button-full"',
 		);
-		expect(body.indexOf("Continue")).toBeLessThan(
+		expect(body.indexOf("Login")).toBeLessThan(
 			body.indexOf("Sign in with Passkey"),
 		);
 		expect(body.indexOf("Sign in with Passkey")).toBeLessThan(
-			body.indexOf("ba-auth-divider"),
+			body.indexOf("Sign in with Google"),
 		);
 		expect(html).toContain('action="/sign-in/social"');
 		expect(html).toContain('name="provider" value="google"');
-		expect(html).toContain("Google");
+		expect(html).toContain("Sign in with Google");
+		expect(html).toContain('data-layout="stack"');
+		expect(html).toContain('aria-current="page">Sign In</span>');
+		expect(html).toContain('href="./sign-up"');
+		expect(html).toContain("Remember me");
+		expect(html).toContain("data-ba-toggle-password");
+	});
+
+	it("grids social providers when more than two are configured", async () => {
+		const { auth } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			socialProviders: {
+				google: {
+					clientId: "test-client-id",
+					clientSecret: "test-client-secret",
+				},
+				github: {
+					clientId: "test-client-id",
+					clientSecret: "test-client-secret",
+				},
+				discord: {
+					clientId: "test-client-id",
+					clientSecret: "test-client-secret",
+				},
+			},
+			plugins: [authUI()],
+		});
+		const res = await auth.ui.handler(
+			new Request("http://localhost:3000/auth/sign-in"),
+		);
+		const html = await res.text();
+
+		expect(html).toContain('data-layout="grid"');
+		expect(html).toContain(
+			'.ba-auth-providers[data-layout="grid"]{grid-template-columns:repeat(2,minmax(0,1fr))}',
+		);
+		expect(html).toContain(">Google</button>");
+		expect(html).toContain(">GitHub</button>");
+		expect(html).toContain(">Discord</button>");
+		expect(html).not.toContain("Sign in with Google");
+		expect(html).toContain(
+			'input[type="checkbox"][hidden]{display:none!important}',
+		);
+
+		const signUp = await auth.ui.handler(
+			new Request("http://localhost:3000/auth/sign-up"),
+		);
+		const signUpHtml = await signUp.text();
+		expect(signUpHtml).toContain('data-layout="grid"');
+		expect(signUpHtml).toContain('name="requestSignUp"');
+		expect(signUpHtml).toMatch(/name="requestSignUp"[^>]*\bhidden\b/);
+		expect(signUpHtml).toContain(">Google</button>");
+		expect(signUpHtml).not.toContain("Sign up with Google");
 	});
 
 	it("renders generic OAuth provider buttons through UI capabilities", async () => {
