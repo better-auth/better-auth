@@ -16,11 +16,11 @@ import {
 import { schema } from "./schema";
 import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
 
-export type { PhoneNumberOptions, UserWithPhoneNumber };
 export {
 	defaultMaskPhoneNumber,
 	PHONE_NUMBER_REVEAL_PATHS,
 } from "./mask";
+export type { PhoneNumberOptions, UserWithPhoneNumber };
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
