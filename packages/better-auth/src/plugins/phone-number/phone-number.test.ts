@@ -1299,7 +1299,8 @@ describe("defaultMaskPhoneNumber", () => {
 	});
 
 	it("still masks numbers that contain a literal asterisk", () => {
-		expect(defaultMaskPhoneNumber("+1*5551234567")).toBe("+********4567");
+		// Digits are extracted ignoring `*`, so this masks like +15551234567.
+		expect(defaultMaskPhoneNumber("+1*5551234567")).toBe("+*******4567");
 	});
 });
 
