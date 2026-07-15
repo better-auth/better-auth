@@ -1136,6 +1136,8 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 				where,
 				limit: pageSize,
 				offset,
+				// Stable order is required for RFC 7644 startIndex/count pagination.
+				sortBy: { field: "id", direction: "asc" },
 			});
 
 			return ctx.json({

@@ -140,8 +140,9 @@ describe("SCIM", () => {
 				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
 				startIndex: 1,
 				totalResults: 2,
-				Resources: [userA, userB],
 			});
+			expect(users.Resources).toEqual(expect.arrayContaining([userA, userB]));
+			expect(users.Resources).toHaveLength(2);
 		});
 
 		it("should return an empty list when no users have been provisioned or belong to the organization", async () => {
@@ -249,8 +250,11 @@ describe("SCIM", () => {
 				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
 				startIndex: 1,
 				totalResults: 2,
-				Resources: [userA, userC],
 			});
+			expect(usersProviderB.Resources).toEqual(
+				expect.arrayContaining([userA, userC]),
+			);
+			expect(usersProviderB.Resources).toHaveLength(2);
 		});
 
 		it("should only allow access to users that belong to the same provider and organization", async () => {
@@ -308,8 +312,11 @@ describe("SCIM", () => {
 				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
 				startIndex: 1,
 				totalResults: 2,
-				Resources: [userA, userC],
 			});
+			expect(usersProviderB.Resources).toEqual(
+				expect.arrayContaining([userA, userC]),
+			);
+			expect(usersProviderB.Resources).toHaveLength(2);
 		});
 
 		it("should filter the list of users", async () => {
@@ -437,6 +444,21 @@ describe("SCIM", () => {
 			expect(page.startIndex).toBe(6);
 			expect(page.itemsPerPage).toBe(5);
 			expect(page.Resources).toHaveLength(5);
+
+			const allUsers = await auth.api.listSCIMUsers({
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+			const expectedPage = allUsers.Resources.slice(5, 10);
+			expect(page.Resources.map((user) => user.id)).toEqual(
+				expectedPage.map((user) => user.id),
+			);
+			expect(allUsers.Resources.map((user) => user.id)).toEqual(
+				[...allUsers.Resources]
+					.map((user) => user.id)
+					.sort((a, b) => a.localeCompare(b)),
+			);
 
 			const emptyPage = await auth.api.listSCIMUsers({
 				query: {
