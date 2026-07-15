@@ -36,6 +36,7 @@ describe("client declaration emit", () => {
 			target: "ES2022",
 			module: "ESNext",
 			moduleResolution: "bundler",
+			jsx: "react-jsx",
 			lib: ["DOM", "DOM.Iterable", "ESNext"],
 			strict: true,
 			skipLibCheck: true,

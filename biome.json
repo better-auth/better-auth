@@ -130,6 +130,7 @@
     "includes": [
       "**",
       "!**/dist",
+      "!**/dist-runtime",
       "!**/coverage",
       "!**/build",
       "!**/demo/electron/out",

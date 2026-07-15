@@ -279,7 +279,7 @@ export function uiRouter(ctx: AuthContext, options: BetterAuthOptions) {
 				throw e;
 			}
 			if (options.onAPIError?.onError) {
-				options.onAPIError.onError(e, ctx);
+				void options.onAPIError.onError(e, ctx);
 				return;
 			}
 			ctx.logger?.error(
