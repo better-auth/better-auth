@@ -131,6 +131,8 @@
       "**",
       "!**/dist",
       "!**/dist-runtime",
+      "!**/runtime.generated.ts",
+      "!**/.vinxi",
       "!**/coverage",
       "!**/build",
       "!**/demo/electron/out",
