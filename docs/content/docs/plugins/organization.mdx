@@ -731,6 +731,28 @@ To retrieve the active organization for the user, you can call the `useActiveOrg
   </Tab>
 </Tabs>
 
+### Get Organization
+
+To get organization metadata without members or invitations, use `getOrganization`.
+By default, if you don't pass any properties, it will use the active organization.
+
+Prefer this over `getFullOrganization` when you only need fields like `id`, `name`, `slug`, `logo`, and `metadata`.
+
+<APIMethod path="/organization/get-organization" method="GET" requireSession>
+  ```ts
+  type getOrganization = {
+      /**
+       * The organization ID to get. By default, it will use the active organization.  
+       */
+      organizationId?: string = "org-id"
+      /**
+       * The organization slug to get.  
+       */
+      organizationSlug?: string = "org-slug"
+  }
+  ```
+</APIMethod>
+
 ### Get Full Organization
 
 To get the full details of an organization, you can use the `getFullOrganization` function.
