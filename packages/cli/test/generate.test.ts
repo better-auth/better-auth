@@ -19,6 +19,36 @@ import { cliPath } from "./utils";
 
 const execFileAsync = promisify(execFile);
 
+const compoundIndexPlugin = (): BetterAuthPlugin => ({
+	id: "compound-index-test",
+	schema: {
+		directoryUser: {
+			modelName: "directory_user",
+			fields: {
+				connectionId: {
+					type: "string",
+					fieldName: "connection_id",
+				},
+				externalId: {
+					type: "string",
+					fieldName: "external_id",
+				},
+				status: {
+					type: "string",
+					fieldName: "provisioning_status",
+				},
+			},
+			indexes: [
+				{
+					fields: ["connectionId", "externalId"],
+					unique: true,
+				},
+				{ fields: ["connectionId", "status"] },
+			],
+		},
+	},
+});
+
 describe("generate", async () => {
 	describe("command output paths", () => {
 		it("should use adapter-specific filenames when output points to an existing directory", async () => {
@@ -122,6 +152,158 @@ export const auth = betterAuth({
 		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/schema.prisma",
 		);
+	});
+
+	it("should generate Prisma compound indexes with physical field names", async () => {
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: prismaAdapter(
+				{},
+				{
+					provider: "mysql",
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: prismaAdapter(
+					{},
+					{
+						provider: "mysql",
+					},
+				),
+				plugins: [compoundIndexPlugin()],
+			},
+		});
+
+		expect(schema.code).toContain(
+			'@@unique([connection_id, external_id], map: "directory_user_connection_id_external_id_uidx")',
+		);
+		expect(schema.code).toContain(
+			'@@index([connection_id, provisioning_status], map: "directory_user_connection_id_provisioning_status_idx")',
+		);
+		expect(schema.code).toMatch(/connection_id\s+String\s+@db\.VarChar\(191\)/);
+		expect(schema.code).toMatch(/external_id\s+String\s+@db\.VarChar\(191\)/);
+	});
+
+	it("should bound existing MySQL string fields before adding compound indexes", async () => {
+		const tmpDir = fs.mkdtempSync(
+			path.join(os.tmpdir(), "prisma-compound-index-upgrade-"),
+		);
+		const filePath = path.join(tmpDir, "schema.prisma");
+		const relativePath = path.relative(process.cwd(), filePath);
+		fs.writeFileSync(
+			filePath,
+			`
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url = env("DATABASE_URL")
+}
+
+model Directory_user {
+  id                  String @id
+  connection_id       String @db.Text
+  external_id         String @db.Text
+  provisioning_status String @db.Text
+
+  @@map("directory_user")
+}
+`,
+		);
+
+		try {
+			const schema = await generatePrismaSchema({
+				file: relativePath,
+				adapter: prismaAdapter(
+					{},
+					{
+						provider: "mysql",
+					},
+				)({} as BetterAuthOptions),
+				options: {
+					database: prismaAdapter(
+						{},
+						{
+							provider: "mysql",
+						},
+					),
+					plugins: [compoundIndexPlugin()],
+				},
+			});
+
+			expect(schema.code).toMatch(
+				/connection_id\s+String\s+@db\.VarChar\(191\)/,
+			);
+			expect(schema.code).toMatch(/external_id\s+String\s+@db\.VarChar\(191\)/);
+			expect(schema.code).toMatch(
+				/provisioning_status\s+String\s+@db\.VarChar\(191\)/,
+			);
+			expect(schema.code).toContain(
+				'@@unique([connection_id, external_id], map: "directory_user_connection_id_external_id_uidx")',
+			);
+		} finally {
+			fs.rmSync(tmpDir, { force: true, recursive: true });
+		}
+	});
+
+	it("should reject a conflicting existing Prisma compound index", async () => {
+		const tmpDir = fs.mkdtempSync(
+			path.join(os.tmpdir(), "prisma-compound-index-"),
+		);
+		const filePath = path.join(tmpDir, "schema.prisma");
+		const relativePath = path.relative(process.cwd(), filePath);
+		fs.writeFileSync(
+			filePath,
+			`
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url = env("DATABASE_URL")
+}
+
+model Directory_user {
+  id                  String @id
+  connection_id       String
+  external_id         String
+  provisioning_status String
+
+  @@index([external_id], map: "Directory_User_Connection_Id_External_Id_UIDX")
+  @@map("directory_user")
+}
+`,
+		);
+
+		try {
+			await expect(
+				generatePrismaSchema({
+					file: relativePath,
+					adapter: prismaAdapter(
+						{},
+						{
+							provider: "mysql",
+						},
+					)({} as BetterAuthOptions),
+					options: {
+						database: prismaAdapter(
+							{},
+							{
+								provider: "mysql",
+							},
+						),
+						plugins: [compoundIndexPlugin()],
+					},
+				}),
+			).rejects.toThrow(
+				'Prisma index "directory_user_connection_id_external_id_uidx" on model "Directory_user" does not match the configured fields and uniqueness.',
+			);
+		} finally {
+			fs.rmSync(tmpDir, { force: true, recursive: true });
+		}
 	});
 
 	/**
@@ -416,6 +598,74 @@ export const auth = betterAuth({
 		});
 		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema.txt",
+		);
+	});
+
+	it("should generate Drizzle compound indexes with physical field names", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "mysql",
+					schema: {},
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "mysql",
+						schema: {},
+					},
+				),
+				plugins: [compoundIndexPlugin()],
+			},
+		});
+
+		expect(schema.code).toMatch(
+			/uniqueIndex\("directory_user_connection_id_external_id_uidx"\)\.on\(\s*table\.connection_id,\s*table\.external_id,?\s*\)/,
+		);
+		expect(schema.code).toMatch(
+			/index\("directory_user_connection_id_provisioning_status_idx"\)\.on\(\s*table\.connection_id,\s*table\.provisioning_status,?\s*\)/,
+		);
+		expect(schema.code).toMatch(
+			/connection_id:\s*varchar\(["']connection_id["'], \{ length: 191 \}\)/,
+		);
+		expect(schema.code).toMatch(
+			/external_id:\s*varchar\(["']external_id["'], \{ length: 191 \}\)/,
+		);
+	});
+
+	it("should reject duplicate Drizzle field-level and table-level indexes", async () => {
+		await expect(
+			generateDrizzleSchema({
+				file: "test.drizzle",
+				adapter: drizzleAdapter(
+					{},
+					{
+						provider: "sqlite",
+						schema: {},
+					},
+				)({} as BetterAuthOptions),
+				options: {
+					plugins: [
+						{
+							id: "directory",
+							schema: {
+								directoryUser: {
+									fields: {
+										subject: { type: "string", index: true },
+									},
+									indexes: [{ fields: ["subject"] }],
+								},
+							},
+						},
+					],
+				},
+			}),
+		).rejects.toThrow(
+			'Database index name "directoryUser_subject_idx" is already reserved by field-level index metadata on table "directoryUser".',
 		);
 	});
 

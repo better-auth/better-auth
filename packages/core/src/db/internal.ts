@@ -1,0 +1,11 @@
+export {
+	type BoundedDatabaseIndexDialect,
+	type DBTableIndexSource,
+	getDatabaseFieldIndexName,
+	getDatabaseIndexName,
+	getDatabaseIndexStringLength,
+	getPortableDatabaseIdentifierKey,
+	type ResolvedDBTableIndex,
+	resolveDatabaseSchemaIndexes,
+	resolveDatabaseTableIndexes,
+} from "./database-index";

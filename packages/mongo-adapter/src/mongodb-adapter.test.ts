@@ -1,3 +1,4 @@
+import type { Db } from "mongodb";
 import { ObjectId, UUID } from "mongodb";
 import { describe, expect, it, vi } from "vitest";
 import { mongodbAdapter } from "./mongodb-adapter";
@@ -9,6 +10,161 @@ describe("mongodb-adapter", () => {
 		} as any;
 		const adapter = mongodbAdapter(db);
 		expect(adapter).toBeDefined();
+	});
+
+	it("creates configured compound indexes before the first write", async () => {
+		let resolveIndexSetup: (indexName: string) => void = () => {};
+		const indexSetup = new Promise<string>((resolve) => {
+			resolveIndexSetup = resolve;
+		});
+		const createIndex = vi.fn(() => indexSetup);
+		const insertOne = vi.fn(async (document: Record<string, unknown>) => ({
+			insertedId: document._id,
+		}));
+		const db = {
+			collection: vi.fn(() => ({ createIndex, insertOne })),
+		};
+		const adapter = mongodbAdapter(db as unknown as Db, {
+			transaction: false,
+		})({
+			plugins: [
+				{
+					id: "directory",
+					schema: {
+						directoryUser: {
+							modelName: "directory_user",
+							fields: {
+								connectionId: {
+									type: "string",
+									fieldName: "connection_id",
+								},
+								externalId: {
+									type: "string",
+									fieldName: "external_id",
+								},
+							},
+							indexes: [
+								{
+									fields: ["connectionId", "externalId"],
+									unique: true,
+								},
+							],
+						},
+					},
+				},
+			],
+		});
+
+		const firstCreate = adapter.create({
+			model: "directoryUser",
+			data: { connectionId: "okta", externalId: "employee-1" },
+		});
+		const secondCreate = adapter.create({
+			model: "directoryUser",
+			data: { connectionId: "okta", externalId: "employee-2" },
+		});
+
+		await vi.waitFor(() => {
+			expect(createIndex).toHaveBeenCalledWith(
+				{ connection_id: 1, external_id: 1 },
+				{
+					name: "directory_user_connection_id_external_id_uidx",
+					unique: true,
+				},
+			);
+		});
+		expect(db.collection).toHaveBeenCalledWith("directory_user");
+		expect(createIndex).toHaveBeenCalledOnce();
+		expect(insertOne).not.toHaveBeenCalled();
+
+		resolveIndexSetup("connection_id_1_external_id_1");
+		await Promise.all([firstCreate, secondCreate]);
+
+		expect(createIndex).toHaveBeenCalledOnce();
+		expect(insertOne).toHaveBeenCalledTimes(2);
+	});
+
+	it("does not create indexes for tables with migrations disabled", async () => {
+		const createIndex = vi.fn();
+		const insertOne = vi.fn(async (document: Record<string, unknown>) => ({
+			insertedId: document._id,
+		}));
+		const db = {
+			collection: vi.fn(() => ({ createIndex, insertOne })),
+		};
+		const adapter = mongodbAdapter(db as unknown as Db, {
+			transaction: false,
+		})({
+			plugins: [
+				{
+					id: "externally-managed-directory",
+					schema: {
+						directoryUser: {
+							disableMigration: true,
+							fields: {
+								connectionId: { type: "string" },
+								externalId: { type: "string" },
+							},
+							indexes: [
+								{
+									fields: ["connectionId", "externalId"],
+									unique: true,
+								},
+							],
+						},
+					},
+				},
+			],
+		});
+
+		await adapter.create({
+			model: "directoryUser",
+			data: { connectionId: "okta", externalId: "employee-1" },
+		});
+
+		expect(createIndex).not.toHaveBeenCalled();
+		expect(insertOne).toHaveBeenCalledOnce();
+	});
+
+	it("allows duplicate cleanup before the first index-enforcing mutation", async () => {
+		const createIndex = vi.fn();
+		const deleteMany = vi.fn(async () => ({ deletedCount: 2 }));
+		const db = {
+			collection: vi.fn(() => ({ createIndex, deleteMany })),
+		};
+		const adapter = mongodbAdapter(db as unknown as Db, {
+			transaction: false,
+		})({
+			plugins: [
+				{
+					id: "directory",
+					schema: {
+						directoryUser: {
+							fields: {
+								connectionId: { type: "string" },
+								externalId: { type: "string" },
+							},
+							indexes: [
+								{
+									fields: ["connectionId", "externalId"],
+									unique: true,
+								},
+							],
+						},
+					},
+				},
+			],
+		});
+
+		await expect(
+			adapter.deleteMany({
+				model: "directoryUser",
+				where: [{ field: "connectionId", value: "duplicate" }],
+			}),
+		).resolves.toBe(2);
+
+		expect(createIndex).not.toHaveBeenCalled();
+		expect(deleteMany).toHaveBeenCalledOnce();
 	});
 
 	it("consumeOne returns the deleted document from Mongo metadata", async () => {

@@ -1,6 +1,12 @@
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import {
+	getDatabaseIndexStringLength,
+	getPortableDatabaseIdentifierKey,
+	resolveDatabaseSchemaIndexes,
+} from "@better-auth/core/db/internal";
+import { BetterAuthError } from "@better-auth/core/error";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import { produceSchema } from "@mrleebo/prisma-ast";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
@@ -8,6 +14,57 @@ import type { DBFieldType } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
 import { getPrismaVersion } from "../utils/get-package-info";
 import type { SchemaGenerator } from "./types";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
+}
+
+function parsePrismaStringLiteral(value: unknown) {
+	if (typeof value !== "string") return undefined;
+	try {
+		const parsed = JSON.parse(value);
+		return typeof parsed === "string" ? parsed : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+function getPrismaIndexDefinition(property: unknown) {
+	if (
+		!isRecord(property) ||
+		property.type !== "attribute" ||
+		property.kind !== "object" ||
+		(property.name !== "index" && property.name !== "unique") ||
+		!Array.isArray(property.args)
+	) {
+		return undefined;
+	}
+
+	let columns: readonly string[] | undefined;
+	let name: string | undefined;
+	let validFullColumns = false;
+	for (const argument of property.args) {
+		if (!isRecord(argument) || !isRecord(argument.value)) continue;
+		const value = argument.value;
+		if (
+			value.type === "array" &&
+			Array.isArray(value.args) &&
+			value.args.every((column) => typeof column === "string")
+		) {
+			columns = value.args.map((column) => String(column));
+			validFullColumns = true;
+		} else if (value.type === "keyValue" && value.key === "map") {
+			name = parsePrismaStringLiteral(value.value);
+		}
+	}
+	if (!name) return undefined;
+	return {
+		columns: columns ?? [],
+		name,
+		unique: property.name === "unique",
+		validFullColumns,
+	};
+}
 
 export const generatePrismaSchema: SchemaGenerator = async ({
 	adapter,
@@ -41,6 +98,18 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				model === getModelName(customModelName)
 			);
 		});
+	const resolvedIndexesByTable = resolveDatabaseSchemaIndexes(
+		Object.keys(tables)
+			.filter((tableKey) => !isMigrationDisabled(tableKey))
+			.map((tableKey) => {
+				const customModelName = tables[tableKey]?.modelName || tableKey;
+				return {
+					fields: tables[tableKey]!.fields,
+					indexes: tables[tableKey]!.indexes,
+					tableName: getModelName(customModelName),
+				};
+			}),
+	);
 
 	let schemaPrisma = "";
 	if (schemaPrismaExist) {
@@ -143,6 +212,8 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			const customModelName = tables[table]?.modelName || table;
 			const modelName = capitalizeFirstLetter(getModelName(customModelName));
 			const fields = tables[table]?.fields;
+			const resolvedTableIndexes =
+				resolvedIndexesByTable.get(getModelName(customModelName)) ?? [];
 			function getType({
 				isBigint,
 				isOptional,
@@ -281,6 +352,23 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 								isAlreadyExist.optional =
 									fieldTypeParts.isOptional || undefined;
 								isAlreadyExist.array = fieldTypeParts.isArray || undefined;
+							}
+						}
+						if (provider === "mysql" && attr.type === "string") {
+							const tableIndexStringLength = getDatabaseIndexStringLength({
+								columnName: fieldName,
+								dialect: "mysql",
+								fields: fields ?? {},
+								indexes: resolvedTableIndexes,
+							});
+							if (tableIndexStringLength) {
+								isAlreadyExist.attributes = isAlreadyExist.attributes?.filter(
+									(attribute) => attribute.group !== "db",
+								);
+								builder
+									.model(modelName)
+									.field(fieldName)
+									.attribute(`db.VarChar(${tableIndexStringLength})`);
 							}
 						}
 						continue;
@@ -431,14 +519,54 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						)
 						.attribute(relationField);
 				}
-				if (
-					!attr.unique &&
-					!attr.references &&
-					provider === "mysql" &&
-					attr.type === "string"
-				) {
-					builder.model(modelName).field(fieldName).attribute("db.Text");
+				if (provider === "mysql" && attr.type === "string") {
+					const tableIndexStringLength = getDatabaseIndexStringLength({
+						columnName: fieldName,
+						dialect: "mysql",
+						fields: fields ?? {},
+						indexes: resolvedTableIndexes,
+					});
+					const nativeType = tableIndexStringLength
+						? `db.VarChar(${tableIndexStringLength})`
+						: !attr.unique && !attr.references
+							? "db.Text"
+							: undefined;
+					if (nativeType) {
+						builder.model(modelName).field(fieldName).attribute(nativeType);
+					}
 				}
+			}
+
+			for (const tableIndex of resolvedTableIndexes) {
+				const attributeName = tableIndex.unique ? "unique" : "index";
+				const existingIndex = prismaModel?.properties
+					.map(getPrismaIndexDefinition)
+					.find(
+						(index) =>
+							index &&
+							getPortableDatabaseIdentifierKey(index.name) ===
+								getPortableDatabaseIdentifierKey(tableIndex.name),
+					);
+				if (existingIndex) {
+					const matches =
+						existingIndex.validFullColumns &&
+						existingIndex.unique === (tableIndex.unique ?? false) &&
+						existingIndex.columns.length === tableIndex.columns.length &&
+						existingIndex.columns.every(
+							(column, position) => column === tableIndex.columns[position],
+						);
+					if (!matches) {
+						throw new BetterAuthError(
+							`Prisma index "${tableIndex.name}" on model "${modelName}" does not match the configured fields and uniqueness. Rename or replace the existing index, then generate the schema again.`,
+						);
+					}
+					continue;
+				}
+				builder
+					.model(modelName)
+					.blockAttribute(
+						`${attributeName}([${tableIndex.columns.join(", ")}], map: ${JSON.stringify(tableIndex.name)})`,
+					);
 			}
 
 			// Add many-to-many fields

@@ -13,6 +13,7 @@ import {
 	transactionsTestSuite,
 	uuidTestSuite,
 } from "../adapter-factory";
+import { compoundIndexTestSuite } from "../adapter-factory/compound-index-test-suite";
 
 // We are not allowed to handle the mssql connection
 // we must let kysely handle it. This is because if kysely is already
@@ -345,6 +346,40 @@ const { execute } = await testAdapter({
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite(),
+		compoundIndexTestSuite({
+			async rerunMigrations(options) {
+				const migrations = await getMigrations({
+					...options,
+					database: { db: kyselyDB, type: "mssql" },
+				});
+				const pendingMigration = await migrations.compileMigrations();
+				await migrations.runMigrations();
+				return pendingMigration;
+			},
+			mismatchError:
+				'Database index "compound_identity_uidx" on table "compound_index_subject" does not match the configured fields and uniqueness.',
+			async verifyMismatchedIndexRejected(options) {
+				await query(`
+					DROP INDEX [compound_identity_uidx]
+						ON [dbo].[compound_index_subject];
+					CREATE INDEX [compound_identity_uidx]
+						ON [dbo].[compound_index_subject] ([provider_subject]);
+				`);
+				try {
+					await getMigrations({
+						...options,
+						database: { db: kyselyDB, type: "mssql" },
+					});
+				} finally {
+					await query(`
+						DROP INDEX [compound_identity_uidx]
+							ON [dbo].[compound_index_subject];
+						CREATE UNIQUE INDEX [compound_identity_uidx]
+							ON [dbo].[compound_index_subject] ([issuer_url], [provider_subject]);
+					`);
+				}
+			},
+		}),
 	],
 	async onFinish() {
 		kyselyDB.destroy();

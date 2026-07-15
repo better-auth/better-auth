@@ -64,6 +64,77 @@ describe("relations-v2 schema generator", () => {
 		expect(typeErrors(code)).toEqual([]);
 	});
 
+	it("generates compound indexes with physical field names", async () => {
+		const { code = "" } = await generateFor("mysql", {
+			plugins: [
+				{
+					id: "compound-index-test",
+					schema: {
+						directoryUser: {
+							modelName: "directory_user",
+							fields: {
+								connectionId: {
+									type: "string",
+									fieldName: "connection_id",
+								},
+								externalId: {
+									type: "string",
+									fieldName: "external_id",
+								},
+							},
+							indexes: [
+								{
+									fields: ["connectionId", "externalId"],
+									unique: true,
+								},
+							],
+						},
+					},
+				},
+			],
+		});
+
+		expect(code).toMatch(
+			/uniqueIndex\("directory_user_connection_id_external_id_uidx"\)\.on\(\s*table\.connection_id,\s*table\.external_id,?\s*\)/,
+		);
+		expect(code).toMatch(
+			/connection_id:\s*varchar\(["']connection_id["'], \{ length: 191 \}\)/,
+		);
+		expect(code).toMatch(
+			/external_id:\s*varchar\(["']external_id["'], \{ length: 191 \}\)/,
+		);
+		expect(typeErrors(code)).toEqual([]);
+	});
+
+	it("does not generate externally managed tables or their indexes", async () => {
+		const { code = "" } = await generate({
+			plugins: [
+				{
+					id: "external-directory",
+					schema: {
+						directoryUser: {
+							disableMigration: true,
+							fields: {
+								connectionId: { type: "string" },
+								externalId: { type: "string" },
+							},
+							indexes: [
+								{
+									fields: ["connectionId", "externalId"],
+									unique: true,
+								},
+							],
+						},
+					},
+				},
+			],
+		});
+
+		expect(code).not.toContain("directoryUser");
+		expect(code).not.toContain("directoryUser_connectionId_externalId_uidx");
+		expect(typeErrors(code)).toEqual([]);
+	});
+
 	/**
 	 * A hardcoded `export const relations = defineRelationsPart(...)` collides
 	 * with a user model whose table name is `relations` (e.g.
