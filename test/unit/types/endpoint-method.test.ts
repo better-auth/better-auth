@@ -73,7 +73,7 @@ describe("Generic OAuth types", () => {
 					tokenUrl: "https://example.com/token",
 					userInfoUrl: "https://example.com/userinfo",
 					clientId: "client",
-					accountSubject({ profile }) {
+					identitySubject({ profile }) {
 						expectTypeOf(profile.id).toEqualTypeOf<
 							string | number | null | undefined
 						>();

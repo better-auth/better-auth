@@ -1,6 +1,12 @@
 import type { AsyncLocalStorage } from "node:async_hooks";
 import { getAsyncLocalStorage } from "@better-auth/core/async_hooks";
-import type { DBAdapter, DBTransactionAdapter } from "../db/adapter";
+import type {
+	AtomicWriteOperation,
+	AtomicWriteResult,
+	DBAdapter,
+	DBTransactionAdapter,
+} from "../db/adapter";
+import { BetterAuthError } from "../error";
 import type { BetterAuthOptions } from "../types";
 import { __getBetterAuthGlobal } from "./global";
 
@@ -143,6 +149,87 @@ export const runWithTransaction = async <
 			throw err;
 		});
 };
+
+/** Returns whether an adapter exposes a real transaction callback. */
+export function hasNativeTransactionSupport<
+	Options extends BetterAuthOptions = BetterAuthOptions,
+>(adapter: Pick<DBAdapter<Options>, "options">): boolean {
+	return typeof adapter.options?.adapterConfig.transaction === "function";
+}
+
+/** Stable error code for adapters that cannot commit a multi-record mutation. */
+export const ATOMIC_WRITES_UNSUPPORTED = "ATOMIC_WRITES_UNSUPPORTED" as const;
+
+/** An atomic mutation rejected before hooks or writes because no capability exists. */
+export type AtomicWritesUnsupportedError = BetterAuthError & {
+	readonly code: typeof ATOMIC_WRITES_UNSUPPORTED;
+	readonly adapterId: string;
+};
+
+/** A predeclared atomic write set and its post-commit result resolver. */
+export type AtomicMutationPlan<R> = {
+	operations: readonly AtomicWriteOperation[];
+	afterCommit: (results: readonly AtomicWriteResult[]) => R | Promise<R>;
+};
+
+/** Returns whether an unknown error reports missing atomic-write support. */
+export function isAtomicWritesUnsupportedError(
+	error: unknown,
+): error is AtomicWritesUnsupportedError {
+	return (
+		error instanceof BetterAuthError &&
+		"code" in error &&
+		error.code === ATOMIC_WRITES_UNSUPPORTED
+	);
+}
+
+const createAtomicWritesUnsupportedError = <
+	Options extends BetterAuthOptions = BetterAuthOptions,
+>(
+	adapter: Pick<DBAdapter<Options>, "id">,
+): AtomicWritesUnsupportedError => {
+	return Object.assign(
+		new BetterAuthError(
+			`Adapter "${adapter.id}" cannot commit this mutation atomically. Configure a native transaction or implement commitAtomicWrites.`,
+		),
+		{
+			code: ATOMIC_WRITES_UNSUPPORTED,
+			adapterId: adapter.id,
+		},
+	);
+};
+
+/**
+ * Run a multi-record mutation through a real transaction or a declarative
+ * atomic-write capability. Adapters without either capability fail before
+ * either mutation branch is invoked.
+ */
+export async function runAtomicMutation<
+	R,
+	Options extends BetterAuthOptions = BetterAuthOptions,
+>(
+	adapter: DBAdapter<Options>,
+	mutation: {
+		runInTransaction: () => Promise<R>;
+		prepareAtomicWrites: () => Promise<AtomicMutationPlan<R>>;
+	},
+): Promise<R> {
+	if (hasNativeTransactionSupport(adapter)) {
+		return runWithTransaction(adapter, mutation.runInTransaction);
+	}
+
+	const commitAtomicWrites = adapter.commitAtomicWrites;
+	if (!commitAtomicWrites) {
+		throw createAtomicWritesUnsupportedError(adapter);
+	}
+
+	const atomicWritePlan = await mutation.prepareAtomicWrites();
+	if (atomicWritePlan.operations.length === 0) {
+		return atomicWritePlan.afterCommit([]);
+	}
+	const committedResults = await commitAtomicWrites(atomicWritePlan.operations);
+	return atomicWritePlan.afterCommit(committedResults);
+}
 
 /**
  * Queue a hook to be executed after the current transaction commits.

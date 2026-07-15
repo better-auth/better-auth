@@ -1,9 +1,13 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
+import { createLocalIdentityIssuer } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import {
+	deleteSessionCookie,
+	rotateSessionCookiePreservingProviderAccountBinding,
+	setSessionCookie,
+} from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput } from "../../types";
@@ -298,7 +302,7 @@ export const changePassword = createAuthEndpoint(
 				);
 			}
 			// set the new session cookie
-			await setSessionCookie(ctx, {
+			await rotateSessionCookiePreservingProviderAccountBinding(ctx, {
 				session: newSession,
 				user: session.user,
 			});
@@ -346,13 +350,24 @@ export const setPassword = createAuthEndpoint.serverOnly(
 		);
 		const passwordHash = await ctx.context.password.hash(newPassword);
 		if (!account) {
-			await ctx.context.internalAdapter.linkAccount({
-				userId: session.user.id,
-				providerId: "credential",
-				issuer: createLocalAccountIssuer("credential"),
-				providerAccountId: session.user.id,
-				password: passwordHash,
-			});
+			const linked = await ctx.context.internalAdapter.linkAccount(
+				session.user.id,
+				{
+					issuer: createLocalIdentityIssuer("credential"),
+					providerAccountId: session.user.id,
+				},
+				{
+					providerId: "credential",
+					providerInstanceId: "credential",
+					password: passwordHash,
+				},
+			);
+			if (linked.account.password !== passwordHash) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					BASE_ERROR_CODES.PASSWORD_ALREADY_SET,
+				);
+			}
 			return ctx.json({
 				status: true,
 			});
@@ -551,7 +566,6 @@ export const deleteUser = createAuthEndpoint(
 			await beforeDelete(session.user, ctx.request);
 		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
-		await ctx.context.internalAdapter.deleteUserSessions(session.user.id);
 		deleteSessionCookie(ctx);
 		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
 		if (afterDelete) {
@@ -648,8 +662,6 @@ export const deleteUserCallback = createAuthEndpoint(
 			await beforeDelete(session.user, ctx.request);
 		}
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
-		await ctx.context.internalAdapter.deleteUserSessions(session.user.id);
-		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
 
 		deleteSessionCookie(ctx);
 

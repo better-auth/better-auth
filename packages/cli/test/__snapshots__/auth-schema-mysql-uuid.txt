@@ -40,23 +40,47 @@ export const custom_session = mysqlTable(
     userAgent: text("user_agent"),
     userId: varchar("user_id", { length: 36 })
       .notNull()
-      .references(() => custom_user.id, { onDelete: "cascade" }),
+      .references(() => custom_user.id, { onDelete: "restrict" }),
   },
   (table) => [index("custom_session_userId_idx").on(table.userId)],
 );
 
-export const custom_account = mysqlTable(
-  "custom_account",
+export const identity = mysqlTable(
+  "identity",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     issuer: varchar("issuer", { length: 191 }).notNull(),
     providerAccountId: varchar("provider_account_id", {
       length: 191,
     }).notNull(),
-    providerId: text("provider_id").notNull(),
     userId: varchar("user_id", { length: 36 })
       .notNull()
-      .references(() => custom_user.id, { onDelete: "cascade" }),
+      .references(() => custom_user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { fsp: 3 })
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("identity_issuer_providerAccountId_uidx").on(
+      table.issuer,
+      table.providerAccountId,
+    ),
+    index("identity_userId_idx").on(table.userId),
+  ],
+);
+
+export const custom_account = mysqlTable(
+  "custom_account",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    identityId: varchar("identity_id", { length: 36 })
+      .notNull()
+      .references(() => identity.id, { onDelete: "restrict" }),
+    providerId: text("provider_id").notNull(),
+    providerInstanceId: varchar("provider_instance_id", {
+      length: 191,
+    }).notNull(),
     accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
     idToken: text("id_token"),
@@ -70,11 +94,10 @@ export const custom_account = mysqlTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("custom_account_issuer_providerAccountId_uidx").on(
-      table.issuer,
-      table.providerAccountId,
+    uniqueIndex("custom_account_identityId_providerInstanceId_uidx").on(
+      table.identityId,
+      table.providerInstanceId,
     ),
-    index("custom_account_userId_idx").on(table.userId),
   ],
 );
 
@@ -115,7 +138,7 @@ export const twoFactor = mysqlTable(
 
 export const custom_userRelations = relations(custom_user, ({ many }) => ({
   custom_sessions: many(custom_session),
-  custom_accounts: many(custom_account),
+  identities: many(identity),
   twoFactors: many(twoFactor),
 }));
 
@@ -126,10 +149,18 @@ export const custom_sessionRelations = relations(custom_session, ({ one }) => ({
   }),
 }));
 
-export const custom_accountRelations = relations(custom_account, ({ one }) => ({
+export const identityRelations = relations(identity, ({ one, many }) => ({
   custom_user: one(custom_user, {
-    fields: [custom_account.userId],
+    fields: [identity.userId],
     references: [custom_user.id],
+  }),
+  custom_accounts: many(custom_account),
+}));
+
+export const custom_accountRelations = relations(custom_account, ({ one }) => ({
+  identity: one(identity, {
+    fields: [custom_account.identityId],
+    references: [identity.id],
   }),
 }));
 

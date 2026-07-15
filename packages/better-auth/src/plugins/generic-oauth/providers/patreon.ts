@@ -74,7 +74,7 @@ export function patreon(
 
 	return {
 		providerId: "patreon",
-		accountSubject: ({ profile }) => profile.id ?? "",
+		identitySubject: ({ profile }) => profile.id ?? "",
 		authorizationUrl: "https://www.patreon.com/oauth2/authorize",
 		tokenUrl: "https://www.patreon.com/api/oauth2/token",
 		clientId: options.clientId,

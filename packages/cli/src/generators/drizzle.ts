@@ -4,7 +4,10 @@ import {
 	getDatabaseIndexStringLength,
 	resolveDatabaseSchemaIndexes,
 } from "@better-auth/core/db/internal";
-import { toSnakeCase } from "@better-auth/core/utils/string";
+import {
+	pluralizeIdentifier,
+	toSnakeCase,
+} from "@better-auth/core/utils/string";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
@@ -515,7 +518,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				!adapter.options?.adapterConfig?.usePlural &&
 				relationType === "many"
 			) {
-				relationKey = `${relationKey}s`;
+				relationKey = pluralizeIdentifier(relationKey);
 			}
 
 			// Only add if we haven't seen this key before

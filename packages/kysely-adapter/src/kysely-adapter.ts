@@ -2,6 +2,9 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
+	AtomicWriteOperation,
+	AtomicWriteResult,
+	CleanedWhere,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	JoinConfig,
@@ -9,6 +12,7 @@ import type {
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
 	InsertQueryBuilder,
@@ -17,6 +21,7 @@ import type {
 	UpdateQueryBuilder,
 } from "kysely";
 import { sql } from "kysely";
+import { getKyselyD1Database } from "./d1-database-registry";
 import {
 	insensitiveEq,
 	insensitiveIlike,
@@ -26,7 +31,14 @@ import {
 } from "./query-builders";
 import type { KyselyDatabaseType } from "./types";
 
-interface KyselyAdapterConfig {
+type ConfiguredD1Database = NonNullable<
+	Extract<
+		NonNullable<BetterAuthOptions["database"]>,
+		{ d1Database?: unknown }
+	>["d1Database"]
+>;
+
+export interface KyselyAdapterConfig {
 	/**
 	 * Database type.
 	 *
@@ -57,13 +69,62 @@ interface KyselyAdapterConfig {
 	 */
 	usePlural?: boolean | undefined;
 	/**
+	 * Raw Cloudflare D1 binding used for atomic batch mutations.
+	 *
+	 * Provide this when `db` uses a community D1 dialect. Kysely does not expose
+	 * the binding through its public API, so the adapter cannot infer it safely.
+	 * Interactive transactions are disabled when this option is present.
+	 */
+	d1Database?: ConfiguredD1Database | undefined;
+	/**
 	 * Whether to execute multiple operations in a transaction.
 	 *
 	 * If the database doesn't support transactions,
-	 * set this to `false` and operations will be executed sequentially.
-	 * @default false
+	 * set this to `false`. Multi-record lifecycle mutations then require an
+	 * atomic batch capability from the driver.
+	 * @default true
 	 */
 	transaction?: boolean | undefined;
+}
+
+function getD1BatchRecord(result: unknown): Record<string, unknown> | null {
+	if (result === null || typeof result !== "object" || !("results" in result)) {
+		return null;
+	}
+	const rows = result.results;
+	if (!Array.isArray(rows)) return null;
+	const record: unknown = rows[0];
+	if (record === null || typeof record !== "object" || Array.isArray(record)) {
+		return null;
+	}
+	return record as Record<string, unknown>;
+}
+
+function getD1BatchDeletedCount(result: unknown): number {
+	if (result === null || typeof result !== "object" || !("meta" in result)) {
+		throw new BetterAuthError("Kysely D1 batch did not return delete metadata");
+	}
+	const meta = result.meta;
+	if (
+		meta === null ||
+		typeof meta !== "object" ||
+		!("changes" in meta) ||
+		typeof meta.changes !== "number" ||
+		!Number.isFinite(meta.changes)
+	) {
+		throw new BetterAuthError(
+			"Kysely D1 batch returned an invalid deleted row count",
+		);
+	}
+	return meta.changes;
+}
+
+function getD1BatchSingleDeletedCount(result: unknown): 0 | 1 {
+	const deletedCount = getD1BatchDeletedCount(result);
+	if (deletedCount === 0 || deletedCount === 1) return deletedCount;
+	throw new BetterAuthError(
+		`Kysely D1 batch deleted ${deletedCount} rows for a single-row delete operation`,
+	);
 }
 
 export const kyselyAdapter = (
@@ -72,6 +133,7 @@ export const kyselyAdapter = (
 ) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	let mysqlNoIdWarned = false;
+	const d1Database = config?.d1Database ?? getKyselyD1Database(db);
 	const createCustomAdapter = (
 		db: Kysely<any>,
 		inTransaction = false,
@@ -409,6 +471,131 @@ export const kyselyAdapter = (
 				};
 			}
 
+			const commitD1AtomicWrites = d1Database
+				? async (
+						operations: readonly AtomicWriteOperation<CleanedWhere>[],
+					): Promise<AtomicWriteResult[]> => {
+						if (operations.length === 0) return [];
+
+						const compiledQueries = operations.map((operation) => {
+							switch (operation.type) {
+								case "create":
+									return db
+										.insertInto(operation.model)
+										.values(operation.data)
+										.returningAll()
+										.compile();
+								case "update": {
+									let query = db
+										.updateTable(operation.model)
+										.set(operation.update);
+									if (operation.where.length === 0) {
+										query = query.where(sql<boolean>`0 = 1`);
+									} else {
+										const { and, or } = convertWhereClause(
+											operation.model,
+											operation.where,
+										);
+										if (and) {
+											query = query.where((eb) =>
+												eb.and(and.map((expression) => expression(eb))),
+											);
+										}
+										if (or) {
+											query = query.where((eb) =>
+												eb.or(or.map((expression) => expression(eb))),
+											);
+										}
+									}
+									return query.returningAll().compile();
+								}
+								case "delete": {
+									let query = db.deleteFrom(operation.model);
+									if (operation.where.length === 0) {
+										query = query.where(sql<boolean>`0 = 1`);
+									} else {
+										const { and, or } = convertWhereClause(
+											operation.model,
+											operation.where,
+										);
+										if (and) {
+											query = query.where((eb) =>
+												eb.and(and.map((expression) => expression(eb))),
+											);
+										}
+										if (or) {
+											query = query.where((eb) =>
+												eb.or(or.map((expression) => expression(eb))),
+											);
+										}
+									}
+									return query.compile();
+								}
+								case "deleteMany": {
+									let query = db.deleteFrom(operation.model);
+									const { and, or } = convertWhereClause(
+										operation.model,
+										operation.where,
+									);
+									if (and) {
+										query = query.where((eb) =>
+											eb.and(and.map((expression) => expression(eb))),
+										);
+									}
+									if (or) {
+										query = query.where((eb) =>
+											eb.or(or.map((expression) => expression(eb))),
+										);
+									}
+									return query.compile();
+								}
+							}
+						});
+						const statements = compiledQueries.map((query) =>
+							d1Database.prepare(query.sql).bind(...query.parameters),
+						);
+						const batchResult: unknown = await d1Database.batch(statements);
+						if (
+							!Array.isArray(batchResult) ||
+							batchResult.length !== operations.length
+						) {
+							throw new BetterAuthError(
+								"Kysely D1 batch returned an unexpected number of results",
+							);
+						}
+
+						return operations.map((operation, index) => {
+							const result: unknown = batchResult[index];
+							switch (operation.type) {
+								case "create": {
+									const record = getD1BatchRecord(result);
+									if (!record) {
+										throw new BetterAuthError(
+											`Kysely D1 batch did not return the created "${operation.model}" record`,
+										);
+									}
+									return { type: "create", record };
+								}
+								case "update":
+									return {
+										type: "update",
+										record: getD1BatchRecord(result),
+									};
+								case "delete":
+									return {
+										type: "delete",
+										deletedCount: getD1BatchSingleDeletedCount(result),
+									};
+								case "deleteMany":
+									return {
+										type: "deleteMany",
+										deletedCount: getD1BatchDeletedCount(result),
+									};
+							}
+						});
+					}
+				: undefined;
+
 			function processJoinedResults(
 				rows: any[],
 				joinConfig: JoinConfig | undefined,
@@ -559,6 +746,7 @@ export const kyselyAdapter = (
 			}
 
 			return {
+				commitAtomicWrites: commitD1AtomicWrites,
 				async create({ data, model }) {
 					const builder = db.insertInto(model).values(data);
 					const returned = await withReturning(data, builder, model, []);
@@ -992,19 +1180,20 @@ export const kyselyAdapter = (
 					: false,
 			supportsArrays: false, // Even if field supports JSON, we must pass stringified arrays to the database.
 			supportsUUIDs: config?.type === "postgres" ? true : false,
-			transaction: config?.transaction
-				? (cb) =>
-						db.transaction().execute((trx) => {
-							const adapter = createAdapterFactory({
-								config: {
-									...adapterOptions!.config,
-									transaction: false,
-								},
-								adapter: createCustomAdapter(trx, true),
-							})(lazyOptions!);
-							return cb(adapter);
-						})
-				: false,
+			transaction:
+				(config?.transaction ?? true) && !d1Database
+					? (cb) =>
+							db.transaction().execute((trx) => {
+								const adapter = createAdapterFactory({
+									config: {
+										...adapterOptions!.config,
+										transaction: false,
+									},
+									adapter: createCustomAdapter(trx, true),
+								})(lazyOptions!);
+								return cb(adapter);
+							})
+					: false,
 		},
 		adapter: createCustomAdapter(db),
 	};

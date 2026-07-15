@@ -99,11 +99,16 @@ export async function getTestInstance<
 			const client = new MongoClient(connectionString);
 			await client.connect();
 			const db = client.db(dbName);
-			return db;
+			return { client, db };
 		};
-		const db = await dbClient("mongodb://127.0.0.1:27017", "better-auth");
-		return db;
+		return dbClient("mongodb://127.0.0.1:27017/?replicaSet=rs0", "better-auth");
 	}
+	const mongodb = testWith === "mongodb" ? await mongodbClient() : undefined;
+	const mongodbDatabase = mongodb
+		? (await import("../adapters/mongodb-adapter")).mongodbAdapter(mongodb.db, {
+				client: mongodb.client,
+			})
+		: undefined;
 
 	const opts = {
 		socialProviders: {
@@ -120,11 +125,8 @@ export async function getTestInstance<
 		database:
 			testWith === "postgres"
 				? { db: await getPostgres(), type: "postgres" }
-				: testWith === "mongodb"
-					? await Promise.all([
-							mongodbClient(),
-							await import("../adapters/mongodb-adapter"),
-						]).then(([db, { mongodbAdapter }]) => mongodbAdapter(db))
+				: mongodbDatabase
+					? mongodbDatabase
 					: testWith === "mysql"
 						? { db: await getMysql(), type: "mysql" }
 						: await getSqlite(),
@@ -193,9 +195,9 @@ export async function getTestInstance<
 	await createTestUser();
 
 	const cleanup = async () => {
-		if (testWith === "mongodb") {
-			const db = await mongodbClient();
-			await db.dropDatabase();
+		if (mongodb) {
+			await mongodb.db.dropDatabase();
+			await mongodb.client.close();
 			return;
 		}
 		if (testWith === "postgres") {

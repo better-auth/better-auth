@@ -2,12 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { inferAdditionalFields } from "../../client/plugins";
 import { getTestInstance } from "../../test-utils/test-instance";
-import type { Account, Session } from "../../types";
+import type { Session } from "../../types";
 
 describe("updateUser", async () => {
 	const sendChangeEmail = vi.fn();
 	let emailVerificationToken = "";
-	const { client, testUser, sessionSetter, db, signInWithTestUser } =
+	const { auth, client, testUser, sessionSetter, db, signInWithTestUser } =
 		await getTestInstance({
 			emailVerification: {
 				async sendVerificationEmail({ user, url, token }) {
@@ -166,21 +166,10 @@ describe("updateUser", async () => {
 		const userId = initialSession?.user.id;
 
 		// Get initial account updatedAt
-		const initialAccounts: Account[] = await db.findMany({
-			model: "account",
-			where: [
-				{
-					field: "userId",
-					value: userId!,
-				},
-				{
-					field: "providerId",
-					value: "credential",
-				},
-			],
-		});
-		expect(initialAccounts.length).toBe(1);
-		const initialUpdatedAt = initialAccounts[0]!.updatedAt;
+		const internalAdapter = (await auth.$context).internalAdapter;
+		const initialAccount = await internalAdapter.findCredentialAccount(userId!);
+		expect(initialAccount).not.toBeNull();
+		const initialUpdatedAt = initialAccount!.updatedAt;
 
 		await new Promise((resolve) => setTimeout(resolve, 100));
 
@@ -195,21 +184,9 @@ describe("updateUser", async () => {
 		expect(updated.data).toBeDefined();
 
 		// Get updated account data
-		const updatedAccounts: Account[] = await db.findMany({
-			model: "account",
-			where: [
-				{
-					field: "userId",
-					value: userId!,
-				},
-				{
-					field: "providerId",
-					value: "credential",
-				},
-			],
-		});
-		expect(updatedAccounts.length).toBe(1);
-		const newUpdatedAt = updatedAccounts[0]!.updatedAt;
+		const updatedAccount = await internalAdapter.findCredentialAccount(userId!);
+		expect(updatedAccount).not.toBeNull();
+		const newUpdatedAt = updatedAccount!.updatedAt;
 
 		// Verify updatedAt was refreshed
 		expect(newUpdatedAt).not.toBe(initialUpdatedAt);
@@ -686,7 +663,7 @@ describe("delete user", async () => {
 
 		// All sessions should be gone now
 		expect(store.get(`active-sessions-${userId}`)).toBeUndefined();
-		expect(store.size).toBe(0);
+		expect([...store.keys()]).toEqual([`session-version-${userId}`]);
 	});
 
 	it("should delete with verification flow and password", async () => {
@@ -1059,7 +1036,7 @@ describe("change-email rejects confirmation-only config for verified users", asy
 });
 
 describe("credential identity across email changes", async () => {
-	const { client, db, sessionSetter } = await getTestInstance(
+	const { auth, client, sessionSetter } = await getTestInstance(
 		{
 			user: {
 				changeEmail: {
@@ -1086,13 +1063,18 @@ describe("credential identity across email changes", async () => {
 		});
 		expect(signUp.error).toBeNull();
 		const userId = signUp.data!.user.id;
-		const accountsBefore = await db.findMany<Account>({
-			model: "account",
-			where: [{ field: "userId", value: userId }],
-		});
-		expect(accountsBefore).toHaveLength(1);
-		expect(accountsBefore[0]).toMatchObject({
+		const internalAdapter = (await auth.$context).internalAdapter;
+		const accountBefore = await internalAdapter.findCredentialAccount(userId);
+		expect(accountBefore).toMatchObject({
 			providerId: "credential",
+		});
+		await expect(
+			internalAdapter.findIdentityByKey({
+				issuer: "local:credential",
+				providerAccountId: userId,
+			}),
+		).resolves.toMatchObject({
+			userId,
 			issuer: "local:credential",
 			providerAccountId: userId,
 		});
@@ -1114,16 +1096,21 @@ describe("credential identity across email changes", async () => {
 		});
 		expect(changedEmailSignIn.data?.user.id).toBe(userId);
 
-		const accountsAfter = await db.findMany<Account>({
-			model: "account",
-			where: [{ field: "userId", value: userId }],
-		});
-		expect(accountsAfter).toHaveLength(1);
-		expect(accountsAfter[0]).toMatchObject({
-			id: accountsBefore[0]!.id,
-			providerId: "credential",
-			issuer: "local:credential",
-			providerAccountId: userId,
+		const linkedAccounts = await internalAdapter.listUserAccounts(userId);
+		const credentialAccounts = linkedAccounts.filter(
+			({ account }) => account.providerId === "credential",
+		);
+		expect(credentialAccounts).toHaveLength(1);
+		expect(credentialAccounts[0]).toMatchObject({
+			account: {
+				id: accountBefore!.id,
+				providerId: "credential",
+			},
+			identity: {
+				userId,
+				issuer: "local:credential",
+				providerAccountId: userId,
+			},
 		});
 	});
 });
@@ -1147,14 +1134,14 @@ describe("setPassword", async () => {
 			}),
 		).resolves.toMatchObject({ status: true });
 
-		const accounts = await context.internalAdapter.findAccounts(user.id);
+		const accounts = await context.internalAdapter.listUserAccounts(user.id);
 		const credentialAccounts = accounts.filter(
-			(account) => account.providerId === "credential",
+			({ account }) => account.providerId === "credential",
 		);
 		expect(credentialAccounts).toHaveLength(1);
 		await expect(
 			context.password.verify({
-				hash: credentialAccounts[0]!.password!,
+				hash: credentialAccounts[0]!.account.password!,
 				password: "new-password",
 			}),
 		).resolves.toBe(true);

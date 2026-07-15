@@ -46,7 +46,7 @@ export const slack = (options: SlackOptions) => {
 	return {
 		id: "slack",
 		name: "Slack",
-		accountSubject: ({ profile }) => profile["https://slack.com/user_id"],
+		identitySubject: ({ profile }) => profile["https://slack.com/user_id"],
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope
 				? []

@@ -67,6 +67,35 @@ export const mongodbAdapter = (
 ) => {
 	let lazyOptions: BetterAuthOptions | null;
 	const indexSetupByDefinition = new Map<string, Promise<string>>();
+	const collectionSetupByModel = new Map<string, Promise<void>>();
+	let prepareStorageBeforeTransaction: (() => Promise<void>) | undefined;
+
+	const ensureModelCollection = (model: string) => {
+		const existingCollectionSetup = collectionSetupByModel.get(model);
+		if (existingCollectionSetup) return existingCollectionSetup;
+
+		const collectionSetup = db
+			.createCollection(model)
+			.then(() => undefined)
+			.catch((error: unknown) => {
+				if (
+					typeof error === "object" &&
+					error !== null &&
+					(("code" in error && error.code === 48) ||
+						("codeName" in error && error.codeName === "NamespaceExists"))
+				) {
+					return;
+				}
+				throw error;
+			});
+		collectionSetupByModel.set(model, collectionSetup);
+		void collectionSetup.catch(() => {
+			if (collectionSetupByModel.get(model) === collectionSetup) {
+				collectionSetupByModel.delete(model);
+			}
+		});
+		return collectionSetup;
+	};
 
 	const getCustomIdGenerator = (options: BetterAuthOptions) => {
 		const generator = options.advanced?.database?.generateId;
@@ -84,6 +113,7 @@ export const mongodbAdapter = (
 		({
 			getFieldAttributes,
 			getFieldName,
+			getModelName,
 			schema,
 			getDefaultModelName,
 			options,
@@ -150,6 +180,25 @@ export const mongodbAdapter = (
 					}),
 				);
 			};
+
+			const ensureModelStorage = async (model: string) => {
+				const defaultModelName = getDefaultModelName(model);
+				const table = schema[defaultModelName];
+				if (!table || table.disableMigrations) return;
+
+				await ensureModelCollection(model);
+				await ensureModelIndexes(model);
+			};
+
+			if (!session && !prepareStorageBeforeTransaction) {
+				prepareStorageBeforeTransaction = async () => {
+					await Promise.all(
+						Object.keys(schema).map((model) =>
+							ensureModelStorage(getModelName(model)),
+						),
+					);
+				};
+			}
 
 			function coerceToIdType(value: string): ObjectId | UUID {
 				if (useUUIDs) return new UUID(value);
@@ -758,6 +807,12 @@ export const mongodbAdapter = (
 							if (!config.client) {
 								return cb(lazyAdapter!(lazyOptions!));
 							}
+							if (!prepareStorageBeforeTransaction) {
+								throw new Error(
+									"MongoDB storage preflight was not initialized.",
+								);
+							}
+							await prepareStorageBeforeTransaction();
 
 							const session = config.client.startSession();
 
@@ -777,7 +832,9 @@ export const mongodbAdapter = (
 								await session.commitTransaction();
 								return result;
 							} catch (err) {
-								await session.abortTransaction();
+								if (session.inTransaction()) {
+									await session.abortTransaction();
+								}
 								throw err;
 							} finally {
 								await session.endSession();

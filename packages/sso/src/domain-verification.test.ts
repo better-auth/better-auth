@@ -36,9 +36,10 @@ describe("Domain verification", async () => {
 			secondaryStorage?: SecondaryStorage;
 		},
 	) => {
-		const data: Record<string, any[]> = {
+		const data: Record<string, object[]> = {
 			user: [],
 			session: [],
+			identity: [],
 			account: [],
 			ssoProvider: [],
 			member: [],
@@ -527,7 +528,7 @@ describe("Domain verification", async () => {
 			const headers = await getAuthHeaders(testUser);
 			const provider = await registerSSOProvider(headers);
 
-			expect(provider.domain).toBe("http://hello.com:8081");
+			expect(provider.domain).toBe("hello.com");
 			expect(provider.domainVerified).toBe(false);
 			expect(provider.domainVerificationToken).toBeTypeOf("string");
 

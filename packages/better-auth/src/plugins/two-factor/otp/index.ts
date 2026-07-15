@@ -2,7 +2,7 @@ import type { Awaitable, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { setSessionCookie } from "../../../cookies";
+import { rotateSessionCookiePreservingProviderAccountBinding } from "../../../cookies";
 import {
 	constantTimeEqual,
 	generateRandomString,
@@ -390,7 +390,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 						false,
 						session.session,
 					);
-					await setSessionCookie(ctx, {
+					await rotateSessionCookiePreservingProviderAccountBinding(ctx, {
 						session: newSession,
 						user: updatedUser,
 					});

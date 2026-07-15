@@ -462,7 +462,7 @@ name: "userId",
 type: "string",
 description: "The ID of the user",
 isForeignKey: true,
-references: { model: "user", field: "id", onDelete: "cascade" },
+references: { model: "user", field: "id", onDelete: "restrict" },
 },
 {
 name: "token",
@@ -502,7 +502,7 @@ description: "Timestamp of when the session was updated",
       </Tab>
     </Tabs>
 
-    ### Account -> Account
+    ### Account -> Identity and Account
 
     <Tabs items={["Auth.js", "Better Auth"]}>
       <Tab value="Auth.js">
@@ -585,6 +585,45 @@ isOptional: true,
 
       <Tab value="Better Auth">
         <DatabaseTable
+          name="identity"
+          fields={[
+{
+name: "id",
+type: "string",
+description: "Unique identifier for the Identity",
+isPrimaryKey: true,
+},
+{
+name: "userId",
+type: "string",
+description: "The ID of the user that owns the Identity",
+isForeignKey: true,
+references: { model: "user", field: "id", onDelete: "restrict" },
+},
+{
+name: "issuer",
+type: "string",
+description: "The trusted authority that assigned the provider identifier",
+},
+{
+name: "providerAccountId",
+type: "string",
+description: "The stable identifier within the issuer namespace",
+},
+{
+name: "createdAt",
+type: "Date",
+description: "Timestamp of when the Identity was created",
+},
+{
+name: "updatedAt",
+type: "Date",
+description: "Timestamp of when the Identity was updated",
+},
+]}
+        />
+
+        <DatabaseTable
           name="account"
           fields={[
 {
@@ -594,26 +633,21 @@ description: "Unique identifier for each account",
 isPrimaryKey: true,
 },
 {
-name: "userId",
+name: "identityId",
 type: "string",
-description: "The ID of the user",
+description: "The ID of the Identity authenticated through this Account",
 isForeignKey: true,
-references: { model: "user", field: "id", onDelete: "cascade" },
-},
-{
-name: "issuer",
-type: "string",
-description: "The trusted authority that issued the provider account identifier",
-},
-{
-name: "providerAccountId",
-type: "string",
-description: "The stable account identifier within the issuer namespace",
+references: { model: "identity", field: "id", onDelete: "restrict" },
 },
 {
 name: "providerId",
 type: "string",
-description: "The provider configuration used to authenticate the account",
+description: "The public alias of the provider configuration",
+},
+{
+name: "providerInstanceId",
+type: "string",
+description: "The stable internal namespace of the provider instance",
 },
 {
 name: "accessToken",
@@ -756,11 +790,12 @@ description: "Timestamp of when the verification request was updated",
     * Better Auth includes `ipAddress` and `userAgent` fields
     * Better Auth includes `createdAt` and `updatedAt` timestamps
 
-    Table: <strong className="underline italic">Account</strong>
+    Tables: <strong className="underline italic">Identity and Account</strong>
 
     * Better Auth uses camelCase naming (e.g. `refreshToken` vs `refresh_token`)
-    * Better Auth uses `id` for the local account record and the unique `issuer` plus `providerAccountId` pair for the external identity
-    * Better Auth uses `providerId` instead of `provider`
+    * Better Auth stores `issuer`, `providerAccountId`, and `userId` on Identity, then links each provider Account through `identityId`
+    * Identity is unique by `issuer` plus `providerAccountId`, while Account is unique by `identityId` plus `providerInstanceId`
+    * Better Auth uses `providerId` as the public provider alias and `providerInstanceId` as the stable Account namespace
     * Better Auth includes `accessTokenExpiresAt` and `refreshTokenExpiresAt` for token management
     * Better Auth includes `password` field to support built-in credential authentication
     * Better Auth does not have a `type` field as it's determined by the `providerId`
@@ -769,8 +804,7 @@ description: "Timestamp of when the verification request was updated",
 
     <Callout type="warn">
       **Critical for Credentials Migration:**
-      In Auth.js, passwords are often stored directly on the `User` model. In Better Auth, passwords must be stored in the `Account` table.
-      If you are migrating users with passwords (including for the Phone Number plugin), you **must** create a record in the `account` table for each user with `providerId: "credential"`, `issuer: "local:credential"`, and `providerAccountId` set to the Better Auth user `id`. Without this record, password-based sign-ins will fail.
+      In Auth.js, passwords are often stored directly on the `User` model. In Better Auth, create an Identity with `issuer: "local:credential"`, `providerAccountId` set to the Better Auth user `id`, and `userId` set to the same user. Then create an Account with that Identity's `id`, `providerId: "credential"`, `providerInstanceId: "credential"`, and the password hash. Without both records, password-based sign-ins will fail.
     </Callout>
 
     Table: <strong className="underline italic">VerificationToken -> Verification</strong>

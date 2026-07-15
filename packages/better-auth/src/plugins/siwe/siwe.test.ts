@@ -1,7 +1,74 @@
+import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	AtomicWriteResult,
+	DBAdapter,
+} from "@better-auth/core/db/adapter";
+import type { MemoryDB } from "@better-auth/memory-adapter";
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import { assert, describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { siweClient } from "./client";
 import { siwe } from "./index";
+import type { WalletAddress } from "./types";
+
+/** Exercise the declarative batch branch while keeping copy-on-write atomicity. */
+function useBatchOnlyAtomicWrites<Options extends BetterAuthOptions>(
+	adapter: DBAdapter<Options>,
+): void {
+	const adapterConfig = adapter.options?.adapterConfig;
+	const nativeTransaction = adapterConfig?.transaction;
+	if (!adapterConfig || typeof nativeTransaction !== "function") {
+		throw new Error("The workflow adapter should expose a native transaction");
+	}
+	adapter.commitAtomicWrites = async (operations) =>
+		nativeTransaction(async (transactionAdapter) => {
+			const results: AtomicWriteResult[] = [];
+			for (const operation of operations) {
+				switch (operation.type) {
+					case "create": {
+						const record = await transactionAdapter.create({
+							model: operation.model,
+							data: operation.data,
+							forceAllowId: operation.forceAllowId,
+						});
+						results.push({ type: "create", record });
+						break;
+					}
+					case "update": {
+						const record = await transactionAdapter.update<
+							Record<string, unknown>
+						>({
+							model: operation.model,
+							where: operation.where,
+							update: operation.update,
+						});
+						results.push({ type: "update", record });
+						break;
+					}
+					case "delete": {
+						const record = await transactionAdapter.consumeOne<
+							Record<string, unknown>
+						>({
+							model: operation.model,
+							where: operation.where,
+						});
+						results.push({ type: "delete", deletedCount: record ? 1 : 0 });
+						break;
+					}
+					case "deleteMany": {
+						const deletedCount = await transactionAdapter.deleteMany({
+							model: operation.model,
+							where: operation.where,
+						});
+						results.push({ type: "deleteMany", deletedCount });
+						break;
+					}
+				}
+			}
+			return results;
+		});
+	adapterConfig.transaction = false;
+}
 
 describe("siwe", async () => {
 	const walletAddress = "0x000000000000000000000000000000000000dEaD";
@@ -347,6 +414,7 @@ describe("siwe", async () => {
 				},
 			},
 		);
+		const context = await auth.$context;
 
 		await client.siwe.nonce({ walletAddress, chainId });
 
@@ -360,16 +428,40 @@ describe("siwe", async () => {
 		expect(error).toBeNull();
 		expect(data?.success).toBe(true);
 		assert(data, "SIWE verification should return a user");
-		const accounts = await (await auth.$context).internalAdapter.findAccounts(
+		const accounts = await context.internalAdapter.listUserAccounts(
 			data.user.id,
 		);
+		const siweAccount = accounts.find(
+			({ account }) => account.providerId === "siwe",
+		)?.account;
+		assert(siweAccount, "SIWE verification should create an account");
 		expect(accounts).toContainEqual(
 			expect.objectContaining({
-				providerId: "siwe",
-				issuer: "local:siwe",
-				providerAccountId: `${walletAddress}:${chainId}`,
+				account: expect.objectContaining({
+					providerId: "siwe",
+				}),
+				identity: expect.objectContaining({
+					userId: data.user.id,
+					issuer: "local:siwe",
+					providerAccountId: `${walletAddress}:${chainId}`,
+				}),
 			}),
 		);
+		await expect(
+			context.adapter.findOne<WalletAddress>({
+				model: "walletAddress",
+				where: [
+					{ field: "accountId", value: siweAccount.id },
+					{ field: "address", value: walletAddress },
+					{ field: "chainId", value: chainId },
+				],
+			}),
+		).resolves.toMatchObject({
+			accountId: siweAccount.id,
+			address: walletAddress,
+			chainId,
+			isPrimary: true,
+		});
 	});
 
 	it.each([
@@ -464,7 +556,6 @@ describe("siwe", async () => {
 				disableTestUser: true,
 			},
 		);
-
 		await client.siwe.nonce({ walletAddress, chainId });
 		const { error } = await client.siwe.verify({
 			message: siweMessage(),
@@ -876,12 +967,12 @@ describe("siwe", async () => {
 		expect(data?.success).toBe(true);
 
 		// Fetch wallet address from the adapter
-		const walletAddresses: any[] = await (await auth.$context).adapter.findMany(
-			{
-				model: "walletAddress",
-				where: [{ field: "address", operator: "eq", value: walletAddress }],
-			},
-		);
+		const walletAddresses = await (
+			await auth.$context
+		).adapter.findMany<WalletAddress>({
+			model: "walletAddress",
+			where: [{ field: "address", operator: "eq", value: walletAddress }],
+		});
 		expect(walletAddresses.length).toBe(1);
 		expect(walletAddresses[0]?.address).toBe(walletAddress); // checksummed
 
@@ -942,15 +1033,15 @@ describe("siwe", async () => {
 		expect(firstUser.data?.success).toBe(true);
 
 		// Verify wallet address record was created
-		const walletAddresses: any[] = await (await auth.$context).adapter.findMany(
-			{
-				model: "walletAddress",
-				where: [
-					{ field: "address", operator: "eq", value: testAddress },
-					{ field: "chainId", operator: "eq", value: testChainId },
-				],
-			},
-		);
+		const walletAddresses = await (
+			await auth.$context
+		).adapter.findMany<WalletAddress>({
+			model: "walletAddress",
+			where: [
+				{ field: "address", operator: "eq", value: testAddress },
+				{ field: "chainId", operator: "eq", value: testChainId },
+			],
+		});
 		expect(walletAddresses.length).toBe(1);
 		expect(walletAddresses[0]?.address).toBe(testAddress);
 		expect(walletAddresses[0]?.chainId).toBe(testChainId);
@@ -972,9 +1063,9 @@ describe("siwe", async () => {
 		expect(secondUser.data?.user.id).toBe(firstUser.data?.user.id); // Same user ID
 
 		// Verify no duplicate wallet address records were created
-		const walletAddressesAfter: any[] = await (
+		const walletAddressesAfter = await (
 			await auth.$context
-		).adapter.findMany({
+		).adapter.findMany<WalletAddress>({
 			model: "walletAddress",
 			where: [
 				{ field: "address", operator: "eq", value: testAddress },
@@ -982,15 +1073,39 @@ describe("siwe", async () => {
 			],
 		});
 		expect(walletAddressesAfter.length).toBe(1); // Still only one record
+	});
 
-		// Verify total user count (should be only 1 user created)
-		const allUsers: any[] = await (await auth.$context).adapter.findMany({
-			model: "user",
+	it("isolates custom schema mappings between plugin instances", () => {
+		const pluginOptions = {
+			domain,
+			async getNonce() {
+				return NONCE;
+			},
+			async verifyMessage() {
+				return true;
+			},
+		};
+		const customPlugin = siwe({
+			...pluginOptions,
+			schema: {
+				walletAddress: {
+					modelName: "wallet_address",
+					fields: { accountId: "account_id" },
+				},
+			},
 		});
-		const usersWithTestAddress = allUsers.filter((user) =>
-			walletAddressesAfter.some((wa) => wa.userId === user.id),
-		);
-		expect(usersWithTestAddress.length).toBe(1); // Only one user should have this address
+		const defaultPlugin = siwe(pluginOptions);
+
+		expect(customPlugin.schema.walletAddress).toMatchObject({
+			modelName: "wallet_address",
+		});
+		expect(customPlugin.schema.walletAddress.fields.accountId).toMatchObject({
+			fieldName: "account_id",
+		});
+		expect(defaultPlugin.schema.walletAddress).not.toHaveProperty("modelName");
+		expect(
+			defaultPlugin.schema.walletAddress.fields.accountId,
+		).not.toHaveProperty("fieldName");
 	});
 
 	it("should support custom schema with mergeSchema", async () => {
@@ -1013,7 +1128,7 @@ describe("siwe", async () => {
 							walletAddress: {
 								modelName: "wallet_address",
 								fields: {
-									userId: "user_id",
+									accountId: "account_id",
 									address: "wallet_address",
 									chainId: "chain_id",
 									isPrimary: "is_primary",
@@ -1045,7 +1160,7 @@ describe("siwe", async () => {
 		expect(result.data?.success).toBe(true);
 		const context = await auth.$context;
 
-		const walletAddresses: any[] = await context.adapter.findMany({
+		const walletAddresses = await context.adapter.findMany<WalletAddress>({
 			model: "walletAddress",
 			where: [
 				{ field: "address", operator: "eq", value: testAddress },
@@ -1056,7 +1171,7 @@ describe("siwe", async () => {
 		expect(walletAddresses[0]?.address).toBe(testAddress);
 		expect(walletAddresses[0]?.chainId).toBe(testChainId);
 		expect(walletAddresses[0]?.isPrimary).toBe(true);
-		expect(walletAddresses[0]?.userId).toBeDefined();
+		expect(walletAddresses[0]?.accountId).toBeDefined();
 		expect(walletAddresses[0]?.createdAt).toBeDefined();
 	});
 
@@ -1107,9 +1222,9 @@ describe("siwe", async () => {
 		expect(polygonAuth.data?.user.id).toBe(ethereumAuth.data?.user.id); // Same user
 
 		// Verify both wallet address records exist
-		const allWalletAddresses: any[] = await (
+		const allWalletAddresses = await (
 			await auth.$context
-		).adapter.findMany({
+		).adapter.findMany<WalletAddress>({
 			model: "walletAddress",
 			where: [{ field: "address", operator: "eq", value: testAddress }],
 		});
@@ -1126,7 +1241,240 @@ describe("siwe", async () => {
 		expect(polygonRecord).toBeDefined();
 		expect(ethereumRecord?.isPrimary).toBe(true); // First address is primary
 		expect(polygonRecord?.isPrimary).toBe(false); // Second address is not primary
-		expect(ethereumRecord?.userId).toBe(polygonRecord?.userId); // Same user ID
+		expect(ethereumRecord?.accountId).not.toBe(polygonRecord?.accountId);
+	});
+
+	it("should roll back a secondary wallet when its account link is rejected", async () => {
+		let accountCreateAttempt = 0;
+		const { client, auth } = await getTestInstance(
+			{
+				databaseHooks: {
+					account: {
+						create: {
+							before: async (account) => {
+								if (account.providerId !== "siwe") return;
+								accountCreateAttempt += 1;
+								if (accountCreateAttempt === 2) return false;
+							},
+						},
+					},
+				},
+				plugins: [
+					siwe({
+						domain,
+						async getNonce() {
+							return NONCE;
+						},
+						async verifyMessage({ signature }) {
+							return signature === "valid_signature";
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [siweClient()] } },
+		);
+
+		await client.siwe.nonce({ walletAddress, chainId });
+		const firstAuthentication = await client.siwe.verify({
+			message: siweMessage(),
+			signature: "valid_signature",
+			walletAddress,
+			chainId,
+		});
+		expect(firstAuthentication.error).toBeNull();
+
+		const secondChainId = 137;
+		await client.siwe.nonce({ walletAddress, chainId: secondChainId });
+		const rejectedAuthentication = await client.siwe.verify({
+			message: siweMessage({ chainId: secondChainId }),
+			signature: "valid_signature",
+			walletAddress,
+			chainId: secondChainId,
+		});
+		expect(rejectedAuthentication.error).not.toBeNull();
+
+		const context = await auth.$context;
+		const walletAddresses = await context.adapter.findMany<{
+			address: string;
+			chainId: number;
+		}>({
+			model: "walletAddress",
+			where: [{ field: "address", operator: "eq", value: walletAddress }],
+		});
+		expect(walletAddresses.map(({ chainId }) => chainId)).toEqual([chainId]);
+	});
+
+	it("should remove wallet authority when its SIWE account is unlinked", async () => {
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				account: { accountLinking: { allowUnlinkingAll: true } },
+				plugins: [
+					siwe({
+						domain,
+						async getNonce() {
+							return NONCE;
+						},
+						async verifyMessage({ signature }) {
+							return signature === "valid_signature";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: { plugins: [siweClient()] },
+				disableTestUser: true,
+			},
+		);
+		const sessionHeaders = new Headers();
+		await client.siwe.nonce({ walletAddress, chainId });
+		const firstAuthentication = await client.siwe.verify({
+			message: siweMessage(),
+			signature: "valid_signature",
+			walletAddress,
+			chainId,
+			fetchOptions: { onSuccess: sessionSetter(sessionHeaders) },
+		});
+		expect(firstAuthentication.error).toBeNull();
+		assert(firstAuthentication.data, "SIWE verification should return a user");
+
+		const context = await auth.$context;
+		const accounts = await context.internalAdapter.listUserAccounts(
+			firstAuthentication.data.user.id,
+		);
+		const siweAccount = accounts.find(
+			({ account }) => account.providerId === "siwe",
+		)?.account;
+		assert(siweAccount, "SIWE verification should create an account");
+		const usersBeforeUnlink = await context.adapter.findMany({ model: "user" });
+
+		const unlinkResult = await client.unlinkAccount({
+			accountId: siweAccount.id,
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(unlinkResult.data?.status).toBe(true);
+		await expect(
+			context.adapter.findOne({
+				model: "walletAddress",
+				where: [
+					{ field: "address", value: walletAddress },
+					{ field: "chainId", value: chainId },
+				],
+			}),
+		).resolves.toBeNull();
+
+		await client.siwe.nonce({ walletAddress, chainId });
+		const authenticationAfterUnlink = await client.siwe.verify({
+			message: siweMessage(),
+			signature: "valid_signature",
+			walletAddress,
+			chainId,
+		});
+		expect(authenticationAfterUnlink.error?.code).toBe(
+			"UNAUTHORIZED_WALLET_NOT_LINKED",
+		);
+		await expect(
+			context.adapter.findMany({ model: "user" }),
+		).resolves.toHaveLength(usersBeforeUnlink.length);
+	});
+
+	it("should unlink and relink a wallet when the adapter does not cascade foreign keys", async () => {
+		const database: MemoryDB = {
+			user: [],
+			identity: [],
+			account: [],
+			session: [],
+			verification: [],
+			walletAddress: [],
+		};
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memoryAdapter(database),
+				account: { accountLinking: { allowUnlinkingAll: true } },
+				plugins: [
+					siwe({
+						domain,
+						async getNonce() {
+							return NONCE;
+						},
+						async verifyMessage({ signature }) {
+							return signature === "valid_signature";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: { plugins: [siweClient()] },
+				disableTestUser: true,
+			},
+		);
+		const context = await auth.$context;
+		useBatchOnlyAtomicWrites(context.adapter);
+
+		await client.siwe.nonce({ walletAddress, chainId });
+		const firstAuthentication = await client.siwe.verify({
+			message: siweMessage(),
+			signature: "valid_signature",
+			walletAddress,
+			chainId,
+		});
+		expect(firstAuthentication.error).toBeNull();
+		assert(firstAuthentication.data, "SIWE verification should return a user");
+
+		const secondChainId = 137;
+		const sessionHeaders = new Headers();
+		await client.siwe.nonce({ walletAddress, chainId: secondChainId });
+		const secondAuthentication = await client.siwe.verify({
+			message: siweMessage({ chainId: secondChainId }),
+			signature: "valid_signature",
+			walletAddress,
+			chainId: secondChainId,
+			fetchOptions: { onSuccess: sessionSetter(sessionHeaders) },
+		});
+		expect(secondAuthentication.error).toBeNull();
+		expect(secondAuthentication.data?.user.id).toBe(
+			firstAuthentication.data.user.id,
+		);
+
+		const accounts = await context.internalAdapter.listUserAccounts(
+			firstAuthentication.data.user.id,
+		);
+		const firstChainAccount = accounts.find(
+			({ identity }) =>
+				identity.providerAccountId === `${walletAddress}:${chainId}`,
+		)?.account;
+		assert(firstChainAccount, "The first chain should have an account");
+
+		const unlinkResult = await client.unlinkAccount({
+			accountId: firstChainAccount.id,
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(unlinkResult.error).toBeNull();
+		expect(unlinkResult.data?.status).toBe(true);
+
+		await client.siwe.nonce({ walletAddress, chainId });
+		const authenticationAfterUnlink = await client.siwe.verify({
+			message: siweMessage(),
+			signature: "valid_signature",
+			walletAddress,
+			chainId,
+		});
+		expect(authenticationAfterUnlink.error).toBeNull();
+		expect(authenticationAfterUnlink.data?.user.id).toBe(
+			firstAuthentication.data.user.id,
+		);
+
+		const relinkedWalletAddresses =
+			await context.adapter.findMany<WalletAddress>({
+				model: "walletAddress",
+				where: [
+					{ field: "address", value: walletAddress },
+					{ field: "chainId", value: chainId },
+				],
+			});
+		expect(relinkedWalletAddresses).toHaveLength(1);
+		expect(relinkedWalletAddresses[0]?.accountId).not.toBe(
+			firstChainAccount.id,
+		);
 	});
 
 	/**

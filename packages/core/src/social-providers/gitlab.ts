@@ -81,7 +81,7 @@ export const gitlab = (options: GitlabOptions) => {
 	return {
 		id: issuerId,
 		name: issuerName,
-		accountSubject: ({ profile }) => profile.id,
+		identitySubject: ({ profile }) => profile.id,
 		createAuthorizationURL: async ({
 			state,
 			scopes,

@@ -251,6 +251,33 @@ deleteMany: async ({ model, where }) => {
 };
 ```
 
+### `commitAtomicWrites` method
+
+The optional `commitAtomicWrites` method commits a predeclared set of create, update, delete, and delete-many operations as one unit. Implement it when the database cannot run an interactive transaction callback but provides an atomic batch primitive, such as Cloudflare D1 `batch()`.
+
+The adapter factory has already converted model names, field names, values, and `where` clauses to the database representation. Return one result for each operation, in the same order:
+
+* `create`: Return `{ type: "create", record }` with the committed row and its database defaults.
+* `update`: Return `{ type: "update", record }`, using `null` when no row matched.
+* `delete`: Return `{ type: "delete", deletedCount }`, where `deletedCount` is `0` or `1`.
+* `deleteMany`: Return `{ type: "deleteMany", deletedCount }`.
+
+```ts title="Example"
+commitAtomicWrites: async (operations) => {
+  const statements = operations.map((operation) =>
+    compileAtomicWrite(operation),
+  );
+  const results = await database.batch(statements);
+  return operations.map((operation, index) =>
+    mapAtomicWriteResult(operation, results[index]),
+  );
+};
+```
+
+<Callout type="warn">
+  The batch must commit every operation or none of them. Do not implement this method by running operations sequentially or by deleting earlier writes after a later failure. Better Auth uses it for lifecycle mutations whose User, Identity, and Account rows must never be partially visible.
+</Callout>
+
 ### `consumeOne` method
 
 The `consumeOne` method atomically deletes a single matching record and returns it, so that two concurrent requests cannot both consume the same row. It powers single-use credentials such as one-time verification challenges.
@@ -507,17 +534,15 @@ const adapter = myAdapter({
 
 ### `transaction`
 
-Whether the adapter supports transactions. If `false`, operations run sequentially; otherwise provide a function that executes a callback with a `TransactionAdapter`.
+Provide a function that executes a callback with a transaction-bound adapter when the database supports interactive transactions. Set this to `false` when it does not.
 
 <Callout type="warn">
-  If your database does not support transactions, the error handling and rollback
-  will not be as robust. We recommend using a database that supports transactions
-  for better data integrity.
+  Setting `transaction` to `false` does not make multi-record mutations sequential. Better Auth uses `commitAtomicWrites` when it is available and otherwise rejects those mutations before hooks or writes. Implement at least one of these capabilities for related User, Identity, and Account mutations and for database-backed verification consumption, which must commit its winner gate and sibling invalidation together.
 </Callout>
 
 ### `debugLogs`
 
-Used to enable debug logs for the adapter. You can pass in a boolean, or an object with the following keys: `create`, `update`, `updateMany`, `findOne`, `findMany`, `delete`, `deleteMany`, `consumeOne`, `incrementOne`, `count`.
+Used to enable debug logs for the adapter. You can pass in a boolean, or an object with the following keys: `create`, `update`, `updateMany`, `findOne`, `findMany`, `delete`, `deleteMany`, `commitAtomicWrites`, `consumeOne`, `incrementOne`, `count`.
 If any of the keys are `true`, the debug logs will be enabled for that method.
 
 ```ts title="Example"

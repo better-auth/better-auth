@@ -1,5 +1,6 @@
 import type { AuthContext, HookEndpointContext } from "@better-auth/core";
 import type { AuthMiddleware } from "@better-auth/core/api";
+import { kReturnAPIError } from "@better-auth/core/api";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { shouldPublishLog } from "@better-auth/core/env";
 import { APIError } from "@better-auth/core/error";
@@ -39,7 +40,26 @@ export type DispatchContext = Partial<
 type InternalContext = DispatchContext & {
 	path?: string | undefined;
 	asResponse?: boolean | undefined;
+	[kReturnAPIError]?: boolean | undefined;
 };
+
+type InternalEndpointCallContext = InternalContext & {
+	asResponse: false;
+	returnHeaders: true;
+	returnStatus: true;
+};
+
+type InternalEndpointCallResult =
+	| Response
+	| {
+			headers: Headers | null;
+			response: unknown;
+			status?: number | undefined;
+	  };
+
+type InternalEndpointCall = (
+	context: InternalEndpointCallContext,
+) => Promise<InternalEndpointCallResult>;
 
 const defuReplaceArrays = createDefu((obj, key, value) => {
 	if (Array.isArray(obj[key]) && Array.isArray(value)) {
@@ -390,34 +410,47 @@ export async function dispatchAuthEndpoint(
 							: before;
 				}
 
-				internalContext.asResponse = false;
-				internalContext.returnHeaders = true;
-				internalContext.returnStatus = true;
-				const result = (await runWithEndpointContext(internalContext, () =>
-					withSpan(
-						`handler ${route}`,
-						{
-							[ATTR_HTTP_ROUTE]: route,
-							[ATTR_OPERATION_ID]: operationId,
-						},
-						() => (endpoint as any)(internalContext as any),
-					),
-				).catch((e: unknown) => {
-					if (isAPIError(e)) {
-						return {
-							response: e,
-							status: e.statusCode,
-							headers: mergeAPIErrorHeaders(e),
-						};
-					}
-					throw e;
-				})) as
-					| Response
-					| { headers: Headers | null; response: any; status?: number };
+				const endpointContext: InternalEndpointCallContext = {
+					...internalContext,
+					asResponse: false,
+					returnHeaders: true,
+					returnStatus: true,
+					[kReturnAPIError]: true,
+				};
+				internalContext = endpointContext;
+				const callEndpoint = endpoint as unknown as InternalEndpointCall;
+				const result: InternalEndpointCallResult = await runWithEndpointContext(
+					endpointContext,
+					async () => {
+						try {
+							return await withSpan(
+								`handler ${route}`,
+								{
+									[ATTR_HTTP_ROUTE]: route,
+									[ATTR_OPERATION_ID]: operationId,
+								},
+								() => callEndpoint(endpointContext),
+							);
+						} catch (error) {
+							if (isAPIError(error)) {
+								return {
+									response: error,
+									status: error.statusCode,
+									headers: mergeAPIErrorHeaders(error),
+								};
+							}
+							throw error;
+						}
+					},
+				);
 
 				// A raw Response skips after hooks and post-processing.
 				if (result instanceof Response) {
 					return result;
+				}
+				if (isAPIError(result.response)) {
+					result.status = result.response.statusCode;
+					result.headers = mergeAPIErrorHeaders(result.response);
 				}
 
 				internalContext.context.returned = result.response;

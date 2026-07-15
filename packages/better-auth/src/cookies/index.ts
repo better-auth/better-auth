@@ -1,9 +1,11 @@
 import type {
+	AuthenticatedProviderAccountBinding,
 	BetterAuthCookie,
 	BetterAuthCookies,
 	BetterAuthOptions,
 	GenericEndpointContext,
 } from "@better-auth/core";
+import type { AccountWithIdentity } from "@better-auth/core/db";
 import { env, isProduction } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { filterOutputFields } from "@better-auth/core/utils/db";
@@ -38,9 +40,12 @@ import {
 } from "./cookie-utils";
 import {
 	createAccountStore,
+	createProviderAccountBindingStore,
 	createSessionStore,
 	getAccountCookie,
+	hasMatchingAuthenticatedProviderAccountBinding,
 	setAccountCookie,
+	setAuthenticatedProviderAccountBindingCookie,
 } from "./session-store";
 
 export function createCookieGetter(options: BetterAuthOptions) {
@@ -127,6 +132,9 @@ export function getCookies(options: BetterAuthOptions) {
 	const sessionData = createCookie("session_data", {
 		maxAge: options.session?.cookieCache?.maxAge || 60 * 5,
 	});
+	const providerAccountBinding = createCookie("provider_account_binding", {
+		maxAge: options.session?.cookieCache?.maxAge || 60 * 5,
+	});
 	const accountData = createCookie("account_data", {
 		maxAge: options.session?.cookieCache?.maxAge || 60 * 5,
 	});
@@ -144,6 +152,10 @@ export function getCookies(options: BetterAuthOptions) {
 			name: sessionData.name,
 			attributes: sessionData.attributes,
 		},
+		providerAccountBinding: {
+			name: providerAccountBinding.name,
+			attributes: providerAccountBinding.attributes,
+		},
 		dontRememberToken: {
 			name: dontRememberToken.name,
 			attributes: dontRememberToken.attributes,
@@ -158,8 +170,11 @@ export function getCookies(options: BetterAuthOptions) {
 export async function setCookieCache(
 	ctx: GenericEndpointContext,
 	session: {
-		session: Session & Record<string, any>;
+		session: Session & Record<string, unknown>;
 		user: User;
+		authenticatedProviderAccountBinding?:
+			| AuthenticatedProviderAccountBinding
+			| undefined;
 	},
 	dontRememberMe: boolean,
 ) {
@@ -173,6 +188,10 @@ export async function setCookieCache(
 	);
 
 	const filteredUser = parseUserOutput(ctx.context.options, session.user);
+	const authenticatedProviderAccountBinding =
+		session.authenticatedProviderAccountBinding ??
+		ctx.context.authenticatedProviderAccountBinding ??
+		undefined;
 
 	const versionConfig = ctx.context.options.session?.cookieCache?.version;
 	let version = "1";
@@ -259,11 +278,21 @@ export async function setCookieCache(
 	) {
 		const accountData = await getAccountCookie(ctx);
 		if (accountData) {
-			if (
-				!shouldBindAccountCookieToSessionUser(ctx.context.options) ||
-				accountData.userId === session.user.id
-			) {
-				await setAccountCookie(ctx, accountData);
+			const hasAccountOwnership =
+				hasMatchingAuthenticatedProviderAccountBinding(
+					accountData,
+					authenticatedProviderAccountBinding ?? null,
+				) &&
+				(!shouldBindAccountCookieToSessionUser(ctx.context.options) ||
+					accountData.identity.userId === session.user.id);
+			if (hasAccountOwnership) {
+				await setProviderAccountCookieForSession(
+					ctx,
+					accountData,
+					session,
+					accountData.accountBindingId,
+					dontRememberMe,
+				);
 			} else {
 				expireCookie(ctx, ctx.context.authCookies.accountData);
 				const accountStore = createAccountStore(
@@ -280,8 +309,11 @@ export async function setCookieCache(
 export async function setSessionCookie(
 	ctx: GenericEndpointContext,
 	session: {
-		session: Session & Record<string, any>;
+		session: Session & Record<string, unknown>;
 		user: User;
+		authenticatedProviderAccountBinding?:
+			| AuthenticatedProviderAccountBinding
+			| undefined;
 	},
 	dontRememberMe?: boolean | undefined,
 	overrides?: Partial<CookieOptions> | undefined,
@@ -317,8 +349,128 @@ export async function setSessionCookie(
 			ctx.context.authCookies.dontRememberToken.attributes,
 		);
 	}
-	await setCookieCache(ctx, session, dontRememberMe);
-	ctx.context.setNewSession(session);
+	ctx.context.authenticatedProviderAccountBinding =
+		session.authenticatedProviderAccountBinding ?? null;
+	if (ctx.context.authenticatedProviderAccountBinding) {
+		await setAuthenticatedProviderAccountBindingCookie(
+			ctx,
+			{
+				sessionToken: session.session.token,
+				binding: ctx.context.authenticatedProviderAccountBinding,
+			},
+			dontRememberMe
+				? undefined
+				: ctx.context.authCookies.providerAccountBinding.attributes.maxAge,
+		);
+	} else {
+		clearProviderAccountBindingCookie(ctx);
+		if (ctx.context.options.account?.storeAccountCookie) {
+			expireCookie(ctx, ctx.context.authCookies.accountData);
+			const accountStore = createAccountStore(
+				ctx.context.authCookies.accountData.name,
+				ctx.context.authCookies.accountData.attributes,
+				ctx,
+			);
+			accountStore.setCookies(accountStore.clean());
+		}
+	}
+	await setCookieCache(
+		ctx,
+		{
+			session: session.session,
+			user: session.user,
+			authenticatedProviderAccountBinding:
+				ctx.context.authenticatedProviderAccountBinding ?? undefined,
+		},
+		dontRememberMe,
+	);
+	ctx.context.setNewSession({
+		session: session.session,
+		user: session.user,
+	});
+}
+
+async function getMatchingProviderAccountBinding(
+	ctx: GenericEndpointContext,
+	userId: string,
+): Promise<AuthenticatedProviderAccountBinding | null> {
+	const accountCookie = await getAccountCookie(ctx);
+	if (!accountCookie) return null;
+	// The session resolver validates the encrypted capability against the
+	// current session token before storing it on the request context. Do not
+	// decode the cookie again here: a deliberately cleared context binding must
+	// remain cleared during session rotation.
+	const binding = ctx.context.authenticatedProviderAccountBinding;
+	if (
+		!hasMatchingAuthenticatedProviderAccountBinding(accountCookie, binding) ||
+		(shouldBindAccountCookieToSessionUser(ctx.context.options) &&
+			accountCookie.identity.userId !== userId)
+	) {
+		return null;
+	}
+	return binding;
+}
+
+/**
+ * Issues an account cookie and binds it to an already-authenticated session.
+ */
+export async function setProviderAccountCookieForSession(
+	ctx: GenericEndpointContext,
+	accountWithIdentity: AccountWithIdentity,
+	session: { session: Session; user: User },
+	accountBindingId?: string | undefined,
+	sessionOnly = false,
+): Promise<AuthenticatedProviderAccountBinding> {
+	if (
+		shouldBindAccountCookieToSessionUser(ctx.context.options) &&
+		accountWithIdentity.identity.userId !== session.user.id
+	) {
+		throw new BetterAuthError(
+			"Cannot bind a provider account to a session owned by another user.",
+		);
+	}
+	const binding = await setAccountCookie(
+		ctx,
+		accountWithIdentity,
+		accountBindingId,
+		sessionOnly,
+	);
+	ctx.context.authenticatedProviderAccountBinding = binding;
+	await setAuthenticatedProviderAccountBindingCookie(
+		ctx,
+		{ sessionToken: session.session.token, binding },
+		sessionOnly
+			? undefined
+			: ctx.context.authCookies.providerAccountBinding.attributes.maxAge,
+	);
+	return binding;
+}
+
+/**
+ * Rotates a same-user session while retaining an exact provider-account
+ * capability. New sign-ins and user switches intentionally use setSessionCookie
+ * directly so they clear any capability from the previous session.
+ */
+export async function rotateSessionCookiePreservingProviderAccountBinding(
+	ctx: GenericEndpointContext,
+	session: { session: Session; user: User },
+	dontRememberMe?: boolean | undefined,
+	overrides?: Partial<CookieOptions> | undefined,
+): Promise<void> {
+	const currentSession = ctx.context.session;
+	const binding =
+		currentSession?.user.id === session.user.id
+			? await getMatchingProviderAccountBinding(ctx, currentSession.user.id)
+			: null;
+	await setSessionCookie(
+		ctx,
+		{
+			...session,
+			authenticatedProviderAccountBinding: binding ?? undefined,
+		},
+		dontRememberMe,
+		overrides,
+	);
 }
 
 type CookieScrubView = GenericEndpointContext & {
@@ -427,12 +579,24 @@ export function expireCookie(
 	});
 }
 
+export function clearProviderAccountBindingCookie(ctx: GenericEndpointContext) {
+	const cookie = ctx.context.authCookies.providerAccountBinding;
+	expireCookie(ctx, cookie);
+	const bindingStore = createProviderAccountBindingStore(
+		cookie.name,
+		cookie.attributes,
+		ctx,
+	);
+	bindingStore.setCookies(bindingStore.clean());
+}
+
 export function deleteSessionCookie(
 	ctx: GenericEndpointContext,
 	skipDontRememberMe?: boolean | undefined,
 ) {
 	expireCookie(ctx, ctx.context.authCookies.sessionToken);
 	expireCookie(ctx, ctx.context.authCookies.sessionData);
+	clearProviderAccountBindingCookie(ctx);
 
 	if (ctx.context.options.account?.storeAccountCookie) {
 		expireCookie(ctx, ctx.context.authCookies.accountData);

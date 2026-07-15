@@ -20,7 +20,7 @@ model User {
   username         String?
   displayUsername  String?     @db.Text
   sessions         Session[]
-  accounts         Account[]
+  identities       Identity[]
   twofactors       TwoFactor[]
 
   @@unique([email])
@@ -37,20 +37,34 @@ model Session {
   ipAddress String?  @db.Text
   userAgent String?  @db.Text
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@unique([token])
   @@index([userId(length: 191)])
   @@map("session")
 }
 
+model Identity {
+  id                String    @id
+  issuer            String    @db.VarChar(191)
+  providerAccountId String    @db.VarChar(191)
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  accounts          Account[]
+
+  @@unique([issuer, providerAccountId], map: "identity_issuer_providerAccountId_uidx")
+  @@index([userId(length: 191)])
+  @@map("identity")
+}
+
 model Account {
   id                    String    @id
-  issuer                String    @db.VarChar(191)
-  providerAccountId     String    @db.VarChar(191)
+  identityId            String    @db.VarChar(191)
+  identity              Identity  @relation(fields: [identityId], references: [id], onDelete: Restrict)
   providerId            String    @db.Text
-  userId                String
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerInstanceId    String    @db.VarChar(191)
   accessToken           String?   @db.Text
   refreshToken          String?   @db.Text
   idToken               String?   @db.Text
@@ -61,8 +75,7 @@ model Account {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  @@unique([issuer, providerAccountId], map: "account_issuer_providerAccountId_uidx")
-  @@index([userId(length: 191)])
+  @@unique([identityId, providerInstanceId], map: "account_identityId_providerInstanceId_uidx")
   @@map("account")
 }
 

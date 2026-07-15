@@ -39,7 +39,7 @@ export function okta(options: OktaOptions): GenericOAuthConfig<"okta"> {
 
 	return {
 		providerId: "okta",
-		accountIssuer: issuer,
+		identityIssuer: issuer,
 		discoveryUrl,
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,

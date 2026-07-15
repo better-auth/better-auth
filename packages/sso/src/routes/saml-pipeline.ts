@@ -3,12 +3,18 @@ import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type { User } from "better-auth";
 import { APIError } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
-import { handleOAuthUserInfo } from "better-auth/oauth2";
+import { authenticateProviderUser } from "better-auth/oauth2";
 import { XMLParser } from "fast-xml-parser";
 import type { FlowResult } from "samlify/types/src/flow";
 
 import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
+import type { ResolvedSSOProvider } from "../provider-instance";
+import {
+	isCurrentSSOProviderReference,
+	parseSSOProviderReference,
+	resolveSSOIdentityIssuer,
+} from "../provider-instance";
 import {
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
@@ -28,7 +34,6 @@ import type {
 	SAMLConfig,
 	SAMLSessionRecord,
 	SSOOptions,
-	SSOProvider,
 } from "../types";
 import {
 	parseProviderEmailVerified,
@@ -246,7 +251,7 @@ export async function processSAMLResponse(
 	}
 
 	// 4. Provider lookup (unified: defaultSSO by providerId, then DB fallback)
-	const provider: SSOProvider<SSOOptions> | null = await findSAMLProvider(
+	const provider: ResolvedSSOProvider | null = await findSAMLProvider(
 		providerId,
 		options,
 		ctx.context.adapter,
@@ -255,6 +260,20 @@ export async function processSAMLResponse(
 	if (!provider?.samlConfig) {
 		throw new APIError("NOT_FOUND", {
 			message: "No SAML provider found",
+		});
+	}
+
+	if (
+		relayState &&
+		!(await isCurrentSSOProviderReference(
+			provider,
+			parseSSOProviderReference(relayState.serverContext?.ssoProvider),
+			"saml",
+		))
+	) {
+		throw new APIError("CONFLICT", {
+			code: "SSO_PROVIDER_CHANGED",
+			message: "SSO provider changed while authentication was in progress",
 		});
 	}
 
@@ -395,7 +414,7 @@ export async function processSAMLResponse(
 	// 12. InResponseTo validation
 	await validateInResponseTo(ctx, {
 		extract: extract as SAMLAssertionExtract,
-		providerId,
+		providerInstanceId: provider.instance.providerInstanceId,
 		options: {
 			enableInResponseToValidation: options?.saml?.enableInResponseToValidation,
 			allowIdpInitiated: options?.saml?.allowIdpInitiated,
@@ -513,10 +532,8 @@ export async function processSAMLResponse(
 	}
 
 	// 16. Session creation
-	// SSO provider ids are user-controlled and share the social-provider account
-	// namespace, so trust must come solely from verified domain ownership, never
-	// from a name match against the global `trustedProviders` list (enforced via
-	// `trustProviderByName: false` below).
+	// An SSO alias is only a routing label. It must not inherit account-linking
+	// trust from a social provider with the same public name.
 	const isTrustedProvider: boolean =
 		"domainVerified" in provider &&
 		!!(provider as { domainVerified?: boolean }).domainVerified &&
@@ -532,21 +549,24 @@ export async function processSAMLResponse(
 		ctx.context.baseURL;
 	const errorUrl = relayState?.errorURL || samlRedirectUrl;
 
-	let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+	let result: Awaited<ReturnType<typeof authenticateProviderUser>>;
 	try {
 		result = await runWithTransaction(ctx.context.adapter, async () => {
 			await lockSSOProviderForAccountLink(ctx, provider);
-			return handleOAuthUserInfo(ctx, {
+			return authenticateProviderUser(ctx, {
 				userInfo: {
 					email: userInfo.email as string,
 					name: (userInfo.name || userInfo.email) as string,
 					id: userInfo.id as string,
 					emailVerified: userInfo.emailVerified,
 				},
-				account: {
-					providerId,
-					issuer,
+				identity: {
+					issuer: resolveSSOIdentityIssuer(provider, "saml"),
 					providerAccountId: userInfo.id as string,
+				},
+				account: {
+					providerId: provider.providerId,
+					providerInstanceId: provider.instance.providerInstanceId,
 					accessToken: "",
 					refreshToken: "",
 				},
@@ -610,15 +630,15 @@ export async function processSAMLResponse(
 	});
 
 	// 19. Set session cookie
-	await setSessionCookie(ctx, { session, user });
+	await setSessionCookie(ctx, result.data!);
 
 	// 20. SLO session record
 	if (options?.saml?.enableSingleLogout && extract.nameID) {
-		const samlSessionKey = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${extract.nameID}`;
+		const samlSessionKey = `${constants.SAML_SESSION_KEY_PREFIX}${provider.instance.providerInstanceId}:${extract.nameID}`;
 		const samlSessionData: SAMLSessionRecord = {
 			sessionId: session.id,
 			sessionToken: session.token,
-			providerId,
+			providerInstanceId: provider.instance.providerInstanceId,
 			nameID: extract.nameID,
 			sessionIndex: (extract as SAMLAssertionExtract).sessionIndex
 				?.sessionIndex,

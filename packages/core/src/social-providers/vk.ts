@@ -30,7 +30,7 @@ export const vk = (options: VkOption) => {
 	return {
 		id: "vk",
 		name: "VK",
-		accountSubject: ({ profile }) => profile.user.user_id,
+		identitySubject: ({ profile }) => profile.user.user_id,
 		async createAuthorizationURL({
 			state,
 			scopes,

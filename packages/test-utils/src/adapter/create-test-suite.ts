@@ -1,11 +1,12 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	Account,
+	Identity,
 	Session,
 	User,
 	Verification,
 } from "@better-auth/core/db";
-import { createLocalAccountIssuer, getAuthTables } from "@better-auth/core/db";
+import { createLocalIdentityIssuer, getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import {
 	createAdapterFactory,
@@ -96,8 +97,15 @@ export type TestSuiteStats = {
 	};
 };
 
-type GenerateFn = <M extends "user" | "session" | "verification" | "account">(
-	Model: M,
+type CoreModelName =
+	| "user"
+	| "session"
+	| "verification"
+	| "identity"
+	| "account";
+
+type GenerateFn = <M extends CoreModelName>(
+	model: M,
 ) => Promise<
 	M extends "user"
 		? User
@@ -105,9 +113,11 @@ type GenerateFn = <M extends "user" | "session" | "verification" | "account">(
 			? Session
 			: M extends "verification"
 				? Verification
-				: M extends "account"
-					? Account
-					: undefined
+				: M extends "identity"
+					? Identity
+					: M extends "account"
+						? Account
+						: undefined
 >;
 
 type Success<T> = {
@@ -134,7 +144,7 @@ async function tryCatch<T, E = Error>(
 }
 
 export type InsertRandomFn = <
-	M extends "user" | "session" | "verification" | "account",
+	M extends CoreModelName,
 	Count extends number = 1,
 >(
 	model: M,
@@ -147,9 +157,11 @@ export type InsertRandomFn = <
 				? [User, Session]
 				: M extends "verification"
 					? [Verification]
-					: M extends "account"
-						? [User, Account]
-						: [undefined]
+					: M extends "identity"
+						? [User, Identity]
+						: M extends "account"
+							? [User, Identity, Account]
+							: [undefined]
 		: Array<
 				M extends "user"
 					? [User]
@@ -157,9 +169,11 @@ export type InsertRandomFn = <
 						? [User, Session]
 						: M extends "verification"
 							? [Verification]
-							: M extends "account"
-								? [User, Account]
-								: [undefined]
+							: M extends "identity"
+								? [User, Identity]
+								: M extends "account"
+									? [User, Identity, Account]
+									: [undefined]
 			>
 >;
 
@@ -271,16 +285,16 @@ export const createTestSuite = <
 					disableTransformInput: true,
 					disableTransformJoin: true,
 				};
-				// Snapshot the real adapter's transaction here so the wrapper always
-				// delegates to it, even when subsequent helper calls reassign
-				// `adapter` (e.g. `adapter = await helpers.adapter()` inside the
-				// proxied methods below). Previously this code mutated
-				// `adapter.transaction = undefined`, which left later
-				// `wrapperAdapter()` invocations with a snapshot of `undefined` and
-				// silently degraded `wrapper.transaction(cb)` to the no-op
-				// `createAsIsTransaction` path — breaking real rollback semantics
-				// for adapters that opt into `transaction: true`.
-				const adapterTransaction = adapter.transaction;
+				// Every factory adapter exposes `transaction`, including adapters whose
+				// implementation is only the sequential fallback. Preserve a native
+				// transaction only when the adapter explicitly advertises one; otherwise
+				// the wrapper must keep batch-only adapters batch-only.
+				const adapterTransaction =
+					typeof adapter.options?.adapterConfig.transaction === "function"
+						? adapter.transaction
+						: false;
+				const hasAtomicWriteCapability =
+					typeof adapter.commitAtomicWrites === "function";
 				const adapterCreator = (
 					options: BetterAuthOptions,
 				): DBAdapter<BetterAuthOptions> =>
@@ -291,6 +305,40 @@ export const createTestSuite = <
 						},
 						adapter: ({ getDefaultModelName }) => {
 							return {
+								commitAtomicWrites: hasAtomicWriteCapability
+									? async (operations) => {
+											adapter = await helpers.adapter();
+											const commitAtomicWrites = adapter.commitAtomicWrites;
+											if (!commitAtomicWrites) {
+												throw new Error(
+													"The adapter lost its atomic-write capability after the test harness refreshed it.",
+												);
+											}
+											// The wrapper already accepted these application-reserved IDs.
+											// Preserve that decision across the second adapter-factory boundary.
+											const committedResults = await commitAtomicWrites(
+												operations.map((operation) =>
+													operation.type === "create"
+														? { ...operation, forceAllowId: true }
+														: operation,
+												),
+											);
+											for (const [index, operation] of operations.entries()) {
+												const result = committedResults[index];
+												if (
+													operation.type !== "create" ||
+													result?.type !== "create"
+												) {
+													continue;
+												}
+												createdRows[operation.model] = [
+													...(createdRows[operation.model] || []),
+													result.record,
+												];
+											}
+											return committedResults;
+										}
+									: undefined,
 								count: async (args: any) => {
 									adapter = await helpers.adapter();
 									const res = await adapter.count(args);
@@ -375,8 +423,10 @@ export const createTestSuite = <
 
 			const cleanupCreatedRows = async () => {
 				adapter = await helpers.adapter();
-				for (const model of Object.keys(createdRows)) {
-					for (const row of createdRows[model]!) {
+				// Creation order follows dependency order (for example user, identity,
+				// account), so cleanup must walk it backwards to satisfy foreign keys.
+				for (const model of Object.keys(createdRows).reverse()) {
+					for (const row of createdRows[model]!.toReversed()) {
 						const schema = getAuthTables(helpers.getBetterAuthOptions());
 						const getDefaultModelName = initGetDefaultModelName({
 							schema,
@@ -517,15 +567,25 @@ export const createTestSuite = <
 					};
 					return verification as any;
 				}
+				if (model === "identity") {
+					const identity: Identity = {
+						id,
+						createdAt: randomDate,
+						updatedAt: new Date(),
+						issuer: createLocalIdentityIssuer("test"),
+						providerAccountId: generateId(),
+						userId: generateId(),
+					};
+					return identity as never;
+				}
 				if (model === "account") {
 					const account: Account = {
 						id,
 						createdAt: randomDate,
 						updatedAt: new Date(),
-						issuer: createLocalAccountIssuer("test"),
-						providerAccountId: generateId(),
+						identityId: generateId(),
 						providerId: "test",
-						userId: generateId(),
+						providerInstanceId: "test",
 						accessToken: generateId(),
 						refreshToken: generateId(),
 						idToken: generateId(),
@@ -540,7 +600,7 @@ export const createTestSuite = <
 			};
 
 			const insertRandom: InsertRandomFn = async <
-				M extends "user" | "session" | "verification" | "account",
+				M extends CoreModelName,
 				Count extends number = 1,
 			>(
 				model: M,
@@ -588,21 +648,44 @@ export const createTestSuite = <
 							}),
 						);
 					}
+					if (model === "identity") {
+						const user = await generateModel("user");
+						const userRes = await a.create({
+							data: user,
+							model: "user",
+							forceAllowId: true,
+						});
+						const identity = await generateModel("identity");
+						identity.userId = userRes.id;
+						const identityRes = await a.create({
+							data: identity,
+							model: "identity",
+							forceAllowId: true,
+						});
+						modelResults.push(userRes, identityRes);
+					}
 					if (model === "account") {
 						const user = await generateModel("user");
+						const identity = await generateModel("identity");
 						const account = await generateModel("account");
 						const userRes = await a.create({
 							data: user,
 							model: "user",
 							forceAllowId: true,
 						});
-						account.userId = userRes.id;
+						identity.userId = userRes.id;
+						const identityRes = await a.create({
+							data: identity,
+							model: "identity",
+							forceAllowId: true,
+						});
+						account.identityId = identityRes.id;
 						const accRes = await a.create({
 							data: account,
 							model: "account",
 							forceAllowId: true,
 						});
-						modelResults.push(userRes, accRes);
+						modelResults.push(userRes, identityRes, accRes);
 					}
 					res.push(modelResults);
 				}

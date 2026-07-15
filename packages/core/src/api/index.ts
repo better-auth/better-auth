@@ -32,6 +32,19 @@ export const NO_STORE_HEADERS = {
 } as const;
 
 /**
+ * Marks an internal endpoint dispatch that needs API errors returned for
+ * pipeline normalization instead of rejected through nested runtime promises.
+ *
+ * @internal
+ */
+export const kReturnAPIError = Symbol.for("better-auth:return-api-error");
+
+type AuthEndpointRuntimeContext = {
+	responseHeaders?: Headers;
+	[kReturnAPIError]?: boolean;
+};
+
+/**
  * Better-call's createEndpoint re-throws APIError without exposing the headers
  * accumulated on ctx.responseHeaders (e.g. Set-Cookie from deleteSessionCookie
  * before throw). Attach them to the error via kAPIErrorHeaderSymbol — matching
@@ -137,12 +150,20 @@ export function createAuthEndpoint<
 				ctx.setHeader(name, value);
 			}
 		}
-		const runtimeCtx = ctx as unknown as { responseHeaders?: Headers };
+		const runtimeCtx = ctx as unknown as AuthEndpointRuntimeContext;
+		const shouldReturnAPIError = runtimeCtx[kReturnAPIError] === true;
+		// The marker belongs to this dispatch boundary. Endpoint handlers may call
+		// another endpoint by spreading this context; leaving it attached would turn
+		// the nested endpoint's APIError into a resolved value.
+		delete runtimeCtx[kReturnAPIError];
 		try {
 			return await runWithEndpointContext(ctx as any, () => handler(ctx));
-		} catch (e) {
-			attachResponseHeadersToAPIError(runtimeCtx.responseHeaders, e);
-			throw e;
+		} catch (error) {
+			attachResponseHeadersToAPIError(runtimeCtx.responseHeaders, error);
+			if (shouldReturnAPIError && isAPIError(error)) {
+				return error as R;
+			}
+			throw error;
 		}
 	};
 

@@ -239,35 +239,21 @@ Before starting the migration process, set up Better Auth in your project. Follo
        */
       tempEmailDomain: 'temp.better-auth.com',
       /**
-       * Configure every social provider enabled in Better Auth with the exact
-       * trusted issuer it uses. For OAuth providers without one, use
-       * local:oauth:<encoded providerId>. The provider ID segment is
-       * percent-encoded. The script checks this map before it writes.
+       * Review every social provider in your Supabase export. Use the exact
+       * trusted issuer Better Auth uses, or local:<encoded providerId> when it has none.
        */
-      accountIssuers: {
-        github: 'local:oauth:github',
+      identityIssuers: {
+        github: 'local:github',
         google: 'https://accounts.google.com',
       } as Record<string, string>,
     };
 
-    function getAccountIssuer(providerId: string) {
-      const issuer = CONFIG.accountIssuers[providerId];
+    function getIdentityIssuer(providerId: string) {
+      const issuer = CONFIG.identityIssuers[providerId];
       if (!issuer) {
         throw new Error(`Missing trusted issuer for ${providerId}`);
       }
       return issuer;
-    }
-
-    function assertAccountIssuerCoverage(providerIds: readonly string[]) {
-      const missingProviderIds = providerIds
-        .filter((providerId) => !CONFIG.accountIssuers[providerId])
-        .sort();
-
-      if (missingProviderIds.length > 0) {
-        throw new Error(
-          `Missing trusted issuers for Better Auth social providers: ${missingProviderIds.join(', ')}. Update CONFIG.accountIssuers before running the migration.`,
-        );
-      }
     }
 
     // ============================================================================
@@ -302,12 +288,20 @@ Before starting the migration process, set up Better Auth in your project. Follo
       [key: string]: any;
     };
 
-    type AccountInsertData = {
+    type IdentityInsertData = {
       id: string;
       userId: string;
-      providerId: string;
       issuer: string;
       providerAccountId: string;
+      createdAt: string | null;
+      updatedAt: string | null;
+    };
+
+    type AccountInsertData = {
+      id: string;
+      identityId: string;
+      providerId: string;
+      providerInstanceId: string;
       password: string | null;
       createdAt: string | null;
       updatedAt: string | null;
@@ -738,17 +732,43 @@ Before starting the migration process, set up Better Auth in your project. Follo
           );
         }
 
+        const identitiesData: IdentityInsertData[] = [];
         const accountsData: AccountInsertData[] = [];
+        const identitiesByKey = new Map<string, { id: string; userId: string }>();
+
+        function registerIdentity(
+          data: Omit<IdentityInsertData, 'id'>,
+        ): string {
+          const identityKey = `${data.issuer}\u0000${data.providerAccountId}`;
+          const existingIdentity = identitiesByKey.get(identityKey);
+          if (existingIdentity) {
+            if (existingIdentity.userId !== data.userId) {
+              throw new Error(`Identity ${data.issuer}/${data.providerAccountId} belongs to several users`);
+            }
+            return existingIdentity.id;
+          }
+
+          const id = generateId();
+          identitiesByKey.set(identityKey, { id, userId: data.userId });
+          identitiesData.push({ id, ...data });
+          return id;
+        }
 
         for (const { user } of validUsersData) {
           for (const identity of user.identities ?? []) {
             if (identity.provider === 'email') {
-              accountsData.push({
-                id: generateId(),
+              const identityId = registerIdentity({
                 userId: user.id,
-                providerId: 'credential',
                 issuer: 'local:credential',
                 providerAccountId: user.id,
+                createdAt: user.created_at,
+                updatedAt: user.updated_at,
+              });
+              accountsData.push({
+                id: generateId(),
+                identityId,
+                providerId: 'credential',
+                providerInstanceId: 'credential',
                 password: user.encrypted_password || null,
                 createdAt: user.created_at,
                 updatedAt: user.updated_at,
@@ -756,12 +776,21 @@ Before starting the migration process, set up Better Auth in your project. Follo
             }
 
             if (supportedProviders.includes(identity.provider)) {
+              const issuer = getIdentityIssuer(identity.provider);
+              const providerAccountId = identity.identity_data?.sub || identity.provider_id;
+              const identityId = registerIdentity({
+                userId: user.id,
+                issuer,
+                providerAccountId,
+                createdAt: identity.created_at ?? user.created_at,
+                updatedAt: identity.updated_at ?? user.updated_at,
+              });
+
               accountsData.push({
                 id: generateId(),
-                userId: user.id,
+                identityId,
                 providerId: identity.provider,
-                issuer: getAccountIssuer(identity.provider),
-                providerAccountId: identity.identity_data?.sub || identity.provider_id,
+                providerInstanceId: identity.provider,
                 password: null,
                 createdAt: identity.created_at ?? user.created_at,
                 updatedAt: identity.updated_at ?? user.updated_at,
@@ -770,28 +799,63 @@ Before starting the migration process, set up Better Auth in your project. Follo
           }
         }
 
+        if (identitiesData.length > 0) {
+          const maxParamsPerQuery = 65000;
+          const fieldsPerIdentity = 6;
+          const identitiesPerChunk = Math.floor(maxParamsPerQuery / fieldsPerIdentity);
+
+          for (let i = 0; i < identitiesData.length; i += identitiesPerChunk) {
+            const chunk = identitiesData.slice(i, i + identitiesPerChunk);
+            const placeholders: string[] = [];
+            const values: Array<string | null> = [];
+            let paramIndex = 1;
+
+            for (const identity of chunk) {
+              placeholders.push(
+                `($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++})`,
+              );
+              values.push(
+                identity.id,
+                identity.userId,
+                identity.issuer,
+                identity.providerAccountId,
+                identity.createdAt,
+                identity.updatedAt,
+              );
+            }
+
+            await toDB.query(
+              `
+              INSERT INTO "identity" ("id", "userId", "issuer", "providerAccountId", "createdAt", "updatedAt")
+              VALUES ${placeholders.join(', ')}
+              ON CONFLICT ("id") DO NOTHING
+            `,
+              values,
+            );
+          }
+        }
+
         if (accountsData.length > 0) {
           const maxParamsPerQuery = 65000;
-          const fieldsPerAccount = 8;
+          const fieldsPerAccount = 7;
           const accountsPerChunk = Math.floor(maxParamsPerQuery / fieldsPerAccount);
 
           for (let i = 0; i < accountsData.length; i += accountsPerChunk) {
             const chunk = accountsData.slice(i, i + accountsPerChunk);
 
             const accountPlaceholders: string[] = [];
-            const accountValues: any[] = [];
+            const accountValues: Array<string | null> = [];
             let paramIndex = 1;
 
             for (const acc of chunk) {
               accountPlaceholders.push(
-                `($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++})`,
+                `($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++})`,
               );
               accountValues.push(
                 acc.id,
-                acc.userId,
+                acc.identityId,
                 acc.providerId,
-                acc.issuer,
-                acc.providerAccountId,
+                acc.providerInstanceId,
                 acc.password,
                 acc.createdAt,
                 acc.updatedAt,
@@ -800,7 +864,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
             await toDB.query(
               `
-              INSERT INTO "account" ("id", "userId", "providerId", "issuer", "providerAccountId", "password", "createdAt", "updatedAt")
+              INSERT INTO "account" ("id", "identityId", "providerId", "providerInstanceId", "password", "createdAt", "updatedAt")
               VALUES ${accountPlaceholders.join(', ')}
               ON CONFLICT ("id") DO NOTHING
             `,
@@ -830,7 +894,6 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
       // Validate Better Auth configuration
       const ctx = await validateAuthConfig();
-      assertAccountIssuerCoverage(Object.keys(ctx.options.socialProviders ?? {}));
 
       try {
         const countResult = await fromDB.query<{ count: string }>(
@@ -1205,6 +1268,7 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
 
     type SSOProviderInsertData = {
       id: string;
+      userId: string;
       providerId: string;
       issuer: string;
       domain: string;
@@ -1232,16 +1296,20 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
      * 
      * @param providers - Array of exported Supabase SSO providers
      * @param betterAuthUrl - Your Better Auth base URL (e.g., https://app.example.com)
+     * @param ownerUserId - Existing Better Auth user that owns the provider records
      */
     async function migrateSSOProviders(
-      providers: SupabaseSSOProvider[], 
-      betterAuthUrl: string
+      providers: SupabaseSSOProvider[],
+      betterAuthUrl: string,
+      ownerUserId: string,
     ) {
       console.log(`\n[SSO] Migrating ${providers.length} SSO provider(s)...\n`);
 
       for (const provider of providers) {
         // Create a unique provider ID that references the original Supabase ID
         const providerId = `sso-${provider.id}`;
+        const providerRecordId = provider.id;
+        const serviceProviderIssuer = `${betterAuthUrl}/api/auth/sso/saml2/sp/metadata?providerId=${providerId}`;
         
         // Combine all domains into a comma-separated string
         const domains = provider.domains.map(d => d.domain).join(',');
@@ -1270,7 +1338,7 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
         }
 
         const samlConfig = {
-          issuer: provider.saml.entity_id,
+          issuer: serviceProviderIssuer,
           entryPoint: '',
           cert: '',
           // Inline IdP metadata XML (required).
@@ -1295,9 +1363,10 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
         };
 
         const ssoProviderData: SSOProviderInsertData = {
-          id: generateId(),
+          id: providerRecordId,
+          userId: ownerUserId,
           providerId,
-          issuer: provider.saml.entity_id,
+          issuer: serviceProviderIssuer,
           domain: domains,
           oidcConfig: null,
           samlConfig: JSON.stringify(samlConfig),
@@ -1309,18 +1378,20 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
         try {
           await toDB.query(`
             INSERT INTO "ssoProvider" (
-              "id", "providerId", "issuer", "domain", 
+              "id", "userId", "providerId", "issuer", "domain",
               "oidcConfig", "samlConfig", "organizationId",
               "createdAt", "updatedAt"
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            ON CONFLICT ("providerId") DO UPDATE SET
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            ON CONFLICT ("id") DO UPDATE SET
+              "userId" = EXCLUDED."userId",
               "issuer" = EXCLUDED."issuer",
               "domain" = EXCLUDED."domain",
               "samlConfig" = EXCLUDED."samlConfig",
               "updatedAt" = EXCLUDED."updatedAt"
           `, [
             ssoProviderData.id,
+            ssoProviderData.userId,
             ssoProviderData.providerId,
             ssoProviderData.issuer,
             ssoProviderData.domain,
@@ -1333,7 +1404,7 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
 
           console.log(`[SSO] ✓ Migrated provider: ${providerId}`);
           console.log(`      Domains: ${domains}`);
-          console.log(`      Issuer: ${provider.saml.entity_id}\n`);
+          console.log(`      Service provider issuer: ${serviceProviderIssuer}\n`);
         } catch (error: any) {
           console.error(`[SSO] ✗ Failed to migrate provider ${providerId}:`, error.message);
         }
@@ -1341,31 +1412,6 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
 
       console.log('[SSO] Provider migration complete.\n');
     }
-    ```
-  </Step>
-
-  <Step>
-    ### Prepare trusted SSO account identities
-
-    Better Auth identifies SAML accounts by the actual IdP entity ID from the provider metadata and the signed `NameID`. Supabase exports do not contain enough verified data to derive those values safely. Before migrating accounts, create an operator-reviewed mapping from each legacy SSO identity to its IdP entity ID and signed `NameID`. Do not substitute the service-provider `entity_id`, an email address, or a profile `sub` claim.
-
-    Add the reviewed mapping to your migration script. The outer map is keyed by the Supabase SSO provider ID, and the inner map by its legacy identity ID:
-
-    ```ts title="migration.ts"
-    const samlAccountIdentityByProviderId = new Map([
-      [
-        'supabase-provider-id',
-        new Map([
-          [
-            'legacy-identity-id',
-            {
-              issuer: 'https://idp.example.com/metadata',
-              providerAccountId: 'signed-name-id',
-            },
-          ],
-        ]),
-      ],
-    ]);
     ```
   </Step>
 
@@ -1382,19 +1428,22 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
       // Handle SSO identities // [!code highlight]
       if (identity.provider.startsWith('sso:')) { // [!code highlight]
         const supabaseProviderId = identity.provider.replace('sso:', ''); // [!code highlight]
-        const accountIdentity = samlAccountIdentityByProviderId // [!code highlight]
-          .get(supabaseProviderId) // [!code highlight]
-          ?.get(identity.provider_id); // [!code highlight]
-        if (!accountIdentity) { // [!code highlight]
-          throw new Error(`Missing trusted SAML account identity for ${supabaseProviderId}`); // [!code highlight]
-        } // [!code highlight]
-        
+        const providerId = `sso-${supabaseProviderId}`; // [!code highlight]
+        const providerInstanceId = `sso:provider:${supabaseProviderId}`; // [!code highlight]
+        const providerAccountId = identity.identity_data?.sub || identity.provider_id; // [!code highlight]
+        const identityId = registerIdentity({ // [!code highlight]
+          userId: user.id, // [!code highlight]
+          issuer: `${providerInstanceId}:saml`, // [!code highlight]
+          providerAccountId, // [!code highlight]
+          createdAt: identity.created_at ?? user.created_at, // [!code highlight]
+          updatedAt: identity.updated_at ?? user.updated_at, // [!code highlight]
+        }); // [!code highlight]
+
         accountsData.push({ // [!code highlight]
           id: generateId(), // [!code highlight]
-          userId: user.id, // [!code highlight]
-          providerId: `sso-${supabaseProviderId}`, // Matches the migrated provider ID // [!code highlight]
-          issuer: accountIdentity.issuer, // IdP metadata entity ID // [!code highlight]
-          providerAccountId: accountIdentity.providerAccountId, // Signed NameID // [!code highlight]
+          identityId, // [!code highlight]
+          providerId, // [!code highlight]
+          providerInstanceId, // [!code highlight]
           password: null, // [!code highlight]
           createdAt: identity.created_at ?? user.created_at, // [!code highlight]
           updatedAt: identity.updated_at ?? user.updated_at, // [!code highlight]
@@ -1403,7 +1452,7 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
     }
     ```
 
-    This links each migrated account to the protocol identity that Better Auth will verify at sign-in. Stop the migration when a trusted mapping is missing, resolve it with the identity provider, then rerun the batch.
+    This ensures that users who previously signed in via SSO will have their accounts linked to the migrated SSO provider.
   </Step>
 
   <Step>
@@ -1422,13 +1471,18 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
 
     // Your Better Auth application URL
     const BETTER_AUTH_URL = process.env.BETTER_AUTH_URL || 'https://app.example.com';
+    // Use a user from the Supabase export who should own the provider records.
+    const SSO_OWNER_USER_ID = process.env.BETTER_AUTH_SSO_OWNER_USER_ID;
+    if (!SSO_OWNER_USER_ID) {
+      throw new Error('BETTER_AUTH_SSO_OWNER_USER_ID is required');
+    }
 
     async function main() {
-      // First, migrate users (including SSO user accounts)
+      // Migrate users first so the selected SSO provider owner exists.
       await migrateFromSupabase();
-      
-      // Then, migrate SSO providers
-      await migrateSSOProviders(providers, BETTER_AUTH_URL);
+
+      // The deterministic provider record IDs already match the migrated Accounts.
+      await migrateSSOProviders(providers, BETTER_AUTH_URL, SSO_OWNER_USER_ID);
     }
 
     main();

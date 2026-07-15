@@ -217,9 +217,9 @@ export const genericOAuth = <const ID extends string>(
 						return null;
 					});
 					if (discovered) {
-						if (!discovered.issuer && !c.accountIssuer) {
+						if (!discovered.issuer && !c.identityIssuer) {
 							throw new Error(
-								`Provider "${c.providerId}": discovery did not return an issuer. Configure accountIssuer explicitly to establish a stable account namespace.`,
+								`Provider "${c.providerId}": discovery did not return an issuer. Configure identityIssuer explicitly to establish a stable identity namespace.`,
 							);
 						}
 						authorizationUrl ??= discovered.authorization_endpoint;
@@ -245,9 +245,9 @@ export const genericOAuth = <const ID extends string>(
 								algorithms: isOidc ? signingAlgs : undefined,
 							};
 						}
-					} else if (!c.accountIssuer) {
+					} else if (!c.identityIssuer) {
 						throw new Error(
-							`Provider "${c.providerId}": discovery returned no valid data. Provider initialization stopped to keep its account issuer stable.`,
+							`Provider "${c.providerId}": discovery returned no valid data. Provider initialization stopped to keep its identity issuer stable.`,
 						);
 					} else if (!authorizationUrl || !tokenUrl) {
 						ctx.logger.error(
@@ -285,31 +285,31 @@ export const genericOAuth = <const ID extends string>(
 					);
 				}
 
-				const accountSubject = c.accountSubject;
-				const accountIssuer = c.accountIssuer;
+				const identitySubject = c.identitySubject;
+				const identityIssuer = c.identityIssuer;
 				const provider: OAuthProvider = {
 					id: c.providerId,
 					name: c.name ?? c.providerId,
 					issuer,
-					accountSubject: ({ tokens, profile }) => {
+					identitySubject: ({ tokens, profile }) => {
 						// AuthContext erases heterogeneous provider profile types. This
 						// provider always emits GenericOAuthUserInfo from getUserInfo below.
 						const genericProfile = profile as GenericOAuthUserInfo;
-						if (accountSubject) {
-							return accountSubject({ tokens, profile: genericProfile });
+						if (identitySubject) {
+							return identitySubject({ tokens, profile: genericProfile });
 						}
 						return isOidc
 							? (genericProfile.sub ?? "")
 							: (genericProfile.id ?? "");
 					},
-					accountIssuer:
-						typeof accountIssuer === "function"
+					identityIssuer:
+						typeof identityIssuer === "function"
 							? ({ tokens, profile }) =>
-									accountIssuer({
+									identityIssuer({
 										tokens,
 										profile: profile as GenericOAuthUserInfo,
 									})
-							: (accountIssuer ?? issuer),
+							: (identityIssuer ?? issuer),
 					idToken: idTokenConfig,
 					requiresIdTokenNonce:
 						idTokenConfig !== undefined &&

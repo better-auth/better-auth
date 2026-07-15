@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getAuthTables, getAuthTablesWithResolvedIndexes } from "../get-tables";
-import type { AccountKey } from "../schema/account";
-import {
-	createLocalAccountIssuer,
-	createOAuthAccountIssuer,
-} from "../schema/account";
+import { getAuthTables } from "../get-tables";
+import { accountSchema } from "../schema/account";
+import type { IdentityKey } from "../schema/identity";
+import { createLocalIdentityIssuer, identitySchema } from "../schema/identity";
 import type { SecondaryStorage } from "../type";
 
 const secondaryStorageStub: SecondaryStorage = {
@@ -16,30 +14,55 @@ const secondaryStorageStub: SecondaryStorage = {
 };
 
 describe("getAuthTables", () => {
-	it("creates a local account key without changing the provider account id", () => {
-		const credentialAccountKey: AccountKey = {
-			issuer: createLocalAccountIssuer("credential"),
+	it("creates a local identity key without changing the provider account id", () => {
+		const credentialIdentityKey: IdentityKey = {
+			issuer: createLocalIdentityIssuer("credential"),
 			providerAccountId: "user-id",
 		};
 
-		expect(credentialAccountKey).toEqual({
+		expect(credentialIdentityKey).toEqual({
 			issuer: "local:credential",
 			providerAccountId: "user-id",
 		});
 	});
 
-	it("escapes provider IDs in synthetic account issuers", () => {
-		expect(createLocalAccountIssuer("credential")).toBe("local:credential");
-		expect(createOAuthAccountIssuer("google")).toBe("local:oauth:google");
-		expect(createLocalAccountIssuer("oauth:google")).toBe(
+	it("escapes provider IDs in synthetic identity issuers", () => {
+		expect(createLocalIdentityIssuer("credential")).toBe("local:credential");
+		expect(createLocalIdentityIssuer("oauth:google")).toBe(
 			"local:oauth%3Agoogle",
 		);
-		expect(createOAuthAccountIssuer("team/google%prod")).toBe(
-			"local:oauth:team%2Fgoogle%25prod",
+		expect(createLocalIdentityIssuer("team/google%prod")).toBe(
+			"local:team%2Fgoogle%25prod",
 		);
-		expect(createLocalAccountIssuer("oauth:google")).not.toBe(
-			createOAuthAccountIssuer("google"),
-		);
+	});
+
+	it("parses identities and provider accounts as separate records", () => {
+		const identity = identitySchema.parse({
+			id: "identity-id",
+			userId: "user-id",
+			issuer: "https://identity.example.com",
+			providerAccountId: "employee-1",
+		});
+		const account = accountSchema.parse({
+			id: "account-id",
+			identityId: identity.id,
+			providerId: "workforce-production",
+			providerInstanceId: "sso:provider:workforce-production",
+		});
+
+		expect(identity).toMatchObject({
+			userId: "user-id",
+			issuer: "https://identity.example.com",
+			providerAccountId: "employee-1",
+		});
+		expect(account).toMatchObject({
+			identityId: "identity-id",
+			providerId: "workforce-production",
+			providerInstanceId: "sso:provider:workforce-production",
+		});
+		expect(account).not.toHaveProperty("userId");
+		expect(account).not.toHaveProperty("issuer");
+		expect(account).not.toHaveProperty("providerAccountId");
 	});
 
 	it("should use correct field name for refreshTokenExpiresAt", () => {
@@ -100,25 +123,62 @@ describe("getAuthTables", () => {
 		expect(accessTokenExpiresAtField.fieldName).toBe("accessTokenExpiresAt");
 	});
 
-	it("defines the issuer-scoped account key with configured field names", () => {
+	it("separates stable identities from provider accounts", () => {
 		const tables = getAuthTables({
-			account: {
+			identity: {
+				modelName: "externalIdentity",
 				fields: {
 					issuer: "identity_issuer",
 					providerAccountId: "provider_subject",
+					userId: "user_id",
+				},
+			},
+			account: {
+				fields: {
+					identityId: "identity_id",
 					providerId: "provider_alias",
+					providerInstanceId: "provider_instance_id",
 				},
 			},
 		});
 
-		expect(tables.account?.fields.issuer?.fieldName).toBe("identity_issuer");
-		expect(tables.account?.fields.providerAccountId?.fieldName).toBe(
+		expect(tables.identity?.fields.issuer?.fieldName).toBe("identity_issuer");
+		expect(tables.identity?.fields.providerAccountId?.fieldName).toBe(
 			"provider_subject",
 		);
-		expect(tables.account?.fields.providerId?.fieldName).toBe("provider_alias");
-		expect(tables.account?.fields.accountId).toBeUndefined();
-		expect(tables.account?.indexes).toContainEqual({
+		expect(tables.session?.fields.userId).toMatchObject({
+			references: { field: "id", model: "user", onDelete: "restrict" },
+		});
+		expect(tables.identity?.fields.userId).toMatchObject({
+			fieldName: "user_id",
+			index: true,
+			references: { field: "id", model: "user", onDelete: "restrict" },
+		});
+		expect(tables.identity?.indexes).toContainEqual({
 			fields: ["issuer", "providerAccountId"],
+			unique: true,
+		});
+
+		expect(tables.account?.fields.identityId).toMatchObject({
+			fieldName: "identity_id",
+			references: {
+				field: "id",
+				model: "externalIdentity",
+				onDelete: "restrict",
+			},
+		});
+		expect(tables.account?.fields.identityId?.index).toBeUndefined();
+		expect(tables.account?.fields.providerId?.fieldName).toBe("provider_alias");
+		expect(tables.account?.fields.providerInstanceId).toMatchObject({
+			fieldName: "provider_instance_id",
+			required: true,
+			returned: false,
+		});
+		expect(tables.account?.fields.userId).toBeUndefined();
+		expect(tables.account?.fields.issuer).toBeUndefined();
+		expect(tables.account?.fields.providerAccountId).toBeUndefined();
+		expect(tables.account?.indexes).toContainEqual({
+			fields: ["identityId", "providerInstanceId"],
 			unique: true,
 		});
 	});
@@ -160,7 +220,7 @@ describe("getAuthTables", () => {
 				{
 					id: "account-identity",
 					schema: {
-						account: {
+						identity: {
 							fields: {
 								issuer: { type: "string" },
 								providerAccountId: { type: "string" },
@@ -177,7 +237,7 @@ describe("getAuthTables", () => {
 			],
 		});
 
-		expect(tables.account?.indexes).toEqual([
+		expect(tables.identity?.indexes).toEqual([
 			{
 				fields: ["issuer", "providerAccountId"],
 				unique: true,
@@ -208,35 +268,6 @@ describe("getAuthTables", () => {
 		).toThrow(
 			'Database schema resolves more than one indexed logical table to "directory_identity".',
 		);
-	});
-
-	it("should return resolved indexes with the constructed tables", () => {
-		const { indexesByTable, tables } = getAuthTablesWithResolvedIndexes({
-			plugins: [
-				{
-					id: "resolved-indexes",
-					schema: {
-						directoryIdentity: {
-							modelName: "directory_identity",
-							fields: {
-								issuer: { fieldName: "issuer_url", type: "string" },
-								subject: { type: "string" },
-							},
-							indexes: [{ fields: ["issuer", "subject"], unique: true }],
-						},
-					},
-				},
-			],
-		});
-
-		expect(tables.directoryIdentity?.indexes).toHaveLength(1);
-		expect(indexesByTable.get("directory_identity")).toEqual([
-			{
-				columns: ["issuer_url", "subject"],
-				name: "directory_identity_issuer_url_subject_uidx",
-				unique: true,
-			},
-		]);
 	});
 
 	it("should merge additionalFields into verification table metadata", () => {

@@ -40,21 +40,45 @@ export const session = sqliteTable(
 		userAgent: text("user_agent"),
 		userId: text("user_id")
 			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
+			.references(() => user.id, { onDelete: "restrict" }),
 	},
 	(table) => [index("session_userId_idx").on(table.userId)],
+);
+
+export const identity = sqliteTable(
+	"identity",
+	{
+		id: text("id").primaryKey(),
+		issuer: text("issuer").notNull(),
+		providerAccountId: text("provider_account_id").notNull(),
+		userId: text("user_id")
+			.notNull()
+			.references(() => user.id, { onDelete: "restrict" }),
+		createdAt: integer("created_at", { mode: "timestamp_ms" })
+			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+			.notNull(),
+		updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+			.$onUpdate(() => /* @__PURE__ */ new Date())
+			.notNull(),
+	},
+	(table) => [
+		uniqueIndex("identity_issuer_providerAccountId_uidx").on(
+			table.issuer,
+			table.providerAccountId,
+		),
+		index("identity_userId_idx").on(table.userId),
+	],
 );
 
 export const account = sqliteTable(
 	"account",
 	{
 		id: text("id").primaryKey(),
-		issuer: text("issuer").notNull(),
-		providerAccountId: text("provider_account_id").notNull(),
-		providerId: text("provider_id").notNull(),
-		userId: text("user_id")
+		identityId: text("identity_id")
 			.notNull()
-			.references(() => user.id, { onDelete: "cascade" }),
+			.references(() => identity.id, { onDelete: "restrict" }),
+		providerId: text("provider_id").notNull(),
+		providerInstanceId: text("provider_instance_id").notNull(),
 		accessToken: text("access_token"),
 		refreshToken: text("refresh_token"),
 		idToken: text("id_token"),
@@ -74,11 +98,11 @@ export const account = sqliteTable(
 			.notNull(),
 	},
 	(table) => [
-		uniqueIndex("account_issuer_providerAccountId_uidx").on(
-			table.issuer,
-			table.providerAccountId,
+		uniqueIndex("account_identityId_providerInstanceId_uidx").on(
+			table.identityId,
+			table.providerInstanceId,
 		),
-		index("account_userId_idx").on(table.userId),
+		index("account_identityId_idx").on(table.identityId),
 	],
 );
 
@@ -106,6 +130,8 @@ export const jwks = sqliteTable("jwks", {
 	privateKey: text("private_key").notNull(),
 	createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
 	expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
+	alg: text("alg"),
+	crv: text("crv"),
 });
 
 export const ssoProvider = sqliteTable("sso_provider", {
@@ -121,7 +147,7 @@ export const ssoProvider = sqliteTable("sso_provider", {
 
 export const userRelations = relations(user, ({ many }) => ({
 	sessions: many(session),
-	accounts: many(account),
+	identities: many(identity),
 	ssoProviders: many(ssoProvider),
 }));
 
@@ -132,10 +158,18 @@ export const sessionRelations = relations(session, ({ one }) => ({
 	}),
 }));
 
-export const accountRelations = relations(account, ({ one }) => ({
+export const identityRelations = relations(identity, ({ many, one }) => ({
 	user: one(user, {
-		fields: [account.userId],
+		fields: [identity.userId],
 		references: [user.id],
+	}),
+	accounts: many(account),
+}));
+
+export const accountRelations = relations(account, ({ one }) => ({
+	identity: one(identity, {
+		fields: [account.identityId],
+		references: [identity.id],
 	}),
 }));
 

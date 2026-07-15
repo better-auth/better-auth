@@ -1,6 +1,6 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
+import { createLocalIdentityIssuer } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
@@ -308,13 +308,18 @@ export const resetPassword = createAuthEndpoint(
 		const account =
 			await ctx.context.internalAdapter.findCredentialAccount(userId);
 		if (!account) {
-			await ctx.context.internalAdapter.createAccount({
+			await ctx.context.internalAdapter.linkAccount(
 				userId,
-				providerId: "credential",
-				issuer: createLocalAccountIssuer("credential"),
-				providerAccountId: user.id,
-				password: hashedPassword,
-			});
+				{
+					issuer: createLocalIdentityIssuer("credential"),
+					providerAccountId: user.id,
+				},
+				{
+					providerId: "credential",
+					providerInstanceId: "credential",
+					password: hashedPassword,
+				},
+			);
 		} else {
 			await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
 		}

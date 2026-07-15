@@ -443,7 +443,7 @@ export function createSCIMUser(
 								await assertBetterAuthEmailAvailable(trx, profile.primaryEmail);
 								user = await ctx.context.internalAdapter.createUser(
 									{ email: profile.primaryEmail, name: profile.displayName },
-									{ method: "scim" },
+									{ method: "scim", connectionId: connection.id },
 								);
 							} else {
 								const linkedUser = await trx.findOne<User>({

@@ -64,6 +64,24 @@ describe("relations-v2 schema generator", () => {
 		expect(typeErrors(code)).toEqual([]);
 	});
 
+	it("generates the identity and provider-account relationships", async () => {
+		const { code = "" } = await generate({});
+
+		expect(code).toMatch(
+			/uniqueIndex\("identity_issuer_providerAccountId_uidx"\)\.on\(table\.issuer, table\.providerAccountId\)/,
+		);
+		expect(code).toMatch(
+			/identityId:\s*text\(['"]identity_id['"]\)\.notNull\(\)\.references\(\(\)=> identity\.id, \{ onDelete: ['"]restrict['"] \}\)/,
+		);
+		expect(code).toMatch(
+			/uniqueIndex\("account_identityId_providerInstanceId_uidx"\)\.on\(table\.identityId, table\.providerInstanceId\)/,
+		);
+		expect(code).not.toContain('index("account_identityId_idx")');
+		expect(code).toContain("identities: r.many.identity");
+		expect(code).toContain("accounts: r.many.account");
+		expect(typeErrors(code)).toEqual([]);
+	});
+
 	it("generates compound indexes with physical field names", async () => {
 		const { code = "" } = await generateFor("mysql", {
 			plugins: [

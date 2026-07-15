@@ -84,10 +84,10 @@ describe("facebook.getUserInfo (opaque access token)", () => {
 		} as any);
 		expect(res?.user).not.toHaveProperty("id");
 		expect(res?.user.email).toBe("u1@example.com");
-		expect(typeof provider.accountSubject).toBe("function");
-		if (typeof provider.accountSubject !== "function" || !res) return;
+		expect(typeof provider.identitySubject).toBe("function");
+		if (typeof provider.identitySubject !== "function" || !res) return;
 		expect(
-			await provider.accountSubject({
+			await provider.identitySubject({
 				tokens: { accessToken: "opaque-access-token" },
 				profile: res.data,
 			}),

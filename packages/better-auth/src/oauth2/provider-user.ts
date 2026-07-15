@@ -1,8 +1,9 @@
 import type {
+	AuthenticatedProviderAccountBinding,
 	GenericEndpointContext,
 	UserProvisioningSource,
 } from "@better-auth/core";
-import { runWithTransaction } from "@better-auth/core/context";
+import type { IdentityKey } from "@better-auth/core/db";
 import { isDevelopment } from "@better-auth/core/env";
 import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
@@ -16,11 +17,22 @@ import { setTokenUtil } from "./utils";
 // TODO(#9124): v2 widens `User.email` to nullable; every `userInfo.email.toLowerCase()`
 // call below needs null-safety before account recognition can be fully
 // independent from email-based implicit linking.
-export async function handleOAuthUserInfo(
+export async function authenticateProviderUser(
 	c: GenericEndpointContext,
 	opts: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
-		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
+		identity: IdentityKey;
+		account: Pick<
+			Account,
+			| "providerId"
+			| "providerInstanceId"
+			| "accessToken"
+			| "refreshToken"
+			| "idToken"
+			| "accessTokenExpiresAt"
+			| "refreshTokenExpiresAt"
+			| "scope"
+		>;
 		callbackURL?: string | undefined;
 		disableSignUp?: boolean | undefined;
 		overrideUserInfo?: boolean | undefined;
@@ -29,17 +41,23 @@ export async function handleOAuthUserInfo(
 		source?: UserProvisioningSource | undefined;
 	},
 ) {
-	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
-		opts;
+	const {
+		userInfo,
+		identity,
+		account,
+		callbackURL,
+		disableSignUp,
+		overrideUserInfo,
+	} = opts;
 	const source = opts.source ?? {
 		method: "oauth",
 		oauth: { providerId: account.providerId },
 	};
-	const accountOwner = await c.context.internalAdapter
-		.findAccountOwnerByKey({
-			issuer: account.issuer,
-			providerAccountId: account.providerAccountId,
-		})
+	let authenticatedProviderAccountBinding:
+		| AuthenticatedProviderAccountBinding
+		| undefined;
+	const identityOwner = await c.context.internalAdapter
+		.findIdentityOwnerByKey(identity)
 		.catch((e) => {
 			c.context.logger.error(
 				"Better auth was unable to query your database.\nError: ",
@@ -49,34 +67,36 @@ export async function handleOAuthUserInfo(
 				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 			redirectOnError(c, errorURL, "internal_server_error");
 		});
-	if (accountOwner?.kind === "orphaned") {
+	if (identityOwner?.kind === "orphaned") {
 		c.context.logger.error(
-			"OAuth account references a missing user. Repair the account before retrying authentication.",
+			"OAuth identity references a missing user. Repair the identity before retrying authentication.",
 		);
-		return {
-			error: "unable to link account",
-			data: null,
-			isRegister: false,
-		};
+		return { error: "unable to link account", data: null };
 	}
 	const dbUser = await (async () => {
-		if (accountOwner?.kind === "owned") {
+		if (identityOwner?.kind === "owned") {
+			const linkedAccount = await c.context.internalAdapter.findAccountByKey({
+				identityId: identityOwner.identity.id,
+				providerInstanceId: account.providerInstanceId,
+			});
 			return {
-				user: accountOwner.user,
-				linkedAccount: accountOwner.account,
-				accounts: [accountOwner.account],
+				user: identityOwner.user,
+				identity: identityOwner.identity,
+				linkedAccount,
+				matchedByIdentity: true,
 			};
 		}
 
 		const emailMatch = await c.context.internalAdapter.findUserByEmail(
 			userInfo.email.toLowerCase(),
-			{ includeAccounts: true },
+			{ includeAccounts: false },
 		);
 		if (!emailMatch) return null;
 		return {
 			user: emailMatch.user,
+			identity: null,
 			linkedAccount: null,
-			accounts: emailMatch.accounts,
+			matchedByIdentity: false,
 		};
 	})().catch((e) => {
 		c.context.logger.error(
@@ -91,29 +111,20 @@ export async function handleOAuthUserInfo(
 	const isRegister = !user;
 
 	if (dbUser) {
-		const linkedAccount =
-			dbUser.linkedAccount ??
-			dbUser.accounts.find(
-				(acc) =>
-					acc.issuer === account.issuer &&
-					acc.providerAccountId === account.providerAccountId,
-			);
+		const linkedAccount = dbUser.linkedAccount;
 		if (!linkedAccount) {
 			const accountLinking = c.context.options.account?.accountLinking;
 			const isTrustedProvider =
 				opts.isTrustedProvider ||
 				(opts.trustProviderByName !== false &&
 					c.context.trustedProviders.includes(account.providerId));
-			// FIXME(next-minor): drop `requireLocalEmailVerified` option and make
-			// the gate unconditional.
-			const requireLocalEmailVerified =
-				accountLinking?.requireLocalEmailVerified ?? true;
-			if (
-				(!isTrustedProvider && !userInfo.emailVerified) ||
-				(requireLocalEmailVerified && !dbUser.user.emailVerified) ||
-				accountLinking?.enabled === false ||
-				accountLinking?.disableImplicitLinking === true
-			) {
+			const implicitLinkingRejected =
+				!dbUser.matchedByIdentity &&
+				((!isTrustedProvider && !userInfo.emailVerified) ||
+					!dbUser.user.emailVerified ||
+					accountLinking?.enabled === false ||
+					accountLinking?.disableImplicitLinking === true);
+			if (implicitLinkingRejected) {
 				if (isDevelopment()) {
 					c.context.logger.warn(
 						`User already exist but account isn't linked to ${account.providerId}. To read more about how account linking works in Better Auth see https://www.better-auth.com/docs/concepts/users-accounts#account-linking.`,
@@ -134,18 +145,26 @@ export async function handleOAuthUserInfo(
 					},
 					source: { ...source, action: "link-account" },
 				});
-				await c.context.internalAdapter.linkAccount({
-					providerId: account.providerId,
-					issuer: account.issuer,
-					providerAccountId: account.providerAccountId,
-					userId: dbUser.user.id,
-					accessToken: await setTokenUtil(account.accessToken, c.context),
-					refreshToken: await setTokenUtil(account.refreshToken, c.context),
-					idToken: account.idToken,
-					accessTokenExpiresAt: account.accessTokenExpiresAt,
-					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-					scope: account.scope,
-				});
+				const linked = await c.context.internalAdapter.linkAccount(
+					dbUser.user.id,
+					identity,
+					{
+						providerId: account.providerId,
+						providerInstanceId: account.providerInstanceId,
+						accessToken: await setTokenUtil(account.accessToken, c.context),
+						refreshToken: await setTokenUtil(account.refreshToken, c.context),
+						idToken: account.idToken,
+						accessTokenExpiresAt: account.accessTokenExpiresAt,
+						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+						scope: account.scope,
+					},
+				);
+				if (c.context.options.account?.storeAccountCookie) {
+					authenticatedProviderAccountBinding = await setAccountCookie(
+						c,
+						linked,
+					);
+				}
 			} catch (e) {
 				if (isAPIError(e)) {
 					throw e;
@@ -156,21 +175,6 @@ export async function handleOAuthUserInfo(
 					data: null,
 				};
 			}
-
-			// Reachable only when `requireLocalEmailVerified: false` lets the link
-			// proceed for an unverified local row. The IdP's verified email is
-			// promoted to the local row so subsequent flows treat it as verified.
-			// FIXME(next-minor): unreachable once the gate becomes unconditional.
-			if (
-				userInfo.emailVerified &&
-				!dbUser.user.emailVerified &&
-				userInfo.email.toLowerCase() === dbUser.user.email
-			) {
-				await c.context.internalAdapter.updateUser(dbUser.user.id, {
-					emailVerified: true,
-				});
-			}
-
 			user =
 				(await applyUpdateUserInfoOnLink(c, dbUser.user.id, userInfo)) ?? user;
 		} else {
@@ -193,7 +197,6 @@ export async function handleOAuthUserInfo(
 				c.context.options.account?.updateAccountOnSignIn !== false
 					? Object.fromEntries(
 							Object.entries({
-								providerId: account.providerId,
 								idToken: account.idToken,
 								accessToken: await setTokenUtil(account.accessToken, c.context),
 								refreshToken: await setTokenUtil(
@@ -206,10 +209,13 @@ export async function handleOAuthUserInfo(
 						)
 					: {};
 
-			if (c.context.options.account?.storeAccountCookie) {
-				await setAccountCookie(c, {
-					...linkedAccount,
-					...freshTokens,
+			if (c.context.options.account?.storeAccountCookie && dbUser.identity) {
+				authenticatedProviderAccountBinding = await setAccountCookie(c, {
+					account: {
+						...linkedAccount,
+						...freshTokens,
+					},
+					identity: dbUser.identity,
 				});
 			}
 
@@ -295,32 +301,30 @@ export async function handleOAuthUserInfo(
 				refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 				scope: account.scope,
 				providerId: account.providerId,
-				issuer: account.issuer,
-				providerAccountId: account.providerAccountId,
+				providerInstanceId: account.providerInstanceId,
 			};
-			const { createdUser, createdAccount } = await runWithTransaction(
-				c.context.adapter,
-				async () => {
-					const createdUser = await c.context.internalAdapter.createUser(
-						{
-							name,
-							image,
-							...additionalUserFields,
-							email: userInfo.email.toLowerCase(),
-							emailVerified: userInfo.emailVerified,
-						},
-						source,
-					);
-					const createdAccount = await c.context.internalAdapter.createAccount({
-						...accountData,
-						userId: createdUser.id,
-					});
-					return { createdUser, createdAccount };
+			const created = await c.context.internalAdapter.createUserWithAccount(
+				{
+					name,
+					image,
+					...additionalUserFields,
+					email: userInfo.email.toLowerCase(),
+					emailVerified: userInfo.emailVerified,
+				},
+				{
+					source,
+					buildAuthentication: () => ({
+						identity,
+						account: accountData,
+					}),
 				},
 			);
-			user = createdUser;
+			user = created.user;
 			if (c.context.options.account?.storeAccountCookie) {
-				await setAccountCookie(c, createdAccount);
+				authenticatedProviderAccountBinding = await setAccountCookie(c, {
+					account: created.account,
+					identity: created.identity,
+				});
 			}
 		} catch (e) {
 			if (isAPIError(e)) {
@@ -379,6 +383,7 @@ export async function handleOAuthUserInfo(
 		data: {
 			session,
 			user,
+			authenticatedProviderAccountBinding,
 		},
 		error: null,
 		isRegister,
@@ -424,7 +429,7 @@ async function dispatchVerificationEmail(
  * Provider profile a freshly linked account may copy onto the local user.
  * `email` and `emailVerified` are identity anchors and are stripped before
  * the remaining fields are written. Provider identity is resolved separately
- * from the raw profile through the provider's account-key contract.
+ * from the raw profile through the provider's identity-key contract.
  */
 type LinkedProviderProfile = {
 	name?: string | undefined;

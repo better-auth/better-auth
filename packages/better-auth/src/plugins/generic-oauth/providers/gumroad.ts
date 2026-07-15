@@ -76,7 +76,7 @@ export function gumroad(
 
 	return {
 		providerId: "gumroad",
-		accountSubject: ({ profile }) => profile.id ?? "",
+		identitySubject: ({ profile }) => profile.id ?? "",
 		authorizationUrl: "https://gumroad.com/oauth/authorize",
 		tokenUrl: "https://api.gumroad.com/oauth/token",
 		clientId: options.clientId,

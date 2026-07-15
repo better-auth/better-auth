@@ -2,9 +2,14 @@ import type {
 	BetterAuthDBOptions,
 	BetterAuthOptions,
 	BetterAuthPlugin,
+	InternalAdapter,
 } from "@better-auth/core";
 import type {
 	Account,
+	AccountKey,
+	AccountWithIdentity,
+	Identity,
+	IdentityKey,
 	Session,
 	User,
 	Verification,
@@ -142,8 +147,111 @@ test("Account with additionalFields", () => {
 	>();
 	expectTypeOf<FinalAccount["isVerified"]>().toEqualTypeOf<boolean>();
 	expectTypeOf<FinalAccount["providerId"]>().toEqualTypeOf<string>();
-	expectTypeOf<FinalAccount["issuer"]>().toEqualTypeOf<string>();
-	expectTypeOf<FinalAccount["providerAccountId"]>().toEqualTypeOf<string>();
+	expectTypeOf<FinalAccount["providerInstanceId"]>().toEqualTypeOf<string>();
+	expectTypeOf<FinalAccount["identityId"]>().toEqualTypeOf<string>();
+	expectTypeOf<FinalAccount>().not.toHaveProperty("issuer");
+	expectTypeOf<FinalAccount>().not.toHaveProperty("providerAccountId");
+	expectTypeOf<FinalAccount>().not.toHaveProperty("userId");
+});
+
+test("AccountKey mirrors the provider-account uniqueness contract", () => {
+	expectTypeOf<AccountKey>().toEqualTypeOf<
+		Readonly<{ identityId: string; providerInstanceId: string }>
+	>();
+	expectTypeOf<AccountKey>().not.toHaveProperty("providerId");
+	expectTypeOf<AccountKey>().not.toHaveProperty("id");
+});
+
+test("Identity with additionalFields", () => {
+	const options = {
+		identity: {
+			additionalFields: {
+				lastAuthenticatedAt: {
+					type: "date",
+					required: false,
+				},
+			},
+		},
+	} satisfies BetterAuthOptions;
+
+	type FinalIdentity = Identity<(typeof options)["identity"]>;
+
+	expectTypeOf<FinalIdentity["lastAuthenticatedAt"]>().toEqualTypeOf<
+		Date | null | undefined
+	>();
+	expectTypeOf<FinalIdentity["issuer"]>().toEqualTypeOf<string>();
+	expectTypeOf<FinalIdentity["providerAccountId"]>().toEqualTypeOf<string>();
+	expectTypeOf<FinalIdentity["userId"]>().toEqualTypeOf<string>();
+});
+
+test("IdentityKey mirrors the issuer-scoped uniqueness contract", () => {
+	expectTypeOf<IdentityKey>().toEqualTypeOf<
+		Readonly<{ issuer: string; providerAccountId: string }>
+	>();
+	expectTypeOf<IdentityKey>().not.toHaveProperty("id");
+	expectTypeOf<IdentityKey>().not.toHaveProperty("userId");
+});
+
+test("AccountWithIdentity and InternalAdapter preserve configured model fields", () => {
+	const modelFieldsPlugin = {
+		id: "model-fields",
+		schema: {
+			account: {
+				fields: {
+					pluginAccountLabel: {
+						type: "string",
+						required: true,
+					},
+				},
+			},
+			identity: {
+				fields: {
+					pluginIdentityLabel: {
+						type: "string",
+						required: true,
+					},
+				},
+			},
+		},
+	} satisfies BetterAuthPlugin;
+	const options = {
+		account: {
+			additionalFields: {
+				accountLabel: {
+					type: "string",
+					required: true,
+				},
+			},
+		},
+		identity: {
+			additionalFields: {
+				identityLabel: {
+					type: "string",
+					required: true,
+				},
+			},
+		},
+		plugins: [modelFieldsPlugin],
+	} satisfies BetterAuthOptions;
+	type Options = typeof options;
+	type LinkedAccount = AccountWithIdentity<Options>;
+	type ListedAccount = Awaited<
+		ReturnType<InternalAdapter<Options>["listUserAccounts"]>
+	>[number];
+
+	expectTypeOf<
+		LinkedAccount["account"]["accountLabel"]
+	>().toEqualTypeOf<string>();
+	expectTypeOf<
+		LinkedAccount["account"]["pluginAccountLabel"]
+	>().toEqualTypeOf<string>();
+	expectTypeOf<
+		LinkedAccount["identity"]["identityLabel"]
+	>().toEqualTypeOf<string>();
+	expectTypeOf<
+		LinkedAccount["identity"]["pluginIdentityLabel"]
+	>().toEqualTypeOf<string>();
+	expectTypeOf<ListedAccount>().toEqualTypeOf<LinkedAccount>();
 });
 
 test("Verification with additionalFields", () => {
@@ -175,12 +283,15 @@ test("Verification with additionalFields", () => {
 test("Schema without additionalFields should work", () => {
 	type DefaultUser = User;
 	type DefaultSession = Session;
+	type DefaultIdentity = Identity;
 	type DefaultAccount = Account;
 	type DefaultVerification = Verification;
 
 	expectTypeOf<DefaultUser["email"]>().toEqualTypeOf<string>();
 	expectTypeOf<DefaultSession["token"]>().toEqualTypeOf<string>();
+	expectTypeOf<DefaultIdentity["issuer"]>().toEqualTypeOf<string>();
 	expectTypeOf<DefaultAccount["providerId"]>().toEqualTypeOf<string>();
+	expectTypeOf<DefaultAccount["providerInstanceId"]>().toEqualTypeOf<string>();
 	expectTypeOf<DefaultVerification["value"]>().toEqualTypeOf<string>();
 });
 

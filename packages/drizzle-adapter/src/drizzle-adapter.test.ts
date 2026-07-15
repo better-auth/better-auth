@@ -1,4 +1,5 @@
 import { is, Param, SQL } from "drizzle-orm";
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { describe, expect, it, vi } from "vitest";
 import { drizzleAdapter } from "./drizzle-adapter";
 
@@ -14,6 +15,179 @@ describe("drizzle-adapter", () => {
 		};
 		const adapter = drizzleAdapter(db, config);
 		expect(adapter).toBeDefined();
+	});
+
+	it("uses D1 batches for atomic writes without claiming interactive transactions", async () => {
+		const userTable = sqliteTable("user", {
+			id: text("id").primaryKey(),
+			name: text("name").notNull(),
+			email: text("email").notNull(),
+			emailVerified: integer("emailVerified", { mode: "boolean" }).notNull(),
+			image: text("image"),
+			createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+			updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).notNull(),
+		});
+		const storedUser = {
+			id: "d1-user",
+			name: "D1 User",
+			email: "d1@example.com",
+			emailVerified: false,
+			image: null,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+		const updatedUser = { ...storedUser, name: "Updated D1 User" };
+		const insertQuery = { kind: "insert-user" };
+		const updateQuery = { kind: "update-user" };
+		const deleteQuery = { kind: "delete-user" };
+		const deleteManyQuery = { kind: "delete-many-users" };
+		const returning = vi.fn(() => insertQuery);
+		const values = vi.fn(() => ({ returning }));
+		const updateReturning = vi.fn(() => updateQuery);
+		const updateWhere = vi.fn(() => ({ returning: updateReturning }));
+		const deleteWhere = vi
+			.fn()
+			.mockReturnValueOnce(deleteQuery)
+			.mockReturnValueOnce(deleteManyQuery);
+		const batch = vi
+			.fn()
+			.mockResolvedValue([
+				[storedUser],
+				[updatedUser],
+				{ meta: { changes: 1 } },
+				{ meta: { changes: 2 } },
+			]);
+		const transaction = vi.fn();
+		const db = {
+			_: { fullSchema: { user: userTable } },
+			$client: {
+				prepare: vi.fn(),
+				batch: vi.fn(),
+				exec: vi.fn(),
+			},
+			batch,
+			insert: vi.fn(() => ({ values })),
+			update: vi.fn(() => ({
+				set: vi.fn(() => ({ where: updateWhere })),
+			})),
+			delete: vi.fn(() => ({ where: deleteWhere })),
+			transaction,
+		};
+		const adapter = drizzleAdapter(db, {
+			provider: "sqlite",
+			transaction: "async",
+		})({ secret: "test-secret-that-is-at-least-32-chars-long!!" });
+
+		expect(adapter.commitAtomicWrites).toBeTypeOf("function");
+		await expect(
+			adapter.commitAtomicWrites?.([
+				{
+					type: "create",
+					model: "user",
+					forceAllowId: true,
+					data: storedUser,
+				},
+				{
+					type: "update",
+					model: "user",
+					where: [{ field: "id", value: storedUser.id }],
+					update: { name: updatedUser.name },
+				},
+				{
+					type: "delete",
+					model: "user",
+					where: [{ field: "id", value: "deleted-user" }],
+				},
+				{
+					type: "deleteMany",
+					model: "user",
+					where: [{ field: "email", value: "stale@example.com" }],
+				},
+			]),
+		).resolves.toEqual([
+			{ type: "create", record: storedUser },
+			{ type: "update", record: updatedUser },
+			{ type: "delete", deletedCount: 1 },
+			{ type: "deleteMany", deletedCount: 2 },
+		]);
+		expect(batch).toHaveBeenCalledWith([
+			insertQuery,
+			updateQuery,
+			deleteQuery,
+			deleteManyQuery,
+		]);
+		expect(adapter.options?.adapterConfig.transaction).toBe(false);
+		expect(transaction).not.toHaveBeenCalled();
+	});
+
+	it("runs predeclared writes synchronously so SQLite can roll back the whole mutation", async () => {
+		const userTable = sqliteTable("user", {
+			id: text("id").primaryKey(),
+			name: text("name").notNull(),
+			email: text("email").notNull(),
+			emailVerified: integer("emailVerified", { mode: "boolean" }).notNull(),
+			image: text("image"),
+			createdAt: integer("createdAt", { mode: "timestamp_ms" }).notNull(),
+			updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).notNull(),
+		});
+		const user = {
+			id: "sync-user",
+			name: "Sync User",
+			email: "sync@example.com",
+			emailVerified: false,
+			image: null,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+		let writeCount = 0;
+		let committed = false;
+		const transactionDatabase = {
+			insert: vi.fn(() => ({
+				values: vi.fn(() => ({
+					returning: vi.fn(() => ({
+						all: vi.fn(() => {
+							writeCount += 1;
+							if (writeCount === 2) throw new Error("duplicate user");
+							return [user];
+						}),
+					})),
+				})),
+			})),
+		};
+		const transaction = vi.fn(
+			(callback: (database: typeof transactionDatabase) => unknown) => {
+				const result = callback(transactionDatabase);
+				if (result instanceof Promise) {
+					throw new Error("SQLite transaction received an async callback");
+				}
+				committed = true;
+				return result;
+			},
+		);
+		const database = {
+			_: { fullSchema: { user: userTable } },
+			transaction,
+		};
+		const adapter = drizzleAdapter(database, {
+			provider: "sqlite",
+			transaction: "sync",
+		})({ secret: "test-secret-that-is-at-least-32-chars-long!!" });
+
+		expect(adapter.commitAtomicWrites).toBeTypeOf("function");
+		expect(adapter.options?.adapterConfig.transaction).toBe(false);
+		await expect(
+			adapter.commitAtomicWrites?.([
+				{ type: "create", model: "user", data: user, forceAllowId: true },
+				{
+					type: "create",
+					model: "user",
+					data: { ...user, email: "duplicate@example.com" },
+					forceAllowId: true,
+				},
+			]),
+		).rejects.toThrow("duplicate user");
+		expect(transaction).toHaveBeenCalledOnce();
+		expect(committed).toBe(false);
 	});
 
 	it("should use unique column fallback for MySQL creates without an id", async () => {

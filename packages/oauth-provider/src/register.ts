@@ -1,5 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { runWithTransaction } from "@better-auth/core/context";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import { isLoopbackHost } from "@better-auth/core/utils/host";
 import { APIError, getSessionFromCtx, NO_STORE_HEADERS } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
@@ -625,7 +628,8 @@ export async function createOAuthClientEndpoint(
 	});
 	const resources = settings.resources ?? [];
 	const client = await runWithTransaction(ctx.context.adapter, async () => {
-		const createdClient = await ctx.context.adapter.create<
+		const transactionAdapter = await getCurrentAdapter(ctx.context.adapter);
+		const createdClient = await transactionAdapter.create<
 			SchemaClient<Scope[]>
 		>({
 			model: "oauthClient",
@@ -646,7 +650,7 @@ export async function createOAuthClientEndpoint(
 			for (const resourceId of resources) {
 				// Deterministic id mirrors the admin link endpoint so the PK UNIQUE
 				// constraint enforces composite (clientId, resourceId) uniqueness.
-				await ctx.context.adapter.create({
+				await transactionAdapter.create({
 					model: linkModel,
 					forceAllowId: true,
 					data: {

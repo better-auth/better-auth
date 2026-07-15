@@ -26,6 +26,7 @@ export type InferPluginTypes<O extends BetterAuthOptions> =
 
 export type {
 	Account,
+	Identity,
 	RateLimit,
 	Session,
 	User,

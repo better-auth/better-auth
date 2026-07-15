@@ -31,7 +31,7 @@ export const linear = (options: LinearOptions) => {
 	return {
 		id: "linear",
 		name: "Linear",
-		accountSubject: ({ profile }) => profile.id,
+		identitySubject: ({ profile }) => profile.id,
 		createAuthorizationURL({
 			state,
 			scopes,

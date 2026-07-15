@@ -92,7 +92,7 @@ describe("organization creation in database hooks", async () => {
 		});
 	});
 
-	it("should handle errors gracefully when organization creation fails in hook", async ({
+	it("surfaces an after-hook error without rolling back the committed user", async ({
 		skip,
 	}) => {
 		let firstUserCreated = false;
@@ -166,7 +166,8 @@ describe("organization creation in database hooks", async () => {
 		});
 		expect(orgs).toHaveLength(1);
 
-		// Verify only the first user exists (transaction should have rolled back for second user)
+		// The User commit precedes its after hook. The hook error is surfaced, but
+		// it cannot roll back the already committed User.
 		const users = await db.findMany({
 			model: "user",
 			where: [
@@ -176,7 +177,7 @@ describe("organization creation in database hooks", async () => {
 				},
 			],
 		});
-		expect(users).toHaveLength(0);
+		expect(users).toHaveLength(1);
 	});
 
 	it("should work with multiple async operations in the hook", async () => {

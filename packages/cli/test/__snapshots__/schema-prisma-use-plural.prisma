@@ -9,15 +9,15 @@ datasource db {
 }
 
 model Users {
-  id            String     @id
+  id            String       @id
   name          String
   email         String
-  emailVerified Boolean    @default(false)
+  emailVerified Boolean      @default(false)
   image         String?
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
   sessions      Sessions[]
-  accounts      Accounts[]
+  identities    Identities[]
 
   @@unique([email])
   @@map("users")
@@ -32,20 +32,34 @@ model Sessions {
   ipAddress String?
   userAgent String?
   userId    String
-  users     Users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  users     Users    @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@unique([token])
   @@index([userId])
   @@map("sessions")
 }
 
+model Identities {
+  id                String     @id
+  issuer            String
+  providerAccountId String
+  userId            String
+  users             Users      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  accounts          Accounts[]
+
+  @@unique([issuer, providerAccountId], map: "identities_issuer_providerAccountId_uidx")
+  @@index([userId])
+  @@map("identities")
+}
+
 model Accounts {
-  id                    String    @id
-  issuer                String
-  providerAccountId     String
+  id                    String     @id
+  identityId            String
+  identities            Identities @relation(fields: [identityId], references: [id], onDelete: Restrict)
   providerId            String
-  userId                String
-  users                 Users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerInstanceId    String
   accessToken           String?
   refreshToken          String?
   idToken               String?
@@ -53,11 +67,10 @@ model Accounts {
   refreshTokenExpiresAt DateTime?
   scope                 String?
   password              String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
 
-  @@unique([issuer, providerAccountId], map: "accounts_issuer_providerAccountId_uidx")
-  @@index([userId])
+  @@unique([identityId, providerInstanceId], map: "accounts_identityId_providerInstanceId_uidx")
   @@map("accounts")
 }
 

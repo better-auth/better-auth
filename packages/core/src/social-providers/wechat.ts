@@ -59,7 +59,7 @@ export const wechat = (options: WeChatOptions) => {
 	return {
 		id: "wechat",
 		name: "WeChat",
-		accountSubject: ({ profile }) => profile.unionid || profile.openid,
+		identitySubject: ({ profile }) => profile.unionid || profile.openid,
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope ? [] : ["snsapi_login"];
 			options.scope && _scopes.push(...options.scope);

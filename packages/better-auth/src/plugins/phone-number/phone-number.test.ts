@@ -499,11 +499,19 @@ describe("phone auth flow", async () => {
 			fetchOptions: { headers, throw: true },
 		});
 		const userId = session!.user.id;
+		const internalAdapter = (await auth.$context).internalAdapter;
 		await expect(
-			(await auth.$context).internalAdapter.findCredentialAccount(userId),
+			internalAdapter.findCredentialAccount(userId),
+		).resolves.toMatchObject({
+			providerId: "credential",
+		});
+		await expect(
+			internalAdapter.findIdentityByKey({
+				issuer: "local:credential",
+				providerAccountId: userId,
+			}),
 		).resolves.toMatchObject({
 			userId,
-			providerId: "credential",
 			issuer: "local:credential",
 			providerAccountId: userId,
 		});
@@ -841,11 +849,19 @@ describe("reset password flow attempts", async () => {
 		});
 		expect(res.data?.token).toBeDefined();
 		const userId = res.data!.user.id;
+		const internalAdapter = (await auth.$context).internalAdapter;
 		await expect(
-			(await auth.$context).internalAdapter.findCredentialAccount(userId),
+			internalAdapter.findCredentialAccount(userId),
+		).resolves.toMatchObject({
+			providerId: "credential",
+		});
+		await expect(
+			internalAdapter.findIdentityByKey({
+				issuer: "local:credential",
+				providerAccountId: userId,
+			}),
 		).resolves.toMatchObject({
 			userId,
-			providerId: "credential",
 			issuer: "local:credential",
 			providerAccountId: userId,
 		});

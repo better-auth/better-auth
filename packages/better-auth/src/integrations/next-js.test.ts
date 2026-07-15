@@ -206,6 +206,7 @@ describe("next-js integration", () => {
 			.map((cookie) => cookie.split("=")[0]!);
 		expect(setCookieNames).toEqual([
 			"better-auth.session_token",
+			"better-auth.provider_account_binding",
 			"better-auth.session_data",
 		]);
 

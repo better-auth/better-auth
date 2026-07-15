@@ -29,7 +29,7 @@ export const railway = (options: RailwayOptions) => {
 	return {
 		id: "railway",
 		name: "Railway",
-		accountSubject: ({ profile }) => profile.sub,
+		identitySubject: ({ profile }) => profile.sub,
 		createAuthorizationURL({
 			state,
 			scopes,

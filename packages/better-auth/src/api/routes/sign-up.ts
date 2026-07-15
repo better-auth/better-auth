@@ -1,7 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { runWithTransaction } from "@better-auth/core/context";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
+import { createLocalIdentityIssuer } from "@better-auth/core/db";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
@@ -342,16 +342,31 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				const hash = await ctx.context.password.hash(password);
 				let createdUser: User;
 				try {
-					createdUser = await ctx.context.internalAdapter.createUser(
-						{
-							email: normalizedEmail,
-							name,
-							image,
-							...additionalUserFields,
-							emailVerified: false,
-						},
-						{ method: "email-password" },
-					);
+					const created =
+						await ctx.context.internalAdapter.createUserWithAccount(
+							{
+								email: normalizedEmail,
+								name,
+								image,
+								...additionalUserFields,
+								emailVerified: false,
+							},
+							{
+								source: { method: "email-password" },
+								buildAuthentication: ({ userId }) => ({
+									identity: {
+										issuer: createLocalIdentityIssuer("credential"),
+										providerAccountId: userId,
+									},
+									account: {
+										providerId: "credential",
+										providerInstanceId: "credential",
+										password: hash,
+									},
+								}),
+							},
+						);
+					createdUser = created.user;
 					if (!createdUser) {
 						throw APIError.from(
 							"BAD_REQUEST",
@@ -383,13 +398,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
 					);
 				}
-				await ctx.context.internalAdapter.linkAccount({
-					userId: createdUser.id,
-					providerId: "credential",
-					issuer: createLocalAccountIssuer("credential"),
-					providerAccountId: createdUser.id,
-					password: hash,
-				});
 				const shouldSendVerificationEmail =
 					ctx.context.options.emailVerification?.sendOnSignUp ??
 					ctx.context.options.emailAndPassword.requireEmailVerification;

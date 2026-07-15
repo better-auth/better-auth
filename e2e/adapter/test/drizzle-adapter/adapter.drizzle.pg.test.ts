@@ -32,7 +32,7 @@ const { execute } = await testAdapter({
 			debugLogs: { isRunningAdapterTests: true },
 			schema,
 			provider: "pg",
-			transaction: true,
+			transaction: "async",
 		});
 	},
 	async runMigrations(betterAuthOptions) {

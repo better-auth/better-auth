@@ -79,7 +79,7 @@ export const paypal = (options: PayPalOptions) => {
 	return {
 		id: "paypal",
 		name: "PayPal",
-		accountSubject: ({ profile }) => profile.user_id,
+		identitySubject: ({ profile }) => profile.user_id,
 		async createAuthorizationURL({
 			state,
 			codeVerifier,

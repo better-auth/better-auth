@@ -21,7 +21,7 @@ const dbClient = async (connectionString: string, dbName: string) => {
 };
 
 const { db, client } = await dbClient(
-	"mongodb://127.0.0.1:27017",
+	"mongodb://127.0.0.1:27017/?replicaSet=rs0",
 	"better-auth",
 );
 
@@ -79,7 +79,7 @@ const updateObjectIdTestSuite = createTestSuite(
 const { execute } = await testAdapter({
 	adapter: (options) => {
 		return mongodbAdapter(db, {
-			transaction: false,
+			client,
 		});
 	},
 	runMigrations: async (betterAuthOptions) => {},

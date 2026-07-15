@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
+import { createLocalIdentityIssuer } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
@@ -821,13 +821,18 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				user.id,
 			);
 			if (!account) {
-				await ctx.context.internalAdapter.createAccount({
-					userId: user.id,
-					providerId: "credential",
-					issuer: createLocalAccountIssuer("credential"),
-					providerAccountId: user.id,
-					password: hashedPassword,
-				});
+				await ctx.context.internalAdapter.linkAccount(
+					user.id,
+					{
+						issuer: createLocalIdentityIssuer("credential"),
+						providerAccountId: user.id,
+					},
+					{
+						providerId: "credential",
+						providerInstanceId: "credential",
+						password: hashedPassword,
+					},
+				);
 			} else {
 				await ctx.context.internalAdapter.updatePassword(
 					user.id,

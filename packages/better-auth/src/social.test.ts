@@ -1035,7 +1035,7 @@ describe("updateAccountOnSignIn", async () => {
 				headers,
 			},
 		});
-		const userAccounts = await ctx.internalAdapter.findAccounts(
+		const userAccounts = await ctx.internalAdapter.listUserAccounts(
 			session.data?.user.id!,
 		);
 		await runWithEndpointContext(
@@ -1043,7 +1043,7 @@ describe("updateAccountOnSignIn", async () => {
 				context: ctx,
 			} as GenericEndpointContext,
 			() =>
-				ctx.internalAdapter.updateAccount(userAccounts[0]!.id, {
+				ctx.internalAdapter.updateAccount(userAccounts[0]!.account.id, {
 					accessToken: "new-access-token",
 				}),
 		);
@@ -1079,10 +1079,10 @@ describe("updateAccountOnSignIn", async () => {
 				headers,
 			},
 		});
-		const userAccounts2 = await ctx.internalAdapter.findAccounts(
+		const userAccounts2 = await ctx.internalAdapter.listUserAccounts(
 			session2.data?.user.id!,
 		);
-		expect(userAccounts2[0]!.accessToken).toBe("new-access-token");
+		expect(userAccounts2[0]!.account.accessToken).toBe("new-access-token");
 	});
 });
 
@@ -1152,6 +1152,48 @@ describe("Google Provider — multiple client IDs", async () => {
 		expect(data.user.email).toBe("mobile-user@example.com");
 	});
 
+	it("binds a direct id-token account cookie to its stateless session without exposing the binding", async () => {
+		const idToken = await signIdToken(webClientId);
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				database: undefined,
+				socialProviders: {
+					google: {
+						clientId: webClientId,
+						clientSecret: "test-secret",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const headers = new Headers();
+
+		const signIn = await client.signIn.social({
+			provider: "google",
+			idToken: {
+				token: idToken,
+				accessToken: "direct-id-token-access-token",
+			},
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+
+		expect(signIn.error).toBeNull();
+		const session = await client.getSession({ fetchOptions: { headers } });
+		expect(session.data).not.toHaveProperty(
+			"authenticatedProviderAccountBinding",
+		);
+		expect(session.data?.session).not.toHaveProperty(
+			"authenticatedProviderAccountBinding",
+		);
+
+		const accessToken = await client.getAccessToken(
+			{ useAccountCookie: true },
+			{ headers },
+		);
+		expect(accessToken.error).toBeNull();
+		expect(accessToken.data?.accessToken).toBe("direct-id-token-access-token");
+	});
+
 	it("rejects an id token whose audience is not configured", async () => {
 		const idToken = await signIdToken("999-unknown.googleusercontent.com");
 		const { client } = await getTestInstance(
@@ -1192,7 +1234,7 @@ describe("Google Provider — multiple client IDs", async () => {
 			(provider) => provider.id === "google",
 		);
 		expect(googleProvider).toBeDefined();
-		googleProvider!.accountSubject = () => "";
+		googleProvider!.identitySubject = () => "";
 
 		const result = await client.$fetch("/sign-in/social", {
 			method: "POST",
@@ -1873,12 +1915,12 @@ describe("Vercel Provider", async () => {
 
 		// Verify account was created
 		const ctx = await auth.$context;
-		const accounts = await ctx.internalAdapter.findAccounts(
+		const accounts = await ctx.internalAdapter.listUserAccounts(
 			session.data?.user.id!,
 		);
 		expect(accounts).toHaveLength(1);
-		expect(accounts[0]?.providerId).toBe("vercel");
-		expect(accounts[0]?.providerAccountId).toBe("vercel_user_123");
+		expect(accounts[0]?.account.providerId).toBe("vercel");
+		expect(accounts[0]?.identity.providerAccountId).toBe("vercel_user_123");
 	});
 
 	it("should use preferred_username as fallback for name", async () => {
@@ -2652,12 +2694,12 @@ describe("Railway Provider", async () => {
 		expect(session.data?.user.emailVerified).toBe(false);
 
 		const ctx = await auth.$context;
-		const accounts = await ctx.internalAdapter.findAccounts(
+		const accounts = await ctx.internalAdapter.listUserAccounts(
 			session.data?.user.id!,
 		);
 		expect(accounts).toHaveLength(1);
-		expect(accounts[0]?.providerId).toBe("railway");
-		expect(accounts[0]?.providerAccountId).toBe("user_railway_123");
+		expect(accounts[0]?.account.providerId).toBe("railway");
+		expect(accounts[0]?.identity.providerAccountId).toBe("user_railway_123");
 	});
 });
 
@@ -3113,7 +3155,15 @@ describe("validateUserInfo callback", async () => {
 				account: {
 					accountLinking: {
 						trustedProviders: ["google"],
-						requireLocalEmailVerified: false,
+					},
+				},
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => ({
+								data: { ...user, emailVerified: true },
+							}),
+						},
 					},
 				},
 				user: {
@@ -3335,8 +3385,8 @@ describe("account.scope path-dependent semantics", async () => {
 
 		const session = await client.getSession({ fetchOptions: { headers } });
 		const userId = session.data!.user.id;
-		const initial = await ctx.internalAdapter.findAccounts(userId);
-		expect(initial[0]!.scope).toContain(
+		const initial = await ctx.internalAdapter.listUserAccounts(userId);
+		expect(initial[0]!.account.scope).toContain(
 			"https://www.googleapis.com/auth/drive.readonly",
 		);
 
@@ -3344,8 +3394,8 @@ describe("account.scope path-dependent semantics", async () => {
 		mockGoogleTokenResponse(idToken, "openid email");
 		await completeSignIn(headers);
 
-		const after = await ctx.internalAdapter.findAccounts(userId);
-		expect(after[0]!.scope).toContain(
+		const after = await ctx.internalAdapter.listUserAccounts(userId);
+		expect(after[0]!.account.scope).toContain(
 			"https://www.googleapis.com/auth/drive.readonly",
 		);
 	});
@@ -3359,8 +3409,8 @@ describe("account.scope path-dependent semantics", async () => {
 
 		const session = await client.getSession({ fetchOptions: { headers } });
 		const userId = session.data!.user.id;
-		const initial = await ctx.internalAdapter.findAccounts(userId);
-		expect(initial[0]!.scope?.split(",").sort()).toEqual([
+		const initial = await ctx.internalAdapter.listUserAccounts(userId);
+		expect(initial[0]!.account.scope?.split(",").sort()).toEqual([
 			"email",
 			"openid",
 			"profile",
@@ -3394,8 +3444,8 @@ describe("account.scope path-dependent semantics", async () => {
 			},
 		});
 
-		const after = await ctx.internalAdapter.findAccounts(userId);
-		const merged = after[0]!.scope?.split(",") ?? [];
+		const after = await ctx.internalAdapter.listUserAccounts(userId);
+		const merged = after[0]!.account.scope?.split(",") ?? [];
 		expect(merged).toContain("openid");
 		expect(merged).toContain("email");
 		expect(merged).toContain("profile");
@@ -3414,8 +3464,8 @@ describe("account.scope path-dependent semantics", async () => {
 
 		const session = await client.getSession({ fetchOptions: { headers } });
 		const userId = session.data!.user.id;
-		const accounts = await ctx.internalAdapter.findAccounts(userId);
-		expect(accounts[0]!.scope).toContain(
+		const accounts = await ctx.internalAdapter.listUserAccounts(userId);
+		expect(accounts[0]!.account.scope).toContain(
 			"https://www.googleapis.com/auth/drive.readonly",
 		);
 
@@ -3433,7 +3483,7 @@ describe("account.scope path-dependent semantics", async () => {
 		);
 		const refresh = await client.$fetch<{ scope?: string }>("/refresh-token", {
 			body: {
-				accountId: accounts[0]!.id,
+				accountId: accounts[0]!.account.id,
 			},
 			headers,
 			method: "POST",
@@ -3445,8 +3495,8 @@ describe("account.scope path-dependent semantics", async () => {
 			"https://www.googleapis.com/auth/drive.readonly",
 		);
 
-		const after = await ctx.internalAdapter.findAccounts(userId);
-		expect(after[0]!.scope).toContain(
+		const after = await ctx.internalAdapter.listUserAccounts(userId);
+		expect(after[0]!.account.scope).toContain(
 			"https://www.googleapis.com/auth/drive.readonly",
 		);
 	});
@@ -3460,10 +3510,10 @@ describe("account.scope path-dependent semantics", async () => {
 
 		const session = await client.getSession({ fetchOptions: { headers } });
 		const userId = session.data!.user.id;
-		const accounts = await ctx.internalAdapter.findAccounts(userId);
+		const accounts = await ctx.internalAdapter.listUserAccounts(userId);
 		const accumulatedScope =
 			"openid,email,profile,https://www.googleapis.com/auth/drive.readonly";
-		await ctx.internalAdapter.updateAccount(accounts[0]!.id, {
+		await ctx.internalAdapter.updateAccount(accounts[0]!.account.id, {
 			scope: accumulatedScope,
 		});
 
@@ -3482,7 +3532,7 @@ describe("account.scope path-dependent semantics", async () => {
 		);
 		const refresh = await client.$fetch<{ scope?: string }>("/refresh-token", {
 			body: {
-				accountId: accounts[0]!.id,
+				accountId: accounts[0]!.account.id,
 			},
 			headers,
 			method: "POST",
@@ -3492,8 +3542,8 @@ describe("account.scope path-dependent semantics", async () => {
 		});
 
 		expect(refresh.data?.scope).toBe(accumulatedScope);
-		const after = await ctx.internalAdapter.findAccounts(userId);
-		expect(after[0]!.scope).toBe(accumulatedScope);
+		const after = await ctx.internalAdapter.listUserAccounts(userId);
+		expect(after[0]!.account.scope).toBe(accumulatedScope);
 	});
 });
 

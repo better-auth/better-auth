@@ -1,10 +1,11 @@
 import {
 	getCurrentAdapter,
+	hasNativeTransactionSupport,
 	runWithTransaction,
 } from "@better-auth/core/context";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import { filterOutputFields } from "@better-auth/core/utils/db";
-import type { AuthContext } from "better-auth";
+import type { AuthContext, BetterAuthOptions } from "better-auth";
 import {
 	APIError,
 	createAuthEndpoint,
@@ -17,6 +18,8 @@ import {
 	mapDiscoveryErrorToAPIError,
 	validateOIDCEndpointUrls,
 } from "../oidc";
+import type { ResolvedSSOProvider } from "../provider-instance";
+import { createPersistedSSOProviderInstance } from "../provider-instance";
 import {
 	resolveSigningCerts,
 	validateCertSources,
@@ -29,7 +32,12 @@ import type {
 	SAMLIdentityProviderMetadata,
 	SSOOptions,
 } from "../types";
-import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
+import {
+	maskClientId,
+	parseCertificate,
+	parseProviderDomains,
+	safeJsonParse,
+} from "../utils";
 import { assertSAMLIdentityProviderAuthority } from "./helpers";
 import {
 	getUpdateSSOProviderBodySchema,
@@ -52,6 +60,9 @@ interface SSOProviderRecord {
 type ProviderIdentitySnapshot = {
 	providerId: string;
 	issuer: string;
+	domain: string;
+	domainVerified?: boolean | undefined;
+	organizationId?: string | null | undefined;
 	userId?: string | undefined;
 	oidcConfig?: OIDCConfig | string | null | undefined;
 	samlConfig?: SAMLConfig | string | null | undefined;
@@ -68,11 +79,12 @@ const OIDC_IDENTITY_BOUNDARY_FIELDS = [
 ] as const;
 const SAML_IDENTITY_BOUNDARY_FIELDS = [
 	"audience",
-	"callbackUrl",
+	"cert",
 	"entryPoint",
-	"identifierFormat",
+	"wantAssertionsSigned",
 ] as const;
 const SAML_IDP_BOUNDARY_FIELDS = [
+	"cert",
 	"metadata",
 	"entityID",
 	"singleSignOnService",
@@ -190,37 +202,85 @@ function ssoProviderIdentityBoundaryChanged(
 	);
 }
 
-async function lockSSOProviderRow(
-	adapter: AuthContext["adapter"],
-	providerId: string,
+function ssoProviderAuthenticationConfigurationChanged(
+	current: ProviderIdentitySnapshot,
+	updated: ProviderIdentitySnapshot,
+): boolean {
+	if (
+		hasChangedField(current, updated, [
+			"providerId",
+			"issuer",
+			"domain",
+			"domainVerified",
+			"organizationId",
+			"userId",
+		])
+	) {
+		return true;
+	}
+
+	return (
+		identityValueChanged(
+			parseConfigSnapshot<SAMLConfig>(current.samlConfig, "SAML"),
+			parseConfigSnapshot<SAMLConfig>(updated.samlConfig, "SAML"),
+		) ||
+		identityValueChanged(
+			parseConfigSnapshot<OIDCConfig>(current.oidcConfig, "OIDC"),
+			parseConfigSnapshot<OIDCConfig>(updated.oidcConfig, "OIDC"),
+		)
+	);
+}
+
+async function lockSSOProviderRow<Options extends BetterAuthOptions>(
+	adapter: AuthContext<Options>["adapter"],
+	providerRecordId: string,
 ): Promise<SSOProviderRecord | null> {
 	const trx = await getCurrentAdapter(adapter);
 	return trx.update<SSOProviderRecord>({
 		model: "ssoProvider",
-		where: [{ field: "providerId", value: providerId }],
-		update: { providerId },
+		where: [{ field: "id", value: providerRecordId }],
+		update: { id: providerRecordId },
 	});
 }
 
-export async function lockSSOProviderForAccountLink(
-	ctx: { context: AuthContext },
-	provider: ProviderIdentitySnapshot,
-) {
+const PERSISTED_SSO_REQUIRES_NATIVE_TRANSACTIONS =
+	"PERSISTED_SSO_REQUIRES_NATIVE_TRANSACTIONS" as const;
+
+/**
+ * Persisted SSO providers coordinate mutable configuration with account
+ * linking. A sequential transaction fallback cannot make that boundary safe.
+ */
+export function assertPersistedSSONativeTransactionSupport<
+	Options extends BetterAuthOptions,
+>(adapter: AuthContext<Options>["adapter"]): void {
+	if (hasNativeTransactionSupport(adapter)) return;
+
+	throw new APIError("NOT_IMPLEMENTED", {
+		code: PERSISTED_SSO_REQUIRES_NATIVE_TRANSACTIONS,
+		message:
+			"Persisted SSO providers require a database adapter with native transaction support",
+	});
+}
+
+export async function lockSSOProviderForAccountLink<
+	Options extends BetterAuthOptions,
+>(ctx: { context: AuthContext<Options> }, provider: ResolvedSSOProvider) {
+	if (provider.instance.type === "configured") {
+		return;
+	}
+	assertPersistedSSONativeTransactionSupport(ctx.context.adapter);
 	const lockedProvider = await lockSSOProviderRow(
 		ctx.context.adapter,
-		provider.providerId,
+		provider.instance.id,
 	);
 	if (!lockedProvider) {
-		if (provider.userId === "default") {
-			return;
-		}
 		throw new APIError("CONFLICT", {
 			code: "SSO_PROVIDER_CHANGED",
 			message: "SSO provider changed while account linking was in progress",
 		});
 	}
 
-	if (ssoProviderIdentityBoundaryChanged(provider, lockedProvider)) {
+	if (ssoProviderAuthenticationConfigurationChanged(provider, lockedProvider)) {
 		throw new APIError("CONFLICT", {
 			code: "SSO_PROVIDER_CHANGED",
 			message: "SSO provider changed while account linking was in progress",
@@ -693,6 +753,10 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						"403": {
 							description: "Access denied",
 						},
+						"501": {
+							description:
+								"The database adapter does not support native transactions",
+						},
 					},
 				},
 			},
@@ -718,7 +782,8 @@ export const updateSSOProvider = (options: SSOOptions) => {
 				});
 			}
 
-			await checkProviderAccess(ctx, providerId);
+			const authorizedProvider = await checkProviderAccess(ctx, providerId);
+			assertPersistedSSONativeTransactionSupport(ctx.context.adapter);
 
 			const fullProvider = await runWithTransaction(
 				ctx.context.adapter,
@@ -726,9 +791,12 @@ export const updateSSOProvider = (options: SSOOptions) => {
 					const trx = await getCurrentAdapter(ctx.context.adapter);
 					const existingProvider = await lockSSOProviderRow(
 						ctx.context.adapter,
-						providerId,
+						authorizedProvider.id,
 					);
-					if (!existingProvider) {
+					if (
+						!existingProvider ||
+						existingProvider.providerId !== authorizedProvider.providerId
+					) {
 						throw new APIError("NOT_FOUND", {
 							message: "Provider not found",
 						});
@@ -737,17 +805,16 @@ export const updateSSOProvider = (options: SSOOptions) => {
 					const updateData: Partial<SSOProviderRecord> = {
 						...additionalFields,
 					};
-					let providerIdentityBoundaryChanged =
-						body.issuer !== undefined &&
-						body.issuer !== existingProvider.issuer;
-
 					if (body.issuer !== undefined) {
 						updateData.issuer = body.issuer;
 					}
 
 					if (body.domain !== undefined) {
 						updateData.domain = body.domain;
-						if (body.domain !== existingProvider.domain) {
+						const existingDomains = parseProviderDomains(
+							existingProvider.domain,
+						)?.join(",");
+						if (body.domain !== existingDomains) {
 							updateData.domainVerified = false;
 						}
 					}
@@ -795,12 +862,6 @@ export const updateSSOProvider = (options: SSOOptions) => {
 
 						validateCertSources(updatedSamlConfig);
 						assertSAMLIdentityProviderAuthority(updatedSamlConfig);
-						if (
-							samlIdentityBoundaryChanged(currentSamlConfig, updatedSamlConfig)
-						) {
-							providerIdentityBoundaryChanged = true;
-						}
-
 						updateData.samlConfig = JSON.stringify(updatedSamlConfig);
 					}
 
@@ -858,39 +919,44 @@ export const updateSSOProvider = (options: SSOOptions) => {
 							});
 						}
 
-						if (
-							oidcIdentityBoundaryChanged(currentOidcConfig, updatedOidcConfig)
-						) {
-							providerIdentityBoundaryChanged = true;
-						}
-
 						updateData.oidcConfig = JSON.stringify(updatedOidcConfig);
 					}
 
-					if (providerIdentityBoundaryChanged) {
+					if (
+						ssoProviderIdentityBoundaryChanged(existingProvider, {
+							...existingProvider,
+							...updateData,
+						})
+					) {
 						const linkedAccount = await trx.findOne<{ id: string }>({
 							model: "account",
-							where: [{ field: "providerId", value: providerId }],
+							where: [
+								{
+									field: "providerInstanceId",
+									value: createPersistedSSOProviderInstance(
+										authorizedProvider.id,
+									).providerInstanceId,
+								},
+							],
 						});
 						if (linkedAccount) {
-							// TODO(next): move SSO account links to immutable provider instance
-							// ids, then expose explicit relinking for identity-boundary changes.
 							throw new APIError("CONFLICT", {
+								code: "SSO_PROVIDER_IDENTITY_IN_USE",
 								message:
-									"Cannot change SSO provider identity fields while linked accounts exist",
+									"Delete and recreate this SSO provider before changing its identity authority",
 							});
 						}
 					}
 
 					await trx.update({
 						model: "ssoProvider",
-						where: [{ field: "providerId", value: providerId }],
+						where: [{ field: "id", value: authorizedProvider.id }],
 						update: updateData,
 					});
 
 					const updatedProvider = await trx.findOne<SSOProviderRecord>({
 						model: "ssoProvider",
-						where: [{ field: "providerId", value: providerId }],
+						where: [{ field: "id", value: authorizedProvider.id }],
 					});
 
 					if (!updatedProvider) {
@@ -934,6 +1000,10 @@ export const deleteSSOProvider = () => {
 						"403": {
 							description: "Access denied",
 						},
+						"501": {
+							description:
+								"The database adapter does not support native transactions",
+						},
 					},
 				},
 			},
@@ -941,17 +1011,30 @@ export const deleteSSOProvider = () => {
 		async (ctx) => {
 			const { providerId } = ctx.body;
 
-			await checkProviderAccess(ctx, providerId);
+			const authorizedProvider = await checkProviderAccess(ctx, providerId);
+			assertPersistedSSONativeTransactionSupport(ctx.context.adapter);
 
 			await runWithTransaction(ctx.context.adapter, async () => {
 				const trx = await getCurrentAdapter(ctx.context.adapter);
-				await trx.deleteMany({
-					model: "account",
-					where: [{ field: "providerId", value: providerId }],
-				});
+				const lockedProvider = await lockSSOProviderRow(
+					ctx.context.adapter,
+					authorizedProvider.id,
+				);
+				if (
+					!lockedProvider ||
+					lockedProvider.providerId !== authorizedProvider.providerId
+				) {
+					throw new APIError("NOT_FOUND", {
+						message: "Provider not found",
+					});
+				}
+				await ctx.context.internalAdapter.deleteAccountsByProviderInstanceId(
+					createPersistedSSOProviderInstance(authorizedProvider.id)
+						.providerInstanceId,
+				);
 				await trx.delete({
 					model: "ssoProvider",
-					where: [{ field: "providerId", value: providerId }],
+					where: [{ field: "id", value: authorizedProvider.id }],
 				});
 			});
 

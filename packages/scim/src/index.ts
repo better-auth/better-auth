@@ -98,6 +98,12 @@ declare module "@better-auth/core" {
 			creator: typeof scim;
 		};
 	}
+
+	interface UserProvisioningSourceRegistry {
+		scim: {
+			connectionId: string;
+		};
+	}
 }
 
 function validateConnections(options: SCIMOptions): void {

@@ -37,7 +37,7 @@ export const polar = (options: PolarOptions) => {
 	return {
 		id: "polar",
 		name: "Polar",
-		accountSubject: ({ profile }) => profile.id,
+		identitySubject: ({ profile }) => profile.id,
 		createAuthorizationURL({
 			state,
 			scopes,

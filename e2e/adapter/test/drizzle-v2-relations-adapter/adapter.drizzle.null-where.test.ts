@@ -39,6 +39,7 @@ describe("drizzle relations-v2 adapter: null comparisons in where clauses", () =
 	const adapter = drizzleAdapter(db, {
 		schema: adapterSchema,
 		provider: "sqlite",
+		transaction: "sync",
 	})({});
 
 	beforeEach(() => {

@@ -6,21 +6,14 @@ import type {
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import { PACKAGE_VERSION } from "../../version";
 
-export const inferAdditionalFields = <
-	T,
-	S extends {
-		user?:
-			| {
-					[key: string]: DBFieldAttribute;
-			  }
-			| undefined;
-		session?:
-			| {
-					[key: string]: DBFieldAttribute;
-			  }
-			| undefined;
-	} = {},
->(
+type AdditionalFieldsSchema = Partial<
+	Record<
+		"user" | "session" | "account" | "identity",
+		Record<string, DBFieldAttribute>
+	>
+>;
+
+export const inferAdditionalFields = <T, S extends AdditionalFieldsSchema = {}>(
 	schema?: S | undefined,
 ) => {
 	type Opts = T extends BetterAuthOptions
@@ -32,18 +25,7 @@ export const inferAdditionalFields = <
 			: never;
 
 	type Plugin = Opts extends never
-		? S extends {
-				user?:
-					| {
-							[key: string]: DBFieldAttribute;
-					  }
-					| undefined;
-				session?:
-					| {
-							[key: string]: DBFieldAttribute;
-					  }
-					| undefined;
-			}
+		? S extends AdditionalFieldsSchema
 			? {
 					id: "additional-fields-client";
 					version: string;
@@ -53,6 +35,12 @@ export const inferAdditionalFields = <
 						};
 						session: {
 							fields: S["session"] extends object ? S["session"] : {};
+						};
+						account: {
+							fields: S["account"] extends object ? S["account"] : {};
+						};
+						identity: {
+							fields: S["identity"] extends object ? S["identity"] : {};
 						};
 					};
 				}
@@ -71,6 +59,20 @@ export const inferAdditionalFields = <
 						};
 						session: {
 							fields: Opts["session"] extends {
+								additionalFields: infer U;
+							}
+								? U
+								: {};
+						};
+						account: {
+							fields: Opts["account"] extends {
+								additionalFields: infer U;
+							}
+								? U
+								: {};
+						};
+						identity: {
+							fields: Opts["identity"] extends {
 								additionalFields: infer U;
 							}
 								? U

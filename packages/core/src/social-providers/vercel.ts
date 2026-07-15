@@ -20,7 +20,7 @@ export const vercel = (options: VercelOptions) => {
 	return {
 		id: "vercel",
 		name: "Vercel",
-		accountSubject: ({ profile }) => profile.sub,
+		identitySubject: ({ profile }) => profile.sub,
 		createAuthorizationURL({
 			state,
 			scopes,

@@ -15,6 +15,8 @@ import { initGetFieldName } from "./get-field-name";
 import { initGetIdField } from "./get-id-field";
 import { initGetModelName } from "./get-model-name";
 import type {
+	AtomicWriteOperation,
+	AtomicWriteResult,
 	CleanedWhere,
 	DBAdapter,
 	DBTransactionAdapter,
@@ -131,6 +133,11 @@ export const createAdapterFactory =
 						} else if (
 							method === "deleteMany" &&
 							!config.debugLogs.deleteMany
+						) {
+							return;
+						} else if (
+							method === "commitAtomicWrites" &&
+							!config.debugLogs.commitAtomicWrites
 						) {
 							return;
 						} else if (
@@ -840,7 +847,157 @@ export const createAdapterFactory =
 			transformWhereClause,
 		});
 
+		const transformAtomicWriteOperation = async (
+			operation: AtomicWriteOperation,
+		): Promise<AtomicWriteOperation<CleanedWhere>> => {
+			const model = getModelName(operation.model);
+			const defaultModelName = getDefaultModelName(operation.model);
+			switch (operation.type) {
+				case "create": {
+					const logicalRecord =
+						"id" in operation.data &&
+						typeof operation.data.id !== "undefined" &&
+						!operation.forceAllowId
+							? { ...operation.data, id: undefined }
+							: operation.data;
+					const record = config.disableTransformInput
+						? logicalRecord
+						: await transformInput(
+								logicalRecord,
+								defaultModelName,
+								"create",
+								operation.forceAllowId,
+							);
+					return { type: "create", model, data: record };
+				}
+				case "update": {
+					const where = transformWhereClause({
+						model: operation.model,
+						where: operation.where,
+						action: "update",
+					});
+					const update = config.disableTransformInput
+						? operation.update
+						: await transformInput(
+								operation.update,
+								defaultModelName,
+								"update",
+							);
+					return { type: "update", model, where, update };
+				}
+				case "delete":
+					return {
+						type: "delete",
+						model,
+						where: transformWhereClause({
+							model: operation.model,
+							where: operation.where,
+							action: "delete",
+						}),
+					};
+				case "deleteMany":
+					return {
+						type: "deleteMany",
+						model,
+						where: transformWhereClause({
+							model: operation.model,
+							where: operation.where,
+							action: "deleteMany",
+						}),
+					};
+			}
+		};
+
+		const transformAtomicWriteResults = async (
+			operations: readonly AtomicWriteOperation[],
+			storedResults: readonly AtomicWriteResult[],
+		): Promise<AtomicWriteResult[]> => {
+			if (storedResults.length !== operations.length) {
+				throw new BetterAuthError(
+					`Adapter "${config.adapterId}" commitAtomicWrites returned ${storedResults.length} results for ${operations.length} operations.`,
+				);
+			}
+
+			const logicalResults: AtomicWriteResult[] = [];
+			for (const [index, operation] of operations.entries()) {
+				const storedResult = storedResults[index]!;
+				switch (operation.type) {
+					case "create": {
+						if (storedResult.type !== "create") {
+							throw new BetterAuthError(
+								`Adapter "${config.adapterId}" commitAtomicWrites returned a ${storedResult.type} result for create operation ${index}.`,
+							);
+						}
+						const record = config.disableTransformOutput
+							? storedResult.record
+							: await transformOutput(
+									storedResult.record,
+									operation.model,
+									undefined,
+									undefined,
+								);
+						logicalResults.push({ type: "create", record });
+						break;
+					}
+					case "update": {
+						if (storedResult.type !== "update") {
+							throw new BetterAuthError(
+								`Adapter "${config.adapterId}" commitAtomicWrites returned a ${storedResult.type} result for update operation ${index}.`,
+							);
+						}
+						const record =
+							storedResult.record === null || config.disableTransformOutput
+								? storedResult.record
+								: await transformOutput(
+										storedResult.record,
+										operation.model,
+										undefined,
+										undefined,
+									);
+						logicalResults.push({ type: "update", record });
+						break;
+					}
+					case "delete": {
+						if (storedResult.type !== "delete") {
+							throw new BetterAuthError(
+								`Adapter "${config.adapterId}" commitAtomicWrites returned a ${storedResult.type} result for delete operation ${index}.`,
+							);
+						}
+						if (
+							storedResult.deletedCount !== 0 &&
+							storedResult.deletedCount !== 1
+						) {
+							throw new BetterAuthError(
+								`Adapter "${config.adapterId}" commitAtomicWrites must return a deletedCount of 0 or 1 for delete operations.`,
+							);
+						}
+						logicalResults.push(storedResult);
+						break;
+					}
+					case "deleteMany": {
+						if (storedResult.type !== "deleteMany") {
+							throw new BetterAuthError(
+								`Adapter "${config.adapterId}" commitAtomicWrites returned a ${storedResult.type} result for deleteMany operation ${index}.`,
+							);
+						}
+						if (
+							typeof storedResult.deletedCount !== "number" ||
+							!Number.isFinite(storedResult.deletedCount)
+						) {
+							throw new BetterAuthError(
+								`Adapter "${config.adapterId}" commitAtomicWrites must return a finite deletedCount for deleteMany operations.`,
+							);
+						}
+						logicalResults.push(storedResult);
+						break;
+					}
+				}
+			}
+			return logicalResults;
+		};
+
 		let lazyLoadTransaction: DBAdapter<Options>["transaction"] | null = null;
+		const commitAtomicWrites = adapterInstance.commitAtomicWrites;
 		const adapter: DBAdapter<Options> = {
 			transaction: async (cb) => {
 				if (!lazyLoadTransaction) {
@@ -855,6 +1012,52 @@ export const createAdapterFactory =
 				}
 				return lazyLoadTransaction(cb);
 			},
+			commitAtomicWrites: commitAtomicWrites
+				? async (operations) => {
+						transactionId++;
+						const thisTransactionId = transactionId;
+						debugLog(
+							{ method: "commitAtomicWrites" },
+							`${formatTransactionId(thisTransactionId)} ${formatStep(1, 4)}`,
+							`${formatMethod("commitAtomicWrites")} ${formatAction("Unsafe Input")}:`,
+							{ operations },
+						);
+						const storedOperations: AtomicWriteOperation<CleanedWhere>[] = [];
+						for (const operation of operations) {
+							storedOperations.push(
+								await transformAtomicWriteOperation(operation),
+							);
+						}
+						debugLog(
+							{ method: "commitAtomicWrites" },
+							`${formatTransactionId(thisTransactionId)} ${formatStep(2, 4)}`,
+							`${formatMethod("commitAtomicWrites")} ${formatAction("Parsed Input")}:`,
+							{ operations: storedOperations },
+						);
+						const storedResults = await withSpan(
+							"db commitAtomicWrites",
+							{ [ATTR_DB_OPERATION_NAME]: "commitAtomicWrites" },
+							() => commitAtomicWrites(storedOperations),
+						);
+						debugLog(
+							{ method: "commitAtomicWrites" },
+							`${formatTransactionId(thisTransactionId)} ${formatStep(3, 4)}`,
+							`${formatMethod("commitAtomicWrites")} ${formatAction("DB Result")}:`,
+							{ results: storedResults },
+						);
+						const logicalResults = await transformAtomicWriteResults(
+							operations,
+							storedResults,
+						);
+						debugLog(
+							{ method: "commitAtomicWrites" },
+							`${formatTransactionId(thisTransactionId)} ${formatStep(4, 4)}`,
+							`${formatMethod("commitAtomicWrites")} ${formatAction("Parsed Result")}:`,
+							{ results: logicalResults },
+						);
+						return logicalResults;
+					}
+				: undefined,
 			create: async <T extends Record<string, any>, R = T>({
 				data: unsafeData,
 				model: unsafeModel,

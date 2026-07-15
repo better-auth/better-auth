@@ -15,6 +15,7 @@ export type DBAdapterDebugLogOption =
 			findMany?: boolean | undefined;
 			delete?: boolean | undefined;
 			deleteMany?: boolean | undefined;
+			commitAtomicWrites?: boolean | undefined;
 			consumeOne?: boolean | undefined;
 			incrementOne?: boolean | undefined;
 			count?: boolean | undefined;
@@ -343,6 +344,67 @@ export type Where = {
 };
 
 /**
+ * A declarative write submitted as part of one atomic commit.
+ *
+ * Operations use Better Auth's logical model and field names. The adapter
+ * factory transforms them to the underlying database representation before
+ * invoking a custom adapter's `commitAtomicWrites` implementation.
+ */
+export type AtomicWriteOperation<W extends Where = Where> =
+	| {
+			type: "create";
+			model: string;
+			data: Record<string, unknown>;
+			/**
+			 * Preserve an explicitly supplied id instead of applying the configured id
+			 * generation behavior.
+			 */
+			forceAllowId?: boolean | undefined;
+	  }
+	| {
+			type: "update";
+			model: string;
+			where: W[];
+			update: Record<string, unknown>;
+	  }
+	| {
+			type: "delete";
+			model: string;
+			where: W[];
+	  }
+	| {
+			type: "deleteMany";
+			model: string;
+			where: W[];
+	  };
+
+/**
+ * The committed outcome for one declarative atomic write.
+ *
+ * Results are ordered and index-aligned with their submitted operations.
+ * Create and update records contain the database's committed row, including
+ * database-generated defaults.
+ */
+export type AtomicWriteResult =
+	| {
+			type: "create";
+			record: Record<string, unknown>;
+	  }
+	| {
+			type: "update";
+			record: Record<string, unknown> | null;
+	  }
+	| {
+			type: "delete";
+			/** The exact number of rows deleted by this single-row operation. */
+			deletedCount: 0 | 1;
+	  }
+	| {
+			type: "deleteMany";
+			deletedCount: number;
+	  };
+
+/**
  * JoinOption configuration for relational queries.
  *
  * Allows you to join related tables/models in a single query operation.
@@ -508,6 +570,18 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		callback: (trx: DBTransactionAdapter<Options>) => Promise<R>,
 	) => Promise<R>;
 	/**
+	 * Commit a predeclared set of writes as one atomic unit.
+	 *
+	 * Implementations must commit every operation or none of them. There is no
+	 * sequential fallback. Results must be index-aligned with the submitted
+	 * operations and contain committed database rows for creates and updates.
+	 */
+	commitAtomicWrites?:
+		| ((
+				operations: readonly AtomicWriteOperation[],
+		  ) => Promise<AtomicWriteResult[]>)
+		| undefined;
+	/**
 	 *
 	 * @param options
 	 * @param file - file path if provided by the user
@@ -586,6 +660,18 @@ export interface CustomAdapter {
 		model: string;
 		where: CleanedWhere[];
 	}) => Promise<number>;
+	/**
+	 * Commit already-transformed writes as one atomic unit.
+	 *
+	 * Model names, field names, values, and predicates are in the underlying
+	 * database representation. Implementations must return index-aligned
+	 * results in that same representation and must not apply another transform.
+	 */
+	commitAtomicWrites?:
+		| ((
+				operations: readonly AtomicWriteOperation<CleanedWhere>[],
+		  ) => Promise<AtomicWriteResult[]>)
+		| undefined;
 	/**
 	 * Native atomic single-row consume.
 	 * Implementing this method natively (e.g. `DELETE ... RETURNING *`,

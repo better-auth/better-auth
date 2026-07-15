@@ -5,6 +5,7 @@ export type BetterAuthCookie = { name: string; attributes: CookieOptions };
 export type BetterAuthCookies = {
 	sessionToken: BetterAuthCookie;
 	sessionData: BetterAuthCookie;
+	providerAccountBinding: BetterAuthCookie;
 	accountData: BetterAuthCookie;
 	dontRememberToken: BetterAuthCookie;
 };

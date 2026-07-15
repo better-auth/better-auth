@@ -1,6 +1,6 @@
 ---
 title: Database
-description: Learn about database adapters, migrations, secondary storage with Redis, core schema (user, session, account, verification), custom tables, extending schemas, ID generation, database hooks, and plugin schemas.
+description: Learn about database adapters, migrations, secondary storage with Redis, core schema (user, session, identity, account, verification), custom tables, extending schemas, ID generation, database hooks, and plugin schemas.
 ---
 
 ## Adapters
@@ -399,7 +399,7 @@ export const sessionTableFields = [
 		type: "string",
 		description: "The ID of the user",
 		isForeignKey: true,
-		references: { model: "user", field: "id", onDelete: "cascade" },
+		references: { model: "user", field: "id", onDelete: "restrict" },
 	},
 	{
 		name: "token",
@@ -438,11 +438,57 @@ export const sessionTableFields = [
 
 <DatabaseTable name="session" fields={sessionTableFields} />
 
+### Identity
+
+Table Name: `identity`
+
+An Identity links a Better Auth user to a stable identifier from an issuing authority. The unique pair of `issuer` and `providerAccountId` recognizes the same provider-side identity across provider configurations.
+
+export const identityTableFields = [
+	{
+		name: "id",
+		type: "string",
+		description: "Unique identifier for the Identity",
+		isPrimaryKey: true,
+	},
+	{
+		name: "userId",
+		type: "string",
+		description: "The ID of the user that owns the Identity",
+		isForeignKey: true,
+		references: { model: "user", field: "id", onDelete: "restrict" },
+	},
+	{
+		name: "issuer",
+		type: "string",
+		description: "The trusted authority that assigned the provider identifier",
+	},
+	{
+		name: "providerAccountId",
+		type: "string",
+		description: "The stable identifier within the issuer namespace",
+	},
+	{
+		name: "createdAt",
+		type: "Date",
+		description: "Timestamp of when the Identity was created",
+	},
+	{
+		name: "updatedAt",
+		type: "Date",
+		description: "Timestamp of when the Identity was updated",
+	},
+];
+
+<DatabaseTable name="identity" fields={identityTableFields} />
+
+The database enforces a unique compound index on `issuer` and `providerAccountId`. Built-in and Generic OAuth providers with a trusted issuer use that authority, including the verified issuer for OpenID Connect. Providers without an issuer use the synthetic `local:<encoded providerId>` namespace, where the provider ID segment is percent-encoded. Persisted SSO providers use an immutable provider-instance namespace. Credential identities use `local:credential` and the linked user's stable `id`.
+
 ### Account
 
 Table Name: `account`
 
-An account represents one authentication method linked to a user. Better Auth recognizes the provider-side identity by the unique pair of `issuer` and `providerAccountId`, while `id` identifies the local account row. Use `id` when an account API asks for an `accountId`.
+An Account represents one provider configuration or credential method attached to an Identity. It owns configuration-specific credentials, grants, and token state. Use its `id` when an account API asks for an `accountId`.
 
 export const accountTableFields = [
 	{
@@ -452,27 +498,21 @@ export const accountTableFields = [
 		isPrimaryKey: true,
 	},
 	{
-		name: "userId",
+		name: "identityId",
 		type: "string",
-		description: "The ID of the user",
+		description: "The ID of the Identity authenticated through this account",
 		isForeignKey: true,
-		references: { model: "user", field: "id", onDelete: "cascade" },
-	},
-	{
-		name: "issuer",
-		type: "string",
-		description:
-			"The trusted authority that issued the provider account identifier",
-	},
-	{
-		name: "providerAccountId",
-		type: "string",
-		description: "The stable account identifier within the issuer namespace",
+		references: { model: "identity", field: "id", onDelete: "restrict" },
 	},
 	{
 		name: "providerId",
 		type: "string",
-		description: "The provider configuration used to authenticate the account",
+		description: "The public alias of the provider configuration",
+	},
+	{
+		name: "providerInstanceId",
+		type: "string",
+		description: "The stable internal namespace of the provider instance",
 	},
 	{
 		name: "accessToken",
@@ -531,7 +571,7 @@ export const accountTableFields = [
 
 <DatabaseTable name="account" fields={accountTableFields} />
 
-The database enforces a unique compound index on `issuer` and `providerAccountId`. Providers with a trusted issuer use that authority, including the verified issuer for OpenID Connect. OAuth providers without an issuer use the synthetic `local:oauth:<encoded providerId>` namespace, with the provider ID segment percent-encoded. Credential accounts use `local:credential` and the linked user's stable `id`.
+The database enforces a unique compound index on `identityId` and `providerInstanceId`. `providerId` is the public configuration alias used by account APIs and provider lookup, while `providerInstanceId` is a stable internal namespace that prevents credentials and lifecycle operations from crossing provider instances. Built-in, social, Generic OAuth, and credential Accounts use their provider alias for both fields. Persisted SSO providers use `sso:provider:<recordId>` as the instance ID, and providers declared in `defaultSSO` use `sso:config:<providerId>`.
 
 ### Verification
 
@@ -873,7 +913,7 @@ This configuration allows you to:
 
 ### Database Hooks
 
-Database hooks allow you to define custom logic that can be executed during the lifecycle of core database operations in Better Auth. You can create hooks for the following models: **user**, **session**, and **account**.
+Database hooks allow you to define custom logic that runs during core database operations in Better Auth. You can create hooks for the User, Session, Identity, and Account models.
 
 <Callout type="warn">
   Additional fields are supported, however full type inference for these fields isn't yet supported.
@@ -884,13 +924,19 @@ There are two types of hooks you can define:
 
 #### 1. Before Hook
 
-* **Purpose**: This hook is called before the respective entity (user, session, or account) is created, updated, or deleted.
+* **Purpose**: This hook runs before the corresponding User, Session, Identity, or Account is created, updated, or deleted.
 * **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the original payload.
 
 #### 2. After Hook
 
-* **Purpose**: This hook is called after the respective entity is created or updated.
-* **Behavior**: You can perform additional actions or modifications after the entity has been successfully created or updated.
+* **Purpose**: This hook runs after the respective entity is created, updated, or deleted.
+* **Behavior**: Use it for follow-up work that depends on the committed database result.
+
+<Callout type="info">
+  After hooks run after the database operation commits. If an after hook throws,
+  the caller receives the error, but the committed operation remains in the
+  database. Put validation that must prevent a write in a before hook.
+</Callout>
 
 **Example Usage**
 
@@ -1022,14 +1068,14 @@ To add new tables and columns to your database, you have two options:
 
 Both methods ensure your database schema stays up to date with your plugins' requirements.
 
-## Joins
+## Experimental Joins
 
-Since Better-Auth version `1.4` we've introduced database joins support.
+Since Better-Auth version `1.4` we've introduced experimental database joins support.
 This allows Better-Auth to perform multiple database queries in a single request, reducing the number of database roundtrips.
 Over 50 endpoints support joins, and we're constantly adding more.
 
-Under the hood, our adapter system supports joins natively. When joins are disabled (the default),
-Better-Auth falls back to making multiple database queries and combining the results.
+Under the hood, our adapter system supports joins natively, meaning even if you don't enable experimental joins,
+it will still fallback to making multiple database queries and combining the results.
 
 To enable joins, update your auth config with the following:
 
@@ -1037,22 +1083,19 @@ To enable joins, update your auth config with the following:
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-  advanced: {
-    database: {
-      joins: true,
-    },
-  },
+  experimental: { joins: true }
 });
 ```
 
-Make sure your DrizzleORM or PrismaORM schema includes the necessary relationships — run our migrate or generate CLI commands to stay up-to-date.
+The Better-Auth `1.4` CLI will generate DrizzleORM and PrismaORM relationships for you so if you do not have those already
+be sure to update your schema by running our migrate or generate CLI commands to be up-to-date with the latest required schema.
 
-Read the documentation regarding joins for your given adapter:
+It's very important to read the documentation regarding experimental joins for your given adapter:
 
-* [DrizzleORM](/docs/adapters/drizzle#joins)
-* [PrismaORM](/docs/adapters/prisma#joins)
-* [SQLite](/docs/adapters/sqlite#joins)
-* [MySQL](/docs/adapters/mysql#joins)
-* [PostgreSQL](/docs/adapters/postgresql#joins)
-* [MSSQL](/docs/adapters/mssql#joins)
-* [MongoDB](/docs/adapters/mongo#joins)
+* [DrizzleORM](/docs/adapters/drizzle#joins-experimental)
+* [PrismaORM](/docs/adapters/prisma#joins-experimental)
+* [SQLite](/docs/adapters/sqlite#joins-experimental)
+* [MySQL](/docs/adapters/mysql#joins-experimental)
+* [PostgreSQL](/docs/adapters/postgresql#joins-experimental)
+* [MSSQL](/docs/adapters/mssql#joins-experimental)
+* [MongoDB](/docs/adapters/mongo#joins-experimental)

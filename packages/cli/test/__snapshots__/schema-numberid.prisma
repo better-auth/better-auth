@@ -20,7 +20,7 @@ model User {
   username         String?
   displayUsername  String?
   sessions         Session[]
-  accounts         Account[]
+  identities       Identity[]
   twofactors       TwoFactor[]
 
   @@unique([email])
@@ -37,20 +37,34 @@ model Session {
   ipAddress String?
   userAgent String?
   userId    Int
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@unique([token])
   @@index([userId])
   @@map("session")
 }
 
+model Identity {
+  id                Int       @id @default(autoincrement())
+  issuer            String
+  providerAccountId String
+  userId            Int
+  user              User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  accounts          Account[]
+
+  @@unique([issuer, providerAccountId], map: "identity_issuer_providerAccountId_uidx")
+  @@index([userId])
+  @@map("identity")
+}
+
 model Account {
   id                    Int       @id @default(autoincrement())
-  issuer                String
-  providerAccountId     String
+  identityId            Int
+  identity              Identity  @relation(fields: [identityId], references: [id], onDelete: Restrict)
   providerId            String
-  userId                Int
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerInstanceId    String
   accessToken           String?
   refreshToken          String?
   idToken               String?
@@ -61,8 +75,7 @@ model Account {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  @@unique([issuer, providerAccountId], map: "account_issuer_providerAccountId_uidx")
-  @@index([userId])
+  @@unique([identityId, providerInstanceId], map: "account_identityId_providerInstanceId_uidx")
   @@map("account")
 }
 

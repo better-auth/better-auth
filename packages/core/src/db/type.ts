@@ -6,7 +6,12 @@ import type {
 	UnionToIntersection,
 } from "../types";
 
-export type BaseModelNames = "user" | "account" | "session" | "verification";
+export type BaseModelNames =
+	| "user"
+	| "identity"
+	| "account"
+	| "session"
+	| "verification";
 
 export type ModelNames<T extends string = LiteralString> =
 	| BaseModelNames
@@ -96,6 +101,7 @@ export type InferDBFieldsFromOptionsInput<
 		| BetterAuthOptions["session"]
 		| BetterAuthOptions["user"]
 		| BetterAuthOptions["verification"]
+		| BetterAuthOptions["identity"]
 		| BetterAuthOptions["account"]
 		| BetterAuthOptions["rateLimit"],
 > = DBOptions extends {
@@ -109,6 +115,7 @@ export type InferDBFieldsFromOptions<
 		| BetterAuthOptions["session"]
 		| BetterAuthOptions["user"]
 		| BetterAuthOptions["verification"]
+		| BetterAuthOptions["identity"]
 		| BetterAuthOptions["account"]
 		| BetterAuthOptions["rateLimit"],
 > = DBOptions extends {

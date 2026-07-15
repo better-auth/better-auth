@@ -32,6 +32,7 @@ describe("drizzle relations-v2 adapter: LIKE wildcard escaping", () => {
 	const adapter = drizzleAdapter(db, {
 		schema,
 		provider: "sqlite",
+		transaction: "sync",
 	})({});
 
 	beforeEach(() => {

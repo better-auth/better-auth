@@ -1,12 +1,19 @@
 export type { StandardSchemaV1 } from "@standard-schema/spec";
 export type {
 	AuthContext,
+	AuthenticatedProviderAccountBinding,
 	BetterAuthPluginRegistry,
 	BetterAuthPluginRegistryIdentifier,
+	CreateUserWithAccountOptions,
+	CreateUserWithAccountRecordIds,
 	GenericEndpointContext,
 	InfoContext,
 	InternalAdapter,
+	LinkAccountOptions,
+	LinkAccountRecordIds,
 	PluginContext,
+	PluginProvisioningRecord,
+	UserAuthenticationInput,
 } from "./context";
 export type {
 	BetterAuthCookie,
@@ -25,6 +32,7 @@ export type {
 	GenerateIdFn,
 	StoreIdentifierOption,
 	UserProvisioningSource,
+	UserProvisioningSourceRegistry,
 	ValidateUserInfoAction,
 	ValidateUserInfoMethod,
 	ValidateUserInfoOAuthInfo,

@@ -5,13 +5,15 @@ import type {
 	InferDBFieldsFromOptions,
 	InferDBFieldsFromPlugins,
 } from "../type";
+import type { Identity } from "./identity";
 import { coreSchema } from "./shared";
 
 export const accountSchema = coreSchema.extend({
+	identityId: z.coerce.string(),
+	/** Public alias of the provider configuration used by this account. */
 	providerId: z.string(),
-	issuer: z.string(),
-	providerAccountId: z.string(),
-	userId: z.coerce.string(),
+	/** Stable opaque namespace of the exact provider instance. */
+	providerInstanceId: z.string(),
 	accessToken: z.string().nullish(),
 	refreshToken: z.string().nullish(),
 	idToken: z.string().nullish(),
@@ -38,30 +40,18 @@ export const accountSchema = coreSchema.extend({
 
 export type BaseAccount = z.infer<typeof accountSchema>;
 
-/** The stable provider-side key used to recognize an account. */
+/** The stable key for one provider instance attached to an identity. */
 export type AccountKey = Readonly<
-	Pick<BaseAccount, "issuer" | "providerAccountId">
+	Pick<BaseAccount, "identityId" | "providerInstanceId">
 >;
 
-function encodeAccountIssuerProviderId(providerId: string): string {
-	return encodeURIComponent(providerId);
-}
-
-/**
- * Creates the synthetic issuer used by providers without an issuer of their own.
- */
-export function createLocalAccountIssuer(providerId: string): string {
-	return `local:${encodeAccountIssuerProviderId(providerId)}`;
-}
-
-/**
- * Creates the synthetic issuer used by OAuth providers without an issuer of
- * their own. OAuth identities use a distinct namespace so a provider ID
- * cannot collide with an internal local authentication method.
- */
-export function createOAuthAccountIssuer(providerId: string): string {
-	return `local:oauth:${encodeAccountIssuerProviderId(providerId)}`;
-}
+/** A provider account together with the identity that owns it. */
+export type AccountWithIdentity<
+	Options extends BetterAuthOptions = BetterAuthOptions,
+> = Readonly<{
+	account: Account<Options["account"], Options["plugins"]>;
+	identity: Identity<Options["identity"], Options["plugins"]>;
+}>;
 
 /**
  * Account schema type used by better-auth, note that it's possible that account could have additional fields

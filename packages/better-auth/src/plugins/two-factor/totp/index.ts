@@ -3,7 +3,7 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
-import { setSessionCookie } from "../../../cookies";
+import { rotateSessionCookiePreservingProviderAccountBinding } from "../../../cookies";
 import { symmetricDecrypt } from "../../../crypto";
 import { shouldRequirePassword } from "../../../utils/password";
 import { PACKAGE_VERSION } from "../../../version";
@@ -343,7 +343,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 						activeSession,
 					);
 
-					await setSessionCookie(ctx, {
+					await rotateSessionCookiePreservingProviderAccountBinding(ctx, {
 						session: newSession,
 						user: updatedUser,
 					});

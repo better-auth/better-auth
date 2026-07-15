@@ -39,7 +39,7 @@ const baseInput = {
 	redirectURI: baseCallback,
 };
 
-describe("OAuth account identity contract", () => {
+describe("OAuth identity contract", () => {
 	const providerOptions = {
 		clientId: credentials.clientId,
 		clientSecret: credentials.clientSecret,
@@ -89,22 +89,22 @@ describe("OAuth account identity contract", () => {
 		socialProviders.zoom(providerOptions),
 	];
 
-	it.each(providers)("$id declares a stable account subject", (provider) => {
-		expect(provider.accountSubject).toBeDefined();
+	it.each(providers)("$id declares a stable identity subject", (provider) => {
+		expect(provider.identitySubject).toBeDefined();
 	});
 
 	it("keeps mapped local-user fields separate from provider identity", () => {
 		const mapProfile: NonNullable<
 			ProviderOptions<{ subject: string }>["mapProfileToUser"]
 		> = () => ({
-			// @ts-expect-error Provider identity must be declared through accountSubject.
+			// @ts-expect-error Provider identity must be declared through identitySubject.
 			id: "mapped-provider-subject",
 		});
 
 		expect(mapProfile).toBeTypeOf("function");
 	});
 
-	it("keeps custom profile loading aligned with account-subject resolution", () => {
+	it("keeps custom profile loading aligned with identity-subject resolution", () => {
 		type GetUserInfo = NonNullable<
 			ProviderOptions<{ subject: string }>["getUserInfo"]
 		>;
@@ -138,7 +138,7 @@ describe("OAuth account identity contract", () => {
 	it("uses canonical issuers only for providers with verified OIDC identity", () => {
 		expect(
 			providers
-				.filter((provider) => provider.accountIssuer !== undefined)
+				.filter((provider) => provider.identityIssuer !== undefined)
 				.map((provider) => provider.id)
 				.sort(),
 		).toEqual([
@@ -152,13 +152,13 @@ describe("OAuth account identity contract", () => {
 		]);
 	});
 
-	it("uses the configured Paybin issuer as the account namespace", () => {
+	it("uses the configured Paybin issuer as the identity namespace", () => {
 		const provider = socialProviders.paybin({
 			...providerOptions,
 			issuer: "https://idp.sandbox.paybin.example",
 		});
 
-		expect(provider.accountIssuer).toBe("https://idp.sandbox.paybin.example");
+		expect(provider.identityIssuer).toBe("https://idp.sandbox.paybin.example");
 	});
 });
 

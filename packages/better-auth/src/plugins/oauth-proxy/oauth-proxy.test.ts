@@ -64,11 +64,11 @@ afterEach(() => {
 afterAll(() => server.close());
 
 describe("oauth-proxy", async () => {
-	it("redirects when a provider cannot derive a stable account identity", async () => {
+	it("redirects when a provider cannot derive a stable identity", async () => {
 		const provider = {
 			id: "invalid-account-identity",
 			name: "Invalid account identity",
-			accountSubject: () => "",
+			identitySubject: () => "",
 			createAuthorizationURL: ({ state }) =>
 				new URL(`https://idp.example.com/authorize?state=${state}`),
 			validateAuthorizationCode: async () => ({
@@ -552,10 +552,12 @@ describe("oauth-proxy", async () => {
 				};
 				account: {
 					providerId: string;
-					issuer: string;
-					providerAccountId: string;
 					accessToken?: string;
 					refreshToken?: string;
+				};
+				identity: {
+					issuer: string;
+					providerAccountId: string;
 				};
 				state: string;
 				callbackURL: string;
@@ -566,8 +568,10 @@ describe("oauth-proxy", async () => {
 			expect(payload.userInfo.email).toBe("user@email.com");
 			expect(payload.account).toBeDefined();
 			expect(payload.account.providerId).toBe("google");
-			expect(payload.account.issuer).toBe("https://accounts.google.com");
-			expect(payload.account.providerAccountId).toBe("1234567890");
+			expect(payload.identity).toEqual({
+				issuer: "https://accounts.google.com",
+				providerAccountId: "1234567890",
+			});
 			expect(payload.state).toBeDefined();
 			expect(payload.timestamp).toBeDefined();
 		});
@@ -722,11 +726,11 @@ describe("oauth-proxy", async () => {
 			expect(previewUsersAfter[0]?.email).toBe("user@email.com");
 
 			// Verify account was created
-			const previewAccounts = await previewCtx.internalAdapter.findAccounts(
+			const previewAccounts = await previewCtx.internalAdapter.listUserAccounts(
 				previewUsersAfter[0]!.id,
 			);
 			expect(previewAccounts.length).toBe(1);
-			expect(previewAccounts[0]?.providerId).toBe("google");
+			expect(previewAccounts[0]?.account.providerId).toBe("google");
 
 			// Verify session was created
 			const previewSessions = await previewCtx.internalAdapter.listSessions(
@@ -836,9 +840,11 @@ describe("oauth-proxy", async () => {
 				},
 				account: {
 					providerId: "google",
+					accessToken: "test",
+				},
+				identity: {
 					issuer: "https://accounts.google.com",
 					providerAccountId: "123",
-					accessToken: "test",
 				},
 				state: "test-state",
 				callbackURL: "/dashboard",
@@ -888,9 +894,11 @@ describe("oauth-proxy", async () => {
 				},
 				account: {
 					providerId: "google",
+					accessToken: "test",
+				},
+				identity: {
 					issuer: "https://accounts.google.com",
 					providerAccountId: "123",
-					accessToken: "test",
 				},
 				state: "test-state",
 				callbackURL: "/dashboard",
@@ -1014,9 +1022,11 @@ describe("oauth-proxy", async () => {
 				},
 				account: {
 					providerId: "google",
+					accessToken: "test",
+				},
+				identity: {
 					issuer: "https://accounts.google.com",
 					providerAccountId: "123",
-					accessToken: "test",
 				},
 				state: "test-state",
 				callbackURL: "/dashboard",
@@ -1042,9 +1052,11 @@ describe("oauth-proxy", async () => {
 			const payloadMissingUserInfo = {
 				account: {
 					providerId: "google",
+					accessToken: "test",
+				},
+				identity: {
 					issuer: "https://accounts.google.com",
 					providerAccountId: "123",
-					accessToken: "test",
 				},
 				state: "test-state",
 				callbackURL: "/dashboard",
@@ -1076,9 +1088,11 @@ describe("oauth-proxy", async () => {
 				},
 				account: {
 					providerId: "google",
+					accessToken: "test",
+				},
+				identity: {
 					issuer: "https://accounts.google.com",
 					providerAccountId: "123",
-					accessToken: "test",
 				},
 				state: "test-state",
 				callbackURL: "/dashboard",
@@ -1207,14 +1221,18 @@ describe("oauth-proxy", async () => {
 			const users = await previewCtx.internalAdapter.listUsers();
 			expect(users.length).toBe(1);
 			expect(users[0]?.email).toBe("user@email.com");
-			const accounts = await previewCtx.internalAdapter.findAccounts(
+			const accounts = await previewCtx.internalAdapter.listUserAccounts(
 				users[0]!.id,
 			);
 			expect(accounts).toContainEqual(
 				expect.objectContaining({
-					providerId: "google",
-					issuer: "https://accounts.google.com",
-					providerAccountId: "1234567890",
+					account: expect.objectContaining({
+						providerId: "google",
+					}),
+					identity: expect.objectContaining({
+						issuer: "https://accounts.google.com",
+						providerAccountId: "1234567890",
+					}),
 				}),
 			);
 		});
@@ -1261,9 +1279,11 @@ describe("oauth-proxy", async () => {
 				},
 				account: {
 					providerId: "google",
+					accessToken: "test123",
+				},
+				identity: {
 					issuer: "https://accounts.google.com",
 					providerAccountId: "google-user-id",
-					accessToken: "test123",
 				},
 				state: "test-state",
 				callbackURL: "/dashboard",
@@ -1290,7 +1310,7 @@ describe("oauth-proxy", async () => {
 			expect(users.length).toBe(1);
 			expect(users[0]?.email).toBe("user@email.com");
 
-			const accounts = await previewCtx.internalAdapter.findAccounts(
+			const accounts = await previewCtx.internalAdapter.listUserAccounts(
 				users[0]!.id,
 			);
 			expect(accounts.length).toBe(0);
@@ -1429,9 +1449,11 @@ describe("oauth-proxy", async () => {
 				},
 				account: {
 					providerId: "google",
+					accessToken: "test",
+				},
+				identity: {
 					issuer: "https://accounts.google.com",
 					providerAccountId: "123",
-					accessToken: "test",
 				},
 				state: "non-existent-state-id",
 				callbackURL: "/dashboard",

@@ -25,7 +25,7 @@ export const reddit = (options: RedditOptions) => {
 	return {
 		id: "reddit",
 		name: "Reddit",
-		accountSubject: ({ profile }) => profile.id,
+		identitySubject: ({ profile }) => profile.id,
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope ? [] : ["identity"];
 			if (options.scope) _scopes.push(...options.scope);

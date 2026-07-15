@@ -11,7 +11,7 @@ import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
 import { OAUTH_CALLBACK_ERROR_CODES } from "../../oauth2/errors";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { authenticateProviderUser } from "../../oauth2/provider-user";
 import { toBoolean } from "../../utils/boolean";
 import { PACKAGE_VERSION } from "../../version";
 
@@ -174,7 +174,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					// the redirect and `signIn.social` flows: the account that owns the
 					// Google `sub` wins, never whichever local user happens to share the
 					// token's email.
-					const result = await handleOAuthUserInfo(ctx, {
+					const result = await authenticateProviderUser(ctx, {
 						userInfo: {
 							id: sub,
 							email,
@@ -182,10 +182,13 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							name: typeof name === "string" ? name : "",
 							image: typeof picture === "string" ? picture : undefined,
 						},
-						account: {
-							providerId: "google",
+						identity: {
 							issuer: "https://accounts.google.com",
 							providerAccountId: sub,
+						},
+						account: {
+							providerId: "google",
+							providerInstanceId: "google",
 							idToken,
 							scope: "openid,profile,email",
 						},

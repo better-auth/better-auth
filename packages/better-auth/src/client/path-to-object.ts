@@ -13,6 +13,7 @@ import type {
 } from "../types/helper";
 import type {
 	InferAdditionalFromClient,
+	InferListedAccountFromClient,
 	InferSessionFromClient,
 	InferUserFromClient,
 } from "./types";
@@ -93,10 +94,13 @@ type MergeCustomSessionWithInferred<
 type RefineAuthResponse<
 	Data,
 	ClientOpts extends BetterAuthClientOptions,
-> = Data extends { token: unknown } | { redirect: unknown }
-	? // Only auth-like responses should get client-side user/session type refinement.
-		ReplaceAuthUserAndSession<Data, ClientOpts>
-	: Data;
+	Path extends string,
+> = Path extends "/list-accounts"
+	? InferListedAccountFromClient<ClientOpts>[]
+	: Data extends { token: unknown } | { redirect: unknown }
+		? // Only auth-like responses should get client-side user/session type refinement.
+			ReplaceAuthUserAndSession<Data, ClientOpts>
+		: Data;
 
 export type CamelCase<S extends string> =
 	S extends `${infer P1}-${infer P2}${infer P3}`
@@ -265,7 +269,11 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 															user: InferUserFromClient<COpts>;
 															session: InferSessionFromClient<COpts>;
 														} | null
-													: RefineAuthResponse<NonNullable<Awaited<R>>, COpts>,
+													: RefineAuthResponse<
+															NonNullable<Awaited<R>>,
+															COpts,
+															T["path"]
+														>,
 											T["options"]["error"] extends StandardSchemaV1
 												? // InferOutput
 													NonNullable<

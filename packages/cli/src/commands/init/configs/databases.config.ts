@@ -190,7 +190,13 @@ export const databasesConfig = [
 		],
 		preCode: `const db = drizzle(new Database("database.sqlite"), { schema });`,
 		code({ additionalOptions }) {
-			return drizzleCode({ provider: "sqlite", additionalOptions });
+			return drizzleCode({
+				provider: "sqlite",
+				additionalOptions: {
+					transaction: '"sync"',
+					...additionalOptions,
+				},
+			});
 		},
 		dependencies: ["drizzle-orm", "better-sqlite3"],
 		devDependencies: ["@types/better-sqlite3"],
@@ -221,7 +227,13 @@ export const databasesConfig = [
 		],
 		preCode: `const db = drizzle({ client: new Database('sqlite.db'), schema });`,
 		code({ additionalOptions }) {
-			return drizzleCode({ provider: "sqlite", additionalOptions });
+			return drizzleCode({
+				provider: "sqlite",
+				additionalOptions: {
+					transaction: '"sync"',
+					...additionalOptions,
+				},
+			});
 		},
 		dependencies: ["drizzle-orm", "bun"],
 		devDependencies: ["@types/bun"],

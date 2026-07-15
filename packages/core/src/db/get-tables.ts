@@ -83,7 +83,7 @@ const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 		},
 	} satisfies BetterAuthDBSchema;
 
-	const { user, session, account, verification, ...pluginTables } =
+	const { user, session, identity, account, verification, ...pluginTables } =
 		pluginSchema;
 
 	const verificationTable = {
@@ -123,7 +123,7 @@ const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 				...verification?.fields,
 				...options.verification?.additionalFields,
 			},
-			order: 4,
+			order: 5,
 		},
 	} satisfies BetterAuthDBSchema;
 
@@ -171,7 +171,7 @@ const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 					references: {
 						model: options.user?.modelName || "user",
 						field: "id",
-						onDelete: "cascade",
+						onDelete: "restrict",
 					},
 					required: true,
 					index: true,
@@ -237,8 +237,8 @@ const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 		...(!options.secondaryStorage || options.session?.storeSessionInDatabase
 			? sessionTable
 			: {}),
-		account: {
-			modelName: options.account?.modelName || "account",
+		identity: {
+			modelName: options.identity?.modelName || "identity",
 			indexes: mergeTableIndexes(
 				[
 					{
@@ -246,35 +246,81 @@ const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 						unique: true,
 					},
 				],
-				account?.indexes,
+				identity?.indexes,
 			),
 			fields: {
 				issuer: {
 					type: "string",
 					required: true,
-					fieldName: options.account?.fields?.issuer || "issuer",
+					fieldName: options.identity?.fields?.issuer || "issuer",
 				},
 				providerAccountId: {
 					type: "string",
 					required: true,
 					fieldName:
-						options.account?.fields?.providerAccountId || "providerAccountId",
-				},
-				providerId: {
-					type: "string",
-					required: true,
-					fieldName: options.account?.fields?.providerId || "providerId",
+						options.identity?.fields?.providerAccountId || "providerAccountId",
 				},
 				userId: {
 					type: "string",
 					references: {
 						model: options.user?.modelName || "user",
 						field: "id",
-						onDelete: "cascade",
+						onDelete: "restrict",
 					},
 					required: true,
-					fieldName: options.account?.fields?.userId || "userId",
+					fieldName: options.identity?.fields?.userId || "userId",
 					index: true,
+				},
+				createdAt: {
+					type: "date",
+					required: true,
+					fieldName: options.identity?.fields?.createdAt || "createdAt",
+					defaultValue: () => new Date(),
+				},
+				updatedAt: {
+					type: "date",
+					required: true,
+					fieldName: options.identity?.fields?.updatedAt || "updatedAt",
+					onUpdate: () => new Date(),
+				},
+				...identity?.fields,
+				...options.identity?.additionalFields,
+			},
+			order: 3,
+		},
+		account: {
+			modelName: options.account?.modelName || "account",
+			indexes: mergeTableIndexes(
+				[
+					{
+						fields: ["identityId", "providerInstanceId"],
+						unique: true,
+					},
+				],
+				account?.indexes,
+			),
+			fields: {
+				identityId: {
+					type: "string",
+					references: {
+						model: options.identity?.modelName || "identity",
+						field: "id",
+						onDelete: "restrict",
+					},
+					required: true,
+					fieldName: options.account?.fields?.identityId || "identityId",
+				},
+				providerId: {
+					type: "string",
+					required: true,
+					fieldName: options.account?.fields?.providerId || "providerId",
+				},
+				providerInstanceId: {
+					type: "string",
+					required: true,
+					returned: false,
+					fieldName:
+						options.account?.fields?.providerInstanceId || "providerInstanceId",
 				},
 				accessToken: {
 					type: "string",
@@ -336,7 +382,7 @@ const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 				...account?.fields,
 				...options.account?.additionalFields,
 			},
-			order: 3,
+			order: 4,
 		},
 		...(!options.secondaryStorage || options.verification?.storeInDatabase
 			? verificationTable

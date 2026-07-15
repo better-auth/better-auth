@@ -218,12 +218,12 @@ export const authClient = createAuthClient({
 
 ## Schema
 
-The SIWE plugin adds a `walletAddress` table to store user wallet associations:
+The SIWE plugin adds a `walletAddress` table for wallet metadata owned by each SIWE account:
 
 | Field     | Type    | Description                               |
 | --------- | ------- | ----------------------------------------- |
 | id        | string  | Primary key                               |
-| userId    | string  | Reference to user.id                      |
+| accountId | string  | Reference to the owning SIWE account      |
 | address   | string  | Ethereum wallet address                   |
 | chainId   | number  | Chain ID (e.g., 1 for Ethereum mainnet)   |
 | isPrimary | boolean | Whether this is the user's primary wallet |

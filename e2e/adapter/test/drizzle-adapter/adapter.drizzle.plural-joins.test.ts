@@ -15,7 +15,7 @@
  * config.schema, but the join code path does db.query["user"] directly,
  * which fails because db.query keys are "users", "sessions", etc.
  */
-import type { Session, User } from "@better-auth/core/db";
+import type { Identity, Session, User } from "@better-auth/core/db";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import Database from "better-sqlite3";
 import { relations } from "drizzle-orm";
@@ -39,7 +39,7 @@ const sessions = sqliteTable("session", {
 	id: text("id").primaryKey(),
 	userId: text("userId")
 		.notNull()
-		.references(() => users.id),
+		.references(() => users.id, { onDelete: "restrict" }),
 	token: text("token").notNull(),
 	expiresAt: integer("expiresAt", { mode: "timestamp" }).notNull(),
 	ipAddress: text("ipAddress"),
@@ -48,14 +48,24 @@ const sessions = sqliteTable("session", {
 	updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
 });
 
-const accounts = sqliteTable("account", {
+const identities = sqliteTable("identity", {
 	id: text("id").primaryKey(),
-	issuer: text("issuer").notNull(),
-	providerAccountId: text("providerAccountId").notNull(),
-	providerId: text("providerId").notNull(),
 	userId: text("userId")
 		.notNull()
-		.references(() => users.id),
+		.references(() => users.id, { onDelete: "restrict" }),
+	issuer: text("issuer").notNull(),
+	providerAccountId: text("providerAccountId").notNull(),
+	createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+	updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+});
+
+const accounts = sqliteTable("account", {
+	id: text("id").primaryKey(),
+	identityId: text("identityId")
+		.notNull()
+		.references(() => identities.id, { onDelete: "restrict" }),
+	providerId: text("providerId").notNull(),
+	providerInstanceId: text("providerInstanceId").notNull(),
 	accessToken: text("accessToken"),
 	refreshToken: text("refreshToken"),
 	idToken: text("idToken"),
@@ -84,26 +94,36 @@ const verifications = sqliteTable("verification", {
 
 const usersRelations = relations(users, ({ many }) => ({
 	sessions: many(sessions),
-	accounts: many(accounts),
+	identities: many(identities),
 }));
 
 const sessionsRelations = relations(sessions, ({ one }) => ({
 	user: one(users, { fields: [sessions.userId], references: [users.id] }),
 }));
 
+const identitiesRelations = relations(identities, ({ many, one }) => ({
+	user: one(users, { fields: [identities.userId], references: [users.id] }),
+	accounts: many(accounts),
+}));
+
 const accountsRelations = relations(accounts, ({ one }) => ({
-	user: one(users, { fields: [accounts.userId], references: [users.id] }),
+	identity: one(identities, {
+		fields: [accounts.identityId],
+		references: [identities.id],
+	}),
 }));
 
 // Schema passed to drizzle() — keys are plural JS export names.
-// db.query keys: "users", "sessions", "accounts", "verifications"
+// db.query keys: "users", "sessions", "identities", "accounts", "verifications"
 const drizzleSchema = {
 	users,
 	sessions,
+	identities,
 	accounts,
 	verifications,
 	usersRelations,
 	sessionsRelations,
+	identitiesRelations,
 	accountsRelations,
 };
 
@@ -112,6 +132,7 @@ const drizzleSchema = {
 const adapterSchema = {
 	user: users,
 	session: sessions,
+	identity: identities,
 	account: accounts,
 	verification: verifications,
 };
@@ -136,7 +157,7 @@ describe("drizzle adapter: singular config.schema keys with plural db.query keys
 			);
 			CREATE TABLE session (
 				id TEXT PRIMARY KEY,
-				userId TEXT NOT NULL REFERENCES user(id),
+				userId TEXT NOT NULL REFERENCES user(id) ON DELETE RESTRICT,
 				token TEXT NOT NULL,
 				expiresAt INTEGER NOT NULL,
 				ipAddress TEXT,
@@ -144,12 +165,19 @@ describe("drizzle adapter: singular config.schema keys with plural db.query keys
 				createdAt INTEGER NOT NULL,
 				updatedAt INTEGER NOT NULL
 			);
-			CREATE TABLE account (
+			CREATE TABLE identity (
 				id TEXT PRIMARY KEY,
 				issuer TEXT NOT NULL,
 				providerAccountId TEXT NOT NULL,
+				userId TEXT NOT NULL REFERENCES user(id) ON DELETE RESTRICT,
+				createdAt INTEGER NOT NULL,
+				updatedAt INTEGER NOT NULL
+			);
+			CREATE TABLE account (
+				id TEXT PRIMARY KEY,
+				identityId TEXT NOT NULL REFERENCES identity(id) ON DELETE RESTRICT,
 				providerId TEXT NOT NULL,
-				userId TEXT NOT NULL REFERENCES user(id),
+				providerInstanceId TEXT NOT NULL,
 				accessToken TEXT,
 				refreshToken TEXT,
 				idToken TEXT,
@@ -182,6 +210,7 @@ describe("drizzle adapter: singular config.schema keys with plural db.query keys
 			// Singular keys — matches Better Auth internal model names
 			schema: adapterSchema,
 			provider: "sqlite",
+			transaction: "sync",
 			// usePlural is NOT set (default: false) — this is the common config
 		});
 
@@ -199,6 +228,9 @@ describe("drizzle adapter: singular config.schema keys with plural db.query keys
 
 			INSERT OR REPLACE INTO session (id, userId, token, expiresAt, ipAddress, userAgent, createdAt, updatedAt)
 			VALUES ('s1', 'u1', 'test-token', ${nowTs + 86400000}, '127.0.0.1', 'vitest', ${nowTs}, ${nowTs});
+
+			INSERT OR REPLACE INTO identity (id, userId, issuer, providerAccountId, createdAt, updatedAt)
+			VALUES ('i1', 'u1', 'https://issuer.example.com', 'subject-1', ${nowTs}, ${nowTs});
 		`);
 
 		// findOne WITHOUT join — should work regardless (baseline)
@@ -231,12 +263,25 @@ describe("drizzle adapter: singular config.schema keys with plural db.query keys
 		expect(Array.isArray(userWithSessions?.session)).toBe(true);
 		expect(userWithSessions?.session).toHaveLength(1);
 		expect(userWithSessions?.session[0]?.id).toBe("s1");
+		const userWithIdentities = await adapter.findOne<
+			User & { identity: Identity[] }
+		>({
+			model: "user",
+			where: [{ field: "id", value: "u1" }],
+			join: {
+				identity: true,
+			},
+		});
+
+		expect(userWithIdentities?.identity).toHaveLength(1);
+		expect(userWithIdentities?.identity[0]?.id).toBe("i1");
 	});
 
 	it("findMany should use relational query (not fall back) when db.query keys differ from model names", async () => {
 		const adapterFactory = drizzleAdapter(db, {
 			schema: adapterSchema,
 			provider: "sqlite",
+			transaction: "sync",
 		});
 
 		const adapter = adapterFactory({

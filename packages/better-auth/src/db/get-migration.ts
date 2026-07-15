@@ -82,6 +82,16 @@ const map = {
 	mssql: mssqlMap,
 };
 
+function getForeignKeyDeleteAction(
+	dbType: KyselyDatabaseType,
+	onDelete: NonNullable<DBFieldAttribute["references"]>["onDelete"],
+) {
+	const action = onDelete ?? "cascade";
+	// SQL Server does not support RESTRICT. NO ACTION has the same fail-closed
+	// behavior for the non-deferrable constraints generated here.
+	return dbType === "mssql" && action === "restrict" ? "no action" : action;
+}
+
 interface DatabaseIndexRow {
 	columnName?: string;
 	column_name?: string;
@@ -168,8 +178,8 @@ function databaseValueIsTrue(value: boolean | number | string | undefined) {
 	return value === "1" || value?.toLowerCase() === "true" || value === "t";
 }
 
-async function getDatabaseIndexes(
-	db: Kysely<unknown>,
+async function getDatabaseIndexes<DatabaseSchema>(
+	db: Kysely<DatabaseSchema>,
 	dbType: KyselyDatabaseType,
 	schemaName: string,
 ) {
@@ -341,8 +351,8 @@ async function getDatabaseIndexes(
 	);
 }
 
-async function getDatabaseColumnBounds(
-	db: Kysely<unknown>,
+async function getDatabaseColumnBounds<DatabaseSchema>(
+	db: Kysely<DatabaseSchema>,
 	dbType: KyselyDatabaseType,
 	schemaName: string,
 ) {
@@ -486,7 +496,9 @@ export function matchType(
  * Get the current PostgreSQL schema (search_path) for the database connection
  * Returns the first schema in the search_path, defaulting to 'public' if not found
  */
-async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
+async function getPostgresSchema<DatabaseSchema>(
+	db: Kysely<DatabaseSchema>,
+): Promise<string> {
 	try {
 		const result = await sql<{
 			search_path?: string;
@@ -513,7 +525,9 @@ async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
 	return "public";
 }
 
-async function getMssqlSchema(db: Kysely<unknown>): Promise<string> {
+async function getMssqlSchema<DatabaseSchema>(
+	db: Kysely<DatabaseSchema>,
+): Promise<string> {
 	try {
 		const result = await sql<{ schemaName?: string }>`
 			SELECT SCHEMA_NAME() AS "schemaName"
@@ -978,7 +992,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 									field.references.field,
 								),
 							)
-							.onDelete(field.references.onDelete || "cascade");
+							.onDelete(
+								getForeignKeyDeleteAction(dbType, field.references.onDelete),
+							);
 					}
 					if (
 						field.type === "date" &&
@@ -1067,7 +1083,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 									field.references.field,
 								),
 							)
-							.onDelete(field.references.onDelete || "cascade");
+							.onDelete(
+								getForeignKeyDeleteAction(dbType, field.references.onDelete),
+							);
 					}
 
 					if (field.unique) {

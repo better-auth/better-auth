@@ -3,7 +3,9 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { getCurrentAdapter } from "@better-auth/core/context";
 import type { User } from "@better-auth/core/db";
+import type { DBTransactionAdapter } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { createEmailVerificationToken } from "../../api";
@@ -177,7 +179,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 	async function validateUsername(
 		username: string,
 		displayUsername: string | null,
-		adapter: { findOne: <T>(opts: any) => Promise<T | null> },
+		fallbackAdapter: DBTransactionAdapter,
 		currentUserId?: string | null,
 	) {
 		const validationError = await validateUsernameValue(username);
@@ -186,6 +188,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 		}
 
 		const normalizedUsername = normalizer(username);
+		const adapter = await getCurrentAdapter(fallbackAdapter);
 		const existingUser = await adapter.findOne<User>({
 			model: "user",
 			where: [{ field: "username", value: normalizedUsername }],

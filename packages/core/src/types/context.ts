@@ -1,7 +1,13 @@
 import type { CookieOptions, EndpointContext } from "better-call";
 import type {
 	Account,
+	AccountKey,
+	AccountWithIdentity,
+	BaseModelNames,
 	BetterAuthDBSchema,
+	Identity,
+	IdentityKey,
+	InferDBFieldsFromPluginsInput,
 	ModelNames,
 	SecondaryStorage,
 	Session,
@@ -9,7 +15,6 @@ import type {
 	Verification,
 } from "../db";
 import type { DBAdapter, Where } from "../db/adapter";
-import type { AccountKey } from "../db/schema/account";
 import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
 import type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
@@ -75,6 +80,22 @@ type InferPluginOptions<
  */
 // biome-ignore lint/correctness/noUnusedVariables: Auth and Context is used in the declaration merging
 export interface BetterAuthPluginRegistry<AuthOptions, Options> {}
+
+/**
+ * Exact provider-account capability authenticated for the current session.
+ *
+ * @internal
+ */
+export type AuthenticatedProviderAccountBinding = Readonly<{
+	/** Opaque nonce generated when the provider account is authenticated. */
+	accountBindingId: string;
+	/** Better Auth Account selected by the authentication. */
+	accountId: string;
+	/** Stable provider-side identity authenticated for the account. */
+	identityKey: IdentityKey;
+	/** Configured provider instance that owns the account credentials. */
+	providerInstanceId: string;
+}>;
 export type BetterAuthPluginRegistryIdentifier = keyof BetterAuthPluginRegistry<
 	unknown,
 	unknown
@@ -86,14 +107,102 @@ export type GenericEndpointContext<
 	context: AuthContext<Options>;
 };
 
+/** Authentication records derived for a newly created user. @internal */
+export type UserAuthenticationInput<
+	Options extends BetterAuthOptions = BetterAuthOptions,
+> = {
+	identity: Omit<
+		Identity<Options["identity"], Options["plugins"]>,
+		"id" | "userId" | "createdAt" | "updatedAt"
+	>;
+	account: Omit<
+		Account<Options["account"], Options["plugins"]>,
+		"id" | "identityId" | "createdAt" | "updatedAt"
+	>;
+};
+
+/** Stable identifiers in a completed user-authentication graph. @internal */
+export type CreateUserWithAccountRecordIds = Readonly<{
+	userId: string;
+	identityId: string;
+	accountId: string;
+}>;
+
+type ConfiguredPluginModelNames<Options extends BetterAuthOptions> =
+	Options["plugins"] extends Array<infer Plugin>
+		? Plugin extends { schema: infer Schema }
+			? keyof Schema & string
+			: never
+		: never;
+
+type PluginProvisioningModelNames<Options extends BetterAuthOptions> = [
+	ConfiguredPluginModelNames<Options>,
+] extends [never]
+	? Exclude<ModelNames, BaseModelNames | "rate-limit">
+	: ConfiguredPluginModelNames<Options>;
+
+/** A plugin-owned record created with a user's first account. @internal */
+export type PluginProvisioningRecord<
+	Options extends BetterAuthOptions = BetterAuthOptions,
+> = {
+	[Model in PluginProvisioningModelNames<Options>]: {
+		model: Model;
+		data: InferDBFieldsFromPluginsInput<Model, Options["plugins"]> &
+			Record<string, unknown>;
+	};
+}[PluginProvisioningModelNames<Options>];
+
+/** Builds the records attached to a user's first account. @internal */
+export type CreateUserWithAccountOptions<
+	Options extends BetterAuthOptions = BetterAuthOptions,
+> = {
+	source: UserProvisioningSource;
+	buildAuthentication: (
+		ids: Pick<CreateUserWithAccountRecordIds, "userId">,
+	) => UserAuthenticationInput<Options>;
+	buildRelatedRecords?:
+		| ((
+				ids: CreateUserWithAccountRecordIds,
+		  ) => readonly PluginProvisioningRecord<Options>[])
+		| undefined;
+};
+
+/** Stable identifiers in a completed account-link graph. @internal */
+export type LinkAccountRecordIds = Readonly<{
+	userId: string;
+	identityId: string;
+	accountId: string;
+}>;
+
+/** Records that must commit with a newly linked authentication method. @internal */
+export type LinkAccountOptions<
+	Options extends BetterAuthOptions = BetterAuthOptions,
+> = {
+	buildRelatedRecords?:
+		| ((
+				ids: LinkAccountRecordIds,
+		  ) => readonly PluginProvisioningRecord<Options>[])
+		| undefined;
+};
+
 export interface InternalAdapter<
-	_Options extends BetterAuthOptions = BetterAuthOptions,
+	Options extends BetterAuthOptions = BetterAuthOptions,
 > {
-	createOAuthUser(
-		user: Omit<User, "id" | "createdAt" | "updatedAt">,
-		account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
-			Partial<Account>,
-	): Promise<{ user: User; account: Account }>;
+	/**
+	 * Creates a user and its first authentication method as one mutation.
+	 * Authentication and plugin-owned records are built from stable graph
+	 * identifiers, so callers never predict or patch foreign keys.
+	 */
+	createUserWithAccount<T extends object = Record<string, never>>(
+		user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
+			Partial<User> &
+			Record<string, unknown>,
+		options: CreateUserWithAccountOptions<Options>,
+	): Promise<{
+		user: User & T;
+		identity: Identity<Options["identity"], Options["plugins"]>;
+		account: Account<Options["account"], Options["plugins"]>;
+	}>;
 
 	createUser<T extends Record<string, any>>(
 		user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
@@ -105,12 +214,6 @@ export interface InternalAdapter<
 		 */
 		source: UserProvisioningSource,
 	): Promise<T & User>;
-
-	createAccount<T extends Record<string, any>>(
-		account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
-			Partial<Account> &
-			T,
-	): Promise<T & Account>;
 
 	listSessions(
 		userId: string,
@@ -156,7 +259,16 @@ export interface InternalAdapter<
 
 	deleteSession(token: string): Promise<void>;
 
-	deleteAccounts(userId: string): Promise<void>;
+	deleteUserAccounts(userId: string): Promise<void>;
+
+	/**
+	 * Delete every account attached to an exact provider instance.
+	 *
+	 * Identities and users are preserved because a provider configuration can be
+	 * removed without revoking ownership of the external identity. The operation
+	 * rejects if a database hook prevents an account from being deleted.
+	 */
+	deleteAccountsByProviderInstanceId(providerInstanceId: string): Promise<void>;
 
 	/**
 	 * Delete an account by its primary key.
@@ -175,15 +287,24 @@ export interface InternalAdapter<
 	 */
 	deleteSessions(sessionTokens: string[]): Promise<void>;
 
-	findAccountOwnerByKey(accountKey: AccountKey): Promise<
+	findUserByIdentityKey(identityKey: IdentityKey): Promise<{
+		user: User;
+		identity: Identity<Options["identity"], Options["plugins"]>;
+	} | null>;
+
+	/**
+	 * Resolves an identity and its owner without collapsing a corrupted,
+	 * ownerless identity into a missing identity.
+	 */
+	findIdentityOwnerByKey(identityKey: IdentityKey): Promise<
 		| {
 				kind: "owned";
 				user: User;
-				account: Account;
+				identity: Identity<Options["identity"], Options["plugins"]>;
 		  }
 		| {
 				kind: "orphaned";
-				account: Account;
+				identity: Identity<Options["identity"], Options["plugins"]>;
 		  }
 		| null
 	>;
@@ -191,13 +312,19 @@ export interface InternalAdapter<
 	findUserByEmail(
 		email: string,
 		options?: { includeAccounts: boolean } | undefined,
-	): Promise<{ user: User; accounts: Account[] } | null>;
+	): Promise<{ user: User; accounts: AccountWithIdentity<Options>[] } | null>;
 
 	findUserById(userId: string): Promise<User | null>;
 
 	linkAccount(
-		account: Omit<Account, "id" | "createdAt" | "updatedAt"> & Partial<Account>,
-	): Promise<Account>;
+		userId: string,
+		identityKey: IdentityKey,
+		account: Omit<
+			Account<Options["account"], Options["plugins"]>,
+			"id" | "identityId" | "createdAt" | "updatedAt"
+		>,
+		options?: LinkAccountOptions<Options> | undefined,
+	): Promise<AccountWithIdentity<Options>>;
 
 	// Record<string, any> is to take into account additional fields or plugin-added fields
 	updateUser<T extends Record<string, any>>(
@@ -212,16 +339,32 @@ export interface InternalAdapter<
 
 	updatePassword(userId: string, password: string): Promise<void>;
 
-	findAccounts(userId: string): Promise<Account[]>;
+	listUserAccounts(userId: string): Promise<AccountWithIdentity<Options>[]>;
 
 	/** Find the credential account whose stable local subject is the user ID. */
-	findCredentialAccount(userId: string): Promise<Account | null>;
+	findCredentialAccount(
+		userId: string,
+	): Promise<Account<Options["account"], Options["plugins"]> | null>;
 
-	findAccountByKey(accountKey: AccountKey): Promise<Account | null>;
+	findIdentityByKey(
+		identityKey: IdentityKey,
+	): Promise<Identity<Options["identity"], Options["plugins"]> | null>;
 
-	findAccountByUserId(userId: string): Promise<Account[]>;
+	findAccountByKey(
+		accountKey: AccountKey,
+	): Promise<Account<Options["account"], Options["plugins"]> | null>;
 
-	updateAccount(id: string, data: Partial<Account>): Promise<Account>;
+	findAccountWithIdentityById(
+		id: string,
+	): Promise<AccountWithIdentity<Options> | null>;
+
+	updateAccount(
+		id: string,
+		data: Omit<
+			Partial<Account<Options["account"], Options["plugins"]>>,
+			"identityId" | "providerId" | "providerInstanceId"
+		>,
+	): Promise<Account<Options["account"], Options["plugins"]> | null>;
 
 	createVerificationValue(
 		data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
@@ -234,13 +377,19 @@ export interface InternalAdapter<
 
 	/**
 	 * Atomically consume a single-use verification row by `identifier` and
-	 * return it. Only the first concurrent caller receives the latest row;
-	 * subsequent callers receive `null`. Consuming one row invalidates the
-	 * whole identifier so stale rows cannot be replayed. Rows past their
+	 * return it. Within one captured identifier generation, only the first
+	 * concurrent caller receives the latest row; other callers receive `null`.
+	 * Consuming one row invalidates every row captured for the identifier so
+	 * stale rows cannot be replayed; a replacement issued after that snapshot
+	 * remains available. Rows past their
 	 * `expiresAt` are treated as already invalid: the row is deleted but
 	 * `null` is returned, so callers do not need to gate on `expiresAt`
 	 * themselves. Callers MUST gate any state change (issue session, mint
 	 * token, change password) on a non-null result.
+	 *
+	 * Database-backed consumption requires either a native transaction or an
+	 * atomic batch capability. Adapters with neither capability fail before
+	 * hooks, reads, or writes.
 	 *
 	 * Replaces the racy `findVerificationValue` + `deleteVerificationByIdentifier`
 	 * pair at single-use credential consumption sites.
@@ -373,6 +522,12 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				session: Session & Record<string, any>;
 				user: User & Record<string, any>;
 			} | null;
+			/**
+			 * Provider-account capability authenticated for the current session.
+			 * Kept outside the public session and user models so account-cookie
+			 * authorization state is never returned by the session API.
+			 */
+			authenticatedProviderAccountBinding: AuthenticatedProviderAccountBinding | null;
 			setNewSession: (
 				session: {
 					session: Session & Record<string, any>;

@@ -1,7 +1,12 @@
-declare module "cloudflare:test" {
-	// Controls the type of `import("cloudflare:test").env`
-	interface ProvidedEnv extends Env {
-		TEST_MIGRATIONS: D1Migration[]; // Defined in `vitest.config.mts`
-		DB: D1Database;
+import type { D1Migration } from "cloudflare:test";
+
+declare global {
+	namespace Cloudflare {
+		interface Env {
+			DB: D1Database;
+			TEST_MIGRATIONS: D1Migration[];
+		}
 	}
 }
+
+export {};

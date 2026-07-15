@@ -396,6 +396,7 @@ Most of the features of Better Auth will not work correctly.`,
 		logger,
 		generateId: generateIdFunc,
 		session: null,
+		authenticatedProviderAccountBinding: null,
 		secondaryStorage: options.secondaryStorage,
 		password: {
 			hash: options.emailAndPassword?.password?.hash || hashPassword,

@@ -73,8 +73,8 @@ export const cognito = (options: CognitoOptions) => {
 	return {
 		id: "cognito",
 		name: "Cognito",
-		accountSubject: ({ profile }) => profile.sub,
-		accountIssuer: `https://cognito-idp.${options.region}.amazonaws.com/${options.userPoolId}`,
+		identitySubject: ({ profile }) => profile.sub,
+		identityIssuer: `https://cognito-idp.${options.region}.amazonaws.com/${options.userPoolId}`,
 		async createAuthorizationURL({
 			state,
 			scopes,

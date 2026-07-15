@@ -28,7 +28,7 @@ export const notion = (options: NotionOptions) => {
 	return {
 		id: "notion",
 		name: "Notion",
-		accountSubject: ({ profile }) => profile.id,
+		identitySubject: ({ profile }) => profile.id,
 		createAuthorizationURL({
 			state,
 			scopes,

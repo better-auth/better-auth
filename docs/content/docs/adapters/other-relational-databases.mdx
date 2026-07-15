@@ -43,3 +43,26 @@ Any dialect supported by Kysely can be utilized with Better Auth, including capa
 <Callout>
   You can see the full list of supported <Link href="https://kysely.dev/docs/dialects">Kysely dialects</Link>.
 </Callout>
+
+### Cloudflare D1
+
+Pass the D1 binding directly when Better Auth owns the Kysely instance:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  database: env.DB,
+});
+```
+
+When you call `kyselyAdapter` with a community D1 dialect, also provide the raw binding as `d1Database`. Kysely does not expose the binding through its public API, and Better Auth needs it to commit related identity writes with D1 `batch()`.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  database: kyselyAdapter(db, {
+    type: "sqlite",
+    d1Database: env.DB,
+  }),
+});
+```
+
+When you configure Better Auth with `{ db, type: "sqlite" }` or `{ dialect, type: "sqlite" }` instead, place `d1Database` in that object. Better Auth disables interactive transactions for these D1 configurations and uses the binding's atomic batch capability instead.

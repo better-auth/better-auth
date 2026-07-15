@@ -63,7 +63,7 @@ export const salesforce = (options: SalesforceOptions) => {
 	return {
 		id: "salesforce",
 		name: "Salesforce",
-		accountSubject: ({ profile }) => profile.user_id,
+		identitySubject: ({ profile }) => profile.user_id,
 
 		async createAuthorizationURL({
 			state,

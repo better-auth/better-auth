@@ -1,4 +1,8 @@
 export {
+	type DirectCascadeDeleteReference,
+	getDirectCascadeDeleteReferences,
+} from "./cascade-delete";
+export {
 	type BoundedDatabaseIndexDialect,
 	type DBTableIndexSource,
 	getDatabaseFieldIndexName,

@@ -77,6 +77,18 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
 
 ## Usage
 
+### Identity and Provider Accounts
+
+Better Auth keeps the durable SSO Identity separate from the provider configuration used to authenticate it. Persisted, dynamically registered providers scope both the Identity and Account to their immutable provider instance, so one tenant-managed provider cannot claim an Identity created through another provider. Only OIDC providers declared by the application in `defaultSSO` may share an Identity through the same verified issuer and `sub` pair.
+
+An SSO Account keeps the provider's public alias in `providerId`. Account APIs such as `listAccounts` return that alias, so it can be matched to the provider used for sign-in. The server-only `providerInstanceId` identifies the exact configuration: persisted providers use `sso:provider:<recordId>`, while providers declared in `defaultSSO` use `sso:config:<providerId>`. Authentication state binds the flow to that exact provider instance, so another provider record cannot finish the flow or receive its credentials.
+
+Deleting a persisted provider deletes only the Accounts attached to that provider instance. Better Auth retains the Identity record so provider deletion does not discard identity ownership. The User and records associated with other provider instances remain unchanged. Both OIDC and SAML use the provider-instance Identity namespace for persisted providers; OIDC uses the verified `sub` as its subject, while SAML uses the signed `NameID`.
+
+<Callout type="warning">
+  Dynamically registered providers require a database adapter with native transaction support. Better Auth coordinates provider updates and deletion with in-flight authentication inside one transaction; a sequential fallback or `commitAtomicWrites` implementation alone cannot protect that boundary. Providers declared in `defaultSSO` do not have this requirement because their configuration is immutable at runtime.
+</Callout>
+
 ### Register an OIDC Provider
 
 To register an OIDC provider, use the `registerSSOProvider` endpoint and provide the necessary configuration details for the provider.
@@ -91,7 +103,7 @@ A redirect URL will be automatically generated using the provider ID. For instan
   When you register an OIDC provider, Better Auth automatically fetches and validates the IdP's [OIDC discovery document](#oidc-discovery). Most endpoint fields are optional — see [OIDC Discovery](#oidc-discovery) for details on auto-discovered fields and possible registration errors.
 </Callout>
 
-Better Auth identifies an OIDC account by the configured `issuer` and the verified `sub` claim. The `mapping` option maps profile fields such as email, name, and image, but it cannot replace the account subject. Provider aliases that return the same issuer and subject resolve to one external identity; this identity deduplication does not create independent grant or provider lifecycle records for each alias.
+Better Auth uses the verified `sub` claim as the OIDC Identity subject. Persisted providers pair it with their immutable provider-instance namespace, even when 2 provider records use the same upstream issuer. Server-configured providers in `defaultSSO` can instead share an Identity when their verified ID tokens contain the same issuer and subject. The `mapping` option maps profile fields such as email, name, and image, but it cannot replace the Identity subject or namespace.
 
 #### Example
 
@@ -350,7 +362,7 @@ If the Identity Provider is misconfigured or unreachable, registration will fail
 
 To register a SAML provider, use the `registerSSOProvider` endpoint with SAML configuration details. The provider will act as a Service Provider (SP) and integrate with your Identity Provider (IdP).
 
-Better Auth identifies a SAML account by the IdP entity ID and the signed `NameID`. The `issuer` field identifies your service provider, while the IdP entity ID comes from `idpMetadata.metadata` or an explicit `idpMetadata.entityID` in a manual configuration. Attribute mappings can populate profile fields, but they cannot replace the signed `NameID` account subject.
+Better Auth identifies a SAML Identity within its provider instance by the signed `NameID`. The `issuer` field identifies your service provider, while the IdP entity ID comes from `idpMetadata.metadata` or an explicit `idpMetadata.entityID` in a manual configuration. Attribute mappings can populate profile fields, but they cannot replace the signed `NameID` identity subject.
 
 <Tabs items={["client", "server"]}>
   <Tab value="client">
@@ -1032,23 +1044,19 @@ mapping: {
 
 ## SAML Security
 
-The SSO plugin includes optional security features to protect against common SAML vulnerabilities.
+The SSO plugin validates SAML request correlation and rejects unsolicited responses by default.
 
 ### AuthnRequest / InResponseTo Validation
 
-You can enable InResponseTo validation for SP-initiated SAML flows. When enabled, the plugin tracks AuthnRequest IDs and validates the `InResponseTo` attribute in SAML responses. This prevents:
+InResponseTo validation is enabled by default for service provider (SP)-initiated SAML flows. The plugin tracks AuthnRequest IDs and validates the `InResponseTo` attribute in SAML responses. This prevents:
 
 * **Unsolicited responses**: Responses not triggered by a legitimate login request
 * **Replay attacks**: Reusing old SAML responses
 * **Cross-provider injection**: Responses meant for a different provider
 
-<Callout type="info">
-  This feature is **opt-in** to ensure backward compatibility. Enable it explicitly for enhanced security.
-</Callout>
+#### Configuring Validation (Single Instance)
 
-#### Enabling Validation (Single Instance)
-
-For single-instance deployments, enable validation with the built-in in-memory store:
+For a single-instance deployment, you can keep the defaults or set them explicitly alongside a custom request lifetime:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -1060,7 +1068,7 @@ const auth = betterAuth({
             saml: {
                 // InResponseTo validation is enabled by default
                 enableInResponseToValidation: true,
-                // Optionally reject IdP-initiated SSO (stricter security)
+                // IdP-initiated SSO is rejected by default
                 allowIdpInitiated: false,
                 // Custom TTL for AuthnRequest validity (default: 5 minutes)
                 requestTTL: 10 * 60 * 1000, // 10 minutes
@@ -1072,11 +1080,11 @@ const auth = betterAuth({
 
 #### Options
 
-| Option                         | Type      | Default          | Description                                                                                                                              |
-| ------------------------------ | --------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `enableInResponseToValidation` | `boolean` | `true`           | Enable InResponseTo validation for SP-initiated flows.                                                                                   |
-| `allowIdpInitiated`            | `boolean` | `true`           | Allow IdP-initiated SSO (responses without InResponseTo). Set to `false` for stricter security. Only applies when validation is enabled. |
-| `requestTTL`                   | `number`  | `300000` (5 min) | Time-to-live for AuthnRequest records in milliseconds. Requests older than this will be rejected.                                        |
+| Option                         | Type      | Default          | Description                                                                                                    |
+| ------------------------------ | --------- | ---------------- | -------------------------------------------------------------------------------------------------------------- |
+| `enableInResponseToValidation` | `boolean` | `true`           | Enable InResponseTo validation for SP-initiated flows.                                                         |
+| `allowIdpInitiated`            | `boolean` | `false`          | Allow IdP-initiated SSO responses that do not contain `InResponseTo`. Only applies when validation is enabled. |
+| `requestTTL`                   | `number`  | `300000` (5 min) | Time-to-live for AuthnRequest records in milliseconds. Requests older than this will be rejected.              |
 
 #### Error Handling
 
@@ -1313,7 +1321,7 @@ The provider ID is stored in the OAuth state so the callback can identify which 
 </Callout>
 
 <Callout type="info">
-  Both the shared endpoint (`/sso/callback`) and the per-provider endpoints (`/sso/callback/:providerId`) are always registered for backward compatibility, so existing integrations continue to work regardless of this setting.
+  Better Auth registers both the shared endpoint (`/sso/callback`) and the per-provider endpoints (`/sso/callback/:providerId`) regardless of this setting.
 </Callout>
 
 ## Domain verification
@@ -1321,7 +1329,7 @@ The provider ID is stored in the OAuth state so the callback can identify which 
 Domain verification allows your application to automatically trust a new SSO provider
 by automatically validating ownership via the associated domain.
 
-When a provider's domain is verified, it is also trusted for **automatic account linking**. This means that if a user signs in with an SSO provider (OIDC or SAML) and an existing account with the same email exists, the accounts will be linked automatically — as long as the user's email domain matches the provider's verified domain.
+When a provider's domain is verified, it is also trusted for **automatic account linking**. If a User signs in through an OIDC or SAML provider and a Better Auth User with the same email exists, Better Auth attaches the new SSO Identity and Account to that User, provided the email domain matches the provider's verified domain.
 
 <Tabs items={["client", "server"]}>
   <Tab value="client">
@@ -1591,7 +1599,22 @@ export const ssoProviderDomainVerificationFields = [
 
 ### IdP-Initiated SAML SSO
 
-Better Auth supports **IdP-initiated SSO flows**, where users access your application directly from their Identity Provider dashboard (e.g., Okta, Azure AD, OneLogin). This is common in enterprise environments where IT admins prefer centralized app access.
+Better Auth supports **IdP-initiated SSO flows** when you explicitly set `saml.allowIdpInitiated` to `true`. In this flow, users access your application from their identity provider (IdP) dashboard, which is common when IT administrators manage application access centrally.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
+export const auth = betterAuth({
+  plugins: [
+    sso({
+      saml: {
+        allowIdpInitiated: true,
+      },
+    }),
+  ],
+});
+```
 
 **How it works:**
 
@@ -1600,14 +1623,10 @@ Better Auth supports **IdP-initiated SSO flows**, where users access your applic
 3. Better Auth processes the assertion, creates a session, and redirects to your application
 4. Browser follows the redirect with a GET request (handled automatically)
 
-**No additional configuration required** - the callback route automatically handles both GET and POST requests.
+After you enable the flow, the callback route handles both GET and POST requests.
 
 <Callout type="warn">
   IdP-initiated flows do not carry a RelayState, so the post-login redirect falls back to your application's base URL. To control where users land after SP-initiated SSO, pass the destination via `callbackURL` in the `signIn.sso()` call.
-</Callout>
-
-<Callout type="info">
-  If you previously created a manual GET handler for the SAML callback route as a workaround, you can remove it after upgrading. Better Auth now handles GET requests automatically.
 </Callout>
 
 <Callout type="info">
@@ -1739,9 +1758,9 @@ export const ssoOptionsType = {
 				default: true,
 			},
 			allowIdpInitiated: {
-				description: "Allow IdP-initiated SSO (unsolicited SAML responses). Set to false for stricter security. Only applies when validation is enabled.",
+				description: "Allow IdP-initiated SSO responses that do not contain InResponseTo. Only applies when validation is enabled.",
 				type: "boolean",
-				default: true,
+				default: false,
 			},
 			requestTTL: {
 				description: "TTL for AuthnRequest records in milliseconds. Only applies when validation is enabled.",

@@ -31,7 +31,7 @@ export const dropbox = (options: DropboxOptions) => {
 	return {
 		id: "dropbox",
 		name: "Dropbox",
-		accountSubject: ({ profile }) => profile.account_id,
+		identitySubject: ({ profile }) => profile.account_id,
 		createAuthorizationURL: async ({
 			state,
 			scopes,

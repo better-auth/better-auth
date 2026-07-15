@@ -44,9 +44,34 @@ export const custom_session = pgTable(
     userAgent: text("user_agent"),
     userId: uuid("user_id")
       .notNull()
-      .references(() => custom_user.id, { onDelete: "cascade" }),
+      .references(() => custom_user.id, { onDelete: "restrict" }),
   },
   (table) => [index("custom_session_userId_idx").on(table.userId)],
+);
+
+export const identity = pgTable(
+  "identity",
+  {
+    id: uuid("id")
+      .default(sql`pg_catalog.gen_random_uuid()`)
+      .primaryKey(),
+    issuer: text("issuer").notNull(),
+    providerAccountId: text("provider_account_id").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => custom_user.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("identity_issuer_providerAccountId_uidx").on(
+      table.issuer,
+      table.providerAccountId,
+    ),
+    index("identity_userId_idx").on(table.userId),
+  ],
 );
 
 export const custom_account = pgTable(
@@ -55,12 +80,11 @@ export const custom_account = pgTable(
     id: uuid("id")
       .default(sql`pg_catalog.gen_random_uuid()`)
       .primaryKey(),
-    issuer: text("issuer").notNull(),
-    providerAccountId: text("provider_account_id").notNull(),
-    providerId: text("provider_id").notNull(),
-    userId: uuid("user_id")
+    identityId: uuid("identity_id")
       .notNull()
-      .references(() => custom_user.id, { onDelete: "cascade" }),
+      .references(() => identity.id, { onDelete: "restrict" }),
+    providerId: text("provider_id").notNull(),
+    providerInstanceId: text("provider_instance_id").notNull(),
     accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
     idToken: text("id_token"),
@@ -74,11 +98,10 @@ export const custom_account = pgTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("custom_account_issuer_providerAccountId_uidx").on(
-      table.issuer,
-      table.providerAccountId,
+    uniqueIndex("custom_account_identityId_providerInstanceId_uidx").on(
+      table.identityId,
+      table.providerInstanceId,
     ),
-    index("custom_account_userId_idx").on(table.userId),
   ],
 );
 
@@ -123,7 +146,7 @@ export const twoFactor = pgTable(
 
 export const custom_userRelations = relations(custom_user, ({ many }) => ({
   custom_sessions: many(custom_session),
-  custom_accounts: many(custom_account),
+  identities: many(identity),
   twoFactors: many(twoFactor),
 }));
 
@@ -134,10 +157,18 @@ export const custom_sessionRelations = relations(custom_session, ({ one }) => ({
   }),
 }));
 
-export const custom_accountRelations = relations(custom_account, ({ one }) => ({
+export const identityRelations = relations(identity, ({ one, many }) => ({
   custom_user: one(custom_user, {
-    fields: [custom_account.userId],
+    fields: [identity.userId],
     references: [custom_user.id],
+  }),
+  custom_accounts: many(custom_account),
+}));
+
+export const custom_accountRelations = relations(custom_account, ({ one }) => ({
+  identity: one(identity, {
+    fields: [custom_account.identityId],
+    references: [identity.id],
   }),
 }));
 

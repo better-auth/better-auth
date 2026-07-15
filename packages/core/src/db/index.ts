@@ -3,11 +3,17 @@ export type { BetterAuthPluginDBSchema } from "./plugin";
 export {
 	type Account,
 	type AccountKey,
+	type AccountWithIdentity,
 	accountSchema,
 	type BaseAccount,
-	createLocalAccountIssuer,
-	createOAuthAccountIssuer,
 } from "./schema/account";
+export {
+	type BaseIdentity,
+	createLocalIdentityIssuer,
+	type Identity,
+	type IdentityKey,
+	identitySchema,
+} from "./schema/identity";
 export {
 	type BaseRateLimit,
 	type RateLimit,

@@ -7,6 +7,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import { generateKeyPair, SignJWT } from "jose";
 import type {
 	MutableResponse,
+	MutableToken,
 	TokenRequestIncomingMessage,
 } from "oauth2-mock-server";
 import { OAuth2Server } from "oauth2-mock-server";
@@ -183,13 +184,13 @@ describe("oauth2", async () => {
 		expect(session.data?.session.userId).toBe(session.data?.user.id);
 
 		const ctx = await auth.$context;
-		const accounts = await ctx.internalAdapter.findAccounts(
+		const accounts = await ctx.internalAdapter.listUserAccounts(
 			session.data?.user.id!,
 		);
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]).toMatchObject({
-			providerId: "test",
-			providerAccountId: "oauth2",
+			account: { providerId: "test" },
+			identity: { providerAccountId: "oauth2" },
 		});
 	});
 
@@ -229,20 +230,23 @@ describe("oauth2", async () => {
 			},
 		});
 		const ctx = await auth.$context;
-		const accounts = await ctx.internalAdapter.findAccounts(
+		const accounts = await ctx.internalAdapter.listUserAccounts(
 			session.data?.user.id!,
 		);
-		const account = accounts[0];
-		expect(account).toMatchObject({
-			providerId,
-			providerAccountId: "oauth2-2",
-			userId: session.data?.user.id,
-			accessToken: expect.any(String),
-			refreshToken: expect.any(String),
-			accessTokenExpiresAt: expect.any(Date),
-			refreshTokenExpiresAt: null,
-			scope: expect.any(String),
-			idToken: expect.any(String),
+		expect(accounts[0]).toMatchObject({
+			account: {
+				providerId,
+				accessToken: expect.any(String),
+				refreshToken: expect.any(String),
+				accessTokenExpiresAt: expect.any(Date),
+				refreshTokenExpiresAt: null,
+				scope: expect.any(String),
+				idToken: expect.any(String),
+			},
+			identity: {
+				providerAccountId: "oauth2-2",
+				userId: session.data?.user.id,
+			},
 		});
 	});
 
@@ -396,8 +400,14 @@ describe("oauth2", async () => {
 				"better-auth-account",
 			),
 		).resolves.toMatchObject({
-			providerId: "test-store-account",
-			accessToken: expect.any(String),
+			account: {
+				providerId: "test-store-account",
+				accessToken: expect.any(String),
+			},
+			identity: {
+				issuer: server.issuer.url,
+				providerAccountId: "first-time-sso",
+			},
 		});
 
 		const accessTokenRes = await newAuthClient.getAccessToken(
@@ -620,7 +630,7 @@ describe("oauth2", async () => {
 								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 								clientId,
 								clientSecret,
-								accountSubject: ({ profile }) => profile.id ?? "",
+								identitySubject: ({ profile }) => profile.id ?? "",
 								pkce: true,
 								accessTokenExpiresIn: 3600,
 								// Custom exchange that omits the expiry.
@@ -1497,12 +1507,15 @@ describe("oauth2", async () => {
 		const userId = firstSession.data?.user.id!;
 
 		const ctx = await auth.$context;
-		const accountsAfterFirst = await ctx.internalAdapter.findAccounts(userId);
+		const accountsAfterFirst =
+			await ctx.internalAdapter.listUserAccounts(userId);
 		expect(accountsAfterFirst).toHaveLength(1);
 		expect(accountsAfterFirst[0]).toMatchObject({
-			providerId: "numeric-test",
-			providerAccountId: String(numericAccountId),
-			userId: userId,
+			account: { providerId: "numeric-test" },
+			identity: {
+				providerAccountId: String(numericAccountId),
+				userId,
+			},
 		});
 
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
@@ -1539,9 +1552,10 @@ describe("oauth2", async () => {
 		expect(secondSession.data).not.toBeNull();
 		expect(secondSession.data?.user.id).toBe(userId);
 
-		const accountsAfterSecond = await ctx.internalAdapter.findAccounts(userId);
+		const accountsAfterSecond =
+			await ctx.internalAdapter.listUserAccounts(userId);
 		expect(accountsAfterSecond).toHaveLength(1);
-		expect(accountsAfterSecond[0]!.providerAccountId).toBe(
+		expect(accountsAfterSecond[0]!.identity.providerAccountId).toBe(
 			String(numericAccountId),
 		);
 	});
@@ -1773,7 +1787,7 @@ describe("oauth2", async () => {
 		expect(accounts).toHaveLength(0);
 	});
 
-	it("completes sign-in when accountSubject derives identity from a non-standard profile field", async () => {
+	it("completes sign-in when identitySubject derives identity from a non-standard profile field", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {
 				username: "derived-id-user",
@@ -1795,7 +1809,7 @@ describe("oauth2", async () => {
 							clientId: clientId,
 							clientSecret: clientSecret,
 							pkce: true,
-							accountSubject: ({ profile }) => String(profile.username),
+							identitySubject: ({ profile }) => String(profile.username),
 							mapProfileToUser: (profile) => {
 								return {
 									email: profile.email ?? undefined,
@@ -1839,13 +1853,13 @@ describe("oauth2", async () => {
 		expect(session.data).not.toBeNull();
 
 		const ctx = await auth.$context;
-		const accounts = await ctx.internalAdapter.findAccounts(
+		const accounts = await ctx.internalAdapter.listUserAccounts(
 			session.data?.user.id!,
 		);
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]).toMatchObject({
-			providerId: "derived-id-test",
-			providerAccountId: "derived-id-user",
+			account: { providerId: "derived-id-test" },
+			identity: { providerAccountId: "derived-id-user" },
 		});
 	});
 
@@ -1908,13 +1922,13 @@ describe("oauth2", async () => {
 		expect(session.data).not.toBeNull();
 
 		const ctx = await auth.$context;
-		const accounts = await ctx.internalAdapter.findAccounts(
+		const accounts = await ctx.internalAdapter.listUserAccounts(
 			session.data?.user.id!,
 		);
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]).toMatchObject({
-			providerId: "sub-over-empty-id-test",
-			providerAccountId: "abc",
+			account: { providerId: "sub-over-empty-id-test" },
+			identity: { providerAccountId: "abc" },
 		});
 	});
 
@@ -1977,17 +1991,17 @@ describe("oauth2", async () => {
 		expect(session.data).not.toBeNull();
 
 		const ctx = await auth.$context;
-		const accounts = await ctx.internalAdapter.findAccounts(
+		const accounts = await ctx.internalAdapter.listUserAccounts(
 			session.data?.user.id!,
 		);
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]).toMatchObject({
-			providerId: "sub-over-null-id-test",
-			providerAccountId: "null-id-sub",
+			account: { providerId: "sub-over-null-id-test" },
+			identity: { providerAccountId: "null-id-sub" },
 		});
 	});
 
-	it("uses the OIDC sub as the account subject when userinfo also has an id field", async () => {
+	it("uses the OIDC sub as the identity subject when userinfo also has an id field", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {
 				sub: "subject-1",
@@ -2046,17 +2060,17 @@ describe("oauth2", async () => {
 		expect(session.data).not.toBeNull();
 
 		const ctx = await auth.$context;
-		const accounts = await ctx.internalAdapter.findAccounts(
+		const accounts = await ctx.internalAdapter.listUserAccounts(
 			session.data?.user.id!,
 		);
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]).toMatchObject({
-			providerId: "id-over-sub-test",
-			providerAccountId: "subject-1",
+			account: { providerId: "id-over-sub-test" },
+			identity: { providerAccountId: "subject-1" },
 		});
 	});
 
-	it("recognizes one OIDC account across provider aliases when mutable profile fields change", async () => {
+	it("recognizes one OIDC identity across provider aliases while keeping provider credentials isolated", async () => {
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
 			plugins: [
 				genericOAuth({
@@ -2081,12 +2095,18 @@ describe("oauth2", async () => {
 			baseURL: "http://localhost:3000",
 			fetchOptions: { customFetchImpl },
 		});
+		let activeProviderAlias = "";
+		const tagProviderAlias = (token: MutableToken) => {
+			token.payload.provider_alias = activeProviderAlias;
+		};
+		server.service.on("beforeTokenSigning", tagProviderAlias);
 
 		async function signIn(
 			provider: "workforce-web" | "workforce-mobile",
 			profileId: string,
 			name: string,
 		) {
+			activeProviderAlias = provider;
 			server.service.once("beforeUserinfo", (userInfoResponse) => {
 				userInfoResponse.body = {
 					sub: "workforce-subject",
@@ -2121,6 +2141,22 @@ describe("oauth2", async () => {
 			"mutable-profile-id-1",
 			"Employee One",
 		);
+		const context = await auth.$context;
+		const accountsAfterFirstSignIn =
+			await context.internalAdapter.listUserAccounts(firstSession.user.id);
+		expect(accountsAfterFirstSignIn).toHaveLength(1);
+		const workforceWebAccount = accountsAfterFirstSignIn[0]!;
+		expect(workforceWebAccount).toMatchObject({
+			account: {
+				providerId: "workforce-web",
+				accessToken: expect.any(String),
+			},
+			identity: {
+				issuer: server.issuer.url,
+				providerAccountId: "workforce-subject",
+			},
+		});
+
 		const secondSession = await signIn(
 			"workforce-mobile",
 			"mutable-profile-id-2",
@@ -2128,16 +2164,41 @@ describe("oauth2", async () => {
 		);
 
 		expect(secondSession.user.id).toBe(firstSession.user.id);
-		const context = await auth.$context;
-		const accounts = await context.internalAdapter.findAccounts(
+		const accounts = await context.internalAdapter.listUserAccounts(
 			firstSession.user.id,
 		);
-		expect(accounts).toHaveLength(1);
-		expect(accounts[0]).toMatchObject({
-			issuer: server.issuer.url,
-			providerAccountId: "workforce-subject",
-			providerId: "workforce-mobile",
+		expect(accounts).toHaveLength(2);
+		expect(new Set(accounts.map(({ identity }) => identity.id)).size).toBe(1);
+
+		const workforceWebAccountAfterAlias = accounts.find(
+			({ account }) => account.providerId === "workforce-web",
+		);
+		const workforceMobileAccount = accounts.find(
+			({ account }) => account.providerId === "workforce-mobile",
+		);
+		expect(workforceWebAccountAfterAlias).toMatchObject({
+			account: {
+				accessToken: workforceWebAccount.account.accessToken,
+			},
+			identity: {
+				id: workforceWebAccount.identity.id,
+				issuer: server.issuer.url,
+				providerAccountId: "workforce-subject",
+			},
 		});
+		expect(workforceMobileAccount).toMatchObject({
+			account: {
+				accessToken: expect.any(String),
+				providerId: "workforce-mobile",
+			},
+			identity: {
+				id: workforceWebAccount.identity.id,
+			},
+		});
+		expect(workforceMobileAccount?.account.accessToken).not.toBe(
+			workforceWebAccount.account.accessToken,
+		);
+		server.service.off("beforeTokenSigning", tagProviderAlias);
 	});
 
 	it("keeps different OIDC subjects separate when a mutable id field is reused", async () => {
@@ -2195,17 +2256,17 @@ describe("oauth2", async () => {
 
 		expect(secondSession.user.id).not.toBe(firstSession.user.id);
 		const context = await auth.$context;
-		const firstAccounts = await context.internalAdapter.findAccounts(
+		const firstAccounts = await context.internalAdapter.listUserAccounts(
 			firstSession.user.id,
 		);
-		const secondAccounts = await context.internalAdapter.findAccounts(
+		const secondAccounts = await context.internalAdapter.listUserAccounts(
 			secondSession.user.id,
 		);
 		expect(firstAccounts[0]).toMatchObject({
-			providerAccountId: "subject-a",
+			identity: { providerAccountId: "subject-a" },
 		});
 		expect(secondAccounts[0]).toMatchObject({
-			providerAccountId: "subject-b",
+			identity: { providerAccountId: "subject-b" },
 		});
 	});
 
@@ -2267,14 +2328,14 @@ describe("oauth2", async () => {
 		});
 
 		const ctx = await auth.$context;
-		const accounts = await ctx.internalAdapter.findAccounts(
+		const accounts = await ctx.internalAdapter.listUserAccounts(
 			session.data?.user.id!,
 		);
 
-		expect(accounts[0]!.providerAccountId).toBe(String(numericId));
+		expect(accounts[0]!.identity.providerAccountId).toBe(String(numericId));
 	});
 
-	it("should handle accountSubject returning a numeric subject", async () => {
+	it("should handle identitySubject returning a numeric subject", async () => {
 		const numericProfileId = 111222333;
 
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
@@ -2299,7 +2360,7 @@ describe("oauth2", async () => {
 							clientId: clientId,
 							clientSecret: clientSecret,
 							pkce: true,
-							accountSubject: ({ profile }) => Number(profile.user_id),
+							identitySubject: ({ profile }) => Number(profile.user_id),
 							mapProfileToUser: (profile) => {
 								return {
 									email: profile.email ?? undefined,
@@ -2342,11 +2403,13 @@ describe("oauth2", async () => {
 		});
 
 		const ctx = await auth.$context;
-		const accounts = await ctx.internalAdapter.findAccounts(
+		const accounts = await ctx.internalAdapter.listUserAccounts(
 			session.data?.user.id!,
 		);
 
-		expect(accounts[0]!.providerAccountId).toBe(String(numericProfileId));
+		expect(accounts[0]!.identity.providerAccountId).toBe(
+			String(numericProfileId),
+		);
 	});
 
 	it("should handle Strava OAuth with custom mapProfileToUser", async () => {
@@ -2432,14 +2495,16 @@ describe("oauth2", async () => {
 		);
 
 		const ctx = await auth.$context;
-		const accounts = await ctx.internalAdapter.findAccounts(
+		const accounts = await ctx.internalAdapter.listUserAccounts(
 			session.data?.user.id!,
 		);
 
 		expect(accounts[0]).toMatchObject({
-			providerId: "strava",
-			providerAccountId: String(stravaUserId),
-			userId: session.data?.user.id,
+			account: { providerId: "strava" },
+			identity: {
+				providerAccountId: String(stravaUserId),
+				userId: session.data?.user.id,
+			},
 		});
 	});
 
@@ -2800,7 +2865,7 @@ describe("oauth2", async () => {
 			);
 		});
 
-		it("normalizes a trailing slash in the domain and account issuer", () => {
+		it("normalizes a trailing slash in the domain and identity issuer", () => {
 			const auth0Config = auth0({
 				clientId: "auth0-client-id",
 				clientSecret: "auth0-client-secret",
@@ -2810,7 +2875,7 @@ describe("oauth2", async () => {
 			expect(auth0Config.discoveryUrl).toBe(
 				"https://dev-xxx.eu.auth0.com/.well-known/openid-configuration",
 			);
-			expect(auth0Config.accountIssuer).toBe("https://dev-xxx.eu.auth0.com/");
+			expect(auth0Config.identityIssuer).toBe("https://dev-xxx.eu.auth0.com/");
 		});
 
 		it("should allow overriding scopes", () => {
@@ -3201,7 +3266,7 @@ describe("oauth2", async () => {
 							clientSecret: clientSecret,
 							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 							scopes: ["snsapi_login"],
-							accountSubject: ({ profile }) => profile.id ?? "",
+							identitySubject: ({ profile }) => profile.id ?? "",
 							pkce: true,
 							// Custom token exchange that doesn't use standard OAuth flow
 							getToken: async ({ code }) => {
@@ -3367,7 +3432,7 @@ describe("oauth2", async () => {
 							clientSecret: clientSecret,
 							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 							scopes: ["profile", "email"],
-							accountSubject: ({ profile }) => profile.id ?? "",
+							identitySubject: ({ profile }) => profile.id ?? "",
 							pkce: true,
 							// Simulates providers that use GET request with query params instead of POST
 							getToken: async () => {
@@ -4674,7 +4739,7 @@ describe("oauth2", async () => {
 			expect(session.data?.user.email).toBe("forged@test.com");
 		});
 
-		it("fails provider initialization when discovery cannot establish an account issuer", async () => {
+		it("fails provider initialization when discovery cannot establish an identity issuer", async () => {
 			const discoveryServer = createServer((_req, res) => {
 				res.setHeader("content-type", "application/json");
 				res.end(

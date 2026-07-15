@@ -32,7 +32,7 @@ export const linkedin = (options: LinkedInOptions) => {
 	return {
 		id: "linkedin",
 		name: "Linkedin",
-		accountSubject: ({ profile }) => profile.sub,
+		identitySubject: ({ profile }) => profile.sub,
 		createAuthorizationURL: async ({
 			state,
 			scopes,

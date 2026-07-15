@@ -44,10 +44,10 @@ describe("wechat.getUserInfo (no provider email)", () => {
 		expect(res?.user.email).toBe("union-abc@wechat.invalid");
 		expect(res?.user.emailVerified).toBe(false);
 		expect(res?.user).not.toHaveProperty("id");
-		expect(typeof provider.accountSubject).toBe("function");
-		if (typeof provider.accountSubject !== "function" || !res) return;
+		expect(typeof provider.identitySubject).toBe("function");
+		if (typeof provider.identitySubject !== "function" || !res) return;
 		expect(
-			await provider.accountSubject({
+			await provider.identitySubject({
 				tokens: { accessToken: "access-token" },
 				profile: res.data,
 			}),

@@ -105,8 +105,8 @@ export function microsoftEntraId(
 
 	return {
 		providerId: "microsoft-entra-id",
-		accountSubject: ({ profile }) => profile.sub ?? "",
-		accountIssuer: tenantIssuer,
+		identitySubject: ({ profile }) => profile.sub ?? "",
+		identityIssuer: tenantIssuer,
 		authorizationUrl,
 		tokenUrl,
 		userInfoUrl,

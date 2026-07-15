@@ -1,5 +1,10 @@
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { APIError } from "better-auth/api";
+import type { ResolvedSSOProvider } from "../provider-instance";
+import {
+	createConfiguredSSOProviderInstance,
+	createPersistedSSOProviderInstance,
+} from "../provider-instance";
 import { resolveSigningCerts } from "../saml";
 import { saml } from "../samlify";
 import type { SAMLConfig, SSOOptions, SSOProvider } from "../types";
@@ -18,7 +23,7 @@ export async function findSAMLProvider(
 	providerId: string,
 	options: SSOOptions | undefined,
 	adapter: DBAdapter,
-): Promise<SSOProvider<SSOOptions> | null> {
+): Promise<ResolvedSSOProvider | null> {
 	if (options?.defaultSSO?.length) {
 		const match = options.defaultSSO.find((p) => p.providerId === providerId);
 		if (match) {
@@ -26,14 +31,15 @@ export async function findSAMLProvider(
 				...match,
 				userId: "default",
 				issuer: match.samlConfig?.issuer || "",
+				instance: createConfiguredSSOProviderInstance(match.providerId),
 				...(options.domainVerification?.enabled
 					? { domainVerified: true }
 					: {}),
-			} as SSOProvider<SSOOptions>;
+			} as ResolvedSSOProvider;
 		}
 	}
 
-	const res = await adapter.findOne<SSOProvider<SSOOptions>>({
+	const res = await adapter.findOne<SSOProvider<SSOOptions> & { id: string }>({
 		model: "ssoProvider",
 		where: [{ field: "providerId", value: providerId }],
 	});
@@ -42,11 +48,12 @@ export async function findSAMLProvider(
 
 	return {
 		...res,
+		instance: createPersistedSSOProviderInstance(res.id),
 		samlConfig: res.samlConfig
 			? safeJsonParse<SAMLConfig>(res.samlConfig as unknown as string) ||
 				undefined
 			: undefined,
-	};
+	} as ResolvedSSOProvider;
 }
 
 export function createSP(

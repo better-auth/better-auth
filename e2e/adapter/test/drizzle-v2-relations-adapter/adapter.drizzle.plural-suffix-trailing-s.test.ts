@@ -52,6 +52,7 @@ describe("drizzle relations-v2 adapter: join model name ending in 's'", () => {
 	const adapter = drizzleAdapter(db, {
 		schema: { user: users, address, relations },
 		provider: "sqlite",
+		transaction: "sync",
 	})({
 		advanced: { database: { joins: true } },
 		plugins: [

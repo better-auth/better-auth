@@ -16,88 +16,66 @@
  * decodes to the freshly created account.
  */
 
+import { createServer } from "node:http";
 import { parseSetCookieHeader } from "better-auth/cookies";
 import { symmetricDecodeJWT } from "better-auth/crypto";
 import { genericOAuth } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
-import type { Dispatcher } from "undici";
-import { getGlobalDispatcher, MockAgent, setGlobalDispatcher } from "undici";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-const IDP_ORIGIN = "https://idp.example.test";
 const PROVIDER_ID = "test-stateless";
 const CLIENT_ID = "test-client-id";
 const CLIENT_SECRET = "test-client-secret";
 
-function mockIdp(agent: MockAgent) {
-	const pool = agent.get(IDP_ORIGIN);
-	const json = { headers: { "content-type": "application/json" } };
+const identityProvider = createServer((request, response) => {
+	const responseBody =
+		request.url === "/token"
+			? {
+					access_token: "test-access-token",
+					refresh_token: "test-refresh-token",
+					token_type: "Bearer",
+					expires_in: 3600,
+					scope: "openid email profile",
+				}
+			: request.url === "/userinfo"
+				? {
+						sub: "first-time-stateless-sub",
+						email: "first-time-stateless@test.com",
+						email_verified: true,
+						name: "First Time Stateless",
+					}
+				: null;
 
-	pool
-		.intercept({ path: "/.well-known/openid-configuration", method: "GET" })
-		.reply(
-			200,
-			{
-				issuer: IDP_ORIGIN,
-				authorization_endpoint: `${IDP_ORIGIN}/authorize`,
-				token_endpoint: `${IDP_ORIGIN}/token`,
-				userinfo_endpoint: `${IDP_ORIGIN}/userinfo`,
-				jwks_uri: `${IDP_ORIGIN}/jwks`,
-				response_types_supported: ["code"],
-				subject_types_supported: ["public"],
-				id_token_signing_alg_values_supported: ["RS256"],
-			},
-			json,
-		)
-		.persist();
+	if (!responseBody) {
+		response.writeHead(404);
+		response.end();
+		return;
+	}
 
-	pool
-		.intercept({ path: "/token", method: "POST" })
-		.reply(
-			200,
-			{
-				access_token: "test-access-token",
-				refresh_token: "test-refresh-token",
-				token_type: "Bearer",
-				expires_in: 3600,
-				scope: "openid email profile",
-			},
-			json,
-		)
-		.persist();
+	response.writeHead(200, { "content-type": "application/json" });
+	response.end(JSON.stringify(responseBody));
+});
 
-	pool
-		.intercept({ path: "/userinfo", method: "GET" })
-		.reply(
-			200,
-			{
-				sub: "first-time-stateless-sub",
-				email: "first-time-stateless@test.com",
-				email_verified: true,
-				name: "First Time Stateless",
-			},
-			json,
-		)
-		.persist();
-}
+let identityProviderOrigin = "";
+
+beforeAll(async () => {
+	await new Promise<void>((resolve) => {
+		identityProvider.listen(0, "127.0.0.1", resolve);
+	});
+	const address = identityProvider.address();
+	if (!address || typeof address === "string") {
+		throw new Error("Unable to determine the identity provider address");
+	}
+	identityProviderOrigin = `http://127.0.0.1:${address.port}`;
+});
+
+afterAll(async () => {
+	await new Promise<void>((resolve, reject) => {
+		identityProvider.close((error) => (error ? reject(error) : resolve()));
+	});
+});
 
 describe("stateless mode account_data cookie (issue #9375)", () => {
-	let originalDispatcher: Dispatcher;
-	let mockAgent: MockAgent;
-
-	beforeEach(() => {
-		originalDispatcher = getGlobalDispatcher();
-		mockAgent = new MockAgent();
-		mockAgent.disableNetConnect();
-		setGlobalDispatcher(mockAgent);
-		mockIdp(mockAgent);
-	});
-
-	afterEach(async () => {
-		await mockAgent.close();
-		setGlobalDispatcher(originalDispatcher);
-	});
-
 	it("emits a decodable account_data cookie on first-time OAuth callback", async () => {
 		const { client, auth } = await getTestInstance({
 			database: undefined,
@@ -107,7 +85,11 @@ describe("stateless mode account_data cookie (issue #9375)", () => {
 					config: [
 						{
 							providerId: PROVIDER_ID,
-							discoveryUrl: `${IDP_ORIGIN}/.well-known/openid-configuration`,
+							authorizationUrl: `${identityProviderOrigin}/authorize`,
+							tokenUrl: `${identityProviderOrigin}/token`,
+							userInfoUrl: `${identityProviderOrigin}/userinfo`,
+							identityIssuer: identityProviderOrigin,
+							identitySubject: ({ profile }) => profile.sub ?? "",
 							clientId: CLIENT_ID,
 							clientSecret: CLIENT_SECRET,
 							pkce: true,
@@ -155,7 +137,7 @@ describe("stateless mode account_data cookie (issue #9375)", () => {
 		});
 
 		// 3. Core invariant: account_data must be present with a non-empty JWE
-		//    payload that decodes to the freshly created account.
+		//    payload that decodes to the freshly created account and identity.
 		const cookies = parseSetCookieHeader(setCookieHeader);
 		const accountDataCookie = cookies.get(ctx.authCookies.accountData.name);
 		expect(accountDataCookie?.value).toMatch(/^ey/);
@@ -167,8 +149,14 @@ describe("stateless mode account_data cookie (issue #9375)", () => {
 				"better-auth-account",
 			),
 		).resolves.toMatchObject({
-			providerId: PROVIDER_ID,
-			accessToken: expect.any(String),
+			account: {
+				providerId: PROVIDER_ID,
+				accessToken: expect.any(String),
+			},
+			identity: {
+				issuer: identityProviderOrigin,
+				providerAccountId: "first-time-stateless-sub",
+			},
 		});
 	});
 });

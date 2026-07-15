@@ -82,8 +82,8 @@ export const apple = (options: AppleOptions) => {
 	return {
 		id: "apple",
 		name: "Apple",
-		accountSubject: ({ profile }) => profile.sub,
-		accountIssuer: "https://appleid.apple.com",
+		identitySubject: ({ profile }) => profile.sub,
+		identityIssuer: "https://appleid.apple.com",
 		async createAuthorizationURL({
 			state,
 			scopes,

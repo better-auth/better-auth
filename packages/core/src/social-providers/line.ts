@@ -50,8 +50,8 @@ export const line = (options: LineOptions) => {
 	return {
 		id: "line",
 		name: "LINE",
-		accountSubject: ({ profile }) => profile.sub,
-		accountIssuer: "https://access.line.me",
+		identitySubject: ({ profile }) => profile.sub,
+		identityIssuer: "https://access.line.me",
 		async createAuthorizationURL({
 			state,
 			scopes,

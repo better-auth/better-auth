@@ -2,6 +2,15 @@ export function capitalizeFirstLetter(str: string) {
 	return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
+/** Pluralizes a model identifier without changing its casing or word shape. */
+export function pluralizeIdentifier(identifier: string): string {
+	if (!identifier || identifier.endsWith("s")) return identifier;
+	if (/[b-df-hj-np-tv-z]y$/i.test(identifier)) {
+		return `${identifier.slice(0, -1)}ies`;
+	}
+	return `${identifier}s`;
+}
+
 const WORD_PATTERN =
 	/[\p{Ll}\d]+|\p{Lu}+(?!\p{Ll})|\p{Lu}[\p{Ll}\d]+|\p{Lo}+/gu;
 const APOSTROPHE_PATTERN = /['\u2019]/g;

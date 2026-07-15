@@ -150,13 +150,10 @@ describe("oauth2 - email verification on link", async () => {
 		expect(redirectLocation).toContain("error=account_not_linked");
 
 		// Link is rejected: no Google account row, local emailVerified untouched
-		const accounts = await ctx.adapter.findMany<{
-			providerId: string;
-		}>({
-			model: "account",
-			where: [{ field: "userId", value: userId }],
-		});
-		const googleAccount = accounts.find((a) => a.providerId === "google");
+		const accounts = await ctx.internalAdapter.listUserAccounts(userId);
+		const googleAccount = accounts.find(
+			({ account }) => account.providerId === "google",
+		);
 		expect(googleAccount).toBeUndefined();
 
 		user = await ctx.adapter.findOne<User>({
@@ -195,13 +192,10 @@ describe("oauth2 - email verification on link", async () => {
 		});
 		expect(user?.emailVerified).toBe(true);
 
-		const accounts = await ctx.adapter.findMany<{
-			providerId: string;
-		}>({
-			model: "account",
-			where: [{ field: "userId", value: userId }],
-		});
-		expect(accounts.find((a) => a.providerId === "google")).toBeDefined();
+		const accounts = await ctx.internalAdapter.listUserAccounts(userId);
+		expect(
+			accounts.find(({ account }) => account.providerId === "google"),
+		).toBeDefined();
 	});
 
 	it("should not update emailVerified when provider reports unverified", async () => {
@@ -404,12 +398,11 @@ describe("oauth2 - account linking with case insensitive email", async () => {
 		expect(redirectLocation).not.toContain("error");
 		expect(redirectLocation).toContain("/settings");
 
-		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
-			model: "account",
-			where: [{ field: "userId", value: userId }],
-		});
+		const accounts = await ctx.internalAdapter.listUserAccounts(userId);
 
-		const googleAccount = accounts.find((a) => a.providerId === "google");
+		const googleAccount = accounts.find(
+			({ account }) => account.providerId === "google",
+		);
 		expect(googleAccount).toBeTruthy();
 	});
 
@@ -465,12 +458,11 @@ describe("oauth2 - account linking with case insensitive email", async () => {
 		expect(linkRes.error).toBeNull();
 		expect(linkRes.data).toBeTruthy();
 
-		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
-			model: "account",
-			where: [{ field: "userId", value: userId }],
-		});
+		const accounts = await ctx.internalAdapter.listUserAccounts(userId);
 
-		const googleAccount = accounts.find((a) => a.providerId === "google");
+		const googleAccount = accounts.find(
+			({ account }) => account.providerId === "google",
+		);
 		expect(googleAccount).toBeTruthy();
 	});
 });
@@ -555,11 +547,11 @@ describe("oauth2 - account linking without trustedProviders", async () => {
 
 		expect(redirectLocation).toContain("error=account_not_linked");
 
-		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
-			model: "account",
-			where: [{ field: "userId", value: "existing-user-id" }],
-		});
-		const googleAccount = accounts.find((a) => a.providerId === "google");
+		const accounts =
+			await ctx.internalAdapter.listUserAccounts("existing-user-id");
+		const googleAccount = accounts.find(
+			({ account }) => account.providerId === "google",
+		);
 		expect(googleAccount).toBeUndefined();
 	});
 
@@ -627,11 +619,10 @@ describe("oauth2 - account linking without trustedProviders", async () => {
 		});
 		expect(user).toBeTruthy();
 
-		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
-			model: "account",
-			where: [{ field: "userId", value: user!.id }],
-		});
-		const googleAccount = accounts.find((a) => a.providerId === "google");
+		const accounts = await ctx.internalAdapter.listUserAccounts(user!.id);
+		const googleAccount = accounts.find(
+			({ account }) => account.providerId === "google",
+		);
 		expect(googleAccount).toBeTruthy();
 	});
 });
@@ -717,11 +708,12 @@ describe("oauth2 - disableImplicitLinking", async () => {
 
 		expect(redirectLocation).toContain("error=account_not_linked");
 
-		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
-			model: "account",
-			where: [{ field: "userId", value: "implicit-block-user" }],
-		});
-		const googleAccount = accounts.find((a) => a.providerId === "google");
+		const accounts = await ctx.internalAdapter.listUserAccounts(
+			"implicit-block-user",
+		);
+		const googleAccount = accounts.find(
+			({ account }) => account.providerId === "google",
+		);
 		expect(googleAccount).toBeUndefined();
 	});
 
@@ -848,11 +840,10 @@ describe("oauth2 - disableImplicitLinking", async () => {
 		expect(redirectLocation).not.toContain("error");
 		expect(redirectLocation).toContain("/settings");
 
-		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
-			model: "account",
-			where: [{ field: "userId", value: userId }],
-		});
-		const googleAccount = accounts.find((a) => a.providerId === "google");
+		const accounts = await ctx.internalAdapter.listUserAccounts(userId);
+		const googleAccount = accounts.find(
+			({ account }) => account.providerId === "google",
+		);
 		expect(googleAccount).toBeTruthy();
 	});
 });
@@ -1184,7 +1175,7 @@ describe("oauth2 - updateUserInfoOnLink on implicit sign-in link", async () => {
 
 		const oAuthHeaders = await signInAndLink(testEmail, "google_implicit_name");
 
-		// The cookie cache is seeded from the value handleOAuthUserInfo returns,
+		// The cookie cache is seeded from the value authenticateProviderUser returns,
 		// and getSession serves it without a database read, so a stale return
 		// would surface right here.
 		const session = await client.getSession({
@@ -1260,11 +1251,12 @@ describe("oauth2 - updateUserInfoOnLink on implicit sign-in link", async () => {
 		expect(session.data?.user.email).toBe(testEmail);
 		expect(session.data?.user.name).toBe("Original Name");
 
-		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
-			model: "account",
-			where: [{ field: "userId", value: session.data!.user.id }],
-		});
-		expect(accounts.find((a) => a.providerId === "google")).toBeTruthy();
+		const accounts = await ctx.internalAdapter.listUserAccounts(
+			session.data!.user.id,
+		);
+		expect(
+			accounts.find(({ account }) => account.providerId === "google"),
+		).toBeTruthy();
 
 		const user = await ctx.adapter.findOne<
 			User & { validatedProfileCode?: string | null }
@@ -1856,79 +1848,94 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 		});
 		const userBId = sessionB.data!.user.id;
 
-		const accountsB = await ctx.adapter.findMany<{
-			providerId: string;
-			issuer: string;
-			providerAccountId: string;
-			userId: string;
-		}>({
-			model: "account",
-			where: [{ field: "userId", value: userBId }],
-		});
+		const accountsB = await ctx.internalAdapter.listUserAccounts(userBId);
 
-		const githubAccount = accountsB.find((a) => a.providerId === "github");
+		const githubAccount = accountsB.find(
+			({ account }) => account.providerId === "github",
+		);
 		expect(githubAccount).toBeTruthy();
-		expect(githubAccount?.issuer).toBe("local:oauth:github");
-		expect(githubAccount?.providerAccountId).toBe(SHARED_ACCOUNT_ID);
-		expect(githubAccount?.userId).toBe(userBId);
+		expect(githubAccount?.identity.issuer).toBe("local:github");
+		expect(githubAccount?.identity.providerAccountId).toBe(SHARED_ACCOUNT_ID);
+		expect(githubAccount?.identity.userId).toBe(userBId);
 
 		// User A's Google account must remain untouched
-		const accountsA = await ctx.adapter.findMany<{
-			providerId: string;
-			userId: string;
-		}>({
-			model: "account",
-			where: [{ field: "userId", value: userAId }],
-		});
-		const googleAccount = accountsA.find((a) => a.providerId === "google");
+		const accountsA = await ctx.internalAdapter.listUserAccounts(userAId);
+		const googleAccount = accountsA.find(
+			({ account }) => account.providerId === "google",
+		);
 		expect(googleAccount).toBeTruthy();
-		expect(googleAccount?.userId).toBe(userAId);
+		expect(googleAccount?.identity.userId).toBe(userAId);
 	});
 });
 
-describe("oauth2 - orphaned account identity", () => {
-	it("does not fall back to email when a matching account has no user", async () => {
-		const database = new DatabaseSync(":memory:");
-		(await getMigrations({ database })).runMigrations();
-		const { auth, client, cookieSetter } = await getTestInstance({
-			database,
-			socialProviders: {
-				google: {
-					clientId: "test",
-					clientSecret: "test",
-					enabled: true,
-					verifyIdToken: async () => true,
-				},
+describe("oauth2 - orphaned identity owners", async () => {
+	const sqlite = new DatabaseSync(":memory:");
+	const database = new Kysely({
+		dialect: new NodeSqliteDialect({ database: sqlite }),
+	});
+	const auth = betterAuth({
+		baseURL: "http://localhost:3000",
+		database: {
+			db: database,
+			type: "sqlite",
+			transaction: true,
+		},
+		emailAndPassword: { enabled: true },
+		account: {
+			accountLinking: {
+				enabled: true,
+				trustedProviders: ["google"],
 			},
-			emailAndPassword: { enabled: true },
-			account: {
-				accountLinking: { enabled: false },
+		},
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
 			},
-		});
-		const ctx = await auth.$context;
-		const email = "orphaned-account@example.com";
+		},
+		rateLimit: { enabled: false },
+	});
+	const { runMigrations } = await getMigrations(auth.options);
+	await runMigrations();
+	const client = createAuthClient({
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: (url, init) => auth.handler(new Request(url, init)),
+		},
+	});
+	const ctx = await auth.$context;
+
+	afterAll(async () => {
+		await database.destroy();
+	});
+
+	it("does not link an orphaned identity to an email-matched user", async () => {
+		const email = "orphaned-identity@example.com";
 		const providerAccountId = "orphaned-google-subject";
-		const { data } = await client.signUp.email({
-			email,
-			password: "password123",
-			name: "Existing User",
+		const existingUser = await ctx.adapter.create({
+			model: "user",
+			data: {
+				email,
+				name: "Existing User",
+				emailVerified: true,
+			},
 		});
 
-		database.exec("PRAGMA foreign_keys = OFF");
+		sqlite.exec("PRAGMA foreign_keys = OFF");
 		try {
 			await ctx.adapter.create({
-				model: "account",
+				model: "identity",
 				data: {
-					providerId: "google",
+					userId: "missing-identity-owner",
 					issuer: "https://accounts.google.com",
 					providerAccountId,
-					userId: "missing-account-owner",
 					createdAt: new Date(),
 					updatedAt: new Date(),
 				},
 			});
 		} finally {
-			database.exec("PRAGMA foreign_keys = ON");
+			sqlite.exec("PRAGMA foreign_keys = ON");
 		}
 
 		server.use(
@@ -1937,7 +1944,7 @@ describe("oauth2 - orphaned account identity", () => {
 					email,
 					email_verified: true,
 					name: "Existing User",
-					picture: "https://example.com/photo.jpg",
+					picture: "https://example.com/avatar.jpg",
 					exp: 1234567890,
 					sub: providerAccountId,
 					iat: 1234567890,
@@ -1950,9 +1957,10 @@ describe("oauth2 - orphaned account identity", () => {
 					given_name: "Existing",
 					family_name: "User",
 				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
 				return HttpResponse.json({
 					access_token: "google-access-token",
-					id_token: await signJWT(profile, DEFAULT_SECRET),
+					id_token: idToken,
 				});
 			}),
 		);
@@ -1961,12 +1969,12 @@ describe("oauth2 - orphaned account identity", () => {
 		const signIn = await client.signIn.social({
 			provider: "google",
 			callbackURL: "/",
-			fetchOptions: { onSuccess: cookieSetter(headers) },
+			fetchOptions: { onSuccess: setCookieToHeader(headers) },
 		});
 		const state = new URL(signIn.data!.url!).searchParams.get("state") || "";
 		let redirectLocation = "";
 		await client.$fetch("/callback/google", {
-			query: { state, code: "test_code" },
+			query: { state, code: "test-code" },
 			method: "GET",
 			headers,
 			onError(context) {
@@ -1976,12 +1984,11 @@ describe("oauth2 - orphaned account identity", () => {
 		});
 
 		expect(redirectLocation).toContain("error=unable_to_link_account");
-		const userAccounts = await ctx.adapter.findMany<{ providerId: string }>({
-			model: "account",
-			where: [{ field: "userId", value: data!.user.id }],
-		});
+		const accounts = await ctx.internalAdapter.listUserAccounts(
+			existingUser.id,
+		);
 		expect(
-			userAccounts.some((account) => account.providerId === "google"),
+			accounts.some(({ account }) => account.providerId === "google"),
 		).toBe(false);
 	});
 });
@@ -2064,13 +2071,13 @@ describe("oauth2 - providers without email", async () => {
 			expect(providerInfo?.user).toMatchObject({
 				id: "mapped-profile-id",
 			});
-			const originalAccountSubject = discordProvider.accountSubject;
+			const originalIdentitySubject = discordProvider.identitySubject;
 			assert(
-				typeof originalAccountSubject === "function",
+				typeof originalIdentitySubject === "function",
 				"Discord should resolve its subject from the raw profile",
 			);
-			const accountSubject = vi.fn(originalAccountSubject);
-			discordProvider.accountSubject = accountSubject;
+			const identitySubject = vi.fn(originalIdentitySubject);
+			discordProvider.identitySubject = identitySubject;
 
 			const oAuthHeaders = new Headers();
 			const signInRes = await client.signIn.social({
@@ -2093,7 +2100,7 @@ describe("oauth2 - providers without email", async () => {
 					cookieSetter(sessionHeaders)(context);
 				},
 			});
-			expect(accountSubject).toHaveBeenCalledWith(
+			expect(identitySubject).toHaveBeenCalledWith(
 				expect.objectContaining({
 					profile: expect.objectContaining({ id: providerAccountId }),
 				}),
@@ -2103,15 +2110,14 @@ describe("oauth2 - providers without email", async () => {
 			});
 			expect(session.data?.user.email).toBe(email);
 
-			const account = await ctx.adapter.findOne<{
-				providerAccountId: string;
-				providerId: string;
-			}>({
-				model: "account",
-				where: [
-					{ field: "providerAccountId", value: providerAccountId },
-					{ field: "providerId", value: "discord" },
-				],
+			const identity = await ctx.internalAdapter.findIdentityByKey({
+				issuer: "local:discord",
+				providerAccountId,
+			});
+			assert(identity, "Discord identity should use the raw profile subject");
+			const account = await ctx.internalAdapter.findAccountByKey({
+				identityId: identity.id,
+				providerInstanceId: "discord",
 			});
 			expect(account).not.toBeNull();
 		});
@@ -2171,16 +2177,12 @@ describe("oauth2 - providers without email", async () => {
 			expect(user).toBeTruthy();
 			expect(user?.email).toBe(synthesizedEmail);
 
-			const accounts = await ctx.adapter.findMany<{
-				providerId: string;
-				providerAccountId: string;
-			}>({
-				model: "account",
-				where: [{ field: "userId", value: user!.id }],
-			});
-			const discordAccount = accounts.find((a) => a.providerId === "discord");
+			const accounts = await ctx.internalAdapter.listUserAccounts(user!.id);
+			const discordAccount = accounts.find(
+				({ account }) => account.providerId === "discord",
+			);
 			expect(discordAccount).toBeTruthy();
-			expect(discordAccount?.providerAccountId).toBe(discordId);
+			expect(discordAccount?.identity.providerAccountId).toBe(discordId);
 		});
 	});
 
@@ -2227,7 +2229,7 @@ describe("oauth2 - providers without email", async () => {
 /**
  * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-g38m-r43w-p2q7
  */
-describe("oauth2 - accountLinking.requireLocalEmailVerified: false opt-out", async () => {
+describe("oauth2 - verified local ownership for implicit linking", async () => {
 	const { auth, client, cookieSetter } = await getTestInstance({
 		socialProviders: {
 			google: {
@@ -2241,7 +2243,6 @@ describe("oauth2 - accountLinking.requireLocalEmailVerified: false opt-out", asy
 			accountLinking: {
 				enabled: true,
 				trustedProviders: ["google"],
-				requireLocalEmailVerified: false,
 			},
 		},
 	});
@@ -2296,7 +2297,7 @@ describe("oauth2 - accountLinking.requireLocalEmailVerified: false opt-out", asy
 		});
 	}
 
-	it("links the account when local user is unverified and the option opts out", async () => {
+	it("rejects a verified provider identity for an unverified local user", async () => {
 		mockEmail = "opt-out@example.com";
 		mockEmailVerified = true;
 		const signUpRes = await client.signUp.email({
@@ -2308,22 +2309,16 @@ describe("oauth2 - accountLinking.requireLocalEmailVerified: false opt-out", asy
 
 		await linkGoogleAccount();
 
-		const accounts = await ctx.adapter.findMany<{
-			providerId: string;
-			userId: string;
-		}>({
-			model: "account",
-			where: [{ field: "userId", value: userId }],
-		});
-		expect(accounts.some((a) => a.providerId === "google")).toBe(true);
+		const accounts = await ctx.internalAdapter.listUserAccounts(userId);
+		expect(
+			accounts.some(({ account }) => account.providerId === "google"),
+		).toBe(false);
 
-		// The legacy emailVerified-promotion path is reachable when the gate is
-		// opted out, so the IdP's verified email lifts the local row.
-		const promoted = await ctx.adapter.findOne<User>({
+		const localUser = await ctx.adapter.findOne<User>({
 			model: "user",
 			where: [{ field: "id", value: userId }],
 		});
-		expect(promoted?.emailVerified).toBe(true);
+		expect(localUser?.emailVerified).toBe(false);
 	});
 });
 /**

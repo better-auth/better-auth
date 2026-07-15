@@ -1,11 +1,21 @@
 import { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
 import {
+	ATOMIC_WRITES_UNSUPPORTED,
 	runWithEndpointContext,
 	runWithTransaction,
 } from "@better-auth/core/context";
 import type { SecondaryStorage } from "@better-auth/core/db";
+import type {
+	AtomicWriteOperation,
+	AtomicWriteResult,
+	DBAdapter,
+} from "@better-auth/core/db/adapter";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
+import type { MemoryDB } from "@better-auth/memory-adapter";
+import { memoryAdapter } from "@better-auth/memory-adapter";
+import { Kysely } from "kysely";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { betterAuth } from "../auth/full";
 import { init } from "../context/init";
@@ -15,6 +25,7 @@ import type {
 	BetterAuthPlugin,
 	Session,
 	User,
+	UserProvisioningSource,
 } from "../types";
 import { getMigrations } from "./get-migration";
 
@@ -50,12 +61,172 @@ function createStringSecondaryStorage(
 	};
 }
 
+function decorateAdapterWithAtomicWrites<Options extends BetterAuthOptions>(
+	adapter: DBAdapter<Options>,
+	database: DatabaseSync,
+	options: { failAtOperationIndex?: number | undefined } = {},
+) {
+	const submittedBatches: Array<readonly AtomicWriteOperation[]> = [];
+	const injectedFailure = new Error("injected atomic write failure");
+	let commitQueue: Promise<void> = Promise.resolve();
+
+	const commitOperations = async (
+		operations: readonly AtomicWriteOperation[],
+	): Promise<AtomicWriteResult[]> => {
+		submittedBatches.push([...operations]);
+		database.exec("BEGIN IMMEDIATE");
+		try {
+			const committedResults: AtomicWriteResult[] = [];
+			for (const [operationIndex, operation] of operations.entries()) {
+				if (operationIndex === options.failAtOperationIndex) {
+					throw injectedFailure;
+				}
+				switch (operation.type) {
+					case "create": {
+						const createdRecord = await adapter.create<
+							Record<string, unknown>,
+							Record<string, unknown>
+						>({
+							model: operation.model,
+							data: operation.data,
+							forceAllowId: operation.forceAllowId,
+						});
+						const recordId = createdRecord.id ?? operation.data.id;
+						if (typeof recordId !== "string" && typeof recordId !== "number") {
+							throw new Error(
+								`Atomic test adapter could not read the created ${operation.model} id.`,
+							);
+						}
+						const committedRecord = await adapter.findOne<
+							Record<string, unknown>
+						>({
+							model: operation.model,
+							where: [{ field: "id", value: recordId }],
+						});
+						if (!committedRecord) {
+							throw new Error(
+								`Atomic test adapter could not reload the created ${operation.model} record.`,
+							);
+						}
+						committedResults.push({
+							type: "create",
+							record: committedRecord,
+						});
+						break;
+					}
+					case "update": {
+						const updatedRecord = await adapter.update<Record<string, unknown>>(
+							{
+								model: operation.model,
+								where: operation.where,
+								update: operation.update,
+							},
+						);
+						committedResults.push({
+							type: "update",
+							record: updatedRecord,
+						});
+						break;
+					}
+					case "delete": {
+						const recordToDelete = await adapter.findOne<
+							Record<string, unknown>
+						>({
+							model: operation.model,
+							where: operation.where,
+						});
+						await adapter.delete({
+							model: operation.model,
+							where: operation.where,
+						});
+						committedResults.push({
+							type: "delete",
+							deletedCount: recordToDelete ? 1 : 0,
+						});
+						break;
+					}
+					case "deleteMany": {
+						const deletedCount = await adapter.deleteMany({
+							model: operation.model,
+							where: operation.where,
+						});
+						committedResults.push({ type: "deleteMany", deletedCount });
+						break;
+					}
+				}
+			}
+			database.exec("COMMIT");
+			return committedResults;
+		} catch (error) {
+			database.exec("ROLLBACK");
+			throw error;
+		}
+	};
+
+	adapter.commitAtomicWrites = (operations) => {
+		const pendingCommit = commitQueue.then(() => commitOperations(operations));
+		commitQueue = pendingCommit.then(
+			() => undefined,
+			() => undefined,
+		);
+		return pendingCommit;
+	};
+
+	return { injectedFailure, submittedBatches };
+}
+
+async function createAtomicWriteTestContext(
+	options: Omit<BetterAuthOptions, "database"> = {},
+	decoratorOptions: { failAtOperationIndex?: number | undefined } = {},
+) {
+	const database = new DatabaseSync(":memory:");
+	const kysely = new Kysely({
+		dialect: new NodeSqliteDialect({ database }),
+	});
+	const authOptions: BetterAuthOptions = {
+		...options,
+		database: { db: kysely, type: "sqlite", transaction: false },
+	};
+	await (await getMigrations(authOptions)).runMigrations();
+	database.exec("PRAGMA foreign_keys = ON");
+	const context = await init(authOptions);
+	const atomicWrites = decorateAdapterWithAtomicWrites(
+		context.adapter,
+		database,
+		decoratorOptions,
+	);
+	return { atomicWrites, context, database, kysely };
+}
+
+const provisioningRecordPlugin = {
+	id: "provisioning-record-test",
+	schema: {
+		provisioningRecord: {
+			fields: {
+				userId: { type: "string", required: true },
+				identityId: { type: "string", required: true },
+				accountId: { type: "string", required: true },
+			},
+		},
+	},
+} satisfies BetterAuthPlugin;
+
 describe("internal adapter test", async () => {
 	const map = new Map<string, string>();
 	const expirationMap = new Map<string, number>();
 	let id = 1;
 	const hookUserCreateBefore = vi.fn();
 	const hookUserCreateAfter = vi.fn();
+	const hookIdentityCreateBefore = vi.fn();
+	const hookIdentityCreateAfter = vi.fn();
+	const hookIdentityDeleteBefore = vi.fn();
+	const hookIdentityDeleteAfter = vi.fn();
+	const hookAccountCreateBefore = vi.fn();
+	const hookAccountCreateAfter = vi.fn();
+	const hookAccountUpdateBefore = vi.fn();
+	const hookAccountUpdateAfter = vi.fn();
+	const hookAccountDeleteBefore = vi.fn();
+	const hookAccountDeleteAfter = vi.fn();
 	const hookVerificationCreateBefore = vi.fn();
 	const hookVerificationCreateAfter = vi.fn();
 	const hookVerificationDeleteBefore = vi.fn();
@@ -91,6 +262,52 @@ describe("internal adapter test", async () => {
 					async after(user, context) {
 						hookUserCreateAfter(user, context);
 						return;
+					},
+				},
+			},
+			identity: {
+				create: {
+					async before(identity, context) {
+						hookIdentityCreateBefore(identity, context);
+						return { data: identity };
+					},
+					async after(identity, context) {
+						hookIdentityCreateAfter(identity, context);
+					},
+				},
+				delete: {
+					async before(identity, context) {
+						hookIdentityDeleteBefore(identity, context);
+					},
+					async after(identity, context) {
+						hookIdentityDeleteAfter(identity, context);
+					},
+				},
+			},
+			account: {
+				create: {
+					async before(account, context) {
+						hookAccountCreateBefore(account, context);
+						return { data: account };
+					},
+					async after(account, context) {
+						hookAccountCreateAfter(account, context);
+					},
+				},
+				update: {
+					async before(account, context) {
+						return hookAccountUpdateBefore(account, context);
+					},
+					async after(account, context) {
+						hookAccountUpdateAfter(account, context);
+					},
+				},
+				delete: {
+					async before(account, context) {
+						hookAccountDeleteBefore(account, context);
+					},
+					async after(account, context) {
+						hookAccountDeleteAfter(account, context);
 					},
 				},
 			},
@@ -164,24 +381,30 @@ describe("internal adapter test", async () => {
 	const authContext = await init(opts);
 	const internalAdapter = authContext.internalAdapter;
 
-	it("should create oauth user with custom generate id", async () => {
-		const user = await internalAdapter.createOAuthUser(
+	it("creates a user with one identity and one account", async () => {
+		const created = await internalAdapter.createUserWithAccount(
 			{
 				email: "email@email.com",
 				name: "name",
 				emailVerified: false,
 			},
 			{
-				providerId: "provider",
-				issuer: "local:provider",
-				providerAccountId: "account",
-				accessTokenExpiresAt: new Date(),
-				refreshTokenExpiresAt: new Date(),
-				createdAt: new Date(),
-				updatedAt: new Date(),
+				source: { method: "oauth", oauth: { providerId: "provider" } },
+				buildAuthentication: () => ({
+					identity: {
+						issuer: "local:provider",
+						providerAccountId: "account",
+					},
+					account: {
+						providerId: "provider",
+						providerInstanceId: "provider",
+						accessTokenExpiresAt: new Date(),
+						refreshTokenExpiresAt: new Date(),
+					},
+				}),
 			},
 		);
-		expect(user).toMatchObject({
+		expect(created).toMatchObject({
 			user: {
 				id: "1",
 				name: "name",
@@ -191,26 +414,48 @@ describe("internal adapter test", async () => {
 				createdAt: expect.any(Date),
 				updatedAt: expect.any(Date),
 			},
-			account: {
+			identity: {
 				id: "2",
-				userId: expect.any(String),
-				providerId: "provider",
+				userId: "1",
 				issuer: "local:provider",
 				providerAccountId: "account",
+				createdAt: expect.any(Date),
+				updatedAt: expect.any(Date),
+			},
+			account: {
+				id: "3",
+				identityId: "2",
+				providerId: "provider",
+				providerInstanceId: "provider",
 				accessToken: null,
 				refreshToken: null,
 				refreshTokenExpiresAt: expect.any(Date),
 				accessTokenExpiresAt: expect.any(Date),
 			},
 		});
-		expect(user?.user.id).toBe(user?.account.userId);
+		await expect(
+			internalAdapter.findUserByIdentityKey({
+				issuer: created.identity.issuer,
+				providerAccountId: created.identity.providerAccountId,
+			}),
+		).resolves.toEqual({ user: created.user, identity: created.identity });
+		await expect(
+			internalAdapter.findAccountByKey({
+				identityId: created.identity.id,
+				providerInstanceId: created.account.providerInstanceId,
+			}),
+		).resolves.toEqual(created.account);
 		expect(pluginHookUserCreateAfter).toHaveBeenCalledOnce();
 		expect(pluginHookUserCreateBefore).toHaveBeenCalledOnce();
 		expect(hookUserCreateAfter).toHaveBeenCalledOnce();
 		expect(hookUserCreateBefore).toHaveBeenCalledOnce();
+		expect(hookIdentityCreateAfter).toHaveBeenCalledOnce();
+		expect(hookIdentityCreateBefore).toHaveBeenCalledOnce();
+		expect(hookAccountCreateAfter).toHaveBeenCalledOnce();
+		expect(hookAccountCreateBefore).toHaveBeenCalledOnce();
 	});
 
-	it("should abort oauth account creation when user creation is vetoed", async () => {
+	it("aborts provider account creation when user creation is vetoed", async () => {
 		const database = new DatabaseSync(":memory:");
 		const abortingOptions = {
 			...opts,
@@ -231,21 +476,82 @@ describe("internal adapter test", async () => {
 			const abortingContext = await init(abortingOptions);
 
 			await expect(
-				abortingContext.internalAdapter.createOAuthUser(
+				abortingContext.internalAdapter.createUserWithAccount(
 					{
 						email: "blocked@email.com",
 						name: "Blocked",
 						emailVerified: false,
 					},
 					{
-						providerId: "provider",
-						issuer: "local:provider",
-						providerAccountId: "account",
-						accessTokenExpiresAt: new Date(),
-						refreshTokenExpiresAt: new Date(),
+						source: { method: "oauth", oauth: { providerId: "provider" } },
+						buildAuthentication: () => ({
+							identity: {
+								issuer: "local:provider",
+								providerAccountId: "account",
+							},
+							account: {
+								providerId: "provider",
+								providerInstanceId: "provider",
+								accessTokenExpiresAt: new Date(),
+								refreshTokenExpiresAt: new Date(),
+							},
+						}),
 					},
 				),
 			).rejects.toThrow("Failed to create user");
+		} finally {
+			database.close();
+		}
+	});
+
+	it("rolls back user creation when the account hook rejects it", async () => {
+		const database = new DatabaseSync(":memory:");
+		const abortingOptions = {
+			...opts,
+			database,
+			databaseHooks: {
+				account: {
+					create: {
+						async before() {
+							return false;
+						},
+					},
+				},
+			},
+			plugins: [],
+		} satisfies BetterAuthOptions;
+		try {
+			(await getMigrations(abortingOptions)).runMigrations();
+			const abortingContext = await init(abortingOptions);
+
+			await expect(
+				abortingContext.internalAdapter.createUserWithAccount(
+					{
+						email: "rejected.provider@example.com",
+						name: "Rejected Provider User",
+						emailVerified: false,
+					},
+					{
+						source: {
+							method: "oauth",
+							oauth: { providerId: "rejected-provider" },
+						},
+						buildAuthentication: () => ({
+							identity: {
+								issuer: "https://provider.example.com",
+								providerAccountId: "rejected-subject",
+							},
+							account: {
+								providerId: "rejected-provider",
+								providerInstanceId: "rejected-provider",
+							},
+						}),
+					},
+				),
+			).rejects.toThrow("Failed to create account");
+			await expect(
+				abortingContext.internalAdapter.listUsers(),
+			).resolves.toEqual([]);
 		} finally {
 			database.close();
 		}
@@ -356,6 +662,58 @@ describe("internal adapter test", async () => {
 
 		expect(capturedAction).toBe("create-user");
 	});
+
+	it("validates users with their provisioning source", async () => {
+		let capturedSource: UserProvisioningSource & { action?: string } = {
+			method: "anonymous",
+		};
+		const { auth } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo({ source }) {
+						capturedSource = source;
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const context = await auth.$context;
+
+		await runWithEndpointContext(
+			{ context } as unknown as GenericEndpointContext,
+			async () => {
+				await context.internalAdapter.createUserWithAccount(
+					{
+						email: "validated.provider@example.com",
+						name: "Validated Provider",
+						emailVerified: true,
+					},
+					{
+						source: {
+							method: "oauth",
+							oauth: { providerId: "validated-provider" },
+						},
+						buildAuthentication: () => ({
+							identity: {
+								issuer: "https://validated-provider.example.com",
+								providerAccountId: "validated-subject",
+							},
+							account: {
+								providerId: "validated-provider",
+								providerInstanceId: "validated-provider",
+							},
+						}),
+					},
+				);
+			},
+		);
+
+		expect(capturedSource).toMatchObject({
+			action: "create-user",
+			method: "oauth",
+			oauth: { providerId: "validated-provider" },
+		});
+	});
 	it("should find session with custom userId", async () => {
 		const { client, signInWithTestUser } = await getTestInstance({
 			session: {
@@ -414,8 +772,8 @@ describe("internal adapter test", async () => {
 		});
 
 		await internalAdapter.deleteVerificationByIdentifier("test-id-1");
-		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
-		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
+		expect(hookVerificationDeleteBefore).toHaveBeenCalledTimes(2);
+		expect(hookVerificationDeleteAfter).toHaveBeenCalledTimes(2);
 	});
 
 	it("should delete verification by identifier with hooks", async () => {
@@ -430,6 +788,29 @@ describe("internal adapter test", async () => {
 		);
 		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
 		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
+	});
+
+	it("deletes every verification sharing an identifier with hooks", async () => {
+		await internalAdapter.createVerificationValue({
+			identifier: "shared-verification-id",
+			value: "first",
+			expiresAt: new Date(Date.now() + 1_000),
+		});
+		await internalAdapter.createVerificationValue({
+			identifier: "shared-verification-id",
+			value: "second",
+			expiresAt: new Date(Date.now() + 1_000),
+		});
+
+		await internalAdapter.deleteVerificationByIdentifier(
+			"shared-verification-id",
+		);
+
+		expect(hookVerificationDeleteBefore).toHaveBeenCalledTimes(2);
+		expect(hookVerificationDeleteAfter).toHaveBeenCalledTimes(2);
+		await expect(
+			internalAdapter.findVerificationValue("shared-verification-id"),
+		).resolves.toBeNull();
 	});
 
 	it("should not call adapter.delete for missing verification record (prevents Prisma P2025)", async () => {
@@ -907,38 +1288,190 @@ describe("internal adapter test", async () => {
 		expect(actualExp! - expectedExp).toBeGreaterThanOrEqual(0); // max 1s clock drift between check and set
 	});
 
-	it("should delete a single account", async () => {
+	it("deletes every matched session beyond the adapter read limit", async () => {
+		const sessionDeleteBefore = vi.fn();
+		const sessionDeleteAfter = vi.fn();
+		const database = new DatabaseSync(":memory:");
+		const bulkDeleteOptions = {
+			database,
+			databaseHooks: {
+				session: {
+					delete: {
+						before: sessionDeleteBefore,
+						after: sessionDeleteAfter,
+					},
+				},
+			},
+		} satisfies BetterAuthOptions;
+		try {
+			(await getMigrations(bulkDeleteOptions)).runMigrations();
+			const bulkDeleteContext = await init(bulkDeleteOptions);
+			const user = await bulkDeleteContext.internalAdapter.createUser(
+				{
+					name: "Bulk Session User",
+					email: "bulk.session@example.com",
+				},
+				{ method: "test" },
+			);
+			const sessionCount = 101;
+			await Promise.all(
+				Array.from({ length: sessionCount }, () =>
+					bulkDeleteContext.internalAdapter.createSession(user.id),
+				),
+			);
+			await expect(
+				bulkDeleteContext.adapter.count({
+					model: "session",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).resolves.toBe(sessionCount);
+
+			await bulkDeleteContext.internalAdapter.deleteUserSessions(user.id);
+
+			await expect(
+				bulkDeleteContext.adapter.count({
+					model: "session",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).resolves.toBe(0);
+			expect(sessionDeleteBefore).toHaveBeenCalledTimes(sessionCount);
+			expect(sessionDeleteAfter).toHaveBeenCalledTimes(sessionCount);
+		} finally {
+			database.close();
+		}
+	});
+
+	it("runs bulk delete after-hooks only for rows this caller commits", async () => {
+		const sessionDeleteBefore = vi.fn();
+		const sessionDeleteAfter = vi.fn();
+		const database = new DatabaseSync(":memory:");
+		let competingAdapter: DBAdapter | undefined;
+		let competingSessionId: string | undefined;
+		let hasCompetingDeleteRun = false;
+		const concurrentDeleteOptions = {
+			database,
+			databaseHooks: {
+				session: {
+					delete: {
+						async before(session) {
+							sessionDeleteBefore(session);
+							if (
+								hasCompetingDeleteRun ||
+								!competingAdapter ||
+								!competingSessionId
+							) {
+								return;
+							}
+							hasCompetingDeleteRun = true;
+							await competingAdapter.consumeOne({
+								model: "session",
+								where: [{ field: "id", value: competingSessionId }],
+							});
+						},
+						async after(session) {
+							sessionDeleteAfter(session);
+						},
+					},
+				},
+			},
+		} satisfies BetterAuthOptions;
+		try {
+			(await getMigrations(concurrentDeleteOptions)).runMigrations();
+			const concurrentDeleteContext = await init(concurrentDeleteOptions);
+			competingAdapter = concurrentDeleteContext.adapter;
+			const user = await concurrentDeleteContext.internalAdapter.createUser(
+				{
+					name: "Concurrent Bulk Session User",
+					email: "concurrent.bulk.session@example.com",
+				},
+				{ method: "test" },
+			);
+			const sessions = await Promise.all(
+				Array.from({ length: 3 }, () =>
+					concurrentDeleteContext.internalAdapter.createSession(user.id),
+				),
+			);
+			competingSessionId = sessions.at(-1)?.id;
+
+			await concurrentDeleteContext.internalAdapter.deleteUserSessions(user.id);
+
+			expect(sessionDeleteBefore).toHaveBeenCalledTimes(sessions.length);
+			expect(sessionDeleteAfter).toHaveBeenCalledTimes(sessions.length - 1);
+			expect(
+				sessionDeleteAfter.mock.calls.map(([session]) => session.id),
+			).not.toContain(competingSessionId);
+			await expect(
+				concurrentDeleteContext.adapter.count({
+					model: "session",
+					where: [{ field: "userId", value: user.id }],
+				}),
+			).resolves.toBe(0);
+		} finally {
+			database.close();
+		}
+	});
+
+	it("links provider configurations to one stable identity", async () => {
 		const user = await internalAdapter.createUser(
 			{
-				name: "Account Delete User",
-				email: "account.delete@example.com",
+				name: "Provider Alias User",
+				email: "provider.alias@example.com",
 			},
 			{ method: "test" },
 		);
-
-		const account = await internalAdapter.createAccount({
-			userId: user.id,
-			providerId: "test-provider",
+		const identityKey = {
 			issuer: "https://issuer.example.com",
-			providerAccountId: "test-account-id-1",
-		});
+			providerAccountId: "provider-subject",
+		};
 
-		let foundAccount = await internalAdapter.findAccountByKey({
-			issuer: account.issuer,
-			providerAccountId: account.providerAccountId,
+		const webAccount = await internalAdapter.linkAccount(user.id, identityKey, {
+			providerId: "workforce-web",
+			providerInstanceId: "workforce-web",
+			accessToken: "web-token",
 		});
-		expect(foundAccount).toBeDefined();
+		const mobileAccount = await internalAdapter.linkAccount(
+			user.id,
+			identityKey,
+			{
+				providerId: "workforce-mobile",
+				providerInstanceId: "workforce-mobile",
+				accessToken: "mobile-token",
+			},
+		);
+		const repeatedWebAccount = await internalAdapter.linkAccount(
+			user.id,
+			identityKey,
+			{
+				providerId: "workforce-web",
+				providerInstanceId: "workforce-web",
+				accessToken: "replacement-token",
+			},
+		);
 
-		await internalAdapter.deleteAccount(account.id);
-
-		foundAccount = await internalAdapter.findAccountByKey({
-			issuer: account.issuer,
-			providerAccountId: account.providerAccountId,
+		expect(mobileAccount.identity.id).toBe(webAccount.identity.id);
+		expect(mobileAccount.account.id).not.toBe(webAccount.account.id);
+		expect(repeatedWebAccount).toEqual(webAccount);
+		const linkedAccounts = await internalAdapter.listUserAccounts(user.id);
+		expect(linkedAccounts).toHaveLength(2);
+		expect(linkedAccounts).toEqual(
+			expect.arrayContaining([webAccount, mobileAccount]),
+		);
+		await expect(
+			internalAdapter.findUserByEmail(user.email, { includeAccounts: true }),
+		).resolves.toEqual({
+			user,
+			accounts: expect.arrayContaining([webAccount, mobileAccount]),
 		});
-		expect(foundAccount).toBeNull();
+		expect(hookIdentityCreateBefore).toHaveBeenCalledOnce();
+		expect(hookIdentityCreateAfter).toHaveBeenCalledOnce();
+		expect(hookAccountCreateBefore).toHaveBeenCalledTimes(2);
+		expect(hookAccountCreateAfter).toHaveBeenCalledTimes(2);
+		await expect(
+			internalAdapter.findAccountWithIdentityById(mobileAccount.account.id),
+		).resolves.toEqual(mobileAccount);
 	});
 
-	it("finds an account owner by the exact account key", async () => {
+	it("keeps identity ownership and account keys immutable", async () => {
 		const firstUser = await internalAdapter.createUser(
 			{
 				name: "First Account Key User",
@@ -954,86 +1487,213 @@ describe("internal adapter test", async () => {
 			{ method: "test" },
 		);
 		const providerAccountId = "shared-provider-subject";
-		const firstAccount = await internalAdapter.createAccount({
-			userId: firstUser.id,
-			providerId: "first-provider-configuration",
+		const firstIdentityKey = {
 			issuer: "https://first-issuer.example.com",
 			providerAccountId,
-		});
-		const secondAccount = await internalAdapter.createAccount({
-			userId: secondUser.id,
-			providerId: "second-provider-configuration",
-			issuer: "https://second-issuer.example.com",
-			providerAccountId,
-		});
-		await expect(
-			internalAdapter.createAccount({
-				userId: secondUser.id,
-				providerId: "another-provider-configuration",
-				issuer: firstAccount.issuer,
+		};
+		const firstLink = await internalAdapter.linkAccount(
+			firstUser.id,
+			firstIdentityKey,
+			{
+				providerId: "first-provider-configuration",
+				providerInstanceId: "first-provider-configuration",
+			},
+		);
+		const secondLink = await internalAdapter.linkAccount(
+			secondUser.id,
+			{
+				issuer: "https://second-issuer.example.com",
 				providerAccountId,
-			}),
-		).rejects.toThrow();
+			},
+			{
+				providerId: "second-provider-configuration",
+				providerInstanceId: "second-provider-configuration",
+			},
+		);
 
-		await internalAdapter.updateAccount(firstAccount.id, {
-			providerId: "renamed-provider-configuration",
+		await expect(
+			internalAdapter.linkAccount(secondUser.id, firstIdentityKey, {
+				providerId: "another-provider-configuration",
+				providerInstanceId: "another-provider-configuration",
+			}),
+		).rejects.toMatchObject({
+			body: { code: "identity_already_linked" },
 		});
 
 		await expect(
 			internalAdapter.findAccountByKey({
-				issuer: firstAccount.issuer,
+				identityId: firstLink.identity.id,
+				providerInstanceId: firstLink.account.providerInstanceId,
+			}),
+		).resolves.toEqual(firstLink.account);
+		await expect(
+			internalAdapter.findUserByIdentityKey({
+				issuer: secondLink.identity.issuer,
 				providerAccountId,
 			}),
-		).resolves.toMatchObject({
-			id: firstAccount.id,
-			providerId: "renamed-provider-configuration",
+		).resolves.toEqual({
+			user: secondUser,
+			identity: secondLink.identity,
 		});
 		await expect(
-			internalAdapter.findAccountOwnerByKey({
-				issuer: secondAccount.issuer,
-				providerAccountId,
-			}),
-		).resolves.toMatchObject({
-			kind: "owned",
-			user: { id: secondUser.id },
-			account: {
-				id: secondAccount.id,
-				providerId: "second-provider-configuration",
-			},
-		});
-		await expect(
-			internalAdapter.findAccountOwnerByKey({
+			internalAdapter.findUserByIdentityKey({
 				issuer: "https://missing-issuer.example.com",
 				providerAccountId,
 			}),
 		).resolves.toBeNull();
+
+		const immutableUpdate = {
+			providerId: "renamed-provider-configuration",
+		} as unknown as Parameters<typeof internalAdapter.updateAccount>[1];
+		await expect(
+			internalAdapter.updateAccount(firstLink.account.id, immutableUpdate),
+		).rejects.toMatchObject({
+			body: { code: "immutable_account_field" },
+		});
 	});
 
-	it("reports an account whose owner is missing", async () => {
-		const database = opts.database as DatabaseSync;
-		const account = await (async () => {
-			database.exec("PRAGMA foreign_keys = OFF");
-			try {
-				return await internalAdapter.createAccount({
-					userId: "missing-account-owner",
-					providerId: "orphaned-provider",
-					issuer: "https://issuer.example.com",
-					providerAccountId: "orphaned-subject",
-				});
-			} finally {
-				database.exec("PRAGMA foreign_keys = ON");
-			}
-		})();
+	it("reports an identity whose owner is missing", async () => {
+		const identityKey = {
+			issuer: "https://orphaned-identity.example.com",
+			providerAccountId: "orphaned-subject",
+		};
+		opts.database.exec("PRAGMA foreign_keys = OFF");
+		try {
+			const identity = await authContext.adapter.create({
+				model: "identity",
+				data: {
+					userId: "missing-identity-owner",
+					...identityKey,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+			await expect(
+				internalAdapter.findIdentityOwnerByKey(identityKey),
+			).resolves.toMatchObject({
+				kind: "orphaned",
+				identity: { id: identity.id, userId: "missing-identity-owner" },
+			});
+		} finally {
+			opts.database.exec("PRAGMA foreign_keys = ON");
+		}
+	});
+
+	it("maps a concurrent identity ownership conflict to a typed API error", async () => {
+		const database = new DatabaseSync(":memory:");
+		const kysely = new Kysely({
+			dialect: new NodeSqliteDialect({ database }),
+		});
+		let identityCreateCount = 0;
+		let releaseIdentityCreates: () => void = () => {};
+		const bothIdentityCreatesStarted = new Promise<void>((resolve) => {
+			releaseIdentityCreates = resolve;
+		});
+		const raceOptions = {
+			database: {
+				db: kysely,
+				type: "sqlite",
+				transaction: false,
+			},
+			databaseHooks: {
+				identity: {
+					create: {
+						async before(identity) {
+							identityCreateCount += 1;
+							if (identityCreateCount === 2) releaseIdentityCreates();
+							await bothIdentityCreatesStarted;
+							return { data: identity };
+						},
+					},
+				},
+			},
+		} satisfies BetterAuthOptions;
+		try {
+			await (await getMigrations(raceOptions)).runMigrations();
+			const raceContext = await init(raceOptions);
+			decorateAdapterWithAtomicWrites(raceContext.adapter, database);
+			const firstUser = await raceContext.internalAdapter.createUser(
+				{
+					name: "First Concurrent Identity User",
+					email: "first.concurrent.identity@example.com",
+				},
+				{ method: "test" },
+			);
+			const secondUser = await raceContext.internalAdapter.createUser(
+				{
+					name: "Second Concurrent Identity User",
+					email: "second.concurrent.identity@example.com",
+				},
+				{ method: "test" },
+			);
+			const identityKey = {
+				issuer: "https://concurrent-identity.example.com",
+				providerAccountId: "concurrent-subject",
+			};
+
+			const linkResults = await Promise.allSettled([
+				raceContext.internalAdapter.linkAccount(firstUser.id, identityKey, {
+					providerId: "first-concurrent-provider",
+					providerInstanceId: "first-concurrent-provider",
+				}),
+				raceContext.internalAdapter.linkAccount(secondUser.id, identityKey, {
+					providerId: "second-concurrent-provider",
+					providerInstanceId: "second-concurrent-provider",
+				}),
+			]);
+
+			expect(
+				linkResults.filter(({ status }) => status === "fulfilled"),
+			).toHaveLength(1);
+			const rejectedLink = linkResults.find(
+				(result) => result.status === "rejected",
+			);
+			expect(rejectedLink).toMatchObject({
+				status: "rejected",
+				reason: {
+					status: "CONFLICT",
+					body: { code: "identity_already_linked" },
+				},
+			});
+		} finally {
+			await kysely.destroy();
+		}
+	});
+
+	it("returns null when an account update hook rejects the change", async () => {
+		const user = await internalAdapter.createUser(
+			{
+				name: "Rejected Account Update",
+				email: "rejected.account.update@example.com",
+			},
+			{ method: "test" },
+		);
+		const linked = await internalAdapter.linkAccount(
+			user.id,
+			{
+				issuer: "https://update-hook.example.com",
+				providerAccountId: "update-hook-subject",
+			},
+			{
+				providerId: "update-hook-provider",
+				providerInstanceId: "update-hook-provider",
+				accessToken: "original-token",
+			},
+		);
+		hookAccountUpdateBefore.mockResolvedValueOnce(false);
 
 		await expect(
-			internalAdapter.findAccountOwnerByKey({
-				issuer: account.issuer,
-				providerAccountId: account.providerAccountId,
+			internalAdapter.updateAccount(linked.account.id, {
+				accessToken: "rejected-token",
 			}),
-		).resolves.toMatchObject({
-			kind: "orphaned",
-			account: { id: account.id, userId: "missing-account-owner" },
-		});
+		).resolves.toBeNull();
+		await expect(
+			internalAdapter.findAccountByKey({
+				identityId: linked.identity.id,
+				providerInstanceId: linked.account.providerInstanceId,
+			}),
+		).resolves.toEqual(linked.account);
+		expect(hookAccountUpdateAfter).not.toHaveBeenCalled();
 	});
 
 	it("finds the same credential account after the user email changes", async () => {
@@ -1044,26 +1704,41 @@ describe("internal adapter test", async () => {
 			},
 			{ method: "test" },
 		);
-		const account = await internalAdapter.createAccount({
-			userId: user.id,
-			providerId: "credential",
-			issuer: "local:credential",
-			providerAccountId: user.id,
-			password: "password-hash",
-		});
+		const { account } = await internalAdapter.linkAccount(
+			user.id,
+			{
+				issuer: "local:credential",
+				providerAccountId: user.id,
+			},
+			{
+				providerId: "credential",
+				providerInstanceId: "credential",
+				password: "password-hash",
+			},
+		);
 
 		await expect(
 			internalAdapter.findCredentialAccount(user.id),
-		).resolves.toMatchObject({ id: account.id, providerAccountId: user.id });
+		).resolves.toEqual(account);
+		await internalAdapter.updatePassword(user.id, "new-password-hash");
+		await expect(
+			internalAdapter.findCredentialAccount(user.id),
+		).resolves.toMatchObject({
+			id: account.id,
+			password: "new-password-hash",
+		});
 		await internalAdapter.updateUser(user.id, {
 			email: "changed.stable.credential@example.com",
 		});
 		await expect(
 			internalAdapter.findCredentialAccount(user.id),
-		).resolves.toMatchObject({ id: account.id, providerAccountId: user.id });
+		).resolves.toMatchObject({
+			id: account.id,
+			password: "new-password-hash",
+		});
 	});
 
-	it("should delete multiple accounts for a user", async () => {
+	it("preserves identities when accounts are unlinked and removes them with their user", async () => {
 		const user = await internalAdapter.createUser(
 			{
 				name: "Accounts Delete User",
@@ -1071,28 +1746,1389 @@ describe("internal adapter test", async () => {
 			},
 			{ method: "test" },
 		);
+		const sharedIdentityKey = {
+			issuer: "https://shared-issuer.example.com",
+			providerAccountId: "shared-subject",
+		};
+		const firstLink = await internalAdapter.linkAccount(
+			user.id,
+			sharedIdentityKey,
+			{ providerId: "shared-web", providerInstanceId: "shared-web" },
+		);
+		const secondLink = await internalAdapter.linkAccount(
+			user.id,
+			sharedIdentityKey,
+			{ providerId: "shared-mobile", providerInstanceId: "shared-mobile" },
+		);
+		const independentLink = await internalAdapter.linkAccount(
+			user.id,
+			{
+				issuer: "https://independent-issuer.example.com",
+				providerAccountId: "independent-subject",
+			},
+			{ providerId: "independent", providerInstanceId: "independent" },
+		);
 
-		await internalAdapter.createAccount({
-			userId: user.id,
-			providerId: "test-provider-1",
-			issuer: "local:test-provider-1",
-			providerAccountId: "test-account-id-2",
+		await internalAdapter.deleteAccount(firstLink.account.id);
+		expect(hookAccountDeleteBefore).toHaveBeenCalledOnce();
+		expect(hookAccountDeleteAfter).toHaveBeenCalledOnce();
+		expect(hookIdentityDeleteBefore).not.toHaveBeenCalled();
+		await expect(
+			internalAdapter.findIdentityByKey(sharedIdentityKey),
+		).resolves.toEqual(secondLink.identity);
+
+		await internalAdapter.deleteAccount(secondLink.account.id);
+		expect(hookAccountDeleteBefore).toHaveBeenCalledTimes(2);
+		expect(hookAccountDeleteAfter).toHaveBeenCalledTimes(2);
+		expect(hookIdentityDeleteBefore).not.toHaveBeenCalled();
+		expect(hookIdentityDeleteAfter).not.toHaveBeenCalled();
+		await expect(
+			internalAdapter.findIdentityByKey(sharedIdentityKey),
+		).resolves.toEqual(firstLink.identity);
+		await expect(internalAdapter.listUserAccounts(user.id)).resolves.toEqual([
+			independentLink,
+		]);
+
+		await internalAdapter.deleteUserAccounts(user.id);
+		expect(hookAccountDeleteBefore).toHaveBeenCalledTimes(3);
+		expect(hookAccountDeleteAfter).toHaveBeenCalledTimes(3);
+		expect(hookIdentityDeleteBefore).toHaveBeenCalledTimes(2);
+		expect(hookIdentityDeleteAfter).toHaveBeenCalledTimes(2);
+		await expect(internalAdapter.listUserAccounts(user.id)).resolves.toEqual(
+			[],
+		);
+		await expect(
+			internalAdapter.findIdentityByKey({
+				issuer: independentLink.identity.issuer,
+				providerAccountId: independentLink.identity.providerAccountId,
+			}),
+		).resolves.toBeNull();
+	});
+
+	it("deletes only accounts for the exact provider instance and preserves their identities", async () => {
+		const firstUser = await internalAdapter.createUser(
+			{
+				name: "First Provider Alias User",
+				email: "first.provider.alias@example.com",
+			},
+			{ method: "test" },
+		);
+		const secondUser = await internalAdapter.createUser(
+			{
+				name: "Second Provider Alias User",
+				email: "second.provider.alias@example.com",
+			},
+			{ method: "test" },
+		);
+		const firstIdentityKey = {
+			issuer: "https://first-provider-alias.example.com",
+			providerAccountId: "first-provider-subject",
+		};
+		const secondIdentityKey = {
+			issuer: "https://second-provider-alias.example.com",
+			providerAccountId: "second-provider-subject",
+		};
+		const firstTarget = await internalAdapter.linkAccount(
+			firstUser.id,
+			firstIdentityKey,
+			{
+				providerId: "enterprise-sso",
+				providerInstanceId: "sso:provider:target",
+			},
+		);
+		const secondTarget = await internalAdapter.linkAccount(
+			secondUser.id,
+			secondIdentityKey,
+			{
+				providerId: "enterprise-sso",
+				providerInstanceId: "sso:provider:target",
+			},
+		);
+		const replacementInstance = await internalAdapter.linkAccount(
+			firstUser.id,
+			firstIdentityKey,
+			{
+				providerId: "enterprise-sso",
+				providerInstanceId: "sso:provider:replacement",
+			},
+		);
+		const unrelatedAccount = await internalAdapter.linkAccount(
+			secondUser.id,
+			secondIdentityKey,
+			{
+				providerId: "unrelated-provider",
+				providerInstanceId: "unrelated-provider",
+			},
+		);
+
+		await internalAdapter.deleteAccountsByProviderInstanceId(
+			"sso:provider:target",
+		);
+
+		expect(hookAccountDeleteBefore).toHaveBeenCalledTimes(2);
+		expect(hookAccountDeleteAfter).toHaveBeenCalledTimes(2);
+		expect(
+			hookAccountDeleteBefore.mock.calls.map(([account]) => account.id),
+		).toEqual(
+			expect.arrayContaining([firstTarget.account.id, secondTarget.account.id]),
+		);
+		await expect(
+			internalAdapter.findAccountWithIdentityById(firstTarget.account.id),
+		).resolves.toBeNull();
+		await expect(
+			internalAdapter.findAccountWithIdentityById(secondTarget.account.id),
+		).resolves.toBeNull();
+		await expect(
+			internalAdapter.findAccountWithIdentityById(
+				replacementInstance.account.id,
+			),
+		).resolves.toEqual(replacementInstance);
+		await expect(
+			internalAdapter.findAccountWithIdentityById(unrelatedAccount.account.id),
+		).resolves.toEqual(unrelatedAccount);
+		await expect(
+			internalAdapter.findIdentityByKey(firstIdentityKey),
+		).resolves.toEqual(firstTarget.identity);
+		await expect(
+			internalAdapter.findIdentityByKey(secondIdentityKey),
+		).resolves.toEqual(secondTarget.identity);
+		await expect(internalAdapter.findUserById(firstUser.id)).resolves.toEqual(
+			firstUser,
+		);
+		await expect(internalAdapter.findUserById(secondUser.id)).resolves.toEqual(
+			secondUser,
+		);
+	});
+
+	it("surfaces account delete hook rejection from every deletion entry point", async () => {
+		const database = new DatabaseSync(":memory:");
+		const rejectingOptions = {
+			database,
+			databaseHooks: {
+				account: {
+					delete: {
+						async before() {
+							return false;
+						},
+					},
+				},
+			},
+		} satisfies BetterAuthOptions;
+		try {
+			(await getMigrations(rejectingOptions)).runMigrations();
+			const rejectingContext = await init(rejectingOptions);
+			const user = await rejectingContext.internalAdapter.createUser(
+				{
+					name: "Preserved Account",
+					email: "preserved.account@example.com",
+				},
+				{ method: "test" },
+			);
+			const linked = await rejectingContext.internalAdapter.linkAccount(
+				user.id,
+				{
+					issuer: "https://delete-hook.example.com",
+					providerAccountId: "preserved-subject",
+				},
+				{
+					providerId: "preserved-provider",
+					providerInstanceId: "preserved-provider",
+				},
+			);
+
+			await expect(
+				rejectingContext.internalAdapter.deleteAccount(linked.account.id),
+			).rejects.toMatchObject({
+				body: { code: "account_deletion_rejected" },
+			});
+			await expect(
+				rejectingContext.internalAdapter.deleteUserAccounts(user.id),
+			).rejects.toMatchObject({
+				body: { code: "account_deletion_rejected" },
+			});
+			await expect(
+				rejectingContext.internalAdapter.deleteAccountsByProviderInstanceId(
+					linked.account.providerInstanceId,
+				),
+			).rejects.toMatchObject({
+				body: { code: "account_deletion_rejected" },
+			});
+			await expect(
+				rejectingContext.internalAdapter.findAccountWithIdentityById(
+					linked.account.id,
+				),
+			).resolves.toEqual(linked);
+			await expect(
+				rejectingContext.internalAdapter.findIdentityByKey({
+					issuer: linked.identity.issuer,
+					providerAccountId: linked.identity.providerAccountId,
+				}),
+			).resolves.toEqual(linked.identity);
+			await expect(
+				rejectingContext.internalAdapter.findUserById(user.id),
+			).resolves.toEqual(user);
+		} finally {
+			database.close();
+		}
+	});
+
+	it("does not invoke identity deletion hooks when unlinking an account", async () => {
+		const database = new DatabaseSync(":memory:");
+		const identityDeleteBefore = vi.fn();
+		const rejectingOptions = {
+			database,
+			databaseHooks: {
+				identity: {
+					delete: {
+						async before() {
+							identityDeleteBefore();
+							return false;
+						},
+					},
+				},
+			},
+		} satisfies BetterAuthOptions;
+		try {
+			(await getMigrations(rejectingOptions)).runMigrations();
+			const rejectingContext = await init(rejectingOptions);
+			const user = await rejectingContext.internalAdapter.createUser(
+				{
+					name: "Rejected Identity Unlink",
+					email: "rejected.identity.unlink@example.com",
+				},
+				{ method: "test" },
+			);
+			const linked = await rejectingContext.internalAdapter.linkAccount(
+				user.id,
+				{
+					issuer: "https://rejected-unlink.example.com",
+					providerAccountId: "rejected-unlink-subject",
+				},
+				{
+					providerId: "rejected-unlink-provider",
+					providerInstanceId: "rejected-unlink-provider",
+				},
+			);
+
+			await rejectingContext.internalAdapter.deleteAccount(linked.account.id);
+			expect(identityDeleteBefore).not.toHaveBeenCalled();
+			await expect(
+				rejectingContext.internalAdapter.findAccountWithIdentityById(
+					linked.account.id,
+				),
+			).resolves.toBeNull();
+			await expect(
+				rejectingContext.internalAdapter.findIdentityByKey({
+					issuer: linked.identity.issuer,
+					providerAccountId: linked.identity.providerAccountId,
+				}),
+			).resolves.toEqual(linked.identity);
+		} finally {
+			database.close();
+		}
+	});
+
+	it("surfaces post-commit account link hook failures", async () => {
+		const database = new DatabaseSync(":memory:");
+		const hookError = new Error("account create.after failed");
+		const rejectingOptions = {
+			database,
+			databaseHooks: {
+				account: {
+					create: {
+						async after() {
+							throw hookError;
+						},
+					},
+				},
+			},
+		} satisfies BetterAuthOptions;
+		try {
+			(await getMigrations(rejectingOptions)).runMigrations();
+			const rejectingContext = await init(rejectingOptions);
+			const user = await rejectingContext.internalAdapter.createUser(
+				{
+					name: "Post-commit Hook User",
+					email: "post-commit.hook@example.com",
+				},
+				{ method: "test" },
+			);
+			const identityKey = {
+				issuer: "https://post-commit-hook.example.com",
+				providerAccountId: "post-commit-hook-subject",
+			};
+
+			await expect(
+				rejectingContext.internalAdapter.linkAccount(user.id, identityKey, {
+					providerId: "post-commit-hook-provider",
+					providerInstanceId: "post-commit-hook-provider",
+				}),
+			).rejects.toBe(hookError);
+			const identity =
+				await rejectingContext.internalAdapter.findIdentityByKey(identityKey);
+			expect(identity).not.toBeNull();
+			await expect(
+				rejectingContext.internalAdapter.findAccountByKey({
+					identityId: identity!.id,
+					providerInstanceId: "post-commit-hook-provider",
+				}),
+			).resolves.not.toBeNull();
+		} finally {
+			database.close();
+		}
+	});
+
+	it("rejects user-with-account creation before hooks or writes without an atomic capability", async () => {
+		const database = new DatabaseSync(":memory:");
+		const kysely = new Kysely({
+			dialect: new NodeSqliteDialect({ database }),
 		});
+		const userCreateBefore = vi.fn();
+		const identityCreateBefore = vi.fn();
+		const accountCreateBefore = vi.fn();
+		const unsupportedOptions = {
+			database: { db: kysely, type: "sqlite", transaction: false },
+			databaseHooks: {
+				user: {
+					create: {
+						async before(user) {
+							userCreateBefore(user);
+							return { data: user };
+						},
+					},
+				},
+				identity: {
+					create: {
+						async before(identity) {
+							identityCreateBefore(identity);
+							return { data: identity };
+						},
+					},
+				},
+				account: {
+					create: {
+						async before(account) {
+							accountCreateBefore(account);
+							return { data: account };
+						},
+					},
+				},
+			},
+			plugins: [],
+		} satisfies BetterAuthOptions;
+		let restoreCreateSpy = () => {};
+		try {
+			await (await getMigrations(unsupportedOptions)).runMigrations();
+			const unsupportedContext = await init(unsupportedOptions);
+			const createSpy = vi.spyOn(unsupportedContext.adapter, "create");
+			restoreCreateSpy = () => createSpy.mockRestore();
+			const identityKey = {
+				issuer: "https://unsupported-create.example.com",
+				providerAccountId: "unsupported-create-subject",
+			};
 
-		await internalAdapter.createAccount({
-			userId: user.id,
-			providerId: "test-provider-2",
-			issuer: "local:test-provider-2",
-			providerAccountId: "test-account-id-3",
+			await expect(
+				unsupportedContext.internalAdapter.createUserWithAccount(
+					{
+						name: "Unsupported Provider User",
+						email: "unsupported.provider.user@example.com",
+						emailVerified: true,
+					},
+					{
+						source: {
+							method: "oauth",
+							oauth: { providerId: "unsupported-provider" },
+						},
+						buildAuthentication: () => ({
+							identity: identityKey,
+							account: {
+								providerId: "unsupported-provider",
+								providerInstanceId: "unsupported-provider",
+							},
+						}),
+					},
+				),
+			).rejects.toMatchObject({ code: ATOMIC_WRITES_UNSUPPORTED });
+			expect(userCreateBefore).not.toHaveBeenCalled();
+			expect(identityCreateBefore).not.toHaveBeenCalled();
+			expect(accountCreateBefore).not.toHaveBeenCalled();
+			expect(createSpy).not.toHaveBeenCalled();
+			await expect(
+				unsupportedContext.internalAdapter.findUserByEmail(
+					"unsupported.provider.user@example.com",
+				),
+			).resolves.toBeNull();
+			await expect(
+				unsupportedContext.internalAdapter.findIdentityByKey(identityKey),
+			).resolves.toBeNull();
+		} finally {
+			restoreCreateSpy();
+			await kysely.destroy();
+		}
+	});
+
+	it("rejects account linking before hooks or writes without an atomic capability", async () => {
+		const database = new DatabaseSync(":memory:");
+		const kysely = new Kysely({
+			dialect: new NodeSqliteDialect({ database }),
 		});
+		const identityCreateBefore = vi.fn();
+		const accountCreateBefore = vi.fn();
+		const unsupportedOptions = {
+			database: { db: kysely, type: "sqlite", transaction: false },
+			databaseHooks: {
+				identity: {
+					create: {
+						async before(identity) {
+							identityCreateBefore(identity);
+							return { data: identity };
+						},
+					},
+				},
+				account: {
+					create: {
+						async before(account) {
+							accountCreateBefore(account);
+							return { data: account };
+						},
+					},
+				},
+			},
+			plugins: [],
+		} satisfies BetterAuthOptions;
+		let restoreCreateSpy = () => {};
+		try {
+			await (await getMigrations(unsupportedOptions)).runMigrations();
+			const unsupportedContext = await init(unsupportedOptions);
+			const user = await unsupportedContext.internalAdapter.createUser(
+				{
+					name: "Preserved Unsupported Link User",
+					email: "preserved.unsupported.link@example.com",
+				},
+				{ method: "test" },
+			);
+			const createSpy = vi.spyOn(unsupportedContext.adapter, "create");
+			restoreCreateSpy = () => createSpy.mockRestore();
+			const identityKey = {
+				issuer: "https://unsupported-link.example.com",
+				providerAccountId: "unsupported-link-subject",
+			};
 
-		let accounts = await internalAdapter.findAccounts(user.id);
-		expect(accounts.length).toBe(2);
+			await expect(
+				unsupportedContext.internalAdapter.linkAccount(user.id, identityKey, {
+					providerId: "unsupported-link-provider",
+					providerInstanceId: "unsupported-link-provider",
+				}),
+			).rejects.toMatchObject({ code: ATOMIC_WRITES_UNSUPPORTED });
+			expect(identityCreateBefore).not.toHaveBeenCalled();
+			expect(accountCreateBefore).not.toHaveBeenCalled();
+			expect(createSpy).not.toHaveBeenCalled();
+			await expect(
+				unsupportedContext.internalAdapter.findIdentityByKey(identityKey),
+			).resolves.toBeNull();
+			await expect(
+				unsupportedContext.internalAdapter.findUserById(user.id),
+			).resolves.toEqual(user);
+		} finally {
+			restoreCreateSpy();
+			await kysely.destroy();
+		}
+	});
 
-		await internalAdapter.deleteAccounts(user.id);
+	it("rejects account unlinking before hooks or writes without an atomic capability", async () => {
+		const database = new DatabaseSync(":memory:");
+		const kysely = new Kysely({
+			dialect: new NodeSqliteDialect({ database }),
+		});
+		const accountDeleteBefore = vi.fn();
+		const identityDeleteBefore = vi.fn();
+		const unsupportedOptions = {
+			database: { db: kysely, type: "sqlite", transaction: false },
+			databaseHooks: {
+				account: {
+					delete: {
+						async before(account) {
+							accountDeleteBefore(account);
+						},
+					},
+				},
+				identity: {
+					delete: {
+						async before(identity) {
+							identityDeleteBefore(identity);
+						},
+					},
+				},
+			},
+			plugins: [],
+		} satisfies BetterAuthOptions;
+		let restoreDeleteSpy = () => {};
+		try {
+			await (await getMigrations(unsupportedOptions)).runMigrations();
+			const unsupportedContext = await init(unsupportedOptions);
+			const user = await unsupportedContext.internalAdapter.createUser(
+				{
+					name: "Preserved Unsupported Unlink User",
+					email: "preserved.unsupported.unlink@example.com",
+				},
+				{ method: "test" },
+			);
+			const identityId = "unsupported-unlink-identity";
+			const accountId = "unsupported-unlink-account";
+			const now = new Date();
+			await unsupportedContext.adapter.create({
+				model: "identity",
+				data: {
+					id: identityId,
+					userId: user.id,
+					issuer: "https://unsupported-unlink.example.com",
+					providerAccountId: "unsupported-unlink-subject",
+					createdAt: now,
+					updatedAt: now,
+				},
+				forceAllowId: true,
+			});
+			await unsupportedContext.adapter.create({
+				model: "account",
+				data: {
+					id: accountId,
+					identityId,
+					providerId: "unsupported-unlink-provider",
+					providerInstanceId: "unsupported-unlink-provider",
+					createdAt: now,
+					updatedAt: now,
+				},
+				forceAllowId: true,
+			});
+			const deleteSpy = vi.spyOn(unsupportedContext.adapter, "delete");
+			restoreDeleteSpy = () => deleteSpy.mockRestore();
 
-		accounts = await internalAdapter.findAccounts(user.id);
-		expect(accounts.length).toBe(0);
+			await expect(
+				unsupportedContext.internalAdapter.deleteAccount(accountId),
+			).rejects.toMatchObject({ code: ATOMIC_WRITES_UNSUPPORTED });
+			expect(accountDeleteBefore).not.toHaveBeenCalled();
+			expect(identityDeleteBefore).not.toHaveBeenCalled();
+			expect(deleteSpy).not.toHaveBeenCalled();
+			await expect(
+				unsupportedContext.internalAdapter.findAccountWithIdentityById(
+					accountId,
+				),
+			).resolves.toMatchObject({
+				account: { id: accountId, identityId },
+				identity: { id: identityId, userId: user.id },
+			});
+			await expect(
+				unsupportedContext.internalAdapter.findUserById(user.id),
+			).resolves.toEqual(user);
+		} finally {
+			restoreDeleteSpy();
+			await kysely.destroy();
+		}
+	});
+
+	it("commits a user authentication graph in one batch and runs after-hooks on committed rows", async () => {
+		const afterHookOrder: string[] = [];
+		const userCreateAfter = vi.fn();
+		const identityCreateAfter = vi.fn();
+		const accountCreateAfter = vi.fn();
+		const { atomicWrites, context, database, kysely } =
+			await createAtomicWriteTestContext({
+				databaseHooks: {
+					user: {
+						create: {
+							async after(user) {
+								afterHookOrder.push("user");
+								userCreateAfter(user);
+							},
+						},
+					},
+					identity: {
+						create: {
+							async after(identity) {
+								afterHookOrder.push("identity");
+								identityCreateAfter(identity);
+							},
+						},
+					},
+					account: {
+						create: {
+							async after(account) {
+								afterHookOrder.push("account");
+								accountCreateAfter(account);
+							},
+						},
+					},
+				},
+				plugins: [provisioningRecordPlugin],
+			});
+		try {
+			database.exec(`
+				CREATE TRIGGER user_image_database_default
+				AFTER INSERT ON "user"
+				FOR EACH ROW
+				WHEN NEW.image IS NULL
+				BEGIN
+					UPDATE "user" SET image = 'database-default' WHERE id = NEW.id;
+				END;
+			`);
+
+			const created = await context.internalAdapter.createUserWithAccount(
+				{
+					name: "Atomic Provider User",
+					email: "atomic.provider.user@example.com",
+					emailVerified: true,
+				},
+				{
+					source: {
+						method: "oauth",
+						oauth: { providerId: "atomic-provider" },
+					},
+					buildAuthentication: () => ({
+						identity: {
+							issuer: "https://atomic-provider.example.com",
+							providerAccountId: "atomic-provider-subject",
+						},
+						account: {
+							providerId: "atomic-provider",
+							providerInstanceId: "atomic-provider",
+						},
+					}),
+					buildRelatedRecords: ({ userId, identityId, accountId }) => [
+						{
+							model: "provisioningRecord",
+							data: { userId, identityId, accountId },
+						},
+					],
+				},
+			);
+
+			expect(atomicWrites.submittedBatches).toHaveLength(1);
+			expect(
+				atomicWrites.submittedBatches[0]?.map(({ type, model }) => ({
+					type,
+					model,
+				})),
+			).toEqual([
+				{ type: "create", model: "user" },
+				{ type: "create", model: "identity" },
+				{ type: "create", model: "account" },
+				{ type: "create", model: "provisioningRecord" },
+			]);
+			expect(created.user.image).toBe("database-default");
+			expect(created.identity.userId).toBe(created.user.id);
+			expect(created.account.identityId).toBe(created.identity.id);
+			expect(afterHookOrder).toEqual(["user", "identity", "account"]);
+			expect(userCreateAfter).toHaveBeenCalledOnce();
+			expect(userCreateAfter).toHaveBeenCalledWith(
+				expect.objectContaining({ image: "database-default" }),
+			);
+			expect(identityCreateAfter).toHaveBeenCalledOnce();
+			expect(accountCreateAfter).toHaveBeenCalledOnce();
+			await expect(
+				context.adapter.findOne<Record<string, unknown>>({
+					model: "provisioningRecord",
+					where: [{ field: "userId", value: created.user.id }],
+				}),
+			).resolves.toMatchObject({
+				userId: created.user.id,
+				identityId: created.identity.id,
+				accountId: created.account.id,
+			});
+			await expect(
+				context.internalAdapter.findUserById(created.user.id),
+			).resolves.toMatchObject({ image: "database-default" });
+		} finally {
+			await kysely.destroy();
+		}
+	});
+
+	it("rolls back every prefix write and skips after-hooks when an atomic operation fails", async () => {
+		const userCreateAfter = vi.fn();
+		const identityCreateAfter = vi.fn();
+		const accountCreateAfter = vi.fn();
+		const { atomicWrites, context, kysely } =
+			await createAtomicWriteTestContext(
+				{
+					databaseHooks: {
+						user: { create: { after: userCreateAfter } },
+						identity: { create: { after: identityCreateAfter } },
+						account: { create: { after: accountCreateAfter } },
+					},
+					plugins: [provisioningRecordPlugin],
+				},
+				{ failAtOperationIndex: 3 },
+			);
+		const identityKey = {
+			issuer: "https://atomic-failure.example.com",
+			providerAccountId: "atomic-failure-subject",
+		};
+		try {
+			await expect(
+				context.internalAdapter.createUserWithAccount(
+					{
+						name: "Rolled Back Atomic User",
+						email: "rolled.back.atomic.user@example.com",
+						emailVerified: true,
+					},
+					{
+						source: {
+							method: "oauth",
+							oauth: { providerId: "atomic-failure-provider" },
+						},
+						buildAuthentication: () => ({
+							identity: identityKey,
+							account: {
+								providerId: "atomic-failure-provider",
+								providerInstanceId: "atomic-failure-provider",
+							},
+						}),
+						buildRelatedRecords: ({ userId, identityId, accountId }) => [
+							{
+								model: "provisioningRecord",
+								data: { userId, identityId, accountId },
+							},
+						],
+					},
+				),
+			).rejects.toBe(atomicWrites.injectedFailure);
+			expect(atomicWrites.submittedBatches).toHaveLength(1);
+			await expect(
+				context.internalAdapter.findUserByEmail(
+					"rolled.back.atomic.user@example.com",
+				),
+			).resolves.toBeNull();
+			await expect(
+				context.internalAdapter.findIdentityByKey(identityKey),
+			).resolves.toBeNull();
+			await expect(
+				context.adapter.findMany({ model: "account" }),
+			).resolves.toEqual([]);
+			await expect(
+				context.adapter.findMany({ model: "provisioningRecord" }),
+			).resolves.toEqual([]);
+			expect(userCreateAfter).not.toHaveBeenCalled();
+			expect(identityCreateAfter).not.toHaveBeenCalled();
+			expect(accountCreateAfter).not.toHaveBeenCalled();
+		} finally {
+			await kysely.destroy();
+		}
+	});
+
+	it("links a new identity and account in one atomic batch", async () => {
+		const afterHookOrder: string[] = [];
+		const { atomicWrites, context, kysely } =
+			await createAtomicWriteTestContext({
+				databaseHooks: {
+					identity: {
+						create: {
+							async after() {
+								afterHookOrder.push("identity");
+							},
+						},
+					},
+					account: {
+						create: {
+							async after() {
+								afterHookOrder.push("account");
+							},
+						},
+					},
+				},
+				plugins: [provisioningRecordPlugin],
+			});
+		try {
+			const user = await context.internalAdapter.createUser(
+				{
+					name: "Atomic Link User",
+					email: "atomic.link.user@example.com",
+				},
+				{ method: "test" },
+			);
+			const identityKey = {
+				issuer: "https://atomic-link.example.com",
+				providerAccountId: "atomic-link-subject",
+			};
+			const linked = await context.internalAdapter.linkAccount(
+				user.id,
+				identityKey,
+				{
+					providerId: "atomic-link-provider",
+					providerInstanceId: "atomic-link-provider",
+				},
+				{
+					buildRelatedRecords: ({ userId, identityId, accountId }) => [
+						{
+							model: "provisioningRecord",
+							data: { userId, identityId, accountId },
+						},
+					],
+				},
+			);
+
+			expect(atomicWrites.submittedBatches).toHaveLength(1);
+			expect(
+				atomicWrites.submittedBatches[0]?.map(({ type, model }) => ({
+					type,
+					model,
+				})),
+			).toEqual([
+				{ type: "create", model: "identity" },
+				{ type: "create", model: "account" },
+				{ type: "create", model: "provisioningRecord" },
+			]);
+			expect(linked.identity.userId).toBe(user.id);
+			expect(linked.account.identityId).toBe(linked.identity.id);
+			expect(afterHookOrder).toEqual(["identity", "account"]);
+			await expect(
+				context.adapter.findOne<Record<string, unknown>>({
+					model: "provisioningRecord",
+					where: [{ field: "accountId", value: linked.account.id }],
+				}),
+			).resolves.toMatchObject({
+				userId: user.id,
+				identityId: linked.identity.id,
+				accountId: linked.account.id,
+			});
+			await expect(
+				context.internalAdapter.findAccountWithIdentityById(linked.account.id),
+			).resolves.toEqual(linked);
+		} finally {
+			await kysely.destroy();
+		}
+	});
+
+	it("rolls back an account link when its related atomic write fails", async () => {
+		const { atomicWrites, context, kysely } =
+			await createAtomicWriteTestContext(
+				{ plugins: [provisioningRecordPlugin] },
+				{ failAtOperationIndex: 2 },
+			);
+		const identityKey = {
+			issuer: "https://atomic-link-rollback.example.com",
+			providerAccountId: "atomic-link-rollback-subject",
+		};
+		try {
+			const user = await context.internalAdapter.createUser(
+				{
+					name: "Atomic Link Rollback User",
+					email: "atomic.link.rollback@example.com",
+				},
+				{ method: "test" },
+			);
+			await expect(
+				context.internalAdapter.linkAccount(
+					user.id,
+					identityKey,
+					{
+						providerId: "atomic-link-rollback-provider",
+						providerInstanceId: "atomic-link-rollback-provider",
+					},
+					{
+						buildRelatedRecords: ({ userId, identityId, accountId }) => [
+							{
+								model: "provisioningRecord",
+								data: { userId, identityId, accountId },
+							},
+						],
+					},
+				),
+			).rejects.toBe(atomicWrites.injectedFailure);
+
+			expect(atomicWrites.submittedBatches).toHaveLength(1);
+			await expect(
+				context.internalAdapter.findIdentityByKey(identityKey),
+			).resolves.toBeNull();
+			await expect(
+				context.adapter.findMany({ model: "account" }),
+			).resolves.toEqual([]);
+			await expect(
+				context.adapter.findMany({ model: "provisioningRecord" }),
+			).resolves.toEqual([]);
+		} finally {
+			await kysely.destroy();
+		}
+	});
+
+	it("does not invoke identity deletion hooks in an atomic account unlink", async () => {
+		const accountDeleteBefore = vi.fn();
+		const accountDeleteAfter = vi.fn();
+		const identityDeleteBefore = vi.fn();
+		const identityDeleteAfter = vi.fn();
+		const { atomicWrites, context, kysely } =
+			await createAtomicWriteTestContext({
+				databaseHooks: {
+					account: {
+						delete: {
+							async before(account) {
+								accountDeleteBefore(account);
+							},
+							after: accountDeleteAfter,
+						},
+					},
+					identity: {
+						delete: {
+							async before(identity) {
+								identityDeleteBefore(identity);
+								return false;
+							},
+							after: identityDeleteAfter,
+						},
+					},
+				},
+				plugins: [],
+			});
+		try {
+			const user = await context.internalAdapter.createUser(
+				{
+					name: "Atomic Delete Veto User",
+					email: "atomic.delete.veto@example.com",
+				},
+				{ method: "test" },
+			);
+			const linked = await context.internalAdapter.linkAccount(
+				user.id,
+				{
+					issuer: "https://atomic-delete-veto.example.com",
+					providerAccountId: "atomic-delete-veto-subject",
+				},
+				{
+					providerId: "atomic-delete-veto-provider",
+					providerInstanceId: "atomic-delete-veto-provider",
+				},
+			);
+			atomicWrites.submittedBatches.length = 0;
+
+			await context.internalAdapter.deleteAccount(linked.account.id);
+			expect(accountDeleteBefore).toHaveBeenCalledOnce();
+			expect(identityDeleteBefore).not.toHaveBeenCalled();
+			expect(accountDeleteAfter).toHaveBeenCalledOnce();
+			expect(identityDeleteAfter).not.toHaveBeenCalled();
+			expect(atomicWrites.submittedBatches).toHaveLength(1);
+			await expect(
+				context.internalAdapter.findAccountWithIdentityById(linked.account.id),
+			).resolves.toBeNull();
+			await expect(
+				context.internalAdapter.findIdentityByKey({
+					issuer: linked.identity.issuer,
+					providerAccountId: linked.identity.providerAccountId,
+				}),
+			).resolves.toEqual(linked.identity);
+		} finally {
+			await kysely.destroy();
+		}
+	});
+
+	it("runs delete after-hooks only for the concurrent account unlink that commits", async () => {
+		const accountDeleteAfter = vi.fn();
+		const identityDeleteAfter = vi.fn();
+		const { context, kysely } = await createAtomicWriteTestContext({
+			databaseHooks: {
+				account: { delete: { after: accountDeleteAfter } },
+				identity: { delete: { after: identityDeleteAfter } },
+			},
+			plugins: [],
+		});
+		try {
+			const user = await context.internalAdapter.createUser(
+				{
+					name: "Concurrent Unlink User",
+					email: "concurrent.unlink@example.com",
+				},
+				{ method: "test" },
+			);
+			const linked = await context.internalAdapter.linkAccount(
+				user.id,
+				{
+					issuer: "https://concurrent-unlink.example.com",
+					providerAccountId: "concurrent-unlink-subject",
+				},
+				{
+					providerId: "concurrent-unlink-provider",
+					providerInstanceId: "concurrent-unlink-provider",
+				},
+			);
+
+			await Promise.all([
+				context.internalAdapter.deleteAccount(linked.account.id),
+				context.internalAdapter.deleteAccount(linked.account.id),
+			]);
+
+			expect(accountDeleteAfter).toHaveBeenCalledOnce();
+			expect(identityDeleteAfter).not.toHaveBeenCalled();
+		} finally {
+			await kysely.destroy();
+		}
+	});
+
+	it("runs delete after-hooks only for the native transaction unlink that commits", async () => {
+		const database: MemoryDB = {
+			user: [],
+			identity: [],
+			account: [],
+			session: [],
+			verification: [],
+		};
+		const accountDeleteAfter = vi.fn();
+		let accountDeleteBeforeCalls = 0;
+		let releaseAccountDeletes = () => {};
+		const bothAccountDeletesStarted = new Promise<void>((resolve) => {
+			releaseAccountDeletes = resolve;
+		});
+		const createMemoryAdapter = memoryAdapter(database);
+		const passthroughTransactionMemoryAdapter = (
+			options: BetterAuthOptions,
+		) => {
+			const adapter = createMemoryAdapter(options);
+			const adapterConfig = adapter.options?.adapterConfig;
+			if (!adapterConfig) {
+				throw new Error("Memory adapter should expose its configuration");
+			}
+			adapterConfig.transaction = async (callback) => callback(adapter);
+			return adapter;
+		};
+		const auth = betterAuth({
+			database: passthroughTransactionMemoryAdapter,
+			databaseHooks: {
+				account: {
+					delete: {
+						async before() {
+							accountDeleteBeforeCalls++;
+							if (accountDeleteBeforeCalls === 2) releaseAccountDeletes();
+							await bothAccountDeletesStarted;
+						},
+						after: accountDeleteAfter,
+					},
+				},
+			},
+		});
+		const context = await auth.$context;
+		const user = await context.internalAdapter.createUser(
+			{
+				name: "Native Concurrent Unlink User",
+				email: "native.concurrent.unlink@example.com",
+			},
+			{ method: "test" },
+		);
+		const linked = await context.internalAdapter.linkAccount(
+			user.id,
+			{
+				issuer: "https://native-concurrent-unlink.example.com",
+				providerAccountId: "native-concurrent-unlink-subject",
+			},
+			{
+				providerId: "native-concurrent-unlink-provider",
+				providerInstanceId: "native-concurrent-unlink-provider",
+			},
+		);
+
+		await Promise.all([
+			context.internalAdapter.deleteAccount(linked.account.id),
+			context.internalAdapter.deleteAccount(linked.account.id),
+		]);
+
+		expect(accountDeleteAfter).toHaveBeenCalledOnce();
+	});
+
+	it("allows an account to be linked while another account is unlinked", async () => {
+		const accountDeleteAfter = vi.fn();
+		const identityDeleteAfter = vi.fn();
+		const { context, kysely } = await createAtomicWriteTestContext({
+			databaseHooks: {
+				account: { delete: { after: accountDeleteAfter } },
+				identity: { delete: { after: identityDeleteAfter } },
+			},
+			plugins: [],
+		});
+		try {
+			const user = await context.internalAdapter.createUser(
+				{
+					name: "Concurrent Link User",
+					email: "concurrent.link@example.com",
+				},
+				{ method: "test" },
+			);
+			const identityKey = {
+				issuer: "https://concurrent-link.example.com",
+				providerAccountId: "concurrent-link-subject",
+			};
+			const firstLink = await context.internalAdapter.linkAccount(
+				user.id,
+				identityKey,
+				{
+					providerId: "first-provider",
+					providerInstanceId: "first-provider",
+				},
+			);
+			const [, secondLink] = await Promise.all([
+				context.internalAdapter.deleteAccount(firstLink.account.id),
+				context.internalAdapter.linkAccount(user.id, identityKey, {
+					providerId: "second-provider",
+					providerInstanceId: "second-provider",
+				}),
+			]);
+			await expect(
+				context.internalAdapter.findAccountWithIdentityById(
+					firstLink.account.id,
+				),
+			).resolves.toBeNull();
+			await expect(
+				context.internalAdapter.findAccountWithIdentityById(
+					secondLink.account.id,
+				),
+			).resolves.toEqual(secondLink);
+			expect(accountDeleteAfter).toHaveBeenCalledOnce();
+			expect(identityDeleteAfter).not.toHaveBeenCalled();
+		} finally {
+			await kysely.destroy();
+		}
+	});
+
+	it("rolls back user deletion when a new session is created concurrently", async () => {
+		const sessionDeleteAfter = vi.fn();
+		let releaseSessionDelete = () => {};
+		let markSessionDeleteStarted = () => {};
+		const sessionDeleteStarted = new Promise<void>((resolve) => {
+			markSessionDeleteStarted = resolve;
+		});
+		const continueSessionDelete = new Promise<void>((resolve) => {
+			releaseSessionDelete = resolve;
+		});
+		const { context, kysely } = await createAtomicWriteTestContext({
+			databaseHooks: {
+				session: {
+					delete: {
+						async before() {
+							markSessionDeleteStarted();
+							await continueSessionDelete;
+						},
+						after: sessionDeleteAfter,
+					},
+				},
+			},
+			plugins: [],
+		});
+		try {
+			const user = await context.internalAdapter.createUser(
+				{
+					name: "Concurrent Session User",
+					email: "concurrent.session@example.com",
+				},
+				{ method: "test" },
+			);
+			const firstSession = await context.internalAdapter.createSession(user.id);
+			const pendingDelete = context.internalAdapter.deleteUser(user.id);
+			await sessionDeleteStarted;
+			const secondSession = await context.internalAdapter.createSession(
+				user.id,
+			);
+			releaseSessionDelete();
+
+			await expect(pendingDelete).rejects.toThrow();
+			await expect(
+				context.internalAdapter.findUserById(user.id),
+			).resolves.toEqual(user);
+			await expect(
+				context.internalAdapter.listSessions(user.id),
+			).resolves.toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({ id: firstSession.id }),
+					expect.objectContaining({ id: secondSession.id }),
+				]),
+			);
+			expect(sessionDeleteAfter).not.toHaveBeenCalled();
+		} finally {
+			releaseSessionDelete();
+			await kysely.destroy();
+		}
+	});
+
+	it("requires application ids before atomic hooks or writes while native serial ids remain supported", async () => {
+		const userCreateBefore = vi.fn();
+		const identityCreateBefore = vi.fn();
+		const accountCreateBefore = vi.fn();
+		const { atomicWrites, context, kysely } =
+			await createAtomicWriteTestContext({
+				advanced: { database: { generateId: false } },
+				databaseHooks: {
+					user: { create: { before: userCreateBefore } },
+					identity: { create: { before: identityCreateBefore } },
+					account: { create: { before: accountCreateBefore } },
+				},
+				plugins: [],
+			});
+		const createSpy = vi.spyOn(context.adapter, "create");
+		try {
+			await expect(
+				context.internalAdapter.createUserWithAccount(
+					{
+						name: "Missing Application Id User",
+						email: "missing.application.id@example.com",
+						emailVerified: true,
+					},
+					{
+						source: {
+							method: "oauth",
+							oauth: { providerId: "missing-application-id-provider" },
+						},
+						buildAuthentication: () => ({
+							identity: {
+								issuer: "https://missing-application-id.example.com",
+								providerAccountId: "missing-application-id-subject",
+							},
+							account: {
+								providerId: "missing-application-id-provider",
+								providerInstanceId: "missing-application-id-provider",
+							},
+						}),
+					},
+				),
+			).rejects.toMatchObject({
+				code: "ATOMIC_WRITES_REQUIRE_APPLICATION_IDS",
+				model: "user",
+			});
+			expect(userCreateBefore).not.toHaveBeenCalled();
+			expect(identityCreateBefore).not.toHaveBeenCalled();
+			expect(accountCreateBefore).not.toHaveBeenCalled();
+			expect(createSpy).not.toHaveBeenCalled();
+			expect(atomicWrites.submittedBatches).toHaveLength(0);
+		} finally {
+			createSpy.mockRestore();
+			await kysely.destroy();
+		}
+
+		const nativeDatabase = new DatabaseSync(":memory:");
+		const nativeOptions = {
+			database: nativeDatabase,
+			advanced: { database: { generateId: "serial" } },
+			plugins: [],
+		} satisfies BetterAuthOptions;
+		try {
+			await (await getMigrations(nativeOptions)).runMigrations();
+			const nativeContext = await init(nativeOptions);
+			const created = await nativeContext.internalAdapter.createUserWithAccount(
+				{
+					name: "Native Serial Id User",
+					email: "native.serial.id@example.com",
+					emailVerified: true,
+				},
+				{
+					source: {
+						method: "oauth",
+						oauth: { providerId: "native-serial-id-provider" },
+					},
+					buildAuthentication: () => ({
+						identity: {
+							issuer: "https://native-serial-id.example.com",
+							providerAccountId: "native-serial-id-subject",
+						},
+						account: {
+							providerId: "native-serial-id-provider",
+							providerInstanceId: "native-serial-id-provider",
+						},
+					}),
+				},
+			);
+			expect(created.user.id).toMatch(/^\d+$/);
+			expect(created.identity.userId).toBe(created.user.id);
+			expect(created.account.identityId).toBe(created.identity.id);
+		} finally {
+			nativeDatabase.close();
+		}
+	});
+
+	it("deletes the complete user lifecycle and committed session cache", async () => {
+		const user = await internalAdapter.createUser(
+			{
+				name: "Complete User Deletion",
+				email: "complete.user.deletion@example.com",
+			},
+			{ method: "test" },
+		);
+		const identityKey = {
+			issuer: "https://complete-deletion.example.com",
+			providerAccountId: "complete-deletion-subject",
+		};
+		const linked = await internalAdapter.linkAccount(user.id, identityKey, {
+			providerId: "complete-deletion-provider",
+			providerInstanceId: "complete-deletion-provider",
+		});
+		const session = await internalAdapter.createSession(user.id);
+		expect(map.has(session.token)).toBe(true);
+
+		await internalAdapter.deleteUser(user.id);
+
+		await expect(internalAdapter.findUserById(user.id)).resolves.toBeNull();
+		await expect(
+			internalAdapter.findAccountWithIdentityById(linked.account.id),
+		).resolves.toBeNull();
+		await expect(
+			internalAdapter.findIdentityByKey(identityKey),
+		).resolves.toBeNull();
+		expect(map.has(session.token)).toBe(false);
+		expect(map.has(`active-sessions-${user.id}`)).toBe(false);
+	});
+
+	it("rolls back user deletion and keeps cached sessions when identity deletion is rejected", async () => {
+		const database = new DatabaseSync(":memory:");
+		const sessionStore = new Map<string, string>();
+		const rejectingOptions = {
+			database,
+			secondaryStorage: createStringSecondaryStorage(sessionStore),
+			session: { storeSessionInDatabase: true },
+			databaseHooks: {
+				identity: {
+					delete: {
+						async before() {
+							return false;
+						},
+					},
+				},
+			},
+		} satisfies BetterAuthOptions;
+		try {
+			(await getMigrations(rejectingOptions)).runMigrations();
+			const rejectingContext = await init(rejectingOptions);
+			const user = await rejectingContext.internalAdapter.createUser(
+				{
+					name: "Rejected User Deletion",
+					email: "rejected.user.deletion@example.com",
+				},
+				{ method: "test" },
+			);
+			const identityKey = {
+				issuer: "https://rejected-deletion.example.com",
+				providerAccountId: "rejected-deletion-subject",
+			};
+			const linked = await rejectingContext.internalAdapter.linkAccount(
+				user.id,
+				identityKey,
+				{
+					providerId: "rejected-deletion-provider",
+					providerInstanceId: "rejected-deletion-provider",
+				},
+			);
+			const session = await rejectingContext.internalAdapter.createSession(
+				user.id,
+			);
+
+			await expect(
+				rejectingContext.internalAdapter.deleteUser(user.id),
+			).rejects.toMatchObject({
+				body: { code: "identity_deletion_rejected" },
+			});
+			await expect(
+				rejectingContext.internalAdapter.findUserById(user.id),
+			).resolves.toEqual(user);
+			await expect(
+				rejectingContext.internalAdapter.findAccountWithIdentityById(
+					linked.account.id,
+				),
+			).resolves.toEqual(linked);
+			expect(sessionStore.has(session.token)).toBe(true);
+			expect(sessionStore.has(`active-sessions-${user.id}`)).toBe(true);
+		} finally {
+			database.close();
+		}
 	});
 
 	it("listSessions should skip missing sessions without blanking the list", async () => {
@@ -1171,14 +3207,21 @@ describe("internal adapter test", async () => {
 		expect(testMap.has(`active-sessions-${user.id}`)).toBe(false);
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/pull/10390#discussion_r3585595438
-	 */
-	it("preserves sessions created after user session deletion is requested", async () => {
+	it("preserves a replacement session created before committed cache revocation finishes", async () => {
 		const testMap = new Map<string, string>();
+		let markVersionWriteStarted: () => void = () => {};
+		const versionWriteStarted = new Promise<void>((resolve) => {
+			markVersionWriteStarted = resolve;
+		});
+		let releaseVersionWrite: () => void = () => {};
+		const continueVersionWrite = new Promise<void>((resolve) => {
+			releaseVersionWrite = resolve;
+		});
+		const storage = createStringSecondaryStorage(testMap);
+
 		const testOpts = {
 			database: new DatabaseSync(":memory:"),
-			secondaryStorage: createStringSecondaryStorage(testMap),
+			secondaryStorage: storage,
 		} satisfies BetterAuthOptions;
 		(await getMigrations(testOpts)).runMigrations();
 		const testCtx = await init(testOpts);
@@ -1189,78 +3232,72 @@ describe("internal adapter test", async () => {
 			},
 			{ method: "test" },
 		);
-		const previousSession = await testCtx.internalAdapter.createSession(
+		const sessionVersionKeyForUser = `session-version-${user.id}`;
+		const sessionRevocationStartedAtKeyForUser = `session-revocation-started-at-${user.id}`;
+		const originalSet = storage.set;
+		let versionWriteBlocked = false;
+		storage.set = async (key, value, ttl) => {
+			if (key === sessionVersionKeyForUser && !versionWriteBlocked) {
+				versionWriteBlocked = true;
+				markVersionWriteStarted();
+				await continueVersionWrite;
+			}
+			return originalSet(key, value, ttl);
+		};
+
+		const revokedSession = await testCtx.internalAdapter.createSession(user.id);
+		const deletion = runWithTransaction(testCtx.adapter, () =>
+			testCtx.internalAdapter.deleteUserSessions(user.id),
+		);
+		await versionWriteStarted;
+		const revocationStartedAt = testMap.get(
+			sessionRevocationStartedAtKeyForUser,
+		);
+		expect(revocationStartedAt).toBeDefined();
+		const replacementSession = await testCtx.internalAdapter.createSession(
 			user.id,
-		);
-
-		const replacementSession = await runWithTransaction(
-			testCtx.adapter,
-			async () => {
-				await testCtx.internalAdapter.deleteUserSessions(user.id);
-				const session = await testCtx.internalAdapter.createSession(user.id);
-
-				expect(testMap.has(previousSession.token)).toBe(true);
-				expect(testMap.has(session.token)).toBe(true);
-				return session;
+			undefined,
+			{
+				createdAt: new Date(new Date(revocationStartedAt!).getTime() + 1),
 			},
+			true,
 		);
+		releaseVersionWrite();
+		await deletion;
 
-		expect(testMap.has(previousSession.token)).toBe(false);
-		expect(testMap.has(replacementSession.token)).toBe(true);
-		expect(
-			safeJSONParse<{ token: string }[]>(
-				testMap.get(`active-sessions-${user.id}`) ?? "[]",
-			),
-		).toEqual([expect.objectContaining({ token: replacementSession.token })]);
+		await expect(
+			testCtx.internalAdapter.findSession(revokedSession.token),
+		).resolves.toBeNull();
+		await expect(
+			testCtx.internalAdapter.findSession(replacementSession.token),
+		).resolves.toMatchObject({
+			session: { token: replacementSession.token },
+		});
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/pull/10390
-	 */
-	it("keeps stored sessions when the revocation snapshot cannot be read", async () => {
+	it("revokes cached sessions even when the active-session index loses a token", async () => {
 		const testMap = new Map<string, string>();
-		const storage = createStringSecondaryStorage(testMap);
-		let shouldFailActiveSessionReads = false;
 		const testOpts = {
 			database: new DatabaseSync(":memory:"),
-			secondaryStorage: {
-				...storage,
-				get(key: string) {
-					if (
-						shouldFailActiveSessionReads &&
-						key.startsWith("active-sessions-")
-					) {
-						throw new Error("secondary storage is unavailable");
-					}
-					return storage.get(key);
-				},
-			},
-			session: {
-				storeSessionInDatabase: true,
-			},
+			secondaryStorage: createStringSecondaryStorage(testMap),
 		} satisfies BetterAuthOptions;
 		(await getMigrations(testOpts)).runMigrations();
 		const testCtx = await init(testOpts);
 		const user = await testCtx.internalAdapter.createUser(
 			{
-				name: "snapshot-failure-user",
-				email: "snapshot-failure@example.com",
+				name: "secondary-session-revocation",
+				email: "secondary-session-revocation@example.com",
 			},
 			{ method: "test" },
 		);
 		const session = await testCtx.internalAdapter.createSession(user.id);
 
-		shouldFailActiveSessionReads = true;
-		await expect(
-			testCtx.internalAdapter.deleteUserSessions(user.id),
-		).rejects.toThrow("secondary storage is unavailable");
+		testMap.set(`active-sessions-${user.id}`, "[]");
+		await testCtx.internalAdapter.deleteUserSessions(user.id);
 
-		shouldFailActiveSessionReads = false;
-		testMap.delete(session.token);
-		const storedSession = await testCtx.internalAdapter.findSession(
-			session.token,
-		);
-		expect(storedSession?.session.token).toBe(session.token);
+		await expect(
+			testCtx.internalAdapter.findSession(session.token),
+		).resolves.toBeNull();
 	});
 
 	it("listSessions should skip malformed session data (valid JSON but wrong structure)", async () => {
@@ -1919,6 +3956,490 @@ describe("internal adapter test", async () => {
 			const ctx = await init(opts);
 			return ctx.internalAdapter;
 		}
+
+		it("fails closed across independent adapters without identifier-wide atomicity", async () => {
+			const database = new DatabaseSync(":memory:");
+			const kysely = new Kysely({
+				dialect: new NodeSqliteDialect({ database }),
+			});
+			const beforeDelete = vi.fn();
+			const options = {
+				database: { db: kysely, type: "sqlite", transaction: false },
+				databaseHooks: {
+					verification: {
+						delete: { before: beforeDelete },
+					},
+				},
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(options)).runMigrations();
+			const [firstContext, secondContext] = await Promise.all([
+				init(options),
+				init(options),
+			]);
+
+			await firstContext.internalAdapter.createVerificationValue({
+				identifier: "consume:non-atomic",
+				value: "older",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			await firstContext.internalAdapter.createVerificationValue({
+				identifier: "consume:non-atomic",
+				value: "newer",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			const firstFindMany = vi.spyOn(firstContext.adapter, "findMany");
+			const secondFindMany = vi.spyOn(secondContext.adapter, "findMany");
+
+			const attempts = await Promise.allSettled([
+				firstContext.internalAdapter.consumeVerificationValue(
+					"consume:non-atomic",
+				),
+				secondContext.internalAdapter.consumeVerificationValue(
+					"consume:non-atomic",
+				),
+			]);
+
+			for (const attempt of attempts) {
+				expect(attempt.status).toBe("rejected");
+				if (attempt.status === "rejected") {
+					expect(attempt.reason).toMatchObject({
+						code: ATOMIC_WRITES_UNSUPPORTED,
+					});
+				}
+			}
+			expect(firstFindMany).not.toHaveBeenCalled();
+			expect(secondFindMany).not.toHaveBeenCalled();
+			expect(beforeDelete).not.toHaveBeenCalled();
+			await expect(
+				firstContext.adapter.count({
+					model: "verification",
+					where: [{ field: "identifier", value: "consume:non-atomic" }],
+				}),
+			).resolves.toBe(2);
+
+			await kysely.destroy();
+		});
+
+		it("atomically gates the winner and invalidates every row for the identifier", async () => {
+			const { atomicWrites, context, kysely } =
+				await createAtomicWriteTestContext();
+			const older = await context.internalAdapter.createVerificationValue({
+				identifier: "consume:atomic-batch",
+				value: "older",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			await new Promise((resolve) => setTimeout(resolve, 5));
+			const latest = await context.internalAdapter.createVerificationValue({
+				identifier: "consume:atomic-batch",
+				value: "newer",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			atomicWrites.submittedBatches.length = 0;
+
+			await expect(
+				context.internalAdapter.consumeVerificationValue(
+					"consume:atomic-batch",
+				),
+			).resolves.toMatchObject({ id: latest.id, value: "newer" });
+
+			expect(atomicWrites.submittedBatches).toHaveLength(1);
+			expect(atomicWrites.submittedBatches[0]).toEqual([
+				{
+					type: "delete",
+					model: "verification",
+					where: [
+						{ field: "id", value: latest.id },
+						{ field: "identifier", value: latest.identifier },
+						{ field: "value", value: latest.value },
+						{ field: "expiresAt", value: latest.expiresAt },
+						{ field: "createdAt", value: latest.createdAt },
+						{ field: "updatedAt", value: latest.updatedAt },
+					],
+				},
+				{
+					type: "deleteMany",
+					model: "verification",
+					where: [{ field: "id", operator: "in", value: [older.id] }],
+				},
+			]);
+			await expect(
+				context.adapter.count({
+					model: "verification",
+					where: [{ field: "identifier", value: "consume:atomic-batch" }],
+				}),
+			).resolves.toBe(0);
+
+			await kysely.destroy();
+		});
+
+		it("captures and invalidates identifier snapshots beyond the initial read limit", async () => {
+			const { atomicWrites, context, kysely } =
+				await createAtomicWriteTestContext();
+			const identifier = "consume:large-atomic-snapshot";
+			for (let index = 0; index < 130; index += 1) {
+				await context.internalAdapter.createVerificationValue({
+					identifier,
+					value: `value-${index}`,
+					expiresAt: new Date(Date.now() + 60_000),
+				});
+			}
+			atomicWrites.submittedBatches.length = 0;
+
+			await expect(
+				context.internalAdapter.consumeVerificationValue(identifier),
+			).resolves.not.toBeNull();
+
+			const submittedBatch = atomicWrites.submittedBatches[0];
+			expect(submittedBatch?.map((operation) => operation.type)).toEqual([
+				"delete",
+				"deleteMany",
+				"deleteMany",
+			]);
+			expect(submittedBatch?.[1]).toMatchObject({
+				where: [{ field: "id", operator: "in", value: expect.any(Array) }],
+			});
+			const firstSiblingDelete = submittedBatch?.[1];
+			const secondSiblingDelete = submittedBatch?.[2];
+			if (
+				firstSiblingDelete?.type !== "deleteMany" ||
+				secondSiblingDelete?.type !== "deleteMany"
+			) {
+				throw new Error(
+					"The verification snapshot should use chunked deletions",
+				);
+			}
+			expect(firstSiblingDelete.where[0]?.value).toHaveLength(100);
+			expect(secondSiblingDelete.where[0]?.value).toHaveLength(29);
+			await expect(
+				context.adapter.count({
+					model: "verification",
+					where: [{ field: "identifier", value: identifier }],
+				}),
+			).resolves.toBe(0);
+
+			await kysely.destroy();
+		});
+
+		it("has exactly one winner across independent atomic-batch adapters", async () => {
+			const database = new DatabaseSync(":memory:");
+			const kysely = new Kysely({
+				dialect: new NodeSqliteDialect({ database }),
+			});
+			const afterDelete = vi.fn();
+			const options = {
+				database: { db: kysely, type: "sqlite", transaction: false },
+				databaseHooks: {
+					verification: {
+						delete: { after: afterDelete },
+					},
+				},
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(options)).runMigrations();
+			const [firstContext, secondContext] = await Promise.all([
+				init(options),
+				init(options),
+			]);
+			const atomicWrites = decorateAdapterWithAtomicWrites(
+				firstContext.adapter,
+				database,
+			);
+			secondContext.adapter.commitAtomicWrites =
+				firstContext.adapter.commitAtomicWrites;
+
+			await firstContext.internalAdapter.createVerificationValue({
+				identifier: "consume:independent-batches",
+				value: "older",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			await new Promise((resolve) => setTimeout(resolve, 5));
+			await firstContext.internalAdapter.createVerificationValue({
+				identifier: "consume:independent-batches",
+				value: "newer",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			atomicWrites.submittedBatches.length = 0;
+
+			const results = await Promise.all([
+				firstContext.internalAdapter.consumeVerificationValue(
+					"consume:independent-batches",
+				),
+				secondContext.internalAdapter.consumeVerificationValue(
+					"consume:independent-batches",
+				),
+			]);
+
+			const winners = results.filter((result) => result !== null);
+			expect(winners).toHaveLength(1);
+			expect(winners[0]?.value).toBe("newer");
+			expect(atomicWrites.submittedBatches).toHaveLength(2);
+			expect(afterDelete).toHaveBeenCalledOnce();
+			await expect(
+				firstContext.adapter.count({
+					model: "verification",
+					where: [
+						{
+							field: "identifier",
+							value: "consume:independent-batches",
+						},
+					],
+				}),
+			).resolves.toBe(0);
+
+			await kysely.destroy();
+		});
+
+		it("keeps a replacement created after a losing atomic batch snapshot", async () => {
+			const database = new DatabaseSync(":memory:");
+			const kysely = new Kysely({
+				dialect: new NodeSqliteDialect({ database }),
+			});
+			const options = {
+				database: { db: kysely, type: "sqlite", transaction: false },
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(options)).runMigrations();
+			const [firstContext, secondContext] = await Promise.all([
+				init(options),
+				init(options),
+			]);
+			decorateAdapterWithAtomicWrites(firstContext.adapter, database);
+			const commitAtomicWrites = firstContext.adapter.commitAtomicWrites;
+			if (!commitAtomicWrites) {
+				throw new Error("The atomic test adapter should expose batch writes");
+			}
+
+			let releaseLosingBatch = () => {};
+			let markLosingBatchReady = () => {};
+			let losingBatchOperations: readonly AtomicWriteOperation[] | undefined;
+			const losingBatchReady = new Promise<void>((resolve) => {
+				markLosingBatchReady = resolve;
+			});
+			const continueLosingBatch = new Promise<void>((resolve) => {
+				releaseLosingBatch = resolve;
+			});
+			let preparedBatchCount = 0;
+			const commitWithDelayedSecondBatch: typeof commitAtomicWrites = async (
+				operations,
+			) => {
+				preparedBatchCount++;
+				if (preparedBatchCount === 2) {
+					losingBatchOperations = operations;
+					markLosingBatchReady();
+					await continueLosingBatch;
+				}
+				return commitAtomicWrites(operations);
+			};
+			firstContext.adapter.commitAtomicWrites = commitWithDelayedSecondBatch;
+			secondContext.adapter.commitAtomicWrites = commitWithDelayedSecondBatch;
+
+			const identifier = "consume:replacement-after-snapshot";
+			const older = await firstContext.internalAdapter.createVerificationValue({
+				identifier,
+				value: "older",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			await new Promise((resolve) => setTimeout(resolve, 5));
+			const latest = await firstContext.internalAdapter.createVerificationValue(
+				{
+					identifier,
+					value: "latest",
+					expiresAt: new Date(Date.now() + 60_000),
+				},
+			);
+
+			const firstAttempt =
+				firstContext.internalAdapter.consumeVerificationValue(identifier);
+			const secondAttempt =
+				secondContext.internalAdapter.consumeVerificationValue(identifier);
+			await losingBatchReady;
+			const winningResult = await Promise.race([firstAttempt, secondAttempt]);
+			expect(winningResult).toMatchObject({ id: latest.id, value: "latest" });
+
+			const replacement =
+				await firstContext.internalAdapter.createVerificationValue({
+					identifier,
+					value: "replacement",
+					expiresAt: new Date(Date.now() + 60_000),
+				});
+			releaseLosingBatch();
+
+			const results = await Promise.all([firstAttempt, secondAttempt]);
+			expect(results.filter((result) => result !== null)).toHaveLength(1);
+			expect(losingBatchOperations).toEqual([
+				{
+					type: "delete",
+					model: "verification",
+					where: [
+						{ field: "id", value: latest.id },
+						{ field: "identifier", value: latest.identifier },
+						{ field: "value", value: latest.value },
+						{ field: "expiresAt", value: latest.expiresAt },
+						{ field: "createdAt", value: latest.createdAt },
+						{ field: "updatedAt", value: latest.updatedAt },
+					],
+				},
+				{
+					type: "deleteMany",
+					model: "verification",
+					where: [{ field: "id", operator: "in", value: [older.id] }],
+				},
+			]);
+			await expect(
+				firstContext.internalAdapter.findVerificationValue(identifier),
+			).resolves.toMatchObject({
+				id: replacement.id,
+				value: "replacement",
+			});
+
+			await kysely.destroy();
+		});
+
+		it("does not consume a verification row updated after the batch snapshot", async () => {
+			const afterDelete = vi.fn();
+			const { context, kysely } = await createAtomicWriteTestContext({
+				databaseHooks: {
+					verification: {
+						delete: { after: afterDelete },
+					},
+				},
+			});
+			const commitAtomicWrites = context.adapter.commitAtomicWrites;
+			if (!commitAtomicWrites) {
+				throw new Error("The atomic test adapter should expose batch writes");
+			}
+
+			let releaseBatch = () => {};
+			let markBatchReady = () => {};
+			const batchReady = new Promise<void>((resolve) => {
+				markBatchReady = resolve;
+			});
+			const continueBatch = new Promise<void>((resolve) => {
+				releaseBatch = resolve;
+			});
+			context.adapter.commitAtomicWrites = async (operations) => {
+				markBatchReady();
+				await continueBatch;
+				return commitAtomicWrites(operations);
+			};
+
+			const identifier = "consume:updated-after-snapshot";
+			await context.internalAdapter.createVerificationValue({
+				identifier,
+				value: "original",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			const consumeAttempt =
+				context.internalAdapter.consumeVerificationValue(identifier);
+			await batchReady;
+
+			const renewedExpiresAt = new Date(Date.now() + 120_000);
+			await context.internalAdapter.updateVerificationByIdentifier(identifier, {
+				value: "renewed",
+				expiresAt: renewedExpiresAt,
+				updatedAt: new Date(),
+			});
+			releaseBatch();
+
+			await expect(consumeAttempt).resolves.toBeNull();
+			expect(afterDelete).not.toHaveBeenCalled();
+			await expect(
+				context.internalAdapter.findVerificationValue(identifier),
+			).resolves.toMatchObject({
+				identifier,
+				value: "renewed",
+				expiresAt: renewedExpiresAt,
+			});
+
+			await kysely.destroy();
+		});
+
+		it("fails before hooks and writes when an identifier snapshot exceeds the atomic bound", async () => {
+			const beforeDelete = vi.fn();
+			const { atomicWrites, context, database, kysely } =
+				await createAtomicWriteTestContext({
+					databaseHooks: {
+						verification: {
+							delete: { before: beforeDelete },
+						},
+					},
+				});
+			const identifier = "consume:oversized-snapshot";
+			const createdAt = new Date();
+			const expiresAt = new Date(Date.now() + 60_000);
+			database
+				.prepare(
+					`WITH RECURSIVE sequence(position) AS (
+						VALUES (0)
+						UNION ALL
+						SELECT position + 1 FROM sequence WHERE position < 4095
+					)
+					INSERT INTO "verification" (
+						"id", "identifier", "value", "expiresAt", "createdAt", "updatedAt"
+					)
+					SELECT
+						'oversized-' || position,
+						?,
+						'value-' || position,
+						?,
+						?,
+						?
+					FROM sequence`,
+				)
+				.run(
+					identifier,
+					expiresAt.toISOString(),
+					createdAt.toISOString(),
+					createdAt.toISOString(),
+				);
+
+			await expect(
+				context.internalAdapter.consumeVerificationValue(identifier),
+			).rejects.toThrow(
+				"Verification identifier has too many rows to consume atomically.",
+			);
+			expect(beforeDelete).not.toHaveBeenCalled();
+			expect(atomicWrites.submittedBatches).toHaveLength(0);
+			await expect(
+				context.adapter.count({
+					model: "verification",
+					where: [{ field: "identifier", value: identifier }],
+				}),
+			).resolves.toBe(4096);
+
+			await kysely.destroy();
+		});
+
+		it("does not submit an atomic batch when a delete.before hook vetoes consumption", async () => {
+			const beforeDelete = vi.fn(async () => false as const);
+			const { atomicWrites, context, kysely } =
+				await createAtomicWriteTestContext({
+					databaseHooks: {
+						verification: {
+							delete: { before: beforeDelete },
+						},
+					},
+				});
+			await context.internalAdapter.createVerificationValue({
+				identifier: "consume:atomic-veto",
+				value: "kept",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			atomicWrites.submittedBatches.length = 0;
+
+			await expect(
+				context.internalAdapter.consumeVerificationValue("consume:atomic-veto"),
+			).resolves.toBeNull();
+
+			expect(beforeDelete).toHaveBeenCalledOnce();
+			expect(atomicWrites.submittedBatches).toHaveLength(0);
+			await expect(
+				context.adapter.count({
+					model: "verification",
+					where: [{ field: "identifier", value: "consume:atomic-veto" }],
+				}),
+			).resolves.toBe(1);
+
+			await kysely.destroy();
+		});
 
 		it("returns the row to the first caller and null to subsequent reads", async () => {
 			const adapter = await makeAdapter();

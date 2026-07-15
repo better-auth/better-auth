@@ -36,6 +36,12 @@ test.describe("postgres-js", async () => {
       AND table_type='BASE TABLE';
     `;
 		const tableNames = allTables.map((row) => row.table_name);
-		expect(tableNames).toEqual(["user", "session", "account", "verification"]);
+		expect(tableNames).toEqual([
+			"user",
+			"session",
+			"identity",
+			"account",
+			"verification",
+		]);
 	});
 });

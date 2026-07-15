@@ -1,4 +1,11 @@
-import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
+import type {
+	BetterAuthOptions,
+	BetterAuthPlugin,
+	UserProvisioningSource,
+	ValidateUserInfoOAuthInfo,
+	ValidateUserInfoSource,
+	ValidateUserInfoSSOInfo,
+} from "@better-auth/core";
 import type { GoogleProfile, JoinConfig, JoinOption } from "better-auth/types";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthEndpoint } from "../api";
@@ -50,9 +57,88 @@ declare module "@better-auth/core" {
 				: never;
 		};
 	}
+
+	interface UserProvisioningSourceRegistry {
+		"test-provisioning": {
+			tenantId: string;
+		};
+	}
 }
 
 describe("general types", async () => {
+	it("narrows provisioning metadata by authentication method", () => {
+		function inspectSource(source: UserProvisioningSource) {
+			if (source.method === "oauth") {
+				expectTypeOf(source.oauth).toEqualTypeOf<ValidateUserInfoOAuthInfo>();
+				expectTypeOf(source.sso).toEqualTypeOf<undefined>();
+				return;
+			}
+			if (source.method === "sso-oidc" || source.method === "sso-saml") {
+				expectTypeOf(source.sso).toEqualTypeOf<ValidateUserInfoSSOInfo>();
+				expectTypeOf(source.oauth).toEqualTypeOf<undefined>();
+				return;
+			}
+			if (source.method === "test-provisioning") {
+				expectTypeOf(source.tenantId).toEqualTypeOf<string>();
+				expectTypeOf(source.oauth).toEqualTypeOf<undefined>();
+				expectTypeOf(source.sso).toEqualTypeOf<undefined>();
+				return;
+			}
+			expectTypeOf(source.oauth).toEqualTypeOf<undefined>();
+			expectTypeOf(source.sso).toEqualTypeOf<undefined>();
+		}
+
+		inspectSource({
+			method: "oauth",
+			oauth: { providerId: "google" },
+		});
+		inspectSource({
+			method: "sso-saml",
+			sso: { providerId: "workforce" },
+		});
+		inspectSource({ method: "email-password" });
+		inspectSource({ method: "test-provisioning", tenantId: "tenant-1" });
+
+		const validationSource = {
+			action: "sign-in",
+			method: "oauth",
+			oauth: { providerId: "github" },
+		} satisfies ValidateUserInfoSource;
+		expectTypeOf(validationSource.action).toEqualTypeOf<"sign-in">();
+
+		// @ts-expect-error OAuth provisioning requires OAuth metadata.
+		const missingOAuthMetadata: UserProvisioningSource = { method: "oauth" };
+		// @ts-expect-error OAuth provisioning cannot carry SSO metadata.
+		const oauthWithSSOMetadata: UserProvisioningSource = {
+			method: "oauth",
+			oauth: { providerId: "github" },
+			sso: { providerId: "workforce" },
+		};
+		// @ts-expect-error SSO provisioning requires SSO metadata.
+		const missingSSOMetadata: UserProvisioningSource = { method: "sso-oidc" };
+		// @ts-expect-error Core provisioning methods cannot carry provider metadata.
+		const passwordWithOAuthMetadata: UserProvisioningSource = {
+			method: "email-password",
+			oauth: { providerId: "github" },
+		};
+		// @ts-expect-error Plugin provisioning requires its registered metadata.
+		const missingPluginMetadata: UserProvisioningSource = {
+			method: "test-provisioning",
+		};
+		// @ts-expect-error Validation sources require a lifecycle action.
+		const missingValidationAction: ValidateUserInfoSource = {
+			method: "oauth",
+			oauth: { providerId: "github" },
+		};
+
+		void missingOAuthMetadata;
+		void oauthWithSSOMetadata;
+		void missingSSOMetadata;
+		void passwordWithOAuthMetadata;
+		void missingPluginMetadata;
+		void missingValidationAction;
+	});
+
 	it("should infer base session", async () => {
 		const { auth } = await getTestInstance();
 		type Session = typeof auth.$Infer.Session;
@@ -332,15 +418,15 @@ describe("public type exports", () => {
 		expectTypeOf<GoogleProfile>().not.toBeAny();
 	});
 
-	it("keeps Generic OAuth profile mapping separate from account identity", () => {
+	it("keeps Generic OAuth profile mapping separate from provider identity", () => {
 		const config: GenericOAuthConfig = {
 			providerId: "company-oauth",
 			clientId: "client-id",
-			accountSubject: ({ profile }) => String(profile.employee_id),
-			// @ts-expect-error Provider identity belongs in accountSubject.
+			identitySubject: ({ profile }) => String(profile.employee_id),
+			// @ts-expect-error Provider identity belongs in identitySubject.
 			mapProfileToUser: () => ({ id: "provider-subject" }),
 		};
-		expectTypeOf(config.accountSubject).not.toBeAny();
+		expectTypeOf(config.identitySubject).not.toBeAny();
 	});
 
 	it("requires Generic OAuth account identity to be resolved from provider data", () => {

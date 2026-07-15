@@ -13,6 +13,7 @@ import {
 	listSSOProviders,
 	updateSSOProvider,
 } from "./routes/providers";
+import { ssoProviderDomainSchema, ssoProviderIdSchema } from "./routes/schemas";
 import {
 	acsEndpoint,
 	callbackSSO,
@@ -216,6 +217,21 @@ function assertNoAdditionalFieldCollisions(options?: SSOOptions) {
 	}
 }
 
+function assertValidConfiguredSSOProviders(options?: SSOOptions): void {
+	for (const provider of options?.defaultSSO ?? []) {
+		if (!ssoProviderIdSchema.safeParse(provider.providerId).success) {
+			throw new Error(
+				`defaultSSO providerId "${provider.providerId}" is not a normalized URL-segment-safe identifier`,
+			);
+		}
+		if (!ssoProviderDomainSchema.safeParse(provider.domain).success) {
+			throw new Error(
+				`defaultSSO provider "${provider.providerId}" must define at least one valid domain`,
+			);
+		}
+	}
+}
+
 export function sso<
 	O extends SSOOptions & {
 		domainVerification?: { enabled: true };
@@ -249,6 +265,7 @@ export function sso<O extends SSOOptions>(
 	options?: O | undefined,
 ): BetterAuthPlugin {
 	assertNoAdditionalFieldCollisions(options);
+	assertValidConfiguredSSOProviders(options);
 	const optionsWithStore = options as O;
 
 	let endpoints = {

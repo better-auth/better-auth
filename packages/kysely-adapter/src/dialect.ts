@@ -7,7 +7,13 @@ import {
 	PostgresDialect,
 	SqliteDialect,
 } from "kysely";
+import {
+	getD1Database,
+	registerKyselyD1Database,
+} from "./d1-database-registry";
 import type { KyselyDatabaseType } from "./types";
+
+type DynamicKyselyDatabaseSchema = Record<string, Record<string, unknown>>;
 
 export function getKyselyDatabaseType(
 	db: BetterAuthOptions["database"],
@@ -67,24 +73,37 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	}
 
 	if ("db" in db) {
+		const d1Database = getD1Database(db.d1Database);
+		if (d1Database) {
+			registerKyselyD1Database(db.db, d1Database);
+		}
 		return {
 			kysely: db.db,
 			databaseType: db.type,
-			transaction: db.transaction,
+			transaction: d1Database ? false : (db.transaction ?? true),
 		};
 	}
 
 	if ("dialect" in db) {
+		const kysely = new Kysely<DynamicKyselyDatabaseSchema>({
+			dialect: db.dialect,
+		});
+		const d1Database = getD1Database(db.d1Database);
+		if (d1Database) {
+			registerKyselyD1Database(kysely, d1Database);
+		}
 		return {
-			kysely: new Kysely<any>({ dialect: db.dialect }),
+			kysely,
 			databaseType: db.type,
-			transaction: db.transaction,
+			transaction: d1Database ? false : (db.transaction ?? true),
 		};
 	}
 
 	let dialect: Dialect | undefined = undefined;
 
 	const databaseType = getKyselyDatabaseType(db);
+	const d1Database = getD1Database(db);
+	const supportsTransactions = !d1Database;
 
 	if ("createDriver" in db) {
 		dialect = db;
@@ -145,16 +164,23 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	}
 
 	// Cloudflare D1
-	if ("batch" in db && "exec" in db && "prepare" in db) {
+	if (d1Database) {
 		const { D1SqliteDialect } = await import("./d1-sqlite-dialect");
 		dialect = new D1SqliteDialect({
-			database: db,
+			database: d1Database,
 		});
 	}
 
+	const kysely = dialect
+		? new Kysely<DynamicKyselyDatabaseSchema>({ dialect })
+		: null;
+	if (kysely && d1Database) {
+		registerKyselyD1Database(kysely, d1Database);
+	}
+
 	return {
-		kysely: dialect ? new Kysely<any>({ dialect }) : null,
+		kysely,
 		databaseType,
-		transaction: undefined,
+		transaction: dialect ? supportsTransactions : undefined,
 	};
 };

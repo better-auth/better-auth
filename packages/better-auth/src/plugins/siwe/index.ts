@@ -1,6 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
+import { createLocalIdentityIssuer } from "@better-auth/core/db";
 import * as z from "zod";
 import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
@@ -235,10 +235,29 @@ export const siwe = (options: SIWEPluginOptions) => {
 							});
 						}
 
-						// Look for existing user by their wallet addresses
-						let user: User | null = null;
+						const identityKey = {
+							issuer: createLocalIdentityIssuer("siwe"),
+							providerAccountId: `${walletAddress}:${chainId}`,
+						};
+						const existingIdentity =
+							await ctx.context.internalAdapter.findUserByIdentityKey(
+								identityKey,
+							);
+						const existingSiweAccount = existingIdentity
+							? await ctx.context.internalAdapter.findAccountByKey({
+									identityId: existingIdentity.identity.id,
+									providerInstanceId: "siwe",
+								})
+							: null;
+						const hasUnlinkedIdentity =
+							!!existingIdentity && !existingSiweAccount;
+						let user: User | null = existingSiweAccount
+							? existingIdentity!.user
+							: null;
 
-						// Check if there's a wallet address record for this exact address+chainId combination
+						// Wallet rows are account-owned profile metadata. A provider account
+						// is the authority for an exact sign-in; the metadata preserves the
+						// existing cross-chain linking policy.
 						const existingWalletAddress: WalletAddress | null =
 							await ctx.context.adapter.findOne({
 								model: "walletAddress",
@@ -248,19 +267,7 @@ export const siwe = (options: SIWEPluginOptions) => {
 								],
 							});
 
-						if (existingWalletAddress) {
-							// Get the user associated with this wallet address
-							user = await ctx.context.adapter.findOne({
-								model: "user",
-								where: [
-									{
-										field: "id",
-										operator: "eq",
-										value: existingWalletAddress.userId,
-									},
-								],
-							});
-						} else {
+						if (!user) {
 							// No exact match found, check if this address exists on any other chain
 							const anyWalletAddress: WalletAddress | null =
 								await ctx.context.adapter.findOne({
@@ -271,22 +278,27 @@ export const siwe = (options: SIWEPluginOptions) => {
 								});
 
 							if (anyWalletAddress) {
-								// Same address exists on different chain, get that user
-								user = await ctx.context.adapter.findOne({
-									model: "user",
-									where: [
-										{
-											field: "id",
-											operator: "eq",
-											value: anyWalletAddress.userId,
-										},
-									],
-								});
+								const linkedAccount =
+									await ctx.context.internalAdapter.findAccountWithIdentityById(
+										anyWalletAddress.accountId,
+									);
+								if (linkedAccount) {
+									user = await ctx.context.internalAdapter.findUserById(
+										linkedAccount.identity.userId,
+									);
+								}
 							}
 						}
 
 						// Create new user if none exists
 						if (!user) {
+							if (hasUnlinkedIdentity) {
+								throw APIError.fromStatus("UNAUTHORIZED", {
+									message: "Unauthorized: Wallet account is not linked",
+									status: 401,
+									code: "UNAUTHORIZED_WALLET_NOT_LINKED",
+								});
+							}
 							const domain =
 								options.emailDomainName ?? getOrigin(ctx.context.baseURL);
 							const normalizedEmail = email?.toLowerCase();
@@ -329,31 +341,69 @@ export const siwe = (options: SIWEPluginOptions) => {
 							}
 							const { name, avatar } =
 								(await options.ensLookup?.({ walletAddress })) ?? {};
-							const createSIWEUser = (email: string) =>
-								ctx.context.internalAdapter.createUser(
-									{
-										name: name ?? walletAddress,
-										email,
-										image: avatar ?? "",
-									},
-									{ method: "siwe" },
-								);
+							const createSiweUser = async (email: string) => {
+								const created =
+									await ctx.context.internalAdapter.createUserWithAccount(
+										{
+											name: name ?? walletAddress,
+											email,
+											image: avatar ?? "",
+											emailVerified: false,
+										},
+										{
+											source: { method: "siwe" },
+											buildAuthentication: () => ({
+												identity: identityKey,
+												account: {
+													providerId: "siwe",
+													providerInstanceId: "siwe",
+												},
+											}),
+											buildRelatedRecords: ({ accountId }) => [
+												{
+													model: "walletAddress",
+													data: {
+														accountId,
+														address: walletAddress,
+														chainId,
+														isPrimary: true,
+														createdAt: new Date(),
+													},
+												},
+											],
+										},
+									);
+								return created.user;
+							};
 
 							try {
-								user = await createSIWEUser(userEmail);
+								user = await createSiweUser(userEmail);
 							} catch (error) {
-								if (userEmail !== normalizedEmail || !normalizedEmail) {
-									throw error;
-								}
-								const claimedUser =
-									await ctx.context.internalAdapter.findUserByEmail(
-										normalizedEmail,
+								const linkedUser =
+									await ctx.context.internalAdapter.findUserByIdentityKey(
+										identityKey,
 									);
-								if (!claimedUser) {
+								const linkedSiweAccount = linkedUser
+									? await ctx.context.internalAdapter.findAccountByKey({
+											identityId: linkedUser.identity.id,
+											providerInstanceId: "siwe",
+										})
+									: null;
+								if (linkedUser && linkedSiweAccount) {
+									user = linkedUser.user;
+								} else if (userEmail !== normalizedEmail || !normalizedEmail) {
 									throw error;
+								} else {
+									const claimedUser =
+										await ctx.context.internalAdapter.findUserByEmail(
+											normalizedEmail,
+										);
+									if (!claimedUser) {
+										throw error;
+									}
+									userEmail = walletEmail;
+									user = await createSiweUser(userEmail);
 								}
-								userEmail = walletEmail;
-								user = await createSIWEUser(userEmail);
 							} finally {
 								if (emailClaimIdentifier) {
 									await ctx.context.internalAdapter
@@ -361,52 +411,29 @@ export const siwe = (options: SIWEPluginOptions) => {
 										.catch(() => {});
 								}
 							}
-
-							// Create wallet address record
-							await ctx.context.adapter.create({
-								model: "walletAddress",
-								data: {
-									userId: user.id,
-									address: walletAddress,
-									chainId,
-									isPrimary: true, // First address is primary
-									createdAt: new Date(),
-								},
-							});
-
-							// Create account record for wallet authentication
-							await ctx.context.internalAdapter.createAccount({
-								userId: user.id,
-								providerId: "siwe",
-								issuer: createLocalAccountIssuer("siwe"),
-								providerAccountId: `${walletAddress}:${chainId}`,
-								createdAt: new Date(),
-								updatedAt: new Date(),
-							});
 						} else {
 							// User exists, but check if this specific address/chain combo exists
 							if (!existingWalletAddress) {
-								// Add this new chainId to existing user's addresses
-								await ctx.context.adapter.create({
-									model: "walletAddress",
-									data: {
-										userId: user.id,
-										address: walletAddress,
-										chainId,
-										isPrimary: false, // Additional addresses are not primary by default
-										createdAt: new Date(),
+								// Persist the wallet row and its authentication graph together.
+								await ctx.context.internalAdapter.linkAccount(
+									user.id,
+									identityKey,
+									{ providerId: "siwe", providerInstanceId: "siwe" },
+									{
+										buildRelatedRecords: ({ accountId }) => [
+											{
+												model: "walletAddress",
+												data: {
+													accountId,
+													address: walletAddress,
+													chainId,
+													isPrimary: false,
+													createdAt: new Date(),
+												},
+											},
+										],
 									},
-								});
-
-								// Create account record for this new wallet+chain combination
-								await ctx.context.internalAdapter.createAccount({
-									userId: user.id,
-									providerId: "siwe",
-									issuer: createLocalAccountIssuer("siwe"),
-									providerAccountId: `${walletAddress}:${chainId}`,
-									createdAt: new Date(),
-									updatedAt: new Date(),
-								});
+								);
 							}
 						}
 

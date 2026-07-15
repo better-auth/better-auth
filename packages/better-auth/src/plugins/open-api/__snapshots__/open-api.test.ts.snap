@@ -24,16 +24,16 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           "idToken": {
             "type": "string",
           },
-          "issuer": {
+          "identityId": {
             "type": "string",
           },
           "password": {
             "type": "string",
           },
-          "providerAccountId": {
+          "providerId": {
             "type": "string",
           },
-          "providerId": {
+          "providerInstanceId": {
             "type": "string",
           },
           "refreshToken": {
@@ -50,6 +50,36 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "format": "date-time",
             "type": "string",
           },
+        },
+        "required": [
+          "id",
+          "identityId",
+          "providerId",
+          "createdAt",
+          "updatedAt",
+        ],
+        "type": "object",
+      },
+      "Identity": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+          },
+          "id": {
+            "readOnly": true,
+            "type": "string",
+          },
+          "issuer": {
+            "type": "string",
+          },
+          "providerAccountId": {
+            "type": "string",
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+          },
           "userId": {
             "type": "string",
           },
@@ -58,7 +88,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           "id",
           "issuer",
           "providerAccountId",
-          "providerId",
           "userId",
           "createdAt",
           "updatedAt",
@@ -228,11 +257,25 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                         "id": {
                           "type": "string",
                         },
-                        "issuer": {
-                          "type": "string",
-                        },
-                        "providerAccountId": {
-                          "type": "string",
+                        "identity": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                            },
+                            "issuer": {
+                              "type": "string",
+                            },
+                            "providerAccountId": {
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "id",
+                            "issuer",
+                            "providerAccountId",
+                          ],
+                          "type": "object",
                         },
                         "providerId": {
                           "type": "string",
@@ -241,8 +284,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "required": [
                         "id",
                         "providerId",
-                        "issuer",
-                        "providerAccountId",
+                        "identity",
                       ],
                       "type": "object",
                     },
@@ -2221,11 +2263,34 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "id": {
                         "type": "string",
                       },
-                      "issuer": {
-                        "type": "string",
-                      },
-                      "providerAccountId": {
-                        "type": "string",
+                      "identity": {
+                        "properties": {
+                          "createdAt": {
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "id": {
+                            "type": "string",
+                          },
+                          "issuer": {
+                            "type": "string",
+                          },
+                          "providerAccountId": {
+                            "type": "string",
+                          },
+                          "updatedAt": {
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "id",
+                          "issuer",
+                          "providerAccountId",
+                          "createdAt",
+                          "updatedAt",
+                        ],
+                        "type": "object",
                       },
                       "providerId": {
                         "type": "string",
@@ -2240,18 +2305,13 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                         "format": "date-time",
                         "type": "string",
                       },
-                      "userId": {
-                        "type": "string",
-                      },
                     },
                     "required": [
                       "id",
                       "providerId",
                       "createdAt",
                       "updatedAt",
-                      "issuer",
-                      "providerAccountId",
-                      "userId",
+                      "identity",
                       "scopes",
                     ],
                     "type": "object",

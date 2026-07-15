@@ -28,7 +28,7 @@ const sessions = sqliteTable("session", {
 	id: text("id").primaryKey(),
 	userId: text("userId")
 		.notNull()
-		.references(() => users.id),
+		.references(() => users.id, { onDelete: "restrict" }),
 	token: text("token").notNull(),
 	expiresAt: integer("expiresAt", { mode: "timestamp" }).notNull(),
 	ipAddress: text("ipAddress"),
@@ -37,14 +37,24 @@ const sessions = sqliteTable("session", {
 	updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
 });
 
-const accounts = sqliteTable("account", {
+const identities = sqliteTable("identity", {
 	id: text("id").primaryKey(),
-	issuer: text("issuer").notNull(),
-	providerAccountId: text("providerAccountId").notNull(),
-	providerId: text("providerId").notNull(),
 	userId: text("userId")
 		.notNull()
-		.references(() => users.id),
+		.references(() => users.id, { onDelete: "restrict" }),
+	issuer: text("issuer").notNull(),
+	providerAccountId: text("providerAccountId").notNull(),
+	createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+	updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+});
+
+const accounts = sqliteTable("account", {
+	id: text("id").primaryKey(),
+	identityId: text("identityId")
+		.notNull()
+		.references(() => identities.id, { onDelete: "restrict" }),
+	providerId: text("providerId").notNull(),
+	providerInstanceId: text("providerInstanceId").notNull(),
 	accessToken: text("accessToken"),
 	refreshToken: text("refreshToken"),
 	idToken: text("idToken"),
@@ -71,30 +81,41 @@ const verifications = sqliteTable("verification", {
 
 const usersRelations = relations(users, ({ many }) => ({
 	sessions: many(sessions),
-	accounts: many(accounts),
+	identities: many(identities),
 }));
 
 const sessionsRelations = relations(sessions, ({ one }) => ({
 	user: one(users, { fields: [sessions.userId], references: [users.id] }),
 }));
 
+const identitiesRelations = relations(identities, ({ many, one }) => ({
+	user: one(users, { fields: [identities.userId], references: [users.id] }),
+	accounts: many(accounts),
+}));
+
 const accountsRelations = relations(accounts, ({ one }) => ({
-	user: one(users, { fields: [accounts.userId], references: [users.id] }),
+	identity: one(identities, {
+		fields: [accounts.identityId],
+		references: [identities.id],
+	}),
 }));
 
 const drizzleSchema = {
 	users,
 	sessions,
+	identities,
 	accounts,
 	verifications,
 	usersRelations,
 	sessionsRelations,
+	identitiesRelations,
 	accountsRelations,
 };
 
 const adapterSchema = {
 	user: users,
 	session: sessions,
+	identity: identities,
 	account: accounts,
 	verification: verifications,
 };
@@ -117,7 +138,7 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 			);
 			CREATE TABLE session (
 				id TEXT PRIMARY KEY,
-				userId TEXT NOT NULL REFERENCES user(id),
+				userId TEXT NOT NULL REFERENCES user(id) ON DELETE RESTRICT,
 				token TEXT NOT NULL,
 				expiresAt INTEGER NOT NULL,
 				ipAddress TEXT,
@@ -125,12 +146,19 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 				createdAt INTEGER NOT NULL,
 				updatedAt INTEGER NOT NULL
 			);
-			CREATE TABLE account (
+			CREATE TABLE identity (
 				id TEXT PRIMARY KEY,
 				issuer TEXT NOT NULL,
 				providerAccountId TEXT NOT NULL,
+				userId TEXT NOT NULL REFERENCES user(id) ON DELETE RESTRICT,
+				createdAt INTEGER NOT NULL,
+				updatedAt INTEGER NOT NULL
+			);
+			CREATE TABLE account (
+				id TEXT PRIMARY KEY,
+				identityId TEXT NOT NULL REFERENCES identity(id) ON DELETE RESTRICT,
 				providerId TEXT NOT NULL,
-				userId TEXT NOT NULL REFERENCES user(id),
+				providerInstanceId TEXT NOT NULL,
 				accessToken TEXT,
 				refreshToken TEXT,
 				idToken TEXT,
@@ -187,6 +215,7 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 		const adapterFactory = drizzleAdapter(db, {
 			schema: adapterSchema,
 			provider: "sqlite",
+			transaction: "sync",
 		});
 		const adapter = adapterFactory({});
 
@@ -219,6 +248,7 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 		const adapterFactory = drizzleAdapter(db, {
 			schema: adapterSchema,
 			provider: "sqlite",
+			transaction: "sync",
 		});
 		const adapter = adapterFactory({
 			advanced: { database: { joins: true } },
@@ -264,6 +294,7 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 		const adapterFactory = drizzleAdapter(db, {
 			schema: adapterSchema,
 			provider: "sqlite",
+			transaction: "sync",
 		});
 		const adapter = adapterFactory({
 			advanced: { database: { joins: true } },
@@ -303,6 +334,7 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 		const adapterFactory = drizzleAdapter(db, {
 			schema: adapterSchema,
 			provider: "sqlite",
+			transaction: "sync",
 		});
 		const adapter = adapterFactory({
 			advanced: { database: { joins: true } },
@@ -340,6 +372,7 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 		const adapterFactory = drizzleAdapter(db, {
 			schema: adapterSchema,
 			provider: "sqlite",
+			transaction: "sync",
 		});
 		const adapter = adapterFactory({
 			advanced: { database: { joins: true } },
@@ -387,6 +420,7 @@ describe("drizzle adapter: mixed AND/OR connectors in where clauses", () => {
 		const adapterFactory = drizzleAdapter(db, {
 			schema: adapterSchema,
 			provider: "sqlite",
+			transaction: "sync",
 		});
 		const adapter = adapterFactory({
 			advanced: { database: { joins: true } },

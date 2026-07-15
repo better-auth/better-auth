@@ -1,7 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { User } from "@better-auth/core/db";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import {
 	additionalAuthorizationParamsSchema,
@@ -14,14 +13,14 @@ import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
 import {
-	resolveOAuthAccountKeyForAPI,
-	toOAuthProfileRecord,
-} from "../../oauth2/account-key";
-import {
 	missingEmailLogMessage,
 	OAUTH_CALLBACK_ERROR_CODES,
 } from "../../oauth2/errors";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import {
+	resolveOAuthIdentityKeyForAPI,
+	toOAuthProfileRecord,
+} from "../../oauth2/identity-key";
+import { authenticateProviderUser } from "../../oauth2/provider-user";
 import { getOAuthCallbackPath } from "../../oauth2/utils";
 import { generateIdTokenNonce, generateState } from "../../utils";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
@@ -318,24 +317,25 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
 					);
 				}
-				const accountKey = await resolveOAuthAccountKeyForAPI(
+				const identityKey = await resolveOAuthIdentityKeyForAPI(
 					provider,
 					oauthTokens,
 					userInfo.data,
 				);
 				const providerProfile = toOAuthProfileRecord(userInfo.data);
-				const data = await handleOAuthUserInfo(c, {
+				const data = await authenticateProviderUser(c, {
 					userInfo: {
 						...userInfo.user,
 						email: userInfo.user.email,
-						id: accountKey.providerAccountId,
+						id: identityKey.providerAccountId,
 						name: userInfo.user.name || "",
 						image: userInfo.user.image,
 						emailVerified: userInfo.user.emailVerified || false,
 					},
+					identity: identityKey,
 					account: {
 						providerId: provider.id,
-						...accountKey,
+						providerInstanceId: provider.id,
 						accessToken: c.body.idToken.accessToken,
 						idToken: token,
 					},
@@ -526,15 +526,12 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			}
 			const userRecord = await ctx.context.internalAdapter.findUserByEmail(
 				email.toLowerCase(),
-				{ includeAccounts: true },
 			);
-			const credentialIssuer = createLocalAccountIssuer("credential");
-			const credentialAccount = userRecord?.accounts.find(
-				(account) =>
-					account.providerId === "credential" &&
-					account.issuer === credentialIssuer &&
-					account.providerAccountId === userRecord.user.id,
-			);
+			const credentialAccount = userRecord
+				? await ctx.context.internalAdapter.findCredentialAccount(
+						userRecord.user.id,
+					)
+				: null;
 
 			if (!userRecord || !credentialAccount) {
 				// Hash password to prevent timing attacks from revealing valid email addresses

@@ -25,9 +25,8 @@ import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import {
 	additionalAuthorizationParamsSchema,
-	handleOAuthUserInfo,
+	authenticateProviderUser,
 } from "better-auth/oauth2";
-import { decodeJwt } from "jose";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { RequestInfo } from "samlify/types/src/types";
 import * as z from "zod";
@@ -43,6 +42,15 @@ import {
 	validateOIDCEndpointUrls,
 	validateOIDCIdToken,
 } from "../oidc";
+import type { ResolvedSSOProvider } from "../provider-instance";
+import {
+	createConfiguredSSOProviderInstance,
+	createPersistedSSOProviderInstance,
+	getSSOProviderReference,
+	isCurrentSSOProviderReference,
+	parseSSOProviderReference,
+	resolveSSOIdentityIssuer,
+} from "../provider-instance";
 import { validateCertSources, validateConfigAlgorithms } from "../saml";
 import { SAML_ERROR_CODES } from "../saml/error-codes";
 import { generateRelayState } from "../saml-state";
@@ -72,6 +80,7 @@ import {
 	findSAMLProvider,
 } from "./helpers";
 import {
+	assertPersistedSSONativeTransactionSupport,
 	filterSSOProviderAdditionalFields,
 	hasOrgAdminRole,
 	lockSSOProviderForAccountLink,
@@ -82,14 +91,7 @@ import {
 	parseSSOProviderAdditionalFields,
 } from "./schemas";
 
-const BUILT_IN_ACCOUNT_PROVIDER_IDS = [
-	"credential",
-	"email-otp",
-	"magic-link",
-	"phone-number",
-	"anonymous",
-	"siwe",
-] as const;
+const SSO_PROVIDER_STATE_KEY = "ssoProvider";
 
 /**
  * Builds the OIDC redirect URI. Uses the shared `redirectURI` option
@@ -371,6 +373,10 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 								},
 							},
 						},
+						"501": {
+							description:
+								"The database adapter does not support native transactions",
+						},
 					},
 				},
 			},
@@ -380,6 +386,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 			if (!user) {
 				throw new APIError("UNAUTHORIZED");
 			}
+			assertPersistedSSONativeTransactionSupport(ctx.context.adapter);
 
 			const limit =
 				typeof options?.providersLimit === "function"
@@ -451,46 +458,19 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				}
 			}
 
-			// SSO provider ids currently share the account-linking provider namespace.
-			// Reject collisions so a user-registered SSO provider cannot be confused
-			// with another account-producing provider.
-			// TODO(next): replace providerId account-link ownership with immutable
-			// SSO provider instance ids, then remove this cross-plugin slug coupling.
-			// Trust for SSO providers is established separately via
-			// verified domain ownership, never by this shared namespace.
-			const reservedProviderIds = new Set<string>([
-				...BUILT_IN_ACCOUNT_PROVIDER_IDS,
-				...Object.keys(ctx.context.options.socialProviders ?? {}),
-				...ctx.context.socialProviders.map((p) => p.id),
-				...ctx.context.trustedProviders,
-				...(options?.defaultSSO?.map((p) => p.providerId) ?? []),
-			]);
-			if (reservedProviderIds.has(body.providerId)) {
+			if (
+				options?.defaultSSO?.some(
+					(configuredProvider) =>
+						configuredProvider.providerId === body.providerId,
+				)
+			) {
 				ctx.context.logger.warn(
-					`SSO provider registration rejected for reserved providerId: ${body.providerId}`,
+					`SSO provider registration rejected for configured providerId: ${body.providerId}`,
 				);
 				throw new APIError("UNPROCESSABLE_ENTITY", {
 					message:
-						"This providerId is reserved and cannot be used for an SSO provider",
+						"This providerId is already used by a configured SSO provider",
 				});
-			}
-
-			if (ctx.context.hasPlugin("scim")) {
-				const existingSCIMProvider = await ctx.context.adapter.findOne<{
-					id: string;
-				}>({
-					model: "scimProvider",
-					where: [{ field: "providerId", value: body.providerId }],
-				});
-				if (existingSCIMProvider) {
-					ctx.context.logger.warn(
-						`SSO provider registration rejected for SCIM providerId: ${body.providerId}`,
-					);
-					throw new APIError("UNPROCESSABLE_ENTITY", {
-						message:
-							"This providerId is already used by a SCIM provider and cannot be used for an SSO provider",
-					});
-				}
 			}
 
 			const existingProvider = await ctx.context.adapter.findOne({
@@ -982,7 +962,7 @@ export const signInSSO = (options?: SSOOptions) => {
 						return res.id;
 					});
 			}
-			let provider: SSOProvider<SSOOptions> | null = null;
+			let provider: ResolvedSSOProvider | null = null;
 			if (options?.defaultSSO?.length) {
 				// Find matching default SSO provider by providerId
 				const matchingDefault = providerId
@@ -1005,10 +985,13 @@ export const signInSSO = (options?: SSOOptions) => {
 						oidcConfig: matchingDefault.oidcConfig,
 						samlConfig: matchingDefault.samlConfig,
 						domain: matchingDefault.domain,
+						instance: createConfiguredSSOProviderInstance(
+							matchingDefault.providerId,
+						),
 						...(options.domainVerification?.enabled
 							? { domainVerified: true }
 							: {}),
-					} as SSOProvider<SSOOptions>;
+					} as ResolvedSSOProvider;
 				}
 			}
 			if (!providerId && !orgId && !domain) {
@@ -1018,10 +1001,13 @@ export const signInSSO = (options?: SSOOptions) => {
 			}
 			// Try to find provider in database
 			if (!provider) {
-				const parseProvider = (res: SSOProvider<SSOOptions> | null) => {
+				const parseProvider = (
+					res: (SSOProvider<SSOOptions> & { id: string }) | null,
+				): ResolvedSSOProvider | null => {
 					if (!res) return null;
 					return {
 						...res,
+						instance: createPersistedSSOProviderInstance(res.id),
 						oidcConfig: res.oidcConfig
 							? safeJsonParse<OIDCConfig>(
 									res.oidcConfig as unknown as string,
@@ -1032,13 +1018,15 @@ export const signInSSO = (options?: SSOOptions) => {
 									res.samlConfig as unknown as string,
 								) || undefined
 							: undefined,
-					};
+					} as ResolvedSSOProvider;
 				};
 
 				if (providerId || orgId) {
 					// Exact match for providerId or orgId
 					provider = parseProvider(
-						await ctx.context.adapter.findOne<SSOProvider<SSOOptions>>({
+						await ctx.context.adapter.findOne<
+							SSOProvider<SSOOptions> & { id: string }
+						>({
 							model: "ssoProvider",
 							where: [
 								{
@@ -1052,7 +1040,9 @@ export const signInSSO = (options?: SSOOptions) => {
 					// For domain lookup, support comma-separated domains
 					// First try exact match (fast path)
 					provider = parseProvider(
-						await ctx.context.adapter.findOne<SSOProvider<SSOOptions>>({
+						await ctx.context.adapter.findOne<
+							SSOProvider<SSOOptions> & { id: string }
+						>({
 							model: "ssoProvider",
 							where: [{ field: "domain", value: domain }],
 						}),
@@ -1060,7 +1050,7 @@ export const signInSSO = (options?: SSOOptions) => {
 					// If not found, search all providers for comma-separated domain match
 					if (!provider) {
 						const allProviders = await ctx.context.adapter.findMany<
-							SSOProvider<SSOOptions>
+							SSOProvider<SSOOptions> & { id: string }
 						>({
 							model: "ssoProvider",
 						});
@@ -1119,13 +1109,12 @@ export const signInSSO = (options?: SSOOptions) => {
 						message: "Invalid OIDC configuration. Authorization URL not found.",
 					});
 				}
-				if (options?.redirectURI?.trim()) {
-					// The shared OIDC callback resolves the provider from server-only
-					// state, so it must not be client-spoofable.
-					await addOAuthServerContext({
-						ssoProviderId: provider.providerId,
-					});
-				}
+				await addOAuthServerContext({
+					[SSO_PROVIDER_STATE_KEY]: await getSSOProviderReference(
+						provider,
+						"oidc",
+					),
+				});
 				const state = await generateState(ctx);
 				const redirectURI = getOIDCRedirectURI(
 					ctx.context.baseURL,
@@ -1182,7 +1171,11 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 				}
 
-				const { state: relayState } = await generateRelayState(ctx, undefined);
+				const { state: relayState } = await generateRelayState(
+					ctx,
+					undefined,
+					await getSSOProviderReference(provider, "saml"),
+				);
 
 				const sp = createSP(
 					parsedSamlConfig,
@@ -1213,7 +1206,7 @@ export const signInSSO = (options?: SSOOptions) => {
 						options?.saml?.requestTTL ?? constants.DEFAULT_AUTHN_REQUEST_TTL_MS;
 					const record: AuthnRequestRecord = {
 						id: loginRequest.id,
-						providerId: provider.providerId,
+						providerInstanceId: provider.instance.providerInstanceId,
 						createdAt: Date.now(),
 						expiresAt: Date.now() + ttl,
 					};
@@ -1319,6 +1312,20 @@ async function handleOIDCCallback(
 			`${
 				errorURL || callbackURL
 			}?error=invalid_provider&error_description=provider not found`,
+		);
+	}
+	if (
+		!(await isCurrentSSOProviderReference(
+			provider,
+			parseSSOProviderReference(
+				stateData.serverContext?.[SSO_PROVIDER_STATE_KEY],
+			),
+			"oidc",
+		))
+	) {
+		redirectOIDCError(
+			"invalid_state",
+			"sso_provider_changed_during_authentication",
 		);
 	}
 
@@ -1496,18 +1503,62 @@ async function handleOIDCCallback(
 			}?error=invalid_provider&error_description=token_response_not_found`,
 		);
 	}
-	let userInfo: {
+	type OIDCUserInfo = {
 		id?: string;
 		email?: string;
 		name?: string;
 		image?: string;
 		emailVerified?: boolean;
-		[key: string]: any;
-	} | null = null;
+	} & Record<string, unknown>;
+	let userInfo: OIDCUserInfo | null = null;
 	const mapping = config.mapping || {};
+	const readStringClaim = (
+		claims: Record<string, unknown>,
+		claim: string,
+	): string | undefined => {
+		const value = claims[claim];
+		return typeof value === "string" && value.length > 0 ? value : undefined;
+	};
 	// The raw, unmapped provider claims, forwarded to the validateUserInfo gate
 	// as `source.sso.profile` so a policy can inspect provider-specific fields.
 	let rawProfile: Record<string, unknown> | undefined;
+	let verifiedIdToken: Awaited<ReturnType<typeof validateOIDCIdToken>> | null =
+		null;
+
+	if (tokenResponse.idToken) {
+		if (!config.jwksEndpoint) {
+			throw ctx.redirect(
+				`${
+					errorURL || callbackURL
+				}?error=invalid_provider&error_description=jwks_endpoint_not_found`,
+			);
+		}
+		verifiedIdToken = await validateOIDCIdToken(
+			tokenResponse.idToken,
+			config.jwksEndpoint,
+			{
+				audience: config.clientId,
+				issuer: provider.issuer,
+			},
+			(url) => ctx.context.isTrustedOrigin(url),
+		).catch((e) => {
+			if (e instanceof DiscoveryError) {
+				redirectOIDCError("invalid_provider", e.message);
+			}
+			ctx.context.logger.error(e);
+			return null;
+		});
+		if (!verifiedIdToken) {
+			throw ctx.redirect(
+				`${
+					errorURL || callbackURL
+				}?error=invalid_provider&error_description=token_not_verified`,
+			);
+		}
+		if (!verifiedIdToken.payload.sub) {
+			redirectOIDCError("invalid_provider", "id_token_subject_missing");
+		}
+	}
 
 	if (config.userInfoEndpoint) {
 		const userInfoResponse = await fetchOIDCEndpoint<Record<string, unknown>>(
@@ -1536,6 +1587,12 @@ async function handleOIDCCallback(
 		const rawUserInfo =
 			userInfoResponse.data ??
 			redirectOIDCError("invalid_provider", "userinfo_response_not_found");
+		if (verifiedIdToken && rawUserInfo.sub !== verifiedIdToken.payload.sub) {
+			redirectOIDCError(
+				"invalid_provider",
+				"id_token_userinfo_subject_mismatch",
+			);
+		}
 		rawProfile = rawUserInfo;
 		userInfo = {
 			...Object.fromEntries(
@@ -1544,71 +1601,35 @@ async function handleOIDCCallback(
 					rawUserInfo[value],
 				]),
 			),
-			id: rawUserInfo.sub as string | undefined,
-			email: rawUserInfo[mapping.email || "email"] as string | undefined,
+			id: readStringClaim(rawUserInfo, "sub"),
+			email: readStringClaim(rawUserInfo, mapping.email || "email"),
 			emailVerified: options?.trustEmailVerified
 				? parseProviderEmailVerified(
 						rawUserInfo[mapping.emailVerified || "email_verified"],
 					)
 				: false,
-			name: rawUserInfo[mapping.name || "name"] as string | undefined,
-			image: rawUserInfo[mapping.image || "picture"] as string | undefined,
+			name: readStringClaim(rawUserInfo, mapping.name || "name"),
+			image: readStringClaim(rawUserInfo, mapping.image || "picture"),
 		};
-	} else if (tokenResponse.idToken) {
-		const idToken = decodeJwt(tokenResponse.idToken);
-		rawProfile = idToken as Record<string, unknown>;
-		if (!config.jwksEndpoint) {
-			throw ctx.redirect(
-				`${
-					errorURL || callbackURL
-				}?error=invalid_provider&error_description=jwks_endpoint_not_found`,
-			);
-		}
-		const verified = await validateOIDCIdToken(
-			tokenResponse.idToken,
-			config.jwksEndpoint,
-			{
-				audience: config.clientId,
-				issuer: provider.issuer,
-			},
-			(url) => ctx.context.isTrustedOrigin(url),
-		).catch((e) => {
-			if (e instanceof DiscoveryError) {
-				redirectOIDCError("invalid_provider", e.message);
-			}
-			ctx.context.logger.error(e);
-			return null;
-		});
-		if (!verified) {
-			throw ctx.redirect(
-				`${
-					errorURL || callbackURL
-				}?error=invalid_provider&error_description=token_not_verified`,
-			);
-		}
-
+	} else if (verifiedIdToken) {
+		const idToken = verifiedIdToken.payload;
+		rawProfile = idToken;
 		userInfo = {
 			...Object.fromEntries(
 				Object.entries(mapping.extraFields || {}).map(([key, value]) => [
 					key,
-					verified.payload[value],
+					idToken[value],
 				]),
 			),
-			id: verified.payload.sub,
-			email: idToken[mapping.email || "email"],
+			id: idToken.sub,
+			email: readStringClaim(idToken, mapping.email || "email"),
 			emailVerified: options?.trustEmailVerified
 				? parseProviderEmailVerified(
 						idToken[mapping.emailVerified || "email_verified"],
 					)
 				: false,
-			name: idToken[mapping.name || "name"],
-			image: idToken[mapping.image || "picture"],
-		} as {
-			id?: string;
-			email?: string;
-			name?: string;
-			image?: string;
-			emailVerified?: boolean;
+			name: readStringClaim(idToken, mapping.name || "name"),
+			image: readStringClaim(idToken, mapping.image || "picture"),
 		};
 	} else {
 		throw ctx.redirect(
@@ -1618,7 +1639,7 @@ async function handleOIDCCallback(
 		);
 	}
 
-	if (!userInfo.email || !userInfo.id) {
+	if (!userInfo?.email || !userInfo.id) {
 		throw ctx.redirect(
 			`${
 				errorURL || callbackURL
@@ -1627,16 +1648,23 @@ async function handleOIDCCallback(
 	}
 	const userInfoEmail = userInfo.email;
 	const userInfoId = userInfo.id;
+	const identityIssuer = resolveSSOIdentityIssuer(
+		provider,
+		"oidc",
+		typeof verifiedIdToken?.payload.iss === "string"
+			? verifiedIdToken.payload.iss
+			: undefined,
+	);
 	const isTrustedProvider =
 		"domainVerified" in provider &&
 		(provider as { domainVerified?: boolean }).domainVerified === true &&
 		validateEmailDomain(userInfoEmail, provider.domain);
 
-	let linked: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+	let linked: Awaited<ReturnType<typeof authenticateProviderUser>>;
 	try {
 		linked = await runWithTransaction(ctx.context.adapter, async () => {
 			await lockSSOProviderForAccountLink(ctx, provider);
-			return handleOAuthUserInfo(ctx, {
+			return authenticateProviderUser(ctx, {
 				userInfo: {
 					email: userInfoEmail,
 					name: userInfo.name || "",
@@ -1646,13 +1674,16 @@ async function handleOIDCCallback(
 						? userInfo.emailVerified || false
 						: false,
 				},
+				identity: {
+					issuer: identityIssuer,
+					providerAccountId: userInfoId,
+				},
 				account: {
 					idToken: tokenResponse.idToken,
 					accessToken: tokenResponse.accessToken,
 					refreshToken: tokenResponse.refreshToken,
-					issuer: provider.issuer,
-					providerAccountId: userInfoId,
 					providerId: provider.providerId,
+					providerInstanceId: provider.instance.providerInstanceId,
 					accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
 					refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
 					scope: tokenResponse.scopes?.join(","),
@@ -1665,10 +1696,8 @@ async function handleOIDCCallback(
 					sso: { providerId: provider.providerId, profile: rawProfile },
 				},
 				isTrustedProvider,
-				// SSO provider ids are user-controlled and live in the same namespace
-				// as social providers. Never inherit trust from the global
-				// `trustedProviders` list by name — rely solely on the SSO-specific
-				// `isTrustedProvider` (verified domain ownership) computed above.
+				// An SSO alias is only a routing label. Trust comes from the
+				// verified SSO authority, not another provider with the same name.
 				trustProviderByName: false,
 			});
 		});
@@ -1688,7 +1717,7 @@ async function handleOIDCCallback(
 		const sep = baseURL.includes("?") ? "&" : "?";
 		throw ctx.redirect(`${baseURL}${sep}${params.toString()}`);
 	}
-	const { session, user } = linked.data!;
+	const { user } = linked.data!;
 
 	if (
 		options?.provisionUser &&
@@ -1717,10 +1746,7 @@ async function handleOIDCCallback(
 		provisioningOptions: options?.organizationProvisioning,
 	});
 
-	await setSessionCookie(ctx, {
-		session,
-		user,
-	});
+	await setSessionCookie(ctx, linked.data!);
 	let toRedirectTo: string;
 	try {
 		const url = linked.isRegister ? newUserURL || callbackURL : callbackURL;
@@ -1763,7 +1789,7 @@ async function resolveOIDCProvider(
 	ctx: any,
 	options: SSOOptions | undefined,
 	providerId: string,
-): Promise<SSOProvider<SSOOptions> | null> {
+): Promise<ResolvedSSOProvider | null> {
 	const matchingDefault = options?.defaultSSO?.find(
 		(defaultProvider) => defaultProvider.providerId === providerId,
 	);
@@ -1772,21 +1798,25 @@ async function resolveOIDCProvider(
 			...matchingDefault,
 			issuer: matchingDefault.oidcConfig?.issuer || "",
 			userId: "default",
+			instance: createConfiguredSSOProviderInstance(matchingDefault.providerId),
 			...(options?.domainVerification?.enabled ? { domainVerified: true } : {}),
-		} as SSOProvider<SSOOptions>;
+		} as ResolvedSSOProvider;
 	}
-	return ctx.context.adapter
-		.findOne({
-			model: "ssoProvider",
-			where: [{ field: "providerId", value: providerId }],
-		})
-		.then((res: { oidcConfig: string } | null) => {
-			if (!res) return null;
-			return {
-				...res,
-				oidcConfig: safeJsonParse<OIDCConfig>(res.oidcConfig) || undefined,
-			} as SSOProvider<SSOOptions>;
-		});
+	const provider = (await ctx.context.adapter.findOne({
+		model: "ssoProvider",
+		where: [{ field: "providerId", value: providerId }],
+	})) as
+		| (SSOProvider<SSOOptions> & {
+				id: string;
+				oidcConfig: string;
+		  })
+		| null;
+	if (!provider) return null;
+	return {
+		...provider,
+		instance: createPersistedSSOProviderInstance(provider.id),
+		oidcConfig: safeJsonParse<OIDCConfig>(provider.oidcConfig) || undefined,
+	} as ResolvedSSOProvider;
 }
 
 /**
@@ -1822,11 +1852,9 @@ async function bounceIfIdpInitiated(
 		return;
 	}
 
-	if (options?.redirectURI?.trim()) {
-		// The shared OIDC callback resolves the provider from server-only state,
-		// so it must not be client-spoofable.
-		await addOAuthServerContext({ ssoProviderId: provider.providerId });
-	}
+	await addOAuthServerContext({
+		[SSO_PROVIDER_STATE_KEY]: await getSSOProviderReference(provider, "oidc"),
+	});
 	const state = await generateState(ctx);
 	const redirectURI = getOIDCRedirectURI(
 		ctx.context.baseURL,
@@ -1892,17 +1920,22 @@ export const callbackSSOShared = (options?: SSOOptions) => {
 				throw ctx.redirect(`${errorURL}?error=invalid_state`);
 			}
 
-			const providerId = stateData.serverContext?.ssoProviderId as
-				| string
-				| undefined;
-			if (!providerId) {
+			const providerReference = parseSSOProviderReference(
+				stateData.serverContext?.[SSO_PROVIDER_STATE_KEY],
+			);
+			if (!providerReference) {
 				const errorURL = stateData.errorURL || stateData.callbackURL;
 				throw ctx.redirect(
-					`${errorURL}?error=invalid_state&error_description=missing_provider_id`,
+					`${errorURL}?error=invalid_state&error_description=missing_sso_provider_reference`,
 				);
 			}
 
-			return handleOIDCCallback(ctx, options, providerId, stateData);
+			return handleOIDCCallback(
+				ctx,
+				options,
+				providerReference.providerId,
+				stateData,
+			);
 		},
 	);
 };
@@ -2093,10 +2126,24 @@ export const sloEndpoint = (options?: SSOOptions) => {
 			const idp = createIdP(config);
 
 			if (samlResponse) {
-				return handleLogoutResponse(ctx, sp, idp, relayState, providerId);
+				return handleLogoutResponse(
+					ctx,
+					sp,
+					idp,
+					relayState,
+					providerId,
+					provider.instance.providerInstanceId,
+				);
 			}
 
-			return handleLogoutRequest(ctx, sp, idp, relayState, providerId);
+			return handleLogoutRequest(
+				ctx,
+				sp,
+				idp,
+				relayState,
+				providerId,
+				provider.instance.providerInstanceId,
+			);
 		},
 	);
 };
@@ -2107,6 +2154,7 @@ async function handleLogoutResponse(
 	idp: ReturnType<typeof createIdP>,
 	relayState: string | undefined,
 	providerId: string,
+	providerInstanceId: string,
 ) {
 	const binding =
 		ctx.method === "POST" && ctx.body?.SAMLResponse ? "post" : "redirect";
@@ -2146,10 +2194,14 @@ async function handleLogoutResponse(
 		const pendingRequest =
 			await ctx.context.internalAdapter.findVerificationValue(key);
 
-		if (!pendingRequest) {
+		if (!pendingRequest || pendingRequest.value !== providerInstanceId) {
 			ctx.context.logger.warn(
-				"LogoutResponse references unknown or expired request",
-				{ inResponseTo },
+				"LogoutResponse references another provider instance or an expired request",
+				{ inResponseTo, providerInstanceId },
+			);
+			throw APIError.from(
+				"BAD_REQUEST",
+				SAML_ERROR_CODES.INVALID_LOGOUT_RESPONSE,
 			);
 		}
 
@@ -2181,6 +2233,7 @@ async function handleLogoutRequest(
 	idp: ReturnType<typeof createIdP>,
 	relayState: string | undefined,
 	providerId: string,
+	providerInstanceId: string,
 ) {
 	const binding =
 		ctx.method === "POST" && ctx.body?.SAMLRequest ? "post" : "redirect";
@@ -2204,7 +2257,7 @@ async function handleLogoutRequest(
 	// where samlify nests it as { sessionIndex: string } from AuthnStatement)
 	const sessionIndex = parsed.extract.sessionIndex as string | undefined;
 
-	const key = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${nameID}`;
+	const key = `${constants.SAML_SESSION_KEY_PREFIX}${providerInstanceId}:${nameID}`;
 	const stored = await ctx.context.internalAdapter.findVerificationValue(key);
 
 	if (stored) {
@@ -2236,7 +2289,7 @@ async function handleLogoutRequest(
 				ctx.context.logger.warn(
 					"SessionIndex mismatch in LogoutRequest - skipping session deletion",
 					{
-						providerId,
+						providerInstanceId,
 						requestedSessionIndex: sessionIndex,
 						storedSessionIndex: data.sessionIndex,
 					},
@@ -2360,6 +2413,14 @@ export const initiateSLO = (options?: SSOOptions) => {
 				if (stored) {
 					const data = safeJsonParse<SAMLSessionRecord>(stored.value);
 					if (data) {
+						if (
+							data.providerInstanceId !== provider.instance.providerInstanceId
+						) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								SAML_ERROR_CODES.INVALID_LOGOUT_REQUEST,
+							);
+						}
 						nameID = data.nameID || nameID;
 						sessionIndex = data.sessionIndex;
 					}
@@ -2377,7 +2438,7 @@ export const initiateSLO = (options?: SSOOptions) => {
 				constants.DEFAULT_LOGOUT_REQUEST_TTL_MS;
 			await ctx.context.internalAdapter.createVerificationValue({
 				identifier: `${constants.LOGOUT_REQUEST_KEY_PREFIX}${logoutRequest.id}`,
-				value: providerId,
+				value: provider.instance.providerInstanceId,
 				expiresAt: new Date(Date.now() + ttl),
 			});
 

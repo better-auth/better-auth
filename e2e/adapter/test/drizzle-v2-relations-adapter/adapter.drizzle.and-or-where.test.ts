@@ -30,6 +30,7 @@ describe("drizzle relations-v2 adapter: mixed AND/OR where clauses", () => {
 	const adapter = drizzleAdapter(db, {
 		schema,
 		provider: "sqlite",
+		transaction: "sync",
 	})({});
 
 	beforeEach(() => {

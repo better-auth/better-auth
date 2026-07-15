@@ -41,7 +41,7 @@ export const roblox = (options: RobloxOptions) => {
 	return {
 		id: "roblox",
 		name: "Roblox",
-		accountSubject: ({ profile }) => profile.sub,
+		identitySubject: ({ profile }) => profile.sub,
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope ? [] : ["openid", "profile"];
 			if (options.scope) _scopes.push(...options.scope);

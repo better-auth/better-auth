@@ -6,6 +6,7 @@ export type {
 	BetterAuthRateLimitOptions,
 	StoreIdentifierOption,
 	UserProvisioningSource,
+	UserProvisioningSourceRegistry,
 	ValidateUserInfoAction,
 	ValidateUserInfoMethod,
 	ValidateUserInfoOAuthInfo,

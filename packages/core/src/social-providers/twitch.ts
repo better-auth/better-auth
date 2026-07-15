@@ -42,7 +42,7 @@ export const twitch = (options: TwitchOptions) => {
 	return {
 		id: "twitch",
 		name: "Twitch",
-		accountSubject: ({ profile }) => profile.sub,
+		identitySubject: ({ profile }) => profile.sub,
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope
 				? []

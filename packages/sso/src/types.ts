@@ -162,7 +162,7 @@ export interface SAMLConfig {
 /** Stored AuthnRequest record for InResponseTo validation */
 export interface AuthnRequestRecord {
 	id: string;
-	providerId: string;
+	providerInstanceId: string;
 	createdAt: number;
 	expiresAt: number;
 }
@@ -173,7 +173,7 @@ export interface SAMLSessionRecord {
 	sessionId: string;
 	/** Session token, used to revoke the session during Single Logout. */
 	sessionToken: string;
-	providerId: string;
+	providerInstanceId: string;
 	nameID: string;
 	sessionIndex?: string;
 }

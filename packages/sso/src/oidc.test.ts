@@ -12,7 +12,7 @@ import { ssoClient } from "./client";
 const server = new OAuth2Server();
 
 describe("SSO", async () => {
-	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+	const { auth, db, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
 			trustedOrigins: ["http://localhost:8080"],
 			plugins: [sso(), organization()],
@@ -49,6 +49,7 @@ describe("SSO", async () => {
 	});
 
 	server.service.on("beforeTokenSigning", (token, req) => {
+		token.payload.sub = "oauth2";
 		token.payload.email = "sso-user@localhost:8000.com";
 		token.payload.email_verified = true;
 		token.payload.name = "Test User";
@@ -161,7 +162,7 @@ describe("SSO", async () => {
 		).rejects.toMatchObject({ status: 400 });
 	});
 
-	it("reuses one account when two provider aliases authenticate the same issuer subject", async () => {
+	it("isolates persisted aliases with the same verified OIDC issuer and subject", async () => {
 		const { headers: adminHeaders } = await signInWithTestUser();
 		const providerAliases = ["workforce-browser", "workforce-desktop"] as const;
 		const issuer = server.issuer.url!;
@@ -170,16 +171,15 @@ describe("SSO", async () => {
 			server.service.listeners("beforeUserinfo");
 		const originalTokenListeners =
 			server.service.listeners("beforeTokenSigning");
-		let profileRevision = 0;
+		let currentEmail = "";
+		const providerRecordIdByAlias = new Map<string, string>();
 
 		server.service.removeAllListeners("beforeUserinfo");
 		server.service.removeAllListeners("beforeTokenSigning");
 		server.service.on("beforeUserinfo", (userInfoResponse) => {
-			profileRevision += 1;
 			userInfoResponse.body = {
 				sub: providerAccountId,
-				employee_id: `mutable-employee-id-${profileRevision}`,
-				email: "shared-workforce@example.com",
+				email: currentEmail,
 				name: "Shared Workforce User",
 				email_verified: true,
 			};
@@ -187,7 +187,7 @@ describe("SSO", async () => {
 		});
 		server.service.on("beforeTokenSigning", (token) => {
 			token.payload.sub = providerAccountId;
-			token.payload.email = "shared-workforce@example.com";
+			token.payload.email = currentEmail;
 			token.payload.email_verified = true;
 			token.payload.name = "Shared Workforce User";
 		});
@@ -207,11 +207,19 @@ describe("SSO", async () => {
 					},
 					headers: adminHeaders,
 				});
+				const registeredProvider = await db.findOne<{ id: string }>({
+					model: "ssoProvider",
+					where: [{ field: "providerId", value: providerId }],
+				});
+				expect(registeredProvider).not.toBeNull();
+				providerRecordIdByAlias.set(providerId, registeredProvider!.id);
 			}
 
 			const signInWithAlias = async (
 				providerId: (typeof providerAliases)[number],
+				email: string,
 			) => {
+				currentEmail = email;
 				const authorizationHeaders = new Headers();
 				const authorization = await authClient.signIn.sso({
 					providerId,
@@ -232,28 +240,134 @@ describe("SSO", async () => {
 				return { session, headers: callback.headers };
 			};
 
-			const firstSignIn = await signInWithAlias(providerAliases[0]);
-			const secondSignIn = await signInWithAlias(providerAliases[1]);
+			const firstSignIn = await signInWithAlias(
+				providerAliases[0],
+				"browser-workforce@example.com",
+			);
+			const secondSignIn = await signInWithAlias(
+				providerAliases[1],
+				"desktop-workforce@example.com",
+			);
 
-			expect(secondSignIn.session.data?.user.id).toBe(
+			expect(secondSignIn.session.data?.user.id).not.toBe(
 				firstSignIn.session.data?.user.id,
 			);
-
-			const accounts = await authClient.listAccounts({
-				fetchOptions: { headers: secondSignIn.headers },
-			});
-			const matchingAccounts = accounts.data?.filter(
-				(account) =>
-					account.issuer === issuer &&
-					account.providerAccountId === providerAccountId,
+			const listSSOAccounts = async (headers: Headers) => {
+				const accounts = await authClient.listAccounts({
+					fetchOptions: { headers },
+				});
+				return (accounts.data ?? []).filter((account) =>
+					providerAliases.includes(
+						account.providerId as (typeof providerAliases)[number],
+					),
+				) as Array<{
+					providerId: string;
+					identity: {
+						id: string;
+						issuer: string;
+						providerAccountId: string;
+					};
+				}>;
+			};
+			const firstAccounts = await listSSOAccounts(firstSignIn.headers);
+			const secondAccounts = await listSSOAccounts(secondSignIn.headers);
+			expect(firstAccounts).toHaveLength(1);
+			expect(secondAccounts).toHaveLength(1);
+			for (const [index, accounts] of [
+				firstAccounts,
+				secondAccounts,
+			].entries()) {
+				const recordId = providerRecordIdByAlias.get(providerAliases[index]!);
+				expect(accounts[0]).toMatchObject({
+					providerId: providerAliases[index],
+					identity: {
+						issuer: `sso:provider:${recordId}:oidc`,
+						providerAccountId,
+					},
+				});
+			}
+			expect(firstAccounts[0]?.identity.id).not.toBe(
+				secondAccounts[0]?.identity.id,
 			);
-			expect(matchingAccounts).toEqual([
-				expect.objectContaining({
-					issuer,
-					providerAccountId,
-					providerId: providerAliases[1],
+		} finally {
+			server.service.removeAllListeners("beforeUserinfo");
+			server.service.removeAllListeners("beforeTokenSigning");
+			for (const listener of originalUserInfoListeners) {
+				server.service.on("beforeUserinfo", listener);
+			}
+			for (const listener of originalTokenListeners) {
+				server.service.on("beforeTokenSigning", listener);
+			}
+		}
+	});
+
+	it("rejects a UserInfo subject that differs from the verified ID token", async () => {
+		const { headers: adminHeaders } = await signInWithTestUser();
+		const providerId = "subject-mismatch";
+		const signedSubject = "signed-subject";
+		const userInfoSubject = "userinfo-subject";
+		const originalUserInfoListeners =
+			server.service.listeners("beforeUserinfo");
+		const originalTokenListeners =
+			server.service.listeners("beforeTokenSigning");
+
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.removeAllListeners("beforeTokenSigning");
+		server.service.on("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				sub: userInfoSubject,
+				email: "subject-mismatch@example.com",
+				name: "Subject Mismatch",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.sub = signedSubject;
+			token.payload.email = "subject-mismatch@example.com";
+			token.payload.email_verified = true;
+			token.payload.name = "Subject Mismatch";
+		});
+
+		try {
+			await auth.api.registerSSOProvider({
+				body: {
+					issuer: server.issuer.url!,
+					domain: "subject-mismatch.example.com",
+					providerId,
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+						discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					},
+				},
+				headers: adminHeaders,
+			});
+
+			const authorizationHeaders = new Headers();
+			const authorization = await authClient.signIn.sso({
+				providerId,
+				callbackURL: "/dashboard",
+				fetchOptions: {
+					throw: true,
+					onSuccess: cookieSetter(authorizationHeaders),
+				},
+			});
+			const { callbackURL } = await simulateOAuthFlow(
+				authorization.url,
+				authorizationHeaders,
+			);
+			const redirectURL = new URL(callbackURL, "http://localhost:3000");
+			expect(redirectURL.searchParams.get("error")).toBe("invalid_provider");
+			expect(redirectURL.searchParams.get("error_description")).toBe(
+				"id_token_userinfo_subject_mismatch",
+			);
+			expect(
+				await db.findMany({
+					model: "identity",
+					where: [{ field: "providerAccountId", value: userInfoSubject }],
 				}),
-			]);
+			).toEqual([]);
 		} finally {
 			server.service.removeAllListeners("beforeUserinfo");
 			server.service.removeAllListeners("beforeTokenSigning");
@@ -752,6 +866,7 @@ describe("SSO disable implicit sign in", async () => {
 	});
 
 	server.service.on("beforeTokenSigning", (token, req) => {
+		token.payload.sub = "oauth2";
 		token.payload.email = "sso-user@localhost:8000.com";
 		token.payload.email_verified = true;
 		token.payload.name = "Test User";
@@ -944,6 +1059,7 @@ describe("provisioning", async (ctx) => {
 	});
 
 	server.service.on("beforeTokenSigning", (token, req) => {
+		token.payload.sub = "oauth2";
 		token.payload.email = "sso-user@localhost:8000.com";
 		token.payload.email_verified = true;
 		token.payload.name = "Test User";
@@ -1079,6 +1195,7 @@ describe("provisionUser should only be called for new users", async () => {
 			userInfoResponse.statusCode = 200;
 		});
 		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.sub = "provision-test-sub";
 			token.payload.email = "provision-test@localhost.com";
 			token.payload.email_verified = true;
 			token.payload.name = "Provision Test";
@@ -1236,6 +1353,7 @@ describe("provisionUserOnEveryLogin should call provisionUser on every sign-in",
 			userInfoResponse.statusCode = 200;
 		});
 		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.sub = "provision-every-login-sub";
 			token.payload.email = "provision-every-login@localhost.com";
 			token.payload.email_verified = true;
 			token.payload.name = "Provision Every Login";
@@ -1367,6 +1485,7 @@ describe("SSO shared redirectURI", async () => {
 	};
 
 	const tokenHandler = (token: any) => {
+		token.payload.sub = "shared-redirect-user";
 		token.payload.email = "shared-redirect@test.com";
 		token.payload.email_verified = true;
 		token.payload.name = "Shared Redirect User";
@@ -1497,7 +1616,7 @@ describe("SSO shared redirectURI", async () => {
 });
 
 describe("OIDC SSO with defaultSSO array", async () => {
-	const { customFetchImpl, cookieSetter } = await getTestInstance({
+	const { auth, customFetchImpl, cookieSetter } = await getTestInstance({
 		trustedOrigins: ["http://localhost:8080"],
 		plugins: [
 			sso({
@@ -1663,6 +1782,19 @@ describe("OIDC SSO with defaultSSO array", async () => {
 			fetchOptions: { headers: sessionHeaders },
 		});
 		expect(session.data?.user.email).toBe("default-sso-user@default-oidc.com");
+		const accountLinks = await (
+			await auth.$context
+		).internalAdapter.listUserAccounts(session.data!.user.id);
+		expect(accountLinks).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					account: expect.objectContaining({
+						providerId: "default-oidc-provider",
+						providerInstanceId: "sso:config:default-oidc-provider",
+					}),
+				}),
+			]),
+		);
 	});
 
 	it("should sign in via defaultSSO OIDC using email domain matching", async () => {
@@ -1960,10 +2092,10 @@ describe("OIDC SSO with private_key_jwt", async () => {
  * @see https://github.com/better-auth/better-auth/issues/8269
  */
 describe("SSO OIDC UserInfo endpoint sub claim mapping", async () => {
-	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+	const { auth, db, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
 			trustedOrigins: ["http://localhost:8080"],
-			plugins: [sso(), organization()],
+			plugins: [sso({ trustEmailVerified: true }), organization()],
 		});
 
 	const authClient = createAuthClient({
@@ -2083,6 +2215,97 @@ describe("SSO OIDC UserInfo endpoint sub claim mapping", async () => {
 			fetchOptions: { headers: sessionHeaders },
 		});
 		expect(session.data?.user.email).toBe("userinfo-only@test.com");
+	});
+
+	it("scopes unsigned UserInfo subjects to each persisted provider instance", async () => {
+		const { headers: adminHeaders } = await signInWithTestUser();
+		const providerIds = ["userinfo-instance-a", "userinfo-instance-b"] as const;
+		const providerRecordIds: string[] = [];
+
+		for (const providerId of providerIds) {
+			await auth.api.registerSSOProvider({
+				body: {
+					issuer: server.issuer.url!,
+					domain: `${providerId}.test.com`,
+					providerId,
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+						authorizationEndpoint: `${server.issuer.url}/authorize`,
+						tokenEndpoint: `${server.issuer.url}/token`,
+						jwksEndpoint: `${server.issuer.url}/jwks`,
+						userInfoEndpoint: `${server.issuer.url}/userinfo`,
+						discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					},
+				},
+				headers: adminHeaders,
+			});
+			const provider = await db.findOne<{ id: string }>({
+				model: "ssoProvider",
+				where: [{ field: "providerId", value: providerId }],
+			});
+			expect(provider).not.toBeNull();
+			providerRecordIds.push(provider!.id);
+		}
+
+		let firstUserId: string | undefined;
+		let latestSessionHeaders = new Headers();
+		for (const providerId of providerIds) {
+			const signInHeaders = new Headers();
+			const authorization = await authClient.signIn.sso({
+				providerId,
+				callbackURL: "/dashboard",
+				fetchOptions: {
+					throw: true,
+					onSuccess: cookieSetter(signInHeaders),
+				},
+			});
+			const { headers: sessionHeaders } = await simulateOAuthFlow(
+				authorization.url,
+				signInHeaders,
+			);
+			const session = await authClient.getSession({
+				fetchOptions: { headers: sessionHeaders },
+			});
+			firstUserId ??= session.data?.user.id;
+			expect(session.data?.user.id).toBe(firstUserId);
+			latestSessionHeaders = sessionHeaders;
+		}
+
+		const accounts = await authClient.listAccounts({
+			fetchOptions: { headers: latestSessionHeaders },
+		});
+		const listedAccounts = (accounts.data ?? []) as Array<{
+			providerId: string;
+			identity: { id: string; issuer: string; providerAccountId: string };
+		}>;
+		const matchingAccounts = listedAccounts.filter(
+			(account) =>
+				account.identity.providerAccountId === "userinfo-only-sub-id" &&
+				providerIds.some((providerId) => providerId === account.providerId),
+		);
+		expect(matchingAccounts).toHaveLength(2);
+		expect(
+			new Set(matchingAccounts.map(({ identity }) => identity.id)).size,
+		).toBe(2);
+		const instanceIdentityIssuers = providerRecordIds.map(
+			(recordId) => `sso:provider:${recordId}:oidc`,
+		);
+		expect(
+			new Set(matchingAccounts.map(({ identity }) => identity.issuer)),
+		).toEqual(new Set(instanceIdentityIssuers));
+		const persistedIdentities = await db.findMany<{
+			issuer: string;
+			providerAccountId: string;
+		}>({
+			model: "identity",
+			where: [{ field: "providerAccountId", value: "userinfo-only-sub-id" }],
+		});
+		expect(
+			persistedIdentities.filter(({ issuer }) =>
+				instanceIdentityIssuers.includes(issuer),
+			),
+		).toHaveLength(2);
 	});
 
 	/**
@@ -2418,6 +2641,7 @@ describe("SSO OIDC hook rejection redirect", async () => {
 	});
 
 	hookServer.service.on("beforeTokenSigning", (token) => {
+		token.payload.sub = "rejected-sub";
 		token.payload.email = "rejected@test.com";
 		token.payload.email_verified = true;
 	});
@@ -2599,7 +2823,7 @@ describe("SSO OIDC IDP-initiated bounce", async () => {
 		expect(location).toContain("state_not_found");
 	});
 
-	it("should carry ssoProviderId in the bounced state when options.redirectURI is configured", async () => {
+	it("binds a shared callback bounce to the configured provider instance", async () => {
 		const { customFetchImpl: sharedRedirectFetch, auth: sharedRedirectAuth } =
 			await getTestInstance({
 				trustedOrigins: ["http://localhost:8080"],
@@ -2640,18 +2864,29 @@ describe("SSO OIDC IDP-initiated bounce", async () => {
 		const stateNonce = url.searchParams.get("state");
 		expect(stateNonce).toBeTruthy();
 
-		// The shared callback resolves the provider from the server-only
-		// `serverContext` channel, so the bounce must write `ssoProviderId` there
-		// and never into the client-controlled top-level state.
+		// The shared callback resolves the provider from the server-only state
+		// channel. The state binds its public alias, immutable account namespace,
+		// and non-secret authentication configuration.
 		const ctx = await sharedRedirectAuth.$context;
 		const verification = await ctx.internalAdapter.findVerificationValue(
 			stateNonce!,
 		);
-		const parsedState = JSON.parse(verification!.value);
-		expect(parsedState.serverContext?.ssoProviderId).toBe(
-			"idp-initiated-shared",
-		);
-		expect(parsedState.ssoProviderId).toBeUndefined();
+		const parsedState = JSON.parse(verification!.value) as {
+			serverContext?: {
+				ssoProvider?: {
+					providerId: string;
+					providerInstanceId: string;
+					authenticationConfigurationFingerprint: string;
+				};
+			};
+			ssoProvider?: unknown;
+		};
+		expect(parsedState.serverContext?.ssoProvider).toMatchObject({
+			providerId: "idp-initiated-shared",
+			providerInstanceId: "sso:config:idp-initiated-shared",
+			authenticationConfigurationFingerprint: expect.any(String),
+		});
+		expect(parsedState.ssoProvider).toBeUndefined();
 	});
 
 	it("should redirect to the error page for providers without the flag", async () => {

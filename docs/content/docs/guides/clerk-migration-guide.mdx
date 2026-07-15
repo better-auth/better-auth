@@ -174,20 +174,20 @@ Before starting the migration process, set up Better Auth in your project. Follo
     Create a new file called `migrate-clerk.ts` in the `scripts` folder and add the following code:
 
     ```ts title="scripts/migrate-clerk.ts"
+    import { generateId } from "better-auth";
     import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
 
     import { auth } from "@/lib/auth"; // import your auth instance
 
     // Review every provider in your Clerk export. Use the exact trusted issuer
-    // Better Auth uses, or local:oauth:<encoded providerId> when it has no
-    // issuer. The provider ID segment is percent-encoded.
-    const accountIssuers: Record<string, string> = {
-      github: "local:oauth:github",
+    // Better Auth uses, or local:<encoded providerId> when it has no issuer.
+    const identityIssuers: Record<string, string> = {
+      github: "local:github",
       google: "https://accounts.google.com",
     };
 
-    function getAccountIssuer(providerId: string) {
-      const issuer = accountIssuers[providerId];
+    function getIdentityIssuer(providerId: string) {
+      const issuer = identityIssuers[providerId];
       if (!issuer) {
         throw new Error(`Missing trusted issuer for ${providerId}`);
       }
@@ -316,6 +316,42 @@ Before starting the migration process, set up Better Auth in your project. Follo
       const isTwoFactorEnabled = ctx.options?.plugins?.find(plugin => plugin.id === "two-factor");
       const isUsernameEnabled = ctx.options?.plugins?.find(plugin => plugin.id === "username");
       const isPhoneNumberEnabled = ctx.options?.plugins?.find(plugin => plugin.id === "phone-number");
+
+      async function findOrCreateIdentity(data: {
+          userId: string;
+          issuer: string;
+          providerAccountId: string;
+          createdAt: Date;
+          updatedAt: Date;
+      }) {
+          const existingIdentity = await ctx.adapter.findOne<{
+              id: string;
+              userId: string;
+          }>({
+              model: "identity",
+              where: [
+                  { field: "issuer", value: data.issuer },
+                  { field: "providerAccountId", value: data.providerAccountId },
+              ],
+          });
+
+          if (existingIdentity && existingIdentity.userId !== data.userId) {
+              throw new Error(`Identity ${data.issuer}/${data.providerAccountId} belongs to another user`);
+          }
+
+          return existingIdentity ?? ctx.adapter.create<{
+              id: string;
+              userId: string;
+          }>({
+              model: "identity",
+              data: {
+                  id: generateId(),
+                  ...data,
+              },
+              forceAllowId: true,
+          });
+      }
+
       for (const user of jsonData) {
           const { id, first_name, last_name, username, primary_email_address, primary_phone_number, verified_email_addresses, unverified_email_addresses, verified_phone_numbers, unverified_phone_numbers, totp_secret, password_digest, password_hasher } = user;
           const clerkUser = clerkUsers.find(clerkUser => clerkUser?.id === id);
@@ -370,42 +406,81 @@ Before starting the migration process, set up Better Auth in your project. Follo
           if (!createdUser) {
               throw new Error(`Unable to create or find user ${id}`);
           }
-          // create external account
+
+          // Password hashes come from the CSV export, not external accounts.
+          if (password_digest) {
+              if (password_hasher !== "bcrypt") {
+                  throw new Error(`Configure password verification for ${password_hasher} before migrating ${id}`);
+              }
+
+              const credentialIdentity = await findOrCreateIdentity({
+                  userId: createdUser.id,
+                  issuer: "local:credential",
+                  providerAccountId: createdUser.id,
+                  createdAt: safeDateConversion(clerkUser?.created_at),
+                  updatedAt: safeDateConversion(clerkUser?.updated_at),
+              });
+              const existingCredentialAccount = await ctx.adapter.findOne({
+                  model: "account",
+                  where: [
+                      { field: "identityId", value: credentialIdentity.id },
+                      { field: "providerInstanceId", value: "credential" },
+                  ],
+              });
+
+              if (!existingCredentialAccount) {
+                  await ctx.adapter.create({
+                      model: "account",
+                      data: {
+                          id: generateId(),
+                          identityId: credentialIdentity.id,
+                          providerId: "credential",
+                          providerInstanceId: "credential",
+                          password: password_digest,
+                          createdAt: safeDateConversion(clerkUser?.created_at),
+                          updatedAt: safeDateConversion(clerkUser?.updated_at),
+                      },
+                      forceAllowId: true,
+                  });
+              }
+          }
+
+          // Create Accounts for OAuth connections returned by Clerk.
           const externalAccounts = clerkUser?.external_accounts;
           if (externalAccounts) {
-              for (const externalAccount of externalAccounts) {
-                  const { id, provider, identification_id, provider_user_id, approved_scopes, email_address, first_name, last_name, image_url, created_at, updated_at } = externalAccount;
-                  if (externalAccount.provider === "credential") {
+                  for (const externalAccount of externalAccounts) {
+                      const { id, provider, provider_user_id, approved_scopes, created_at, updated_at } = externalAccount;
+                      if (provider === "credential") continue;
+                      const providerId = provider.replace(/^oauth_/, "");
+                  const identity = await findOrCreateIdentity({
+                      userId: createdUser.id,
+                      issuer: getIdentityIssuer(providerId),
+                      providerAccountId: provider_user_id,
+                      createdAt: safeDateConversion(created_at),
+                      updatedAt: safeDateConversion(updated_at),
+                  });
+                  const existingAccount = await ctx.adapter.findOne({
+                      model: "account",
+                      where: [
+                          { field: "identityId", value: identity.id },
+                          { field: "providerInstanceId", value: providerId },
+                      ],
+                  });
+
+                  if (!existingAccount) {
                       await ctx.adapter.create({
                           model: "account",
                           data: {
                               id,
-                              providerId: provider,
-                              issuer: "local:credential",
-                              providerAccountId: createdUser.id,
-                              scope: approved_scopes,
-                              userId: createdUser.id,
-                              createdAt: safeDateConversion(created_at),
-                              updatedAt: safeDateConversion(updated_at),
-                              password: password_digest,
-                          }
-                      })
-                  } else {
-                      const providerId = provider.replace("oauth_", "");
-                      await ctx.adapter.create({
-                          model: "account",
-                          data: {
-                              id,
+                              identityId: identity.id,
                               providerId,
-                              issuer: getAccountIssuer(providerId),
-                              providerAccountId: externalAccount.provider_user_id,
+                              providerInstanceId: providerId,
                               scope: approved_scopes,
-                              userId: createdUser.id,
                               createdAt: safeDateConversion(created_at),
                               updatedAt: safeDateConversion(updated_at),
                           },
-                          forceAllowId: true
-                      })
+                          forceAllowId: true,
+                      });
                   }
               }
           }

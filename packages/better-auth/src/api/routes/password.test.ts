@@ -1,14 +1,13 @@
 import { APIError } from "better-call";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils";
-import type { Account } from "../../types";
 
 describe("forgot password", async () => {
 	const mockSendEmail = vi.fn();
 	const mockOnPasswordReset = vi.fn();
 	let token = "";
 
-	const { client, testUser, db } = await getTestInstance(
+	const { auth, client, testUser } = await getTestInstance(
 		{
 			emailAndPassword: {
 				enabled: true,
@@ -109,21 +108,10 @@ describe("forgot password", async () => {
 		expect(userId).toBeDefined();
 
 		// Get initial account data
-		const initialAccounts: Account[] = await db.findMany({
-			model: "account",
-			where: [
-				{
-					field: "userId",
-					value: userId!,
-				},
-				{
-					field: "providerId",
-					value: "credential",
-				},
-			],
-		});
-		expect(initialAccounts.length).toBe(1);
-		const initialUpdatedAt = initialAccounts[0]!.updatedAt;
+		const internalAdapter = (await auth.$context).internalAdapter;
+		const initialAccount = await internalAdapter.findCredentialAccount(userId!);
+		expect(initialAccount).not.toBeNull();
+		const initialUpdatedAt = initialAccount!.updatedAt;
 
 		// Request password reset
 		let resetToken = "";
@@ -147,26 +135,21 @@ describe("forgot password", async () => {
 		expect(resetRes.data?.status).toBe(true);
 
 		// Get updated account data
-		const updatedAccounts: Account[] = await db.findMany({
-			model: "account",
-			where: [
-				{
-					field: "userId",
-					value: userId!,
-				},
-				{
-					field: "providerId",
-					value: "credential",
-				},
-			],
-		});
-		expect(updatedAccounts.length).toBe(1);
-		expect(updatedAccounts[0]).toMatchObject({
+		const updatedAccount = await internalAdapter.findCredentialAccount(userId!);
+		expect(updatedAccount).toMatchObject({
 			providerId: "credential",
+		});
+		await expect(
+			internalAdapter.findIdentityByKey({
+				issuer: "local:credential",
+				providerAccountId: userId!,
+			}),
+		).resolves.toMatchObject({
+			userId,
 			issuer: "local:credential",
 			providerAccountId: userId,
 		});
-		const newUpdatedAt = updatedAccounts[0]!.updatedAt;
+		const newUpdatedAt = updatedAccount!.updatedAt;
 
 		// Verify updatedAt was refreshed
 		expect(newUpdatedAt).not.toBe(initialUpdatedAt);

@@ -27,10 +27,21 @@ import { db } from "./database.ts";
 export const auth = betterAuth({
   database: drizzleAdapter(db, { // [!code highlight]
     provider: "sqlite", // or "pg" or "mysql" // [!code highlight]
+    transaction: "sync", // use "sync" for synchronous SQLite drivers // [!code highlight]
   }), // [!code highlight]
   //... the rest of your config
 });
 ```
+
+## Transaction mode
+
+The adapter defaults to Drizzle's asynchronous transaction API. Set `transaction` to match the database driver:
+
+* Use `"async"` for PostgreSQL, MySQL, and asynchronous SQLite drivers.
+* Use `"sync"` for synchronous SQLite drivers such as `node:sqlite` and `better-sqlite3`.
+* Use `false` when interactive transactions are unavailable. Cloudflare D1 still uses its atomic `batch()` capability.
+
+This setting is a capability declaration. Choosing `"async"` for a synchronous driver can commit before an asynchronous authentication callback finishes.
 
 ## Schema generation & migration
 

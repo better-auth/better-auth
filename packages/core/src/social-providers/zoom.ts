@@ -152,7 +152,7 @@ export const zoom = (userOptions: ZoomOptions) => {
 	return {
 		id: "zoom",
 		name: "Zoom",
-		accountSubject: ({ profile }) => profile.id,
+		identitySubject: ({ profile }) => profile.id,
 		createAuthorizationURL: async ({
 			state,
 			redirectURI,

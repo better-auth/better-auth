@@ -47,7 +47,7 @@ export const huggingface = (options: HuggingFaceOptions) => {
 	return {
 		id: "huggingface",
 		name: "Hugging Face",
-		accountSubject: ({ profile }) => profile.sub,
+		identitySubject: ({ profile }) => profile.sub,
 		createAuthorizationURL({
 			state,
 			scopes,

@@ -63,7 +63,7 @@ export const github = (options: GithubOptions) => {
 	return {
 		id: "github",
 		name: "GitHub",
-		accountSubject: ({ profile }) => profile.id,
+		identitySubject: ({ profile }) => profile.id,
 		createAuthorizationURL({
 			state,
 			scopes,

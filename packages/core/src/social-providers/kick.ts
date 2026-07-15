@@ -33,7 +33,7 @@ export const kick = (options: KickOptions) => {
 	return {
 		id: "kick",
 		name: "Kick",
-		accountSubject: ({ profile }) => profile.user_id,
+		identitySubject: ({ profile }) => profile.user_id,
 		createAuthorizationURL({
 			state,
 			scopes,

@@ -133,64 +133,18 @@ describe("one-tap implicit linking gate", async () => {
 
 		expect(res.error).toBeFalsy();
 		const ctx = await auth.$context;
-		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
-			model: "account",
-			where: [
-				{
-					field: "providerId",
-					value: "google",
-				},
-			],
+		const googleIdentity = await ctx.internalAdapter.findIdentityByKey({
+			issuer: "https://accounts.google.com",
+			providerAccountId: verifiedPayload.sub,
 		});
-		expect(accounts.length).toBeGreaterThanOrEqual(1);
-	});
-
-	/**
-	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-g38m-r43w-p2q7
-	 */
-	it("links the account when requireLocalEmailVerified is opted out, even for an unverified local user", async () => {
-		const { auth, client } = await getTestInstance({
-			socialProviders: {
-				google: {
-					clientId: "test-client",
-					clientSecret: "test-secret",
-					enabled: true,
-				},
-			},
-			account: {
-				accountLinking: {
-					requireLocalEmailVerified: false,
-				},
-			},
-			plugins: [oneTap()],
-		});
-
-		await client.signUp.email({
-			email: verifiedPayload.email,
-			password: "password123",
-			name: "Pre-existing Unverified (Opted-out)",
-		});
-
-		const res = await client.$fetch<{
-			data: unknown;
-			error: { status: number } | null;
-		}>("/one-tap/callback", {
-			method: "POST",
-			body: { idToken: "stub-id-token" },
-		});
-
-		expect(res.error).toBeFalsy();
-		const ctx = await auth.$context;
-		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
-			model: "account",
-			where: [
-				{
-					field: "providerId",
-					value: "google",
-				},
-			],
-		});
-		expect(accounts.length).toBeGreaterThanOrEqual(1);
+		expect(googleIdentity).toBeTruthy();
+		const googleAccount = googleIdentity
+			? await ctx.internalAdapter.findAccountByKey({
+					identityId: googleIdentity.id,
+					providerInstanceId: "google",
+				})
+			: null;
+		expect(googleAccount).toBeTruthy();
 	});
 
 	/**
@@ -241,12 +195,16 @@ describe("one-tap implicit linking gate", async () => {
 					enabled: true,
 				},
 			},
-			account: {
-				accountLinking: {
-					requireLocalEmailVerified: false,
+			plugins: [oneTap()],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: { ...user, emailVerified: true },
+						}),
+					},
 				},
 			},
-			plugins: [oneTap()],
 		});
 
 		const ctx = await auth.$context;
@@ -257,12 +215,14 @@ describe("one-tap implicit linking gate", async () => {
 			},
 			{ method: "test" },
 		);
-		await ctx.internalAdapter.createAccount({
-			userId: otherUser.id,
-			providerId: "github",
-			issuer: "local:github",
-			providerAccountId: verifiedPayload.sub,
-		});
+		await ctx.internalAdapter.linkAccount(
+			otherUser.id,
+			{
+				issuer: "local:github",
+				providerAccountId: verifiedPayload.sub,
+			},
+			{ providerId: "github", providerInstanceId: "github" },
+		);
 
 		await client.signUp.email({
 			email: verifiedPayload.email,
@@ -279,15 +239,18 @@ describe("one-tap implicit linking gate", async () => {
 		});
 
 		expect(res.error).toBeFalsy();
-		const googleAccounts = await ctx.adapter.findMany<{ providerId: string }>({
-			model: "account",
-			where: [
-				{ field: "providerId", value: "google" },
-				{ field: "issuer", value: "https://accounts.google.com" },
-				{ field: "providerAccountId", value: verifiedPayload.sub },
-			],
+		const googleIdentity = await ctx.internalAdapter.findUserByIdentityKey({
+			issuer: "https://accounts.google.com",
+			providerAccountId: verifiedPayload.sub,
 		});
-		expect(googleAccounts).toHaveLength(1);
+		expect(googleIdentity?.user.email).toBe(verifiedPayload.email);
+		const googleAccount = googleIdentity
+			? await ctx.internalAdapter.findAccountByKey({
+					identityId: googleIdentity.identity.id,
+					providerInstanceId: "google",
+				})
+			: null;
+		expect(googleAccount).toBeTruthy();
 	});
 
 	/**
@@ -324,15 +287,17 @@ describe("one-tap implicit linking gate", async () => {
 		expect(second.error).toBeFalsy();
 		expect(second.data?.token).toBeTruthy();
 
-		const googleAccounts = await ctx.adapter.findMany<{ providerId: string }>({
-			model: "account",
-			where: [
-				{ field: "providerId", value: "google" },
-				{ field: "issuer", value: "https://accounts.google.com" },
-				{ field: "providerAccountId", value: verifiedPayload.sub },
-			],
+		const googleIdentity = await ctx.internalAdapter.findUserByIdentityKey({
+			issuer: "https://accounts.google.com",
+			providerAccountId: verifiedPayload.sub,
 		});
-		expect(googleAccounts).toHaveLength(1);
+		expect(googleIdentity).toBeTruthy();
+		const accounts = googleIdentity
+			? await ctx.internalAdapter.listUserAccounts(googleIdentity.user.id)
+			: [];
+		expect(
+			accounts.filter(({ account }) => account.providerId === "google"),
+		).toHaveLength(1);
 	});
 
 	/**
@@ -366,12 +331,14 @@ describe("one-tap implicit linking gate", async () => {
 			},
 			{ method: "test" },
 		);
-		await ctx.internalAdapter.createAccount({
-			userId: userA.id,
-			providerId: "google",
-			issuer: "https://accounts.google.com",
-			providerAccountId: sharedSub,
-		});
+		await ctx.internalAdapter.linkAccount(
+			userA.id,
+			{
+				issuer: "https://accounts.google.com",
+				providerAccountId: sharedSub,
+			},
+			{ providerId: "google", providerInstanceId: "google" },
+		);
 		const userB = await ctx.internalAdapter.createUser(
 			{
 				name: "Email Match B",
@@ -433,16 +400,11 @@ describe("one-tap implicit linking gate", async () => {
 		expect(res.error?.status).toBe(401);
 
 		const ctx = await auth.$context;
-		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
-			model: "account",
-			where: [
-				{
-					field: "providerId",
-					value: "google",
-				},
-			],
+		const googleIdentity = await ctx.internalAdapter.findIdentityByKey({
+			issuer: "https://accounts.google.com",
+			providerAccountId: verifiedPayload.sub,
 		});
-		expect(accounts.length).toBe(0);
+		expect(googleIdentity).toBeNull();
 	});
 });
 

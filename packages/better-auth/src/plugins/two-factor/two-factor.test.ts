@@ -2157,7 +2157,7 @@ describe("two factor password still required for credential accounts", async () 
  * @see https://github.com/better-auth/better-auth/issues/8900
  */
 describe("checkPassword must not leak credential presence via error codes", async () => {
-	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+	const { auth, signInWithTestUser, testUser } = await getTestInstance({
 		secret: DEFAULT_SECRET,
 		plugins: [
 			twoFactor({
@@ -2167,6 +2167,7 @@ describe("checkPassword must not leak credential presence via error codes", asyn
 			}),
 		],
 	});
+	const context = await auth.$context;
 	const { headers, user } = await signInWithTestUser();
 
 	const enableRes = await auth.api.enableTwoFactor({
@@ -2190,19 +2191,11 @@ describe("checkPassword must not leak credential presence via error codes", asyn
 			}
 		}
 
-		const accounts = await db.findMany<{
-			id: string;
-			providerId: string;
-		}>({
-			model: "account",
-			where: [{ field: "userId", value: user.id }],
-		});
-		const credential = accounts.find((a) => a.providerId === "credential");
+		const credential = await context.internalAdapter.findCredentialAccount(
+			user.id,
+		);
 		expect(credential).toBeDefined();
-		await db.delete({
-			model: "account",
-			where: [{ field: "id", value: credential!.id }],
-		});
+		await context.internalAdapter.deleteAccount(credential!.id);
 
 		try {
 			await auth.api.getTOTPURI({

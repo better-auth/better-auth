@@ -1,4 +1,4 @@
-import type { Db } from "mongodb";
+import type { Db, MongoClient } from "mongodb";
 import { ObjectId, UUID } from "mongodb";
 import { describe, expect, it, vi } from "vitest";
 import { mongodbAdapter } from "./mongodb-adapter";
@@ -10,6 +10,136 @@ describe("mongodb-adapter", () => {
 		} as any;
 		const adapter = mongodbAdapter(db);
 		expect(adapter).toBeDefined();
+	});
+
+	it("does not abort a transaction after a failed commit completed it", async () => {
+		const commitError = new Error("commit outcome was not acknowledged");
+		const abortError = new Error("cannot abort a committed transaction");
+		const abortTransaction = vi.fn(async () => {
+			throw abortError;
+		});
+		const session = {
+			startTransaction: vi.fn(),
+			commitTransaction: vi.fn(async () => {
+				throw commitError;
+			}),
+			abortTransaction,
+			endSession: vi.fn(async () => {}),
+			inTransaction: vi.fn(() => false),
+		};
+		const client = {
+			startSession: vi.fn(() => session),
+		};
+		const db = {
+			createCollection: vi.fn(async () => ({})),
+			collection: vi.fn(() => ({
+				createIndex: vi.fn(async () => "index"),
+			})),
+		};
+		const adapter = mongodbAdapter(db as unknown as Db, {
+			client: client as unknown as MongoClient,
+		})({});
+
+		await expect(adapter.transaction(async () => "result")).rejects.toBe(
+			commitError,
+		);
+		expect(abortTransaction).not.toHaveBeenCalled();
+		expect(session.endSession).toHaveBeenCalledOnce();
+	});
+
+	it("prepares collections and indexes before a transaction starts", async () => {
+		const storageEvents: string[] = [];
+		const createIndex = vi.fn(async () => {
+			storageEvents.push("create-index");
+			return "directory_user_external_id_uidx";
+		});
+		const insertOne = vi.fn(async (document: Record<string, unknown>) => ({
+			insertedId: document._id,
+		}));
+		const db = {
+			createCollection: vi.fn(async (model: string) => {
+				storageEvents.push(`create-collection:${model}`);
+				throw Object.assign(new Error(`${model} already exists`), {
+					code: 48,
+					codeName: "NamespaceExists",
+				});
+			}),
+			collection: vi.fn(() => ({ createIndex, insertOne })),
+		};
+		const session = {
+			startTransaction: vi.fn(() => {
+				storageEvents.push("start-transaction");
+			}),
+			commitTransaction: vi.fn(async () => {}),
+			abortTransaction: vi.fn(async () => {}),
+			inTransaction: vi.fn(() => false),
+			endSession: vi.fn(async () => {}),
+		};
+		const client = {
+			startSession: vi.fn(() => session),
+		};
+		const adapter = mongodbAdapter(db as unknown as Db, {
+			client: client as unknown as MongoClient,
+		})({
+			plugins: [
+				{
+					id: "directory",
+					schema: {
+						directoryUser: {
+							modelName: "directory_user",
+							fields: {
+								externalId: {
+									type: "string",
+									fieldName: "external_id",
+								},
+							},
+							indexes: [
+								{
+									fields: ["externalId"],
+									unique: true,
+								},
+							],
+						},
+					},
+				},
+			],
+		});
+		type TransactionAdapter = Parameters<
+			Parameters<typeof adapter.transaction>[0]
+		>[0];
+		const createDirectoryUser = vi.fn(
+			async (transactionAdapter: TransactionAdapter) => {
+				storageEvents.push("transaction-callback");
+				return transactionAdapter.create({
+					model: "directoryUser",
+					data: { externalId: "employee-1" },
+				});
+			},
+		);
+
+		await adapter.transaction(createDirectoryUser);
+
+		const transactionStart = storageEvents.indexOf("start-transaction");
+		expect(transactionStart).toBeGreaterThan(-1);
+		expect(storageEvents.indexOf("create-collection:identity")).toBeLessThan(
+			transactionStart,
+		);
+		expect(storageEvents.lastIndexOf("create-index")).toBeLessThan(
+			transactionStart,
+		);
+		expect(storageEvents.indexOf("transaction-callback")).toBeGreaterThan(
+			transactionStart,
+		);
+		expect(createDirectoryUser).toHaveBeenCalledOnce();
+		expect(createIndex).toHaveBeenCalledWith(
+			{ external_id: 1 },
+			{
+				name: "directory_user_external_id_uidx",
+				unique: true,
+			},
+		);
+		expect(insertOne).toHaveBeenCalledOnce();
+		expect(session.endSession).toHaveBeenCalledOnce();
 	});
 
 	it("creates configured compound indexes before the first write", async () => {

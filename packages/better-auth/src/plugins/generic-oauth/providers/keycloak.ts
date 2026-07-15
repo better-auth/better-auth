@@ -41,7 +41,7 @@ export function keycloak(
 
 	return {
 		providerId: "keycloak",
-		accountIssuer: issuer,
+		identityIssuer: issuer,
 		discoveryUrl,
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,

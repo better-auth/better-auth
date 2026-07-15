@@ -35,21 +35,43 @@ export const sessions = pgTable(
     userAgent: text("user_agent"),
     userId: text("user_id")
       .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+      .references(() => users.id, { onDelete: "restrict" }),
   },
   (table) => [index("sessions_userId_idx").on(table.userId)],
+);
+
+export const identities = pgTable(
+  "identities",
+  {
+    id: text("id").primaryKey(),
+    issuer: text("issuer").notNull(),
+    providerAccountId: text("provider_account_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("identities_issuer_providerAccountId_uidx").on(
+      table.issuer,
+      table.providerAccountId,
+    ),
+    index("identities_userId_idx").on(table.userId),
+  ],
 );
 
 export const accounts = pgTable(
   "accounts",
   {
     id: text("id").primaryKey(),
-    issuer: text("issuer").notNull(),
-    providerAccountId: text("provider_account_id").notNull(),
-    providerId: text("provider_id").notNull(),
-    userId: text("user_id")
+    identityId: text("identity_id")
       .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+      .references(() => identities.id, { onDelete: "restrict" }),
+    providerId: text("provider_id").notNull(),
+    providerInstanceId: text("provider_instance_id").notNull(),
     accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
     idToken: text("id_token"),
@@ -63,11 +85,10 @@ export const accounts = pgTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("accounts_issuer_providerAccountId_uidx").on(
-      table.issuer,
-      table.providerAccountId,
+    uniqueIndex("accounts_identityId_providerInstanceId_uidx").on(
+      table.identityId,
+      table.providerInstanceId,
     ),
-    index("accounts_userId_idx").on(table.userId),
   ],
 );
 
@@ -89,7 +110,7 @@ export const verifications = pgTable(
 
 export const usersRelations = relations(users, ({ many }) => ({
   sessions: many(sessions),
-  accounts: many(accounts),
+  identities: many(identities),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -99,9 +120,17 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
   }),
 }));
 
-export const accountsRelations = relations(accounts, ({ one }) => ({
+export const identitiesRelations = relations(identities, ({ one, many }) => ({
   user: one(users, {
-    fields: [accounts.userId],
+    fields: [identities.userId],
     references: [users.id],
+  }),
+  accounts: many(accounts),
+}));
+
+export const accountsRelations = relations(accounts, ({ one }) => ({
+  identity: one(identities, {
+    fields: [accounts.identityId],
+    references: [identities.id],
   }),
 }));

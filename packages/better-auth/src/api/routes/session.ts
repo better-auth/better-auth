@@ -18,10 +18,13 @@ import {
 	deleteSessionCookie,
 	expireCookie,
 	getChunkedCookie,
+	rotateSessionCookiePreservingProviderAccountBinding,
 	setCookieCache,
-	setSessionCookie,
 } from "../../cookies";
-import { getSessionQuerySchema } from "../../cookies/session-store";
+import {
+	getAuthenticatedProviderAccountBindingCookie,
+	getSessionQuerySchema,
+} from "../../cookies/session-store";
 import { symmetricDecodeJWT, verifyJWT as verifySecretJWT } from "../../crypto";
 import { parseSessionOutput, parseUserOutput } from "../../db";
 import {
@@ -88,6 +91,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			}
 
 			try {
+				ctx.context.authenticatedProviderAccountBinding = null;
 				const sessionCookieToken = await ctx.getSignedCookie(
 					ctx.context.authCookies.sessionToken.name,
 					ctx.context.secret,
@@ -96,6 +100,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				if (!sessionCookieToken) {
 					return null;
 				}
+				const authenticatedProviderAccountBinding =
+					await getAuthenticatedProviderAccountBindingCookie(
+						ctx,
+						sessionCookieToken,
+					);
 
 				const sessionDataCookie = getChunkedCookie(
 					ctx,
@@ -274,13 +283,18 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					if (shouldExpireCookieCache) {
 						expireCookie(ctx, ctx.context.authCookies.sessionData);
 					} else {
+						ctx.context.authenticatedProviderAccountBinding =
+							authenticatedProviderAccountBinding;
 						// Check if the cookie cache needs to be refreshed based on refreshCache
 						const cookieRefreshCache =
 							ctx.context.sessionConfig.cookieRefreshCache;
 
 						if (cookieRefreshCache === false) {
 							// If refreshCache is disabled, return the session from cookie as-is
-							ctx.context.session = session;
+							ctx.context.session = {
+								session: session.session,
+								user: session.user,
+							};
 							// Parse session and user to ensure additionalFields are included
 							// Rehydrate date fields from JSON strings before parsing
 							const parsedSession = parseSessionOutput(ctx.context.options, {
@@ -315,6 +329,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								},
 								user: session.user,
 								updatedAt: Date.now(),
+								authenticatedProviderAccountBinding:
+									authenticatedProviderAccountBinding ?? undefined,
 							};
 
 							// Set the refreshed cookie cache
@@ -409,6 +425,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					}
 					return ctx.json(null);
 				}
+				ctx.context.authenticatedProviderAccountBinding =
+					authenticatedProviderAccountBinding;
 				/**
 				 * We don't need to update the session if the user doesn't want to be remembered
 				 * or if the session refresh is disabled
@@ -491,7 +509,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						);
 					}
 					const maxAge = ctx.context.sessionConfig.expiresIn;
-					await setSessionCookie(
+					await rotateSessionCookiePreservingProviderAccountBinding(
 						ctx,
 						{
 							session: updatedSession,

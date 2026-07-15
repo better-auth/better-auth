@@ -18,6 +18,7 @@ const widgetPlugin = {
 				tag: { type: "string" as const, required: false },
 				count: { type: "number" as const, required: false },
 				remaining: { type: "number" as const, required: false },
+				expiresAt: { type: "date" as const, required: false },
 			},
 		},
 	},
@@ -106,6 +107,28 @@ describe("memory adapter updateMany return shape", () => {
 			update: { tag: "everyone" },
 		});
 		expect(all).toBe(3);
+	});
+});
+
+describe("memory adapter date predicates", () => {
+	it("matches a Date captured before a copy-on-write transaction", async () => {
+		const { adapter } = setup();
+		const expiresAt = new Date("2030-01-01T00:00:00.000Z");
+		await adapter.create({
+			model: "widget",
+			data: { id: "dated", name: "dated-row", expiresAt },
+			forceAllowId: true,
+		});
+
+		const consumed = await adapter.transaction((transactionAdapter) =>
+			transactionAdapter.consumeOne<{ id: string }>({
+				model: "widget",
+				where: [{ field: "expiresAt", value: expiresAt }],
+			}),
+		);
+
+		expect(consumed?.id).toBe("dated");
+		await expect(adapter.count({ model: "widget" })).resolves.toBe(0);
 	});
 });
 

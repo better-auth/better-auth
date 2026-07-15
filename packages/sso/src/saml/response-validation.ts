@@ -24,7 +24,7 @@ function errorRedirectUrl(
 
 export interface InResponseToValidationContext {
 	extract: SAMLAssertionExtract;
-	providerId: string;
+	providerInstanceId: string;
 	options: {
 		enableInResponseToValidation?: boolean;
 		allowIdpInitiated?: boolean;
@@ -74,7 +74,7 @@ export async function validateInResponseTo(
 		if (!storedRequest) {
 			c.context.logger.error(
 				"SAML InResponseTo validation failed: unknown or expired request ID",
-				{ inResponseTo, providerId: ctx.providerId },
+				{ inResponseTo, providerInstanceId: ctx.providerInstanceId },
 			);
 			throw c.redirect(
 				errorRedirectUrl(
@@ -85,13 +85,13 @@ export async function validateInResponseTo(
 			);
 		}
 
-		if (storedRequest.providerId !== ctx.providerId) {
+		if (storedRequest.providerInstanceId !== ctx.providerInstanceId) {
 			c.context.logger.error(
 				"SAML InResponseTo validation failed: provider mismatch",
 				{
 					inResponseTo,
-					expectedProvider: storedRequest.providerId,
-					actualProvider: ctx.providerId,
+					expectedProviderInstanceId: storedRequest.providerInstanceId,
+					actualProviderInstanceId: ctx.providerInstanceId,
 				},
 			);
 			throw c.redirect(
@@ -105,7 +105,7 @@ export async function validateInResponseTo(
 	} else if (!allowIdpInitiated) {
 		c.context.logger.error(
 			"SAML IdP-initiated SSO rejected: InResponseTo missing and allowIdpInitiated is false",
-			{ providerId: ctx.providerId },
+			{ providerInstanceId: ctx.providerInstanceId },
 		);
 		throw c.redirect(
 			errorRedirectUrl(

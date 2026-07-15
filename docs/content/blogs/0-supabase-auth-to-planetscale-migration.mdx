@@ -206,7 +206,7 @@ Essentially you should be able to copy the following code into `migration.ts` an
 ```ts title="migration.ts"
 import { Pool } from "pg";
 import { auth } from "./lib/auth";
-import { User as SupabaseUser } from "@supabase/supabase-js";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 type User = SupabaseUser & {
   is_super_admin: boolean;
@@ -226,8 +226,29 @@ type User = SupabaseUser & {
     };
     created_at: string;
     updated_at: string;
-  };
+  }[];
 };
+
+const identityIssuers: Record<string, string> = {
+  github: "local:github",
+  google: "https://accounts.google.com",
+};
+
+function getIdentityIssuer(providerId: string): string {
+  const issuer = identityIssuers[providerId];
+  if (!issuer) {
+    throw new Error(`Add a trusted Identity issuer for ${providerId}`);
+  }
+  return issuer;
+}
+
+function getAccountLinkKey(
+  issuer: string,
+  providerAccountId: string,
+  providerInstanceId: string,
+): string {
+  return `${issuer}\u0000${providerAccountId}\u0000${providerInstanceId}`;
+}
 
 const migrateFromSupabase = async () => {
   const ctx = await auth.$context;
@@ -269,47 +290,65 @@ const migrateFromSupabase = async () => {
         },
       })
       .catch(() => {});
-    for (const identity of user.identities) {
-      const existingAccounts = await ctx.internalAdapter.findAccounts(user.id);
+    const linkedAccounts = await ctx.internalAdapter.listUserAccounts(user.id);
+    const accountLinkKeys = new Set(
+      linkedAccounts.map(({ account, identity }) =>
+        getAccountLinkKey(
+          identity.issuer,
+          identity.providerAccountId,
+          account.providerInstanceId,
+        ),
+      ),
+    );
 
+    for (const identity of user.identities) {
       if (identity.provider === "email") {
-        const hasCredential = existingAccounts.find(
-          (account: { providerId: string }) =>
-            account.providerId === "credential"
+        const issuer = "local:credential";
+        const providerAccountId = user.id;
+        const accountLinkKey = getAccountLinkKey(
+          issuer,
+          providerAccountId,
+          "credential",
         );
-        if (!hasCredential) {
-          await ctx.adapter
-            .create({
-              model: "account",
-              data: {
-                userId: user.id,
-                providerId: "credential",
-                accountId: user.id,
-                password: user.encrypted_password,
-                createdAt: new Date(user.created_at),
-                updatedAt: new Date(user.updated_at),
-              },
-            })
-            .catch(() => {});
+        if (!accountLinkKeys.has(accountLinkKey)) {
+          await ctx.internalAdapter.linkAccount(
+            user.id,
+            { issuer, providerAccountId },
+            {
+              providerId: "credential",
+              providerInstanceId: "credential",
+              password: user.encrypted_password,
+              createdAt: new Date(user.created_at),
+              updatedAt: new Date(user.updated_at),
+            },
+          );
+          accountLinkKeys.add(accountLinkKey);
         }
       }
       const supportedProviders = Object.keys(ctx.options.socialProviders || {});
       if (supportedProviders.includes(identity.provider)) {
-        const hasAccount = existingAccounts.find(
-          (account: { providerId: string }) =>
-            account.providerId === identity.provider
+        const issuer = getIdentityIssuer(identity.provider);
+        const providerAccountId = identity.identity_data?.sub;
+        if (!providerAccountId) {
+          throw new Error(`Missing provider subject for ${identity.provider}`);
+        }
+        const accountLinkKey = getAccountLinkKey(
+          issuer,
+          providerAccountId,
+          identity.provider,
         );
-        if (!hasAccount) {
-          await ctx.adapter.create({
-            model: "account",
-            data: {
-              userId: user.id,
+        if (!accountLinkKeys.has(accountLinkKey)) {
+          await ctx.internalAdapter.linkAccount(
+            user.id,
+            { issuer, providerAccountId },
+            {
               providerId: identity.provider,
-              accountId: identity.identity_data?.sub,
-              createdAt: new Date(identity.created_at ?? user.created_at),
-              updatedAt: new Date(identity.updated_at ?? user.updated_at),
+              providerInstanceId: identity.provider,
+              createdAt: new Date(identity.created_at),
+              updatedAt: new Date(identity.updated_at),
             },
-          });
+          );
+          accountLinkKeys.add(accountLinkKey);
         }
       }
     }

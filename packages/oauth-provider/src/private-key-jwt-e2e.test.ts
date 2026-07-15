@@ -117,36 +117,33 @@ describe("private_key_jwt e2e", async () => {
 		onTestFinished,
 	}) => {
 		// Set up the Relying Party with genericOAuth using private_key_jwt
-		const { customFetchImpl: rpFetchImpl } = await getTestInstance({
-			account: {
-				accountLinking: {
-					trustedProviders: [providerId],
-					requireLocalEmailVerified: false,
-				},
-			},
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							providerId,
-							clientId: oauthClient.client_id,
-							redirectURI: redirectUri,
-							discoveryUrl: `${authServerBaseUrl}/.well-known/openid-configuration`,
-							scopes: ["openid", "profile", "email"],
-							pkce: true,
-							tokenEndpointAuth: {
-								method: "private_key_jwt",
-								getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
-									privateKeyJwk: privateJwk,
-									kid: "e2e-key-1",
-									algorithm: "RS256",
-								}),
+		const { customFetchImpl: rpFetchImpl } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId,
+								clientId: oauthClient.client_id,
+								redirectURI: redirectUri,
+								discoveryUrl: `${authServerBaseUrl}/.well-known/openid-configuration`,
+								scopes: ["openid", "profile", "email"],
+								pkce: true,
+								tokenEndpointAuth: {
+									method: "private_key_jwt",
+									getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
+										privateKeyJwk: privateJwk,
+										kid: "e2e-key-1",
+										algorithm: "RS256",
+									}),
+								},
 							},
-						},
-					],
-				}),
-			],
-		});
+						],
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
 
 		const rpClient = createAuthClient({
 			baseURL: rpBaseUrl,
@@ -259,36 +256,33 @@ describe("private_key_jwt e2e", async () => {
 			vi.unstubAllGlobals();
 		});
 
-		const { customFetchImpl: rpFetchImpl } = await getTestInstance({
-			account: {
-				accountLinking: {
-					trustedProviders: [providerId],
-					requireLocalEmailVerified: false,
-				},
-			},
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							providerId,
-							clientId: oauthJwksUriClient.client_id,
-							redirectURI: redirectUri,
-							discoveryUrl: `${authServerBaseUrl}/.well-known/openid-configuration`,
-							scopes: ["openid", "profile", "email"],
-							pkce: true,
-							tokenEndpointAuth: {
-								method: "private_key_jwt",
-								getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
-									privateKeyJwk: privateJwk,
-									kid: "e2e-key-1",
-									algorithm: "RS256",
-								}),
+		const { customFetchImpl: rpFetchImpl } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId,
+								clientId: oauthJwksUriClient.client_id,
+								redirectURI: redirectUri,
+								discoveryUrl: `${authServerBaseUrl}/.well-known/openid-configuration`,
+								scopes: ["openid", "profile", "email"],
+								pkce: true,
+								tokenEndpointAuth: {
+									method: "private_key_jwt",
+									getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
+										privateKeyJwk: privateJwk,
+										kid: "e2e-key-1",
+										algorithm: "RS256",
+									}),
+								},
 							},
-						},
-					],
-				}),
-			],
-		});
+						],
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
 
 		const rpClient = createAuthClient({
 			baseURL: rpBaseUrl,

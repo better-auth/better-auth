@@ -1353,6 +1353,56 @@ describe("response headers on APIError", async () => {
 	});
 });
 
+describe("nested endpoint errors", () => {
+	const nestedEndpoint = createAuthEndpoint(
+		"/nested-conflict",
+		{ method: "POST" },
+		async () => {
+			throw new APIError(
+				"CONFLICT",
+				{ message: "nested conflict" },
+				{ "x-error": "nested" },
+			);
+		},
+	);
+	const endpoints = {
+		callsNestedEndpoint: createAuthEndpoint(
+			"/calls-nested-conflict",
+			{ method: "POST" },
+			async (context) => {
+				await nestedEndpoint({ ...context });
+				return { success: true };
+			},
+		),
+	};
+	const authContext = init({
+		hooks: {
+			after: createAuthMiddleware(async (context) => {
+				context.setHeader("x-after", "ran");
+			}),
+		},
+	});
+	const api = toAuthEndpoints(endpoints, authContext);
+
+	it("throws the nested APIError from direct auth.api calls", async () => {
+		await expect(api.callsNestedEndpoint()).rejects.toMatchObject({
+			statusCode: 409,
+			body: { message: "nested conflict" },
+		});
+	});
+
+	it("serializes the nested APIError status and runs after hooks for HTTP responses", async () => {
+		const response = await api.callsNestedEndpoint({ asResponse: true });
+
+		expect(response.status).toBe(409);
+		expect(response.headers.get("x-error")).toBe("nested");
+		expect(response.headers.get("x-after")).toBe("ran");
+		expect(await response.json()).toMatchObject({
+			message: "nested conflict",
+		});
+	});
+});
+
 /**
  * @see https://github.com/better-auth/better-auth/issues/9887
  *

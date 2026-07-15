@@ -4,7 +4,7 @@
 
 export interface WalletAddress {
 	id: string;
-	userId: string;
+	accountId: string;
 	address: string;
 	chainId: number;
 	isPrimary: boolean;

@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client"
   output   = "./.tmp/prisma-client-base"
@@ -9,15 +8,15 @@ datasource db {
 }
 
 model User {
-  id            String    @id
+  id            String     @id
   name          String
   email         String
-  emailVerified Boolean   @default(false)
+  emailVerified Boolean    @default(false)
   image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @default(now()) @updatedAt
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @default(now()) @updatedAt
   sessions      Session[]
-  accounts      Account[]
+  identities    Identity[]
 
   @@unique([email])
   @@map("user")
@@ -32,19 +31,32 @@ model Session {
   ipAddress String?
   userAgent String?
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@unique([token])
   @@map("session")
 }
 
+model Identity {
+  id                String    @id
+  issuer            String
+  providerAccountId String
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  accounts          Account[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([issuer, providerAccountId])
+  @@map("identity")
+}
+
 model Account {
   id                    String    @id
-  issuer                String
-  providerAccountId     String
+  identityId            String
+  identity              Identity  @relation(fields: [identityId], references: [id], onDelete: Restrict)
   providerId            String
-  userId                String
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerInstanceId    String
   accessToken           String?
   refreshToken          String?
   idToken               String?
@@ -55,7 +67,7 @@ model Account {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  @@unique([issuer, providerAccountId])
+  @@unique([identityId, providerInstanceId])
   @@map("account")
 }
 

@@ -53,11 +53,12 @@ These features change the schema:
 | Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables               | Not needed               |
 | Back-channel logout        | Logout-URL and revoked columns                                             | Not needed               |
 | Requested user-info claims | A requested-claims column on the token and consent tables                  | Not needed               |
-| Account identity           | An issuer column, a renamed provider-account column, and a compound index  | **No, backfill**         |
+| Identities and accounts    | A new Identity table and an Identity foreign key on Account                | **No, backfill**         |
+| SIWE wallet ownership      | `accountId` replaces `userId` on `walletAddress`                           | **No, backfill**         |
 | SCIM                       | Seven provisioning models with layouts that replace the legacy SCIM models | **No, reprovision**      |
 | Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                  | Not needed               |
 
-Account identity and SCIM both require a manual data step. Plan each applicable cutover before you deploy.
+The Identity and Account split, SIWE wallet ownership, and SCIM require a manual data step. Plan each applicable cutover before you deploy.
 
 <Callout type="warn">
   Do not run the generated SCIM migration over populated prerelease `scimGroup` or `scimGroupMember` tables. Follow the [SCIM cutover](#scim-requires-full-reprovisioning) before creating the new schema.
@@ -69,40 +70,62 @@ Account identity and SCIM both require a manual data step. Plan each applicable 
 
 This covers email and password, social login, the generic OAuth plugin, One Tap, and consuming SSO.
 
-### Account identity is scoped by issuer
+### Identities and provider accounts are separate
 
-Better Auth now recognizes an external account by the unique pair of `issuer` and `providerAccountId`. The `providerId` remains the local provider configuration, while `account.id` identifies the Better Auth account row. The account schema replaces `accountId` with `providerAccountId`, adds the required `issuer` field, and creates a unique compound index across both identity fields.
+Better Auth now stores the stable provider-side identity and its provider-specific credentials in 2 tables. `identity` owns `userId`, `issuer`, and `providerAccountId`, with a unique index on `(issuer, providerAccountId)`. `account` owns `identityId`, the public `providerId` alias, the stable internal `providerInstanceId`, tokens, password, scope, and expiry fields, with a unique index on `(identityId, providerInstanceId)`.
+
+Several provider configurations can point to one Identity without sharing credentials. Equal subjects from different issuers remain separate Identities, and each provider Account keeps independent tokens, grants, and lifecycle state.
 
 <Callout type="warn">
-  Use a maintenance window and stop authentication writes before changing the account schema. The generated migration cannot choose trusted issuers or resolve identity collisions for you.
+  Use a maintenance window and stop authentication writes before changing these tables. The generated migration cannot choose trusted issuers, resolve ownership conflicts, or decide which duplicate credentials to retain.
 </Callout>
 
-**Backfill the account identity:**
+**Backfill the Identity and Account tables:**
 
-1. Back up the `account` and `user` tables, then inventory every distinct `providerId`. Include custom physical field names from `account.fields` in that inventory.
-2. Rename the physical `accountId` column to `providerAccountId`, or add `providerAccountId` as nullable and copy the existing values if your migration tool cannot express a rename. Add `issuer` as nullable during the backfill.
-3. Populate both fields according to the account type:
+1. Back up the `account` and `user` tables, then inventory every distinct `providerId`. Include custom physical field names from `account.fields` and `identity.fields` in the migration plan.
+2. Add nullable staging columns named `issuer`, `providerAccountId`, and `providerInstanceId` to the existing `account` table. Copy the old provider-side `accountId` value into `providerAccountId`, then populate the issuer and provider instance according to the account type:
 
-   | Account type                     | `issuer`                                  | `providerAccountId`                    |
-   | -------------------------------- | ----------------------------------------- | -------------------------------------- |
-   | Credential                       | `local:credential`                        | Stable `id` from the linked `user` row |
-   | Provider with an issuer          | Exact trusted issuer used by the provider | Existing provider account identifier   |
-   | OAuth provider without an issuer | `local:oauth:<encoded providerId>`        | Existing provider account identifier   |
+   | Account type                | `issuer`                                  | `providerAccountId`                    | `providerInstanceId`            |
+   | --------------------------- | ----------------------------------------- | -------------------------------------- | ------------------------------- |
+   | Credential                  | `local:credential`                        | Stable `id` from the linked `user` row | `credential`                    |
+   | Trusted OAuth/OIDC provider | Exact trusted issuer used by the provider | Existing provider account identifier   | Existing `providerId`           |
+   | Provider without an issuer  | `local:<encoded providerId>`              | Existing provider account identifier   | Existing `providerId`           |
+   | Persisted OIDC SSO provider | `sso:provider:<ssoProvider.id>:oidc`      | Verified `sub`                         | `sso:provider:<ssoProvider.id>` |
+   | Persisted SAML SSO provider | `sso:provider:<ssoProvider.id>:saml`      | Signed `NameID`                        | `sso:provider:<ssoProvider.id>` |
+   | `defaultSSO` OIDC provider  | Exact verified issuer                     | Verified `sub`                         | `sso:config:<providerId>`       |
+   | `defaultSSO` SAML provider  | `sso:config:<providerId>:saml`            | Signed `NameID`                        | `sso:config:<providerId>`       |
 
-   The synthetic issuer percent-encodes its provider ID segment exactly as `encodeURIComponent(providerId)`; for example, `local:oauth:github` and `local:oauth:team%2Fgithub`. Build an explicit `providerId`-to-issuer map for your deployment. Multiple provider configurations that represent the same OpenID Connect authority must use the same issuer. Do not derive an issuer from email, display name, an unverified request value, or a mutable authorization endpoint.
-4. Find collisions before creating the unique index. Adapt this query to your physical table and field names:
+   Build an explicit `providerId`-to-issuer map for your deployment. Built-in, Generic OAuth, and `defaultSSO` OIDC configurations that intentionally share one verified OpenID Connect authority must use the same exact issuer. Keep persisted SSO providers in their immutable instance namespace. Do not derive an issuer from email, display name, an unverified request value, or a mutable authorization endpoint.
+3. Find identity keys that currently point to several users. Adapt this query to your physical table and field names:
 
-   ```sql title="Identity collision check"
-   SELECT issuer, providerAccountId, COUNT(*) AS accountCount,
+   ```sql title="Identity ownership conflicts"
+   SELECT issuer, providerAccountId,
           COUNT(DISTINCT userId) AS userCount
    FROM account
    GROUP BY issuer, providerAccountId
+   HAVING COUNT(DISTINCT userId) > 1;
+   ```
+
+   Stop if this query returns a row. Establish the owner from trusted provider data, then move or remove the conflicting records through a reviewed account-merge process. Never merge users by matching email alone.
+4. Find duplicate provider Accounts that would violate the new `(identityId, providerInstanceId)` key:
+
+   ```sql title="Duplicate provider Accounts"
+   SELECT issuer, providerAccountId, providerInstanceId,
+          COUNT(*) AS accountCount
+   FROM account
+   GROUP BY issuer, providerAccountId, providerInstanceId
    HAVING COUNT(*) > 1;
    ```
 
-   If duplicate rows belong to one user, choose the account record to keep and reconcile its provider configuration, tokens, scopes, and timestamps before deleting the others. If a key belongs to multiple users, stop the migration and establish the owner from trusted provider data. Never merge users by matching email alone.
-5. Confirm that every row has both identity fields, make them non-nullable, and add the unique compound index on `issuer` and `providerAccountId`. Remove the old column only after verifying a copy-based migration.
-6. Update custom adapters, database hooks, generated schemas, and field mappings to use `issuer` and `providerAccountId`. Credential accounts keep the linked user's stable `id` as `providerAccountId`; email remains a mutable sign-in identifier and does not change the account key.
+   If the same identity key and provider instance appears more than once, choose the Account to keep and reconcile its public alias, tokens, password, scope, and timestamps before deleting the duplicates.
+5. Create the `identity` table with `id`, `userId`, `issuer`, `providerAccountId`, `createdAt`, and `updatedAt`. Add a user foreign key with restricted deletion, a unique index on `(issuer, providerAccountId)`, and an index on `userId`.
+6. Insert one Identity for each distinct `(userId, issuer, providerAccountId)` tuple. Generate IDs with the same strategy as your Better Auth configuration, and preserve the earliest creation time plus the latest update time when several provider aliases collapse into one Identity.
+7. Add nullable `identityId` to `account`, then populate it by joining each staged `account` row to `identity` on `userId`, `issuer`, and `providerAccountId`. Confirm that every Account has exactly one match before making `identityId` non-nullable.
+8. Make `providerInstanceId` non-nullable. Add the Account foreign key to `identity.id` with restricted deletion and the unique index on `(identityId, providerInstanceId)`. Change the existing Session-to-User foreign key to restricted deletion as well. Better Auth deletes dependent rows through its lifecycle methods so hooks and atomicity checks run before a parent is removed. Remove `userId`, `issuer`, `providerAccountId`, and the old provider-side `accountId` from `account` only after you have verified the row counts and foreign keys.
+9. Update custom adapters, database hooks, generated schemas, and field mappings. Identity hooks receive `userId`, `issuer`, and `providerAccountId`; Account hooks receive `identityId`, `providerId`, `providerInstanceId`, and provider-specific credential data.
+10. If you use SIWE, add nullable `accountId` to `walletAddress`. Match each row to the Identity whose issuer is `local:siwe` and whose `providerAccountId` is `<address>:<chainId>`, then select that Identity's `siwe` Account. Stop if a wallet row has zero or several matches. Populate `accountId`, add a cascading foreign key to `account.id`, make `accountId` unique, add a unique index on `(address, chainId)`, and remove `userId`. Update custom SIWE field mappings from `userId` to `accountId`.
+
+Credential authentication still uses `local:credential` and the linked user's stable `id` for the Identity key. Email remains a mutable sign-in identifier and does not change that key.
 
 Account-specific APIs now use explicit, strongly typed selectors. Read `id` from `listAccounts`, then pass it as `accountId` to `unlinkAccount`. For `getAccessToken`, `refreshToken`, and `accountInfo`, choose exactly one of these request shapes:
 
@@ -113,7 +136,11 @@ Remove `providerId` from every account selector, and do not pass `providerAccoun
 
 Deploy only after the collision query returns no rows and the required unique index exists. Verify email-and-password sign-in, returning OAuth and SSO sign-in, explicit account linking, unlinking, provider profile retrieval, and token refresh against the migrated data.
 
-Review every custom OAuth provider's account subject. OpenID Connect discovery providers now use verified `sub`; plain OAuth providers use `id`; the previous runtime fallback between those fields is removed. Set `accountSubject` when either default is not the provider's immutable identifier. `getUserInfo().user` now contains only mutable local-user fields; keep the provider identifier in `getUserInfo().data`. `mapProfileToUser` can no longer return `id`. The `accountInfo` response exposes the selected identity as `account.providerAccountId` instead of `user.id`.
+Account responses now nest the durable Identity under `account.identity`, while the Account retains its local `id` and `providerId`. Update callers of `listAccounts` and `accountInfo` that previously read `issuer` or `providerAccountId` directly from the Account.
+
+Review every custom OAuth provider's identity subject. OpenID Connect discovery providers now use verified `sub`; plain OAuth providers use `id`; the previous runtime fallback between those fields is removed. Set `identitySubject` when either default is not the provider's immutable identifier, and set `identityIssuer` when explicit provider configurations share a verified authority. Resolver functions receive `OAuthIdentityKeyContext`.
+
+`getUserInfo().user` now contains only mutable local-user fields; keep the provider identifier in `getUserInfo().data`. `mapProfileToUser` can no longer return `id`. The `accountInfo` response exposes the selected key as `account.identity.providerAccountId` instead of `user.id`.
 
 The generic `microsoftEntraId` helper now requires a concrete tenant GUID. Replace `common`, `organizations`, or `consumers` configurations with the built-in Microsoft social provider, which validates tenant claims and derives the token's actual issuer.
 
@@ -356,13 +383,13 @@ The OAuth endpoints move from `/mcp/*` to `/oauth2/*`. Discovery-based MCP clien
 
 ## Enterprise SSO
 
-### SSO account subjects are protocol-defined
+### SSO identities and provider instances are separate
 
-OIDC SSO now uses the verified `sub` claim as the account subject, and SAML uses the signed `NameID`. Profile mappings can still select email, name, image, and additional fields, but `oidcConfig.mapping.id` and `samlConfig.mapping.id` are removed. Manual SAML configurations that do not provide `idpMetadata.metadata` must set `idpMetadata.entityID`; `samlConfig.issuer` identifies the service provider and no longer acts as an IdP fallback.
+Persisted SSO providers use their immutable provider-instance namespace for both OIDC and SAML Identities. OIDC uses the verified `sub` as its subject, while SAML uses the signed `NameID`. Only OIDC providers declared by the application in `defaultSSO` may share an Identity through the same verified issuer and subject. Profile mappings can still select email, name, image, and additional fields, but `oidcConfig.mapping.id` and `samlConfig.mapping.id` are removed. Manual SAML configurations that do not provide `idpMetadata.metadata` must set `idpMetadata.entityID`; `samlConfig.issuer` identifies the service provider and no longer acts as an IdP fallback.
 
-**What to do:** remove `id` from every OIDC and SAML mapping, then confirm that each OIDC provider returns a stable `sub` and each SAML provider returns a stable, signed `NameID`. During the account-identity backfill, use the exact OIDC issuer and subject or the exact SAML IdP entity ID and `NameID`. Provider aliases with the same OIDC issuer and subject deduplicate one external identity, but this change does not introduce independent grant or provider lifecycle records for those aliases.
+Persisted SSO Accounts keep the public routing alias in `providerId` and store `sso:provider:<ssoProvider.id>` in `providerInstanceId`. During the backfill, set each persisted Account's Identity issuer to `sso:provider:<ssoProvider.id>:oidc` or `sso:provider:<ssoProvider.id>:saml`. Set each `defaultSSO` Account's `providerInstanceId` to `sso:config:<providerId>`; use the verified issuer for an OIDC Identity that intentionally shares authority, and `sso:config:<providerId>:saml` for SAML. If an old Account cannot be mapped to exactly one provider instance, remove that Account and require the user to authenticate again instead of guessing from a mutable label.
 
-If a previous mapping used `mapping.id`, prepare its replacement before the maintenance window. Build a trusted mapping from every old account subject to the protocol-defined identity, then rewrite those account rows before adding the compound index: OIDC needs the exact issuer and verified `sub`; SAML needs the actual IdP metadata entity ID and signed `NameID`. Obtain this mapping from the identity provider, not email or a mutable profile attribute. Do not deploy a runtime fallback for the old mapping.
+**What to do:** remove `id` from every OIDC and SAML mapping, then confirm that each OIDC provider returns a stable `sub` and each SAML provider returns a stable, signed `NameID`. Deleting a persisted provider removes only its Accounts; Better Auth retains that instance's Identity record so provider deletion does not discard identity ownership. The User and records for other provider instances remain unchanged.
 
 ### IdP-initiated SAML is off by default
 
@@ -433,7 +460,7 @@ The new SCIM models do not read or convert the legacy SCIM tables. The prereleas
 1. Back up the legacy SCIM tables. Build a reviewed inventory of SCIM-created `account` rows, their linked `user` rows, and any organization membership or team state created by provisioning. Use the configured SCIM providers and directory subjects to identify them. Do not classify rows by a `providerId` prefix alone: stable 1.6 could store a raw provider ID that another account source also uses, while later prereleases used a `scim:` namespace.
 2. Decide how each legacy User will be handled. To retain a User, copy a stable connection-and-subject-to-`userId` mapping into application-owned storage, remove the legacy SCIM account row, and configure `identity.resolveUser` before reprovisioning. To recreate a User, remove the legacy SCIM account and delete the User only after proving that no other sign-in method or application data depends on it. Clean up organization state according to your application's ownership rules.
 3. Drop whichever legacy plugin models exist. Stable 1.6 uses `scimProvider`. If you adopted prerelease Group provisioning, first drop `scimGroupRoleGrant`, `scimGroupRole`, `scimGroupMember`, and `scimGroup` in that child-first order, then drop `scimProvider`. Use their physical table names if you customized model names.
-4. Configure the new connections and enable native interactive transactions in your database adapter. Cloudflare D1 cannot provide the required transaction behavior.
+4. Configure the new connections and use an adapter with native interactive transactions. Cloudflare D1 and synchronous SQLite drivers cannot run the complete SCIM mutation transaction.
 5. Run `auth generate` or `auth migrate` to create `scimConnectionBinding`, `scimIdentityTombstone`, `scimSubject`, `scimUser`, `scimGroup`, `scimGroupMember`, and `scimProjectionGrant`.
 6. Deploy the new configuration, update the directory's bearer credential, and trigger a complete User and Group provisioning cycle.
 7. Verify user linking, lifecycle, and role projection in your application, then resume provisioning.
@@ -498,6 +525,20 @@ The atomic-state work introduces required methods. If you use only the built-in 
 `incrementOne` updates one row's counter atomically and returns the row, or null when the guard did not match. `consumeOne` reads and deletes a row in one step for single-use credentials. Both are now required, and the old fallback is gone.
 
 **What to do:** implement both `incrementOne` and `consumeOne` in any custom adapter. A missing `consumeOne` throws at runtime. All built-in adapters already do.
+
+### Multi-record identity mutations require an atomic capability
+
+Creating or removing a provider identity can change related User, Identity, and Account rows. Better Auth no longer attempts to undo partial writes when an adapter cannot run a real transaction.
+
+**What to do:** provide an interactive `transaction` implementation or implement `commitAtomicWrites` with a database-native all-or-nothing batch. Adapters with neither capability reject these lifecycle mutations before database hooks or writes. The built-in Drizzle D1 and Kysely D1 paths use D1 `batch()`.
+
+Dynamically registered SSO providers have a stronger requirement: provider updates and deletion must serialize with in-flight authentication, so they require an interactive transaction. Providers declared in `defaultSSO` remain available with batch-only adapters because their configuration cannot change at runtime.
+
+### Drizzle transaction mode identifies the driver contract
+
+The Drizzle adapter's boolean `transaction` option is replaced by `"async"`, `"sync"`, or `false`. The adapter no longer inspects private Drizzle runtime fields to guess whether SQLite is synchronous.
+
+**What to do:** use `transaction: "sync"` with synchronous SQLite drivers, `transaction: "async"` with asynchronous drivers, and `transaction: false` when interactive transactions are unavailable. D1 continues to use `batch()` when transactions are disabled.
 
 ### Secondary storage must implement `increment` and `getAndDelete`
 
@@ -583,7 +624,7 @@ npx auth@latest migrate
 
 Then complete the manual data step if it applies:
 
-* **Backfill account identities:** assign every account a reviewed issuer and provider account identifier, resolve collisions, and add the compound unique index before deploying.
+* **Backfill Identities and Accounts:** assign every existing Account a reviewed Identity key, resolve ownership and provider collisions, populate both tables, and add their compound unique indexes before deploying.
 * **Reprovision SCIM:** follow the [full cutover](#scim-requires-full-reprovisioning), including reviewed handling of legacy core identities, then run a complete User and Group provisioning cycle.
 
 ***
@@ -595,5 +636,7 @@ If you upgraded straight from 1.6 to the final 1.7, skip this. It applies only i
 A breaking change in one beta can be reverted in a later beta of the same line, and the reversal is a migration in the opposite direction. The clearest case is OAuth scopes: an early beta moved `account.scope` into a `grantedScopes` array, and a later beta reverted it, so the final 1.7 keeps the original `account.scope` string. If you adopted the `grantedScopes` column, drop it and restore the `scope` column on every schema you changed. When your migration tool cannot tell a rename from a drop, reconcile the column with direct SQL so you keep existing rows.
 
 An earlier 1.7 prerelease used organization-scoped SCIM providers and interim Group tables. The final SCIM schema does not convert those tables. If you adopted that prerelease, follow the same [full SCIM reprovisioning cutover](#scim-requires-full-reprovisioning) as an upgrade from 1.6.
+
+An earlier 1.7 prerelease stored `issuer` and `providerAccountId` directly on `account` and exposed Generic OAuth options as `accountIssuer` and `accountSubject`. Reuse those populated columns and start the 2-table backfill at the collision checks, then rename the options to `identityIssuer` and `identitySubject`. Replace `OAuthAccountKeyContext` imports with `OAuthIdentityKeyContext`.
 
 Two habits make this cheaper. Read `revert` entries in the changelog, not just `feat` and `fix`; a revert is a migration for you even though it does not announce itself as breaking. Bump only the packages that carry the change, and confirm your own plugins do not import the reverted surface before you rebuild them.

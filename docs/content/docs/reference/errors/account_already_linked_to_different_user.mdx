@@ -5,8 +5,8 @@ description: The account is already linked to a different user.
 
 ## What is it?
 
-This error occurs during the OAuth flow when attempting to link an OAuth provider account
-to the currently authenticated user, but that exact provider account is already linked to
+This error occurs during the OAuth flow when attempting to link an OAuth provider Identity
+to the currently authenticated user, but that exact Identity is already linked to
 another user in your project. To prevent account takeover, Better Auth blocks the link and
 throws this error.
 
@@ -31,8 +31,8 @@ not triggered by email/password flows on their own.
 * Test/preview environments share the same OAuth provider configuration and database; the provider account
   is already linked to a different user record.
 * Data migration or manual database edits left a stale link pointing to the wrong user.
-* You rely on email matching to decide linking, but the actual unique key is `issuer` and
-  `providerAccountId`. If that identity belongs to another user, linking will be blocked.
+* You rely on email matching to decide linking, but an Identity is uniquely keyed by `issuer` and
+  `providerAccountId`. If that Identity belongs to another user, linking will be blocked.
 
 ### Safer patterns and prevention
 
@@ -44,9 +44,11 @@ not triggered by email/password flows on their own.
 
 ### Debug locally
 
-* Inspect your `account` database table. Each row points to a `userId` and is uniquely keyed by
-  `issuer` and `providerAccountId`. For OpenID Connect providers, these values correspond to the
-  verified issuer and stable subject.
+* Inspect the `identity` row selected by the Account. Each Identity points to a `userId` and is
+  uniquely keyed by `issuer` and `providerAccountId`. For OpenID Connect providers, these values
+  correspond to the verified issuer and stable subject.
+* Inspect the related `account` rows by `identityId`. Provider aliases can share the Identity, but
+  each provider configuration has its own Account and token state.
 * Identify which user currently owns the provider link and decide whether to unlink, merge, or keep as-is.
 * Verify your app is connected to the expected database and environment (dev/staging/prod) to avoid confusion
   due to shared credentials or misconfigured environment variables.

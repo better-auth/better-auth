@@ -2,7 +2,7 @@ import type { Awaitable } from "@better-auth/core";
 import type {
 	OAuth2Tokens,
 	OAuth2UserInfo,
-	OAuthAccountKeyContext,
+	OAuthIdentityKeyContext,
 	OAuthMappedUser,
 	OAuthRefreshContext,
 	TokenEndpointAuth,
@@ -39,27 +39,27 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * OpenID Connect discovery providers use the verified profile's `sub` field
 	 * by default. Plain OAuth providers use `id`. Configure this resolver when
 	 * the provider uses a different immutable identifier. Better Auth never
-	 * switches between fields at runtime because that could change an account's
+	 * switches between fields at runtime because that could change the external
 	 * identity. The resolver never receives the mapped local user, so profile
 	 * mapping cannot redefine provider identity.
 	 */
-	accountSubject?:
+	identitySubject?:
 		| ((
-				context: OAuthAccountKeyContext<GenericOAuthUserInfo>,
+				context: OAuthIdentityKeyContext<GenericOAuthUserInfo>,
 		  ) => Awaitable<string | number>)
 		| undefined;
 	/**
-	 * Stable issuer namespace paired with the provider account ID.
+	 * Stable issuer namespace paired with the provider identity subject.
 	 *
 	 * Discovery providers use the discovered issuer by default. Set this for
 	 * providers without discovery, provider aliases that share one identity
 	 * namespace, or tenant-specific issuers derived from verified provider data.
 	 * The resolver must not use unverified request input.
 	 */
-	accountIssuer?:
+	identityIssuer?:
 		| string
 		| ((
-				context: OAuthAccountKeyContext<GenericOAuthUserInfo>,
+				context: OAuthIdentityKeyContext<GenericOAuthUserInfo>,
 		  ) => Awaitable<string>)
 		| undefined;
 	/**

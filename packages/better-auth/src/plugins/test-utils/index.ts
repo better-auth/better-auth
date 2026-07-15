@@ -30,6 +30,10 @@ declare module "@better-auth/core" {
 			creator: typeof testUtils;
 		};
 	}
+
+	interface UserProvisioningSourceRegistry {
+		test: {};
+	}
 }
 
 /**

@@ -9,6 +9,7 @@ import type {
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
+import { pluralizeIdentifier } from "@better-auth/core/utils/string";
 import type { SQL } from "drizzle-orm";
 import {
 	and,
@@ -29,6 +30,14 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
+import type { DrizzleTransactionMode } from "./atomic-writes";
+import {
+	createDrizzleAtomicWriteCapability,
+	getDrizzleAtomicWriteMode,
+} from "./atomic-writes";
+
+export type { DrizzleTransactionMode } from "./atomic-writes";
+
 import {
 	insensitiveEq,
 	insensitiveIlike,
@@ -55,7 +64,7 @@ export interface DB {
  */
 function getAffectedRowCount(
 	result: unknown,
-	operation: "updateMany" | "deleteMany" | "consumeOne",
+	operation: "updateMany" | "delete" | "deleteMany" | "consumeOne",
 	context: { model: string; where: Where[] },
 ): number {
 	let count: unknown = 0;
@@ -144,13 +153,15 @@ export interface DrizzleAdapterConfig {
 	 */
 	camelCase?: boolean | undefined;
 	/**
-	 * Whether to execute multiple operations in a transaction.
+	 * How to execute multi-write mutations atomically.
 	 *
-	 * If the database doesn't support transactions,
-	 * set this to `false` and operations will be executed sequentially.
-	 * @default false
+	 * Use `"async"` for Drizzle's interactive async transaction API or `"sync"`
+	 * for synchronous SQLite drivers. Set this to `false` when transactions are
+	 * unavailable. Cloudflare D1 batch support is detected independently.
+	 *
+	 * @default "async"
 	 */
-	transaction?: boolean | undefined;
+	transaction?: DrizzleTransactionMode | undefined;
 	/**
 	 * Database schema namespace, used during the Better Auth CLI to generate the schema.
 	 *
@@ -172,6 +183,11 @@ export interface DrizzleAdapterConfig {
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	let mysqlNoIdWarned = false;
+	const atomicWriteMode = getDrizzleAtomicWriteMode(
+		db,
+		config.provider,
+		config.transaction ?? "async",
+	);
 	const createCustomAdapter =
 		(db: DB, inTransaction = false): AdapterFactoryCustomizeAdapterCreator =>
 		({
@@ -722,11 +738,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			 *    corresponds to the same table object
 			 */
 			function getQueryModel(model: string): string | null {
-				if (!db.query) return null;
 				if (db.query[model]) return model;
 
 				if (config.usePlural) {
-					const plural = `${model}s`;
+					const plural = pluralizeIdentifier(model);
 					if (db.query[plural]) return plural;
 				}
 
@@ -747,7 +762,21 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				return null;
 			}
 
+			function getJoinRelationKey(model: string, isUnique: boolean): string {
+				if (isUnique || config.usePlural) return model;
+				return pluralizeIdentifier(model);
+			}
+
+			const atomicWriteCapability = createDrizzleAtomicWriteCapability({
+				atomicWriteMode,
+				convertWhereClause,
+				database: db,
+				getSchema,
+				readAffectedRowCount: getAffectedRowCount,
+			});
+
 			return {
+				commitAtomicWrites: atomicWriteCapability.commitAtomicWrites,
 				async create({ model, data: values }) {
 					const schemaModel = getSchema(model);
 					checkMissingFields(schemaModel, model, values);
@@ -771,21 +800,21 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| Record<string, { limit: number } | boolean>
 								| undefined;
 
-							const pluralJoinResults: string[] = [];
-							includes = {};
-							const joinEntries = Object.entries(join);
-							for (const [model, joinAttr] of joinEntries) {
-								const limit =
-									joinAttr.limit ??
-									options.advanced?.database?.defaultFindManyLimit ??
-									100;
-								const isUnique = joinAttr.relation === "one-to-one";
-								const pluralSuffix = isUnique || config.usePlural ? "" : "s";
-								includes[`${model}${pluralSuffix}`] = isUnique
-									? true
-									: { limit };
-								if (!isUnique) {
-									pluralJoinResults.push(`${model}${pluralSuffix}`);
+							const pluralJoinResults: { key: string; target: string }[] = [];
+							if (join) {
+								includes = {};
+								const joinEntries = Object.entries(join);
+								for (const [model, joinAttr] of joinEntries) {
+									const limit =
+										joinAttr.limit ??
+										options.advanced?.database?.defaultFindManyLimit ??
+										100;
+									const isUnique = joinAttr.relation === "one-to-one";
+									const relationKey = getJoinRelationKey(model, isUnique);
+									includes[relationKey] = isUnique ? true : { limit };
+									if (!isUnique) {
+										pluralJoinResults.push({ key: relationKey, target: model });
+									}
 								}
 							}
 							const query = db.query[queryModel].findFirst({
@@ -805,13 +834,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							const res = await query;
 
 							if (res) {
-								for (const pluralJoinResult of pluralJoinResults) {
-									const singularKey = !config.usePlural
-										? pluralJoinResult.slice(0, -1)
-										: pluralJoinResult;
-									res[singularKey] = res[pluralJoinResult];
-									if (pluralJoinResult !== singularKey) {
-										delete res[pluralJoinResult];
+								for (const { key, target } of pluralJoinResults) {
+									if (key === target) continue;
+									res[target] = res[key];
+									if (key !== target) {
+										delete res[key];
 									}
 								}
 							}
@@ -846,7 +873,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 
 					if (join) {
 						const queryModel = getQueryModel(model);
-						if (!db.query || !queryModel) {
+						if (!queryModel) {
 							logger.error(
 								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx auth@latest generate".`,
 							);
@@ -856,21 +883,21 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| Record<string, { limit: number } | boolean>
 								| undefined;
 
-							const pluralJoinResults: string[] = [];
-							includes = {};
-							const joinEntries = Object.entries(join);
-							for (const [model, joinAttr] of joinEntries) {
-								const isUnique = joinAttr.relation === "one-to-one";
-								const limit =
-									joinAttr.limit ??
-									options.advanced?.database?.defaultFindManyLimit ??
-									100;
-								const pluralSuffix = isUnique || config.usePlural ? "" : "s";
-								includes[`${model}${pluralSuffix}`] = isUnique
-									? true
-									: { limit };
-								if (!isUnique)
-									pluralJoinResults.push(`${model}${pluralSuffix}`);
+							const pluralJoinResults: { key: string; target: string }[] = [];
+							if (join) {
+								includes = {};
+								const joinEntries = Object.entries(join);
+								for (const [model, joinAttr] of joinEntries) {
+									const isUnique = joinAttr.relation === "one-to-one";
+									const limit =
+										joinAttr.limit ??
+										options.advanced?.database?.defaultFindManyLimit ??
+										100;
+									const relationKey = getJoinRelationKey(model, isUnique);
+									includes[relationKey] = isUnique ? true : { limit };
+									if (!isUnique)
+										pluralJoinResults.push({ key: relationKey, target: model });
+								}
 							}
 							let orderBy: SQL<unknown>[] | undefined = undefined;
 							if (sortBy?.field) {
@@ -900,13 +927,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							const res = await query;
 							if (res) {
 								for (const item of res) {
-									for (const pluralJoinResult of pluralJoinResults) {
-										const singularKey = !config.usePlural
-											? pluralJoinResult.slice(0, -1)
-											: pluralJoinResult;
-										if (singularKey === pluralJoinResult) continue;
-										item[singularKey] = item[pluralJoinResult];
-										delete item[pluralJoinResult];
+									for (const { key, target } of pluralJoinResults) {
+										if (key === target) continue;
+										item[target] = item[key];
+										delete item[key];
 									}
 								}
 							}
@@ -1156,7 +1180,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				return data;
 			},
 			transaction:
-				(config.transaction ?? false)
+				atomicWriteMode === "async-transaction" &&
+				typeof db.transaction === "function"
 					? (cb) =>
 							db.transaction((tx: DB) => {
 								const adapter = createAdapterFactory({

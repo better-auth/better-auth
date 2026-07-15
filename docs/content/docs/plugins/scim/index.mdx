@@ -21,9 +21,9 @@ Each SCIM User links to a Better Auth User. Provisioning does not create a sign-
   </Step>
 
   <Step>
-    ### Enable database transactions
+    ### Use a native transaction adapter
 
-    SCIM resource requests require a database adapter with native interactive transaction support. Enable transactions only when your database driver can run an interactive transaction callback.
+    SCIM resource requests require native interactive transactions so resource state, projections, callbacks, and lifecycle fences commit as one unit. The built-in Kysely and Prisma adapters enable native transactions by default. Drizzle uses native transactions when its driver supports asynchronous transaction callbacks.
 
     <Tabs items={["Kysely", "Drizzle", "Prisma"]}>
       <Tab value="Kysely">
@@ -31,7 +31,6 @@ Each SCIM User links to a Better Auth User. Provisioning does not create a sign-
         const auth = betterAuth({
           database: kyselyAdapter(db, {
             type: "sqlite",
-            transaction: true,
           }),
         });
         ```
@@ -42,7 +41,6 @@ Each SCIM User links to a Better Auth User. Provisioning does not create a sign-
         const auth = betterAuth({
           database: drizzleAdapter(db, {
             provider: "pg",
-            transaction: true,
           }),
         });
         ```
@@ -53,7 +51,6 @@ Each SCIM User links to a Better Auth User. Provisioning does not create a sign-
         const auth = betterAuth({
           database: prismaAdapter(prisma, {
             provider: "postgresql",
-            transaction: true,
           }),
         });
         ```
@@ -61,7 +58,7 @@ Each SCIM User links to a Better Auth User. Provisioning does not create a sign-
     </Tabs>
 
     <Callout type="warn">
-      Cloudflare D1 does not support the interactive transactions required by the SCIM plugin.
+      Cloudflare D1 and synchronous SQLite drivers do not provide the interactive transactions required by the SCIM plugin. Their atomic batch support covers other Better Auth lifecycle mutations, not a complete SCIM resource request.
     </Callout>
   </Step>
 

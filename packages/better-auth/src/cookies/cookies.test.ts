@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import type { AccountWithIdentity } from "@better-auth/core/db";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
@@ -234,6 +235,15 @@ describe("cookie configuration", () => {
 		expect(cookies.sessionToken.name).toContain("test-prefix.session_token");
 		expect(cookies.sessionData.attributes.sameSite).toBe("lax");
 		expect(cookies.sessionData.attributes.domain).toBe("example.com");
+	});
+
+	it("uses the cookie-cache lifetime for provider account capabilities", () => {
+		const cookies = getCookies({
+			session: { cookieCache: { enabled: true, maxAge: 120 } },
+		});
+
+		expect(cookies.accountData.attributes.maxAge).toBe(120);
+		expect(cookies.providerAccountBinding.attributes.maxAge).toBe(120);
 	});
 });
 
@@ -2285,14 +2295,14 @@ describe("account cookie sync on user switch", () => {
 
 		const session = await auth.api.getSession({ headers });
 		expect(session?.user.email).toBe("switch-second@test.com");
-		const accountData = safeJSONParse<{ userId: string }>(
+		const accountData = safeJSONParse<AccountWithIdentity>(
 			await symmetricDecodeJWT(
 				accountSetCookie?.value || "",
 				ctx.secretConfig,
 				"better-auth-account",
 			),
 		);
-		expect(accountData?.userId).toBe(session?.user.id);
+		expect(accountData?.identity.userId).toBe(session?.user.id);
 	});
 
 	it("still expires another user's stale account cookie when the response issues no fresh one", async () => {

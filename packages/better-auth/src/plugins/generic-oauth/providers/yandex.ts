@@ -91,7 +91,7 @@ export function yandex(options: YandexOptions): GenericOAuthConfig {
 
 	return {
 		providerId: "yandex",
-		accountSubject: ({ profile }) => profile.id ?? "",
+		identitySubject: ({ profile }) => profile.id ?? "",
 		authorizationUrl: "https://oauth.yandex.com/authorize",
 		tokenUrl: "https://oauth.yandex.com/token",
 		clientId: options.clientId,

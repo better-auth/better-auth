@@ -119,6 +119,13 @@ function rowChanged(baseRow: any, cloneRow: any): boolean {
 	return JSON.stringify(baseRow) !== JSON.stringify(cloneRow);
 }
 
+function valuesEqual(left: unknown, right: unknown): boolean {
+	if (left instanceof Date && right instanceof Date) {
+		return left.getTime() === right.getTime();
+	}
+	return left === right;
+}
+
 export const memoryAdapter = (
 	db: MemoryDB,
 	config?: MemoryAdapterConfig | undefined,
@@ -259,8 +266,9 @@ export const memoryAdapter = (
 									if (isInsensitive) {
 										return insensitiveIn(record[field], value);
 									}
-									// @ts-expect-error
-									return value.includes(record[field]);
+									return value.some((candidate) =>
+										valuesEqual(record[field], candidate),
+									);
 								case "not_in":
 									if (!Array.isArray(value)) {
 										throw new Error("Value must be an array");
@@ -268,8 +276,9 @@ export const memoryAdapter = (
 									if (isInsensitive) {
 										return insensitiveNotIn(record[field], value);
 									}
-									// @ts-expect-error
-									return !value.includes(record[field]);
+									return !value.some((candidate) =>
+										valuesEqual(record[field], candidate),
+									);
 								case "contains":
 									if (isInsensitive) {
 										return insensitiveContains(record[field], value);
@@ -288,7 +297,7 @@ export const memoryAdapter = (
 								case "ne":
 									return isInsensitive
 										? !insensitiveCompare(record[field], value)
-										: record[field] !== value;
+										: !valuesEqual(record[field], value);
 								case "gt":
 									return value != null && Boolean(record[field] > value);
 								case "gte":
@@ -311,7 +320,7 @@ export const memoryAdapter = (
 									if (value === null) {
 										return record[field] == null;
 									}
-									return record[field] === value;
+									return valuesEqual(record[field], value);
 							}
 						};
 

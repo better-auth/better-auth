@@ -71,7 +71,7 @@ export interface OAuth2Tokens {
 
 /** Mutable local-user attributes normalized from an OAuth provider profile. */
 export type OAuth2UserInfo = {
-	/** Provider identity belongs in raw profile data and `accountSubject`. */
+	/** Provider identity belongs in raw profile data and `identitySubject`. */
 	id?: never;
 	name?: string | undefined;
 	email?: (string | null) | undefined;
@@ -80,33 +80,33 @@ export type OAuth2UserInfo = {
 };
 
 /**
- * Verified provider data available when deriving a stable OAuth account key.
+ * Verified provider data available when deriving a stable OAuth identity key.
  *
- * Account-key resolvers must use the raw provider profile or verified token
+ * Identity-key resolvers must use the raw provider profile or verified token
  * response. They never receive the mapped local user, so profile mapping
  * cannot redefine provider identity.
  */
-export interface OAuthAccountKeyContext<Profile extends object = object> {
+export interface OAuthIdentityKeyContext<Profile extends object = object> {
 	tokens: OAuth2Tokens;
 	profile: Profile;
 }
 
 /**
- * Resolves one part of an account key from a profile returned by the same
+ * Resolves one part of an identity key from a profile returned by the same
  * provider. The method-derived callback keeps that profile pairing intact when
  * providers with different profile shapes share an `OAuthProvider[]`.
  */
-type OAuthAccountKeyResolver<Profile extends object, Value> = {
-	resolve(context: OAuthAccountKeyContext<Profile>): Awaitable<Value>;
+type OAuthIdentityKeyResolver<Profile extends object, Value> = {
+	resolve(context: OAuthIdentityKeyContext<Profile>): Awaitable<Value>;
 }["resolve"];
 
-/** Resolves the stable provider subject used to build an OAuth account key. */
-export type OAuthAccountSubject<Profile extends object = object> =
-	OAuthAccountKeyResolver<Profile, string | number>;
+/** Stable provider subject or resolver used to build an OAuth identity key. */
+export type OAuthIdentitySubject<Profile extends object = object> =
+	OAuthIdentityKeyResolver<Profile, string | number>;
 
 /** Mutable local-user attributes returned by `mapProfileToUser`. */
 export type OAuthMappedUser = {
-	/** Provider identity is defined by `accountSubject`, not local user mapping. */
+	/** Provider identity is defined by `identitySubject`, not local user mapping. */
 	id?: never;
 	name?: string;
 	email?: string | null;
@@ -173,7 +173,7 @@ export interface OAuthProvider<
 	 * provider's documented immutable user identifier. Never derive this value
 	 * from `mapProfileToUser`.
 	 */
-	accountSubject: OAuthAccountSubject<T>;
+	identitySubject: OAuthIdentitySubject<T>;
 	validateAuthorizationCode: (data: {
 		code: string;
 		redirectURI: string;
@@ -233,15 +233,15 @@ export interface OAuthProvider<
 	 */
 	issuer?: string | undefined;
 	/**
-	 * Stable issuer used with the provider subject to recognize an account.
+	 * Stable issuer used with the provider subject to recognize an identity.
 	 *
 	 * Use the validated OpenID Connect issuer for OIDC providers. A resolver is
 	 * supported for tenant-specific issuers and receives only provider-verified
 	 * data. OAuth providers without an issuer omit this property and are scoped
-	 * to the synthetic `local:oauth:<encoded providerId>` issuer, where the
-	 * provider ID segment is percent-encoded.
+	 * to the synthetic `local:<encoded providerId>` issuer, where the provider
+	 * ID segment is percent-encoded.
 	 */
-	accountIssuer?: string | OAuthAccountKeyResolver<T, string> | undefined;
+	identityIssuer?: string | OAuthIdentityKeyResolver<T, string> | undefined;
 	/**
 	 * Require shared OAuth redirect routes to bind ID-token verification to an
 	 * authorization request nonce. When true, routes generate `idTokenNonce`,
@@ -335,7 +335,7 @@ export type ProviderOptions<Profile extends object = object> = {
 	/**
 	 * Custom function to get user info from the provider
 	 *
-	 * `data` must preserve the declared raw profile shape because account-key
+	 * `data` must preserve the declared raw profile shape because identity-key
 	 * resolvers consume it after this hook returns.
 	 */
 	getUserInfo?:

@@ -467,6 +467,29 @@ export const auth = betterAuth({
 * `cookieCache`: Enable caching session in cookie
 * `cookieCache.jwt.signingKey`: For `strategy: "jwt"`, choose `"secret"` (HS256, default) or `"jwt-plugin"` (asymmetric JWTs backed by the `jwt()` plugin)
 
+## `identity`
+
+Identity configuration controls the table that links a Better Auth user to a stable provider-side key.
+
+```ts
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+	identity: {
+		modelName: "identities",
+		fields: {
+			userId: "user_id",
+			issuer: "issuer",
+			providerAccountId: "provider_account_id",
+		},
+	},
+});
+```
+
+* `modelName`: The model name for the Identity
+* `fields`: Map Identity fields to different column names
+* `additionalFields`: Add application-defined fields to the Identity schema
+
 ## `account`
 
 Account configuration options.
@@ -477,10 +500,13 @@ export const auth = betterAuth({
 	account: {
 		modelName: "accounts",
 		fields: {
-			userId: "user_id"
+			identityId: "identity_id",
+			providerId: "provider_id",
+			providerInstanceId: "provider_instance_id",
 		},
 		encryptOAuthTokens: true, // Encrypt OAuth tokens before storing them in the database
 		storeStateStrategy: "database", // Store OAuth state payload in verification storage
+		skipStateCookieCheck: false, // Keep OAuth state bound to the initiating browser
 		storeAccountCookie: true, // Store provider account data after OAuth flow in an encrypted cookie (useful for database-less flows)
 		accountLinking: {
 			enabled: true,
@@ -512,6 +538,10 @@ Controls where OAuth state data is stored during the authentication flow.
 
 Defaults to `"database"` when a database or `secondaryStorage` is configured, and to `"cookie"` only when neither is set (a fully stateless setup). With `secondaryStorage`, OAuth state is stored there automatically; you no longer need to set this manually.
 
+### `skipStateCookieCheck`
+
+Skip the signed cookie check that binds database-backed OAuth state to the browser that started the flow. Default: `false`. Enabling this weakens OAuth callback correlation and can allow account takeover, so use it only when the integration cannot preserve the state cookie and you have evaluated the security impact.
+
 ### `storeAccountCookie`
 
 Store provider account data after an OAuth flow in an encrypted cookie. This is useful for database-less flows where OAuth token material, such as access tokens, refresh tokens, ID tokens, scopes, and token expiry, must be available without an account table.
@@ -519,9 +549,11 @@ Store provider account data after an OAuth flow in an encrypted cookie. This is 
 * Default: `false`
 * Automatically set to `true` if no database is provided
 
-The account cookie has a five-minute max age and is refreshed when Better Auth writes updated provider account data, for example after `getAccessToken` or `/refresh-token` refreshes provider tokens. When this happens in server-side code, forward the returned `Set-Cookie` header to the browser so the refreshed account cookie is retained.
+The account cookie and its session binding use `session.cookieCache.maxAge`. The default is five minutes when a server-side account store is available. In a fully stateless deployment, Better Auth defaults the cookie cache to the session lifetime, so the provider account remains available for that session. The account cookie is refreshed when Better Auth writes updated provider account data, for example after `getAccessToken` or `/refresh-token` refreshes provider tokens. When this happens in server-side code, forward the returned `Set-Cookie` header to the browser so the refreshed account cookie is retained.
 
 Pass `useAccountCookie: true` to `getAccessToken`, `refreshToken`, or `accountInfo` when the signed cookie should select the account. These APIs require an explicit `accountId` or `useAccountCookie: true`; omitting both selectors is invalid.
+
+With a database, the cookie selects the Account by its Better Auth `id`, and Better Auth reloads the current Account and Identity before using provider credentials. Unlinking an Account or rotating its tokens therefore takes effect immediately. Without a database, the encrypted cookie remains the source of the provider account data. Better Auth binds each account-cookie issuance to the exact session, Better Auth Account, external Identity, and provider instance that authenticated it. Copying an account cookie from another session cannot authorize account operations, even when both sessions use the same upstream Identity. A configured `secondaryStorage` remains authoritative for session validity; provider account binding does not enable session caching.
 
 Better Auth chunks oversized account cookies, but browsers and proxies can still enforce total cookie or header limits. Prefer database-backed account storage for providers that issue large JWTs or for production flows that need durable token storage.
 
@@ -532,7 +564,10 @@ import { createAuthMiddleware } from "better-auth/api";
 import { getAccountCookie } from "better-auth/cookies";
 
 const hook = createAuthMiddleware(async (ctx) => {
-	const account = await getAccountCookie(ctx);
+	const accountWithIdentity = await getAccountCookie(ctx);
+
+	console.log(accountWithIdentity?.account.providerId);
+	console.log(accountWithIdentity?.identity.issuer);
 });
 ```
 
@@ -636,8 +671,6 @@ export const auth = betterAuth({
 			httpOnly: true,
 			secure: true
 		},
-		// OAuth state configuration has been moved to account option
-		// Use account.storeStateStrategy and account.skipStateCookieCheck instead
 		cookiePrefix: "myapp",
 		database: {
 			// Use your own custom ID generator,
@@ -674,7 +707,6 @@ export const auth = betterAuth({
 * `database`: Database configuration options
 * `backgroundTasks`: Configure background task handling for deferred operations
 * `skipTrailingSlashes`: Skip trailing slash validation in route matching. (default: `false`)
-* OAuth state configuration options (`storeStateStrategy`, `skipStateCookieCheck`) are now part of the `account` option
 
 <h3 id="advanced-database"><code>database</code></h3>
 
@@ -827,6 +859,9 @@ export const auth = betterAuth({
 		},
 		session: {
 			// Session hooks
+		},
+		identity: {
+			// Identity hooks
 		},
 		account: {
 			// Account hooks

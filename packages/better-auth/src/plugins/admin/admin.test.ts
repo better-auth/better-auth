@@ -177,6 +177,23 @@ describe("Admin plugin", async () => {
 		);
 		newUser = res.data?.user;
 		expect(newUser?.role).toBe("user");
+		const context = await auth.$context;
+		const linkedAccounts = await context.internalAdapter.listUserAccounts(
+			newUser?.id ?? "",
+		);
+		expect(linkedAccounts).toContainEqual(
+			expect.objectContaining({
+				identity: expect.objectContaining({
+					userId: newUser?.id,
+					issuer: "local:credential",
+					providerAccountId: newUser?.id,
+				}),
+				account: expect.objectContaining({
+					providerId: "credential",
+					providerInstanceId: "credential",
+				}),
+			}),
+		);
 	});
 
 	it("should allow admin to create users without password", async () => {
@@ -1375,11 +1392,19 @@ describe("Admin plugin", async () => {
 		});
 		expect(postSignIn.error).toBeNull();
 		expect(postSignIn.data?.user.id).toBe(userId);
+		const internalAdapter = (await auth.$context).internalAdapter;
 		await expect(
-			(await auth.$context).internalAdapter.findCredentialAccount(userId),
+			internalAdapter.findCredentialAccount(userId),
+		).resolves.toMatchObject({
+			providerId: "credential",
+		});
+		await expect(
+			internalAdapter.findIdentityByKey({
+				issuer: "local:credential",
+				providerAccountId: userId,
+			}),
 		).resolves.toMatchObject({
 			userId,
-			providerId: "credential",
 			issuer: "local:credential",
 			providerAccountId: userId,
 		});

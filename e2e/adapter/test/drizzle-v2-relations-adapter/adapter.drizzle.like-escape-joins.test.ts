@@ -1,5 +1,5 @@
 /**
- * With joins, `findMany` filters through Drizzle's relational
+ * With `experimental.joins`, `findMany` filters through Drizzle's relational
  * query object, whose `like` filter cannot carry `ESCAPE`. LIKE is routed
  * through `RAW`, so this checks `%` and `_` still match literally.
  *
@@ -33,9 +33,8 @@ describe("drizzle relations-v2 adapter: LIKE escaping on the joins path", () => 
 	const adapter = drizzleAdapter(db, {
 		schema: { ...tables, relations },
 		provider: "sqlite",
-	})({
-		advanced: { database: { joins: true } },
-	});
+		transaction: "sync",
+	})({ advanced: { database: { joins: true } } });
 
 	beforeEach(() => {
 		sqliteDb.exec("DROP TABLE IF EXISTS user;");

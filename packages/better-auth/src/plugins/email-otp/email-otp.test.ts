@@ -115,12 +115,14 @@ describe("email-otp", async () => {
 		});
 		const userId = created.user!.id;
 		expect(created.user?.emailVerified).toBe(false);
-		await internalAdapter.createAccount({
+		await internalAdapter.linkAccount(
 			userId,
-			providerId: "google",
-			issuer: "local:google",
-			providerAccountId: "attacker-google",
-		});
+			{
+				issuer: "local:google",
+				providerAccountId: "attacker-google",
+			},
+			{ providerId: "google", providerInstanceId: "google" },
+		);
 
 		// Precondition: the password is blocked behind the verification gate.
 		await expect(
@@ -140,7 +142,7 @@ describe("email-otp", async () => {
 
 		// Pre-proof account links are gone, so the password no longer works and
 		// an OAuth link cannot survive the email-owner proof.
-		const accounts = await internalAdapter.findAccounts(userId);
+		const accounts = await internalAdapter.listUserAccounts(userId);
 		expect(accounts).toHaveLength(0);
 		await expect(
 			scopedAuth.api.signInEmail({
@@ -393,11 +395,19 @@ describe("email-otp", async () => {
 		});
 		expect(res.data?.token).toBeDefined();
 		const userId = res.data!.user.id;
+		const internalAdapter = (await auth.$context).internalAdapter;
 		await expect(
-			(await auth.$context).internalAdapter.findCredentialAccount(userId),
+			internalAdapter.findCredentialAccount(userId),
+		).resolves.toMatchObject({
+			providerId: "credential",
+		});
+		await expect(
+			internalAdapter.findIdentityByKey({
+				issuer: "local:credential",
+				providerAccountId: userId,
+			}),
 		).resolves.toMatchObject({
 			userId,
-			providerId: "credential",
 			issuer: "local:credential",
 			providerAccountId: userId,
 		});

@@ -7,7 +7,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import type { AccountKey } from "@better-auth/core/db";
+import type { IdentityKey } from "@better-auth/core/db";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { defu } from "defu";
 import * as z from "zod";
@@ -16,12 +16,12 @@ import { parseJSON } from "../../client/parser";
 import { setSessionCookie } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import {
-	resolveOAuthAccountKey,
-	toOAuthProfileRecord,
-} from "../../oauth2/account-key";
 import { redirectOnError } from "../../oauth2/errors";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import {
+	resolveOAuthIdentityKey,
+	toOAuthProfileRecord,
+} from "../../oauth2/identity-key";
+import { authenticateProviderUser } from "../../oauth2/provider-user";
 import { getOAuthCallbackPath } from "../../oauth2/utils";
 import type { StateData } from "../../state";
 import { parseGenericState } from "../../state";
@@ -105,7 +105,18 @@ type OAuthProxyStatePackage = {
  */
 type PassthroughPayload = {
 	userInfo: Omit<User, "createdAt" | "updatedAt">;
-	account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
+	identity: IdentityKey;
+	account: Pick<
+		Account,
+		| "providerId"
+		| "providerInstanceId"
+		| "accessToken"
+		| "refreshToken"
+		| "idToken"
+		| "accessTokenExpiresAt"
+		| "refreshTokenExpiresAt"
+		| "scope"
+	>;
 	/** Raw provider profile, relayed so `validateUserInfo` sees the same `source.oauth.profile` as a direct callback. */
 	profile?: Record<string, unknown> | undefined;
 	state: string;
@@ -241,7 +252,11 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 					if (
 						typeof payload.timestamp !== "number" ||
 						!payload.userInfo ||
+						!payload.identity ||
+						typeof payload.identity.issuer !== "string" ||
+						typeof payload.identity.providerAccountId !== "string" ||
 						!payload.account ||
+						typeof payload.account.providerId !== "string" ||
 						!payload.state ||
 						!payload.callbackURL
 					) {
@@ -269,10 +284,11 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						throw redirectOnError(ctx, errorURL, "state_mismatch");
 					}
 
-					let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+					let result: Awaited<ReturnType<typeof authenticateProviderUser>>;
 					try {
-						result = await handleOAuthUserInfo(ctx, {
+						result = await authenticateProviderUser(ctx, {
 							userInfo: payload.userInfo,
+							identity: payload.identity,
 							account: payload.account,
 							callbackURL: payload.callbackURL,
 							disableSignUp: payload.disableSignUp,
@@ -495,20 +511,17 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							ctx.context.logger.error("Provider did not return email");
 							throw redirectOnError(ctx, errorURL, "email_not_found");
 						}
-						let accountKey: AccountKey;
+						let identityKey: IdentityKey;
 						try {
-							accountKey = await resolveOAuthAccountKey(
+							identityKey = await resolveOAuthIdentityKey(
 								provider,
 								tokens,
 								userInfoResult.data,
 							);
 						} catch (error) {
 							ctx.context.logger.error(
-								"Unable to derive provider account identity",
-								{
-									providerId: provider.id,
-									error,
-								},
+								"Unable to resolve provider identity",
+								error,
 							);
 							throw redirectOnError(ctx, errorURL, "unable_to_get_user_info");
 						}
@@ -521,16 +534,17 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 
 						const payload: PassthroughPayload = {
 							userInfo: {
-								id: accountKey.providerAccountId,
+								id: identityKey.providerAccountId,
 								email: userInfo.email,
 								name: userInfo.name || "",
 								image: userInfo.image,
 								emailVerified: userInfo.emailVerified,
 							},
 							profile: providerProfile,
+							identity: identityKey,
 							account: {
 								providerId: provider.id,
-								...accountKey,
+								providerInstanceId: provider.id,
 								accessToken: tokens.accessToken,
 								refreshToken: tokens.refreshToken,
 								idToken: tokens.idToken,

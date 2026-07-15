@@ -76,8 +76,8 @@ export function slack(options: SlackOptions): GenericOAuthConfig<"slack"> {
 
 	return {
 		providerId: "slack",
-		accountSubject: ({ profile }) => profile.sub ?? "",
-		accountIssuer: "https://slack.com",
+		identitySubject: ({ profile }) => profile.sub ?? "",
+		identityIssuer: "https://slack.com",
 		authorizationUrl: "https://slack.com/openid/connect/authorize",
 		tokenUrl: "https://slack.com/api/openid.connect.token",
 		userInfoUrl: "https://slack.com/api/openid.connect.userInfo",

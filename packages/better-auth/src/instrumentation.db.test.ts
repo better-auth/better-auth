@@ -171,7 +171,7 @@ describe("database instrumentation", () => {
 		});
 	});
 
-	it("emits db delete span", async () => {
+	it("emits an atomic consume span for a single-row delete", async () => {
 		const instance = await createTestInstance();
 		await instance.client.signUp.email(testUser);
 
@@ -188,8 +188,8 @@ describe("database instrumentation", () => {
 				void (await instance.client.revokeSession({ token: sessionToken! })),
 		);
 
-		const span = await waitForSpan((s) => s.name === "db delete session");
-		expect(span.attributes[ATTR_DB_OPERATION_NAME]).toBe("delete");
+		const span = await waitForSpan((s) => s.name === "db consumeOne session");
+		expect(span.attributes[ATTR_DB_OPERATION_NAME]).toBe("consumeOne");
 		expect(span.attributes[ATTR_DB_COLLECTION_NAME]).toBe("session");
 
 		const beforeHookSpan = await waitForSpan(
@@ -209,7 +209,7 @@ describe("database instrumentation", () => {
 		});
 	});
 
-	it("emits db deleteMany span", async () => {
+	it("emits atomic consume spans for a hook-aware bulk delete", async () => {
 		const instance = await createTestInstance();
 		await instance.client.signUp.email(testUser);
 
@@ -219,8 +219,8 @@ describe("database instrumentation", () => {
 			async () => void (await instance.client.revokeSessions()),
 		);
 
-		const span = await waitForSpan((s) => s.name === "db deleteMany session");
-		expect(span.attributes[ATTR_DB_OPERATION_NAME]).toBe("deleteMany");
+		const span = await waitForSpan((s) => s.name === "db consumeOne session");
+		expect(span.attributes[ATTR_DB_OPERATION_NAME]).toBe("consumeOne");
 		expect(span.attributes[ATTR_DB_COLLECTION_NAME]).toBe("session");
 
 		const beforeHookSpan = await waitForSpan(

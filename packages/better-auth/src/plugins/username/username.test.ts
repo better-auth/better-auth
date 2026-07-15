@@ -79,20 +79,27 @@ describe("username", async () => {
 		);
 
 		await context.internalAdapter.deleteAccount(canonicalAccount.id);
-		await context.internalAdapter.createAccount({
+		await context.internalAdapter.linkAccount(
 			userId,
-			providerId: "credential",
-			issuer: "local:decoy-credential",
-			providerAccountId: "decoy-subject",
-			password: await context.password.hash("decoy-password"),
-		});
-		await context.internalAdapter.createAccount({
+			{
+				issuer: "local:decoy-credential",
+				providerAccountId: "decoy-subject",
+			},
+			{
+				providerId: "credential",
+				providerInstanceId: "credential",
+				password: await context.password.hash("decoy-password"),
+			},
+		);
+		await context.internalAdapter.linkAccount(
 			userId,
-			providerId: "credential",
-			issuer: "local:credential",
-			providerAccountId: userId,
-			password: canonicalAccount.password,
-		});
+			{ issuer: "local:credential", providerAccountId: userId },
+			{
+				providerId: "credential",
+				providerInstanceId: "credential",
+				password: canonicalAccount.password,
+			},
+		);
 
 		const canonicalSignIn = await client.signIn.username({
 			username: "canonical_username",

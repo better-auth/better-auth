@@ -1,8 +1,8 @@
 CREATE TABLE `account` (
 	`id` text PRIMARY KEY NOT NULL,
-	`account_id` text NOT NULL,
+	`identity_id` text NOT NULL,
 	`provider_id` text NOT NULL,
-	`user_id` text NOT NULL,
+	`provider_instance_id` text NOT NULL,
 	`access_token` text,
 	`refresh_token` text,
 	`id_token` text,
@@ -12,16 +12,31 @@ CREATE TABLE `account` (
 	`password` text,
 	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
 	`updated_at` integer NOT NULL,
-	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`identity_id`) REFERENCES `identity`(`id`) ON UPDATE no action ON DELETE restrict
 );
 --> statement-breakpoint
-CREATE INDEX `account_userId_idx` ON `account` (`user_id`);--> statement-breakpoint
+CREATE UNIQUE INDEX `account_identityId_providerInstanceId_uidx` ON `account` (`identity_id`,`provider_instance_id`);--> statement-breakpoint
+CREATE INDEX `account_identityId_idx` ON `account` (`identity_id`);--> statement-breakpoint
+CREATE TABLE `identity` (
+	`id` text PRIMARY KEY NOT NULL,
+	`issuer` text NOT NULL,
+	`provider_account_id` text NOT NULL,
+	`user_id` text NOT NULL,
+	`created_at` integer DEFAULT (cast(unixepoch('subsecond') * 1000 as integer)) NOT NULL,
+	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE restrict
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `identity_issuer_providerAccountId_uidx` ON `identity` (`issuer`,`provider_account_id`);--> statement-breakpoint
+CREATE INDEX `identity_userId_idx` ON `identity` (`user_id`);--> statement-breakpoint
 CREATE TABLE `jwks` (
 	`id` text PRIMARY KEY NOT NULL,
 	`public_key` text NOT NULL,
 	`private_key` text NOT NULL,
 	`created_at` integer NOT NULL,
-	`expires_at` integer
+	`expires_at` integer,
+	`alg` text,
+	`crv` text
 );
 --> statement-breakpoint
 CREATE TABLE `session` (
@@ -33,7 +48,7 @@ CREATE TABLE `session` (
 	`ip_address` text,
 	`user_agent` text,
 	`user_id` text NOT NULL,
-	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE restrict
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `session_token_unique` ON `session` (`token`);--> statement-breakpoint

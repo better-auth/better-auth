@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { BetterAuthOptions } from "../../types";
 import { createAdapterFactory } from "./factory";
-import type { CustomAdapter, Where } from "./index";
+import type {
+	AtomicWriteOperation,
+	AtomicWriteResult,
+	CleanedWhere,
+	CustomAdapter,
+	Where,
+} from "./index";
 
 function createCustomAdapter(
 	overrides: Partial<CustomAdapter> = {},
@@ -67,6 +73,225 @@ function createTestAdapter({
 }
 
 describe("createAdapterFactory atomic primitives", () => {
+	it("pluralizes identity model names without leaking storage grammar", async () => {
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				findOne: async ({ model }) => {
+					expect(model).toBe("identities");
+					return null;
+				},
+			}),
+		});
+
+		await adapter.findOne({
+			model: "identity",
+			where: [{ field: "id", value: "identity-id" }],
+		});
+	});
+
+	it("transforms and delegates every declarative atomic write exactly once", async () => {
+		let storedOperations: readonly AtomicWriteOperation<CleanedWhere>[] = [];
+		const storedResults: AtomicWriteResult[] = [
+			{
+				type: "create",
+				record: {
+					id: "verification-id",
+					identifier_text: "created-token",
+				},
+			},
+			{
+				type: "update",
+				record: {
+					id: "verification-id",
+					identifier_text: "updated-token",
+					attempt_count: 2,
+				},
+			},
+			{ type: "delete", deletedCount: 1 },
+			{ type: "deleteMany", deletedCount: 3 },
+		];
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				commitAtomicWrites: async (operations) => {
+					storedOperations = operations;
+					return storedResults;
+				},
+			}),
+		});
+		const operations: AtomicWriteOperation[] = [
+			{
+				type: "create",
+				model: "verification",
+				data: {
+					id: "verification-id",
+					identifier: "create-token",
+					value: "pending",
+				},
+				forceAllowId: true,
+			},
+			{
+				type: "update",
+				model: "verification",
+				where: [{ field: "identifier", value: "current-token" }],
+				update: { identifier: "next-token", attempts: 2 },
+			},
+			{
+				type: "delete",
+				model: "verification",
+				where: [{ field: "identifier", value: "delete-token" }],
+			},
+			{
+				type: "deleteMany",
+				model: "verification",
+				where: [{ field: "identifier", value: "delete-many-token" }],
+			},
+		];
+
+		const logicalResults = await adapter.commitAtomicWrites!(operations);
+
+		expect(storedOperations).toEqual([
+			{
+				type: "create",
+				model: "verificationRecords",
+				data: expect.objectContaining({
+					id: "verification-id",
+					identifier_text: "create-token:create",
+					value: "pending",
+				}),
+			},
+			{
+				type: "update",
+				model: "verificationRecords",
+				where: [
+					{
+						field: "identifier_text",
+						value: "current-token:update",
+						operator: "eq",
+						connector: "AND",
+						mode: "sensitive",
+					},
+				],
+				update: expect.objectContaining({
+					identifier_text: "next-token:update",
+					attempt_count: 2,
+				}),
+			},
+			{
+				type: "delete",
+				model: "verificationRecords",
+				where: [
+					{
+						field: "identifier_text",
+						value: "delete-token:delete",
+						operator: "eq",
+						connector: "AND",
+						mode: "sensitive",
+					},
+				],
+			},
+			{
+				type: "deleteMany",
+				model: "verificationRecords",
+				where: [
+					{
+						field: "identifier_text",
+						value: "delete-many-token:deleteMany",
+						operator: "eq",
+						connector: "AND",
+						mode: "sensitive",
+					},
+				],
+			},
+		]);
+		expect(logicalResults).toEqual([
+			{
+				type: "create",
+				record: expect.objectContaining({
+					id: "verification-id",
+					identifier: "created-token:output",
+				}),
+			},
+			{
+				type: "update",
+				record: expect.objectContaining({
+					id: "verification-id",
+					identifier: "updated-token:output",
+					attempts: 2,
+				}),
+			},
+			{ type: "delete", deletedCount: 1 },
+			{ type: "deleteMany", deletedCount: 3 },
+		]);
+	});
+
+	it("does not expose atomic writes when the custom adapter lacks the capability", () => {
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter(),
+		});
+
+		expect(adapter.commitAtomicWrites).toBeUndefined();
+	});
+
+	it("preserves a null result when an atomic update matches no row", async () => {
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				commitAtomicWrites: async () => [{ type: "update", record: null }],
+			}),
+		});
+
+		await expect(
+			adapter.commitAtomicWrites!([
+				{
+					type: "update",
+					model: "verification",
+					where: [{ field: "identifier", value: "missing" }],
+					update: { value: "next" },
+				},
+			]),
+		).resolves.toEqual([{ type: "update", record: null }]);
+	});
+
+	it("rejects atomic results that are not aligned with their operations", async () => {
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				commitAtomicWrites: async () => [{ type: "delete", deletedCount: 1 }],
+			}),
+		});
+
+		await expect(
+			adapter.commitAtomicWrites!([
+				{
+					type: "create",
+					model: "verification",
+					data: { identifier: "token", value: "pending" },
+				},
+			]),
+		).rejects.toThrow(/returned a delete result for create operation 0/);
+	});
+
+	it("rejects an inexact result for an atomic single-row delete", async () => {
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				commitAtomicWrites: async () => [
+					{
+						type: "delete",
+						deletedCount: 2,
+					} as unknown as AtomicWriteResult,
+				],
+			}),
+		});
+
+		await expect(
+			adapter.commitAtomicWrites!([
+				{
+					type: "delete",
+					model: "verification",
+					where: [{ field: "identifier", value: "token" }],
+				},
+			]),
+		).rejects.toThrow(/deletedCount of 0 or 1/);
+	});
+
 	it("delegates consumeOne to the native adapter with transformed where and output", async () => {
 		const adapter = createTestAdapter({
 			adapter: createCustomAdapter({

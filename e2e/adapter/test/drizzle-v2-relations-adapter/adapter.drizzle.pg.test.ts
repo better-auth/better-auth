@@ -43,7 +43,7 @@ const { execute } = await testAdapter({
 				debugLogs: { isRunningAdapterTests: true },
 				schema: { ...schemas, relations },
 				provider: "pg",
-				transaction: true,
+				transaction: "async",
 			},
 		);
 	},

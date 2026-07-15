@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	capitalizeFirstLetter,
+	pluralizeIdentifier,
 	toCamelCase,
 	toKebabCase,
 	toPascalCase,
@@ -12,6 +13,19 @@ describe("capitalizeFirstLetter", () => {
 		expect(capitalizeFirstLetter("hello")).toBe("Hello");
 		expect(capitalizeFirstLetter("HELLO")).toBe("HELLO");
 		expect(capitalizeFirstLetter("")).toBe("");
+	});
+});
+
+describe("pluralizeIdentifier", () => {
+	it.each([
+		["identity", "identities"],
+		["apiKey", "apiKeys"],
+		["account", "accounts"],
+		["session", "sessions"],
+		["status", "status"],
+		["", ""],
+	])("%s -> %s", (input, expected) => {
+		expect(pluralizeIdentifier(input)).toBe(expected);
 	});
 });
 

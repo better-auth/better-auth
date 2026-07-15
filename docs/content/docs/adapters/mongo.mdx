@@ -29,11 +29,14 @@ const db = client.db();
 
 export const auth = betterAuth({
   database: mongodbAdapter(db, {
-    // Optional: if you don't provide a client, database transactions won't be enabled.
     client
   }),
 });
 ```
+
+Pass the `MongoClient` to enable native transactions. Identity and Account lifecycle operations require native transactions because their related records must commit together. Your MongoDB deployment must therefore run as a replica set or sharded cluster for authentication flows that create or link provider identities.
+
+Omit `client` only when your Better Auth configuration never performs a multi-record operation that requires atomicity. Those operations fail before writing when transaction support is unavailable.
 
 ## Schema generation & migration
 

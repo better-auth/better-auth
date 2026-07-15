@@ -24,15 +24,20 @@ services:
   mongodb:
     image: mongo:7.0.34@sha256:c1a84ab5d0c17deed1e0dba1d24bd7c76e5c7b281145fe536911939b1551754c
     container_name: mongodb
+    command: ["--replSet", "rs0", "--bind_ip_all"]
     ports:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test:
+        [
+          "CMD-SHELL",
+          "mongosh --quiet --eval 'try { rs.status().ok } catch (_) { rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"localhost:27017\"}]}).ok }' | grep -q 1",
+        ]
       interval: 1s
       timeout: 5s
-      retries: 10
+      retries: 30
 
   redis:
     image: redis:latest

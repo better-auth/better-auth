@@ -16,6 +16,7 @@ import {
 	getDatabaseIndexStringLength,
 	resolveDatabaseSchemaIndexes,
 } from "@better-auth/core/db/internal";
+import { pluralizeIdentifier } from "@better-auth/core/utils/string";
 import type { DrizzleAdapterConfig } from ".";
 
 interface SchemaGenerator {
@@ -522,9 +523,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 					let relationKey = otherModelName;
 					if (!adapterConfig?.usePlural) {
-						relationKey = otherModelName.endsWith("s")
-							? otherModelName
-							: `${otherModelName}s`;
+						relationKey = pluralizeIdentifier(otherModelName);
 					}
 					// Disambiguate multiple FKs from the same table by appending field name
 					if (nonUniqueFKs.length > 1) {

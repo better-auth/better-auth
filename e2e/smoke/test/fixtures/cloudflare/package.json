@@ -1,6 +1,7 @@
 {
   "name": "@better-auth-test/fixtures-cloudflare",
   "private": true,
+  "type": "module",
   "dependencies": {
     "@better-auth/sso": "workspace:*",
     "better-auth": "workspace:*",
@@ -8,7 +9,7 @@
     "hono": "^4.12.25"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.12.18",
+    "@cloudflare/vitest-pool-workers": "^0.18.4",
     "@cloudflare/workers-types": "^4.20260226.1",
     "drizzle-kit": "^0.31.10",
     "wrangler": "4.61.0"

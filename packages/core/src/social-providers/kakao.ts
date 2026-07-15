@@ -106,7 +106,7 @@ export const kakao = (options: KakaoOptions) => {
 	return {
 		id: "kakao",
 		name: "Kakao",
-		accountSubject: ({ profile }) => profile.id,
+		identitySubject: ({ profile }) => profile.id,
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope
 				? []

@@ -1,11 +1,18 @@
-import type { GenericEndpointContext } from "@better-auth/core";
-import type { Account } from "@better-auth/core/db";
+import type {
+	AuthenticatedProviderAccountBinding,
+	GenericEndpointContext,
+} from "@better-auth/core";
+import type { AccountWithIdentity } from "@better-auth/core/db";
 import type { InternalLogger } from "@better-auth/core/env";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { CookieOptions } from "better-call";
 import { serializeCookie } from "better-call";
 import * as z from "zod";
-import { symmetricDecodeJWT, symmetricEncodeJWT } from "../crypto";
+import {
+	generateRandomString,
+	symmetricDecodeJWT,
+	symmetricEncodeJWT,
+} from "../crypto";
 import { parseCookies } from "./cookie-utils";
 
 /**
@@ -190,6 +197,12 @@ const storeFactory =
 
 export const createSessionStore = storeFactory("Session");
 export const createAccountStore = storeFactory("Account");
+export const createProviderAccountBindingStore = storeFactory(
+	"Provider account binding",
+);
+
+export type ProviderAccountCookie = AccountWithIdentity &
+	Readonly<{ accountBindingId: string }>;
 
 export function getChunkedCookie(
 	ctx: GenericEndpointContext,
@@ -228,43 +241,155 @@ export function getChunkedCookie(
 
 export async function setAccountCookie(
 	c: GenericEndpointContext,
-	accountData: Record<string, any>,
-) {
+	accountData: AccountWithIdentity | ProviderAccountCookie,
+	accountBindingId = "accountBindingId" in accountData
+		? accountData.accountBindingId
+		: generateRandomString(32),
+	sessionOnly = false,
+): Promise<AuthenticatedProviderAccountBinding> {
 	const accountDataCookie = c.context.authCookies.accountData;
 	const options = {
-		maxAge: 60 * 5,
 		...accountDataCookie.attributes,
+		maxAge: sessionOnly
+			? undefined
+			: (accountDataCookie.attributes.maxAge ?? 60 * 5),
+	};
+	const providerAccountCookie: ProviderAccountCookie = {
+		...accountData,
+		accountBindingId,
 	};
 	const data = await symmetricEncodeJWT(
-		accountData,
+		providerAccountCookie,
 		c.context.secretConfig,
 		"better-auth-account",
-		options.maxAge,
+		options.maxAge ?? c.context.sessionConfig.expiresIn,
 	);
 
 	const accountStore = createAccountStore(accountDataCookie.name, options, c);
 	accountStore.setCookies(accountStore.chunk(data, options));
+	return buildAuthenticatedProviderAccountBinding(providerAccountCookie);
 }
 
-export async function getAccountCookie(c: GenericEndpointContext) {
+export async function getAccountCookie(
+	c: GenericEndpointContext,
+): Promise<ProviderAccountCookie | null> {
 	const accountCookie = getChunkedCookie(
 		c,
 		c.context.authCookies.accountData.name,
 	);
 	if (accountCookie) {
-		const accountData = safeJSONParse<Account>(
+		const accountData = safeJSONParse<ProviderAccountCookie>(
 			await symmetricDecodeJWT(
 				accountCookie,
 				c.context.secretConfig,
 				"better-auth-account",
 			),
 		);
-		if (accountData) {
+		if (
+			accountData &&
+			typeof accountData.accountBindingId === "string" &&
+			accountData.accountBindingId.length > 0
+		) {
 			return accountData;
 		}
 	}
 
 	return null;
+}
+
+function buildAuthenticatedProviderAccountBinding(
+	accountCookie: ProviderAccountCookie,
+): AuthenticatedProviderAccountBinding {
+	return {
+		accountBindingId: accountCookie.accountBindingId,
+		accountId: accountCookie.account.id,
+		identityKey: {
+			issuer: accountCookie.identity.issuer,
+			providerAccountId: accountCookie.identity.providerAccountId,
+		},
+		providerInstanceId: accountCookie.account.providerInstanceId,
+	};
+}
+
+export function hasMatchingAuthenticatedProviderAccountBinding(
+	accountCookie: ProviderAccountCookie,
+	binding: AuthenticatedProviderAccountBinding | null,
+): boolean {
+	return !!(
+		binding &&
+		binding.accountBindingId === accountCookie.accountBindingId &&
+		binding.accountId === accountCookie.account.id &&
+		binding.identityKey.issuer === accountCookie.identity.issuer &&
+		binding.identityKey.providerAccountId ===
+			accountCookie.identity.providerAccountId &&
+		binding.providerInstanceId === accountCookie.account.providerInstanceId
+	);
+}
+
+type AuthenticatedProviderAccountBindingCookie = {
+	sessionToken: string;
+	binding: AuthenticatedProviderAccountBinding;
+};
+
+const AUTHENTICATED_PROVIDER_ACCOUNT_BINDING_SALT =
+	"better-auth-authenticated-provider-account";
+
+/**
+ * Stores the exact provider-account capability separately from the optional
+ * session cache. The encrypted payload is bound to one session token, so an
+ * account cookie from another authentication cannot authorize this session.
+ */
+export async function setAuthenticatedProviderAccountBindingCookie(
+	ctx: GenericEndpointContext,
+	payload: AuthenticatedProviderAccountBindingCookie,
+	maxAge: number | undefined,
+): Promise<void> {
+	const cookie = ctx.context.authCookies.providerAccountBinding;
+	const token = await symmetricEncodeJWT(
+		payload,
+		ctx.context.secretConfig,
+		AUTHENTICATED_PROVIDER_ACCOUNT_BINDING_SALT,
+		maxAge ?? ctx.context.sessionConfig.expiresIn,
+	);
+	const options = { ...cookie.attributes, maxAge };
+	const bindingStore = createProviderAccountBindingStore(
+		cookie.name,
+		options,
+		ctx,
+	);
+	bindingStore.setCookies(bindingStore.chunk(token, options));
+}
+
+/** Returns the provider-account binding only when it belongs to the session. */
+export async function getAuthenticatedProviderAccountBindingCookie(
+	ctx: GenericEndpointContext,
+	sessionToken: string,
+): Promise<AuthenticatedProviderAccountBinding | null> {
+	const token = getChunkedCookie(
+		ctx,
+		ctx.context.authCookies.providerAccountBinding.name,
+	);
+	if (!token) return null;
+	const payload =
+		await symmetricDecodeJWT<AuthenticatedProviderAccountBindingCookie>(
+			token,
+			ctx.context.secretConfig,
+			AUTHENTICATED_PROVIDER_ACCOUNT_BINDING_SALT,
+		);
+	if (
+		!payload ||
+		payload.sessionToken !== sessionToken ||
+		typeof payload.binding?.accountBindingId !== "string" ||
+		payload.binding.accountBindingId.length === 0 ||
+		typeof payload.binding.accountId !== "string" ||
+		payload.binding.accountId.length === 0 ||
+		typeof payload.binding.identityKey?.issuer !== "string" ||
+		typeof payload.binding.identityKey?.providerAccountId !== "string" ||
+		typeof payload.binding.providerInstanceId !== "string"
+	) {
+		return null;
+	}
+	return payload.binding;
 }
 
 export const getSessionQuerySchema = z.optional(

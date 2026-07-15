@@ -8,7 +8,10 @@ import {
 	resolveDatabaseSchemaIndexes,
 } from "@better-auth/core/db/internal";
 import { BetterAuthError } from "@better-auth/core/error";
-import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
+import {
+	capitalizeFirstLetter,
+	pluralizeIdentifier,
+} from "@better-auth/core/utils/string";
 import { produceSchema } from "@mrleebo/prisma-ast";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 import type { DBFieldType } from "better-auth/db";
@@ -50,9 +53,10 @@ function getPrismaIndexDefinition(
 	) {
 		return undefined;
 	}
-	const propertyArgs = property.args;
 
 	let columns: readonly string[] | undefined;
+	const propertyArgs = property.args;
+
 	let mappedName: string | undefined;
 	let validFullColumns = false;
 	for (const argument of propertyArgs) {
@@ -394,7 +398,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						}
 						if (
 							provider === "mysql" &&
-							(attr.type === "string" || Array.isArray(attr.type)) &&
+							fieldType?.startsWith("String") &&
 							typeof isAlreadyExist.fieldType === "string" &&
 							getFieldTypeParts(isAlreadyExist.fieldType).fieldType === "String"
 						) {
@@ -562,10 +566,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						)
 						.attribute(relationField);
 				}
-				if (
-					provider === "mysql" &&
-					(attr.type === "string" || Array.isArray(attr.type))
-				) {
+				if (provider === "mysql" && fieldType.startsWith("String")) {
 					const tableIndexStringLength = getDatabaseIndexStringLength({
 						columnName: fieldName,
 						dialect: "mysql",
@@ -645,7 +646,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					const fieldName =
 						isUnique || adapter.options?.usePlural === true
 							? `${relatedModel.toLowerCase()}`
-							: `${relatedModel.toLowerCase()}s`;
+							: pluralizeIdentifier(relatedModel.toLowerCase());
 					const existingField = builder.findByType("field", {
 						name: fieldName,
 						within: prismaModel?.properties,

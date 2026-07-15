@@ -1,3 +1,6 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthMiddleware } from "@better-auth/core/api";
+import type { SecondaryStorage } from "@better-auth/core/db";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type {
 	CognitoProfile,
@@ -19,11 +22,13 @@ import {
 } from "vitest";
 import { betterAuth } from "../../auth/minimal";
 import { parseSetCookieHeader } from "../../cookies";
-import { signJWT, symmetricDecodeJWT, symmetricEncodeJWT } from "../../crypto";
+import { signJWT, symmetricDecodeJWT } from "../../crypto";
 import { genericOAuth } from "../../plugins/generic-oauth";
+import { twoFactor } from "../../plugins/two-factor";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account } from "../../types";
 import { DEFAULT_SECRET } from "../../utils/constants";
+import { getSessionFromCtx } from "./session";
 
 let email = "";
 let handlers: ReturnType<typeof http.post>[];
@@ -112,6 +117,8 @@ describe("account", async () => {
 		await runWithUser(async () => {
 			const accounts = await client.listAccounts();
 			expect(accounts.data?.length).toBe(1);
+			expect(accounts.data?.[0]).toMatchObject({ providerId: "credential" });
+			expect(accounts.data?.[0]).not.toHaveProperty("providerInstanceId");
 		});
 	});
 
@@ -129,7 +136,7 @@ describe("account", async () => {
 						);
 						headers.set(
 							"cookie",
-							`better-auth.state=${cookies.get("better-auth.state")?.value}`,
+							`${headers.get("cookie") || ""}; better-auth.state=${cookies.get("better-auth.state")?.value}`,
 						);
 					},
 				},
@@ -200,13 +207,19 @@ describe("account", async () => {
 		});
 		const isolatedContext = await isolatedAuth.$context;
 		const { user, headers } = await signInOnIsolatedInstance();
-		const storedAccount = await isolatedContext.internalAdapter.createAccount({
-			userId: user.id,
-			providerId: "google",
-			issuer: "https://accounts.google.com",
-			providerAccountId: "local-account-selector-subject",
-			accessToken: "local-account-selector-token",
-		});
+		const { account: storedAccount } =
+			await isolatedContext.internalAdapter.linkAccount(
+				user.id,
+				{
+					issuer: "https://accounts.google.com",
+					providerAccountId: "local-account-selector-subject",
+				},
+				{
+					providerId: "google",
+					providerInstanceId: "google",
+					accessToken: "local-account-selector-token",
+				},
+			);
 
 		const accounts = await isolatedClient.listAccounts({
 			fetchOptions: { headers },
@@ -215,11 +228,11 @@ describe("account", async () => {
 			(account) => account.id === storedAccount.id,
 		);
 		assert(googleAccount, "google account should be listed");
-		expect(googleAccount.issuer).toBe("https://accounts.google.com");
-		expect(googleAccount.providerAccountId).toBe(
+		expect(googleAccount.identity.issuer).toBe("https://accounts.google.com");
+		expect(googleAccount.identity.providerAccountId).toBe(
 			"local-account-selector-subject",
 		);
-		expect(googleAccount.id).not.toBe(googleAccount.providerAccountId);
+		expect(googleAccount.id).not.toBe(googleAccount.identity.providerAccountId);
 
 		const accessToken = await isolatedClient.getAccessToken(
 			{ accountId: googleAccount.id },
@@ -257,20 +270,26 @@ describe("account", async () => {
 		});
 		const providerAccountId = "empty-scope-google-account";
 		const testCtx = await auth.$context;
-		const storedAccount = await testCtx.internalAdapter.createAccount({
-			userId: session.data!.user.id,
-			providerId: "google",
-			issuer: "https://accounts.google.com",
-			providerAccountId,
-			accessToken: "access-token",
-			scope: "",
-		});
+		const { account: storedAccount } =
+			await testCtx.internalAdapter.linkAccount(
+				session.data!.user.id,
+				{
+					issuer: "https://accounts.google.com",
+					providerAccountId,
+				},
+				{
+					providerId: "google",
+					providerInstanceId: "google",
+					accessToken: "access-token",
+					scope: "",
+				},
+			);
 
 		const accounts = await scopedClient.listAccounts({
 			fetchOptions: { headers },
 		});
 		const googleAccount = accounts.data?.find(
-			(account) => account.providerAccountId === providerAccountId,
+			(account) => account.identity.providerAccountId === providerAccountId,
 		);
 		expect(googleAccount?.scopes).toEqual([]);
 
@@ -310,13 +329,19 @@ describe("account", async () => {
 		});
 		const { runWithUser: runWithIsolatedUser, user } =
 			await signInIsolatedUser();
-		const googleAccount = await context.internalAdapter.createAccount({
-			userId: user.id,
-			providerId: "google",
-			issuer: "https://accounts.google.com",
-			providerAccountId: "provider-subject",
-			accessToken: "provider-access-token",
-		});
+		const { account: googleAccount, identity: googleIdentity } =
+			await context.internalAdapter.linkAccount(
+				user.id,
+				{
+					issuer: "https://accounts.google.com",
+					providerAccountId: "provider-subject",
+				},
+				{
+					providerId: "google",
+					providerInstanceId: "google",
+					accessToken: "provider-access-token",
+				},
+			);
 
 		await runWithIsolatedUser(async () => {
 			const info = await isolatedClient.accountInfo({
@@ -330,8 +355,11 @@ describe("account", async () => {
 				account: {
 					id: googleAccount.id,
 					providerId: googleAccount.providerId,
-					issuer: googleAccount.issuer,
-					providerAccountId: googleAccount.providerAccountId,
+					identity: {
+						id: googleIdentity.id,
+						issuer: googleIdentity.issuer,
+						providerAccountId: googleIdentity.providerAccountId,
+					},
 				},
 				data: expect.any(Object),
 			});
@@ -354,13 +382,19 @@ describe("account", async () => {
 		)!;
 		vi.spyOn(googleProvider, "getUserInfo").mockResolvedValue(null);
 		const { runWithUser, user } = await signInIsolatedUser();
-		const googleAccount = await context.internalAdapter.createAccount({
-			userId: user.id,
-			providerId: "google",
-			issuer: "https://accounts.google.com",
-			providerAccountId: "unavailable-provider-subject",
-			accessToken: "provider-access-token",
-		});
+		const { account: googleAccount } =
+			await context.internalAdapter.linkAccount(
+				user.id,
+				{
+					issuer: "https://accounts.google.com",
+					providerAccountId: "unavailable-provider-subject",
+				},
+				{
+					providerId: "google",
+					providerInstanceId: "google",
+					accessToken: "provider-access-token",
+				},
+			);
 
 		await runWithUser(async () => {
 			const info = await isolatedClient.$fetch("/account-info", {
@@ -394,13 +428,19 @@ describe("account", async () => {
 			},
 			{ method: "test" },
 		);
-		const googleAccount = await context.internalAdapter.createAccount({
-			userId: user.id,
-			providerId: "google",
-			issuer: "https://accounts.google.com",
-			providerAccountId: "server-side-provider-subject",
-			accessToken: "server-side-access-token",
-		});
+		const { account: googleAccount, identity: googleIdentity } =
+			await context.internalAdapter.linkAccount(
+				user.id,
+				{
+					issuer: "https://accounts.google.com",
+					providerAccountId: "server-side-provider-subject",
+				},
+				{
+					providerId: "google",
+					providerInstanceId: "google",
+					accessToken: "server-side-access-token",
+				},
+			);
 		const googleProvider = context.socialProviders.find(
 			(provider) => provider.id === "google",
 		)!;
@@ -410,14 +450,14 @@ describe("account", async () => {
 				email: user.email,
 				emailVerified: true,
 			},
-			data: { sub: googleAccount.providerAccountId },
+			data: { sub: googleIdentity.providerAccountId },
 		});
 
 		// No headers: the server-side caller identifies the user via userId.
 		const info = await auth.api.accountInfo({
 			query: {
 				accountId: googleAccount.id,
-				userId: googleAccount.userId,
+				userId: googleIdentity.userId,
 			},
 		});
 
@@ -428,8 +468,11 @@ describe("account", async () => {
 			account: {
 				id: googleAccount.id,
 				providerId: googleAccount.providerId,
-				issuer: googleAccount.issuer,
-				providerAccountId: googleAccount.providerAccountId,
+				identity: {
+					id: googleIdentity.id,
+					issuer: googleIdentity.issuer,
+					providerAccountId: googleIdentity.providerAccountId,
+				},
 			},
 			data: expect.any(Object),
 		});
@@ -469,13 +512,18 @@ describe("account", async () => {
 			},
 			{ method: "test" },
 		);
-		const otherUserAccount = await ctx.internalAdapter.createAccount({
-			userId: otherUser.id,
-			providerId: "google",
-			issuer: "https://accounts.google.com",
-			providerAccountId: "other-user-google-subject",
-			accessToken: "other-access-token",
-		});
+		const { account: otherUserAccount } = await ctx.internalAdapter.linkAccount(
+			otherUser.id,
+			{
+				issuer: "https://accounts.google.com",
+				providerAccountId: "other-user-google-subject",
+			},
+			{
+				providerId: "google",
+				providerInstanceId: "google",
+				accessToken: "other-access-token",
+			},
+		);
 
 		const { runWithUser } = await signInWithTestUser();
 
@@ -518,20 +566,30 @@ describe("account", async () => {
 		const sharedProviderAccountId = "shared-provider-account-id";
 
 		const { runWithUser, user } = await signInWithTestUser();
-		await ctx.internalAdapter.createAccount({
-			userId: user.id,
-			providerId: "google",
-			issuer: "https://accounts.google.com",
-			providerAccountId: sharedProviderAccountId,
-			accessToken: "google-access-token",
-		});
-		const githubAccount = await ctx.internalAdapter.createAccount({
-			userId: user.id,
-			providerId: "github",
-			issuer: "local:oauth:github",
-			providerAccountId: sharedProviderAccountId,
-			accessToken: "github-access-token",
-		});
+		await ctx.internalAdapter.linkAccount(
+			user.id,
+			{
+				issuer: "https://accounts.google.com",
+				providerAccountId: sharedProviderAccountId,
+			},
+			{
+				providerId: "google",
+				providerInstanceId: "google",
+				accessToken: "google-access-token",
+			},
+		);
+		const { account: githubAccount } = await ctx.internalAdapter.linkAccount(
+			user.id,
+			{
+				issuer: "local:github",
+				providerAccountId: sharedProviderAccountId,
+			},
+			{
+				providerId: "github",
+				providerInstanceId: "github",
+				accessToken: "github-access-token",
+			},
+		);
 
 		await runWithUser(async () => {
 			githubGetUserInfoMock.mockResolvedValueOnce({
@@ -584,13 +642,18 @@ describe("account", async () => {
 			},
 			{ method: "test" },
 		);
-		const otherUserAccount = await ctx.internalAdapter.createAccount({
-			userId: otherUser.id,
-			providerId: "github",
-			issuer: "local:oauth:github",
-			providerAccountId: "other-server-side-subject",
-			accessToken: "github-access-token",
-		});
+		const { account: otherUserAccount } = await ctx.internalAdapter.linkAccount(
+			otherUser.id,
+			{
+				issuer: "local:github",
+				providerAccountId: "other-server-side-subject",
+			},
+			{
+				providerId: "github",
+				providerInstanceId: "github",
+				accessToken: "github-access-token",
+			},
+		);
 
 		await expect(
 			auth.api.accountInfo({
@@ -736,7 +799,7 @@ describe("account", async () => {
 						);
 						headers.set(
 							"cookie",
-							`better-auth.state=${cookies.get("better-auth.state")?.value}`,
+							`${headers.get("cookie") || ""}; better-auth.state=${cookies.get("better-auth.state")?.value}`,
 						);
 					},
 				},
@@ -802,7 +865,7 @@ describe("account", async () => {
 						);
 						headers.set(
 							"cookie",
-							`better-auth.state=${cookies.get("better-auth.state")?.value}`,
+							`${headers.get("cookie") || ""}; better-auth.state=${cookies.get("better-auth.state")?.value}`,
 						);
 					},
 				},
@@ -838,7 +901,7 @@ describe("account", async () => {
 			(provider) => provider.id === "google",
 		);
 		assert(googleProvider, "google provider should be configured");
-		googleProvider.accountSubject = () => "";
+		googleProvider.identitySubject = () => "";
 		vi.spyOn(googleProvider, "getUserInfo").mockResolvedValue({
 			user: {
 				name: "Invalid Subject User",
@@ -864,55 +927,9 @@ describe("account", async () => {
 			code: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO.code,
 			message: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO.message,
 		});
-		const accounts = await context.internalAdapter.findAccounts(user.id);
+		const accounts = await context.internalAdapter.listUserAccounts(user.id);
 		expect(accounts).toHaveLength(1);
-		expect(accounts[0]?.providerId).toBe("credential");
-	});
-
-	it("prioritizes a missing provider email over an invalid account key", async () => {
-		const {
-			auth,
-			client: isolatedClient,
-			signInWithTestUser: signInIsolatedUser,
-		} = await getTestInstance({
-			socialProviders: {
-				google: {
-					clientId: "test",
-					clientSecret: "test",
-					verifyIdToken: async () => true,
-				},
-			},
-		});
-		const context = await auth.$context;
-		const googleProvider = context.socialProviders.find(
-			(provider) => provider.id === "google",
-		);
-		assert(googleProvider, "google provider should be configured");
-		googleProvider.accountSubject = () => "";
-		vi.spyOn(googleProvider, "getUserInfo").mockResolvedValue({
-			user: {
-				name: "Missing Email User",
-				emailVerified: true,
-			},
-			data: { sub: "ignored-provider-subject" },
-		});
-		const { headers } = await signInIsolatedUser();
-
-		const result = await isolatedClient.$fetch("/link-social", {
-			method: "POST",
-			body: {
-				provider: "google",
-				idToken: { token: "verified-id-token" },
-			},
-			headers,
-		});
-
-		expect(result.data).toBeNull();
-		expect(result.error).toMatchObject({
-			status: 401,
-			code: BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND.code,
-			message: BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND.message,
-		});
+		expect(accounts[0]?.account.providerId).toBe("credential");
 	});
 
 	/**
@@ -979,16 +996,21 @@ describe("account", async () => {
 		expect(aliasLink.data).toMatchObject({ status: true, redirect: false });
 
 		const firstUserAccounts =
-			await isolatedContext.internalAdapter.findAccounts(
+			await isolatedContext.internalAdapter.listUserAccounts(
 				firstUserSession.user.id,
 			);
+		const aliasedAccounts = firstUserAccounts.filter(
+			({ identity }) =>
+				identity.issuer === "https://accounts.google.com" &&
+				identity.providerAccountId === providerAccountId,
+		);
+		expect(aliasedAccounts).toHaveLength(2);
 		expect(
-			firstUserAccounts.filter(
-				(account) =>
-					account.issuer === "https://accounts.google.com" &&
-					account.providerAccountId === providerAccountId,
-			),
-		).toHaveLength(1);
+			aliasedAccounts.map(({ account }) => account.providerId).sort(),
+		).toEqual(["google", "google-mobile"]);
+		expect(new Set(aliasedAccounts.map(({ identity }) => identity.id))).toEqual(
+			new Set([aliasedAccounts[0]!.identity.id]),
+		);
 
 		const secondUserHeaders = new Headers();
 		await isolatedClient.signUp.email(
@@ -1014,14 +1036,14 @@ describe("account", async () => {
 			BASE_ERROR_CODES.SOCIAL_ACCOUNT_ALREADY_LINKED.message,
 		);
 		const secondUserAccounts =
-			await isolatedContext.internalAdapter.findAccounts(
+			await isolatedContext.internalAdapter.listUserAccounts(
 				secondUserSession.user.id,
 			);
 		expect(
 			secondUserAccounts.some(
-				(account) =>
-					account.issuer === "https://accounts.google.com" &&
-					account.providerAccountId === providerAccountId,
+				({ identity }) =>
+					identity.issuer === "https://accounts.google.com" &&
+					identity.providerAccountId === providerAccountId,
 			),
 		).toBe(false);
 	});
@@ -1031,9 +1053,12 @@ describe("account", async () => {
 		await runWithUser(async () => {
 			const previousAccounts = await client.listAccounts();
 			expect(previousAccounts.data?.length).toBe(3);
-			const unlinkAccountId = previousAccounts.data![1]!.id;
+			const googleAccount = previousAccounts.data?.find(
+				(account) => account.providerId === "google",
+			);
+			assert(googleAccount, "a Google account should be linked");
 			const unlinkRes = await client.unlinkAccount({
-				accountId: unlinkAccountId,
+				accountId: googleAccount.id,
 			});
 			expect(unlinkRes.data?.status).toBe(true);
 			const accounts = await client.listAccounts();
@@ -1099,29 +1124,29 @@ describe("account", async () => {
 
 	it("should unlink provider accounts individually by local account ID", async () => {
 		const { runWithUser, user } = await signInWithTestUser();
-		await ctx.adapter.create({
-			model: "account",
-			data: {
-				providerId: "google",
+		await ctx.internalAdapter.linkAccount(
+			user.id,
+			{
 				issuer: "https://accounts.google.com",
 				providerAccountId: "123",
-				userId: user.id,
-				createdAt: new Date(),
-				updatedAt: new Date(),
 			},
-		});
-
-		await ctx.adapter.create({
-			model: "account",
-			data: {
+			{
 				providerId: "google",
+				providerInstanceId: "google",
+			},
+		);
+
+		await ctx.internalAdapter.linkAccount(
+			user.id,
+			{
 				issuer: "https://accounts.google.com",
 				providerAccountId: "345",
-				userId: user.id,
-				createdAt: new Date(),
-				updatedAt: new Date(),
 			},
-		});
+			{
+				providerId: "google",
+				providerInstanceId: "google",
+			},
+		);
 
 		await runWithUser(async () => {
 			const previousAccounts = await client.listAccounts();
@@ -1144,6 +1169,48 @@ describe("account", async () => {
 				(account) => account.providerId === "google",
 			);
 			expect(remainingGoogleAccounts.length).toBe(1);
+		});
+	});
+
+	it("should unlink an account without invoking identity lifecycle hooks", async () => {
+		const identityDeleteBefore = vi.fn();
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			account: {
+				accountLinking: { allowUnlinkingAll: true },
+			},
+			databaseHooks: {
+				identity: {
+					delete: {
+						async before() {
+							identityDeleteBefore();
+							return false;
+						},
+					},
+				},
+			},
+		});
+		const testContext = await auth.$context;
+		const { runWithUser, user } = await signInWithTestUser();
+
+		await runWithUser(async () => {
+			const accountsBefore = await client.listAccounts();
+			const account = accountsBefore.data?.[0];
+			assert(account, "signed-in user should have an account");
+
+			const unlinkResponse = await client.unlinkAccount({
+				accountId: account.id,
+			});
+			expect(unlinkResponse.data?.status).toBe(true);
+			expect(identityDeleteBefore).not.toHaveBeenCalled();
+
+			const accountsAfter = await client.listAccounts();
+			expect(accountsAfter.data).toEqual([]);
+			await expect(
+				testContext.internalAdapter.findIdentityByKey({
+					issuer: account.identity.issuer,
+					providerAccountId: account.identity.providerAccountId,
+				}),
+			).resolves.toMatchObject({ userId: user.id });
 		});
 	});
 
@@ -1268,8 +1335,12 @@ describe("account", async () => {
 			},
 		});
 
-		// Spy on findAccounts to verify cookie path is used (no DB fallback)
-		const findAccountsSpy = vi.spyOn(testCtx.internalAdapter, "findAccounts");
+		// Stateful deployments use the signed cookie as an account selector and
+		// resolve the current account data from the database.
+		const findAccountByIdSpy = vi.spyOn(
+			testCtx.internalAdapter,
+			"findAccountWithIdentityById",
+		);
 
 		const accessTokenRes = await client.getAccessToken(
 			{ useAccountCookie: true },
@@ -1277,9 +1348,184 @@ describe("account", async () => {
 		);
 
 		expect(accessTokenRes.data?.accessToken).toBe("test");
-		// Cookie should have matched directly, no DB lookup needed
-		expect(findAccountsSpy).not.toHaveBeenCalled();
-		findAccountsSpy.mockRestore();
+		expect(findAccountByIdSpy).toHaveBeenCalledOnce();
+		findAccountByIdSpy.mockRestore();
+	});
+
+	it("should reject a stale account cookie immediately after unlinking", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				storeAccountCookie: true,
+				accountLinking: { allowUnlinkingAll: true },
+			},
+		});
+		const testContext = await auth.$context;
+		const headers = new Headers();
+		email = "stale-unlinked-account-cookie@test.com";
+
+		const signInResponse = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const state =
+			signInResponse.data &&
+			"url" in signInResponse.data &&
+			signInResponse.data.url
+				? new URL(signInResponse.data.url).searchParams.get("state") || ""
+				: "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		const session = await auth.api.getSession({ headers });
+		assert(session, "OAuth sign-in should create a session");
+		const account = (
+			await testContext.internalAdapter.listUserAccounts(session.user.id)
+		).find(({ account }) => account.providerId === "google");
+		assert(account, "Google account should exist");
+
+		const unlinkHeaders = new Headers(headers);
+		unlinkHeaders.set("content-type", "application/json");
+		const unlinkResponse = await auth.handler(
+			new Request("http://localhost:3000/api/auth/unlink-account", {
+				method: "POST",
+				headers: unlinkHeaders,
+				body: JSON.stringify({ accountId: account.account.id }),
+			}),
+		);
+		expect(unlinkResponse.status).toBe(200);
+		const unlinkCookies = parseSetCookieHeader(
+			unlinkResponse.headers.get("set-cookie") ?? "",
+		);
+		expect(
+			unlinkCookies.get(testContext.authCookies.accountData.name)?.value,
+		).toBe("");
+		expect(
+			unlinkCookies.get(testContext.authCookies.providerAccountBinding.name)
+				?.value,
+		).toBe("");
+		cookieSetter(headers)({ response: unlinkResponse });
+
+		const accessTokenResponse = await client.getAccessToken(
+			{ useAccountCookie: true },
+			{ headers },
+		);
+		expect(accessTokenResponse.error?.message).toBe(
+			BASE_ERROR_CODES.ACCOUNT_NOT_FOUND.message,
+		);
+
+		const refreshTokenResponse = await client.refreshToken(
+			{ useAccountCookie: true },
+			{ headers },
+		);
+		expect(refreshTokenResponse.error?.message).toBe(
+			BASE_ERROR_CODES.ACCOUNT_NOT_FOUND.message,
+		);
+	});
+
+	it.each([
+		{
+			name: "getAccessToken auto-refresh",
+			request: (
+				client: Awaited<ReturnType<typeof getTestInstance>>["client"],
+				accountId: string,
+				headers: Headers,
+			) => client.getAccessToken({ accountId }, { headers }),
+		},
+		{
+			name: "refreshToken",
+			request: (
+				client: Awaited<ReturnType<typeof getTestInstance>>["client"],
+				accountId: string,
+				headers: Headers,
+			) => client.refreshToken({ accountId }, { headers }),
+		},
+	])("should not release refreshed credentials when $name races with unlinking", async ({
+		request,
+	}) => {
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+		});
+		const testContext = await auth.$context;
+		const provider = testContext.socialProviders.find(
+			(candidate) => candidate.id === "google",
+		);
+		assert(provider?.refreshAccessToken, "Google should support token refresh");
+
+		let signalRefreshStarted: () => void = () => {};
+		const refreshStarted = new Promise<void>((resolve) => {
+			signalRefreshStarted = resolve;
+		});
+		let releaseRefresh: () => void = () => {};
+		const refreshMayFinish = new Promise<void>((resolve) => {
+			releaseRefresh = resolve;
+		});
+		const refreshSpy = vi
+			.spyOn(provider, "refreshAccessToken")
+			.mockImplementation(async () => {
+				signalRefreshStarted();
+				await refreshMayFinish;
+				return {
+					accessToken: "unlinked-refreshed-access-token",
+					refreshToken: "unlinked-refreshed-refresh-token",
+				};
+			});
+
+		const { runWithUser, user } = await signInWithTestUser();
+		const linked = await testContext.internalAdapter.linkAccount(
+			user.id,
+			{
+				issuer: "https://accounts.google.com",
+				providerAccountId: `unlink-race-${crypto.randomUUID()}`,
+			},
+			{
+				providerId: "google",
+				providerInstanceId: "google",
+				accessToken: "expired-access-token",
+				refreshToken: "current-refresh-token",
+				accessTokenExpiresAt: new Date(Date.now() - 1_000),
+			},
+		);
+
+		await runWithUser(async (headers) => {
+			const responsePromise = request(client, linked.account.id, headers);
+			await refreshStarted;
+			await testContext.internalAdapter.deleteAccount(linked.account.id);
+			releaseRefresh();
+			const response = await responsePromise;
+
+			expect(response.data).toBeNull();
+			expect(response.error?.message).toBe(
+				BASE_ERROR_CODES.ACCOUNT_NOT_FOUND.message,
+			);
+		});
+
+		expect(refreshSpy).toHaveBeenCalledOnce();
+		await expect(
+			testContext.internalAdapter.findAccountWithIdentityById(
+				linked.account.id,
+			),
+		).resolves.toBeNull();
 	});
 
 	it("should resolve a local account ID from the database instead of the account cookie", async () => {
@@ -1331,9 +1577,12 @@ describe("account", async () => {
 		});
 		const googleAccount = accounts.data?.find((a) => a.providerId === "google");
 		assert(googleAccount, "google account should exist");
-		assert(googleAccount.id !== googleAccount.providerAccountId);
+		assert(googleAccount.id !== googleAccount.identity.providerAccountId);
 
-		const findAccountsSpy = vi.spyOn(testCtx.internalAdapter, "findAccounts");
+		const findAccountByIdSpy = vi.spyOn(
+			testCtx.internalAdapter,
+			"findAccountWithIdentityById",
+		);
 
 		const accessTokenRes = await client.getAccessToken(
 			{
@@ -1347,8 +1596,8 @@ describe("account", async () => {
 		expect(accessTokenRes.data?.accessToken).toBe("test");
 		// Row-ID selection is authoritative and cannot be satisfied by cached
 		// account-cookie data, even when the cookie contains the same ID.
-		expect(findAccountsSpy).toHaveBeenCalledWith(googleAccount.userId);
-		findAccountsSpy.mockRestore();
+		expect(findAccountByIdSpy).toHaveBeenCalledWith(googleAccount.id);
+		findAccountByIdSpy.mockRestore();
 	});
 
 	it("should not refresh with a stale account cookie belonging to another user", async () => {
@@ -1446,15 +1695,21 @@ describe("account", async () => {
 		expect(session.user.email).toBe("stale-cookie-second@test.com");
 
 		// The second user has their own google account
-		const secondUserAccount = await testCtx.internalAdapter.createAccount({
-			userId: session.user.id,
-			providerId: "google",
-			issuer: "https://accounts.google.com",
-			providerAccountId: "second-google-sub",
-			accessToken: "second-access-token",
-			refreshToken: "second-refresh-token",
-			scope: "email",
-		});
+		const { account: secondUserAccount } =
+			await testCtx.internalAdapter.linkAccount(
+				session.user.id,
+				{
+					issuer: "https://accounts.google.com",
+					providerAccountId: "second-google-sub",
+				},
+				{
+					providerId: "google",
+					providerInstanceId: "google",
+					accessToken: "second-access-token",
+					refreshToken: "second-refresh-token",
+					scope: "email",
+				},
+			);
 
 		const res = await client.refreshToken(
 			{
@@ -1470,11 +1725,13 @@ describe("account", async () => {
 
 		// The second user's account row must not be overwritten with the
 		// the first user's tokens
-		const accounts = await testCtx.internalAdapter.findAccounts(
+		const accounts = await testCtx.internalAdapter.listUserAccounts(
 			session.user.id,
 		);
-		const googleAccount = accounts.find((a) => a.providerId === "google");
-		expect(googleAccount?.refreshToken).toBe("second-refresh-token");
+		const googleAccount = accounts.find(
+			({ account }) => account.providerId === "google",
+		);
+		expect(googleAccount?.account.refreshToken).toBe("second-refresh-token");
 	});
 
 	it("should persist refreshed idToken in database during getAccessToken auto-refresh", async () => {
@@ -1775,7 +2032,9 @@ describe("account", async () => {
 				"better-auth-account",
 			),
 		).resolves.toMatchObject({
-			idToken: newIdToken,
+			account: {
+				idToken: newIdToken,
+			},
 		});
 
 		const secondAccessToken = await client.getAccessToken(
@@ -1925,9 +2184,11 @@ describe("account", async () => {
 				"better-auth-account",
 			),
 		).resolves.toMatchObject({
-			accessToken: "refreshed-cognito-access-token",
-			idToken: refreshedIdToken,
-			refreshToken: "cognito-refresh-token",
+			account: {
+				accessToken: "refreshed-cognito-access-token",
+				idToken: refreshedIdToken,
+				refreshToken: "cognito-refresh-token",
+			},
 		});
 
 		const refreshTokenResponse = await client.refreshToken(
@@ -2165,9 +2426,11 @@ describe("account", async () => {
 				await expect(
 					symmetricDecodeJWT(accountData!, ctx.secret, "better-auth-account"),
 				).resolves.toMatchObject({
-					accessToken: "test",
-					refreshToken: "test",
-					providerId: "google",
+					account: {
+						accessToken: "test",
+						refreshToken: "test",
+						providerId: "google",
+					},
 				});
 			},
 		});
@@ -2640,52 +2903,32 @@ describe("account selector validation", async () => {
 			400, 400, 400,
 		]);
 	});
-
-	it("does not select a signed account cookie when account storage is disabled", async () => {
-		const { auth, client, signInWithTestUser } = await getTestInstance({
-			socialProviders: {
-				google: { clientId: "test", clientSecret: "test" },
-			},
-			account: { storeAccountCookie: false },
-		});
-		const context = await auth.$context;
-		const { headers, user } = await signInWithTestUser();
-		const account = await context.internalAdapter.createAccount({
-			userId: user.id,
-			providerId: "google",
-			issuer: "https://accounts.google.com",
-			providerAccountId: "stale-google-subject",
-			accessToken: "stale-access-token",
-		});
-		const signedAccountCookie = await symmetricEncodeJWT(
-			account,
-			context.secret,
-			"better-auth-account",
-			60 * 5,
-		);
-		headers.append(
-			"cookie",
-			`${context.authCookies.accountData.name}=${signedAccountCookie}`,
-		);
-
-		const result = await client.getAccessToken(
-			{ useAccountCookie: true },
-			{ headers },
-		);
-
-		expect(result.data).toBeNull();
-		expect(result.error).toMatchObject({
-			status: 400,
-			code: BASE_ERROR_CODES.ACCOUNT_NOT_FOUND.code,
-			message: BASE_ERROR_CODES.ACCOUNT_NOT_FOUND.message,
-		});
-	});
 });
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/9967
  */
 describe("token routes cookie cache revocation", async () => {
+	const preloadProviderTokenSessionPlugin = {
+		id: "preload-provider-token-session",
+		hooks: {
+			before: [
+				{
+					matcher(ctx) {
+						return [
+							"/get-access-token",
+							"/refresh-token",
+							"/account-info",
+						].includes(ctx.path ?? "");
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						await getSessionFromCtx(ctx);
+					}),
+				},
+			],
+		},
+	} satisfies BetterAuthPlugin;
+
 	it("get-access-token fails closed after the session is revoked in a stateful deployment", async () => {
 		const { auth, client, testUser, cookieSetter } = await getTestInstance({
 			session: { cookieCache: { enabled: true, maxAge: 60 } },
@@ -2728,11 +2971,232 @@ describe("token routes cookie cache revocation", async () => {
 		);
 		expect(bypass.error?.status).toBe(401);
 	});
+
+	it("rejects every token route after a hook preloads a revoked cached session", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			plugins: [preloadProviderTokenSessionPlugin],
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const session = await auth.api.getSession({ headers });
+		assert(session, "expected a cached session");
+		await (await auth.$context).internalAdapter.deleteSession(
+			session.session.token,
+		);
+
+		const postHeaders = new Headers(headers);
+		postHeaders.set("content-type", "application/json");
+		const responses = await Promise.all([
+			auth.handler(
+				new Request("http://localhost:3000/api/auth/get-access-token", {
+					method: "POST",
+					headers: postHeaders,
+					body: JSON.stringify({ useAccountCookie: true }),
+				}),
+			),
+			auth.handler(
+				new Request("http://localhost:3000/api/auth/refresh-token", {
+					method: "POST",
+					headers: postHeaders,
+					body: JSON.stringify({ useAccountCookie: true }),
+				}),
+			),
+			auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/account-info?useAccountCookie=true",
+					{ headers },
+				),
+			),
+		]);
+
+		expect(responses.map((response) => response.status)).toEqual([
+			401, 401, 401,
+		]);
+	});
+});
+
+describe("provider account binding across same-user session rotation", async () => {
+	type CookieJar = Map<string, string>;
+	type HttpAuth = {
+		handler: (request: Request) => Promise<Response>;
+	};
+
+	const collectResponseCookies = (response: Response, jar: CookieJar) => {
+		for (const cookie of response.headers.getSetCookie()) {
+			const [pair = ""] = cookie.split(";");
+			const separatorIndex = pair.indexOf("=");
+			if (separatorIndex > 0) {
+				jar.set(pair.slice(0, separatorIndex), pair.slice(separatorIndex + 1));
+			}
+		}
+	};
+
+	const jarFromHeaders = (headers: Headers): CookieJar => {
+		const jar: CookieJar = new Map();
+		for (const pair of (headers.get("cookie") ?? "").split(";")) {
+			const separatorIndex = pair.indexOf("=");
+			if (separatorIndex > 0) {
+				jar.set(
+					pair.slice(0, separatorIndex).trim(),
+					pair.slice(separatorIndex + 1),
+				);
+			}
+		}
+		return jar;
+	};
+
+	const headersFromJar = (jar: CookieJar) =>
+		new Headers({
+			cookie: [...jar].map(([name, value]) => `${name}=${value}`).join("; "),
+			host: "localhost:3000",
+		});
+
+	const linkGoogleAccount = async (
+		auth: HttpAuth,
+		jar: CookieJar,
+		userEmail: string,
+	) => {
+		const linkHeaders = headersFromJar(jar);
+		linkHeaders.set("content-type", "application/json");
+		const linkResponse = await auth.handler(
+			new Request("http://localhost:3000/api/auth/link-social", {
+				method: "POST",
+				headers: linkHeaders,
+				body: JSON.stringify({
+					provider: "google",
+					callbackURL: "/linked",
+					disableRedirect: true,
+				}),
+			}),
+		);
+		expect(linkResponse.status).toBe(200);
+		collectResponseCookies(linkResponse, jar);
+		const { url } = (await linkResponse.json()) as { url: string };
+		const state = new URL(url).searchParams.get("state");
+		assert(state, "expected linkSocial to issue OAuth state");
+		email = userEmail;
+		const callbackResponse = await auth.handler(
+			new Request(
+				`http://localhost:3000/api/auth/callback/google?code=test&state=${state}`,
+				{ headers: headersFromJar(jar), redirect: "manual" },
+			),
+		);
+		expect(callbackResponse.status).toBe(302);
+		collectResponseCookies(callbackResponse, jar);
+	};
+
+	const expectProviderAccess = async (auth: HttpAuth, jar: CookieJar) => {
+		const headers = headersFromJar(jar);
+		headers.set("content-type", "application/json");
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-access-token", {
+				method: "POST",
+				headers,
+				body: JSON.stringify({ useAccountCookie: true }),
+			}),
+		);
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({ accessToken: "test" });
+	};
+
+	it("preserves provider access when a password change revokes the current session", async () => {
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			account: { storeAccountCookie: true },
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test" },
+			},
+		});
+		const { headers } = await signInWithTestUser();
+		const jar = jarFromHeaders(headers);
+		await linkGoogleAccount(auth, jar, testUser.email);
+
+		const changeHeaders = headersFromJar(jar);
+		changeHeaders.set("content-type", "application/json");
+		const changeResponse = await auth.handler(
+			new Request("http://localhost:3000/api/auth/change-password", {
+				method: "POST",
+				headers: changeHeaders,
+				body: JSON.stringify({
+					currentPassword: testUser.password,
+					newPassword: "new-password123456",
+					revokeOtherSessions: true,
+				}),
+			}),
+		);
+		expect(changeResponse.status).toBe(200);
+		collectResponseCookies(changeResponse, jar);
+		await expectProviderAccess(auth, jar);
+	});
+
+	it("preserves provider access when two-factor enrollment and removal rotate the session", async () => {
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			account: { storeAccountCookie: true },
+			plugins: [twoFactor({ skipVerificationOnEnable: true })],
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test" },
+			},
+		});
+		const { headers } = await signInWithTestUser();
+		const jar = jarFromHeaders(headers);
+		await linkGoogleAccount(auth, jar, testUser.email);
+
+		const enableHeaders = headersFromJar(jar);
+		enableHeaders.set("content-type", "application/json");
+		const enableResponse = await auth.handler(
+			new Request("http://localhost:3000/api/auth/two-factor/enable", {
+				method: "POST",
+				headers: enableHeaders,
+				body: JSON.stringify({
+					password: testUser.password,
+					method: "totp",
+				}),
+			}),
+		);
+		expect(enableResponse.status).toBe(200);
+		collectResponseCookies(enableResponse, jar);
+		await expectProviderAccess(auth, jar);
+
+		const disableHeaders = headersFromJar(jar);
+		disableHeaders.set("content-type", "application/json");
+		const disableResponse = await auth.handler(
+			new Request("http://localhost:3000/api/auth/two-factor/disable", {
+				method: "POST",
+				headers: disableHeaders,
+				body: JSON.stringify({ password: testUser.password }),
+			}),
+		);
+		expect(disableResponse.status).toBe(200);
+		collectResponseCookies(disableResponse, jar);
+		await expectProviderAccess(auth, jar);
+	});
 });
 
 describe("account resolution in stateless mode", async () => {
 	const IDP = "https://idp.stateless.test";
 	const STATELESS_SECRET = "stateless-test-secret-stateless-test-secret";
+	const preloadProviderTokenSessionPlugin = {
+		id: "preload-stateless-provider-token-session",
+		hooks: {
+			before: [
+				{
+					matcher(ctx) {
+						return [
+							"/get-access-token",
+							"/refresh-token",
+							"/account-info",
+						].includes(ctx.path ?? "");
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						await getSessionFromCtx(ctx);
+					}),
+				},
+			],
+		},
+	} satisfies BetterAuthPlugin;
 
 	const idpHandlers = [
 		http.get(`${IDP}/.well-known/openid-configuration`, () =>
@@ -2767,31 +3231,38 @@ describe("account resolution in stateless mode", async () => {
 
 	beforeEach(() => server.use(...idpHandlers));
 
-	const makeStatelessAuth = () =>
+	const makeStatelessAuth = (
+		providerAccountId = "shared-idp-user",
+		secondaryStorage?: SecondaryStorage,
+		providerId = "idp",
+	) =>
 		betterAuth({
 			secret: STATELESS_SECRET,
 			baseURL: "http://localhost:3000",
 			trustedOrigins: ["http://localhost:3000"],
+			emailAndPassword: { enabled: true },
+			...(secondaryStorage ? { secondaryStorage } : {}),
 			session: {
 				cookieCache: {
 					enabled: true,
-					strategy: "jwe",
+					strategy: "jwe" as const,
 					maxAge: 60,
 					refreshCache: { updateAge: 60 * 60 },
 				},
 			},
 			account: { storeStateStrategy: "cookie", storeAccountCookie: true },
 			plugins: [
+				preloadProviderTokenSessionPlugin,
 				genericOAuth({
 					config: [
 						{
-							providerId: "idp",
+							providerId,
 							clientId: "client-id",
 							clientSecret: "client-secret",
 							scopes: ["openid", "profile", "email"],
 							discoveryUrl: `${IDP}/.well-known/openid-configuration`,
 							getUserInfo: async (tokens) => ({
-								id: "shared-idp-user",
+								id: providerAccountId,
 								email: "user@stateless.test",
 								name: "Stateless User",
 								emailVerified: true,
@@ -2824,14 +3295,56 @@ describe("account resolution in stateless mode", async () => {
 			host: "localhost:3000",
 		});
 
+	const signUpCredentialUser = async (
+		auth: ReturnType<typeof makeStatelessAuth>,
+	) => {
+		const jar: Jar = new Map();
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-up/email", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					name: "Credential User",
+					email: "user@stateless.test",
+					password: "password123456",
+				}),
+			}),
+		);
+		expect(response.status).toBe(200);
+		collectCookies(response, jar);
+		return jar;
+	};
+
+	const requestAccountAccessToken = async (
+		auth: ReturnType<typeof makeStatelessAuth>,
+		jar: Jar,
+	) => {
+		const headers = requestHeaders(jar);
+		headers.set("content-type", "application/json");
+		return auth.handler(
+			new Request("http://localhost:3000/api/auth/get-access-token", {
+				method: "POST",
+				headers,
+				body: JSON.stringify({ useAccountCookie: true }),
+			}),
+		);
+	};
+
+	const expectAccountNotFound = async (response: Response) => {
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({ code: "ACCOUNT_NOT_FOUND" });
+	};
+
 	const signIn = async (auth: ReturnType<typeof makeStatelessAuth>) => {
 		const jar: Jar = new Map();
+		const providerId = (await auth.$context).socialProviders[0]?.id;
+		assert(providerId, "expected an OAuth provider");
 		let res = await auth.handler(
 			new Request("http://localhost:3000/api/auth/sign-in/social", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
 				body: JSON.stringify({
-					provider: "idp",
+					provider: providerId,
 					callbackURL: "/",
 					disableRedirect: true,
 				}),
@@ -2844,7 +3357,7 @@ describe("account resolution in stateless mode", async () => {
 
 		res = await auth.handler(
 			new Request(
-				`http://localhost:3000/api/auth/callback/idp?code=test-code&state=${state}`,
+				`http://localhost:3000/api/auth/callback/${providerId}?code=test-code&state=${state}`,
 				{ headers: requestHeaders(jar), redirect: "manual" },
 			),
 		);
@@ -2852,19 +3365,36 @@ describe("account resolution in stateless mode", async () => {
 
 		const session = (await auth.api.getSession({
 			headers: requestHeaders(jar),
-		})) as { user: { id: string } } | null;
+		})) as { session: { token: string }; user: { id: string } } | null;
 		assert(session?.user.id, "expected OAuth sign-in to create a session");
-		return { jar, userId: session.user.id };
+		return {
+			jar,
+			sessionToken: session.session.token,
+			userId: session.user.id,
+		};
 	};
 
-	const signInOnTwoInstances = async () => {
-		const authA = makeStatelessAuth();
+	const signInOnTwoInstances = async (
+		firstProviderAccountId = "shared-idp-user",
+		secondProviderAccountId = "shared-idp-user",
+		firstProviderId = "idp",
+		secondProviderId = "idp",
+	) => {
+		const authA = makeStatelessAuth(
+			firstProviderAccountId,
+			undefined,
+			firstProviderId,
+		);
 		const a = await signIn(authA);
-		const b = await signIn(makeStatelessAuth());
+		const b = await signIn(
+			makeStatelessAuth(secondProviderAccountId, undefined, secondProviderId),
+		);
 		expect(a.userId).not.toBe(b.userId);
 
 		const accountCookieName = (await authA.$context).authCookies.accountData
 			.name;
+		const providerAccountBindingCookieName = (await authA.$context).authCookies
+			.providerAccountBinding.name;
 		const mixed: Jar = new Map(a.jar);
 		for (const key of [...mixed.keys()]) {
 			if (key.startsWith(accountCookieName)) mixed.delete(key);
@@ -2872,9 +3402,16 @@ describe("account resolution in stateless mode", async () => {
 		for (const [key, value] of b.jar) {
 			if (key.startsWith(accountCookieName)) mixed.set(key, value);
 		}
+		const foreignBindingMixed = new Map(mixed);
+		for (const [key, value] of b.jar) {
+			if (key === providerAccountBindingCookieName) {
+				foreignBindingMixed.set(key, value);
+			}
+		}
 
 		return {
 			accountCookieName,
+			foreignBindingMixed,
 			mixed,
 			sessionUserId: a.userId,
 		};
@@ -2883,56 +3420,406 @@ describe("account resolution in stateless mode", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9978
 	 */
-	it("resolves getAccessToken with a valid account cookie whose userId differs from the session user", async () => {
+	it("rejects an account cookie copied from another session with the same upstream identity", async () => {
 		const { mixed, sessionUserId } = await signInOnTwoInstances();
+		const headers = requestHeaders(mixed);
+		headers.set("content-type", "application/json");
 
-		const result = await makeStatelessAuth().api.getAccessToken({
-			body: { useAccountCookie: true, userId: sessionUserId },
-			headers: requestHeaders(mixed),
+		const response = await makeStatelessAuth().handler(
+			new Request("http://localhost:3000/api/auth/get-access-token", {
+				method: "POST",
+				headers,
+				body: JSON.stringify({
+					useAccountCookie: true,
+					userId: sessionUserId,
+				}),
+			}),
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({ code: "ACCOUNT_NOT_FOUND" });
+	});
+
+	it("rejects an Identity proof copied from a different session", async () => {
+		const { foreignBindingMixed, sessionUserId } = await signInOnTwoInstances();
+		const headers = requestHeaders(foreignBindingMixed);
+		headers.set("content-type", "application/json");
+		const response = await makeStatelessAuth().handler(
+			new Request("http://localhost:3000/api/auth/get-access-token", {
+				method: "POST",
+				headers,
+				body: JSON.stringify({
+					useAccountCookie: true,
+					userId: sessionUserId,
+				}),
+			}),
+		);
+
+		await expectAccountNotFound(response);
+	});
+
+	it("rejects an account cookie from another provider instance for the same identity", async () => {
+		const { mixed, sessionUserId } = await signInOnTwoInstances(
+			"shared-idp-user",
+			"shared-idp-user",
+			"idp-primary",
+			"idp-secondary",
+		);
+		const headers = requestHeaders(mixed);
+		headers.set("content-type", "application/json");
+		const response = await makeStatelessAuth(
+			"shared-idp-user",
+			undefined,
+			"idp-primary",
+		).handler(
+			new Request("http://localhost:3000/api/auth/get-access-token", {
+				method: "POST",
+				headers,
+				body: JSON.stringify({
+					useAccountCookie: true,
+					userId: sessionUserId,
+				}),
+			}),
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({ code: "ACCOUNT_NOT_FOUND" });
+	});
+
+	it("allows every token route with the complete session-bound account cookies", async () => {
+		const auth = makeStatelessAuth();
+		const { jar } = await signIn(auth);
+		const postHeaders = requestHeaders(jar);
+		postHeaders.set("content-type", "application/json");
+		const responses = await Promise.all([
+			auth.handler(
+				new Request("http://localhost:3000/api/auth/get-access-token", {
+					method: "POST",
+					headers: postHeaders,
+					body: JSON.stringify({ useAccountCookie: true }),
+				}),
+			),
+			auth.handler(
+				new Request("http://localhost:3000/api/auth/refresh-token", {
+					method: "POST",
+					headers: postHeaders,
+					body: JSON.stringify({ useAccountCookie: true }),
+				}),
+			),
+			auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/account-info?useAccountCookie=true",
+					{ headers: requestHeaders(jar) },
+				),
+			),
+		]);
+
+		expect(responses.map((response) => response.status)).toEqual([
+			200, 200, 200,
+		]);
+	});
+
+	it("keeps provider access bound to the session after refreshing provider tokens", async () => {
+		const auth = makeStatelessAuth();
+		const { jar } = await signIn(auth);
+		const headers = requestHeaders(jar);
+		headers.set("content-type", "application/json");
+
+		const refreshResponse = await auth.handler(
+			new Request("http://localhost:3000/api/auth/refresh-token", {
+				method: "POST",
+				headers,
+				body: JSON.stringify({ useAccountCookie: true }),
+			}),
+		);
+		expect(refreshResponse.status).toBe(200);
+
+		const context = await auth.$context;
+		const refreshedCookies = parseSetCookieHeader(
+			refreshResponse.headers.get("set-cookie") ?? "",
+		);
+		expect(
+			refreshedCookies.get(context.authCookies.accountData.name)?.value,
+		).toBeTruthy();
+		expect(
+			refreshedCookies.get(context.authCookies.providerAccountBinding.name)
+				?.value,
+		).toBeTruthy();
+		collectCookies(refreshResponse, jar);
+
+		const accessTokenResponse = await requestAccountAccessToken(auth, jar);
+		expect(accessTokenResponse.status).toBe(200);
+		expect(await accessTokenResponse.json()).toMatchObject({
+			accessToken: "idp-refreshed-access-token",
 		});
+	});
 
-		expect(result.accessToken).toBe("idp-access-token");
+	it("resolves getAccessToken after a secondary-storage session is authoritatively reloaded", async () => {
+		const values = new Map<string, string>();
+		const secondaryStorage: SecondaryStorage = {
+			get: async (key) => values.get(key) ?? null,
+			getAndDelete: async (key) => {
+				const value = values.get(key) ?? null;
+				values.delete(key);
+				return value;
+			},
+			increment: async (key) => {
+				const next = Number(values.get(key) ?? 0) + 1;
+				values.set(key, String(next));
+				return next;
+			},
+			set: async (key, value) => {
+				values.set(key, value);
+			},
+			delete: async (key) => {
+				values.delete(key);
+			},
+		};
+		const auth = makeStatelessAuth("secondary-storage-user", secondaryStorage);
+		const { jar, userId } = await signIn(auth);
+
+		const headers = requestHeaders(jar);
+		headers.set("content-type", "application/json");
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-access-token", {
+				method: "POST",
+				headers,
+				body: JSON.stringify({ useAccountCookie: true, userId }),
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			accessToken: "idp-access-token",
+		});
+	});
+
+	it("rejects every token route after a secondary-storage session is revoked", async () => {
+		const values = new Map<string, string>();
+		const secondaryStorage: SecondaryStorage = {
+			get: async (key) => values.get(key) ?? null,
+			getAndDelete: async (key) => {
+				const value = values.get(key) ?? null;
+				values.delete(key);
+				return value;
+			},
+			increment: async (key) => {
+				const next = Number(values.get(key) ?? 0) + 1;
+				values.set(key, String(next));
+				return next;
+			},
+			set: async (key, value) => {
+				values.set(key, value);
+			},
+			delete: async (key) => {
+				values.delete(key);
+			},
+		};
+		const auth = makeStatelessAuth("secondary-revoked-user", secondaryStorage);
+		const { jar, sessionToken } = await signIn(auth);
+		await (await auth.$context).internalAdapter.deleteSession(sessionToken);
+
+		const postHeaders = requestHeaders(jar);
+		postHeaders.set("content-type", "application/json");
+		const responses = await Promise.all([
+			auth.handler(
+				new Request("http://localhost:3000/api/auth/get-access-token", {
+					method: "POST",
+					headers: postHeaders,
+					body: JSON.stringify({ useAccountCookie: true }),
+				}),
+			),
+			auth.handler(
+				new Request("http://localhost:3000/api/auth/refresh-token", {
+					method: "POST",
+					headers: postHeaders,
+					body: JSON.stringify({ useAccountCookie: true }),
+				}),
+			),
+			auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/account-info?useAccountCookie=true",
+					{ headers: requestHeaders(jar) },
+				),
+			),
+		]);
+
+		expect(responses.map((response) => response.status)).toEqual([
+			401, 401, 401,
+		]);
+	});
+
+	it("binds a redirect-linked provider account to the existing stateless session", async () => {
+		const auth = makeStatelessAuth("redirect-linked-user");
+		const jar = await signUpCredentialUser(auth);
+		const linkHeaders = requestHeaders(jar);
+		linkHeaders.set("content-type", "application/json");
+		const linkResponse = await auth.handler(
+			new Request("http://localhost:3000/api/auth/link-social", {
+				method: "POST",
+				headers: linkHeaders,
+				body: JSON.stringify({
+					provider: "idp",
+					callbackURL: "/linked",
+					disableRedirect: true,
+				}),
+			}),
+		);
+		expect(linkResponse.status).toBe(200);
+		collectCookies(linkResponse, jar);
+		const { url } = (await linkResponse.json()) as { url: string };
+		const state = new URL(url).searchParams.get("state");
+		assert(state, "expected linkSocial to issue OAuth state");
+
+		const callbackResponse = await auth.handler(
+			new Request(
+				`http://localhost:3000/api/auth/callback/idp?code=test-code&state=${state}`,
+				{ headers: requestHeaders(jar), redirect: "manual" },
+			),
+		);
+		expect(callbackResponse.status).toBe(302);
+		collectCookies(callbackResponse, jar);
+
+		const tokenResponse = await requestAccountAccessToken(auth, jar);
+		expect(tokenResponse.status).toBe(200);
+		expect(await tokenResponse.json()).toMatchObject({
+			accessToken: "idp-access-token",
+		});
+	});
+
+	it("binds a direct ID-token-linked provider account to the existing stateless session", async () => {
+		const auth = makeStatelessAuth("direct-linked-user");
+		const provider = (await auth.$context).socialProviders.find(
+			(candidate) => candidate.id === "idp",
+		);
+		assert(provider, "expected the generic OAuth provider");
+		Object.assign(provider, {
+			options: { ...provider.options, verifyIdToken: async () => true },
+		});
+		const jar = await signUpCredentialUser(auth);
+		const linkHeaders = requestHeaders(jar);
+		linkHeaders.set("content-type", "application/json");
+		const linkResponse = await auth.handler(
+			new Request("http://localhost:3000/api/auth/link-social", {
+				method: "POST",
+				headers: linkHeaders,
+				body: JSON.stringify({
+					provider: "idp",
+					idToken: {
+						token: "verified-id-token",
+						accessToken: "direct-access-token",
+						refreshToken: "direct-refresh-token",
+					},
+				}),
+			}),
+		);
+		expect(linkResponse.status).toBe(200);
+		collectCookies(linkResponse, jar);
+
+		const tokenResponse = await requestAccountAccessToken(auth, jar);
+		expect(tokenResponse.status).toBe(200);
+		expect(await tokenResponse.json()).toMatchObject({
+			accessToken: "direct-access-token",
+		});
+	});
+
+	it("rejects getAccessToken when the session and account cookie represent different upstream identities", async () => {
+		const { mixed, sessionUserId } = await signInOnTwoInstances(
+			"first-idp-user",
+			"second-idp-user",
+		);
+		const headers = requestHeaders(mixed);
+		headers.set("content-type", "application/json");
+		const response = await makeStatelessAuth("first-idp-user").handler(
+			new Request("http://localhost:3000/api/auth/get-access-token", {
+				method: "POST",
+				headers,
+				body: JSON.stringify({
+					useAccountCookie: true,
+					userId: sessionUserId,
+				}),
+			}),
+		);
+
+		await expectAccountNotFound(response);
 	});
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9978
 	 */
-	it("resolves accountInfo with a valid account cookie whose userId differs from the session user", async () => {
+	it("rejects accountInfo with an account cookie copied from another session", async () => {
 		const { mixed, sessionUserId } = await signInOnTwoInstances();
+		const response = await makeStatelessAuth().handler(
+			new Request(
+				`http://localhost:3000/api/auth/account-info?useAccountCookie=true&userId=${sessionUserId}`,
+				{ headers: requestHeaders(mixed) },
+			),
+		);
 
-		const info = await makeStatelessAuth().api.accountInfo({
-			query: { useAccountCookie: true, userId: sessionUserId },
-			headers: requestHeaders(mixed),
-		});
+		await expectAccountNotFound(response);
+	});
 
-		assert(info, "expected accountInfo to resolve from the account cookie");
-		expect(info.account).toMatchObject({
-			issuer: IDP,
-			providerAccountId: "shared-idp-user",
-			providerId: "idp",
-		});
-		expect(info.data).toMatchObject({ accessTokenSeen: "idp-access-token" });
+	it("rejects accountInfo when the session and account cookie represent different upstream identities", async () => {
+		const { mixed, sessionUserId } = await signInOnTwoInstances(
+			"first-idp-user",
+			"second-idp-user",
+		);
+		const response = await makeStatelessAuth("first-idp-user").handler(
+			new Request(
+				`http://localhost:3000/api/auth/account-info?useAccountCookie=true&userId=${sessionUserId}`,
+				{ headers: requestHeaders(mixed) },
+			),
+		);
+
+		await expectAccountNotFound(response);
 	});
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9978
 	 */
-	it("refreshes a valid account cookie whose userId differs from the session user", async () => {
+	it("rejects refreshToken with an account cookie copied from another session", async () => {
 		const { mixed, sessionUserId } = await signInOnTwoInstances();
+		const headers = requestHeaders(mixed);
+		headers.set("content-type", "application/json");
+		const response = await makeStatelessAuth().handler(
+			new Request("http://localhost:3000/api/auth/refresh-token", {
+				method: "POST",
+				headers,
+				body: JSON.stringify({
+					useAccountCookie: true,
+					userId: sessionUserId,
+				}),
+			}),
+		);
 
-		const result = await makeStatelessAuth().api.refreshToken({
-			body: { useAccountCookie: true, userId: sessionUserId },
-			headers: requestHeaders(mixed),
-		});
+		await expectAccountNotFound(response);
+	});
 
-		expect(result.accessToken).toBe("idp-refreshed-access-token");
-		expect(result.refreshToken).toBe("idp-rotated-refresh-token");
+	it("rejects refreshToken when the session and account cookie represent different upstream identities", async () => {
+		const { mixed, sessionUserId } = await signInOnTwoInstances(
+			"first-idp-user",
+			"second-idp-user",
+		);
+		const headers = requestHeaders(mixed);
+		headers.set("content-type", "application/json");
+		const response = await makeStatelessAuth("first-idp-user").handler(
+			new Request("http://localhost:3000/api/auth/refresh-token", {
+				method: "POST",
+				headers,
+				body: JSON.stringify({
+					useAccountCookie: true,
+					userId: sessionUserId,
+				}),
+			}),
+		);
+
+		await expectAccountNotFound(response);
 	});
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9978
 	 */
-	it("preserves a valid mismatched account cookie during stateless session refresh", async () => {
+	it("expires a copied account cookie during stateless session refresh", async () => {
 		const { accountCookieName, mixed } = await signInOnTwoInstances();
 
 		const res = await makeStatelessAuth().handler(
@@ -2942,9 +3829,81 @@ describe("account resolution in stateless mode", async () => {
 		);
 		expect(res.status).toBe(200);
 
-		const cookies = parseSetCookieHeader(res.headers.get("set-cookie") || "");
+		const setCookieHeader = res.headers.get("set-cookie") || "";
+		expect(setCookieHeader).toContain(`${accountCookieName}=`);
+		const cookies = parseSetCookieHeader(setCookieHeader);
 		const accountCookie = cookies.get(accountCookieName);
-		expect(accountCookie?.value).toBeTruthy();
-		expect(accountCookie?.maxAge).not.toBe(0);
+		expect(accountCookie?.value).toBeFalsy();
+		expect(accountCookie?.["max-age"]).toBe(0);
+	});
+
+	it("expires an account cookie for a different upstream identity during stateless session refresh", async () => {
+		const { accountCookieName, mixed } = await signInOnTwoInstances(
+			"first-idp-user",
+			"second-idp-user",
+		);
+
+		const res = await makeStatelessAuth("first-idp-user").handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				headers: requestHeaders(mixed),
+			}),
+		);
+		expect(res.status).toBe(200);
+
+		const setCookieHeader = res.headers.get("set-cookie") || "";
+		expect(setCookieHeader).toContain(`${accountCookieName}=`);
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		const accountCookie = cookies.get(accountCookieName);
+		expect(accountCookie?.value).toBeFalsy();
+		expect(accountCookie?.["max-age"]).toBe(0);
+	});
+
+	it("expires the bound account cookie when a stateless session signs out", async () => {
+		const auth = makeStatelessAuth();
+		const { jar } = await signIn(auth);
+		const accountCookieName = (await auth.$context).authCookies.accountData
+			.name;
+
+		const res = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-out", {
+				method: "POST",
+				headers: requestHeaders(jar),
+			}),
+		);
+		expect(res.status).toBe(200);
+
+		const accountCookie = parseSetCookieHeader(
+			res.headers.get("set-cookie") || "",
+		).get(accountCookieName);
+		expect(accountCookie?.value).toBeFalsy();
+		expect(accountCookie?.["max-age"]).toBe(0);
+	});
+
+	it("expires the OAuth account cookie when a new credential session replaces the stateless session", async () => {
+		const auth = makeStatelessAuth();
+		const { jar } = await signIn(auth);
+		const accountCookieName = (await auth.$context).authCookies.accountData
+			.name;
+		const headers = requestHeaders(jar);
+		headers.set("content-type", "application/json");
+
+		const res = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-up/email", {
+				method: "POST",
+				headers,
+				body: JSON.stringify({
+					name: "Credential User",
+					email: "credential-user@stateless.test",
+					password: "password123456",
+				}),
+			}),
+		);
+		expect(res.status).toBe(200);
+
+		const accountCookie = parseSetCookieHeader(
+			res.headers.get("set-cookie") || "",
+		).get(accountCookieName);
+		expect(accountCookie?.value).toBeFalsy();
+		expect(accountCookie?.["max-age"]).toBe(0);
 	});
 });

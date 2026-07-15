@@ -96,7 +96,7 @@ export function hubspot(
 
 	return {
 		providerId: "hubspot",
-		accountSubject: ({ profile }) => profile.id ?? "",
+		identitySubject: ({ profile }) => profile.id ?? "",
 		authorizationUrl: "https://app.hubspot.com/oauth/authorize",
 		tokenUrl: "https://api.hubapi.com/oauth/v1/token",
 		clientId: options.clientId,

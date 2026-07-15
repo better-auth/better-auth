@@ -13,6 +13,7 @@ import type { AuthMiddleware } from "../api";
 import type {
 	Account,
 	DBFieldAttribute,
+	Identity,
 	ModelNames,
 	SecondaryStorage,
 	Session,
@@ -21,6 +22,7 @@ import type {
 } from "../db";
 import type { DBAdapterDebugLogOption, DBAdapterInstance } from "../db/adapter";
 import type { BaseAccount } from "../db/schema/account";
+import type { BaseIdentity } from "../db/schema/identity";
 import type { BaseRateLimit } from "../db/schema/rate-limit";
 import type { BaseSession } from "../db/schema/session";
 import type { BaseUser } from "../db/schema/user";
@@ -65,24 +67,6 @@ export type GenerateIdFn = (options: {
  */
 export type ValidateUserInfoAction = "create-user" | "link-account" | "sign-in";
 
-/**
- * The authentication method that produced the incoming user info. The named
- * methods cover Better Auth's built-ins; the open `string` keeps it extensible
- * for plugins (for example `"scim"`).
- */
-export type ValidateUserInfoMethod =
-	| "oauth"
-	| "sso-oidc"
-	| "sso-saml"
-	| "email-password"
-	| "magic-link"
-	| "email-otp"
-	| "anonymous"
-	| "siwe"
-	| "phone-number"
-	| "admin"
-	| (string & {});
-
 /** OAuth-specific provisioning context; present only when `method` is `"oauth"`. */
 export type ValidateUserInfoOAuthInfo = {
 	/** The social or generic OAuth provider id (e.g. `"google"`). */
@@ -99,14 +83,63 @@ export type ValidateUserInfoSSOInfo = {
 	profile?: Record<string, unknown> | undefined;
 };
 
-/** Provisioning origin passed to `createUser`; the creation seam adds `action: "create-user"` to build {@link ValidateUserInfoSource}. */
+/**
+ * Authentication methods and the metadata each method contributes while
+ * provisioning a user.
+ *
+ * Plugins extend this interface through module augmentation. The registry
+ * value contains method-specific metadata; Better Auth adds the `method`
+ * discriminant and forbids unrelated OAuth and SSO metadata automatically.
+ *
+ * @example
+ * ```ts
+ * declare module "@better-auth/core" {
+ *   interface UserProvisioningSourceRegistry {
+ *     scim: { connectionId: string };
+ *   }
+ * }
+ * ```
+ */
+export interface UserProvisioningSourceRegistry {
+	oauth: {
+		oauth: ValidateUserInfoOAuthInfo;
+	};
+	"sso-oidc": {
+		sso: ValidateUserInfoSSOInfo;
+	};
+	"sso-saml": {
+		sso: ValidateUserInfoSSOInfo;
+	};
+	"email-password": {};
+	"magic-link": {};
+	"email-otp": {};
+	anonymous: {};
+	siwe: {};
+	"phone-number": {};
+	admin: {};
+}
+
+/** The authentication method that produced the incoming user info. */
+export type ValidateUserInfoMethod = keyof UserProvisioningSourceRegistry &
+	string;
+
+type UserProvisioningSourceFor<Method extends ValidateUserInfoMethod> = {
+	method: Method;
+} & UserProvisioningSourceRegistry[Method] &
+	("oauth" extends keyof UserProvisioningSourceRegistry[Method]
+		? {}
+		: { oauth?: never }) &
+	("sso" extends keyof UserProvisioningSourceRegistry[Method]
+		? {}
+		: { sso?: never });
+
+/**
+ * Provisioning origin passed to `createUser`. The creation seam adds
+ * `action: "create-user"` to build {@link ValidateUserInfoSource}.
+ */
 export type UserProvisioningSource = {
-	method: ValidateUserInfoMethod;
-	/** Provider id and raw profile; present iff `method` is `"oauth"`. */
-	oauth?: ValidateUserInfoOAuthInfo | undefined;
-	/** Provider id and raw profile; present iff `method` is `"sso-oidc"` or `"sso-saml"`. */
-	sso?: ValidateUserInfoSSOInfo | undefined;
-};
+	[Method in ValidateUserInfoMethod]: UserProvisioningSourceFor<Method>;
+}[ValidateUserInfoMethod];
 
 /**
  * The context passed to `validateUserInfo`: the lifecycle
@@ -124,9 +157,11 @@ export type UserProvisioningSource = {
  * }
  * ```
  */
-export type ValidateUserInfoSource = UserProvisioningSource & {
-	action: ValidateUserInfoAction;
-};
+export type ValidateUserInfoSource = {
+	[Method in ValidateUserInfoMethod]: UserProvisioningSourceFor<Method> & {
+		action: ValidateUserInfoAction;
+	};
+}[ValidateUserInfoMethod];
 
 export type ValidateUserInfoResult = {
 	/** A short, machine-readable rejection code, surfaced to the client. */
@@ -630,11 +665,17 @@ export type BetterAuthOptions = {
 						 */
 						debugLogs?: DBAdapterDebugLogOption;
 						/**
-						 * Whether to execute multiple operations in a transaction.
-						 * If the database doesn't support transactions,
-						 * set this to `false` and operations will be executed sequentially.
+						 * Cloudflare D1 binding used for atomic batch mutations.
 						 *
-						 * @default false
+						 * Provide this when the Kysely dialect is backed by D1. Better Auth
+						 * cannot safely recover the binding from a community dialect.
+						 */
+						d1Database?: D1Database;
+						/**
+						 * Whether to execute multiple operations in a transaction.
+						 * D1-backed dialects use `d1Database.batch()` instead.
+						 *
+						 * @default true
 						 */
 						transaction?: boolean;
 				  }
@@ -660,11 +701,17 @@ export type BetterAuthOptions = {
 						 */
 						debugLogs?: DBAdapterDebugLogOption;
 						/**
-						 * Whether to execute multiple operations in a transaction.
-						 * If the database doesn't support transactions,
-						 * set this to `false` and operations will be executed sequentially.
+						 * Cloudflare D1 binding used for atomic batch mutations.
 						 *
-						 * @default false
+						 * Provide this when the Kysely instance is backed by D1. Better Auth
+						 * cannot safely recover the binding from a community dialect.
+						 */
+						d1Database?: D1Database;
+						/**
+						 * Whether to execute multiple operations in a transaction.
+						 * D1-backed instances use `d1Database.batch()` instead.
+						 *
+						 * @default true
 						 */
 						transaction?: boolean;
 				  }
@@ -1168,6 +1215,10 @@ export type BetterAuthOptions = {
 				freshAge?: number;
 		  })
 		| undefined;
+	/**
+	 * Configure the stable external identities recognized by Better Auth.
+	 */
+	identity?: BetterAuthDBOptions<"identity", keyof BaseIdentity> | undefined;
 	account?:
 		| (BetterAuthDBOptions<"account", keyof BaseAccount> & {
 				/**
@@ -1198,25 +1249,6 @@ export type BetterAuthOptions = {
 					 * @default false
 					 */
 					disableImplicitLinking?: boolean;
-					/**
-					 * Require the existing local user row to have
-					 * `emailVerified: true` before implicit account linking
-					 * uses the IdP's `email_verified` claim as ownership
-					 * proof. Defaults to `true` so an attacker who
-					 * pre-registers an unverified account at a victim's
-					 * email cannot have the victim's OAuth identity linked
-					 * into the attacker-owned row on first sign-in. Set to
-					 * `false` for backward compatibility on apps whose
-					 * users sign up via OAuth without verifying their email
-					 * locally; understand the takeover risk before doing
-					 * so.
-					 *
-					 * @default true
-					 *
-					 * @deprecated The option will be removed on the next
-					 * minor; the gate will become unconditional.
-					 */
-					requireLocalEmailVerified?: boolean;
 					/**
 					 * List of trusted providers. Can be a static array or a function
 					 * that returns providers dynamically. The function is called
@@ -1544,6 +1576,71 @@ export type BetterAuthOptions = {
 						 */
 						after?: (
 							session: Session & Record<string, unknown>,
+							context: GenericEndpointContext | null,
+						) => Promise<void>;
+					};
+				};
+				/**
+				 * Identity hooks
+				 */
+				identity?: {
+					create?: {
+						/**
+						 * Hook that runs before an identity is created.
+						 */
+						before?: (
+							identity: Identity & Record<string, unknown>,
+							context: GenericEndpointContext | null,
+						) => Promise<
+							| boolean
+							| void
+							| {
+									data: Optional<Identity> & Record<string, unknown>;
+							  }
+						>;
+						/**
+						 * Hook that runs after an identity is created.
+						 */
+						after?: (
+							identity: Identity & Record<string, unknown>,
+							context: GenericEndpointContext | null,
+						) => Promise<void>;
+					};
+					update?: {
+						/**
+						 * Hook that runs before an identity is updated.
+						 */
+						before?: (
+							identity: Partial<Identity> & Record<string, unknown>,
+							context: GenericEndpointContext | null,
+						) => Promise<
+							| boolean
+							| void
+							| {
+									data: Optional<Identity> & Record<string, unknown>;
+							  }
+						>;
+						/**
+						 * Hook that runs after an identity is updated.
+						 */
+						after?: (
+							identity: Identity & Record<string, unknown>,
+							context: GenericEndpointContext | null,
+						) => Promise<void>;
+					};
+					delete?: {
+						/**
+						 * Hook that runs before an identity is deleted.
+						 */
+						before?: (
+							identity: Identity & Record<string, unknown>,
+							context: GenericEndpointContext | null,
+						) => Promise<boolean | void>;
+						/**
+						 * Hook that runs after an identity is deleted.
+						 */
+						after?: (
+							identity: Identity & Record<string, unknown>,
 							context: GenericEndpointContext | null,
 						) => Promise<void>;
 					};

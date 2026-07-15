@@ -3,14 +3,15 @@ import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 export const schema = {
 	walletAddress: {
 		fields: {
-			userId: {
+			accountId: {
 				type: "string",
 				references: {
-					model: "user",
+					model: "account",
 					field: "id",
+					onDelete: "cascade",
 				},
 				required: true,
-				index: true,
+				unique: true,
 			},
 			address: {
 				type: "string",
@@ -29,6 +30,12 @@ export const schema = {
 				required: true,
 			},
 		},
+		indexes: [
+			{
+				fields: ["address", "chainId"],
+				unique: true,
+			},
+		],
 	},
 } satisfies BetterAuthPluginDBSchema;
 

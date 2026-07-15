@@ -65,7 +65,7 @@ type Session = typeof auth.$Infer.Session
 
 ## Additional Fields
 
-Better Auth allows you to add additional fields to the user and session objects. All additional fields are properly inferred and available on the server and client side.
+Better Auth allows you to add additional fields to User, Session, Identity, and Account records. Server APIs infer these fields from the auth configuration. Use `inferAdditionalFields` to carry the public fields into client types.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"

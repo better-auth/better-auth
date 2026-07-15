@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import type { Account } from "@better-auth/core/db";
+import type { Account, AccountWithIdentity } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import {
@@ -12,25 +12,36 @@ import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
-import { shouldBindAccountCookieToSessionUser } from "../../context/store-capabilities";
 import {
+	hasServerAccountStore,
+	shouldBindAccountCookieToSessionUser,
+} from "../../context/store-capabilities";
+import {
+	clearProviderAccountBindingCookie,
+	expireCookie,
+	setProviderAccountCookieForSession,
+} from "../../cookies";
+import type { ProviderAccountCookie } from "../../cookies/session-store";
+import {
+	createAccountStore,
 	getAccountCookie,
-	setAccountCookie,
+	hasMatchingAuthenticatedProviderAccountBinding,
 } from "../../cookies/session-store";
-import { parseAccountOutput } from "../../db/schema";
-import { resolveOAuthAccountKeyForAPI } from "../../oauth2/account-key";
+import { parseAccountOutput, parseIdentityOutput } from "../../db/schema";
 import { missingEmailLogMessage } from "../../oauth2/errors";
-import { applyUpdateUserInfoOnLink } from "../../oauth2/link-account";
+import { resolveOAuthIdentityKeyForAPI } from "../../oauth2/identity-key";
+import { applyUpdateUserInfoOnLink } from "../../oauth2/provider-user";
 import { generateIdTokenNonce, generateState } from "../../oauth2/state";
 import {
 	decryptOAuthToken,
 	getOAuthCallbackPath,
 	setTokenUtil,
 } from "../../oauth2/utils";
+import { isAPIError } from "../../utils/is-api-error";
 import {
 	freshSessionMiddleware,
-	getSessionFromCtx,
-	isStateful,
+	getAuthoritativeSessionFromCtx,
+	sensitiveSessionMiddleware,
 	sessionMiddleware,
 } from "./session";
 
@@ -75,14 +86,28 @@ export const listUserAccounts = createAuthEndpoint(
 												type: "string",
 												format: "date-time",
 											},
-											issuer: {
-												type: "string",
-											},
-											providerAccountId: {
-												type: "string",
-											},
-											userId: {
-												type: "string",
+											identity: {
+												type: "object",
+												properties: {
+													id: { type: "string" },
+													issuer: { type: "string" },
+													providerAccountId: { type: "string" },
+													createdAt: {
+														type: "string",
+														format: "date-time",
+													},
+													updatedAt: {
+														type: "string",
+														format: "date-time",
+													},
+												},
+												required: [
+													"id",
+													"issuer",
+													"providerAccountId",
+													"createdAt",
+													"updatedAt",
+												],
 											},
 											scopes: {
 												type: "array",
@@ -96,9 +121,7 @@ export const listUserAccounts = createAuthEndpoint(
 											"providerId",
 											"createdAt",
 											"updatedAt",
-											"issuer",
-											"providerAccountId",
-											"userId",
+											"identity",
 											"scopes",
 										],
 									},
@@ -112,14 +135,23 @@ export const listUserAccounts = createAuthEndpoint(
 	},
 	async (c) => {
 		const session = c.context.session;
-		const accounts = await c.context.internalAdapter.findAccounts(
+		const accounts = await c.context.internalAdapter.listUserAccounts(
 			session.user.id,
 		);
 		return c.json(
-			accounts.map((a) => {
-				const { scope, ...parsed } = parseAccountOutput(c.context.options, a);
+			accounts.map(({ account, identity }) => {
+				const {
+					scope,
+					identityId: _identityId,
+					...parsedAccount
+				} = parseAccountOutput(c.context.options, account);
+				const { userId: _userId, ...parsedIdentity } = parseIdentityOutput(
+					c.context.options,
+					identity,
+				);
 				return {
-					...parsed,
+					...parsedAccount,
+					identity: parsedIdentity,
 					scopes: parseStoredScopes(scope),
 				};
 			}),
@@ -216,7 +248,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			 */
 			additionalData: z.record(z.string(), z.any()).optional(),
 		}),
-		use: [sessionMiddleware],
+		use: [sensitiveSessionMiddleware],
 		metadata: {
 			openapi: {
 				description: "Link a social account to the user",
@@ -308,6 +340,16 @@ export const linkSocialAccount = createAuthEndpoint(
 				);
 			}
 
+			const identityKey = await resolveOAuthIdentityKeyForAPI(
+				provider,
+				{
+					idToken: token,
+					accessToken: c.body.idToken.accessToken,
+					refreshToken: c.body.idToken.refreshToken,
+				},
+				linkingUserInfo.data,
+			);
+
 			if (!linkingUserInfo.user.email) {
 				c.context.logger.error(
 					missingEmailLogMessage(c.body.provider, { source: "id_token" }),
@@ -319,23 +361,25 @@ export const linkSocialAccount = createAuthEndpoint(
 				);
 			}
 
-			const accountKey = await resolveOAuthAccountKeyForAPI(
-				provider,
-				{
-					idToken: token,
-					accessToken: c.body.idToken.accessToken,
-					refreshToken: c.body.idToken.refreshToken,
-				},
-				linkingUserInfo.data,
-			);
+			const linkedIdentity =
+				await c.context.internalAdapter.findIdentityByKey(identityKey);
 
-			const linkedAccount =
-				await c.context.internalAdapter.findAccountByKey(accountKey);
+			if (linkedIdentity && linkedIdentity.userId !== session.user.id) {
+				throw APIError.from(
+					"CONFLICT",
+					BASE_ERROR_CODES.SOCIAL_ACCOUNT_ALREADY_LINKED,
+				);
+			}
+			const linkedAccount = linkedIdentity
+				? await c.context.internalAdapter.findAccountByKey({
+						identityId: linkedIdentity.id,
+						providerInstanceId: provider.id,
+					})
+				: null;
 
-			if (linkedAccount?.userId === session.user.id) {
+			if (linkedAccount) {
 				const updateData = Object.fromEntries(
 					Object.entries({
-						providerId: provider.id,
 						accessToken: await setTokenUtil(
 							c.body.idToken.accessToken,
 							c.context,
@@ -347,34 +391,42 @@ export const linkSocialAccount = createAuthEndpoint(
 						),
 					}).filter(([_, value]) => value !== undefined),
 				);
-				await c.context.internalAdapter.updateAccount(
+				const updatedAccount = await c.context.internalAdapter.updateAccount(
 					linkedAccount.id,
 					updateData,
 				);
+				if (!updatedAccount || !linkedIdentity) {
+					throw APIError.from("EXPECTATION_FAILED", {
+						message: "Account not linked - unable to update account",
+						code: "LINKING_FAILED",
+					});
+				}
 				await applyUpdateUserInfoOnLink(
 					c,
 					session.user.id,
 					linkingUserInfo.user,
 				);
+				if (c.context.options.account?.storeAccountCookie) {
+					await setProviderAccountCookieForSession(
+						c,
+						{ account: updatedAccount, identity: linkedIdentity },
+						session,
+					);
+				}
 				return c.json({
 					url: "", // this is for type inference
 					status: true,
 					redirect: false,
 				});
 			}
-			if (linkedAccount) {
-				throw APIError.from(
-					"CONFLICT",
-					BASE_ERROR_CODES.SOCIAL_ACCOUNT_ALREADY_LINKED,
-				);
-			}
 
 			const isTrustedProvider = c.context.trustedProviders.includes(
 				provider.id,
 			);
 			if (
-				(!isTrustedProvider && !linkingUserInfo.user.emailVerified) ||
-				c.context.options.account?.accountLinking?.enabled === false
+				!linkedIdentity &&
+				((!isTrustedProvider && !linkingUserInfo.user.emailVerified) ||
+					c.context.options.account?.accountLinking?.enabled === false)
 			) {
 				throw APIError.from("UNAUTHORIZED", {
 					message: "Account not linked - linking not allowed",
@@ -383,6 +435,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			if (
+				!linkedIdentity &&
 				linkingUserInfo.user.email?.toLowerCase() !==
 					session.user.email.toLowerCase() &&
 				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
@@ -393,21 +446,25 @@ export const linkSocialAccount = createAuthEndpoint(
 				});
 			}
 
+			let linkedAccountWithIdentity: AccountWithIdentity;
 			try {
-				await c.context.internalAdapter.createAccount({
-					userId: session.user.id,
-					providerId: provider.id,
-					...accountKey,
-					accessToken: await setTokenUtil(
-						c.body.idToken.accessToken,
-						c.context,
-					),
-					idToken: token,
-					refreshToken: await setTokenUtil(
-						c.body.idToken.refreshToken,
-						c.context,
-					),
-				});
+				linkedAccountWithIdentity = await c.context.internalAdapter.linkAccount(
+					session.user.id,
+					identityKey,
+					{
+						providerId: provider.id,
+						providerInstanceId: provider.id,
+						accessToken: await setTokenUtil(
+							c.body.idToken.accessToken,
+							c.context,
+						),
+						idToken: token,
+						refreshToken: await setTokenUtil(
+							c.body.idToken.refreshToken,
+							c.context,
+						),
+					},
+				);
 			} catch {
 				throw APIError.from("EXPECTATION_FAILED", {
 					message: "Account not linked - unable to create account",
@@ -416,6 +473,13 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			await applyUpdateUserInfoOnLink(c, session.user.id, linkingUserInfo.user);
+			if (c.context.options.account?.storeAccountCookie) {
+				await setProviderAccountCookieForSession(
+					c,
+					linkedAccountWithIdentity,
+					session,
+				);
+			}
 
 			return c.json({
 				url: "", // this is for type inference
@@ -490,7 +554,7 @@ export const unlinkAccount = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const { accountId } = ctx.body;
-		const accounts = await ctx.context.internalAdapter.findAccounts(
+		const accounts = await ctx.context.internalAdapter.listUserAccounts(
 			ctx.context.session.user.id,
 		);
 		if (
@@ -502,11 +566,28 @@ export const unlinkAccount = createAuthEndpoint(
 				BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
 			);
 		}
-		const accountExist = accounts.find((account) => account.id === accountId);
+		const accountExist = accounts.find(
+			({ account }) => account.id === accountId,
+		);
 		if (!accountExist) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
 		}
-		await ctx.context.internalAdapter.deleteAccount(accountExist.id);
+		await ctx.context.internalAdapter.deleteAccount(accountExist.account.id);
+		const accountCookie = await getAccountCookie(ctx);
+		if (
+			ctx.context.authenticatedProviderAccountBinding?.accountId ===
+				accountExist.account.id ||
+			accountCookie?.account.id === accountExist.account.id
+		) {
+			clearProviderAccountBindingCookie(ctx);
+			expireCookie(ctx, ctx.context.authCookies.accountData);
+			const accountStore = createAccountStore(
+				ctx.context.authCookies.accountData.name,
+				ctx.context.authCookies.accountData.attributes,
+				ctx,
+			);
+			accountStore.setCookies(accountStore.clean());
+		}
 		return ctx.json({
 			status: true,
 		});
@@ -533,9 +614,7 @@ async function resolveUserId(
 	ctx: GenericEndpointContext,
 	userId?: string,
 ): Promise<string> {
-	const session = await getSessionFromCtx(ctx, {
-		disableCookieCache: isStateful(ctx),
-	});
+	const session = await getAuthoritativeSessionFromCtx(ctx);
 	if (!session && (ctx.request || ctx.headers)) {
 		throw ctx.error("UNAUTHORIZED");
 	}
@@ -548,6 +627,13 @@ async function resolveUserId(
 	}
 	return resolvedUserId;
 }
+
+const accountCookieSelectionSchema = z.preprocess(
+	(value) => (value === "true" ? true : value),
+	z.literal(true).meta({
+		description: "Select the current OAuth account from its signed cookie",
+	}),
+);
 
 const accountSelectionSchema = z.union([
 	z.strictObject({
@@ -562,9 +648,7 @@ const accountSelectionSchema = z.union([
 			.optional(),
 	}),
 	z.strictObject({
-		useAccountCookie: z.literal(true).meta({
-			description: "Select the current OAuth account from its signed cookie",
-		}),
+		useAccountCookie: accountCookieSelectionSchema,
 		userId: z
 			.string()
 			.meta({
@@ -576,9 +660,10 @@ const accountSelectionSchema = z.union([
 
 type AccountSelection = { accountId: string } | { useAccountCookie: true };
 
-function matchesAccountSelection(
+async function matchesAccountSelection(
 	ctx: GenericEndpointContext,
-	account: Account,
+	accountWithIdentity: AccountWithIdentity,
+	accountCookie: ProviderAccountCookie | null,
 	{
 		resolvedUserId,
 		selection,
@@ -587,12 +672,28 @@ function matchesAccountSelection(
 		selection: AccountSelection;
 	},
 ) {
-	const matchesSessionUser =
-		!shouldBindAccountCookieToSessionUser(ctx.context.options) ||
-		account.userId === resolvedUserId;
+	if ("accountId" in selection) {
+		return (
+			accountWithIdentity.identity.userId === resolvedUserId &&
+			accountWithIdentity.account.id === selection.accountId
+		);
+	}
+	if (!accountCookie) return false;
+	const matchesAccountCookie =
+		accountWithIdentity.account.id === accountCookie.account.id &&
+		accountWithIdentity.account.providerInstanceId ===
+			accountCookie.account.providerInstanceId &&
+		accountWithIdentity.identity.issuer === accountCookie.identity.issuer &&
+		accountWithIdentity.identity.providerAccountId ===
+			accountCookie.identity.providerAccountId;
 	return (
-		matchesSessionUser &&
-		("accountId" in selection ? account.id === selection.accountId : true)
+		matchesAccountCookie &&
+		hasMatchingAuthenticatedProviderAccountBinding(
+			accountCookie,
+			ctx.context.authenticatedProviderAccountBinding,
+		) &&
+		(!shouldBindAccountCookieToSessionUser(ctx.context.options) ||
+			accountWithIdentity.identity.userId === resolvedUserId)
 	);
 }
 
@@ -612,24 +713,43 @@ async function resolveUserAccount(
 		resolvedUserId: string;
 		selection: AccountSelection;
 	},
-): Promise<{ account: Account; accountCookie: Account | null }> {
+): Promise<{
+	accountWithIdentity: AccountWithIdentity;
+	accountCookie: ProviderAccountCookie | null;
+}> {
 	if ("accountId" in selection) {
-		const accounts =
-			await ctx.context.internalAdapter.findAccounts(resolvedUserId);
-		const account = accounts.find(
-			(candidate) => candidate.id === selection.accountId,
-		);
-		if (account) return { account, accountCookie: null };
-	} else if (ctx.context.options.account?.storeAccountCookie) {
-		const accountCookie = await getAccountCookie(ctx);
+		const accountWithIdentity =
+			await ctx.context.internalAdapter.findAccountWithIdentityById(
+				selection.accountId,
+			);
 		if (
-			accountCookie &&
-			matchesAccountSelection(ctx, accountCookie, {
+			accountWithIdentity &&
+			(await matchesAccountSelection(ctx, accountWithIdentity, null, {
 				resolvedUserId,
 				selection,
-			})
+			}))
 		) {
-			return { account: accountCookie, accountCookie };
+			return { accountWithIdentity, accountCookie: null };
+		}
+	} else {
+		const accountCookie = await getAccountCookie(ctx);
+		const accountWithIdentity =
+			accountCookie && hasServerAccountStore(ctx.context.options)
+				? await ctx.context.internalAdapter.findAccountWithIdentityById(
+						accountCookie.account.id,
+					)
+				: accountCookie;
+		if (
+			accountWithIdentity &&
+			(await matchesAccountSelection(ctx, accountWithIdentity, accountCookie, {
+				resolvedUserId,
+				selection,
+			}))
+		) {
+			return {
+				accountWithIdentity,
+				accountCookie,
+			};
 		}
 	}
 
@@ -647,7 +767,8 @@ async function getValidAccessToken(
 	{
 		resolvedUserId,
 		selection,
-		account: resolvedAccount,
+		accountWithIdentity: resolvedAccount,
+		accountCookie: suppliedAccountCookie,
 	}: {
 		resolvedUserId: string;
 		selection: AccountSelection;
@@ -656,25 +777,26 @@ async function getValidAccessToken(
 		 * database lookup so a caller that has the account in hand does not
 		 * re-query for it.
 		 */
-		account?: Account;
+		accountWithIdentity?: AccountWithIdentity;
+		accountCookie?: ProviderAccountCookie | null;
 	},
 ) {
-	const account =
-		resolvedAccount ??
-		(
-			await resolveUserAccount(ctx, {
-				resolvedUserId,
-				selection,
-			})
-		).account;
+	const resolved = resolvedAccount
+		? {
+				accountWithIdentity: resolvedAccount,
+				accountCookie: suppliedAccountCookie ?? null,
+			}
+		: await resolveUserAccount(ctx, { resolvedUserId, selection });
+	const { accountWithIdentity, accountCookie } = resolved;
 	if (
-		!matchesAccountSelection(ctx, account, {
+		!(await matchesAccountSelection(ctx, accountWithIdentity, accountCookie, {
 			resolvedUserId,
 			selection,
-		})
+		}))
 	) {
 		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
 	}
+	const { account, identity } = accountWithIdentity;
 
 	const provider = await getAwaitableValue(ctx.context.socialProviders, {
 		value: account.providerId,
@@ -718,11 +840,26 @@ async function getValidAccessToken(
 					updatedData,
 				);
 			}
-			if (ctx.context.options.account?.storeAccountCookie) {
-				await setAccountCookie(ctx, {
-					...account,
-					...(updatedAccount ?? updatedData),
-				});
+			if (hasServerAccountStore(ctx.context.options) && !updatedAccount) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
+			}
+			if (
+				ctx.context.options.account?.storeAccountCookie &&
+				accountCookie?.account.id === account.id &&
+				ctx.context.session
+			) {
+				await setProviderAccountCookieForSession(
+					ctx,
+					{
+						account: {
+							...account,
+							...(updatedAccount ?? updatedData),
+						},
+						identity,
+					},
+					ctx.context.session,
+					accountCookie.accountBindingId,
+				);
 			}
 		}
 
@@ -750,7 +887,8 @@ async function getValidAccessToken(
 			scopes: parseStoredScopes(account.scope),
 			idToken: newTokens?.idToken ?? account.idToken ?? undefined,
 		};
-	} catch (_error) {
+	} catch (error) {
+		if (isAPIError(error)) throw error;
 		throw APIError.from("BAD_REQUEST", {
 			message: "Failed to get a valid access token",
 			code: "FAILED_TO_GET_ACCESS_TOKEN",
@@ -861,10 +999,14 @@ export const refreshToken = createAuthEndpoint(
 	async (ctx) => {
 		const { userId } = ctx.body;
 		const resolvedUserId = await resolveUserId(ctx, userId);
-		const { account, accountCookie } = await resolveUserAccount(ctx, {
-			resolvedUserId,
-			selection: ctx.body,
-		});
+		const { accountWithIdentity, accountCookie } = await resolveUserAccount(
+			ctx,
+			{
+				resolvedUserId,
+				selection: ctx.body,
+			},
+		);
+		const { account } = accountWithIdentity;
 		const provider = await getAwaitableValue(ctx.context.socialProviders, {
 			value: account.providerId,
 		});
@@ -925,16 +1067,28 @@ export const refreshToken = createAuthEndpoint(
 					updatedTokenData,
 				);
 			}
+			if (hasServerAccountStore(ctx.context.options) && !updatedAccount) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
+			}
 
 			if (
-				accountCookie?.id === account.id &&
-				ctx.context.options.account?.storeAccountCookie
+				accountCookie?.account.id === account.id &&
+				ctx.context.options.account?.storeAccountCookie &&
+				ctx.context.session
 			) {
 				const updateData = {
-					...accountCookie,
-					...(updatedAccount ?? updatedTokenData),
+					account: {
+						...accountCookie.account,
+						...(updatedAccount ?? updatedTokenData),
+					},
+					identity: accountCookie.identity,
 				};
-				await setAccountCookie(ctx, updateData);
+				await setProviderAccountCookieForSession(
+					ctx,
+					updateData,
+					ctx.context.session,
+					accountCookie.accountBindingId,
+				);
 			}
 			const responseScope = updatedAccount?.scope ?? account.scope;
 			return ctx.json({
@@ -947,7 +1101,8 @@ export const refreshToken = createAuthEndpoint(
 				providerId: account.providerId,
 				accountId: account.id,
 			});
-		} catch (_error) {
+		} catch (error) {
+			if (isAPIError(error)) throw error;
 			throw APIError.from("BAD_REQUEST", {
 				message: "Failed to refresh access token",
 				code: "FAILED_TO_REFRESH_ACCESS_TOKEN",
@@ -995,15 +1150,18 @@ export const accountInfo = createAuthEndpoint(
 											properties: {
 												id: { type: "string" },
 												providerId: { type: "string" },
-												issuer: { type: "string" },
-												providerAccountId: { type: "string" },
+												identity: {
+													type: "object",
+													properties: {
+														id: { type: "string" },
+														issuer: { type: "string" },
+														providerAccountId: { type: "string" },
+													},
+													required: ["id", "issuer", "providerAccountId"],
+													additionalProperties: false,
+												},
 											},
-											required: [
-												"id",
-												"providerId",
-												"issuer",
-												"providerAccountId",
-											],
+											required: ["id", "providerId", "identity"],
 											additionalProperties: false,
 										},
 										data: {
@@ -1026,10 +1184,14 @@ export const accountInfo = createAuthEndpoint(
 	async (ctx) => {
 		const { userId } = ctx.query;
 		const resolvedUserId = await resolveUserId(ctx, userId);
-		const { account } = await resolveUserAccount(ctx, {
-			resolvedUserId,
-			selection: ctx.query,
-		});
+		const { accountWithIdentity, accountCookie } = await resolveUserAccount(
+			ctx,
+			{
+				resolvedUserId,
+				selection: ctx.query,
+			},
+		);
+		const { account } = accountWithIdentity;
 
 		const provider = await getAwaitableValue(ctx.context.socialProviders, {
 			value: account.providerId,
@@ -1044,7 +1206,8 @@ export const accountInfo = createAuthEndpoint(
 		const tokens = await getValidAccessToken(ctx, {
 			resolvedUserId,
 			selection: ctx.query,
-			account,
+			accountWithIdentity,
+			accountCookie,
 		});
 		if (!tokens.accessToken) {
 			throw APIError.from("BAD_REQUEST", {
@@ -1067,8 +1230,11 @@ export const accountInfo = createAuthEndpoint(
 			account: {
 				id: account.id,
 				providerId: account.providerId,
-				issuer: account.issuer,
-				providerAccountId: account.providerAccountId,
+				identity: {
+					id: accountWithIdentity.identity.id,
+					issuer: accountWithIdentity.identity.issuer,
+					providerAccountId: accountWithIdentity.identity.providerAccountId,
+				},
 			},
 		});
 	},

@@ -150,8 +150,8 @@ export const google = (options: GoogleOptions) => {
 	return {
 		id: "google",
 		name: "Google",
-		accountSubject: ({ profile }) => profile.sub,
-		accountIssuer: "https://accounts.google.com",
+		identitySubject: ({ profile }) => profile.sub,
+		identityIssuer: "https://accounts.google.com",
 		async createAuthorizationURL({
 			state,
 			scopes,

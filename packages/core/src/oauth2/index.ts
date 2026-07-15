@@ -65,8 +65,8 @@ export {
 export type {
 	OAuth2Tokens,
 	OAuth2UserInfo,
-	OAuthAccountKeyContext,
-	OAuthAccountSubject,
+	OAuthIdentityKeyContext,
+	OAuthIdentitySubject,
 	OAuthIdTokenConfig,
 	OAuthMappedUser,
 	OAuthProvider,

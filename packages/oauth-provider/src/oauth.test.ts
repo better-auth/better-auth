@@ -340,10 +340,10 @@ describe("oauth", async () => {
 							{
 								scopes: ["openid", "profile", "email"],
 								...config,
-								accountSubject:
-									config?.accountSubject ??
+								identitySubject:
+									config?.identitySubject ??
 									(({ profile }) => profile.sub ?? ""),
-								accountIssuer: config?.accountIssuer ?? authServerBaseUrl,
+								identityIssuer: config?.identityIssuer ?? authServerBaseUrl,
 								providerId,
 								redirectURI: redirectUri,
 								authorizationUrl: config?.discoveryUrl
@@ -768,8 +768,8 @@ describe("oauth", async () => {
 					config: [
 						{
 							scopes: ["openid", "profile", "email"],
-							accountSubject: ({ profile }) => profile.sub ?? "",
-							accountIssuer: authServerBaseUrl,
+							identitySubject: ({ profile }) => profile.sub ?? "",
+							identityIssuer: authServerBaseUrl,
 							providerId,
 							redirectURI: redirectUri,
 							authorizationUrl: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
@@ -865,8 +865,8 @@ describe("oauth", async () => {
 					config: [
 						{
 							scopes: ["openid", "profile", "email"],
-							accountSubject: ({ profile }) => profile.sub ?? "",
-							accountIssuer: authServerBaseUrl,
+							identitySubject: ({ profile }) => profile.sub ?? "",
+							identityIssuer: authServerBaseUrl,
 							providerId,
 							redirectURI: redirectUri,
 							authorizationUrl: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
@@ -1213,10 +1213,10 @@ describe("oauth - prompt", async () => {
 							{
 								scopes: ["openid", "profile", "email"],
 								...config,
-								accountSubject:
-									config?.accountSubject ??
+								identitySubject:
+									config?.identitySubject ??
 									(({ profile }) => profile.sub ?? ""),
-								accountIssuer: config?.accountIssuer ?? authServerBaseUrl,
+								identityIssuer: config?.identityIssuer ?? authServerBaseUrl,
 								providerId,
 								redirectURI: redirectUri,
 								authorizationUrl: config?.discoveryUrl
@@ -1422,8 +1422,8 @@ describe("oauth - prompt", async () => {
 						config: [
 							{
 								scopes: ["openid", "profile", "email"],
-								accountSubject: ({ profile }) => profile.sub ?? "",
-								accountIssuer: authServerBaseUrl,
+								identitySubject: ({ profile }) => profile.sub ?? "",
+								identityIssuer: authServerBaseUrl,
 								providerId,
 								redirectURI: redirectUri,
 								authorizationUrl: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
@@ -2917,10 +2917,10 @@ describe("oauth - config", () => {
 							{
 								scopes: ["openid", "profile", "email"],
 								...config,
-								accountSubject:
-									config?.accountSubject ??
+								identitySubject:
+									config?.identitySubject ??
 									(({ profile }) => profile.sub ?? ""),
-								accountIssuer: config?.accountIssuer ?? authServerBaseUrl,
+								identityIssuer: config?.identityIssuer ?? authServerBaseUrl,
 								providerId,
 								redirectURI: redirectUri,
 								authorizationUrl: config?.discoveryUrl

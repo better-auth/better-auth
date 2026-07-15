@@ -9,6 +9,7 @@ import type {
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
+import { pluralizeIdentifier } from "@better-auth/core/utils/string";
 
 export interface PrismaConfig {
 	/**
@@ -40,8 +41,9 @@ export interface PrismaConfig {
 	 * Whether to execute multiple operations in a transaction.
 	 *
 	 * If the database doesn't support transactions,
-	 * set this to `false` and operations will be executed sequentially.
-	 * @default false
+	 * set this to `false`. Multi-record lifecycle mutations then require an
+	 * atomic batch capability from the driver.
+	 * @default true
 	 */
 	transaction?: boolean | undefined;
 }
@@ -132,7 +134,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 			/**
 			 * Build the join key name based on whether the foreign field is unique or not.
-			 * If unique, use singular. Otherwise, pluralize (add 's').
+			 * If unique, use singular. Otherwise, pluralize the identifier.
 			 */
 			const getJoinKeyName = (
 				baseModel: string,
@@ -161,7 +163,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						const [_foreignKey, foreignKeyAttributes] = foreignKeys[0] as any;
 						// Only check if field is explicitly marked as unique
 						const isUnique = foreignKeyAttributes?.unique === true;
-						return isUnique || config.usePlural === true ? key : `${key}s`;
+						return isUnique || config.usePlural === true
+							? key
+							: pluralizeIdentifier(key);
 					}
 
 					// Check backwards: does the base model have FKs to the joined model?
@@ -180,7 +184,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				} catch {
 					// Fallback to pluralizing if we can't determine uniqueness
 				}
-				return `${getModelName(joinedModel).toLowerCase()}s`;
+				return pluralizeIdentifier(getModelName(joinedModel).toLowerCase());
 			};
 			function operatorToPrismaOperator(operator: string) {
 				switch (operator) {
@@ -804,7 +808,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					? true
 					: false,
 			transaction:
-				(config.transaction ?? false)
+				(config.transaction ?? true)
 					? (cb) =>
 							(prisma as PrismaClientInternal).$transaction((tx) => {
 								const adapter = createAdapterFactory({

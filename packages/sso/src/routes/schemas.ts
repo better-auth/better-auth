@@ -3,6 +3,35 @@ import { APIError } from "better-auth/api";
 import { parseInputData, toZodSchema } from "better-auth/db";
 import * as z from "zod";
 import type { SSOOptions } from "../types";
+import { parseProviderDomains } from "../utils";
+
+/** A public SSO provider alias that can safely occupy one callback-path segment. */
+export const ssoProviderIdSchema = z
+	.string()
+	.min(1)
+	.max(128)
+	.regex(/^[A-Za-z0-9._~-]+$/, {
+		message:
+			"providerId must contain only URL-segment-safe letters, numbers, '.', '_', '~', or '-'",
+	})
+	.refine((providerId) => providerId !== "." && providerId !== "..", {
+		message: "providerId must identify a provider, not a relative path segment",
+	});
+
+/** A canonical comma-separated list of non-empty email domains. */
+export const ssoProviderDomainSchema = z
+	.string()
+	.transform((value, context) => {
+		const domains = parseProviderDomains(value);
+		if (!domains) {
+			context.addIssue({
+				code: "custom",
+				message: "domain must contain at least one valid email domain",
+			});
+			return z.NEVER;
+		}
+		return domains.join(",");
+	});
 
 function getSSOProviderAdditionalFields(options?: SSOOptions) {
 	return (options?.schema?.ssoProvider?.additionalFields ?? {}) as Record<
@@ -267,7 +296,7 @@ const samlConfigSchema = z.object({
 });
 
 const registerSSOProviderBodySchema = z.object({
-	providerId: z.string().meta({
+	providerId: ssoProviderIdSchema.meta({
 		description:
 			"The ID of the provider. This is used to identify the provider during login and callback",
 	}),
@@ -275,7 +304,7 @@ const registerSSOProviderBodySchema = z.object({
 		.string()
 		.url()
 		.meta({ description: "The issuer URL of the provider" }),
-	domain: z.string().meta({
+	domain: ssoProviderDomainSchema.meta({
 		description:
 			"The domain(s) of the provider. For enterprise multi-domain SSO where a single IdP serves multiple email domains, use comma-separated values (e.g., 'company.com,subsidiary.com,acquired-company.com')",
 	}),
@@ -306,7 +335,7 @@ export function getRegisterSSOProviderBodySchema(options?: SSOOptions) {
 
 const updateSSOProviderBodySchema = z.object({
 	issuer: z.string().url().optional(),
-	domain: z.string().optional(),
+	domain: ssoProviderDomainSchema.optional(),
 	oidcConfig: oidcConfigSchema.partial().optional(),
 	samlConfig: samlConfigSchema
 		.omit({ idpMetadata: true })
@@ -319,7 +348,7 @@ const updateSSOProviderBodySchema = z.object({
 
 export function getUpdateSSOProviderBodySchema(options?: SSOOptions) {
 	return updateSSOProviderBodySchema.extend({
-		providerId: z.string(),
+		providerId: ssoProviderIdSchema,
 		...getSSOProviderAdditionalFieldsSchema(options).partial().shape,
 	});
 }

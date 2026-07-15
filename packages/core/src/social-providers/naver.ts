@@ -44,7 +44,7 @@ export const naver = (options: NaverOptions) => {
 	return {
 		id: "naver",
 		name: "Naver",
-		accountSubject: ({ profile }) => profile.response.id,
+		identitySubject: ({ profile }) => profile.response.id,
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope ? [] : ["profile", "email"];
 			if (options.scope) _scopes.push(...options.scope);

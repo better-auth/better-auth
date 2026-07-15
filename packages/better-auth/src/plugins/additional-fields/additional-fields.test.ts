@@ -1,7 +1,8 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { betterAuth } from "../../auth/full";
-import { createAuthClient } from "../../client";
+import { createAuthClient, InferPlugin } from "../../client";
 import { createAuthClient as createReactAuthClient } from "../../client/react";
+import type { InferListedAccountFromClient } from "../../client/types";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Session } from "./../../types";
 import { twoFactor, twoFactorClient } from "../two-factor";
@@ -192,6 +193,105 @@ describe("additionalFields", async () => {
 			};
 			session: Session;
 		} | null>;
+	});
+
+	it("should infer public account and identity fields on listAccounts", () => {
+		const modelFieldsPlugin = {
+			id: "model-fields",
+			schema: {
+				account: {
+					fields: {
+						pluginAccountLabel: {
+							type: "string",
+							required: true,
+						},
+						pluginAccountSecret: {
+							type: "string",
+							required: true,
+							returned: false,
+						},
+					},
+				},
+				identity: {
+					fields: {
+						pluginIdentityLabel: {
+							type: "string",
+							required: true,
+						},
+						pluginIdentitySecret: {
+							type: "string",
+							required: true,
+							returned: false,
+						},
+					},
+				},
+			},
+		} as const;
+		const auth = betterAuth({
+			account: {
+				additionalFields: {
+					accountLabel: { type: "string", required: true },
+					accountSecret: {
+						type: "string",
+						required: true,
+						returned: false,
+					},
+				},
+			},
+			identity: {
+				additionalFields: {
+					identityLabel: { type: "string", required: true },
+					identitySecret: {
+						type: "string",
+						required: true,
+						returned: false,
+					},
+				},
+			},
+			plugins: [modelFieldsPlugin],
+		});
+		const clientOptions = {
+			plugins: [
+				inferAdditionalFields<typeof auth>(),
+				InferPlugin<typeof modelFieldsPlugin>(),
+			],
+		};
+		const client = createAuthClient(clientOptions);
+		type DirectListedAccount = InferListedAccountFromClient<
+			typeof clientOptions
+		>;
+		const listAccounts = () => client.listAccounts();
+		type Accounts = NonNullable<
+			Awaited<ReturnType<typeof listAccounts>>["data"]
+		>;
+		type ListedAccount = Accounts[number];
+
+		expectTypeOf<DirectListedAccount["accountLabel"]>().toEqualTypeOf<string>();
+		expectTypeOf<ListedAccount["accountLabel"]>().toEqualTypeOf<string>();
+		expectTypeOf<ListedAccount["pluginAccountLabel"]>().toEqualTypeOf<string>();
+		expectTypeOf<ListedAccount>().not.toHaveProperty("accountSecret");
+		expectTypeOf<ListedAccount>().not.toHaveProperty("pluginAccountSecret");
+		expectTypeOf<ListedAccount>().not.toHaveProperty("accessToken");
+		expectTypeOf<ListedAccount>().not.toHaveProperty("refreshToken");
+		expectTypeOf<ListedAccount>().not.toHaveProperty("idToken");
+		expectTypeOf<ListedAccount>().not.toHaveProperty("password");
+		expectTypeOf<ListedAccount>().not.toHaveProperty("identityId");
+		expectTypeOf<ListedAccount>().not.toHaveProperty("providerInstanceId");
+		expectTypeOf<ListedAccount>().not.toHaveProperty("scope");
+		expectTypeOf<ListedAccount["scopes"]>().toEqualTypeOf<string[]>();
+		expectTypeOf<
+			ListedAccount["identity"]["identityLabel"]
+		>().toEqualTypeOf<string>();
+		expectTypeOf<
+			ListedAccount["identity"]["pluginIdentityLabel"]
+		>().toEqualTypeOf<string>();
+		expectTypeOf<ListedAccount["identity"]>().not.toHaveProperty(
+			"identitySecret",
+		);
+		expectTypeOf<ListedAccount["identity"]>().not.toHaveProperty(
+			"pluginIdentitySecret",
+		);
+		expectTypeOf<ListedAccount["identity"]>().not.toHaveProperty("userId");
 	});
 
 	/**

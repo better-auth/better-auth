@@ -54,7 +54,16 @@ describe("init CLI - database generation", () => {
 		it("should generate the right drizzle-sqlite database code", async () => {
 			const database = getDatabaseCode("drizzle-sqlite-better-sqlite3");
 			const expectedCode = await formatCode(
-				`drizzleAdapter(db, { provider: 'sqlite', schema })`,
+				`drizzleAdapter(db, { provider: 'sqlite', schema, transaction: 'sync' })`,
+			);
+			const code = await formatCode(database.code({}));
+			expect(code).toEqual(expectedCode);
+		});
+
+		it("should generate synchronous transaction mode for Bun SQLite", async () => {
+			const database = getDatabaseCode("drizzle-sqlite-bun");
+			const expectedCode = await formatCode(
+				`drizzleAdapter(db, { provider: 'sqlite', schema, transaction: 'sync' })`,
 			);
 			const code = await formatCode(database.code({}));
 			expect(code).toEqual(expectedCode);

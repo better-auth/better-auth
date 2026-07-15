@@ -194,6 +194,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
     ```ts title="scripts/migrate-auth0.ts"
     import { ManagementClient } from 'auth0';
+    import { generateId } from 'better-auth';
     import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
     import { auth } from '@/lib/auth';
 
@@ -203,51 +204,19 @@ Before starting the migration process, set up Better Auth in your project. Follo
         clientSecret: process.env.AUTH0_SECRET!,
     });
 
-    // Map every social provider in your Auth0 export to the exact trusted issuer
-    // Better Auth uses. For OAuth providers without one, use
-    // local:oauth:<encoded providerId>, with the provider ID segment
-    // percent-encoded.
-    const accountIssuers: Record<string, string> = {
-        github: "local:oauth:github",
+    // Review every social provider in your Auth0 export. Use the exact trusted
+    // issuer Better Auth uses, or local:<encoded providerId> when it has no issuer.
+    const identityIssuers: Record<string, string> = {
+        github: "local:github",
         google: "https://accounts.google.com",
     };
 
-    function getAccountIssuer(providerId: string) {
-        const issuer = accountIssuers[providerId];
+    function getIdentityIssuer(providerId: string) {
+        const issuer = identityIssuers[providerId];
         if (!issuer) {
             throw new Error(`Missing trusted issuer for ${providerId}`);
         }
         return issuer;
-    }
-
-    function getAccountProviderId(identity: { provider: string }) {
-        return identity.provider === "auth0"
-            ? "credential"
-            : (identity.provider.split("-")[0] ?? identity.provider);
-    }
-
-    function assertAccountIssuerCoverage(
-        users: ReadonlyArray<{
-            identities?: ReadonlyArray<{ provider: string }>;
-        }>,
-    ) {
-        const missingProviderIds = [
-            ...new Set(
-                users
-                    .flatMap((user) => user.identities ?? [])
-                    .map(getAccountProviderId)
-                    .filter(
-                        (providerId) =>
-                            providerId !== "credential" && !accountIssuers[providerId],
-                    ),
-            ),
-        ].sort();
-
-        if (missingProviderIds.length > 0) {
-            throw new Error(
-                `Missing trusted issuers for Auth0 providers: ${missingProviderIds.join(", ")}. Update accountIssuers before running the migration.`,
-            );
-        }
     }
 
     function safeDateConversion(timestamp?: string | number): Date {
@@ -378,24 +347,56 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
         for (const identity of auth0User.identities) {
             try {
-                const providerId = getAccountProviderId(identity);
+                const providerId = identity.provider === 'auth0' ? "credential" : identity.provider.split("-")[0];
                 const issuer = providerId === "credential"
                     ? "local:credential"
-                    : getAccountIssuer(providerId);
+                    : getIdentityIssuer(providerId);
                 const providerAccountId = providerId === "credential"
                     ? userId
                     : identity.user_id;
+
+                let linkedIdentity = await ctx.adapter.findOne<{
+                    id: string;
+                    userId: string;
+                }>({
+                    model: "identity",
+                    where: [
+                        { field: "issuer", value: issuer },
+                        { field: "providerAccountId", value: providerAccountId },
+                    ],
+                });
+
+                if (linkedIdentity && linkedIdentity.userId !== userId) {
+                    throw new Error(`Identity ${issuer}/${providerAccountId} belongs to another user`);
+                }
+
+                linkedIdentity ??= await ctx.adapter.create<{
+                    id: string;
+                    userId: string;
+                }>({
+                    model: "identity",
+                    data: {
+                        id: generateId(),
+                        userId,
+                        issuer,
+                        providerAccountId,
+                        createdAt: safeDateConversion(auth0User.created_at),
+                        updatedAt: safeDateConversion(auth0User.updated_at),
+                    },
+                    forceAllowId: true,
+                });
+
                 await ctx.adapter.create({
                     model: "account",
                     data: {
                         id: `${auth0User.user_id}|${identity.provider}|${identity.user_id}`,
-                        userId: userId,
-                        password: await migratePassword(auth0User),
-                        providerId: providerId || identity.provider,
-                        issuer,
-                        providerAccountId,
+                        identityId: linkedIdentity.id,
+                        password: providerId === "credential"
+                            ? await migratePassword(auth0User)
+                            : null,
+                        providerId,
+                        providerInstanceId: providerId,
                         accessToken: identity.access_token,
-                        tokenType: identity.token_type,
                         refreshToken: identity.refresh_token,
                         accessTokenExpiresAt: identity.expires_in ? new Date(Date.now() + identity.expires_in * 1000) : undefined,
                         // if you are enterprise user, you can get the refresh tokens or all the tokensets - auth0Client.users.getAllTokensets 
@@ -407,30 +408,6 @@ Before starting the migration process, set up Better Auth in your project. Follo
                         updatedAt: safeDateConversion(auth0User.updated_at)
                     },
                     forceAllowId: true
-                }).catch((error: Error) => {
-                    console.error(`Failed to create OAuth account for user ${userId} with provider ${providerId}:`, error);
-                    return ctx.adapter.create({
-                        // Try creating without optional fields if the first attempt failed
-                        model: "account",
-                        data: {
-                            id: `${auth0User.user_id}|${identity.provider}|${identity.user_id}`,
-                            userId: userId,
-                            password: migratePassword(auth0User),
-                            providerId: providerId,
-                            issuer,
-                            providerAccountId,
-                            accessToken: identity.access_token,
-                            tokenType: identity.token_type,
-                            refreshToken: identity.refresh_token,
-                            accessTokenExpiresAt: identity.expires_in ? new Date(Date.now() + identity.expires_in * 1000) : undefined,
-                            refreshTokenExpiresAt: identity.refresh_token_expires_in ? new Date(Date.now() + identity.refresh_token_expires_in * 1000) : undefined,
-                            scope: identity.scope,
-                            idToken: identity.id_token,
-                            createdAt: safeDateConversion(auth0User.created_at),
-                            updatedAt: safeDateConversion(auth0User.updated_at)
-                        },
-                        forceAllowId: true
-                    });
                 });
 
                 console.log(`Successfully migrated OAuth account for user ${userId} with provider ${providerId}`);
@@ -526,7 +503,6 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
 
             console.log(`Found ${auth0Users.length} users to migrate`);
-            assertAccountIssuerCoverage(auth0Users);
 
             for (const auth0User of auth0Users) {
                 try {

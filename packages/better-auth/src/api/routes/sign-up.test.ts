@@ -11,11 +11,15 @@ describe("sign-up with custom fields", async () => {
 	});
 	const { auth, db } = await getTestInstance(
 		{
+			identity: {
+				fields: {
+					issuer: "issuer",
+					providerAccountId: "provider_account_id",
+				},
+			},
 			account: {
 				fields: {
 					providerId: "provider_id",
-					issuer: "issuer",
-					providerAccountId: "provider_account_id",
 				},
 			},
 			user: {
@@ -50,7 +54,7 @@ describe("sign-up with custom fields", async () => {
 		},
 	);
 
-	it("should work with custom fields on account table", async () => {
+	it("should work with custom fields on identity and account tables", async () => {
 		const res = await auth.api.signUpEmail({
 			body: {
 				email: "email@test.com",
@@ -67,6 +71,22 @@ describe("sign-up with custom fields", async () => {
 			model: "account",
 		});
 		expect(accounts).toHaveLength(1);
+		const linkedAccounts = await (
+			await auth.$context
+		).internalAdapter.listUserAccounts(res.user.id);
+		expect(linkedAccounts).toContainEqual(
+			expect.objectContaining({
+				identity: expect.objectContaining({
+					userId: res.user.id,
+					issuer: "local:credential",
+					providerAccountId: res.user.id,
+				}),
+				account: expect.objectContaining({
+					providerId: "credential",
+					providerInstanceId: "credential",
+				}),
+			}),
+		);
 
 		expect("isAdmin" in (users[0] as any)).toBe(true);
 		expect((users[0] as any).isAdmin).toBe(true);

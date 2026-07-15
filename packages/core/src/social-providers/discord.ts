@@ -88,7 +88,7 @@ export const discord = (options: DiscordOptions) => {
 	return {
 		id: "discord",
 		name: "Discord",
-		accountSubject: ({ profile }) => profile.id,
+		identitySubject: ({ profile }) => profile.id,
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope ? [] : ["identify", "email"];
 			if (scopes) _scopes.push(...scopes);

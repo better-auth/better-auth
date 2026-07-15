@@ -1,6 +1,8 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import type {
 	Account,
+	AccountKey,
+	Identity,
 	Session,
 	User,
 	Verification,
@@ -79,7 +81,7 @@ export const getNormalTestSuiteTests = (
 			expect(res).toHaveProperty("id");
 			expect(typeof res.id).toEqual("string");
 		},
-		"create - should enforce the issuer-scoped account identity key": async ({
+		"create - should enforce the issuer-scoped identity key": async ({
 			skip,
 		}: {
 			skip: (note?: string | undefined) => never;
@@ -98,42 +100,39 @@ export const getNormalTestSuiteTests = (
 				data: await generate("user"),
 				forceAllowId: true,
 			});
-			const firstAccount = {
-				...(await generate("account")),
+			const firstIdentity = {
+				...(await generate("identity")),
 				userId: firstUser.id,
-				providerId: "issuer-key-first-alias",
 				issuer: "https://issuer-key.example.com",
 				providerAccountId: "shared-subject",
 			};
-			await adapter.create<Account>({
-				model: "account",
-				data: firstAccount,
+			await adapter.create<Identity>({
+				model: "identity",
+				data: firstIdentity,
 				forceAllowId: true,
 			});
 
 			await expect(
-				adapter.create<Account>({
-					model: "account",
+				adapter.create<Identity>({
+					model: "identity",
 					data: {
-						...(await generate("account")),
+						...(await generate("identity")),
 						userId: secondUser.id,
-						providerId: "issuer-key-second-alias",
-						issuer: firstAccount.issuer,
-						providerAccountId: firstAccount.providerAccountId,
+						issuer: firstIdentity.issuer,
+						providerAccountId: firstIdentity.providerAccountId,
 					},
 					forceAllowId: true,
 				}),
 			).rejects.toThrow();
 
 			await expect(
-				adapter.create<Account>({
-					model: "account",
+				adapter.create<Identity>({
+					model: "identity",
 					data: {
-						...(await generate("account")),
+						...(await generate("identity")),
 						userId: secondUser.id,
-						providerId: "issuer-key-other-issuer",
 						issuer: "https://other-issuer-key.example.com",
-						providerAccountId: firstAccount.providerAccountId,
+						providerAccountId: firstIdentity.providerAccountId,
 					},
 					forceAllowId: true,
 				}),
@@ -142,6 +141,113 @@ export const getNormalTestSuiteTests = (
 				providerAccountId: "shared-subject",
 			});
 		},
+		"create - should enforce one account per identity and provider instance":
+			async ({ skip }: { skip: (note?: string | undefined) => never }) => {
+				if (adapter.options?.adapterConfig.adapterId === "memory") {
+					skip("The memory adapter does not implement database indexes");
+					return;
+				}
+				const user = await adapter.create<User>({
+					model: "user",
+					data: await generate("user"),
+					forceAllowId: true,
+				});
+				const firstIdentity = await adapter.create<Identity>({
+					model: "identity",
+					data: {
+						...(await generate("identity")),
+						userId: user.id,
+						issuer: "https://provider-account.example.com",
+						providerAccountId: "employee-1",
+					},
+					forceAllowId: true,
+				});
+				const secondIdentity = await adapter.create<Identity>({
+					model: "identity",
+					data: {
+						...(await generate("identity")),
+						userId: user.id,
+						issuer: "https://provider-account.example.com",
+						providerAccountId: "employee-2",
+					},
+					forceAllowId: true,
+				});
+				const providerId = "workforce";
+				const providerInstanceId = "workforce-production";
+				const firstAccount = await adapter.create<Account>({
+					model: "account",
+					data: {
+						...(await generate("account")),
+						identityId: firstIdentity.id,
+						providerId,
+						providerInstanceId,
+					},
+					forceAllowId: true,
+				});
+				const accountKey: AccountKey = {
+					identityId: firstIdentity.id,
+					providerInstanceId,
+				};
+				await expect(
+					adapter.findOne<Account>({
+						model: "account",
+						where: [
+							{ field: "identityId", value: accountKey.identityId },
+							{
+								field: "providerInstanceId",
+								value: accountKey.providerInstanceId,
+							},
+						],
+					}),
+				).resolves.toMatchObject({ id: firstAccount.id, ...accountKey });
+
+				await expect(
+					adapter.create<Account>({
+						model: "account",
+						data: {
+							...(await generate("account")),
+							identityId: firstIdentity.id,
+							providerId: "renamed-workforce",
+							providerInstanceId,
+						},
+						forceAllowId: true,
+					}),
+				).rejects.toThrow();
+
+				await expect(
+					adapter.create<Account>({
+						model: "account",
+						data: {
+							...(await generate("account")),
+							identityId: firstIdentity.id,
+							providerId,
+							providerInstanceId: "workforce-staging",
+						},
+						forceAllowId: true,
+					}),
+				).resolves.toMatchObject({
+					identityId: firstIdentity.id,
+					providerId,
+					providerInstanceId: "workforce-staging",
+				});
+
+				await expect(
+					adapter.create<Account>({
+						model: "account",
+						data: {
+							...(await generate("account")),
+							identityId: secondIdentity.id,
+							providerId,
+							providerInstanceId,
+						},
+						forceAllowId: true,
+					}),
+				).resolves.toMatchObject({
+					identityId: secondIdentity.id,
+					providerId,
+					providerInstanceId,
+				});
+			},
 		"create - should use generateId if provided": async () => {
 			const ID = (await customIdGenerator?.()) || "MOCK-ID";
 			await modifyBetterAuthOptions(
@@ -399,7 +505,7 @@ export const getNormalTestSuiteTests = (
 		"findOne - should find a model with join": async () => {
 			const users: User[] = [];
 			const sessions: Session[] = [];
-			const accounts: Account[] = [];
+			const identities: Identity[] = [];
 			for (const _ of Array.from({ length: 3 })) {
 				const user = await adapter.create<User>({
 					model: "user",
@@ -419,35 +525,38 @@ export const getNormalTestSuiteTests = (
 					forceAllowId: true,
 				});
 				sessions.push(session);
-				const account = await adapter.create<Account>({
-					model: "account",
+				const identity = await adapter.create<Identity>({
+					model: "identity",
 					data: {
-						...(await generate("account")),
+						...(await generate("identity")),
 						userId,
 					},
 					forceAllowId: true,
 				});
-				accounts.push(account);
+				identities.push(identity);
 			}
 
-			type ExpectedResult = User & { session: Session[]; account: Account[] };
+			type ExpectedResult = User & {
+				session: Session[];
+				identity: Identity[];
+			};
 
 			const result = await adapter.findOne<ExpectedResult>({
 				model: "user",
 				where: [{ field: "id", value: users[0]!.id }],
 				join: {
 					session: true,
-					account: true,
+					identity: true,
 				},
 			});
 			expect({
 				...result,
 				session: result?.session.sort((a, b) => a.id.localeCompare(b.id)),
-				account: result?.account.sort((a, b) => a.id.localeCompare(b.id)),
+				identity: result?.identity.sort((a, b) => a.id.localeCompare(b.id)),
 			}).toEqual({
 				...users[0]!,
 				session: sessions.sort((a, b) => a.id.localeCompare(b.id)),
-				account: accounts.sort((a, b) => a.id.localeCompare(b.id)),
+				identity: identities.sort((a, b) => a.id.localeCompare(b.id)),
 			});
 		},
 		"findOne - should find a model with modified field name": async () => {
@@ -625,22 +734,22 @@ export const getNormalTestSuiteTests = (
 				data: { ...(await generate("session")), userId: user.id },
 				forceAllowId: true,
 			});
-			const account = await adapter.create<Account>({
-				model: "account",
-				data: { ...(await generate("account")), userId: user.id },
+			const identity = await adapter.create<Identity>({
+				model: "identity",
+				data: { ...(await generate("identity")), userId: user.id },
 				forceAllowId: true,
 			});
 
 			type ResultType = Pick<User, "email" | "name"> & {
 				session: Session[];
-				account: Account[];
+				identity: Identity[];
 			};
 
 			const result = await adapter.findOne<ResultType>({
 				model: "user",
 				where: [{ field: "id", value: user.id }],
 				select: ["email", "name"],
-				join: { session: true, account: true },
+				join: { session: true, identity: true },
 			});
 
 			expect(result).toBeDefined();
@@ -650,10 +759,10 @@ export const getNormalTestSuiteTests = (
 			expect(Array.isArray(result?.session)).toBe(true);
 			expect(result?.session).toHaveLength(1);
 			expect(result?.session[0]).toEqual(session);
-			expect(result?.account).toBeDefined();
-			expect(Array.isArray(result?.account)).toBe(true);
-			expect(result?.account).toHaveLength(1);
-			expect(result?.account[0]).toEqual(account);
+			expect(result?.identity).toBeDefined();
+			expect(Array.isArray(result?.identity)).toBe(true);
+			expect(result?.identity).toHaveLength(1);
+			expect(result?.identity[0]).toEqual(identity);
 		},
 		"findOne - should find model with date field": async () => {
 			const [user] = await insertRandom("user");
@@ -859,7 +968,7 @@ export const getNormalTestSuiteTests = (
 					where: [
 						{ field: "id", value: useUUIDs ? crypto.randomUUID() : "100000" },
 					],
-					join: { session: true, account: true, oneToOneTable: true },
+					join: { session: true, identity: true, oneToOneTable: true },
 				});
 				expect(result).toBeNull();
 			},
@@ -947,7 +1056,10 @@ export const getNormalTestSuiteTests = (
 			);
 		},
 		"findMany - should find many models with join": async () => {
-			type ExpectedResult = User & { session: Session[]; account: Account[] };
+			type ExpectedResult = User & {
+				session: Session[];
+				identity: Identity[];
+			};
 			let expectedResult: ExpectedResult[] = [];
 
 			for (let i = 0; i < 10; i++) {
@@ -968,21 +1080,21 @@ export const getNormalTestSuiteTests = (
 					});
 					sessions.push(session);
 				}
-				const accounts: Account[] = [];
+				const identities: Identity[] = [];
 				for (let index = 0; index < 3; index++) {
-					const account = await adapter.create<Account>({
-						model: "account",
-						data: { ...(await generate("account")), userId: user.id },
+					const identity = await adapter.create<Identity>({
+						model: "identity",
+						data: { ...(await generate("identity")), userId: user.id },
 						forceAllowId: true,
 					});
-					accounts.push(account);
+					identities.push(identity);
 				}
 
 				if (i < 3) {
 					expectedResult.push({
 						...user,
 						session: sessions,
-						account: accounts,
+						identity: identities,
 					});
 				}
 			}
@@ -992,7 +1104,7 @@ export const getNormalTestSuiteTests = (
 				where: [{ field: "name", value: "join-user", operator: "starts_with" }],
 				join: {
 					session: true,
-					account: true,
+					identity: true,
 				},
 			});
 
@@ -1004,14 +1116,14 @@ export const getNormalTestSuiteTests = (
 			result = result.map((x) => ({
 				...x,
 				session: x.session.sort((a, b) => a.id.localeCompare(b.id)),
-				account: x.account.sort((a, b) => a.id.localeCompare(b.id)),
+				identity: x.identity.sort((a, b) => a.id.localeCompare(b.id)),
 			}));
 
 			expectedResult = expectedResult.sort(sort);
 			expectedResult = expectedResult.map((x) => ({
 				...x,
 				session: x.session.sort((a, b) => a.id.localeCompare(b.id)),
-				account: x.account.sort((a, b) => a.id.localeCompare(b.id)),
+				identity: x.identity.sort((a, b) => a.id.localeCompare(b.id)),
 			}));
 			expect(result).toEqual(expectedResult);
 		},
@@ -1175,22 +1287,22 @@ export const getNormalTestSuiteTests = (
 				data: { ...(await generate("session")), userId: user.id },
 				forceAllowId: true,
 			});
-			const account = await adapter.create<Account>({
-				model: "account",
-				data: { ...(await generate("account")), userId: user.id },
+			const identity = await adapter.create<Identity>({
+				model: "identity",
+				data: { ...(await generate("identity")), userId: user.id },
 				forceAllowId: true,
 			});
 
 			type ResultType = Pick<User, "email" | "name"> & {
 				session: Session[];
-				account: Account[];
+				identity: Identity[];
 			};
 
 			const [result] = await adapter.findMany<ResultType>({
 				model: "user",
 				where: [{ field: "id", value: user.id }],
 				select: ["email", "name"],
-				join: { session: true, account: true },
+				join: { session: true, identity: true },
 			});
 
 			expect(result).toBeDefined();
@@ -1200,10 +1312,10 @@ export const getNormalTestSuiteTests = (
 			expect(Array.isArray(result?.session)).toBe(true);
 			expect(result?.session).toHaveLength(1);
 			expect(result?.session[0]).toEqual(session);
-			expect(result?.account).toBeDefined();
-			expect(Array.isArray(result?.account)).toBe(true);
-			expect(result?.account).toHaveLength(1);
-			expect(result?.account[0]).toEqual(account);
+			expect(result?.identity).toBeDefined();
+			expect(Array.isArray(result?.identity)).toBe(true);
+			expect(result?.identity).toHaveLength(1);
+			expect(result?.identity[0]).toEqual(identity);
 		},
 		"findMany - should find many with join and offset": async () => {
 			const users: User[] = [];
@@ -1514,7 +1626,7 @@ export const getNormalTestSuiteTests = (
 					where: [
 						{ field: "id", value: useUUIDs ? crypto.randomUUID() : "100000" },
 					],
-					join: { session: true, account: true, oneToOneTable: true },
+					join: { session: true, identity: true, oneToOneTable: true },
 				});
 				expect(result).toEqual([]);
 			},
@@ -2786,28 +2898,28 @@ export const getNormalTestSuiteTests = (
 					data: { ...(await generate("session")), userId: user.id },
 					forceAllowId: true,
 				});
-				await adapter.create<Account>({
-					model: "account",
-					data: { ...(await generate("account")), userId: user.id },
+				await adapter.create<Identity>({
+					model: "identity",
+					data: { ...(await generate("identity")), userId: user.id },
 					forceAllowId: true,
 				});
 			}
 
 			const result = await adapter.findOne<
-				User & { session: Session[]; account: Account[] }
+				User & { session: Session[]; identity: Identity[] }
 			>({
 				model: "user",
 				where: [{ field: "id", value: user.id }],
 				join: {
 					session: { limit: 2 },
-					account: { limit: 3 },
+					identity: { limit: 3 },
 				},
 			});
 			expect(result).toBeDefined();
 			expect(result?.session).toBeDefined();
 			expect(result?.session).toHaveLength(2);
-			expect(result?.account).toBeDefined();
-			expect(result?.account).toHaveLength(3);
+			expect(result?.identity).toBeDefined();
+			expect(result?.identity).toHaveLength(3);
 		},
 		"findMany - should be able to perform a limited join": async () => {
 			const users: User[] = [];
@@ -2847,7 +2959,7 @@ export const getNormalTestSuiteTests = (
 		"findMany - should be able to perform a complex limited join": async () => {
 			const users: User[] = [];
 			const sessionsByUser: Map<string, Session[]> = new Map();
-			const accountsByUser: Map<string, Account[]> = new Map();
+			const identitiesByUser: Map<string, Identity[]> = new Map();
 			for (let i = 0; i < 5; i++) {
 				const user = await adapter.create<User>({
 					model: "user",
@@ -2856,7 +2968,7 @@ export const getNormalTestSuiteTests = (
 				});
 				users.push(user);
 				sessionsByUser.set(user.id, []);
-				accountsByUser.set(user.id, []);
+				identitiesByUser.set(user.id, []);
 				for (let i = 0; i < 5; i++) {
 					const session = await adapter.create<Session>({
 						model: "session",
@@ -2864,20 +2976,20 @@ export const getNormalTestSuiteTests = (
 						forceAllowId: true,
 					});
 					sessionsByUser.get(user.id)!.push(session);
-					const account = await adapter.create<Account>({
-						model: "account",
-						data: { ...(await generate("account")), userId: user.id },
+					const identity = await adapter.create<Identity>({
+						model: "identity",
+						data: { ...(await generate("identity")), userId: user.id },
 						forceAllowId: true,
 					});
-					accountsByUser.get(user.id)!.push(account);
+					identitiesByUser.get(user.id)!.push(identity);
 				}
 			}
-			type ResultType = User & { session: Session[]; account: Account[] };
+			type ResultType = User & { session: Session[]; identity: Identity[] };
 			const result = await adapter.findMany<ResultType>({
 				model: "user",
 				join: {
 					session: { limit: 2 },
-					account: { limit: 3 },
+					identity: { limit: 3 },
 				},
 				limit: 2,
 				offset: 2,
@@ -2888,9 +3000,9 @@ export const getNormalTestSuiteTests = (
 				expect(user.session).toBeDefined();
 				expect(user.session).toHaveLength(2);
 				expect(user.session[0]?.userId).toBe(user.id);
-				expect(user.account).toBeDefined();
-				expect(user.account).toHaveLength(3);
-				expect(user.account[0]?.userId).toBe(user.id);
+				expect(user.identity).toBeDefined();
+				expect(user.identity).toHaveLength(3);
+				expect(user.identity[0]?.userId).toBe(user.id);
 			});
 		},
 		"findOne - should return null for one-to-one join when joined record doesn't exist":

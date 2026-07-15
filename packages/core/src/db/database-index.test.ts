@@ -303,10 +303,10 @@ describe("database indexes", () => {
 						unique: true,
 					},
 				],
-				tableName: "account",
+				tableName: "identity",
 			}),
 		).toThrow(
-			'Unique index on table "account" can only include required fields so its behavior is consistent across databases.',
+			'Unique index on table "identity" can only include required fields so its behavior is consistent across databases.',
 		);
 	});
 

@@ -677,7 +677,6 @@ describe("cookie cache", async () => {
 		vi.useRealTimers();
 	});
 
-	it("should cache cookies", async () => {});
 	const fn = vi.spyOn(ctx.adapter, "findOne");
 
 	const headers = new Headers();
@@ -691,7 +690,8 @@ describe("cookie cache", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		);
-		expect(fn).toHaveBeenCalledTimes(1);
+		const databaseReadsAfterSignIn = fn.mock.calls.length;
+		expect(databaseReadsAfterSignIn).toBeGreaterThan(0);
 		const session = await client.getSession({
 			fetchOptions: {
 				headers,
@@ -699,11 +699,12 @@ describe("cookie cache", async () => {
 		});
 		expect(session.data?.session).not.toHaveProperty("sensitiveData");
 		expect(session.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(1);
+		expect(fn).toHaveBeenCalledTimes(databaseReadsAfterSignIn);
 	});
 
 	it("should disable cookie cache", async () => {
 		const ctx = await auth.$context;
+		const databaseReadsBeforeCacheBypass = fn.mock.calls.length;
 
 		const s = await client.getSession({
 			fetchOptions: {
@@ -721,7 +722,7 @@ describe("cookie cache", async () => {
 				});
 			},
 		);
-		expect(fn).toHaveBeenCalledTimes(1);
+		expect(fn).toHaveBeenCalledTimes(databaseReadsBeforeCacheBypass);
 
 		const session = await client.getSession({
 			query: {
@@ -733,16 +734,17 @@ describe("cookie cache", async () => {
 		});
 		expect(session.data?.user.emailVerified).toBe(true);
 		expect(session.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(2);
+		expect(fn).toHaveBeenCalledTimes(databaseReadsBeforeCacheBypass + 1);
 	});
 
 	it("should reset cache when expires", async () => {
-		expect(fn).toHaveBeenCalledTimes(2);
+		const databaseReadsBeforeExpiration = fn.mock.calls.length;
 		await client.getSession({
 			fetchOptions: {
 				headers,
 			},
 		});
+		expect(fn).toHaveBeenCalledTimes(databaseReadsBeforeExpiration);
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000 * 60 * 10); // 10 minutes
 		await client.getSession({
@@ -753,7 +755,7 @@ describe("cookie cache", async () => {
 				},
 			},
 		});
-		expect(fn).toHaveBeenCalledTimes(3);
+		expect(fn).toHaveBeenCalledTimes(databaseReadsBeforeExpiration + 1);
 		await client.getSession({
 			fetchOptions: {
 				headers,
@@ -762,7 +764,7 @@ describe("cookie cache", async () => {
 				},
 			},
 		});
-		expect(fn).toHaveBeenCalledTimes(3);
+		expect(fn).toHaveBeenCalledTimes(databaseReadsBeforeExpiration + 1);
 	});
 });
 
@@ -802,7 +804,8 @@ describe("cookie cache with JWT strategy", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		);
-		expect(fn).toHaveBeenCalledTimes(1);
+		const databaseReadsAfterSignIn = fn.mock.calls.length;
+		expect(databaseReadsAfterSignIn).toBeGreaterThan(0);
 		const session = await client.getSession({
 			fetchOptions: {
 				headers,
@@ -818,7 +821,7 @@ describe("cookie cache with JWT strategy", async () => {
 		expect(payload).not.toBeNull();
 		expect(session.data?.session).not.toHaveProperty("sensitiveData");
 		expect(session.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(1); // Should still be 1 (cache hit)
+		expect(fn).toHaveBeenCalledTimes(databaseReadsAfterSignIn);
 	});
 
 	it("should not allow tampering with the cookie", async () => {
@@ -968,7 +971,8 @@ describe("cookie cache with JWT strategy backed by JWKS", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		);
-		expect(fn).toHaveBeenCalledTimes(1);
+		const databaseReadsAfterSignIn = fn.mock.calls.length;
+		expect(databaseReadsAfterSignIn).toBeGreaterThan(0);
 
 		const session = await client.getSession({
 			fetchOptions: {
@@ -1000,7 +1004,7 @@ describe("cookie cache with JWT strategy backed by JWKS", async () => {
 		expect(verified.payload.sid).toBe(session.data?.session.token);
 		expect(session.data?.session).not.toHaveProperty("sensitiveData");
 		expect(session.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(1);
+		expect(fn).toHaveBeenCalledTimes(databaseReadsAfterSignIn);
 	});
 
 	it("should ignore a JWKS cookie cache from a different session token", async () => {
@@ -1225,7 +1229,8 @@ describe("cookie cache with JWE strategy", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		);
-		expect(fn).toHaveBeenCalledTimes(1);
+		const databaseReadsAfterSignIn = fn.mock.calls.length;
+		expect(databaseReadsAfterSignIn).toBeGreaterThan(0);
 		const session = await client.getSession({
 			fetchOptions: {
 				headers,
@@ -1233,11 +1238,12 @@ describe("cookie cache with JWE strategy", async () => {
 		});
 		expect(session.data?.session).not.toHaveProperty("sensitiveData");
 		expect(session.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(1); // Should still be 1 (cache hit)
+		expect(fn).toHaveBeenCalledTimes(databaseReadsAfterSignIn);
 	});
 
 	it("should disable cookie cache with JWE strategy", async () => {
 		const ctx = await auth.$context;
+		const databaseReadsBeforeCacheBypass = fn.mock.calls.length;
 
 		const s = await client.getSession({
 			fetchOptions: {
@@ -1255,7 +1261,7 @@ describe("cookie cache with JWE strategy", async () => {
 				});
 			},
 		);
-		expect(fn).toHaveBeenCalledTimes(1);
+		expect(fn).toHaveBeenCalledTimes(databaseReadsBeforeCacheBypass);
 
 		const session = await client.getSession({
 			query: {
@@ -1267,17 +1273,17 @@ describe("cookie cache with JWE strategy", async () => {
 		});
 		expect(session.data?.user.emailVerified).toBe(true);
 		expect(session.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(2); // Database hit when cache disabled
+		expect(fn).toHaveBeenCalledTimes(databaseReadsBeforeCacheBypass + 1);
 	});
 
 	it("should reset JWE cache when expires", async () => {
-		expect(fn).toHaveBeenCalledTimes(2);
+		const databaseReadsBeforeExpiration = fn.mock.calls.length;
 		await client.getSession({
 			fetchOptions: {
 				headers,
 			},
 		});
-		expect(fn).toHaveBeenCalledTimes(2);
+		expect(fn).toHaveBeenCalledTimes(databaseReadsBeforeExpiration);
 
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000 * 60 * 10);
@@ -1291,7 +1297,9 @@ describe("cookie cache with JWE strategy", async () => {
 			},
 		});
 
-		expect(fn.mock.calls.length).toBeGreaterThanOrEqual(2);
+		expect(fn.mock.calls.length).toBeGreaterThanOrEqual(
+			databaseReadsBeforeExpiration + 1,
+		);
 
 		vi.useRealTimers();
 	});
@@ -1362,7 +1370,8 @@ describe("cookie cache refreshCache", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		);
-		expect(fn).toHaveBeenCalledTimes(1);
+		const databaseReadsAfterSignIn = fn.mock.calls.length;
+		expect(databaseReadsAfterSignIn).toBeGreaterThan(0);
 
 		const session1 = await client.getSession({
 			fetchOptions: {
@@ -1370,7 +1379,7 @@ describe("cookie cache refreshCache", async () => {
 			},
 		});
 		expect(session1.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(1);
+		expect(fn).toHaveBeenCalledTimes(databaseReadsAfterSignIn);
 
 		const session2 = await client.getSession({
 			fetchOptions: {
@@ -1378,7 +1387,7 @@ describe("cookie cache refreshCache", async () => {
 			},
 		});
 		expect(session2.data).not.toBeNull();
-		expect(fn).toHaveBeenCalledTimes(1);
+		expect(fn).toHaveBeenCalledTimes(databaseReadsAfterSignIn);
 	});
 
 	it("should not perform stateless refresh when a database is configured", async () => {

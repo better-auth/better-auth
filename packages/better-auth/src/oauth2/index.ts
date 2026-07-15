@@ -1,4 +1,4 @@
 export * from "@better-auth/core/oauth2";
-export * from "./link-account";
+export * from "./provider-user";
 export * from "./state";
 export * from "./utils";

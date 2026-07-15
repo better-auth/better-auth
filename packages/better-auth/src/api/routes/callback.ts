@@ -1,23 +1,26 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import type { AccountKey } from "@better-auth/core/db";
+import type { AccountWithIdentity, IdentityKey } from "@better-auth/core/db";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { mergeScopes } from "@better-auth/core/oauth2";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
-import { setSessionCookie } from "../../cookies";
 import {
-	resolveOAuthAccountKey,
-	toOAuthProfileRecord,
-} from "../../oauth2/account-key";
+	setProviderAccountCookieForSession,
+	setSessionCookie,
+} from "../../cookies";
 import {
 	missingEmailLogMessage,
 	OAUTH_CALLBACK_ERROR_CODES,
 } from "../../oauth2/errors";
 import {
+	resolveOAuthIdentityKey,
+	toOAuthProfileRecord,
+} from "../../oauth2/identity-key";
+import {
 	applyUpdateUserInfoOnLink,
-	handleOAuthUserInfo,
-} from "../../oauth2/link-account";
+	authenticateProviderUser,
+} from "../../oauth2/provider-user";
 import {
 	generateIdTokenNonce,
 	generateState,
@@ -27,6 +30,7 @@ import { getOAuthCallbackPath, setTokenUtil } from "../../oauth2/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 import { isAPIError } from "../../utils/is-api-error";
 import { assertValidUserInfo } from "../../utils/validate-user-info";
+import { getAuthoritativeSessionFromCtx } from "./session";
 
 const schema = z.object({
 	code: z.string().optional(),
@@ -233,9 +237,9 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 		const userInfo = providerResult.user;
 		const providerProfile = toOAuthProfileRecord(providerResult.data);
-		let accountKey: AccountKey;
+		let identityKey: IdentityKey;
 		try {
-			accountKey = await resolveOAuthAccountKey(
+			identityKey = await resolveOAuthIdentityKey(
 				provider,
 				tokens,
 				providerResult.data,
@@ -249,7 +253,7 @@ export const callbackOAuth = createAuthEndpoint(
 				OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_GET_USER_INFO,
 			);
 		}
-		const { providerAccountId } = accountKey;
+		const { providerAccountId } = identityKey;
 
 		if (!callbackURL) {
 			c.context.logger.error("No callback URL found");
@@ -257,6 +261,12 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 
 		if (link) {
+			const currentSession = await getAuthoritativeSessionFromCtx(c);
+			if (!currentSession || currentSession.user.id !== link.userId) {
+				return redirectOnError(
+					OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
+				);
+			}
 			// Link-account creates no user row, so the gate runs here rather than
 			// inside createUser.
 			try {
@@ -295,54 +305,91 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 
 			if (
-				userInfo.email?.toLowerCase() !== link.email.toLowerCase() &&
+				userInfo.email?.toLowerCase() !==
+					currentSession.user.email.toLowerCase() &&
 				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
 			) {
 				return redirectOnError(OAUTH_CALLBACK_ERROR_CODES.EMAIL_DOES_NOT_MATCH);
 			}
 
-			const existingAccount =
-				await c.context.internalAdapter.findAccountByKey(accountKey);
+			const existingIdentity =
+				await c.context.internalAdapter.findIdentityByKey(identityKey);
 
-			if (existingAccount) {
-				if (existingAccount.userId.toString() !== link.userId.toString()) {
-					return redirectOnError(
-						OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_ALREADY_LINKED_TO_DIFFERENT_USER,
-					);
-				}
-				const mergedScope = mergeScopes(existingAccount.scope, tokens.scopes);
-				const updateData = Object.fromEntries(
-					Object.entries({
-						providerId: provider.id,
-						accessToken: await setTokenUtil(tokens.accessToken, c.context),
-						refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
-						idToken: tokens.idToken,
-						accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-						refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
-						scope: mergedScope || undefined,
-					}).filter(([_, value]) => value !== undefined),
+			if (
+				existingIdentity &&
+				existingIdentity.userId.toString() !== link.userId.toString()
+			) {
+				return redirectOnError(
+					OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_ALREADY_LINKED_TO_DIFFERENT_USER,
 				);
-				await c.context.internalAdapter.updateAccount(
-					existingAccount.id,
-					updateData,
-				);
-			} else {
-				const newAccount = await c.context.internalAdapter.createAccount({
-					userId: link.userId,
-					providerId: provider.id,
-					...accountKey,
-					...tokens,
-					accessToken: await setTokenUtil(tokens.accessToken, c.context),
-					refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
-					scope: tokens.scopes?.join(","),
-				});
-				if (!newAccount) {
-					return redirectOnError(
-						OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
+			}
+			const existingAccount = existingIdentity
+				? await c.context.internalAdapter.findAccountByKey({
+						identityId: existingIdentity.id,
+						providerInstanceId: provider.id,
+					})
+				: null;
+
+			let linkedAccountWithIdentity: AccountWithIdentity;
+			try {
+				if (existingAccount) {
+					const mergedScope = mergeScopes(existingAccount.scope, tokens.scopes);
+					const updateData = Object.fromEntries(
+						Object.entries({
+							accessToken: await setTokenUtil(tokens.accessToken, c.context),
+							refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
+							idToken: tokens.idToken,
+							accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+							refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+							scope: mergedScope || undefined,
+						}).filter(([_, value]) => value !== undefined),
 					);
+					const updatedAccount = await c.context.internalAdapter.updateAccount(
+						existingAccount.id,
+						updateData,
+					);
+					if (!updatedAccount || !existingIdentity) {
+						return redirectOnError(
+							OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
+						);
+					}
+					linkedAccountWithIdentity = {
+						account: updatedAccount,
+						identity: existingIdentity,
+					};
+				} else {
+					linkedAccountWithIdentity =
+						await c.context.internalAdapter.linkAccount(
+							link.userId,
+							identityKey,
+							{
+								providerId: provider.id,
+								providerInstanceId: provider.id,
+								accessToken: await setTokenUtil(tokens.accessToken, c.context),
+								refreshToken: await setTokenUtil(
+									tokens.refreshToken,
+									c.context,
+								),
+								idToken: tokens.idToken,
+								accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+								refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+								scope: tokens.scopes?.join(","),
+							},
+						);
 				}
+			} catch {
+				return redirectOnError(
+					OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
+				);
 			}
 			await applyUpdateUserInfoOnLink(c, link.userId, userInfo);
+			if (c.context.options.account?.storeAccountCookie) {
+				await setProviderAccountCookieForSession(
+					c,
+					linkedAccountWithIdentity,
+					currentSession,
+				);
+			}
 			let toRedirectTo: string;
 			try {
 				const url = callbackURL;
@@ -359,19 +406,20 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 		const accountData = {
 			providerId: provider.id,
-			...accountKey,
+			providerInstanceId: provider.id,
 			...tokens,
 			scope: tokens.scopes?.join(","),
 		};
-		let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+		let result: Awaited<ReturnType<typeof authenticateProviderUser>>;
 		try {
-			result = await handleOAuthUserInfo(c, {
+			result = await authenticateProviderUser(c, {
 				userInfo: {
 					...userInfo,
 					id: providerAccountId,
 					email: userInfo.email,
 					name: userInfo.name || "",
 				},
+				identity: identityKey,
 				account: accountData,
 				callbackURL,
 				disableSignUp:
@@ -395,11 +443,7 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.error(result.error.split(" ").join("_"));
 			return redirectOnError(result.error.split(" ").join("_"));
 		}
-		const { session, user } = result.data!;
-		await setSessionCookie(c, {
-			session,
-			user,
-		});
+		await setSessionCookie(c, result.data!);
 
 		let toRedirectTo: string;
 		try {

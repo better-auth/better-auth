@@ -7,7 +7,7 @@ import type {
 import { getAuthTables } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { filterOutputFields } from "@better-auth/core/utils/db";
-import type { Account, Session, User } from "../types";
+import type { Account, Identity, Session, User } from "../types";
 
 type Mode = "input" | "output";
 
@@ -33,7 +33,10 @@ function getFields(
 	const coreSchema =
 		mode === "output" ? (getAuthTables(options)[modelName]?.fields ?? {}) : {};
 	const additionalFields =
-		modelName === "user" || modelName === "session" || modelName === "account"
+		modelName === "user" ||
+		modelName === "session" ||
+		modelName === "identity" ||
+		modelName === "account"
 			? options[modelName]?.additionalFields
 			: undefined;
 	let schema: Record<string, DBFieldAttribute> = {
@@ -118,6 +121,14 @@ export function parseSessionOutput<T extends Session>(
 ) {
 	const schema = getFields(options, "session", "output");
 	return filterOutputFields(session, schema);
+}
+
+export function parseIdentityOutput<T extends Identity>(
+	options: BetterAuthOptions,
+	identity: T,
+) {
+	const schema = getFields(options, "identity", "output");
+	return filterOutputFields(identity, schema);
 }
 
 export function parseAccountOutput<T extends Account>(
@@ -294,21 +305,46 @@ export function mergeSchema<S extends BetterAuthPluginDBSchema>(
 		  }
 		| undefined,
 ) {
-	if (!newSchema) {
-		return schema;
-	}
-	for (const table in newSchema) {
-		const newModelName = newSchema[table]?.modelName;
-		if (newModelName) {
-			schema[table]!.modelName = newModelName;
-		}
-		for (const field in schema[table]!.fields) {
-			const newField = newSchema[table]?.fields?.[field];
-			if (!newField) {
-				continue;
-			}
-			schema[table]!.fields[field]!.fieldName = newField;
-		}
-	}
-	return schema;
+	return Object.fromEntries(
+		Object.entries(schema).map(([tableName, table]) => {
+			const tableMappings = newSchema?.[tableName];
+			return [
+				tableName,
+				{
+					...table,
+					...(tableMappings?.modelName
+						? { modelName: tableMappings.modelName }
+						: {}),
+					fields: Object.fromEntries(
+						Object.entries(table.fields).map(([fieldName, field]) => [
+							fieldName,
+							{
+								...field,
+								...(field.references
+									? { references: { ...field.references } }
+									: {}),
+								...(field.transform
+									? { transform: { ...field.transform } }
+									: {}),
+								...(field.validator
+									? { validator: { ...field.validator } }
+									: {}),
+								...(tableMappings?.fields?.[fieldName]
+									? { fieldName: tableMappings.fields[fieldName] }
+									: {}),
+							},
+						]),
+					),
+					...(table.indexes
+						? {
+								indexes: table.indexes.map((index) => ({
+									...index,
+									fields: [...index.fields] as [string, ...string[]],
+								})),
+							}
+						: {}),
+				},
+			];
+		}),
+	) as S;
 }

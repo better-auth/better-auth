@@ -29,7 +29,7 @@ const { execute } = await testAdapter({
 			debugLogs: { isRunningAdapterTests: true },
 			schema,
 			provider: "mysql",
-			transaction: true,
+			transaction: "async",
 		});
 	},
 	async runMigrations(betterAuthOptions) {

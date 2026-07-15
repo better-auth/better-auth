@@ -15,9 +15,15 @@ export {
 	runWithRequestState,
 } from "./request-state";
 export {
+	ATOMIC_WRITES_UNSUPPORTED,
+	type AtomicMutationPlan,
+	type AtomicWritesUnsupportedError,
 	getCurrentAdapter,
 	getCurrentDBAdapterAsyncLocalStorage,
+	hasNativeTransactionSupport,
+	isAtomicWritesUnsupportedError,
 	queueAfterTransactionHook,
+	runAtomicMutation,
 	runWithAdapter,
 	runWithTransaction,
 } from "./transaction";

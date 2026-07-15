@@ -11,7 +11,7 @@ import { sensitiveSessionMiddleware, sessionMiddleware } from "../../api";
 import {
 	deleteSessionCookie,
 	expireCookie,
-	setSessionCookie,
+	rotateSessionCookiePreservingProviderAccountBinding,
 } from "../../cookies";
 import { symmetricEncrypt } from "../../crypto";
 import { generateRandomString } from "../../crypto/random";
@@ -219,7 +219,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							false,
 							ctx.context.session.session,
 						);
-						await setSessionCookie(ctx, {
+						await rotateSessionCookiePreservingProviderAccountBinding(ctx, {
 							session: newSession,
 							user: updatedUser,
 						});
@@ -255,7 +255,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							false,
 							ctx.context.session.session,
 						);
-						await setSessionCookie(ctx, {
+						await rotateSessionCookiePreservingProviderAccountBinding(ctx, {
 							session: newSession,
 							user: updatedUser,
 						});
@@ -393,7 +393,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 					/**
 					 * Update the session cookie with the new user data
 					 */
-					await setSessionCookie(ctx, {
+					await rotateSessionCookiePreservingProviderAccountBinding(ctx, {
 						session: newSession,
 						user: updatedUser,
 					});

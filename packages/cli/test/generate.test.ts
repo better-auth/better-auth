@@ -1903,6 +1903,20 @@ describe("--adapter flag support (mock adapter)", () => {
 		expect(schema.code).toContain("model Session");
 	});
 
+	it("does not apply MySQL string native types to serial foreign keys", async () => {
+		const mockAdapter = createMockAdapter("prisma", "mysql");
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: mockAdapter,
+			options: {
+				advanced: { database: { generateId: "serial" } },
+			},
+		});
+
+		expect(schema.code).toMatch(/identityId\s+Int\b/);
+		expect(schema.code).not.toMatch(/identityId\s+Int[^\n]*@db\.VarChar/);
+	});
+
 	it("should generate drizzle schema with mock adapter and provider", async () => {
 		const mockAdapter = createMockAdapter("drizzle", "pg");
 		const schema = await generateDrizzleSchema({

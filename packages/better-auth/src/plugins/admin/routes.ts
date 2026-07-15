@@ -3,7 +3,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { Session } from "@better-auth/core/db";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
+import { createLocalIdentityIssuer } from "@better-auth/core/db";
 import type { Where } from "@better-auth/core/db/adapter";
 import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
@@ -435,37 +435,51 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				);
 			}
-			const user = await ctx.context.internalAdapter.createUser<UserWithRole>(
-				{
-					...userData,
-					email: email,
-					name: ctx.body.name,
-					role:
-						requestedRole !== undefined
-							? parseRoles(requestedRole as string | string[])
-							: (opts?.defaultRole ?? "user"),
-				},
-				{ method: "admin" },
-			);
+			const userToCreate = {
+				...userData,
+				email,
+				name: ctx.body.name,
+				role:
+					requestedRole !== undefined
+						? parseRoles(requestedRole as string | string[])
+						: (opts?.defaultRole ?? "user"),
+			};
+			let user: UserWithRole;
+			if (ctx.body.password) {
+				const hashedPassword = await ctx.context.password.hash(
+					ctx.body.password,
+				);
+				const created =
+					await ctx.context.internalAdapter.createUserWithAccount<UserWithRole>(
+						userToCreate,
+						{
+							source: { method: "admin" },
+							buildAuthentication: ({ userId }) => ({
+								identity: {
+									issuer: createLocalIdentityIssuer("credential"),
+									providerAccountId: userId,
+								},
+								account: {
+									providerId: "credential",
+									providerInstanceId: "credential",
+									password: hashedPassword,
+								},
+							}),
+						},
+					);
+				user = created.user;
+			} else {
+				user = await ctx.context.internalAdapter.createUser<UserWithRole>(
+					userToCreate,
+					{ method: "admin" },
+				);
+			}
 
 			if (!user) {
 				throw APIError.from(
 					"INTERNAL_SERVER_ERROR",
 					ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
 				);
-			}
-			// Only create credential account if password is provided
-			if (ctx.body.password) {
-				const hashedPassword = await ctx.context.password.hash(
-					ctx.body.password,
-				);
-				await ctx.context.internalAdapter.linkAccount({
-					providerId: "credential",
-					issuer: createLocalAccountIssuer("credential"),
-					providerAccountId: user.id,
-					password: hashedPassword,
-					userId: user.id,
-				});
 			}
 			return ctx.json({
 				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
@@ -1737,13 +1751,18 @@ export const setUserPassword = (opts: AdminOptions) =>
 					hashedPassword,
 				);
 			} else {
-				await ctx.context.internalAdapter.createAccount({
+				await ctx.context.internalAdapter.linkAccount(
 					userId,
-					providerId: "credential",
-					issuer: createLocalAccountIssuer("credential"),
-					providerAccountId: user.id,
-					password: hashedPassword,
-				});
+					{
+						issuer: createLocalIdentityIssuer("credential"),
+						providerAccountId: user.id,
+					},
+					{
+						providerId: "credential",
+						providerInstanceId: "credential",
+						password: hashedPassword,
+					},
+				);
 			}
 			return ctx.json({
 				status: true,

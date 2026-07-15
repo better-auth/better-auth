@@ -27,7 +27,7 @@ export interface TiktokProfile extends Record<string, any> {
 			 *
 			 * To return this field, add `fields=union_id` in the user profile request's query parameter.
 			 */
-			union_id?: string | undefined;
+			union_id: string;
 			/**
 			 * User's profile image.
 			 *
@@ -135,7 +135,7 @@ export const tiktok = (options: TiktokOptions) => {
 	return {
 		id: "tiktok",
 		name: "TikTok",
-		accountSubject: ({ profile }) => profile.data.user.open_id,
+		identitySubject: ({ profile }) => profile.data.user.union_id,
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope ? [] : ["user.info.profile"];
 			if (options.scope) _scopes.push(...options.scope);
@@ -191,6 +191,7 @@ export const tiktok = (options: TiktokOptions) => {
 
 			const fields = [
 				"open_id",
+				"union_id",
 				"avatar_large_url",
 				"display_name",
 				"username",

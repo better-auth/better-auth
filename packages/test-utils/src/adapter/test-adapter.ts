@@ -138,22 +138,38 @@ export const testAdapter = async ({
 		await refreshAdapter(betterAuthOptions);
 		const getAllModels = getAuthTables(betterAuthOptions);
 
-		// Clean up all rows from all models
-		for (const model of Object.keys(getAllModels)) {
-			const getModelName = initGetModelName({
-				usePlural: adapter.options?.adapterConfig?.usePlural,
-				schema: getAllModels,
-			});
-			try {
-				const modelName = getModelName(model);
-				await adapter.deleteMany({ model: modelName, where: [] });
-			} catch (error) {
+		// Delete independent tables first, then retry tables that were still
+		// referenced. This derives a safe order from the database constraints
+		// instead of coupling the harness to one generated schema order.
+		let remainingModels = Object.keys(getAllModels);
+		const cleanupErrors = new Map<string, unknown>();
+		while (remainingModels.length > 0) {
+			const blockedModels: string[] = [];
+			let deletedModelCount = 0;
+			for (const model of remainingModels) {
+				const getModelName = initGetModelName({
+					usePlural: adapter.options?.adapterConfig?.usePlural,
+					schema: getAllModels,
+				});
+				try {
+					const modelName = getModelName(model);
+					await adapter.deleteMany({ model: modelName, where: [] });
+					cleanupErrors.delete(model);
+					deletedModelCount += 1;
+				} catch (error) {
+					blockedModels.push(model);
+					cleanupErrors.set(model, error);
+				}
+			}
+			if (blockedModels.length === 0) break;
+			if (deletedModelCount === 0) {
+				const model = blockedModels[0]!;
+				const error = cleanupErrors.get(model);
 				const msg = `Error while cleaning up all rows from ${model}`;
 				log.error(msg, error);
-				throw new Error(msg, {
-					cause: error,
-				});
+				throw new Error(msg, { cause: error });
 			}
+			remainingModels = blockedModels;
 		}
 
 		// Run additional cleanups

@@ -108,7 +108,7 @@ export const twitter = (options: TwitterOption) => {
 	return {
 		id: "twitter",
 		name: "Twitter",
-		accountSubject: ({ profile }) => profile.data.id,
+		identitySubject: ({ profile }) => profile.data.id,
 		createAuthorizationURL(data) {
 			const _scopes = options.disableDefaultScope
 				? []

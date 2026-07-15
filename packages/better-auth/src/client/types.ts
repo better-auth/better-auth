@@ -5,7 +5,9 @@ import type {
 	ClientStore,
 } from "@better-auth/core";
 import type {
+	Account,
 	DBFieldAttribute,
+	Identity,
 	InferDBFieldsOutput,
 } from "@better-auth/core/db";
 import type { InferFieldsInputClient } from "../db/field";
@@ -110,6 +112,40 @@ export type InferSessionFromClient<O extends BetterAuthClientOptions> =
 export type InferUserFromClient<O extends BetterAuthClientOptions> =
 	StripEmptyObjects<
 		User & UnionToIntersection<InferAdditionalFromClient<O, "user", "output">>
+	>;
+
+type PrivateListedAccountField =
+	| "identityId"
+	| "providerInstanceId"
+	| "accessToken"
+	| "refreshToken"
+	| "idToken"
+	| "accessTokenExpiresAt"
+	| "refreshTokenExpiresAt"
+	| "scope"
+	| "password";
+
+/** Public Identity fields returned by the `listAccounts` client method. */
+export type InferListedIdentityFromClient<O extends BetterAuthClientOptions> =
+	StripEmptyObjects<
+		Omit<
+			Identity &
+				UnionToIntersection<InferAdditionalFromClient<O, "identity", "output">>,
+			"userId"
+		>
+	>;
+
+/** Public Account fields returned by the `listAccounts` client method. */
+export type InferListedAccountFromClient<O extends BetterAuthClientOptions> =
+	StripEmptyObjects<
+		Omit<
+			Account &
+				UnionToIntersection<InferAdditionalFromClient<O, "account", "output">>,
+			PrivateListedAccountField | "identity" | "scopes"
+		> & {
+			identity: InferListedIdentityFromClient<O>;
+			scopes: string[];
+		}
 	>;
 
 export type InferAdditionalFromClient<

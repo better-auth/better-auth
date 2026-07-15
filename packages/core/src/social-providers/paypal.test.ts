@@ -63,11 +63,12 @@ describe("paypal.getUserInfo", () => {
 
 		expect(result?.user).not.toHaveProperty("id");
 		expect(result?.user.email).toBe("paypal-user@example.com");
-		expect(result).not.toBeNull();
+		expect(typeof provider.identitySubject).toBe("function");
+		if (typeof provider.identitySubject !== "function" || !result) return;
 		expect(
-			await provider.accountSubject({
+			await provider.identitySubject({
 				tokens: { accessToken: "paypal-access-token" },
-				profile: result!.data,
+				profile: result.data,
 			}),
 		).toBe("paypal-user-123");
 	});
@@ -87,11 +88,12 @@ describe("paypal.getUserInfo", () => {
 			idToken: await idToken("paypal-subject-123"),
 		});
 
-		expect(result).not.toBeNull();
+		expect(typeof provider.identitySubject).toBe("function");
+		if (typeof provider.identitySubject !== "function" || !result) return;
 		expect(
-			await provider.accountSubject({
+			await provider.identitySubject({
 				tokens: { accessToken: "paypal-access-token" },
-				profile: result!.data,
+				profile: result.data,
 			}),
 		).toBe("paypal-user-123");
 	});

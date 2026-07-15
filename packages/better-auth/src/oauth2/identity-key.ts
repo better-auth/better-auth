@@ -1,5 +1,5 @@
-import type { AccountKey } from "@better-auth/core/db";
-import { createOAuthAccountIssuer } from "@better-auth/core/db";
+import type { IdentityKey } from "@better-auth/core/db";
+import { createLocalIdentityIssuer } from "@better-auth/core/db";
 import {
 	APIError,
 	BASE_ERROR_CODES,
@@ -17,16 +17,19 @@ export function toOAuthProfileRecord(profile: object): Record<string, unknown> {
 }
 
 /**
- * Resolves the stable account key established by an OAuth provider response.
+ * Resolves the stable identity key established by an OAuth provider response.
  */
-export async function resolveOAuthAccountKey<Profile extends object>(
+export async function resolveOAuthIdentityKey<Profile extends object>(
 	provider: OAuthProvider<Profile>,
 	tokens: OAuth2Tokens,
 	profile: Profile,
-): Promise<AccountKey> {
-	const accountKeyContext = { tokens, profile };
-	const accountSubject = provider.accountSubject;
-	const resolvedSubject = await accountSubject(accountKeyContext);
+): Promise<IdentityKey> {
+	const identityKeyContext = { tokens, profile };
+	const identitySubject = provider.identitySubject;
+	if (typeof identitySubject !== "function") {
+		throw new BetterAuthError("OAUTH_IDENTITY_SUBJECT_INVALID");
+	}
+	const resolvedSubject = await identitySubject(identityKeyContext);
 	const providerAccountId = String(resolvedSubject);
 	if (
 		(typeof resolvedSubject === "number" &&
@@ -35,42 +38,44 @@ export async function resolveOAuthAccountKey<Profile extends object>(
 		providerAccountId === "undefined" ||
 		providerAccountId === "null"
 	) {
-		throw new BetterAuthError("OAUTH_ACCOUNT_SUBJECT_INVALID");
+		throw new BetterAuthError("OAUTH_IDENTITY_SUBJECT_INVALID");
 	}
 
-	const accountIssuer = provider.accountIssuer;
+	const identityIssuer = provider.identityIssuer;
+	const resolvedIssuer =
+		typeof identityIssuer === "function"
+			? await identityIssuer(identityKeyContext)
+			: identityIssuer;
 	const issuer =
-		accountIssuer === undefined
-			? createOAuthAccountIssuer(provider.id)
-			: typeof accountIssuer === "function"
-				? await accountIssuer(accountKeyContext)
-				: accountIssuer;
+		resolvedIssuer === undefined
+			? createLocalIdentityIssuer(provider.id)
+			: resolvedIssuer;
 	if (
 		typeof issuer !== "string" ||
 		issuer.trim().length === 0 ||
 		issuer === "undefined" ||
 		issuer === "null"
 	) {
-		throw new BetterAuthError("OAUTH_ACCOUNT_ISSUER_INVALID");
+		throw new BetterAuthError("OAUTH_IDENTITY_ISSUER_INVALID");
 	}
 
 	return { issuer, providerAccountId };
 }
 
 /**
- * Resolves an OAuth account key at a direct HTTP authentication boundary.
+ * Resolves an OAuth identity key at a direct HTTP authentication boundary.
  *
  * Provider resolvers are application code and can reject or return malformed
  * values. Direct sign-in and linking expose all such failures as one stable
  * authentication error instead of leaking implementation details or a 500.
  */
-export async function resolveOAuthAccountKeyForAPI<Profile extends object>(
+export async function resolveOAuthIdentityKeyForAPI<Profile extends object>(
 	provider: OAuthProvider<Profile>,
 	tokens: OAuth2Tokens,
 	profile: Profile,
-): Promise<AccountKey> {
+): Promise<IdentityKey> {
 	try {
-		return await resolveOAuthAccountKey(provider, tokens, profile);
+		return await resolveOAuthIdentityKey(provider, tokens, profile);
 	} catch {
 		throw APIError.from(
 			"UNAUTHORIZED",

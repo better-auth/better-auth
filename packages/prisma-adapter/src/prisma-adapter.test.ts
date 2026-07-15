@@ -32,6 +32,32 @@ describe("prisma-adapter", () => {
 		expect(adapter).toBeDefined();
 	});
 
+	it("pluralizes identity relation keys as identities", async () => {
+		const findFirst = vi.fn().mockResolvedValue({
+			id: "user-id",
+			identities: [],
+		});
+		const adapter = prismaAdapter(
+			{
+				$transaction: vi.fn(),
+				user: { findFirst },
+			},
+			{ provider: "sqlite" },
+		)({ experimental: { joins: true } } as BetterAuthOptions);
+
+		await adapter.findOne({
+			model: "user",
+			where: [{ field: "id", value: "user-id" }],
+			join: { identity: true },
+		});
+
+		expect(findFirst).toHaveBeenCalledWith(
+			expect.objectContaining({
+				select: expect.objectContaining({ identities: { take: 100 } }),
+			}),
+		);
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8365
 	 */
@@ -526,7 +552,7 @@ describe("prisma-adapter", () => {
 		expect(txClient.verification.update).toHaveBeenCalledTimes(1);
 	});
 
-	it("consumeOne does not open a nested transaction from a transaction adapter", async () => {
+	it("uses native transactions by default without nesting consumeOne", async () => {
 		const target = {
 			id: "verification-id",
 			identifier: "magic-link-token",
@@ -544,7 +570,6 @@ describe("prisma-adapter", () => {
 			} as never,
 			{
 				provider: "sqlite",
-				transaction: true,
 			},
 		)({} as BetterAuthOptions);
 

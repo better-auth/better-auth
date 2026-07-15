@@ -36,8 +36,8 @@ export const paybin = (options: PaybinOptions) => {
 	return {
 		id: "paybin",
 		name: "Paybin",
-		accountSubject: ({ profile }) => profile.sub,
-		accountIssuer: issuer,
+		identityIssuer: issuer,
+		identitySubject: ({ profile }) => profile.sub,
 		async createAuthorizationURL({
 			state,
 			scopes,

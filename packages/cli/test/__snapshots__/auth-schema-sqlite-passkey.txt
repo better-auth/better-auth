@@ -40,21 +40,45 @@ export const custom_session = sqliteTable(
     userAgent: text("user_agent"),
     userId: text("user_id")
       .notNull()
-      .references(() => custom_user.id, { onDelete: "cascade" }),
+      .references(() => custom_user.id, { onDelete: "restrict" }),
   },
   (table) => [index("custom_session_userId_idx").on(table.userId)],
+);
+
+export const identity = sqliteTable(
+  "identity",
+  {
+    id: text("id").primaryKey(),
+    issuer: text("issuer").notNull(),
+    providerAccountId: text("provider_account_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => custom_user.id, { onDelete: "restrict" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("identity_issuer_providerAccountId_uidx").on(
+      table.issuer,
+      table.providerAccountId,
+    ),
+    index("identity_userId_idx").on(table.userId),
+  ],
 );
 
 export const custom_account = sqliteTable(
   "custom_account",
   {
     id: text("id").primaryKey(),
-    issuer: text("issuer").notNull(),
-    providerAccountId: text("provider_account_id").notNull(),
-    providerId: text("provider_id").notNull(),
-    userId: text("user_id")
+    identityId: text("identity_id")
       .notNull()
-      .references(() => custom_user.id, { onDelete: "cascade" }),
+      .references(() => identity.id, { onDelete: "restrict" }),
+    providerId: text("provider_id").notNull(),
+    providerInstanceId: text("provider_instance_id").notNull(),
     accessToken: text("access_token"),
     refreshToken: text("refresh_token"),
     idToken: text("id_token"),
@@ -74,11 +98,10 @@ export const custom_account = sqliteTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("custom_account_issuer_providerAccountId_uidx").on(
-      table.issuer,
-      table.providerAccountId,
+    uniqueIndex("custom_account_identityId_providerInstanceId_uidx").on(
+      table.identityId,
+      table.providerInstanceId,
     ),
-    index("custom_account_userId_idx").on(table.userId),
   ],
 );
 
@@ -125,7 +148,7 @@ export const passkey = sqliteTable(
 
 export const custom_userRelations = relations(custom_user, ({ many }) => ({
   custom_sessions: many(custom_session),
-  custom_accounts: many(custom_account),
+  identities: many(identity),
   passkeys: many(passkey),
 }));
 
@@ -136,10 +159,18 @@ export const custom_sessionRelations = relations(custom_session, ({ one }) => ({
   }),
 }));
 
-export const custom_accountRelations = relations(custom_account, ({ one }) => ({
+export const identityRelations = relations(identity, ({ one, many }) => ({
   custom_user: one(custom_user, {
-    fields: [custom_account.userId],
+    fields: [identity.userId],
     references: [custom_user.id],
+  }),
+  custom_accounts: many(custom_account),
+}));
+
+export const custom_accountRelations = relations(custom_account, ({ one }) => ({
+  identity: one(identity, {
+    fields: [custom_account.identityId],
+    references: [identity.id],
   }),
 }));
 

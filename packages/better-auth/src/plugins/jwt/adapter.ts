@@ -2,6 +2,7 @@ import type {
 	BetterAuthOptions,
 	GenericEndpointContext,
 } from "@better-auth/core";
+import { getCurrentAdapter } from "@better-auth/core/context";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import type { Jwk, JwtOptions } from "./types";
 
@@ -14,7 +15,8 @@ export const getJwksAdapter = (
 			if (options?.adapter?.getJwks) {
 				return await options.adapter.getJwks(ctx);
 			}
-			return await adapter.findMany<Jwk>({
+			const currentAdapter = await getCurrentAdapter(adapter);
+			return await currentAdapter.findMany<Jwk>({
 				model: "jwks",
 			});
 		},
@@ -30,7 +32,8 @@ export const getJwksAdapter = (
 					?.filter(isLive)
 					.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
 			}
-			const keys = await adapter.findMany<Jwk>({
+			const currentAdapter = await getCurrentAdapter(adapter);
+			const keys = await currentAdapter.findMany<Jwk>({
 				model: "jwks",
 			});
 			return keys
@@ -50,8 +53,9 @@ export const getJwksAdapter = (
 				const keys = await options.adapter.getJwks(ctx);
 				return keys?.find((k) => k.id === id);
 			}
+			const currentAdapter = await getCurrentAdapter(adapter);
 			return (
-				(await adapter.findOne<Jwk>({
+				(await currentAdapter.findOne<Jwk>({
 					model: "jwks",
 					where: [{ field: "id", value: id }],
 				})) ?? undefined
@@ -76,9 +80,10 @@ export const getJwksAdapter = (
 			ctx: GenericEndpointContext,
 			alg: NonNullable<Jwk["alg"]>,
 		) => {
+			const currentAdapter = await getCurrentAdapter(adapter);
 			const candidates = options?.adapter?.getJwks
 				? await options.adapter.getJwks(ctx)
-				: await adapter.findMany<Jwk>({ model: "jwks" });
+				: await currentAdapter.findMany<Jwk>({ model: "jwks" });
 			if (!candidates) return undefined;
 			const configAlg = options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
 			const now = new Date();
@@ -91,7 +96,8 @@ export const getJwksAdapter = (
 			if (options?.adapter?.createJwk) {
 				return await options.adapter.createJwk(webKey, ctx);
 			}
-			const jwk = await adapter.create<Omit<Jwk, "id">, Jwk>({
+			const currentAdapter = await getCurrentAdapter(adapter);
+			const jwk = await currentAdapter.create<Omit<Jwk, "id">, Jwk>({
 				model: "jwks",
 				data: {
 					...webKey,

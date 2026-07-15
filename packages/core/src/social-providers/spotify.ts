@@ -24,7 +24,7 @@ export const spotify = (options: SpotifyOptions) => {
 	return {
 		id: "spotify",
 		name: "Spotify",
-		accountSubject: ({ profile }) => profile.id,
+		identitySubject: ({ profile }) => profile.id,
 		createAuthorizationURL({
 			state,
 			scopes,

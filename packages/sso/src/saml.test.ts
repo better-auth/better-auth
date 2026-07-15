@@ -33,7 +33,7 @@ import {
 } from "vitest";
 import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
-import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
+import { DEFAULT_CLOCK_SKEW_MS, LOGOUT_REQUEST_KEY_PREFIX } from "./constants";
 import { saml } from "./samlify";
 import { normalizePem } from "./utils";
 
@@ -677,6 +677,7 @@ describe("SAML SSO with defaultSSO array", async () => {
 		user: [],
 		session: [],
 		verification: [],
+		identity: [],
 		account: [],
 		ssoProvider: [],
 	};
@@ -793,6 +794,7 @@ describe("SAML SSO with signed AuthnRequests", async () => {
 		user: [],
 		session: [],
 		verification: [],
+		identity: [],
 		account: [],
 		ssoProvider: [],
 	};
@@ -898,6 +900,7 @@ describe("SAML SSO with signed AuthnRequests", async () => {
 				user: [],
 				session: [],
 				verification: [],
+				identity: [],
 				account: [],
 				ssoProvider: [],
 			}),
@@ -943,6 +946,7 @@ describe("SAML SSO without signed AuthnRequests", async () => {
 		user: [],
 		session: [],
 		verification: [],
+		identity: [],
 		account: [],
 		ssoProvider: [],
 	};
@@ -1007,6 +1011,7 @@ describe("SAML SSO with idpMetadata but without metadata XML (fallback to top-le
 		user: [],
 		session: [],
 		verification: [],
+		identity: [],
 		account: [],
 		ssoProvider: [],
 	};
@@ -1095,6 +1100,7 @@ describe("SAML SSO", async () => {
 		user: [],
 		session: [],
 		verification: [],
+		identity: [],
 		account: [],
 		ssoProvider: [],
 	};
@@ -1446,6 +1452,7 @@ describe("SAML SSO", async () => {
 					user: [],
 					session: [],
 					verification: [],
+					identity: [],
 					account: [],
 					ssoProvider: [],
 				}),
@@ -1917,6 +1924,150 @@ describe("SAML SSO", async () => {
 		expect(callbackResponse.headers.get("location")).toContain("dashboard");
 	});
 
+	it("rejects a SAML callback after its provider instance is replaced", async () => {
+		const { auth, signInWithTestUser, db } = await getTestInstance({
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
+		});
+		const { headers } = await signInWithTestUser();
+		const providerId = "replaced-saml-provider";
+		const registerProvider = () =>
+			auth.api.registerSSOProvider({
+				body: {
+					providerId,
+					issuer: "http://localhost:8081",
+					domain: "replaced-saml.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						wantAssertionsSigned: false,
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+						identifierFormat:
+							"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+					},
+				},
+				headers,
+			});
+
+		await registerProvider();
+		const originalProvider = await db.findOne<{ id: string }>({
+			model: "ssoProvider",
+			where: [{ field: "providerId", value: providerId }],
+		});
+		if (!originalProvider)
+			throw new Error("Original SAML provider was not persisted");
+
+		const signIn = await auth.api.signInSSO({
+			body: { providerId, callbackURL: "http://localhost:3000/dashboard" },
+			returnHeaders: true,
+		});
+		const relayState = new URL(signIn.response.url).searchParams.get(
+			"RelayState",
+		);
+		if (!relayState) throw new Error("SAML sign-in did not return RelayState");
+		const idpResponse = await fetch(signIn.response.url);
+		const idpBody: unknown = await idpResponse.json();
+		if (
+			!idpBody ||
+			typeof idpBody !== "object" ||
+			!("samlResponse" in idpBody) ||
+			typeof idpBody.samlResponse !== "string"
+		) {
+			throw new Error("SAML identity provider did not return a response");
+		}
+
+		await auth.api.deleteSSOProvider({ body: { providerId }, headers });
+		await registerProvider();
+		const replacementProvider = await db.findOne<{ id: string }>({
+			model: "ssoProvider",
+			where: [{ field: "providerId", value: providerId }],
+		});
+		if (!replacementProvider) {
+			throw new Error("Replacement SAML provider was not persisted");
+		}
+		expect(replacementProvider.id).not.toBe(originalProvider.id);
+
+		const callback = await auth.api.acsEndpoint({
+			method: "POST",
+			body: { SAMLResponse: idpBody.samlResponse, RelayState: relayState },
+			headers: { Cookie: signIn.headers.get("set-cookie") ?? "" },
+			params: { providerId },
+			asResponse: true,
+		});
+		expect(callback.status).toBe(409);
+		expect(
+			await db.findOne({
+				model: "account",
+				where: [
+					{
+						field: "providerInstanceId",
+						value: `sso:provider:${replacementProvider.id}`,
+					},
+				],
+			}),
+		).toBeNull();
+	});
+
+	it("rejects a SAML callback after its authentication configuration changes", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
+		});
+		const { headers } = await signInWithTestUser();
+		const providerId = "reconfigured-saml-provider";
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId,
+				issuer: "http://localhost:8081",
+				domain: "reconfigured-saml.example.com",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					wantAssertionsSigned: false,
+					idpMetadata: { metadata: idpMetadata },
+					spMetadata: { metadata: spMetadata },
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const signIn = await auth.api.signInSSO({
+			body: { providerId, callbackURL: "http://localhost:3000/dashboard" },
+			returnHeaders: true,
+		});
+		const relayState = new URL(signIn.response.url).searchParams.get(
+			"RelayState",
+		);
+		if (!relayState) throw new Error("SAML sign-in did not return RelayState");
+
+		await auth.api.updateSSOProvider({
+			body: {
+				providerId,
+				samlConfig: {
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:2.0:nameid-format:persistent",
+				},
+			},
+			headers,
+		});
+
+		const callback = await auth.api.acsEndpoint({
+			method: "POST",
+			body: {
+				SAMLResponse: "invalid-after-config-update",
+				RelayState: relayState,
+			},
+			headers: { Cookie: signIn.headers.get("set-cookie") ?? "" },
+			params: { providerId },
+			asResponse: true,
+		});
+		expect(callback.status).toBe(409);
+		expect(await callback.json()).toMatchObject({
+			code: "SSO_PROVIDER_CHANGED",
+		});
+	});
+
 	it("should initiate SAML login and fallback to baseURL on invalid RelayState", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
@@ -2345,11 +2496,10 @@ describe("SAML SSO", async () => {
 		expect(redirectLocation).toContain("error=account_not_linked");
 	});
 
-	// SSO trust must come from verified domain ownership, never from a name
-	// match against the global `trustedProviders` list — otherwise a
-	// user-registered SSO provider named after a trusted provider could inherit
-	// that trust. Registering such a colliding id is now rejected outright.
-	it("should reject registering an SSO provider whose id collides with a trustedProviders entry", async () => {
+	// SSO accounts use an immutable, namespaced provider-instance identifier.
+	// A public SSO alias therefore cannot inherit trust from a social provider
+	// with the same public name.
+	it("allows an SSO alias that matches a trusted social provider", async () => {
 		const { auth: authWithTrusted, signInWithTestUser } = await getTestInstance(
 			{
 				account: {
@@ -2389,7 +2539,7 @@ describe("SAML SSO", async () => {
 			asResponse: true,
 		});
 
-		expect(response.status).toBe(422);
+		expect(response.status).toBe(200);
 	});
 
 	it("should reject unsolicited SAML response when allowIdpInitiated is false", async () => {
@@ -3183,6 +3333,7 @@ describe("SAML SSO with custom fields", () => {
 		user: [],
 		session: [],
 		verification: [],
+		identity: [],
 		account: [],
 		sso_provider: [],
 	};
@@ -3343,12 +3494,13 @@ describe("safeJsonParse", () => {
 
 describe("SSO Provider Config Parsing", () => {
 	it("returns parsed SAML config and avoids [object Object] in response", async () => {
-		const data = {
-			user: [] as any[],
-			session: [] as any[],
-			verification: [] as any[],
-			account: [] as any[],
-			ssoProvider: [] as any[],
+		const data: Record<string, object[]> = {
+			user: [],
+			session: [],
+			verification: [],
+			identity: [],
+			account: [],
+			ssoProvider: [],
 		};
 
 		const memory = memoryAdapter(data);
@@ -3416,12 +3568,13 @@ describe("SSO Provider Config Parsing", () => {
 		await oidcServer.start(8082, "localhost");
 
 		try {
-			const data = {
-				user: [] as any[],
-				session: [] as any[],
-				verification: [] as any[],
-				account: [] as any[],
-				ssoProvider: [] as any[],
+			const data: Record<string, object[]> = {
+				user: [],
+				session: [],
+				verification: [],
+				identity: [],
+				account: [],
+				ssoProvider: [],
 			};
 
 			const memory = memoryAdapter(data);
@@ -4977,6 +5130,13 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 
 		const ctx = await auth.$context;
 		const { AUTHN_REQUEST_KEY_PREFIX } = await import("./constants");
+		const providerRecord = await ctx.adapter.findOne<{ id: string }>({
+			model: "ssoProvider",
+			where: [{ field: "providerId", value: "concurrent-replay-provider" }],
+		});
+		if (!providerRecord) {
+			throw new Error("Concurrent replay provider was not persisted");
+		}
 
 		// The mock IdP echoes a fixed `InResponseTo`, so seed the matching
 		// AuthnRequest record directly. Both concurrent submissions then race to
@@ -4987,7 +5147,7 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 			identifier: `${AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
 			value: JSON.stringify({
 				id: inResponseTo,
-				providerId: "concurrent-replay-provider",
+				providerInstanceId: `sso:provider:${providerRecord.id}`,
 				createdAt: Date.now(),
 				expiresAt: Date.now() + 5 * 60 * 1000,
 			}),
@@ -6079,6 +6239,21 @@ describe("SAML Single Logout (SLO)", () => {
 			const url = new URL(logoutResponse.context);
 			const samlResponse = url.searchParams.get("SAMLResponse");
 			const relayState = url.searchParams.get("RelayState");
+			const authContext = await auth.$context;
+			const providerRecord = await authContext.adapter.findOne<{ id: string }>({
+				model: "ssoProvider",
+				where: [{ field: "providerId", value: "logout-response-test" }],
+			});
+			if (!providerRecord) {
+				throw new Error("Logout response provider was not persisted");
+			}
+			// The samlify mock emits this literal placeholder when no original
+			// LogoutRequest object is supplied to createLogoutResponse.
+			await authContext.internalAdapter.createVerificationValue({
+				identifier: `${LOGOUT_REQUEST_KEY_PREFIX}{InResponseTo}`,
+				value: `sso:provider:${providerRecord.id}`,
+				expiresAt: new Date(Date.now() + 60_000),
+			});
 
 			const sloRes = await auth.handler(
 				new Request(
@@ -6161,6 +6336,19 @@ describe("SAML Single Logout (SLO)", () => {
 
 			const url = new URL(logoutResponse.context);
 			const samlResponse = url.searchParams.get("SAMLResponse");
+			const authContext = await auth.$context;
+			const providerRecord = await authContext.adapter.findOne<{ id: string }>({
+				model: "ssoProvider",
+				where: [{ field: "providerId", value: "logout-no-relay" }],
+			});
+			if (!providerRecord) {
+				throw new Error("Logout response provider was not persisted");
+			}
+			await authContext.internalAdapter.createVerificationValue({
+				identifier: `${LOGOUT_REQUEST_KEY_PREFIX}{InResponseTo}`,
+				value: `sso:provider:${providerRecord.id}`,
+				expiresAt: new Date(Date.now() + 60_000),
+			});
 
 			const sloRes = await auth.handler(
 				new Request(
@@ -6519,30 +6707,59 @@ describe("SAML E2E: SP-initiated flow", () => {
 		expect(location).not.toContain("error=");
 		expect(location).toContain("/dashboard");
 
-		// 6. Verify an account was linked to the SSO provider
-		const accounts = await db.findMany({ model: "account" });
-		const ssoAccount = accounts.find((a: any) => a.providerId === "e2e-saml") as
-			| Record<string, any>
-			| undefined;
+		// 6. Verify the provider instance owns an account linked through a
+		// protocol-scoped identity.
+		const providerRecord = await db.findOne<{ id: string }>({
+			model: "ssoProvider",
+			where: [{ field: "providerId", value: "e2e-saml" }],
+		});
+		expect(providerRecord).not.toBeNull();
+		const ssoAccount = await db.findOne<{
+			id: string;
+			identityId: string;
+			providerId: string;
+			providerInstanceId: string;
+		}>({
+			model: "account",
+			where: [
+				{
+					field: "providerInstanceId",
+					value: `sso:provider:${providerRecord!.id}`,
+				},
+			],
+		});
 		expect(ssoAccount).toBeDefined();
-		expect(ssoAccount!.issuer).toBe(
-			"http://localhost:8081/api/sso/saml2/idp/metadata",
-		);
-		expect(ssoAccount!.providerAccountId).toBe("test@email.com");
+		expect(ssoAccount?.providerId).toBe("e2e-saml");
+		const ssoIdentity = await db.findOne<{
+			id: string;
+			userId: string;
+			issuer: string;
+			providerAccountId: string;
+		}>({
+			model: "identity",
+			where: [{ field: "id", value: ssoAccount!.identityId }],
+		});
+		expect(ssoIdentity).toMatchObject({
+			issuer: `sso:provider:${providerRecord!.id}:saml`,
+			providerAccountId: "test@email.com",
+		});
 
 		// 7. Verify the user exists and is linked
-		const users = await db.findMany({ model: "user" });
-		const ssoUser = users.find((u: any) => u.id === ssoAccount!.userId) as
-			| Record<string, any>
-			| undefined;
+		const ssoUser = await db.findOne<{ id: string; email: string }>({
+			model: "user",
+			where: [{ field: "id", value: ssoIdentity!.userId }],
+		});
 		expect(ssoUser).toBeDefined();
 		expect(ssoUser!.email).toBe("test@email.com");
 
 		// 8. Verify a session was created for the SSO user
-		const sessions = await db.findMany({ model: "session" });
-		const ssoSession = sessions.find((s: any) => s.userId === ssoUser!.id) as
-			| Record<string, any>
-			| undefined;
+		const ssoSession = await db.findOne<{
+			userId: string;
+			expiresAt: Date;
+		}>({
+			model: "session",
+			where: [{ field: "userId", value: ssoUser!.id }],
+		});
 		expect(ssoSession).toBeDefined();
 		expect(ssoSession!.expiresAt).toBeDefined();
 	});

@@ -981,18 +981,18 @@ describe("seat-based billing", () => {
 					emailVerified: true,
 				},
 			});
-			await ctx.adapter.create({
-				model: "account",
-				data: {
-					userId: newMember.id,
+			await ctx.internalAdapter.linkAccount(
+				newMember.id,
+				{
 					issuer: "local:credential",
 					providerAccountId: newMember.id,
-					providerId: "credential",
-					password: await ctx.password.hash("password"),
-					createdAt: new Date(),
-					updatedAt: new Date(),
 				},
-			});
+				{
+					providerId: "credential",
+					providerInstanceId: "credential",
+					password: await ctx.password.hash("password"),
+				},
+			);
 
 			await client.organization.inviteMember({
 				email: "new-member@test.com",
