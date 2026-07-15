@@ -653,6 +653,27 @@ importers:
         specifier: ^7.8.0
         version: 7.8.0(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.2)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@5.9.3)
 
+  e2e/adapter/test/prisma-next-adapter:
+    devDependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../../../../packages/core
+      '@better-auth/prisma-next-adapter':
+        specifier: workspace:*
+        version: link:../../../../packages/prisma-next-adapter
+      '@better-auth/test-utils':
+        specifier: workspace:*
+        version: link:../../../../packages/test-utils
+      '@types/pg':
+        specifier: ^8.16.0
+        version: 8.16.0
+      better-auth:
+        specifier: workspace:*
+        version: link:../../../../packages/better-auth
+      pg:
+        specifier: ^8.19.0
+        version: 8.19.0
+
   e2e/integration:
     dependencies:
       '@better-auth/oauth-provider':
@@ -1492,6 +1513,21 @@ importers:
       tsdown:
         specifier: 'catalog:'
         version: 0.21.1(@arethetypeswrong/core@0.18.3)(oxc-resolver@11.21.3)(publint@0.3.21)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
+  packages/prisma-next-adapter:
+    devDependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
+      '@better-auth/utils':
+        specifier: 'catalog:'
+        version: 0.4.1
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.21.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@5.9.3)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
