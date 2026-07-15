@@ -398,20 +398,21 @@ export const auth = betterAuth({
 
 ## Accounts
 
-Better Auth supports multiple authentication methods. Each authentication method is called a provider. For example, email and password authentication is a provider, Google authentication is a provider, etc.
+Better Auth supports multiple authentication methods through providers such as email and password, Google, or an enterprise identity provider. Each method linked to a user is stored as an account.
 
-When a user signs in using a provider, an account is created for the user. The account stores the authentication data returned by the provider. This data includes the access token, refresh token, and other information returned by the provider.
+An account has a local record ID and a provider identity. `id` identifies the Better Auth account record and is the value to pass as `accountId` to account-management APIs. The pair of `issuer` and `providerAccountId` identifies the external account: `issuer` names the trusted authority, and `providerAccountId` is the stable identifier that authority assigned. The `providerId` identifies the provider configuration Better Auth uses for protocol operations.
 
-The account table stores the authentication data of the user [Click here to view the schema](/docs/concepts/database#account)
+This separation allows multiple provider configurations for the same issuer to deduplicate the same external identity without treating an identifier from another issuer as the same person. Provider aliases share one account row and token set; they do not have independent grants or provider lifecycle records. See the [account schema](/docs/concepts/database#account) for the complete set of fields.
 
 ### List User Accounts
 
-To list user accounts you can use `client.user.listAccounts` method. Which will return all accounts associated with a user.
+Use `listAccounts` to retrieve every authentication method linked to the current user. Keep the returned `id` when you need to unlink the account or call another account-specific API.
 
 ```ts
 import { authClient } from "@/lib/auth-client"
 
 const accounts = await authClient.listAccounts();
+const googleAccount = accounts.find((account) => account.providerId === "google");
 ```
 
 ### Token Encryption
@@ -606,23 +607,22 @@ Users already signed in can manually link their account to additional social pro
 
 ### Account Unlinking
 
-You can unlink a user account by providing a `providerId`.
+Unlink an account by passing the Better Auth account record's `id`, which you can obtain from `listAccounts`.
 
 ```ts
 import { authClient } from "@/lib/auth-client"
 
-await authClient.unlinkAccount({
-    providerId: "google"
-});
+const accounts = await authClient.listAccounts();
+const account = accounts.find((account) => account.providerId === "google");
 
-// Unlink a specific account
-await authClient.unlinkAccount({
-    providerId: "google",
-    accountId: "123"
-});
+if (account) {
+    await authClient.unlinkAccount({
+        accountId: account.id,
+    });
+}
 ```
 
-If the account doesn't exist, it will throw an error. Additionally, if the user only has one account, unlinking will be prevented to stop account lockout (unless `allowUnlinkingAll` is set to `true`).
+If the account does not exist or does not belong to the current user, Better Auth returns an error. Better Auth also prevents a user from unlinking their only account unless `allowUnlinkingAll` is `true`.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";

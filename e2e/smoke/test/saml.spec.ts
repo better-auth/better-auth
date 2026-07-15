@@ -56,6 +56,9 @@ describe("SAML SSO", () => {
 							domain: "example.com",
 							samlConfig: {
 								issuer: "https://idp.example.com",
+								idpMetadata: {
+									entityID: "https://idp.example.com",
+								},
 								entryPoint: IDP_ENTRY_POINT,
 								cert: TEST_CERT,
 								callbackUrl:
@@ -104,6 +107,9 @@ describe("SAML SSO", () => {
 							domain: "corp.example.com",
 							samlConfig: {
 								issuer: "https://idp.corp.example.com",
+								idpMetadata: {
+									entityID: "https://idp.corp.example.com",
+								},
 								entryPoint: IDP_ENTRY_POINT,
 								cert: TEST_CERT,
 								callbackUrl:

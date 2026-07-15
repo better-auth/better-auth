@@ -6,6 +6,7 @@ import {
   boolean,
   integer,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 const authSchema = pgSchema("auth");
@@ -49,7 +50,8 @@ export const account = authSchema.table(
   "account",
   {
     id: text("id").primaryKey(),
-    accountId: text("account_id").notNull(),
+    issuer: text("issuer").notNull(),
+    providerAccountId: text("provider_account_id").notNull(),
     providerId: text("provider_id").notNull(),
     userId: text("user_id")
       .notNull()
@@ -66,7 +68,13 @@ export const account = authSchema.table(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [index("account_userId_idx").on(table.userId)],
+  (table) => [
+    uniqueIndex("account_issuer_providerAccountId_uidx").on(
+      table.issuer,
+      table.providerAccountId,
+    ),
+    index("account_userId_idx").on(table.userId),
+  ],
 );
 
 export const verification = authSchema.table(

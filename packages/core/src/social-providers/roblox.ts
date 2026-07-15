@@ -41,6 +41,7 @@ export const roblox = (options: RobloxOptions) => {
 	return {
 		id: "roblox",
 		name: "Roblox",
+		accountSubject: ({ profile }) => profile.sub,
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope ? [] : ["openid", "profile"];
 			if (options.scope) _scopes.push(...options.scope);
@@ -100,7 +101,6 @@ export const roblox = (options: RobloxOptions) => {
 			// We default to false for security consistency.
 			return {
 				user: {
-					id: profile.sub,
 					name: profile.nickname || profile.preferred_username || "",
 					image: profile.picture,
 					email: profile.preferred_username || null, // Roblox does not provide email

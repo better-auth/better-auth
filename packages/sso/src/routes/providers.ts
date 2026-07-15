@@ -22,8 +22,15 @@ import {
 	validateCertSources,
 	validateConfigAlgorithms,
 } from "../saml";
-import type { Member, OIDCConfig, SAMLConfig, SSOOptions } from "../types";
+import type {
+	Member,
+	OIDCConfig,
+	SAMLConfig,
+	SAMLIdentityProviderMetadata,
+	SSOOptions,
+} from "../types";
 import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
+import { assertSAMLIdentityProviderAuthority } from "./helpers";
 import {
 	getUpdateSSOProviderBodySchema,
 	parseSSOProviderAdditionalFields,
@@ -109,10 +116,7 @@ function oidcIdentityBoundaryChanged(
 	current: OIDCConfig,
 	updated: OIDCConfig,
 ): boolean {
-	return (
-		hasChangedField(current, updated, OIDC_IDENTITY_BOUNDARY_FIELDS) ||
-		identityValueChanged(current.mapping?.id, updated.mapping?.id)
-	);
+	return hasChangedField(current, updated, OIDC_IDENTITY_BOUNDARY_FIELDS);
 }
 
 function samlIdentityBoundaryChanged(
@@ -121,7 +125,6 @@ function samlIdentityBoundaryChanged(
 ): boolean {
 	return (
 		hasChangedField(current, updated, SAML_IDENTITY_BOUNDARY_FIELDS) ||
-		identityValueChanged(current.mapping?.id, updated.mapping?.id) ||
 		hasChangedField(
 			current.idpMetadata,
 			updated.idpMetadata,
@@ -582,9 +585,40 @@ function parseAndValidateConfig<T>(
 	return config;
 }
 
+type SAMLConfigUpdate = Omit<
+	Partial<SAMLConfig>,
+	"idpMetadata" | "spMetadata"
+> & {
+	idpMetadata?: Partial<SAMLIdentityProviderMetadata> | undefined;
+	spMetadata?: Partial<NonNullable<SAMLConfig["spMetadata"]>> | undefined;
+};
+
+function mergeSAMLIdentityProviderMetadata(
+	current: SAMLIdentityProviderMetadata,
+	updates: Partial<SAMLIdentityProviderMetadata> | undefined,
+): SAMLIdentityProviderMetadata {
+	if (!updates) {
+		return current;
+	}
+
+	const merged = { ...current, ...updates };
+	const metadata = updates.metadata ?? current.metadata;
+	const entityID = updates.entityID ?? current.entityID;
+	if (metadata) {
+		return { ...merged, metadata, entityID };
+	}
+	if (!entityID) {
+		throw new APIError("BAD_REQUEST", {
+			message:
+				"SAML manual IdP configuration requires idpMetadata.entityID; issuer identifies the service provider and cannot identify the IdP",
+		});
+	}
+	return { ...merged, metadata: undefined, entityID };
+}
+
 function mergeSAMLConfig(
 	current: SAMLConfig,
-	updates: Partial<SAMLConfig>,
+	updates: SAMLConfigUpdate,
 	issuer: string,
 ): SAMLConfig {
 	return {
@@ -593,8 +627,13 @@ function mergeSAMLConfig(
 		issuer,
 		entryPoint: updates.entryPoint ?? current.entryPoint,
 		cert: updates.cert ?? current.cert,
-		spMetadata: updates.spMetadata ?? current.spMetadata,
-		idpMetadata: updates.idpMetadata ?? current.idpMetadata,
+		spMetadata: updates.spMetadata
+			? { ...current.spMetadata, ...updates.spMetadata }
+			: current.spMetadata,
+		idpMetadata: mergeSAMLIdentityProviderMetadata(
+			current.idpMetadata,
+			updates.idpMetadata,
+		),
 		mapping: updates.mapping ?? current.mapping,
 		audience: updates.audience ?? current.audience,
 		callbackUrl: updates.callbackUrl ?? current.callbackUrl,
@@ -765,6 +804,7 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						);
 
 						validateCertSources(updatedSamlConfig);
+						assertSAMLIdentityProviderAuthority(updatedSamlConfig);
 						if (
 							samlIdentityBoundaryChanged(currentSamlConfig, updatedSamlConfig)
 						) {

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getAuthTables, getAuthTablesWithResolvedIndexes } from "../get-tables";
+import type { AccountKey } from "../schema/account";
+import { createLocalAccountIssuer } from "../schema/account";
 import type { SecondaryStorage } from "../type";
 
 const secondaryStorageStub: SecondaryStorage = {
@@ -11,6 +13,18 @@ const secondaryStorageStub: SecondaryStorage = {
 };
 
 describe("getAuthTables", () => {
+	it("creates a local account key without changing the provider account id", () => {
+		const credentialAccountKey: AccountKey = {
+			issuer: createLocalAccountIssuer("credential"),
+			providerAccountId: "user-id",
+		};
+
+		expect(credentialAccountKey).toEqual({
+			issuer: "local:credential",
+			providerAccountId: "user-id",
+		});
+	});
+
 	it("should use correct field name for refreshTokenExpiresAt", () => {
 		const tables = getAuthTables({
 			account: {
@@ -67,6 +81,29 @@ describe("getAuthTables", () => {
 
 		expect(refreshTokenExpiresAtField.fieldName).toBe("refreshTokenExpiresAt");
 		expect(accessTokenExpiresAtField.fieldName).toBe("accessTokenExpiresAt");
+	});
+
+	it("defines the issuer-scoped account key with configured field names", () => {
+		const tables = getAuthTables({
+			account: {
+				fields: {
+					issuer: "identity_issuer",
+					providerAccountId: "provider_subject",
+					providerId: "provider_alias",
+				},
+			},
+		});
+
+		expect(tables.account?.fields.issuer?.fieldName).toBe("identity_issuer");
+		expect(tables.account?.fields.providerAccountId?.fieldName).toBe(
+			"provider_subject",
+		);
+		expect(tables.account?.fields.providerId?.fieldName).toBe("provider_alias");
+		expect(tables.account?.fields.accountId).toBeUndefined();
+		expect(tables.account?.indexes).toContainEqual({
+			fields: ["issuer", "providerAccountId"],
+			unique: true,
+		});
 	});
 
 	it("should propagate compound indexes from plugin schemas", () => {

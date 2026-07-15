@@ -31,6 +31,7 @@ export const linear = (options: LinearOptions) => {
 	return {
 		id: "linear",
 		name: "Linear",
+		accountSubject: ({ profile }) => profile.id,
 		createAuthorizationURL({
 			state,
 			scopes,
@@ -113,7 +114,6 @@ export const linear = (options: LinearOptions) => {
 			// We default to false for security consistency.
 			return {
 				user: {
-					id: profile.data.viewer.id,
 					name: profile.data.viewer.name,
 					email: profile.data.viewer.email,
 					image: profile.data.viewer.avatarUrl,

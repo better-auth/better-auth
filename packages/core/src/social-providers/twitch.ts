@@ -42,6 +42,7 @@ export const twitch = (options: TwitchOptions) => {
 	return {
 		id: "twitch",
 		name: "Twitch",
+		accountSubject: ({ profile }) => profile.sub,
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope
 				? []
@@ -98,7 +99,6 @@ export const twitch = (options: TwitchOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.sub,
 					name: profile.preferred_username,
 					email: profile.email,
 					image: profile.picture,

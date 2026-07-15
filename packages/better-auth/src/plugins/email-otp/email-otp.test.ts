@@ -117,8 +117,9 @@ describe("email-otp", async () => {
 		expect(created.user?.emailVerified).toBe(false);
 		await internalAdapter.createAccount({
 			userId,
-			accountId: "attacker-google",
 			providerId: "google",
+			issuer: "local:google",
+			providerAccountId: "attacker-google",
 		});
 
 		// Precondition: the password is blocked behind the verification gate.
@@ -391,6 +392,15 @@ describe("email-otp", async () => {
 			password: "password",
 		});
 		expect(res.data?.token).toBeDefined();
+		const userId = res.data!.user.id;
+		await expect(
+			(await auth.$context).internalAdapter.findCredentialAccount(userId),
+		).resolves.toMatchObject({
+			userId,
+			providerId: "credential",
+			issuer: "local:credential",
+			providerAccountId: userId,
+		});
 	});
 
 	it("should fail on invalid email", async () => {

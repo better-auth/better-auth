@@ -61,8 +61,16 @@ describe("paypal.getUserInfo", () => {
 			idToken: await idToken("paypal-user-123"),
 		});
 
-		expect(result?.user.id).toBe("paypal-user-123");
+		expect(result?.user).not.toHaveProperty("id");
 		expect(result?.user.email).toBe("paypal-user@example.com");
+		expect(typeof provider.accountSubject).toBe("function");
+		if (typeof provider.accountSubject !== "function" || !result) return;
+		expect(
+			await provider.accountSubject({
+				tokens: { accessToken: "paypal-access-token" },
+				profile: result.data,
+			}),
+		).toBe("paypal-user-123");
 	});
 
 	it("keeps the PayPal user id when the profile subject matches", async () => {
@@ -80,7 +88,14 @@ describe("paypal.getUserInfo", () => {
 			idToken: await idToken("paypal-subject-123"),
 		});
 
-		expect(result?.user.id).toBe("paypal-user-123");
+		expect(typeof provider.accountSubject).toBe("function");
+		if (typeof provider.accountSubject !== "function" || !result) return;
+		expect(
+			await provider.accountSubject({
+				tokens: { accessToken: "paypal-access-token" },
+				profile: result.data,
+			}),
+		).toBe("paypal-user-123");
 	});
 
 	it("returns null when the id token subject does not match the profile", async () => {

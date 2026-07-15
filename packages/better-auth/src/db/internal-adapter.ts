@@ -12,6 +12,7 @@ import {
 	queueAfterTransactionHook,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import { createLocalAccountIssuer } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
@@ -884,7 +885,7 @@ export const createInternalAdapter = (
 		/**
 		 * Delete an account by its primary key.
 		 *
-		 * @param id - The account row's primary key (the `id` column, not the `accountId` column).
+		 * @param id - The account row's primary key, not its providerAccountId.
 		 */
 		deleteAccount: async (id: string) => {
 			await deleteWithHooks(
@@ -965,87 +966,28 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
-		findOAuthUser: async (
-			email: string,
-			accountId: string,
-			providerId: string,
-		) => {
-			// we need to find account first to avoid missing user if the email changed with the provider for the same account
-			const account = await (await getCurrentAdapter(adapter)).findOne<
+		findUserByAccountKey: async ({ issuer, providerAccountId }) => {
+			const accountWithUser = await (await getCurrentAdapter(adapter)).findOne<
 				Account & { user: User | null }
 			>({
 				model: "account",
 				where: [
 					{
-						value: accountId,
-						field: "accountId",
+						field: "issuer",
+						value: issuer,
 					},
 					{
-						value: providerId,
-						field: "providerId",
+						field: "providerAccountId",
+						value: providerAccountId,
 					},
 				],
 				join: {
 					user: true,
 				},
 			});
-			if (account) {
-				if (account.user) {
-					return {
-						user: account.user,
-						linkedAccount: account,
-						accounts: [account],
-					};
-				} else {
-					const user = await (await getCurrentAdapter(adapter)).findOne<User>({
-						model: "user",
-						where: [
-							{
-								value: email.toLowerCase(),
-								field: "email",
-							},
-						],
-					});
-					if (user) {
-						return {
-							user,
-							linkedAccount: account,
-							accounts: [account],
-						};
-					}
-					return null;
-				}
-			} else {
-				const user = await (await getCurrentAdapter(adapter)).findOne<User>({
-					model: "user",
-					where: [
-						{
-							value: email.toLowerCase(),
-							field: "email",
-						},
-					],
-				});
-				if (user) {
-					const accounts = await (
-						await getCurrentAdapter(adapter)
-					).findMany<Account>({
-						model: "account",
-						where: [
-							{
-								value: user.id,
-								field: "userId",
-							},
-						],
-					});
-					return {
-						user,
-						linkedAccount: null,
-						accounts: accounts || [],
-					};
-				} else {
-					return null;
-				}
-			}
+			if (!accountWithUser?.user) return null;
+			const { user, ...account } = accountWithUser;
+			return { user, account };
 		},
 		findUserByEmail: async (
 			email: string,
@@ -1172,6 +1114,14 @@ export const createInternalAdapter = (
 						field: "providerId",
 						value: "credential",
 					},
+					{
+						field: "issuer",
+						value: createLocalAccountIssuer("credential"),
+					},
+					{
+						field: "providerAccountId",
+						value: userId,
+					},
 				],
 				"account",
 				undefined,
@@ -1191,18 +1141,32 @@ export const createInternalAdapter = (
 			});
 			return accounts;
 		},
-		findAccountByProviderId: async (accountId: string, providerId: string) => {
+		findCredentialAccount: async (userId: string) => {
+			return (await getCurrentAdapter(adapter)).findOne<Account>({
+				model: "account",
+				where: [
+					{ field: "userId", value: userId },
+					{ field: "providerId", value: "credential" },
+					{
+						field: "issuer",
+						value: createLocalAccountIssuer("credential"),
+					},
+					{ field: "providerAccountId", value: userId },
+				],
+			});
+		},
+		findAccountByKey: async ({ issuer, providerAccountId }) => {
 			const account = await (await getCurrentAdapter(adapter)).findOne<Account>(
 				{
 					model: "account",
 					where: [
 						{
-							field: "accountId",
-							value: accountId,
+							field: "issuer",
+							value: issuer,
 						},
 						{
-							field: "providerId",
-							value: providerId,
+							field: "providerAccountId",
+							value: providerAccountId,
 						},
 					],
 				},

@@ -1,5 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
@@ -264,11 +265,8 @@ export const changePassword = createAuthEndpoint(
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 		}
 
-		const accounts = await ctx.context.internalAdapter.findAccounts(
+		const account = await ctx.context.internalAdapter.findCredentialAccount(
 			session.user.id,
-		);
-		const account = accounts.find(
-			(account) => account.providerId === "credential" && account.password,
 		);
 		if (!account || !account.password) {
 			throw APIError.from(
@@ -343,18 +341,16 @@ export const setPassword = createAuthEndpoint.serverOnly(
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 		}
 
-		const accounts = await ctx.context.internalAdapter.findAccounts(
+		const account = await ctx.context.internalAdapter.findCredentialAccount(
 			session.user.id,
-		);
-		const account = accounts.find(
-			(account) => account.providerId === "credential" && account.password,
 		);
 		const passwordHash = await ctx.context.password.hash(newPassword);
 		if (!account) {
 			await ctx.context.internalAdapter.linkAccount({
 				userId: session.user.id,
 				providerId: "credential",
-				accountId: session.user.id,
+				issuer: createLocalAccountIssuer("credential"),
+				providerAccountId: session.user.id,
 				password: passwordHash,
 			});
 			return ctx.json({
@@ -469,11 +465,8 @@ export const deleteUser = createAuthEndpoint(
 		const session = ctx.context.session;
 
 		if (ctx.body.password) {
-			const accounts = await ctx.context.internalAdapter.findAccounts(
+			const account = await ctx.context.internalAdapter.findCredentialAccount(
 				session.user.id,
-			);
-			const account = accounts.find(
-				(account) => account.providerId === "credential" && account.password,
 			);
 			if (!account || !account.password) {
 				throw APIError.from(
@@ -783,11 +776,9 @@ export const changeEmail = createAuthEndpoint(
 		 * If the email is not verified, we can update the email if the option is enabled
 		 */
 		if (canUpdateWithoutVerification) {
-			await ctx.context.internalAdapter.updateUserByEmail(
-				ctx.context.session.user.email,
-				{
-					email: newEmail,
-				},
+			await ctx.context.internalAdapter.updateUser(
+				ctx.context.session.user.id,
+				{ email: newEmail },
 			);
 			await setSessionCookie(ctx, {
 				session: ctx.context.session.session,

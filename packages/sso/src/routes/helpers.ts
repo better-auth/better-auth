@@ -120,7 +120,24 @@ export function createSP(
 	});
 }
 
+export function assertSAMLIdentityProviderAuthority(config: {
+	idpMetadata?: {
+		metadata?: string | undefined;
+		entityID?: string | undefined;
+	};
+}): void {
+	if (config.idpMetadata?.metadata || config.idpMetadata?.entityID) {
+		return;
+	}
+
+	throw new APIError("BAD_REQUEST", {
+		message:
+			"SAML manual IdP configuration requires idpMetadata.entityID; issuer identifies the service provider and cannot identify the IdP",
+	});
+}
+
 export function createIdP(config: SAMLConfig) {
+	assertSAMLIdentityProviderAuthority(config);
 	const idpData = config.idpMetadata;
 	if (idpData?.metadata) {
 		return saml.IdentityProvider({
@@ -133,19 +150,19 @@ export function createIdP(config: SAMLConfig) {
 		});
 	}
 	return saml.IdentityProvider({
-		entityID: idpData?.entityID || config.issuer,
-		singleSignOnService: idpData?.singleSignOnService || [
+		entityID: idpData.entityID,
+		singleSignOnService: idpData.singleSignOnService || [
 			{
 				Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
 				Location: config.entryPoint,
 			},
 		],
-		singleLogoutService: idpData?.singleLogoutService,
+		singleLogoutService: idpData.singleLogoutService,
 		signingCert: normalizePemList(resolveSigningCerts(config)),
 		wantAuthnRequestsSigned: config.authnRequestsSigned || false,
-		isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
-		encPrivateKey: normalizePem(idpData?.encPrivateKey),
-		encPrivateKeyPass: idpData?.encPrivateKeyPass,
+		isAssertionEncrypted: idpData.isAssertionEncrypted || false,
+		encPrivateKey: normalizePem(idpData.encPrivateKey),
+		encPrivateKeyPass: idpData.encPrivateKeyPass,
 	});
 }
 

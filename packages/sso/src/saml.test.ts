@@ -111,6 +111,22 @@ const idpMetadata = `
 </md:ContactPerson>
 </md:EntityDescriptor>
 `;
+
+function extractSigningCertificateFromMetadata(metadata: string): string {
+	const certificateMatch = metadata.match(
+		/<ds:X509Certificate>([^<]+)<\/ds:X509Certificate>/,
+	);
+	const certificateBody = certificateMatch?.[1]?.trim();
+	if (!certificateBody) {
+		throw new Error("IdP metadata does not contain a signing certificate");
+	}
+	return `-----BEGIN CERTIFICATE-----\n${certificateBody}\n-----END CERTIFICATE-----`;
+}
+
+const mockIdentityProviderMetadata = {
+	entityID: "http://localhost:8081/api/sso/saml2/idp/metadata",
+};
+
 const idPk = `
 -----BEGIN RSA PRIVATE KEY-----
 MIIJKgIBAAKCAgEA+YIi6C8hA+NSB7dEcQf5OseCtL8wCohnnD8nnUTUdaMor9zm
@@ -1537,6 +1553,7 @@ describe("SAML SSO", async () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
+						idpMetadata: mockIdentityProviderMetadata,
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
@@ -1567,6 +1584,7 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
+					idpMetadata: mockIdentityProviderMetadata,
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1587,6 +1605,7 @@ describe("SAML SSO", async () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
+						idpMetadata: mockIdentityProviderMetadata,
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
@@ -1625,6 +1644,7 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
+					idpMetadata: mockIdentityProviderMetadata,
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -1645,6 +1665,7 @@ describe("SAML SSO", async () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
+						idpMetadata: mockIdentityProviderMetadata,
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
@@ -1677,6 +1698,7 @@ describe("SAML SSO", async () => {
 					domain: "http://localhost:8081",
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
+						idpMetadata: mockIdentityProviderMetadata,
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -1791,6 +1813,7 @@ describe("SAML SSO", async () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
+					idpMetadata: mockIdentityProviderMetadata,
 					spMetadata: {
 						metadata: spMetadata,
 					},
@@ -1808,6 +1831,7 @@ describe("SAML SSO", async () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
+						idpMetadata: mockIdentityProviderMetadata,
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -3364,6 +3388,7 @@ describe("SSO Provider Config Parsing", () => {
 				samlConfig: {
 					entryPoint: "http://localhost:8081/sso",
 					cert: "test-cert",
+					idpMetadata: mockIdentityProviderMetadata,
 					spMetadata: {
 						entityID: "test-entity",
 					},
@@ -3439,7 +3464,6 @@ describe("SSO Provider Config Parsing", () => {
 						clientSecret: "test-secret",
 						tokenEndpointAuthentication: "client_secret_basic",
 						mapping: {
-							id: "sub",
 							email: "email",
 							name: "name",
 						},
@@ -3456,7 +3480,10 @@ describe("SSO Provider Config Parsing", () => {
 			const serialized = JSON.stringify(provider.oidcConfig);
 			expect(serialized).not.toContain("[object Object]");
 
-			expect(provider.oidcConfig?.mapping?.id).toBe("sub");
+			expect(provider.oidcConfig?.mapping).toEqual({
+				email: "email",
+				name: "name",
+			});
 		} finally {
 			await oidcServer.stop().catch(() => {});
 		}
@@ -4363,6 +4390,7 @@ describe("SAML ACS Origin Check Bypass", () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
+						idpMetadata: mockIdentityProviderMetadata,
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
@@ -4416,6 +4444,7 @@ describe("SAML ACS Origin Check Bypass", () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
+						idpMetadata: mockIdentityProviderMetadata,
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
@@ -4516,6 +4545,7 @@ describe("SAML ACS Origin Check Bypass", () => {
 					samlConfig: {
 						entryPoint: sharedMockIdP.metadataUrl,
 						cert: certificate,
+						idpMetadata: mockIdentityProviderMetadata,
 						wantAssertionsSigned: false,
 						signatureAlgorithm: "sha256",
 						digestAlgorithm: "sha256",
@@ -4571,6 +4601,7 @@ describe("SAML Response Security", () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
+					idpMetadata: mockIdentityProviderMetadata,
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -4627,6 +4658,7 @@ describe("SAML Response Security", () => {
 				samlConfig: {
 					entryPoint: sharedMockIdP.metadataUrl,
 					cert: certificate,
+					idpMetadata: mockIdentityProviderMetadata,
 					wantAssertionsSigned: false,
 					signatureAlgorithm: "sha256",
 					digestAlgorithm: "sha256",
@@ -5445,7 +5477,6 @@ describe("SAML SSO - Single Assertion Validation", () => {
 					identifierFormat:
 						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
 					mapping: {
-						id: "nameID",
 						email: "nameID",
 						name: "displayName",
 					},
@@ -5599,6 +5630,7 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
 						cert: certificate,
+						idpMetadata: mockIdentityProviderMetadata,
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -5680,6 +5712,7 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
 						cert: certificate,
+						idpMetadata: mockIdentityProviderMetadata,
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -5730,6 +5763,7 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
 						cert: certificate,
+						idpMetadata: mockIdentityProviderMetadata,
 						spMetadata: {
 							entityID: "http://localhost:8081/sp",
 						},
@@ -5767,6 +5801,7 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
 						cert: certificate,
+						idpMetadata: mockIdentityProviderMetadata,
 						spMetadata: {
 							entityID: "http://localhost:8081/sp",
 						},
@@ -5805,6 +5840,7 @@ describe("SAML Single Logout (SLO)", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/sso",
 						cert: certificate,
+						idpMetadata: mockIdentityProviderMetadata,
 						spMetadata: {
 							metadata: spMetadata,
 						},
@@ -6423,13 +6459,13 @@ describe("SAML E2E: SP-initiated flow", () => {
 		await auth.api.registerSSOProvider({
 			body: {
 				providerId: "e2e-saml",
-				issuer: "http://localhost:8081",
+				issuer: "https://sp.example.com/saml/e2e",
 				domain: "e2e.example.com",
 				samlConfig: {
 					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
-					cert: certificate,
+					cert: extractSigningCertificateFromMetadata(idpMetadata),
 					idpMetadata: {
-						metadata: idpMetadata,
+						entityID: "http://localhost:8081/api/sso/saml2/idp/metadata",
 					},
 					spMetadata: {
 						metadata: spMetadata,
@@ -6489,7 +6525,10 @@ describe("SAML E2E: SP-initiated flow", () => {
 			| Record<string, any>
 			| undefined;
 		expect(ssoAccount).toBeDefined();
-		expect(ssoAccount!.accountId).toBeDefined();
+		expect(ssoAccount!.issuer).toBe(
+			"http://localhost:8081/api/sso/saml2/idp/metadata",
+		);
+		expect(ssoAccount!.providerAccountId).toBe("test@email.com");
 
 		// 7. Verify the user exists and is linked
 		const users = await db.findMany({ model: "user" });
@@ -6606,6 +6645,7 @@ describe("SAML SSO Hardening", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 						cert: certificate,
+						idpMetadata: mockIdentityProviderMetadata,
 						spMetadata: {},
 					},
 				},
@@ -6686,6 +6726,10 @@ describe("SAML SSO Hardening", () => {
 									issuer: "http://localhost:8081",
 									entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 									cert: certificate,
+									idpMetadata: {
+										entityID:
+											"http://localhost:8081/api/sso/saml2/idp/metadata",
+									},
 									spMetadata: { metadata: spMetadata },
 								},
 							},
@@ -6746,6 +6790,10 @@ describe("SAML SSO Hardening", () => {
 									issuer: "http://localhost:8081",
 									entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 									cert: certificate,
+									idpMetadata: {
+										entityID:
+											"http://localhost:8081/api/sso/saml2/idp/metadata",
+									},
 									spMetadata: { metadata: spMetadata },
 								},
 							},
@@ -6780,6 +6828,70 @@ describe("SAML SSO Hardening", () => {
 	 * errors early rather than failing silently at sign-in time.
 	 */
 	describe("Registration-time config validation", () => {
+		it("should reject SAML mappings that attempt to replace the NameID identity", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [sso()],
+			});
+			const { headers } = await signInWithTestUser();
+			const requestHeaders = new Headers(headers);
+			requestHeaders.set("Content-Type", "application/json");
+
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sso/register", {
+					method: "POST",
+					headers: requestHeaders,
+					body: JSON.stringify({
+						providerId: "mapped-saml-identity",
+						issuer: "https://sp.example.com/saml",
+						domain: "example.com",
+						samlConfig: {
+							entryPoint: "https://idp.example.com/sso",
+							cert: "placeholder",
+							idpMetadata: { entityID: "https://idp.example.com" },
+							mapping: {
+								id: "employee_id",
+								email: "email",
+								name: "displayName",
+							},
+						},
+					}),
+				}),
+			);
+
+			expect(response.status).toBe(400);
+		});
+
+		it("should reject manual IdP configuration without an explicit entity ID", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [sso()],
+			});
+			const { headers } = await signInWithTestUser();
+			const requestHeaders = new Headers(headers);
+			requestHeaders.set("Content-Type", "application/json");
+
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sso/register", {
+					method: "POST",
+					headers: requestHeaders,
+					body: JSON.stringify({
+						providerId: "ambiguous-idp-authority",
+						issuer: "https://sp.example.com/saml",
+						domain: "example.com",
+						samlConfig: {
+							entryPoint: "https://idp.example.com/sso",
+							cert: "placeholder",
+							spMetadata: {},
+						},
+					}),
+				}),
+			);
+
+			expect(response.status).toBe(400);
+			expect(await response.json()).toMatchObject({
+				message: expect.stringContaining("idpMetadata.entityID"),
+			});
+		});
+
 		it("should reject registration with empty entryPoint and no idpMetadata.metadata", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
 				plugins: [sso()],

@@ -521,6 +521,8 @@ Store provider account data after an OAuth flow in an encrypted cookie. This is 
 
 The account cookie has a five-minute max age and is refreshed when Better Auth writes updated provider account data, for example after `getAccessToken` or `/refresh-token` refreshes provider tokens. When this happens in server-side code, forward the returned `Set-Cookie` header to the browser so the refreshed account cookie is retained.
 
+Pass `useAccountCookie: true` to `getAccessToken`, `refreshToken`, or `accountInfo` when the signed cookie should select the account. These APIs require an explicit `accountId` or `useAccountCookie: true`; omitting both selectors is invalid.
+
 Better Auth chunks oversized account cookies, but browsers and proxies can still enforce total cookie or header limits. Prefer database-backed account storage for providers that issue large JWTs or for production flows that need durable token storage.
 
 When this option is enabled, you can read the decrypted account cookie in hooks or middleware using `getAccountCookie` from `better-auth/cookies`:

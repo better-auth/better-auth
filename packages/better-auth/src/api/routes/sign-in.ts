@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { User } from "@better-auth/core/db";
+import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import {
 	additionalAuthorizationParamsSchema,
@@ -12,6 +13,10 @@ import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
+import {
+	resolveOAuthAccountKeyForAPI,
+	toOAuthProfileRecord,
+} from "../../oauth2/account-key";
 import {
 	missingEmailLogMessage,
 	OAUTH_CALLBACK_ERROR_CODES,
@@ -287,12 +292,13 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					});
 					throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.INVALID_TOKEN);
 				}
-				const userInfo = await provider.getUserInfo({
+				const oauthTokens = {
 					idToken: token,
 					accessToken: c.body.idToken.accessToken,
 					refreshToken: c.body.idToken.refreshToken,
 					user: c.body.idToken.user,
-				});
+				};
+				const userInfo = await provider.getUserInfo(oauthTokens);
 				if (!userInfo || !userInfo?.user) {
 					c.context.logger.error("Failed to get user info", {
 						provider: c.body.provider,
@@ -312,19 +318,26 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
 					);
 				}
+				const accountKey = await resolveOAuthAccountKeyForAPI(
+					provider,
+					oauthTokens,
+					userInfo.data,
+				);
+				const providerProfile = toOAuthProfileRecord(userInfo.data);
 				const data = await handleOAuthUserInfo(c, {
 					userInfo: {
 						...userInfo.user,
 						email: userInfo.user.email,
-						id: String(userInfo.user.id),
+						id: accountKey.providerAccountId,
 						name: userInfo.user.name || "",
 						image: userInfo.user.image,
 						emailVerified: userInfo.user.emailVerified || false,
 					},
 					account: {
 						providerId: provider.id,
-						accountId: String(userInfo.user.id),
+						...accountKey,
 						accessToken: c.body.idToken.accessToken,
+						idToken: token,
 					},
 					callbackURL: c.body.callbackURL,
 					disableSignUp:
@@ -332,7 +345,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						provider.disableSignUp,
 					source: {
 						method: "oauth",
-						oauth: { providerId: provider.id, profile: userInfo.data },
+						oauth: { providerId: provider.id, profile: providerProfile },
 					},
 				});
 				if (data.error) {
@@ -511,11 +524,20 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			if (!isValidEmail.success) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
-			const user = await ctx.context.internalAdapter.findUserByEmail(email, {
-				includeAccounts: true,
-			});
+			const userRecord = await ctx.context.internalAdapter.findUserByEmail(
+				email.toLowerCase(),
+				{ includeAccounts: true },
+			);
+			const credentialIssuer = createLocalAccountIssuer("credential");
+			const credentialAccount = userRecord?.accounts.find(
+				(account) =>
+					account.userId === userRecord.user.id &&
+					account.providerId === "credential" &&
+					account.issuer === credentialIssuer &&
+					account.providerAccountId === userRecord.user.id,
+			);
 
-			if (!user) {
+			if (!userRecord || !credentialAccount) {
 				// Hash password to prevent timing attacks from revealing valid email addresses
 				// By hashing passwords for invalid emails, we ensure consistent response times
 				await ctx.context.password.hash(password);
@@ -526,18 +548,8 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				);
 			}
 
-			const credentialAccount = user.accounts.find(
-				(a) => a.providerId === "credential",
-			);
-			if (!credentialAccount) {
-				await ctx.context.password.hash(password);
-				ctx.context.logger.warn("Credential account not found");
-				throw APIError.from(
-					"UNAUTHORIZED",
-					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
-				);
-			}
-			const currentPassword = credentialAccount?.password;
+			const user = userRecord.user;
+			const currentPassword = credentialAccount.password;
 			if (!currentPassword) {
 				await ctx.context.password.hash(password);
 				ctx.context.logger.warn("Password not found");
@@ -560,7 +572,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 
 			if (
 				ctx.context.options?.emailAndPassword?.requireEmailVerification &&
-				!user.user.emailVerified
+				!user.emailVerified
 			) {
 				if (!ctx.context.options?.emailVerification?.sendVerificationEmail) {
 					throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.EMAIL_NOT_VERIFIED);
@@ -569,7 +581,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				if (ctx.context.options?.emailVerification?.sendOnSignIn) {
 					const token = await createEmailVerificationToken(
 						ctx.context.secret,
-						user.user.email,
+						user.email,
 						undefined,
 						ctx.context.options.emailVerification?.expiresIn,
 					);
@@ -580,7 +592,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 					await ctx.context.runInBackgroundOrAwait(
 						ctx.context.options.emailVerification.sendVerificationEmail(
 							{
-								user: user.user,
+								user,
 								url,
 								token,
 							},
@@ -593,7 +605,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			}
 
 			const session = await ctx.context.internalAdapter.createSession(
-				user.user.id,
+				user.id,
 				ctx.body.rememberMe === false,
 			);
 
@@ -609,7 +621,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				ctx,
 				{
 					session,
-					user: user.user,
+					user,
 				},
 				ctx.body.rememberMe === false,
 			);
@@ -622,7 +634,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				redirect: !!ctx.body.callbackURL,
 				token: session.token,
 				url: ctx.body.callbackURL,
-				user: parseUserOutput(ctx.context.options, user.user) as User<
+				user: parseUserOutput(ctx.context.options, user) as User<
 					O["user"],
 					O["plugins"]
 				>,

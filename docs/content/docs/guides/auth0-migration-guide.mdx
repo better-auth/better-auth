@@ -203,7 +203,20 @@ Before starting the migration process, set up Better Auth in your project. Follo
         clientSecret: process.env.AUTH0_SECRET!,
     });
 
+    // Review every social provider in your Auth0 export. Use the exact trusted
+    // issuer Better Auth uses, or local:<providerId> when it has no issuer.
+    const accountIssuers: Record<string, string> = {
+        github: "local:github",
+        google: "https://accounts.google.com",
+    };
 
+    function getAccountIssuer(providerId: string) {
+        const issuer = accountIssuers[providerId];
+        if (!issuer) {
+            throw new Error(`Missing trusted issuer for ${providerId}`);
+        }
+        return issuer;
+    }
 
     function safeDateConversion(timestamp?: string | number): Date {
         if (!timestamp) return new Date();
@@ -334,6 +347,12 @@ Before starting the migration process, set up Better Auth in your project. Follo
         for (const identity of auth0User.identities) {
             try {
                 const providerId = identity.provider === 'auth0' ? "credential" : identity.provider.split("-")[0];
+                const issuer = providerId === "credential"
+                    ? "local:credential"
+                    : getAccountIssuer(providerId);
+                const providerAccountId = providerId === "credential"
+                    ? userId
+                    : identity.user_id;
                 await ctx.adapter.create({
                     model: "account",
                     data: {
@@ -341,7 +360,8 @@ Before starting the migration process, set up Better Auth in your project. Follo
                         userId: userId,
                         password: await migratePassword(auth0User),
                         providerId: providerId || identity.provider,
-                        accountId: identity.user_id,
+                        issuer,
+                        providerAccountId,
                         accessToken: identity.access_token,
                         tokenType: identity.token_type,
                         refreshToken: identity.refresh_token,
@@ -365,7 +385,8 @@ Before starting the migration process, set up Better Auth in your project. Follo
                             userId: userId,
                             password: migratePassword(auth0User),
                             providerId: providerId,
-                            accountId: identity.user_id,
+                            issuer,
+                            providerAccountId,
                             accessToken: identity.access_token,
                             tokenType: identity.token_type,
                             refreshToken: identity.refresh_token,

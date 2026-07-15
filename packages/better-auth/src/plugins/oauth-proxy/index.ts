@@ -15,6 +15,10 @@ import { parseJSON } from "../../client/parser";
 import { setSessionCookie } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
+import {
+	resolveOAuthAccountKey,
+	toOAuthProfileRecord,
+} from "../../oauth2/account-key";
 import { redirectOnError } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { getOAuthCallbackPath } from "../../oauth2/utils";
@@ -490,6 +494,12 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							ctx.context.logger.error("Provider did not return email");
 							throw redirectOnError(ctx, errorURL, "email_not_found");
 						}
+						const accountKey = await resolveOAuthAccountKey(
+							provider,
+							tokens,
+							userInfoResult.data,
+						);
+						const providerProfile = toOAuthProfileRecord(userInfoResult.data);
 
 						const proxyCallbackURL = new URL(stateData.callbackURL);
 						const finalCallbackURL =
@@ -498,16 +508,16 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 
 						const payload: PassthroughPayload = {
 							userInfo: {
-								id: String(userInfo.id),
+								id: accountKey.providerAccountId,
 								email: userInfo.email,
 								name: userInfo.name || "",
 								image: userInfo.image,
 								emailVerified: userInfo.emailVerified,
 							},
-							profile: userInfoResult?.data,
+							profile: providerProfile,
 							account: {
 								providerId: provider.id,
-								accountId: String(userInfo.id),
+								...accountKey,
 								accessToken: tokens.accessToken,
 								refreshToken: tokens.refreshToken,
 								idToken: tokens.idToken,

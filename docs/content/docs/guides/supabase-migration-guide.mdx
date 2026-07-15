@@ -238,7 +238,23 @@ Before starting the migration process, set up Better Auth in your project. Follo
        * Format: {phone_number}@{tempEmailDomain}
        */
       tempEmailDomain: 'temp.better-auth.com',
+      /**
+       * Review every social provider in your Supabase export. Use the exact
+       * trusted issuer Better Auth uses, or local:<providerId> when it has none.
+       */
+      accountIssuers: {
+        github: 'local:github',
+        google: 'https://accounts.google.com',
+      } as Record<string, string>,
     };
+
+    function getAccountIssuer(providerId: string) {
+      const issuer = CONFIG.accountIssuers[providerId];
+      if (!issuer) {
+        throw new Error(`Missing trusted issuer for ${providerId}`);
+      }
+      return issuer;
+    }
 
     // ============================================================================
     // TYPE DEFINITIONS
@@ -276,7 +292,8 @@ Before starting the migration process, set up Better Auth in your project. Follo
       id: string;
       userId: string;
       providerId: string;
-      accountId: string;
+      issuer: string;
+      providerAccountId: string;
       password: string | null;
       createdAt: string | null;
       updatedAt: string | null;
@@ -716,7 +733,8 @@ Before starting the migration process, set up Better Auth in your project. Follo
                 id: generateId(),
                 userId: user.id,
                 providerId: 'credential',
-                accountId: user.id,
+                issuer: 'local:credential',
+                providerAccountId: user.id,
                 password: user.encrypted_password || null,
                 createdAt: user.created_at,
                 updatedAt: user.updated_at,
@@ -728,7 +746,8 @@ Before starting the migration process, set up Better Auth in your project. Follo
                 id: generateId(),
                 userId: user.id,
                 providerId: identity.provider,
-                accountId: identity.identity_data?.sub || identity.provider_id,
+                issuer: getAccountIssuer(identity.provider),
+                providerAccountId: identity.identity_data?.sub || identity.provider_id,
                 password: null,
                 createdAt: identity.created_at ?? user.created_at,
                 updatedAt: identity.updated_at ?? user.updated_at,
@@ -739,7 +758,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
         if (accountsData.length > 0) {
           const maxParamsPerQuery = 65000;
-          const fieldsPerAccount = 7;
+          const fieldsPerAccount = 8;
           const accountsPerChunk = Math.floor(maxParamsPerQuery / fieldsPerAccount);
 
           for (let i = 0; i < accountsData.length; i += accountsPerChunk) {
@@ -751,13 +770,14 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
             for (const acc of chunk) {
               accountPlaceholders.push(
-                `($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++})`,
+                `($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++})`,
               );
               accountValues.push(
                 acc.id,
                 acc.userId,
                 acc.providerId,
-                acc.accountId,
+                acc.issuer,
+                acc.providerAccountId,
                 acc.password,
                 acc.createdAt,
                 acc.updatedAt,
@@ -766,7 +786,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
             await toDB.query(
               `
-              INSERT INTO "account" ("id", "userId", "providerId", "accountId", "password", "createdAt", "updatedAt")
+              INSERT INTO "account" ("id", "userId", "providerId", "issuer", "providerAccountId", "password", "createdAt", "updatedAt")
               VALUES ${accountPlaceholders.join(', ')}
               ON CONFLICT ("id") DO NOTHING
             `,
@@ -1328,7 +1348,8 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
           id: generateId(), // [!code highlight]
           userId: user.id, // [!code highlight]
           providerId: `sso-${supabaseProviderId}`, // Matches the migrated provider ID // [!code highlight]
-          accountId: identity.identity_data?.sub || identity.provider_id, // [!code highlight]
+          issuer: `local:sso-${supabaseProviderId}`, // [!code highlight]
+          providerAccountId: identity.identity_data?.sub || identity.provider_id, // [!code highlight]
           password: null, // [!code highlight]
           createdAt: identity.created_at ?? user.created_at, // [!code highlight]
           updatedAt: identity.updated_at ?? user.updated_at, // [!code highlight]

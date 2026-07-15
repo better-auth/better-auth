@@ -6,6 +6,7 @@ import { betterAuth } from "../auth/minimal";
 import type { InferCtx } from "../client/path-to-object";
 import { tanstackStartCookies } from "../integrations/tanstack-start";
 import { admin, organization, twoFactor } from "../plugins";
+import type { GenericOAuthConfig } from "../plugins/generic-oauth";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { Auth } from "./auth";
 import type { HasRequiredKeys } from "./helper";
@@ -330,6 +331,17 @@ describe("public type exports", () => {
 	it("should export GoogleProfile from better-auth/types", () => {
 		expectTypeOf<GoogleProfile>().not.toBeAny();
 	});
+
+	it("keeps Generic OAuth profile mapping separate from account identity", () => {
+		const config: GenericOAuthConfig = {
+			providerId: "company-oauth",
+			clientId: "client-id",
+			accountSubject: ({ profile }) => String(profile.employee_id),
+			// @ts-expect-error Provider identity belongs in accountSubject.
+			mapProfileToUser: () => ({ id: "provider-subject" }),
+		};
+		expectTypeOf(config.accountSubject).not.toBeAny();
+	});
 });
 
 describe("HasRequiredKeys", () => {
@@ -357,6 +369,25 @@ describe("any-poisoning guards", () => {
 			{}
 		>;
 		expectTypeOf<Result["query"]>().toEqualTypeOf<{ page: number }>();
+	});
+
+	it("InferCtx should preserve each branch of a union body", () => {
+		type Result = InferCtx<
+			{
+				body: { accountId: string } | { useAccountCookie: true };
+				query: undefined;
+				method: "POST";
+			},
+			{}
+		>;
+		type AccountIdSelection = Extract<Result, { accountId: string }>;
+		type AccountCookieSelection = Extract<Result, { useAccountCookie: true }>;
+		expectTypeOf<AccountIdSelection["accountId"]>().toEqualTypeOf<string>();
+		expectTypeOf<AccountIdSelection>().not.toHaveProperty("useAccountCookie");
+		expectTypeOf<
+			AccountCookieSelection["useAccountCookie"]
+		>().toEqualTypeOf<true>();
+		expectTypeOf<AccountCookieSelection>().not.toHaveProperty("accountId");
 	});
 
 	/**
