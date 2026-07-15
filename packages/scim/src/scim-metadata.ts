@@ -5,6 +5,7 @@ const MetadataFieldSupportOpenAPISchema = {
 			type: "boolean",
 		},
 	},
+	required: ["supported"] as string[],
 };
 
 export const ServiceProviderOpenAPISchema = {
@@ -83,6 +84,7 @@ export const ServiceProviderOpenAPISchema = {
 		"filter",
 		"changePassword",
 		"sort",
+		"etag",
 		"authenticationSchemes",
 		"schemas",
 		"meta",
