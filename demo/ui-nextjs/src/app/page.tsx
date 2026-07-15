@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { codeToHtml } from "shiki";
 import { authClient } from "@/lib/auth-client";
 
@@ -90,7 +90,6 @@ function UserCard() {
 function SessionBlock() {
 	const session = authClient.useSession();
 	const [html, setHtml] = useState("");
-	const prev = useRef("");
 
 	const json = useMemo(
 		() =>
@@ -106,21 +105,21 @@ function SessionBlock() {
 	);
 
 	useEffect(() => {
-		let stale = false;
+		let generation = 0;
 		const media = window.matchMedia("(prefers-color-scheme: dark)");
 		const render = () => {
+			const current = ++generation;
 			const theme = media.matches ? "github-dark" : "github-light";
 			void codeToHtml(json, { lang: "json", theme }).then((h) => {
-				if (!stale) {
+				if (current === generation) {
 					setHtml(h);
-					prev.current = json;
 				}
 			});
 		};
 		render();
 		media.addEventListener("change", render);
 		return () => {
-			stale = true;
+			generation = Number.POSITIVE_INFINITY;
 			media.removeEventListener("change", render);
 		};
 	}, [json]);

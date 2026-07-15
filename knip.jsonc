@@ -8,6 +8,8 @@
 	"ignore": [
 		// test utilities only imported by test files — invisible to --production
 		"packages/better-auth/src/client/test-plugin.ts",
+		// UI browser runtime is bundled separately into runtime.generated.ts
+		"packages/better-auth/src/ui/runtime/**",
 		// CI scripts used by GitHub Actions workflows, not by packages
 		".github/scripts/**"
 	],
@@ -52,7 +54,12 @@
 				"src/**/*.tsx!",
 				"!src/adapters/**/test/*.prisma",
 				"!src/adapters/**/test/.tmp",
-				"!src/adapters/**/test/auth.ts"
+				"!src/adapters/**/test/auth.ts",
+				"!src/ui/runtime/**"
+			],
+			"ignoreDependencies": [
+				// bundled into the UI browser runtime IIFE
+				"@simplewebauthn/browser"
 			]
 		},
 		"packages/ui": {
