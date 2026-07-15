@@ -10,9 +10,25 @@ const MetadataFieldSupportOpenAPISchema = {
 export const ServiceProviderOpenAPISchema = {
 	type: "object",
 	properties: {
+		id: {
+			type: "string",
+		},
 		patch: MetadataFieldSupportOpenAPISchema,
-		bulk: MetadataFieldSupportOpenAPISchema,
-		filter: MetadataFieldSupportOpenAPISchema,
+		bulk: {
+			type: "object",
+			properties: {
+				supported: { type: "boolean" },
+				maxOperations: { type: "integer" },
+				maxPayloadSize: { type: "integer" },
+			},
+		},
+		filter: {
+			type: "object",
+			properties: {
+				supported: { type: "boolean" },
+				maxResults: { type: "integer" },
+			},
+		},
 		changePassword: MetadataFieldSupportOpenAPISchema,
 		sort: MetadataFieldSupportOpenAPISchema,
 		etag: MetadataFieldSupportOpenAPISchema,
@@ -49,6 +65,9 @@ export const ServiceProviderOpenAPISchema = {
 			type: "object",
 			properties: {
 				resourceType: {
+					type: "string",
+				},
+				location: {
 					type: "string",
 				},
 			},
