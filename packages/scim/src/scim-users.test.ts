@@ -369,6 +369,96 @@ describe("SCIM", () => {
 				}),
 			);
 		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10398
+		 */
+		it("should filter the list of users by externalId", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			const createUser = (userName: string, externalId: string) => {
+				return auth.api.createSCIMUser({
+					body: {
+						userName,
+						externalId,
+					},
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
+			};
+
+			const [userA] = await Promise.all([
+				createUser("user-a", "ext-a"),
+				createUser("user-b", "ext-b"),
+			]);
+
+			const users = await auth.api.listSCIMUsers({
+				query: {
+					filter: 'externalId eq "ext-a"',
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(users).toMatchObject({
+				itemsPerPage: 1,
+				totalResults: 1,
+				Resources: [userA],
+			});
+		});
+
+		it("should return an empty list for an externalId filter with no matching account", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			await auth.api.createSCIMUser({
+				body: { userName: "user-a", externalId: "ext-a" },
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+
+			const users = await auth.api.listSCIMUsers({
+				query: {
+					filter: 'externalId eq "does-not-exist"',
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(users).toMatchObject({
+				itemsPerPage: 0,
+				totalResults: 0,
+				Resources: [],
+			});
+		});
+
+		it("treats externalId filter values as case-sensitive (caseExact)", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			await auth.api.createSCIMUser({
+				body: { userName: "user-a", externalId: "Ext-A" },
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+
+			const users = await auth.api.listSCIMUsers({
+				query: {
+					filter: 'externalId eq "ext-a"',
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(users).toMatchObject({
+				itemsPerPage: 0,
+				totalResults: 0,
+				Resources: [],
+			});
+		});
 	});
 
 	describe("GET /scim/v2/Users/:userId", () => {

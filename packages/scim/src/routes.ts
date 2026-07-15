@@ -20,7 +20,11 @@ import type { AuthMiddleware } from "./middlewares";
 import { buildUserPatch } from "./patch-operations";
 import { SCIMAPIError, SCIMErrorOpenAPISchemas } from "./scim-error";
 import type { DBFilter } from "./scim-filters";
-import { parseSCIMUserFilter, SCIMParseError } from "./scim-filters";
+import {
+	parseSCIMFilter,
+	parseSCIMUserFilter,
+	SCIMParseError,
+} from "./scim-filters";
 import {
 	ResourceTypeOpenAPISchema,
 	SCIMSchemaOpenAPISchema,
@@ -1043,7 +1047,9 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 				Resources: [],
 			} as const;
 
-			const apiFilters: DBFilter[] = parseSCIMAPIUserFilter(ctx.query?.filter);
+			const { externalId, apiFilters } = parseSCIMAPIUserFilter(
+				ctx.query?.filter,
+			);
 
 			const providerId = ctx.context.scimProvider.providerId;
 			const accounts = await ctx.context.adapter.findMany<Account>({
@@ -1051,9 +1057,18 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 				where: [{ field: "providerId", value: providerId }],
 			});
 
-			const accountUserIds = accounts.map((account) => account.userId);
+			// An `externalId` filter narrows to the account(s) whose accountId
+			// matches, before any other lookup - it's the standard pre-provision
+			// existence check every major SCIM provider performs.
+			const scopedAccounts =
+				externalId !== undefined
+					? accounts.filter((account) => account.accountId === externalId)
+					: accounts;
 
-			// No accounts exist for this provider
+			const accountUserIds = scopedAccounts.map((account) => account.userId);
+
+			// No accounts (matching the externalId filter, if any) exist for
+			// this provider
 
 			if (accountUserIds.length === 0) {
 				return ctx.json(emptyListResponse);
@@ -1699,11 +1714,26 @@ const findUserById = async (
 	return { user, account };
 };
 
-const parseSCIMAPIUserFilter = (filter?: string) => {
-	let filters: DBFilter[] = [];
+/**
+ * `externalId` lives on the `account` model (as `accountId`), not on the
+ * `user` model, so it can't be resolved through the generic
+ * `SCIMUserAttributes` map used for the other list filters. It's intercepted
+ * here and resolved by the caller against the already-fetched accounts for
+ * this provider.
+ */
+const parseSCIMAPIUserFilter = (
+	filter?: string,
+): { externalId?: string; apiFilters: DBFilter[] } => {
+	if (!filter) {
+		return { apiFilters: [] };
+	}
 
 	try {
-		filters = filter ? parseSCIMUserFilter(filter) : [];
+		const parsed = parseSCIMFilter(filter);
+		if (parsed.attribute === "externalId") {
+			return { externalId: parsed.value.replaceAll('"', ""), apiFilters: [] };
+		}
+		return { apiFilters: parseSCIMUserFilter(filter) };
 	} catch (error) {
 		throw new SCIMAPIError("BAD_REQUEST", {
 			detail:
@@ -1711,6 +1741,4 @@ const parseSCIMAPIUserFilter = (filter?: string) => {
 			scimType: "invalidFilter",
 		});
 	}
-
-	return filters;
 };

@@ -19,7 +19,14 @@ export class SCIMParseError extends Error {}
 const SCIMFilterRegex =
 	/^\s*(?<attribute>[^\s]+)\s+(?<op>eq|ne|co|sw|ew|pr)\s*(?:(?<value>"[^"]*"|[^\s]+))?\s*$/i;
 
-const parseSCIMFilter = (filter: string) => {
+/**
+ * Parses a raw SCIM filter expression into its attribute/operator/value parts
+ * without mapping the attribute to a database field. Exposed for callers
+ * (like the `externalId` filter on `GET /scim/v2/Users`) that need to resolve
+ * an attribute against a different model than the generic `SCIMUserAttributes`
+ * map targets.
+ */
+export const parseSCIMFilter = (filter: string) => {
 	const match = filter.match(SCIMFilterRegex);
 	if (!match) {
 		throw new SCIMParseError("Invalid filter expression");
