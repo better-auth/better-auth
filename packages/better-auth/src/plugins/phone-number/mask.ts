@@ -11,7 +11,7 @@ export const PHONE_NUMBER_REVEAL_PATHS = [
  * True when the value already matches the default mask format
  * (`+` optional, then one or more `*`, then up to 4 trailing digits).
  */
-export function isDefaultMaskedPhoneNumber(phoneNumber: string): boolean {
+function isDefaultMaskedPhoneNumber(phoneNumber: string): boolean {
 	return /^\+?\*+\d{0,4}$/.test(phoneNumber);
 }
 
@@ -19,7 +19,7 @@ export function isDefaultMaskedPhoneNumber(phoneNumber: string): boolean {
  * True when the value still looks like a raw phone number worth masking.
  * Used so cookie-cached / already-masked values are not transformed again.
  */
-export function looksLikeRawPhoneNumber(phoneNumber: string): boolean {
+function looksLikeRawPhoneNumber(phoneNumber: string): boolean {
 	if (isDefaultMaskedPhoneNumber(phoneNumber)) {
 		return false;
 	}
