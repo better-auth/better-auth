@@ -992,6 +992,14 @@ export const updateSCIMUser = (authMiddleware: AuthMiddleware) =>
 const listSCIMUsersQuerySchema = z
 	.object({
 		filter: z.string().optional(),
+		startIndex: z.coerce.number().int().min(1).optional().meta({
+			description:
+				"1-based index of the first result (RFC 7644 §3.4.2.4). Defaults to 1.",
+		}),
+		count: z.coerce.number().int().min(0).optional().meta({
+			description:
+				"Maximum number of results to return (RFC 7644 §3.4.2.4). When omitted, all matching results are returned. When 0, returns no resources but still reports totalResults.",
+		}),
 	})
 	.optional();
 
@@ -1007,7 +1015,7 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 				openapi: {
 					summary: "List SCIM users",
 					description:
-						"Returns all users provisioned via SCIM for the linked organization. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.4.2",
+						"Returns users provisioned via SCIM for the linked organization, with RFC 7644 pagination via startIndex and count. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.4.2",
 					responses: {
 						"200": {
 							description: "SCIM user list",
@@ -1035,10 +1043,13 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 			use: [authMiddleware],
 		},
 		async (ctx) => {
+			const startIndex = ctx.query?.startIndex ?? 1;
+			const count = ctx.query?.count;
+
 			const emptyListResponse = {
 				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
 				totalResults: 0,
-				startIndex: 1,
+				startIndex,
 				itemsPerPage: 0,
 				Resources: [],
 			} as const;
@@ -1046,18 +1057,25 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 			const apiFilters: DBFilter[] = parseSCIMAPIUserFilter(ctx.query?.filter);
 
 			const providerId = ctx.context.scimProvider.providerId;
+			const accountWhere = [{ field: "providerId", value: providerId }];
+			// Count first, then fetch with an explicit limit so the adapter
+			// factory default (100) does not silently truncate the ID set.
+			const accountCount = await ctx.context.adapter.count({
+				model: "account",
+				where: accountWhere,
+			});
+
+			if (accountCount === 0) {
+				return ctx.json(emptyListResponse);
+			}
+
 			const accounts = await ctx.context.adapter.findMany<Account>({
 				model: "account",
-				where: [{ field: "providerId", value: providerId }],
+				where: accountWhere,
+				limit: accountCount,
 			});
 
 			const accountUserIds = accounts.map((account) => account.userId);
-
-			// No accounts exist for this provider
-
-			if (accountUserIds.length === 0) {
-				return ctx.json(emptyListResponse);
-			}
 
 			let userFilters: DBFilter[] = [
 				{ field: "id", value: accountUserIds, operator: "in" },
@@ -1065,34 +1083,65 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 
 			const organizationId = ctx.context.scimProvider.organizationId;
 			if (organizationId) {
-				const members = await ctx.context.adapter.findMany<Member>({
+				const memberWhere: DBFilter[] = [
+					{ field: "organizationId", value: organizationId },
+					{ field: "userId", value: accountUserIds, operator: "in" },
+				];
+				const memberCount = await ctx.context.adapter.count({
 					model: "member",
-					where: [
-						{ field: "organizationId", value: organizationId },
-						{ field: "userId", value: accountUserIds, operator: "in" },
-					],
+					where: memberWhere,
 				});
 
-				const memberUserIds = members.map((member) => member.userId);
-
-				// No members exist for this organization
-
-				if (memberUserIds.length === 0) {
+				if (memberCount === 0) {
 					return ctx.json(emptyListResponse);
 				}
 
+				const members = await ctx.context.adapter.findMany<Member>({
+					model: "member",
+					where: memberWhere,
+					limit: memberCount,
+				});
+
+				const memberUserIds = members.map((member) => member.userId);
 				userFilters = [{ field: "id", value: memberUserIds, operator: "in" }];
+			}
+
+			const where = [...userFilters, ...apiFilters];
+			const totalResults = await ctx.context.adapter.count({
+				model: "user",
+				where,
+			});
+
+			if (totalResults === 0) {
+				return ctx.json(emptyListResponse);
+			}
+
+			// When count is omitted, return the full matching set. When count is
+			// 0, return no resources but still report totalResults (RFC 7644).
+			const pageSize = count ?? totalResults;
+			const offset = startIndex - 1;
+
+			if (pageSize === 0 || offset >= totalResults) {
+				return ctx.json({
+					schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+					totalResults,
+					startIndex,
+					itemsPerPage: 0,
+					Resources: [],
+				});
 			}
 
 			const users = await ctx.context.adapter.findMany<User>({
 				model: "user",
-				where: [...userFilters, ...apiFilters],
+				where,
+				limit: pageSize,
+				offset,
 			});
 
 			return ctx.json({
 				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
-				totalResults: users.length,
-				startIndex: 1,
+				totalResults,
+				startIndex,
 				itemsPerPage: users.length,
 				Resources: users.map((user) => {
 					const account = accounts.find((a) => a.userId === user.id);

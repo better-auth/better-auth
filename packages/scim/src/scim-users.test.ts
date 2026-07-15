@@ -369,6 +369,127 @@ describe("SCIM", () => {
 				}),
 			);
 		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10398
+		 */
+		it("should report the real totalResults when more than 100 users are provisioned", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+			const totalUsers = 101;
+
+			await Promise.all(
+				Array.from({ length: totalUsers }, (_, index) =>
+					auth.api.createSCIMUser({
+						body: {
+							userName: `user-${index}`,
+						},
+						headers: {
+							authorization: `Bearer ${scimToken}`,
+						},
+					}),
+				),
+			);
+
+			const users = await auth.api.listSCIMUsers({
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(users.totalResults).toBe(totalUsers);
+			expect(users.Resources.length).toBe(totalUsers);
+			expect(users.itemsPerPage).toBe(totalUsers);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10398
+		 */
+		it("should accept startIndex and count query parameters for pagination", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+			const totalUsers = 15;
+
+			await Promise.all(
+				Array.from({ length: totalUsers }, (_, index) =>
+					auth.api.createSCIMUser({
+						body: {
+							userName: `page-user-${index}`,
+						},
+						headers: {
+							authorization: `Bearer ${scimToken}`,
+						},
+					}),
+				),
+			);
+
+			const page = await auth.api.listSCIMUsers({
+				query: {
+					startIndex: 6,
+					count: 5,
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(page.totalResults).toBe(totalUsers);
+			expect(page.startIndex).toBe(6);
+			expect(page.itemsPerPage).toBe(5);
+			expect(page.Resources).toHaveLength(5);
+
+			const emptyPage = await auth.api.listSCIMUsers({
+				query: {
+					startIndex: 1,
+					count: 0,
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(emptyPage.totalResults).toBe(totalUsers);
+			expect(emptyPage.startIndex).toBe(1);
+			expect(emptyPage.itemsPerPage).toBe(0);
+			expect(emptyPage.Resources).toHaveLength(0);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10398
+		 */
+		it("should paginate beyond the adapter default findMany limit of 100", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+			const totalUsers = 105;
+
+			await Promise.all(
+				Array.from({ length: totalUsers }, (_, index) =>
+					auth.api.createSCIMUser({
+						body: {
+							userName: `overflow-user-${index}`,
+						},
+						headers: {
+							authorization: `Bearer ${scimToken}`,
+						},
+					}),
+				),
+			);
+
+			const page = await auth.api.listSCIMUsers({
+				query: {
+					startIndex: 101,
+					count: 10,
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(page.totalResults).toBe(totalUsers);
+			expect(page.startIndex).toBe(101);
+			expect(page.itemsPerPage).toBe(5);
+			expect(page.Resources).toHaveLength(5);
+		});
 	});
 
 	describe("GET /scim/v2/Users/:userId", () => {

@@ -294,13 +294,21 @@ The following subset of the specification is currently supported:
 
 Get a list of available users in the database. This is restricted to list only users associated to the same provider and organization than your SCIM token.
 
-<APIMethod path="/scim/v2/Users" method="GET" requireBearerToken isExternalOnly note="Returns the provisioned SCIM user details. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.4.1">
+<APIMethod path="/scim/v2/Users" method="GET" requireBearerToken isExternalOnly note="Returns the provisioned SCIM user details. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.4.2">
   ```ts
   type listSCIMUsers = {
       /**
        * SCIM compliant filter expression
-      */
+       */
       filter?: string = 'userName eq "user-a"'
+      /**
+       * 1-based index of the first result. Defaults to 1.
+       */
+      startIndex?: number = 1
+      /**
+       * Maximum number of results to return. When omitted, all matching results are returned. When 0, returns no resources but still reports totalResults.
+       */
+      count?: number = 100
   }
   ```
 </APIMethod>
