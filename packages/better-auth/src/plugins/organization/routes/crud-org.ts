@@ -622,6 +622,90 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 	);
 };
 
+const getOrganizationQuerySchema = z.optional(
+	z.object({
+		organizationId: z
+			.string()
+			.meta({
+				description: "The organization id to get",
+			})
+			.optional(),
+		organizationSlug: z
+			.string()
+			.meta({
+				description: "The organization slug to get",
+			})
+			.optional(),
+	}),
+);
+
+export const getOrganization = <O extends OrganizationOptions>(options: O) =>
+	createAuthEndpoint(
+		"/organization/get-organization",
+		{
+			method: "GET",
+			query: getOrganizationQuerySchema,
+			requireHeaders: true,
+			use: [orgMiddleware, orgSessionMiddleware],
+			metadata: {
+				openapi: {
+					operationId: "getOrganization",
+					description: "Get the organization metadata",
+					responses: {
+						"200": {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										description: "The organization",
+										$ref: "#/components/schemas/Organization",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const session = ctx.context.session;
+			const organizationId =
+				ctx.query?.organizationSlug ||
+				ctx.query?.organizationId ||
+				session.session.activeOrganizationId;
+			// return null if no organization is found to avoid erroring since this is a usual scenario
+			if (!organizationId) {
+				return ctx.json(null, {
+					status: 200,
+				});
+			}
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+			const organization = ctx.query?.organizationSlug
+				? await adapter.findOrganizationBySlug(organizationId)
+				: await adapter.findOrganizationById(organizationId);
+			if (!organization) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
+			}
+			const isMember = await adapter.checkMembership({
+				userId: session.user.id,
+				organizationId: organization.id,
+			});
+			if (!isMember) {
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				);
+			}
+
+			return ctx.json(organization as InferOrganization<O>);
+		},
+	);
+
 const getFullOrganizationQuerySchema = z.optional(
 	z.object({
 		organizationId: z
@@ -659,7 +743,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
 				openapi: {
-					operationId: "getOrganization",
+					operationId: "getFullOrganization",
 					description: "Get the full organization",
 					responses: {
 						"200": {
