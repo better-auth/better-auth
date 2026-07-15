@@ -150,9 +150,12 @@ export const buildUserPatch = (user: User, operations: Operation[]) => {
 					scimType: "noTarget",
 				});
 			}
+			// `noTarget` is defined for a path that doesn't yield a target
+			// (RFC 7644 §3.12) - this path exists and has a value, we simply
+			// haven't implemented removal for it, so no scimType is included
+			// here to avoid signaling "invalid path" to a client that inspects it.
 			throw new SCIMAPIError("BAD_REQUEST", {
 				detail: `remove is not supported for path "${operation.path}"`,
-				scimType: "noTarget",
 			});
 		}
 

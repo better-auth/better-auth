@@ -754,6 +754,12 @@ describe("SCIM", () => {
 				}),
 			);
 
+			// `noTarget` means the path didn't yield a target - "name.formatted"
+			// does, so this must not be labeled noTarget (only the path-less case
+			// above is a genuine noTarget).
+			const error = await patchUser().catch((e) => e);
+			expect(error.body).not.toHaveProperty("scimType");
+
 			const unchangedUser = await auth.api.getSCIMUser({
 				params: { userId: user.id },
 				headers: { authorization: `Bearer ${scimToken}` },
