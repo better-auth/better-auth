@@ -1150,6 +1150,12 @@ export const getSCIMUser = (authMiddleware: AuthMiddleware) =>
 		},
 	);
 
+const patchSCIMUserQuerySchema = z
+	.object({
+		attributes: z.string().optional(),
+	})
+	.optional();
+
 const patchSCIMUserBodySchema = z.object({
 	schemas: z
 		.array(z.string())
@@ -1178,6 +1184,7 @@ export const patchSCIMUser = (authMiddleware: AuthMiddleware) =>
 		{
 			method: "PATCH",
 			body: patchSCIMUserBodySchema,
+			query: patchSCIMUserQuerySchema,
 			metadata: {
 				...HIDE_METADATA,
 				allowedMediaTypes: supportedMediaTypes,
@@ -1185,6 +1192,15 @@ export const patchSCIMUser = (authMiddleware: AuthMiddleware) =>
 					summary: "Patch SCIM user",
 					description: "Updates fields on a SCIM user record",
 					responses: {
+						"200": {
+							description:
+								"Patch update applied correctly; returned when the attributes query parameter is specified",
+							content: {
+								"application/json": {
+									schema: OpenAPIUserResourceSchema,
+								},
+							},
+						},
 						"204": {
 							description: "Patch update applied correctly",
 						},
@@ -1236,23 +1252,35 @@ export const patchSCIMUser = (authMiddleware: AuthMiddleware) =>
 
 			const deactivating = resolveSCIMActiveDeactivation(ctx, userPatch);
 
-			await Promise.all([
+			const [updatedUser, updatedAccount] = await Promise.all([
 				Object.keys(userPatch).length > 0
 					? ctx.context.internalAdapter.updateUser(userId, {
 							...userPatch,
 							updatedAt: new Date(),
 						})
-					: Promise.resolve(),
+					: Promise.resolve(user),
 				Object.keys(accountPatch).length > 0
 					? ctx.context.internalAdapter.updateAccount(account.id, {
 							...accountPatch,
 							updatedAt: new Date(),
 						})
-					: Promise.resolve(),
+					: Promise.resolve(account),
 			]);
 
 			if (deactivating) {
 				await ctx.context.internalAdapter.deleteUserSessions(userId);
+			}
+
+			// RFC 7644 §3.5.2: "The server MUST return a 200 OK if the
+			// 'attributes' parameter is specified in the request."
+			if (ctx.query?.attributes) {
+				return ctx.json(
+					createUserResource(
+						ctx.context.baseURL,
+						updatedUser ?? user,
+						updatedAccount ?? account,
+					),
+				);
 			}
 
 			ctx.setStatus(204);

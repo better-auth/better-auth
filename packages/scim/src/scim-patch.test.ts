@@ -685,6 +685,111 @@ describe("SCIM", () => {
 			);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10398
+		 */
+		it("should reject a path-less remove operation with 400 noTarget", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			const user = await auth.api.createSCIMUser({
+				body: { userName: "path-less-remove" },
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+
+			const patchUser = () =>
+				auth.api.patchSCIMUser({
+					params: { userId: user.id },
+					body: {
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+						Operations: [{ op: "remove", value: "x" }],
+					},
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
+
+			await expect(patchUser()).rejects.toThrowError(
+				expect.objectContaining({
+					body: {
+						detail: "remove operation requires a path",
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+						scimType: "noTarget",
+						status: "400",
+					},
+				}),
+			);
+		});
+
+		it("should reject a remove operation with a path with 400", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			const user = await auth.api.createSCIMUser({
+				body: {
+					userName: "path-remove",
+					name: { formatted: "Original Name" },
+				},
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+
+			const patchUser = () =>
+				auth.api.patchSCIMUser({
+					params: { userId: user.id },
+					body: {
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+						Operations: [{ op: "remove", path: "name.formatted", value: null }],
+					},
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
+
+			await expect(patchUser()).rejects.toThrowError(
+				expect.objectContaining({
+					body: expect.objectContaining({
+						detail: 'remove is not supported for path "name.formatted"',
+						status: "400",
+					}),
+				}),
+			);
+
+			const unchangedUser = await auth.api.getSCIMUser({
+				params: { userId: user.id },
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+			expect(unchangedUser.name.formatted).toBe("Original Name");
+		});
+
+		it("should return 200 with the resource body when the attributes query parameter is present", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			const user = await auth.api.createSCIMUser({
+				body: { userName: "attributes-param-user" },
+				headers: { authorization: `Bearer ${scimToken}` },
+			});
+
+			const response = await auth.api.patchSCIMUser({
+				params: { userId: user.id },
+				query: { attributes: "userName" },
+				body: {
+					schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+					Operations: [
+						{ op: "replace", path: "/userName", value: "renamed-user" },
+					],
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(response).toMatchObject({
+				id: user.id,
+				userName: "renamed-user",
+			});
+		});
+
 		it("should not allow anonymous access", async () => {
 			const { auth } = createTestInstance();
 

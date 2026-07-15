@@ -1,5 +1,6 @@
 import type { User } from "better-auth";
 import { getUserFullName } from "./mappings";
+import { SCIMAPIError } from "./scim-error";
 
 type Operation = {
 	op: "add" | "remove" | "replace";
@@ -139,6 +140,22 @@ export const buildUserPatch = (user: User, operations: Operation[]) => {
 	const resources: Resources = { user: userPatch, account: accountPatch };
 
 	for (const operation of operations) {
+		if (operation.op === "remove") {
+			// RFC 7644 §3.5.2.2: a path-less remove fails with 400 noTarget. A
+			// PATCH is atomic (§3.5.2), so this must reject the whole request
+			// rather than silently applying the other operations.
+			if (!operation.path) {
+				throw new SCIMAPIError("BAD_REQUEST", {
+					detail: "remove operation requires a path",
+					scimType: "noTarget",
+				});
+			}
+			throw new SCIMAPIError("BAD_REQUEST", {
+				detail: `remove is not supported for path "${operation.path}"`,
+				scimType: "noTarget",
+			});
+		}
+
 		if (operation.op !== "add" && operation.op !== "replace") {
 			continue;
 		}
