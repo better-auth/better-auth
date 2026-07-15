@@ -30,10 +30,6 @@ describe("oauth userinfo", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				validAudiences: [validAudience],
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});

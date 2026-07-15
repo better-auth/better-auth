@@ -210,10 +210,6 @@ describe("oauth authorize - unauthenticated", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],
@@ -394,10 +390,6 @@ describe("oauth authorize - request_uri resolution", async () => {
 
 					return null;
 				},
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],
@@ -514,10 +506,6 @@ describe("oauth authorize - authenticated", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],

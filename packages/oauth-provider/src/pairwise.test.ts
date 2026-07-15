@@ -33,10 +33,6 @@ describe("pairwise subject identifiers", async () => {
 				pairwiseSecret: "test-pairwise-secret-key-32chars!!",
 				validAudiences: [validAudience],
 				allowDynamicClientRegistration: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -313,10 +309,6 @@ describe("pairwise DCR validation", async () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -342,10 +334,6 @@ describe("pairwise DCR validation", async () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					pairwiseSecret: "test-secret-for-dcr-test-32chars!",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -373,10 +361,6 @@ describe("pairwise DCR validation", async () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					pairwiseSecret: "test-secret-for-dcr-test-32chars!",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -403,10 +387,6 @@ describe("pairwise DCR validation", async () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					pairwiseSecret: "test-secret-for-dcr-test-32chars!",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -435,10 +415,6 @@ describe("pairwise DCR validation", async () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					pairwiseSecret: "test-secret-for-dcr-test-32chars!",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -470,10 +446,6 @@ describe("pairwise DCR validation", async () => {
 					consentPage: "/consent",
 					pairwiseSecret: "test-secret-for-dcr-test-32chars!",
 					allowDynamicClientRegistration: true,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -535,10 +507,6 @@ describe("pairwise metadata", async () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					pairwiseSecret: "test-pairwise-metadata-secret!!!",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -555,10 +523,6 @@ describe("pairwise metadata", async () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});

@@ -30,10 +30,6 @@ describe("oauth revoke", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				validAudiences: [validAudience],
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -355,10 +351,6 @@ describe("oauth revoke - config", async () => {
 						consentPage: "/consent",
 						validAudiences: [validAudience],
 						scopes,
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 						...opts?.oauthProviderConfig,
 					}),
 					...(opts?.oauthProviderConfig?.disableJwtPlugin

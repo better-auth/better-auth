@@ -430,10 +430,6 @@ const authOptions = {
 					}
 				},
 			},
-			silenceWarnings: {
-				openidConfig: true,
-				oauthAuthServerConfig: true,
-			},
 		}),
 		electron(),
 	],

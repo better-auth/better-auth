@@ -30,10 +30,6 @@ describe("oauth introspect", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				validAudiences: [validAudience],
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -557,10 +553,6 @@ describe("oauth introspect - config", async () => {
 						consentPage: "/consent",
 						validAudiences: [validAudience],
 						scopes,
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 						...opts?.oauthProviderConfig,
 					}),
 					...(opts?.oauthProviderConfig?.disableJwtPlugin
@@ -781,10 +773,6 @@ describe("oauth introspect - rejects non-OAuth same-issuer JWTs", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				validAudiences: [authServerBaseUrl],
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
