@@ -103,9 +103,12 @@ export const defaultMessages: Record<string, string> = {
 	"action.backToSignIn": "Back to sign in",
 	"action.signIn": "Sign in",
 	"action.signInWithPhone": "Sign in with phone number",
+	"action.or": "or",
+	"action.signOut": "Sign Out",
+	"action.signingOut": "Signing out...",
+	"action.signOutError": "Could not sign out.",
 
 	// Legal
-	"legal.agreeTo": "I agree to the",
 	"legal.termsOfService": "Terms of Service",
 	"legal.privacyPolicy": "Privacy Policy",
 	"legal.and": "and",
@@ -157,19 +160,41 @@ export const defaultMessages: Record<string, string> = {
 	"twoFactor.backupCodeError": "Could not verify backup code.",
 
 	// Two-factor enrollment
-	"twoFactor.enrollTitle": "Secure your account",
+	"twoFactor.enrollTitle": "Set up two-factor",
 	"twoFactor.enrollDescription":
-		"Add an authenticator app for an extra verification step.",
-	"twoFactor.setupSubmit": "Set up two-factor",
+		"Continue to set up an authenticator app for your account.",
+	"twoFactor.setupTitle": "Scan and confirm",
+	"twoFactor.setupDescription":
+		"Scan the QR code with your authenticator app, then enter the code it shows.",
+	"twoFactor.setupSubmit": "Continue",
 	"twoFactor.preparingSetup": "Preparing two-factor setup...",
 	"twoFactor.setupError": "Could not start two-factor setup.",
+	"twoFactor.tabQr": "QR code",
+	"twoFactor.tabBackupCodes": "Backup codes",
 	"twoFactor.scanQRCode":
-		"Scan this QR code with your authenticator app, then enter the code it shows. Save your backup codes somewhere safe.",
+		"Save your backup codes somewhere safe before you continue.",
 	"twoFactor.verifyingAuthenticator": "Verifying authenticator...",
 	"twoFactor.enabled": "Two-factor authentication enabled.",
 	"twoFactor.verifyAuthenticatorError": "Could not verify authenticator code.",
 	"twoFactor.confirmAndContinue": "Confirm and continue",
 	"twoFactor.currentPassword": "Current password",
+	"twoFactor.optionLabel": "Set up authenticator app",
+	"twoFactor.optionDescription":
+		"Use an app like Authy or Google Authenticator.",
+
+	// Post-signup security chooser
+	"security.chooserTitle": "Secure your account",
+	"security.chooserDescription":
+		"Add an extra layer of security now, or skip and set this up later.",
+	"security.passkeyOption": "Add a passkey",
+	"security.passkeyOptionDescription":
+		"Sign in faster with Face ID, Touch ID, or a security key.",
+	"security.skip": "Skip for now",
+	"security.back": "Back",
+	"security.continue": "Continue",
+	"security.successTitle": "Security method added",
+	"security.successDescription":
+		"Your account is more secure. Continue, or set up another method.",
 
 	// Magic link
 	"magicLink.sendSubmit": "Send magic link",

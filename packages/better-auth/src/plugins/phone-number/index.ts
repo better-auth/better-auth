@@ -4,6 +4,7 @@ import { APIError } from "@better-auth/core/error";
 import { mergeSchema } from "../../db/schema";
 import { PACKAGE_VERSION } from "../../version";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
+import { phoneNumberSettingsCards } from "./phone-number-ui";
 import type { RequiredPhoneNumberOptions } from "./routes";
 import {
 	consumePhoneNumberOTP,
@@ -147,6 +148,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 					},
 				},
 			},
+			settingsCards: phoneNumberSettingsCards,
 		},
 		options,
 		$ERROR_CODES: PHONE_NUMBER_ERROR_CODES,

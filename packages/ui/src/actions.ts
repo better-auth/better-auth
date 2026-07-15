@@ -27,6 +27,7 @@ export const routes = {
 	signUp: {
 		email: post("/sign-up/email"),
 	},
+	signOut: post("/sign-out"),
 	password: {
 		requestReset: post("/request-password-reset"),
 		reset: post("/reset-password"),

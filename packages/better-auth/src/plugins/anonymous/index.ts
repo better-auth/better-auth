@@ -23,6 +23,7 @@ import {
 import { mergeSchema, parseUserOutput } from "../../db/schema";
 import type { Session, User } from "../../types";
 import { PACKAGE_VERSION } from "../../version";
+import { anonymousSettingsCards } from "./anonymous-ui";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
 import type {
@@ -429,6 +430,22 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 		options,
 		schema: mergeSchema(schema, options?.schema),
 		$ERROR_CODES: ANONYMOUS_ERROR_CODES,
+		ui: {
+			capabilities: {
+				anonymous: {
+					id: "anonymous",
+					enabled: true,
+					routes: {
+						signIn: {
+							type: "auth-route",
+							path: "/sign-in/anonymous",
+							method: "POST",
+						},
+					},
+				},
+			},
+			settingsCards: anonymousSettingsCards,
+		},
 	} satisfies BetterAuthPlugin;
 };
 

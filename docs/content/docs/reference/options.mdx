@@ -924,7 +924,7 @@ UI handler configuration. Better Auth exposes a separate `auth.ui.handler` for s
 
 Plugin UI can be authored with `@better-auth/ui` and `jsxImportSource: "@better-auth/ui"`. The JSX runtime compiles UI code to Better Auth's serializable component tree and the browser receives only HTML, CSS, and the small Better Auth UI runtime.
 
-Plugins can expose `ui.pages` for full pages and `ui.capabilities` for data-oriented integration with first-party Auth UI pages. Capabilities expose route descriptors and metadata that Auth UI reads explicitly with `ctx.capability("plugin-id")`; they are not arbitrary UI injection points.
+Plugins can expose `ui.pages` for full pages, `ui.capabilities` for data-oriented integration with first-party Auth UI pages, and `ui.settingsCards` for account settings panels. Capabilities expose route descriptors and metadata that Auth UI reads explicitly with `ctx.capability("plugin-id")`; they are not arbitrary UI injection points. Settings cards let plugins contribute body content while Auth UI owns panel chrome and danger-zone ordering.
 
 ```ts
 import { betterAuth } from "better-auth";

@@ -1,4 +1,4 @@
-import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
+import type { AuthContext, UIPluginConfig } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
@@ -13,6 +13,7 @@ import { getOrgAdapter } from "./adapter";
 import { orgSessionMiddleware } from "./call";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { hasPermission } from "./has-permission";
+import { organizationSettingsCards } from "./organization-ui";
 import {
 	createOrgRole,
 	deleteOrgRole,
@@ -105,6 +106,7 @@ export type DefaultOrganizationPlugin<Options extends OrganizationOptions> = {
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
 	options: NoInfer<Options>;
+	ui: UIPluginConfig;
 };
 
 export interface OrganizationCreator {
@@ -319,6 +321,7 @@ export type OrganizationPlugin<O extends OrganizationOptions> = {
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
 	options: NoInfer<O>;
+	ui: UIPluginConfig;
 };
 
 /**
@@ -371,6 +374,7 @@ export function organization<
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
 	options: NoInfer<O>;
+	ui: UIPluginConfig;
 };
 export function organization<
 	O extends OrganizationOptions & {
@@ -405,6 +409,7 @@ export function organization<
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
 	options: NoInfer<O>;
+	ui: UIPluginConfig;
 };
 export function organization<
 	O extends OrganizationOptions & {
@@ -437,6 +442,7 @@ export function organization<
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
 	options: NoInfer<O>;
+	ui: UIPluginConfig;
 };
 export function organization<O extends OrganizationOptions>(
 	options?: O | undefined,
@@ -1296,5 +1302,41 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		},
 		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
 		options: opts as NoInfer<O>,
-	} satisfies BetterAuthPlugin;
+		ui: {
+			capabilities: {
+				organization: {
+					id: "organization",
+					enabled: true,
+					routes: {
+						list: {
+							type: "auth-route",
+							path: "/organization/list",
+							method: "GET",
+						},
+						listUserInvitations: {
+							type: "auth-route",
+							path: "/organization/list-user-invitations",
+							method: "GET",
+						},
+						leave: {
+							type: "auth-route",
+							path: "/organization/leave",
+							method: "POST",
+						},
+						acceptInvitation: {
+							type: "auth-route",
+							path: "/organization/accept-invitation",
+							method: "POST",
+						},
+						rejectInvitation: {
+							type: "auth-route",
+							path: "/organization/reject-invitation",
+							method: "POST",
+						},
+					},
+				},
+			},
+			settingsCards: organizationSettingsCards,
+		},
+	} as unknown as DefaultOrganizationPlugin<O>;
 }

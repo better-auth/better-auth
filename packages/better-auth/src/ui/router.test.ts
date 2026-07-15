@@ -3,6 +3,9 @@ import { backgrounds } from "@better-auth/ui";
 import { describe, expect, it } from "vitest";
 import { authUI } from "../plugins/auth-ui";
 import { genericOAuth } from "../plugins/generic-oauth";
+import { multiSession } from "../plugins/multi-session";
+import { phoneNumber } from "../plugins/phone-number";
+import { twoFactor } from "../plugins/two-factor";
 import { username } from "../plugins/username";
 import { getTestInstance } from "../test-utils/test-instance";
 
@@ -503,7 +506,7 @@ describe("ui router", async () => {
 		const signUpHtml = await signUp.text();
 
 		expect(signUpHtml).toContain('aria-current="page">Sign Up</span>');
-		expect(signUpHtml).toContain('href="./sign-in"');
+		expect(signUpHtml).toContain('href="/auth/sign-in"');
 		expect(signUpHtml).toContain("By signing up, you agree to the");
 		expect(signUpHtml).toContain('href="https://example.com/terms"');
 		expect(signUpHtml).toContain('href="https://example.com/privacy"');
@@ -512,9 +515,9 @@ describe("ui router", async () => {
 			new Request("http://localhost:3000/auth/sign-in"),
 		);
 		const signInHtml = await signIn.text();
-		expect(signInHtml).toContain("By signing in, you agree to the");
-		expect(signInHtml).toContain("Terms of Service");
-		expect(signInHtml).toContain("Privacy Policy");
+		expect(signInHtml).not.toContain("By signing in, you agree to the");
+		expect(signInHtml).not.toContain("Terms of Service");
+		expect(signInHtml).not.toContain("Privacy Policy");
 	});
 
 	it("renders theme-specific auth UI logos", async () => {
@@ -590,7 +593,7 @@ describe("ui router", async () => {
 		expect(html).toContain("Sign in with Google");
 		expect(html).toContain('data-layout="stack"');
 		expect(html).toContain('aria-current="page">Sign In</span>');
-		expect(html).toContain('href="./sign-up"');
+		expect(html).toContain('href="/auth/sign-up"');
 		expect(html).toContain("Remember me");
 		expect(html).toContain("data-ba-toggle-password");
 	});
@@ -703,23 +706,35 @@ describe("ui router", async () => {
 		);
 		const html = await res.text();
 		expect(html).toContain("Last used sign-in method: passkey.");
+		expect(html).toContain('<div id="account-security"');
 		expect(html).toContain('<div id="passkey-registration"');
-		expect(html).toContain('data-ba-dialog-close="passkey-registration"');
-		expect(html).toContain("Add passkey");
+		expect(html).toContain('data-ba-open-dialog="passkey-registration"');
+		expect(html).toContain("Add a passkey");
 		expect(html).toContain("&quot;type&quot;:&quot;openDialog&quot;");
-		expect(html).toContain(
-			"&quot;target&quot;:&quot;passkey-registration&quot;",
-		);
-		expect(html).toContain('class="ba-button ba-button-secondary"');
+		expect(html).toContain("&quot;target&quot;:&quot;account-security&quot;");
 		expect(html).toContain("Skip for now");
-		expect(html).toContain('<div id="two-factor-enrollment"');
+		expect(html).toContain('<div id="two-factor-setup"');
+		expect(html).toContain('<div id="security-success"');
 		expect(html).toContain('class="ba-modal"');
 		expect(html).toContain('class="ba-modal-panel"');
-		expect(html).toContain('data-ba-dialog-close="two-factor-enrollment"');
-		expect(html).toContain("Set up two-factor");
+		expect(html).toContain("Set up authenticator app");
+		expect(html).toContain("Scan and confirm");
+		expect(html).toContain("Security method added");
+		expect(html).toContain("Continue");
+		expect(html).toContain(">Back<");
+		expect(html).toContain("security.passkeyDone");
+		expect(html).toContain("security.twoFactorDone");
+		expect(html).toContain("&quot;target&quot;:&quot;security-success&quot;");
+		expect(html).toContain("[hidden]{display:none!important}");
+		expect(html).toContain('data-ba-method="qr"');
+		expect(html).toContain('data-ba-method="backup"');
+		expect(html).toContain('data-ba-method-panel="qr"');
+		expect(html).toContain('data-ba-method-panel="backup"');
+		expect(html).toContain("data-ba-two-factor-enable");
+		expect(html).not.toContain("Confirm your password");
 	});
 
-	it("opens two-factor enrollment as a dialog after sign up", async () => {
+	it("opens account security chooser after sign up when two-factor is available", async () => {
 		const twoFactorPlugin = {
 			id: "two-factor-fixture",
 			ui: {
@@ -739,11 +754,15 @@ describe("ui router", async () => {
 		);
 		const html = await res.text();
 
-		expect(html).toContain('<div id="two-factor-enrollment"');
+		expect(html).toContain('<div id="account-security"');
+		expect(html).toContain('<div id="two-factor-setup"');
+		expect(html).toContain('<div id="security-success"');
 		expect(html).toContain("&quot;type&quot;:&quot;openDialog&quot;");
-		expect(html).toContain(
-			"&quot;target&quot;:&quot;two-factor-enrollment&quot;",
-		);
+		expect(html).toContain("&quot;target&quot;:&quot;account-security&quot;");
+		expect(html).toContain("data-ba-totp-qr");
+		expect(html).toContain("data-ba-two-factor-enable");
+		expect(html).toContain("security.twoFactorDone");
+		expect(html).not.toContain("Confirm your password");
 	});
 
 	it("renders username plugin fields on sign up", async () => {
@@ -834,10 +853,63 @@ describe("ui router", async () => {
 		expect(usernameHTML).toContain('action="/sign-in/username"');
 		expect(usernameHTML).toContain('name="username"');
 		expect(usernameHTML).toContain('autocomplete="username"');
-		expect(usernameHTML).toContain('href="../sign-in"');
+		expect(usernameHTML).toContain('href="/auth/sign-in"');
 	});
 
-	it("renders the settings hub with navigation links", async () => {
+	it("keeps auth tab links absolute from nested sign-in routes", async () => {
+		const { auth } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [
+				phoneNumber({
+					sendOTP: async () => {},
+				}),
+				authUI(),
+			],
+		});
+		const res = await auth.ui.handler(
+			new Request("http://localhost:3000/auth/sign-in/phone"),
+		);
+		expect(res.status).toBe(200);
+		const html = await res.text();
+		expect(html).toContain('href="/auth/sign-up"');
+		expect(html).toContain('href="/auth/sign-in"');
+		expect(html).not.toContain('href="./sign-up"');
+		expect(html).not.toContain('href="../sign-in"');
+		expect(html).not.toContain("/auth/sign-in/sign-up");
+	});
+
+	it("redirects the auth UI index to sign-in when unauthenticated", async () => {
+		const { auth } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [authUI()],
+		});
+		const res = await auth.ui.handler(
+			new Request("http://localhost:3000/auth"),
+		);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toBe("/auth/sign-in");
+	});
+
+	it("redirects the auth UI index to settings when authenticated", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [authUI()],
+		});
+		const { headers } = await signInWithTestUser();
+		const res = await auth.ui.handler(
+			new Request("http://localhost:3000/auth", { headers }),
+		);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toBe("/auth/settings");
+	});
+
+	it("redirects the settings page to sign-in when unauthenticated", async () => {
 		const { auth } = await getTestInstance({
 			emailAndPassword: {
 				enabled: true,
@@ -847,16 +919,56 @@ describe("ui router", async () => {
 		const res = await auth.ui.handler(
 			new Request("http://localhost:3000/auth/settings"),
 		);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toBe("/auth/sign-in");
+	});
+
+	it("renders the settings page as a single stacked account view", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [authUI()],
+		});
+		const { headers } = await signInWithTestUser();
+		const res = await auth.ui.handler(
+			new Request("http://localhost:3000/auth/settings", { headers }),
+		);
 		expect(res.status).toBe(200);
 		const html = await res.text();
 		expect(html).toContain("Account Settings");
-		expect(html).toContain("settings/profile");
-		expect(html).toContain("settings/password");
+		expect(html).toContain(
+			"Manage your personal account settings and preferences",
+		);
+		expect(html).toContain("ba-settings-page");
+		expect(html).toContain("ba-settings-stack");
+		expect(html).toContain("data-ba-settings-profile");
+		expect(html).toContain("data-ba-settings-sessions");
+		expect(html).toContain('action="/sign-out"');
+		expect(html).toContain("Sign Out");
 		expect(html).toContain("data-ba-require-session");
-		expect(html).toContain("ba-settings-nav");
+		expect(html).not.toContain("ba-settings-nav");
+		expect(html).not.toContain('href="/auth/settings/profile"');
 	});
 
-	it("renders the change password settings page", async () => {
+	it("includes the UI runtime on the settings page", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [authUI()],
+		});
+		const { headers } = await signInWithTestUser();
+		const res = await auth.ui.handler(
+			new Request("http://localhost:3000/auth/settings", { headers }),
+		);
+		const html = await res.text();
+		expect(html).toContain('src="/auth/_ba/runtime.js"');
+		expect(html).toContain("data-ba-settings-profile");
+		expect(html).toContain("data-ba-require-session");
+	});
+
+	it("redirects legacy nested settings routes to the settings page", async () => {
 		const { auth } = await getTestInstance({
 			emailAndPassword: {
 				enabled: true,
@@ -866,80 +978,161 @@ describe("ui router", async () => {
 		const res = await auth.ui.handler(
 			new Request("http://localhost:3000/auth/settings/password"),
 		);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toBe("/auth/settings");
+	});
+
+	it("keeps change password available from the settings page dialog", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [authUI()],
+		});
+		const { headers } = await signInWithTestUser();
+		const res = await auth.ui.handler(
+			new Request("http://localhost:3000/auth/settings", { headers }),
+		);
 		expect(res.status).toBe(200);
 		const html = await res.text();
 		expect(html).toContain("Change Password");
 		expect(html).toContain('action="/change-password"');
 		expect(html).toContain('name="currentPassword"');
 		expect(html).toContain('name="newPassword"');
+		expect(html).toContain('id="settings-change-password"');
 	});
 
-	it("renders the profile settings page", async () => {
-		const { auth } = await getTestInstance({
+	it("keeps profile editing available from the settings page dialog", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
 			emailAndPassword: {
 				enabled: true,
 			},
 			plugins: [authUI()],
 		});
+		const { headers } = await signInWithTestUser();
 		const res = await auth.ui.handler(
-			new Request("http://localhost:3000/auth/settings/profile"),
+			new Request("http://localhost:3000/auth/settings", { headers }),
 		);
 		expect(res.status).toBe(200);
 		const html = await res.text();
 		expect(html).toContain("Profile");
 		expect(html).toContain('action="/update-user"');
 		expect(html).toContain('name="name"');
+		expect(html).toContain('id="settings-edit-profile"');
 	});
 
-	it("renders the email settings page only when changeEmail is enabled", async () => {
-		const { auth: authWithoutEmail } = await getTestInstance({
-			emailAndPassword: {
-				enabled: true,
-			},
-			plugins: [authUI()],
-		});
+	it("includes email change dialog only when changeEmail is enabled", async () => {
+		const { auth: authWithoutEmail, signInWithTestUser: signInWithout } =
+			await getTestInstance({
+				emailAndPassword: {
+					enabled: true,
+				},
+				plugins: [authUI()],
+			});
+		const { headers: headersDisabled } = await signInWithout();
 		const resDisabled = await authWithoutEmail.ui.handler(
-			new Request("http://localhost:3000/auth/settings/email"),
+			new Request("http://localhost:3000/auth/settings", {
+				headers: headersDisabled,
+			}),
 		);
 		expect(resDisabled.status).toBe(200);
 		const htmlDisabled = await resDisabled.text();
-		expect(htmlDisabled).toContain("Email change unavailable");
+		expect(htmlDisabled).not.toContain('id="settings-change-email"');
+		expect(htmlDisabled).not.toContain("Change Email");
 
-		const { auth: authWithEmail } = await getTestInstance({
-			emailAndPassword: {
-				enabled: true,
-			},
-			user: {
-				changeEmail: {
+		const { auth: authWithEmail, signInWithTestUser: signInWith } =
+			await getTestInstance({
+				emailAndPassword: {
 					enabled: true,
 				},
-			},
-			plugins: [authUI()],
-		});
+				user: {
+					changeEmail: {
+						enabled: true,
+					},
+				},
+				plugins: [authUI()],
+			});
+		const { headers: headersEnabled } = await signInWith();
 		const resEnabled = await authWithEmail.ui.handler(
-			new Request("http://localhost:3000/auth/settings/email"),
+			new Request("http://localhost:3000/auth/settings", {
+				headers: headersEnabled,
+			}),
 		);
 		expect(resEnabled.status).toBe(200);
 		const htmlEnabled = await resEnabled.text();
 		expect(htmlEnabled).toContain("Change Email");
 		expect(htmlEnabled).toContain('action="/change-email"');
 		expect(htmlEnabled).toContain('name="newEmail"');
+		expect(htmlEnabled).toContain('id="settings-change-email"');
 	});
 
-	it("renders the accounts settings page with runtime loading", async () => {
-		const { auth } = await getTestInstance({
+	it("renders linked accounts on the settings page with runtime loading", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
 			emailAndPassword: {
 				enabled: true,
 			},
+			socialProviders: {
+				github: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
 			plugins: [authUI()],
 		});
+		const { headers } = await signInWithTestUser();
 		const res = await auth.ui.handler(
-			new Request("http://localhost:3000/auth/settings/accounts"),
+			new Request("http://localhost:3000/auth/settings", { headers }),
 		);
 		expect(res.status).toBe(200);
 		const html = await res.text();
 		expect(html).toContain("Linked Accounts");
 		expect(html).toContain("data-ba-settings-accounts");
+		expect(html).toContain('data-ba-provider-id="github"');
+	});
+
+	it("renders delete account only when deleteUser is enabled", async () => {
+		const { auth: authWithoutDelete, signInWithTestUser: signInWithout } =
+			await getTestInstance({
+				emailAndPassword: {
+					enabled: true,
+				},
+				plugins: [authUI()],
+			});
+		const { headers: headersDisabled } = await signInWithout();
+		const resDisabled = await authWithoutDelete.ui.handler(
+			new Request("http://localhost:3000/auth/settings", {
+				headers: headersDisabled,
+			}),
+		);
+		const htmlDisabled = await resDisabled.text();
+		expect(htmlDisabled).not.toContain('id="settings-delete-account"');
+		expect(htmlDisabled).not.toContain("data-ba-delete-account");
+
+		const { auth: authWithDelete, signInWithTestUser: signInWith } =
+			await getTestInstance({
+				emailAndPassword: {
+					enabled: true,
+				},
+				user: {
+					deleteUser: {
+						enabled: true,
+					},
+				},
+				plugins: [authUI()],
+			});
+		const { headers: headersEnabled } = await signInWith();
+		const resEnabled = await authWithDelete.ui.handler(
+			new Request("http://localhost:3000/auth/settings", {
+				headers: headersEnabled,
+			}),
+		);
+		const htmlEnabled = await resEnabled.text();
+		expect(htmlEnabled).toContain("Delete Account");
+		expect(htmlEnabled).toContain('id="settings-delete-account"');
+		expect(htmlEnabled).toContain("data-ba-delete-account");
+		expect(htmlEnabled).toContain('action="/delete-user"');
+		expect(htmlEnabled).toContain('name="confirmEmail"');
+		expect(htmlEnabled).toContain('name="password"');
 	});
 
 	it("serves runtime support for staged UI effects", async () => {
@@ -982,5 +1175,107 @@ describe("ui router", async () => {
 		// Passkey ceremony is bundled in via @simplewebauthn/browser.
 		expect(js).toContain("data-ba-passkey-register");
 		expect(js).toContain("data-ba-passkey-auth");
+	});
+
+	it("collects and renders plugin settings cards on /settings", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [
+				twoFactor(),
+				phoneNumber({
+					sendOTP: async () => {},
+				}),
+				username(),
+				multiSession(),
+				authUI(),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const res = await auth.ui.handler(
+			new Request("http://localhost:3000/auth/settings", { headers }),
+		);
+		const html = await res.text();
+		expect(html).toContain("Account Settings");
+		expect(html).toContain("Two-Factor Authentication");
+		expect(html).toContain("data-ba-settings-two-factor");
+		expect(html).toContain("Phone Number for 2FA");
+		expect(html).toContain("data-ba-settings-phone");
+		expect(html).toContain("Username");
+		expect(html).toContain("data-ba-settings-username");
+		expect(html).toContain("Accounts on This Device");
+		expect(html).toContain("data-ba-settings-multi-session");
+		expect(html).toContain("Active Sessions");
+		expect(html).toContain("Sign Out");
+		// Plugin cards sit after core Password and before Active Sessions /
+		// danger zone ordering is preserved in the document.
+		const passwordIdx = html.indexOf("Change Password");
+		const twoFactorIdx = html.indexOf("Two-Factor Authentication");
+		const sessionsIdx = html.indexOf("Active Sessions");
+		const signOutIdx = html.indexOf(">Sign Out<");
+		expect(passwordIdx).toBeGreaterThan(-1);
+		expect(twoFactorIdx).toBeGreaterThan(passwordIdx);
+		expect(sessionsIdx).toBeGreaterThan(twoFactorIdx);
+		expect(signOutIdx).toBeGreaterThan(sessionsIdx);
+	});
+
+	it("omits settings cards when the contributing plugin is not installed", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [authUI()],
+		});
+		const { headers } = await signInWithTestUser();
+		const res = await auth.ui.handler(
+			new Request("http://localhost:3000/auth/settings", { headers }),
+		);
+		const html = await res.text();
+		expect(html).toContain("Account Settings");
+		expect(html).not.toContain("Two-Factor Authentication");
+		expect(html).not.toContain("Phone Number for 2FA");
+		expect(html).not.toContain("data-ba-settings-username");
+		expect(html).not.toContain("Accounts on This Device");
+		expect(html).not.toContain("data-ba-settings-multi-session");
+	});
+
+	it("renders danger settings cards after core danger actions", async () => {
+		const dangerPlugin = {
+			id: "danger-settings-plugin",
+			ui: {
+				settingsCards: [
+					{
+						id: "danger-demo",
+						variant: "danger",
+						priority: 10,
+						title: "Revoke All Access",
+						description: "Plugin-contributed danger action",
+						render: () => ({
+							tag: "p",
+							props: { class: "ba-settings-muted" },
+							children: ["Danger body"],
+						}),
+					},
+				],
+			},
+		} satisfies BetterAuthPlugin;
+		const { auth, signInWithTestUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [dangerPlugin, authUI()],
+		});
+		const { headers } = await signInWithTestUser();
+		const res = await auth.ui.handler(
+			new Request("http://localhost:3000/auth/settings", { headers }),
+		);
+		const html = await res.text();
+		expect(html).toContain("Revoke All Access");
+		expect(html).toContain("Danger body");
+		const signOutIdx = html.indexOf("Sign out of your account");
+		const dangerIdx = html.indexOf("Revoke All Access");
+		expect(signOutIdx).toBeGreaterThan(-1);
+		expect(dangerIdx).toBeGreaterThan(signOutIdx);
 	});
 });

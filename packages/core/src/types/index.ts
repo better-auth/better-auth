@@ -65,4 +65,6 @@ export type {
 	UIPluginConfig,
 	UIPrimitive,
 	UIProps,
+	UISettingsCard,
+	UISettingsCardVariant,
 } from "./ui";

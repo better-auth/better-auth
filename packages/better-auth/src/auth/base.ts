@@ -98,6 +98,17 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 			basePath: getUIBasePath(options),
 			handler: async (request: Request) => {
 				const handlerCtx = await resolveHandlerContext(request);
+				const uiBasePath = getUIBasePath(handlerCtx.options);
+				const url = new URL(request.url);
+				// better-call only matches `${basePath}/...`, so normalize the
+				// exact UI mount (`/auth`) to `/auth/` for the index page.
+				if (
+					uiBasePath &&
+					(url.pathname === uiBasePath || url.pathname === `${uiBasePath}/`)
+				) {
+					url.pathname = `${uiBasePath}/`;
+					request = new Request(url, request);
+				}
 				const { handler } = uiRouter(handlerCtx, handlerCtx.options);
 				return runWithAdapter(handlerCtx.adapter, () => handler(request));
 			},

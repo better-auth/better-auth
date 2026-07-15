@@ -1,6 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { mergeSchema } from "better-auth/db";
 import { PASSKEY_ERROR_CODES } from "./error-codes";
+import { passkeySettingsCards } from "./passkey-ui";
 import {
 	deletePasskey,
 	generatePasskeyAuthenticationOptions,
@@ -97,6 +98,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 					},
 				},
 			},
+			settingsCards: passkeySettingsCards,
 		},
 		schema: mergeSchema(schema, options?.schema),
 		$ERROR_CODES: PASSKEY_ERROR_CODES,

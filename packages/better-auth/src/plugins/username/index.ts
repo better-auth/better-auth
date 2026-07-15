@@ -15,6 +15,7 @@ import { PACKAGE_VERSION } from "../../version";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import type { UsernameSchema } from "./schema";
 import { getSchema } from "./schema";
+import { usernameSettingsCards } from "./username-ui";
 
 export { USERNAME_ERROR_CODES } from "./error-codes";
 
@@ -647,6 +648,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 					},
 				},
 			},
+			settingsCards: usernameSettingsCards,
 		},
 		schema: mergeSchema(
 			getSchema({

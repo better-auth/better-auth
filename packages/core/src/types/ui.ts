@@ -156,6 +156,11 @@ export type UIContext<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	/** Look up a translated UI string by key. */
 	t: (key: string, fallback?: string) => string;
 	slots: (slot: string) => UIExtension[];
+	/**
+	 * Settings cards registered by plugins, sorted by priority (higher first).
+	 * Auth UI filters by `variant` and evaluates `visible` when rendering.
+	 */
+	settingsCards: () => UISettingsCard[];
 	capability: <T extends UIPluginCapability = UIPluginCapability>(
 		id: string,
 	) => T | null;
@@ -187,12 +192,41 @@ export type UIExtension<Options extends BetterAuthOptions = BetterAuthOptions> =
 		render: (ctx: UIContext<Options>) => Awaitable<UIComponent>;
 	};
 
+export type UISettingsCardVariant = "default" | "danger";
+
+/**
+ * Plugin-contributed account settings card. Auth UI owns the panel chrome
+ * (title, description, icon, default vs danger styling); `render` returns
+ * the card body only (dialogs may be included as siblings inside the body).
+ */
+export type UISettingsCard<
+	Options extends BetterAuthOptions = BetterAuthOptions,
+> = {
+	id: LiteralString;
+	/** Visual/placement band. Danger cards always render at the bottom. */
+	variant?: UISettingsCardVariant | undefined;
+	/** Higher first within the same variant band. Defaults to `0`. */
+	priority?: number | undefined;
+	title: string | ((ctx: UIContext<Options>) => string);
+	description?: string | ((ctx: UIContext<Options>) => string) | undefined;
+	icon?: ((ctx: UIContext<Options>) => UIComponent) | undefined;
+	/** Return `false` to hide the card for this request. */
+	visible?: ((ctx: UIContext<Options>) => Awaitable<boolean>) | undefined;
+	/** Body only — Auth UI wraps with settings panel chrome. */
+	render: (ctx: UIContext<Options>) => Awaitable<UIComponent>;
+};
+
 export type UIPluginConfig<
 	Options extends BetterAuthOptions = BetterAuthOptions,
 > = {
 	pages?: Record<string, UIPage<Options>> | undefined;
 	slots?: Record<string, UIExtension<Options>[]> | undefined;
 	capabilities?: Record<string, UIPluginCapability> | undefined;
+	/**
+	 * Cards contributed to the Auth UI `/settings` page. Auth UI provides
+	 * panel chrome; danger cards are sorted below all default cards.
+	 */
+	settingsCards?: UISettingsCard<Options>[] | undefined;
 	middleware?:
 		| {
 				path: string;

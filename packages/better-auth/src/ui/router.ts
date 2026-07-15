@@ -6,6 +6,7 @@ import type {
 	UIMiddleware,
 	UIPage,
 	UIPluginCapability,
+	UISettingsCard,
 } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { logger } from "@better-auth/core/env";
@@ -69,6 +70,23 @@ function collectCapabilities(options: BetterAuthOptions) {
 	return capabilities;
 }
 
+function collectSettingsCards(options: BetterAuthOptions) {
+	const cards = new Map<string, UISettingsCard>();
+	for (const plugin of options.plugins ?? []) {
+		for (const card of plugin.ui?.settingsCards ?? []) {
+			if (cards.has(card.id)) {
+				logger.warn(
+					`UI settings card id conflict: "${card.id}" is registered by multiple plugins; later registration from "${plugin.id}" wins.`,
+				);
+			}
+			cards.set(card.id, card);
+		}
+	}
+	return [...cards.values()].sort(
+		(a, b) => (b.priority ?? 0) - (a.priority ?? 0),
+	);
+}
+
 export function getUIPages(options: BetterAuthOptions) {
 	const pages: UIPageEntry[] = [];
 	const paths = new Map<string, UIPageEntry>();
@@ -114,6 +132,7 @@ function createUIContext(options: {
 	params: Record<string, string>;
 	slots: Map<string, UIExtension[]>;
 	capabilities: Map<string, UIPluginCapability>;
+	settingsCards: UISettingsCard[];
 }): UIContext {
 	const url = new URL(options.request.url);
 	const messages = getUIMessages(options.ctx.options);
@@ -130,6 +149,9 @@ function createUIContext(options: {
 		t: (key: string, fallback?: string) => t(messages, key, fallback),
 		slots(slot) {
 			return options.slots.get(slot) ?? [];
+		},
+		settingsCards() {
+			return options.settingsCards;
 		},
 		capability(id) {
 			const capability = options.capabilities.get(id);
@@ -152,6 +174,7 @@ function createPageEndpoint(
 	entry: UIPageEntry,
 	slots: Map<string, UIExtension[]>,
 	capabilities: Map<string, UIPluginCapability>,
+	settingsCards: UISettingsCard[],
 ) {
 	return createAuthEndpoint(
 		entry.path,
@@ -187,6 +210,7 @@ function createPageEndpoint(
 				params,
 				slots,
 				capabilities,
+				settingsCards,
 			});
 			const middleware = [
 				...getUIMiddleware(c.context.options, entry.path),
@@ -249,12 +273,14 @@ const actionEndpoint = createAuthEndpoint(
 export function uiRouter(ctx: AuthContext, options: BetterAuthOptions) {
 	const slots = collectSlots(options);
 	const capabilities = collectCapabilities(options);
+	const settingsCards = collectSettingsCards(options);
 	const pageEndpoints = getUIPages(options).reduce<Record<string, Endpoint>>(
 		(acc, entry) => {
 			acc[`ui_${entry.pluginId}_${entry.key}`] = createPageEndpoint(
 				entry,
 				slots,
 				capabilities,
+				settingsCards,
 			);
 			return acc;
 		},

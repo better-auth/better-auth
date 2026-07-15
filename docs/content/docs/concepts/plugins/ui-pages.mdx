@@ -301,6 +301,8 @@ Use `ui.pages` when your plugin owns a full page. Good examples are dashboards, 
 
 Use `ui.capabilities` when your plugin wants built-in pages to know what it can do. Good examples are passkey support, two-factor routes, captcha requirements, or a last-used-login-method cookie.
 
+Use `ui.settingsCards` when your plugin should appear on the Auth UI `/settings` page. Auth UI provides the card chrome; your plugin provides the body. Prefer this over hardcoding settings panels in Auth UI.
+
 Capabilities should contain serializable facts, route descriptors, and metadata:
 
 ```ts
@@ -318,6 +320,61 @@ ui: {
 ```
 
 Avoid using capabilities as a backdoor for arbitrary UI injection. If you need to change a built-in page substantially, override the whole page instead.
+
+## Settings cards
+
+Account settings is the supported place for plugin UI composition. Plugins can register `ui.settingsCards` — Auth UI owns the panel chrome (title, description, icon, default vs danger styling) and renders card bodies contributed by plugins.
+
+```tsx title="plugin-settings.tsx"
+/** @jsxImportSource @better-auth/ui */
+
+import type { UISettingsCard } from "@better-auth/core";
+import { Button, effects, Form } from "@better-auth/ui";
+
+export const myPluginSettingsCards: UISettingsCard[] = [
+	{
+		id: "my-plugin",
+		priority: 40,
+		title: "My Plugin",
+		description: "Manage my-plugin settings for your account",
+		visible: (ctx) => ctx.hasCapability("my-plugin"),
+		render: (ctx) => {
+			const route = ctx.capability("my-plugin")?.routes?.action;
+			if (!route) return <p class="ba-settings-muted">Unavailable</p>;
+			return (
+				<Form
+					action={route}
+					pending="Saving..."
+					success={[effects.reload()]}
+					error={[effects.toastFromError({ fallback: "Could not save." })]}
+				>
+					<Button type="submit">Save</Button>
+				</Form>
+			);
+		},
+	},
+];
+```
+
+Register the cards on the plugin:
+
+```ts
+ui: {
+	capabilities: { "my-plugin": { id: "my-plugin", routes: { /* ... */ } } },
+	settingsCards: myPluginSettingsCards,
+}
+```
+
+Layout rules:
+
+* Core anchors stay in Auth UI: Profile, Linked Accounts, Password, Active Sessions, Sign Out, and Delete Account.
+* Plugin cards with `variant: "default"` (the default) render after Password and before Active Sessions, sorted by `priority` (higher first).
+* Plugin cards with `variant: "danger"` always render at the bottom of the page, after core danger actions.
+* Keep using capabilities for serializable routes and metadata; settings cards are the presentation layer.
+
+List UIs that need client hydration should expose `data-ba-*` hosts in the card body. First-party plugins ship matching loaders in the Auth UI runtime. Third-party plugins should prefer forms and links until a general client-loader contribution API exists.
+
+Do not use settings cards (or slots) to inject into sign-in or sign-up — those pages stay capability-driven so Auth UI owns the complete auth flow.
 
 ## Page Overrides
 
@@ -350,6 +407,7 @@ This is why UI forms do not redirect users to `/api/auth/*` JSON responses.
 * Keep client behavior declarative with `effects`.
 * Use `createRoute` for plugin endpoints.
 * Use capabilities for plugin facts and routes that built-in pages can read.
+* Use `ui.settingsCards` for account settings panels contributed by plugins.
 * Use full page overrides for deeply custom auth flows.
 * Do not rely on React hooks, React event handlers, or hydration. Better Auth's JSX runtime is not React.
 

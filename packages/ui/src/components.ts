@@ -126,7 +126,7 @@ export function Dialog(
 							"data-ba-dialog-close": props.id,
 							"aria-label": closeLabel ?? "Close dialog",
 						},
-						children: ["x"],
+						children: ["\u00d7"],
 					},
 					title
 						? {

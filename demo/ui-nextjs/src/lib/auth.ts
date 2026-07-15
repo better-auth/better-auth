@@ -1,7 +1,7 @@
 import { passkey } from "@better-auth/passkey";
 import { backgrounds } from "@better-auth/ui";
 import { betterAuth } from "better-auth";
-import { phoneNumber, twoFactor } from "better-auth/plugins";
+import { admin, phoneNumber, twoFactor } from "better-auth/plugins";
 import { database } from "./db";
 import { socialProvider } from "./utils";
 
@@ -10,6 +10,14 @@ const secret = "better-auth-ui-demo-secret-at-least-32-characters";
 
 export const auth = betterAuth({
 	emailAndPassword: { enabled: true },
+	user: {
+		changeEmail: {
+			enabled: true,
+		},
+		deleteUser: {
+			enabled: true,
+		},
+	},
 	ui: {
 		basePath: "/auth",
 		background: backgrounds.squaredGrid,
@@ -23,7 +31,7 @@ export const auth = betterAuth({
 			},
 		},
 	},
-	plugins: [twoFactor(), passkey(), phoneNumber()],
+	plugins: [twoFactor(), passkey(), phoneNumber(), admin()],
 	socialProviders: {
 		google: socialProvider("google"),
 		github: socialProvider("github"),

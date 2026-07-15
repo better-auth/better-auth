@@ -39,8 +39,14 @@ import { mountQr } from "./qr";
 import {
 	initSessionGate,
 	initSettingsAccounts,
+	initSettingsApiKeys,
+	initSettingsMultiSession,
+	initSettingsOAuthConsents,
+	initSettingsOrganizations,
 	initSettingsPasskeys,
+	initSettingsPhoneSync,
 	initSettingsSession,
+	initSettingsStripe,
 } from "./settings";
 
 function read(
@@ -59,13 +65,13 @@ function applyTwoFactorEnableResult(
 		payload && typeof payload === "object"
 			? (payload as Record<string, unknown>)
 			: null;
-	const dialog =
+	const scope =
+		document.getElementById("two-factor-setup") ||
 		form.closest(".ba-modal") ||
-		document.getElementById("two-factor-enrollment");
-	const qrHost = dialog?.querySelector<HTMLElement>("[data-ba-totp-qr]");
-	const backupHost = dialog?.querySelector<HTMLElement>(
-		"[data-ba-backup-codes]",
-	);
+		form.closest(".ba-settings-card") ||
+		document.body;
+	const qrHost = scope.querySelector<HTMLElement>("[data-ba-totp-qr]");
+	const backupHost = scope.querySelector<HTMLElement>("[data-ba-backup-codes]");
 	const totpURI = typeof data?.totpURI === "string" ? data.totpURI : null;
 	if (qrHost && totpURI) mountQr(qrHost, totpURI);
 	const backupCodes = Array.isArray(data?.backupCodes)
@@ -74,7 +80,6 @@ function applyTwoFactorEnableResult(
 			)
 		: [];
 	if (backupHost && backupCodes.length > 0) {
-		backupHost.hidden = false;
 		backupHost.textContent = backupCodes.join("\n");
 	}
 }
@@ -358,6 +363,19 @@ document.addEventListener("submit", async (event) => {
 		return;
 	}
 
+	if (form.matches("[data-ba-delete-account]")) {
+		const expected = (form.dataset.baExpectedEmail || "").trim().toLowerCase();
+		const confirmInput = form.querySelector<HTMLInputElement>(
+			"[data-ba-delete-account-confirm]",
+		);
+		const confirmed = (confirmInput?.value || "").trim().toLowerCase();
+		if (!expected || confirmed !== expected) {
+			showToast("error", "Email does not match your account email.");
+			confirmInput?.focus();
+			return;
+		}
+	}
+
 	form.setAttribute("aria-busy", "true");
 	if (submitter && "disabled" in submitter)
 		(submitter as HTMLButtonElement).disabled = true;
@@ -385,7 +403,11 @@ document.addEventListener("submit", async (event) => {
 			}
 		} else {
 			init.headers["content-type"] = "application/json";
-			init.body = JSON.stringify(formToJSON(form));
+			const body = formToJSON(form);
+			if (form.matches("[data-ba-delete-account]")) {
+				body.confirmEmail = undefined;
+			}
+			init.body = JSON.stringify(body);
 		}
 
 		const response = await fetch(url, init);
@@ -418,6 +440,16 @@ document.addEventListener("submit", async (event) => {
 			return;
 		}
 
+		if (
+			form.matches("[data-ba-delete-account]") &&
+			data &&
+			data.message === "Verification email sent"
+		) {
+			showToast("success", "Check your email to confirm account deletion.");
+			closeDialog("settings-delete-account");
+			return;
+		}
+
 		const message = getMessage(payload, successMessage);
 		if (form.matches("[data-ba-two-factor-enable]")) {
 			applyTwoFactorEnableResult(form, payload);
@@ -447,3 +479,9 @@ initSessionGate();
 initSettingsSession();
 initSettingsAccounts();
 initSettingsPasskeys();
+initSettingsPhoneSync();
+initSettingsApiKeys();
+initSettingsOAuthConsents();
+initSettingsMultiSession();
+initSettingsOrganizations();
+initSettingsStripe();

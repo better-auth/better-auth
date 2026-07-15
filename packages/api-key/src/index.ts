@@ -7,6 +7,7 @@ import { BetterAuthError } from "better-auth";
 import { APIError } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { mergeSchema } from "better-auth/db";
+import { apiKeySettingsCards } from "./api-key-ui";
 import { API_KEY_ERROR_CODES } from "./error-codes";
 import type { PredefinedApiKeyOptions } from "./routes";
 import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
@@ -381,6 +382,32 @@ export function apiKey(
 			deleteAllExpiredApiKeys: routes.deleteAllExpiredApiKeys,
 		},
 		schema,
+		ui: {
+			capabilities: {
+				"api-key": {
+					id: "api-key",
+					enabled: true,
+					routes: {
+						create: {
+							type: "auth-route",
+							path: "/api-key/create",
+							method: "POST",
+						},
+						list: {
+							type: "auth-route",
+							path: "/api-key/list",
+							method: "GET",
+						},
+						delete: {
+							type: "auth-route",
+							path: "/api-key/delete",
+							method: "POST",
+						},
+					},
+				},
+			},
+			settingsCards: apiKeySettingsCards,
+		},
 	} satisfies BetterAuthPlugin;
 }
 

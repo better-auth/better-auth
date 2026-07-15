@@ -15,6 +15,7 @@ import {
 	upgradeSubscription,
 } from "./routes";
 import { getSchema } from "./schema";
+import { stripeSettingsCards } from "./stripe-ui";
 import type {
 	StripeOptions,
 	StripePlan,
@@ -465,6 +466,32 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		schema: getSchema(options),
 		options: options as NoInfer<O>,
 		$ERROR_CODES: STRIPE_ERROR_CODES,
+		ui: {
+			capabilities: {
+				stripe: {
+					id: "stripe",
+					enabled: true,
+					metadata: {
+						subscriptionEnabled: Boolean(options.subscription?.enabled),
+					},
+					routes: {
+						listSubscriptions: {
+							type: "auth-route",
+							path: "/subscription/list",
+							method: "GET",
+						},
+						billingPortal: {
+							type: "auth-route",
+							path: "/subscription/billing-portal",
+							method: "POST",
+						},
+					},
+				},
+			},
+			settingsCards: options.subscription?.enabled
+				? stripeSettingsCards
+				: undefined,
+		},
 	} satisfies BetterAuthPlugin;
 };
 

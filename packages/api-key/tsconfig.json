@@ -1,15 +1,22 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["esnext", "dom", "dom.iterable"]
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "@better-auth/ui"
   },
   "include": ["./src", "./package.json"],
+  "exclude": [
+    "./src/**/*.test.ts",
+    "./src/api-key.test.ts",
+    "./src/org-api-key.test.ts"
+  ],
   "references": [
     {
       "path": "../core/tsconfig.json"
     },
     {
-      "path": "./tsconfig.test.json"
+      "path": "../ui/tsconfig.json"
     }
   ]
 }

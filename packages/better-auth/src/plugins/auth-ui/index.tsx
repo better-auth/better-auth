@@ -18,10 +18,14 @@ import {
 	Input,
 	Link,
 	routes,
+	Show,
+	state,
 	Text,
+	when,
 } from "@better-auth/ui";
-import { getSafeUIRedirectTo } from "../../ui";
+import { getSafeUIRedirectTo, getUIBasePath } from "../../ui";
 import { PACKAGE_VERSION } from "../../version";
+import { hasActiveUISession, uiRedirect } from "./session";
 import { createSettingsPages } from "./settings";
 import { KNOWN_PROVIDER_ICONS } from "./social-provider-icons";
 
@@ -37,6 +41,7 @@ type AuthUIOptions = {
 	disableSignUp?: boolean | undefined;
 	pages?: Partial<
 		Record<
+			| "index"
 			| "signIn"
 			| "signInUsername"
 			| "signInPhone"
@@ -61,6 +66,12 @@ type AuthProvider = {
 	label: string;
 	route: "social" | "oauth2";
 };
+
+function uiHref(ctx: UIContext, path: string) {
+	const base = getUIBasePath(ctx.context.options);
+	const normalized = path.startsWith("/") ? path : `/${path}`;
+	return `${base}${normalized}`;
+}
 
 function readCookie(request: Request, name: string) {
 	const header = request.headers.get("cookie");
@@ -297,51 +308,6 @@ function AuthLegalNotice(props: {
 	);
 }
 
-function AuthLegalCheckbox(props: { ctx: UIContext }) {
-	const { t } = props.ctx;
-	const termsOfServiceURL = props.ctx.context.options.ui?.termsOfServiceURL;
-	const privacyPolicyURL = props.ctx.context.options.ui?.privacyPolicyURL;
-	if (!termsOfServiceURL && !privacyPolicyURL) return <></>;
-
-	const termsLink = termsOfServiceURL ? (
-		<Link href={termsOfServiceURL} target="_blank" rel="noopener noreferrer">
-			{t("legal.termsOfService")}
-		</Link>
-	) : null;
-	const privacyLink = privacyPolicyURL ? (
-		<Link href={privacyPolicyURL} target="_blank" rel="noopener noreferrer">
-			{t("legal.privacyPolicy")}
-		</Link>
-	) : null;
-
-	const text =
-		termsLink && privacyLink ? (
-			<>
-				{t("legal.agreeTo")} {termsLink} {t("legal.and")} {privacyLink}.
-			</>
-		) : termsLink ? (
-			<>
-				{t("legal.agreeTo")} {termsLink}.
-			</>
-		) : (
-			<>
-				{t("legal.agreeTo")} {privacyLink}.
-			</>
-		);
-
-	return (
-		<label class="ba-checkbox ba-auth-legal-checkbox">
-			<input
-				type="checkbox"
-				name="agreeToLegal"
-				class="ba-checkbox-input"
-				required
-			/>
-			<span>{text}</span>
-		</label>
-	);
-}
-
 function PasswordField(props: {
 	ctx: UIContext;
 	name: string;
@@ -449,7 +415,7 @@ function AuthCard(props: {
 							{props.ctx.t("tabs.signIn")}
 						</span>
 					) : (
-						<Link href="./sign-in" class="ba-auth-tab">
+						<Link href={uiHref(props.ctx, "/sign-in")} class="ba-auth-tab">
 							{props.ctx.t("tabs.signIn")}
 						</Link>
 					)}
@@ -458,7 +424,7 @@ function AuthCard(props: {
 							{props.ctx.t("tabs.signUp")}
 						</span>
 					) : (
-						<Link href="./sign-up" class="ba-auth-tab">
+						<Link href={uiHref(props.ctx, "/sign-up")} class="ba-auth-tab">
 							{props.ctx.t("tabs.signUp")}
 						</Link>
 					)}
@@ -502,7 +468,10 @@ function AuthCardShim(props: {
 					<h1 class="ba-auth-title">{props.title}</h1>
 					<p class="ba-auth-description">{props.description}</p>
 				</header>
-				<Link href="./sign-in" class="ba-button ba-button-full">
+				<Link
+					href={uiHref(props.ctx, "/sign-in")}
+					class="ba-button ba-button-full"
+				>
 					{props.ctx.t("action.backToSignIn")}
 				</Link>
 			</Card>
@@ -549,10 +518,11 @@ function ProviderButtons(props: {
 	ctx: UIContext;
 	mode: "signIn" | "signUp";
 	providers: AuthProvider[];
+	children?: UIChild;
 }) {
 	const { t } = props.ctx;
 	const redirectTo = getRedirectTo(props.ctx);
-	if (props.providers.length === 0) return <></>;
+	if (props.providers.length === 0 && !props.children) return <></>;
 	const stacked = props.providers.length <= 2;
 	const prefix =
 		props.mode === "signUp"
@@ -564,6 +534,7 @@ function ProviderButtons(props: {
 			data-layout={stacked ? "stack" : "grid"}
 			aria-label="Other sign-in methods"
 		>
+			{props.children}
 			{props.providers.map((provider) => (
 				<Form
 					class="ba-provider-form"
@@ -643,7 +614,7 @@ function PasskeySignInButton(props: { ctx: UIContext }) {
 			data-ba-passkey-auth
 			data-ba-passkey-verify={verifyAuthenticationPath}
 		>
-			<Button type="submit" class="ba-button-secondary ba-button-full">
+			<Button type="submit" class="ba-button-outline">
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					width="16"
@@ -672,6 +643,42 @@ function PasskeySignInButton(props: { ctx: UIContext }) {
 	);
 }
 
+function PhoneSignInButton(props: { ctx: UIContext }) {
+	const { t } = props.ctx;
+	return (
+		<div class="ba-provider-form">
+			<Link
+				href={uiHref(props.ctx, "/sign-in/phone")}
+				class="ba-button ba-button-outline"
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					width="16"
+					height="16"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true"
+				>
+					<path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384" />
+				</svg>
+				{t("action.signInWithPhone")}
+			</Link>
+		</div>
+	);
+}
+
+function AuthDivider(props: { label: string }) {
+	return (
+		<div class="ba-auth-divider" role="separator">
+			{props.label}
+		</div>
+	);
+}
+
 function LastLoginMethodHint(props: {
 	ctx: UIContext;
 	capability: UIPluginCapability;
@@ -688,11 +695,142 @@ function LastLoginMethodHint(props: {
 	return <Text>{t("lastLogin.lastUsed").replace("{method}", lastMethod)}</Text>;
 }
 
+function AccountSecurityChooser(props: {
+	ctx: UIContext;
+	passkey: UIPluginCapability | null;
+	twoFactor: UIPluginCapability | null;
+	redirectTo: string;
+}) {
+	const { t } = props.ctx;
+	const enableRoute = props.twoFactor?.routes?.enable;
+	const supportsTotp =
+		props.twoFactor?.metadata?.supportsTotp !== false && Boolean(enableRoute);
+	if (!props.passkey && !supportsTotp) return <></>;
+	return (
+		<>
+			<Dialog
+				id="account-security"
+				title={t("security.chooserTitle")}
+				description={t("security.chooserDescription")}
+			>
+				<div class="ba-security-options ba-dialog-actions">
+					{props.passkey ? (
+						<button
+							type="button"
+							class="ba-button ba-button-full"
+							data-ba-unstyled
+							data-ba-dialog-close="account-security"
+							data-ba-open-dialog="passkey-registration"
+						>
+							{t("security.passkeyOption")}
+						</button>
+					) : null}
+					{supportsTotp && enableRoute ? (
+						<Form
+							action={enableRoute}
+							pending={t("twoFactor.preparingSetup")}
+							success={[
+								effects.closeDialog("account-security"),
+								effects.openDialog("two-factor-setup"),
+							]}
+							error={[
+								effects.toastFromError({
+									fallback: t("twoFactor.setupError"),
+								}),
+							]}
+							data-ba-two-factor-enable
+						>
+							<input type="hidden" name="method" value="totp" />
+							<Button type="submit" class="ba-button-full">
+								{t("twoFactor.optionLabel")}
+							</Button>
+						</Form>
+					) : null}
+					<Link href={props.redirectTo} class="ba-button ba-button-outline">
+						{t("security.skip")}
+					</Link>
+				</div>
+			</Dialog>
+			<SecuritySuccessDialog
+				ctx={props.ctx}
+				passkey={props.passkey}
+				twoFactor={props.twoFactor}
+				redirectTo={props.redirectTo}
+			/>
+		</>
+	);
+}
+
+function SecuritySuccessDialog(props: {
+	ctx: UIContext;
+	passkey: UIPluginCapability | null;
+	twoFactor: UIPluginCapability | null;
+	redirectTo: string;
+}) {
+	const { t } = props.ctx;
+	const enableRoute = props.twoFactor?.routes?.enable;
+	const supportsTotp =
+		props.twoFactor?.metadata?.supportsTotp !== false && Boolean(enableRoute);
+	const passkeyDone = state("security.passkeyDone");
+	const twoFactorDone = state("security.twoFactorDone");
+	return (
+		<Dialog
+			id="security-success"
+			title={t("security.successTitle")}
+			description={t("security.successDescription")}
+		>
+			<div class="ba-dialog-actions">
+				{supportsTotp && enableRoute ? (
+					<Show when={when(passkeyDone, { equals: true })}>
+						<Show when={when(twoFactorDone, { not: true })}>
+							<Form
+								action={enableRoute}
+								pending={t("twoFactor.preparingSetup")}
+								success={[
+									effects.closeDialog("security-success"),
+									effects.openDialog("two-factor-setup"),
+								]}
+								error={[
+									effects.toastFromError({
+										fallback: t("twoFactor.setupError"),
+									}),
+								]}
+								data-ba-two-factor-enable
+							>
+								<input type="hidden" name="method" value="totp" />
+								<Button type="submit" class="ba-button-full">
+									{t("twoFactor.optionLabel")}
+								</Button>
+							</Form>
+						</Show>
+					</Show>
+				) : null}
+				{props.passkey ? (
+					<Show when={when(twoFactorDone, { equals: true })}>
+						<Show when={when(passkeyDone, { not: true })}>
+							<button
+								type="button"
+								class="ba-button ba-button-full"
+								data-ba-unstyled
+								data-ba-dialog-close="security-success"
+								data-ba-open-dialog="passkey-registration"
+							>
+								{t("security.passkeyOption")}
+							</button>
+						</Show>
+					</Show>
+				) : null}
+				<a href={props.redirectTo} class="ba-button ba-button-outline">
+					{t("security.continue")}
+				</a>
+			</div>
+		</Dialog>
+	);
+}
+
 function PasskeyRegistrationPanel(props: {
 	ctx: UIContext;
 	capability: UIPluginCapability;
-	redirectTo: string;
-	nextDialog?: string | undefined;
 }) {
 	const { t } = props.ctx;
 	const registerRoute = props.capability.routes?.generateRegisterOptions;
@@ -701,33 +839,6 @@ function PasskeyRegistrationPanel(props: {
 		verifyRegistration?.type === "auth-route"
 			? verifyRegistration.path
 			: undefined;
-	const afterPasskey = props.nextDialog
-		? [
-				effects.closeDialog("passkey-registration"),
-				effects.openDialog(props.nextDialog),
-			]
-		: [
-				effects.toast({
-					level: "success",
-					message: t("passkey.registered"),
-				}),
-				effects.navigate(props.redirectTo),
-			];
-	const skip = props.nextDialog ? (
-		<button
-			type="button"
-			class="ba-button ba-button-secondary"
-			data-ba-unstyled
-			data-ba-dialog-close="passkey-registration"
-			data-ba-open-dialog={props.nextDialog}
-		>
-			{t("passkey.skipForNow")}
-		</button>
-	) : (
-		<Link href={props.redirectTo} class="ba-button ba-button-secondary">
-			{t("passkey.skipForNow")}
-		</Link>
-	);
 	return (
 		<Dialog
 			id="passkey-registration"
@@ -739,7 +850,15 @@ function PasskeyRegistrationPanel(props: {
 					<Form
 						action={registerRoute}
 						pending={t("passkey.startingRegistration")}
-						success={afterPasskey}
+						success={[
+							effects.set("security.passkeyDone", true),
+							effects.toast({
+								level: "success",
+								message: t("passkey.registered"),
+							}),
+							effects.closeDialog("passkey-registration"),
+							effects.openDialog("security-success"),
+						]}
 						error={[
 							effects.toastFromError({
 								fallback: t("passkey.registerError"),
@@ -753,7 +872,15 @@ function PasskeyRegistrationPanel(props: {
 						</Button>
 					</Form>
 				) : null}
-				{skip}
+				<button
+					type="button"
+					class="ba-button ba-button-outline"
+					data-ba-unstyled
+					data-ba-dialog-close="passkey-registration"
+					data-ba-open-dialog="account-security"
+				>
+					{t("security.back")}
+				</button>
 			</div>
 		</Dialog>
 	);
@@ -762,74 +889,64 @@ function PasskeyRegistrationPanel(props: {
 function TwoFactorEnrollmentPanel(props: {
 	ctx: UIContext;
 	capability: UIPluginCapability;
-	redirectTo: string;
 }) {
 	const { t } = props.ctx;
 	const enableRoute = props.capability.routes?.enable;
 	const verifyTotpRoute = props.capability.routes?.verifyTotp;
-	const allowPasswordless =
-		props.capability.metadata?.allowPasswordless === true;
 	const supportsTotp = props.capability.metadata?.supportsTotp !== false;
 	if (!enableRoute || !supportsTotp) return <></>;
 	return (
 		<Dialog
-			id="two-factor-enrollment"
-			title={t("twoFactor.enrollTitle")}
-			description={t("twoFactor.enrollDescription")}
+			id="two-factor-setup"
+			title={t("twoFactor.setupTitle")}
+			description={t("twoFactor.setupDescription")}
 		>
-			<div class="ba-two-factor-step" data-ba-panel="two-factor-enroll-start">
-				{enableRoute ? (
-					<Form
-						action={enableRoute}
-						pending={t("twoFactor.preparingSetup")}
-						success={[
-							effects.hide("two-factor-enroll-start"),
-							effects.show("two-factor-enroll-setup"),
-						]}
-						error={[
-							effects.toastFromError({
-								fallback: t("twoFactor.setupError"),
-							}),
-						]}
-						data-ba-two-factor-enable
+			<div class="ba-dialog-actions" data-ba-method-scope>
+				<div
+					class="ba-auth-methods"
+					role="tablist"
+					aria-label={t("twoFactor.setupTitle")}
+				>
+					<button
+						type="button"
+						class="ba-auth-method-btn"
+						data-ba-unstyled
+						data-ba-method="qr"
+						aria-pressed="true"
+						role="tab"
 					>
-						<input type="hidden" name="method" value="totp" />
-						{allowPasswordless ? null : (
-							<Input
-								name="password"
-								label={t("twoFactor.currentPassword")}
-								type="password"
-								autocomplete="current-password"
-								required
-							/>
-						)}
-						<Button type="submit" class="ba-button-full">
-							{t("twoFactor.setupSubmit")}
-						</Button>
-					</Form>
-				) : null}
-				<Link href={props.redirectTo} class="ba-button ba-button-outline">
-					{t("passkey.skipForNow")}
-				</Link>
-			</div>
-			<div
-				class="ba-two-factor-step"
-				data-ba-panel="two-factor-enroll-setup"
-				hidden
-			>
-				<p class="ba-dialog-description">{t("twoFactor.scanQRCode")}</p>
-				<div class="ba-totp-qr" data-ba-totp-qr aria-live="polite"></div>
-				<pre class="ba-backup-codes" data-ba-backup-codes hidden></pre>
+						{t("twoFactor.tabQr")}
+					</button>
+					<button
+						type="button"
+						class="ba-auth-method-btn"
+						data-ba-unstyled
+						data-ba-method="backup"
+						aria-pressed="false"
+						role="tab"
+					>
+						{t("twoFactor.tabBackupCodes")}
+					</button>
+				</div>
+				<div data-ba-method-panel="qr">
+					<div class="ba-totp-qr" data-ba-totp-qr aria-live="polite"></div>
+				</div>
+				<div data-ba-method-panel="backup" hidden>
+					<pre class="ba-backup-codes" data-ba-backup-codes></pre>
+					<p class="ba-dialog-description">{t("twoFactor.scanQRCode")}</p>
+				</div>
 				{verifyTotpRoute ? (
 					<Form
 						action={verifyTotpRoute}
 						pending={t("twoFactor.verifyingAuthenticator")}
 						success={[
+							effects.set("security.twoFactorDone", true),
 							effects.toast({
 								level: "success",
 								message: t("twoFactor.enabled"),
 							}),
-							effects.navigate(props.redirectTo),
+							effects.closeDialog("two-factor-setup"),
+							effects.openDialog("security-success"),
 						]}
 						error={[
 							effects.toastFromError({
@@ -848,9 +965,15 @@ function TwoFactorEnrollmentPanel(props: {
 						</Button>
 					</Form>
 				) : null}
-				<Link href={props.redirectTo} class="ba-button ba-button-outline">
-					{t("passkey.skipForNow")}
-				</Link>
+				<button
+					type="button"
+					class="ba-button ba-button-outline"
+					data-ba-unstyled
+					data-ba-dialog-close="two-factor-setup"
+					data-ba-open-dialog="account-security"
+				>
+					{t("security.back")}
+				</button>
 			</div>
 		</Dialog>
 	);
@@ -1077,7 +1200,7 @@ function EmailSignInForm(props: { ctx: UIContext }) {
 					name="password"
 					autocomplete="current-password"
 					placeholder={t("placeholder.password")}
-					forgotPasswordHref="./forgot-password"
+					forgotPasswordHref={uiHref(props.ctx, "/forgot-password")}
 				/>
 				<label class="ba-checkbox">
 					<input type="checkbox" name="rememberMe" class="ba-checkbox-input" />
@@ -1140,7 +1263,7 @@ function UsernameSignInForm(props: {
 					name="password"
 					autocomplete="current-password"
 					placeholder={t("placeholder.password")}
-					forgotPasswordHref="./forgot-password"
+					forgotPasswordHref={uiHref(props.ctx, "/forgot-password")}
 				/>
 				<label class="ba-checkbox">
 					<input type="checkbox" name="rememberMe" class="ba-checkbox-input" />
@@ -1353,11 +1476,9 @@ function EmailSignUpForm(props: {
 					level: "success",
 					message: t("signUp.success"),
 				}),
-				props.passkey
-					? effects.openDialog("passkey-registration")
-					: props.twoFactor
-						? effects.openDialog("two-factor-enrollment")
-						: effects.navigate(redirectTo),
+				props.passkey || props.twoFactor
+					? effects.openDialog("account-security")
+					: effects.navigate(redirectTo),
 			]}
 			error={[
 				effects.toastFromError({
@@ -1408,7 +1529,6 @@ function EmailSignUpForm(props: {
 				autocomplete="new-password"
 				placeholder={t("placeholder.password")}
 			/>
-			<AuthLegalCheckbox ctx={props.ctx} />
 			<Button type="submit" class="ba-button-full">
 				{t("signUp.submit")}
 			</Button>
@@ -1418,6 +1538,20 @@ function EmailSignUpForm(props: {
 
 export const authUI = (options?: AuthUIOptions) => {
 	const pages: NonNullable<AuthUIOptions["pages"]> = {
+		index: createUIPage({
+			id: "auth-ui.index",
+			path: "/",
+			title: "Auth",
+			middleware: [
+				async (ctx) => {
+					const authed = await hasActiveUISession(ctx);
+					return uiRedirect(ctx, authed ? "/settings" : "/sign-in");
+				},
+			],
+			render() {
+				return <main class="ba-auth-page" />;
+			},
+		}),
 		signIn: createUIPage({
 			id: "auth-ui.sign-in",
 			path: "/sign-in",
@@ -1443,13 +1577,15 @@ export const authUI = (options?: AuthUIOptions) => {
 				const hasEmailOtp = Boolean(
 					emailOtp?.routes?.sendVerificationOtp && emailOtp?.routes?.signIn,
 				);
+				const hasCredentialMethods = hasPassword || hasMagicLink || hasEmailOtp;
+				const hasAltButtons = Boolean(phoneNumber) || hasPasskeyAuth;
+				const hasOtherMethods = providers.length > 0 || hasAltButtons;
 				return (
 					<AuthCard
 						ctx={ctx}
 						title={t("signIn.title")}
 						description={t("signIn.description")}
 						tabs={signUpDisabled ? undefined : "sign-in"}
-						legalAction="signing in"
 					>
 						{lastMethod ? (
 							<LastLoginMethodHint ctx={ctx} capability={lastMethod} />
@@ -1481,17 +1617,15 @@ export const authUI = (options?: AuthUIOptions) => {
 							{hasEmailOtp && emailOtp ? (
 								<EmailOtpPanel ctx={ctx} capability={emailOtp} />
 							) : null}
-							{phoneNumber ? (
-								<div class="ba-auth-links">
-									<Link href="./sign-in/phone">
-										{t("action.signInWithPhone")}
-									</Link>
-								</div>
-							) : null}
-							{hasPasskeyAuth ? <PasskeySignInButton ctx={ctx} /> : null}
 						</section>
-						{providers.length > 0 ? (
-							<ProviderButtons ctx={ctx} mode="signIn" providers={providers} />
+						{hasCredentialMethods && hasOtherMethods ? (
+							<AuthDivider label={t("action.or")} />
+						) : null}
+						{hasOtherMethods ? (
+							<ProviderButtons ctx={ctx} mode="signIn" providers={providers}>
+								{phoneNumber ? <PhoneSignInButton ctx={ctx} /> : null}
+								{hasPasskeyAuth ? <PasskeySignInButton ctx={ctx} /> : null}
+							</ProviderButtons>
 						) : null}
 						<CaptchaConfig ctx={ctx} />
 						{twoFactor ? (
@@ -1527,11 +1661,10 @@ export const authUI = (options?: AuthUIOptions) => {
 						title={t("signIn.username.title")}
 						description={t("signIn.username.description")}
 						tabs={signUpDisabled ? undefined : "sign-in"}
-						legalAction="signing in"
 						footer={
 							<>
 								{t("signIn.username.preferEmail")}{" "}
-								<Link href="../sign-in">
+								<Link href={uiHref(ctx, "/sign-in")}>
 									{t("signIn.username.signInWithEmail")}
 								</Link>
 							</>
@@ -1568,10 +1701,10 @@ export const authUI = (options?: AuthUIOptions) => {
 									name="password"
 									autocomplete="current-password"
 									placeholder={t("placeholder.password")}
-									forgotPasswordHref="../forgot-password"
+									forgotPasswordHref={uiHref(ctx, "/forgot-password")}
 								/>
 								<div class="ba-auth-links">
-									<Link href="../sign-in">
+									<Link href={uiHref(ctx, "/sign-in")}>
 										{t("signIn.username.useEmailInstead")}
 									</Link>
 								</div>
@@ -1625,11 +1758,10 @@ export const authUI = (options?: AuthUIOptions) => {
 						title={t("signIn.phone.title")}
 						description={t("signIn.phone.description")}
 						tabs={signUpDisabled ? undefined : "sign-in"}
-						legalAction="signing in"
 						footer={
 							<>
 								{t("signIn.phone.preferEmail")}{" "}
-								<Link href="../sign-in">
+								<Link href={uiHref(ctx, "/sign-in")}>
 									{t("signIn.phone.signInWithEmail")}
 								</Link>
 							</>
@@ -1693,7 +1825,7 @@ export const authUI = (options?: AuthUIOptions) => {
 											name="password"
 											autocomplete="current-password"
 											placeholder={t("placeholder.password")}
-											forgotPasswordHref="../forgot-password"
+											forgotPasswordHref={uiHref(ctx, "/forgot-password")}
 										/>
 										<label class="ba-checkbox">
 											<input
@@ -1817,7 +1949,7 @@ export const authUI = (options?: AuthUIOptions) => {
 						footer={
 							<>
 								{t("forgotPassword.rememberPassword")}{" "}
-								<Link href="./sign-in">{t("action.signIn")}</Link>
+								<Link href={uiHref(ctx, "/sign-in")}>{t("action.signIn")}</Link>
 							</>
 						}
 					>
@@ -1867,7 +1999,7 @@ export const authUI = (options?: AuthUIOptions) => {
 						footer={
 							<>
 								{t("resetPassword.backTo")}{" "}
-								<Link href="./sign-in">{t("action.signIn")}</Link>
+								<Link href={uiHref(ctx, "/sign-in")}>{t("action.signIn")}</Link>
 							</>
 						}
 					>
@@ -1879,7 +2011,7 @@ export const authUI = (options?: AuthUIOptions) => {
 									level: "success",
 									message: t("resetPassword.success"),
 								}),
-								effects.navigate("./sign-in"),
+								effects.navigate(uiHref(ctx, "/sign-in")),
 							]}
 							error={[
 								effects.toastFromError({
@@ -1922,7 +2054,7 @@ export const authUI = (options?: AuthUIOptions) => {
 						footer={
 							<>
 								{t("resetPassword.backTo")}{" "}
-								<Link href="./sign-in">{t("action.signIn")}</Link>
+								<Link href={uiHref(ctx, "/sign-in")}>{t("action.signIn")}</Link>
 							</>
 						}
 					>
@@ -1934,7 +2066,7 @@ export const authUI = (options?: AuthUIOptions) => {
 									level: "success",
 									message: t("verifyEmail.success"),
 								}),
-								effects.navigate("./sign-in"),
+								effects.navigate(uiHref(ctx, "/sign-in")),
 							]}
 							error={[
 								effects.toastFromError({
@@ -2007,23 +2139,29 @@ export const authUI = (options?: AuthUIOptions) => {
 							/>
 						</section>
 						{hasOtherMethods ? (
-							<ProviderButtons ctx={ctx} mode="signUp" providers={providers} />
+							<>
+								<AuthDivider label={t("action.or")} />
+								<ProviderButtons
+									ctx={ctx}
+									mode="signUp"
+									providers={providers}
+								/>
+							</>
 						) : null}
 						<CaptchaConfig ctx={ctx} />
-						{passkey ? (
-							<PasskeyRegistrationPanel
+						{passkey || twoFactor ? (
+							<AccountSecurityChooser
 								ctx={ctx}
-								capability={passkey}
+								passkey={passkey}
+								twoFactor={twoFactor}
 								redirectTo={getRedirectTo(ctx)}
-								nextDialog={twoFactor ? "two-factor-enrollment" : undefined}
 							/>
 						) : null}
+						{passkey ? (
+							<PasskeyRegistrationPanel ctx={ctx} capability={passkey} />
+						) : null}
 						{twoFactor ? (
-							<TwoFactorEnrollmentPanel
-								ctx={ctx}
-								capability={twoFactor}
-								redirectTo={getRedirectTo(ctx)}
-							/>
+							<TwoFactorEnrollmentPanel ctx={ctx} capability={twoFactor} />
 						) : null}
 					</AuthCard>
 				);

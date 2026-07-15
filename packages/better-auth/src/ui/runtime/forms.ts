@@ -152,7 +152,13 @@ function setFieldError(input: Element, message: string): void {
 	error.id = id;
 	error.className = "ba-field-error";
 	error.textContent = message;
-	input.insertAdjacentElement("afterend", error);
+	// Place errors after the checkbox label (not between input and label text).
+	const checkboxLabel =
+		input instanceof HTMLInputElement &&
+		input.type === "checkbox" &&
+		input.closest("label.ba-checkbox");
+	const anchor = checkboxLabel || input;
+	anchor.insertAdjacentElement("afterend", error);
 	if (!input.hasAttribute("data-ba-describedby-original")) {
 		input.setAttribute(
 			"data-ba-describedby-original",

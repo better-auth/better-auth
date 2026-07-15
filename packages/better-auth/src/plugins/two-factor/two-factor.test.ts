@@ -2138,15 +2138,29 @@ describe("two factor passwordless", async () => {
 describe("two factor password still required for credential accounts", async () => {
 	const { auth, signInWithTestUser } = await getTestInstance({
 		secret: DEFAULT_SECRET,
+		session: {
+			freshAge: 1,
+		},
 		plugins: [twoFactor({ allowPasswordless: true })],
 	});
 
 	const { headers } = await signInWithTestUser();
 
-	it("rejects enabling without password for credential users", async () => {
+	it("allows enabling without password while the session is fresh", async () => {
+		const res = await auth.api.enableTwoFactor({
+			body: { method: "totp" },
+			headers,
+			asResponse: true,
+		});
+		expect(res.status).toBe(200);
+	});
+
+	it("rejects enabling without password once the session is no longer fresh", async () => {
+		const { headers: staleHeaders } = await signInWithTestUser();
+		await new Promise((resolve) => setTimeout(resolve, 1100));
 		const res = await auth.api.enableTwoFactor({
 			body: {},
-			headers,
+			headers: staleHeaders,
 			asResponse: true,
 		});
 		expect(res.status).toBe(400);
