@@ -1,28 +1,39 @@
 import type { DBAdapter } from "better-auth";
-import {
-	getSCIMDemoToken,
-	SCIM_DEMO_CONNECTION_ID,
-	SCIM_DEMO_EXTERNAL_ID_PREFIX,
-} from "./scim-demo.ts";
+import { getSCIMDemoToken, SCIM_DEMO_CONNECTION_ID } from "./scim-demo.ts";
 import type { SCIMDemoGroupKey, SCIMDemoUserKey } from "./scim-demo-catalog.ts";
 import {
+	isSCIMDemoUserKey,
 	SCIM_DEMO_DIRECTORY_GROUPS,
 	SCIM_DEMO_DIRECTORY_USERS,
 	SCIM_DEMO_ROLE,
 } from "./scim-demo-catalog.ts";
 import type {
-	SCIMDemoAccessDecision,
 	SCIMDemoAction,
 	SCIMDemoActionResult,
-	SCIMDemoApplicationAccess,
 	SCIMDemoConnectionState,
+	SCIMDemoEmployeePortalState,
 	SCIMDemoGroupState,
+	SCIMDemoIdentityLinkStatus,
 	SCIMDemoOperation,
+	SCIMDemoSessionStatus,
 	SCIMDemoUserLifecycle,
 	SCIMDemoUserState,
 	SCIMDemoWorkspace,
 } from "./scim-demo-contract.ts";
 import { isSCIMDemoOperation } from "./scim-demo-contract.ts";
+import {
+	createSCIMDemoEmployeePortalPath,
+	createSCIMDemoUserEmail,
+	createSCIMDemoUserExternalId,
+	createSCIMDemoWorkspaceId,
+	isSCIMDemoWorkspaceId,
+	SCIM_DEMO_EXTERNAL_ID_PREFIX,
+} from "./scim-demo-identity.ts";
+import {
+	getSCIMDemoOIDCIssuer,
+	SCIM_DEMO_SSO_PROVIDER_ID,
+	SCIM_DEMO_SSO_PROVIDER_INSTANCE_ID,
+} from "./scim-demo-oidc.ts";
 
 const SCIM_BASE_PATH = "/api/auth/scim/v2";
 const SCIM_MEDIA_TYPE = "application/scim+json";
@@ -31,7 +42,6 @@ const SCIM_GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
 const SCIM_PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
 const SCIM_REQUEST_TIMEOUT_MS = 5_000;
 
-type SCIMDemoUserDefinition = (typeof SCIM_DEMO_DIRECTORY_USERS)[number];
 type SCIMDemoGroupDefinition = (typeof SCIM_DEMO_DIRECTORY_GROUPS)[number];
 
 interface SCIMUserRow {
@@ -71,8 +81,33 @@ interface SCIMDemoApplicationUserRow {
 	email: string;
 	id: string;
 	name: string;
-	scimDemoActive?: boolean | null;
 	scimDemoRole?: string | null;
+}
+
+interface SCIMDemoIdentityRow {
+	id: string;
+	issuer: string;
+	providerAccountId: string;
+	userId: string;
+}
+
+interface SCIMDemoAccountRow {
+	id: string;
+	identityId: string;
+	providerId: string;
+	providerInstanceId: string;
+}
+
+interface SCIMDemoSessionRow {
+	expiresAt: Date | string;
+	id: string;
+	userId: string;
+}
+
+interface SCIMDemoUserAuthenticationState {
+	activeSessionCount: number;
+	identityLinkStatus: SCIMDemoIdentityLinkStatus;
+	sessionStatus: SCIMDemoSessionStatus;
 }
 
 interface SCIMUserResource {
@@ -107,8 +142,12 @@ interface SCIMDemoServiceContext {
 	operatorId: string;
 }
 
+interface SCIMDemoUserGraph {
+	deleteUser(userId: string): Promise<void>;
+}
+
 interface SCIMDemoActionContext extends SCIMDemoServiceContext {
-	database: Pick<DBAdapter, "deleteMany" | "findMany" | "findOne">;
+	userGraph: SCIMDemoUserGraph;
 }
 
 type SCIMDemoRequestError = Error & {
@@ -307,16 +346,6 @@ function createOperation(input: {
 	};
 }
 
-async function createOperatorScope(operatorId: string) {
-	const digest = await crypto.subtle.digest(
-		"SHA-256",
-		new TextEncoder().encode(operatorId),
-	);
-	return Array.from(new Uint8Array(digest).slice(0, 6), (byte) =>
-		byte.toString(16).padStart(2, "0"),
-	).join("");
-}
-
 function getUserDefinition(userKey: SCIMDemoUserKey) {
 	const definition = SCIM_DEMO_DIRECTORY_USERS.find(
 		(user) => user.key === userKey,
@@ -333,23 +362,15 @@ function getGroupDefinition(groupKey: SCIMDemoGroupKey) {
 	return definition;
 }
 
-function getUserExternalId(scope: string, userKey: SCIMDemoUserKey) {
-	return `${SCIM_DEMO_EXTERNAL_ID_PREFIX}${scope}:${userKey}`;
-}
-
-function getGroupExternalId(scope: string, groupKey: SCIMDemoGroupKey) {
-	return `${SCIM_DEMO_EXTERNAL_ID_PREFIX}${scope}-${groupKey}`;
-}
-
-function getUserName(definition: SCIMDemoUserDefinition, scope: string) {
-	return `${definition.emailLocalPart}+${scope}@acme.example`;
+function getGroupExternalId(workspaceId: string, groupKey: SCIMDemoGroupKey) {
+	return `${SCIM_DEMO_EXTERNAL_ID_PREFIX}${workspaceId}-${groupKey}`;
 }
 
 function getPersistedGroupName(
 	definition: SCIMDemoGroupDefinition,
-	scope: string,
+	workspaceId: string,
 ) {
-	return `${definition.displayName} (${scope})`;
+	return `${definition.displayName} (${workspaceId})`;
 }
 
 function toISODate(value: Date | string | null | undefined) {
@@ -421,6 +442,63 @@ async function findTombstone(
 	});
 }
 
+function isActiveSession(session: SCIMDemoSessionRow, now: Date) {
+	const expiresAt =
+		session.expiresAt instanceof Date
+			? session.expiresAt
+			: new Date(session.expiresAt);
+	return !Number.isNaN(expiresAt.getTime()) && expiresAt > now;
+}
+
+async function readUserAuthenticationState(
+	database: SCIMDemoServiceContext["database"],
+	userId: string | null,
+	externalId: string,
+): Promise<SCIMDemoUserAuthenticationState> {
+	if (!userId) {
+		return {
+			activeSessionCount: 0,
+			identityLinkStatus: "not-linked" as const,
+			sessionStatus: "none" as const,
+		};
+	}
+	const [identity, sessions] = await Promise.all([
+		database.findOne<SCIMDemoIdentityRow>({
+			model: "identity",
+			where: [
+				{ field: "userId", value: userId },
+				{ field: "issuer", value: getSCIMDemoOIDCIssuer() },
+				{ field: "providerAccountId", value: externalId },
+			],
+		}),
+		database.findMany<SCIMDemoSessionRow>({
+			model: "session",
+			where: [{ field: "userId", value: userId }],
+		}),
+	]);
+	const account = identity
+		? await database.findOne<SCIMDemoAccountRow>({
+				model: "account",
+				where: [
+					{ field: "identityId", value: identity.id },
+					{ field: "providerId", value: SCIM_DEMO_SSO_PROVIDER_ID },
+					{
+						field: "providerInstanceId",
+						value: SCIM_DEMO_SSO_PROVIDER_INSTANCE_ID,
+					},
+				],
+			})
+		: null;
+	const activeSessionCount = sessions.filter((session) =>
+		isActiveSession(session, new Date()),
+	).length;
+	return {
+		activeSessionCount,
+		identityLinkStatus: account ? "linked" : "not-linked",
+		sessionStatus: activeSessionCount > 0 ? "active" : "none",
+	};
+}
+
 async function readApplicationState(
 	database: SCIMDemoServiceContext["database"],
 	scimUserId: string,
@@ -472,20 +550,26 @@ export async function getSCIMDemoWorkspace({
 	database,
 	operatorId,
 }: SCIMDemoServiceContext): Promise<SCIMDemoWorkspace> {
-	const scope = await createOperatorScope(operatorId);
+	const workspaceId = await createSCIMDemoWorkspaceId(operatorId);
 	const scimUsersPromise = Promise.all(
 		SCIM_DEMO_DIRECTORY_USERS.map((definition) =>
-			findSCIMUser(database, getUserExternalId(scope, definition.key)),
+			findSCIMUser(
+				database,
+				createSCIMDemoUserExternalId(workspaceId, definition.key),
+			),
 		),
 	);
 	const tombstonesPromise = Promise.all(
 		SCIM_DEMO_DIRECTORY_USERS.map((definition) =>
-			findTombstone(database, getUserExternalId(scope, definition.key)),
+			findTombstone(
+				database,
+				createSCIMDemoUserExternalId(workspaceId, definition.key),
+			),
 		),
 	);
 	const scimGroups = await Promise.all(
 		SCIM_DEMO_DIRECTORY_GROUPS.map((definition) =>
-			findSCIMGroup(database, getGroupExternalId(scope, definition.key)),
+			findSCIMGroup(database, getGroupExternalId(workspaceId, definition.key)),
 		),
 	);
 	const [scimUsers, tombstones, memberships] = await Promise.all([
@@ -543,12 +627,21 @@ export async function getSCIMDemoWorkspace({
 		},
 	);
 
-	const users: SCIMDemoUserState[] = SCIM_DEMO_DIRECTORY_USERS.map(
-		(definition, index) => {
+	const users: SCIMDemoUserState[] = await Promise.all(
+		SCIM_DEMO_DIRECTORY_USERS.map(async (definition, index) => {
 			const scimUser = scimUsers[index];
 			const tombstone = tombstones[index];
 			const applicationUser = applicationUserById.get(
 				scimUser?.userId ?? tombstone?.userId ?? "",
+			);
+			const externalId = createSCIMDemoUserExternalId(
+				workspaceId,
+				definition.key,
+			);
+			const authentication = await readUserAuthenticationState(
+				database,
+				applicationUser?.id ?? null,
+				externalId,
 			);
 			const userGroups = scimUser
 				? groups
@@ -558,13 +651,8 @@ export async function getSCIMDemoWorkspace({
 			let lifecycle: SCIMDemoUserLifecycle = "not-provisioned";
 			if (scimUser) lifecycle = scimUser.active ? "active" : "inactive";
 			else if (tombstone) lifecycle = "deleted";
-			let applicationAccess: SCIMDemoApplicationAccess = "none";
-			if (applicationUser) {
-				applicationAccess = applicationUser.scimDemoActive
-					? "active"
-					: "disabled";
-			}
 			return {
+				activeSessionCount: authentication.activeSessionCount,
 				key: definition.key,
 				displayName:
 					scimUser?.displayName ??
@@ -573,18 +661,23 @@ export async function getSCIMDemoWorkspace({
 				email:
 					scimUser?.userName ??
 					applicationUser?.email ??
-					getUserName(definition, scope),
+					createSCIMDemoUserEmail(workspaceId, definition.key),
 				initials: definition.initials,
 				defaultGroupKey: definition.defaultGroupKey,
 				lifecycle,
-				applicationAccess,
 				applicationUserId: applicationUser?.id ?? null,
+				employeePortalPath: createSCIMDemoEmployeePortalPath(
+					workspaceId,
+					definition.key,
+				),
 				groups: userGroups,
+				identityLinkStatus: authentication.identityLinkStatus,
 				lastSyncedAt: toISODate(scimUser?.updatedAt ?? tombstone?.deletedAt),
 				role: applicationUser?.scimDemoRole ?? null,
 				scimResourceId: scimUser?.id ?? null,
+				sessionStatus: authentication.sessionStatus,
 			};
-		},
+		}),
 	);
 
 	const lastSyncedAt = getLatestDate([
@@ -596,39 +689,90 @@ export async function getSCIMDemoWorkspace({
 	return { connection, groups, users };
 }
 
-export async function checkSCIMDemoAccess(
-	context: SCIMDemoServiceContext,
-	userKey: SCIMDemoUserKey,
-): Promise<SCIMDemoAccessDecision> {
-	getUserDefinition(userKey);
-	const scope = await createOperatorScope(context.operatorId);
-	const externalId = getUserExternalId(scope, userKey);
-	const scimUser = await findSCIMUser(context.database, externalId);
-	const tombstone = scimUser
-		? null
-		: await findTombstone(context.database, externalId);
-	const applicationUserId = scimUser?.userId ?? tombstone?.userId;
-	if (!applicationUserId) {
-		throw createActionError("Provision this user before checking access", 404);
+export async function hasSCIMDemoEmployeeIdentity(
+	database: SCIMDemoServiceContext["database"],
+	userId: string,
+) {
+	const [source, tombstone] = await Promise.all([
+		database.findOne<SCIMUserRow>({
+			model: "scimUser",
+			where: [
+				{ field: "connectionId", value: SCIM_DEMO_CONNECTION_ID },
+				{ field: "userId", value: userId },
+			],
+		}),
+		database.findOne<SCIMIdentityTombstoneRow>({
+			model: "scimIdentityTombstone",
+			where: [
+				{ field: "connectionId", value: SCIM_DEMO_CONNECTION_ID },
+				{ field: "userId", value: userId },
+			],
+		}),
+	]);
+	return Boolean(source || tombstone);
+}
+
+export async function assertSCIMDemoOperatorAccess(
+	database: SCIMDemoServiceContext["database"],
+	userId: string,
+) {
+	if (await hasSCIMDemoEmployeeIdentity(database, userId)) {
+		throw createActionError(
+			"Employee sessions cannot manage the SCIM sandbox",
+			403,
+		);
 	}
-	const applicationUser =
-		await context.database.findOne<SCIMDemoApplicationUserRow>({
-			model: "user",
-			where: [{ field: "id", value: applicationUserId }],
-		});
-	if (!applicationUser) {
-		throw createActionError("The application user was not found", 404);
+}
+
+export async function getSCIMDemoEmployeePortalState(
+	database: SCIMDemoServiceContext["database"],
+	workspaceId: string,
+	userKey: string,
+	authenticatedUserId?: string | null,
+): Promise<SCIMDemoEmployeePortalState> {
+	if (!isSCIMDemoWorkspaceId(workspaceId) || !isSCIMDemoUserKey(userKey)) {
+		return { status: "invalid", message: "This demo employee link is invalid" };
 	}
-	const allowed = applicationUser.scimDemoActive === true;
+	const definition = getUserDefinition(userKey);
+	const externalId = createSCIMDemoUserExternalId(workspaceId, userKey);
+	const [scimUser, tombstone] = await Promise.all([
+		findSCIMUser(database, externalId),
+		findTombstone(database, externalId),
+	]);
+	const applicationUserId = scimUser?.userId ?? tombstone?.userId ?? null;
+	const applicationUser = applicationUserId
+		? await database.findOne<SCIMDemoApplicationUserRow>({
+				model: "user",
+				where: [{ field: "id", value: applicationUserId }],
+			})
+		: null;
+	let directoryStatus: SCIMDemoUserLifecycle = "not-provisioned";
+	if (scimUser) directoryStatus = scimUser.active ? "active" : "inactive";
+	else if (tombstone) directoryStatus = "deleted";
+	const authentication = await readUserAuthenticationState(
+		database,
+		applicationUser?.id ?? null,
+		externalId,
+	);
 	return {
-		allowed,
-		applicationUserId,
-		checkedAt: new Date().toISOString(),
-		message: allowed
-			? "The application authorized this user"
-			: "The application denied access for this user",
-		role: applicationUser.scimDemoRole ?? null,
+		status: "ready",
+		activeSessionCount: authentication.activeSessionCount,
+		applicationUserId: applicationUser?.id ?? null,
+		directoryStatus,
+		displayName:
+			scimUser?.displayName ?? applicationUser?.name ?? definition.displayName,
+		email:
+			scimUser?.userName ??
+			applicationUser?.email ??
+			createSCIMDemoUserEmail(workspaceId, userKey),
+		identityLinkStatus: authentication.identityLinkStatus,
+		isCurrentEmployee:
+			Boolean(applicationUser?.id) &&
+			authenticatedUserId === applicationUser?.id,
+		role: applicationUser?.scimDemoRole ?? null,
+		sessionStatus: authentication.sessionStatus,
 		userKey,
+		workspaceId,
 	};
 }
 
@@ -636,9 +780,9 @@ async function provisionUser(
 	context: SCIMDemoActionContext,
 	userKey: SCIMDemoUserKey,
 ) {
-	const scope = await createOperatorScope(context.operatorId);
+	const workspaceId = await createSCIMDemoWorkspaceId(context.operatorId);
 	const definition = getUserDefinition(userKey);
-	const externalId = getUserExternalId(scope, userKey);
+	const externalId = createSCIMDemoUserExternalId(workspaceId, userKey);
 	const existing = await findSCIMUser(context.database, externalId);
 	if (existing) {
 		throw createActionError("This directory user is already provisioned", 409);
@@ -650,7 +794,7 @@ async function provisionUser(
 				where: [{ field: "id", value: retainedIdentity.userId }],
 			})
 		: null;
-	const userName = getUserName(definition, scope);
+	const userName = createSCIMDemoUserEmail(workspaceId, userKey);
 	const displayName = retainedApplicationUser?.name ?? definition.displayName;
 	const requestBody = {
 		schemas: [SCIM_USER_SCHEMA],
@@ -677,10 +821,6 @@ async function provisionUser(
 		"externalId was not retained",
 	);
 	assertState(resource.active, "The provisioned SCIM User is not active");
-	assertState(
-		state.user.scimDemoActive === true,
-		"Application access was not enabled",
-	);
 	assertState(
 		(state.user.scimDemoRole ?? null) === null,
 		"An application role was granted before Group membership",
@@ -718,10 +858,10 @@ async function updateProfile(
 			400,
 		);
 	}
-	const scope = await createOperatorScope(context.operatorId);
+	const workspaceId = await createSCIMDemoWorkspaceId(context.operatorId);
 	const scimUser = await findSCIMUser(
 		context.database,
-		getUserExternalId(scope, userKey),
+		createSCIMDemoUserExternalId(workspaceId, userKey),
 	);
 	if (!scimUser) throw createActionError("Provision this user first", 409);
 	const requestBody = {
@@ -753,17 +893,17 @@ async function updateProfile(
 
 async function ensureGroup(
 	context: SCIMDemoActionContext,
-	scope: string,
+	workspaceId: string,
 	definition: SCIMDemoGroupDefinition,
 	userKey: SCIMDemoUserKey,
 ) {
-	const externalId = getGroupExternalId(scope, definition.key);
+	const externalId = getGroupExternalId(workspaceId, definition.key);
 	const existing = await findSCIMGroup(context.database, externalId);
 	if (existing) return { group: existing, operations: [] };
 	const requestBody = {
 		schemas: [SCIM_GROUP_SCHEMA],
 		externalId,
-		displayName: getPersistedGroupName(definition, scope),
+		displayName: getPersistedGroupName(definition, workspaceId),
 		members: [],
 	};
 	const response = await requestSCIM(context.baseURL, "/Groups", {
@@ -799,10 +939,10 @@ async function setGroups(
 	userKey: SCIMDemoUserKey,
 	groupKeys: readonly SCIMDemoGroupKey[],
 ) {
-	const scope = await createOperatorScope(context.operatorId);
+	const workspaceId = await createSCIMDemoWorkspaceId(context.operatorId);
 	const scimUser = await findSCIMUser(
 		context.database,
-		getUserExternalId(scope, userKey),
+		createSCIMDemoUserExternalId(workspaceId, userKey),
 	);
 	if (!scimUser) throw createActionError("Provision this user first", 409);
 	const requestedGroups = new Set(groupKeys);
@@ -816,10 +956,15 @@ async function setGroups(
 		for (const definition of SCIM_DEMO_DIRECTORY_GROUPS) {
 			let group = await findSCIMGroup(
 				context.database,
-				getGroupExternalId(scope, definition.key),
+				getGroupExternalId(workspaceId, definition.key),
 			);
 			if (requestedGroups.has(definition.key) && !group) {
-				const created = await ensureGroup(context, scope, definition, userKey);
+				const created = await ensureGroup(
+					context,
+					workspaceId,
+					definition,
+					userKey,
+				);
 				group = created.group;
 				operations.push(...created.operations);
 			}
@@ -918,10 +1063,10 @@ async function setUserActive(
 	userKey: SCIMDemoUserKey,
 	active: boolean,
 ) {
-	const scope = await createOperatorScope(context.operatorId);
+	const workspaceId = await createSCIMDemoWorkspaceId(context.operatorId);
 	const scimUser = await findSCIMUser(
 		context.database,
-		getUserExternalId(scope, userKey),
+		createSCIMDemoUserExternalId(workspaceId, userKey),
 	);
 	if (!scimUser) throw createActionError("Provision this user first", 409);
 	if (scimUser.active === active) {
@@ -942,12 +1087,23 @@ async function setUserActive(
 	});
 	const state = await readApplicationState(context.database, scimUser.id);
 	assertState(
-		state.scimUser.active === active && state.user.scimDemoActive === active,
-		"Application access did not follow the SCIM active state",
+		state.scimUser.active === active,
+		"The persisted SCIM active state did not match the request",
 	);
+	const authentication = await readUserAuthenticationState(
+		context.database,
+		state.user.id,
+		createSCIMDemoUserExternalId(workspaceId, userKey),
+	);
+	if (!active) {
+		assertState(
+			authentication.activeSessionCount === 0,
+			"Inactive directory access still had an active session",
+		);
+	}
 	const financeGroup = await findSCIMGroup(
 		context.database,
-		getGroupExternalId(scope, "finance-admins"),
+		getGroupExternalId(workspaceId, "finance-admins"),
 	);
 	const financeMembership = financeGroup
 		? await context.database.findOne<SCIMGroupMemberRow>({
@@ -981,8 +1137,8 @@ async function deleteUser(
 	context: SCIMDemoActionContext,
 	userKey: SCIMDemoUserKey,
 ) {
-	const scope = await createOperatorScope(context.operatorId);
-	const externalId = getUserExternalId(scope, userKey);
+	const workspaceId = await createSCIMDemoWorkspaceId(context.operatorId);
+	const externalId = createSCIMDemoUserExternalId(workspaceId, userKey);
 	const scimUser = await findSCIMUser(context.database, externalId);
 	if (!scimUser) throw createActionError("This user has no SCIM resource", 409);
 	const resourcePath = `/Users/${encodeURIComponent(scimUser.id)}`;
@@ -1004,9 +1160,18 @@ async function deleteUser(
 		"The stable application identity was not retained",
 	);
 	assertState(
-		applicationUser?.scimDemoActive === false &&
-			(applicationUser.scimDemoRole ?? null) === null,
+		Boolean(applicationUser) &&
+			(applicationUser?.scimDemoRole ?? null) === null,
 		"Deleted SCIM access was not removed from the application user",
+	);
+	const authentication = await readUserAuthenticationState(
+		context.database,
+		applicationUser?.id ?? null,
+		externalId,
+	);
+	assertState(
+		authentication.activeSessionCount === 0,
+		"Deleted directory access still had an active session",
 	);
 	return [
 		createOperation({
@@ -1020,22 +1185,40 @@ async function deleteUser(
 	];
 }
 
-async function cleanupApplicationUser(
-	database: SCIMDemoActionContext["database"],
+async function assertSandboxUserGraphDeletable(
+	context: SCIMDemoActionContext,
 	userId: string,
 	allowedExternalIds: ReadonlySet<string>,
+	options: { allowSandboxSCIMUsers: boolean },
 ) {
-	const liveSCIMUsers = await database.findMany<SCIMUserRow>({
-		model: "scimUser",
-		where: [{ field: "userId", value: userId }],
-	});
-	if (liveSCIMUsers.length > 0) {
+	const { database } = context;
+	const [liveSCIMUsers, tombstones, identities] = await Promise.all([
+		database.findMany<SCIMUserRow>({
+			model: "scimUser",
+			where: [{ field: "userId", value: userId }],
+		}),
+		database.findMany<SCIMIdentityTombstoneRow>({
+			model: "scimIdentityTombstone",
+			where: [{ field: "userId", value: userId }],
+		}),
+		database.findMany<SCIMDemoIdentityRow>({
+			model: "identity",
+			where: [{ field: "userId", value: userId }],
+		}),
+	]);
+	if (
+		liveSCIMUsers.some(
+			(source) =>
+				source.connectionId !== SCIM_DEMO_CONNECTION_ID ||
+				!source.externalId ||
+				!allowedExternalIds.has(source.externalId),
+		)
+	) {
+		throw new Error("The application user is linked outside this demo sandbox");
+	}
+	if (!options.allowSandboxSCIMUsers && liveSCIMUsers.length > 0) {
 		throw new Error("The demo application user still has a SCIM resource");
 	}
-	const tombstones = await database.findMany<SCIMIdentityTombstoneRow>({
-		model: "scimIdentityTombstone",
-		where: [{ field: "userId", value: userId }],
-	});
 	if (
 		tombstones.some(
 			(tombstone) =>
@@ -1045,28 +1228,68 @@ async function cleanupApplicationUser(
 	) {
 		throw new Error("The application user is linked outside this demo sandbox");
 	}
-	await database.deleteMany({
-		model: "scimIdentityTombstone",
-		where: [
-			{ field: "userId", value: userId },
-			{ field: "connectionId", value: SCIM_DEMO_CONNECTION_ID },
-		],
+	if (
+		identities.some(
+			(identity) =>
+				identity.issuer !== getSCIMDemoOIDCIssuer() ||
+				!allowedExternalIds.has(identity.providerAccountId),
+		)
+	) {
+		throw new Error(
+			"The application user has a non-demo authentication identity",
+		);
+	}
+	const identityIds = identities.map((identity) => identity.id);
+	const accounts =
+		identityIds.length > 0
+			? await database.findMany<SCIMDemoAccountRow>({
+					model: "account",
+					where: [{ field: "identityId", value: identityIds, operator: "in" }],
+				})
+			: [];
+	if (
+		accounts.some(
+			(account) =>
+				account.providerId !== SCIM_DEMO_SSO_PROVIDER_ID ||
+				account.providerInstanceId !== SCIM_DEMO_SSO_PROVIDER_INSTANCE_ID,
+		)
+	) {
+		throw new Error(
+			"The application user has a non-demo authentication account",
+		);
+	}
+}
+
+async function cleanupApplicationUser(
+	context: SCIMDemoActionContext,
+	userId: string,
+	allowedExternalIds: ReadonlySet<string>,
+) {
+	await assertSandboxUserGraphDeletable(context, userId, allowedExternalIds, {
+		allowSandboxSCIMUsers: false,
 	});
+	const { database } = context;
+	await context.userGraph.deleteUser(userId);
+	const remainingUser = await database.findOne<SCIMDemoApplicationUserRow>({
+		model: "user",
+		where: [{ field: "id", value: userId }],
+	});
+	assertState(!remainingUser, "The demo application user was not deleted");
 	await database.deleteMany({
 		model: "scimSubject",
 		where: [{ field: "userId", value: userId }],
 	});
 	await database.deleteMany({
-		model: "user",
-		where: [{ field: "id", value: userId }],
+		model: "scimIdentityTombstone",
+		where: [{ field: "userId", value: userId }],
 	});
 }
 
 async function resetSandbox(context: SCIMDemoActionContext) {
-	const scope = await createOperatorScope(context.operatorId);
+	const workspaceId = await createSCIMDemoWorkspaceId(context.operatorId);
 	const userExternalIds = new Set(
 		SCIM_DEMO_DIRECTORY_USERS.map((definition) =>
-			getUserExternalId(scope, definition.key),
+			createSCIMDemoUserExternalId(workspaceId, definition.key),
 		),
 	);
 	const [groups, users, tombstones] = await Promise.all([
@@ -1074,7 +1297,7 @@ async function resetSandbox(context: SCIMDemoActionContext) {
 			SCIM_DEMO_DIRECTORY_GROUPS.map((definition) =>
 				findSCIMGroup(
 					context.database,
-					getGroupExternalId(scope, definition.key),
+					getGroupExternalId(workspaceId, definition.key),
 				),
 			),
 		),
@@ -1082,7 +1305,7 @@ async function resetSandbox(context: SCIMDemoActionContext) {
 			SCIM_DEMO_DIRECTORY_USERS.map((definition) =>
 				findSCIMUser(
 					context.database,
-					getUserExternalId(scope, definition.key),
+					createSCIMDemoUserExternalId(workspaceId, definition.key),
 				),
 			),
 		),
@@ -1090,7 +1313,7 @@ async function resetSandbox(context: SCIMDemoActionContext) {
 			SCIM_DEMO_DIRECTORY_USERS.map((definition) =>
 				findTombstone(
 					context.database,
-					getUserExternalId(scope, definition.key),
+					createSCIMDemoUserExternalId(workspaceId, definition.key),
 				),
 			),
 		),
@@ -1100,6 +1323,13 @@ async function resetSandbox(context: SCIMDemoActionContext) {
 			...users.map((user) => user?.userId),
 			...tombstones.map((tombstone) => tombstone?.userId),
 		].filter((userId): userId is string => Boolean(userId)),
+	);
+	await Promise.all(
+		Array.from(applicationUserIds, (userId) =>
+			assertSandboxUserGraphDeletable(context, userId, userExternalIds, {
+				allowSandboxSCIMUsers: true,
+			}),
+		),
 	);
 
 	for (const group of groups) {
@@ -1119,34 +1349,49 @@ async function resetSandbox(context: SCIMDemoActionContext) {
 		);
 	}
 	for (const userId of applicationUserIds) {
-		await cleanupApplicationUser(context.database, userId, userExternalIds);
+		await cleanupApplicationUser(context, userId, userExternalIds);
 	}
 
-	const [remainingUsers, remainingGroups, remainingTombstones] =
-		await Promise.all([
-			Promise.all(
-				Array.from(userExternalIds, (externalId) =>
-					findSCIMUser(context.database, externalId),
-				),
+	const [
+		remainingUsers,
+		remainingGroups,
+		remainingTombstones,
+		remainingSubjects,
+	] = await Promise.all([
+		Promise.all(
+			Array.from(userExternalIds, (externalId) =>
+				findSCIMUser(context.database, externalId),
 			),
-			Promise.all(
-				SCIM_DEMO_DIRECTORY_GROUPS.map((definition) =>
-					findSCIMGroup(
-						context.database,
-						getGroupExternalId(scope, definition.key),
-					),
-				),
-			),
-			Promise.all(
-				Array.from(userExternalIds, (externalId) =>
-					findTombstone(context.database, externalId),
-				),
-			),
-		]);
-	assertState(
-		[...remainingUsers, ...remainingGroups, ...remainingTombstones].every(
-			(resource) => !resource,
 		),
+		Promise.all(
+			SCIM_DEMO_DIRECTORY_GROUPS.map((definition) =>
+				findSCIMGroup(
+					context.database,
+					getGroupExternalId(workspaceId, definition.key),
+				),
+			),
+		),
+		Promise.all(
+			Array.from(userExternalIds, (externalId) =>
+				findTombstone(context.database, externalId),
+			),
+		),
+		Promise.all(
+			Array.from(applicationUserIds, (userId) =>
+				context.database.findOne({
+					model: "scimSubject",
+					where: [{ field: "userId", value: userId }],
+				}),
+			),
+		),
+	]);
+	assertState(
+		[
+			...remainingUsers,
+			...remainingGroups,
+			...remainingTombstones,
+			...remainingSubjects,
+		].every((resource) => !resource),
 		"The sandbox still contains SCIM resources",
 	);
 }

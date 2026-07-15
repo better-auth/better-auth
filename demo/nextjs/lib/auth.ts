@@ -5,6 +5,7 @@ import { dash, sendEmail, sentinel } from "@better-auth/infra";
 import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
+import { acquireActiveSCIMUserLink } from "@better-auth/scim";
 import { sso } from "@better-auth/sso";
 import { stripe } from "@better-auth/stripe";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -29,7 +30,15 @@ import {
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { Stripe } from "stripe";
-import { createSCIMDemoPlugin } from "./scim-demo.ts";
+import {
+	createSCIMDemoPlugin,
+	isSCIMDemoEnabled,
+	SCIM_DEMO_CONNECTION_ID,
+} from "./scim-demo.ts";
+import {
+	getSCIMDemoOIDCProvider,
+	SCIM_DEMO_SSO_PROVIDER_INSTANCE_ID,
+} from "./scim-demo-oidc.ts";
 
 const database = (() => {
 	if (process.env.DEMO_SQLITE_PATH) {
@@ -80,13 +89,6 @@ const authOptions = {
 	database,
 	user: {
 		additionalFields: {
-			scimDemoActive: {
-				type: "boolean",
-				required: false,
-				defaultValue: false,
-				input: false,
-				returned: false,
-			},
 			scimDemoRole: {
 				type: "string",
 				required: false,
@@ -274,6 +276,29 @@ const authOptions = {
 			},
 		}),
 		sso({
+			resolveUser: async (input, context) => {
+				if (input.providerInstanceId !== SCIM_DEMO_SSO_PROVIDER_INSTANCE_ID) {
+					return { action: "default" };
+				}
+				const link = await acquireActiveSCIMUserLink(
+					{
+						connectionId: SCIM_DEMO_CONNECTION_ID,
+						externalId: input.identity.providerAccountId,
+					},
+					context,
+				);
+				return link
+					? {
+							action: "link",
+							profile: "preserve",
+							userId: link.userId,
+						}
+					: {
+							action: "reject",
+							code: "SCIM_USER_NOT_ACTIVE",
+							message: "This directory user is not active",
+						};
+			},
 			defaultSSO: [
 				{
 					domain: "http://localhost:3000",
@@ -341,12 +366,8 @@ const authOptions = {
 		  `,
 						},
 						idpMetadata: {
-							entityURL:
-								"https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435/metadata",
 							entityID:
 								"https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435",
-							redirectURL:
-								"https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435/sso",
 							singleSignOnService: [
 								{
 									Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
@@ -377,6 +398,7 @@ const authOptions = {
 						callbackUrl: "/dashboard",
 					},
 				},
+				...(isSCIMDemoEnabled() ? [getSCIMDemoOIDCProvider()] : []),
 			],
 		}),
 		scimDemoPlugin,

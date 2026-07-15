@@ -1,4 +1,6 @@
 import { Filter, Search } from "lucide-react";
+import Link from "next/link";
+import type { ReactNode } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +20,6 @@ import type {
 import { cn } from "@/lib/utils";
 import {
 	formatRelativeTime,
-	getAccessLabel,
 	getLifecycleLabel,
 	StatusMark,
 	UserStatusBadge,
@@ -26,13 +27,58 @@ import {
 
 export type UserFilter = "all" | "provisioned" | "not-provisioned";
 
+interface UserSelectionTargetProps {
+	children: ReactNode;
+	className: string;
+	href: string;
+	isCurrent: boolean;
+	isDisabled: boolean;
+}
+
+function UserSelectionTarget({
+	children,
+	className,
+	href,
+	isCurrent,
+	isDisabled,
+}: UserSelectionTargetProps) {
+	if (isDisabled) {
+		return (
+			<span
+				aria-current={isCurrent ? "page" : undefined}
+				aria-disabled="true"
+				className={cn(className, "cursor-not-allowed opacity-50")}
+			>
+				{children}
+			</span>
+		);
+	}
+
+	return (
+		<Link
+			aria-current={isCurrent ? "page" : undefined}
+			className={className}
+			href={href}
+			replace
+		>
+			{children}
+		</Link>
+	);
+}
+
+function isUserFilter(value: string): value is UserFilter {
+	return (
+		value === "all" || value === "provisioned" || value === "not-provisioned"
+	);
+}
+
 interface UserListProps {
 	filter: UserFilter;
 	filteredUsers: SCIMDemoUserState[];
+	getUserHref: (userKey: SCIMDemoUserKey) => string;
 	isSelectionDisabled: boolean;
 	onFilterChange: (filter: UserFilter) => void;
 	onSearchChange: (search: string) => void;
-	onSelectUser: (userKey: SCIMDemoUserKey) => void;
 	search: string;
 	selectedUserKey: SCIMDemoUserKey;
 	totalUserCount: number;
@@ -41,10 +87,10 @@ interface UserListProps {
 export function UserList({
 	filter,
 	filteredUsers,
+	getUserHref,
 	isSelectionDisabled,
 	onFilterChange,
 	onSearchChange,
-	onSelectUser,
 	search,
 	selectedUserKey,
 	totalUserCount,
@@ -78,7 +124,7 @@ export function UserList({
 						value={search}
 						onChange={(event) => onSearchChange(event.target.value)}
 						placeholder="Search users…"
-						className="pl-9"
+						className="min-h-11 pl-9"
 					/>
 				</label>
 				<label className="relative">
@@ -91,10 +137,12 @@ export function UserList({
 						name="scim-user-filter"
 						autoComplete="off"
 						value={filter}
-						onChange={(event) =>
-							onFilterChange(event.target.value as UserFilter)
-						}
-						className="h-9 min-w-36 appearance-none border bg-background pr-8 pl-9 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						onChange={(event) => {
+							if (isUserFilter(event.target.value)) {
+								onFilterChange(event.target.value);
+							}
+						}}
+						className="h-11 min-w-36 appearance-none border bg-background pr-8 pl-9 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 					>
 						<option value="all">All users</option>
 						<option value="provisioned">Provisioned</option>
@@ -105,17 +153,18 @@ export function UserList({
 
 			{filteredUsers.length > 0 ? (
 				<>
-					<div className="hidden md:block">
-						<Table>
+					<div className="hidden overflow-x-auto md:block">
+						<Table className="min-w-[48rem]">
 							<caption className="sr-only">
 								Directory users and provisioning state
 							</caption>
 							<TableHeader>
 								<TableRow>
 									<TableHead>User</TableHead>
-									<TableHead>Status</TableHead>
+									<TableHead>Directory</TableHead>
 									<TableHead>Groups</TableHead>
-									<TableHead>Access</TableHead>
+									<TableHead>SSO account</TableHead>
+									<TableHead>Session</TableHead>
 									<TableHead>Role</TableHead>
 									<TableHead>Last operation</TableHead>
 								</TableRow>
@@ -129,14 +178,11 @@ export function UserList({
 										}
 									>
 										<TableCell className="min-w-40 whitespace-normal">
-											<button
-												type="button"
-												disabled={isSelectionDisabled}
-												onClick={() => onSelectUser(user.key)}
-												aria-current={
-													selectedUserKey === user.key ? "true" : undefined
-												}
-												className="flex w-full items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+											<UserSelectionTarget
+												className="flex min-h-11 w-full items-center gap-2 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+												href={getUserHref(user.key)}
+												isCurrent={selectedUserKey === user.key}
+												isDisabled={isSelectionDisabled}
 											>
 												<Avatar className="size-8 border">
 													<AvatarFallback className="bg-background text-[10px]">
@@ -151,7 +197,7 @@ export function UserList({
 														{user.email}
 													</span>
 												</span>
-											</button>
+											</UserSelectionTarget>
 										</TableCell>
 										<TableCell className="whitespace-normal text-xs">
 											<span className="flex items-center gap-1.5">
@@ -167,7 +213,14 @@ export function UserList({
 												: "—"}
 										</TableCell>
 										<TableCell className="whitespace-normal text-xs">
-											{getAccessLabel(user)}
+											{user.identityLinkStatus === "linked"
+												? "Linked"
+												: "Not linked"}
+										</TableCell>
+										<TableCell className="whitespace-normal text-xs">
+											{user.sessionStatus === "active"
+												? "Active session"
+												: "No active session"}
 										</TableCell>
 										<TableCell className="whitespace-normal text-xs text-muted-foreground">
 											{user.role ?? "—"}
@@ -183,17 +236,14 @@ export function UserList({
 					<ul className="divide-y md:hidden" aria-label="Directory users">
 						{filteredUsers.map((user) => (
 							<li key={user.key}>
-								<button
-									type="button"
-									disabled={isSelectionDisabled}
-									onClick={() => onSelectUser(user.key)}
-									aria-current={
-										selectedUserKey === user.key ? "true" : undefined
-									}
+								<UserSelectionTarget
 									className={cn(
-										"w-full p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+										"block min-h-11 w-full p-4 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 										selectedUserKey === user.key && "bg-muted",
 									)}
+									href={getUserHref(user.key)}
+									isCurrent={selectedUserKey === user.key}
+									isDisabled={isSelectionDisabled}
 								>
 									<span className="flex items-start justify-between gap-3">
 										<span>
@@ -207,10 +257,19 @@ export function UserList({
 										<UserStatusBadge user={user} />
 									</span>
 									<span className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-										<span>Access: {getAccessLabel(user)}</span>
+										<span>
+											SSO:{" "}
+											{user.identityLinkStatus === "linked"
+												? "Linked"
+												: "Not linked"}
+										</span>
+										<span>
+											Session:{" "}
+											{user.sessionStatus === "active" ? "Active" : "None"}
+										</span>
 										<span>Role: {user.role ?? "None"}</span>
 									</span>
-								</button>
+								</UserSelectionTarget>
 							</li>
 						))}
 					</ul>
@@ -221,6 +280,7 @@ export function UserList({
 					<Button
 						type="button"
 						variant="link"
+						className="min-h-11"
 						onClick={() => {
 							onSearchChange("");
 							onFilterChange("all");

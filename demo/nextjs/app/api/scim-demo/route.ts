@@ -7,6 +7,7 @@ import {
 } from "@/lib/scim-demo-catalog";
 import type { SCIMDemoAction } from "@/lib/scim-demo-contract";
 import {
+	assertSCIMDemoOperatorAccess,
 	getSCIMDemoCompletedOperations,
 	getSCIMDemoError,
 	getSCIMDemoWorkspace,
@@ -53,6 +54,7 @@ function getServiceContext(baseURL: string, operatorId: string) {
 		baseURL,
 		database: context.adapter,
 		operatorId,
+		userGraph: context.internalAdapter,
 	}));
 }
 
@@ -63,9 +65,12 @@ export async function GET(request: Request) {
 	if (!session) return jsonError("Authentication required", 401);
 
 	try {
-		const workspace = await getSCIMDemoWorkspace(
-			await getServiceContext(getSCIMDemoBaseURL(), session.user.id),
+		const context = await getServiceContext(
+			getSCIMDemoBaseURL(),
+			session.user.id,
 		);
+		await assertSCIMDemoOperatorAccess(context.database, session.user.id);
+		const workspace = await getSCIMDemoWorkspace(context);
 		return Response.json(workspace, {
 			headers: { "cache-control": "no-store" },
 		});
@@ -86,6 +91,13 @@ export async function POST(request: Request) {
 
 	const session = await auth.api.getSession({ headers: request.headers });
 	if (!session) return jsonError("Authentication required", 401);
+	const context = await getServiceContext(baseURL, session.user.id);
+	try {
+		await assertSCIMDemoOperatorAccess(context.database, session.user.id);
+	} catch (error) {
+		const failure = getSCIMDemoError(error);
+		return jsonError(failure.message, failure.status);
+	}
 
 	const body: unknown = await request.json().catch(() => undefined);
 	const parsedAction = actionSchema.safeParse(body);
@@ -93,7 +105,6 @@ export async function POST(request: Request) {
 		return jsonError("Invalid SCIM demo action", 400);
 	}
 
-	const context = await getServiceContext(baseURL, session.user.id);
 	try {
 		const action: SCIMDemoAction = parsedAction.data;
 		const result = await performSCIMDemoAction(context, action);

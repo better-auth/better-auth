@@ -189,6 +189,9 @@ importers:
       input-otp:
         specifier: ^1.4.2
         version: 1.4.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      jose:
+        specifier: ^6.2.3
+        version: 6.2.3
       kysely:
         specifier: 0.28.17
         version: 0.28.17
@@ -2160,6 +2163,9 @@ packages:
 
   jose@6.2.2:
     resolution: {integrity: sha512-d7kPDd34KO/YnzaDOlikGpOurfF0ByC2sEV4cANCtdqLlTfBlw2p14O/5d/zv40gJPbIQxfES3nSx1/oYNyuZQ==}
+
+  jose@6.2.3:
+    resolution: {integrity: sha512-YYVDInQKFJfR/xa3ojUTl8c2KoTwiL1R5Wg9YCydwH0x0B9grbzlg5HC7mMjCtUJjbQ/YnGEZIhI5tCgfTb4Hw==}
 
   js-base64@3.7.8:
     resolution: {integrity: sha512-hNngCeKxIUQiEUN3GPJOkz4wF/YvdUdbNL9hsBcMQTkKzboD7T/q3OYOuuPZLUE6dBxSGpwhk5mwuDud7JVAow==}
@@ -4537,6 +4543,8 @@ snapshots:
   jiti@2.6.1: {}
 
   jose@6.2.2: {}
+
+  jose@6.2.3: {}
 
   js-base64@3.7.8: {}
 

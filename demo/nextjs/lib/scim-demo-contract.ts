@@ -14,7 +14,8 @@ export type SCIMDemoUserLifecycle =
 	| "inactive"
 	| "deleted";
 
-export type SCIMDemoApplicationAccess = "active" | "disabled" | "none";
+export type SCIMDemoIdentityLinkStatus = "linked" | "not-linked";
+export type SCIMDemoSessionStatus = "active" | "none";
 
 export interface SCIMDemoDirectoryUser {
 	key: SCIMDemoUserKey;
@@ -25,13 +26,16 @@ export interface SCIMDemoDirectoryUser {
 }
 
 export interface SCIMDemoUserState extends SCIMDemoDirectoryUser {
-	applicationAccess: SCIMDemoApplicationAccess;
+	activeSessionCount: number;
 	applicationUserId: string | null;
+	employeePortalPath: string;
 	groups: SCIMDemoGroupKey[];
+	identityLinkStatus: SCIMDemoIdentityLinkStatus;
 	lastSyncedAt: string | null;
 	lifecycle: SCIMDemoUserLifecycle;
 	role: string | null;
 	scimResourceId: string | null;
+	sessionStatus: SCIMDemoSessionStatus;
 }
 
 export interface SCIMDemoGroupState {
@@ -81,14 +85,25 @@ export interface SCIMDemoActionFailure {
 	workspace: SCIMDemoWorkspace;
 }
 
-export interface SCIMDemoAccessDecision {
-	allowed: boolean;
-	applicationUserId: string;
-	checkedAt: string;
-	message: string;
-	role: string | null;
-	userKey: SCIMDemoUserKey;
-}
+export type SCIMDemoEmployeePortalState =
+	| {
+			message: string;
+			status: "invalid";
+	  }
+	| {
+			activeSessionCount: number;
+			applicationUserId: string | null;
+			directoryStatus: SCIMDemoUserLifecycle;
+			displayName: string;
+			email: string;
+			identityLinkStatus: SCIMDemoIdentityLinkStatus;
+			isCurrentEmployee: boolean;
+			role: string | null;
+			sessionStatus: SCIMDemoSessionStatus;
+			status: "ready";
+			userKey: SCIMDemoUserKey;
+			workspaceId: string;
+	  };
 
 export type SCIMDemoAction =
 	| { type: "provision-user"; userKey: SCIMDemoUserKey }
@@ -176,15 +191,17 @@ function isSCIMDemoGroupState(value: unknown): value is SCIMDemoGroupState {
 function isSCIMDemoUserState(value: unknown): value is SCIMDemoUserState {
 	return (
 		isRecord(value) &&
-		(value.applicationAccess === "active" ||
-			value.applicationAccess === "disabled" ||
-			value.applicationAccess === "none") &&
+		Number.isInteger(value.activeSessionCount) &&
+		value.activeSessionCount >= 0 &&
 		isNullableString(value.applicationUserId) &&
 		isSCIMDemoGroupKey(value.defaultGroupKey) &&
 		typeof value.displayName === "string" &&
 		typeof value.email === "string" &&
+		typeof value.employeePortalPath === "string" &&
 		Array.isArray(value.groups) &&
 		value.groups.every(isSCIMDemoGroupKey) &&
+		(value.identityLinkStatus === "linked" ||
+			value.identityLinkStatus === "not-linked") &&
 		typeof value.initials === "string" &&
 		isSCIMDemoUserKey(value.key) &&
 		isNullableString(value.lastSyncedAt) &&
@@ -193,7 +210,8 @@ function isSCIMDemoUserState(value: unknown): value is SCIMDemoUserState {
 			value.lifecycle === "inactive" ||
 			value.lifecycle === "deleted") &&
 		isNullableString(value.role) &&
-		isNullableString(value.scimResourceId)
+		isNullableString(value.scimResourceId) &&
+		(value.sessionStatus === "active" || value.sessionStatus === "none")
 	);
 }
 
@@ -230,19 +248,5 @@ export function isSCIMDemoActionFailure(
 		Array.isArray(value.operations) &&
 		value.operations.every(isSCIMDemoOperation) &&
 		isSCIMDemoWorkspace(value.workspace)
-	);
-}
-
-export function isSCIMDemoAccessDecision(
-	value: unknown,
-): value is SCIMDemoAccessDecision {
-	return (
-		isRecord(value) &&
-		typeof value.allowed === "boolean" &&
-		typeof value.applicationUserId === "string" &&
-		typeof value.checkedAt === "string" &&
-		typeof value.message === "string" &&
-		isNullableString(value.role) &&
-		isSCIMDemoUserKey(value.userKey)
 	);
 }
