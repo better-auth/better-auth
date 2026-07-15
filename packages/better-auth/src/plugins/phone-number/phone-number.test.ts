@@ -1293,9 +1293,13 @@ describe("defaultMaskPhoneNumber", () => {
 		expect(defaultMaskPhoneNumber("+251911121314")).toBe("+********1314");
 	});
 
-	it("is idempotent", () => {
+	it("is idempotent for the default mask format", () => {
 		const masked = defaultMaskPhoneNumber("+15551234567");
 		expect(defaultMaskPhoneNumber(masked)).toBe(masked);
+	});
+
+	it("still masks numbers that contain a literal asterisk", () => {
+		expect(defaultMaskPhoneNumber("+1*5551234567")).toBe("+********4567");
 	});
 });
 

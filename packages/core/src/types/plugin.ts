@@ -141,15 +141,15 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 	/**
 	 * Mask sensitive fields on user objects returned via `parseUserOutput`.
 	 *
-	 * Called after `returned: false` filtering. Skip with `{ skipMask: true }`
-	 * for server-internal loads; force with `{ forCookie: true }` for cookie cache.
+	 * Called after `returned: false` filtering when masking is not skipped by
+	 * the caller. Use `{ forCookie: true }` for cookie-cache writes and
+	 * `{ path }` for reveal allowlisting.
 	 */
 	$maskUserOutput?:
 		| ((
 				user: Record<string, unknown>,
 				meta?:
 					| {
-							skipMask?: boolean | undefined;
 							forCookie?: boolean | undefined;
 							path?: string | undefined;
 					  }

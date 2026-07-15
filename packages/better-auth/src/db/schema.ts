@@ -84,10 +84,9 @@ export function parseUserOutput<T extends User>(
 	}
 	for (const plugin of options.plugins || []) {
 		if (typeof plugin.$maskUserOutput === "function") {
-			output = plugin.$maskUserOutput(
-				output as Record<string, unknown>,
-				meta,
-			) as T;
+			output = plugin.$maskUserOutput(output as Record<string, unknown>, {
+				...meta,
+			}) as T;
 		}
 	}
 	return output;

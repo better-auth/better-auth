@@ -142,6 +142,10 @@ export interface PhoneNumberOptions {
 				/**
 				 * Custom mask function.
 				 *
+				 * Must be idempotent: cookie cache and `/get-session` may apply it
+				 * more than once to the same value. Prefer returning the input
+				 * unchanged when it is already masked.
+				 *
 				 * @default keep `+` prefix and last 4 digits
 				 */
 				mask?: (phoneNumber: string) => string;

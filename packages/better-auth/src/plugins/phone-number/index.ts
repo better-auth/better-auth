@@ -52,13 +52,13 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 			if (shouldRevealPhoneNumber(meta)) {
 				return user;
 			}
-			const phoneNumber = user.phoneNumber;
-			if (typeof phoneNumber !== "string" || phoneNumber.length === 0) {
+			const value = user.phoneNumber;
+			if (typeof value !== "string" || value.length === 0) {
 				return user;
 			}
 			return {
 				...user,
-				phoneNumber: phoneMask.mask(phoneNumber),
+				phoneNumber: phoneMask.mask(value),
 			};
 		},
 		init() {
