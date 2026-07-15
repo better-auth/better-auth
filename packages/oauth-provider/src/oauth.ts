@@ -1,6 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { defineRequestState } from "@better-auth/core/context";
-import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { DispatchContext } from "better-auth/api";
 import {
@@ -437,43 +436,23 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			// Check for jwt plugin registration
 			if (!opts.disableJwtPlugin) {
 				const jwtPlugin = getJwtPlugin(ctx);
-				const jwtPluginOptions = jwtPlugin?.options;
+				const jwtIssuer = jwtPlugin?.options?.jwt?.issuer;
 
-				// Issuer and well-known endpoint checks
-				const issuer = jwtPluginOptions?.jwt?.issuer ?? ctx.baseURL;
+				// Fail fast on an invalid configured issuer
+				const issuer = jwtIssuer ?? ctx.baseURL;
 				const isDynamicBaseURLInit =
-					jwtPluginOptions?.jwt?.issuer == null &&
+					jwtIssuer == null &&
 					typeof ctx.options.baseURL === "object" &&
 					ctx.options.baseURL !== null &&
 					"allowedHosts" in ctx.options.baseURL;
-				let issuerPath: string;
 				try {
-					issuerPath = new URL(issuer).pathname;
+					new URL(issuer);
 				} catch (error) {
 					// baseURL may not be available during init when using dynamic baseURL config
 					if (isDynamicBaseURLInit && issuer === "") {
 						return;
 					}
 					throw error;
-				}
-				// oAuth Server Config
-				if (
-					!opts.silenceWarnings?.oauthAuthServerConfig &&
-					!(ctx.options.basePath === "/" && issuerPath === "/")
-				) {
-					logger.warn(
-						`Please ensure '/.well-known/oauth-authorization-server${issuerPath === "/" ? "" : issuerPath}' exists. Upon completion, clear with silenceWarnings.oauthAuthServerConfig.`,
-					);
-				}
-				// OpenId Config
-				if (
-					!opts.silenceWarnings?.openidConfig &&
-					ctx.options.basePath !== issuerPath &&
-					opts.scopes?.includes("openid")
-				) {
-					logger.warn(
-						`Please ensure '${issuerPath}${issuerPath.endsWith("/") ? "" : "/"}.well-known/openid-configuration' exists. Upon completion, clear with silenceWarnings.openidConfig.`,
-					);
 				}
 			}
 		},

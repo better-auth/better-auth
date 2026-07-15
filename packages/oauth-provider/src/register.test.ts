@@ -24,10 +24,6 @@ describe("oauth register", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 				scopes: [
 					"openid",
 					"profile",
@@ -279,10 +275,6 @@ describe("oauth register - unauthenticated", async () => {
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
 				allowUnauthenticatedClientRegistration: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -406,10 +398,6 @@ describe("oauth register - unauthenticated DCR full flow", async () => {
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
 				allowUnauthenticatedClientRegistration: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -531,10 +519,6 @@ describe("oauth register - organization", async () => {
 						(session?.activeOrganizationId as string | undefined) ?? undefined
 					);
 				},
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],
@@ -591,10 +575,6 @@ describe("oauth register - skip_consent blocked", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],

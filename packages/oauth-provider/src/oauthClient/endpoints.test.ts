@@ -18,10 +18,6 @@ describe("oauthClient", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 				allowPublicClientPrelogin: true,
 			}),
 			jwt(),

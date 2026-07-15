@@ -34,10 +34,6 @@ describe("oauthClient", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 				clientReference() {
 					return "oauth-client-test";
 				},
@@ -409,10 +405,6 @@ describe("oauthClient dynamic registration privileges", async () => {
 				allowDynamicClientRegistration: true,
 				allowUnauthenticatedClientRegistration: true,
 				clientPrivileges,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],
