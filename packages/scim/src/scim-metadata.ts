@@ -21,6 +21,7 @@ export const ServiceProviderOpenAPISchema = {
 				maxOperations: { type: "integer" },
 				maxPayloadSize: { type: "integer" },
 			},
+			required: ["supported", "maxOperations", "maxPayloadSize"] as string[],
 		},
 		filter: {
 			type: "object",
@@ -28,6 +29,7 @@ export const ServiceProviderOpenAPISchema = {
 				supported: { type: "boolean" },
 				maxResults: { type: "integer" },
 			},
+			required: ["supported", "maxResults"] as string[],
 		},
 		changePassword: MetadataFieldSupportOpenAPISchema,
 		sort: MetadataFieldSupportOpenAPISchema,
@@ -71,8 +73,20 @@ export const ServiceProviderOpenAPISchema = {
 					type: "string",
 				},
 			},
+			required: ["resourceType", "location"] as string[],
 		},
 	},
+	required: [
+		"id",
+		"patch",
+		"bulk",
+		"filter",
+		"changePassword",
+		"sort",
+		"authenticationSchemes",
+		"schemas",
+		"meta",
+	] as string[],
 } as const;
 
 export const ResourceTypeOpenAPISchema = {
