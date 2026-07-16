@@ -145,14 +145,20 @@ describe("useAuthQuery - error handling", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9077
 	 */
-	it("should not refetch when atom re-mounts before the initial fetch resolves", async () => {
+	it("should defer remount refetch until the initial fetch resolves", async () => {
 		let fetchCount = 0;
+		let resolveInitialFetch: ((response: Response) => void) | undefined;
 		const $fetch = createFetch({
 			baseURL: "http://localhost:3000",
 			customFetchImpl: async () => {
 				fetchCount++;
-				// Keep the fetch pending to widen the race window.
-				return new Promise<Response>(() => {});
+				if (fetchCount === 1) {
+					// Keep the first fetch pending to widen the race window.
+					return new Promise<Response>((resolve) => {
+						resolveInitialFetch = resolve;
+					});
+				}
+				return new Response(JSON.stringify({ data: "fresh" }));
 			},
 		});
 
@@ -173,6 +179,11 @@ describe("useAuthQuery - error handling", () => {
 		const unsubscribe2 = queryAtom.listen(() => {});
 		await vi.advanceTimersByTimeAsync(0);
 		expect(fetchCount).toBe(1);
+
+		if (!resolveInitialFetch) throw new Error("Initial fetch did not start");
+		resolveInitialFetch(new Response(JSON.stringify({ data: "stale" })));
+		await vi.runAllTimersAsync();
+		expect(fetchCount).toBe(2);
 
 		unsubscribe2();
 	});

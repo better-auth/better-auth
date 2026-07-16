@@ -19,8 +19,8 @@ catalogs:
       specifier: ^0.28.17 || ^0.29.0
       version: 0.29.2
     tsdown:
-      specifier: 0.22.4
-      version: 0.22.4
+      specifier: 0.22.7
+      version: 0.22.7
     typescript:
       specifier: ^6.0.3
       version: 6.0.3
@@ -184,9 +184,6 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.2.1
         version: 5.2.2(react-hook-form@7.71.2(react@19.2.4))
-      '@openrouter/ai-sdk-provider':
-        specifier: ^2.2.5
-        version: 2.2.5(ai@6.0.116(zod@4.3.6))(zod@4.3.6)
       '@radix-ui/react-accordion':
         specifier: ^1.2.12
         version: 1.2.12(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -318,7 +315,7 @@ importers:
         version: 14.2.9(@types/mdast@4.0.4)(@types/mdx@2.0.13)(@types/react@19.2.14)(fumadocs-core@16.7.9(@mdx-js/mdx@3.1.1)(@tanstack/react-router@1.170.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.14)(lucide-react@1.7.0(react@19.2.4))(next@16.2.6(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@4.3.6))(mdast-util-directive@3.1.0)(next@16.2.6(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0))
       fumadocs-typescript:
         specifier: ^5.2.1
-        version: 5.2.1(008ac65d30c4c0c7f671b1a54983a4c7)
+        version: 5.2.1(c53fe2b94061d4ac5ed47868bf2858d5)
       fumadocs-ui:
         specifier: 16.7.9
         version: 16.7.9(@types/mdx@2.0.13)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(fumadocs-core@16.7.9(@mdx-js/mdx@3.1.1)(@tanstack/react-router@1.170.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.14)(lucide-react@1.7.0(react@19.2.4))(next@16.2.6(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@4.3.6))(next@16.2.6(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(shiki@4.0.1)(tailwindcss@4.2.1)
@@ -426,7 +423,7 @@ importers:
         version: 3.0.2(@babel/runtime@7.29.2)
       typesense-fumadocs-adapter:
         specifier: ^0.3.0
-        version: 0.3.0(6ad95d0261285bf78ab0fce27e33d0af)
+        version: 0.3.0(d54169324f8bf9e5218f0a3db157ec66)
       unist-util-visit:
         specifier: ^5.1.0
         version: 5.1.0
@@ -654,7 +651,7 @@ importers:
         version: 0.15.4(solid-js@1.9.11)
       '@solidjs/start':
         specifier: ^1.3.2
-        version: 1.3.2(solid-js@1.9.11)(vinxi@0.5.11(c5789ddab17d734d92a90f1e6827c60c))(vite@6.4.2(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0))
+        version: 1.3.2(solid-js@1.9.11)(vinxi@0.5.11(4cc1d9608922457128dfdcfb96c47df7))(vite@6.4.2(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0))
       better-auth:
         specifier: workspace:*
         version: link:../../../packages/better-auth
@@ -663,7 +660,7 @@ importers:
         version: 1.9.11
       vinxi:
         specifier: ^0.5.11
-        version: 0.5.11(c5789ddab17d734d92a90f1e6827c60c)
+        version: 0.5.11(4cc1d9608922457128dfdcfb96c47df7)
     devDependencies:
       '@better-auth-test/test-utils':
         specifier: workspace:*
@@ -868,7 +865,7 @@ importers:
         version: link:../better-auth
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
 
   packages/better-auth:
     dependencies:
@@ -1010,7 +1007,7 @@ importers:
         version: 1.9.11
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
       type-fest:
         specifier: ^5.4.4
         version: 5.4.4
@@ -1113,7 +1110,7 @@ importers:
         version: 4.56.10(tslib@2.8.1)
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
       tsx:
         specifier: ^4.21.0
         version: 4.22.4
@@ -1168,7 +1165,7 @@ importers:
         version: 1.1.1
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
 
   packages/drizzle-adapter:
     devDependencies:
@@ -1183,7 +1180,7 @@ importers:
         version: 0.45.2(@cloudflare/workers-types@4.20260226.1)(@electric-sql/pglite@0.3.15)(@opentelemetry/api@1.9.0)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))(typescript@6.0.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@upstash/redis@1.36.4)(better-sqlite3@12.6.2)(bun-types@1.3.9)(kysely@0.29.2)(mysql2@3.18.2(@types/node@25.9.1))(pg@8.19.0)(postgres@3.4.8)(prisma@7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -1223,7 +1220,7 @@ importers:
         version: 41.2.2
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
 
   packages/expo:
     dependencies:
@@ -1260,7 +1257,7 @@ importers:
         version: 0.84.1(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4)
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
 
   packages/i18n:
     devDependencies:
@@ -1272,7 +1269,7 @@ importers:
         version: link:../better-auth
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
 
   packages/kysely-adapter:
     devDependencies:
@@ -1290,7 +1287,7 @@ importers:
         version: 0.29.2
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -1305,7 +1302,7 @@ importers:
         version: 0.4.2
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -1323,7 +1320,7 @@ importers:
         version: 7.1.0
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -1360,7 +1357,7 @@ importers:
         version: 1.9.0
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
 
   packages/passkey:
     dependencies:
@@ -1394,7 +1391,7 @@ importers:
         version: link:../better-auth
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
 
   packages/prisma-adapter:
     dependencies:
@@ -1413,7 +1410,7 @@ importers:
         version: 0.4.2
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -1431,7 +1428,7 @@ importers:
         version: 5.9.3
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -1462,7 +1459,7 @@ importers:
         version: link:../sso
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
 
   packages/sso:
     dependencies:
@@ -1514,7 +1511,7 @@ importers:
         version: 8.2.2
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
 
   packages/stripe:
     dependencies:
@@ -1539,7 +1536,7 @@ importers:
         version: 22.0.1(@types/node@25.9.1)
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
 
   packages/telemetry:
     dependencies:
@@ -1555,7 +1552,7 @@ importers:
         version: link:../core
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
       type-fest:
         specifier: ^5.4.4
         version: 5.4.4
@@ -1570,7 +1567,7 @@ importers:
         version: link:../better-auth
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
       vitest:
         specifier: catalog:vitest
         version: 4.1.5(@opentelemetry/api@1.9.0)(@types/node@25.9.1)(@vitest/coverage-istanbul@4.1.5)(@vitest/ui@4.1.5)(happy-dom@20.8.9)(msw@2.12.10(@types/node@25.9.1)(typescript@6.0.3))(vite@6.4.2(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0))
@@ -2831,11 +2828,11 @@ packages:
 
   '@esbuild-kit/core-utils@3.3.2':
     resolution: {integrity: sha512-sPRAnw9CdSsRmEtnsl2WXWdyquogVpB3yZ3dgwJfe8zrOzTsV7cJvmwrKVa+0ma5BoiGJ+BoqkMvawbayKUsqQ==}
-    deprecated: 'Merged into tsx: https://tsx.is'
+    deprecated: 'Merged into tsx: https://tsx.hirok.io'
 
   '@esbuild-kit/esm-loader@2.6.5':
     resolution: {integrity: sha512-FxEMIkJKnodyA1OaCUoEvbYRkoZlLZ4d/eXFu9Fh8CbBBgP5EmZxrfTRyN0qpXZ4vOvqnE5YdRdcrmUUXuU+dA==}
-    deprecated: 'Merged into tsx: https://tsx.is'
+    deprecated: 'Merged into tsx: https://tsx.hirok.io'
 
   '@esbuild/aix-ppc64@0.28.1':
     resolution: {integrity: sha512-Svl7tq8k/08+p6CXPpRjQ1fKX+1odH/BQbb48fV6fj3CWHhsoIOoY87w1oHXm0qEpkIK3ZfVgp0hed3XBXzXMQ==}
@@ -3783,13 +3780,6 @@ packages:
 
   '@open-draft/until@2.1.0':
     resolution: {integrity: sha512-U69T3ItWHvLwGg5eJ0n3I62nWuE6ilHlmz7zM0npLBRvPRd7e6NYmg54vvRtP5mZG7kZqZCFVdsTWo7BPtBujg==}
-
-  '@openrouter/ai-sdk-provider@2.2.5':
-    resolution: {integrity: sha512-IgM96gPvpxMZYYJQSIuXqvHX0mUXHEvsa/AtIlfb1VK4ek584ydAzc/wf3IuKxNof15o38WZMpCwfsOFHv96Jg==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      ai: ^6.0.0
-      zod: ^3.25.0 || ^4.0.0
 
   '@opentelemetry/api@1.9.0':
     resolution: {integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==}
@@ -6620,125 +6610,125 @@ packages:
     resolution: {integrity: sha512-KRYzxepc14G/CEpEGc3Yn+JKaAeT63smlDr+vjB8jRfgTBBI9wRj/nkQEO+ucV8p8I9bfKLWp37uHgFrbntPvw==}
     engines: {node: '>=10.0.0'}
 
-  '@yuku-codegen/binding-darwin-arm64@0.5.46':
-    resolution: {integrity: sha512-Kb3ULHGCN3lCfFj8L6YzSeIg1rcpXRuzbDc47KYBdK9R/8YW9HWKWfHji+WF/91QiCDb7u0VMhHgB/dPjpT2qg==}
+  '@yuku-codegen/binding-darwin-arm64@0.6.1':
+    resolution: {integrity: sha512-LDJtpOKtcv9f3V0eDUwFmmy47t2VC+DAuN+gq80R1IA+fa0d408i6sHsVtt6n+g5rf8f86ySoPSAe94lHt6Ixw==}
     cpu: [arm64]
     os: [darwin]
 
-  '@yuku-codegen/binding-darwin-x64@0.5.46':
-    resolution: {integrity: sha512-5yJZFGJOU2ijYcD1gr7ooIlzqOTArE0YPNWEC2LlLGjqcYUpC3wPU+FVtDO1xLW60oJQlG2T54pbYsuXCsTdMA==}
+  '@yuku-codegen/binding-darwin-x64@0.6.1':
+    resolution: {integrity: sha512-fBwpBOh33W7N87F94SVNExwm2KUV3ROhk51okr3Oy2ost1/JJuBWINVjcgwd2WPKZEFzUXgCzj/03UR/G+WIrQ==}
     cpu: [x64]
     os: [darwin]
 
-  '@yuku-codegen/binding-freebsd-x64@0.5.46':
-    resolution: {integrity: sha512-5K6x+Ll4qcfoU1lfDvkpK7i3r8a+bJYsE3zj8SnRoAHSu21au53E4c3XE1u8KlHo8JIiMsT6W8ZyXM3QKdSymQ==}
+  '@yuku-codegen/binding-freebsd-x64@0.6.1':
+    resolution: {integrity: sha512-UpMkskQV3a5oPnJV+GFFupIqnLwSBD4ZsZAVUZuNVkrqct433FHKqTwuG+P5JhHZbmhf+++3Ie/V2sgduyXrAQ==}
     cpu: [x64]
     os: [freebsd]
 
-  '@yuku-codegen/binding-linux-arm-gnu@0.5.46':
-    resolution: {integrity: sha512-biSavMngiyj1kk0BPvAAHm2y6Xw87cXzjfZtPHA0zETz0CwZLz8NLxe3K8ZroEJb1jZUCMhV6SnMR86gB5s8bA==}
+  '@yuku-codegen/binding-linux-arm-gnu@0.6.1':
+    resolution: {integrity: sha512-HICjDelfEDeD6TD8OEz/Dvt8KHxJiETR+paI/Fr7eVTQbjMfRrXJz8O1qV1qGH5SHZUGl2SAw2Rp+MLtXOjCrQ==}
     cpu: [arm]
     os: [linux]
     libc: [glibc]
 
-  '@yuku-codegen/binding-linux-arm-musl@0.5.46':
-    resolution: {integrity: sha512-1Tuduchx+rt3xeWnZtLB430UYjP6mY2xhG3lw72q1YrFl9fHEvwzKaA9Uuiq3BkMhz5x5urIpfLV8XAf20Nqgw==}
+  '@yuku-codegen/binding-linux-arm-musl@0.6.1':
+    resolution: {integrity: sha512-pUswnwa+WOmtH2ZGOWL05kFLMNY7/TnEAryfIv1yVFzKQnmSy9TKYi3oIOxGZL3w+cdUKCZ6Q+jaD0oI10ztzA==}
     cpu: [arm]
     os: [linux]
     libc: [musl]
 
-  '@yuku-codegen/binding-linux-arm64-gnu@0.5.46':
-    resolution: {integrity: sha512-++sIi/yitZHeB3Xav8P88Vh+E53Ej/959FUfPdTElV4FNAwdRsEtxoNw37mASy2gkiwOhEjIIy986FXaKrYTdg==}
+  '@yuku-codegen/binding-linux-arm64-gnu@0.6.1':
+    resolution: {integrity: sha512-Zro0FOu9clLCmqCnUKzEWHAu30tss0iEfhs+KDXm9Dpm1FkIHAKu43tF6FQU2hsTA7a8xd93NGddzc2EOJFKUg==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@yuku-codegen/binding-linux-arm64-musl@0.5.46':
-    resolution: {integrity: sha512-/UMkxyjjXMX5yq6mk4Z1GdSDYWv3CMNfN2Dv7SdKwKpl6Lwp6aR+RPIiiC+oRAI5PaFrrorJIg3BloU3ss/sLQ==}
+  '@yuku-codegen/binding-linux-arm64-musl@0.6.1':
+    resolution: {integrity: sha512-NZaT+mp9toqWuFEA4MYW5HMRxgIa8DCqnTTnM5SrrojZgm4QoMI/mJfifVet1ZHgl/Dly5m6H6GPpq43uXVj8g==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
-  '@yuku-codegen/binding-linux-x64-gnu@0.5.46':
-    resolution: {integrity: sha512-/qtlyhxsXWGy1777IJ1RScNp2p+znbR/WJ9ZK5dZRQh0851pdJCPQALuLhEAFdQjfnT8sJPJgB61RPS9Ou6uzQ==}
+  '@yuku-codegen/binding-linux-x64-gnu@0.6.1':
+    resolution: {integrity: sha512-M5macseSCBPvJ4yfKNyQpMc7nBQBtj39MNfMt0r+8UkTnR5qJE00JJx06puHgPxT5hnGxMAuAWZ+3a9H2ngqAw==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@yuku-codegen/binding-linux-x64-musl@0.5.46':
-    resolution: {integrity: sha512-9PtrZqSNvsz7UZl5Nbol8TFB6VXMKAVbBdF/CPU/96qt3kFAeNTNO7O4SZERiPr4dDYzf8i9IxmDSoMywJyQHQ==}
+  '@yuku-codegen/binding-linux-x64-musl@0.6.1':
+    resolution: {integrity: sha512-liAyBZI5AbazZGeeNfWj0jCD/TE2L84hgVYh4KkjJA/N9bNzFQCDf4BvWP76nEO89r2tIGEUjbXdM4mM26riHg==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
-  '@yuku-codegen/binding-win32-arm64@0.5.46':
-    resolution: {integrity: sha512-VwW0f6z8NwpvI7DORWL9I5m2p51VF/Cz7FlemTEwMQT4DUWIvGEgqVLChty1+CVgdLros+OIIVmcgWbP1u/u2Q==}
+  '@yuku-codegen/binding-win32-arm64@0.6.1':
+    resolution: {integrity: sha512-qItzfH3x6MYChPeGfvh22rHD92WLgXQRSuwvspRVSnLvpnubEfZd+9REPRQVT2l9fIuETDCEkDNRqkDROQTkgA==}
     cpu: [arm64]
     os: [win32]
 
-  '@yuku-codegen/binding-win32-x64@0.5.46':
-    resolution: {integrity: sha512-4l+eRLvivimYCpgODeyvaVutu7LsBxP9NexAPrTXEG+ttXNF6YcOL+ApYuC6/Jap2ojdm82t8d1wD4ExszLVrA==}
+  '@yuku-codegen/binding-win32-x64@0.6.1':
+    resolution: {integrity: sha512-DFFkKROZ9ZAHmFMUFRtRTkosZds1KH8BOx5t3UpNULIjT3iuUmEx9V5pWR0xOi66sANY38Ap77nz1kOZraQxEg==}
     cpu: [x64]
     os: [win32]
 
-  '@yuku-parser/binding-darwin-arm64@0.5.46':
-    resolution: {integrity: sha512-k8ljigcfWnr+qEgJLBuayjXdTeXdAqS6yo0jITnDKE7zIoq73lmdAKvD5+g8pHXnfoGPzNA7+TH4z/MHwFHD4g==}
+  '@yuku-parser/binding-darwin-arm64@0.6.1':
+    resolution: {integrity: sha512-jORysyRZg5zGDgVw15LGMsjZDh7jwjpUIJRBHgFt0ir15O5pEazfvuF2dnwvrJiTF0IT1EgHAVbTAYJWwQLCjg==}
     cpu: [arm64]
     os: [darwin]
 
-  '@yuku-parser/binding-darwin-x64@0.5.46':
-    resolution: {integrity: sha512-yGeFK/ac5iWtwQyXIJbyKIFS2kODKZCVUSd/uVxFYT8OiA5KvG1jgq+Ca44ezBG2WrEyc3/IM+4sLwPRkJHp3w==}
+  '@yuku-parser/binding-darwin-x64@0.6.1':
+    resolution: {integrity: sha512-dTeYFkkFlbP/WCB2DtezXas3NApOPtFlXSdssB7wGtY9wpNp4HAkVo1KBwI5mcHK0e2joyUcqTSf44mFE+q7vg==}
     cpu: [x64]
     os: [darwin]
 
-  '@yuku-parser/binding-freebsd-x64@0.5.46':
-    resolution: {integrity: sha512-rZ8GTjrfavwS8QzYjv6OuXGWcuHJpyGCRSzDk1nfGr0d8dmdQx6htbTl/vUY8BgkiZftsiZnNeDulKjf4m0M8A==}
+  '@yuku-parser/binding-freebsd-x64@0.6.1':
+    resolution: {integrity: sha512-GExDp3rebo28mt3EAjvKQs0ZC3gkznAErV0I9TUNDa9muuhvD35kft61Mpsc6+NWeE+BG+kUyKbm6iO5B6ZMMA==}
     cpu: [x64]
     os: [freebsd]
 
-  '@yuku-parser/binding-linux-arm-gnu@0.5.46':
-    resolution: {integrity: sha512-gttOTy0Swirw40+tA5vnmraJ2xqLrY0Hn0VjPT8AIfMwUgKjefT7pvRxI8HTeLCCYHgAaNiud1LQWnvPMgUXiA==}
+  '@yuku-parser/binding-linux-arm-gnu@0.6.1':
+    resolution: {integrity: sha512-a9MjABj4J0VE3Z2oROGhmeddZZrhwwrnl4ZWZOuHUhD/smDtDiNtr0LpCbKB7rEYaQ29snopOPdZ/0T3YgLglQ==}
     cpu: [arm]
     os: [linux]
     libc: [glibc]
 
-  '@yuku-parser/binding-linux-arm-musl@0.5.46':
-    resolution: {integrity: sha512-GBH7ASymEaazgC4Zo4LODpgEV4Sn3l8qQq6hTC9B7ftvfZGy8CJx0qtj0zNWH3SpOvjWjTDVVxUjRXVnHRpKDQ==}
+  '@yuku-parser/binding-linux-arm-musl@0.6.1':
+    resolution: {integrity: sha512-ctuvXJgDRKKlmJfHxT4RsTvcAcHEFNJHTCsGbtt4rluQpVDc+ezk9JvQ534ehoIfZ9T0eIHSBgqYAZ4xCatNmQ==}
     cpu: [arm]
     os: [linux]
     libc: [musl]
 
-  '@yuku-parser/binding-linux-arm64-gnu@0.5.46':
-    resolution: {integrity: sha512-TWwBKtCjny12ef5tAScFYcIyTWG69WAx7I/vTyhQto2yydmotNUwOuViUsmwVex+Ldix05n1Z7naZF/5xTlWzg==}
+  '@yuku-parser/binding-linux-arm64-gnu@0.6.1':
+    resolution: {integrity: sha512-vRtyoTtT0Ltowuh9LWOl/ZNU9h79J89ilOz5SEGspcw0jfhoUt19i07VNitll4jjfg5p2EN00q+MqX0pAobrFw==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@yuku-parser/binding-linux-arm64-musl@0.5.46':
-    resolution: {integrity: sha512-7VfxvUQKepU6bwG5FX6XLU3cXvw50wePuW+f8cDYOfuTEWGCrirI8NlK6afy+udofAEmjhH82GsrXupOactIfw==}
+  '@yuku-parser/binding-linux-arm64-musl@0.6.1':
+    resolution: {integrity: sha512-vCsc3GOe1ylmRyfo/WLjIhjiCmaTtJbWNF4ZtgjNegDjpsRsFuCcP9duXB41QcfnJK38repKVFqFh0LR3l48FA==}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
-  '@yuku-parser/binding-linux-x64-gnu@0.5.46':
-    resolution: {integrity: sha512-r2ytt3LNpAyBP/s9kvLtPgldkyCXJGZFpteoZK40NaRo55Cfd5KFJRxdekK3mgBnm2gnQnx9qWaOniXUolj/HQ==}
+  '@yuku-parser/binding-linux-x64-gnu@0.6.1':
+    resolution: {integrity: sha512-gw3d81RdUHSYwjDW2IG6gEtm4VDoPP4ZOqpuC6Nc8+UBfos+4gTWOgzmuxIOVhkSV2fJCcUDpSJIlPzEU0FLZw==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@yuku-parser/binding-linux-x64-musl@0.5.46':
-    resolution: {integrity: sha512-nsE+ajANECHyR09xCVHlXtbNiexSUutzrSb1fhU3JVEfVKIMfsP1LDIWh9w43FG2GRODv3lByuSl1AwnuBj0jA==}
+  '@yuku-parser/binding-linux-x64-musl@0.6.1':
+    resolution: {integrity: sha512-nzU+Doq9UgZvYYvald36lZJ2Neeyheije6WE/YpoFt/oJiNmnjArRgr2CMtb/7gWBl80YSMwcHK4Ju0E+7wfWg==}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
-  '@yuku-parser/binding-win32-arm64@0.5.46':
-    resolution: {integrity: sha512-/jkn8U4s649vZXxDD+UmfqSB5OM8H9wjPg545q0V0d3Lj0K4CwaUOqvStaBrmxI21NM3WU/mM6xzslFHlJ3fVA==}
+  '@yuku-parser/binding-win32-arm64@0.6.1':
+    resolution: {integrity: sha512-r3tXFVDliWCPe7TL6DVxUkT4rkqnXyeFVSEDf+V9My6Gztq99/gIe3POQqFbshTRuSrpEYMGMbGxeFh+m+stxA==}
     cpu: [arm64]
     os: [win32]
 
-  '@yuku-parser/binding-win32-x64@0.5.46':
-    resolution: {integrity: sha512-pZlngLHCrQT1lcQXTW/F+Vld6akOyRiaDjj8TAK9ongNRAEZawencz4X01kLOeWwJWx88Xvz7nT0iBwdY6ZkHA==}
+  '@yuku-parser/binding-win32-x64@0.6.1':
+    resolution: {integrity: sha512-FqYMOqeCS2XTdn5yvaKlOhtSQ84mVO3aTXp6LGfMd9Zq8RsV4H8qLWv+sxJsgPCXfuBV64u8/f+CTr3uIwNLWA==}
     cpu: [x64]
     os: [win32]
 
@@ -12084,8 +12074,8 @@ packages:
   robust-predicates@3.0.3:
     resolution: {integrity: sha512-NS3levdsRIUOmiJ8FZWCP7LG3QpJyrs/TE0Zpf1yvZu8cAJJ6QMW92H1c7kWpdIHo8RvmLxN/o2JXTKHp74lUA==}
 
-  rolldown-plugin-dts@0.27.4:
-    resolution: {integrity: sha512-z1uz1gH2sJ55i6JY/xi3q7gsI5CPthefDp5HYXnBlrkN1L3K4tx+gyAQO3Udt69ASWItWKwXJ55nKQq2HCMVfA==}
+  rolldown-plugin-dts@0.27.8:
+    resolution: {integrity: sha512-IjBTFpkrYYJPRUmIjUJFsZdR1zeHskFcEwFDzSfFDoC2pZcSNgLrBUcDFY9K0Q+A1TZJR3q9MlVomxMDP8AuLQ==}
     engines: {node: ^22.18.0 || >=24.11.0}
     peerDependencies:
       '@ts-macro/tsc': ^0.3.6
@@ -12894,18 +12884,18 @@ packages:
   ts-morph@27.0.2:
     resolution: {integrity: sha512-fhUhgeljcrdZ+9DZND1De1029PrE+cMkIP7ooqkLRTrRLTqcki2AstsyJm0vRNbTbVCNJ0idGlbBrfqc7/nA8w==}
 
-  tsdown@0.22.4:
-    resolution: {integrity: sha512-3a5FsNL2fH2jw3ozvFUuPMBgS0xXjX9wpZShHyB4klXelVhyaNw5Q5WA9TPCNeoGYpRZEc4OZdMx5wT4Fkma3A==}
+  tsdown@0.22.7:
+    resolution: {integrity: sha512-4egbOzc9dxVv/QS+gDV75FIxDIjQQeOnXBlUuikyjmn0ozuc6FW11djJjEEo3vqkuJRygpnKHurnj+Iwftk4VA==}
     engines: {node: ^22.18.0 || >=24.11.0}
     hasBin: true
     peerDependencies:
       '@arethetypeswrong/core': ^0.18.1
-      '@tsdown/css': 0.22.4
-      '@tsdown/exe': 0.22.4
+      '@tsdown/css': 0.22.7
+      '@tsdown/exe': 0.22.7
       '@vitejs/devtools': '*'
       publint: ^0.3.8
       tsx: '*'
-      typescript: ^5.0.0 || ^6.0.0
+      typescript: ^5.0.0 || ^6.0.0 || ^7.0.0
       unplugin-unused: ^0.5.0
       unrun: '*'
     peerDependenciesMeta:
@@ -13959,11 +13949,11 @@ packages:
   yuku-ast@0.1.7:
     resolution: {integrity: sha512-2RiMEWv500TixY5rJy6OZd4fSy9WYZKWh6gGbIJ7y7vAGcuCugWOWwOLGaQcRZrXcPUfqtLtvpaJ3SdXtWlhKA==}
 
-  yuku-codegen@0.5.46:
-    resolution: {integrity: sha512-2qFouFH7ag332HJhqLd3/QGqGQtSIjnTU1/5Y4BTvRWMwR252rezKBtEBHq/s+rwLc7uKoLvbm2BzQzzsJghTQ==}
+  yuku-codegen@0.6.1:
+    resolution: {integrity: sha512-6RJqqON2xYhMEp/sZv5oOSI3uOpWwRwzAi2fc/rMcRFjcqedAC5Fyp4AD9Vn2b8SB7hf9ESqVW+YwbDs/KvyKA==}
 
-  yuku-parser@0.5.46:
-    resolution: {integrity: sha512-eMNzX5eYnkqo6zNYf2H8WHcMPHfIf7ijmw0X8NYZ1ANXAU5Y9rwTB9MgfCuvLxlR7fV/96v3gWa8y/YUGFLxjw==}
+  yuku-parser@0.6.1:
+    resolution: {integrity: sha512-dPE3/+H2VBw9LhjoIVeW/axKidYGd+XzNtrwGGseZ0325cQFl0Dpwyh0R74XWe/WqQn4M8CR5YApsv2KF2zN1A==}
 
   zeptomatch@2.1.0:
     resolution: {integrity: sha512-KiGErG2J0G82LSpniV0CtIzjlJ10E04j02VOudJsPyPwNZgGnRKQy7I1R7GMyg/QswnE4l7ohSGrQbQbjXPPDA==}
@@ -15624,7 +15614,7 @@ snapshots:
       resolve: 1.22.12
       resolve-from: 5.0.0
       resolve.exports: 2.0.3
-      semver: 7.8.0
+      semver: 7.8.5
       send: 0.19.2
       slugify: 1.6.9
       source-map-support: 0.5.21
@@ -15659,7 +15649,7 @@ snapshots:
       getenv: 2.0.0
       glob: 13.0.6
       resolve-from: 5.0.0
-      semver: 7.8.0
+      semver: 7.8.5
       slash: 3.0.0
       slugify: 1.6.9
       xcode: 3.0.1
@@ -15701,7 +15691,7 @@ snapshots:
       require-from-string: 2.0.2
       resolve-from: 5.0.0
       resolve-workspace-root: 2.0.1
-      semver: 7.8.0
+      semver: 7.8.5
       slugify: 1.6.9
       sucrase: 3.35.1
     transitivePeerDependencies:
@@ -15768,7 +15758,7 @@ snapshots:
       minimatch: 9.0.9
       p-limit: 3.1.0
       resolve-from: 5.0.0
-      semver: 7.8.0
+      semver: 7.8.5
     transitivePeerDependencies:
       - supports-color
 
@@ -15780,7 +15770,7 @@ snapshots:
       getenv: 2.0.0
       jimp-compact: 0.16.1
       parse-png: 2.1.0
-      semver: 7.8.0
+      semver: 7.8.5
     transitivePeerDependencies:
       - supports-color
       - typescript
@@ -15887,7 +15877,7 @@ snapshots:
       debug: 4.4.3
       expo: 54.0.33(@babel/core@7.29.0)(graphql@16.13.0)(react-native@0.84.1(@babel/core@7.29.0)(@types/react@19.2.14)(react@19.2.4))(react@19.2.4)(typescript@6.0.3)
       resolve-from: 5.0.0
-      semver: 7.8.0
+      semver: 7.8.5
       xml2js: 0.6.0
     transitivePeerDependencies:
       - supports-color
@@ -16597,7 +16587,7 @@ snapshots:
       ini: 4.1.3
       nopt: 7.2.1
       proc-log: 4.2.0
-      semver: 7.8.0
+      semver: 7.8.5
       walk-up-path: 3.0.1
     transitivePeerDependencies:
       - bluebird
@@ -16611,7 +16601,7 @@ snapshots:
       proc-log: 4.2.0
       promise-inflight: 1.0.1
       promise-retry: 2.0.1
-      semver: 7.8.0
+      semver: 7.8.5
       which: 4.0.0
     transitivePeerDependencies:
       - bluebird
@@ -16633,7 +16623,7 @@ snapshots:
       json-parse-even-better-errors: 3.0.2
       normalize-package-data: 6.0.2
       proc-log: 4.2.0
-      semver: 7.8.0
+      semver: 7.8.5
     transitivePeerDependencies:
       - bluebird
 
@@ -16668,11 +16658,6 @@ snapshots:
       outvariant: 1.4.3
 
   '@open-draft/until@2.1.0': {}
-
-  '@openrouter/ai-sdk-provider@2.2.5(ai@6.0.116(zod@4.3.6))(zod@4.3.6)':
-    dependencies:
-      ai: 6.0.116(zod@4.3.6)
-      zod: 4.3.6
 
   '@opentelemetry/api@1.9.0': {}
 
@@ -18629,11 +18614,11 @@ snapshots:
     dependencies:
       solid-js: 1.9.11
 
-  '@solidjs/start@1.3.2(solid-js@1.9.11)(vinxi@0.5.11(c5789ddab17d734d92a90f1e6827c60c))(vite@6.4.2(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0))':
+  '@solidjs/start@1.3.2(solid-js@1.9.11)(vinxi@0.5.11(4cc1d9608922457128dfdcfb96c47df7))(vite@6.4.2(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0))':
     dependencies:
       '@tanstack/server-functions-plugin': 1.121.21(vite@6.4.2(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0))
-      '@vinxi/plugin-directives': 0.5.1(vinxi@0.5.11(c5789ddab17d734d92a90f1e6827c60c))
-      '@vinxi/server-components': 0.5.1(vinxi@0.5.11(c5789ddab17d734d92a90f1e6827c60c))
+      '@vinxi/plugin-directives': 0.5.1(vinxi@0.5.11(4cc1d9608922457128dfdcfb96c47df7))
+      '@vinxi/server-components': 0.5.1(vinxi@0.5.11(4cc1d9608922457128dfdcfb96c47df7))
       cookie-es: 2.0.0
       defu: 6.1.7
       error-stack-parser: 2.1.4
@@ -18645,7 +18630,7 @@ snapshots:
       source-map-js: 1.2.1
       terracotta: 1.1.0(solid-js@1.9.11)
       tinyglobby: 0.2.15
-      vinxi: 0.5.11(c5789ddab17d734d92a90f1e6827c60c)
+      vinxi: 0.5.11(4cc1d9608922457128dfdcfb96c47df7)
       vite-plugin-solid: 2.11.10(solid-js@1.9.11)(vite@6.4.2(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0))
     transitivePeerDependencies:
       - '@testing-library/jest-dom'
@@ -18711,7 +18696,7 @@ snapshots:
   '@sveltejs/vite-plugin-svelte-inspector@5.0.2(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.55.7)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0)))(svelte@5.55.7)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0))':
     dependencies:
       '@sveltejs/vite-plugin-svelte': 6.2.1(svelte@5.55.7)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0))
-      obug: 2.1.1
+      obug: 2.1.3
       svelte: 5.55.7
       vite: 6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0)
     optional: true
@@ -18719,7 +18704,7 @@ snapshots:
   '@sveltejs/vite-plugin-svelte-inspector@5.0.2(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.55.7)(vite@7.3.2(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0)))(svelte@5.55.7)(vite@7.3.2(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0))':
     dependencies:
       '@sveltejs/vite-plugin-svelte': 6.2.1(svelte@5.55.7)(vite@7.3.2(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0))
-      obug: 2.1.1
+      obug: 2.1.3
       svelte: 5.55.7
       vite: 7.3.2(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0)
 
@@ -19617,7 +19602,7 @@ snapshots:
       untun: 0.1.3
       uqr: 0.1.2
 
-  '@vinxi/plugin-directives@0.5.1(vinxi@0.5.11(c5789ddab17d734d92a90f1e6827c60c))':
+  '@vinxi/plugin-directives@0.5.1(vinxi@0.5.11(4cc1d9608922457128dfdcfb96c47df7))':
     dependencies:
       '@babel/parser': 7.29.0
       acorn: 8.16.0
@@ -19628,18 +19613,18 @@ snapshots:
       magicast: 0.2.11
       recast: 0.23.11
       tslib: 2.8.1
-      vinxi: 0.5.11(c5789ddab17d734d92a90f1e6827c60c)
+      vinxi: 0.5.11(4cc1d9608922457128dfdcfb96c47df7)
 
-  '@vinxi/server-components@0.5.1(vinxi@0.5.11(c5789ddab17d734d92a90f1e6827c60c))':
+  '@vinxi/server-components@0.5.1(vinxi@0.5.11(4cc1d9608922457128dfdcfb96c47df7))':
     dependencies:
-      '@vinxi/plugin-directives': 0.5.1(vinxi@0.5.11(c5789ddab17d734d92a90f1e6827c60c))
+      '@vinxi/plugin-directives': 0.5.1(vinxi@0.5.11(4cc1d9608922457128dfdcfb96c47df7))
       acorn: 8.16.0
       acorn-loose: 8.5.2
       acorn-typescript: 1.4.13(acorn@8.16.0)
       astring: 1.9.0
       magicast: 0.2.11
       recast: 0.23.11
-      vinxi: 0.5.11(c5789ddab17d734d92a90f1e6827c60c)
+      vinxi: 0.5.11(4cc1d9608922457128dfdcfb96c47df7)
 
   '@vitest/coverage-istanbul@4.1.5(vitest@4.1.5)':
     dependencies:
@@ -19828,70 +19813,70 @@ snapshots:
 
   '@xmldom/xmldom@0.8.13': {}
 
-  '@yuku-codegen/binding-darwin-arm64@0.5.46':
+  '@yuku-codegen/binding-darwin-arm64@0.6.1':
     optional: true
 
-  '@yuku-codegen/binding-darwin-x64@0.5.46':
+  '@yuku-codegen/binding-darwin-x64@0.6.1':
     optional: true
 
-  '@yuku-codegen/binding-freebsd-x64@0.5.46':
+  '@yuku-codegen/binding-freebsd-x64@0.6.1':
     optional: true
 
-  '@yuku-codegen/binding-linux-arm-gnu@0.5.46':
+  '@yuku-codegen/binding-linux-arm-gnu@0.6.1':
     optional: true
 
-  '@yuku-codegen/binding-linux-arm-musl@0.5.46':
+  '@yuku-codegen/binding-linux-arm-musl@0.6.1':
     optional: true
 
-  '@yuku-codegen/binding-linux-arm64-gnu@0.5.46':
+  '@yuku-codegen/binding-linux-arm64-gnu@0.6.1':
     optional: true
 
-  '@yuku-codegen/binding-linux-arm64-musl@0.5.46':
+  '@yuku-codegen/binding-linux-arm64-musl@0.6.1':
     optional: true
 
-  '@yuku-codegen/binding-linux-x64-gnu@0.5.46':
+  '@yuku-codegen/binding-linux-x64-gnu@0.6.1':
     optional: true
 
-  '@yuku-codegen/binding-linux-x64-musl@0.5.46':
+  '@yuku-codegen/binding-linux-x64-musl@0.6.1':
     optional: true
 
-  '@yuku-codegen/binding-win32-arm64@0.5.46':
+  '@yuku-codegen/binding-win32-arm64@0.6.1':
     optional: true
 
-  '@yuku-codegen/binding-win32-x64@0.5.46':
+  '@yuku-codegen/binding-win32-x64@0.6.1':
     optional: true
 
-  '@yuku-parser/binding-darwin-arm64@0.5.46':
+  '@yuku-parser/binding-darwin-arm64@0.6.1':
     optional: true
 
-  '@yuku-parser/binding-darwin-x64@0.5.46':
+  '@yuku-parser/binding-darwin-x64@0.6.1':
     optional: true
 
-  '@yuku-parser/binding-freebsd-x64@0.5.46':
+  '@yuku-parser/binding-freebsd-x64@0.6.1':
     optional: true
 
-  '@yuku-parser/binding-linux-arm-gnu@0.5.46':
+  '@yuku-parser/binding-linux-arm-gnu@0.6.1':
     optional: true
 
-  '@yuku-parser/binding-linux-arm-musl@0.5.46':
+  '@yuku-parser/binding-linux-arm-musl@0.6.1':
     optional: true
 
-  '@yuku-parser/binding-linux-arm64-gnu@0.5.46':
+  '@yuku-parser/binding-linux-arm64-gnu@0.6.1':
     optional: true
 
-  '@yuku-parser/binding-linux-arm64-musl@0.5.46':
+  '@yuku-parser/binding-linux-arm64-musl@0.6.1':
     optional: true
 
-  '@yuku-parser/binding-linux-x64-gnu@0.5.46':
+  '@yuku-parser/binding-linux-x64-gnu@0.6.1':
     optional: true
 
-  '@yuku-parser/binding-linux-x64-musl@0.5.46':
+  '@yuku-parser/binding-linux-x64-musl@0.6.1':
     optional: true
 
-  '@yuku-parser/binding-win32-arm64@0.5.46':
+  '@yuku-parser/binding-win32-arm64@0.6.1':
     optional: true
 
-  '@yuku-parser/binding-win32-x64@0.5.46':
+  '@yuku-parser/binding-win32-x64@0.6.1':
     optional: true
 
   '@yuku-toolchain/types@0.5.43': {}
@@ -22024,6 +22009,10 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.4
 
+  fdir@6.5.0(picomatch@4.0.5):
+    optionalDependencies:
+      picomatch: 4.0.5
+
   feed@5.2.0:
     dependencies:
       xml-js: 1.6.11
@@ -22238,7 +22227,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  fumadocs-typescript@5.2.1(008ac65d30c4c0c7f671b1a54983a4c7):
+  fumadocs-typescript@5.2.1(c53fe2b94061d4ac5ed47868bf2858d5):
     dependencies:
       estree-util-value-to-estree: 3.5.0
       fumadocs-core: 16.7.9(@mdx-js/mdx@3.1.1)(@tanstack/react-router@1.170.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.14)(lucide-react@1.7.0(react@19.2.4))(next@16.2.6(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@4.3.6)
@@ -24933,7 +24922,7 @@ snapshots:
   normalize-package-data@6.0.2:
     dependencies:
       hosted-git-info: 7.0.2
-      semver: 7.8.0
+      semver: 7.8.5
       validate-npm-package-license: 3.0.4
 
   normalize-path@3.0.0: {}
@@ -24942,7 +24931,7 @@ snapshots:
 
   npm-install-checks@6.3.0:
     dependencies:
-      semver: 7.8.0
+      semver: 7.8.5
 
   npm-normalize-package-bin@3.0.1: {}
 
@@ -24950,7 +24939,7 @@ snapshots:
     dependencies:
       hosted-git-info: 7.0.2
       proc-log: 4.2.0
-      semver: 7.8.0
+      semver: 7.8.5
       validate-npm-package-name: 5.0.1
 
   npm-pick-manifest@9.1.0:
@@ -24958,7 +24947,7 @@ snapshots:
       npm-install-checks: 6.3.0
       npm-normalize-package-bin: 3.0.1
       npm-package-arg: 11.0.3
-      semver: 7.8.0
+      semver: 7.8.5
 
   npm-run-path@5.3.0:
     dependencies:
@@ -26461,15 +26450,15 @@ snapshots:
 
   robust-predicates@3.0.3: {}
 
-  rolldown-plugin-dts@0.27.4(oxc-resolver@11.19.0)(rolldown@1.1.5)(typescript@6.0.3):
+  rolldown-plugin-dts@0.27.8(oxc-resolver@11.19.0)(rolldown@1.1.5)(typescript@6.0.3):
     dependencies:
       dts-resolver: 3.0.0(oxc-resolver@11.19.0)
       get-tsconfig: 5.0.0-beta.5
       obug: 2.1.3
       rolldown: 1.1.5
       yuku-ast: 0.1.7
-      yuku-codegen: 0.5.46
-      yuku-parser: 0.5.46
+      yuku-codegen: 0.6.1
+      yuku-parser: 0.6.1
     optionalDependencies:
       typescript: 6.0.3
     transitivePeerDependencies:
@@ -27122,7 +27111,7 @@ snapshots:
       lines-and-columns: 1.2.4
       mz: 2.7.0
       pirates: 4.0.7
-      tinyglobby: 0.2.16
+      tinyglobby: 0.2.17
       ts-interface-checker: 0.1.13
 
   sumchecker@3.0.1:
@@ -27349,8 +27338,8 @@ snapshots:
 
   tinyglobby@0.2.17:
     dependencies:
-      fdir: 6.5.0(picomatch@4.0.4)
-      picomatch: 4.0.4
+      fdir: 6.5.0(picomatch@4.0.5)
+      picomatch: 4.0.5
 
   tinyrainbow@3.1.0: {}
 
@@ -27405,7 +27394,7 @@ snapshots:
       '@ts-morph/common': 0.28.1
       code-block-writer: 13.0.3
 
-  tsdown@0.22.4(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3):
+  tsdown@0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3):
     dependencies:
       ansis: 4.3.1
       cac: 7.0.0
@@ -27416,7 +27405,7 @@ snapshots:
       obug: 2.1.3
       picomatch: 4.0.5
       rolldown: 1.1.5
-      rolldown-plugin-dts: 0.27.4(oxc-resolver@11.19.0)(rolldown@1.1.5)(typescript@6.0.3)
+      rolldown-plugin-dts: 0.27.8(oxc-resolver@11.19.0)(rolldown@1.1.5)(typescript@6.0.3)
       semver: 7.8.5
       tinyexec: 1.2.4
       tinyglobby: 0.2.17
@@ -27504,7 +27493,7 @@ snapshots:
 
   typescript@6.0.3: {}
 
-  typesense-fumadocs-adapter@0.3.0(6ad95d0261285bf78ab0fce27e33d0af):
+  typesense-fumadocs-adapter@0.3.0(d54169324f8bf9e5218f0a3db157ec66):
     dependencies:
       fumadocs-core: 16.7.9(@mdx-js/mdx@3.1.1)(@tanstack/react-router@1.170.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.14)(lucide-react@1.7.0(react@19.2.4))(next@16.2.6(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@4.3.6)
       fumadocs-ui: 16.7.9(@types/mdx@2.0.13)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(fumadocs-core@16.7.9(@mdx-js/mdx@3.1.1)(@tanstack/react-router@1.170.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.14)(lucide-react@1.7.0(react@19.2.4))(next@16.2.6(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@4.3.6))(next@16.2.6(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(shiki@4.0.1)(tailwindcss@4.2.1)
@@ -27931,7 +27920,7 @@ snapshots:
       d3-time: 3.1.0
       d3-timer: 3.0.1
 
-  vinxi@0.5.11(c5789ddab17d734d92a90f1e6827c60c):
+  vinxi@0.5.11(4cc1d9608922457128dfdcfb96c47df7):
     dependencies:
       '@babel/core': 7.29.0
       '@babel/plugin-syntax-jsx': 7.28.6(@babel/core@7.29.0)
@@ -28232,13 +28221,13 @@ snapshots:
       es-module-lexer: 2.1.0
       expect-type: 1.3.0
       magic-string: 0.30.21
-      obug: 2.1.1
+      obug: 2.1.3
       pathe: 2.0.3
       picomatch: 4.0.4
       std-env: 4.1.0
       tinybench: 2.9.0
-      tinyexec: 1.1.2
-      tinyglobby: 0.2.16
+      tinyexec: 1.2.4
+      tinyglobby: 0.2.17
       tinyrainbow: 3.1.0
       vite: 6.4.2(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.47.1)(tsx@4.22.4)(yaml@2.9.0)
       why-is-node-running: 2.3.0
@@ -28596,37 +28585,37 @@ snapshots:
     dependencies:
       '@yuku-toolchain/types': 0.5.43
 
-  yuku-codegen@0.5.46:
+  yuku-codegen@0.6.1:
     dependencies:
       '@yuku-toolchain/types': 0.5.43
     optionalDependencies:
-      '@yuku-codegen/binding-darwin-arm64': 0.5.46
-      '@yuku-codegen/binding-darwin-x64': 0.5.46
-      '@yuku-codegen/binding-freebsd-x64': 0.5.46
-      '@yuku-codegen/binding-linux-arm-gnu': 0.5.46
-      '@yuku-codegen/binding-linux-arm-musl': 0.5.46
-      '@yuku-codegen/binding-linux-arm64-gnu': 0.5.46
-      '@yuku-codegen/binding-linux-arm64-musl': 0.5.46
-      '@yuku-codegen/binding-linux-x64-gnu': 0.5.46
-      '@yuku-codegen/binding-linux-x64-musl': 0.5.46
-      '@yuku-codegen/binding-win32-arm64': 0.5.46
-      '@yuku-codegen/binding-win32-x64': 0.5.46
+      '@yuku-codegen/binding-darwin-arm64': 0.6.1
+      '@yuku-codegen/binding-darwin-x64': 0.6.1
+      '@yuku-codegen/binding-freebsd-x64': 0.6.1
+      '@yuku-codegen/binding-linux-arm-gnu': 0.6.1
+      '@yuku-codegen/binding-linux-arm-musl': 0.6.1
+      '@yuku-codegen/binding-linux-arm64-gnu': 0.6.1
+      '@yuku-codegen/binding-linux-arm64-musl': 0.6.1
+      '@yuku-codegen/binding-linux-x64-gnu': 0.6.1
+      '@yuku-codegen/binding-linux-x64-musl': 0.6.1
+      '@yuku-codegen/binding-win32-arm64': 0.6.1
+      '@yuku-codegen/binding-win32-x64': 0.6.1
 
-  yuku-parser@0.5.46:
+  yuku-parser@0.6.1:
     dependencies:
       '@yuku-toolchain/types': 0.5.43
     optionalDependencies:
-      '@yuku-parser/binding-darwin-arm64': 0.5.46
-      '@yuku-parser/binding-darwin-x64': 0.5.46
-      '@yuku-parser/binding-freebsd-x64': 0.5.46
-      '@yuku-parser/binding-linux-arm-gnu': 0.5.46
-      '@yuku-parser/binding-linux-arm-musl': 0.5.46
-      '@yuku-parser/binding-linux-arm64-gnu': 0.5.46
-      '@yuku-parser/binding-linux-arm64-musl': 0.5.46
-      '@yuku-parser/binding-linux-x64-gnu': 0.5.46
-      '@yuku-parser/binding-linux-x64-musl': 0.5.46
-      '@yuku-parser/binding-win32-arm64': 0.5.46
-      '@yuku-parser/binding-win32-x64': 0.5.46
+      '@yuku-parser/binding-darwin-arm64': 0.6.1
+      '@yuku-parser/binding-darwin-x64': 0.6.1
+      '@yuku-parser/binding-freebsd-x64': 0.6.1
+      '@yuku-parser/binding-linux-arm-gnu': 0.6.1
+      '@yuku-parser/binding-linux-arm-musl': 0.6.1
+      '@yuku-parser/binding-linux-arm64-gnu': 0.6.1
+      '@yuku-parser/binding-linux-arm64-musl': 0.6.1
+      '@yuku-parser/binding-linux-x64-gnu': 0.6.1
+      '@yuku-parser/binding-linux-x64-musl': 0.6.1
+      '@yuku-parser/binding-win32-arm64': 0.6.1
+      '@yuku-parser/binding-win32-x64': 0.6.1
 
   zeptomatch@2.1.0:
     dependencies:
