@@ -241,7 +241,7 @@ export interface OAuthProvider<
 	 * Use the validated OpenID Connect issuer for OIDC providers. A resolver is
 	 * supported for tenant-specific issuers and receives only provider-verified
 	 * data. OAuth providers without an issuer omit this property and are scoped
-	 * to the synthetic `local:<providerId>` issuer.
+	 * to the synthetic `local:oauth:<providerId>` issuer.
 	 */
 	accountIssuer?: string | OAuthAccountKeyResolver<T, string> | undefined;
 	/**

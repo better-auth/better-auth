@@ -7,6 +7,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import type { AccountKey } from "@better-auth/core/db";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { defu } from "defu";
 import * as z from "zod";
@@ -494,11 +495,23 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							ctx.context.logger.error("Provider did not return email");
 							throw redirectOnError(ctx, errorURL, "email_not_found");
 						}
-						const accountKey = await resolveOAuthAccountKey(
-							provider,
-							tokens,
-							userInfoResult.data,
-						);
+						let accountKey: AccountKey;
+						try {
+							accountKey = await resolveOAuthAccountKey(
+								provider,
+								tokens,
+								userInfoResult.data,
+							);
+						} catch (error) {
+							ctx.context.logger.error(
+								"Unable to derive provider account identity",
+								{
+									providerId: provider.id,
+									error,
+								},
+							);
+							throw redirectOnError(ctx, errorURL, "unable_to_get_user_info");
+						}
 						const providerProfile = toOAuthProfileRecord(userInfoResult.data);
 
 						const proxyCallbackURL = new URL(stateData.callbackURL);

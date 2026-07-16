@@ -1127,3 +1127,36 @@ describe("credential identity across email changes", async () => {
 		});
 	});
 });
+
+describe("setPassword", async () => {
+	it("sets the password on the existing passwordless credential account", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance();
+		const context = await auth.$context;
+		const { headers, user } = await signInWithTestUser();
+		const credentialAccount =
+			await context.internalAdapter.findCredentialAccount(user.id);
+		expect(credentialAccount).toBeTruthy();
+		await context.internalAdapter.updateAccount(credentialAccount!.id, {
+			password: null,
+		});
+
+		await expect(
+			auth.api.setPassword({
+				body: { newPassword: "new-password" },
+				headers,
+			}),
+		).resolves.toMatchObject({ status: true });
+
+		const accounts = await context.internalAdapter.findAccounts(user.id);
+		const credentialAccounts = accounts.filter(
+			(account) => account.providerId === "credential",
+		);
+		expect(credentialAccounts).toHaveLength(1);
+		await expect(
+			context.password.verify({
+				hash: credentialAccounts[0]!.password!,
+				password: "new-password",
+			}),
+		).resolves.toBe(true);
+	});
+});

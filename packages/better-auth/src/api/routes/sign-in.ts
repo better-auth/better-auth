@@ -531,7 +531,6 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			const credentialIssuer = createLocalAccountIssuer("credential");
 			const credentialAccount = userRecord?.accounts.find(
 				(account) =>
-					account.userId === userRecord.user.id &&
 					account.providerId === "credential" &&
 					account.issuer === credentialIssuer &&
 					account.providerAccountId === userRecord.user.id,

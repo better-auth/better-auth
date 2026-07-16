@@ -26,7 +26,7 @@ describe("resolveOAuthAccountKey", () => {
 		await expect(
 			resolveOAuthAccountKey(createProvider(), tokens, result.data),
 		).resolves.toEqual({
-			issuer: "local:company-oauth",
+			issuer: "local:oauth:company-oauth",
 			providerAccountId: "provider-subject",
 		});
 	});
@@ -42,7 +42,7 @@ describe("resolveOAuthAccountKey", () => {
 				result.data,
 			),
 		).resolves.toEqual({
-			issuer: "local:company-oauth",
+			issuer: "local:oauth:company-oauth",
 			providerAccountId,
 		});
 	});
@@ -137,6 +137,24 @@ describe("resolveOAuthAccountKey", () => {
 		await expect(
 			resolveOAuthAccountKey(
 				createProvider({ accountIssuer: " " }),
+				tokens,
+				result.data,
+			),
+		).rejects.toThrow("OAUTH_ACCOUNT_ISSUER_INVALID");
+	});
+
+	it.each([
+		undefined,
+		null,
+		"undefined",
+		"null",
+		42,
+	] as const)("rejects an invalid account issuer returned by a resolver: %j", async (issuer) => {
+		await expect(
+			resolveOAuthAccountKey(
+				createProvider({
+					accountIssuer: (() => issuer) as never,
+				}),
 				tokens,
 				result.data,
 			),

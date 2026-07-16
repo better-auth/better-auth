@@ -1868,7 +1868,7 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 
 		const githubAccount = accountsB.find((a) => a.providerId === "github");
 		expect(githubAccount).toBeTruthy();
-		expect(githubAccount?.issuer).toBe("local:github");
+		expect(githubAccount?.issuer).toBe("local:oauth:github");
 		expect(githubAccount?.providerAccountId).toBe(SHARED_ACCOUNT_ID);
 		expect(githubAccount?.userId).toBe(userBId);
 

@@ -108,8 +108,13 @@ Use `getAccessToken` to retrieve the access token for a linked account. Every to
 The account record ID is available from `listAccounts`. If its access token is expired, Better Auth refreshes it before returning it.
 
 ```ts
-const accounts = await authClient.listAccounts();
-const account = accounts.find((account) => account.providerId === "google");
+const { data: accounts, error } = await authClient.listAccounts();
+
+if (error) {
+  throw new Error(error.message);
+}
+
+const account = accounts?.find((account) => account.providerId === "google");
 
 if (!account) {
   throw new Error("Google account is not linked");

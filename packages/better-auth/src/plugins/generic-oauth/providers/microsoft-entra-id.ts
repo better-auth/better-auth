@@ -55,7 +55,8 @@ export function microsoftEntraId(
 ): GenericOAuthConfig<"microsoft-entra-id"> {
 	const defaultScopes = ["openid", "profile", "email"];
 
-	const tenantId = options.tenantId.toLowerCase();
+	const tenantId =
+		typeof options.tenantId === "string" ? options.tenantId.toLowerCase() : "";
 	if (
 		!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
 			tenantId,

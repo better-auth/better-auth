@@ -1,5 +1,5 @@
 import type { AccountKey } from "@better-auth/core/db";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
+import { createOAuthAccountIssuer } from "@better-auth/core/db";
 import {
 	APIError,
 	BASE_ERROR_CODES,
@@ -42,15 +42,18 @@ export async function resolveOAuthAccountKey<Profile extends object>(
 	}
 
 	const accountIssuer = provider.accountIssuer;
-	const resolvedIssuer =
-		typeof accountIssuer === "function"
-			? await accountIssuer(accountKeyContext)
-			: accountIssuer;
 	const issuer =
-		resolvedIssuer === undefined
-			? createLocalAccountIssuer(provider.id)
-			: resolvedIssuer;
-	if (issuer.trim().length === 0) {
+		accountIssuer === undefined
+			? createOAuthAccountIssuer(provider.id)
+			: typeof accountIssuer === "function"
+				? await accountIssuer(accountKeyContext)
+				: accountIssuer;
+	if (
+		typeof issuer !== "string" ||
+		issuer.trim().length === 0 ||
+		issuer === "undefined" ||
+		issuer === "null"
+	) {
 		throw new BetterAuthError("OAUTH_ACCOUNT_ISSUER_INVALID");
 	}
 

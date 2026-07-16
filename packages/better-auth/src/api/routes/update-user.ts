@@ -357,6 +357,14 @@ export const setPassword = createAuthEndpoint.serverOnly(
 				status: true,
 			});
 		}
+		if (!account.password) {
+			await ctx.context.internalAdapter.updateAccount(account.id, {
+				password: passwordHash,
+			});
+			return ctx.json({
+				status: true,
+			});
+		}
 		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_ALREADY_SET);
 	},
 );

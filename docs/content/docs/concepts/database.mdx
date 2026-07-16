@@ -531,7 +531,7 @@ export const accountTableFields = [
 
 <DatabaseTable name="account" fields={accountTableFields} />
 
-The database enforces a unique compound index on `issuer` and `providerAccountId`. Providers with a trusted issuer use that authority, including the verified issuer for OpenID Connect. Providers without an issuer use the synthetic `local:<providerId>` namespace. Credential accounts use `local:credential` and the linked user's stable `id`.
+The database enforces a unique compound index on `issuer` and `providerAccountId`. Providers with a trusted issuer use that authority, including the verified issuer for OpenID Connect. OAuth providers without an issuer use the synthetic `local:oauth:<providerId>` namespace. Credential accounts use `local:credential` and the linked user's stable `id`.
 
 ### Verification
 

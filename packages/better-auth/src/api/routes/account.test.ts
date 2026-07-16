@@ -19,7 +19,7 @@ import {
 } from "vitest";
 import { betterAuth } from "../../auth/minimal";
 import { parseSetCookieHeader } from "../../cookies";
-import { signJWT, symmetricDecodeJWT } from "../../crypto";
+import { signJWT, symmetricDecodeJWT, symmetricEncodeJWT } from "../../crypto";
 import { genericOAuth } from "../../plugins/generic-oauth";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account } from "../../types";
@@ -528,7 +528,7 @@ describe("account", async () => {
 		const githubAccount = await ctx.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "github",
-			issuer: "local:github",
+			issuer: "local:oauth:github",
 			providerAccountId: sharedProviderAccountId,
 			accessToken: "github-access-token",
 		});
@@ -587,7 +587,7 @@ describe("account", async () => {
 		const otherUserAccount = await ctx.internalAdapter.createAccount({
 			userId: otherUser.id,
 			providerId: "github",
-			issuer: "local:github",
+			issuer: "local:oauth:github",
 			providerAccountId: "other-server-side-subject",
 			accessToken: "github-access-token",
 		});
@@ -867,6 +867,52 @@ describe("account", async () => {
 		const accounts = await context.internalAdapter.findAccounts(user.id);
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]?.providerId).toBe("credential");
+	});
+
+	it("prioritizes a missing provider email over an invalid account key", async () => {
+		const {
+			auth,
+			client: isolatedClient,
+			signInWithTestUser: signInIsolatedUser,
+		} = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					verifyIdToken: async () => true,
+				},
+			},
+		});
+		const context = await auth.$context;
+		const googleProvider = context.socialProviders.find(
+			(provider) => provider.id === "google",
+		);
+		assert(googleProvider, "google provider should be configured");
+		googleProvider.accountSubject = () => "";
+		vi.spyOn(googleProvider, "getUserInfo").mockResolvedValue({
+			user: {
+				name: "Missing Email User",
+				emailVerified: true,
+			},
+			data: { sub: "ignored-provider-subject" },
+		});
+		const { headers } = await signInIsolatedUser();
+
+		const result = await isolatedClient.$fetch("/link-social", {
+			method: "POST",
+			body: {
+				provider: "google",
+				idToken: { token: "verified-id-token" },
+			},
+			headers,
+		});
+
+		expect(result.data).toBeNull();
+		expect(result.error).toMatchObject({
+			status: 401,
+			code: BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND.code,
+			message: BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND.message,
+		});
 	});
 
 	/**
@@ -2593,6 +2639,46 @@ describe("account selector validation", async () => {
 		expect(responses.map((response) => response.status)).toEqual([
 			400, 400, 400,
 		]);
+	});
+
+	it("does not select a signed account cookie when account storage is disabled", async () => {
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test" },
+			},
+			account: { storeAccountCookie: false },
+		});
+		const context = await auth.$context;
+		const { headers, user } = await signInWithTestUser();
+		const account = await context.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "google",
+			issuer: "https://accounts.google.com",
+			providerAccountId: "stale-google-subject",
+			accessToken: "stale-access-token",
+		});
+		const signedAccountCookie = await symmetricEncodeJWT(
+			account,
+			context.secret,
+			"better-auth-account",
+			60 * 5,
+		);
+		headers.append(
+			"cookie",
+			`${context.authCookies.accountData.name}=${signedAccountCookie}`,
+		);
+
+		const result = await client.getAccessToken(
+			{ useAccountCookie: true },
+			{ headers },
+		);
+
+		expect(result.data).toBeNull();
+		expect(result.error).toMatchObject({
+			status: 400,
+			code: BASE_ERROR_CODES.ACCOUNT_NOT_FOUND.code,
+			message: BASE_ERROR_CODES.ACCOUNT_NOT_FOUND.message,
+		});
 	});
 });
 

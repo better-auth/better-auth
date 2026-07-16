@@ -83,11 +83,11 @@ Better Auth now recognizes an external account by the unique pair of `issuer` an
 2. Rename the physical `accountId` column to `providerAccountId`, or add `providerAccountId` as nullable and copy the existing values if your migration tool cannot express a rename. Add `issuer` as nullable during the backfill.
 3. Populate both fields according to the account type:
 
-   | Account type               | `issuer`                                  | `providerAccountId`                    |
-   | -------------------------- | ----------------------------------------- | -------------------------------------- |
-   | Credential                 | `local:credential`                        | Stable `id` from the linked `user` row |
-   | Provider with an issuer    | Exact trusted issuer used by the provider | Existing provider account identifier   |
-   | Provider without an issuer | `local:<providerId>`                      | Existing provider account identifier   |
+   | Account type                     | `issuer`                                  | `providerAccountId`                    |
+   | -------------------------------- | ----------------------------------------- | -------------------------------------- |
+   | Credential                       | `local:credential`                        | Stable `id` from the linked `user` row |
+   | Provider with an issuer          | Exact trusted issuer used by the provider | Existing provider account identifier   |
+   | OAuth provider without an issuer | `local:oauth:<providerId>`                | Existing provider account identifier   |
 
    Build an explicit `providerId`-to-issuer map for your deployment. Multiple provider configurations that represent the same OpenID Connect authority must use the same issuer. Do not derive an issuer from email, display name, an unverified request value, or a mutable authorization endpoint.
 4. Find collisions before creating the unique index. Adapt this query to your physical table and field names:

@@ -2800,6 +2800,19 @@ describe("oauth2", async () => {
 			);
 		});
 
+		it("normalizes a trailing slash in the domain and account issuer", () => {
+			const auth0Config = auth0({
+				clientId: "auth0-client-id",
+				clientSecret: "auth0-client-secret",
+				domain: "https://dev-xxx.eu.auth0.com/",
+			});
+
+			expect(auth0Config.discoveryUrl).toBe(
+				"https://dev-xxx.eu.auth0.com/.well-known/openid-configuration",
+			);
+			expect(auth0Config.accountIssuer).toBe("https://dev-xxx.eu.auth0.com/");
+		});
+
 		it("should allow overriding scopes", () => {
 			const auth0Config = auth0({
 				clientId: "auth0-client-id",
@@ -2898,6 +2911,16 @@ describe("oauth2", async () => {
 					clientSecret: "ms-client-secret",
 					tenantId,
 				}),
+			).toThrow("requires a concrete Microsoft Entra tenant GUID");
+		});
+
+		it("rejects a missing tenant ID from an untyped runtime configuration", () => {
+			expect(() =>
+				microsoftEntraId({
+					clientId: "ms-client-id",
+					clientSecret: "ms-client-secret",
+					tenantId: undefined,
+				} as unknown as Parameters<typeof microsoftEntraId>[0]),
 			).toThrow("requires a concrete Microsoft Entra tenant GUID");
 		});
 	});

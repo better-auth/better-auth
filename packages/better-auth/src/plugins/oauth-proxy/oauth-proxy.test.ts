@@ -1,3 +1,4 @@
+import type { OAuthProvider } from "@better-auth/core/oauth2";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
@@ -63,6 +64,61 @@ afterEach(() => {
 afterAll(() => server.close());
 
 describe("oauth-proxy", async () => {
+	it("redirects when a provider cannot derive a stable account identity", async () => {
+		const provider = {
+			id: "invalid-account-identity",
+			name: "Invalid account identity",
+			accountSubject: () => "",
+			createAuthorizationURL: ({ state }) =>
+				new URL(`https://idp.example.com/authorize?state=${state}`),
+			validateAuthorizationCode: async () => ({
+				accessToken: "access-token",
+			}),
+			getUserInfo: async () => ({
+				user: {
+					email: "user@example.com",
+					emailVerified: true,
+				},
+				data: {},
+			}),
+		} satisfies OAuthProvider<Record<string, never>>;
+
+		const { client } = await getTestInstance({
+			plugins: [
+				{
+					id: "invalid-account-identity-provider",
+					init: (ctx) => ({
+						context: {
+							socialProviders: [provider, ...ctx.socialProviders],
+						},
+					}),
+				},
+				oAuthProxy({ currentURL: "http://preview.example.com" }),
+			],
+		});
+
+		const signIn = await client.signIn.social(
+			{
+				provider: provider.id,
+				callbackURL: "/dashboard",
+			},
+			{ throw: true },
+		);
+		const state = new URL(signIn.url!).searchParams.get("state");
+
+		let redirectURL: string | null = null;
+		await client.$fetch(`/callback/${provider.id}?code=test&state=${state}`, {
+			onError(context) {
+				redirectURL = context.response.headers.get("location");
+			},
+		});
+
+		expect(redirectURL).not.toBeNull();
+		expect(new URL(redirectURL!).searchParams.get("error")).toBe(
+			"unable_to_get_user_info",
+		);
+	});
+
 	it("should redirect to proxy url with profile data (passthrough)", async () => {
 		const { client } = await getTestInstance({
 			plugins: [

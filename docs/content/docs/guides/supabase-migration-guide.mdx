@@ -239,11 +239,12 @@ Before starting the migration process, set up Better Auth in your project. Follo
        */
       tempEmailDomain: 'temp.better-auth.com',
       /**
-       * Review every social provider in your Supabase export. Use the exact
-       * trusted issuer Better Auth uses, or local:<providerId> when it has none.
+       * Configure every social provider enabled in Better Auth with the exact
+       * trusted issuer it uses. For OAuth providers without one, use
+       * local:oauth:<providerId>. The script checks this map before it writes.
        */
       accountIssuers: {
-        github: 'local:github',
+        github: 'local:oauth:github',
         google: 'https://accounts.google.com',
       } as Record<string, string>,
     };
@@ -254,6 +255,18 @@ Before starting the migration process, set up Better Auth in your project. Follo
         throw new Error(`Missing trusted issuer for ${providerId}`);
       }
       return issuer;
+    }
+
+    function assertAccountIssuerCoverage(providerIds: readonly string[]) {
+      const missingProviderIds = providerIds
+        .filter((providerId) => !CONFIG.accountIssuers[providerId])
+        .sort();
+
+      if (missingProviderIds.length > 0) {
+        throw new Error(
+          `Missing trusted issuers for Better Auth social providers: ${missingProviderIds.join(', ')}. Update CONFIG.accountIssuers before running the migration.`,
+        );
+      }
     }
 
     // ============================================================================
@@ -816,6 +829,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
       // Validate Better Auth configuration
       const ctx = await validateAuthConfig();
+      assertAccountIssuerCoverage(Object.keys(ctx.options.socialProviders ?? {}));
 
       try {
         const countResult = await fromDB.query<{ count: string }>(

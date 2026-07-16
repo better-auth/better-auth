@@ -6,6 +6,7 @@ export {
 	accountSchema,
 	type BaseAccount,
 	createLocalAccountIssuer,
+	createOAuthAccountIssuer,
 } from "./schema/account";
 export {
 	type BaseRateLimit,

@@ -308,16 +308,6 @@ export const linkSocialAccount = createAuthEndpoint(
 				);
 			}
 
-			const accountKey = await resolveOAuthAccountKeyForAPI(
-				provider,
-				{
-					idToken: token,
-					accessToken: c.body.idToken.accessToken,
-					refreshToken: c.body.idToken.refreshToken,
-				},
-				linkingUserInfo.data,
-			);
-
 			if (!linkingUserInfo.user.email) {
 				c.context.logger.error(
 					missingEmailLogMessage(c.body.provider, { source: "id_token" }),
@@ -328,6 +318,16 @@ export const linkSocialAccount = createAuthEndpoint(
 					BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
 				);
 			}
+
+			const accountKey = await resolveOAuthAccountKeyForAPI(
+				provider,
+				{
+					idToken: token,
+					accessToken: c.body.idToken.accessToken,
+					refreshToken: c.body.idToken.refreshToken,
+				},
+				linkingUserInfo.data,
+			);
 
 			const linkedAccount =
 				await c.context.internalAdapter.findAccountByKey(accountKey);
@@ -620,7 +620,7 @@ async function resolveUserAccount(
 			(candidate) => candidate.id === selection.accountId,
 		);
 		if (account) return { account, accountCookie: null };
-	} else {
+	} else if (ctx.context.options.account?.storeAccountCookie) {
 		const accountCookie = await getAccountCookie(ctx);
 		if (
 			accountCookie &&

@@ -315,7 +315,7 @@ interface GenericOAuthConfig {
 
 `mapProfileToUser` cannot set the account subject. This keeps local profile mapping separate from account recognition.
 
-**accountIssuer**: (Optional) The stable authority namespace paired with the provider account subject. A discovery provider uses its discovered issuer by default. Set this field when an explicit-endpoint provider has an issuer, when multiple provider configurations represent the same authority, or when a verified profile determines a tenant-specific issuer. Without discovery or `accountIssuer`, Better Auth uses `local:<providerId>`.
+**accountIssuer**: (Optional) The stable authority namespace paired with the provider account subject. A discovery provider uses its discovered issuer by default. Set this field when an explicit-endpoint provider has an issuer, when multiple provider configurations represent the same authority, or when a verified profile determines a tenant-specific issuer. Without discovery or `accountIssuer`, Better Auth uses `local:oauth:<providerId>`.
 
 The resolver receives verified provider data. Derive a dynamic issuer only from a claim or profile value established by the provider verification flow; never use a request parameter, email domain, or other caller-controlled value.
 
