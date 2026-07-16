@@ -153,9 +153,6 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						return `varchar('${name}', { length: 36 })`;
 					}
 				}
-				if (databaseType === "mssql") {
-					return `varchar('${name}', { length: 'max' })`;
-				}
 				return `text('${name}')`;
 			}
 			const type = field.type;

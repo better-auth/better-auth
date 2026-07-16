@@ -458,6 +458,60 @@ describe("drizzle-adapter", () => {
 
 			expect(result).toBeNull();
 		});
+
+		// mssql-core has no .for("update")/.limit(); the guard-select must use
+		// .top(1) instead, and the DELETE must go through .execute() rather than
+		// .returning() (which mssql-core also doesn't support).
+		function createMssqlConsumeDb(driverResult: unknown) {
+			const selectExecute = vi.fn().mockResolvedValue([verificationRow]);
+			const selectWhere = vi.fn().mockReturnValue({ execute: selectExecute });
+			const selectFrom = vi.fn().mockReturnValue({ where: selectWhere });
+			const top = vi.fn().mockReturnValue({ from: selectFrom });
+			const execute = vi.fn().mockResolvedValue(driverResult);
+			const deleteWhere = vi.fn().mockReturnValue({ execute });
+			const tx = {
+				select: vi.fn().mockReturnValue({ top, from: selectFrom }),
+				delete: vi.fn().mockReturnValue({ where: deleteWhere }),
+			};
+			const db = {
+				_: { fullSchema: { verification: verificationTable } },
+				transaction: vi
+					.fn()
+					.mockImplementation((fn: (transaction: typeof tx) => unknown) =>
+						fn(tx),
+					),
+			} as Parameters<typeof drizzleAdapter>[0];
+			return { db, top };
+		}
+
+		it("returns the consumed row for MSSQL via TOP(1) instead of .limit()", async () => {
+			const { db, top } = createMssqlConsumeDb({ rowsAffected: [1] });
+			const adapter = drizzleAdapter(db, { provider: "mssql" })({
+				secret: defaultSecret,
+			});
+
+			const result = await adapter.consumeOne({
+				model: "verification",
+				where: [{ field: "id", value: verificationRow.id }],
+			});
+
+			expect(result).toEqual(verificationRow);
+			expect(top).toHaveBeenCalledWith(1);
+		});
+
+		it("returns null when the MSSQL delete does not affect a row", async () => {
+			const { db } = createMssqlConsumeDb({ rowsAffected: [0] });
+			const adapter = drizzleAdapter(db, { provider: "mssql" })({
+				secret: defaultSecret,
+			});
+
+			const result = await adapter.consumeOne({
+				model: "verification",
+				where: [{ field: "id", value: verificationRow.id }],
+			});
+
+			expect(result).toBeNull();
+		});
 	});
 
 	describe("incrementOne", () => {
@@ -614,6 +668,94 @@ describe("drizzle-adapter", () => {
 				// A `gt` guard that no row satisfies must yield null, never a row.
 				where: [{ field: "attempts", value: 100, operator: "gt" }],
 				increment: { attempts: -1 },
+			});
+
+			expect(result).toBeNull();
+		});
+
+		// mssql-core has no .for("update")/.limit(); the guard-select and the
+		// post-update re-select must both use .top(1), and the UPDATE must go
+		// through .execute() rather than .returning() (unsupported on mssql-core).
+		function createMssqlIncrementDb(guardRow: unknown, updatedRow: unknown) {
+			const guardExecute = vi
+				.fn()
+				.mockResolvedValue(guardRow ? [guardRow] : []);
+			const guardWhere = vi.fn().mockReturnValue({ execute: guardExecute });
+			const guardFrom = vi.fn().mockReturnValue({ where: guardWhere });
+			const guardTop = vi.fn().mockReturnValue({ from: guardFrom });
+
+			const reselectExecute = vi
+				.fn()
+				.mockResolvedValue(updatedRow ? [updatedRow] : []);
+			const reselectWhere = vi
+				.fn()
+				.mockReturnValue({ execute: reselectExecute });
+			const reselectFrom = vi.fn().mockReturnValue({ where: reselectWhere });
+			const reselectTop = vi.fn().mockReturnValue({ from: reselectFrom });
+
+			const top = vi
+				.fn()
+				.mockReturnValueOnce({ from: guardFrom })
+				.mockReturnValueOnce({ from: reselectFrom });
+
+			const updateExecute = vi.fn().mockResolvedValue(undefined);
+			const updateWhere = vi.fn().mockReturnValue({ execute: updateExecute });
+			const set = vi.fn().mockReturnValue({ where: updateWhere });
+
+			const tx = {
+				select: vi.fn().mockReturnValue({ top }),
+				update: vi.fn().mockReturnValue({ set }),
+			};
+			const db = {
+				_: { fullSchema: { user: userTable } },
+				transaction: vi
+					.fn()
+					.mockImplementation((fn: (transaction: typeof tx) => unknown) =>
+						fn(tx),
+					),
+			} as any;
+			return { db, top, guardTop, reselectTop };
+		}
+
+		it("increments and re-reads via TOP(1) on MSSQL instead of .limit()", async () => {
+			const guardRow = { id: "user-1", attempts: 4 };
+			const updatedRow = { id: "user-1", attempts: 5 };
+			const { db, top } = createMssqlIncrementDb(guardRow, updatedRow);
+			const adapter = drizzleAdapter(db, { provider: "mssql" })({
+				secret: defaultSecret,
+				user: {
+					additionalFields: {
+						attempts: { type: "number", required: false },
+					},
+				},
+			});
+
+			const result = await adapter.incrementOne({
+				model: "user",
+				where: [{ field: "id", value: "user-1" }],
+				increment: { attempts: 1 },
+			});
+
+			expect(result).toEqual(updatedRow);
+			expect(top).toHaveBeenCalledWith(1);
+			expect(top).toHaveBeenCalledTimes(2);
+		});
+
+		it("returns null when the MSSQL guard matches no row", async () => {
+			const { db } = createMssqlIncrementDb(null, null);
+			const adapter = drizzleAdapter(db, { provider: "mssql" })({
+				secret: defaultSecret,
+				user: {
+					additionalFields: {
+						attempts: { type: "number", required: false },
+					},
+				},
+			});
+
+			const result = await adapter.incrementOne({
+				model: "user",
+				where: [{ field: "id", value: "user-1" }],
+				increment: { attempts: 1 },
 			});
 
 			expect(result).toBeNull();

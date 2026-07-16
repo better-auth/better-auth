@@ -217,6 +217,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				}
 				return schemaModel;
 			}
+			// MSSQL's drizzle select builder has no .limit(); use TOP(N) chained
+			// on the pre-from builder instead. These two helpers keep the rest
+			// of the code shape-agnostic across providers.
+			const withTop = (b: any, n: number) =>
+				config.provider === "mssql" ? b.top(n) : b;
+			const withLimit = (b: any, n: number) =>
+				config.provider === "mssql" ? b : b.limit(n);
 			const withReturning = async (
 				model: string,
 				builder: any,
@@ -233,13 +240,6 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				// back to executing the write, then re-selecting the affected row.
 				await builder.execute();
 				const schemaModel = getSchema(model);
-				// MSSQL's drizzle select builder has no .limit(); use TOP(N)
-				// chained on the pre-from builder instead. These two helpers
-				// keep the rest of the code shape-agnostic across providers.
-				const withTop = (b: any, n: number) =>
-					config.provider === "mssql" ? b.top(n) : b;
-				const withLimit = (b: any, n: number) =>
-					config.provider === "mssql" ? b : b.limit(n);
 				const builderVal = builder.config?.values;
 				if (where?.length) {
 					const updatedWhere = where.map((w) => {
@@ -1062,17 +1062,27 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const idField = getFieldName({ model, field: "id" });
 					const idColumn = schemaModel[idField];
 
-					if (config.provider === "mysql") {
-						// MySQL has no DELETE ... RETURNING. Hold the row under
-						// SELECT ... FOR UPDATE inside a transaction so concurrent
-						// claimants block until the row is gone.
+					if (config.provider === "mysql" || config.provider === "mssql") {
+						// MySQL and MSSQL have no DELETE ... RETURNING. Read the row
+						// first, then delete it by id and only report success if the
+						// delete actually removed a row — this still resolves the race
+						// between concurrent claimants without a locking hint, since at
+						// most one DELETE can affect a row that's already gone.
+						// mssql-core has no .for("update")/.limit(); MySQL locks the row
+						// under SELECT ... FOR UPDATE inside the transaction instead.
 						const claimFromTransaction = async (tx: DB) => {
-							const rows = await tx
-								.select()
-								.from(schemaModel)
-								.where(...clause)
-								.for("update")
-								.limit(1);
+							const rows =
+								config.provider === "mssql"
+									? await withTop(tx.select(), 1)
+											.from(schemaModel)
+											.where(...clause)
+											.execute()
+									: await tx
+											.select()
+											.from(schemaModel)
+											.where(...clause)
+											.for("update")
+											.limit(1);
 							const target = rows[0];
 							if (!target) return null;
 							const targetId = target[idField] ?? (target as any).id;
@@ -1141,17 +1151,24 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						}
 					}
 
-					if (config.provider === "mysql") {
-						// MySQL has no UPDATE ... RETURNING. Hold the guarded row under
-						// SELECT ... FOR UPDATE inside a transaction so concurrent updates
-						// serialize, then read the mutated row back by id.
+					if (config.provider === "mysql" || config.provider === "mssql") {
+						// MySQL and MSSQL have no UPDATE ... RETURNING. Guard-select the
+						// row, update it by id, then read the mutated row back.
+						// mssql-core has no .for("update")/.limit(); MySQL locks the row
+						// under SELECT ... FOR UPDATE inside the transaction instead.
 						const mutateInTransaction = async (tx: DB) => {
-							const rows = await tx
-								.select()
-								.from(schemaModel)
-								.where(...clause)
-								.for("update")
-								.limit(1);
+							const rows =
+								config.provider === "mssql"
+									? await withTop(tx.select(), 1)
+											.from(schemaModel)
+											.where(...clause)
+											.execute()
+									: await tx
+											.select()
+											.from(schemaModel)
+											.where(...clause)
+											.for("update")
+											.limit(1);
 							const target = rows[0];
 							if (!target) return null;
 							const targetId = target[idField] ?? (target as any).id;
@@ -1163,12 +1180,12 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								.set(assignments)
 								.where(eq(idColumn, targetId))
 								.execute();
-							const updated = await tx
-								.select()
-								.from(schemaModel)
-								.where(eq(idColumn, targetId))
-								.limit(1)
-								.execute();
+							const updated = await withLimit(
+								withTop(tx.select(), 1)
+									.from(schemaModel)
+									.where(eq(idColumn, targetId)),
+								1,
+							).execute();
 							return (updated[0] as any) ?? null;
 						};
 						return inTransaction
