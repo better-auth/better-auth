@@ -9,6 +9,7 @@ import type {
 import {
 	getCurrentAdapter,
 	getCurrentAuthContext,
+	queueAfterTransactionHook,
 	runWithTransaction,
 } from "@better-auth/core/context";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
@@ -42,6 +43,11 @@ function getTTLSeconds(expiresAt: Date | number, now = Date.now()): number {
 		typeof expiresAt === "number" ? expiresAt : expiresAt.getTime();
 	return Math.max(Math.floor((expiresMs - now) / 1000), 0);
 }
+
+type ActiveSessionReference = {
+	readonly token: string;
+	readonly expiresAt: number;
+};
 
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
@@ -128,6 +134,49 @@ export const createInternalAdapter = (
 				);
 			}),
 		);
+	}
+
+	async function getActiveSessionReferences(userId: string) {
+		if (!secondaryStorage) return [];
+		const activeSessions = await secondaryStorage.get(
+			`active-sessions-${userId}`,
+		);
+		return activeSessions
+			? safeJSONParse<ActiveSessionReference[]>(activeSessions) || []
+			: [];
+	}
+
+	async function deleteCachedUserSessions(
+		userId: string,
+		sessionReferences: readonly ActiveSessionReference[],
+	) {
+		if (!secondaryStorage) return;
+
+		const deletedTokens = new Set(
+			sessionReferences.map((session) => session.token),
+		);
+		for (const { token } of sessionReferences) {
+			await secondaryStorage.delete(token);
+		}
+
+		const activeSessionsKey = `active-sessions-${userId}`;
+		const currentSessionReferences = await getActiveSessionReferences(userId);
+		const now = Date.now();
+		const remainingSessionReferences = currentSessionReferences.filter(
+			(session) => session.expiresAt > now && !deletedTokens.has(session.token),
+		);
+		remainingSessionReferences.sort((a, b) => a.expiresAt - b.expiresAt);
+		const furthestExpiration = remainingSessionReferences.at(-1)?.expiresAt;
+
+		if (furthestExpiration) {
+			await secondaryStorage.set(
+				activeSessionsKey,
+				JSON.stringify(remainingSessionReferences),
+				getTTLSeconds(furthestExpiration, now),
+			);
+			return;
+		}
+		await secondaryStorage.delete(activeSessionsKey);
 	}
 
 	async function withVerificationConsumeLock<T>(
@@ -851,17 +900,20 @@ export const createInternalAdapter = (
 		},
 		deleteUserSessions: async (userId: string) => {
 			if (secondaryStorage) {
-				const activeSession = await secondaryStorage.get(
-					`active-sessions-${userId}`,
+				// Callers may create a replacement session before queued hooks run.
+				// Capture the revocation set now so that replacement remains active.
+				const sessionReferences = await getActiveSessionReferences(userId);
+				await queueAfterTransactionHook(
+					() => deleteCachedUserSessions(userId, sessionReferences),
+					{
+						onError(error) {
+							logger.error(
+								"Failed to delete committed user sessions from secondary storage",
+								error,
+							);
+						},
+					},
 				);
-				const sessions = activeSession
-					? safeJSONParse<{ token: string }[]>(activeSession)
-					: [];
-				if (!sessions) return;
-				for (const session of sessions) {
-					await secondaryStorage.delete(session.token);
-				}
-				await secondaryStorage.delete(`active-sessions-${userId}`);
 
 				if (!options.session?.storeSessionInDatabase) {
 					return;
@@ -1068,7 +1120,14 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
-			await refreshUserSessions(user);
+			await queueAfterTransactionHook(() => refreshUserSessions(user), {
+				onError(error) {
+					logger.error(
+						"Failed to refresh committed user sessions in secondary storage",
+						error,
+					);
+				},
+			});
 			return user;
 		},
 		updateUserByEmail: async (
@@ -1089,7 +1148,14 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
-			await refreshUserSessions(user);
+			await queueAfterTransactionHook(() => refreshUserSessions(user), {
+				onError(error) {
+					logger.error(
+						"Failed to refresh committed user sessions in secondary storage",
+						error,
+					);
+				},
+			});
 			return user;
 		},
 		updatePassword: async (userId: string, password: string) => {

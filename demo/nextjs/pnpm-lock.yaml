@@ -5,6 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  '@better-fetch/fetch': 1.3.1
   path-to-regexp@>=8: ^8.4.0
   fast-uri@<=3.1.1: 3.1.2
   hono: ^4.12.25
@@ -23,15 +24,21 @@ importers:
       '@better-auth/cimd':
         specifier: link:../../packages/cimd
         version: link:../../packages/cimd
-      '@better-auth/dash':
-        specifier: ^0.1.6
-        version: 0.1.6(better-auth@..+packages+better-auth)(zod@4.3.6)
+      '@better-auth/core':
+        specifier: link:../../packages/core
+        version: link:../../packages/core
       '@better-auth/electron':
         specifier: link:../../packages/electron
         version: link:../../packages/electron
       '@better-auth/infra':
-        specifier: ^0.2.5
-        version: 0.2.5(@better-auth/core@1.6.6(@better-auth/utils@0.4.0)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.3.6))(jose@6.2.2)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/sso@..+packages+sso)(better-auth@..+packages+better-auth)(zod@4.3.6)
+        specifier: ^0.3.5
+        version: 0.3.6(@better-auth/core@..+packages+core)(better-auth@..+packages+better-auth)(zod@4.3.6)
+      '@better-auth/kysely-adapter':
+        specifier: link:../../packages/kysely-adapter
+        version: link:../../packages/kysely-adapter
+      '@better-auth/mcp':
+        specifier: link:../../packages/mcp
+        version: link:../../packages/mcp
       '@better-auth/oauth-provider':
         specifier: link:../../packages/oauth-provider
         version: link:../../packages/oauth-provider
@@ -52,10 +59,10 @@ importers:
         version: 5.2.2(react-hook-form@7.73.1(react@19.2.5))
       '@libsql/kysely-libsql':
         specifier: ^0.4.1
-        version: 0.4.1(kysely@0.29.2)
+        version: 0.4.1(kysely@0.28.17)
       '@modelcontextprotocol/sdk':
-        specifier: ^1.27.1
-        version: 1.29.0(zod@4.3.6)
+        specifier: 1.26.0
+        version: 1.26.0(zod@4.3.6)
       '@number-flow/react':
         specifier: ^0.6.0
         version: 0.6.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -183,17 +190,17 @@ importers:
         specifier: ^1.4.2
         version: 1.4.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       kysely:
-        specifier: ^0.28.17 || ^0.29.0
-        version: 0.29.2
+        specifier: 0.28.17
+        version: 0.28.17
       lucide-react:
         specifier: ^0.575.0
         version: 0.575.0(react@19.2.5)
       mcp-handler:
         specifier: ^1.1.0
-        version: 1.1.0(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(next@16.2.6(react-dom@19.2.5(react@19.2.5))(react@19.2.5))
+        version: 1.1.0(@modelcontextprotocol/sdk@1.26.0(zod@4.3.6))(next@16.2.6(react-dom@19.2.5(react@19.2.5))(react@19.2.5))
       mysql2:
         specifier: ^3.18.2
-        version: 3.22.2(@types/node@25.6.0)
+        version: 3.22.2(@types/node@25.9.4)
       next:
         specifier: ^16.2.6
         version: 16.2.6(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -229,7 +236,7 @@ importers:
         version: 2.0.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       stripe:
         specifier: 22.0.1
-        version: 22.0.1(@types/node@25.6.0)
+        version: 22.0.1(@types/node@25.9.4)
       tailwind-merge:
         specifier: ^3.5.0
         version: 3.5.0
@@ -249,6 +256,9 @@ importers:
       '@types/canvas-confetti':
         specifier: ^1.9.0
         version: 1.9.0
+      '@types/node':
+        specifier: 25.9.4
+        version: 25.9.4
       '@types/react':
         specifier: ^19.2.14
         version: 19.2.14
@@ -267,6 +277,9 @@ importers:
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
 packages:
 
@@ -274,33 +287,10 @@ packages:
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
     engines: {node: '>=10'}
 
-  '@better-auth/core@1.6.6':
-    resolution: {integrity: sha512-NdG2oTlbkA8TrxvFUL8QDpyTxY3JtCGwuf2qzg1nu9VroSV5ujWZz/N9CGQrZd7k0P41SYuXIl64Ysx3uDIymQ==}
-    peerDependencies:
-      '@better-auth/utils': 0.4.0
-      '@better-fetch/fetch': 1.1.21
-      '@cloudflare/workers-types': '>=4'
-      '@opentelemetry/api': ^1.9.0
-      better-call: 1.3.5
-      jose: ^6.1.0
-      kysely: ^0.28.5
-      nanostores: ^1.0.1
-    peerDependenciesMeta:
-      '@cloudflare/workers-types':
-        optional: true
-      '@opentelemetry/api':
-        optional: true
-
-  '@better-auth/dash@0.1.6':
-    resolution: {integrity: sha512-5FTWeto6oZVhZRHvHiAEM0D6ifQKbjdVTBUidd9gUn5f+SSa1Zxn4qPtW+iWyJPDLWanXZNXoXGvggtj1TQn9w==}
-    peerDependencies:
-      better-auth: '>=1.4.0'
-
-  '@better-auth/infra@0.2.5':
-    resolution: {integrity: sha512-TYY5OUV/pnG3OYZlHHcFo4jaIQBTWb2K8QR3fKiugTa9OJ1W3JcPbS5xSdTxcBeUFScLEFTTO59oCZ9a7f16AQ==}
+  '@better-auth/infra@0.3.6':
+    resolution: {integrity: sha512-g5WwUMSQ0IuyRUMthBAdSRFoC+lHVLpv+diM8i3ls5kROMSomnZTA265g+SN3QqPM6ohVTWcyVtXvMQzl3eSgA==}
     peerDependencies:
       '@better-auth/core': '>=1.4.0'
-      '@better-auth/sso': '>=1.4.0'
       '@react-native-async-storage/async-storage': '>=1.21.0'
       better-auth: '>=1.4.0'
       expo-constants: '>=16.0.0'
@@ -320,14 +310,14 @@ packages:
       react-native:
         optional: true
 
-  '@better-auth/utils@0.3.1':
-    resolution: {integrity: sha512-+CGp4UmZSUrHHnpHhLPYu6cV+wSUSvVbZbNykxhUDocpVNTo9uFFxw/NqJlh1iC4wQ9HKKWGCKuZ5wUgS0v6Kg==}
-
   '@better-auth/utils@0.4.0':
     resolution: {integrity: sha512-RpMtLUIQAEWMgdPLNVbIF5ON2mm+CH0U3rCdUCU1VyeAUui4m38DyK7/aXMLZov2YDjG684pS1D0MBllrmgjQA==}
 
-  '@better-fetch/fetch@1.1.21':
-    resolution: {integrity: sha512-/ImESw0sskqlVR94jB+5+Pxjf+xBwDZF/N5+y2/q4EqD7IARUTSpPfIo8uf39SYpCxyOCtbyYpUrZ3F/k0zT4A==}
+  '@better-auth/utils@0.4.2':
+    resolution: {integrity: sha512-AUxrvu+HaaODsUyzDxFgwd/8RZ1yZaYo42LXKSrU2oGgR38pS1ij8nqQKNgtTWoYGpNevNXtCfgTy6loHveW9A==}
+
+  '@better-fetch/fetch@1.3.1':
+    resolution: {integrity: sha512-ABkD1WhyfPZprKRQI3bhATjeiFuNWC9PXhfGWqL+sg/gKrM977oFrYkdb4msM3hgUGonr7KlOsOFT5TU2rht9g==}
 
   '@date-fns/tz@1.4.1':
     resolution: {integrity: sha512-P5LUNhtbj6YfI3iJjw5EL9eUAG6OitD0W3fWQcpQjDRc/QIsL0tRNuO1PcDvPccWL1fSTXXdE1ds+l95DV/OFA==}
@@ -586,8 +576,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@modelcontextprotocol/sdk@1.29.0':
-    resolution: {integrity: sha512-zo37mZA9hJWpULgkRpowewez1y6ML5GsXJPY8FI0tBBCd77HEvza4jDqRKOXgHNn867PVGCyTdzqpz0izu5ZjQ==}
+  '@modelcontextprotocol/sdk@1.26.0':
+    resolution: {integrity: sha512-Y5RmPncpiDtTXDbLKswIJzTqu2hyBKxTNsgKqKclDbhIgg1wgtf1fRuvxgTnRfcnxtvvgbIEcqUOzZrJ6iSReg==}
     engines: {node: '>=18'}
     peerDependencies:
       '@cfworker/json-schema': ^4.1.1
@@ -663,10 +653,6 @@ packages:
     peerDependencies:
       react: ^18 || ^19
       react-dom: ^18 || ^19
-
-  '@opentelemetry/semantic-conventions@1.40.0':
-    resolution: {integrity: sha512-cifvXDhcqMwwTlTK04GBNeIe7yyo28Mfby85QXFe1Yk8nmi36Ab/5UQwptOx84SsoGNRg+EVSjwzfSZMy6pmlw==}
-    engines: {node: '>=14'}
 
   '@radix-ui/number@1.1.1':
     resolution: {integrity: sha512-MkKCwxlXTgz6CFoJx3pCwn07GKp36+aZyu/u2Ln2VrA5DcdyCZkASEDBTd8x5whTQQL5CiYf4prXKLcgQdv29g==}
@@ -1706,8 +1692,11 @@ packages:
   '@types/d3-timer@3.0.2':
     resolution: {integrity: sha512-Ps3T8E8dZDam6fUyNiMkekK3XUsaUEik+idO9/YjPtfj2qruF8tFBXS7XhtE4iIXBLxhmLjP3SXpLhVf21I9Lw==}
 
-  '@types/node@25.6.0':
-    resolution: {integrity: sha512-+qIYRKdNYJwY3vRCZMdJbPLJAtGjQBudzZzdzwQYkEPQd+PJGixUL5QfvCLDaULoLv+RhT3LDkwEfKaAkgSmNQ==}
+  '@types/node@25.9.4':
+    resolution: {integrity: sha512-dszCsrKb5U7ZsVZBWiHFklTloVl0mSEnWH/iZXfZUlI4rzCUnsvGmgqfuVRHL54ugE7/wRuxEIXRa2iMZ+BG6g==}
+
+  '@types/node@25.9.5':
+    resolution: {integrity: sha512-OScDchr2fwuUmWdf4kZ9h7PcJiYDVInhJizG/biAq3cAvqwYktuy/TYGGdZNMtNTFUP7rnb0NU4TUdm82kt4Rg==}
 
   '@types/react-dom@19.2.3':
     resolution: {integrity: sha512-jp2L/eY6fn+KgVVQAOqYItbF0VY/YApe5Mz2F0aykSO8gx31bYCZyvSeYxCHKvzHG5eZjc+zyaS5BrBWya2+kQ==}
@@ -1754,8 +1743,8 @@ packages:
     engines: {node: '>=6.0.0'}
     hasBin: true
 
-  better-call@1.3.5:
-    resolution: {integrity: sha512-kOFJkBP7utAQLEYrobZm3vkTH8mXq5GNgvjc5/XEST1ilVHaxXUXfeDeFlqoETMtyqS4+3/h4ONX2i++ebZrvA==}
+  better-call@1.3.7:
+    resolution: {integrity: sha512-Al51/hjp2SSp6CRTa3F2ptcx4yQVS1xWKoY6jcVXqNYOap6mHFP2jUBn5EwIL4iIed1/Sq4hlQ+Umm6EflZG+w==}
     peerDependencies:
       zod: ^4.0.0
     peerDependenciesMeta:
@@ -2184,15 +2173,15 @@ packages:
   json-schema-typed@8.0.2:
     resolution: {integrity: sha512-fQhoXdcvc3V28x7C7BMs4P5+kNlgUURe2jmUT1T//oBRMDrqy1QPelJimwZGo7Hg9VPV3EQV5Bnq4hbFy2vetA==}
 
-  kysely@0.29.2:
-    resolution: {integrity: sha512-s6WVJyEZrbm6jhBpiKHsGHyePMrVQKJ85wZCFCr9W4QHv6WTjWIrdvTmO9hDEA3bNK0xkrE2DqrHsXMLWuZpQg==}
-    engines: {node: '>=22.0.0'}
+  kysely@0.28.17:
+    resolution: {integrity: sha512-nbD8lB9EB3wNdMhOCdx5Li8DxnLbvKByylRLcJ1h+4SkrowVeECAyZlyiKMThF7xFdRz0jSQ2MoJr+wXux2y0Q==}
+    engines: {node: '>=20.0.0'}
 
   leac@0.6.0:
     resolution: {integrity: sha512-y+SqErxb8h7nE/fiEX07jsbuhrpO9lL8eca7/Y1nuWV2moNlXhyd59iDGcRf6moVyDMbmTNzL40SUyrFU/yDpg==}
 
-  libphonenumber-js@1.12.41:
-    resolution: {integrity: sha512-lsmMmGXBxXIK/VMLEj0kL6MtUs1kBGj1nTCzi6zgQoG1DEwqwt2DQyHxcLykceIxAnfE3hya7NuIh6PpC6S3fA==}
+  libphonenumber-js@1.13.8:
+    resolution: {integrity: sha512-80xal1m93rADejw2pMp2MSzFhHCPLEspjHxnH2UtqI+DgAmElsbmLMiqk9niwH9NWAfjsRtaJI+qBrOEmRx9nQ==}
 
   libsql@0.3.19:
     resolution: {integrity: sha512-Aj5cQ5uk/6fHdmeW0TiXK42FqUlwx7ytmMLPSaUQPin5HKKKuUPD62MAbN4OEweGBBI7q1BekoEN4gPUEL6MZA==}
@@ -2292,10 +2281,6 @@ packages:
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
 
-  mailchecker@6.0.20:
-    resolution: {integrity: sha512-mZ3kmtfXzGj06prtNm6d8an7D++Kf1G4jEkPZ1QQyhknYNLkmGoMtfaNPNHJU6E8J+Bm3AcZlIIfq5D6L4MS2g==}
-    engines: {node: '>=0.10'}
-
   marked@15.0.12:
     resolution: {integrity: sha512-8dD6FusOQSrpv9Z1rdNMdlSgQOIP880DHqnohobOmYLElGEqAL/JvxvuxZO16r4HtjTlfPRDC1hbvxC9dPN2nA==}
     engines: {node: '>= 18'}
@@ -2354,10 +2339,6 @@ packages:
     resolution: {integrity: sha512-ZB9RH/39qpq5Vu6Y+NmUaFhQR6pp+M2Xt76XBnEwDaGcVAqhlvxrl3B2bKS5D3NH3QR76v3aSrKaF/Kiy7lEtQ==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
-
-  nanostores@1.3.0:
-    resolution: {integrity: sha512-XPUa/jz+P1oJvN9VBxw4L9MtdFfaH3DAryqPssqhb2kXjmb9npz0dly6rCsgFWOPr4Yg9mTfM3MDZgZZ+7A3lA==}
-    engines: {node: ^20.0.0 || >=22.0.0}
 
   negotiator@1.0.0:
     resolution: {integrity: sha512-8Ofs/AUQh8MaEcrlq5xOX0CQ9ypTF5dl78mjlMNfOK08fzpgTHQRQPBxcPlEtIw0yRpws+Zo/3r+5WRby7u3Gg==}
@@ -2730,6 +2711,11 @@ packages:
     resolution: {integrity: sha512-OZs6gsjF4vMp32qrCbiVSkrFmXtG/AZhY3t0iAMrMBiAZyV9oALtXO8hsrHbMXF9x6L3grlFuwW2oAz7cav+Gw==}
     engines: {node: '>= 0.6'}
 
+  typescript@5.9.3:
+    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
   ua-is-frozen@0.1.2:
     resolution: {integrity: sha512-RwKDW2p3iyWn4UbaxpP2+VxwqXh0jpvdxsYpZ5j/MLLiQOfbsV5shpgQiw93+KMYQPcteeMQ289MaAFzs3G9pw==}
 
@@ -2737,8 +2723,8 @@ packages:
     resolution: {integrity: sha512-OsqGhxyo/wGdLSXMSJxuMGN6H4gDnKz6Fb3IBm4bxZFMnyy0sdf6MN96Ie8tC6z/btdO+Bsy8guxlvLdwT076w==}
     hasBin: true
 
-  undici-types@7.19.2:
-    resolution: {integrity: sha512-qYVnV5OEm2AW8cJMCpdV20CDyaN3g0AjDlOGf1OW4iaDEx8MwdtChUp4zu4H0VP3nDRF/8RKWH+IPp9uW0YGZg==}
+  undici-types@7.24.6:
+    resolution: {integrity: sha512-WRNW+sJgj5OBN4/0JpHFqtqzhpbnV0GuB+OozA9gCL7a993SmU+1JBZCzLNxYsbMfIeDL+lTsphD5jN5N+n0zg==}
 
   unpipe@1.0.0:
     resolution: {integrity: sha512-pjy2bYhSsufwWlKwPc+l3cN7+wuJlK6uz0YdJEOlQDbl6jo/YlPi4mb8agUkVC8BF7V8NuzeyPNqRksA3hztKQ==}
@@ -2825,48 +2811,26 @@ snapshots:
 
   '@alloc/quick-lru@5.2.0': {}
 
-  '@better-auth/core@1.6.6(@better-auth/utils@0.4.0)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.3.6))(jose@6.2.2)(kysely@0.29.2)(nanostores@1.3.0)':
+  '@better-auth/infra@0.3.6(@better-auth/core@..+packages+core)(better-auth@..+packages+better-auth)(zod@4.3.6)':
     dependencies:
-      '@better-auth/utils': 0.4.0
-      '@better-fetch/fetch': 1.1.21
-      '@opentelemetry/semantic-conventions': 1.40.0
-      '@standard-schema/spec': 1.1.0
-      better-call: 1.3.5(zod@4.3.6)
-      jose: 6.2.2
-      kysely: 0.29.2
-      nanostores: 1.3.0
-      zod: 4.3.6
-
-  '@better-auth/dash@0.1.6(better-auth@..+packages+better-auth)(zod@4.3.6)':
-    dependencies:
-      '@better-auth/utils': 0.3.1
-      '@better-fetch/fetch': 1.1.21
+      '@better-auth/core': link:../../packages/core
+      '@better-auth/utils': 0.4.2
+      '@better-fetch/fetch': 1.3.1
       better-auth: link:../../packages/better-auth
-      better-call: 1.3.5(zod@4.3.6)
+      better-call: 1.3.7(zod@4.3.6)
       jose: 6.2.2
-      libphonenumber-js: 1.12.41
-      mailchecker: 6.0.20
-    transitivePeerDependencies:
-      - zod
-
-  '@better-auth/infra@0.2.5(@better-auth/core@1.6.6(@better-auth/utils@0.4.0)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.3.6))(jose@6.2.2)(kysely@0.29.2)(nanostores@1.3.0))(@better-auth/sso@..+packages+sso)(better-auth@..+packages+better-auth)(zod@4.3.6)':
-    dependencies:
-      '@better-auth/core': 1.6.6(@better-auth/utils@0.4.0)(@better-fetch/fetch@1.1.21)(better-call@1.3.5(zod@4.3.6))(jose@6.2.2)(kysely@0.29.2)(nanostores@1.3.0)
-      '@better-auth/sso': link:../../packages/sso
-      '@better-fetch/fetch': 1.1.21
-      better-auth: link:../../packages/better-auth
-      better-call: 1.3.5(zod@4.3.6)
-      jose: 6.2.2
-      libphonenumber-js: 1.12.41
+      libphonenumber-js: 1.13.8
       zod: 4.3.6
-
-  '@better-auth/utils@0.3.1': {}
 
   '@better-auth/utils@0.4.0':
     dependencies:
       '@noble/hashes': 2.2.0
 
-  '@better-fetch/fetch@1.1.21': {}
+  '@better-auth/utils@0.4.2':
+    dependencies:
+      '@noble/hashes': 2.2.0
+
+  '@better-fetch/fetch@1.3.1': {}
 
   '@date-fns/tz@1.4.1': {}
 
@@ -3058,10 +3022,10 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@libsql/kysely-libsql@0.4.1(kysely@0.29.2)':
+  '@libsql/kysely-libsql@0.4.1(kysely@0.28.17)':
     dependencies:
       '@libsql/client': 0.8.1
-      kysely: 0.29.2
+      kysely: 0.28.17
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -3081,7 +3045,7 @@ snapshots:
   '@libsql/win32-x64-msvc@0.3.19':
     optional: true
 
-  '@modelcontextprotocol/sdk@1.29.0(zod@4.3.6)':
+  '@modelcontextprotocol/sdk@1.26.0(zod@4.3.6)':
     dependencies:
       '@hono/node-server': 1.19.14(hono@4.12.25)
       ajv: 8.18.0
@@ -3139,8 +3103,6 @@ snapshots:
       number-flow: 0.6.0
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)
-
-  '@opentelemetry/semantic-conventions@1.40.0': {}
 
   '@radix-ui/number@1.1.1': {}
 
@@ -4130,9 +4092,13 @@ snapshots:
 
   '@types/d3-timer@3.0.2': {}
 
-  '@types/node@25.6.0':
+  '@types/node@25.9.4':
     dependencies:
-      undici-types: 7.19.2
+      undici-types: 7.24.6
+
+  '@types/node@25.9.5':
+    dependencies:
+      undici-types: 7.24.6
 
   '@types/react-dom@19.2.3(@types/react@19.2.14)':
     dependencies:
@@ -4148,7 +4114,7 @@ snapshots:
 
   '@types/ws@8.18.1':
     dependencies:
-      '@types/node': 25.6.0
+      '@types/node': 25.9.5
 
   accepts@2.0.0:
     dependencies:
@@ -4174,10 +4140,10 @@ snapshots:
 
   baseline-browser-mapping@2.10.20: {}
 
-  better-call@1.3.5(zod@4.3.6):
+  better-call@1.3.7(zod@4.3.6):
     dependencies:
       '@better-auth/utils': 0.4.0
-      '@better-fetch/fetch': 1.1.21
+      '@better-fetch/fetch': 1.3.1
       rou3: 0.7.12
       set-cookie-parser: 3.1.0
     optionalDependencies:
@@ -4580,11 +4546,11 @@ snapshots:
 
   json-schema-typed@8.0.2: {}
 
-  kysely@0.29.2: {}
+  kysely@0.28.17: {}
 
   leac@0.6.0: {}
 
-  libphonenumber-js@1.12.41: {}
+  libphonenumber-js@1.13.8: {}
 
   libsql@0.3.19:
     dependencies:
@@ -4664,15 +4630,13 @@ snapshots:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  mailchecker@6.0.20: {}
-
   marked@15.0.12: {}
 
   math-intrinsics@1.1.0: {}
 
-  mcp-handler@1.1.0(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(next@16.2.6(react-dom@19.2.5(react@19.2.5))(react@19.2.5)):
+  mcp-handler@1.1.0(@modelcontextprotocol/sdk@1.26.0(zod@4.3.6))(next@16.2.6(react-dom@19.2.5(react@19.2.5))(react@19.2.5)):
     dependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.3.6)
+      '@modelcontextprotocol/sdk': 1.26.0(zod@4.3.6)
       chalk: 5.6.2
       commander: 11.1.0
       redis: 4.7.1
@@ -4697,9 +4661,9 @@ snapshots:
 
   ms@2.1.3: {}
 
-  mysql2@3.22.2(@types/node@25.6.0):
+  mysql2@3.22.2(@types/node@25.9.4):
     dependencies:
-      '@types/node': 25.6.0
+      '@types/node': 25.9.4
       aws-ssl-profiles: 1.1.2
       denque: 2.1.0
       generate-function: 2.3.1
@@ -4714,8 +4678,6 @@ snapshots:
       lru.min: 1.1.4
 
   nanoid@3.3.12: {}
-
-  nanostores@1.3.0: {}
 
   negotiator@1.0.0: {}
 
@@ -5077,9 +5039,9 @@ snapshots:
 
   statuses@2.0.2: {}
 
-  stripe@22.0.1(@types/node@25.6.0):
+  stripe@22.0.1(@types/node@25.9.4):
     optionalDependencies:
-      '@types/node': 25.6.0
+      '@types/node': 25.9.4
 
   styled-jsx@5.1.6(react@19.2.5):
     dependencies:
@@ -5111,6 +5073,8 @@ snapshots:
       media-typer: 1.1.0
       mime-types: 3.0.2
 
+  typescript@5.9.3: {}
+
   ua-is-frozen@0.1.2: {}
 
   ua-parser-js@2.0.9:
@@ -5119,7 +5083,7 @@ snapshots:
       is-standalone-pwa: 0.1.1
       ua-is-frozen: 0.1.2
 
-  undici-types@7.19.2: {}
+  undici-types@7.24.6: {}
 
   unpipe@1.0.0: {}
 

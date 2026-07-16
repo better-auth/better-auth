@@ -8,15 +8,18 @@ import type {
 import { toNodeHandler } from "../integrations/node";
 import { getTestInstance } from "./test-instance";
 
-type NodeRequestHandler = (
+/** A Node request handler that can be installed on an HTTP test listener. */
+export type HttpTestRequestHandler = (
 	req: IncomingMessage,
 	res: ServerResponse,
 ) => unknown | Promise<unknown>;
 
-type TestHttpServer = {
+/** A bound HTTP test listener whose request handler can be installed later. */
+export type HttpTestServer = {
 	url: string;
 	address: AddressInfo;
 	server: ReturnType<typeof createServer>;
+	setRequestHandler: (handler: HttpTestRequestHandler) => void;
 	close: () => Promise<void>;
 };
 
@@ -38,7 +41,7 @@ export type HttpTestInstanceConfig<C extends BetterAuthClientOptions> = Omit<
 	 */
 	handler?: (
 		auth: Awaited<ReturnType<typeof getTestInstance>>["auth"],
-	) => NodeRequestHandler;
+	) => HttpTestRequestHandler;
 };
 
 const closeHttpServer = (server: ReturnType<typeof createServer>) =>
@@ -65,24 +68,12 @@ const endUnhandledErrorResponse = (res: ServerResponse, error: unknown) => {
 };
 
 /**
- * Like `getTestInstance`, but bound to an actual HTTP listener on an
- * OS-assigned port (`port: 0`). The discovered URL is fed back into the auth
- * instance so its `baseURL` matches the listener.
- *
- * This removes the race window that the temp-server-then-rebind pattern
- * introduces. The listener is bound once, holds the port for its lifetime,
- * and only swaps in the real request handler after the auth instance is
- * fully constructed.
- *
- * The caller is responsible for calling `server.close()` in `afterAll`. Any
- * `baseURL` passed in `options` is ignored — the URL must match the
- * listener.
+ * Binds an HTTP listener to an OS-assigned port before the final request
+ * handler exists. This lets tests construct URL-sensitive applications only
+ * after the listener owns its port, then install the application handler.
  */
-export async function getHttpTestInstance<
-	O extends Partial<BetterAuthOptions>,
-	C extends BetterAuthClientOptions,
->(options?: O, config?: HttpTestInstanceConfig<C>) {
-	let activeHandler: NodeRequestHandler = (_req, res) => {
+export async function createHttpTestServer(): Promise<HttpTestServer> {
+	let activeHandler: HttpTestRequestHandler = (_req, res) => {
 		res.statusCode = 503;
 		res.end("Test HTTP listener has no handler bound yet");
 	};
@@ -113,13 +104,38 @@ export async function getHttpTestInstance<
 			"HTTP test listener did not report a bound port for the test listener",
 		);
 	}
-	const baseURL = `http://127.0.0.1:${address.port}`;
-	const server: TestHttpServer = {
-		url: baseURL,
+
+	return {
+		url: `http://127.0.0.1:${address.port}`,
 		address,
 		server: nodeServer,
+		setRequestHandler(handler) {
+			activeHandler = handler;
+		},
 		close: () => closeHttpServer(nodeServer),
 	};
+}
+
+/**
+ * Like `getTestInstance`, but bound to an actual HTTP listener on an
+ * OS-assigned port (`port: 0`). The discovered URL is fed back into the auth
+ * instance so its `baseURL` matches the listener.
+ *
+ * This removes the race window that the temp-server-then-rebind pattern
+ * introduces. The listener is bound once, holds the port for its lifetime,
+ * and only swaps in the real request handler after the auth instance is
+ * fully constructed.
+ *
+ * The caller is responsible for calling `server.close()` in `afterAll`. Any
+ * `baseURL` passed in `options` is ignored — the URL must match the
+ * listener.
+ */
+export async function getHttpTestInstance<
+	O extends Partial<BetterAuthOptions>,
+	C extends BetterAuthClientOptions,
+>(options?: O, config?: HttpTestInstanceConfig<C>) {
+	const server = await createHttpTestServer();
+	const baseURL = server.url;
 
 	try {
 		const instance = await getTestInstance(
@@ -131,10 +147,12 @@ export async function getHttpTestInstance<
 				testWith: config?.testWith,
 			},
 		);
-		activeHandler = config?.handler
-			? config.handler(instance.auth as never)
-			: toNodeHandler(instance.auth.handler);
-		return { ...instance, server, baseURL, port: address.port };
+		server.setRequestHandler(
+			config?.handler
+				? config.handler(instance.auth as never)
+				: toNodeHandler(instance.auth.handler),
+		);
+		return { ...instance, server, baseURL, port: server.address.port };
 	} catch (error) {
 		await server.close();
 		throw error;

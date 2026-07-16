@@ -107,7 +107,7 @@ overrides:
   uuid@<11.1.1: '>=11.1.1 <12'
   shell-quote@<=1.8.3: 1.8.4
 
-packageExtensionsChecksum: sha256-CGrIxUxwVsS4NUc5kVffV7wPJyz72rcofMmCW8mlNgo=
+packageExtensionsChecksum: sha256-cX1laHnAcMMdOXVmjthaDi7iH9suQXcE1QM/hILndGo=
 
 patchedDependencies:
   '@changesets/assemble-release-plan': 0599486e3d3f68b6f30d0f55a524ccac93e7fe24b273f0f5691b59685498605f
@@ -187,7 +187,7 @@ importers:
         version: 1.3.1
       '@hookform/resolvers':
         specifier: ^5.4.0
-        version: 5.4.0(react-hook-form@7.79.0(react@19.2.7))
+        version: 5.4.0(react-hook-form@7.79.0(react@19.2.7))(zod@4.3.6)
       '@openrouter/ai-sdk-provider':
         specifier: ^2.9.1
         version: 2.9.1(ai@6.0.208(zod@4.3.6))(zod@4.3.6)
@@ -532,6 +532,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../../../../packages/core
+      '@better-auth/scim':
+        specifier: workspace:*
+        version: link:../../../../packages/scim
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
@@ -547,6 +550,9 @@ importers:
       '@better-auth/drizzle-adapter':
         specifier: workspace:*
         version: link:../../../../packages/drizzle-adapter
+      '@better-auth/scim':
+        specifier: workspace:*
+        version: link:../../../../packages/scim
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
@@ -580,6 +586,9 @@ importers:
       '@better-auth/kysely-adapter':
         specifier: workspace:*
         version: link:../../../../packages/kysely-adapter
+      '@better-auth/scim':
+        specifier: workspace:*
+        version: link:../../../../packages/scim
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
@@ -628,6 +637,9 @@ importers:
       '@better-auth/prisma-adapter':
         specifier: workspace:*
         version: link:../../../../packages/prisma-adapter
+      '@better-auth/scim':
+        specifier: workspace:*
+        version: link:../../../../packages/scim
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
@@ -655,13 +667,40 @@ importers:
 
   e2e/integration:
     dependencies:
+      '@better-auth/cimd':
+        specifier: workspace:*
+        version: link:../../packages/cimd
+      '@better-auth/electron':
+        specifier: workspace:*
+        version: link:../../packages/electron
+      '@better-auth/kysely-adapter':
+        specifier: workspace:*
+        version: link:../../packages/kysely-adapter
+      '@better-auth/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
       '@better-auth/oauth-provider':
         specifier: workspace:*
         version: link:../../packages/oauth-provider
+      '@better-auth/passkey':
+        specifier: workspace:*
+        version: link:../../packages/passkey
+      '@better-auth/scim':
+        specifier: workspace:*
+        version: link:../../packages/scim
+      '@better-auth/sso':
+        specifier: workspace:*
+        version: link:../../packages/sso
+      '@better-auth/stripe':
+        specifier: workspace:*
+        version: link:../../packages/stripe
       better-auth:
         specifier: workspace:*
         version: link:../../packages/better-auth
     devDependencies:
+      '@better-auth-test/test-utils':
+        specifier: workspace:*
+        version: link:test-utils
       '@playwright/test':
         specifier: ~1.58.2
         version: 1.58.2
@@ -1522,6 +1561,9 @@ importers:
       '@better-auth/utils':
         specifier: 'catalog:'
         version: 0.4.2
+      '@noble/hashes':
+        specifier: ^2.2.0
+        version: 2.2.0
       better-auth:
         specifier: workspace:^
         version: link:../better-auth
@@ -1535,9 +1577,15 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
-      '@better-auth/sso':
+      '@better-auth/kysely-adapter':
         specifier: workspace:*
-        version: link:../sso
+        version: link:../kysely-adapter
+      '@better-auth/test-utils':
+        specifier: workspace:*
+        version: link:../test-utils
+      kysely:
+        specifier: 0.28.17
+        version: 0.28.17
       tsdown:
         specifier: 'catalog:'
         version: 0.21.1(@arethetypeswrong/core@0.18.3)(oxc-resolver@11.21.3)(publint@0.3.21)(typescript@5.9.3)
@@ -2863,11 +2911,11 @@ packages:
 
   '@esbuild-kit/core-utils@3.3.2':
     resolution: {integrity: sha512-sPRAnw9CdSsRmEtnsl2WXWdyquogVpB3yZ3dgwJfe8zrOzTsV7cJvmwrKVa+0ma5BoiGJ+BoqkMvawbayKUsqQ==}
-    deprecated: 'Merged into tsx: https://tsx.is'
+    deprecated: 'Merged into tsx: https://tsx.hirok.io'
 
   '@esbuild-kit/esm-loader@2.6.5':
     resolution: {integrity: sha512-FxEMIkJKnodyA1OaCUoEvbYRkoZlLZ4d/eXFu9Fh8CbBBgP5EmZxrfTRyN0qpXZ4vOvqnE5YdRdcrmUUXuU+dA==}
-    deprecated: 'Merged into tsx: https://tsx.is'
+    deprecated: 'Merged into tsx: https://tsx.hirok.io'
 
   '@esbuild/aix-ppc64@0.28.1':
     resolution: {integrity: sha512-Svl7tq8k/08+p6CXPpRjQ1fKX+1odH/BQbb48fV6fj3CWHhsoIOoY87w1oHXm0qEpkIK3ZfVgp0hed3XBXzXMQ==}
@@ -3203,6 +3251,10 @@ packages:
     resolution: {integrity: sha512-EIsqr/t/qbinPIhGjMdtvutIN1Kk4uwbROE9/UQ93CAVGR7GkA7Y92+fX80OzXi/OB67jVFYwKGO1WzkxmkFZw==}
     peerDependencies:
       react-hook-form: ^7.55.0
+      zod: 4.3.6
+    peerDependenciesMeta:
+      zod:
+        optional: true
 
   '@iconify/types@2.0.0':
     resolution: {integrity: sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg==}
@@ -6760,6 +6812,7 @@ packages:
 
   '@ungap/structured-clone@1.3.0':
     resolution: {integrity: sha512-WmoN8qaIAo7WTYWbAZuG8PYEhn5fkz7dZrqTBZ7dtt//lL2Gwms1IcnQ5yHqjDfX8Ft5j4YzDM23f87zBfDe9g==}
+    deprecated: Potential CWE-502 - Update to 1.3.1 or higher
 
   '@upsetjs/venn.js@2.0.0':
     resolution: {integrity: sha512-WbBhLrooyePuQ1VZxrJjtLvTc4NVfpOyKx0sKqioq9bX1C1m7Jgykkn8gLrtwumBioXIqam8DLxp88Adbue6Hw==}
@@ -15910,10 +15963,12 @@ snapshots:
     dependencies:
       hono: 4.12.25
 
-  '@hookform/resolvers@5.4.0(react-hook-form@7.79.0(react@19.2.7))':
+  '@hookform/resolvers@5.4.0(react-hook-form@7.79.0(react@19.2.7))(zod@4.3.6)':
     dependencies:
       '@standard-schema/utils': 0.3.0
       react-hook-form: 7.79.0(react@19.2.7)
+    optionalDependencies:
+      zod: 4.3.6
 
   '@iconify/types@2.0.0': {}
 

@@ -1553,30 +1553,6 @@ export const tempPluginsConfig = {
 			],
 		},
 	},
-	scim: {
-		displayName: "SCIM",
-		dependencies: ["@better-auth/scim"],
-		auth: {
-			function: "scim",
-			imports: [
-				{
-					path: "@better-auth/scim",
-					imports: [createImport({ name: "scim" })],
-					isNamedImport: false,
-				},
-			],
-		},
-		authClient: {
-			function: "scimClient",
-			imports: [
-				{
-					path: "@better-auth/scim/client",
-					imports: [createImport({ name: "scimClient" })],
-					isNamedImport: false,
-				},
-			],
-		},
-	},
 	sso: {
 		displayName: "SSO",
 		dependencies: ["@better-auth/sso"],

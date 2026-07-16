@@ -1,0 +1,380 @@
+---
+title: SCIM reference
+description: SCIM options, endpoints, resource behavior, and database schema.
+---
+
+This reference describes the SCIM operations and configuration supported by `@better-auth/scim`.
+
+## Plugin options
+
+| Option           | Type                               | Description                                                          |
+| ---------------- | ---------------------------------- | -------------------------------------------------------------------- |
+| `connections`    | `readonly SCIMConnectionOptions[]` | Required. Configures one or more provisioning connections.           |
+| `authentication` | `SCIMAuthenticationOptions`        | Optional. Verifies externally issued OAuth bearer access tokens.     |
+| `identity`       | `SCIMIdentity`                     | Optional. Links existing users and applies global lifecycle state.   |
+| `projection`     | `SCIMProjection`                   | Optional. Maps Groups to roles and applies application access state. |
+
+### Connection options
+
+| Option                 | Type                                     | Description                                                                                                                                                                |
+| ---------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                   | `string`                                 | Required connection identifier. It must be trimmed, unique, and no longer than 255 characters.                                                                             |
+| `credentials`          | `readonly SCIMBearerCredentialOptions[]` | Required list of static bearer credentials. The list may be empty when `authentication.verifyBearerToken` is configured.                                                   |
+| `provisioningDomainId` | `string`                                 | Optional application boundary. It must be trimmed, nonempty, and no longer than 255 characters. It defaults to the connection ID and may be shared by several connections. |
+
+A connection owns its Users, Groups, and memberships. Changing `provisioningDomainId` after the connection first authenticates returns `409 Conflict`.
+
+### Bearer credential options
+
+| Option      | Type                   | Description                                                                                                  |
+| ----------- | ---------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `type`      | `"bearer"`             | Required credential type.                                                                                    |
+| `id`        | `string`               | Required stable identifier included in the authenticated principal. It must be unique within the connection. |
+| `token`     | `string`               | Required opaque token. It cannot contain whitespace and must be unique across all connections.               |
+| `scopes`    | `readonly SCIMScope[]` | Optional operation scopes. Static credentials receive every scope when this option is omitted.               |
+| `expiresAt` | `Date`                 | Optional valid `Date` used as a hard expiry during credential rotation.                                      |
+
+Store tokens in a secret manager, use a different value for each connection, and require HTTPS in production.
+
+### OAuth bearer verification
+
+Use `authentication.verifyBearerToken` when an authorization server issues access tokens through OAuth client credentials or another OAuth grant. The verifier validates the token and returns the connection, credential, and operation scopes represented by its claims.
+
+```ts title="auth.ts"
+scim({
+  connections: [{ id: "workforce-acme", credentials: [] }],
+  authentication: {
+    async verifyBearerToken({ token }) {
+      const claims = await verifyDirectoryAccessToken(token);
+      if (!claims) return null;
+
+      return {
+        connectionId: "workforce-acme",
+        credentialId: claims.clientId,
+        scopes: claims.scopes,
+        expiresAt: claims.expiresAt,
+      };
+    },
+  },
+});
+```
+
+The plugin does not issue access tokens or run an OAuth token endpoint. The application-owned verifier must validate the signature or introspection response, issuer, audience, expiry, and client identity before returning a principal.
+
+| Scope               | Operations                                |
+| ------------------- | ----------------------------------------- |
+| `scim.users.read`   | List or retrieve Users.                   |
+| `scim.users.write`  | Create, replace, patch, or delete Users.  |
+| `scim.groups.read`  | List or retrieve Groups.                  |
+| `scim.groups.write` | Create, replace, patch, or delete Groups. |
+
+An authenticated token without the required scope receives `403 Forbidden`. An invalid or expired token receives `401 Unauthorized`.
+
+## HTTP behavior
+
+The SCIM base path is `/scim/v2` under your Better Auth base URL. User and Group endpoints require `Authorization: Bearer <token>`. Discovery endpoints are public.
+
+Requests with a body may use `application/scim+json` or `application/json`. Responses use `application/scim+json`. Authentication, validation, uniqueness, missing-resource, and media-type failures use the SCIM Error schema.
+
+`POST` and `PUT` bodies must contain exactly one matching core schema URN:
+
+* User: `urn:ietf:params:scim:schemas:core:2.0:User`
+* Group: `urn:ietf:params:scim:schemas:core:2.0:Group`
+
+PATCH bodies must include `urn:ietf:params:scim:api:messages:2.0:PatchOp`. User and Group create or replace requests with unsupported or duplicate schema URNs return `400 Bad Request` with `scimType: "invalidValue"`.
+
+## Users
+
+| Method   | Path                     | Result                                                                                           |
+| -------- | ------------------------ | ------------------------------------------------------------------------------------------------ |
+| `POST`   | `/scim/v2/Users`         | Creates a SCIM User and creates or explicitly links a Better Auth User. Returns `201`.           |
+| `GET`    | `/scim/v2/Users`         | Returns the connection's Users in a SCIM `ListResponse`.                                         |
+| `GET`    | `/scim/v2/Users/:userId` | Returns one User owned by the connection.                                                        |
+| `PUT`    | `/scim/v2/Users/:userId` | Replaces the writable profile while preserving the resource ID. Returns `200`.                   |
+| `PATCH`  | `/scim/v2/Users/:userId` | Applies ordered, atomic changes. Returns `204`, or `200` when response attributes are requested. |
+| `DELETE` | `/scim/v2/Users/:userId` | Deletes the SCIM resource while preserving the Better Auth User. Returns `204`.                  |
+
+Deleting a User also removes its direct Group memberships and projected grants, updates the affected Groups, and reconciles lifecycle and access state. When `externalId` is present, the plugin preserves the link needed to attach a later reprovisioned resource to the same Better Auth User.
+
+### Supported User attributes
+
+| Attribute         | Behavior                                                                                    |
+| ----------------- | ------------------------------------------------------------------------------------------- |
+| `userName`        | Required and unique case-insensitively within the connection. Supplied casing is preserved. |
+| `externalId`      | Optional and unique exactly as supplied within the connection.                              |
+| `active`          | Optional lifecycle state. Defaults to `true`.                                               |
+| `displayName`     | Optional display name. The plugin derives a value when omitted.                             |
+| `name.formatted`  | Optional formatted name. The plugin derives a value when omitted.                           |
+| `name.givenName`  | Optional given name.                                                                        |
+| `name.familyName` | Optional family name.                                                                       |
+| `emails`          | Up to 20 typed email values, each no longer than 254 characters.                            |
+
+Email values and types are normalized to lowercase. Each type and value pair must be unique case-insensitively. At most one email may set `primary: true`.
+
+When no email is marked primary, the first work email wins, followed by the first email. If `emails` is missing or empty, `userName` must be a valid email and becomes the primary email.
+
+The formatted-name fallback order is `name.formatted`, `displayName`, the joined given and family names, then the primary email. `displayName` falls back to the resulting formatted name.
+
+A profile-managing source writes the primary email and display name to the Better Auth User. The email must be globally unique, or the request returns `409 Conflict`. Changing the email clears `emailVerified` because provisioning does not verify mailbox ownership.
+
+```json title="Create User"
+{
+  "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+  "externalId": "directory-user-42",
+  "userName": "Ada.Login@Example.com",
+  "displayName": "Countess of Lovelace",
+  "name": {
+    "formatted": "Augusta Ada King, Countess of Lovelace",
+    "givenName": "Augusta Ada",
+    "familyName": "King"
+  },
+  "emails": [
+    {
+      "value": "ada.work@example.com",
+      "type": "work",
+      "primary": true
+    }
+  ],
+  "active": true
+}
+```
+
+## Groups
+
+| Method   | Path                       | Result                                                                                                                    |
+| -------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `POST`   | `/scim/v2/Groups`          | Creates a Group and its direct memberships. Returns `201`.                                                                |
+| `GET`    | `/scim/v2/Groups`          | Returns the connection's Groups in a SCIM `ListResponse`.                                                                 |
+| `GET`    | `/scim/v2/Groups/:groupId` | Returns one Group owned by the connection.                                                                                |
+| `PUT`    | `/scim/v2/Groups/:groupId` | Replaces the Group attributes and complete membership set. Returns `200`.                                                 |
+| `PATCH`  | `/scim/v2/Groups/:groupId` | Applies ordered, atomic attribute and membership changes. Returns `204`, or `200` when response attributes are requested. |
+| `DELETE` | `/scim/v2/Groups/:groupId` | Deletes the Group, memberships, and projected grants. Returns `204`.                                                      |
+
+`displayName` is required and unique case-insensitively within the connection. `externalId` is optional and unique exactly as supplied.
+
+Each `members[].value` must contain a SCIM User ID from the same connection. Members may be direct Users only. When `type` is present, it must equal `User` case-insensitively. Duplicate references are collapsed, and a Group may contain up to 1,000 unique members.
+
+## Discovery
+
+| Method | Path                                     | Result                                                              |
+| ------ | ---------------------------------------- | ------------------------------------------------------------------- |
+| `GET`  | `/scim/v2/ServiceProviderConfig`         | Reports authentication, filter, PATCH, and pagination capabilities. |
+| `GET`  | `/scim/v2/Schemas`                       | Lists the supported User and Group schemas.                         |
+| `GET`  | `/scim/v2/Schemas/:schemaId`             | Returns one supported schema.                                       |
+| `GET`  | `/scim/v2/ResourceTypes`                 | Lists the User and Group resource types.                            |
+| `GET`  | `/scim/v2/ResourceTypes/:resourceTypeId` | Returns one resource type.                                          |
+
+## Filters and pagination
+
+Collection filters accept from one to 10 equality expressions joined by `and`. Each expression uses `attribute eq "value"`. Attribute names and operators are case-insensitive, and attributes may include the core schema prefix.
+
+| Resource | Supported equality filters                                                     |
+| -------- | ------------------------------------------------------------------------------ |
+| User     | `id`, `userName`, `externalId`, `emails.value`, `emails[type eq "work"].value` |
+| Group    | `id`, `displayName`, `externalId`                                              |
+
+`userName`, email values, and Group `displayName` use case-insensitive matching. `id` and `externalId` use exact matching.
+
+```http
+GET /api/auth/scim/v2/Users?filter=userName%20eq%20%22ada.login%40example.com%22
+Authorization: Bearer <token>
+```
+
+Logical `or` and `not`, presence filters, comparison operators, and parentheses are not supported. Unsupported syntax returns `invalidFilter`.
+
+Pagination uses a one-based `startIndex` and a nonnegative `count`. Both collections default to `startIndex=1` and `count=100`. The server caps `count` at 100.
+
+## Response attributes
+
+Use `attributes` or `excludedAttributes` to select response fields. Each parameter accepts a comma-separated list of case-insensitive paths, including `name.givenName`, `emails.value`, and `members.value`. The parameters cannot be combined, and `schemas` and `id` always remain in a projected resource.
+
+```http
+GET /api/auth/scim/v2/Groups?startIndex=1&count=25&excludedAttributes=members
+Authorization: Bearer <token>
+```
+
+`POST` and `PUT` apply attribute selection to their resource response. PATCH returns `204 No Content` by default. When either response-attribute parameter is present, PATCH returns `200 OK` with the selected resource.
+
+## PATCH
+
+A PATCH body must contain at least one operation. Operations run in array order and accept case-insensitive `add`, `replace`, and `remove` values. An omitted `op` defaults to `replace`. The complete request is atomic.
+
+```json
+{
+  "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+  "Operations": [
+    {
+      "op": "replace",
+      "path": "active",
+      "value": false
+    }
+  ]
+}
+```
+
+### User PATCH paths
+
+| Path                           | Operations                 | Behavior                                                            |
+| ------------------------------ | -------------------------- | ------------------------------------------------------------------- |
+| `userName`                     | `add`, `replace`           | Requires a non-empty value.                                         |
+| `externalId`                   | `add`, `replace`, `remove` | `remove` clears the identifier.                                     |
+| `active`                       | `add`, `replace`, `remove` | Requires a boolean. `remove` resets it to `true`.                   |
+| `displayName`                  | `add`, `replace`, `remove` | `remove` applies the formatted-name fallback.                       |
+| `name`                         | `add`, `replace`, `remove` | Accepts the supported structured name fields.                       |
+| `name.formatted`               | `add`, `replace`, `remove` | `remove` derives a formatted name.                                  |
+| `name.givenName`               | `add`, `replace`, `remove` | `remove` clears the given name.                                     |
+| `name.familyName`              | `add`, `replace`, `remove` | `remove` clears the family name.                                    |
+| `emails`                       | `add`, `replace`           | `add` appends missing entries. `replace` supplies the complete set. |
+| `emails.value`                 | `add`, `replace`           | Replaces the value on every email entry.                            |
+| `emails[type eq "work"].value` | `add`, `replace`, `remove` | Adds, replaces, or removes the selected work email.                 |
+
+User paths may include the core User schema prefix. An `add` or `replace` operation may omit `path` and provide an object of writable attributes. `id`, `schemas`, and `meta` are read-only.
+
+### Group PATCH paths
+
+| Path                                 | Operations                 | Behavior                                                                          |
+| ------------------------------------ | -------------------------- | --------------------------------------------------------------------------------- |
+| `displayName`                        | `add`, `replace`           | Requires a non-empty, unique value.                                               |
+| `externalId`                         | `add`, `replace`, `remove` | `remove` clears the identifier.                                                   |
+| `members`                            | `add`                      | Adds the supplied User references.                                                |
+| `members`                            | `replace`                  | Replaces the complete membership set.                                             |
+| `members`                            | `remove`                   | Clears all members when no value is supplied, or removes the supplied references. |
+| `members[value eq "<scim-user-id>"]` | `remove`                   | Removes one User reference.                                                       |
+
+Group paths may include the core Group schema prefix. An `add` or `replace` operation may omit `path` and provide an object with `displayName`, `externalId`, or `members`.
+
+## Identity callbacks
+
+### `identity.resolveUser`
+
+```ts
+type SCIMIdentityResolution =
+  | { action: "create" }
+  | { action: "link"; userId: string; profile: "manage" | "preserve" };
+
+type resolveUser = (
+  input: {
+    connectionId: string;
+    provisioningDomainId: string;
+    resource: {
+      externalId?: string;
+      userName: string;
+      primaryEmail: string;
+      displayName: string;
+      name: SCIMCanonicalName;
+      emails: readonly SCIMCanonicalEmail[];
+      active: boolean;
+    };
+  },
+  context: {
+    database: Pick<DBAdapter, "count" | "findMany" | "findOne">;
+  },
+) => SCIMIdentityResolution | Promise<SCIMIdentityResolution>;
+```
+
+Use this callback to return an explicit create-or-link decision for an incoming User. A `link` result for a missing Better Auth User returns `409 Conflict`.
+
+### `identity.reconcileUser`
+
+```ts
+type reconcileUser = (
+  state: {
+    userId: string;
+    active: boolean;
+    profileSourceId?: string;
+    sources: readonly SCIMIdentitySource[];
+  },
+  context: { database: DBTransactionAdapter },
+) => void | Promise<void>;
+```
+
+Use this callback to store the global enabled or disabled state. The callback runs inside the SCIM transaction.
+
+## Projection callbacks
+
+### `projection.roles.map`
+
+Maps one Group source to zero or more application role identifiers. The input includes `connectionId`, `provisioningDomainId`, `scimUserId`, `userId`, and the canonical Group `source`.
+
+### `projection.roles.exists`
+
+Confirms that a mapped role exists in the target provisioning domain. A rejected role grants nothing.
+
+### `projection.reconcileUser`
+
+Receives the complete desired access state for one Better Auth User in one provisioning domain. The callback runs inside the SCIM transaction and must be idempotent.
+
+Each grant has a validated `role` and the canonical authorization `source` that produced it. A Group source has `type: "group"`, its immutable SCIM `id`, and its current `externalId` and `displayName` when available. Persistence keys and storage column names are not part of this callback contract.
+
+See [Groups and custom roles](/docs/plugins/scim/groups-and-roles) for a complete example.
+
+## Trusted server APIs
+
+These methods have no HTTP route and do not appear in OpenAPI output. Call them from trusted server code.
+
+### `reconcileSCIMProjection`
+
+```ts
+await auth.api.reconcileSCIMProjection({
+  body: { provisioningDomainId: "workspace-acme" },
+});
+```
+
+Replays every linked user in the provisioning domain through `projection.reconcileUser`.
+
+This method requires `projection.reconcileUser` to be configured. It returns `provisioningDomainId`, `reconciledUsers`, and `batches`.
+
+### `decommissionSCIMConnection`
+
+```ts
+const result = await auth.api.decommissionSCIMConnection({
+  body: { connectionId: "workforce-acme" },
+});
+```
+
+Rejects the connection's credentials and removes its contribution from lifecycle and access state. If the result is `reconciling`, wait for `retryAfter` and call the method again until it returns `complete`.
+
+The connection must have authenticated at least once so a binding exists. Remove a never-used connection from configuration directly. Decommissioning is irreversible, and `retryAfter` is a `Date` indicating the earliest retry time.
+
+## Unsupported features
+
+The plugin does not support the following SCIM features:
+
+* Enterprise User or custom schema extensions
+* `User.groups`, `roles`, or `entitlements`
+* Phone numbers, addresses, titles, locales, timezones, photos, or passwords
+* Nested Groups or non-User Group members
+* Bulk requests, POST-based search, `/Me`, ETags, cursors, or sorting
+* Operators other than equality and logical `and`
+* A built-in OAuth token endpoint, Basic authentication, or mutual TLS
+* Dynamic connection management, audit events, or webhooks
+
+The package is server-only and does not export a client plugin. SCIM provisioning does not configure user authentication.
+
+## Schema
+
+The plugin adds the following models. Use `auth generate` to create the exact schema for your database adapter.
+
+| Model                   | Purpose                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------- |
+| `scimConnectionBinding` | Stores the connection's provisioning domain and decommission status.            |
+| `scimUser`              | Stores canonical User attributes and the linked Better Auth User ID.            |
+| `scimGroup`             | Stores canonical Group attributes.                                              |
+| `scimGroupMember`       | Stores direct Group-to-User memberships.                                        |
+| `scimSubject`           | Coordinates linked SCIM sources and profile authority for one Better Auth User. |
+| `scimIdentityTombstone` | Preserves a stable `externalId` link after a SCIM User is deleted.              |
+| `scimProjectionGrant`   | Stores validated role grants and their Group sources.                           |
+
+Better Auth supplies the primary `id` field for each model. The SCIM models also reference the core `user` model where required.
+
+## Related
+
+<Cards>
+  <Card href="/docs/plugins/scim" title="SCIM setup">
+    Install the plugin, configure a directory, and provision users.
+  </Card>
+
+  <Card href="/docs/plugins/scim/groups-and-roles" title="Groups and custom roles">
+    Apply directory memberships to your application's access model.
+  </Card>
+</Cards>

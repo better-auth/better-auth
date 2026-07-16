@@ -120,6 +120,9 @@ jobs:
       - name: Install
         run: pnpm install
 
+      - name: Install Next.js demo
+        run: pnpm --dir demo/nextjs install --frozen-lockfile
+
       - name: Install Playwright Browsers
         uses: ./.github/actions/setup-playwright
 
@@ -133,6 +136,27 @@ jobs:
 
       - name: Integration
         run: pnpm e2e:integration --filter=./e2e/integration
+
+      - name: Build Next.js demo
+        working-directory: demo/nextjs
+        env:
+          BETTER_AUTH_SECRET: better-auth-scim-demo-ci-secret-at-least-thirty-two-characters
+          BETTER_AUTH_URL: http://127.0.0.1:3000
+          DEMO_SQLITE_PATH: ${{ runner.temp }}/better-auth-scim-demo-build.sqlite
+          SCIM_DEMO_ENABLED: "true"
+          SCIM_DEMO_TOKEN: better-auth-scim-demo-ci-token
+        run: pnpm build
+
+      - name: Upload integration browser artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: integration-playwright-artifacts
+          path: |
+            e2e/integration/playwright-report
+            e2e/integration/test-results
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Docker Compose Diagnostics
         if: failure() && hashFiles('docker-compose.yml') != ''

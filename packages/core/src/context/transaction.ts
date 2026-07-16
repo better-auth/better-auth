@@ -128,11 +128,11 @@ export const runWithTransaction = async <
 				hasError = true;
 				error = e;
 			}
-			for (const hook of pendingHooks) {
-				await hook();
-			}
 			if (hasError) {
 				throw error;
+			}
+			for (const hook of pendingHooks) {
+				await hook();
 			}
 			return result!;
 		})
@@ -150,20 +150,27 @@ export const runWithTransaction = async <
  */
 export const queueAfterTransactionHook = async (
 	hook: () => Promise<void>,
+	options?: {
+		/** Handles a queued hook failure after the surrounding work has committed. */
+		onError?: (error: unknown) => void | Promise<void>;
+	},
 ): Promise<void> => {
-	return ensureAsyncStorage()
-		.then((als) => {
-			const store = als.getStore();
-			if (store) {
-				// We're in a transaction context, queue the hook
-				store.pendingHooks.push(hook);
-			} else {
-				// Not in a transaction, execute immediately
-				return hook();
-			}
-		})
-		.catch(() => {
-			// No async storage available, execute immediately
-			return hook();
-		});
+	const executeHook = async () => {
+		try {
+			await hook();
+		} catch (error) {
+			if (!options?.onError) throw error;
+			await options.onError(error);
+		}
+	};
+	let storage: Awaited<ReturnType<typeof ensureAsyncStorage>>;
+	try {
+		storage = await ensureAsyncStorage();
+	} catch {
+		return executeHook();
+	}
+
+	const store = storage.getStore();
+	if (!store?.isTransactionActive) return executeHook();
+	store.pendingHooks.push(executeHook);
 };
