@@ -2571,3 +2571,98 @@ describe("email-otp send origin/CSRF protection", async () => {
 		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10412
+ */
+describe("email-otp rememberMe", async () => {
+	let otp = "";
+	const { client, testUser } = await getTestInstance(
+		{
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP({ otp: _otp }) {
+						otp = _otp;
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+
+	it("should set a persistent session cookie by default on email OTP sign-in", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "sign-in",
+		});
+
+		await client.signIn.emailOtp(
+			{
+				email: testUser.email,
+				otp,
+			},
+			{
+				onSuccess(ctx) {
+					const cookies = parseSetCookieHeader(
+						ctx.response.headers.get("set-cookie") || "",
+					);
+					const sessionToken = cookies.get("better-auth.session_token");
+					expect(sessionToken).toBeDefined();
+					expect(sessionToken?.["max-age"]).toBeDefined();
+					expect(cookies.get("better-auth.dont_remember")).toBeUndefined();
+				},
+			},
+		);
+	});
+
+	it("should clear max-age when email OTP sign-in uses rememberMe: false", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "sign-in",
+		});
+
+		await client.signIn.emailOtp(
+			{
+				email: testUser.email,
+				otp,
+				rememberMe: false,
+			},
+			{
+				onSuccess(ctx) {
+					const cookies = parseSetCookieHeader(
+						ctx.response.headers.get("set-cookie") || "",
+					);
+					const sessionToken = cookies.get("better-auth.session_token");
+					expect(sessionToken).toBeDefined();
+					expect(sessionToken?.["max-age"]).toBeUndefined();
+					expect(cookies.get("better-auth.dont_remember")).toBeDefined();
+				},
+			},
+		);
+	});
+
+	it("should clear max-age when email/password uses rememberMe: false (control)", async () => {
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+				rememberMe: false,
+			},
+			{
+				onSuccess(ctx) {
+					const cookies = parseSetCookieHeader(
+						ctx.response.headers.get("set-cookie") || "",
+					);
+					const sessionToken = cookies.get("better-auth.session_token");
+					expect(sessionToken).toBeDefined();
+					expect(sessionToken?.["max-age"]).toBeUndefined();
+					expect(cookies.get("better-auth.dont_remember")).toBeDefined();
+				},
+			},
+		);
+	});
+});
