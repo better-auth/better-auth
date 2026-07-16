@@ -52,7 +52,7 @@ const mysqlMap = {
 
 const sqliteMap = {
 	string: ["TEXT"],
-	number: ["INTEGER", "REAL"],
+	number: ["INTEGER", "REAL", "BIGINT"],
 	boolean: ["INTEGER", "BOOLEAN"], // 0 or 1
 	date: ["DATE", "INTEGER"],
 	json: ["TEXT"],
@@ -224,6 +224,9 @@ export async function getMigrations(config: BetterAuthOptions) {
 	}[] = [];
 
 	for (const [key, value] of Object.entries(betterAuthSchema)) {
+		if (value.disableMigrations) {
+			continue;
+		}
 		const table = tableMetadata.find((t) => t.name === key);
 		if (!table) {
 			const tIndex = toBeCreated.findIndex((t) => t.table === key);
@@ -537,14 +540,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 					return col;
 				});
 
-				if (field.index) {
+				if (field.index && !field.unique) {
 					const builder = db.schema
-						.createIndex(
-							`${table.table}_${fieldName}_${field.unique ? "uidx" : "idx"}`,
-						)
+						.createIndex(`${table.table}_${fieldName}_idx`)
 						.on(table.table)
 						.columns([fieldName]);
-					deferredIndexes.push(field.unique ? builder.unique() : builder);
+					deferredIndexes.push(builder);
 				}
 			}
 			migrations.push(dbT);

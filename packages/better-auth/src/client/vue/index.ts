@@ -1,7 +1,4 @@
-import type {
-	BetterAuthClientOptions,
-	BetterAuthClientPlugin,
-} from "@better-auth/core";
+import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
@@ -29,8 +26,10 @@ type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
 	plugins: Array<infer Plugin>;
 }
 	? UnionToIntersection<
-			Plugin extends BetterAuthClientPlugin
-				? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
+			Plugin extends {
+				getAtoms?: infer GetAtoms;
+			}
+				? GetAtoms extends (fetch: any) => infer Atoms
 					? Atoms extends Record<string, any>
 						? {
 								[key in keyof Atoms as IsSignal<key> extends true
@@ -47,9 +46,62 @@ type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
 		>
 	: {};
 
+type ClientConfig = ReturnType<typeof getClientConfig>;
+type ClientSession<Option extends BetterAuthClientOptions> =
+	InferClientAPI<Option> extends {
+		getSession: () => Promise<infer Res>;
+	}
+		? Res extends BetterFetchResponse<infer S>
+			? S
+			: Res
+		: never;
+
+type VueUseSession<Option extends BetterAuthClientOptions> = {
+	(): DeepReadonly<
+		Ref<{
+			data: ClientSession<Option>;
+			isPending: boolean;
+			isRefetching: boolean;
+			error: BetterFetchError | null;
+			refetch: (
+				queryParams?: { query?: SessionQueryParams } | undefined,
+			) => Promise<void>;
+		}>
+	>;
+	<F extends (...args: any) => any>(
+		useFetch: F,
+	): Promise<{
+		data: Ref<ClientSession<Option>>;
+		isPending: false;
+		error: Ref<{
+			message?: string | undefined;
+			status: number;
+			statusText: string;
+		}>;
+	}>;
+};
+
+/**
+ * Vue client returned by `createAuthClient`.
+ */
+export type VueAuthClient<Option extends BetterAuthClientOptions> =
+	UnionToIntersection<InferResolvedHooks<Option>> &
+		InferClientAPI<Option> &
+		InferActions<Option> & {
+			useSession: VueUseSession<Option>;
+			$Infer: {
+				Session: NonNullable<ClientSession<Option>>;
+			};
+			$fetch: ClientConfig["$fetch"];
+			$store: ClientConfig["$store"];
+			$ERROR_CODES: PrettifyDeep<
+				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
+			>;
+		};
+
 export function createAuthClient<Option extends BetterAuthClientOptions>(
 	options?: Option | undefined,
-) {
+): VueAuthClient<Option> {
 	const {
 		baseURL,
 		pluginPathMethods,
@@ -64,18 +116,9 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		resolvedHooks[getAtomKey(key)] = () => useStore(value);
 	}
 
-	type ClientAPI = InferClientAPI<Option>;
-	type Session = ClientAPI extends {
-		getSession: () => Promise<infer Res>;
-	}
-		? Res extends BetterFetchResponse<infer S>
-			? S
-			: Res
-		: never;
-
 	function useSession(): DeepReadonly<
 		Ref<{
-			data: Session;
+			data: ClientSession<Option>;
 			isPending: boolean;
 			isRefetching: boolean;
 			error: BetterFetchError | null;
@@ -87,7 +130,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	function useSession<F extends (...args: any) => any>(
 		useFetch: F,
 	): Promise<{
-		data: Ref<Session>;
+		data: Ref<ClientSession<Option>>;
 		isPending: false; //this is just to be consistent with the default hook
 		error: Ref<{
 			message?: string | undefined;
@@ -129,19 +172,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		atomListeners,
 	);
 
-	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
-		InferClientAPI<Option> &
-		InferActions<Option> & {
-			useSession: typeof useSession;
-			$Infer: {
-				Session: NonNullable<Session>;
-			};
-			$fetch: typeof $fetch;
-			$store: typeof $store;
-			$ERROR_CODES: PrettifyDeep<
-				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
-			>;
-		};
+	return proxy as VueAuthClient<Option>;
 }
 
 export type * from "@better-fetch/fetch";

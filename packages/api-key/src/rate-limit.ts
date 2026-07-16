@@ -2,96 +2,96 @@ import { API_KEY_ERROR_CODES as ERROR_CODES } from ".";
 import type { PredefinedApiKeyOptions } from "./routes";
 import type { ApiKey } from "./types";
 
-interface RateLimitResult {
-	success: boolean;
-	message: string | null;
-	tryAgainIn: number | null;
-	update: Partial<ApiKey> | null;
-}
+/**
+ * The atomic action the verify route must apply for the current request, derived
+ * from a single read of the API key. The route translates each variant into a
+ * guarded storage operation so concurrent verifications cannot exceed the limit.
+ */
+export type RateLimitDecision =
+	| {
+			/** Rate limiting does not apply; only stamp `lastRequest`. */
+			type: "skip";
+			lastRequest: Date | null;
+	  }
+	| {
+			/** First request in a fresh window: set `requestCount` to 1. */
+			type: "start";
+			now: Date;
+	  }
+	| {
+			/** Window elapsed: reset `requestCount` to 1, guarded on the window. */
+			type: "reset";
+			now: Date;
+			/** `lastRequest` must still predate this instant for the reset to apply. */
+			windowStart: Date;
+	  }
+	| {
+			/** Within the window and under the max: increment `requestCount` by 1. */
+			type: "increment";
+			now: Date;
+			max: number;
+			windowStart: Date;
+	  }
+	| {
+			/** Within the window and at the max: reject. */
+			type: "deny";
+			message: string;
+			tryAgainIn: number;
+	  };
 
 /**
- * Determines if a request is allowed based on rate limiting parameters.
- *
- * @returns An object indicating whether the request is allowed and, if not,
- *          a message and updated ApiKey data.
+ * Decides how the current request affects the per-key rate-limit counter, based
+ * on the read-in-memory ApiKey. The verify route applies the result atomically;
+ * this function performs no writes.
  */
-export function isRateLimited(
-	/**
-	 * The ApiKey object containing rate limiting information
-	 */
+export function evaluateRateLimit(
 	apiKey: ApiKey,
 	opts: PredefinedApiKeyOptions,
-): RateLimitResult {
+): RateLimitDecision {
 	const now = new Date();
 	const lastRequest = apiKey.lastRequest;
 	const rateLimitTimeWindow = apiKey.rateLimitTimeWindow;
 	const rateLimitMax = apiKey.rateLimitMax;
-	let requestCount = apiKey.requestCount;
 
-	if (opts.rateLimit.enabled === false)
-		return {
-			success: true,
-			message: null,
-			update: { lastRequest: now },
-			tryAgainIn: null,
-		};
+	if (opts.rateLimit.enabled === false) {
+		return { type: "skip", lastRequest: now };
+	}
 
-	if (apiKey.rateLimitEnabled === false)
-		return {
-			success: true,
-			message: null,
-			update: { lastRequest: now },
-			tryAgainIn: null,
-		};
+	if (apiKey.rateLimitEnabled === false) {
+		return { type: "skip", lastRequest: now };
+	}
 
 	if (rateLimitTimeWindow === null || rateLimitMax === null) {
-		// Rate limiting is disabled.
-		return {
-			success: true,
-			message: null,
-			update: null,
-			tryAgainIn: null,
-		};
+		// Rate limiting is disabled for this key.
+		return { type: "skip", lastRequest: null };
 	}
 
 	if (lastRequest === null) {
-		// No previous requests, so allow the first one.
-		return {
-			success: true,
-			message: null,
-			update: { lastRequest: now, requestCount: 1 },
-			tryAgainIn: null,
-		};
+		return { type: "start", now };
 	}
 
 	const timeSinceLastRequest = now.getTime() - new Date(lastRequest).getTime();
 
 	if (timeSinceLastRequest > rateLimitTimeWindow) {
-		// Time window has passed, reset the request count.
 		return {
-			success: true,
-			message: null,
-			update: { lastRequest: now, requestCount: 1 },
-			tryAgainIn: null,
+			type: "reset",
+			now,
+			windowStart: new Date(now.getTime() - rateLimitTimeWindow),
 		};
 	}
 
-	if (requestCount >= rateLimitMax) {
-		// Rate limit exceeded.
+	if (apiKey.requestCount >= rateLimitMax) {
 		return {
-			success: false,
+			type: "deny",
 			message: ERROR_CODES.RATE_LIMIT_EXCEEDED.message,
-			update: null,
 			tryAgainIn: Math.ceil(rateLimitTimeWindow - timeSinceLastRequest),
 		};
 	}
 
-	// Request is allowed.
-	requestCount++;
 	return {
-		success: true,
-		message: null,
-		tryAgainIn: null,
-		update: { lastRequest: now, requestCount: requestCount },
+		type: "increment",
+		now,
+		max: rateLimitMax,
+		windowStart: new Date(now.getTime() - rateLimitTimeWindow),
 	};
 }

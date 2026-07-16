@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { runWithTransaction } from "../../context/transaction";
 import type { BetterAuthOptions } from "../../types";
 import { createAdapterFactory } from "./factory";
-import type { CleanedWhere, CustomAdapter } from "./index";
+import type {
+	CleanedWhere,
+	CustomAdapter,
+	DBAdapter,
+	DBTransactionAdapter,
+} from "./index";
 
 function createCustomAdapter(overrides: Partial<CustomAdapter>): CustomAdapter {
 	return {
@@ -21,9 +27,13 @@ function createCustomAdapter(overrides: Partial<CustomAdapter>): CustomAdapter {
 function createTestAdapter({
 	adapter,
 	options = {},
+	transaction,
 }: {
 	adapter: CustomAdapter;
 	options?: BetterAuthOptions;
+	transaction?: <R>(
+		callback: (trx: DBTransactionAdapter<BetterAuthOptions>) => Promise<R>,
+	) => Promise<R>;
 }) {
 	return createAdapterFactory<BetterAuthOptions>({
 		config: {
@@ -42,6 +52,7 @@ function createTestAdapter({
 				}
 				return data;
 			},
+			transaction,
 		},
 		adapter: () => adapter,
 	})({
@@ -144,6 +155,57 @@ describe("createAdapterFactory consumeOne fallback", () => {
 		expect(result).toBeNull();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9869
+	 */
+	it("reuses the active transaction for the fallback", async () => {
+		let transactionCalls = 0;
+		let isTransactionActive = false;
+		let adapter: DBAdapter<BetterAuthOptions> | null = null;
+
+		const transaction = async <R>(
+			callback: (trx: DBTransactionAdapter<BetterAuthOptions>) => Promise<R>,
+		): Promise<R> => {
+			transactionCalls += 1;
+			if (isTransactionActive) {
+				throw new Error("nested transaction");
+			}
+			if (!adapter) {
+				throw new Error("adapter has not been initialized");
+			}
+			isTransactionActive = true;
+			try {
+				return await callback(adapter);
+			} finally {
+				isTransactionActive = false;
+			}
+		};
+
+		adapter = createTestAdapter({
+			transaction,
+			adapter: createCustomAdapter({
+				findMany: async <T>() =>
+					[
+						{
+							id: "verification-id",
+							identifier_text: "stored-token",
+						},
+					] as T[],
+				deleteMany: async () => 1,
+			}),
+		});
+
+		const result = await runWithTransaction(adapter, async () =>
+			adapter!.consumeOne<{ id: string; identifier: string }>({
+				model: "verification",
+				where: [{ field: "identifier", value: "token" }],
+			}),
+		);
+
+		expect(result?.id).toBe("verification-id");
+		expect(transactionCalls).toBe(1);
+	});
+
 	it("throws when deleteMany returns a non-numeric value", async () => {
 		const adapter = createTestAdapter({
 			adapter: createCustomAdapter({
@@ -167,5 +229,83 @@ describe("createAdapterFactory consumeOne fallback", () => {
 				where: [{ field: "identifier", value: "token" }],
 			}),
 		).rejects.toThrowError(/non-numeric value from deleteMany/);
+	});
+});
+
+/**
+ * HTTP query params arrive as strings. Coercion must happen in the adapter
+ * factory before the underlying store sees the where clause — SQL engines
+ * often cast silently, which can hide missing coercion in integration tests.
+ */
+describe("createAdapterFactory where value coercion", () => {
+	it("coerces string where values to match field types before querying", async () => {
+		const seenWhere: CleanedWhere[][] = [];
+		const adapter = createAdapterFactory({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+				supportsBooleans: true,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					findMany: async <T>(
+						params: Parameters<CustomAdapter["findMany"]>[0],
+					) => {
+						if (params.where) {
+							seenWhere.push(params.where);
+						}
+						return [] as T[];
+					},
+				}),
+		})({
+			user: {
+				additionalFields: {
+					age: { type: "number", required: false },
+				},
+			},
+		});
+
+		await adapter.findMany({
+			model: "user",
+			where: [{ field: "emailVerified", operator: "eq", value: "false" }],
+		});
+		await adapter.findMany({
+			model: "user",
+			where: [{ field: "age", operator: "eq", value: "25" }],
+		});
+		await adapter.findMany({
+			model: "user",
+			where: [{ field: "age", operator: "in", value: ["25", "30"] }],
+		});
+
+		expect(seenWhere).toEqual([
+			[
+				{
+					field: "emailVerified",
+					value: false,
+					operator: "eq",
+					connector: "AND",
+					mode: "sensitive",
+				},
+			],
+			[
+				{
+					field: "age",
+					value: 25,
+					operator: "eq",
+					connector: "AND",
+					mode: "sensitive",
+				},
+			],
+			[
+				{
+					field: "age",
+					value: [25, 30],
+					operator: "in",
+					connector: "AND",
+					mode: "sensitive",
+				},
+			],
+		]);
 	});
 });

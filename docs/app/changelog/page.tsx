@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Footer from "@/components/landing/footer";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
+import { SignatureMark } from "@/components/landing/signature-mark";
 import { createMetadata } from "@/lib/metadata";
 import { ChangelogContent } from "./changelog-content";
 
@@ -16,30 +17,45 @@ interface GitHubRelease {
 	published_at: string;
 }
 
+const GITHUB_USERNAME_REGEX =
+	/(?:^|[^\w.+-])@([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)(?![A-Za-z0-9-]|[./][A-Za-z])/g;
+
+function getMentionUsernames(line: string) {
+	return Array.from(
+		new Set(
+			Array.from(line.matchAll(GITHUB_USERNAME_REGEX), (match) => match[1]),
+		),
+	);
+}
+
+function getContributorAvatarLinks(usernames: string[]) {
+	return usernames
+		.map((username) => {
+			const avatarUrl = `https://github.com/${username}.png?size=48`;
+			return `[![${username}](${avatarUrl})](https://github.com/${username})`;
+		})
+		.join("");
+}
+
 function getContent(content: string) {
 	const lines = content.split("\n");
+	let inContributorsSection = false;
 	const newContext = lines.map((line) => {
 		if (line.trim().startsWith("## ") || line.trim().startsWith("### ")) {
-			return line.split("date=")[0].trim();
+			const heading = line.split("date=")[0].trim();
+			if (heading.startsWith("## ")) {
+				inContributorsSection = heading.toLowerCase().includes("contributors");
+			}
+			return heading;
+		}
+		if (inContributorsSection) {
+			const usernames = getMentionUsernames(line);
+			if (usernames.length > 0) {
+				return getContributorAvatarLinks(usernames);
+			}
 		}
 		if (line.trim().startsWith("- ")) {
-			const mainContent = line.split(";")[0];
-			const context = line.split(";")[2];
-			const mentionMatches =
-				(context ?? line)?.match(/@([A-Za-z0-9-]+)/g) ?? [];
-			if (mentionMatches.length === 0) {
-				return (mainContent || line).replace(/&nbsp/g, "");
-			}
-			const mentions = mentionMatches.map((match) => {
-				const username = match.slice(1);
-				const avatarUrl = `https://github.com/${username}.png`;
-				return `[![${match}](${avatarUrl})](https://github.com/${username})`;
-			});
-			return (
-				(mainContent || line).replace(/&nbsp/g, "") +
-				" \u2013 " +
-				mentions.join(" ")
-			);
+			return line.replace(/&nbsp/g, "");
 		}
 		return line;
 	});
@@ -98,6 +114,9 @@ export default async function ChangelogPage() {
 			{/* Left panel — sticky */}
 			<div className="hidden lg:block relative w-full lg:w-[30%] lg:h-dvh shrink-0 border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-clip px-5 sm:px-6 lg:px-10 lg:sticky lg:top-0">
 				<HalftoneBackground />
+				<div className="absolute left-10 right-6 bottom-4 z-[3]">
+					<SignatureMark compact />
+				</div>
 				<div className="relative w-full pt-6 md:pt-10 pb-6 lg:pb-0 flex flex-col justify-center lg:h-full">
 					<div className="space-y-1">
 						<div className="flex items-center gap-1.5">
@@ -198,7 +217,9 @@ export default async function ChangelogPage() {
 
 				<ChangelogContent messages={messages ?? []} />
 
-				<Footer />
+				<div className="lg:hidden">
+					<Footer />
+				</div>
 			</div>
 		</div>
 	);

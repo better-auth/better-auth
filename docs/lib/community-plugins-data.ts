@@ -152,17 +152,6 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
-		name: "@commet/better-auth",
-		url: "https://github.com/commet-labs/commet",
-		description:
-			"Billing and payments plugin for Commet with customer sync, subscriptions, feature access, usage tracking, seats, and customer portal support.",
-		author: {
-			name: "Commet Labs",
-			github: "commet-labs",
-			avatar: "https://github.com/commet-labs.png",
-		},
-	},
-	{
 		name: "stargate-better-auth",
 		url: "https://github.com/neiii/stargate-better-auth",
 		description:
@@ -289,6 +278,68 @@ export const communityPlugins: CommunityPlugin[] = [
 			name: "mhbdev",
 			github: "mhbdev",
 			avatar: "https://github.com/mhbdev.png",
+		},
+	},
+	{
+		name: "@dbsc-toolkit/better-auth",
+		url: "https://www.npmjs.com/package/@dbsc-toolkit/better-auth",
+		description:
+			"Device Bound Session Credentials (DBSC) — binds sessions to a device-resident key so a stolen cookie can't be replayed from another machine. Native binding via TPM or Secure Enclave on Chromium 145+, with a Web Crypto polyfill for Firefox, Safari, and older Chromium.",
+		author: {
+			name: "SulimanAbdulrazzaq",
+			github: "SulimanAbdulrazzaq",
+			avatar: "https://github.com/SulimanAbdulrazzaq.png",
+		},
+	},
+	{
+		name: "@marinedotsh/better-auth-referral",
+		url: "https://github.com/marinedotsh/better-auth-referral",
+		description: "A Better Auth plugin for adding user referrals to your app.",
+		author: {
+			name: "Shivam Gupta",
+			github: "shivamrun",
+			avatar: "https://github.com/shivamrun.png",
+		},
+	},
+	{
+		name: "better-auth-instagram",
+		url: "https://github.com/rajatsandeepsen/better-auth-instagram",
+		description: "Instagram Provider for Better Auth",
+		author: {
+			name: "Rajat Sandeep",
+			github: "rajatsandeepsen",
+			avatar: "https://github.com/rajatsandeepsen.png",
+		},
+	},
+	{
+		name: "better-auth-zoho",
+		url: "https://github.com/rajatsandeepsen/better-auth-zoho",
+		description: "Zoho Provider for Better Auth",
+		author: {
+			name: "Rajat Sandeep",
+			github: "rajatsandeepsen",
+			avatar: "https://github.com/rajatsandeepsen.png",
+		},
+	},
+	{
+		name: "better-auth-snapchat",
+		url: "https://github.com/rajatsandeepsen/better-auth-snapchat",
+		description: "Snapchat Provider for Better Auth",
+		author: {
+			name: "Rajat Sandeep",
+			github: "rajatsandeepsen",
+			avatar: "https://github.com/rajatsandeepsen.png",
+		},
+	},
+	{
+		name: "better-inbox",
+		url: "https://github.com/better-inbox/better-inbox",
+		description:
+			"In-app notifications for Better Auth apps. One plugin, one migration, one component — notifications live in your database, addressed to your users.",
+		author: {
+			name: "stewartjarod",
+			github: "stewartjarod",
+			avatar: "https://github.com/stewartjarod.png",
 		},
 	},
 ];

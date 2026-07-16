@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import type * as z from "zod";
 import Footer from "@/components/landing/footer";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
+import { SignatureMark } from "@/components/landing/signature-mark";
 import { Button } from "@/components/ui/button";
 import {
 	Form,
@@ -128,6 +129,9 @@ export function EnterprisePageClient() {
 							<HalftoneBackground />
 						</div>
 						<EnterpriseHero />
+						<div className="absolute left-10 right-6 bottom-4 z-[3]">
+							<SignatureMark />
+						</div>
 					</div>
 
 					{/* Right side — Contact form */}
@@ -319,7 +323,9 @@ export function EnterprisePageClient() {
 							</motion.div>
 						</div>
 						<div className="mt-auto">
-							<Footer />
+							<div className="lg:hidden">
+								<Footer />
+							</div>
 						</div>
 					</div>
 				</div>

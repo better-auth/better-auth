@@ -1,4 +1,5 @@
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { APIError } from "better-auth/api";
 import { saml } from "../samlify";
 import type { SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { normalizePem, safeJsonParse } from "../utils";
@@ -43,6 +44,7 @@ export function createSP(
 	baseURL: string,
 	providerId: string,
 	opts?: {
+		clockSkew?: number;
 		relayState?: string;
 		sloOptions?: {
 			wantLogoutRequestSigned?: boolean;
@@ -92,6 +94,10 @@ export function createSP(
 			? [config.identifierFormat]
 			: undefined,
 		relayState: opts?.relayState,
+		clockDrifts:
+			opts?.clockSkew && opts?.clockSkew !== 0
+				? [-opts.clockSkew, opts.clockSkew]
+				: undefined,
 	});
 }
 
@@ -134,12 +140,30 @@ function escapeHtml(str: string | undefined | null): string {
 		.replace(/'/g, "&#39;");
 }
 
+function isSAMLPostBindingLocation(value: string): boolean {
+	let url: URL;
+	try {
+		url = new URL(value);
+	} catch {
+		return false;
+	}
+	return url.protocol === "http:" || url.protocol === "https:";
+}
+
 export function createSAMLPostForm(
 	action: string,
 	samlParam: string,
 	samlValue: string,
 	relayState?: string,
 ): Response {
+	// `action` is an IdP-supplied endpoint (e.g. the SLO Location); only emit
+	// http(s) URLs into the auto-submitting form.
+	if (!isSAMLPostBindingLocation(action)) {
+		throw new APIError("BAD_REQUEST", {
+			message:
+				"SAML POST binding location must be an absolute http or https URL",
+		});
+	}
 	const safeAction = escapeHtml(action);
 	const safeSamlParam = escapeHtml(samlParam);
 	const safeSamlValue = escapeHtml(samlValue);

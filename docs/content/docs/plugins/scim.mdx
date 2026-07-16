@@ -413,7 +413,9 @@ Allows to apply a partial update to the user details. This operation can only up
 
 #### Deletes a user resource
 
-Completely deletes a user resource from the database. This operation can only delete users that belong to the same provider and organization than the SCIM token.
+Removes a user resource. This operation only affects users that belong to the same provider (and organization) as the SCIM token.
+
+For an organization-scoped token, the user is deprovisioned from the organization: their membership and the provider account are removed, while the global user record is kept. For a non-organization token, the global user is deleted only when this provider's account is their sole identity; otherwise just that account is unlinked.
 
 <APIMethod path="/scim/v2/Users/:userId" method="DELETE" forceAsParam requireBearerToken isExternalOnly note="Deletes an existing user resource. See https://datatracker.ietf.org/doc/html/rfc7644#section-3.6">
   ```ts
@@ -487,6 +489,8 @@ By default, the SCIM provisioning will automatically map the following fields:
 * `account.providerId`: Provider associated to the `SCIM` token
 * `account.accountId`: Defaults to `externalId` and fallbacks to `userName`
 * `member.organizationId`: Organization associated to the provider
+
+The SCIM `active` attribute maps to the user's disabled state. `active: false` deactivates the user (via the [admin](/docs/plugins/admin) plugin's `banned` state) and revokes their sessions; `active: true` reactivates. Honoring `active` requires the admin plugin. Changing a user's email through SCIM also resets their verified status.
 
 ## Schema
 

@@ -104,15 +104,19 @@ export const reddit = (options: RedditOptions) => {
 			}
 
 			const userMap = await options.mapProfileToUser?.(profile);
-
+			// Reddit's identity scope does not return an email. Synthesize a stable,
+			// non-routable placeholder (RFC 2606 `.invalid`) keyed to the user's
+			// Reddit id rather than the routable `reddit.com`, which could collide
+			// with a real address. Left unverified; `mapProfileToUser` can override.
+			const email = userMap?.email || `${profile.id}@reddit.invalid`;
 			return {
 				user: {
 					id: profile.id,
 					name: profile.name,
-					email: profile.oauth_client_id,
-					emailVerified: profile.has_verified_email,
 					image: profile.icon_img?.split("?")[0]!,
 					...userMap,
+					email,
+					emailVerified: userMap?.emailVerified ?? false,
 				},
 				data: profile,
 			};

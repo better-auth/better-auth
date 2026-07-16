@@ -2,15 +2,13 @@
  * @see {@link https://nodejs.org/api/sqlite.html} - Node.js SQLite API documentation
  */
 
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import type {
 	DatabaseConnection,
 	DatabaseIntrospector,
-	DatabaseMetadata,
 	DatabaseMetadataOptions,
 	Dialect,
 	DialectAdapter,
-	DialectAdapterBase,
 	Driver,
 	Kysely,
 	QueryCompiler,
@@ -18,20 +16,22 @@ import type {
 	SchemaMetadata,
 	TableMetadata,
 } from "kysely";
+import { CompiledQuery, DefaultQueryCompiler, sql } from "kysely";
 import {
-	CompiledQuery,
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
-	DefaultQueryCompiler,
-	sql,
-} from "kysely";
+} from "./kysely-migration-tables";
 
-class NodeSqliteAdapter implements DialectAdapterBase {
+class NodeSqliteAdapter implements DialectAdapter {
 	get supportsCreateIfNotExists(): boolean {
 		return true;
 	}
 
 	get supportsTransactionalDdl(): boolean {
+		return false;
+	}
+
+	get supportsMultipleConnections(): boolean {
 		return false;
 	}
 
@@ -131,11 +131,27 @@ class NodeSqliteConnection implements DatabaseConnection {
 	executeQuery<O>(compiledQuery: CompiledQuery): Promise<QueryResult<O>> {
 		const { sql, parameters } = compiledQuery;
 		const stmt = this.#db.prepare(sql);
+		const params = parameters as SQLInputValue[];
 
-		const rows = stmt.all(...(parameters as any[])) as O[];
+		// Row-producing statements (SELECT, RETURNING) expose columns, so they
+		// must read through `all()`. Plain mutations expose none; running them
+		// through `all()` would discard node:sqlite's change metadata, leaving
+		// Kysely to report zero affected rows even when writes occurred.
+		if (stmt.columns().length > 0) {
+			return Promise.resolve({
+				rows: stmt.all(...params) as O[],
+			});
+		}
+
+		const { changes, lastInsertRowid } = stmt.run(...params);
 
 		return Promise.resolve({
-			rows,
+			rows: [],
+			numAffectedRows: BigInt(changes),
+			insertId:
+				typeof lastInsertRowid === "bigint"
+					? lastInsertRowid
+					: BigInt(lastInsertRowid),
 		});
 	}
 
@@ -205,14 +221,6 @@ class NodeSqliteIntrospector implements DatabaseIntrospector {
 		return Promise.all(tables.map(({ name }) => this.#getTableMetadata(name)));
 	}
 
-	async getMetadata(
-		options?: DatabaseMetadataOptions | undefined,
-	): Promise<DatabaseMetadata> {
-		return {
-			tables: await this.getTables(options),
-		};
-	}
-
 	async #getTableMetadata(table: string): Promise<TableMetadata> {
 		const db = this.#db;
 
@@ -255,6 +263,7 @@ class NodeSqliteIntrospector implements DatabaseIntrospector {
 				hasDefaultValue: col.dflt_value != null,
 			})),
 			isView: false,
+			isForeign: false,
 		};
 	}
 }

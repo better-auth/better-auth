@@ -12,6 +12,7 @@ import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 import type { CookieOptions } from "better-call";
+import { shouldBindAccountCookieToSessionUser } from "../context/store-capabilities";
 import {
 	signJWT,
 	symmetricDecodeJWT,
@@ -234,33 +235,35 @@ export async function setCookieCache(
 		);
 	}
 
-	// Check if we need to chunk the cookie (only if it exceeds 4093 bytes)
-	if (data.length > 4093) {
-		const sessionStore = createSessionStore(
-			ctx.context.authCookies.sessionData.name,
-			options,
-			ctx,
-		);
-		const cookies = sessionStore.chunk(data, options);
-		sessionStore.setCookies(cookies);
-	} else {
-		const sessionStore = createSessionStore(
-			ctx.context.authCookies.sessionData.name,
-			options,
-			ctx,
-		);
-		if (sessionStore.hasChunks()) {
-			const cleanCookies = sessionStore.clean();
-			sessionStore.setCookies(cleanCookies);
-		}
-		ctx.setCookie(ctx.context.authCookies.sessionData.name, data, options);
-	}
+	const sessionStore = createSessionStore(
+		ctx.context.authCookies.sessionData.name,
+		options,
+		ctx,
+	);
+	sessionStore.setCookies(sessionStore.chunk(data, options));
 
-	// Refresh account cookie to keep it in sync
-	if (ctx.context.options.account?.storeAccountCookie) {
+	// Keep the account cookie in sync, unless this response already set a
+	// fresh one that the stale request copy would downgrade or expire.
+	if (
+		ctx.context.options.account?.storeAccountCookie &&
+		!hasPendingSetCookie(ctx, ctx.context.authCookies.accountData.name)
+	) {
 		const accountData = await getAccountCookie(ctx);
 		if (accountData) {
-			await setAccountCookie(ctx, accountData);
+			if (
+				!shouldBindAccountCookieToSessionUser(ctx.context.options) ||
+				accountData.userId === session.user.id
+			) {
+				await setAccountCookie(ctx, accountData);
+			} else {
+				expireCookie(ctx, ctx.context.authCookies.accountData);
+				const accountStore = createAccountStore(
+					ctx.context.authCookies.accountData.name,
+					ctx.context.authCookies.accountData.attributes,
+					ctx,
+				);
+				accountStore.setCookies(accountStore.clean());
+			}
 		}
 	}
 }
@@ -369,6 +372,39 @@ function removeSetCookieEntries(
 }
 
 /**
+ * Whether the response already has a pending `Set-Cookie` for `cookieName`
+ * or a chunked variant.
+ */
+function hasPendingSetCookie(
+	ctx: GenericEndpointContext,
+	cookieName: string,
+): boolean {
+	const scoped = ctx as CookieScrubView;
+	const targets = new Set<Headers>();
+	if (scoped.responseHeaders) targets.add(scoped.responseHeaders);
+	if (scoped.context?.responseHeaders)
+		targets.add(scoped.context.responseHeaders);
+
+	const exact = `${cookieName}=`;
+	const chunk = `${cookieName}.`;
+
+	for (const headers of targets) {
+		const existing =
+			typeof headers.getSetCookie === "function"
+				? headers.getSetCookie()
+				: splitSetCookieHeader(headers.get("set-cookie") || "");
+		if (
+			existing.some(
+				(entry) => entry.startsWith(exact) || entry.startsWith(chunk),
+			)
+		) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
  * Expires a cookie by setting `maxAge: 0` while preserving its attributes
  */
 export function expireCookie(
@@ -443,9 +479,10 @@ export const getSessionCookie = (
 	const { cookieName = "session_token", cookiePrefix = "better-auth" } =
 		config || {};
 	const parsedCookie = parseCookies(cookies);
+	// Prefer __Secure- (HTTPS-only) over a non-secure leftover.
 	const getCookie = (name: string) =>
-		parsedCookie.get(name) ||
-		parsedCookie.get(`${SECURE_COOKIE_PREFIX}${name}`);
+		parsedCookie.get(`${SECURE_COOKIE_PREFIX}${name}`) ??
+		parsedCookie.get(name);
 
 	const sessionToken =
 		getCookie(`${cookiePrefix}.${cookieName}`) ||
@@ -539,6 +576,15 @@ export const getCookieCache = async <
 
 		const strategy = config?.strategy || "compact";
 
+		// A valid signature/encryption only proves integrity, not freshness. Mirror
+		// the in-route session reader and reject a snapshot whose embedded session
+		// has already expired, so a caller using this helper as an auth gate cannot
+		// treat a stale-but-signed cookie as a live session.
+		const isEmbeddedSessionExpired = (payload: S): boolean => {
+			const expiresAt = payload.session?.expiresAt;
+			return !!expiresAt && new Date(expiresAt).getTime() < Date.now();
+		};
+
 		if (strategy === "jwe") {
 			// Use JWE strategy (encrypted)
 			const payload = await symmetricDecodeJWT<S>(
@@ -562,6 +608,9 @@ export const getCookieCache = async <
 						return null;
 					}
 				}
+				if (isEmbeddedSessionExpired(payload)) {
+					return null;
+				}
 				return payload;
 			}
 			return null;
@@ -583,6 +632,9 @@ export const getCookieCache = async <
 					if (cookieVersion !== expectedVersion) {
 						return null;
 					}
+				}
+				if (isEmbeddedSessionExpired(payload)) {
+					return null;
 				}
 				return payload;
 			}
@@ -625,6 +677,19 @@ export const getCookieCache = async <
 				if (cookieVersion !== expectedVersion) {
 					return null;
 				}
+			}
+
+			// The compact strategy carries no `exp` claim, so the outer cache window
+			// and the embedded session lifetime must be checked explicitly (the
+			// jwt/jwe strategies get the outer window from their `exp` claim).
+			if (
+				typeof sessionDataPayload.expiresAt === "number" &&
+				sessionDataPayload.expiresAt < Date.now()
+			) {
+				return null;
+			}
+			if (isEmbeddedSessionExpired(sessionDataPayload.session)) {
+				return null;
 			}
 
 			return sessionDataPayload.session;

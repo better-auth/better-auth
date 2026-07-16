@@ -408,7 +408,49 @@ Disables the use of the ID token for sign-in. By default, it's enabled for some 
 
 ### verifyIdToken
 
-A custom function to verify the ID token.
+A custom function to verify the ID token. Receives the token, an optional nonce, and the request endpoint context so you can branch on headers or other request data.
+
+<Callout type="warn">
+  Providing `verifyIdToken` **replaces** the provider's built-in verification (signature, issuer, audience, and expiry). Your callback must perform those checks itself. Client-supplied headers such as `x-platform` are attacker-controlled — use them only to select which audience (or other claim) to verify against, not as proof of identity on their own.
+</Callout>
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { createRemoteJWKSet, jwtVerify } from "jose";
+
+const appleJwks = createRemoteJWKSet(
+  new URL("https://appleid.apple.com/auth/keys"),
+);
+
+export const auth = betterAuth({
+  socialProviders: {
+    apple: {
+      clientId: "YOUR_APPLE_CLIENT_ID",
+      clientSecret: "YOUR_APPLE_CLIENT_SECRET",
+      verifyIdToken: async (token, nonce, ctx) => {
+        // Select audience from the request, then cryptographically verify.
+        const audience =
+          ctx?.headers?.get("x-platform") === "ios"
+            ? process.env.APPLE_APP_BUNDLE_IDENTIFIER!
+            : process.env.APPLE_CLIENT_ID!;
+        try {
+          const { payload } = await jwtVerify(token, appleJwks, {
+            issuer: "https://appleid.apple.com",
+            audience,
+            maxTokenAge: "1h",
+          });
+          if (nonce && payload.nonce !== nonce) {
+            return false;
+          }
+          return true;
+        } catch {
+          return false;
+        }
+      },
+    },
+  },
+});
+```
 
 ### overrideUserInfoOnSignIn
 
@@ -419,6 +461,8 @@ A boolean value that determines whether to override the user information in the 
 A custom function to map the user profile returned from the provider to the user object in your database.
 
 Useful, if you have additional fields in your user object you want to populate from the provider's profile. Or if you want to change how by default the user object is mapped.
+
+`mapProfileToUser` follows the input rules from `user.additionalFields`. It can populate additional fields that allow input, but provider values for fields marked `input: false` are ignored during OAuth sign-up, sign-in profile override, and account-link profile sync. Use server-side provisioning code to set server-owned fields such as roles, bans, or internal flags.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -442,7 +486,8 @@ export const auth = betterAuth({
 
 <Callout type="info">
   You may want to pass additional fields into the user object in `mapProfileToUser`,
-  to do this, you must configure the `user.additionalFields` [option](/docs/concepts/database#extending-core-schema).
+  to do this, you must configure the `user.additionalFields` [option](/docs/concepts/database#extending-core-schema)
+  and allow those fields as input.
   (The same applies for stateless auth setups)
 </Callout>
 
