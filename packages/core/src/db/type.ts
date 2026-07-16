@@ -281,6 +281,16 @@ export type DBFieldAttribute<T extends DBFieldType = DBFieldType> = {
 	type: T;
 } & DBFieldAttributeConfig;
 
+/** A database index spanning one or more logical schema fields. */
+export interface DBTableIndex {
+	/** One to sixteen logical field names included in the index, in index order. */
+	fields: readonly [string, ...string[]];
+	/** Portable database index name of at most 63 UTF-8 bytes. */
+	name?: string | undefined;
+	/** Whether the indexed field tuple must be unique. */
+	unique?: boolean | undefined;
+}
+
 export type BetterAuthDBSchema = Record<
 	string,
 	{
@@ -292,6 +302,8 @@ export type BetterAuthDBSchema = Record<
 		 * The fields of the table
 		 */
 		fields: Record<string, DBFieldAttribute>;
+		/** Table-level indexes, including compound indexes. */
+		indexes?: readonly DBTableIndex[] | undefined;
 		/**
 		 * Whether to disable migrations for this table
 		 * @default false

@@ -29,6 +29,7 @@ export type {
 	DBFieldAttributeConfig,
 	DBFieldType,
 	DBPrimitive,
+	DBTableIndex,
 	InferDBFieldInput,
 	InferDBFieldOutput,
 	InferDBFieldsFromOptions,

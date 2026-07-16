@@ -583,6 +583,9 @@ importers:
 
   e2e/adapter/test/kysely-adapter:
     devDependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../../../../packages/core
       '@better-auth/kysely-adapter':
         specifier: workspace:*
         version: link:../../../../packages/kysely-adapter
