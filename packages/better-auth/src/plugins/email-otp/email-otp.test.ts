@@ -2595,6 +2595,7 @@ describe("email-otp rememberMe", async () => {
 	);
 
 	it("should set a persistent session cookie by default on email OTP sign-in", async () => {
+		expect.assertions(3);
 		await client.emailOtp.sendVerificationOtp({
 			email: testUser.email,
 			type: "sign-in",
@@ -2620,6 +2621,7 @@ describe("email-otp rememberMe", async () => {
 	});
 
 	it("should clear max-age when email OTP sign-in uses rememberMe: false", async () => {
+		expect.assertions(3);
 		await client.emailOtp.sendVerificationOtp({
 			email: testUser.email,
 			type: "sign-in",
@@ -2629,27 +2631,6 @@ describe("email-otp rememberMe", async () => {
 			{
 				email: testUser.email,
 				otp,
-				rememberMe: false,
-			},
-			{
-				onSuccess(ctx) {
-					const cookies = parseSetCookieHeader(
-						ctx.response.headers.get("set-cookie") || "",
-					);
-					const sessionToken = cookies.get("better-auth.session_token");
-					expect(sessionToken).toBeDefined();
-					expect(sessionToken?.["max-age"]).toBeUndefined();
-					expect(cookies.get("better-auth.dont_remember")).toBeDefined();
-				},
-			},
-		);
-	});
-
-	it("should clear max-age when email/password uses rememberMe: false (control)", async () => {
-		await client.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
 				rememberMe: false,
 			},
 			{

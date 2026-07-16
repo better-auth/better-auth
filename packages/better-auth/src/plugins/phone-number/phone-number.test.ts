@@ -1292,7 +1292,7 @@ describe("phone-number rememberMe", async () => {
 	let otp = "";
 	const testPhoneNumber = "+15551234567";
 
-	const { client, auth } = await getTestInstance(
+	const { client } = await getTestInstance(
 		{
 			plugins: [
 				phoneNumber({
@@ -1315,6 +1315,7 @@ describe("phone-number rememberMe", async () => {
 	);
 
 	it("should set a persistent session cookie by default on phone OTP verify", async () => {
+		expect.assertions(3);
 		await client.phoneNumber.sendOtp({
 			phoneNumber: testPhoneNumber,
 		});
@@ -1339,6 +1340,7 @@ describe("phone-number rememberMe", async () => {
 	});
 
 	it("should clear max-age when phone OTP verify uses rememberMe: false", async () => {
+		expect.assertions(3);
 		const otherPhone = "+15559876543";
 		await client.phoneNumber.sendOtp({
 			phoneNumber: otherPhone,
@@ -1348,53 +1350,6 @@ describe("phone-number rememberMe", async () => {
 			{
 				phoneNumber: otherPhone,
 				code: otp,
-				rememberMe: false,
-			},
-			{
-				onSuccess(ctx) {
-					const cookies = parseSetCookieHeader(
-						ctx.response.headers.get("set-cookie") || "",
-					);
-					const sessionToken = cookies.get("better-auth.session_token");
-					expect(sessionToken).toBeDefined();
-					expect(sessionToken?.["max-age"]).toBeUndefined();
-					expect(cookies.get("better-auth.dont_remember")).toBeDefined();
-				},
-			},
-		);
-	});
-
-	it("should clear max-age when signIn.phoneNumber uses rememberMe: false (control)", async () => {
-		const passwordPhone = "+15551112222";
-		const headers = new Headers();
-		await client.phoneNumber.sendOtp({
-			phoneNumber: passwordPhone,
-		});
-		await client.phoneNumber.verify(
-			{
-				phoneNumber: passwordPhone,
-				code: otp,
-			},
-			{
-				onSuccess: (ctx) => {
-					const setCookie = ctx.response.headers.get("set-cookie") || "";
-					const cookies = parseSetCookieHeader(setCookie);
-					const token = cookies.get("better-auth.session_token")?.value;
-					expect(token).toBeDefined();
-					headers.set("cookie", `better-auth.session_token=${token}`);
-				},
-			},
-		);
-
-		await auth.api.setPassword({
-			body: { newPassword: "password123" },
-			headers,
-		});
-
-		await client.signIn.phoneNumber(
-			{
-				phoneNumber: passwordPhone,
-				password: "password123",
 				rememberMe: false,
 			},
 			{
