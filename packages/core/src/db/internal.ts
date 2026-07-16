@@ -9,3 +9,4 @@ export {
 	resolveDatabaseSchemaIndexes,
 	resolveDatabaseTableIndexes,
 } from "./database-index";
+export { getAuthTablesWithResolvedIndexes } from "./get-tables";

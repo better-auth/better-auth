@@ -363,7 +363,7 @@ const { execute } = await testAdapter({
 							[id] varchar(36) NOT NULL,
 							[issuer_url] varchar(max) NOT NULL,
 							[provider_subject] varchar(max) NOT NULL,
-							[display_name] varchar(max) NOT NULL
+							[display_name] varchar(255) NOT NULL
 						);
 						CREATE INDEX [compound_identity_uidx]
 							ON [better_auth_shadow].[compound_index_subject] ([display_name]);

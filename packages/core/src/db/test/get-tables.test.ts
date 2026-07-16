@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getAuthTables } from "../get-tables";
+import { getAuthTables, getAuthTablesWithResolvedIndexes } from "../get-tables";
 import type { SecondaryStorage } from "../type";
 
 const secondaryStorageStub: SecondaryStorage = {
@@ -154,6 +154,35 @@ describe("getAuthTables", () => {
 		).toThrow(
 			'Database schema resolves more than one indexed logical table to "directory_identity".',
 		);
+	});
+
+	it("should return resolved indexes with the constructed tables", () => {
+		const { indexesByTable, tables } = getAuthTablesWithResolvedIndexes({
+			plugins: [
+				{
+					id: "resolved-indexes",
+					schema: {
+						directoryIdentity: {
+							modelName: "directory_identity",
+							fields: {
+								issuer: { fieldName: "issuer_url", type: "string" },
+								subject: { type: "string" },
+							},
+							indexes: [{ fields: ["issuer", "subject"], unique: true }],
+						},
+					},
+				},
+			],
+		});
+
+		expect(tables.directoryIdentity?.indexes).toHaveLength(1);
+		expect(indexesByTable.get("directory_identity")).toEqual([
+			{
+				columns: ["issuer_url", "subject"],
+				name: "directory_identity_issuer_url_subject_uidx",
+				unique: true,
+			},
+		]);
 	});
 
 	it("should merge additionalFields into verification table metadata", () => {

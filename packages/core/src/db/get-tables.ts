@@ -26,9 +26,7 @@ function mergeTableIndexes(
 	return indexes;
 }
 
-export const getAuthTables = (
-	options: BetterAuthOptions,
-): BetterAuthDBSchema => {
+const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 	const pluginSchema = (options.plugins ?? []).reduce(
 		(acc, plugin) => {
 			const schema = plugin.schema;
@@ -333,8 +331,13 @@ export const getAuthTables = (
 		...(shouldAddRateLimitTable ? rateLimitTable : {}),
 	} satisfies BetterAuthDBSchema;
 
-	resolveDatabaseSchemaIndexes(
-		Object.values(authTables)
+	return authTables;
+};
+
+export function getAuthTablesWithResolvedIndexes(options: BetterAuthOptions) {
+	const tables = buildAuthTables(options);
+	const indexesByTable = resolveDatabaseSchemaIndexes(
+		Object.values(tables)
 			.filter(
 				(table) => !("disableMigrations" in table) || !table.disableMigrations,
 			)
@@ -345,5 +348,8 @@ export const getAuthTables = (
 			})),
 	);
 
-	return authTables;
-};
+	return { indexesByTable, tables };
+}
+
+export const getAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema =>
+	getAuthTablesWithResolvedIndexes(options).tables;
