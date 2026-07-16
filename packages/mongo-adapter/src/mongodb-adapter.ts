@@ -90,16 +90,31 @@ export const mongodbAdapter = (
 		}) => {
 			const customIdGen = getCustomIdGenerator(options);
 			const useUUIDs = options.advanced?.database?.generateId === "uuid";
+			const resolvedIndexesByModel = new Map<
+				string,
+				ReturnType<typeof resolveDatabaseTableIndexes>
+			>();
 
-			const ensureModelIndexes = async (model: string) => {
+			const getResolvedModelIndexes = (model: string) => {
+				const cachedIndexes = resolvedIndexesByModel.get(model);
+				if (cachedIndexes) return cachedIndexes;
+
 				const defaultModelName = getDefaultModelName(model);
 				const table = schema[defaultModelName];
-				if (!table || table.disableMigrations) return;
-				const indexes = resolveDatabaseTableIndexes({
-					fields: table.fields,
-					indexes: table.indexes,
-					tableName: model,
-				});
+				const indexes =
+					!table || table.disableMigrations
+						? []
+						: resolveDatabaseTableIndexes({
+								fields: table.fields,
+								indexes: table.indexes,
+								tableName: model,
+							});
+				resolvedIndexesByModel.set(model, indexes);
+				return indexes;
+			};
+
+			const ensureModelIndexes = async (model: string) => {
+				const indexes = getResolvedModelIndexes(model);
 
 				await Promise.all(
 					indexes.map((index) => {

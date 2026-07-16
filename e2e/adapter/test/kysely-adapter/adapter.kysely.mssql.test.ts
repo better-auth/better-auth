@@ -348,13 +348,46 @@ const { execute } = await testAdapter({
 		uuidTestSuite(),
 		compoundIndexTestSuite({
 			async rerunMigrations(options) {
-				const migrations = await getMigrations({
-					...options,
-					database: { db: kyselyDB, type: "mssql" },
-				});
-				const pendingMigration = await migrations.compileMigrations();
-				await migrations.runMigrations();
-				return pendingMigration;
+				try {
+					await query(`
+						IF NOT EXISTS (
+							SELECT 1 FROM sys.schemas WHERE name = N'better_auth_shadow'
+						)
+							EXEC(N'CREATE SCHEMA [better_auth_shadow]');
+						IF OBJECT_ID(
+							N'[better_auth_shadow].[compound_index_subject]',
+							N'U'
+						) IS NOT NULL
+							DROP TABLE [better_auth_shadow].[compound_index_subject];
+						CREATE TABLE [better_auth_shadow].[compound_index_subject] (
+							[id] varchar(36) NOT NULL,
+							[issuer_url] varchar(max) NOT NULL,
+							[provider_subject] varchar(max) NOT NULL,
+							[display_name] varchar(max) NOT NULL
+						);
+						CREATE INDEX [compound_identity_uidx]
+							ON [better_auth_shadow].[compound_index_subject] ([display_name]);
+					`);
+					const migrations = await getMigrations({
+						...options,
+						database: { db: kyselyDB, type: "mssql" },
+					});
+					const pendingMigration = await migrations.compileMigrations();
+					await migrations.runMigrations();
+					return pendingMigration;
+				} finally {
+					await query(`
+						IF OBJECT_ID(
+							N'[better_auth_shadow].[compound_index_subject]',
+							N'U'
+						) IS NOT NULL
+							DROP TABLE [better_auth_shadow].[compound_index_subject];
+						IF EXISTS (
+							SELECT 1 FROM sys.schemas WHERE name = N'better_auth_shadow'
+						)
+							EXEC(N'DROP SCHEMA [better_auth_shadow]');
+					`);
+				}
 			},
 			mismatchError:
 				'Database index "compound_identity_uidx" on table "compound_index_subject" does not match the configured fields and uniqueness.',

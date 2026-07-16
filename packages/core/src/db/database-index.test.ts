@@ -65,6 +65,31 @@ describe("database indexes", () => {
 		]);
 	});
 
+	it("allows enum fields in compound indexes", () => {
+		expect(
+			resolveDatabaseTableIndexes({
+				fields: {
+					connectionId: {
+						type: "string",
+						fieldName: "connection_id",
+					},
+					status: {
+						type: ["active", "suspended"],
+						fieldName: "provisioning_status",
+					},
+				},
+				indexes: [{ fields: ["connectionId", "status"] }],
+				tableName: "directory_user",
+			}),
+		).toEqual([
+			{
+				columns: ["connection_id", "provisioning_status"],
+				name: "directory_user_connection_id_provisioning_status_idx",
+				unique: undefined,
+			},
+		]);
+	});
+
 	it("rejects malformed runtime definitions before adapters use them", () => {
 		const emptyFields = [] as unknown as DBTableIndex["fields"];
 

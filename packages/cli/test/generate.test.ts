@@ -34,7 +34,7 @@ const compoundIndexPlugin = (): BetterAuthPlugin => ({
 					fieldName: "external_id",
 				},
 				status: {
-					type: "string",
+					type: ["active", "suspended"],
 					fieldName: "provisioning_status",
 				},
 			},
@@ -182,6 +182,9 @@ export const auth = betterAuth({
 		);
 		expect(schema.code).toMatch(/connection_id\s+String\s+@db\.VarChar\(191\)/);
 		expect(schema.code).toMatch(/external_id\s+String\s+@db\.VarChar\(191\)/);
+		expect(schema.code).toMatch(
+			/provisioning_status\s+String\s+@db\.VarChar\(191\)/,
+		);
 	});
 
 	it("should bound existing MySQL string fields before adding compound indexes", async () => {
@@ -300,6 +303,75 @@ model Directory_user {
 				}),
 			).rejects.toThrow(
 				'Prisma index "directory_user_connection_id_external_id_uidx" on model "Directory_user" does not match the configured fields and uniqueness.',
+			);
+		} finally {
+			fs.rmSync(tmpDir, { force: true, recursive: true });
+		}
+	});
+
+	it("should name matching existing Prisma compound indexes", async () => {
+		const tmpDir = fs.mkdtempSync(
+			path.join(os.tmpdir(), "prisma-compound-index-name-"),
+		);
+		const filePath = path.join(tmpDir, "schema.prisma");
+		const relativePath = path.relative(process.cwd(), filePath);
+		fs.writeFileSync(
+			filePath,
+			`
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url = env("DATABASE_URL")
+}
+
+model Directory_user {
+  id                  String @id
+  connection_id       String
+  external_id         String
+  provisioning_status String
+
+  @@unique([connection_id, external_id])
+  @@index([connection_id, provisioning_status])
+  @@map("directory_user")
+}
+`,
+		);
+
+		try {
+			const schema = await generatePrismaSchema({
+				file: relativePath,
+				adapter: prismaAdapter(
+					{},
+					{
+						provider: "mysql",
+					},
+				)({} as BetterAuthOptions),
+				options: {
+					database: prismaAdapter(
+						{},
+						{
+							provider: "mysql",
+						},
+					),
+					plugins: [compoundIndexPlugin()],
+				},
+			});
+			const schemaCode = schema.code ?? "";
+
+			expect(
+				schemaCode.match(/@@unique\(\[connection_id, external_id\]/g),
+			).toHaveLength(1);
+			expect(
+				schemaCode.match(/@@index\(\[connection_id, provisioning_status\]/g),
+			).toHaveLength(1);
+			expect(schemaCode).toContain(
+				'@@unique([connection_id, external_id], map: "directory_user_connection_id_external_id_uidx")',
+			);
+			expect(schemaCode).toContain(
+				'@@index([connection_id, provisioning_status], map: "directory_user_connection_id_provisioning_status_idx")',
 			);
 		} finally {
 			fs.rmSync(tmpDir, { force: true, recursive: true });
@@ -634,6 +706,9 @@ model Directory_user {
 		);
 		expect(schema.code).toMatch(
 			/external_id:\s*varchar\(["']external_id["'], \{ length: 191 \}\)/,
+		);
+		expect(schema.code).toMatch(
+			/provisioning_status:\s*mysqlEnum\("provisioning_status", \[\s*"active",\s*"suspended",?\s*\]\)/,
 		);
 	});
 

@@ -171,7 +171,7 @@ function databaseValueIsTrue(value: boolean | number | string | undefined) {
 async function getDatabaseIndexes(
 	db: Kysely<unknown>,
 	dbType: KyselyDatabaseType,
-	postgresSchema: string,
+	schemaName: string,
 ) {
 	let rows: readonly DatabaseIndexRow[];
 	if (dbType === "sqlite") {
@@ -214,7 +214,7 @@ async function getDatabaseIndexes(
 				LEFT JOIN pg_attribute AS index_attribute
 					ON index_attribute.attrelid = table_class.oid
 					AND index_attribute.attnum = index_column.attribute_number
-				WHERE table_namespace.nspname = ${postgresSchema}
+				WHERE table_namespace.nspname = ${schemaName}
 					AND table_class.relkind = 'r'
 					AND index_column.ordinality <= index_data.indnkeyatts
 			`.execute(db)
@@ -248,13 +248,16 @@ async function getDatabaseIndexes(
 				FROM sys.indexes AS indexes
 				INNER JOIN sys.tables AS tables
 					ON indexes.object_id = tables.object_id
+				INNER JOIN sys.schemas AS table_schemas
+					ON table_schemas.schema_id = tables.schema_id
 				INNER JOIN sys.index_columns AS index_columns
 					ON index_columns.object_id = indexes.object_id
 					AND index_columns.index_id = indexes.index_id
 				INNER JOIN sys.columns AS columns
 					ON columns.object_id = index_columns.object_id
 					AND columns.column_id = index_columns.column_id
-				WHERE indexes.name IS NOT NULL
+				WHERE table_schemas.name = ${schemaName}
+					AND indexes.name IS NOT NULL
 					AND index_columns.key_ordinal > 0
 			`.execute(db)
 		).rows;
@@ -341,6 +344,7 @@ async function getDatabaseIndexes(
 async function getDatabaseColumnBounds(
 	db: Kysely<unknown>,
 	dbType: KyselyDatabaseType,
+	schemaName: string,
 ) {
 	if (dbType !== "mysql" && dbType !== "mssql") {
 		return new Map<string, DatabaseColumnBound>();
@@ -370,8 +374,11 @@ async function getDatabaseColumnBounds(
 				FROM sys.columns AS columns
 				INNER JOIN sys.tables AS tables
 					ON tables.object_id = columns.object_id
+				INNER JOIN sys.schemas AS table_schemas
+					ON table_schemas.schema_id = tables.schema_id
 				INNER JOIN sys.types AS types
 					ON types.user_type_id = columns.user_type_id
+				WHERE table_schemas.name = ${schemaName}
 			`.execute(db)
 		).rows;
 	}
@@ -506,6 +513,17 @@ async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
 	return "public";
 }
 
+async function getMssqlSchema(db: Kysely<unknown>): Promise<string> {
+	try {
+		const result = await sql<{ schemaName?: string }>`
+			SELECT SCHEMA_NAME() AS "schemaName"
+		`.execute(db);
+		return result.rows[0]?.schemaName || "dbo";
+	} catch {
+		return "dbo";
+	}
+}
+
 export async function getMigrations(config: BetterAuthOptions) {
 	const betterAuthSchema = getSchema(config);
 	const logger = createLogger(config.logger);
@@ -526,8 +544,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 		process.exit(1);
 	}
 
-	// For PostgreSQL, detect and log the current schema being used
-	let currentSchema = "public";
+	let currentSchema = dbType === "mssql" ? await getMssqlSchema(db) : "public";
 	if (dbType === "postgres") {
 		currentSchema = await getPostgresSchema(db);
 		logger.debug(
@@ -557,13 +574,21 @@ export async function getMigrations(config: BetterAuthOptions) {
 				`Could not verify schema existence: ${error instanceof Error ? error.message : String(error)}`,
 			);
 		}
+	} else if (dbType === "mssql") {
+		logger.debug(
+			`SQL Server migration: Using schema '${currentSchema}' (from the current user's default schema)`,
+		);
 	}
 
 	const allTableMetadata = await db.introspection.getTables();
 	const databaseIndexes = await getDatabaseIndexes(db, dbType, currentSchema);
-	const databaseColumnBounds = await getDatabaseColumnBounds(db, dbType);
+	const databaseColumnBounds = await getDatabaseColumnBounds(
+		db,
+		dbType,
+		currentSchema,
+	);
 
-	// For PostgreSQL, filter tables to only those in the target schema
+	// Filter introspected tables to the schema used by unqualified migrations.
 	let tableMetadata = allTableMetadata;
 	if (dbType === "postgres") {
 		// Get tables with their schema information
@@ -597,6 +622,10 @@ export async function getMigrations(config: BetterAuthOptions) {
 			);
 			// Fall back to using all tables if schema filtering fails
 		}
+	} else if (dbType === "mssql") {
+		tableMetadata = allTableMetadata.filter(
+			(table) => table.schema === currentSchema,
+		);
 	}
 	const toBeCreated: {
 		table: string;

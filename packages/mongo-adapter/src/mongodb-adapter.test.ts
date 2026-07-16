@@ -84,6 +84,58 @@ describe("mongodb-adapter", () => {
 		expect(insertOne).toHaveBeenCalledTimes(2);
 	});
 
+	it("resolves configured indexes once per model", async () => {
+		let indexFieldReads = 0;
+		const createIndex = vi.fn(async () => "connection_id_1_external_id_1");
+		const insertOne = vi.fn(async (document: Record<string, unknown>) => ({
+			insertedId: document._id,
+		}));
+		const db = {
+			collection: vi.fn(() => ({ createIndex, insertOne })),
+		};
+		const adapter = mongodbAdapter(db as unknown as Db, {
+			transaction: false,
+		})({
+			plugins: [
+				{
+					id: "directory",
+					schema: {
+						directoryUser: {
+							fields: {
+								connectionId: { type: "string" },
+								externalId: { type: "string" },
+							},
+							indexes: [
+								{
+									get fields() {
+										indexFieldReads++;
+										return ["connectionId", "externalId"] as const;
+									},
+									unique: true,
+								},
+							],
+						},
+					},
+				},
+			],
+		});
+
+		await adapter.create({
+			model: "directoryUser",
+			data: { connectionId: "okta", externalId: "employee-1" },
+		});
+		const readsAfterFirstWrite = indexFieldReads;
+
+		await adapter.create({
+			model: "directoryUser",
+			data: { connectionId: "okta", externalId: "employee-2" },
+		});
+
+		expect(indexFieldReads).toBe(readsAfterFirstWrite);
+		expect(createIndex).toHaveBeenCalledOnce();
+		expect(insertOne).toHaveBeenCalledTimes(2);
+	});
+
 	it("does not create indexes for tables with migrations disabled", async () => {
 		const createIndex = vi.fn();
 		const insertOne = vi.fn(async (document: Record<string, unknown>) => ({

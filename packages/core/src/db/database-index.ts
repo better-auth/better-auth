@@ -136,8 +136,7 @@ export function resolveDatabaseTableIndexes({
 			return (
 				fieldType === "json" ||
 				fieldType === "string[]" ||
-				fieldType === "number[]" ||
-				Array.isArray(fieldType)
+				fieldType === "number[]"
 			);
 		});
 		if (unsupportedField) {

@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { ResolvedDBTableIndex } from "@better-auth/core/db/internal";
 import {
 	getDatabaseIndexStringLength,
 	getPortableDatabaseIdentifierKey,
@@ -29,7 +30,17 @@ function parsePrismaStringLiteral(value: unknown) {
 	}
 }
 
-function getPrismaIndexDefinition(property: unknown) {
+interface PrismaIndexDefinition {
+	columns: readonly string[];
+	mappedName: string | undefined;
+	setMappedName: (name: string) => void;
+	unique: boolean;
+	validFullColumns: boolean;
+}
+
+function getPrismaIndexDefinition(
+	property: unknown,
+): PrismaIndexDefinition | undefined {
 	if (
 		!isRecord(property) ||
 		property.type !== "attribute" ||
@@ -39,11 +50,12 @@ function getPrismaIndexDefinition(property: unknown) {
 	) {
 		return undefined;
 	}
+	const propertyArgs = property.args;
 
 	let columns: readonly string[] | undefined;
-	let name: string | undefined;
+	let mappedName: string | undefined;
 	let validFullColumns = false;
-	for (const argument of property.args) {
+	for (const argument of propertyArgs) {
 		if (!isRecord(argument) || !isRecord(argument.value)) continue;
 		const value = argument.value;
 		if (
@@ -54,16 +66,39 @@ function getPrismaIndexDefinition(property: unknown) {
 			columns = value.args.map((column) => String(column));
 			validFullColumns = true;
 		} else if (value.type === "keyValue" && value.key === "map") {
-			name = parsePrismaStringLiteral(value.value);
+			mappedName = parsePrismaStringLiteral(value.value);
 		}
 	}
-	if (!name) return undefined;
 	return {
 		columns: columns ?? [],
-		name,
+		mappedName,
+		setMappedName(name) {
+			propertyArgs.push({
+				type: "attributeArgument",
+				value: {
+					type: "keyValue",
+					key: "map",
+					value: JSON.stringify(name),
+				},
+			});
+		},
 		unique: property.name === "unique",
 		validFullColumns,
 	};
+}
+
+function prismaIndexMatches(
+	existing: PrismaIndexDefinition,
+	configured: ResolvedDBTableIndex,
+) {
+	return (
+		existing.validFullColumns &&
+		existing.unique === (configured.unique ?? false) &&
+		existing.columns.length === configured.columns.length &&
+		existing.columns.every(
+			(column, position) => column === configured.columns[position],
+		)
+	);
 }
 
 export const generatePrismaSchema: SchemaGenerator = async ({
@@ -226,6 +261,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				if (type === "string") {
 					return isOptional ? "String?" : "String";
 				}
+				if (Array.isArray(type)) {
+					return isOptional ? "String?" : "String";
+				}
 				if (type === "number" && isBigint) {
 					return isOptional ? "BigInt?" : "BigInt";
 				}
@@ -354,7 +392,12 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 								isAlreadyExist.array = fieldTypeParts.isArray || undefined;
 							}
 						}
-						if (provider === "mysql" && attr.type === "string") {
+						if (
+							provider === "mysql" &&
+							(attr.type === "string" || Array.isArray(attr.type)) &&
+							typeof isAlreadyExist.fieldType === "string" &&
+							getFieldTypeParts(isAlreadyExist.fieldType).fieldType === "String"
+						) {
 							const tableIndexStringLength = getDatabaseIndexStringLength({
 								columnName: fieldName,
 								dialect: "mysql",
@@ -519,7 +562,10 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						)
 						.attribute(relationField);
 				}
-				if (provider === "mysql" && attr.type === "string") {
+				if (
+					provider === "mysql" &&
+					(attr.type === "string" || Array.isArray(attr.type))
+				) {
 					const tableIndexStringLength = getDatabaseIndexStringLength({
 						columnName: fieldName,
 						dialect: "mysql",
@@ -539,27 +585,33 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 			for (const tableIndex of resolvedTableIndexes) {
 				const attributeName = tableIndex.unique ? "unique" : "index";
-				const existingIndex = prismaModel?.properties
-					.map(getPrismaIndexDefinition)
-					.find(
-						(index) =>
-							index &&
-							getPortableDatabaseIdentifierKey(index.name) ===
-								getPortableDatabaseIdentifierKey(tableIndex.name),
-					);
-				if (existingIndex) {
-					const matches =
-						existingIndex.validFullColumns &&
-						existingIndex.unique === (tableIndex.unique ?? false) &&
-						existingIndex.columns.length === tableIndex.columns.length &&
-						existingIndex.columns.every(
-							(column, position) => column === tableIndex.columns[position],
-						);
-					if (!matches) {
+				const existingIndexes =
+					prismaModel?.properties
+						.map(getPrismaIndexDefinition)
+						.filter(
+							(index): index is PrismaIndexDefinition => index !== undefined,
+						) ?? [];
+				const existingMappedIndex = existingIndexes.find(
+					(index) =>
+						index.mappedName !== undefined &&
+						getPortableDatabaseIdentifierKey(index.mappedName) ===
+							getPortableDatabaseIdentifierKey(tableIndex.name),
+				);
+				if (existingMappedIndex) {
+					if (!prismaIndexMatches(existingMappedIndex, tableIndex)) {
 						throw new BetterAuthError(
 							`Prisma index "${tableIndex.name}" on model "${modelName}" does not match the configured fields and uniqueness. Rename or replace the existing index, then generate the schema again.`,
 						);
 					}
+					continue;
+				}
+				const existingUnmappedIndex = existingIndexes.find(
+					(index) =>
+						index.mappedName === undefined &&
+						prismaIndexMatches(index, tableIndex),
+				);
+				if (existingUnmappedIndex) {
+					existingUnmappedIndex.setMappedName(tableIndex.name);
 					continue;
 				}
 				builder
