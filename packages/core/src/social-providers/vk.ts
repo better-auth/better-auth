@@ -1,10 +1,10 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface VkProfile {
 	user: {
@@ -92,7 +92,7 @@ export const vk = (options: VkOption) => {
 				access_token: data.accessToken,
 				client_id: options.clientId,
 			}).toString();
-			const { data: profile, error } = await betterFetch<VkProfile>(
+			const { data: profile, error } = await fetchPublicResource<VkProfile>(
 				"https://id.vk.com/oauth2/user_info",
 				{
 					method: "POST",

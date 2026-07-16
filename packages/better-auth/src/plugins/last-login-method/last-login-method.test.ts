@@ -32,6 +32,7 @@ const SIWE_WALLET = "0x000000000000000000000000000000000000dEaD";
 const SIWE_CHAIN_ID = 1;
 const SIWE_DOMAIN = "example.com";
 const SIWE_NONCE = "A1b2C3d4E5f6G7h8J";
+const genericProviderOrigin = "https://provider.example.com";
 // The siwe plugin now parses and validates the ERC-4361 message body (binding it
 // to the server-issued nonce), so these tests must sign a real SIWE message
 // rather than an arbitrary placeholder string.
@@ -73,7 +74,7 @@ beforeAll(async () => {
 				id_token: testIdToken,
 			});
 		}),
-		http.post("https://provider.example.com/oauth/token", () => {
+		http.post(`${genericProviderOrigin}/oauth/token`, () => {
 			return HttpResponse.json({});
 		}),
 	];
@@ -623,6 +624,7 @@ describe("lastLoginMethod", async () => {
 	it("should set the last login method for generic OAuth provider with /callback/:providerId", async () => {
 		const { client, cookieSetter } = await getTestInstance(
 			{
+				trustedOrigins: [genericProviderOrigin],
 				plugins: [
 					lastLoginMethod({ storeInDatabase: true }),
 					genericOAuth({
@@ -631,9 +633,8 @@ describe("lastLoginMethod", async () => {
 								providerId: "my-provider-id",
 								clientId: "test-client-id",
 								clientSecret: "test-client-secret",
-								authorizationUrl:
-									"https://provider.example.com/oauth/authorize",
-								tokenUrl: "https://provider.example.com/oauth/token",
+								authorizationUrl: `${genericProviderOrigin}/oauth/authorize`,
+								tokenUrl: `${genericProviderOrigin}/oauth/token`,
 								scopes: ["openid", "profile", "email"],
 								async getUserInfo(token) {
 									return {

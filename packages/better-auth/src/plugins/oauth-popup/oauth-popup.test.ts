@@ -37,6 +37,7 @@ describe("oauth popup server flow", async () => {
 
 	const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
 		baseURL: popupOrigin,
+		trustedOrigins: [`http://localhost:${port}`],
 		// Cookie-cached sessions make the callback set both session_token and
 		// session_data, so the completion response carries multiple Set-Cookie
 		// headers (the case where the token cookie was getting dropped).

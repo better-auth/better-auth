@@ -1,10 +1,10 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface SpotifyProfile {
 	id: string;
@@ -71,15 +71,16 @@ export const spotify = (options: SpotifyOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			const { data: profile, error } = await betterFetch<SpotifyProfile>(
-				"https://api.spotify.com/v1/me",
-				{
-					method: "GET",
-					headers: {
-						Authorization: `Bearer ${token.accessToken}`,
+			const { data: profile, error } =
+				await fetchPublicResource<SpotifyProfile>(
+					"https://api.spotify.com/v1/me",
+					{
+						method: "GET",
+						headers: {
+							Authorization: `Bearer ${token.accessToken}`,
+						},
 					},
-				},
-			);
+				);
 			if (error) {
 				return null;
 			}

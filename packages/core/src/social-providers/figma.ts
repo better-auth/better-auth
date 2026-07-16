@@ -1,4 +1,3 @@
-import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
@@ -7,6 +6,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface FigmaProfile {
 	id: string;
@@ -88,7 +88,7 @@ export const figma = (options: FigmaOptions) => {
 			}
 
 			try {
-				const { data: profile } = await betterFetch<FigmaProfile>(
+				const { data: profile } = await fetchPublicResource<FigmaProfile>(
 					"https://api.figma.com/v1/me",
 					{
 						headers: {

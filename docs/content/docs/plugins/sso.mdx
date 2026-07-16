@@ -244,28 +244,15 @@ Example of relative endpoint and issuer with base path:
 
 #### Trusted origins
 
-Both the discovery endpoint as well as any URL resolved through the discovery process are subject to your app's [`trustedOrigins`](/docs/reference/security#trusted-origins) configuration.
-Discovery will fail with the `discovery_untrusted_origin` code unless you explicitly update your `trustedOrigins` configuration:
+Discovery, token, userinfo, and JWKS endpoints must use public hosts. Public IdPs such as Okta, Google, Microsoft Entra, and Auth0 do not need `trustedOrigins` entries.
+
+Add private, VPN-only, or local IdPs to `trustedOrigins`:
 
 ```ts
-trustedOrigins: ["https://your-org.okta.com"],
+trustedOrigins: ["https://idp.internal.example.com"],
 ```
 
-If your use-case requires to support multiple arbitrary but known IDPs (e.g Okta), we recommend to:
-
-1. Register a list of well known IDPs ahead of time
-
-```ts
-trustedOrigins: [
-    "https://your-org.okta.com",
-    "https://accounts.google.com",
-    "https://login.microsoftonline.com",
-    "https://auth0.com",
-    "https://idp.example.com"
-],
-```
-
-2. Or dynamically compute the `trustedOrigins` by specifying a callback function:
+You can compute private IdP origins dynamically:
 
 ```ts
 trustedOrigins: async (request) => {
@@ -285,13 +272,13 @@ trustedOrigins: async (request) => {
 }
 ```
 
-See the [`trustedOrigins`](/docs/reference/security#trusted-origins) docs for more information.
+See [`trustedOrigins`](/docs/reference/security#trusted-origins) for the full option contract.
 
 #### Redirecting OIDC endpoints
 
-Better Auth does not follow redirects for server-side OIDC requests. Configure the final canonical URL for the discovery, token, userinfo, and JWKS endpoints.
+Better Auth does not follow redirects for server-side OIDC requests. Configure the final discovery, token, userinfo, and JWKS URLs.
 
-If one of those endpoints returns a `3xx` response, registration or sign-in fails with `oidc_endpoint_redirect`. This keeps endpoint validation tied to the exact URL that Better Auth fetches.
+If an endpoint returns `3xx`, registration or sign-in fails with `oidc_endpoint_redirect`.
 
 #### Why Discovery Can Fail
 
@@ -306,17 +293,17 @@ Better Auth validates that the IdP's metadata is correct and complete **before**
 
 If the Identity Provider is misconfigured or unreachable, registration will fail with a structured error.
 
-| Error Code                      | Meaning                                                                                                                             |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `issuer_mismatch`               | The IdP's discovery document reports a different `issuer` than the one you configured                                               |
-| `discovery_incomplete`          | Required fields (`authorization_endpoint`, `token_endpoint`, `jwks_uri`) are missing                                                |
-| `discovery_not_found`           | The discovery document endpoint returned 404                                                                                        |
-| `discovery_timeout`             | The IdP did not respond within the timeout window (default: 10 seconds)                                                             |
-| `discovery_invalid_url`         | The discovery URL is malformed or uses an unsupported protocol                                                                      |
-| `discovery_untrusted_origin`    | The discovery URL or one of the URLs discovered as part of this process was not trusted by your app's trusted origins configuration |
-| `discovery_invalid_json`        | The discovery response is empty or not valid JSON                                                                                   |
-| `oidc_endpoint_redirect`        | The discovery, token, userinfo, or JWKS endpoint returned a redirect; configure the final endpoint URL instead                      |
-| `unsupported_token_auth_method` | The IdP only supports token auth methods that Better Auth doesn't support                                                           |
+| Error Code                      | Meaning                                                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `issuer_mismatch`               | The IdP's discovery document reports a different `issuer` than the one you configured                              |
+| `discovery_incomplete`          | Required fields (`authorization_endpoint`, `token_endpoint`, `jwks_uri`) are missing                               |
+| `discovery_not_found`           | The discovery document endpoint returned 404                                                                       |
+| `discovery_timeout`             | The IdP did not respond within the timeout window (default: 10 seconds)                                            |
+| `discovery_invalid_url`         | The discovery URL is malformed or uses an unsupported protocol                                                     |
+| `discovery_private_host`        | The discovery URL or one of the discovered endpoints points to a private, link-local, or otherwise non-public host |
+| `discovery_invalid_json`        | The discovery response is empty or not valid JSON                                                                  |
+| `oidc_endpoint_redirect`        | The discovery, token, userinfo, or JWKS endpoint returned a redirect; configure the final endpoint URL instead     |
+| `unsupported_token_auth_method` | The IdP only supports token auth methods that Better Auth doesn't support                                          |
 
 **Supported token auth methods:**
 

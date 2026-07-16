@@ -1,7 +1,7 @@
-import { betterFetch } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface VercelProfile {
 	sub: string;
@@ -63,7 +63,7 @@ export const vercel = (options: VercelOptions) => {
 				return options.getUserInfo(token);
 			}
 
-			const { data: profile, error } = await betterFetch<VercelProfile>(
+			const { data: profile, error } = await fetchPublicResource<VercelProfile>(
 				"https://api.vercel.com/login/oauth/userinfo",
 				{
 					headers: {

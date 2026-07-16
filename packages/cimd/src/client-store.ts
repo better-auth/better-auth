@@ -1,4 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { isLoopbackHost } from "@better-auth/core/utils/host";
+import {
+	assertPublicFetchTarget,
+	isRedirectResponse,
+	SsrfRefusedError,
+} from "@better-auth/core/utils/public-fetch";
 import type {
 	OAuthClient,
 	OAuthOptions,
@@ -282,9 +288,7 @@ async function fetchAndValidateMetadataDocument(
 		});
 	}
 
-	// Pre-fetch gate: operators can block domains, rate-limit, or reject
-	// URLs whose hostnames resolve to non-public addresses (DNS-level SSRF
-	// defense beyond the IP-literal check in `validateClientIdUrl`).
+	// Caller policy runs before Better Auth's shared host gate.
 	if (cimdOptions.allowFetch) {
 		const allowed = await cimdOptions.allowFetch(clientIdUrl, ctx);
 		if (!allowed) {
@@ -296,11 +300,35 @@ async function fetchAndValidateMetadataDocument(
 		}
 	}
 
+	// The shared host gate allows loopback only when CIMD opted into it.
+	try {
+		await assertPublicFetchTarget(clientIdUrl, {
+			isTrustedOrigin: cimdOptions.allowLoopback
+				? (url) => {
+						try {
+							return isLoopbackHost(new URL(url).hostname);
+						} catch {
+							return false;
+						}
+					}
+				: undefined,
+		});
+	} catch (err) {
+		if (err instanceof SsrfRefusedError) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client",
+				error_description:
+					"client_id URL is not permitted by the server's fetch policy",
+			});
+		}
+		throw err;
+	}
+
 	let response: Response;
 	try {
 		response = await fetch(clientIdUrl, {
 			headers: { Accept: "application/json" },
-			redirect: "error",
+			redirect: "manual",
 			signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
 		});
 	} catch (err) {
@@ -310,7 +338,15 @@ async function fetchAndValidateMetadataDocument(
 			error: "invalid_client",
 			error_description: isTimeout
 				? `Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`
-				: "Failed to fetch metadata document (network error or redirect blocked)",
+				: "Failed to fetch metadata document (network error)",
+		});
+	}
+
+	if (isRedirectResponse(response)) {
+		await response.body?.cancel();
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client",
+			error_description: "Metadata document fetch returned an HTTP redirect",
 		});
 	}
 

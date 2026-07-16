@@ -1,5 +1,3 @@
-import { betterFetch } from "@better-fetch/fetch";
-
 import { decodeJwt, importJWK } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
@@ -10,6 +8,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 export interface AppleProfile {
 	/**
 	 * The subject registered claim identifies the principal that’s the subject
@@ -190,7 +189,7 @@ export const apple = (options: AppleOptions) => {
 export const getApplePublicKey = async (kid: string) => {
 	const APPLE_BASE_URL = "https://appleid.apple.com";
 	const JWKS_APPLE_URI = "/auth/keys";
-	const { data } = await betterFetch<{
+	const { data } = await fetchPublicResource<{
 		keys: Array<{
 			kid: string;
 			alg: string;

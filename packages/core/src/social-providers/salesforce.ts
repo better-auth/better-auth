@@ -1,4 +1,3 @@
-import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
@@ -7,6 +6,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface SalesforceProfile {
 	sub: string;
@@ -128,7 +128,7 @@ export const salesforce = (options: SalesforceOptions) => {
 			}
 
 			try {
-				const { data: user } = await betterFetch<SalesforceProfile>(
+				const { data: user } = await fetchPublicResource<SalesforceProfile>(
 					userInfoEndpoint,
 					{
 						headers: {

@@ -1,4 +1,3 @@
-import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../env";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
@@ -7,6 +6,7 @@ import {
 	refreshAccessToken,
 } from "../oauth2";
 import { authorizationCodeRequest } from "../oauth2/validate-authorization-code";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface GithubProfile {
 	login: string;
@@ -97,7 +97,7 @@ export const github = (options: GithubOptions) => {
 				options,
 			});
 
-			const { data, error } = await betterFetch<
+			const { data, error } = await fetchPublicResource<
 				| { access_token: string; token_type: string; scope: string }
 				| { error: string; error_description?: string; error_uri?: string }
 			>(tokenEndpoint, {
@@ -135,7 +135,7 @@ export const github = (options: GithubOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			const { data: profile, error } = await betterFetch<GithubProfile>(
+			const { data: profile, error } = await fetchPublicResource<GithubProfile>(
 				"https://api.github.com/user",
 				{
 					headers: {
@@ -147,7 +147,7 @@ export const github = (options: GithubOptions) => {
 			if (error) {
 				return null;
 			}
-			const { data: emails } = await betterFetch<
+			const { data: emails } = await fetchPublicResource<
 				{
 					email: string;
 					primary: boolean;

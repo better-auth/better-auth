@@ -17,6 +17,18 @@ import {
 } from "vitest";
 import { cimd } from "./index";
 
+const lookup = vi.hoisted(() =>
+	vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]),
+);
+
+vi.mock("node:dns/promises", () => ({
+	lookup,
+}));
+
+afterEach(() => {
+	lookup.mockClear();
+});
+
 const PKCE_VERIFIER = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
 const PKCE_CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 
@@ -524,6 +536,225 @@ describe("CIMD - allowFetch gate", async () => {
 				allowedClientUrl,
 				redirectUriAllowed,
 			),
+			{
+				method: "GET",
+				onError(ctx) {
+					redirect = ctx.response.headers.get("Location") || "";
+				},
+			},
+		);
+		expect(redirect).toContain("/consent");
+	});
+});
+
+describe("CIMD - SSRF fetch boundary", async () => {
+	const port = 3105;
+	const authServerBaseUrl = `http://localhost:${port}`;
+	const clientMetadataUrl =
+		"https://mcp-client-ssrf.example.com/client-metadata.json";
+	const redirectUri = "http://localhost:5106/callback";
+
+	const {
+		auth: authorizationServer,
+		signInWithTestUser,
+		customFetchImpl,
+	} = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["openid", "profile", "email", "offline_access"],
+				silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
+			}),
+			cimd(),
+		],
+	});
+
+	let server: Listener;
+	beforeAll(async () => {
+		server = await listen(
+			(req, res) => toNodeHandler(authorizationServer.handler)(req, res),
+			{ port },
+		);
+	});
+	afterAll(async () => {
+		await server.close();
+	});
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	async function authorizeStatus(clientIdUrl: string): Promise<number> {
+		const { headers } = await signInWithTestUser();
+		const authedClient = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: { customFetchImpl, headers },
+		});
+
+		let status = 0;
+		await authedClient.$fetch(
+			buildAuthorizeUrl(authServerBaseUrl, clientIdUrl, redirectUri),
+			{
+				method: "GET",
+				onError(ctx) {
+					status = ctx.response.status;
+				},
+			},
+		);
+		return status;
+	}
+
+	it("refuses a redirected metadata response (redirect: manual)", async () => {
+		const originalFetch = globalThis.fetch.bind(globalThis);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+				const requested =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				if (requested === clientMetadataUrl) {
+					return Promise.resolve(
+						new Response(null, {
+							status: 302,
+							headers: {
+								location: "https://attacker.example.com/client-metadata.json",
+							},
+						}),
+					);
+				}
+				return originalFetch(input, init);
+			}),
+		);
+
+		expect(await authorizeStatus(clientMetadataUrl)).toBeGreaterThanOrEqual(
+			400,
+		);
+	});
+
+	it("enforces the response size limit while streaming the body", async () => {
+		const oversized = JSON.stringify({
+			client_id: clientMetadataUrl,
+			redirect_uris: [redirectUri],
+			padding: "x".repeat(6 * 1024),
+		});
+		const originalFetch = globalThis.fetch.bind(globalThis);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+				const requested =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				if (requested === clientMetadataUrl) {
+					const stream = new ReadableStream<Uint8Array>({
+						start(controller) {
+							controller.enqueue(new TextEncoder().encode(oversized));
+							controller.close();
+						},
+					});
+					return Promise.resolve(
+						new Response(stream, {
+							status: 200,
+							headers: { "content-type": "application/json" },
+						}),
+					);
+				}
+				return originalFetch(input, init);
+			}),
+		);
+
+		expect(await authorizeStatus(clientMetadataUrl)).toBeGreaterThanOrEqual(
+			400,
+		);
+	});
+
+	it("blocks a loopback client_id by default", async () => {
+		const loopbackUrl = "https://127.0.0.1/client-metadata.json";
+		const originalFetch = globalThis.fetch.bind(globalThis);
+		const fetchSpy = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
+			originalFetch(input, init),
+		);
+		vi.stubGlobal("fetch", fetchSpy);
+
+		expect(await authorizeStatus(loopbackUrl)).toBeGreaterThanOrEqual(400);
+		const reached = fetchSpy.mock.calls.some((args) => {
+			const input = args[0];
+			const url =
+				typeof input === "string"
+					? input
+					: input instanceof URL
+						? input.href
+						: (input as Request).url;
+			return url === loopbackUrl;
+		});
+		expect(reached).toBe(false);
+	});
+});
+
+describe("CIMD - SSRF boundary with allowLoopback", async () => {
+	const port = 3106;
+	const authServerBaseUrl = `http://localhost:${port}`;
+	const loopbackClientUrl = "http://127.0.0.1:5107/client-metadata.json";
+	const redirectUri = "http://127.0.0.1:5107/callback";
+	const metadataDocument = {
+		client_id: loopbackClientUrl,
+		redirect_uris: [redirectUri],
+		token_endpoint_auth_method: "none",
+	};
+
+	const {
+		auth: authorizationServer,
+		signInWithTestUser,
+		customFetchImpl,
+	} = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["openid", "profile", "email", "offline_access"],
+				silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
+			}),
+			cimd({ allowLoopback: true }),
+		],
+	});
+
+	let server: Listener;
+	beforeAll(async () => {
+		server = await listen(
+			(req, res) => toNodeHandler(authorizationServer.handler)(req, res),
+			{ port },
+		);
+	});
+	afterAll(async () => {
+		await server.close();
+	});
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it("permits a loopback client_id when allowLoopback is set", async () => {
+		stubMetadataFetch(loopbackClientUrl, metadataDocument);
+
+		const { headers } = await signInWithTestUser();
+		const authedClient = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: { customFetchImpl, headers },
+		});
+
+		let redirect = "";
+		await authedClient.$fetch(
+			buildAuthorizeUrl(authServerBaseUrl, loopbackClientUrl, redirectUri),
 			{
 				method: "GET",
 				onError(ctx) {

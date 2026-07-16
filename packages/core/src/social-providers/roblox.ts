@@ -1,10 +1,10 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface RobloxProfile extends Record<string, any> {
 	/** the user's id */
@@ -82,7 +82,7 @@ export const roblox = (options: RobloxOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			const { data: profile, error } = await betterFetch<RobloxProfile>(
+			const { data: profile, error } = await fetchPublicResource<RobloxProfile>(
 				"https://apis.roblox.com/oauth/v1/userinfo",
 				{
 					headers: {

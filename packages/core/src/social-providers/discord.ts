@@ -1,10 +1,10 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 export interface DiscordProfile extends Record<string, any> {
 	/** the user's id (i.e. the numerical snowflake) */
 	id: string;
@@ -134,14 +134,15 @@ export const discord = (options: DiscordOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			const { data: profile, error } = await betterFetch<DiscordProfile>(
-				"https://discord.com/api/users/@me",
-				{
-					headers: {
-						authorization: `Bearer ${token.accessToken}`,
+			const { data: profile, error } =
+				await fetchPublicResource<DiscordProfile>(
+					"https://discord.com/api/users/@me",
+					{
+						headers: {
+							authorization: `Bearer ${token.accessToken}`,
+						},
 					},
-				},
-			);
+				);
 
 			if (error) {
 				return null;

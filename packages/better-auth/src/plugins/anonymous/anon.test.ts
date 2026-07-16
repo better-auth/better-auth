@@ -698,6 +698,7 @@ describe("anonymous linking through generic oauth (Expo)", async () => {
 	const { client, sessionSetter, cookieSetter, customFetchImpl } =
 		await getTestInstance(
 			{
+				trustedOrigins: [`http://localhost:${port}`],
 				plugins: [
 					anonymous({
 						async onLinkAccount(data) {

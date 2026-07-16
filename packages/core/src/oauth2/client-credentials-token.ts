@@ -1,6 +1,6 @@
 import type { AwaitableFunction } from "../types";
+import { fetchPublicResource } from "../utils/public-fetch";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
-import { fetchRefusingRedirects } from "./reject-redirects";
 import type {
 	TokenEndpointAuth,
 	TokenEndpointSecretAuthentication,
@@ -27,6 +27,11 @@ interface ClientCredentialsTokenInput
 	extends ClientCredentialsTokenRequestInput {
 	tokenEndpoint: string;
 	scope: string;
+	/**
+	 * Origins exempt from the public-routable gate, for an operator whose token
+	 * endpoint runs on a private network. Forwarded to the SSRF fetch boundary.
+	 */
+	isTrustedOrigin?: (url: string) => boolean;
 }
 
 export async function clientCredentialsTokenRequest({
@@ -99,6 +104,7 @@ export async function clientCredentialsToken({
 	authentication,
 	tokenEndpointAuth,
 	resource,
+	isTrustedOrigin,
 }: ClientCredentialsTokenInput): Promise<OAuth2Tokens> {
 	const { body, headers } = await clientCredentialsTokenRequest({
 		options,
@@ -109,7 +115,7 @@ export async function clientCredentialsToken({
 		resource,
 	});
 
-	const { data, error } = await fetchRefusingRedirects<{
+	const { data, error } = await fetchPublicResource<{
 		access_token: string;
 		expires_in?: number | undefined;
 		token_type?: string | undefined;
@@ -118,6 +124,7 @@ export async function clientCredentialsToken({
 		method: "POST",
 		body,
 		headers,
+		isTrustedOrigin,
 	});
 	if (error) {
 		throw error;

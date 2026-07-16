@@ -1,6 +1,11 @@
 import type { User } from "@better-auth/core/db";
 import { isDevelopment } from "@better-auth/core/env";
-import { isPublicRoutableHost } from "@better-auth/core/utils/host";
+import { isLoopbackHost } from "@better-auth/core/utils/host";
+import {
+	assertPublicFetchTarget,
+	isRedirectResponse,
+	SsrfRefusedError,
+} from "@better-auth/core/utils/public-fetch";
 import { base64 } from "@better-auth/utils/base64";
 import electron from "electron";
 import type { ElectronClientOptions } from "./client";
@@ -8,6 +13,7 @@ import type { ElectronClientOptions } from "./client";
 const { net } = electron;
 
 const DEFAULT_MAX_BYTES = 1024 * 1024 * 5; // 5MB
+const MAX_REDIRECT_HOPS = 5;
 
 export type FetchUserImageResult = {
 	stream: ReadableStream<Uint8Array>;
@@ -33,24 +39,20 @@ export async function fetchUserImage(
 		return { stream, mimeType: decoded.mimeType };
 	}
 
-	// Validate and resolve URL
-	let resolvedUrl: string;
+	let parsed: URL;
 	try {
-		let parsed: URL;
+		parsed = new URL(url);
+	} catch {
+		if (!baseURL) return null;
+		const base = baseURL.endsWith("/") ? baseURL : `${baseURL}/`;
+		const relative = url.startsWith("/") ? url.slice(1) : url;
 		try {
-			parsed = new URL(url);
-		} catch {
-			if (!baseURL) return null;
-			const base = baseURL.endsWith("/") ? baseURL : `${baseURL}/`;
-			const relative = url.startsWith("/") ? url.slice(1) : url;
 			parsed = new URL(relative, base);
-		}
-		if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+		} catch {
 			return null;
 		}
-		if (!isDevelopment() && !isPublicRoutableHost(parsed.hostname)) return null;
-		resolvedUrl = parsed.href;
-	} catch {
+	}
+	if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
 		return null;
 	}
 
@@ -60,11 +62,47 @@ export async function fetchUserImage(
 		customValidator: validateImage = detectImageType,
 	} = options?.userImageProxy ?? {};
 
-	const response = await net.fetch(resolvedUrl, {
-		method: "GET",
-		headers: { accept },
-	});
+	const isTrustedOrigin = (target: string) => {
+		if (!isDevelopment()) return false;
+		try {
+			return isLoopbackHost(new URL(target).hostname);
+		} catch {
+			return false;
+		}
+	};
 
+	let response: Response | null = null;
+	let next: URL | null = parsed;
+	for (let hop = 0; hop < MAX_REDIRECT_HOPS; hop++) {
+		if (!next) return null;
+		try {
+			await assertPublicFetchTarget(next, { isTrustedOrigin });
+		} catch (error) {
+			if (error instanceof SsrfRefusedError) return null;
+			throw error;
+		}
+
+		const hopResponse = await net.fetch(next.href, {
+			method: "GET",
+			headers: { accept },
+			redirect: "manual",
+		});
+
+		if (!isRedirectResponse(hopResponse)) {
+			response = hopResponse;
+			break;
+		}
+
+		const location = hopResponse.headers.get("location");
+		if (!location) return null;
+		try {
+			next = new URL(location, next);
+		} catch {
+			return null;
+		}
+	}
+
+	if (!response) return null;
 	if (!response.ok) return null;
 
 	const contentType = response.headers.get("content-type");

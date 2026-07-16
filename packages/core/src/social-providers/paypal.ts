@@ -1,10 +1,10 @@
 import { base64 } from "@better-auth/utils/base64";
-import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL } from "../oauth2";
+import { fetchPublicResource } from "../utils/public-fetch";
 
 export interface PayPalProfile {
 	sub?: string | undefined;
@@ -124,7 +124,7 @@ export const paypal = (options: PayPalOptions) => {
 			);
 
 			try {
-				const response = await betterFetch(tokenEndpoint, {
+				const response = await fetchPublicResource(tokenEndpoint, {
 					method: "POST",
 					headers: {
 						Authorization: `Basic ${credentials}`,
@@ -169,7 +169,7 @@ export const paypal = (options: PayPalOptions) => {
 					);
 
 					try {
-						const response = await betterFetch(tokenEndpoint, {
+						const response = await fetchPublicResource(tokenEndpoint, {
 							method: "POST",
 							headers: {
 								Authorization: `Basic ${credentials}`,
@@ -212,7 +212,7 @@ export const paypal = (options: PayPalOptions) => {
 			}
 
 			try {
-				const response = await betterFetch<PayPalProfile>(
+				const response = await fetchPublicResource<PayPalProfile>(
 					`${userInfoEndpoint}?schema=paypalv1.1`,
 					{
 						headers: {
