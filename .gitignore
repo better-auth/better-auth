@@ -213,3 +213,6 @@ state.txt
 .claude/worktrees
 
 .deepsec
+
+# Intermediate UI runtime build output (final bundle is committed as runtime.generated.ts)
+packages/better-auth/dist-runtime/

@@ -34,6 +34,7 @@ export interface MultiSessionConfig {
 }
 
 import { MULTI_SESSION_ERROR_CODES as ERROR_CODES } from "./error-codes";
+import { multiSessionSettingsCards } from "./multi-session-ui";
 
 export { MULTI_SESSION_ERROR_CODES as ERROR_CODES } from "./error-codes";
 
@@ -416,5 +417,31 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 		},
 		options,
 		$ERROR_CODES: ERROR_CODES,
+		ui: {
+			capabilities: {
+				"multi-session": {
+					id: "multi-session",
+					enabled: true,
+					routes: {
+						listDeviceSessions: {
+							type: "auth-route",
+							path: "/multi-session/list-device-sessions",
+							method: "GET",
+						},
+						setActive: {
+							type: "auth-route",
+							path: "/multi-session/set-active",
+							method: "POST",
+						},
+						revoke: {
+							type: "auth-route",
+							path: "/multi-session/revoke",
+							method: "POST",
+						},
+					},
+				},
+			},
+			settingsCards: multiSessionSettingsCards,
+		},
 	} satisfies BetterAuthPlugin;
 };

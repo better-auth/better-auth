@@ -16,7 +16,11 @@ import {
 import { symmetricEncrypt } from "../../crypto";
 import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db/schema";
-import { shouldRequirePassword, validatePassword } from "../../utils/password";
+import {
+	isSessionFresh,
+	shouldRequirePassword,
+	validatePassword,
+} from "../../utils/password";
 import { PACKAGE_VERSION } from "../../version";
 import type { BackupCodeOptions } from "./backup-codes";
 import { backupCode2fa, generateBackupCodes } from "./backup-codes";
@@ -29,6 +33,7 @@ import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 import { otp2fa } from "./otp";
 import { schema } from "./schema";
 import { totp2fa } from "./totp";
+import { twoFactorSettingsCards } from "./two-factor-ui";
 import type {
 	TwoFactorOptions,
 	TwoFactorTable,
@@ -79,17 +84,11 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 			description: "Custom issuer for the TOTP URI",
 		})
 		.optional();
-	const enableTwoFactorBodySchema = allowPasswordless
-		? z.object({
-				password: passwordSchema.optional(),
-				method: methodField,
-				issuer: issuerField,
-			})
-		: z.object({
-				password: passwordSchema,
-				method: methodField,
-				issuer: issuerField,
-			});
+	const enableTwoFactorBodySchema = z.object({
+		password: passwordSchema.optional(),
+		method: methodField,
+		issuer: issuerField,
+	});
 	const disableTwoFactorBodySchema = allowPasswordless
 		? z.object({
 				password: passwordSchema.optional(),
@@ -170,11 +169,9 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
 					const { password, issuer, method } = ctx.body;
-					const requirePassword = await shouldRequirePassword(
-						ctx,
-						user.id,
-						allowPasswordless,
-					);
+					const requirePassword =
+						!isSessionFresh(ctx) &&
+						(await shouldRequirePassword(ctx, user.id, allowPasswordless));
 					if (requirePassword) {
 						if (!password) {
 							throw APIError.from(
@@ -614,6 +611,62 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 				max: 3,
 			},
 		],
+		ui: {
+			capabilities: {
+				"two-factor": {
+					id: "two-factor",
+					enabled: true,
+					metadata: {
+						allowPasswordless: Boolean(allowPasswordless),
+						supportsTotp: options?.totpOptions?.disable !== true,
+						supportsOtp: Boolean(options?.otpOptions?.sendOTP),
+					},
+					routes: {
+						verifyTotp: {
+							type: "auth-route",
+							path: "/two-factor/verify-totp",
+							method: "POST",
+						},
+						verifyOtp: {
+							type: "auth-route",
+							path: "/two-factor/verify-otp",
+							method: "POST",
+						},
+						verifyBackupCode: {
+							type: "auth-route",
+							path: "/two-factor/verify-backup-code",
+							method: "POST",
+						},
+						sendOtp: {
+							type: "auth-route",
+							path: "/two-factor/send-otp",
+							method: "POST",
+						},
+						enable: {
+							type: "auth-route",
+							path: "/two-factor/enable",
+							method: "POST",
+						},
+						disable: {
+							type: "auth-route",
+							path: "/two-factor/disable",
+							method: "POST",
+						},
+						getTotpUri: {
+							type: "auth-route",
+							path: "/two-factor/get-totp-uri",
+							method: "POST",
+						},
+						generateBackupCodes: {
+							type: "auth-route",
+							path: "/two-factor/generate-backup-codes",
+							method: "POST",
+						},
+					},
+				},
+			},
+			settingsCards: twoFactorSettingsCards,
+		},
 		$ERROR_CODES: TWO_FACTOR_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };

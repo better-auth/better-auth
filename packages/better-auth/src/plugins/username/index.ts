@@ -15,6 +15,7 @@ import { PACKAGE_VERSION } from "../../version";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import type { UsernameSchema } from "./schema";
 import { getSchema } from "./schema";
+import { usernameSettingsCards } from "./username-ui";
 
 export { USERNAME_ERROR_CODES } from "./error-codes";
 
@@ -621,6 +622,33 @@ export const username = (options?: UsernameOptions | undefined) => {
 					});
 				},
 			),
+		},
+		ui: {
+			capabilities: {
+				username: {
+					id: "username",
+					enabled: true,
+					metadata: {
+						minUsernameLength,
+						maxUsernameLength,
+						supportsDisplayUsername: true,
+						displayUsernameLabel: "Display name",
+					},
+					routes: {
+						signInUsername: {
+							type: "auth-route",
+							path: "/sign-in/username",
+							method: "POST",
+						},
+						isUsernameAvailable: {
+							type: "auth-route",
+							path: "/is-username-available",
+							method: "POST",
+						},
+					},
+				},
+			},
+			settingsCards: usernameSettingsCards,
 		},
 		schema: mergeSchema(
 			getSchema({

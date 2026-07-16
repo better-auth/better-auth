@@ -23,12 +23,14 @@ export const inferAdditionalFields = <
 >(
 	schema?: S | undefined,
 ) => {
-	type Opts = T extends BetterAuthOptions
-		? T
-		: T extends {
-					options: BetterAuthOptions;
-				}
-			? T["options"]
+	type Opts = T extends {
+		options: infer O;
+	}
+		? O extends BetterAuthOptions
+			? O
+			: never
+		: T extends BetterAuthOptions
+			? T
 			: never;
 
 	type Plugin = Opts extends never
@@ -63,14 +65,14 @@ export const inferAdditionalFields = <
 					version: string;
 					schema: {
 						user: {
-							fields: Opts["user"] extends {
+							fields: NonNullable<Opts["user"]> extends {
 								additionalFields: infer U;
 							}
 								? U
 								: {};
 						};
 						session: {
-							fields: Opts["session"] extends {
+							fields: NonNullable<Opts["session"]> extends {
 								additionalFields: infer U;
 							}
 								? U

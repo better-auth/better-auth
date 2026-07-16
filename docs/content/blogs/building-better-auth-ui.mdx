@@ -1,0 +1,348 @@
+---
+title: "Building Better Auth UI Without Shipping React"
+description: "How Better Auth can support framework-agnostic auth pages with JSX authoring, server-rendered HTML, and a tiny client runtime."
+date: 2026-06-06
+author:
+  name: "Better Auth"
+  avatar: "/avatars/beka.jpg"
+image: "https://docs.better-auth.com/blogs/better-auth-ui.png"
+tags: ["ui", "authentication", "jsx", "plugins", "framework-agnostic"]
+---
+
+# Building Better Auth UI Without Shipping React
+
+Better Auth has always been API-first. You bring your framework, your routes, your components, and Better Auth gives you the primitives to own authentication.
+
+That model works well for applications, but it leaves a gap for plugin-owned UI.
+
+Some plugins naturally want pages:
+
+* Auth flows need sign-in, sign-up, forgot-password, reset-password, verify-email, and error pages.
+* Admin needs dashboards, user tables, sessions, audit logs, and security controls.
+* Enterprise SSO needs a self-service configuration screen.
+* Passkeys, two-factor, magic links, captcha, and last-login-method all want to influence auth flows.
+
+The challenge is making that possible without turning Better Auth into a React app, a Next.js app, or a framework-specific dashboard.
+
+This is the design we landed on.
+
+***
+
+## The Constraints
+
+We wanted the UI system to satisfy a few constraints:
+
+* **Framework agnostic**: served by Better Auth's own request handler.
+* **No React runtime**: plugin UI should not require hydration or ship React to the browser.
+* **Ergonomic authoring**: maintainers should not write large JSON component trees by hand.
+* **Safe rendering**: HTML must be escaped by default.
+* **Composable with plugins**: auth pages need to know which plugins are enabled and call their endpoints.
+* **Small client runtime**: forms, toasts, navigation, and lightweight reactivity should work without a full framework.
+
+The tension is that JSX is a great authoring format, but React is a runtime model. We wanted the former without inheriting the latter.
+
+***
+
+## A Separate UI Handler
+
+The first piece is a separate handler:
+
+```ts title="server.ts"
+app.use("/api/auth", auth.handler);
+app.use("/auth", auth.ui.handler);
+```
+
+The API handler remains the JSON/API surface. The UI handler serves pages like:
+
+```txt
+/auth/sign-in
+/auth/sign-up
+/auth/error
+/auth/sso-config
+```
+
+Internally, this is another Better Call router. It uses the same Better Auth context, adapter, plugins, trusted origins, and request lifecycle as the API handler, but it has its own base path and returns HTML.
+
+That separation matters. API routes can stay stable and machine-oriented, while UI routes can be human-oriented.
+
+***
+
+## JSX As Authoring, Not Runtime
+
+The next piece is `@better-auth/ui`.
+
+Plugin authors write TSX:
+
+```tsx title="sign-up.tsx"
+/** @jsxImportSource @better-auth/ui */
+
+import {
+  Button,
+  Card,
+  Form,
+  Input,
+  Link,
+  Text,
+  effects,
+  routes,
+} from "@better-auth/ui";
+
+export function SignUpEmailPage(ctx) {
+  return (
+    <main class="ba-page">
+      <Card>
+        <h1>Create account</h1>
+
+        <Form
+          action={routes.signUp.email}
+          pending="Creating your account..."
+          success={[
+            effects.toast({
+              level: "success",
+              message: "Account created successfully.",
+            }),
+          ]}
+          error={[
+            effects.toastFromError({
+              fallback: "Could not create your account.",
+            }),
+          ]}
+        >
+          <Input name="name" label="Name" autocomplete="name" required />
+          <Input name="email" label="Email" type="email" autocomplete="email" required />
+          <Input
+            name="password"
+            label="Password"
+            type="password"
+            autocomplete="new-password"
+            required
+          />
+          <Button type="submit">Sign up</Button>
+        </Form>
+
+        <Text>
+          Already have an account? <Link href="./sign-in">Sign in</Link>
+        </Text>
+      </Card>
+    </main>
+  );
+}
+```
+
+But this does not import React.
+
+TypeScript compiles JSX through Better Auth's JSX runtime:
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@better-auth/ui"
+  }
+}
+```
+
+So JSX becomes calls to:
+
+```ts
+@better-auth/ui/jsx-runtime
+```
+
+Those functions return a serializable Better Auth UI component tree.
+
+***
+
+## The UI Component Tree
+
+The server renderer does not render React components. It renders a small Better Auth UI IR.
+
+Conceptually, TSX compiles to something like:
+
+```ts
+{
+  tag: "form",
+  props: {
+    action: "/sign-up/email",
+    method: "post",
+    "data-ba-action-kind": "auth-route",
+    "data-ba-success-effects": "[...]",
+    "data-ba-error-effects": "[...]"
+  },
+  children: [
+    { tag: "input", props: { name: "email", type: "email" } },
+    { tag: "button", props: { type: "submit" }, children: ["Sign up"] }
+  ]
+}
+```
+
+The renderer serializes this to HTML and escapes text and attributes by default.
+
+This gives us the ergonomics of JSX while keeping the rendering target simple, inspectable, and framework-agnostic.
+
+***
+
+## The Browser Runtime
+
+Server-rendered HTML is not enough for auth flows. A form submission should not dump a JSON blob in the browser. It should call the auth API in the background, then show a toast, navigate, reload, or update local UI state.
+
+So Better Auth ships a small UI runtime.
+
+When a page contains interactive components, the UI handler includes:
+
+```html
+<script type="module" src="/auth/_ba/runtime.js"></script>
+```
+
+The runtime knows how to:
+
+* intercept enhanced forms
+* serialize fields
+* call Better Auth API endpoints
+* parse API success and error responses
+* render success and error status
+* show toast messages
+* navigate or reload
+* apply small declarative state updates
+
+The important part is that plugin authors do not ship arbitrary browser callbacks.
+
+They describe "effects", which the Better Auth runtime executes.
+
+```ts
+effects.toast({
+  level: "success",
+  message: "Account created successfully.",
+});
+```
+
+***
+
+## Form Actions Are Descriptors
+
+The same idea applies to API calls.
+
+This:
+
+```tsx
+<Form action={routes.signUp.email}>
+```
+
+does not pass a function to the browser. It serializes an action descriptor:
+
+```ts
+{
+  type: "auth-route",
+  path: "/sign-up/email",
+  method: "POST"
+}
+```
+
+At runtime, Better Auth resolves that against the API base URL and calls:
+
+```ts
+fetch("/api/auth/sign-up/email", {
+  method: "POST",
+  credentials: "include",
+  headers: {
+    "content-type": "application/json",
+    accept: "application/json",
+  },
+  body: JSON.stringify(input),
+});
+```
+
+***
+
+## Handling Plugin-Aware Auth Pages
+
+Auth pages are more complicated than a static form.
+
+For example, `/sign-up` may need to consider:
+
+* passkey registration
+* two-factor enrollment or challenge flows
+* last-used login method hints
+* magic links
+* captcha
+* social providers
+
+One option is to let plugins inject UI into arbitrary slots. That is powerful, but it creates a second plugin system inside the UI system.
+
+For the first version, we prefer a simpler rule:
+
+**The page owns the flow. Plugins expose capabilities.**
+
+So Auth UI can ask:
+
+```ts
+ctx.context.hasPlugin("passkey")
+ctx.context.hasPlugin("two-factor")
+ctx.context.hasPlugin("last-login-method")
+```
+
+and render the whole page intentionally.
+
+The passkey plugin can expose routes and metadata. Auth UI decides where those routes appear in the sign-up or sign-in experience.
+
+That keeps the UX consistent and avoids hidden ordering problems like:
+
+```txt
+plugin A injects before plugin B
+plugin B changes the form shape
+plugin C depends on plugin A's result
+```
+
+If an application needs a completely different flow, it can override the page.
+
+***
+
+## Why Not React Server Rendering?
+
+React can render non-interactive markup with `renderToStaticMarkup`, but interactivity is the problem.
+
+If plugin authors write React logic like `useState`, `useEffect`, or `onClick`, that logic expects React to exist in the browser. Without hydration, it does not behave like a React app. With hydration, Better Auth would need to ship React and own a client app lifecycle.
+
+That is not the direction we want.
+
+Better Auth UI uses JSX as syntax only. The runtime model is Better Auth's.
+
+***
+
+## What Maintainers Build
+
+There are two build products:
+
+### `@better-auth/ui`
+
+This package is the authoring layer:
+
+```txt
+@better-auth/ui
+@better-auth/ui/jsx-runtime
+@better-auth/ui/jsx-dev-runtime
+```
+
+It contains JSX helpers, components, action descriptors, and effect helpers. It is used by plugin source code and compiled server-side code.
+
+### `better-auth`
+
+The base better-auth package owns the server renderer and browser runtime:
+
+```txt
+auth.ui.handler
+/auth/_ba/runtime.js
+HTML renderer
+default styles
+built-in UI pages
+```
+
+The browser does not receive `@better-auth/ui`. It receives HTML and the Better Auth runtime.
+
+***
+
+## The End Result
+
+The end result is a UI system that feels like writing components, but behaves like Better Auth.
+Plugin maintainers get TSX, while Better Auth keeps a safe serializable IR, renders HTML on your server,
+and your forms can talk to auth endpoints quietly in the background. Just a lightweight,
+framework-agnostic handler your app sets up in one line.

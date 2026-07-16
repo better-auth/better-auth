@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { isLoopbackHost, isLoopbackIP } from "@better-auth/core/utils/host";
+import { getUIErrorURL } from "better-auth";
 import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
@@ -236,8 +237,7 @@ function getErrorURL(
 	error: OAuthErrorCode,
 	description: string,
 ) {
-	const baseURL =
-		ctx.context.options.onAPIError?.errorURL || `${ctx.context.baseURL}/error`;
+	const baseURL = getUIErrorURL(ctx.context);
 	const formattedURL = formatErrorURL(baseURL, error, description);
 	return formattedURL;
 }

@@ -109,6 +109,9 @@
 		"*.test.ts",
 		".gitignore",
 		// locale translation files contain non-English text that CSpell doesn't recognize
-		"packages/i18n/src/locales/**"
+		"packages/i18n/src/locales/**",
+		// minified UI browser runtime bundle
+		"packages/better-auth/src/ui/runtime.generated.ts",
+		"packages/better-auth/dist-runtime/**"
 	]
 }

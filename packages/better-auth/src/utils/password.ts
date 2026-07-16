@@ -63,3 +63,17 @@ export async function shouldRequirePassword(
 
 	return Boolean(credentialAccount);
 }
+
+/**
+ * Whether the current session counts as recently authenticated.
+ * Mirrors `freshSessionMiddleware`: `freshAge === 0` disables freshness.
+ */
+export function isSessionFresh(ctx: GenericEndpointContext): boolean {
+	const session = ctx.context.session?.session;
+	if (!session) return false;
+	const freshAge = ctx.context.sessionConfig.freshAge;
+	if (freshAge === 0) return false;
+	const createdAt = new Date(session.createdAt).getTime();
+	if (Number.isNaN(createdAt)) return false;
+	return Date.now() - createdAt < freshAge * 1000;
+}

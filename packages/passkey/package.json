@@ -64,12 +64,14 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
+    "@better-auth/ui": "workspace:*",
     "better-auth": "workspace:*",
     "nanostores": "catalog:",
     "tsdown": "catalog:"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:^",
+    "@better-auth/ui": "workspace:^",
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:^",

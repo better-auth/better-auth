@@ -9,6 +9,7 @@ import {
 	resolveRequestContext,
 } from "../context/helpers";
 import type { Auth } from "../types";
+import { getUIBasePath, uiRouter } from "../ui";
 import { getBaseURL, getOrigin, isDynamicBaseURLConfig } from "../utils/url";
 
 export const createBetterAuth = <Options extends BetterAuthOptions>(
@@ -17,16 +18,7 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 ): Auth<Options> => {
 	const authContext = initFn(options);
 	const { api } = getEndpoints(authContext, options);
-	const errorCodes = options.plugins?.reduce((acc, plugin) => {
-		if (plugin.$ERROR_CODES) {
-			return {
-				...acc,
-				...plugin.$ERROR_CODES,
-			};
-		}
-		return acc;
-	}, {});
-	const handler = async (request: Request) => {
+	const resolveHandlerContext = async (request: Request) => {
 		const ctx = await authContext;
 		const basePath = ctx.options.basePath || "/api/auth";
 
@@ -83,13 +75,44 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 				request,
 			);
 		}
-
+		return handlerCtx;
+	};
+	const errorCodes = options.plugins?.reduce((acc, plugin) => {
+		if (plugin.$ERROR_CODES) {
+			return {
+				...acc,
+				...plugin.$ERROR_CODES,
+			};
+		}
+		return acc;
+	}, {});
+	const handler = async (request: Request) => {
+		const handlerCtx = await resolveHandlerContext(request);
 		const { handler } = router(handlerCtx, options);
 		return runWithAdapter(handlerCtx.adapter, () => handler(request));
 	};
 	return {
 		handler,
 		fetch: handler,
+		ui: {
+			basePath: getUIBasePath(options),
+			handler: async (request: Request) => {
+				const handlerCtx = await resolveHandlerContext(request);
+				const uiBasePath = getUIBasePath(handlerCtx.options);
+				const url = new URL(request.url);
+				// better-call only matches `${basePath}/...`, so normalize the
+				// exact UI mount (`/auth`) to `/auth/` for the index page.
+				if (
+					uiBasePath &&
+					(url.pathname === uiBasePath || url.pathname === `${uiBasePath}/`)
+				) {
+					url.pathname = `${uiBasePath}/`;
+					request = new Request(url, request);
+				}
+				const { handler } = uiRouter(handlerCtx, handlerCtx.options);
+				return runWithAdapter(handlerCtx.adapter, () => handler(request));
+			},
+		},
 		api,
 		options: options,
 		$context: authContext,

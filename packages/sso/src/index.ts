@@ -24,6 +24,7 @@ import {
 	spMetadata,
 } from "./routes/sso";
 import { saml } from "./samlify";
+import { ssoConfigPage } from "./sso-ui";
 
 export {
 	DEFAULT_CLOCK_SKEW_MS,
@@ -287,6 +288,11 @@ export function sso<O extends SSOOptions>(
 			};
 		},
 		endpoints,
+		ui: {
+			pages: {
+				ssoConfig: ssoConfigPage,
+			},
+		},
 		hooks: {
 			before: [
 				{

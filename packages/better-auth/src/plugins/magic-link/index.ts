@@ -481,6 +481,24 @@ export const magicLink = (options: MagicLinkOptions) => {
 				max: opts.rateLimit?.max || 5,
 			},
 		],
+		ui: {
+			capabilities: {
+				"magic-link": {
+					id: "magic-link",
+					enabled: true,
+					metadata: {
+						disableSignUp: Boolean(opts.disableSignUp),
+					},
+					routes: {
+						signIn: {
+							type: "auth-route",
+							path: "/sign-in/magic-link",
+							method: "POST",
+						},
+					},
+				},
+			},
+		},
 		options,
 	} satisfies BetterAuthPlugin;
 };

@@ -73,3 +73,6 @@ pjpeg
 styl
 vbscript
 unvalidated
+UIURL
+describedby
+labelledby

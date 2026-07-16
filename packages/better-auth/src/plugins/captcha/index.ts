@@ -129,5 +129,21 @@ export const captcha = (options: CaptchaOptions) =>
 				});
 			}
 		},
+		ui: {
+			capabilities: {
+				captcha: {
+					id: "captcha",
+					enabled: true,
+					metadata: {
+						provider: options.provider,
+						siteKey: "siteKey" in options ? options.siteKey : undefined,
+						endpoints: options.endpoints?.length
+							? options.endpoints
+							: defaultEndpoints,
+						headerName: "x-captcha-response",
+					},
+				},
+			},
+		},
 		options,
 	}) satisfies BetterAuthPlugin;

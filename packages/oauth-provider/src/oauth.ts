@@ -34,6 +34,7 @@ import {
 	oidcServerMetadata,
 } from "./metadata";
 import { createOAuthEndpoint } from "./oauth-endpoint";
+import { oauthProviderSettingsCards } from "./oauth-provider-ui";
 import * as oauthClientEndpoints from "./oauthClient";
 import * as oauthConsentEndpoints from "./oauthConsent";
 import * as oauthResourceEndpoints from "./oauthResource";
@@ -1692,5 +1693,26 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					]
 				: []),
 		],
+		ui: {
+			capabilities: {
+				"oauth-provider": {
+					id: "oauth-provider",
+					enabled: true,
+					routes: {
+						getConsents: {
+							type: "auth-route",
+							path: "/oauth2/get-consents",
+							method: "GET",
+						},
+						deleteConsent: {
+							type: "auth-route",
+							path: "/oauth2/delete-consent",
+							method: "POST",
+						},
+					},
+				},
+			},
+			settingsCards: oauthProviderSettingsCards,
+		},
 	} satisfies BetterAuthPlugin;
 };

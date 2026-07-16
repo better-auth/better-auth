@@ -888,8 +888,8 @@ export const auth = betterAuth({
 
 * `throw`: Throw an error on API error (default: `false`)
 * `onError`: Custom error handler
-* `errorURL`: URL to redirect to on error (default: `/api/auth/error`)
-* `customizeDefaultErrorPage`: Configure the default error page provided by Better Auth. Start your dev server and go to `/api/auth/error` to see the error page.
+* `errorURL`: URL to redirect to on error (default: `/auth/error`)
+* `customizeDefaultErrorPage`: Configure the default error page provided by Better Auth. Start your dev server and go to `/auth/error` to see the error page.
   * `colors`: Customize color scheme for the error page
     * `background`: Background color
     * `foreground`: Foreground/text color
@@ -917,6 +917,161 @@ export const auth = betterAuth({
   * `disableTitleBorder`: Disable the border around the title (default: `false`)
   * `disableCornerDecorations`: Disable corner decorations (default: `false`)
   * `disableBackgroundGrid`: Disable the background grid pattern (default: `false`)
+
+## `ui`
+
+UI handler configuration. Better Auth exposes a separate `auth.ui.handler` for server-rendered plugin UI pages.
+
+Plugin UI can be authored with `@better-auth/ui` and `jsxImportSource: "@better-auth/ui"`. The JSX runtime compiles UI code to Better Auth's serializable component tree and the browser receives only HTML, CSS, and the small Better Auth UI runtime.
+
+Plugins can expose `ui.pages` for full pages, `ui.capabilities` for data-oriented integration with first-party Auth UI pages, and `ui.settingsCards` for account settings panels. Capabilities expose route descriptors and metadata that Auth UI reads explicitly with `ctx.capability("plugin-id")`; they are not arbitrary UI injection points. Settings cards let plugins contribute body content while Auth UI owns panel chrome and danger-zone ordering.
+
+```ts
+import { betterAuth } from "better-auth";
+import { backgrounds } from "@better-auth/ui";
+
+export const auth = betterAuth({
+	ui: {
+		basePath: "/auth",
+		background: backgrounds.squaredGrid,
+		defaultRedirectTo: "/dashboard",
+		termsOfServiceURL: "https://example.com/terms",
+		privacyPolicyURL: "https://example.com/privacy",
+		theme: {
+			primary: "#6366f1",
+			appName: "My App",
+			logoURL: "https://example.com/logo.svg",
+			logoPlacement: "top-center",
+			borderRadius: "none"
+		}
+	}
+})
+```
+
+* `basePath`: Where UI pages are mounted (default: `/auth`)
+* `background`: Trusted stringified XML/HTML rendered behind UI pages. Use `backgrounds.blank`, `backgrounds.squaredGrid`, or a custom string.
+* `defaultRedirectTo`: Where built-in Auth UI pages redirect after successful auth actions when no query override is provided (default: `/`)
+* `termsOfServiceURL`: Optional Terms of Service URL. When set, sign-in and sign-up show a legal notice with a link to this page.
+* `privacyPolicyURL`: Optional Privacy Policy URL. When set, sign-in and sign-up show a legal notice with a link to this page.
+* `theme`: Shared theme tokens used by Better Auth UI pages
+* `locale`: BCP 47 locale tag for the HTML `lang` attribute and future locale-aware behavior (falls back to `Accept-Language`, then `"en"`)
+* `messages`: Partial string dictionary to override built-in Auth UI labels, buttons, and toasts
+* `csp`: Content Security Policy options for UI responses, or `false` to disable UI CSP handling
+
+### UI Redirects
+
+Built-in Auth UI pages resolve a safe redirect URL for successful auth form submissions. By default, users are redirected to `/`.
+
+```ts
+export const auth = betterAuth({
+	ui: {
+		defaultRedirectTo: "/dashboard"
+	}
+})
+```
+
+The redirect can be overridden per request with `redirectTo`:
+
+```txt
+/auth/sign-up?redirectTo=/onboarding
+```
+
+Redirect precedence is:
+
+1. `redirectTo` query parameter
+2. `callbackURL` query parameter, for compatibility with existing auth and OAuth flows
+3. `ui.defaultRedirectTo`
+4. `/`
+
+Better Auth validates redirect targets with the same trusted-origin rules used by auth API routes. Relative paths such as `/dashboard` and `/dashboard?tab=billing` are allowed. Protocol-relative URLs such as `//evil.example` are rejected. Absolute URLs must match [`trustedOrigins`](#trustedorigins). Invalid or untrusted redirect values are ignored and Better Auth falls back to the next safe candidate.
+
+### UI Backgrounds
+
+Better Auth renders UI backgrounds in a fixed, pointer-events-none layer behind the page content. The auth forms and other UI pages render in a separate foreground layer, so custom background HTML cannot affect the position of the UI.
+
+```ts
+import { backgrounds } from "@better-auth/ui";
+
+export const auth = betterAuth({
+	ui: {
+		background: backgrounds.squaredGrid
+	}
+})
+```
+
+The built-in presets are:
+
+* `backgrounds.blank`: no background markup
+* `backgrounds.squaredGrid`: a centered squared grid that fades out with a radial mask and uses theme colors for its lines
+* `backgrounds.dotGrid`: a lighter dotted grid with the same centered radial fade
+
+You can also provide custom trusted HTML:
+
+```ts
+export const auth = betterAuth({
+	ui: {
+		background: `<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="50%" cy="50%" r="40%" /></svg>`
+	}
+})
+```
+
+### UI Localization
+
+Better Auth's built-in Auth UI pages support localization through `ui.locale` and `ui.messages`. No locale files are required — English is built in, and you can override any string via the `messages` map.
+
+```ts
+export const auth = betterAuth({
+	ui: {
+		locale: "en",
+		messages: {
+			"signIn.title": "Welcome back",
+			"signIn.description": "Sign in with your email to continue.",
+			"signIn.submit": "Sign in",
+			"signUp.title": "Create an account",
+			"signUp.submit": "Create account",
+			"field.email": "Email address",
+			"field.password": "Password",
+			"action.forgotPassword": "Forgot password?",
+			"action.rememberMe": "Keep me signed in",
+		}
+	}
+})
+```
+
+* `locale`: BCP 47 locale tag (e.g. `"en"`, `"fr"`, `"ja"`). When not set, Better Auth reads the request `Accept-Language` header, falling back to `"en"`. The value is used for the HTML `lang` attribute.
+* `messages`: Partial dictionary of UI strings keyed by dot-notation (e.g. `"signIn.title"`, `"error.somethingWentWrong"`). Provided values are merged on top of the built-in English defaults. See the [default message keys](https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/ui/messages.ts) for the full list.
+
+The `UIContext` exposes a `t(key, fallback?)` helper that plugin authors can use in custom UI pages to look up translated strings.
+
+### UI Theme
+
+The built-in Auth UI reads `ui.theme.appName` and `ui.theme.logoURL` for the centered brand header. If `appName` is not set, Better Auth falls back to the top-level `appName` option.
+
+```ts
+export const auth = betterAuth({
+	appName: "My App",
+	ui: {
+		theme: {
+			logoURL: {
+				light: "https://example.com/logo-light.svg",
+				dark: "https://example.com/logo-dark.svg"
+			},
+			logoPlacement: "top-center",
+			primary: "#6366f1",
+			dark: {
+				background: "#0f1020",
+				surface: "#181827",
+				text: "#f8fafc"
+			}
+		}
+	}
+})
+```
+
+* `logoURL`: A single image URL or `{ light: string; dark: string }` object rendered next to the app name and used as the UI favicon. When an object is provided, Better Auth renders the light logo by default, uses the dark logo for dark UI, and switches the favicon with the system `prefers-color-scheme` preference (including live changes).
+* `logoPlacement`: Where the app name and logo render on built-in Auth UI pages. Defaults to `"top-center"`, which places the brand above the form in the center of the screen. Supported values are `"hidden"`, `"top-left"`, `"top-center"`, `"top-right"`, `"bottom-left"`, `"bottom-center"`, and `"bottom-right"`.
+* `dark`: Optional dark-mode overrides for the same color tokens (`background`, `surface`, `text`, `textSecondary`, `border`, `primary`, `error`, `success`). Applied automatically when the user's system preference is `prefers-color-scheme: dark`.
+* `borderRadius`: Controls shared component radius tokens, including Auth UI inputs and buttons. Defaults to `"none"` (squared). Supported values are `"none"`, `"sm"`, `"md"`, `"lg"`, and `"full"`.
 
 ## `hooks`
 

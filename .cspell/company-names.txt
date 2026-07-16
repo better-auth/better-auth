@@ -32,3 +32,5 @@ Contoso
 Mikro
 anthropics
 Zitadel
+
+Authy

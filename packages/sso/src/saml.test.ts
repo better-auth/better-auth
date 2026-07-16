@@ -5002,9 +5002,16 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 		expect(failed).toHaveLength(1);
 	});
 
-	it("should issue only one session when the same assertion is submitted concurrently without InResponseTo validation", async () => {
+	it("should issue only one session when the same IdP-initiated assertion is submitted concurrently", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
+			plugins: [
+				sso({
+					saml: {
+						allowIdpInitiated: true,
+						enableInResponseToValidation: false,
+					},
+				}),
+			],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -5033,9 +5040,10 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 			headers,
 		});
 
-		// The shared mock IdP emits a literal `InResponseTo="null"` value. Disable
-		// that gate here so the assertion-replay tombstone is the only duplicate
-		// guard under test.
+		// IdP-initiated: no AuthnRequest is stored, so the InResponseTo gate is
+		// not in play. The assertion-replay tombstone is the only thing that can
+		// stop a duplicate submission, which makes this the direct regression for
+		// the non-atomic read-then-create.
 		let samlResponse: any;
 		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
 			onSuccess: async (context) => {
@@ -5054,7 +5062,6 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 						},
 						body: new URLSearchParams({
 							SAMLResponse: samlResponse.samlResponse,
-							RelayState: "http://localhost:3000/dashboard",
 						}),
 					},
 				),
@@ -5068,7 +5075,7 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 		const locations = [first, second].map(
 			(res) => res.headers.get("location") || "",
 		);
-		const succeeded = locations.filter((loc) => loc && !loc.includes("error"));
+		const succeeded = locations.filter((loc) => !loc.includes("error"));
 		const replayed = locations.filter((loc) =>
 			loc.includes("error=replay_detected"),
 		);

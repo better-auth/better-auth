@@ -70,11 +70,13 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
+    "@better-auth/ui": "workspace:*",
     "better-auth": "workspace:*",
     "tsdown": "catalog:"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:^",
+    "@better-auth/ui": "workspace:^",
     "@better-auth/utils": "catalog:",
     "better-auth": "workspace:^",
     "better-call": "catalog:"

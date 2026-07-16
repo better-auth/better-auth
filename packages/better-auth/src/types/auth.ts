@@ -11,6 +11,10 @@ export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	 * Alias for {@link Auth.handler}.
 	 */
 	fetch: (request: Request) => Promise<Response>;
+	ui: {
+		handler: (request: Request) => Promise<Response>;
+		basePath: string;
+	};
 	api: InferAPI<ReturnType<typeof router<Options>>["endpoints"]>;
 	options: Options;
 	$ERROR_CODES: InferPluginErrorCodes<Options> & typeof BASE_ERROR_CODES;

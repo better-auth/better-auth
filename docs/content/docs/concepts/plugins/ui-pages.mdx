@@ -1,0 +1,546 @@
+---
+title: Plugin UI Pages
+description: Learn how plugins register framework-agnostic UI pages with Better Auth's JSX authoring API, UI handler, runtime effects, and plugin capabilities.
+---
+
+## UI Pages
+
+Plugins can register framework-agnostic UI pages through the `ui.pages` field. These pages are served by `auth.ui.handler`, which is separate from the API handler and defaults to the `/auth` mount path.
+
+The recommended authoring API is `@better-auth/ui`. It gives plugin authors TSX ergonomics, but it does not use React and does not ship a component framework to the browser. TSX compiles to Better Auth's serializable UI component tree, and Better Auth renders that tree to HTML on the server.
+
+<Callout>
+  UI pages are for pages that Better Auth owns, such as `/auth/sign-in`, `/auth/sign-up`, or `/auth/sso-config`. If your app already owns a page in your framework, you can keep using your framework page and call Better Auth APIs directly.
+</Callout>
+
+## Mental Model
+
+Better Auth UI has four layers:
+
+1. **Authoring**: plugin maintainers write TSX with `@better-auth/ui`.
+2. **IR**: TSX returns a serializable `UIComponent` tree.
+3. **Server rendering**: `auth.ui.handler` renders the tree to escaped HTML.
+4. **Runtime**: a small Better Auth script enhances forms, calls auth endpoints in the background, and applies declared effects.
+
+The browser receives HTML, CSS, and the Better Auth UI runtime. It does not receive React.
+
+## Mounting The UI Handler (user land)
+
+If you're a user of Better Auth, you can mount `auth.ui.handler` wherever your framework accepts a standard `Request` to `Response` handler.
+The UI handler is intentionally separate from `auth.handler`.
+
+```ts title="server.ts"
+app.use("/auth", auth.ui.handler)
+```
+
+You can change the mount path with `ui.basePath`:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    ui: {
+        basePath: "/account",
+    },
+});
+```
+
+***
+
+## TypeScript Setup
+
+To use TSX in a plugin package, configure TypeScript with Better Auth's JSX runtime:
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@better-auth/ui"
+  }
+}
+```
+
+Then add the import source pragma to TSX files that define UI:
+
+```tsx
+/** @jsxImportSource @better-auth/ui */
+```
+
+With that configuration, a plugin page at `path: "/settings"` is served at `/account/settings`.
+
+## Creating A Page
+
+Use `createUIPage` to define a page. The page path is relative to the UI base path.
+
+```tsx title="plugin.tsx"
+/** @jsxImportSource @better-auth/ui */
+
+import type { BetterAuthPlugin } from "better-auth";
+import {
+    Button,
+    Card,
+    Form,
+    Input,
+    Text,
+    createRoute,
+    createUIPage,
+    effects,
+} from "@better-auth/ui";
+
+const saveSettings = createRoute({
+    path: "/my-plugin/settings",
+    method: "POST",
+});
+
+export const myPlugin = () => ({
+    id: "my-plugin",
+    ui: {
+        pages: {
+            settings: createUIPage({
+                id: "my-plugin.settings",
+                path: "/settings",
+                title: "Settings",
+                render: () => (
+                    <main class="ba-page">
+                        <Card>
+                            <h1>Plugin settings</h1>
+                            <Text>Update settings managed by this plugin.</Text>
+                            <Form
+                                action={saveSettings}
+                                pending="Saving settings..."
+                                success={effects.toast({
+                                    level: "success",
+                                    message: "Settings saved",
+                                })}
+                                error={effects.toastFromError({
+                                    fallback: "Could not save settings",
+                                })}
+                            >
+                                <Input name="email" label="Email" type="email" required />
+                                <Button type="submit">Save</Button>
+                            </Form>
+                        </Card>
+                    </main>
+                ),
+            }),
+        },
+    },
+}) satisfies BetterAuthPlugin;
+```
+
+This is server-side TSX. It compiles to calls into `@better-auth/ui/jsx-runtime`, which returns a Better Auth UI component tree. It does not import React.
+
+## Forms, Routes, And Effects
+
+Forms do not navigate users to JSON API responses. Better Auth enhances UI forms in the browser, serializes the form fields, calls the target endpoint with `fetch`, and applies the effects you declared.
+
+For core auth endpoints, use `routes`:
+
+```tsx
+<Form
+    action={routes.signUp.email}
+    pending="Creating your account..."
+    success={[
+        effects.toast({
+            level: "success",
+            message: "Account created",
+        }),
+        effects.navigate("/"),
+    ]}
+    error={[
+        effects.toastFromError({
+            fallback: "Could not create account",
+        }),
+    ]}
+>
+    <Input name="name" label="Name" required />
+    <Input name="email" label="Email" type="email" required />
+    <Input name="password" label="Password" type="password" required />
+    <Button type="submit">Sign up</Button>
+</Form>
+```
+
+For plugin endpoints, create your own route descriptor:
+
+```ts
+import { createRoute } from "@better-auth/ui";
+
+export const saveSettings = createRoute({
+    path: "/my-plugin/settings",
+    method: "POST",
+});
+```
+
+Then use it in a form:
+
+```tsx
+<Form action={saveSettings}>
+    <Input name="name" label="Name" />
+    <Button type="submit">Save</Button>
+</Form>
+```
+
+The browser runtime resolves route descriptors against the Better Auth API base URL. For example, `path: "/my-plugin/settings"` is called as `/api/auth/my-plugin/settings` by default.
+
+Supported effects include:
+
+* `effects.toast(...)` to show a success, info, warning, or error toast
+* `effects.toastFromError(...)` to show a message from the API error response
+* `effects.navigate(...)` to redirect after a successful action
+* `effects.reload()` to reload the current page
+* `effects.show(...)` and `effects.hide(...)` to reveal or hide staged panels
+* `effects.set(...)` for small local state updates
+
+## Plugin-Aware Auth Pages
+
+Built-in auth pages often need to react to other plugins. For example, sign-up may need to account for passkeys, two-factor, and the last-login-method plugin.
+
+Better Auth keeps this simple: auth pages own the complete user experience, while plugins expose **capabilities**. Capabilities are data-oriented descriptors, not injected components.
+
+```ts title="passkey plugin"
+ui: {
+    capabilities: {
+        passkey: {
+            id: "passkey",
+            routes: {
+                generateAuthenticateOptions: createRoute({
+                    path: "/passkey/generate-authenticate-options",
+                    method: "POST",
+                }),
+                verifyAuthentication: createRoute({
+                    path: "/passkey/verify-authentication",
+                    method: "POST",
+                }),
+                generateRegisterOptions: createRoute({
+                    path: "/passkey/generate-register-options",
+                    method: "POST",
+                }),
+                verifyRegistration: createRoute({
+                    path: "/passkey/verify-registration",
+                    method: "POST",
+                }),
+            },
+            metadata: {
+                supportsRegistration: true,
+            },
+        },
+    },
+}
+```
+
+Auth UI can then explicitly read that capability:
+
+```tsx
+const passkey = ctx.capability("passkey");
+
+return (
+    <Card>
+        <Form
+            action={routes.signUp.email}
+            success={[
+                effects.toast({
+                    level: "success",
+                    message: "Account created",
+                }),
+                passkey ? effects.show("passkey-registration") : effects.navigate("/"),
+            ]}
+        >
+            <Input name="name" label="Name" required />
+            <Input name="email" label="Email" type="email" required />
+            <Input name="password" label="Password" type="password" required />
+            <Button type="submit">Sign up</Button>
+        </Form>
+
+        {passkey ? (
+            <section id="passkey-registration" hidden>
+                <h2>Add a passkey</h2>
+                <Text>Add a passkey now for faster sign-ins.</Text>
+                <Form action={passkey.routes.generateRegisterOptions}>
+                    <Button type="submit">Add passkey</Button>
+                </Form>
+            </section>
+        ) : null}
+    </Card>
+);
+```
+
+This keeps the page understandable. The Auth UI page decides how passkey, two-factor, last-login-method, captcha, or magic-link should appear together instead of letting every plugin inject arbitrary UI into the page.
+
+### Built-in Auth UI surfaces
+
+The first-party Auth UI plugin (`authUI`) already composes these capability-driven surfaces:
+
+* **Sign-in / sign-up** — tabbed credentials card, Email/Username segment, magic-link and email-OTP modes, phone page at `/sign-in/phone`, social/OAuth provider buttons, passkey, and two-factor challenge/enrollment dialogs
+* **Account settings** — `/settings` hub plus profile, password, email, linked accounts, passkeys, and two-factor pages (session-gated)
+* **Captcha** — when the `captcha` capability is present, Auth UI loads a widget (Turnstile when configured) and sends `x-captcha-response` on protected form posts
+* **Localization** — override copy with `ui.locale` and `ui.messages` (English defaults built in)
+
+The built-in Auth UI uses this same model for provider buttons. Passkey sign-in appears when the `passkey` capability exposes authentication and verification routes. Social providers configured on the auth instance appear as provider buttons automatically. Generic OAuth providers can expose a `generic-oauth` capability with provider metadata so Auth UI can render them without importing plugin internals:
+
+```ts
+ui: {
+    capabilities: {
+        "generic-oauth": {
+            id: "generic-oauth",
+            metadata: {
+                providers: [
+                    {
+                        id: "steam",
+                        name: "Steam",
+                    },
+                ],
+            },
+        },
+    },
+}
+```
+
+## Capabilities vs Pages
+
+Use `ui.pages` when your plugin owns a full page. Good examples are dashboards, setup screens, and self-service configuration flows.
+
+Use `ui.capabilities` when your plugin wants built-in pages to know what it can do. Good examples are passkey support, two-factor routes, captcha requirements, or a last-used-login-method cookie.
+
+Use `ui.settingsCards` when your plugin should appear on the Auth UI `/settings` page. Auth UI provides the card chrome; your plugin provides the body. Prefer this over hardcoding settings panels in Auth UI.
+
+Capabilities should contain serializable facts, route descriptors, and metadata:
+
+```ts
+ui: {
+    capabilities: {
+        "last-login-method": {
+            id: "last-login-method",
+            metadata: {
+                cookieName: "better-auth.last_used_login_method",
+                storeInDatabase: false,
+            },
+        },
+    },
+}
+```
+
+Avoid using capabilities as a backdoor for arbitrary UI injection. If you need to change a built-in page substantially, override the whole page instead.
+
+## Settings cards
+
+Account settings is the supported place for plugin UI composition. Plugins can register `ui.settingsCards` — Auth UI owns the panel chrome (title, description, icon, default vs danger styling) and renders card bodies contributed by plugins.
+
+```tsx title="plugin-settings.tsx"
+/** @jsxImportSource @better-auth/ui */
+
+import type { UISettingsCard } from "@better-auth/core";
+import { Button, effects, Form } from "@better-auth/ui";
+
+export const myPluginSettingsCards: UISettingsCard[] = [
+	{
+		id: "my-plugin",
+		priority: 40,
+		title: "My Plugin",
+		description: "Manage my-plugin settings for your account",
+		visible: (ctx) => ctx.hasCapability("my-plugin"),
+		render: (ctx) => {
+			const route = ctx.capability("my-plugin")?.routes?.action;
+			if (!route) return <p class="ba-settings-muted">Unavailable</p>;
+			return (
+				<Form
+					action={route}
+					pending="Saving..."
+					success={[effects.reload()]}
+					error={[effects.toastFromError({ fallback: "Could not save." })]}
+				>
+					<Button type="submit">Save</Button>
+				</Form>
+			);
+		},
+	},
+];
+```
+
+Register the cards on the plugin:
+
+```ts
+ui: {
+	capabilities: { "my-plugin": { id: "my-plugin", routes: { /* ... */ } } },
+	settingsCards: myPluginSettingsCards,
+}
+```
+
+Layout rules:
+
+* Core anchors stay in Auth UI: Profile, Linked Accounts, Password, Active Sessions, Sign Out, and Delete Account.
+* Plugin cards with `variant: "default"` (the default) render after Password and before Active Sessions, sorted by `priority` (higher first).
+* Plugin cards with `variant: "danger"` always render at the bottom of the page, after core danger actions.
+* Keep using capabilities for serializable routes and metadata; settings cards are the presentation layer.
+
+List UIs that need client hydration should expose `data-ba-*` hosts in the card body. First-party plugins ship matching loaders in the Auth UI runtime. Third-party plugins should prefer forms and links until a general client-loader contribution API exists.
+
+Do not use settings cards (or slots) to inject into sign-in or sign-up — those pages stay capability-driven so Auth UI owns the complete auth flow.
+
+## Page Overrides
+
+Built-in Auth UI pages are registered by Better Auth internally. Prefer full page overrides for app-specific UX when you need to substantially change those pages; they are easier to reason about than partial plugin injection and avoid ordering problems between plugins.
+
+## Runtime Behavior
+
+When a page includes a form, Better Auth includes the UI runtime:
+
+```html
+<script type="module" src="/auth/_ba/runtime.js"></script>
+```
+
+The runtime:
+
+* intercepts enhanced form submissions
+* sends JSON requests to the Better Auth API handler
+* includes credentials with the request
+* parses success and error responses
+* writes inline form status
+* shows toast messages
+* applies declared effects
+
+This is why UI forms do not redirect users to `/api/auth/*` JSON responses.
+
+## Guidelines
+
+* Keep UI pages focused on complete user flows.
+* Use `@better-auth/ui` TSX for authoring; do not write raw JSON trees unless you need a low-level escape hatch.
+* Keep client behavior declarative with `effects`.
+* Use `createRoute` for plugin endpoints.
+* Use capabilities for plugin facts and routes that built-in pages can read.
+* Use `ui.settingsCards` for account settings panels contributed by plugins.
+* Use full page overrides for deeply custom auth flows.
+* Do not rely on React hooks, React event handlers, or hydration. Better Auth's JSX runtime is not React.
+
+***
+
+# Creating a Plugin UI Page
+
+Plugins can register framework-agnostic UI pages through the `ui.pages` field. UI pages are served by the separate UI handler, which defaults to `/auth`.
+
+The recommended authoring API is `@better-auth/ui`, which provides a JSX runtime that compiles TSX to Better Auth's serializable UI component tree. It does not use or ship React.
+
+```tsx title="plugin.tsx"
+/** @jsxImportSource @better-auth/ui */
+
+import type { BetterAuthPlugin } from "better-auth";
+import { Card, Form, Input, Button, createRoute, createUIPage, effects, routes } from "@better-auth/ui";
+
+export const myPlugin = () => ({
+    id: "my-plugin",
+    ui: {
+        pages: {
+            settings: createUIPage({
+                id: "my-plugin.settings",
+                path: "/settings",
+                title: "Settings",
+                render: () => (
+                    <main class="ba-page">
+                        <Card>
+                            <h1>Plugin settings</h1>
+                            <Form
+                                action={routes.signUp.email}
+                                success={effects.toast({
+                                    level: "success",
+                                    message: "Saved settings"
+                                })}
+                                error={effects.toastFromError({
+                                    fallback: "Could not save settings"
+                                })}
+                            >
+                                <Input name="email" label="Email" type="email" required />
+                                <Button type="submit">Save</Button>
+                            </Form>
+                        </Card>
+                    </main>
+                )
+            })
+        },
+        capabilities: {
+            "my-plugin": {
+                id: "my-plugin",
+                routes: {
+                    saveSettings: createRoute({
+                        path: "/my-plugin/settings",
+                        method: "POST"
+                    })
+                },
+                metadata: {
+                    supportsSettings: true
+                }
+            }
+        }
+    }
+}) satisfies BetterAuthPlugin;
+```
+
+To use TSX in a plugin package, configure TypeScript with Better Auth's JSX runtime:
+
+```json title="tsconfig.json"
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@better-auth/ui"
+  }
+}
+```
+
+Mount `auth.ui.handler` wherever your framework accepts a standard `Request` to `Response` handler.
+
+```ts title="server.ts"
+app.use("/auth", auth.ui.handler)
+```
+
+The component tree is rendered to server-side HTML.
+Forms and actions are enhanced by the Better Auth UI runtime, which calls Better Auth API endpoints in the background and applies declared effects such as toasts, navigation, reloads, state updates, staged panels with `effects.show()` / `effects.hide()`, and dialogs with `effects.openDialog()` / `effects.closeDialog()`.
+
+Built-in Auth UI pages use a safe redirect resolver for success navigation and provider `callbackURL` fields. The resolver accepts `redirectTo` query params, falls back to `callbackURL`, then `ui.defaultRedirectTo`, then `/`, and validates each candidate with Better Auth's trusted-origin rules before emitting `effects.navigate(...)`.
+
+Use `Dialog` for staged flows that should not expand inline inside the current page layout:
+
+```tsx
+import { Button, Dialog, Form, Input, effects } from "@better-auth/ui";
+
+<Dialog
+    id="two-factor-challenge"
+    title="Two-factor verification"
+    description="Enter your authenticator code to continue."
+>
+    <Form
+        success={[
+            effects.toast({ level: "success", message: "Verified." }),
+            effects.closeDialog("two-factor-challenge"),
+        ]}
+    >
+        <Input name="code" label="Authenticator code" required />
+        <Button type="submit">Verify code</Button>
+    </Form>
+</Dialog>
+```
+
+UI pages can use document-level backgrounds from `@better-auth/ui`. Backgrounds are stringified XML/HTML rendered in a fixed layer behind the foreground UI, so they cannot change the layout position of auth forms or other page content.
+
+```ts
+import { backgrounds } from "@better-auth/ui";
+
+export const auth = betterAuth({
+    ui: {
+        background: backgrounds.squaredGrid,
+    },
+});
+```
+
+The built-in presets are `backgrounds.blank`, `backgrounds.squaredGrid`, and `backgrounds.dotGrid`. Custom trusted HTML is also supported through `ui.background`.
+
+Plugins can also expose `ui.capabilities`. Capabilities are data-oriented descriptors that Auth UI pages can explicitly read from `ctx.capability("plugin-id")`. They should expose facts, route descriptors, and serializable metadata, not component trees. This keeps built-in auth pages such as sign-in and sign-up responsible for their complete UX instead of letting plugins inject arbitrary UI into those pages.
+
+The built-in sign-up page also renders supported `user.additionalFields` when they are configured with `input: true`. String, number, boolean, and date fields are rendered as native form inputs and submitted to `/sign-up/email` with the rest of the form.
+
+For app-specific changes to built-in auth pages, prefer a full page override through the Auth UI plugin options instead of partial plugin injection:
+
+```ts
+authUI({
+    pages: {
+        signUp: customSignUpPage,
+    },
+});
+```

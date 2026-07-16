@@ -481,6 +481,20 @@ export const genericOAuth = <const ID extends string>(
 				},
 			};
 		},
+		ui: {
+			capabilities: {
+				"generic-oauth": {
+					id: "generic-oauth",
+					enabled: true,
+					metadata: {
+						providers: options.config.map((config) => ({
+							id: config.providerId,
+							name: config.providerId,
+						})),
+					},
+				},
+			},
+		},
 		options,
 		$ERROR_CODES: GENERIC_OAUTH_ERROR_CODES,
 	} satisfies BetterAuthPlugin;

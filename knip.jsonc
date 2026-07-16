@@ -8,6 +8,8 @@
 	"ignore": [
 		// test utilities only imported by test files — invisible to --production
 		"packages/better-auth/src/client/test-plugin.ts",
+		// UI browser runtime is bundled separately into runtime.generated.ts
+		"packages/better-auth/src/ui/runtime/**",
 		// CI scripts used by GitHub Actions workflows, not by packages
 		".github/scripts/**"
 	],
@@ -29,7 +31,10 @@
 		"packages/cli/src/commands/init/utility/imports.ts": ["exports"],
 		"packages/oauth-provider/src/oauth-endpoint.ts": ["exports"],
 		"packages/sso/src/saml/assertions.ts": ["exports"],
-		"packages/sso/src/oidc/discovery.ts": ["exports"]
+		"packages/sso/src/oidc/discovery.ts": ["exports"],
+		"packages/better-auth/src/ui/render.ts": ["exports"],
+		"packages/better-auth/src/ui/utils.ts": ["exports"],
+		"packages/ui/src/jsx-runtime.ts": ["duplicates"]
 	},
 	"ignoreDependencies": ["@changesets/cli", "@vitest/coverage-istanbul"],
 	"rules": {
@@ -46,10 +51,23 @@
 		"packages/better-auth": {
 			"project": [
 				"src/**/*.ts!",
+				"src/**/*.tsx!",
 				"!src/adapters/**/test/*.prisma",
 				"!src/adapters/**/test/.tmp",
-				"!src/adapters/**/test/auth.ts"
+				"!src/adapters/**/test/auth.ts",
+				"!src/ui/runtime/**"
+			],
+			"ignoreDependencies": [
+				// bundled into the UI browser runtime IIFE
+				"@simplewebauthn/browser",
+				"uqr"
 			]
+		},
+		"packages/ui": {
+			"project": ["src/**/*.ts!", "src/**/*.tsx!"]
+		},
+		"packages/sso": {
+			"project": ["src/**/*.ts!", "src/**/*.tsx!"]
 		},
 		"packages/core": {
 			"ignoreDependencies": [
@@ -65,7 +83,7 @@
 		}
 	},
 	"vitest": {
-		"entry": ["**/*.test.ts", "**/*.spec.ts"]
+		"entry": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts"]
 	},
 	"ignoreWorkspaces": ["demo/**", "docs/**", "e2e/**"]
 }
