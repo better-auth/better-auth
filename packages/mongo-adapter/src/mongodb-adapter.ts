@@ -7,6 +7,7 @@ import type {
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import { resolveDatabaseTableIndexes } from "@better-auth/core/db/internal";
 import type { ClientSession, Db, MongoClient } from "mongodb";
 import { ObjectId, UUID } from "mongodb";
 import {
@@ -65,6 +66,7 @@ export const mongodbAdapter = (
 	config?: MongoDBAdapterConfig | undefined,
 ) => {
 	let lazyOptions: BetterAuthOptions | null;
+	const indexSetupByDefinition = new Map<string, Promise<string>>();
 
 	const getCustomIdGenerator = (options: BetterAuthOptions) => {
 		const generator = options.advanced?.database?.generateId;
@@ -88,6 +90,66 @@ export const mongodbAdapter = (
 		}) => {
 			const customIdGen = getCustomIdGenerator(options);
 			const useUUIDs = options.advanced?.database?.generateId === "uuid";
+			const resolvedIndexesByModel = new Map<
+				string,
+				ReturnType<typeof resolveDatabaseTableIndexes>
+			>();
+
+			const getResolvedModelIndexes = (model: string) => {
+				const cachedIndexes = resolvedIndexesByModel.get(model);
+				if (cachedIndexes) return cachedIndexes;
+
+				const defaultModelName = getDefaultModelName(model);
+				const table = schema[defaultModelName];
+				const indexes =
+					!table || table.disableMigrations
+						? []
+						: resolveDatabaseTableIndexes({
+								fields: table.fields,
+								indexes: table.indexes,
+								tableName: model,
+							});
+				resolvedIndexesByModel.set(model, indexes);
+				return indexes;
+			};
+
+			const ensureModelIndexes = async (model: string) => {
+				const indexes = getResolvedModelIndexes(model);
+
+				await Promise.all(
+					indexes.map((index) => {
+						const physicalFieldNames = index.columns.map((fieldName) =>
+							fieldName === "id" ? "_id" : fieldName,
+						);
+						const indexDefinition = JSON.stringify([
+							model,
+							index.name,
+							physicalFieldNames,
+							index.unique ?? false,
+						]);
+						const existingIndexSetup =
+							indexSetupByDefinition.get(indexDefinition);
+						if (existingIndexSetup) return existingIndexSetup;
+
+						const indexFields = Object.fromEntries(
+							physicalFieldNames.map((field) => [field, 1] as const),
+						);
+						const indexSetup = Promise.resolve().then(() =>
+							db.collection(model).createIndex(indexFields, {
+								name: index.name,
+								unique: index.unique ?? false,
+							}),
+						);
+						indexSetupByDefinition.set(indexDefinition, indexSetup);
+						void indexSetup.catch(() => {
+							if (indexSetupByDefinition.get(indexDefinition) === indexSetup) {
+								indexSetupByDefinition.delete(indexDefinition);
+							}
+						});
+						return indexSetup;
+					}),
+				);
+			};
 
 			function coerceToIdType(value: string): ObjectId | UUID {
 				if (useUUIDs) return new UUID(value);
@@ -342,6 +404,7 @@ export const mongodbAdapter = (
 
 			return {
 				async create({ model, data: values }) {
+					await ensureModelIndexes(model);
 					const res = await db.collection(model).insertOne(values, { session });
 					const insertedData = { _id: res.insertedId.toString(), ...values };
 					return insertedData as any;
@@ -592,6 +655,7 @@ export const mongodbAdapter = (
 					return res[0]?.total ?? 0;
 				},
 				async update({ model, where, update: values }) {
+					await ensureModelIndexes(model);
 					const clause = convertWhereClause({ where, model });
 
 					const res = await db.collection(model).findOneAndUpdate(
@@ -608,6 +672,7 @@ export const mongodbAdapter = (
 					return doc as any;
 				},
 				async updateMany({ model, where, update: values }) {
+					await ensureModelIndexes(model);
 					const clause = convertWhereClause({ where, model });
 
 					const res = await db.collection(model).updateMany(
@@ -639,6 +704,7 @@ export const mongodbAdapter = (
 					return ((doc as any)?.value as any) ?? null;
 				},
 				async incrementOne({ model, where, increment, set }) {
+					await ensureModelIndexes(model);
 					const clause = convertWhereClause({ where, model });
 					// Only include operators that carry fields. An empty `$inc: {}`
 					// errors on MongoDB server < 5.0, and a set-only guarded

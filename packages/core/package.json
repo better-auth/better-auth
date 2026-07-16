@@ -89,6 +89,11 @@
       "types": "./dist/db/index.d.mts",
       "default": "./dist/db/index.mjs"
     },
+    "./db/internal": {
+      "dev-source": "./src/db/internal.ts",
+      "types": "./dist/db/internal.d.mts",
+      "default": "./dist/db/internal.mjs"
+    },
     "./db/adapter": {
       "dev-source": "./src/db/adapter/index.ts",
       "types": "./dist/db/adapter/index.d.mts",
@@ -143,6 +148,9 @@
       ],
       "db": [
         "dist/db/index.d.mts"
+      ],
+      "db/internal": [
+        "dist/db/internal.d.mts"
       ],
       "db/adapter": [
         "dist/db/adapter/index.d.mts"

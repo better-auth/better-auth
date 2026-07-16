@@ -11,6 +11,11 @@ import {
 	initGetFieldName,
 	initGetModelName,
 } from "@better-auth/core/db/adapter";
+import {
+	getDatabaseFieldIndexName,
+	getDatabaseIndexStringLength,
+	resolveDatabaseSchemaIndexes,
+} from "@better-auth/core/db/internal";
 import type { DrizzleAdapterConfig } from ".";
 
 interface SchemaGenerator {
@@ -119,13 +124,28 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		schema: tables,
 		usePlural: adapterConfig?.usePlural,
 	});
+	const resolvedIndexesByTable = resolveDatabaseSchemaIndexes(
+		Object.keys(tables)
+			.filter((tableKey) => !tables[tableKey]!.disableMigrations)
+			.map((tableKey) => ({
+				fields: tables[tableKey]!.fields,
+				indexes: tables[tableKey]!.indexes,
+				tableName: getModelName(tableKey),
+			})),
+	);
 
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
+		if (table.disableMigrations) continue;
 		const modelName = getModelName(tableKey);
 		const fields = table.fields;
+		const resolvedTableIndexes = resolvedIndexesByTable.get(modelName) ?? [];
 
-		function getType(name: string, field: DBFieldAttribute) {
+		function getType(
+			name: string,
+			field: DBFieldAttribute,
+			tableIndexStringLength?: number | undefined,
+		) {
 			// Not possible to reach, it's here to make typescript happy
 			if (!databaseType) {
 				throw new Error(
@@ -177,15 +197,17 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				string: {
 					sqlite: `text('${name}')`,
 					pg: `text('${name}')`,
-					mysql: field.unique
-						? `varchar('${name}', { length: 255 })`
-						: field.references
-							? `varchar('${name}', { length: 36 })`
-							: field.sortable
-								? `varchar('${name}', { length: 255 })`
-								: field.index
+					mysql: tableIndexStringLength
+						? `varchar('${name}', { length: ${tableIndexStringLength} })`
+						: field.unique
+							? `varchar('${name}', { length: 255 })`
+							: field.references
+								? `varchar('${name}', { length: 36 })`
+								: field.sortable
 									? `varchar('${name}', { length: 255 })`
-									: `text('${name}')`,
+									: field.index
+										? `varchar('${name}', { length: 255 })`
+										: `text('${name}')`,
 				},
 				boolean: {
 					sqlite: `integer('${name}', { mode: 'boolean' })`,
@@ -260,7 +282,11 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			}
 		}
 
-		type Index = { type: "uniqueIndex" | "index"; name: string; on: string };
+		type Index = {
+			type: "uniqueIndex" | "index";
+			name: string;
+			on: readonly string[];
+		};
 
 		const indexes: Index[] = [];
 
@@ -270,13 +296,23 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			const code: string[] = [`, (table) => [`];
 
 			for (const index of indexes) {
-				code.push(`  ${index.type}("${index.name}").on(table.${index.on}),`);
+				code.push(
+					`  ${index.type}(${JSON.stringify(index.name)}).on(${index.on.map((fieldName) => `table.${fieldName}`).join(", ")}),`,
+				);
 			}
 
 			code.push(`]`);
 
 			return code.join("\n");
 		};
+
+		for (const tableIndex of resolvedTableIndexes) {
+			indexes.push({
+				type: tableIndex.unique ? "uniqueIndex" : "index",
+				name: tableIndex.name,
+				on: tableIndex.columns,
+			});
+		}
 
 		const schema = `export const ${modelName} = ${tableFunction}("${convertToSnakeCase(
 			modelName,
@@ -287,19 +323,30 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 						.map((field) => {
 							const attr = fields[field]!;
 							const fieldName = attr.fieldName || field;
-							let type = getType(fieldName, attr);
+							let type = getType(
+								fieldName,
+								attr,
+								databaseType === "mysql"
+									? getDatabaseIndexStringLength({
+											columnName: fieldName,
+											dialect: "mysql",
+											fields,
+											indexes: resolvedTableIndexes,
+										})
+									: undefined,
+							);
 
 							if (attr.index && !attr.unique) {
 								indexes.push({
 									type: "index",
-									name: `${modelName}_${fieldName}_idx`,
-									on: fieldName,
+									name: getDatabaseFieldIndexName(modelName, fieldName, false),
+									on: [fieldName],
 								});
 							} else if (attr.index && attr.unique) {
 								indexes.push({
 									type: "uniqueIndex",
-									name: `${modelName}_${fieldName}_uidx`,
-									on: fieldName,
+									name: getDatabaseFieldIndexName(modelName, fieldName, true),
+									on: [fieldName],
 								});
 							}
 
@@ -373,6 +420,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	// Build schema object import for defineRelationsPart
 	const schemaObjectKeys: string[] = [];
 	for (const tableKey in tables) {
+		if (tables[tableKey]!.disableMigrations) continue;
 		const modelName = getModelName(tableKey);
 		schemaObjectKeys.push(modelName);
 	}
@@ -394,6 +442,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	// Process all tables to build relations
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
+		if (table.disableMigrations) continue;
 		const modelName = getModelName(tableKey);
 		const modelRelations: RelationDef[] = [];
 
@@ -403,6 +452,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		for (const [fieldName, field] of foreignFields) {
 			const referencedModel = field.references!.model;
+			if (tables[referencedModel]?.disableMigrations) continue;
 			const targetModelName = getModelName(referencedModel);
 			const fromField = getFieldName({ model: tableKey, field: fieldName });
 			const toField = getFieldName({
@@ -433,7 +483,8 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		// 2. Find all OTHER tables that reference THIS table (creates "many" relations)
 		const otherModels = Object.entries(tables).filter(
-			([modelName]) => modelName !== tableKey,
+			([modelName, otherTable]) =>
+				modelName !== tableKey && !otherTable.disableMigrations,
 		);
 
 		for (const [otherTableKey, otherTable] of otherModels) {
@@ -719,11 +770,19 @@ function generateImport({
 	}
 
 	//handle indexes
-	const hasIndexes = Object.values(tables).some((table) =>
-		Object.values(table.fields).some((field) => field.index && !field.unique),
+	const hasIndexes = Object.values(tables).some(
+		(table) =>
+			Object.values(table.fields).some(
+				(field) => field.index && !field.unique,
+			) ||
+			(table.indexes?.some((index) => !index.unique) ?? false),
 	);
-	const hasUniqueIndexes = Object.values(tables).some((table) =>
-		Object.values(table.fields).some((field) => field.unique && field.index),
+	const hasUniqueIndexes = Object.values(tables).some(
+		(table) =>
+			Object.values(table.fields).some(
+				(field) => field.unique && field.index,
+			) ||
+			(table.indexes?.some((index) => index.unique) ?? false),
 	);
 	if (hasIndexes) {
 		coreImports.push("index");

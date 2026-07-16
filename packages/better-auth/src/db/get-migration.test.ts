@@ -147,3 +147,266 @@ describe("get-migration: ALTER TABLE ADD COLUMN on SQLite", () => {
 		expect(user.referralCode).toBe("unset");
 	});
 });
+
+describe("get-migration: compound indexes on SQLite", () => {
+	it("rejects duplicate field-level and table-level indexes before creating a table", async () => {
+		await expect(
+			getMigrations({
+				database: new DatabaseSync(":memory:"),
+				plugins: [
+					{
+						id: "directory",
+						schema: {
+							directoryUser: {
+								fields: {
+									subject: { type: "string", index: true },
+								},
+								indexes: [{ fields: ["subject"] }],
+							},
+						},
+					},
+				],
+			}),
+		).rejects.toThrow(
+			'Database index name "directoryUser_subject_idx" is already reserved by field-level index metadata on table "directoryUser".',
+		);
+	});
+
+	it("enforces a compound unique index with configured table and field names", async () => {
+		const db = new DatabaseSync(":memory:");
+		const config: BetterAuthOptions = {
+			database: db,
+			plugins: [
+				{
+					id: "directory",
+					schema: {
+						directoryUser: {
+							modelName: "directory_user",
+							fields: {
+								connectionId: {
+									type: "string",
+									fieldName: "connection_id",
+								},
+								externalId: {
+									type: "string",
+									fieldName: "external_id",
+								},
+							},
+							indexes: [
+								{
+									fields: ["connectionId", "externalId"],
+									unique: true,
+								},
+							],
+						},
+					},
+				},
+			],
+		};
+
+		const migrations = await getMigrations(config);
+		const sql = (await migrations.compileMigrations()).toLowerCase();
+
+		expect(sql).toContain(
+			'create unique index "directory_user_connection_id_external_id_uidx" on "directory_user" ("connection_id", "external_id")',
+		);
+
+		await migrations.runMigrations();
+		db.exec(`
+			INSERT INTO "directory_user" ("id", "connection_id", "external_id")
+			VALUES
+				('du1', 'okta', 'employee-1'),
+				('du2', 'entra', 'employee-1');
+		`);
+
+		expect(() =>
+			db.exec(`
+				INSERT INTO "directory_user" ("id", "connection_id", "external_id")
+				VALUES ('du3', 'okta', 'employee-1');
+			`),
+		).toThrow();
+
+		const nextMigration = await getMigrations(config);
+		expect(await nextMigration.compileMigrations()).not.toContain(
+			"directory_user_connection_id_external_id_uidx",
+		);
+	});
+
+	it("rejects an existing index with the requested name but different semantics", async () => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(`
+			CREATE TABLE "directory_user" (
+				"id" text primary key not null,
+				"connection_id" text not null,
+				"external_id" text not null
+			);
+			CREATE INDEX "directory_identity_uidx"
+				ON "directory_user" ("external_id");
+		`);
+		const config: BetterAuthOptions = {
+			database: db,
+			plugins: [
+				{
+					id: "directory",
+					schema: {
+						directoryUser: {
+							modelName: "directory_user",
+							fields: {
+								connectionId: {
+									type: "string",
+									fieldName: "connection_id",
+								},
+								externalId: {
+									type: "string",
+									fieldName: "external_id",
+								},
+							},
+							indexes: [
+								{
+									fields: ["connectionId", "externalId"],
+									name: "directory_identity_uidx",
+									unique: true,
+								},
+							],
+						},
+					},
+				},
+			],
+		};
+
+		await expect(getMigrations(config)).rejects.toThrow(
+			'Database index "directory_identity_uidx" on table "directory_user" does not match the configured fields and uniqueness.',
+		);
+	});
+
+	it("recognizes existing index names case-insensitively", async () => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(`
+			CREATE TABLE "directory_user" (
+				"id" text primary key not null,
+				"connection_id" text not null,
+				"external_id" text not null
+			);
+			CREATE UNIQUE INDEX "Directory_Identity_UIDX"
+				ON "directory_user" ("connection_id", "external_id");
+		`);
+		const migrations = await getMigrations({
+			database: db,
+			plugins: [
+				{
+					id: "directory",
+					schema: {
+						directoryUser: {
+							modelName: "directory_user",
+							fields: {
+								connectionId: {
+									type: "string",
+									fieldName: "connection_id",
+								},
+								externalId: {
+									type: "string",
+									fieldName: "external_id",
+								},
+							},
+							indexes: [
+								{
+									fields: ["connectionId", "externalId"],
+									name: "directory_identity_uidx",
+									unique: true,
+								},
+							],
+						},
+					},
+				},
+			],
+		});
+
+		expect(await migrations.compileMigrations()).not.toContain(
+			"directory_identity_uidx",
+		);
+	});
+
+	it("rejects a case-insensitive existing index name on another table", async () => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(`
+			CREATE TABLE "reserved_index_owner" (
+				"id" text primary key not null,
+				"subject" text not null
+			);
+			CREATE INDEX "Directory_Identity_UIDX"
+				ON "reserved_index_owner" ("subject");
+		`);
+
+		await expect(
+			getMigrations({
+				database: db,
+				plugins: [
+					{
+						id: "directory",
+						schema: {
+							directoryUser: {
+								fields: { subject: { type: "string" } },
+								indexes: [
+									{
+										fields: ["subject"],
+										name: "directory_identity_uidx",
+									},
+								],
+							},
+						},
+					},
+				],
+			}),
+		).rejects.toThrow(
+			'Database index name "directory_identity_uidx" is already used by table "reserved_index_owner".',
+		);
+	});
+
+	it("does not accept a partial unique index as a full uniqueness guarantee", async () => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(`
+			CREATE TABLE "directory_user" (
+				"id" text primary key not null,
+				"connection_id" text not null,
+				"external_id" text not null
+			);
+			CREATE UNIQUE INDEX "directory_identity_uidx"
+				ON "directory_user" ("connection_id", "external_id")
+				WHERE "external_id" IS NOT NULL;
+		`);
+		const config: BetterAuthOptions = {
+			database: db,
+			plugins: [
+				{
+					id: "directory",
+					schema: {
+						directoryUser: {
+							modelName: "directory_user",
+							fields: {
+								connectionId: {
+									type: "string",
+									fieldName: "connection_id",
+								},
+								externalId: {
+									type: "string",
+									fieldName: "external_id",
+								},
+							},
+							indexes: [
+								{
+									fields: ["connectionId", "externalId"],
+									name: "directory_identity_uidx",
+									unique: true,
+								},
+							],
+						},
+					},
+				},
+			],
+		};
+
+		await expect(getMigrations(config)).rejects.toThrow(
+			'Database index "directory_identity_uidx" on table "directory_user" does not match the configured fields and uniqueness.',
+		);
+	});
+});
