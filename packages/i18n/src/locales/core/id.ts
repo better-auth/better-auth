@@ -1,0 +1,60 @@
+import type { BASE_ERROR_CODES } from "@better-auth/core/error";
+import type { LocalizedTranslations } from "../../types";
+
+export const idCore: LocalizedTranslations<typeof BASE_ERROR_CODES> = {
+	ACCOUNT_NOT_FOUND: "Akun tidak ditemukan",
+	ASYNC_VALIDATION_NOT_SUPPORTED: "Async validation is not supported",
+	BODY_MUST_BE_AN_OBJECT: "Body must be an object",
+	CALLBACK_URL_REQUIRED: "callbackURL is required",
+	CHANGE_EMAIL_DISABLED: "Change email is disabled",
+	CREDENTIAL_ACCOUNT_NOT_FOUND: "Akun kredensial tidak ditemukan",
+	CROSS_SITE_NAVIGATION_LOGIN_BLOCKED:
+		"Cross-site navigation login blocked. This request appears to be a CSRF attack.",
+	EMAIL_ALREADY_VERIFIED: "Email sudah diverifikasi",
+	EMAIL_CAN_NOT_BE_UPDATED: "Email tidak dapat diperbarui",
+	EMAIL_MISMATCH: "Email tidak cocok",
+	EMAIL_NOT_VERIFIED: "Email belum diverifikasi",
+	FAILED_TO_CREATE_SESSION: "Gagal membuat sesi",
+	FAILED_TO_CREATE_USER: "Gagal membuat pengguna",
+	FAILED_TO_CREATE_VERIFICATION: "Unable to create verification",
+	FAILED_TO_GET_SESSION: "Gagal mendapatkan sesi",
+	FAILED_TO_GET_USER_INFO: "Gagal mendapatkan informasi pengguna",
+	FAILED_TO_UNLINK_LAST_ACCOUNT:
+		"Anda tidak dapat memutuskan tautan akun terakhir Anda",
+	FAILED_TO_UPDATE_USER: "Gagal memperbarui pengguna",
+	FIELD_NOT_ALLOWED: "Field not allowed to be set",
+	ID_TOKEN_NOT_SUPPORTED: "id_token not supported",
+	INVALID_CALLBACK_URL: "Invalid callbackURL",
+	INVALID_EMAIL: "Alamat email tidak valid",
+	INVALID_EMAIL_OR_PASSWORD: "Email atau kata sandi tidak valid",
+	INVALID_ERROR_CALLBACK_URL: "Invalid errorCallbackURL",
+	INVALID_NEW_USER_CALLBACK_URL: "Invalid newUserCallbackURL",
+	INVALID_ORIGIN: "Invalid origin",
+	INVALID_PASSWORD: "Kata sandi tidak valid",
+	INVALID_REDIRECT_URL: "Invalid redirectURL",
+	INVALID_TOKEN: "Token tidak valid",
+	INVALID_USER: "Pengguna tidak valid",
+	LINKED_ACCOUNT_ALREADY_EXISTS: "Akun yang ditautkan sudah ada",
+	METHOD_NOT_ALLOWED_DEFER_SESSION_REQUIRED:
+		"POST method requires deferSessionRefresh to be enabled in session config",
+	MISSING_FIELD: "Kolom ini diperlukan",
+	MISSING_OR_NULL_ORIGIN: "Missing or null Origin",
+	PASSWORD_ALREADY_SET: "Pengguna sudah memiliki kata sandi yang ditetapkan",
+	PASSWORD_TOO_LONG: "Kata sandi terlalu panjang",
+	PASSWORD_TOO_SHORT: "Kata sandi terlalu pendek",
+	PROVIDER_NOT_FOUND: "Penyedia tidak ditemukan",
+	SESSION_EXPIRED:
+		"Sesi telah kedaluwarsa. Autentikasi ulang untuk melakukan tindakan ini.",
+	SESSION_NOT_FRESH: "Sesi tidak segar",
+	SOCIAL_ACCOUNT_ALREADY_LINKED: "Akun sosial sudah ditautkan",
+	TOKEN_EXPIRED: "Token sudah kedaluwarsa",
+	USER_ALREADY_EXISTS: "Pengguna sudah ada",
+	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
+		"Pengguna sudah ada. Gunakan email lain.",
+	USER_ALREADY_HAS_PASSWORD:
+		"Pengguna sudah memiliki kata sandi. Berikan kata sandi tersebut untuk menghapus akun.",
+	USER_EMAIL_NOT_FOUND: "Email pengguna tidak ditemukan",
+	USER_NOT_FOUND: "Pengguna tidak ditemukan",
+	VALIDATION_ERROR: "Kesalahan validasi",
+	VERIFICATION_EMAIL_NOT_ENABLED: "Email verifikasi tidak diaktifkan",
+};

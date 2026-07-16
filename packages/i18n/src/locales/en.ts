@@ -1,43 +1,42 @@
 import type { TranslationDictionary } from "../types";
+import { enCore } from "./core/en";
+import { enAdmin } from "./plugins/admin/en";
+import { enAnonymous } from "./plugins/anonymous/en";
+import { enApiKey } from "./plugins/api-key/en";
+import { enCaptcha } from "./plugins/captcha/en";
+import { enDeviceAuthorization } from "./plugins/device-authorization/en";
+import { enElectron } from "./plugins/electron/en";
+import { enEmailOtp } from "./plugins/email-otp/en";
+import { enGenericOAuth } from "./plugins/generic-oauth/en";
+import { enHaveIBeenPwned } from "./plugins/haveibeenpwned/en";
+import { enMultiSession } from "./plugins/multi-session/en";
+import { enOauthPopup } from "./plugins/oauth-popup/en";
+import { enOrganization } from "./plugins/organization/en";
+import { enPasskey } from "./plugins/passkey/en";
+import { enPhoneNumber } from "./plugins/phone-number/en";
+import { enSso } from "./plugins/sso/en";
+import { enStripe } from "./plugins/stripe/en";
+import { enTwoFactor } from "./plugins/two-factor/en";
+import { enUsername } from "./plugins/username/en";
 
-/**
- * English translations (default)
- */
 export const en: TranslationDictionary = {
-	USER_NOT_FOUND: "User not found",
-	FAILED_TO_CREATE_USER: "Failed to create user",
-	FAILED_TO_CREATE_SESSION: "Failed to create session",
-	FAILED_TO_UPDATE_USER: "Failed to update user",
-	FAILED_TO_GET_SESSION: "Failed to get session",
-	INVALID_PASSWORD: "Invalid password",
-	INVALID_EMAIL: "Invalid email",
-	INVALID_EMAIL_OR_PASSWORD: "Invalid email or password",
-	INVALID_USER: "Invalid user",
-	SOCIAL_ACCOUNT_ALREADY_LINKED: "Social account already linked",
-	PROVIDER_NOT_FOUND: "Provider not found",
-	INVALID_TOKEN: "Invalid token",
-	TOKEN_EXPIRED: "Token expired",
-	FAILED_TO_GET_USER_INFO: "Failed to get user info",
-	USER_EMAIL_NOT_FOUND: "User email not found",
-	EMAIL_NOT_VERIFIED: "Email not verified",
-	PASSWORD_TOO_SHORT: "Password too short",
-	PASSWORD_TOO_LONG: "Password too long",
-	USER_ALREADY_EXISTS: "User already exists",
-	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
-		"User already exists. Use another email.",
-	EMAIL_CAN_NOT_BE_UPDATED: "Email cannot be updated",
-	CREDENTIAL_ACCOUNT_NOT_FOUND: "Credential account not found",
-	SESSION_EXPIRED: "Session expired. Re-authenticate to perform this action.",
-	FAILED_TO_UNLINK_LAST_ACCOUNT: "You can't unlink your last account",
-	ACCOUNT_NOT_FOUND: "Account not found",
-	USER_ALREADY_HAS_PASSWORD:
-		"User already has a password. Provide that to delete the account.",
-	VERIFICATION_EMAIL_NOT_ENABLED: "Verification email isn't enabled",
-	EMAIL_ALREADY_VERIFIED: "Email is already verified",
-	EMAIL_MISMATCH: "Email mismatch",
-	SESSION_NOT_FRESH: "Session is not fresh",
-	LINKED_ACCOUNT_ALREADY_EXISTS: "Linked account already exists",
-	VALIDATION_ERROR: "Validation error",
-	MISSING_FIELD: "Field is required",
-	PASSWORD_ALREADY_SET: "User already has a password set",
+	...enCore,
+	...enUsername,
+	...enSso,
+	...enDeviceAuthorization,
+	...enOauthPopup,
+	...enOrganization,
+	...enEmailOtp,
+	...enApiKey,
+	...enElectron,
+	...enHaveIBeenPwned,
+	...enStripe,
+	...enMultiSession,
+	...enAdmin,
+	...enAnonymous,
+	...enCaptcha,
+	...enPasskey,
+	...enTwoFactor,
+	...enPhoneNumber,
+	...enGenericOAuth,
 };

@@ -1,0 +1,60 @@
+import type { BASE_ERROR_CODES } from "@better-auth/core/error";
+import type { LocalizedTranslations } from "../../types";
+
+export const plCore: LocalizedTranslations<typeof BASE_ERROR_CODES> = {
+	ACCOUNT_NOT_FOUND: "Konto nie znalezione",
+	ASYNC_VALIDATION_NOT_SUPPORTED: "Async validation is not supported",
+	BODY_MUST_BE_AN_OBJECT: "Body must be an object",
+	CALLBACK_URL_REQUIRED: "callbackURL is required",
+	CHANGE_EMAIL_DISABLED: "Change email is disabled",
+	CREDENTIAL_ACCOUNT_NOT_FOUND:
+		"Konto z danymi uwierzytelniającymi nie znalezione",
+	CROSS_SITE_NAVIGATION_LOGIN_BLOCKED:
+		"Cross-site navigation login blocked. This request appears to be a CSRF attack.",
+	EMAIL_ALREADY_VERIFIED: "Adres e-mail jest już zweryfikowany",
+	EMAIL_CAN_NOT_BE_UPDATED: "Adres e-mail nie może zostać zaktualizowany",
+	EMAIL_MISMATCH: "Adresy e-mail nie są zgodne",
+	EMAIL_NOT_VERIFIED: "Adres e-mail nie został zweryfikowany",
+	FAILED_TO_CREATE_SESSION: "Nie udało się utworzyć sesji",
+	FAILED_TO_CREATE_USER: "Nie udało się utworzyć użytkownika",
+	FAILED_TO_CREATE_VERIFICATION: "Unable to create verification",
+	FAILED_TO_GET_SESSION: "Nie udało się pobrać sesji",
+	FAILED_TO_GET_USER_INFO: "Nie udało się pobrać informacji o użytkowniku",
+	FAILED_TO_UNLINK_LAST_ACCOUNT: "Nie możesz odłączyć swojego ostatniego konta",
+	FAILED_TO_UPDATE_USER: "Nie udało się zaktualizować użytkownika",
+	FIELD_NOT_ALLOWED: "Field not allowed to be set",
+	ID_TOKEN_NOT_SUPPORTED: "id_token not supported",
+	INVALID_CALLBACK_URL: "Invalid callbackURL",
+	INVALID_EMAIL: "Nieprawidłowy adres e-mail",
+	INVALID_EMAIL_OR_PASSWORD: "Nieprawidłowy adres e-mail lub hasło",
+	INVALID_ERROR_CALLBACK_URL: "Invalid errorCallbackURL",
+	INVALID_NEW_USER_CALLBACK_URL: "Invalid newUserCallbackURL",
+	INVALID_ORIGIN: "Invalid origin",
+	INVALID_PASSWORD: "Nieprawidłowe hasło",
+	INVALID_REDIRECT_URL: "Invalid redirectURL",
+	INVALID_TOKEN: "Nieprawidłowy token",
+	INVALID_USER: "Nieprawidłowy użytkownik",
+	LINKED_ACCOUNT_ALREADY_EXISTS: "Połączone konto już istnieje",
+	METHOD_NOT_ALLOWED_DEFER_SESSION_REQUIRED:
+		"POST method requires deferSessionRefresh to be enabled in session config",
+	MISSING_FIELD: "To pole jest wymagane",
+	MISSING_OR_NULL_ORIGIN: "Missing or null Origin",
+	PASSWORD_ALREADY_SET: "Użytkownik ma już ustawione hasło",
+	PASSWORD_TOO_LONG: "Hasło jest za długie",
+	PASSWORD_TOO_SHORT: "Hasło jest za krótkie",
+	PROVIDER_NOT_FOUND: "Dostawca nie znaleziony",
+	SESSION_EXPIRED:
+		"Sesja wygasła. Uwierzytelnij się ponownie, aby wykonać tę akcję.",
+	SESSION_NOT_FRESH: "Sesja nie jest aktualna",
+	SOCIAL_ACCOUNT_ALREADY_LINKED: "Konto społecznościowe jest już połączone",
+	TOKEN_EXPIRED: "Token wygasł",
+	USER_ALREADY_EXISTS: "Użytkownik już istnieje",
+	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
+		"Użytkownik już istnieje. Użyj innego adresu e-mail.",
+	USER_ALREADY_HAS_PASSWORD:
+		"Użytkownik ma już hasło. Podaj je, aby usunąć konto.",
+	USER_EMAIL_NOT_FOUND: "Adres e-mail użytkownika nie znalezony",
+	USER_NOT_FOUND: "Użytkownik nie znaleziony",
+	VALIDATION_ERROR: "Błąd walidacji",
+	VERIFICATION_EMAIL_NOT_ENABLED: "E-mail weryfikacyjny nie jest włączony",
+};

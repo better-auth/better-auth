@@ -41,7 +41,8 @@ The package ships with ready-to-use translations for 22 languages:
 
 ```ts
 import { betterAuth } from "better-auth";
-import { i18n, locales } from "@better-auth/i18n";
+import { i18n } from "@better-auth/i18n";
+import * as locales from "@better-auth/i18n/locales";
 
 export const auth = betterAuth({
   plugins: [
@@ -50,17 +51,25 @@ export const auth = betterAuth({
 });
 ```
 
-### Use a subset of locales
+> [!WARNING]
+> Importing from `@better-auth/i18n/locales` directly will bundle all 22 languages. To keep your bundle lean, it is recommended to import individual locales from their specific subpaths.
+
+### Use a subset of locales (Recommended)
+
+To keep your bundle lean and enable tree-shaking, import only the locales you need from their subpath exports:
 
 ```ts
-import { i18n, locales } from "@better-auth/i18n";
+import { betterAuth } from "better-auth";
+import { i18n } from "@better-auth/i18n";
+import { en } from "@better-auth/i18n/locales/en";
+import { fr } from "@better-auth/i18n/locales/fr";
 
 export const auth = betterAuth({
   plugins: [
     i18n({
       translations: {
-        en: locales.en,
-        fr: locales.fr,
+        en,
+        fr,
       },
     }),
   ],
@@ -70,7 +79,9 @@ export const auth = betterAuth({
 ### Override specific messages
 
 ```ts
-import { i18n, locales } from "@better-auth/i18n";
+import { betterAuth } from "better-auth";
+import { i18n } from "@better-auth/i18n";
+import * as locales from "@better-auth/i18n/locales";
 
 export const auth = betterAuth({
   plugins: [
@@ -90,7 +101,9 @@ export const auth = betterAuth({
 ### Add a custom locale
 
 ```ts
-import { i18n, locales } from "@better-auth/i18n";
+import { betterAuth } from "better-auth";
+import { i18n } from "@better-auth/i18n";
+import * as locales from "@better-auth/i18n/locales";
 import type { TranslationDictionary } from "@better-auth/i18n";
 
 const myLocale: TranslationDictionary = {

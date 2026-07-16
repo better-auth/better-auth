@@ -1,44 +1,42 @@
 import type { TranslationDictionary } from "../types";
+import { trCore } from "./core/tr";
+import { trAdmin } from "./plugins/admin/tr";
+import { trAnonymous } from "./plugins/anonymous/tr";
+import { trApiKey } from "./plugins/api-key/tr";
+import { trCaptcha } from "./plugins/captcha/tr";
+import { trDeviceAuthorization } from "./plugins/device-authorization/tr";
+import { trElectron } from "./plugins/electron/tr";
+import { trEmailOtp } from "./plugins/email-otp/tr";
+import { trGenericOAuth } from "./plugins/generic-oauth/tr";
+import { trHaveIBeenPwned } from "./plugins/haveibeenpwned/tr";
+import { trMultiSession } from "./plugins/multi-session/tr";
+import { trOauthPopup } from "./plugins/oauth-popup/tr";
+import { trOrganization } from "./plugins/organization/tr";
+import { trPasskey } from "./plugins/passkey/tr";
+import { trPhoneNumber } from "./plugins/phone-number/tr";
+import { trSso } from "./plugins/sso/tr";
+import { trStripe } from "./plugins/stripe/tr";
+import { trTwoFactor } from "./plugins/two-factor/tr";
+import { trUsername } from "./plugins/username/tr";
 
-/**
- * Turkish translations
- */
 export const tr: TranslationDictionary = {
-	USER_NOT_FOUND: "Kullanıcı bulunamadı",
-	FAILED_TO_CREATE_USER: "Kullanıcı oluşturulamadı",
-	FAILED_TO_CREATE_SESSION: "Oturum oluşturulamadı",
-	FAILED_TO_UPDATE_USER: "Kullanıcı güncellenemedi",
-	FAILED_TO_GET_SESSION: "Oturum alınamadı",
-	INVALID_PASSWORD: "Geçersiz şifre",
-	INVALID_EMAIL: "Geçersiz e-posta adresi",
-	INVALID_EMAIL_OR_PASSWORD: "Geçersiz e-posta adresi veya şifre",
-	INVALID_USER: "Geçersiz kullanıcı",
-	SOCIAL_ACCOUNT_ALREADY_LINKED: "Sosyal hesap zaten bağlı",
-	PROVIDER_NOT_FOUND: "Sağlayıcı bulunamadı",
-	INVALID_TOKEN: "Geçersiz token",
-	TOKEN_EXPIRED: "Token süresi doldu",
-	FAILED_TO_GET_USER_INFO: "Kullanıcı bilgileri alınamadı",
-	USER_EMAIL_NOT_FOUND: "Kullanıcı e-posta adresi bulunamadı",
-	EMAIL_NOT_VERIFIED: "E-posta adresi doğrulanmadı",
-	PASSWORD_TOO_SHORT: "Şifre çok kısa",
-	PASSWORD_TOO_LONG: "Şifre çok uzun",
-	USER_ALREADY_EXISTS: "Kullanıcı zaten mevcut",
-	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
-		"Kullanıcı zaten mevcut. Başka bir e-posta adresi kullanın.",
-	EMAIL_CAN_NOT_BE_UPDATED: "E-posta adresi güncellenemiyor",
-	CREDENTIAL_ACCOUNT_NOT_FOUND: "Kimlik bilgisi hesabı bulunamadı",
-	SESSION_EXPIRED:
-		"Oturum süresi doldu. Bu işlemi gerçekleştirmek için yeniden kimlik doğrulayın.",
-	FAILED_TO_UNLINK_LAST_ACCOUNT: "Son hesabınızın bağlantısını kaldıramazsınız",
-	ACCOUNT_NOT_FOUND: "Hesap bulunamadı",
-	USER_ALREADY_HAS_PASSWORD:
-		"Kullanıcının zaten bir şifresi var. Hesabı silmek için şifreyi girin.",
-	VERIFICATION_EMAIL_NOT_ENABLED: "Doğrulama e-postası etkin değil",
-	EMAIL_ALREADY_VERIFIED: "E-posta adresi zaten doğrulandı",
-	EMAIL_MISMATCH: "E-posta adresleri uyuşmuyor",
-	SESSION_NOT_FRESH: "Oturum güncel değil",
-	LINKED_ACCOUNT_ALREADY_EXISTS: "Bağlı hesap zaten mevcut",
-	VALIDATION_ERROR: "Doğrulama hatası",
-	MISSING_FIELD: "Bu alan gerekli",
-	PASSWORD_ALREADY_SET: "Kullanıcının şifresi zaten ayarlanmış",
+	...trCore,
+	...trUsername,
+	...trSso,
+	...trDeviceAuthorization,
+	...trOauthPopup,
+	...trOrganization,
+	...trEmailOtp,
+	...trApiKey,
+	...trElectron,
+	...trHaveIBeenPwned,
+	...trStripe,
+	...trMultiSession,
+	...trAdmin,
+	...trAnonymous,
+	...trCaptcha,
+	...trPasskey,
+	...trTwoFactor,
+	...trPhoneNumber,
+	...trGenericOAuth,
 };

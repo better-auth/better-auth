@@ -1,0 +1,21 @@
+import type { DEVICE_AUTHORIZATION_ERROR_CODES } from "better-auth/plugins/device-authorization";
+import type { LocalizedTranslations } from "../../../types";
+
+export const enDeviceAuthorization: LocalizedTranslations<
+	typeof DEVICE_AUTHORIZATION_ERROR_CODES
+> = {
+	INVALID_DEVICE_CODE: "Invalid device code",
+	EXPIRED_DEVICE_CODE: "Device code has expired",
+	EXPIRED_USER_CODE: "User code has expired",
+	AUTHORIZATION_PENDING: "Authorization pending",
+	ACCESS_DENIED: "Access denied",
+	INVALID_USER_CODE: "Invalid user code",
+	DEVICE_CODE_ALREADY_PROCESSED: "Device code already processed",
+	DEVICE_CODE_NOT_CLAIMED:
+		"Device code has not been claimed by a verifying session; call `GET /device` with the `user_code` while signed in before approving or denying",
+	POLLING_TOO_FREQUENTLY: "Polling too frequently",
+	USER_NOT_FOUND: "User not found",
+	FAILED_TO_CREATE_SESSION: "Failed to create session",
+	INVALID_DEVICE_CODE_STATUS: "Invalid device code status",
+	AUTHENTICATION_REQUIRED: "Authentication required",
+};

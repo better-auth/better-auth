@@ -1,43 +1,42 @@
 import type { TranslationDictionary } from "../types";
+import { hiCore } from "./core/hi";
+import { hiAdmin } from "./plugins/admin/hi";
+import { hiAnonymous } from "./plugins/anonymous/hi";
+import { hiApiKey } from "./plugins/api-key/hi";
+import { hiCaptcha } from "./plugins/captcha/hi";
+import { hiDeviceAuthorization } from "./plugins/device-authorization/hi";
+import { hiElectron } from "./plugins/electron/hi";
+import { hiEmailOtp } from "./plugins/email-otp/hi";
+import { hiGenericOAuth } from "./plugins/generic-oauth/hi";
+import { hiHaveIBeenPwned } from "./plugins/haveibeenpwned/hi";
+import { hiMultiSession } from "./plugins/multi-session/hi";
+import { hiOauthPopup } from "./plugins/oauth-popup/hi";
+import { hiOrganization } from "./plugins/organization/hi";
+import { hiPasskey } from "./plugins/passkey/hi";
+import { hiPhoneNumber } from "./plugins/phone-number/hi";
+import { hiSso } from "./plugins/sso/hi";
+import { hiStripe } from "./plugins/stripe/hi";
+import { hiTwoFactor } from "./plugins/two-factor/hi";
+import { hiUsername } from "./plugins/username/hi";
 
-/**
- * Hindi translations
- */
 export const hi: TranslationDictionary = {
-	USER_NOT_FOUND: "उपयोगकर्ता नहीं मिला",
-	FAILED_TO_CREATE_USER: "उपयोगकर्ता बनाने में विफल",
-	FAILED_TO_CREATE_SESSION: "सत्र बनाने में विफल",
-	FAILED_TO_UPDATE_USER: "उपयोगकर्ता अपडेट करने में विफल",
-	FAILED_TO_GET_SESSION: "सत्र प्राप्त करने में विफल",
-	INVALID_PASSWORD: "अमान्य पासवर्ड",
-	INVALID_EMAIL: "अमान्य ईमेल",
-	INVALID_EMAIL_OR_PASSWORD: "अमान्य ईमेल या पासवर्ड",
-	INVALID_USER: "अमान्य उपयोगकर्ता",
-	SOCIAL_ACCOUNT_ALREADY_LINKED: "सोशल अकाउंट पहले से लिंक है",
-	PROVIDER_NOT_FOUND: "प्रदाता नहीं मिला",
-	INVALID_TOKEN: "अमान्य टोकन",
-	TOKEN_EXPIRED: "टोकन समाप्त हो गया",
-	FAILED_TO_GET_USER_INFO: "उपयोगकर्ता जानकारी प्राप्त करने में विफल",
-	USER_EMAIL_NOT_FOUND: "उपयोगकर्ता का ईमेल नहीं मिला",
-	EMAIL_NOT_VERIFIED: "ईमेल सत्यापित नहीं है",
-	PASSWORD_TOO_SHORT: "पासवर्ड बहुत छोटा है",
-	PASSWORD_TOO_LONG: "पासवर्ड बहुत लंबा है",
-	USER_ALREADY_EXISTS: "उपयोगकर्ता पहले से मौजूद है",
-	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
-		"उपयोगकर्ता पहले से मौजूद है। कोई अन्य ईमेल उपयोग करें।",
-	EMAIL_CAN_NOT_BE_UPDATED: "ईमेल अपडेट नहीं किया जा सकता",
-	CREDENTIAL_ACCOUNT_NOT_FOUND: "क्रेडेंशियल अकाउंट नहीं मिला",
-	SESSION_EXPIRED: "सत्र समाप्त हो गया। इस क्रिया को करने के लिए पुनः प्रमाणित करें।",
-	FAILED_TO_UNLINK_LAST_ACCOUNT: "आप अपने अंतिम अकाउंट को अनलिंक नहीं कर सकते",
-	ACCOUNT_NOT_FOUND: "अकाउंट नहीं मिला",
-	USER_ALREADY_HAS_PASSWORD:
-		"उपयोगकर्ता के पास पहले से पासवर्ड है। अकाउंट हटाने के लिए वह दर्ज करें।",
-	VERIFICATION_EMAIL_NOT_ENABLED: "सत्यापन ईमेल सक्षम नहीं है",
-	EMAIL_ALREADY_VERIFIED: "ईमेल पहले से सत्यापित है",
-	EMAIL_MISMATCH: "ईमेल मेल नहीं खाता",
-	SESSION_NOT_FRESH: "सत्र ताजा नहीं है",
-	LINKED_ACCOUNT_ALREADY_EXISTS: "लिंक किया गया अकाउंट पहले से मौजूद है",
-	VALIDATION_ERROR: "सत्यापन त्रुटि",
-	MISSING_FIELD: "यह फ़ील्ड आवश्यक है",
-	PASSWORD_ALREADY_SET: "उपयोगकर्ता का पासवर्ड पहले से सेट है",
+	...hiCore,
+	...hiUsername,
+	...hiSso,
+	...hiDeviceAuthorization,
+	...hiOauthPopup,
+	...hiOrganization,
+	...hiEmailOtp,
+	...hiApiKey,
+	...hiElectron,
+	...hiHaveIBeenPwned,
+	...hiStripe,
+	...hiMultiSession,
+	...hiAdmin,
+	...hiAnonymous,
+	...hiCaptcha,
+	...hiPasskey,
+	...hiTwoFactor,
+	...hiPhoneNumber,
+	...hiGenericOAuth,
 };

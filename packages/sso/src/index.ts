@@ -38,6 +38,7 @@ export {
 	KeyEncryptionAlgorithm,
 	SignatureAlgorithm,
 } from "./saml";
+export * from "./saml/error-codes";
 export {
 	type SAMLConditions,
 	type TimestampValidationOptions,

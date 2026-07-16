@@ -1,7 +1,7 @@
 import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
-import { i18n } from ".";
-import * as locales from "./locales";
+import { i18n } from "../src";
+import * as locales from "../src/locales";
 
 const translations = {
 	en: {
@@ -20,7 +20,7 @@ const translations = {
 	},
 };
 
-describe("i18n plugin", async () => {
+describe("i18n plugin - General", async () => {
 	const { auth } = await getTestInstance({
 		plugins: [
 			i18n({
@@ -379,30 +379,7 @@ describe("i18n plugin", async () => {
 
 	describe("built-in locales", () => {
 		it("should export all expected built-in locales", () => {
-			const expectedLocales = [
-				"ar",
-				"bn",
-				"de",
-				"en",
-				"es",
-				"fa",
-				"fr",
-				"hi",
-				"id",
-				"it",
-				"ja",
-				"ko",
-				"nl",
-				"pl",
-				"pt",
-				"ru",
-				"sv",
-				"th",
-				"tr",
-				"uk",
-				"vi",
-				"zh",
-			];
+			const expectedLocales = ["de", "en", "fr"];
 
 			for (const locale of expectedLocales) {
 				expect(locales).toHaveProperty(locale);

@@ -1350,9 +1350,24 @@ importers:
 
   packages/i18n:
     devDependencies:
+      '@better-auth/api-key':
+        specifier: workspace:*
+        version: link:../api-key
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/electron':
+        specifier: workspace:*
+        version: link:../electron
+      '@better-auth/passkey':
+        specifier: workspace:*
+        version: link:../passkey
+      '@better-auth/sso':
+        specifier: workspace:*
+        version: link:../sso
+      '@better-auth/stripe':
+        specifier: workspace:*
+        version: link:../stripe
       better-auth:
         specifier: workspace:*
         version: link:../better-auth

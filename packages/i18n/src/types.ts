@@ -5,6 +5,35 @@ import type {
 	UnionToIntersection,
 } from "@better-auth/core";
 
+export const SUPPORTED_LOCALES = [
+	"en",
+	"fr",
+	"ar",
+	"de",
+	"es",
+	"zh",
+	"ja",
+	"ko",
+	"pt",
+	"it",
+	"ru",
+	"tr",
+	"nl",
+	"pl",
+	"sv",
+	"vi",
+	"hi",
+	"id",
+	"uk",
+	"bn",
+	"th",
+	"fa",
+] as const;
+export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
+
+export type LocalizedTranslations<ErrorCodes extends Record<string, any>> =
+	Record<keyof ErrorCodes, string>;
+
 type ALL_PLUGIN_ERROR_CODE_KEYS = keyof UnionToIntersection<
 	{
 		[Key in Exclude<
@@ -24,9 +53,9 @@ type ALL_PLUGIN_ERROR_CODE_KEYS = keyof UnionToIntersection<
 	}[Exclude<BetterAuthPluginRegistryIdentifier, "i18n">]
 >;
 
-type InternalTranslationDictionary = Partial<{
+type InternalTranslationDictionary = {
 	[Key in ALL_PLUGIN_ERROR_CODE_KEYS]: string;
-}>;
+};
 
 /**
  * Translation dictionary mapping error codes to translated messages
@@ -56,7 +85,7 @@ export interface I18nOptions<Locales extends string[]> {
 	 * }
 	 */
 	translations: {
-		[Locale in Locales[number]]: TranslationDictionary;
+		[Locale in Locales[number]]: Partial<TranslationDictionary>;
 	};
 
 	/**

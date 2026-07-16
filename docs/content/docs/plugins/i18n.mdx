@@ -24,22 +24,13 @@ Better Auth already provides English error messages by default, so you only need
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth"
     import { i18n } from "@better-auth/i18n"
+    import { en } from "@better-auth/i18n/locales/en"
+    import { fr } from "@better-auth/i18n/locales/fr"
 
     export const auth = betterAuth({
         plugins: [
             i18n({
-                translations: {
-                    fr: {
-                        USER_NOT_FOUND: "Utilisateur non trouvé",
-                        INVALID_EMAIL_OR_PASSWORD: "Email ou mot de passe invalide",
-                        INVALID_PASSWORD: "Mot de passe invalide",
-                    },
-                    de: {
-                        USER_NOT_FOUND: "Benutzer nicht gefunden",
-                        INVALID_EMAIL_OR_PASSWORD: "Ungültige E-Mail oder Passwort",
-                        INVALID_PASSWORD: "Ungültiges Passwort",
-                    },
-                },
+                translations: { en, fr },
             }),
         ],
     })
@@ -49,7 +40,7 @@ Better Auth already provides English error messages by default, so you only need
 
 ## Built-in Translations
 
-The package ships with ready-to-use translations for 22 languages, so you don't need to write translations from scratch. Import `locales` from `@better-auth/i18n` to use them.
+The package ships with ready-to-use translations for 22 languages, so you don't need to write translations from scratch. Import them from `@better-auth/i18n/locales` to use them.
 
 | Code | Language             |
 | ---- | -------------------- |
@@ -76,11 +67,31 @@ The package ships with ready-to-use translations for 22 languages, so you don't 
 | `vi` | Vietnamese           |
 | `zh` | Chinese (Simplified) |
 
+### Use a subset of locales (Recommended)
+
+To keep your bundle lean and enable tree-shaking, import only the locales you need from their subpath exports:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { i18n } from "@better-auth/i18n"
+import { en } from "@better-auth/i18n/locales/en"
+import { fr } from "@better-auth/i18n/locales/fr"
+
+export const auth = betterAuth({
+    plugins: [
+        i18n({
+            translations: { en, fr },
+        }),
+    ],
+})
+```
+
 ### Use all built-in locales
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { i18n, locales } from "@better-auth/i18n"
+import { i18n } from "@better-auth/i18n"
+import * as locales from "@better-auth/i18n/locales"
 
 export const auth = betterAuth({
     plugins: [
@@ -89,20 +100,32 @@ export const auth = betterAuth({
 })
 ```
 
-### Use a subset of locales
+<Callout type="warn">
+  Importing from the root locales entry point (`@better-auth/i18n/locales`) will bundle all 22 languages. To keep your bundle lean, import individual locales from their specific subpaths instead.
+</Callout>
 
-To keep your bundle lean, you can import only the locales you need:
+### Custom translations
+
+Instead of using a built-in locale, you can provide your own translations directly as a plain object. Only the keys you provide will be overridden — everything else falls back to the default English messages:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { i18n, locales } from "@better-auth/i18n"
+import { i18n } from "@better-auth/i18n"
 
 export const auth = betterAuth({
     plugins: [
         i18n({
             translations: {
-                en: locales.en,
-                fr: locales.fr,
+                fr: {
+                    USER_NOT_FOUND: "Utilisateur non trouvé",
+                    INVALID_EMAIL_OR_PASSWORD: "Email ou mot de passe invalide",
+                    INVALID_PASSWORD: "Mot de passe invalide",
+                },
+                de: {
+                    USER_NOT_FOUND: "Benutzer nicht gefunden",
+                    INVALID_EMAIL_OR_PASSWORD: "Ungültige E-Mail oder Passwort",
+                    INVALID_PASSWORD: "Ungültiges Passwort",
+                },
             },
         }),
     ],
@@ -115,15 +138,15 @@ You can spread a built-in locale and override only the messages you want to cust
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { i18n, locales } from "@better-auth/i18n"
+import { i18n } from "@better-auth/i18n"
+import { fr } from "@better-auth/i18n/locales/fr"
 
 export const auth = betterAuth({
     plugins: [
         i18n({
             translations: {
-                ...locales,
                 fr: {
-                    ...locales.fr,
+                    ...fr,
                     USER_NOT_FOUND: "Membre introuvable",
                 },
             },
@@ -138,7 +161,8 @@ You can mix built-in locales with your own custom ones:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { i18n, locales } from "@better-auth/i18n"
+import { i18n } from "@better-auth/i18n"
+import * as locales from "@better-auth/i18n/locales"
 import type { TranslationDictionary } from "@better-auth/i18n"
 
 const myLocale: TranslationDictionary = {

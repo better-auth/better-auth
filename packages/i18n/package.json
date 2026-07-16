@@ -51,6 +51,11 @@
       "dev-source": "./src/locales/index.ts",
       "types": "./dist/locales/index.d.mts",
       "default": "./dist/locales/index.mjs"
+    },
+    "./locales/*": {
+      "dev-source": "./src/locales/*.ts",
+      "types": "./dist/locales/*.d.mts",
+      "default": "./dist/locales/*.mjs"
     }
   },
   "typesVersions": {
@@ -63,11 +68,19 @@
       ],
       "locales": [
         "./dist/locales/index.d.mts"
+      ],
+      "locales/*": [
+        "./dist/locales/*.d.mts"
       ]
     }
   },
   "devDependencies": {
+    "@better-auth/api-key": "workspace:*",
     "@better-auth/core": "workspace:*",
+    "@better-auth/electron": "workspace:*",
+    "@better-auth/passkey": "workspace:*",
+    "@better-auth/sso": "workspace:*",
+    "@better-auth/stripe": "workspace:*",
     "better-auth": "workspace:*",
     "tsdown": "catalog:"
   },

@@ -1,0 +1,60 @@
+import type { BASE_ERROR_CODES } from "@better-auth/core/error";
+import type { LocalizedTranslations } from "../../types";
+
+export const svCore: LocalizedTranslations<typeof BASE_ERROR_CODES> = {
+	ACCOUNT_NOT_FOUND: "Kontot hittades inte",
+	ASYNC_VALIDATION_NOT_SUPPORTED: "Async validation is not supported",
+	BODY_MUST_BE_AN_OBJECT: "Body must be an object",
+	CALLBACK_URL_REQUIRED: "callbackURL is required",
+	CHANGE_EMAIL_DISABLED: "Change email is disabled",
+	CREDENTIAL_ACCOUNT_NOT_FOUND: "Inloggningskontot hittades inte",
+	CROSS_SITE_NAVIGATION_LOGIN_BLOCKED:
+		"Cross-site navigation login blocked. This request appears to be a CSRF attack.",
+	EMAIL_ALREADY_VERIFIED: "E-postadressen är redan verifierad",
+	EMAIL_CAN_NOT_BE_UPDATED: "E-postadressen kan inte uppdateras",
+	EMAIL_MISMATCH: "E-postadresserna stämmer inte överens",
+	EMAIL_NOT_VERIFIED: "E-postadressen är inte verifierad",
+	FAILED_TO_CREATE_SESSION: "Misslyckades med att skapa session",
+	FAILED_TO_CREATE_USER: "Misslyckades med att skapa användare",
+	FAILED_TO_CREATE_VERIFICATION: "Unable to create verification",
+	FAILED_TO_GET_SESSION: "Misslyckades med att hämta session",
+	FAILED_TO_GET_USER_INFO: "Misslyckades med att hämta användarinformation",
+	FAILED_TO_UNLINK_LAST_ACCOUNT:
+		"Du kan inte ta bort länken till ditt sista konto",
+	FAILED_TO_UPDATE_USER: "Misslyckades med att uppdatera användare",
+	FIELD_NOT_ALLOWED: "Field not allowed to be set",
+	ID_TOKEN_NOT_SUPPORTED: "id_token not supported",
+	INVALID_CALLBACK_URL: "Invalid callbackURL",
+	INVALID_EMAIL: "Ogiltig e-postadress",
+	INVALID_EMAIL_OR_PASSWORD: "Ogiltig e-postadress eller lösenord",
+	INVALID_ERROR_CALLBACK_URL: "Invalid errorCallbackURL",
+	INVALID_NEW_USER_CALLBACK_URL: "Invalid newUserCallbackURL",
+	INVALID_ORIGIN: "Invalid origin",
+	INVALID_PASSWORD: "Ogiltigt lösenord",
+	INVALID_REDIRECT_URL: "Invalid redirectURL",
+	INVALID_TOKEN: "Ogiltigt token",
+	INVALID_USER: "Ogiltig användare",
+	LINKED_ACCOUNT_ALREADY_EXISTS: "Det länkade kontot finns redan",
+	METHOD_NOT_ALLOWED_DEFER_SESSION_REQUIRED:
+		"POST method requires deferSessionRefresh to be enabled in session config",
+	MISSING_FIELD: "Det här fältet är obligatoriskt",
+	MISSING_OR_NULL_ORIGIN: "Missing or null Origin",
+	PASSWORD_ALREADY_SET: "Användaren har redan ett lösenord inställt",
+	PASSWORD_TOO_LONG: "Lösenordet är för långt",
+	PASSWORD_TOO_SHORT: "Lösenordet är för kort",
+	PROVIDER_NOT_FOUND: "Leverantör hittades inte",
+	SESSION_EXPIRED:
+		"Sessionen har gått ut. Autentisera dig igen för att utföra denna åtgärd.",
+	SESSION_NOT_FRESH: "Sessionen är inte aktuell",
+	SOCIAL_ACCOUNT_ALREADY_LINKED: "Socialt konto redan länkat",
+	TOKEN_EXPIRED: "Token har gått ut",
+	USER_ALREADY_EXISTS: "Användaren finns redan",
+	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
+		"Användaren finns redan. Använd en annan e-postadress.",
+	USER_ALREADY_HAS_PASSWORD:
+		"Användaren har redan ett lösenord. Ange det för att ta bort kontot.",
+	USER_EMAIL_NOT_FOUND: "Användarens e-postadress hittades inte",
+	USER_NOT_FOUND: "Användare hittades inte",
+	VALIDATION_ERROR: "Valideringsfel",
+	VERIFICATION_EMAIL_NOT_ENABLED: "Verifieringsmail är inte aktiverat",
+};

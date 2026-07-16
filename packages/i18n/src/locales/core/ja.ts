@@ -1,0 +1,60 @@
+import type { BASE_ERROR_CODES } from "@better-auth/core/error";
+import type { LocalizedTranslations } from "../../types";
+
+export const jaCore: LocalizedTranslations<typeof BASE_ERROR_CODES> = {
+	ACCOUNT_NOT_FOUND: "アカウントが見つかりません",
+	ASYNC_VALIDATION_NOT_SUPPORTED: "Async validation is not supported",
+	BODY_MUST_BE_AN_OBJECT: "Body must be an object",
+	CALLBACK_URL_REQUIRED: "callbackURL is required",
+	CHANGE_EMAIL_DISABLED: "Change email is disabled",
+	CREDENTIAL_ACCOUNT_NOT_FOUND: "認証アカウントが見つかりません",
+	CROSS_SITE_NAVIGATION_LOGIN_BLOCKED:
+		"Cross-site navigation login blocked. This request appears to be a CSRF attack.",
+	EMAIL_ALREADY_VERIFIED: "メールアドレスはすでに確認済みです",
+	EMAIL_CAN_NOT_BE_UPDATED: "メールアドレスは更新できません",
+	EMAIL_MISMATCH: "メールアドレスが一致しません",
+	EMAIL_NOT_VERIFIED: "メールアドレスが確認されていません",
+	FAILED_TO_CREATE_SESSION: "セッションの作成に失敗しました",
+	FAILED_TO_CREATE_USER: "ユーザーの作成に失敗しました",
+	FAILED_TO_CREATE_VERIFICATION: "Unable to create verification",
+	FAILED_TO_GET_SESSION: "セッションの取得に失敗しました",
+	FAILED_TO_GET_USER_INFO: "ユーザー情報の取得に失敗しました",
+	FAILED_TO_UNLINK_LAST_ACCOUNT:
+		"最後のアカウント of 連携を解除することはできません",
+	FAILED_TO_UPDATE_USER: "ユーザーの更新に失敗しました",
+	FIELD_NOT_ALLOWED: "Field not allowed to be set",
+	ID_TOKEN_NOT_SUPPORTED: "id_token not supported",
+	INVALID_CALLBACK_URL: "Invalid callbackURL",
+	INVALID_EMAIL: "メールアドレスが無効です",
+	INVALID_EMAIL_OR_PASSWORD: "メールアドレスまたはパスワードが無効です",
+	INVALID_ERROR_CALLBACK_URL: "Invalid errorCallbackURL",
+	INVALID_NEW_USER_CALLBACK_URL: "Invalid newUserCallbackURL",
+	INVALID_ORIGIN: "Invalid origin",
+	INVALID_PASSWORD: "パスワードが無効です",
+	INVALID_REDIRECT_URL: "Invalid redirectURL",
+	INVALID_TOKEN: "トークンが無効です",
+	INVALID_USER: "ユーザーが無効です",
+	LINKED_ACCOUNT_ALREADY_EXISTS: "連携アカウントはすでに存在します",
+	METHOD_NOT_ALLOWED_DEFER_SESSION_REQUIRED:
+		"POST method requires deferSessionRefresh to be enabled in session config",
+	MISSING_FIELD: "このフィールドは必須です",
+	MISSING_OR_NULL_ORIGIN: "Missing or null Origin",
+	PASSWORD_ALREADY_SET: "ユーザーにはすでにパスワードが設定されています",
+	PASSWORD_TOO_LONG: "パスワードが長すぎます",
+	PASSWORD_TOO_SHORT: "パスワードが短すぎます",
+	PROVIDER_NOT_FOUND: "プロバイダーが見つかりません",
+	SESSION_EXPIRED:
+		"セッションの有効期限が切れています。このアクションを実行するには再認証してください。",
+	SESSION_NOT_FRESH: "セッションが最新ではありません",
+	SOCIAL_ACCOUNT_ALREADY_LINKED: "ソーシャルアカウントはすでに連携されています",
+	TOKEN_EXPIRED: "トークンの有効期限が切れています",
+	USER_ALREADY_EXISTS: "ユーザーはすでに存在します",
+	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
+		"ユーザーはすでに存在します。別のメールアドレスをご使用ください。",
+	USER_ALREADY_HAS_PASSWORD:
+		"ユーザーにはすでにパスワードが設定されています。アカウントを削除するにはパスワードを入力してください。",
+	USER_EMAIL_NOT_FOUND: "ユーザーのメールアドレスが見つかりません",
+	USER_NOT_FOUND: "ユーザーが見つかりません",
+	VALIDATION_ERROR: "バリデーションエラー",
+	VERIFICATION_EMAIL_NOT_ENABLED: "確認メールが有効化されていません",
+};

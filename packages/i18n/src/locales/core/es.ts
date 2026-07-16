@@ -1,0 +1,60 @@
+import type { BASE_ERROR_CODES } from "@better-auth/core/error";
+import type { LocalizedTranslations } from "../../types";
+
+export const esCore: LocalizedTranslations<typeof BASE_ERROR_CODES> = {
+	ACCOUNT_NOT_FOUND: "Cuenta no encontrada",
+	ASYNC_VALIDATION_NOT_SUPPORTED: "Async validation is not supported",
+	BODY_MUST_BE_AN_OBJECT: "Body must be an object",
+	CALLBACK_URL_REQUIRED: "callbackURL is required",
+	CHANGE_EMAIL_DISABLED: "Change email is disabled",
+	CREDENTIAL_ACCOUNT_NOT_FOUND: "Cuenta de credenciales no encontrada",
+	CROSS_SITE_NAVIGATION_LOGIN_BLOCKED:
+		"Cross-site navigation login blocked. This request appears to be a CSRF attack.",
+	EMAIL_ALREADY_VERIFIED: "El correo electrónico ya está verificado",
+	EMAIL_CAN_NOT_BE_UPDATED: "El correo electrónico no puede actualizarse",
+	EMAIL_MISMATCH: "Los correos electrónicos no coinciden",
+	EMAIL_NOT_VERIFIED: "Correo electrónico no verificado",
+	FAILED_TO_CREATE_SESSION: "Error al crear la sesión",
+	FAILED_TO_CREATE_USER: "Error al crear el usuario",
+	FAILED_TO_CREATE_VERIFICATION: "Unable to create verification",
+	FAILED_TO_GET_SESSION: "Error al obtener la sesión",
+	FAILED_TO_GET_USER_INFO: "Error al obtener la información del usuario",
+	FAILED_TO_UNLINK_LAST_ACCOUNT: "No puedes desvincular tu última cuenta",
+	FAILED_TO_UPDATE_USER: "Error al actualizar el usuario",
+	FIELD_NOT_ALLOWED: "Field not allowed to be set",
+	ID_TOKEN_NOT_SUPPORTED: "id_token not supported",
+	INVALID_CALLBACK_URL: "Invalid callbackURL",
+	INVALID_EMAIL: "Correo electrónico inválido",
+	INVALID_EMAIL_OR_PASSWORD: "Correo electrónico o contraseña inválidos",
+	INVALID_ERROR_CALLBACK_URL: "Invalid errorCallbackURL",
+	INVALID_NEW_USER_CALLBACK_URL: "Invalid newUserCallbackURL",
+	INVALID_ORIGIN: "Invalid origin",
+	INVALID_PASSWORD: "Contraseña inválida",
+	INVALID_REDIRECT_URL: "Invalid redirectURL",
+	INVALID_TOKEN: "Token inválido",
+	INVALID_USER: "Usuario inválido",
+	LINKED_ACCOUNT_ALREADY_EXISTS: "La cuenta vinculada ya existe",
+	METHOD_NOT_ALLOWED_DEFER_SESSION_REQUIRED:
+		"POST method requires deferSessionRefresh to be enabled in session config",
+	MISSING_FIELD: "Este campo es requerido",
+	MISSING_OR_NULL_ORIGIN: "Missing or null Origin",
+	PASSWORD_ALREADY_SET: "El usuario ya tiene una contraseña establecida",
+	PASSWORD_TOO_LONG: "Contraseña demasiado larga",
+	PASSWORD_TOO_SHORT: "Contraseña demasiado corta",
+	PROVIDER_NOT_FOUND: "Proveedor no encontrado",
+	SESSION_EXPIRED:
+		"Sesión expirada. Vuelve a autenticarte para realizar esta acción.",
+	SESSION_NOT_FRESH: "La sesión no es reciente",
+	SOCIAL_ACCOUNT_ALREADY_LINKED: "La cuenta social ya está vinculada",
+	TOKEN_EXPIRED: "Token expirado",
+	USER_ALREADY_EXISTS: "El usuario ya existe",
+	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
+		"El usuario ya existe. Usa otro correo electrónico.",
+	USER_ALREADY_HAS_PASSWORD:
+		"El usuario ya tiene una contraseña. Proporciónala para eliminar la cuenta.",
+	USER_EMAIL_NOT_FOUND: "Correo electrónico del usuario no encontrado",
+	USER_NOT_FOUND: "Usuario no encontrado",
+	VALIDATION_ERROR: "Error de validación",
+	VERIFICATION_EMAIL_NOT_ENABLED:
+		"El correo de verificación no está habilitado",
+};
