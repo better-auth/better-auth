@@ -317,7 +317,7 @@ describe("ui router", async () => {
 			},
 			ui: {
 				theme: {
-					logoUrl: "https://example.com/logo.svg",
+					logoURL: "https://example.com/logo.svg",
 					primary: "#6d5dfc",
 				},
 			},
@@ -354,7 +354,7 @@ describe("ui router", async () => {
 			},
 			ui: {
 				theme: {
-					logoUrl: "https://example.com/logo.svg",
+					logoURL: "https://example.com/logo.svg",
 				},
 			},
 			plugins: [authUI()],
@@ -381,7 +381,7 @@ describe("ui router", async () => {
 			},
 			ui: {
 				theme: {
-					logoUrl: "https://example.com/logo.svg",
+					logoURL: "https://example.com/logo.svg",
 					logoPlacement: "top-center",
 				},
 			},
@@ -407,7 +407,7 @@ describe("ui router", async () => {
 			},
 			ui: {
 				theme: {
-					logoUrl: "https://example.com/logo.svg",
+					logoURL: "https://example.com/logo.svg",
 					logoPlacement: "hidden",
 				},
 			},
@@ -431,7 +431,7 @@ describe("ui router", async () => {
 			},
 			ui: {
 				theme: {
-					logoUrl: "https://example.com/logo.svg",
+					logoURL: "https://example.com/logo.svg",
 					logoPlacement: "bottom-left",
 				},
 			},
@@ -528,7 +528,7 @@ describe("ui router", async () => {
 			},
 			ui: {
 				theme: {
-					logoUrl: {
+					logoURL: {
 						dark: "https://example.com/logo-dark.svg",
 						light: "https://example.com/logo-light.svg",
 					},

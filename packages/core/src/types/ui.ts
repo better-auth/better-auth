@@ -235,7 +235,7 @@ export type UIPluginConfig<
 		| undefined;
 };
 
-export type ThemeLogoUrl =
+export type ThemeLogoURL =
 	| string
 	| {
 			dark: string;
@@ -252,7 +252,7 @@ export type ThemeLogoPlacement =
 	| "bottom-right";
 
 export type ThemeConfig = {
-	logoUrl?: ThemeLogoUrl | undefined;
+	logoURL?: ThemeLogoURL | undefined;
 	logoPlacement?: ThemeLogoPlacement | undefined;
 	appName?: string | undefined;
 	primary: string;

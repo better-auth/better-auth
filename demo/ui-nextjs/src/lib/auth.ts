@@ -19,13 +19,12 @@ export const auth = betterAuth({
 		},
 	},
 	ui: {
-		basePath: "/auth",
 		background: backgrounds.squaredGrid,
 		termsOfServiceURL: "https://example.com/terms",
 		privacyPolicyURL: "https://example.com/privacy",
 		theme: {
 			appName: "ACME",
-			logoUrl: {
+			logoURL: {
 				dark: "/better-auth-logo-dark.svg",
 				light: "/better-auth-logo-light.svg",
 			},

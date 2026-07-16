@@ -234,13 +234,13 @@ function SettingsPanel(props: {
 
 function SettingsBrand(props: { ctx: UIContext }) {
 	const appName = props.ctx.theme.appName ?? props.ctx.context.appName;
-	const logoUrl = props.ctx.theme.logoUrl;
+	const logoURL = props.ctx.theme.logoURL;
 	const logo =
-		typeof logoUrl === "string"
-			? { src: logoUrl }
+		typeof logoURL === "string"
+			? { src: logoURL }
 			: {
-					src: logoUrl?.light,
-					dark: logoUrl?.dark,
+					src: logoURL?.light,
+					dark: logoURL?.dark,
 				};
 	if (!logo.src) return <span hidden />;
 	return (

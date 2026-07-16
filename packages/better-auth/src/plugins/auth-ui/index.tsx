@@ -234,13 +234,13 @@ function getAuthProviders(ctx: UIContext): AuthProvider[] {
 
 function AppBrand(props: { ctx: UIContext }) {
 	const appName = props.ctx.theme.appName ?? props.ctx.context.appName;
-	const logoUrl = props.ctx.theme.logoUrl;
+	const logoURL = props.ctx.theme.logoURL;
 	const logo =
-		typeof logoUrl === "string"
-			? { src: logoUrl }
+		typeof logoURL === "string"
+			? { src: logoURL }
 			: {
-					src: logoUrl?.light,
-					dark: logoUrl?.dark,
+					src: logoURL?.light,
+					dark: logoURL?.dark,
 				};
 	return (
 		<a class="ba-auth-brand" href="/" aria-label={`${appName} home`}>

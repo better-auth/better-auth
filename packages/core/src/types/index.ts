@@ -50,7 +50,7 @@ export type {
 	ClientEffect,
 	ThemeConfig,
 	ThemeLogoPlacement,
-	ThemeLogoUrl,
+	ThemeLogoURL,
 	UIAction,
 	UIActionDescriptor,
 	UIComponent,

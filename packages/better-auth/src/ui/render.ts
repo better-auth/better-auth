@@ -202,18 +202,18 @@ function themeStyles(theme: ThemeConfig) {
 }
 
 function faviconLinks(theme: ThemeConfig) {
-	const logoUrl = theme.logoUrl;
-	if (!logoUrl) return "";
-	if (typeof logoUrl === "string") {
-		return `<link rel="icon" href="${escapeHTML(logoUrl)}">`;
+	const logoURL = theme.logoURL;
+	if (!logoURL) return "";
+	if (typeof logoURL === "string") {
+		return `<link rel="icon" href="${escapeHTML(logoURL)}">`;
 	}
 	// Browsers inconsistently honor `media` on favicon <link> tags and often
 	// won't re-evaluate when the system theme changes. Use one link plus a
 	// matchMedia listener so light/dark icons actually switch.
-	const light = JSON.stringify(logoUrl.light);
-	const dark = JSON.stringify(logoUrl.dark);
+	const light = JSON.stringify(logoURL.light);
+	const dark = JSON.stringify(logoURL.dark);
 	return [
-		`<link rel="icon" id="ba-favicon" href="${escapeHTML(logoUrl.light)}">`,
+		`<link rel="icon" id="ba-favicon" href="${escapeHTML(logoURL.light)}">`,
 		`<script>(function(){var l=${light},d=${dark},el=document.getElementById("ba-favicon");if(!el)return;var m=window.matchMedia("(prefers-color-scheme: dark)");function a(){el.setAttribute("href",m.matches?d:l)}a();m.addEventListener("change",a)})();</script>`,
 	].join("\n");
 }
@@ -352,8 +352,9 @@ label{display:grid;gap:.5rem;color:var(--ba-text);font-size:.875rem;font-weight:
 .ba-auth-description{margin:0;color:var(--ba-text-secondary);font-size:.875rem}
 .ba-auth-footer{margin:0;text-align:center;color:var(--ba-text-secondary);font-size:.875rem}
 .ba-auth-legal{display:grid;gap:.5rem;margin-top:-.5rem}
-.ba-auth-legal-text{margin:0;text-align:center;color:var(--ba-text-secondary);font-size:.75rem;line-height:1.5}
-.ba-auth-legal-text a{color:var(--ba-text);text-decoration:underline;text-underline-offset:.12em}
+.ba-auth-legal-text{margin:0;text-align:center;color:color-mix(in srgb,var(--ba-text-secondary) 62%,transparent);font-size:.75rem;line-height:1.5}
+.ba-auth-legal-text a{color:color-mix(in srgb,var(--ba-text-secondary) 82%,transparent);text-decoration:underline;text-underline-offset:.12em}
+.ba-auth-legal-text a:hover{color:var(--ba-text)}
 .ba-two-factor-challenge{display:grid;gap:1.25rem}
 .ba-two-factor-method{display:grid;gap:.75rem;padding-top:.75rem;border-top:1px solid color-mix(in srgb,var(--ba-border) 88%,transparent)}
 .ba-two-factor-method:first-child{padding-top:0;border-top:0}

@@ -940,7 +940,7 @@ export const auth = betterAuth({
 		theme: {
 			primary: "#6366f1",
 			appName: "My App",
-			logoUrl: "https://example.com/logo.svg",
+			logoURL: "https://example.com/logo.svg",
 			logoPlacement: "top-center",
 			borderRadius: "none"
 		}
@@ -1045,14 +1045,14 @@ The `UIContext` exposes a `t(key, fallback?)` helper that plugin authors can use
 
 ### UI Theme
 
-The built-in Auth UI reads `ui.theme.appName` and `ui.theme.logoUrl` for the centered brand header. If `appName` is not set, Better Auth falls back to the top-level `appName` option.
+The built-in Auth UI reads `ui.theme.appName` and `ui.theme.logoURL` for the centered brand header. If `appName` is not set, Better Auth falls back to the top-level `appName` option.
 
 ```ts
 export const auth = betterAuth({
 	appName: "My App",
 	ui: {
 		theme: {
-			logoUrl: {
+			logoURL: {
 				light: "https://example.com/logo-light.svg",
 				dark: "https://example.com/logo-dark.svg"
 			},
@@ -1068,7 +1068,7 @@ export const auth = betterAuth({
 })
 ```
 
-* `logoUrl`: A single image URL or `{ light: string; dark: string }` object rendered next to the app name and used as the UI favicon. When an object is provided, Better Auth renders the light logo by default, uses the dark logo for dark UI, and switches the favicon with the system `prefers-color-scheme` preference (including live changes).
+* `logoURL`: A single image URL or `{ light: string; dark: string }` object rendered next to the app name and used as the UI favicon. When an object is provided, Better Auth renders the light logo by default, uses the dark logo for dark UI, and switches the favicon with the system `prefers-color-scheme` preference (including live changes).
 * `logoPlacement`: Where the app name and logo render on built-in Auth UI pages. Defaults to `"top-center"`, which places the brand above the form in the center of the screen. Supported values are `"hidden"`, `"top-left"`, `"top-center"`, `"top-right"`, `"bottom-left"`, `"bottom-center"`, and `"bottom-right"`.
 * `dark`: Optional dark-mode overrides for the same color tokens (`background`, `surface`, `text`, `textSecondary`, `border`, `primary`, `error`, `success`). Applied automatically when the user's system preference is `prefers-color-scheme: dark`.
 * `borderRadius`: Controls shared component radius tokens, including Auth UI inputs and buttons. Defaults to `"none"` (squared). Supported values are `"none"`, `"sm"`, `"md"`, `"lg"`, and `"full"`.

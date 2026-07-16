@@ -24,13 +24,13 @@ function getErrorMessage(code: string, description: string | null) {
 function brandBlock(theme: ThemeConfig): UIComponent | null {
 	const appName = theme.appName;
 	if (!appName) return null;
-	const logoUrl = theme.logoUrl;
+	const logoURL = theme.logoURL;
 	const logo =
-		typeof logoUrl === "string"
-			? { src: logoUrl }
+		typeof logoURL === "string"
+			? { src: logoURL }
 			: {
-					src: logoUrl?.light,
-					dark: logoUrl?.dark,
+					src: logoURL?.light,
+					dark: logoURL?.dark,
 				};
 	const placement = theme.logoPlacement ?? "top-center";
 	if (placement === "hidden") return null;
