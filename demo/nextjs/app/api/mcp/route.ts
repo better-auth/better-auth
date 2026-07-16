@@ -1,4 +1,4 @@
-import { mcpHandler } from "@better-auth/oauth-provider";
+import { mcpHandler } from "@better-auth/mcp";
 import { createMcpHandler } from "mcp-handler";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";

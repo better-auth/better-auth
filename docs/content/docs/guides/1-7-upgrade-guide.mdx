@@ -17,7 +17,8 @@ Some areas need more care: OAuth, OpenID Connect, SAML, SCIM, two-factor authent
 | Uses social login, generic OAuth, One Tap, or SSO                      | [As a login client](#as-a-login-client)                                         |
 | Runs its own OAuth or OpenID provider                                  | [As an identity provider](#as-an-identity-provider)                             |
 | Runs MCP                                                               | [MCP](#mcp)                                                                     |
-| Uses SAML, SSO domain verification, or SCIM                            | [Enterprise SSO](#enterprise-sso)                                               |
+| Uses SAML or SSO domain verification                                   | [Enterprise SSO](#enterprise-sso)                                               |
+| Uses SCIM                                                              | [SCIM](#scim)                                                                   |
 | Uses Stripe billing                                                    | [Stripe](#stripe)                                                               |
 | Uses two-factor auth, magic links, or email OTP                        | [Two-factor and passwordless security](#two-factor-and-passwordless-security)   |
 | Uses a custom database adapter, secondary storage, or rate-limit store | [Custom adapters and storage](#custom-adapters-and-storage)                     |
@@ -43,23 +44,22 @@ The `auth` CLI now requires Node.js 22.12 or newer to run.
 
 These features change the schema:
 
-| Feature                    | What it adds                                                                         | Converts data for you?   |
-| -------------------------- | ------------------------------------------------------------------------------------ | ------------------------ |
-| Protected resources        | New resource tables and key columns                                                  | Not needed (config move) |
-| Resource-bound tokens      | Resource columns on the token tables                                                 | Yes                      |
-| DPoP                       | A token-binding column                                                               | Not needed               |
-| Refresh-token reuse window | A cached replay-response column on refresh tokens                                    | Not needed               |
-| Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables                         | Not needed               |
-| Back-channel logout        | Logout-URL and revoked columns                                                       | Not needed               |
-| Requested user-info claims | A requested-claims column on the token and consent tables                            | Not needed               |
-| SCIM org scoping           | `organizationId` required, `userId` removed, `providerKey` added                     | **No, reclaim old rows** |
-| Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                            | Not needed               |
-| SCIM groups                | New `scimGroup`, `scimGroupMember`, `scimGroupRole`, and `scimGroupRoleGrant` tables | Not needed               |
+| Feature                    | What it adds                                                               | Converts data for you?   |
+| -------------------------- | -------------------------------------------------------------------------- | ------------------------ |
+| Protected resources        | New resource tables and key columns                                        | Not needed (config move) |
+| Resource-bound tokens      | Resource columns on the token tables                                       | Yes                      |
+| DPoP                       | A token-binding column                                                     | Not needed               |
+| Refresh-token reuse window | A cached replay-response column on refresh tokens                          | Not needed               |
+| Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables               | Not needed               |
+| Back-channel logout        | Logout-URL and revoked columns                                             | Not needed               |
+| Requested user-info claims | A requested-claims column on the token and consent tables                  | Not needed               |
+| SCIM                       | Seven provisioning models with layouts that replace the legacy SCIM models | **No, reprovision**      |
+| Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                  | Not needed               |
 
-The SCIM reclaim is the one manual data step. Plan for it before you cut over.
+SCIM is the one schema change that requires a manual cutover. Plan for it before you deploy.
 
 <Callout type="warn">
-  The SCIM reclaim is not automatic. Connections created before 1.7 may have no organization, so you must delete or assign an `organizationId` to rows without one before regenerating their tokens.
+  Do not run the generated SCIM migration over populated prerelease `scimGroup` or `scimGroupMember` tables. Follow the [SCIM cutover](#scim-requires-full-reprovisioning) before creating the new schema.
 </Callout>
 
 ***
@@ -325,35 +325,67 @@ The callback URL is derived automatically, service-provider metadata is generate
 
 **What to do:** remove `callbackUrl`, the empty `spMetadata`, and the removed fields from your config. Update your provider callback URL to `/sso/saml2/sp/acs/:providerId`. Set the post-login redirect with `callbackURL` in `signIn.sso()`. If you read SAML error codes from the redirect URL, switch to the lowercased codes.
 
-### SCIM writes are safer
-
-SCIM user writes now honor the `active` attribute, and non-organization SCIM deletes only remove the global user when the SCIM account is their only identity. `PUT` and `PATCH` reject changing a user's email to one already used by another user.
-
-**What to do:** if your SCIM client sends `active: false`, Better Auth now deactivates the user through the admin plugin and revokes their sessions. If your SCIM client changes emails, handle `409` conflicts. Honoring `active` requires the admin plugin.
-
-### SCIM connections are scoped to an organization
-
-SCIM connections now require `organizationId`, add a `providerKey` column, and drop the old `userId` column. The `defaultSCIM` option becomes `staticProviders`, `trustedDomains` is removed, and provider IDs are namespaced per organization. The old per-user ownership option (`providerOwnership`) is removed, so every connection is bound to an organization.
-
-**What to do:** run the migration, set `organizationId` on connections, rename the `defaultSCIM` config to `staticProviders`, and remove `trustedDomains`. Reclaim pre-1.7 connections that have no organization by assigning an `organizationId` or deleting them, then regenerate their tokens.
-
 ### `/sso/update-provider` rejects partial mappings
 
 Updating an SSO provider now rejects a partial OIDC or SAML mapping object.
 
 **What to do:** send a complete mapping object when you call `/sso/update-provider`.
 
-### SCIM gains durable group resources
-
-SCIM now manages groups with membership, roles, and lifecycle endpoints, backed by new `scimGroup`, `scimGroupMember`, `scimGroupRole`, and `scimGroupRoleGrant` tables.
-
-**What to do:** run `generate` and `migrate` to add the SCIM group tables before using group provisioning.
-
 ### OIDC SSO works on Cloudflare Workers
 
 OIDC SSO with discovery now works on Cloudflare Workers. A discovery or token endpoint that redirects is rejected with a clear configuration error instead of failing in a runtime-specific way.
 
 **What to do:** nothing. If a provider endpoint redirects, point your config at the final URL.
+
+***
+
+## SCIM
+
+### SCIM uses code-defined connections
+
+SCIM connections are now declared in `scim({ connections })`. Each connection has an immutable ID, one or more bearer credentials, and an optional provisioning domain. The plugin no longer depends on the organization or SSO plugins.
+
+The runtime connection-management endpoints, SCIM client plugin, CLI scaffolding, `defaultSCIM`, `staticProviders`, `trustedDomains`, `providerOwnership`, and organization-scoped provider configuration are removed. Provisioned identities no longer create authentication accounts. Use `identity` callbacks to link existing Better Auth Users and apply lifecycle state. Use `projection` callbacks to map Groups into your application's roles.
+
+**What to do:** replace the removed configuration and management APIs with code-defined connections. Store bearer credentials in your secret manager, configure the same values in the directory, and choose a stable `provisioningDomainId` for the application boundary that receives lifecycle and access changes. Configure a separate sign-in method for provisioned Users.
+
+```ts title="auth.ts"
+scim({
+  connections: [
+    {
+      id: "workforce-acme",
+      provisioningDomainId: "workspace-acme",
+      credentials: [
+        { type: "bearer", id: "workforce-primary", token: workforceToken },
+      ],
+    },
+  ],
+});
+```
+
+### SCIM requires full reprovisioning
+
+The new SCIM models do not read or convert the legacy SCIM tables. The prerelease and final `scimGroup` and `scimGroupMember` models also use incompatible layouts, so this change cannot use an in-place generated migration.
+
+<Callout type="warn">
+  Use a maintenance window. Pause provisioning and stop every application instance that runs the old SCIM plugin before changing the schema.
+</Callout>
+
+**What to do:**
+
+1. Back up the legacy SCIM tables. Build a reviewed inventory of SCIM-created `account` rows, their linked `user` rows, and any organization membership or team state created by provisioning. Use the configured SCIM providers and directory subjects to identify them. Do not classify rows by a `providerId` prefix alone: stable 1.6 could store a raw provider ID that another account source also uses, while later prereleases used a `scim:` namespace.
+2. Decide how each legacy User will be handled. To retain a User, copy a stable connection-and-subject-to-`userId` mapping into application-owned storage, remove the legacy SCIM account row, and configure `identity.resolveUser` before reprovisioning. To recreate a User, remove the legacy SCIM account and delete the User only after proving that no other sign-in method or application data depends on it. Clean up organization state according to your application's ownership rules.
+3. Drop whichever legacy plugin models exist. Stable 1.6 uses `scimProvider`. If you adopted prerelease Group provisioning, first drop `scimGroupRoleGrant`, `scimGroupRole`, `scimGroupMember`, and `scimGroup` in that child-first order, then drop `scimProvider`. Use their physical table names if you customized model names.
+4. Configure the new connections and enable native interactive transactions in your database adapter. Cloudflare D1 cannot provide the required transaction behavior.
+5. Run `auth generate` or `auth migrate` to create `scimConnectionBinding`, `scimIdentityTombstone`, `scimSubject`, `scimUser`, `scimGroup`, `scimGroupMember`, and `scimProjectionGrant`.
+6. Deploy the new configuration, update the directory's bearer credential, and trigger a complete User and Group provisioning cycle.
+7. Verify user linking, lifecycle, and role projection in your application, then resume provisioning.
+
+<Callout type="warn">
+  The new plugin never links by email. Retained legacy Users will cause `409 Conflict` during reprovisioning unless `identity.resolveUser` returns an explicit link decision for them.
+</Callout>
+
+See the [SCIM plugin documentation](/docs/plugins/scim) for the final configuration and supported protocol behavior.
 
 ***
 
@@ -494,7 +526,7 @@ npx auth@latest migrate
 
 Then complete the manual data step if it applies:
 
-* **Reclaim SCIM connections:** delete or assign an `organizationId` to connection rows that have no organization.
+* **Reprovision SCIM:** follow the [full cutover](#scim-requires-full-reprovisioning), including reviewed handling of legacy core identities, then run a complete User and Group provisioning cycle.
 
 ***
 
@@ -503,5 +535,7 @@ Then complete the manual data step if it applies:
 If you upgraded straight from 1.6 to the final 1.7, skip this. It applies only if you adopted a 1.7 beta and followed its changes.
 
 A breaking change in one beta can be reverted in a later beta of the same line, and the reversal is a migration in the opposite direction. The clearest case is OAuth scopes: an early beta moved `account.scope` into a `grantedScopes` array, and a later beta reverted it, so the final 1.7 keeps the original `account.scope` string. If you adopted the `grantedScopes` column, drop it and restore the `scope` column on every schema you changed. When your migration tool cannot tell a rename from a drop, reconcile the column with direct SQL so you keep existing rows.
+
+An earlier 1.7 prerelease used organization-scoped SCIM providers and interim Group tables. The final SCIM schema does not convert those tables. If you adopted that prerelease, follow the same [full SCIM reprovisioning cutover](#scim-requires-full-reprovisioning) as an upgrade from 1.6.
 
 Two habits make this cheaper. Read `revert` entries in the changelog, not just `feat` and `fix`; a revert is a migration for you even though it does not announce itself as breaking. Bump only the packages that carry the change, and confirm your own plugins do not import the reverted surface before you rebuild them.

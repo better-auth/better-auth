@@ -4,6 +4,7 @@ pkce
 unban
 siwe
 scim
+SCIMO
 aaguid
 aaguids
 Nord
