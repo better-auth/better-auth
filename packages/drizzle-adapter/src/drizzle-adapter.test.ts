@@ -237,6 +237,7 @@ describe("drizzle-adapter", () => {
 					}),
 				}),
 				select,
+				transaction: vi.fn().mockImplementation((fn: any) => fn(db)),
 			} as any;
 			const factory = drizzleAdapter(db, { provider: "mssql" });
 			const adapter = factory({ secret: defaultSecret });

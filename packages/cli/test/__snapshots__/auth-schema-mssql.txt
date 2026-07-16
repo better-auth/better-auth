@@ -4,6 +4,7 @@ import {
   varchar,
   datetime2,
   bit,
+  int,
   index,
 } from "drizzle-orm/mssql-core";
 
@@ -104,6 +105,8 @@ export const twoFactor = mssqlTable(
       .notNull()
       .references(() => custom_user.id, { onDelete: "cascade" }),
     verified: bit("verified").default(true),
+    failedVerificationCount: int("failed_verification_count").default(0),
+    lockedUntil: datetime2("locked_until", { precision: 3 }),
   },
   (table) => [
     index("twoFactor_secret_idx").on(table.secret),
