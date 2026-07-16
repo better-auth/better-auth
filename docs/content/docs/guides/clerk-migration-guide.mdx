@@ -179,7 +179,8 @@ Before starting the migration process, set up Better Auth in your project. Follo
     import { auth } from "@/lib/auth"; // import your auth instance
 
     // Review every provider in your Clerk export. Use the exact trusted issuer
-    // Better Auth uses, or local:oauth:<providerId> when it has no issuer.
+    // Better Auth uses, or local:oauth:<encoded providerId> when it has no
+    // issuer. The provider ID segment is percent-encoded.
     const accountIssuers: Record<string, string> = {
       github: "local:oauth:github",
       google: "https://accounts.google.com",

@@ -205,7 +205,8 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
     // Map every social provider in your Auth0 export to the exact trusted issuer
     // Better Auth uses. For OAuth providers without one, use
-    // local:oauth:<providerId>.
+    // local:oauth:<encoded providerId>, with the provider ID segment
+    // percent-encoded.
     const accountIssuers: Record<string, string> = {
         github: "local:oauth:github",
         google: "https://accounts.google.com",

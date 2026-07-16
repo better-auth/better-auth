@@ -34,10 +34,10 @@ describe("resolveOAuthAccountKey", () => {
 	it.each([
 		["provider-subject", "provider-subject"],
 		[42, "42"],
-	] as const)("normalizes the explicit account subject %j", async (accountSubject, providerAccountId) => {
+	] as const)("normalizes the account subject resolved from provider data %j", async (accountSubject, providerAccountId) => {
 		await expect(
 			resolveOAuthAccountKey(
-				createProvider({ accountSubject }),
+				createProvider({ accountSubject: () => accountSubject }),
 				tokens,
 				result.data,
 			),
@@ -110,7 +110,7 @@ describe("resolveOAuthAccountKey", () => {
 	])("rejects the invalid account subject %j", async (accountSubject) => {
 		await expect(
 			resolveOAuthAccountKey(
-				createProvider({ accountSubject }),
+				createProvider({ accountSubject: () => accountSubject }),
 				tokens,
 				result.data,
 			),

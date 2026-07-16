@@ -1886,6 +1886,106 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 	});
 });
 
+describe("oauth2 - orphaned account identity", () => {
+	it("does not fall back to email when a matching account has no user", async () => {
+		const database = new DatabaseSync(":memory:");
+		(await getMigrations({ database })).runMigrations();
+		const { auth, client, cookieSetter } = await getTestInstance({
+			database,
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					verifyIdToken: async () => true,
+				},
+			},
+			emailAndPassword: { enabled: true },
+			account: {
+				accountLinking: { enabled: false },
+			},
+		});
+		const ctx = await auth.$context;
+		const email = "orphaned-account@example.com";
+		const providerAccountId = "orphaned-google-subject";
+		const { data } = await client.signUp.email({
+			email,
+			password: "password123",
+			name: "Existing User",
+		});
+
+		database.exec("PRAGMA foreign_keys = OFF");
+		try {
+			await ctx.adapter.create({
+				model: "account",
+				data: {
+					providerId: "google",
+					issuer: "https://accounts.google.com",
+					providerAccountId,
+					userId: "missing-account-owner",
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+		} finally {
+			database.exec("PRAGMA foreign_keys = ON");
+		}
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					email,
+					email_verified: true,
+					name: "Existing User",
+					picture: "https://example.com/photo.jpg",
+					exp: 1234567890,
+					sub: providerAccountId,
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "https://accounts.google.com",
+					locale: "en",
+					jti: "test",
+					given_name: "Existing",
+					family_name: "User",
+				};
+				return HttpResponse.json({
+					access_token: "google-access-token",
+					id_token: await signJWT(profile, DEFAULT_SECRET),
+				});
+			}),
+		);
+
+		const headers = new Headers();
+		const signIn = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const state = new URL(signIn.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers,
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(redirectLocation).toContain("error=unable_to_link_account");
+		const userAccounts = await ctx.adapter.findMany<{ providerId: string }>({
+			model: "account",
+			where: [{ field: "userId", value: data!.user.id }],
+		});
+		expect(
+			userAccounts.some((account) => account.providerId === "google"),
+		).toBe(false);
+	});
+});
+
 /**
  * @see https://github.com/better-auth/better-auth/issues/9124
  */

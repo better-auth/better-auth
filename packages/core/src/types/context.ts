@@ -175,10 +175,18 @@ export interface InternalAdapter<
 	 */
 	deleteSessions(sessionTokens: string[]): Promise<void>;
 
-	findUserByAccountKey(accountKey: AccountKey): Promise<{
-		user: User;
-		account: Account;
-	} | null>;
+	findAccountOwnerByKey(accountKey: AccountKey): Promise<
+		| {
+				kind: "owned";
+				user: User;
+				account: Account;
+		  }
+		| {
+				kind: "orphaned";
+				account: Account;
+		  }
+		| null
+	>;
 
 	findUserByEmail(
 		email: string,

@@ -86,9 +86,7 @@ export type OAuth2UserInfo = {
  * response. They never receive the mapped local user, so profile mapping
  * cannot redefine provider identity.
  */
-export interface OAuthAccountKeyContext<
-	Profile extends object = Record<string, unknown>,
-> {
+export interface OAuthAccountKeyContext<Profile extends object = object> {
 	tokens: OAuth2Tokens;
 	profile: Profile;
 }
@@ -102,10 +100,9 @@ type OAuthAccountKeyResolver<Profile extends object, Value> = {
 	resolve(context: OAuthAccountKeyContext<Profile>): Awaitable<Value>;
 }["resolve"];
 
-/** Stable provider subject or resolver used to build an OAuth account key. */
-export type OAuthAccountSubject<
-	Profile extends object = Record<string, unknown>,
-> = string | number | OAuthAccountKeyResolver<Profile, string | number>;
+/** Resolves the stable provider subject used to build an OAuth account key. */
+export type OAuthAccountSubject<Profile extends object = object> =
+	OAuthAccountKeyResolver<Profile, string | number>;
 
 /** Mutable local-user attributes returned by `mapProfileToUser`. */
 export type OAuthMappedUser = {
@@ -241,7 +238,8 @@ export interface OAuthProvider<
 	 * Use the validated OpenID Connect issuer for OIDC providers. A resolver is
 	 * supported for tenant-specific issuers and receives only provider-verified
 	 * data. OAuth providers without an issuer omit this property and are scoped
-	 * to the synthetic `local:oauth:<providerId>` issuer.
+	 * to the synthetic `local:oauth:<encoded providerId>` issuer, where the
+	 * provider ID segment is percent-encoded.
 	 */
 	accountIssuer?: string | OAuthAccountKeyResolver<T, string> | undefined;
 	/**

@@ -342,6 +342,16 @@ describe("public type exports", () => {
 		};
 		expectTypeOf(config.accountSubject).not.toBeAny();
 	});
+
+	it("requires Generic OAuth account identity to be resolved from provider data", () => {
+		const config: GenericOAuthConfig = {
+			providerId: "company-oauth",
+			clientId: "client-id",
+			// @ts-expect-error A static subject would assign every provider user one identity.
+			accountSubject: "employee-123",
+		};
+		expectTypeOf(config).not.toBeAny();
+	});
 });
 
 describe("HasRequiredKeys", () => {

@@ -966,7 +966,7 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
-		findUserByAccountKey: async ({ issuer, providerAccountId }) => {
+		findAccountOwnerByKey: async ({ issuer, providerAccountId }) => {
 			const accountWithUser = await (await getCurrentAdapter(adapter)).findOne<
 				Account & { user: User | null }
 			>({
@@ -985,9 +985,11 @@ export const createInternalAdapter = (
 					user: true,
 				},
 			});
-			if (!accountWithUser?.user) return null;
+			if (!accountWithUser) return null;
 			const { user, ...account } = accountWithUser;
-			return { user, account };
+			return user
+				? { kind: "owned" as const, user, account }
+				: { kind: "orphaned" as const, account };
 		},
 		findUserByEmail: async (
 			email: string,

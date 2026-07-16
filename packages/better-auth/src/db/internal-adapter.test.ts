@@ -938,7 +938,7 @@ describe("internal adapter test", async () => {
 		expect(foundAccount).toBeNull();
 	});
 
-	it("finds an account and its user by the exact account key", async () => {
+	it("finds an account owner by the exact account key", async () => {
 		const firstUser = await internalAdapter.createUser(
 			{
 				name: "First Account Key User",
@@ -989,11 +989,12 @@ describe("internal adapter test", async () => {
 			providerId: "renamed-provider-configuration",
 		});
 		await expect(
-			internalAdapter.findUserByAccountKey({
+			internalAdapter.findAccountOwnerByKey({
 				issuer: secondAccount.issuer,
 				providerAccountId,
 			}),
 		).resolves.toMatchObject({
+			kind: "owned",
 			user: { id: secondUser.id },
 			account: {
 				id: secondAccount.id,
@@ -1001,11 +1002,38 @@ describe("internal adapter test", async () => {
 			},
 		});
 		await expect(
-			internalAdapter.findUserByAccountKey({
+			internalAdapter.findAccountOwnerByKey({
 				issuer: "https://missing-issuer.example.com",
 				providerAccountId,
 			}),
 		).resolves.toBeNull();
+	});
+
+	it("reports an account whose owner is missing", async () => {
+		const database = opts.database as DatabaseSync;
+		const account = await (async () => {
+			database.exec("PRAGMA foreign_keys = OFF");
+			try {
+				return await internalAdapter.createAccount({
+					userId: "missing-account-owner",
+					providerId: "orphaned-provider",
+					issuer: "https://issuer.example.com",
+					providerAccountId: "orphaned-subject",
+				});
+			} finally {
+				database.exec("PRAGMA foreign_keys = ON");
+			}
+		})();
+
+		await expect(
+			internalAdapter.findAccountOwnerByKey({
+				issuer: account.issuer,
+				providerAccountId: account.providerAccountId,
+			}),
+		).resolves.toMatchObject({
+			kind: "orphaned",
+			account: { id: account.id, userId: "missing-account-owner" },
+		});
 	});
 
 	it("finds the same credential account after the user email changes", async () => {

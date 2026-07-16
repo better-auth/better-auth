@@ -2108,6 +2108,7 @@ describe("Microsoft Provider", async () => {
 	it("should support verifyIdToken with custom function", async () => {
 		const microsoftProfile: Partial<MicrosoftEntraIDProfile> = {
 			sub: "ms-user-123",
+			iss: "https://login.microsoftonline.com/ms-tenant-123/v2.0",
 			email: "msuser@outlook.com",
 			name: "Microsoft User",
 			oid: "ms-oid-123",
@@ -2183,6 +2184,7 @@ describe("Microsoft Provider", async () => {
 	it("should verify id token using JWKS endpoint", async () => {
 		const microsoftProfile: Partial<MicrosoftEntraIDProfile> = {
 			sub: "ms-jwks-user-456",
+			iss: "https://login.microsoftonline.com/ms-tenant-456/v2.0",
 			email: "jwksuser@outlook.com",
 			name: "JWKS User",
 			oid: "ms-oid-456",

@@ -35,17 +35,36 @@ export async function handleOAuthUserInfo(
 		method: "oauth",
 		oauth: { providerId: account.providerId },
 	};
+	const accountOwner = await c.context.internalAdapter
+		.findAccountOwnerByKey({
+			issuer: account.issuer,
+			providerAccountId: account.providerAccountId,
+		})
+		.catch((e) => {
+			c.context.logger.error(
+				"Better auth was unable to query your database.\nError: ",
+				e,
+			);
+			const errorURL =
+				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+			redirectOnError(c, errorURL, "internal_server_error");
+		});
+	if (accountOwner?.kind === "orphaned") {
+		c.context.logger.error(
+			"OAuth account references a missing user. Repair the account before retrying authentication.",
+		);
+		return {
+			error: "unable to link account",
+			data: null,
+			isRegister: false,
+		};
+	}
 	const dbUser = await (async () => {
-		const recognizedAccount =
-			await c.context.internalAdapter.findUserByAccountKey({
-				issuer: account.issuer,
-				providerAccountId: account.providerAccountId,
-			});
-		if (recognizedAccount) {
+		if (accountOwner?.kind === "owned") {
 			return {
-				user: recognizedAccount.user,
-				linkedAccount: recognizedAccount.account,
-				accounts: [recognizedAccount.account],
+				user: accountOwner.user,
+				linkedAccount: accountOwner.account,
+				accounts: [accountOwner.account],
 			};
 		}
 

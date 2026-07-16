@@ -601,19 +601,9 @@ function mergeSAMLIdentityProviderMetadata(
 		return current;
 	}
 
-	const merged = { ...current, ...updates };
-	const metadata = updates.metadata ?? current.metadata;
-	const entityID = updates.entityID ?? current.entityID;
-	if (metadata) {
-		return { ...merged, metadata, entityID };
-	}
-	if (!entityID) {
-		throw new APIError("BAD_REQUEST", {
-			message:
-				"SAML manual IdP configuration requires idpMetadata.entityID; issuer identifies the service provider and cannot identify the IdP",
-		});
-	}
-	return { ...merged, metadata: undefined, entityID };
+	const config = { idpMetadata: { ...current, ...updates } };
+	assertSAMLIdentityProviderAuthority(config);
+	return config.idpMetadata;
 }
 
 function mergeSAMLConfig(

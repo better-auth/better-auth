@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { getAuthTables, getAuthTablesWithResolvedIndexes } from "../get-tables";
 import type { AccountKey } from "../schema/account";
-import { createLocalAccountIssuer } from "../schema/account";
+import {
+	createLocalAccountIssuer,
+	createOAuthAccountIssuer,
+} from "../schema/account";
 import type { SecondaryStorage } from "../type";
 
 const secondaryStorageStub: SecondaryStorage = {
@@ -23,6 +26,20 @@ describe("getAuthTables", () => {
 			issuer: "local:credential",
 			providerAccountId: "user-id",
 		});
+	});
+
+	it("escapes provider IDs in synthetic account issuers", () => {
+		expect(createLocalAccountIssuer("credential")).toBe("local:credential");
+		expect(createOAuthAccountIssuer("google")).toBe("local:oauth:google");
+		expect(createLocalAccountIssuer("oauth:google")).toBe(
+			"local:oauth%3Agoogle",
+		);
+		expect(createOAuthAccountIssuer("team/google%prod")).toBe(
+			"local:oauth:team%2Fgoogle%25prod",
+		);
+		expect(createLocalAccountIssuer("oauth:google")).not.toBe(
+			createOAuthAccountIssuer("google"),
+		);
 	});
 
 	it("should use correct field name for refreshTokenExpiresAt", () => {

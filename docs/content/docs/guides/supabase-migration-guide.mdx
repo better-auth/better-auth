@@ -241,7 +241,8 @@ Before starting the migration process, set up Better Auth in your project. Follo
       /**
        * Configure every social provider enabled in Better Auth with the exact
        * trusted issuer it uses. For OAuth providers without one, use
-       * local:oauth:<providerId>. The script checks this map before it writes.
+       * local:oauth:<encoded providerId>. The provider ID segment is
+       * percent-encoded. The script checks this map before it writes.
        */
       accountIssuers: {
         github: 'local:oauth:github',
@@ -1286,7 +1287,6 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
             'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
           // Map Supabase attribute names to Better Auth fields
           mapping: {
-            id: 'nameID',
             email: attrName('email') || 'email',
             name: attrName('name') || 'displayName',
             firstName: attrName('first_name') || 'givenName',
@@ -1345,6 +1345,31 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
   </Step>
 
   <Step>
+    ### Prepare trusted SSO account identities
+
+    Better Auth identifies SAML accounts by the actual IdP entity ID from the provider metadata and the signed `NameID`. Supabase exports do not contain enough verified data to derive those values safely. Before migrating accounts, create an operator-reviewed mapping from each legacy SSO identity to its IdP entity ID and signed `NameID`. Do not substitute the service-provider `entity_id`, an email address, or a profile `sub` claim.
+
+    Add the reviewed mapping to your migration script. The outer map is keyed by the Supabase SSO provider ID, and the inner map by its legacy identity ID:
+
+    ```ts title="migration.ts"
+    const samlAccountIdentityByProviderId = new Map([
+      [
+        'supabase-provider-id',
+        new Map([
+          [
+            'legacy-identity-id',
+            {
+              issuer: 'https://idp.example.com/metadata',
+              providerAccountId: 'signed-name-id',
+            },
+          ],
+        ]),
+      ],
+    ]);
+    ```
+  </Step>
+
+  <Step>
     ### Update user migration to link SSO accounts
 
     In the `processBatch` function, add handling for SSO identities. Find the section that processes identities and add:
@@ -1357,13 +1382,19 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
       // Handle SSO identities // [!code highlight]
       if (identity.provider.startsWith('sso:')) { // [!code highlight]
         const supabaseProviderId = identity.provider.replace('sso:', ''); // [!code highlight]
+        const accountIdentity = samlAccountIdentityByProviderId // [!code highlight]
+          .get(supabaseProviderId) // [!code highlight]
+          ?.get(identity.provider_id); // [!code highlight]
+        if (!accountIdentity) { // [!code highlight]
+          throw new Error(`Missing trusted SAML account identity for ${supabaseProviderId}`); // [!code highlight]
+        } // [!code highlight]
         
         accountsData.push({ // [!code highlight]
           id: generateId(), // [!code highlight]
           userId: user.id, // [!code highlight]
           providerId: `sso-${supabaseProviderId}`, // Matches the migrated provider ID // [!code highlight]
-          issuer: `local:sso-${supabaseProviderId}`, // [!code highlight]
-          providerAccountId: identity.identity_data?.sub || identity.provider_id, // [!code highlight]
+          issuer: accountIdentity.issuer, // IdP metadata entity ID // [!code highlight]
+          providerAccountId: accountIdentity.providerAccountId, // Signed NameID // [!code highlight]
           password: null, // [!code highlight]
           createdAt: identity.created_at ?? user.created_at, // [!code highlight]
           updatedAt: identity.updated_at ?? user.updated_at, // [!code highlight]
@@ -1372,7 +1403,7 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
     }
     ```
 
-    This ensures that users who previously signed in via SSO will have their accounts linked to the migrated SSO provider.
+    This links each migrated account to the protocol identity that Better Auth will verify at sign-in. Stop the migration when a trusted mapping is missing, resolve it with the identity provider, then rerun the batch.
   </Step>
 
   <Step>

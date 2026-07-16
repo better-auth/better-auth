@@ -43,11 +43,15 @@ export type AccountKey = Readonly<
 	Pick<BaseAccount, "issuer" | "providerAccountId">
 >;
 
+function encodeAccountIssuerProviderId(providerId: string): string {
+	return encodeURIComponent(providerId);
+}
+
 /**
  * Creates the synthetic issuer used by providers without an issuer of their own.
  */
 export function createLocalAccountIssuer(providerId: string): string {
-	return `local:${providerId}`;
+	return `local:${encodeAccountIssuerProviderId(providerId)}`;
 }
 
 /**
@@ -56,7 +60,7 @@ export function createLocalAccountIssuer(providerId: string): string {
  * cannot collide with an internal local authentication method.
  */
 export function createOAuthAccountIssuer(providerId: string): string {
-	return `local:oauth:${providerId}`;
+	return `local:oauth:${encodeAccountIssuerProviderId(providerId)}`;
 }
 
 /**

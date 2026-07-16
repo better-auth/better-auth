@@ -26,10 +26,7 @@ export async function resolveOAuthAccountKey<Profile extends object>(
 ): Promise<AccountKey> {
 	const accountKeyContext = { tokens, profile };
 	const accountSubject = provider.accountSubject;
-	const resolvedSubject =
-		typeof accountSubject === "function"
-			? await accountSubject(accountKeyContext)
-			: accountSubject;
+	const resolvedSubject = await accountSubject(accountKeyContext);
 	const providerAccountId = String(resolvedSubject);
 	if (
 		(typeof resolvedSubject === "number" &&

@@ -120,12 +120,24 @@ export function createSP(
 	});
 }
 
-export function assertSAMLIdentityProviderAuthority(config: {
-	idpMetadata?: {
-		metadata?: string | undefined;
-		entityID?: string | undefined;
-	};
-}): void {
+export function assertSAMLIdentityProviderAuthority<
+	Config extends {
+		idpMetadata?:
+			| {
+					metadata?: string | undefined;
+					entityID?: string | undefined;
+			  }
+			| undefined;
+	},
+>(
+	config: Config,
+): asserts config is Config & {
+	idpMetadata: NonNullable<Config["idpMetadata"]> &
+		(
+			| { metadata: string; entityID?: string | undefined }
+			| { metadata?: undefined; entityID: string }
+		);
+} {
 	if (config.idpMetadata?.metadata || config.idpMetadata?.entityID) {
 		return;
 	}
