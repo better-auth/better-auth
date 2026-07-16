@@ -676,7 +676,11 @@ describe("drizzle-adapter", () => {
 		// mssql-core has no .for("update")/.limit(); the guard-select and the
 		// post-update re-select must both use .top(1), and the UPDATE must go
 		// through .execute() rather than .returning() (unsupported on mssql-core).
-		function createMssqlIncrementDb(guardRow: unknown, updatedRow: unknown) {
+		function createMssqlIncrementDb(
+			guardRow: unknown,
+			updatedRow: unknown,
+			updateResult: unknown = { rowsAffected: [1] },
+		) {
 			const guardExecute = vi
 				.fn()
 				.mockResolvedValue(guardRow ? [guardRow] : []);
@@ -698,7 +702,7 @@ describe("drizzle-adapter", () => {
 				.mockReturnValueOnce({ from: guardFrom })
 				.mockReturnValueOnce({ from: reselectFrom });
 
-			const updateExecute = vi.fn().mockResolvedValue(undefined);
+			const updateExecute = vi.fn().mockResolvedValue(updateResult);
 			const updateWhere = vi.fn().mockReturnValue({ execute: updateExecute });
 			const set = vi.fn().mockReturnValue({ where: updateWhere });
 
@@ -739,6 +743,36 @@ describe("drizzle-adapter", () => {
 			expect(result).toEqual(updatedRow);
 			expect(top).toHaveBeenCalledWith(1);
 			expect(top).toHaveBeenCalledTimes(2);
+		});
+
+		it("returns null on MSSQL when the guard no longer matches at update time", async () => {
+			// The guard-select finds a row, but the row's guarded fields changed
+			// before the UPDATE runs (e.g. a concurrent request already mutated
+			// it) — the UPDATE re-checks the original clause, affects zero rows,
+			// and must report null rather than the stale guard-select snapshot.
+			const guardRow = { id: "user-1", attempts: 4 };
+			const { db, top } = createMssqlIncrementDb(guardRow, null, {
+				rowsAffected: [0],
+			});
+			const adapter = drizzleAdapter(db, { provider: "mssql" })({
+				secret: defaultSecret,
+				user: {
+					additionalFields: {
+						attempts: { type: "number", required: false },
+					},
+				},
+			});
+
+			const result = await adapter.incrementOne({
+				model: "user",
+				where: [{ field: "id", value: "user-1" }],
+				increment: { attempts: 1 },
+			});
+
+			expect(result).toBeNull();
+			// The guard-select still ran, but the re-select after the update must
+			// not — the function must short-circuit on the zero-row update.
+			expect(top).toHaveBeenCalledTimes(1);
 		});
 
 		it("returns null when the MSSQL guard matches no row", async () => {

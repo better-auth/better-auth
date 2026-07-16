@@ -55,7 +55,7 @@ export interface DB {
  */
 function getAffectedRowCount(
 	result: unknown,
-	operation: "updateMany" | "deleteMany" | "consumeOne",
+	operation: "updateMany" | "deleteMany" | "consumeOne" | "incrementOne",
 	context: { model: string; where: Where[] },
 ): number {
 	let count: unknown = 0;
@@ -1064,12 +1064,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 
 					if (config.provider === "mysql" || config.provider === "mssql") {
 						// MySQL and MSSQL have no DELETE ... RETURNING. Read the row
-						// first, then delete it by id and only report success if the
-						// delete actually removed a row — this still resolves the race
-						// between concurrent claimants without a locking hint, since at
-						// most one DELETE can affect a row that's already gone.
-						// mssql-core has no .for("update")/.limit(); MySQL locks the row
-						// under SELECT ... FOR UPDATE inside the transaction instead.
+						// first, then delete by id while re-checking the original guard
+						// clause, so a row whose guarded fields changed since the SELECT
+						// (e.g. another request already consumed or altered it) affects
+						// zero rows and reports null instead of returning stale data.
+						// mssql-core has no .for("update")/.limit(); MySQL additionally
+						// locks the row under SELECT ... FOR UPDATE inside the
+						// transaction so the guard can't change before the DELETE runs.
 						const claimFromTransaction = async (tx: DB) => {
 							const rows =
 								config.provider === "mssql"
@@ -1091,7 +1092,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							}
 							const delRes = await tx
 								.delete(schemaModel)
-								.where(eq(idColumn, targetId))
+								.where(...clause, eq(idColumn, targetId))
 								.execute();
 							const count = getAffectedRowCount(delRes, "consumeOne", {
 								model,
@@ -1153,9 +1154,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 
 					if (config.provider === "mysql" || config.provider === "mssql") {
 						// MySQL and MSSQL have no UPDATE ... RETURNING. Guard-select the
-						// row, update it by id, then read the mutated row back.
-						// mssql-core has no .for("update")/.limit(); MySQL locks the row
-						// under SELECT ... FOR UPDATE inside the transaction instead.
+						// row, then update it while re-checking the original guard
+						// clause (not just id), so a row whose guarded fields changed
+						// since the SELECT affects zero rows and reports null instead
+						// of mutating/returning based on a stale snapshot. mssql-core
+						// has no .for("update")/.limit(); MySQL additionally locks the
+						// row under SELECT ... FOR UPDATE inside the transaction so the
+						// guard can't change before the UPDATE runs.
 						const mutateInTransaction = async (tx: DB) => {
 							const rows =
 								config.provider === "mssql"
@@ -1175,11 +1180,16 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							if (targetId === undefined || targetId === null || !idColumn) {
 								return null;
 							}
-							await tx
+							const updateRes = await tx
 								.update(schemaModel)
 								.set(assignments)
-								.where(eq(idColumn, targetId))
+								.where(...clause, eq(idColumn, targetId))
 								.execute();
+							const count = getAffectedRowCount(updateRes, "incrementOne", {
+								model,
+								where,
+							});
+							if (count === 0) return null;
 							const updated = await withLimit(
 								withTop(tx.select(), 1)
 									.from(schemaModel)
