@@ -1375,6 +1375,14 @@ describe("Admin plugin", async () => {
 		});
 		expect(postSignIn.error).toBeNull();
 		expect(postSignIn.data?.user.id).toBe(userId);
+		await expect(
+			(await auth.$context).internalAdapter.findCredentialAccount(userId),
+		).resolves.toMatchObject({
+			userId,
+			providerId: "credential",
+			issuer: "local:credential",
+			providerAccountId: userId,
+		});
 
 		await client.admin.removeUser({ userId }, { headers: adminHeaders });
 	});

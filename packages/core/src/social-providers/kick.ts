@@ -33,6 +33,7 @@ export const kick = (options: KickOptions) => {
 	return {
 		id: "kick",
 		name: "Kick",
+		accountSubject: ({ profile }) => profile.user_id,
 		createAuthorizationURL({
 			state,
 			scopes,
@@ -101,7 +102,6 @@ export const kick = (options: KickOptions) => {
 			// We default to false for security consistency.
 			return {
 				user: {
-					id: profile.user_id,
 					name: profile.name,
 					email: profile.email,
 					image: profile.profile_picture,

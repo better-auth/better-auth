@@ -1,10 +1,15 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import type { AccountKey } from "@better-auth/core/db";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { mergeScopes } from "@better-auth/core/oauth2";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
+import {
+	resolveOAuthAccountKey,
+	toOAuthProfileRecord,
+} from "../../oauth2/account-key";
 import {
 	missingEmailLogMessage,
 	OAUTH_CALLBACK_ERROR_CODES,
@@ -220,19 +225,31 @@ export const callbackOAuth = createAuthEndpoint(
 			 */
 			user: parsedUserData ?? undefined,
 		});
-		if (
-			!providerResult?.user ||
-			providerResult.user.id === undefined ||
-			providerResult.user.id === null ||
-			providerResult.user.id === ""
-		) {
+		if (!providerResult?.user) {
 			c.context.logger.error("Unable to get user info");
 			return redirectOnError(
 				OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_GET_USER_INFO,
 			);
 		}
 		const userInfo = providerResult.user;
-		const providerAccountId = String(userInfo.id);
+		const providerProfile = toOAuthProfileRecord(providerResult.data);
+		let accountKey: AccountKey;
+		try {
+			accountKey = await resolveOAuthAccountKey(
+				provider,
+				tokens,
+				providerResult.data,
+			);
+		} catch (error) {
+			c.context.logger.error("Unable to derive provider account identity", {
+				providerId: provider.id,
+				error,
+			});
+			return redirectOnError(
+				OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_GET_USER_INFO,
+			);
+		}
+		const { providerAccountId } = accountKey;
 
 		if (!callbackURL) {
 			c.context.logger.error("No callback URL found");
@@ -246,7 +263,7 @@ export const callbackOAuth = createAuthEndpoint(
 				await assertValidUserInfo(c, {
 					user: {
 						...userInfo,
-						id: providerAccountId,
+						id: link.userId,
 						email: userInfo.email ?? undefined,
 					},
 					source: {
@@ -254,7 +271,7 @@ export const callbackOAuth = createAuthEndpoint(
 						method: "oauth",
 						oauth: {
 							providerId: provider.id,
-							profile: providerResult.data,
+							profile: providerProfile,
 						},
 					},
 				});
@@ -285,10 +302,7 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 
 			const existingAccount =
-				await c.context.internalAdapter.findAccountByProviderId(
-					providerAccountId,
-					provider.id,
-				);
+				await c.context.internalAdapter.findAccountByKey(accountKey);
 
 			if (existingAccount) {
 				if (existingAccount.userId.toString() !== link.userId.toString()) {
@@ -299,6 +313,7 @@ export const callbackOAuth = createAuthEndpoint(
 				const mergedScope = mergeScopes(existingAccount.scope, tokens.scopes);
 				const updateData = Object.fromEntries(
 					Object.entries({
+						providerId: provider.id,
 						accessToken: await setTokenUtil(tokens.accessToken, c.context),
 						refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
 						idToken: tokens.idToken,
@@ -315,7 +330,7 @@ export const callbackOAuth = createAuthEndpoint(
 				const newAccount = await c.context.internalAdapter.createAccount({
 					userId: link.userId,
 					providerId: provider.id,
-					accountId: providerAccountId,
+					...accountKey,
 					...tokens,
 					accessToken: await setTokenUtil(tokens.accessToken, c.context),
 					refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
@@ -344,7 +359,7 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 		const accountData = {
 			providerId: provider.id,
-			accountId: providerAccountId,
+			...accountKey,
 			...tokens,
 			scope: tokens.scopes?.join(","),
 		};
@@ -365,7 +380,7 @@ export const callbackOAuth = createAuthEndpoint(
 				overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
 				source: {
 					method: "oauth",
-					oauth: { providerId: provider.id, profile: providerResult.data },
+					oauth: { providerId: provider.id, profile: providerProfile },
 				},
 			});
 		} catch (e) {

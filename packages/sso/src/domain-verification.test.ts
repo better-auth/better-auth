@@ -128,6 +128,7 @@ describe("Domain verification", async () => {
 					samlConfig: {
 						entryPoint: "http://idp.com:",
 						cert: "the-cert",
+						idpMetadata: { entityID: "http://idp.com" },
 						spMetadata: {},
 					},
 					organizationId,
@@ -599,6 +600,7 @@ describe("Domain verification", async () => {
 					samlConfig: {
 						entryPoint: "http://idp.com:",
 						cert: "the-cert",
+						idpMetadata: { entityID: "http://idp.com" },
 						spMetadata: {},
 					},
 				},
@@ -643,6 +645,7 @@ describe("Domain verification", async () => {
 					samlConfig: {
 						entryPoint: "http://idp.com:",
 						cert: "the-cert",
+						idpMetadata: { entityID: "http://idp.com" },
 						spMetadata: {},
 					},
 				},
@@ -715,6 +718,7 @@ describe("Domain verification", async () => {
 					samlConfig: {
 						entryPoint: "http://idp.com:",
 						cert: "the-cert",
+						idpMetadata: { entityID: "https://idp.example.com" },
 						callbackUrl: "http://hello.com:8081/api/sso/saml2/callback",
 						spMetadata: {},
 					},
@@ -771,6 +775,7 @@ describe("Domain verification", async () => {
 					samlConfig: {
 						entryPoint: "http://idp.com:",
 						cert: "the-cert",
+						idpMetadata: { entityID: "https://idp.company.example" },
 						callbackUrl: "http://hello.com:8081/api/sso/saml2/callback",
 						spMetadata: {},
 					},

@@ -88,6 +88,7 @@ export const discord = (options: DiscordOptions) => {
 	return {
 		id: "discord",
 		name: "Discord",
+		accountSubject: ({ profile }) => profile.id,
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope ? [] : ["identify", "email"];
 			if (scopes) _scopes.push(...scopes);
@@ -159,7 +160,6 @@ export const discord = (options: DiscordOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.id,
 					name: profile.global_name || profile.username || "",
 					email: profile.email,
 					emailVerified: profile.verified,

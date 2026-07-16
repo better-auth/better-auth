@@ -6,6 +6,7 @@ import {
   boolean,
   integer,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const custom_user = pgTable("custom_user", {
@@ -44,7 +45,8 @@ export const custom_account = pgTable(
   "custom_account",
   {
     id: text("id").primaryKey(),
-    accountId: text("account_id").notNull(),
+    issuer: text("issuer").notNull(),
+    providerAccountId: text("provider_account_id").notNull(),
     providerId: text("provider_id").notNull(),
     userId: text("user_id")
       .notNull()
@@ -61,7 +63,13 @@ export const custom_account = pgTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [index("custom_account_userId_idx").on(table.userId)],
+  (table) => [
+    uniqueIndex("custom_account_issuer_providerAccountId_uidx").on(
+      table.issuer,
+      table.providerAccountId,
+    ),
+    index("custom_account_userId_idx").on(table.userId),
+  ],
 );
 
 export const custom_verification = pgTable(

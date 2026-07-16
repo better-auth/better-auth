@@ -123,7 +123,7 @@ export interface TiktokProfile extends Record<string, any> {
 		| undefined;
 }
 
-export interface TiktokOptions extends ProviderOptions {
+export interface TiktokOptions extends ProviderOptions<TiktokProfile> {
 	// Client ID is not used in TikTok, we delete it from the options
 	clientId?: never | undefined;
 	clientSecret: string;
@@ -135,6 +135,7 @@ export const tiktok = (options: TiktokOptions) => {
 	return {
 		id: "tiktok",
 		name: "TikTok",
+		accountSubject: ({ profile }) => profile.data.user.open_id,
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope ? [] : ["user.info.profile"];
 			if (options.scope) _scopes.push(...options.scope);
@@ -210,7 +211,6 @@ export const tiktok = (options: TiktokOptions) => {
 			return {
 				user: {
 					email: profile.data.user.email || profile.data.user.username,
-					id: profile.data.user.open_id,
 					name:
 						profile.data.user.display_name || profile.data.user.username || "",
 					image: profile.data.user.avatar_large_url,

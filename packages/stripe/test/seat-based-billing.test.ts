@@ -985,7 +985,8 @@ describe("seat-based billing", () => {
 				model: "account",
 				data: {
 					userId: newMember.id,
-					accountId: newMember.id,
+					issuer: "local:credential",
+					providerAccountId: newMember.id,
 					providerId: "credential",
 					password: await ctx.password.hash("password"),
 					createdAt: new Date(),

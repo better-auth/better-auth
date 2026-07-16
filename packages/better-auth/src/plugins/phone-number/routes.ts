@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
@@ -7,7 +8,6 @@ import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
 import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
-import type { Account } from "../../types";
 import { HIDE_METADATA } from "../../utils";
 import { getDate } from "../../utils/date";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
@@ -143,12 +143,8 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					);
 				}
 			}
-			const accounts = await ctx.context.internalAdapter.findAccountByUserId(
-				user.id,
-			);
-			const credentialAccount = accounts.find(
-				(a) => a.providerId === "credential",
-			);
+			const credentialAccount =
+				await ctx.context.internalAdapter.findCredentialAccount(user.id);
 			if (!credentialAccount) {
 				ctx.context.logger.warn("Credential account not found");
 				throw APIError.from(
@@ -795,9 +791,7 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 		async (ctx) => {
 			const phoneResetIdentifier = `${ctx.body.phoneNumber}-request-password-reset`;
 			await verifyPhoneNumberOTP(ctx, opts, phoneResetIdentifier, ctx.body.otp);
-			const userRes = await ctx.context.adapter.findOne<
-				UserWithPhoneNumber & { account: Account[] | undefined }
-			>({
+			const user = await ctx.context.adapter.findOne<UserWithPhoneNumber>({
 				model: "user",
 				where: [
 					{
@@ -805,17 +799,13 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 						value: ctx.body.phoneNumber,
 					},
 				],
-				join: {
-					account: true,
-				},
 			});
-			if (!userRes) {
+			if (!user) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					PHONE_NUMBER_ERROR_CODES.UNEXPECTED_ERROR,
 				);
 			}
-			const { account: accounts = [], ...user } = userRes;
 			const minLength = ctx.context.password.config.minPasswordLength;
 			const maxLength = ctx.context.password.config.maxPasswordLength;
 			if (ctx.body.newPassword.length < minLength) {
@@ -827,14 +817,15 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			const hashedPassword = await ctx.context.password.hash(
 				ctx.body.newPassword,
 			);
-			const account = accounts.find(
-				(account) => account.providerId === "credential",
+			const account = await ctx.context.internalAdapter.findCredentialAccount(
+				user.id,
 			);
 			if (!account) {
 				await ctx.context.internalAdapter.createAccount({
 					userId: user.id,
 					providerId: "credential",
-					accountId: user.id,
+					issuer: createLocalAccountIssuer("credential"),
+					providerAccountId: user.id,
 					password: hashedPassword,
 				});
 			} else {

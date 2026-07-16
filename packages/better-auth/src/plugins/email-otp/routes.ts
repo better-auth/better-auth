@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { deprecate } from "@better-auth/core/utils/deprecate";
 import * as z from "zod";
@@ -948,9 +949,7 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				ctx.body.otp,
 			);
 
-			const user = await ctx.context.internalAdapter.findUserByEmail(email, {
-				includeAccounts: true,
-			});
+			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
@@ -963,14 +962,15 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 			}
 			const passwordHash = await ctx.context.password.hash(ctx.body.password);
-			const account = user.accounts?.find(
-				(account) => account.providerId === "credential",
+			const account = await ctx.context.internalAdapter.findCredentialAccount(
+				user.user.id,
 			);
 			if (!account) {
 				await ctx.context.internalAdapter.createAccount({
 					userId: user.user.id,
 					providerId: "credential",
-					accountId: user.user.id,
+					issuer: createLocalAccountIssuer("credential"),
+					providerAccountId: user.user.id,
 					password: passwordHash,
 				});
 			} else {

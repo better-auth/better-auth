@@ -187,6 +187,8 @@ export const microsoft = (options: MicrosoftOptions) => {
 	return {
 		id: "microsoft",
 		name: "Microsoft EntraID",
+		accountSubject: ({ profile }) => profile.sub,
+		accountIssuer: ({ profile }) => profile.iss,
 		createAuthorizationURL(data) {
 			// Microsoft Entra supports public clients (SPA / native apps with
 			// PKCE only), so clientSecret is intentionally not required here.
@@ -319,7 +321,6 @@ export const microsoft = (options: MicrosoftOptions) => {
 						: false;
 			return {
 				user: {
-					id: user.sub,
 					name: user.name,
 					email: user.email,
 					image: user.picture,
@@ -351,7 +352,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 					});
 				},
 		options,
-	} satisfies OAuthProvider;
+	} satisfies OAuthProvider<MicrosoftEntraIDProfile>;
 };
 
 export const getMicrosoftPublicKey = async (

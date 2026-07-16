@@ -91,6 +91,8 @@ A redirect URL will be automatically generated using the provider ID. For instan
   When you register an OIDC provider, Better Auth automatically fetches and validates the IdP's [OIDC discovery document](#oidc-discovery). Most endpoint fields are optional — see [OIDC Discovery](#oidc-discovery) for details on auto-discovered fields and possible registration errors.
 </Callout>
 
+Better Auth identifies an OIDC account by the configured `issuer` and the verified `sub` claim. The `mapping` option maps profile fields such as email, name, and image, but it cannot replace the account subject. Provider aliases that return the same issuer and subject resolve to one external identity; this identity deduplication does not create independent grant or provider lifecycle records for each alias.
+
 #### Example
 
 <Tabs items={["client", "server"]}>
@@ -113,7 +115,6 @@ A redirect URL will be automatically generated using the provider ID. For instan
             scopes: ["openid", "email", "profile"],
             pkce: true,
             mapping: {
-                id: "sub",
                 email: "email",
                 emailVerified: "email_verified",
                 name: "name",
@@ -146,7 +147,6 @@ A redirect URL will be automatically generated using the provider ID. For instan
                 scopes: ["openid", "email", "profile"],
                 pkce: true,
                 mapping: {
-                    id: "sub",
                     email: "email",
                     emailVerified: "email_verified",
                     name: "name",
@@ -350,6 +350,8 @@ If the Identity Provider is misconfigured or unreachable, registration will fail
 
 To register a SAML provider, use the `registerSSOProvider` endpoint with SAML configuration details. The provider will act as a Service Provider (SP) and integrate with your Identity Provider (IdP).
 
+Better Auth identifies a SAML account by the IdP entity ID and the signed `NameID`. The `issuer` field identifies your service provider, while the IdP entity ID comes from `idpMetadata.metadata` or an explicit `idpMetadata.entityID` in a manual configuration. Attribute mappings can populate profile fields, but they cannot replace the signed `NameID` account subject.
+
 <Tabs items={["client", "server"]}>
   <Tab value="client">
     ```ts title="register-saml-provider.ts"
@@ -357,7 +359,7 @@ To register a SAML provider, use the `registerSSOProvider` endpoint with SAML co
 
     await authClient.sso.register({
         providerId: "saml-provider",
-        issuer: "https://idp.example.com",
+        issuer: "https://yourapp.com/saml",
         domain: "example.com",
         samlConfig: {
             entryPoint: "https://idp.example.com/sso",
@@ -384,7 +386,6 @@ To register a SAML provider, use the `registerSSOProvider` endpoint with SAML co
                 encPrivateKeyPass: "your-sp-encryption-key-password"
             },
             mapping: {
-                id: "nameID",
                 email: "email",
                 name: "displayName",
                 firstName: "givenName",
@@ -406,7 +407,7 @@ To register a SAML provider, use the `registerSSOProvider` endpoint with SAML co
     await auth.api.registerSSOProvider({
         body: {
             providerId: "saml-provider",
-            issuer: "https://idp.example.com",
+            issuer: "https://yourapp.com/saml",
             domain: "example.com",
             samlConfig: {
                 entryPoint: "https://idp.example.com/sso",
@@ -433,7 +434,6 @@ To register a SAML provider, use the `registerSSOProvider` endpoint with SAML co
                     encPrivateKeyPass: "your-sp-encryption-key-password"
                 },
                 mapping: {
-                    id: "nameID",
                     email: "email",
                     name: "displayName",
                     firstName: "givenName",
@@ -784,7 +784,7 @@ import { auth } from "@/lib/auth"
 await auth.api.registerSSOProvider({
     body: {
         providerId: "acme-corp-saml",
-        issuer: "https://acme-corp.okta.com",
+        issuer: "https://yourapp.com/saml/acme-corp",
         domain: "acmecorp.com",
         organizationId: "org_acme_corp_id", // Link to organization
         samlConfig: {
@@ -826,7 +826,7 @@ import { auth } from "@/lib/auth"
 await auth.api.registerSSOProvider({
     body: {
         providerId: "acme-corp",
-        issuer: "https://acme.okta.com",
+        issuer: "https://yourapp.com/saml/acme-corp",
         domain: "acmecorp.com",
         organizationId: "org_acme_id",
         samlConfig: { /* ... */ },
@@ -928,6 +928,9 @@ const auth = betterAuth({
                         issuer: "https://your-app.com",
                         entryPoint: "https://idp.example.com/sso",
                         cert: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+                        idpMetadata: {
+                            entityID: "https://idp.example.com",
+                        },
                         spMetadata: {
                             entityID: "http://localhost:3000/api/auth/sso/saml2/sp/metadata",
                             metadata: "<!-- Your SP Metadata XML -->",
@@ -1015,7 +1018,6 @@ Configure how SAML attributes map to user fields:
 
 ```ts
 mapping: {
-    id: "nameID",           // Default: "nameID"
     email: "email",         // Default: "email" or "nameID"
     name: "displayName",    // Default: "displayName"
     firstName: "givenName", // Default: "givenName"

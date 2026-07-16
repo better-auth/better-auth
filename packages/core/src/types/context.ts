@@ -9,6 +9,7 @@ import type {
 	Verification,
 } from "../db";
 import type { DBAdapter, Where } from "../db/adapter";
+import type { AccountKey } from "../db/schema/account";
 import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
 import type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
@@ -160,7 +161,7 @@ export interface InternalAdapter<
 	/**
 	 * Delete an account by its primary key.
 	 *
-	 * @param id - The account row's primary key (the `id` column, not the `accountId` column).
+	 * @param id - The account row's primary key, not its provider account ID.
 	 */
 	deleteAccount(id: string): Promise<void>;
 
@@ -174,15 +175,18 @@ export interface InternalAdapter<
 	 */
 	deleteSessions(sessionTokens: string[]): Promise<void>;
 
-	findOAuthUser(
-		email: string,
-		accountId: string,
-		providerId: string,
-	): Promise<{
-		user: User;
-		linkedAccount: Account | null;
-		accounts: Account[];
-	} | null>;
+	findAccountOwnerByKey(accountKey: AccountKey): Promise<
+		| {
+				kind: "owned";
+				user: User;
+				account: Account;
+		  }
+		| {
+				kind: "orphaned";
+				account: Account;
+		  }
+		| null
+	>;
 
 	findUserByEmail(
 		email: string,
@@ -210,10 +214,10 @@ export interface InternalAdapter<
 
 	findAccounts(userId: string): Promise<Account[]>;
 
-	findAccountByProviderId(
-		accountId: string,
-		providerId: string,
-	): Promise<Account | null>;
+	/** Find the credential account whose stable local subject is the user ID. */
+	findCredentialAccount(userId: string): Promise<Account | null>;
+
+	findAccountByKey(accountKey: AccountKey): Promise<Account | null>;
 
 	findAccountByUserId(userId: string): Promise<Account[]>;
 

@@ -8,7 +8,6 @@ import type {
 import type { AlgorithmValidationOptions } from "./saml/algorithms";
 
 export interface OIDCMapping {
-	id?: string | undefined;
 	email?: string | undefined;
 	emailVerified?: string | undefined;
 	name?: string | undefined;
@@ -17,7 +16,6 @@ export interface OIDCMapping {
 }
 
 export interface SAMLMapping {
-	id?: string | undefined;
 	email?: string | undefined;
 	emailVerified?: string | undefined;
 	name?: string | undefined;
@@ -58,6 +56,51 @@ export interface OIDCConfig {
 	allowIdpInitiated?: boolean | undefined;
 }
 
+interface SAMLIdentityProviderMetadataBase {
+	/**
+	 * IdP signing certificate(s). Pass a single PEM string or an array for
+	 * rolling rotation. Takes precedence over the top-level `cert` when both
+	 * are set. Omit when `metadata` XML is supplied.
+	 */
+	cert?: string | string[] | undefined;
+	privateKey?: string | undefined;
+	privateKeyPass?: string | undefined;
+	isAssertionEncrypted?: boolean | undefined;
+	encPrivateKey?: string | undefined;
+	encPrivateKeyPass?: string | undefined;
+	singleSignOnService?:
+		| Array<{
+				Binding: string;
+				Location: string;
+		  }>
+		| undefined;
+	singleLogoutService?:
+		| Array<{
+				Binding: string;
+				Location: string;
+		  }>
+		| undefined;
+}
+
+/**
+ * The trusted identity-provider authority for a SAML connection.
+ *
+ * Metadata XML carries the IdP entity ID. Manual configurations must declare
+ * `entityID` explicitly so the service provider's issuer is never mistaken
+ * for the identity provider's authority.
+ */
+export type SAMLIdentityProviderMetadata = SAMLIdentityProviderMetadataBase &
+	(
+		| {
+				metadata: string;
+				entityID?: string | undefined;
+		  }
+		| {
+				metadata?: undefined;
+				entityID: string;
+		  }
+	);
+
 export interface SAMLConfig {
 	/**
 	 * SP Entity ID. Used as the `entityID` in SP metadata when
@@ -86,31 +129,7 @@ export interface SAMLConfig {
 	 * flows when no RelayState callback URL is available.
 	 */
 	callbackUrl?: string | undefined;
-	idpMetadata?:
-		| {
-				metadata?: string;
-				entityID?: string;
-				/**
-				 * IdP signing certificate(s). Pass a single PEM string or an array
-				 * for rolling rotation. Takes precedence over the top-level `cert`
-				 * when both are set. Omit when `metadata` XML is supplied.
-				 */
-				cert?: string | string[];
-				privateKey?: string;
-				privateKeyPass?: string;
-				isAssertionEncrypted?: boolean;
-				encPrivateKey?: string;
-				encPrivateKeyPass?: string;
-				singleSignOnService?: Array<{
-					Binding: string;
-					Location: string;
-				}>;
-				singleLogoutService?: Array<{
-					Binding: string;
-					Location: string;
-				}>;
-		  }
-		| undefined;
+	idpMetadata: SAMLIdentityProviderMetadata;
 	/**
 	 * SP metadata configuration. All fields are optional; when omitted,
 	 * SP metadata is auto-generated from `issuer`, `wantAssertionsSigned`,

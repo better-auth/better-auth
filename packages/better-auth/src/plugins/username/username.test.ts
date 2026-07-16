@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { USERNAME_ERROR_CODES, username } from ".";
 import { usernameClient } from "./client";
@@ -52,6 +52,60 @@ describe("username", async () => {
 			},
 		);
 		expect(res.data?.token).toBeDefined();
+	});
+
+	it("uses only the canonical credential account during username sign-in", async () => {
+		const { auth, client } = await getTestInstance(
+			{
+				plugins: [username()],
+			},
+			{
+				clientOptions: { plugins: [usernameClient()] },
+			},
+		);
+		const signUp = await client.signUp.email({
+			email: "canonical-username@example.com",
+			username: "canonical_username",
+			password: "canonical-password",
+			name: "Canonical Username",
+		});
+		const userId = signUp.data!.user.id;
+		const context = await auth.$context;
+		const canonicalAccount =
+			await context.internalAdapter.findCredentialAccount(userId);
+		assert(
+			canonicalAccount?.password,
+			"canonical credential account is required",
+		);
+
+		await context.internalAdapter.deleteAccount(canonicalAccount.id);
+		await context.internalAdapter.createAccount({
+			userId,
+			providerId: "credential",
+			issuer: "local:decoy-credential",
+			providerAccountId: "decoy-subject",
+			password: await context.password.hash("decoy-password"),
+		});
+		await context.internalAdapter.createAccount({
+			userId,
+			providerId: "credential",
+			issuer: "local:credential",
+			providerAccountId: userId,
+			password: canonicalAccount.password,
+		});
+
+		const canonicalSignIn = await client.signIn.username({
+			username: "canonical_username",
+			password: "canonical-password",
+		});
+		expect(canonicalSignIn.data?.user.id).toBe(userId);
+
+		const decoySignIn = await client.signIn.username({
+			username: "canonical_username",
+			password: "decoy-password",
+		});
+		expect(decoySignIn.data).toBeNull();
+		expect(decoySignIn.error?.status).toBe(401);
 	});
 
 	/**

@@ -65,6 +65,7 @@ import {
 } from "../utils";
 import { getVerificationIdentifier } from "./domain-verification";
 import {
+	assertSAMLIdentityProviderAuthority,
 	createIdP,
 	createSAMLPostForm,
 	createSP,
@@ -296,11 +297,6 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 														type: "object",
 														nullable: true,
 														properties: {
-															id: {
-																type: "string",
-																description:
-																	"Field mapping for user ID (defaults to 'sub')",
-															},
 															email: {
 																type: "string",
 																description:
@@ -330,7 +326,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 																description: "Additional field mappings",
 															},
 														},
-														required: ["id", "email", "name"],
+														required: ["email", "name"],
 													},
 												},
 												required: [
@@ -618,6 +614,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				);
 
 				validateCertSources(body.samlConfig);
+				assertSAMLIdentityProviderAuthority(body.samlConfig);
 
 				// Validate that the config has a usable IdP entry point
 				const hasIdpMetadata = body.samlConfig.idpMetadata?.metadata;
@@ -1547,7 +1544,7 @@ async function handleOIDCCallback(
 					rawUserInfo[value],
 				]),
 			),
-			id: rawUserInfo[mapping.id || "sub"] as string | undefined,
+			id: rawUserInfo.sub as string | undefined,
 			email: rawUserInfo[mapping.email || "email"] as string | undefined,
 			emailVerified: options?.trustEmailVerified
 				? parseProviderEmailVerified(
@@ -1597,7 +1594,7 @@ async function handleOIDCCallback(
 					verified.payload[value],
 				]),
 			),
-			id: idToken[mapping.id || "sub"],
+			id: verified.payload.sub,
 			email: idToken[mapping.email || "email"],
 			emailVerified: options?.trustEmailVerified
 				? parseProviderEmailVerified(
@@ -1653,7 +1650,8 @@ async function handleOIDCCallback(
 					idToken: tokenResponse.idToken,
 					accessToken: tokenResponse.accessToken,
 					refreshToken: tokenResponse.refreshToken,
-					accountId: userInfoId,
+					issuer: provider.issuer,
+					providerAccountId: userInfoId,
 					providerId: provider.providerId,
 					accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
 					refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
@@ -1709,7 +1707,7 @@ async function handleOIDCCallback(
 		profile: {
 			providerType: "oidc",
 			providerId: provider.providerId,
-			accountId: userInfoId,
+			providerAccountId: userInfoId,
 			email: userInfoEmail,
 			emailVerified: Boolean(userInfo.emailVerified),
 			rawAttributes: userInfo,

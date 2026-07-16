@@ -28,6 +28,8 @@ Every aspect of the OAuth flow can be overridden:
 | Provider requires extra token parameters                       | `tokenUrlParams`                                             |
 | Provider requires custom HTTP headers                          | `discoveryHeaders`, `authorizationHeaders`                   |
 | Provider does not support OIDC discovery                       | Set `authorizationUrl`, `tokenUrl`, `userInfoUrl` explicitly |
+| Provider configurations share one identity namespace           | Set the same `accountIssuer`                                 |
+| Provider uses a non-standard immutable user identifier         | Set `accountSubject`                                         |
 | Provider rejects PKCE                                          | Set `pkce: false`                                            |
 
 ## Installation
@@ -246,7 +248,7 @@ Each provider helper accepts common OAuth options (extending `BaseOAuthProviderO
 * **HubSpot**: No additional required fields. Optional `scopes` (defaults to `["oauth"]`)
 * **Keycloak**: Requires `issuer` (e.g., `https://my-domain/realms/MyRealm`)
 * **LINE**: Optional `providerId` (defaults to `"line"`). LINE requires separate channels for different countries (Japan, Thailand, Taiwan, etc.), so you can call `line()` multiple times with different `providerId`s and credentials to support multiple countries
-* **Microsoft Entra ID**: Requires `tenantId` (can be a GUID, `"common"`, `"organizations"`, or `"consumers"`)
+* **Microsoft Entra ID**: Requires a concrete tenant GUID. Use the built-in [Microsoft social provider](/docs/authentication/microsoft) for the multi-tenant `"common"`, `"organizations"`, or `"consumers"` authorities; those authorities require ID-token claim validation to determine the account's actual issuer
 * **Okta**: Requires `issuer` (e.g., `https://dev-xxxxx.okta.com/oauth2/default`)
 * **Slack**: No additional required fields
 * **Patreon**: No additional required fields
@@ -272,10 +274,21 @@ When adding the plugin to your auth config, you can configure multiple OAuth pro
 Each provider configuration object supports the following options:
 
 ```ts
-import type { TokenEndpointAuth } from "better-auth/oauth2";
+import type {
+  OAuthAccountKeyContext,
+  OAuth2Tokens,
+  TokenEndpointAuth,
+} from "better-auth/oauth2";
+import type { GenericOAuthUserInfo } from "better-auth/plugins/generic-oauth";
 
 interface GenericOAuthConfig {
   providerId: string;
+  accountSubject?: (
+    context: OAuthAccountKeyContext<GenericOAuthUserInfo>,
+  ) => string | number | Promise<string | number>;
+  accountIssuer?:
+    | string
+    | ((context: OAuthAccountKeyContext<GenericOAuthUserInfo>) => string | Promise<string>);
   discoveryUrl?: string;
   authorizationUrl?: string;
   tokenUrl?: string;
@@ -290,7 +303,7 @@ interface GenericOAuthConfig {
   pkce?: boolean;
   accessType?: string;
   accessTokenExpiresIn?: number;
-  getUserInfo?: (tokens: OAuth2Tokens) => Promise<User | null>;
+  getUserInfo?: (tokens: OAuth2Tokens) => Promise<GenericOAuthUserInfo | null>;
 }
 ```
 
@@ -298,7 +311,17 @@ interface GenericOAuthConfig {
 
 **providerId**: A unique string to identify the OAuth provider configuration.
 
-**discoveryUrl**: (Optional) URL to fetch the provider's OAuth 2.0/OIDC configuration. If provided, endpoints like `authorizationUrl`, `tokenUrl`, and `userInfoUrl` will be auto-discovered at server startup. When the discovery document publishes a `jwks_uri`, `id_token`s returned by the provider are verified against it (signature, issuer, audience, and advertised signing algorithms) before their claims are used; a token that fails verification rejects the sign-in. Discovery providers also bind the `id_token` to the authorization request with a server-generated OIDC `nonce` and reject a callback whose `id_token` does not echo it.
+**accountSubject**: (Optional) Resolves the immutable user identifier assigned by the provider. OpenID Connect discovery providers use the verified `sub` field by default. Plain OAuth providers use `id`. Better Auth does not switch between those fields at runtime. Set this resolver when a provider uses another field, such as `account_id`. The resolver receives the OAuth tokens and raw provider profile, and can return a string or number.
+
+`mapProfileToUser` cannot set the account subject. This keeps local profile mapping separate from account recognition.
+
+**accountIssuer**: (Optional) The stable authority namespace paired with the provider account subject. A discovery provider uses its discovered issuer by default. Set this field when an explicit-endpoint provider has an issuer, when multiple provider configurations represent the same authority, or when a verified profile determines a tenant-specific issuer. Without discovery or `accountIssuer`, Better Auth uses `local:oauth:<encoded providerId>`, where the provider ID segment is percent-encoded.
+
+The resolver receives verified provider data. Derive a dynamic issuer only from a claim or profile value established by the provider verification flow; never use a request parameter, email domain, or other caller-controlled value.
+
+Provider configurations with the same `accountIssuer` and subject deduplicate one external identity. They share one account row and token set; aliases do not create independent grants or provider lifecycle records.
+
+**discoveryUrl**: (Optional) URL to fetch the provider's OAuth 2.0/OIDC configuration. If provided, endpoints like `authorizationUrl`, `tokenUrl`, and `userInfoUrl` will be auto-discovered at server startup. When the discovery document publishes a `jwks_uri`, `id_token`s returned by the provider are verified against it (signature, issuer, audience, and advertised signing algorithms) before their claims are used; a token that fails verification rejects the sign-in. Discovery providers also bind the `id_token` to the authorization request with a server-generated OIDC `nonce` and reject a callback whose `id_token` does not echo it. Provider initialization fails if discovery cannot establish a valid configuration, which prevents an account from switching between its discovered issuer and a local fallback.
 
 **disableIdTokenNonceBinding**: (Optional) Turn off OIDC `nonce` binding for a discovery provider's `id_token`. Binding is on by default and rejects an `id_token` that does not echo the server-generated `nonce` (OIDC Core 1.0 §3.1.3.7). Set this to `true` only for providers that do not return the `nonce` claim in the authorization-code flow; it removes `id_token` replay protection for the provider.
 
@@ -334,7 +357,7 @@ interface GenericOAuthConfig {
 
 **getUserInfo**: (Optional) A custom function to fetch user info from the provider, given the OAuth tokens. If not provided, a default fetch is used.
 
-**mapProfileToUser**: (Optional) A function to map the provider's user profile to your app's user object. Useful for custom field mapping or transformations.
+**mapProfileToUser**: (Optional) A function to map the provider profile to mutable fields on your app's user. It cannot set provider identity; use `accountSubject` for a non-standard immutable identifier.
 
 **authorizationUrlParams**: (Optional) Additional query parameters to add to the authorization URL. Reserved OAuth keys (`state`, `client_id`, `redirect_uri`, `response_type`, `code_challenge`, `code_challenge_method`, `nonce`, `scope`) are ignored so they cannot replace the values Better Auth manages for the flow; any other key overrides the default.
 

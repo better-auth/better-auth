@@ -103,47 +103,99 @@ export const auth = betterAuth({
 
 ### Get Access Token
 
-To get the access token for a social provider, you can use the `getAccessToken` function with the `authClient` or `auth.api` for server-side usage. When you use this endpoint, if the access token is expired, it will be refreshed.
+Use `getAccessToken` to retrieve the access token for a linked account. Every token or provider-profile request must select the account explicitly: pass the Better Auth account record's `id` as `accountId`, or pass `useAccountCookie: true` to select the account from its signed cookie. A `providerId` is never an account selector, and a request without either supported selector is invalid.
+
+The account record ID is available from `listAccounts`. If its access token is expired, Better Auth refreshes it before returning it.
 
 ```ts
+const { data: accounts, error } = await authClient.listAccounts();
+
+if (error) {
+  throw new Error(error.message);
+}
+
+const account = accounts?.find((account) => account.providerId === "google");
+
+if (!account) {
+  throw new Error("Google account is not linked");
+}
+
 const { accessToken } = await authClient.getAccessToken({
-  providerId: "google", // or any other provider id
-  accountId: "accountId", // optional, if you want to get the access token for a specific account
+  accountId: account.id,
 })
 ```
 
-server-side usage:
+When [`account.storeAccountCookie`](/docs/reference/options#storeaccountcookie) is enabled, select the account from the signed cookie explicitly:
+
+```ts
+const { accessToken } = await authClient.getAccessToken({
+  useAccountCookie: true,
+});
+```
+
+For server-side usage, pass the same account record ID. A trusted server call can also provide `userId` when it does not include session headers.
 
 ```ts
 await auth.api.getAccessToken({
   body: {
-    providerId: "google", // or any other provider id
-    accountId: "accountId", // optional, if you want to get the access token for a specific account
-    userId: "userId", // optional, if you don't provide headers with authenticated token
+    accountId: account.id,
   },
-  headers: await headers() // headers containing the user's session token
+  headers: await headers(), // headers containing the user's session token
+});
+```
+
+### Refresh Access Token
+
+Use `refreshToken` when you need to refresh the selected account's access token immediately. It uses the same explicit selector contract as `getAccessToken`.
+
+```ts
+const tokens = await authClient.refreshToken({
+  accountId: account.id,
+});
+```
+
+To use the signed account cookie instead:
+
+```ts
+await auth.api.refreshToken({
+  body: {
+    useAccountCookie: true,
+  },
+  headers: await headers(),
 });
 ```
 
 ### Get Account Info Provided by the provider
 
-To get provider specific account info you can use the `accountInfo` function with the `authClient` or `auth.api` for server-side usage.
+Use `accountInfo` to retrieve current profile data from the provider for a linked account. Pass the Better Auth account record's `id`, not the provider's subject identifier.
+
+The response keeps identity and profile data separate. `account` contains the selected Better Auth record and its provider key, `user` contains mutable profile fields, and `data` contains the raw provider response.
 
 ```ts
 const info = await authClient.accountInfo({
-  query: { accountId: "accountId" }, // here you pass in the provider given account id, the provider is automatically detected from the account id
-})
+  query: { accountId: account.id },
+});
+
+console.log(info.data?.account.providerAccountId);
+console.log(info.data?.user.email);
 ```
 
-server-side usage:
+When the signed account cookie should select the account:
+
+```ts
+const info = await authClient.accountInfo({
+  query: { useAccountCookie: true },
+});
+```
+
+For server-side usage:
 
 ```ts
 await auth.api.accountInfo({
   query: {
-    accountId: "accountId",
-    userId: "userId", // optional, if you don't provide headers with authenticated token
+    accountId: account.id,
   },
-  headers: await headers() // headers containing the user's session token
+  headers: await headers(), // headers containing the user's session token
 });
 ```
 
@@ -412,7 +464,7 @@ export const auth = betterAuth({
 * **Microsoft Entra ID**: because `email` is tenant-mutable and never verified, use `profile.oid` (immutable, stable within the tenant) as the identity anchor; treat `email` as a profile attribute only. Microsoft's [claims validation guidance](https://learn.microsoft.com/en-us/entra/identity-platform/claims-validation) explicitly warns never to use `email`, `preferred_username`, or `unique_name` for authorization decisions.
 * **Facebook**: without a per-email verification flag, treat every Facebook email as unverified unless you run your own verification challenge.
 
-First-class support for emailless users, using the stable `(providerId, accountId)` pair as the identity key (in line with [OpenID Connect Core §5.7](https://openid.net/specs/openid-connect-core-1_0.html#ClaimStability)), is tracked in [#9124](https://github.com/better-auth/better-auth/issues/9124).
+Better Auth recognizes a returning OAuth account by its stable `(issuer, providerAccountId)` key, but the linked Better Auth user still requires an email address. Support for users without an email is tracked in [#9124](https://github.com/better-auth/better-auth/issues/9124).
 
 ## Provider Options
 
@@ -532,6 +584,8 @@ Useful, if you have additional fields in your user object you want to populate f
 
 `mapProfileToUser` follows the input rules from `user.additionalFields`. It can populate additional fields that allow input, but provider values for fields marked `input: false` are ignored during OAuth sign-up, sign-in profile override, and account-link profile sync. Use server-side provisioning code to set server-owned fields such as roles, bans, or internal flags.
 
+Profile mapping cannot redefine the provider account identity. Built-in providers derive identity from their documented immutable profile field. Generic OAuth providers use `accountSubject` when the default `sub` or `id` field is not the correct identifier.
+
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 
@@ -624,7 +678,6 @@ export const auth = betterAuth({
         const profile = await response.json();
         return {
           user: {
-            id: profile.id,
             name: profile.name,
             email: profile.email,
             image: profile.picture,

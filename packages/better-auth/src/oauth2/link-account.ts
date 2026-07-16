@@ -14,7 +14,8 @@ import { OAUTH_CALLBACK_ERROR_CODES, redirectOnError } from "./errors";
 import { setTokenUtil } from "./utils";
 
 // TODO(#9124): v2 widens `User.email` to nullable; every `userInfo.email.toLowerCase()`
-// call below needs null-safety, and `findOAuthUser` must accept a nullable email.
+// call below needs null-safety before account recognition can be fully
+// independent from email-based implicit linking.
 export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
 	opts: {
@@ -34,12 +35,11 @@ export async function handleOAuthUserInfo(
 		method: "oauth",
 		oauth: { providerId: account.providerId },
 	};
-	const dbUser = await c.context.internalAdapter
-		.findOAuthUser(
-			userInfo.email.toLowerCase(),
-			account.accountId,
-			account.providerId,
-		)
+	const accountOwner = await c.context.internalAdapter
+		.findAccountOwnerByKey({
+			issuer: account.issuer,
+			providerAccountId: account.providerAccountId,
+		})
 		.catch((e) => {
 			c.context.logger.error(
 				"Better auth was unable to query your database.\nError: ",
@@ -49,6 +49,44 @@ export async function handleOAuthUserInfo(
 				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 			redirectOnError(c, errorURL, "internal_server_error");
 		});
+	if (accountOwner?.kind === "orphaned") {
+		c.context.logger.error(
+			"OAuth account references a missing user. Repair the account before retrying authentication.",
+		);
+		return {
+			error: "unable to link account",
+			data: null,
+			isRegister: false,
+		};
+	}
+	const dbUser = await (async () => {
+		if (accountOwner?.kind === "owned") {
+			return {
+				user: accountOwner.user,
+				linkedAccount: accountOwner.account,
+				accounts: [accountOwner.account],
+			};
+		}
+
+		const emailMatch = await c.context.internalAdapter.findUserByEmail(
+			userInfo.email.toLowerCase(),
+			{ includeAccounts: true },
+		);
+		if (!emailMatch) return null;
+		return {
+			user: emailMatch.user,
+			linkedAccount: null,
+			accounts: emailMatch.accounts,
+		};
+	})().catch((e) => {
+		c.context.logger.error(
+			"Better auth was unable to query your database.\nError: ",
+			e,
+		);
+		const errorURL =
+			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+		redirectOnError(c, errorURL, "internal_server_error");
+	});
 	let user = dbUser?.user;
 	const isRegister = !user;
 
@@ -57,8 +95,8 @@ export async function handleOAuthUserInfo(
 			dbUser.linkedAccount ??
 			dbUser.accounts.find(
 				(acc) =>
-					acc.providerId === account.providerId &&
-					acc.accountId === account.accountId,
+					acc.issuer === account.issuer &&
+					acc.providerAccountId === account.providerAccountId,
 			);
 		if (!linkedAccount) {
 			const accountLinking = c.context.options.account?.accountLinking;
@@ -98,7 +136,8 @@ export async function handleOAuthUserInfo(
 				});
 				await c.context.internalAdapter.linkAccount({
 					providerId: account.providerId,
-					accountId: userInfo.id.toString(),
+					issuer: account.issuer,
+					providerAccountId: account.providerAccountId,
 					userId: dbUser.user.id,
 					accessToken: await setTokenUtil(account.accessToken, c.context),
 					refreshToken: await setTokenUtil(account.refreshToken, c.context),
@@ -154,6 +193,7 @@ export async function handleOAuthUserInfo(
 				c.context.options.account?.updateAccountOnSignIn !== false
 					? Object.fromEntries(
 							Object.entries({
+								providerId: account.providerId,
 								idToken: account.idToken,
 								accessToken: await setTokenUtil(account.accessToken, c.context),
 								refreshToken: await setTokenUtil(
@@ -255,7 +295,8 @@ export async function handleOAuthUserInfo(
 				refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 				scope: account.scope,
 				providerId: account.providerId,
-				accountId: userInfo.id.toString(),
+				issuer: account.issuer,
+				providerAccountId: account.providerAccountId,
 			};
 			const { createdUser, createdAccount } = await runWithTransaction(
 				c.context.adapter,
@@ -381,12 +422,11 @@ async function dispatchVerificationEmail(
 
 /**
  * Provider profile a freshly linked account may copy onto the local user.
- * `id` is the provider's account id (never the local user id), and `email`/
- * `emailVerified` are identity anchors; all three are stripped before the
- * remaining fields are written.
+ * `email` and `emailVerified` are identity anchors and are stripped before
+ * the remaining fields are written. Provider identity is resolved separately
+ * from the raw profile through the provider's account-key contract.
  */
 type LinkedProviderProfile = {
-	id: string | number;
 	name?: string | undefined;
 	email?: string | null | undefined;
 	emailVerified?: boolean | undefined;
@@ -417,7 +457,6 @@ export async function applyUpdateUserInfoOnLink(
 	}
 	try {
 		const {
-			id: _id,
 			email: _email,
 			emailVerified: _emailVerified,
 			name,

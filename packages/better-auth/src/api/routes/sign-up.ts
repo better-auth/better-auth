@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { runWithTransaction } from "@better-auth/core/context";
+import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
@@ -385,7 +386,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				await ctx.context.internalAdapter.linkAccount({
 					userId: createdUser.id,
 					providerId: "credential",
-					accountId: createdUser.id,
+					issuer: createLocalAccountIssuer("credential"),
+					providerAccountId: createdUser.id,
 					password: hash,
 				});
 				const shouldSendVerificationEmail =

@@ -29,6 +29,7 @@ export const railway = (options: RailwayOptions) => {
 	return {
 		id: "railway",
 		name: "Railway",
+		accountSubject: ({ profile }) => profile.sub,
 		createAuthorizationURL({
 			state,
 			scopes,
@@ -92,7 +93,6 @@ export const railway = (options: RailwayOptions) => {
 			// We default to false for security consistency.
 			return {
 				user: {
-					id: profile.sub,
 					name: profile.name,
 					email: profile.email,
 					image: profile.picture,

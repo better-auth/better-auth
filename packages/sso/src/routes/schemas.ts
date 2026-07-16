@@ -53,10 +53,7 @@ export function parseSSOProviderAdditionalFields(
 }
 
 const oidcMappingSchema = z
-	.object({
-		id: z.string().meta({
-			description: "Field mapping for user ID (defaults to 'sub')",
-		}),
+	.strictObject({
 		email: z.string().meta({
 			description: "Field mapping for email (defaults to 'email')",
 		}),
@@ -81,10 +78,7 @@ const oidcMappingSchema = z
 	.optional();
 
 const samlMappingSchema = z
-	.object({
-		id: z.string().meta({
-			description: "Field mapping for user ID (defaults to 'nameID')",
-		}),
+	.strictObject({
 		email: z.string().meta({
 			description: "Field mapping for email (defaults to 'email')",
 		}),
@@ -176,6 +170,62 @@ const oidcConfigSchema = z.object({
 	mapping: oidcMappingSchema,
 });
 
+const samlIdentityProviderConfigSchema = z.object({
+	cert: signingCertSchema
+		.meta({
+			description:
+				"IdP signing certificate(s). Pass a single PEM string or an array for rolling rotation. Takes precedence over the top-level `cert`.",
+		})
+		.optional(),
+	privateKey: z.string().optional(),
+	privateKeyPass: z.string().optional(),
+	isAssertionEncrypted: z.boolean().optional(),
+	encPrivateKey: z.string().optional(),
+	encPrivateKeyPass: z.string().optional(),
+	singleSignOnService: z
+		.array(
+			z.object({
+				Binding: z
+					.string()
+					.meta({ description: "The binding type for the SSO service" }),
+				Location: z
+					.string()
+					.url()
+					.meta({ description: "The URL for the SSO service" }),
+			}),
+		)
+		.meta({ description: "Single Sign-On service configuration" })
+		.optional(),
+	singleLogoutService: z
+		.array(
+			z.object({
+				Binding: z.string(),
+				Location: z.string().url(),
+			}),
+		)
+		.optional(),
+});
+
+const samlIdentityProviderMetadataSchema = z.union(
+	[
+		samlIdentityProviderConfigSchema.extend({
+			metadata: z.string().min(1),
+			entityID: z.string().optional(),
+		}),
+		samlIdentityProviderConfigSchema.extend({
+			metadata: z.undefined().optional(),
+			entityID: z.string().min(1),
+		}),
+	],
+	"idpMetadata.entityID is required when IdP metadata XML is not provided",
+);
+
+const samlIdentityProviderMetadataUpdateSchema =
+	samlIdentityProviderConfigSchema.extend({
+		metadata: z.string().min(1).optional(),
+		entityID: z.string().min(1).optional(),
+	});
+
 const samlConfigSchema = z.object({
 	entryPoint: z
 		.string()
@@ -194,45 +244,7 @@ const samlConfigSchema = z.object({
 			message: "callbackUrl must not contain a fragment",
 		})
 		.optional(),
-	idpMetadata: z
-		.object({
-			metadata: z.string().optional(),
-			entityID: z.string().optional(),
-			cert: signingCertSchema
-				.meta({
-					description:
-						"IdP signing certificate(s). Pass a single PEM string or an array for rolling rotation. Takes precedence over the top-level `cert`.",
-				})
-				.optional(),
-			privateKey: z.string().optional(),
-			privateKeyPass: z.string().optional(),
-			isAssertionEncrypted: z.boolean().optional(),
-			encPrivateKey: z.string().optional(),
-			encPrivateKeyPass: z.string().optional(),
-			singleSignOnService: z
-				.array(
-					z.object({
-						Binding: z
-							.string()
-							.meta({ description: "The binding type for the SSO service" }),
-						Location: z
-							.string()
-							.url()
-							.meta({ description: "The URL for the SSO service" }),
-					}),
-				)
-				.meta({ description: "Single Sign-On service configuration" })
-				.optional(),
-			singleLogoutService: z
-				.array(
-					z.object({
-						Binding: z.string(),
-						Location: z.string().url(),
-					}),
-				)
-				.optional(),
-		})
-		.optional(),
+	idpMetadata: samlIdentityProviderMetadataSchema,
 	spMetadata: z
 		.object({
 			metadata: z.string().optional(),
@@ -296,7 +308,13 @@ const updateSSOProviderBodySchema = z.object({
 	issuer: z.string().url().optional(),
 	domain: z.string().optional(),
 	oidcConfig: oidcConfigSchema.partial().optional(),
-	samlConfig: samlConfigSchema.partial().optional(),
+	samlConfig: samlConfigSchema
+		.omit({ idpMetadata: true })
+		.partial()
+		.extend({
+			idpMetadata: samlIdentityProviderMetadataUpdateSchema.optional(),
+		})
+		.optional(),
 });
 
 export function getUpdateSSOProviderBodySchema(options?: SSOOptions) {

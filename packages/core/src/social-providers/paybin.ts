@@ -36,6 +36,8 @@ export const paybin = (options: PaybinOptions) => {
 	return {
 		id: "paybin",
 		name: "Paybin",
+		accountSubject: ({ profile }) => profile.sub,
+		accountIssuer: issuer,
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -105,7 +107,6 @@ export const paybin = (options: PaybinOptions) => {
 			const userMap = await options.mapProfileToUser?.(user);
 			return {
 				user: {
-					id: user.sub,
 					name: user.name || user.preferred_username || "",
 					email: user.email,
 					image: user.picture,

@@ -48,13 +48,20 @@ import type {
 	InferSSOProvider,
 	OIDCConfig,
 	SAMLConfig,
+	SAMLIdentityProviderMetadata,
 	SSOOptions,
 	SSOProvider,
 	SSOProviderSchema,
 } from "./types";
 import { PACKAGE_VERSION } from "./version";
 
-export type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider };
+export type {
+	OIDCConfig,
+	SAMLConfig,
+	SAMLIdentityProviderMetadata,
+	SSOOptions,
+	SSOProvider,
+};
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {

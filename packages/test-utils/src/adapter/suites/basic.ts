@@ -79,6 +79,69 @@ export const getNormalTestSuiteTests = (
 			expect(res).toHaveProperty("id");
 			expect(typeof res.id).toEqual("string");
 		},
+		"create - should enforce the issuer-scoped account identity key": async ({
+			skip,
+		}: {
+			skip: (note?: string | undefined) => never;
+		}) => {
+			if (adapter.options?.adapterConfig.adapterId === "memory") {
+				skip("The memory adapter does not implement database indexes");
+				return;
+			}
+			const firstUser = await adapter.create<User>({
+				model: "user",
+				data: await generate("user"),
+				forceAllowId: true,
+			});
+			const secondUser = await adapter.create<User>({
+				model: "user",
+				data: await generate("user"),
+				forceAllowId: true,
+			});
+			const firstAccount = {
+				...(await generate("account")),
+				userId: firstUser.id,
+				providerId: "issuer-key-first-alias",
+				issuer: "https://issuer-key.example.com",
+				providerAccountId: "shared-subject",
+			};
+			await adapter.create<Account>({
+				model: "account",
+				data: firstAccount,
+				forceAllowId: true,
+			});
+
+			await expect(
+				adapter.create<Account>({
+					model: "account",
+					data: {
+						...(await generate("account")),
+						userId: secondUser.id,
+						providerId: "issuer-key-second-alias",
+						issuer: firstAccount.issuer,
+						providerAccountId: firstAccount.providerAccountId,
+					},
+					forceAllowId: true,
+				}),
+			).rejects.toThrow();
+
+			await expect(
+				adapter.create<Account>({
+					model: "account",
+					data: {
+						...(await generate("account")),
+						userId: secondUser.id,
+						providerId: "issuer-key-other-issuer",
+						issuer: "https://other-issuer-key.example.com",
+						providerAccountId: firstAccount.providerAccountId,
+					},
+					forceAllowId: true,
+				}),
+			).resolves.toMatchObject({
+				issuer: "https://other-issuer-key.example.com",
+				providerAccountId: "shared-subject",
+			});
+		},
 		"create - should use generateId if provided": async () => {
 			const ID = (await customIdGenerator?.()) || "MOCK-ID";
 			await modifyBetterAuthOptions(

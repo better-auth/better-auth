@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { siweClient } from "./client";
 import { siwe } from "./index";
@@ -325,7 +325,7 @@ describe("siwe", async () => {
 	});
 
 	it("should accept verification with email when anonymous is false", async () => {
-		const { client } = await getTestInstance(
+		const { auth, client } = await getTestInstance(
 			{
 				plugins: [
 					siwe({
@@ -359,6 +359,17 @@ describe("siwe", async () => {
 		});
 		expect(error).toBeNull();
 		expect(data?.success).toBe(true);
+		assert(data, "SIWE verification should return a user");
+		const accounts = await (await auth.$context).internalAdapter.findAccounts(
+			data.user.id,
+		);
+		expect(accounts).toContainEqual(
+			expect.objectContaining({
+				providerId: "siwe",
+				issuer: "local:siwe",
+				providerAccountId: `${walletAddress}:${chainId}`,
+			}),
+		);
 	});
 
 	it.each([

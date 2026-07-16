@@ -416,10 +416,10 @@ export async function processSAMLResponse(
 	// and proceeds, every later caller (including a concurrent submission) finds
 	// the row already present and is rejected. The deterministic primary key is
 	// the gate, so no separate find/expiry check is needed.
+	const issuer = idp.entityMeta.getEntityID();
 	const assertionId = extractAssertionId(samlBindingContent);
 
 	if (assertionId) {
-		const issuer = idp.entityMeta.getEntityID();
 		const conditions = (extract as SAMLAssertionExtract).conditions as
 			| SAMLConditions
 			| undefined;
@@ -480,7 +480,7 @@ export async function processSAMLResponse(
 				attributes[value as string],
 			]),
 		),
-		id: attr(mapping.id || "nameID") || extract.nameID,
+		id: extract.nameID,
 		email: (
 			attr(mapping.email || "email") ||
 			extract.nameID ||
@@ -545,7 +545,8 @@ export async function processSAMLResponse(
 				},
 				account: {
 					providerId,
-					accountId: userInfo.id as string,
+					issuer,
+					providerAccountId: userInfo.id as string,
 					accessToken: "",
 					refreshToken: "",
 				},
@@ -599,7 +600,7 @@ export async function processSAMLResponse(
 		profile: {
 			providerType: "saml",
 			providerId,
-			accountId: userInfo.id as string,
+			providerAccountId: userInfo.id as string,
 			email: userInfo.email as string,
 			emailVerified: userInfo.emailVerified,
 			rawAttributes: attributes,

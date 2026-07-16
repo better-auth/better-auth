@@ -369,8 +369,9 @@ describe("magic link", async () => {
 		expect(created.user?.emailVerified).toBe(false);
 		await internalAdapter.createAccount({
 			userId,
-			accountId: "attacker-google",
 			providerId: "google",
+			issuer: "local:google",
+			providerAccountId: "attacker-google",
 		});
 
 		// Precondition: the password is blocked behind the verification gate.

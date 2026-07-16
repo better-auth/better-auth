@@ -32,6 +32,7 @@ export const linkedin = (options: LinkedInOptions) => {
 	return {
 		id: "linkedin",
 		name: "Linkedin",
+		accountSubject: ({ profile }) => profile.sub,
 		createAuthorizationURL: async ({
 			state,
 			scopes,
@@ -97,7 +98,6 @@ export const linkedin = (options: LinkedInOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.sub,
 					name: profile.name,
 					email: profile.email,
 					emailVerified: profile.email_verified ?? false,

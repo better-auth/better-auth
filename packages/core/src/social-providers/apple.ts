@@ -82,6 +82,8 @@ export const apple = (options: AppleOptions) => {
 	return {
 		id: "apple",
 		name: "Apple",
+		accountSubject: ({ profile }) => profile.sub,
+		accountIssuer: "https://appleid.apple.com",
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -174,7 +176,6 @@ export const apple = (options: AppleOptions) => {
 			const userMap = await options.mapProfileToUser?.(enrichedProfile);
 			return {
 				user: {
-					id: profile.sub,
 					name: enrichedProfile.name,
 					emailVerified: emailVerified,
 					email: profile.email,

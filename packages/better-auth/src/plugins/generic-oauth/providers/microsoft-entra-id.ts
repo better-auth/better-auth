@@ -1,11 +1,18 @@
-import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
-import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
+import type {
+	BaseOAuthProviderOptions,
+	GenericOAuthConfig,
+	GenericOAuthUserInfo,
+} from "../index";
 
 export interface MicrosoftEntraIdOptions extends BaseOAuthProviderOptions {
 	/**
-	 * Microsoft Entra ID tenant ID.
-	 * Can be a GUID, "common", "organizations", or "consumers"
+	 * Concrete Microsoft Entra ID tenant GUID.
+	 *
+	 * Use Better Auth's built-in Microsoft provider for the multi-tenant
+	 * `common`, `organizations`, or `consumers` authorities. Those authorities
+	 * require ID-token claim validation to derive the account's actual issuer.
 	 */
 	tenantId: string;
 }
@@ -48,14 +55,25 @@ export function microsoftEntraId(
 ): GenericOAuthConfig<"microsoft-entra-id"> {
 	const defaultScopes = ["openid", "profile", "email"];
 
-	const tenantId = options.tenantId;
+	const tenantId =
+		typeof options.tenantId === "string" ? options.tenantId.toLowerCase() : "";
+	if (
+		!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+			tenantId,
+		)
+	) {
+		throw new Error(
+			"The generic microsoftEntraId helper requires a concrete Microsoft Entra tenant GUID. Use the built-in Microsoft provider for common, organizations, or consumers.",
+		);
+	}
 	const authorizationUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize`;
 	const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
 	const userInfoUrl = "https://graph.microsoft.com/oidc/userinfo";
+	const tenantIssuer = `https://login.microsoftonline.com/${tenantId}/v2.0`;
 
 	const getUserInfo = async (
 		tokens: OAuth2Tokens,
-	): Promise<OAuth2UserInfo | null> => {
+	): Promise<GenericOAuthUserInfo | null> => {
 		const { data: profile, error } = await betterFetch<MicrosoftEntraIdProfile>(
 			userInfoUrl,
 			{
@@ -70,7 +88,7 @@ export function microsoftEntraId(
 		}
 
 		return {
-			id: profile.sub,
+			sub: profile.sub,
 			name:
 				profile.name ??
 				(`${profile.given_name ?? ""} ${profile.family_name ?? ""}`.trim() ||
@@ -87,6 +105,8 @@ export function microsoftEntraId(
 
 	return {
 		providerId: "microsoft-entra-id",
+		accountSubject: ({ profile }) => profile.sub ?? "",
+		accountIssuer: tenantIssuer,
 		authorizationUrl,
 		tokenUrl,
 		userInfoUrl,
