@@ -37,6 +37,7 @@ export const polar = (options: PolarOptions) => {
 	return {
 		id: "polar",
 		name: "Polar",
+		accountSubject: ({ profile }) => profile.id,
 		createAuthorizationURL({
 			state,
 			scopes,
@@ -103,7 +104,6 @@ export const polar = (options: PolarOptions) => {
 			// We check for it first, then default to false for security consistency.
 			return {
 				user: {
-					id: profile.id,
 					name: profile.public_name || profile.username || "",
 					email: profile.email,
 					image: profile.avatar_url,

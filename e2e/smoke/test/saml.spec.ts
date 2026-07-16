@@ -55,7 +55,10 @@ describe("SAML SSO", () => {
 							providerId: "test-saml",
 							domain: "example.com",
 							samlConfig: {
-								issuer: "https://idp.example.com",
+								issuer: "http://localhost:3000/saml/test-saml",
+								idpMetadata: {
+									entityID: "https://idp.example.com",
+								},
 								entryPoint: IDP_ENTRY_POINT,
 								cert: TEST_CERT,
 								callbackUrl:
@@ -88,6 +91,17 @@ describe("SAML SSO", () => {
 			"URL should contain a SAMLRequest parameter",
 		);
 		assert.equal(result.redirect, true);
+
+		const metadata = await auth.api.spMetadata({
+			query: { providerId: "test-saml" },
+		});
+		assert.equal(metadata.status, 200);
+		assert.ok(
+			(await metadata.text()).includes(
+				'<EntityDescriptor entityID="http://localhost:3000/saml/test-saml"',
+			),
+			"metadata should identify this application as the service provider",
+		);
 	});
 
 	test("should generate SAML login request URL via email domain lookup", async () => {
@@ -103,7 +117,10 @@ describe("SAML SSO", () => {
 							providerId: "domain-saml",
 							domain: "corp.example.com",
 							samlConfig: {
-								issuer: "https://idp.corp.example.com",
+								issuer: "http://localhost:3000/saml/domain-saml",
+								idpMetadata: {
+									entityID: "https://idp.corp.example.com",
+								},
 								entryPoint: IDP_ENTRY_POINT,
 								cert: TEST_CERT,
 								callbackUrl:

@@ -10,6 +10,7 @@ import { setupServer } from "msw/node";
 import {
 	afterAll,
 	afterEach,
+	assert,
 	beforeAll,
 	describe,
 	expect,
@@ -436,7 +437,7 @@ describe("oauth2 - account linking with case insensitive email", async () => {
 			name: "Test User",
 			picture: "https://example.com/photo.jpg",
 			exp: 1234567890,
-			sub: "google_oauth_sub_casing",
+			sub: "google_oauth_sub_casing_id_token",
 			iat: 1234567890,
 			aud: "test",
 			azp: "test",
@@ -1710,13 +1711,13 @@ describe("oauth2 - sign-up account creation rollback", async () => {
 /**
  * @see https://github.com/better-auth/better-auth/issues/8906
  *
- * Regression: linkSocial callback looked up the account by accountId
- * alone, without filtering by providerId. When two different providers share the same
- * numeric account ID, the wrong account could be matched, causing a
+ * Regression: linkSocial callback looked up the provider subject without its
+ * issuer namespace. When two different issuers share the same numeric subject,
+ * the wrong account could be matched, causing a
  * spurious "account_already_linked_to_different_user" error or silently
  * updating the wrong account record.
  */
-describe("oauth2 - link-social uses provider-scoped account lookup", async () => {
+describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 	// Shared numeric ID used by both Google and GitHub to trigger the bug
 	const SHARED_ACCOUNT_ID = "99999";
 
@@ -1782,8 +1783,8 @@ describe("oauth2 - link-social uses provider-scoped account lookup", async () =>
 		);
 	}
 
-	it("should not match a different provider's account when the accountId is the same", async () => {
-		// User A: signed up via Google with accountId = SHARED_ACCOUNT_ID
+	it("does not match a different issuer with the same provider account id", async () => {
+		// User A signs up through Google with a shared provider account ID.
 		const userAEmail = "user-a@example.com";
 		mockGoogleToken(userAEmail, SHARED_ACCOUNT_ID);
 
@@ -1822,8 +1823,8 @@ describe("oauth2 - link-social uses provider-scoped account lookup", async () =>
 			{ onSuccess: cookieSetter(userBHeaders) },
 		);
 
-		// User B tries to link GitHub — GitHub returns the SAME accountId
-		// as User A's Google account. Without the fix, an accountId-only lookup
+		// User B tries to link GitHub — GitHub returns the same provider account ID
+		// as User A's Google account. Without the issuer-scoped key, the lookup
 		// would find User A's Google account and return "account_already_linked_to_different_user".
 		mockGithubToken("user-b-gh", Number(SHARED_ACCOUNT_ID), userBEmail);
 
@@ -1857,7 +1858,8 @@ describe("oauth2 - link-social uses provider-scoped account lookup", async () =>
 
 		const accountsB = await ctx.adapter.findMany<{
 			providerId: string;
-			accountId: string;
+			issuer: string;
+			providerAccountId: string;
 			userId: string;
 		}>({
 			model: "account",
@@ -1866,7 +1868,8 @@ describe("oauth2 - link-social uses provider-scoped account lookup", async () =>
 
 		const githubAccount = accountsB.find((a) => a.providerId === "github");
 		expect(githubAccount).toBeTruthy();
-		expect(githubAccount?.accountId).toBe(SHARED_ACCOUNT_ID);
+		expect(githubAccount?.issuer).toBe("local:oauth:github");
+		expect(githubAccount?.providerAccountId).toBe(SHARED_ACCOUNT_ID);
 		expect(githubAccount?.userId).toBe(userBId);
 
 		// User A's Google account must remain untouched
@@ -1880,6 +1883,106 @@ describe("oauth2 - link-social uses provider-scoped account lookup", async () =>
 		const googleAccount = accountsA.find((a) => a.providerId === "google");
 		expect(googleAccount).toBeTruthy();
 		expect(googleAccount?.userId).toBe(userAId);
+	});
+});
+
+describe("oauth2 - orphaned account identity", () => {
+	it("does not fall back to email when a matching account has no user", async () => {
+		const database = new DatabaseSync(":memory:");
+		(await getMigrations({ database })).runMigrations();
+		const { auth, client, cookieSetter } = await getTestInstance({
+			database,
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					verifyIdToken: async () => true,
+				},
+			},
+			emailAndPassword: { enabled: true },
+			account: {
+				accountLinking: { enabled: false },
+			},
+		});
+		const ctx = await auth.$context;
+		const email = "orphaned-account@example.com";
+		const providerAccountId = "orphaned-google-subject";
+		const { data } = await client.signUp.email({
+			email,
+			password: "password123",
+			name: "Existing User",
+		});
+
+		database.exec("PRAGMA foreign_keys = OFF");
+		try {
+			await ctx.adapter.create({
+				model: "account",
+				data: {
+					providerId: "google",
+					issuer: "https://accounts.google.com",
+					providerAccountId,
+					userId: "missing-account-owner",
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+		} finally {
+			database.exec("PRAGMA foreign_keys = ON");
+		}
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					email,
+					email_verified: true,
+					name: "Existing User",
+					picture: "https://example.com/photo.jpg",
+					exp: 1234567890,
+					sub: providerAccountId,
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "https://accounts.google.com",
+					locale: "en",
+					jti: "test",
+					given_name: "Existing",
+					family_name: "User",
+				};
+				return HttpResponse.json({
+					access_token: "google-access-token",
+					id_token: await signJWT(profile, DEFAULT_SECRET),
+				});
+			}),
+		);
+
+		const headers = new Headers();
+		const signIn = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const state = new URL(signIn.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers,
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(redirectLocation).toContain("error=unable_to_link_account");
+		const userAccounts = await ctx.adapter.findMany<{ providerId: string }>({
+			model: "account",
+			where: [{ field: "userId", value: data!.user.id }],
+		});
+		expect(
+			userAccounts.some((account) => account.providerId === "google"),
+		).toBe(false);
 	});
 });
 
@@ -1928,15 +2031,16 @@ describe("oauth2 - providers without email", async () => {
 		);
 	}
 
-	describe("with mapProfileToUser omitting provider id", async () => {
-		const missingProviderId = undefined as unknown as string;
+	describe("with mapProfileToUser attempting to redefine provider identity", async () => {
 		const { auth, client, cookieSetter } = await getTestInstance({
 			socialProviders: {
 				discord: {
 					clientId: "test",
 					clientSecret: "test",
 					enabled: true,
-					mapProfileToUser: () => ({ id: missingProviderId }),
+					// Simulate an untyped JavaScript integration. TypeScript rejects this
+					// field, and the runtime must ignore it as an identity source.
+					mapProfileToUser: () => ({ id: "mapped-profile-id" }) as never,
 				},
 			},
 		});
@@ -1946,9 +2050,27 @@ describe("oauth2 - providers without email", async () => {
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/9454
 		 */
-		it("rejects provider user info with a missing id before creating an account", async () => {
-			const email = "missing-id@example.com";
-			mockDiscordToken("920138789012345000", "missing-id", email);
+		it("uses the verified raw profile subject instead of a mapped id", async () => {
+			const providerAccountId = "920138789012345000";
+			const email = "mapped-id@example.com";
+			mockDiscordToken(providerAccountId, "mapped-id", email);
+			const discordProvider = ctx.socialProviders.find(
+				(provider) => provider.id === "discord",
+			)!;
+			const providerInfo = await discordProvider.getUserInfo({
+				accessToken: discordTokenResponse.access_token,
+			});
+			expect(providerInfo?.data).toMatchObject({ id: providerAccountId });
+			expect(providerInfo?.user).toMatchObject({
+				id: "mapped-profile-id",
+			});
+			const originalAccountSubject = discordProvider.accountSubject;
+			assert(
+				typeof originalAccountSubject === "function",
+				"Discord should resolve its subject from the raw profile",
+			);
+			const accountSubject = vi.fn(originalAccountSubject);
+			discordProvider.accountSubject = accountSubject;
 
 			const oAuthHeaders = new Headers();
 			const signInRes = await client.signIn.social({
@@ -1961,35 +2083,37 @@ describe("oauth2 - providers without email", async () => {
 
 			const state =
 				new URL(signInRes.data!.url!).searchParams.get("state") || "";
-			let redirectLocation = "";
+			let sessionHeaders = new Headers();
 			await client.$fetch("/callback/discord", {
 				query: { state, code: "test_code" },
 				method: "GET",
 				headers: oAuthHeaders,
 				onError(context) {
-					redirectLocation = context.response.headers.get("location") || "";
+					sessionHeaders = new Headers();
+					cookieSetter(sessionHeaders)(context);
 				},
 			});
-
-			expect(redirectLocation).toContain("error=unable_to_get_user_info");
+			expect(accountSubject).toHaveBeenCalledWith(
+				expect.objectContaining({
+					profile: expect.objectContaining({ id: providerAccountId }),
+				}),
+			);
+			const session = await client.getSession({
+				fetchOptions: { headers: sessionHeaders },
+			});
+			expect(session.data?.user.email).toBe(email);
 
 			const account = await ctx.adapter.findOne<{
-				accountId: string;
+				providerAccountId: string;
 				providerId: string;
 			}>({
 				model: "account",
 				where: [
-					{ field: "accountId", value: "undefined" },
+					{ field: "providerAccountId", value: providerAccountId },
 					{ field: "providerId", value: "discord" },
 				],
 			});
-			expect(account).toBeNull();
-
-			const user = await ctx.adapter.findOne<User>({
-				model: "user",
-				where: [{ field: "email", value: email }],
-			});
-			expect(user).toBeNull();
+			expect(account).not.toBeNull();
 		});
 	});
 
@@ -2049,14 +2173,14 @@ describe("oauth2 - providers without email", async () => {
 
 			const accounts = await ctx.adapter.findMany<{
 				providerId: string;
-				accountId: string;
+				providerAccountId: string;
 			}>({
 				model: "account",
 				where: [{ field: "userId", value: user!.id }],
 			});
 			const discordAccount = accounts.find((a) => a.providerId === "discord");
 			expect(discordAccount).toBeTruthy();
-			expect(discordAccount?.accountId).toBe(discordId);
+			expect(discordAccount?.providerAccountId).toBe(discordId);
 		});
 	});
 

@@ -173,7 +173,8 @@ describe("internal adapter test", async () => {
 			},
 			{
 				providerId: "provider",
-				accountId: "account",
+				issuer: "local:provider",
+				providerAccountId: "account",
 				accessTokenExpiresAt: new Date(),
 				refreshTokenExpiresAt: new Date(),
 				createdAt: new Date(),
@@ -194,7 +195,8 @@ describe("internal adapter test", async () => {
 				id: "2",
 				userId: expect.any(String),
 				providerId: "provider",
-				accountId: "account",
+				issuer: "local:provider",
+				providerAccountId: "account",
 				accessToken: null,
 				refreshToken: null,
 				refreshTokenExpiresAt: expect.any(Date),
@@ -237,7 +239,8 @@ describe("internal adapter test", async () => {
 					},
 					{
 						providerId: "provider",
-						accountId: "account",
+						issuer: "local:provider",
+						providerAccountId: "account",
 						accessTokenExpiresAt: new Date(),
 						refreshTokenExpiresAt: new Date(),
 					},
@@ -916,22 +919,148 @@ describe("internal adapter test", async () => {
 		const account = await internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "test-provider",
-			accountId: "test-account-id-1",
+			issuer: "https://issuer.example.com",
+			providerAccountId: "test-account-id-1",
 		});
 
-		let foundAccount = await internalAdapter.findAccountByProviderId(
-			account.accountId,
-			"test-provider",
-		);
+		let foundAccount = await internalAdapter.findAccountByKey({
+			issuer: account.issuer,
+			providerAccountId: account.providerAccountId,
+		});
 		expect(foundAccount).toBeDefined();
 
 		await internalAdapter.deleteAccount(account.id);
 
-		foundAccount = await internalAdapter.findAccountByProviderId(
-			account.accountId,
-			"test-provider",
-		);
+		foundAccount = await internalAdapter.findAccountByKey({
+			issuer: account.issuer,
+			providerAccountId: account.providerAccountId,
+		});
 		expect(foundAccount).toBeNull();
+	});
+
+	it("finds an account owner by the exact account key", async () => {
+		const firstUser = await internalAdapter.createUser(
+			{
+				name: "First Account Key User",
+				email: "first.account.key@example.com",
+			},
+			{ method: "test" },
+		);
+		const secondUser = await internalAdapter.createUser(
+			{
+				name: "Second Account Key User",
+				email: "second.account.key@example.com",
+			},
+			{ method: "test" },
+		);
+		const providerAccountId = "shared-provider-subject";
+		const firstAccount = await internalAdapter.createAccount({
+			userId: firstUser.id,
+			providerId: "first-provider-configuration",
+			issuer: "https://first-issuer.example.com",
+			providerAccountId,
+		});
+		const secondAccount = await internalAdapter.createAccount({
+			userId: secondUser.id,
+			providerId: "second-provider-configuration",
+			issuer: "https://second-issuer.example.com",
+			providerAccountId,
+		});
+		await expect(
+			internalAdapter.createAccount({
+				userId: secondUser.id,
+				providerId: "another-provider-configuration",
+				issuer: firstAccount.issuer,
+				providerAccountId,
+			}),
+		).rejects.toThrow();
+
+		await internalAdapter.updateAccount(firstAccount.id, {
+			providerId: "renamed-provider-configuration",
+		});
+
+		await expect(
+			internalAdapter.findAccountByKey({
+				issuer: firstAccount.issuer,
+				providerAccountId,
+			}),
+		).resolves.toMatchObject({
+			id: firstAccount.id,
+			providerId: "renamed-provider-configuration",
+		});
+		await expect(
+			internalAdapter.findAccountOwnerByKey({
+				issuer: secondAccount.issuer,
+				providerAccountId,
+			}),
+		).resolves.toMatchObject({
+			kind: "owned",
+			user: { id: secondUser.id },
+			account: {
+				id: secondAccount.id,
+				providerId: "second-provider-configuration",
+			},
+		});
+		await expect(
+			internalAdapter.findAccountOwnerByKey({
+				issuer: "https://missing-issuer.example.com",
+				providerAccountId,
+			}),
+		).resolves.toBeNull();
+	});
+
+	it("reports an account whose owner is missing", async () => {
+		const database = opts.database as DatabaseSync;
+		const account = await (async () => {
+			database.exec("PRAGMA foreign_keys = OFF");
+			try {
+				return await internalAdapter.createAccount({
+					userId: "missing-account-owner",
+					providerId: "orphaned-provider",
+					issuer: "https://issuer.example.com",
+					providerAccountId: "orphaned-subject",
+				});
+			} finally {
+				database.exec("PRAGMA foreign_keys = ON");
+			}
+		})();
+
+		await expect(
+			internalAdapter.findAccountOwnerByKey({
+				issuer: account.issuer,
+				providerAccountId: account.providerAccountId,
+			}),
+		).resolves.toMatchObject({
+			kind: "orphaned",
+			account: { id: account.id, userId: "missing-account-owner" },
+		});
+	});
+
+	it("finds the same credential account after the user email changes", async () => {
+		const user = await internalAdapter.createUser(
+			{
+				name: "Stable Credential User",
+				email: "stable.credential@example.com",
+			},
+			{ method: "test" },
+		);
+		const account = await internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "credential",
+			issuer: "local:credential",
+			providerAccountId: user.id,
+			password: "password-hash",
+		});
+
+		await expect(
+			internalAdapter.findCredentialAccount(user.id),
+		).resolves.toMatchObject({ id: account.id, providerAccountId: user.id });
+		await internalAdapter.updateUser(user.id, {
+			email: "changed.stable.credential@example.com",
+		});
+		await expect(
+			internalAdapter.findCredentialAccount(user.id),
+		).resolves.toMatchObject({ id: account.id, providerAccountId: user.id });
 	});
 
 	it("should delete multiple accounts for a user", async () => {
@@ -946,13 +1075,15 @@ describe("internal adapter test", async () => {
 		await internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "test-provider-1",
-			accountId: "test-account-id-2",
+			issuer: "local:test-provider-1",
+			providerAccountId: "test-account-id-2",
 		});
 
 		await internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "test-provider-2",
-			accountId: "test-account-id-3",
+			issuer: "local:test-provider-2",
+			providerAccountId: "test-account-id-3",
 		});
 
 		let accounts = await internalAdapter.findAccounts(user.id);

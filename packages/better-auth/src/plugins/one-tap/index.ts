@@ -184,7 +184,8 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						},
 						account: {
 							providerId: "google",
-							accountId: sub,
+							issuer: "https://accounts.google.com",
+							providerAccountId: sub,
 							idToken,
 							scope: "openid,profile,email",
 						},

@@ -34,6 +34,7 @@ export const atlassian = (options: AtlassianOptions) => {
 	return {
 		id: "atlassian",
 		name: "Atlassian",
+		accountSubject: ({ profile }) => profile.account_id,
 
 		async createAuthorizationURL({
 			state,
@@ -120,7 +121,6 @@ export const atlassian = (options: AtlassianOptions) => {
 
 				return {
 					user: {
-						id: profile.account_id,
 						name: profile.name,
 						email: profile.email,
 						image: profile.picture,

@@ -63,6 +63,7 @@ export const github = (options: GithubOptions) => {
 	return {
 		id: "github",
 		name: "GitHub",
+		accountSubject: ({ profile }) => profile.id,
 		createAuthorizationURL({
 			state,
 			scopes,
@@ -171,7 +172,6 @@ export const github = (options: GithubOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.id,
 					name: profile.name || profile.login || "",
 					email: profile.email,
 					image: profile.avatar_url,

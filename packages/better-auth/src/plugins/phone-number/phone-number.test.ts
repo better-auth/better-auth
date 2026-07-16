@@ -495,6 +495,23 @@ describe("phone auth flow", async () => {
 		});
 		expect(changedEmailRes.error).toBe(null);
 		expect(changedEmailRes.data?.status).toBe(true);
+		const session = await client.getSession({
+			fetchOptions: { headers, throw: true },
+		});
+		const userId = session!.user.id;
+		await expect(
+			(await auth.$context).internalAdapter.findCredentialAccount(userId),
+		).resolves.toMatchObject({
+			userId,
+			providerId: "credential",
+			issuer: "local:credential",
+			providerAccountId: userId,
+		});
+		const emailSignIn = await client.signIn.email({
+			email: newEmail,
+			password: "password",
+		});
+		expect(emailSignIn.data?.user.id).toBe(userId);
 	});
 
 	it("should sign in with phone number and password", async () => {
@@ -717,7 +734,7 @@ describe("reset password flow attempts", async () => {
 	let otp = "";
 	let resetOtp = "";
 
-	const { client, db } = await getTestInstance(
+	const { auth, client, db } = await getTestInstance(
 		{
 			plugins: [
 				phoneNumber({
@@ -823,6 +840,15 @@ describe("reset password flow attempts", async () => {
 			password: "password",
 		});
 		expect(res.data?.token).toBeDefined();
+		const userId = res.data!.user.id;
+		await expect(
+			(await auth.$context).internalAdapter.findCredentialAccount(userId),
+		).resolves.toMatchObject({
+			userId,
+			providerId: "credential",
+			issuer: "local:credential",
+			providerAccountId: userId,
+		});
 	});
 
 	it("shouldn't allow to re-use the same OTP code", async () => {

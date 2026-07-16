@@ -340,6 +340,10 @@ describe("oauth", async () => {
 							{
 								scopes: ["openid", "profile", "email"],
 								...config,
+								accountSubject:
+									config?.accountSubject ??
+									(({ profile }) => profile.sub ?? ""),
+								accountIssuer: config?.accountIssuer ?? authServerBaseUrl,
 								providerId,
 								redirectURI: redirectUri,
 								authorizationUrl: config?.discoveryUrl
@@ -764,6 +768,8 @@ describe("oauth", async () => {
 					config: [
 						{
 							scopes: ["openid", "profile", "email"],
+							accountSubject: ({ profile }) => profile.sub ?? "",
+							accountIssuer: authServerBaseUrl,
 							providerId,
 							redirectURI: redirectUri,
 							authorizationUrl: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
@@ -859,6 +865,8 @@ describe("oauth", async () => {
 					config: [
 						{
 							scopes: ["openid", "profile", "email"],
+							accountSubject: ({ profile }) => profile.sub ?? "",
+							accountIssuer: authServerBaseUrl,
 							providerId,
 							redirectURI: redirectUri,
 							authorizationUrl: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
@@ -1205,6 +1213,10 @@ describe("oauth - prompt", async () => {
 							{
 								scopes: ["openid", "profile", "email"],
 								...config,
+								accountSubject:
+									config?.accountSubject ??
+									(({ profile }) => profile.sub ?? ""),
+								accountIssuer: config?.accountIssuer ?? authServerBaseUrl,
 								providerId,
 								redirectURI: redirectUri,
 								authorizationUrl: config?.discoveryUrl
@@ -1410,6 +1422,8 @@ describe("oauth - prompt", async () => {
 						config: [
 							{
 								scopes: ["openid", "profile", "email"],
+								accountSubject: ({ profile }) => profile.sub ?? "",
+								accountIssuer: authServerBaseUrl,
 								providerId,
 								redirectURI: redirectUri,
 								authorizationUrl: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
@@ -1769,16 +1783,23 @@ describe("oauth - prompt", async () => {
 			},
 		});
 		expect(authToken).toBeDefined();
+		if (!authToken) throw new Error("missing session bearer token");
 
 		// Retrieve the access token via the RP and verify narrowed scopes
+		const requestHeaders = new Headers({
+			authorization: `Bearer ${authToken}`,
+		});
+		const accounts = await client.listAccounts({
+			fetchOptions: { headers: requestHeaders },
+		});
+		const accountId = accounts.data?.find(
+			(account) => account.providerId === providerId,
+		)?.id;
+		expect(accountId).toBeDefined();
+		if (!accountId) throw new Error("missing provider account");
 		const tokens = await client.getAccessToken(
-			{ providerId },
-			{
-				auth: {
-					type: "Bearer",
-					token: authToken,
-				},
-			},
+			{ accountId },
+			{ headers: requestHeaders },
 		);
 		expect(tokens.data?.accessToken).toBeDefined();
 
@@ -2896,6 +2917,10 @@ describe("oauth - config", () => {
 							{
 								scopes: ["openid", "profile", "email"],
 								...config,
+								accountSubject:
+									config?.accountSubject ??
+									(({ profile }) => profile.sub ?? ""),
+								accountIssuer: config?.accountIssuer ?? authServerBaseUrl,
 								providerId,
 								redirectURI: redirectUri,
 								authorizationUrl: config?.discoveryUrl
@@ -3342,16 +3367,24 @@ describe("oauth - config", () => {
 			},
 		});
 		expect(callbackURL).toContain("/success");
+		expect(authToken).toBeDefined();
+		if (!authToken) throw new Error("missing session bearer token");
 
 		// Get and check tokens
+		const requestHeaders = new Headers({
+			authorization: `Bearer ${authToken}`,
+		});
+		const accounts = await client.listAccounts({
+			fetchOptions: { headers: requestHeaders },
+		});
+		const accountId = accounts.data?.find(
+			(account) => account.providerId === "test",
+		)?.id;
+		expect(accountId).toBeDefined();
+		if (!accountId) throw new Error("missing provider account");
 		const tokens = await client.getAccessToken(
-			{ providerId: "test", userId: user.id },
-			{
-				auth: {
-					type: "Bearer",
-					token: authToken,
-				},
-			},
+			{ accountId, userId: user.id },
+			{ headers: requestHeaders },
 		);
 
 		// Check for access tokens

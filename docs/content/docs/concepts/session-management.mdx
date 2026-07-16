@@ -426,7 +426,7 @@ export const auth = betterAuth({
   If you don't provide a database, by default we provide the above configuration for you.
 </Callout>
 
-In stateless OAuth flows, `storeAccountCookie` stores provider account data, including OAuth token material, in the encrypted `account_data` cookie. `getAccessToken` can refresh expired provider access tokens when the account cookie contains a refresh token and a known access-token expiry. Token refresh responses set an updated account cookie, so server-side integrations must forward the returned `Set-Cookie` header to the browser.
+In stateless OAuth flows, `storeAccountCookie` stores provider account data, including OAuth token material, in the encrypted `account_data` cookie. `getAccessToken({ useAccountCookie: true })` can refresh expired provider access tokens when the account cookie contains a refresh token and a known access-token expiry. Token refresh responses set an updated account cookie, so server-side integrations must forward the returned `Set-Cookie` header to the browser.
 
 Better Auth chunks oversized account cookies, but browsers and proxies can still enforce total cookie or header limits. Use database-backed account storage for providers that issue large JWTs or for production flows that need durable token storage.
 

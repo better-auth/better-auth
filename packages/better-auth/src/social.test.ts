@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { refreshAccessToken } from "@better-auth/core/oauth2";
 import type {
 	GoogleProfile,
@@ -511,13 +512,12 @@ describe("Social Providers", async (c) => {
 				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
 			},
 		});
-		await client.listAccounts({
+		const accounts = await client.listAccounts({
 			fetchOptions: { headers },
 		});
 		await client.$fetch("/refresh-token", {
 			body: {
-				accountId: "test-id",
-				providerId: "google",
+				accountId: accounts.data?.[0]?.id,
 			},
 			headers,
 			method: "POST",
@@ -1172,6 +1172,42 @@ describe("Google Provider — multiple client IDs", async () => {
 		});
 
 		expect(res.error?.status).toBe(401);
+	});
+
+	it("returns 401 over HTTP when a verified profile resolves an invalid account subject", async () => {
+		const idToken = await signIdToken(webClientId);
+		const { auth, client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: webClientId,
+						clientSecret: "test-secret",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const context = await auth.$context;
+		const googleProvider = context.socialProviders.find(
+			(provider) => provider.id === "google",
+		);
+		expect(googleProvider).toBeDefined();
+		googleProvider!.accountSubject = () => "";
+
+		const result = await client.$fetch("/sign-in/social", {
+			method: "POST",
+			body: {
+				provider: "google",
+				idToken: { token: idToken },
+			},
+		});
+
+		expect(result.data).toBeNull();
+		expect(result.error).toMatchObject({
+			status: 401,
+			code: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO.code,
+			message: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO.message,
+		});
 	});
 
 	it("uses the first configured client id when building the authorization URL", async () => {
@@ -1842,7 +1878,7 @@ describe("Vercel Provider", async () => {
 		);
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]?.providerId).toBe("vercel");
-		expect(accounts[0]?.accountId).toBe("vercel_user_123");
+		expect(accounts[0]?.providerAccountId).toBe("vercel_user_123");
 	});
 
 	it("should use preferred_username as fallback for name", async () => {
@@ -2072,6 +2108,7 @@ describe("Microsoft Provider", async () => {
 	it("should support verifyIdToken with custom function", async () => {
 		const microsoftProfile: Partial<MicrosoftEntraIDProfile> = {
 			sub: "ms-user-123",
+			iss: "https://login.microsoftonline.com/ms-tenant-123/v2.0",
 			email: "msuser@outlook.com",
 			name: "Microsoft User",
 			oid: "ms-oid-123",
@@ -2147,6 +2184,7 @@ describe("Microsoft Provider", async () => {
 	it("should verify id token using JWKS endpoint", async () => {
 		const microsoftProfile: Partial<MicrosoftEntraIDProfile> = {
 			sub: "ms-jwks-user-456",
+			iss: "https://login.microsoftonline.com/ms-tenant-456/v2.0",
 			email: "jwksuser@outlook.com",
 			name: "JWKS User",
 			oid: "ms-oid-456",
@@ -2619,7 +2657,7 @@ describe("Railway Provider", async () => {
 		);
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]?.providerId).toBe("railway");
-		expect(accounts[0]?.accountId).toBe("user_railway_123");
+		expect(accounts[0]?.providerAccountId).toBe("user_railway_123");
 	});
 });
 
@@ -3395,8 +3433,7 @@ describe("account.scope path-dependent semantics", async () => {
 		);
 		const refresh = await client.$fetch<{ scope?: string }>("/refresh-token", {
 			body: {
-				accountId: accounts[0]!.accountId,
-				providerId: "google",
+				accountId: accounts[0]!.id,
 			},
 			headers,
 			method: "POST",
@@ -3445,8 +3482,7 @@ describe("account.scope path-dependent semantics", async () => {
 		);
 		const refresh = await client.$fetch<{ scope?: string }>("/refresh-token", {
 			body: {
-				accountId: accounts[0]!.accountId,
-				providerId: "google",
+				accountId: accounts[0]!.id,
 			},
 			headers,
 			method: "POST",

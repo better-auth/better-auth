@@ -1057,3 +1057,106 @@ describe("change-email rejects confirmation-only config for verified users", asy
 		});
 	});
 });
+
+describe("credential identity across email changes", async () => {
+	const { client, db, sessionSetter } = await getTestInstance(
+		{
+			user: {
+				changeEmail: {
+					enabled: true,
+					updateEmailWithoutVerification: true,
+				},
+			},
+		},
+		{ disableTestUser: true },
+	);
+
+	it("keeps one credential account when the user changes their sign-in email", async () => {
+		const originalEmail = "credential-email-change@example.com";
+		const changedEmail = "changed-credential-email@example.com";
+		const password = "credential-password";
+		const sessionHeaders = new Headers();
+		const signUp = await client.signUp.email({
+			name: "Credential Email Change",
+			email: originalEmail,
+			password,
+			fetchOptions: {
+				onSuccess: sessionSetter(sessionHeaders),
+			},
+		});
+		expect(signUp.error).toBeNull();
+		const userId = signUp.data!.user.id;
+		const accountsBefore = await db.findMany<Account>({
+			model: "account",
+			where: [{ field: "userId", value: userId }],
+		});
+		expect(accountsBefore).toHaveLength(1);
+		expect(accountsBefore[0]).toMatchObject({
+			providerId: "credential",
+			issuer: "local:credential",
+			providerAccountId: userId,
+		});
+
+		const changeEmail = await client.changeEmail({
+			newEmail: changedEmail,
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(changeEmail.data?.status).toBe(true);
+
+		const oldEmailSignIn = await client.signIn.email({
+			email: originalEmail,
+			password,
+		});
+		expect(oldEmailSignIn.data).toBeNull();
+		const changedEmailSignIn = await client.signIn.email({
+			email: changedEmail,
+			password,
+		});
+		expect(changedEmailSignIn.data?.user.id).toBe(userId);
+
+		const accountsAfter = await db.findMany<Account>({
+			model: "account",
+			where: [{ field: "userId", value: userId }],
+		});
+		expect(accountsAfter).toHaveLength(1);
+		expect(accountsAfter[0]).toMatchObject({
+			id: accountsBefore[0]!.id,
+			providerId: "credential",
+			issuer: "local:credential",
+			providerAccountId: userId,
+		});
+	});
+});
+
+describe("setPassword", async () => {
+	it("sets the password on the existing passwordless credential account", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance();
+		const context = await auth.$context;
+		const { headers, user } = await signInWithTestUser();
+		const credentialAccount =
+			await context.internalAdapter.findCredentialAccount(user.id);
+		expect(credentialAccount).toBeTruthy();
+		await context.internalAdapter.updateAccount(credentialAccount!.id, {
+			password: null,
+		});
+
+		await expect(
+			auth.api.setPassword({
+				body: { newPassword: "new-password" },
+				headers,
+			}),
+		).resolves.toMatchObject({ status: true });
+
+		const accounts = await context.internalAdapter.findAccounts(user.id);
+		const credentialAccounts = accounts.filter(
+			(account) => account.providerId === "credential",
+		);
+		expect(credentialAccounts).toHaveLength(1);
+		await expect(
+			context.password.verify({
+				hash: credentialAccounts[0]!.password!,
+				password: "new-password",
+			}),
+		).resolves.toBe(true);
+	});
+});

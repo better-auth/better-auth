@@ -50,6 +50,8 @@ export const line = (options: LineOptions) => {
 	return {
 		id: "line",
 		name: "LINE",
+		accountSubject: ({ profile }) => profile.sub,
+		accountIssuer: "https://access.line.me",
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -142,24 +144,17 @@ export const line = (options: LineOptions) => {
 				profile = data || null;
 			}
 			if (!profile) return null;
-			const userMap = await options.mapProfileToUser?.(profile as any);
-			// ID preference order
-			const id = (profile as any).sub || (profile as any).userId;
-			const name = (profile as any).name || (profile as any).displayName || "";
-			const image =
-				(profile as any).picture || (profile as any).pictureUrl || undefined;
-			const email = (profile as any).email;
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id,
-					name,
-					email,
-					image,
+					name: profile.name || "",
+					email: profile.email,
+					image: profile.picture,
 					// LINE does not expose email verification status in ID token/userinfo
 					emailVerified: false,
 					...userMap,
 				},
-				data: profile as any,
+				data: profile,
 			};
 		},
 		options,

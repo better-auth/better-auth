@@ -6,7 +6,8 @@ import { organization } from "better-auth/plugins";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
-import type { SSOOptions } from "./types";
+import type { SAMLConfig, SSOOptions } from "./types";
+import { safeJsonParse } from "./utils";
 
 const TEST_CERT = `MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiUMA0Gcm9markup
 temporary cert for testing`;
@@ -136,6 +137,7 @@ describe("SSO provider read endpoints", () => {
 						cert: TEST_CERT,
 						audience: "my-audience",
 						wantAssertionsSigned: true,
+						idpMetadata: { entityID: "https://idp.example.com" },
 						spMetadata: {},
 					},
 					organizationId,
@@ -739,6 +741,38 @@ epyw0Ikhqk/BFtQCRei+t1HJ9GIu6qnsC7CxrUA80IcxZjeg7N6ua+uctzRWzDhn
 kBGIJYs=
 -----END CERTIFICATE-----`;
 
+		it("should preserve the IdP authority during a nested certificate update", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "manual-saml-provider");
+
+			await auth.api.updateSSOProvider({
+				body: {
+					providerId: "manual-saml-provider",
+					samlConfig: {
+						idpMetadata: { cert: ROTATION_CERT_1 },
+					},
+				},
+				headers,
+			});
+
+			const storedProvider = data.ssoProvider.find(
+				(provider) => provider.providerId === "manual-saml-provider",
+			);
+			const storedConfig = safeJsonParse<SAMLConfig>(
+				storedProvider?.samlConfig ?? "",
+			);
+			expect(storedConfig?.idpMetadata.entityID).toBe(
+				"https://idp.example.com",
+			);
+			expect(storedConfig?.idpMetadata.cert).toBe(ROTATION_CERT_1);
+		});
+
 		it("should not expose raw certificate PEM", async () => {
 			const { auth, getAuthHeaders, registerSAMLProvider } =
 				createTestAuth(false);
@@ -1080,7 +1114,7 @@ kBGIJYs=
 				id: "linked-saml-account",
 				userId: user!.id,
 				providerId: "my-saml-provider",
-				accountId: "saml-account-id",
+				providerAccountId: "saml-account-id",
 			});
 
 			const response = await auth.api.updateSSOProvider({
@@ -1114,7 +1148,7 @@ kBGIJYs=
 				id: "linked-saml-account",
 				userId: user!.id,
 				providerId: "my-saml-provider",
-				accountId: "saml-account-id",
+				providerAccountId: "saml-account-id",
 			});
 
 			const updated = await auth.api.updateSSOProvider({
@@ -1146,7 +1180,7 @@ kBGIJYs=
 				id: "linked-oidc-account",
 				userId: user!.id,
 				providerId: "my-oidc-provider",
-				accountId: "oidc-account-id",
+				providerAccountId: "oidc-account-id",
 			});
 
 			const response = await auth.api.updateSSOProvider({
@@ -1179,7 +1213,7 @@ kBGIJYs=
 				id: "linked-oidc-account",
 				userId: user!.id,
 				providerId: "my-oidc-provider",
-				accountId: "oidc-account-id",
+				providerAccountId: "oidc-account-id",
 			});
 
 			const updated = await auth.api.updateSSOProvider({
@@ -1215,7 +1249,7 @@ kBGIJYs=
 				id: "linked-oidc-account",
 				userId: user!.id,
 				providerId: "my-oidc-provider",
-				accountId: "oidc-account-id",
+				providerAccountId: "oidc-account-id",
 			});
 
 			const updated = await auth.api.updateSSOProvider({
@@ -1856,7 +1890,7 @@ kBGIJYs=
 				id: "account-1",
 				userId: user!.id,
 				providerId: "my-saml-provider",
-				accountId: "saml-account-id",
+				providerAccountId: "saml-account-id",
 				accessToken: "token",
 				refreshToken: "refresh",
 			});
@@ -1912,6 +1946,7 @@ kBGIJYs=
 						cert: TEST_CERT,
 						audience: "my-audience",
 						wantAssertionsSigned: true,
+						idpMetadata: { entityID: "https://idp.example.com" },
 						spMetadata: {},
 					},
 					organizationId: org!.id,
@@ -1960,6 +1995,7 @@ kBGIJYs=
 						cert: TEST_CERT,
 						audience: "my-audience",
 						wantAssertionsSigned: true,
+						idpMetadata: { entityID: "https://idp.example.com" },
 						spMetadata: {},
 					},
 					organizationId: org!.id,
@@ -2001,6 +2037,7 @@ kBGIJYs=
 						cert: TEST_CERT,
 						audience: "my-audience",
 						wantAssertionsSigned: true,
+						idpMetadata: { entityID: "https://idp.example.com" },
 						spMetadata: {},
 					},
 					organizationId: org!.id,
@@ -2079,6 +2116,7 @@ describe("SSO providerId namespace collisions", () => {
 			callbackUrl: "http://localhost:3000/api/sso/callback",
 			audience: "my-audience",
 			wantAssertionsSigned: true,
+			idpMetadata: { entityID: "https://idp.example.com" },
 			spMetadata: {},
 		},
 	});
@@ -2123,10 +2161,11 @@ describe("SSO providerId namespace collisions", () => {
 					domain: "example.com",
 					providerId: "default-sso",
 					samlConfig: {
-						issuer: "https://idp.example.com",
+						issuer: "https://sp.example.com/saml",
 						entryPoint: "https://idp.example.com/sso",
 						cert: TEST_CERT,
 						callbackUrl: "http://localhost:3000/api/sso/callback",
+						idpMetadata: { entityID: "https://idp.example.com" },
 						spMetadata: {},
 					},
 				},

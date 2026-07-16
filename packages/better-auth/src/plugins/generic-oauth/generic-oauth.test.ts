@@ -189,7 +189,7 @@ describe("oauth2", async () => {
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]).toMatchObject({
 			providerId: "test",
-			accountId: "oauth2",
+			providerAccountId: "oauth2",
 		});
 	});
 
@@ -235,7 +235,7 @@ describe("oauth2", async () => {
 		const account = accounts[0];
 		expect(account).toMatchObject({
 			providerId,
-			accountId: "oauth2-2",
+			providerAccountId: "oauth2-2",
 			userId: session.data?.user.id,
 			accessToken: expect.any(String),
 			refreshToken: expect.any(String),
@@ -401,7 +401,7 @@ describe("oauth2", async () => {
 		});
 
 		const accessTokenRes = await newAuthClient.getAccessToken(
-			{ providerId: "test-store-account" },
+			{ useAccountCookie: true },
 			{ headers: postCallbackHeaders },
 		);
 		expect(accessTokenRes.error).toBeNull();
@@ -474,10 +474,15 @@ describe("oauth2", async () => {
 				headers,
 				customFetchImpl,
 			);
+			const accounts = await client.listAccounts({
+				fetchOptions: { headers: postCallbackHeaders },
+			});
+			const accountId = accounts.data?.[0]?.id;
+			expect(accountId).toBeDefined();
 
 			// Within the synthesized window: no premature refresh.
 			const fresh = await client.getAccessToken(
-				{ providerId: "exp-fallback" },
+				{ accountId: accountId! },
 				{ headers: postCallbackHeaders },
 			);
 			expect(fresh.data?.accessToken).toBeTruthy();
@@ -488,7 +493,7 @@ describe("oauth2", async () => {
 			try {
 				vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
 				const refreshed = await client.getAccessToken(
-					{ providerId: "exp-fallback" },
+					{ accountId: accountId! },
 					{ headers: postCallbackHeaders },
 				);
 				expect(refreshed.data?.accessToken).toBeTruthy();
@@ -564,12 +569,17 @@ describe("oauth2", async () => {
 				headers,
 				customFetchImpl,
 			);
+			const accounts = await client.listAccounts({
+				fetchOptions: { headers: postCallbackHeaders },
+			});
+			const accountId = accounts.data?.[0]?.id;
+			expect(accountId).toBeDefined();
 
 			vi.useFakeTimers({ toFake: ["Date"] });
 			try {
 				vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
 				const res = await client.getAccessToken(
-					{ providerId: "exp-none" },
+					{ accountId: accountId! },
 					{ headers: postCallbackHeaders },
 				);
 				// Expiry stays unknown: the stored token is returned as-is, no refresh.
@@ -610,6 +620,7 @@ describe("oauth2", async () => {
 								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 								clientId,
 								clientSecret,
+								accountSubject: ({ profile }) => profile.id ?? "",
 								pkce: true,
 								accessTokenExpiresIn: 3600,
 								// Custom exchange that omits the expiry.
@@ -645,11 +656,16 @@ describe("oauth2", async () => {
 				headers,
 				customFetchImpl,
 			);
+			const accounts = await client.listAccounts({
+				fetchOptions: { headers: postCallbackHeaders },
+			});
+			const accountId = accounts.data?.[0]?.id;
+			expect(accountId).toBeDefined();
 
 			// getToken omitted the expiry; the fallback synthesized it, so within
 			// the window the stored token is returned without refreshing.
 			const fresh = await client.getAccessToken(
-				{ providerId: "exp-gettoken" },
+				{ accountId: accountId! },
 				{ headers: postCallbackHeaders },
 			);
 			expect(fresh.data?.accessToken).toBe("gettoken-initial");
@@ -661,7 +677,7 @@ describe("oauth2", async () => {
 			try {
 				vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
 				const refreshed = await client.getAccessToken(
-					{ providerId: "exp-gettoken" },
+					{ accountId: accountId! },
 					{ headers: postCallbackHeaders },
 				);
 				expect(refreshed.data?.accessToken).toBeTruthy();
@@ -809,56 +825,61 @@ describe("oauth2", async () => {
 					headers,
 					customFetchImpl,
 				);
-				return postCallbackHeaders;
+				const accounts = await client.listAccounts({
+					fetchOptions: { headers: postCallbackHeaders },
+				});
+				const accountId = accounts.data?.[0]?.id;
+				expect(accountId).toBeDefined();
+				return { headers: postCallbackHeaders, accountId: accountId! };
 			}
 
-			const ctxHeaders = await signIn("refresh-params-ctx");
-			const staticHeaders = await signIn("refresh-params-static");
-			const dynamicHeaders = await signIn("refresh-params-dynamic");
-			const noopHeaders = await signIn("refresh-params-noop");
-			const protectedHeaders = await signIn("refresh-params-protected");
+			const ctxAccount = await signIn("refresh-params-ctx");
+			const staticAccount = await signIn("refresh-params-static");
+			const dynamicAccount = await signIn("refresh-params-dynamic");
+			const noopAccount = await signIn("refresh-params-noop");
+			const protectedAccount = await signIn("refresh-params-protected");
 
 			vi.useFakeTimers({ toFake: ["Date"] });
 			try {
 				vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
 
-				const ctxHeadersWithOrg = new Headers(ctxHeaders);
+				const ctxHeadersWithOrg = new Headers(ctxAccount.headers);
 				ctxHeadersWithOrg.set("x-active-org", "org-from-header");
 				const ctxRefresh = await client.getAccessToken(
-					{ providerId: "refresh-params-ctx" },
+					{ accountId: ctxAccount.accountId },
 					{ headers: ctxHeadersWithOrg },
 				);
 				expect(ctxRefresh.data?.accessToken).toBeTruthy();
 
 				const staticRefresh = await client.getAccessToken(
-					{ providerId: "refresh-params-static" },
-					{ headers: staticHeaders },
+					{ accountId: staticAccount.accountId },
+					{ headers: staticAccount.headers },
 				);
 				expect(staticRefresh.data?.accessToken).toBeTruthy();
 
 				const firstDynamic = await client.getAccessToken(
-					{ providerId: "refresh-params-dynamic" },
-					{ headers: dynamicHeaders },
+					{ accountId: dynamicAccount.accountId },
+					{ headers: dynamicAccount.headers },
 				);
 				expect(firstDynamic.data?.accessToken).toBeTruthy();
 
 				dynamicScope = "urn:zitadel:iam:org:id:org-B";
 				vi.setSystemTime(new Date(Date.now() + 4 * 60 * 60 * 1000));
 				const secondDynamic = await client.getAccessToken(
-					{ providerId: "refresh-params-dynamic" },
-					{ headers: dynamicHeaders },
+					{ accountId: dynamicAccount.accountId },
+					{ headers: dynamicAccount.headers },
 				);
 				expect(secondDynamic.data?.accessToken).toBeTruthy();
 
 				const noopRefresh = await client.getAccessToken(
-					{ providerId: "refresh-params-noop" },
-					{ headers: noopHeaders },
+					{ accountId: noopAccount.accountId },
+					{ headers: noopAccount.headers },
 				);
 				expect(noopRefresh.data?.accessToken).toBeTruthy();
 
 				const protectedRefresh = await client.getAccessToken(
-					{ providerId: "refresh-params-protected" },
-					{ headers: protectedHeaders },
+					{ accountId: protectedAccount.accountId },
+					{ headers: protectedAccount.headers },
 				);
 				expect(protectedRefresh.data?.accessToken).toBeTruthy();
 			} finally {
@@ -1480,7 +1501,7 @@ describe("oauth2", async () => {
 		expect(accountsAfterFirst).toHaveLength(1);
 		expect(accountsAfterFirst[0]).toMatchObject({
 			providerId: "numeric-test",
-			accountId: String(numericAccountId),
+			providerAccountId: String(numericAccountId),
 			userId: userId,
 		});
 
@@ -1520,7 +1541,9 @@ describe("oauth2", async () => {
 
 		const accountsAfterSecond = await ctx.internalAdapter.findAccounts(userId);
 		expect(accountsAfterSecond).toHaveLength(1);
-		expect(accountsAfterSecond[0]!.accountId).toBe(String(numericAccountId));
+		expect(accountsAfterSecond[0]!.providerAccountId).toBe(
+			String(numericAccountId),
+		);
 	});
 
 	it("rejects sign-in when the provider omits an account id, preventing account collisions", async () => {
@@ -1592,7 +1615,9 @@ describe("oauth2", async () => {
 		expect(firstSession.data).toBeNull();
 
 		// No account should have been created with an empty/undefined account id.
-		const emptyIdAccounts = await ctx.adapter.findMany<{ accountId: string }>({
+		const emptyIdAccounts = await ctx.adapter.findMany<{
+			providerAccountId: string;
+		}>({
 			model: "account",
 			where: [{ field: "providerId", value: "no-sub-test" }],
 		});
@@ -1685,7 +1710,7 @@ describe("oauth2", async () => {
 		expect(accounts).toHaveLength(0);
 	});
 
-	it("falls back to sub when a custom getUserInfo returns an empty id", async () => {
+	it("does not switch a plain OAuth account from id to sub", async () => {
 		const { customFetchImpl, auth, cookieSetter, client } =
 			await getTestInstance({
 				databaseHooks: {
@@ -1733,25 +1758,22 @@ describe("oauth2", async () => {
 			customFetchImpl,
 		);
 
-		expect(flow.callbackURL).toBe("http://localhost:3000/new_user");
+		expect(flow.callbackURL).toContain("error=unable_to_get_user_info");
 
 		const session = await client.getSession({
 			fetchOptions: { headers: flow.headers },
 		});
-		expect(session.data).not.toBeNull();
+		expect(session.data).toBeNull();
 
 		const ctx = await auth.$context;
-		const accounts = await ctx.internalAdapter.findAccounts(
-			session.data?.user.id!,
-		);
-		expect(accounts).toHaveLength(1);
-		expect(accounts[0]).toMatchObject({
-			providerId: "empty-id-with-sub-test",
-			accountId: "custom-sub-id",
+		const accounts = await ctx.adapter.findMany({
+			model: "account",
+			where: [{ field: "providerId", value: "empty-id-with-sub-test" }],
 		});
+		expect(accounts).toHaveLength(0);
 	});
 
-	it("completes sign-in when mapProfileToUser derives the account id from a non-standard userinfo field", async () => {
+	it("completes sign-in when accountSubject derives identity from a non-standard profile field", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {
 				username: "derived-id-user",
@@ -1773,9 +1795,9 @@ describe("oauth2", async () => {
 							clientId: clientId,
 							clientSecret: clientSecret,
 							pkce: true,
+							accountSubject: ({ profile }) => String(profile.username),
 							mapProfileToUser: (profile) => {
 								return {
-									id: String(profile.username),
 									email: profile.email ?? undefined,
 									name: profile.name,
 									emailVerified: !!profile.email_verified,
@@ -1823,11 +1845,11 @@ describe("oauth2", async () => {
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]).toMatchObject({
 			providerId: "derived-id-test",
-			accountId: "derived-id-user",
+			providerAccountId: "derived-id-user",
 		});
 	});
 
-	it("falls back to sub when the userinfo id field is empty", async () => {
+	it("uses the OIDC sub when the userinfo id field is empty", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {
 				sub: "abc",
@@ -1892,11 +1914,11 @@ describe("oauth2", async () => {
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]).toMatchObject({
 			providerId: "sub-over-empty-id-test",
-			accountId: "abc",
+			providerAccountId: "abc",
 		});
 	});
 
-	it("falls back to sub when the userinfo id field is null", async () => {
+	it("uses the OIDC sub when the userinfo id field is null", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {
 				sub: "null-id-sub",
@@ -1961,11 +1983,11 @@ describe("oauth2", async () => {
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]).toMatchObject({
 			providerId: "sub-over-null-id-test",
-			accountId: "null-id-sub",
+			providerAccountId: "null-id-sub",
 		});
 	});
 
-	it("keeps a non-empty id field as the account id when the userinfo response also has sub", async () => {
+	it("uses the OIDC sub as the account subject when userinfo also has an id field", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {
 				sub: "subject-1",
@@ -2030,7 +2052,160 @@ describe("oauth2", async () => {
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]).toMatchObject({
 			providerId: "id-over-sub-test",
-			accountId: "raw-id-1",
+			providerAccountId: "subject-1",
+		});
+	});
+
+	it("recognizes one OIDC account across provider aliases when mutable profile fields change", async () => {
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "workforce-web",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId,
+							clientSecret,
+						},
+						{
+							providerId: "workforce-mobile",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId,
+							clientSecret,
+						},
+					],
+				}),
+			],
+		});
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+
+		async function signIn(
+			provider: "workforce-web" | "workforce-mobile",
+			profileId: string,
+			name: string,
+		) {
+			server.service.once("beforeUserinfo", (userInfoResponse) => {
+				userInfoResponse.body = {
+					sub: "workforce-subject",
+					id: profileId,
+					email: "employee@workforce.test",
+					name,
+					email_verified: true,
+				};
+				userInfoResponse.statusCode = 200;
+			});
+			const stateHeaders = new Headers();
+			const response = await client.signIn.social({
+				provider,
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new-user",
+				fetchOptions: { onSuccess: cookieSetter(stateHeaders) },
+			});
+			const flow = await simulateOAuthFlow(
+				response.data?.url ?? "",
+				stateHeaders,
+				customFetchImpl,
+			);
+			const session = await client.getSession({
+				fetchOptions: { headers: flow.headers },
+			});
+			expect(session.data).not.toBeNull();
+			return session.data!;
+		}
+
+		const firstSession = await signIn(
+			"workforce-web",
+			"mutable-profile-id-1",
+			"Employee One",
+		);
+		const secondSession = await signIn(
+			"workforce-mobile",
+			"mutable-profile-id-2",
+			"Employee Two",
+		);
+
+		expect(secondSession.user.id).toBe(firstSession.user.id);
+		const context = await auth.$context;
+		const accounts = await context.internalAdapter.findAccounts(
+			firstSession.user.id,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]).toMatchObject({
+			issuer: server.issuer.url,
+			providerAccountId: "workforce-subject",
+			providerId: "workforce-mobile",
+		});
+	});
+
+	it("keeps different OIDC subjects separate when a mutable id field is reused", async () => {
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "subject-boundary",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId,
+							clientSecret,
+						},
+					],
+				}),
+			],
+		});
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+
+		async function signIn(subject: string, email: string) {
+			server.service.once("beforeUserinfo", (userInfoResponse) => {
+				userInfoResponse.body = {
+					subject,
+					sub: subject,
+					id: "reused-profile-id",
+					email,
+					name: subject,
+					email_verified: true,
+				};
+				userInfoResponse.statusCode = 200;
+			});
+			const stateHeaders = new Headers();
+			const response = await client.signIn.social({
+				provider: "subject-boundary",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(stateHeaders) },
+			});
+			const flow = await simulateOAuthFlow(
+				response.data?.url ?? "",
+				stateHeaders,
+				customFetchImpl,
+			);
+			const session = await client.getSession({
+				fetchOptions: { headers: flow.headers },
+			});
+			expect(session.data).not.toBeNull();
+			return session.data!;
+		}
+
+		const firstSession = await signIn("subject-a", "subject-a@workforce.test");
+		const secondSession = await signIn("subject-b", "subject-b@workforce.test");
+
+		expect(secondSession.user.id).not.toBe(firstSession.user.id);
+		const context = await auth.$context;
+		const firstAccounts = await context.internalAdapter.findAccounts(
+			firstSession.user.id,
+		);
+		const secondAccounts = await context.internalAdapter.findAccounts(
+			secondSession.user.id,
+		);
+		expect(firstAccounts[0]).toMatchObject({
+			providerAccountId: "subject-a",
+		});
+		expect(secondAccounts[0]).toMatchObject({
+			providerAccountId: "subject-b",
 		});
 	});
 
@@ -2096,10 +2271,10 @@ describe("oauth2", async () => {
 			session.data?.user.id!,
 		);
 
-		expect(accounts[0]!.accountId).toBe(String(numericId));
+		expect(accounts[0]!.providerAccountId).toBe(String(numericId));
 	});
 
-	it("should handle mapProfileToUser returning numeric ID", async () => {
+	it("should handle accountSubject returning a numeric subject", async () => {
 		const numericProfileId = 111222333;
 
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
@@ -2124,9 +2299,9 @@ describe("oauth2", async () => {
 							clientId: clientId,
 							clientSecret: clientSecret,
 							pkce: true,
+							accountSubject: ({ profile }) => Number(profile.user_id),
 							mapProfileToUser: (profile) => {
 								return {
-									id: String(profile.user_id),
 									email: profile.email ?? undefined,
 									name: profile.name,
 									emailVerified: !!profile.email_verified,
@@ -2171,7 +2346,7 @@ describe("oauth2", async () => {
 			session.data?.user.id!,
 		);
 
-		expect(accounts[0]!.accountId).toBe(String(numericProfileId));
+		expect(accounts[0]!.providerAccountId).toBe(String(numericProfileId));
 	});
 
 	it("should handle Strava OAuth with custom mapProfileToUser", async () => {
@@ -2205,7 +2380,6 @@ describe("oauth2", async () => {
 							mapProfileToUser: (profile) => {
 								const fullName = `${profile.firstname} ${profile.lastname}`;
 								return {
-									id: String(profile.id),
 									email: `${profile.id}@strava.local`,
 									name: fullName,
 									image: profile.profile as string,
@@ -2264,7 +2438,7 @@ describe("oauth2", async () => {
 
 		expect(accounts[0]).toMatchObject({
 			providerId: "strava",
-			accountId: String(stravaUserId),
+			providerAccountId: String(stravaUserId),
 			userId: session.data?.user.id,
 		});
 	});
@@ -2504,7 +2678,7 @@ describe("oauth2", async () => {
 		expect(result?.user).toHaveProperty("customField", "async-custom-data");
 	});
 
-	it("falls back to sub when provider wrapper getUserInfo returns an empty id", async () => {
+	it("keeps provider sub in raw data when the plain OAuth id is empty", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [
 				genericOAuth({
@@ -2537,7 +2711,8 @@ describe("oauth2", async () => {
 			refreshToken: undefined,
 		});
 
-		expect(result?.user.id).toBe("wrapped-sub");
+		expect(result?.data).toMatchObject({ sub: "wrapped-sub" });
+		expect(result?.user).not.toHaveProperty("id");
 	});
 
 	describe("Okta Provider Helper", () => {
@@ -2625,6 +2800,19 @@ describe("oauth2", async () => {
 			);
 		});
 
+		it("normalizes a trailing slash in the domain and account issuer", () => {
+			const auth0Config = auth0({
+				clientId: "auth0-client-id",
+				clientSecret: "auth0-client-secret",
+				domain: "https://dev-xxx.eu.auth0.com/",
+			});
+
+			expect(auth0Config.discoveryUrl).toBe(
+				"https://dev-xxx.eu.auth0.com/.well-known/openid-configuration",
+			);
+			expect(auth0Config.accountIssuer).toBe("https://dev-xxx.eu.auth0.com/");
+		});
+
 		it("should allow overriding scopes", () => {
 			const auth0Config = auth0({
 				clientId: "auth0-client-id",
@@ -2655,15 +2843,15 @@ describe("oauth2", async () => {
 			const msConfig = microsoftEntraId({
 				clientId: "ms-client-id",
 				clientSecret: "ms-client-secret",
-				tenantId: "common",
+				tenantId: "12345678-1234-1234-1234-123456789012",
 			});
 
 			expect(msConfig.providerId).toBe("microsoft-entra-id");
 			expect(msConfig.authorizationUrl).toBe(
-				"https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+				"https://login.microsoftonline.com/12345678-1234-1234-1234-123456789012/oauth2/v2.0/authorize",
 			);
 			expect(msConfig.tokenUrl).toBe(
-				"https://login.microsoftonline.com/common/oauth2/v2.0/token",
+				"https://login.microsoftonline.com/12345678-1234-1234-1234-123456789012/oauth2/v2.0/token",
 			);
 			expect(msConfig.userInfoUrl).toBe(
 				"https://graph.microsoft.com/oidc/userinfo",
@@ -2692,7 +2880,7 @@ describe("oauth2", async () => {
 			const msConfig = microsoftEntraId({
 				clientId: "ms-client-id",
 				clientSecret: "ms-client-secret",
-				tenantId: "common",
+				tenantId: "12345678-1234-1234-1234-123456789012",
 				scopes: ["openid", "profile"],
 			});
 
@@ -2703,13 +2891,37 @@ describe("oauth2", async () => {
 			const msConfig = microsoftEntraId({
 				clientId: "ms-client-id",
 				clientSecret: "ms-client-secret",
-				tenantId: "common",
+				tenantId: "12345678-1234-1234-1234-123456789012",
 				pkce: true,
 				disableImplicitSignUp: true,
 			});
 
 			expect(msConfig.pkce).toBe(true);
 			expect(msConfig.disableImplicitSignUp).toBe(true);
+		});
+
+		it.each([
+			"common",
+			"organizations",
+			"consumers",
+		])("rejects the multi-tenant %s endpoint because it cannot provide a stable issuer", (tenantId) => {
+			expect(() =>
+				microsoftEntraId({
+					clientId: "ms-client-id",
+					clientSecret: "ms-client-secret",
+					tenantId,
+				}),
+			).toThrow("requires a concrete Microsoft Entra tenant GUID");
+		});
+
+		it("rejects a missing tenant ID from an untyped runtime configuration", () => {
+			expect(() =>
+				microsoftEntraId({
+					clientId: "ms-client-id",
+					clientSecret: "ms-client-secret",
+					tenantId: undefined,
+				} as unknown as Parameters<typeof microsoftEntraId>[0]),
+			).toThrow("requires a concrete Microsoft Entra tenant GUID");
 		});
 	});
 
@@ -2921,7 +3133,7 @@ describe("oauth2", async () => {
 						microsoftEntraId({
 							clientId: "ms-client-id",
 							clientSecret: "ms-client-secret",
-							tenantId: "common",
+							tenantId: "12345678-1234-1234-1234-123456789012",
 						}),
 					],
 				}),
@@ -2989,6 +3201,7 @@ describe("oauth2", async () => {
 							clientSecret: clientSecret,
 							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 							scopes: ["snsapi_login"],
+							accountSubject: ({ profile }) => profile.id ?? "",
 							pkce: true,
 							// Custom token exchange that doesn't use standard OAuth flow
 							getToken: async ({ code }) => {
@@ -3154,6 +3367,7 @@ describe("oauth2", async () => {
 							clientSecret: clientSecret,
 							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 							scopes: ["profile", "email"],
+							accountSubject: ({ profile }) => profile.id ?? "",
 							pkce: true,
 							// Simulates providers that use GET request with query params instead of POST
 							getToken: async () => {
@@ -4460,7 +4674,49 @@ describe("oauth2", async () => {
 			expect(session.data?.user.email).toBe("forged@test.com");
 		});
 
-		it("should not break provider registration when jwks_uri is malformed", async () => {
+		it("fails provider initialization when discovery cannot establish an account issuer", async () => {
+			const discoveryServer = createServer((_req, res) => {
+				res.setHeader("content-type", "application/json");
+				res.end(
+					JSON.stringify({
+						authorization_endpoint: `http://localhost:${port}/authorize`,
+						token_endpoint: `http://localhost:${port}/token`,
+						userinfo_endpoint: `http://localhost:${port}/userinfo`,
+					}),
+				);
+			});
+			await new Promise<void>((resolve) => discoveryServer.listen(0, resolve));
+			const discoveryPort = (discoveryServer.address() as AddressInfo).port;
+			try {
+				const { auth } = await getTestInstance(
+					{
+						plugins: [
+							genericOAuth({
+								config: [
+									{
+										providerId: "issuerless-discovery",
+										discoveryUrl: `http://localhost:${discoveryPort}/.well-known/openid-configuration`,
+										clientId,
+										clientSecret,
+									},
+								],
+							}),
+						],
+					},
+					{ disableTestUser: true },
+				);
+
+				await expect(auth.$context).rejects.toThrow(
+					"discovery did not return an issuer",
+				);
+			} finally {
+				await new Promise<void>((resolve, reject) =>
+					discoveryServer.close((error) => (error ? reject(error) : resolve())),
+				);
+			}
+		});
+
+		it("fails provider initialization when discovery returns a malformed jwks_uri", async () => {
 			const discoveryServer = createServer((_req, res) => {
 				res.setHeader("content-type", "application/json");
 				res.end(
@@ -4477,206 +4733,33 @@ describe("oauth2", async () => {
 			await new Promise<void>((resolve) => discoveryServer.listen(0, resolve));
 			const discoveryPort = (discoveryServer.address() as AddressInfo).port;
 			try {
-				const { customFetchImpl, cookieSetter } = await getTestInstance({
-					plugins: [
-						genericOAuth({
-							config: [
-								{
-									providerId: "malformed-jwks",
-									discoveryUrl: `http://localhost:${discoveryPort}/.well-known/openid-configuration`,
-									clientId,
-									clientSecret,
-									pkce: true,
-								},
-							],
-						}),
-					],
-				});
-				const client = createAuthClient({
-					baseURL: "http://localhost:3000",
-					fetchOptions: { customFetchImpl },
-				});
-				const headers = new Headers();
-				const res = await client.signIn.social({
-					provider: "malformed-jwks",
-					callbackURL: "http://localhost:3000/dashboard",
-					newUserCallbackURL: "http://localhost:3000/new_user",
-					fetchOptions: { onSuccess: cookieSetter(headers) },
-				});
-				const { callbackURL } = await simulateOAuthFlow(
-					res.data?.url || "",
-					headers,
-					customFetchImpl,
+				const { auth } = await getTestInstance(
+					{
+						plugins: [
+							genericOAuth({
+								config: [
+									{
+										providerId: "malformed-jwks",
+										discoveryUrl: `http://localhost:${discoveryPort}/.well-known/openid-configuration`,
+										clientId,
+										clientSecret,
+										pkce: true,
+									},
+								],
+							}),
+						],
+					},
+					{ disableTestUser: true },
 				);
-				expect(callbackURL).not.toContain("?error=");
+				await expect(auth.$context).rejects.toThrow(
+					'invalid jwks_uri "http://[malformed"',
+				);
 			} finally {
 				await new Promise<void>((resolve, reject) =>
 					discoveryServer.close((err) => (err ? reject(err) : resolve())),
 				);
 			}
 		});
-	});
-
-	it("rejects sign-in when the provider omits an account id, preventing account collisions", async () => {
-		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
-			databaseHooks: {
-				user: {
-					create: {
-						before: async (user) => ({
-							data: { ...user, emailVerified: true },
-						}),
-					},
-				},
-			},
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							providerId: "no-sub-test",
-							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
-							clientId: clientId,
-							clientSecret: clientSecret,
-							pkce: true,
-						},
-					],
-				}),
-			],
-		});
-		const ctx = await auth.$context;
-		const authClient = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: { customFetchImpl },
-		});
-
-		// A userinfo response that includes email/name but no `sub`/`id`.
-		const respondWithoutSub = (email: string, name: string) => {
-			server.service.once("beforeUserinfo", (userInfoResponse) => {
-				userInfoResponse.body = {
-					email,
-					name,
-					picture: "https://test.com/picture.png",
-					email_verified: true,
-				};
-				userInfoResponse.statusCode = 200;
-			});
-		};
-
-		// First user signs in — must be rejected, not stored under an empty id.
-		respondWithoutSub("first-no-sub@test.com", "First No Sub");
-		const firstHeaders = new Headers();
-		const firstSignIn = await authClient.signIn.social({
-			provider: "no-sub-test",
-			callbackURL: "http://localhost:3000/dashboard",
-			newUserCallbackURL: "http://localhost:3000/new_user",
-			fetchOptions: { onSuccess: cookieSetter(firstHeaders) },
-		});
-		const firstFlow = await simulateOAuthFlow(
-			firstSignIn.data?.url || "",
-			firstHeaders,
-			customFetchImpl,
-		);
-		// Rejected at the error page rather than landing on a success URL.
-		expect(firstFlow.callbackURL).toContain("error=");
-		expect(firstFlow.callbackURL).not.toContain("/dashboard");
-		expect(firstFlow.callbackURL).not.toContain("/new_user");
-
-		const firstSession = await authClient.getSession({
-			fetchOptions: { headers: firstFlow.headers },
-		});
-		expect(firstSession.data).toBeNull();
-
-		// No account should have been created with an empty/undefined account id.
-		const emptyIdAccounts = await ctx.adapter.findMany<{ accountId: string }>({
-			model: "account",
-			where: [{ field: "providerId", value: "no-sub-test" }],
-		});
-		expect(emptyIdAccounts).toHaveLength(0);
-
-		// A second, different user signing in through the same provider must not
-		// resolve to the first user's account.
-		respondWithoutSub("second-no-sub@test.com", "Second No Sub");
-		const secondHeaders = new Headers();
-		const secondSignIn = await authClient.signIn.social({
-			provider: "no-sub-test",
-			callbackURL: "http://localhost:3000/dashboard",
-			fetchOptions: { onSuccess: cookieSetter(secondHeaders) },
-		});
-		const secondFlow = await simulateOAuthFlow(
-			secondSignIn.data?.url || "",
-			secondHeaders,
-			customFetchImpl,
-		);
-		expect(secondFlow.callbackURL).toContain("error=");
-		const secondSession = await authClient.getSession({
-			fetchOptions: { headers: secondFlow.headers },
-		});
-		// Must NOT have resolved to the first user (the collision being fixed).
-		expect(secondSession.data).toBeNull();
-	});
-
-	it("rejects sign-in when a custom getUserInfo returns an empty id", async () => {
-		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
-			databaseHooks: {
-				user: {
-					create: {
-						before: async (user) => ({
-							data: { ...user, emailVerified: true },
-						}),
-					},
-				},
-			},
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							providerId: "empty-id-test",
-							authorizationUrl: `http://localhost:${port}/authorize`,
-							tokenUrl: `http://localhost:${port}/token`,
-							clientId: clientId,
-							clientSecret: clientSecret,
-							pkce: true,
-							// A misconfigured custom mapper that yields no account id.
-							getUserInfo: async () => ({
-								id: "",
-								email: "empty-id@test.com",
-								name: "Empty Id",
-								emailVerified: true,
-							}),
-						},
-					],
-				}),
-			],
-		});
-		const ctx = await auth.$context;
-		const authClient = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: { customFetchImpl },
-		});
-
-		const headers = new Headers();
-		const signIn = await authClient.signIn.social({
-			provider: "empty-id-test",
-			callbackURL: "http://localhost:3000/dashboard",
-			fetchOptions: { onSuccess: cookieSetter(headers) },
-		});
-		const flow = await simulateOAuthFlow(
-			signIn.data?.url || "",
-			headers,
-			customFetchImpl,
-		);
-		// The callback guard rejects the empty resolved account id.
-		expect(flow.callbackURL).toContain("error=unable_to_get_user_info");
-
-		const session = await authClient.getSession({
-			fetchOptions: { headers: flow.headers },
-		});
-		expect(session.data).toBeNull();
-
-		const accounts = await ctx.adapter.findMany({
-			model: "account",
-			where: [{ field: "providerId", value: "empty-id-test" }],
-		});
-		expect(accounts).toHaveLength(0);
 	});
 });
 

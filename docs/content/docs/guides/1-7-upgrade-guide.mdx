@@ -14,7 +14,7 @@ Some areas need more care: OAuth, OpenID Connect, SAML, SCIM, two-factor authent
 | If your project                                                        | Read                                                                            |
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | Uses Better Auth at all                                                | [Before you upgrade](#before-you-upgrade) and [Behind a proxy](#behind-a-proxy) |
-| Uses social login, generic OAuth, One Tap, or SSO                      | [As a login client](#as-a-login-client)                                         |
+| Uses email and password, social login, generic OAuth, One Tap, or SSO  | [As a login client](#as-a-login-client)                                         |
 | Runs its own OAuth or OpenID provider                                  | [As an identity provider](#as-an-identity-provider)                             |
 | Runs MCP                                                               | [MCP](#mcp)                                                                     |
 | Uses SAML or SSO domain verification                                   | [Enterprise SSO](#enterprise-sso)                                               |
@@ -53,10 +53,11 @@ These features change the schema:
 | Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables               | Not needed               |
 | Back-channel logout        | Logout-URL and revoked columns                                             | Not needed               |
 | Requested user-info claims | A requested-claims column on the token and consent tables                  | Not needed               |
+| Account identity           | An issuer column, a renamed provider-account column, and a compound index  | **No, backfill**         |
 | SCIM                       | Seven provisioning models with layouts that replace the legacy SCIM models | **No, reprovision**      |
 | Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                  | Not needed               |
 
-SCIM is the one schema change that requires a manual cutover. Plan for it before you deploy.
+Account identity and SCIM both require a manual data step. Plan each applicable cutover before you deploy.
 
 <Callout type="warn">
   Do not run the generated SCIM migration over populated prerelease `scimGroup` or `scimGroupMember` tables. Follow the [SCIM cutover](#scim-requires-full-reprovisioning) before creating the new schema.
@@ -66,7 +67,55 @@ SCIM is the one schema change that requires a manual cutover. Plan for it before
 
 ## As a login client
 
-This covers social login, the generic OAuth plugin, One Tap, and consuming SSO.
+This covers email and password, social login, the generic OAuth plugin, One Tap, and consuming SSO.
+
+### Account identity is scoped by issuer
+
+Better Auth now recognizes an external account by the unique pair of `issuer` and `providerAccountId`. The `providerId` remains the local provider configuration, while `account.id` identifies the Better Auth account row. The account schema replaces `accountId` with `providerAccountId`, adds the required `issuer` field, and creates a unique compound index across both identity fields.
+
+<Callout type="warn">
+  Use a maintenance window and stop authentication writes before changing the account schema. The generated migration cannot choose trusted issuers or resolve identity collisions for you.
+</Callout>
+
+**Backfill the account identity:**
+
+1. Back up the `account` and `user` tables, then inventory every distinct `providerId`. Include custom physical field names from `account.fields` in that inventory.
+2. Rename the physical `accountId` column to `providerAccountId`, or add `providerAccountId` as nullable and copy the existing values if your migration tool cannot express a rename. Add `issuer` as nullable during the backfill.
+3. Populate both fields according to the account type:
+
+   | Account type                     | `issuer`                                  | `providerAccountId`                    |
+   | -------------------------------- | ----------------------------------------- | -------------------------------------- |
+   | Credential                       | `local:credential`                        | Stable `id` from the linked `user` row |
+   | Provider with an issuer          | Exact trusted issuer used by the provider | Existing provider account identifier   |
+   | OAuth provider without an issuer | `local:oauth:<encoded providerId>`        | Existing provider account identifier   |
+
+   The synthetic issuer percent-encodes its provider ID segment exactly as `encodeURIComponent(providerId)`; for example, `local:oauth:github` and `local:oauth:team%2Fgithub`. Build an explicit `providerId`-to-issuer map for your deployment. Multiple provider configurations that represent the same OpenID Connect authority must use the same issuer. Do not derive an issuer from email, display name, an unverified request value, or a mutable authorization endpoint.
+4. Find collisions before creating the unique index. Adapt this query to your physical table and field names:
+
+   ```sql title="Identity collision check"
+   SELECT issuer, providerAccountId, COUNT(*) AS accountCount,
+          COUNT(DISTINCT userId) AS userCount
+   FROM account
+   GROUP BY issuer, providerAccountId
+   HAVING COUNT(*) > 1;
+   ```
+
+   If duplicate rows belong to one user, choose the account record to keep and reconcile its provider configuration, tokens, scopes, and timestamps before deleting the others. If a key belongs to multiple users, stop the migration and establish the owner from trusted provider data. Never merge users by matching email alone.
+5. Confirm that every row has both identity fields, make them non-nullable, and add the unique compound index on `issuer` and `providerAccountId`. Remove the old column only after verifying a copy-based migration.
+6. Update custom adapters, database hooks, generated schemas, and field mappings to use `issuer` and `providerAccountId`. Credential accounts keep the linked user's stable `id` as `providerAccountId`; email remains a mutable sign-in identifier and does not change the account key.
+
+Account-specific APIs now use explicit, strongly typed selectors. Read `id` from `listAccounts`, then pass it as `accountId` to `unlinkAccount`. For `getAccessToken`, `refreshToken`, and `accountInfo`, choose exactly one of these request shapes:
+
+* `{ accountId: account.id, userId? }` selects the local account row.
+* `{ useAccountCookie: true, userId? }` selects the account from its signed cookie.
+
+Remove `providerId` from every account selector, and do not pass `providerAccountId` in its place. A token or provider-profile request that previously omitted the selector to use the account cookie must now send `useAccountCookie: true`; omitting both supported selectors is invalid.
+
+Deploy only after the collision query returns no rows and the required unique index exists. Verify email-and-password sign-in, returning OAuth and SSO sign-in, explicit account linking, unlinking, provider profile retrieval, and token refresh against the migrated data.
+
+Review every custom OAuth provider's account subject. OpenID Connect discovery providers now use verified `sub`; plain OAuth providers use `id`; the previous runtime fallback between those fields is removed. Set `accountSubject` when either default is not the provider's immutable identifier. `getUserInfo().user` now contains only mutable local-user fields; keep the provider identifier in `getUserInfo().data`. `mapProfileToUser` can no longer return `id`. The `accountInfo` response exposes the selected identity as `account.providerAccountId` instead of `user.id`.
+
+The generic `microsoftEntraId` helper now requires a concrete tenant GUID. Replace `common`, `organizations`, or `consumers` configurations with the built-in Microsoft social provider, which validates tenant claims and derives the token's actual issuer.
 
 ### Generic OAuth is rebuilt on the social-provider path
 
@@ -307,6 +356,14 @@ The OAuth endpoints move from `/mcp/*` to `/oauth2/*`. Discovery-based MCP clien
 
 ## Enterprise SSO
 
+### SSO account subjects are protocol-defined
+
+OIDC SSO now uses the verified `sub` claim as the account subject, and SAML uses the signed `NameID`. Profile mappings can still select email, name, image, and additional fields, but `oidcConfig.mapping.id` and `samlConfig.mapping.id` are removed. Manual SAML configurations that do not provide `idpMetadata.metadata` must set `idpMetadata.entityID`; `samlConfig.issuer` identifies the service provider and no longer acts as an IdP fallback.
+
+**What to do:** remove `id` from every OIDC and SAML mapping, then confirm that each OIDC provider returns a stable `sub` and each SAML provider returns a stable, signed `NameID`. During the account-identity backfill, use the exact OIDC issuer and subject or the exact SAML IdP entity ID and `NameID`. Provider aliases with the same OIDC issuer and subject deduplicate one external identity, but this change does not introduce independent grant or provider lifecycle records for those aliases.
+
+If a previous mapping used `mapping.id`, prepare its replacement before the maintenance window. Build a trusted mapping from every old account subject to the protocol-defined identity, then rewrite those account rows before adding the compound index: OIDC needs the exact issuer and verified `sub`; SAML needs the actual IdP metadata entity ID and signed `NameID`. Obtain this mapping from the identity provider, not email or a mutable profile attribute. Do not deploy a runtime fallback for the old mapping.
+
 ### IdP-initiated SAML is off by default
 
 Unsolicited logins started by the identity provider are now disabled by default. A login response is validated for `InResponseTo`, so it cannot be replayed against a request it was not issued for, and Single Logout requests are matched to their session by `SessionIndex`.
@@ -526,6 +583,7 @@ npx auth@latest migrate
 
 Then complete the manual data step if it applies:
 
+* **Backfill account identities:** assign every account a reviewed issuer and provider account identifier, resolve collisions, and add the compound unique index before deploying.
 * **Reprovision SCIM:** follow the [full cutover](#scim-requires-full-reprovisioning), including reviewed handling of legacy core identities, then run a complete User and Group provisioning cycle.
 
 ***
