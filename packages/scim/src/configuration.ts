@@ -135,10 +135,10 @@ export interface SCIMCanonicalUser {
 
 /** One connection-owned identity source participating in aggregate lifecycle. */
 export interface SCIMIdentitySource {
-	id: string;
-	connectionId: string;
-	provisioningDomainId: string;
-	active: boolean;
+	readonly id: string;
+	readonly connectionId: string;
+	readonly provisioningDomainId: string;
+	readonly active: boolean;
 }
 
 /** Explicit create-or-link decision for an incoming SCIM User. */
@@ -164,10 +164,10 @@ export interface SCIMIdentityResolutionContext {
 
 /** Complete global lifecycle state for one linked Better Auth user. */
 export interface SCIMIdentityState {
-	userId: string;
-	active: boolean;
-	profileSourceId?: string;
-	sources: readonly SCIMIdentitySource[];
+	readonly userId: string;
+	readonly active: boolean;
+	readonly profileSourceId?: string;
+	readonly sources: readonly SCIMIdentitySource[];
 }
 
 /** Transaction-bound context shared by identity and access reconciliation. */

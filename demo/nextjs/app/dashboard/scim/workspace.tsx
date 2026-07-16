@@ -26,21 +26,23 @@ import {
 	AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import {
-	SCIM_DEMO_GROUP_LABELS,
-	SCIM_DEMO_USER_KEYS,
-} from "@/lib/scim-demo-catalog";
+import { SCIM_DEMO_GROUP_LABELS } from "@/lib/scim-demo-catalog";
 import type {
 	SCIMDemoAccessDecision,
 	SCIMDemoAction,
-	SCIMDemoActionFailure,
-	SCIMDemoActionResult,
 	SCIMDemoOperation,
 	SCIMDemoUserAction,
 	SCIMDemoUserKey,
 	SCIMDemoView,
 	SCIMDemoWorkspace,
-} from "@/lib/scim-demo-types";
+} from "@/lib/scim-demo-contract";
+import {
+	isSCIMDemoAccessDecision,
+	isSCIMDemoActionFailure,
+	isSCIMDemoActionResult,
+	isSCIMDemoUserKey,
+	isSCIMDemoWorkspace,
+} from "@/lib/scim-demo-contract";
 import { cn } from "@/lib/utils";
 import { formatRelativeTime } from "./resource-presentation";
 import { ActivityView, GroupsView, RoleMappingsView } from "./resource-views";
@@ -65,62 +67,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isView(value: string | null): value is SCIMDemoView {
 	return resourceNavigation.some((item) => item.view === value);
-}
-
-function isUserKey(value: string | null): value is SCIMDemoUserKey {
-	return SCIM_DEMO_USER_KEYS.some((userKey) => userKey === value);
-}
-
-function isWorkspace(value: unknown): value is SCIMDemoWorkspace {
-	return (
-		isRecord(value) &&
-		isRecord(value.connection) &&
-		Array.isArray(value.groups) &&
-		Array.isArray(value.users)
-	);
-}
-
-function isOperation(value: unknown): value is SCIMDemoOperation {
-	return (
-		isRecord(value) &&
-		typeof value.id === "string" &&
-		typeof value.effect === "string" &&
-		(value.method === "POST" ||
-			value.method === "PATCH" ||
-			value.method === "DELETE") &&
-		typeof value.status === "number"
-	);
-}
-
-function isActionResult(value: unknown): value is SCIMDemoActionResult {
-	return (
-		isRecord(value) &&
-		Array.isArray(value.operations) &&
-		value.operations.every(isOperation) &&
-		isWorkspace(value.workspace)
-	);
-}
-
-function isActionFailure(value: unknown): value is SCIMDemoActionFailure {
-	return (
-		isRecord(value) &&
-		typeof value.error === "string" &&
-		Array.isArray(value.operations) &&
-		value.operations.every(isOperation) &&
-		isWorkspace(value.workspace)
-	);
-}
-
-function isAccessDecision(value: unknown): value is SCIMDemoAccessDecision {
-	return (
-		isRecord(value) &&
-		typeof value.allowed === "boolean" &&
-		typeof value.applicationUserId === "string" &&
-		typeof value.checkedAt === "string" &&
-		typeof value.message === "string" &&
-		(value.role === null || typeof value.role === "string") &&
-		isUserKey(typeof value.userKey === "string" ? value.userKey : null)
-	);
 }
 
 function getResponseError(body: unknown, status: number) {
@@ -176,7 +122,7 @@ export function SCIMWorkspace({
 	const requestedView = searchParams.get("view");
 	const requestedUserKey = searchParams.get("user");
 	const view = isView(requestedView) ? requestedView : "users";
-	const selectedUserKey = isUserKey(requestedUserKey)
+	const selectedUserKey = isSCIMDemoUserKey(requestedUserKey)
 		? requestedUserKey
 		: "maya-chen";
 	const [workspace, setWorkspace] = useState<SCIMDemoWorkspace | null>(
@@ -218,7 +164,7 @@ export function SCIMWorkspace({
 		});
 		const body: unknown = await response.json().catch(() => undefined);
 		if (!response.ok) throw new Error(getResponseError(body, response.status));
-		if (!isWorkspace(body)) {
+		if (!isSCIMDemoWorkspace(body)) {
 			throw new Error("The SCIM workspace returned an invalid response");
 		}
 		setWorkspace(body);
@@ -301,7 +247,7 @@ export function SCIMWorkspace({
 			});
 			const body: unknown = await response.json().catch(() => undefined);
 			if (!response.ok) {
-				if (isActionFailure(body)) {
+				if (isSCIMDemoActionFailure(body)) {
 					partialFailureReconciled = true;
 					setWorkspace(body.workspace);
 					setOperations((current) =>
@@ -313,7 +259,7 @@ export function SCIMWorkspace({
 				}
 				throw new Error(getResponseError(body, response.status));
 			}
-			if (!isActionResult(body)) {
+			if (!isSCIMDemoActionResult(body)) {
 				throw new Error("The directory change returned an invalid response");
 			}
 			setWorkspace(body.workspace);
@@ -374,7 +320,7 @@ export function SCIMWorkspace({
 			);
 			const body: unknown = await response.json().catch(() => undefined);
 			if (requestId !== accessRequestId.current) return;
-			if (isAccessDecision(body) && body.userKey === selectedUser.key) {
+			if (isSCIMDemoAccessDecision(body) && body.userKey === selectedUser.key) {
 				setAccessDecision(body);
 				setAnnouncement(body.message);
 				return;

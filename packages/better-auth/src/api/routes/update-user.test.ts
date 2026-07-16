@@ -265,6 +265,79 @@ describe("updateUser", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10390#discussion_r3585595438
+	 */
+	it("should preserve the replacement session in secondary storage", async () => {
+		const store = new Map<string, string>();
+		const {
+			client: secondaryStorageClient,
+			testUser: secondaryStorageUser,
+			signInWithTestUser: signInWithSecondaryStorageUser,
+			sessionSetter: setSecondaryStorageSession,
+		} = await getTestInstance({
+			secondaryStorage: {
+				set(key, value) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				getAndDelete(key) {
+					const value = store.get(key) || null;
+					store.delete(key);
+					return value;
+				},
+				increment(key) {
+					const count = Number(store.get(key) ?? 0) + 1;
+					store.set(key, String(count));
+					return count;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+		});
+		const { headers: previousSessionHeaders, user: signedInUser } =
+			await signInWithSecondaryStorageUser();
+		const replacementSessionHeaders = new Headers();
+
+		const passwordChange = await secondaryStorageClient.changePassword({
+			newPassword: "new-secondary-storage-password",
+			currentPassword: secondaryStorageUser.password,
+			revokeOtherSessions: true,
+			fetchOptions: {
+				headers: previousSessionHeaders,
+				onSuccess: setSecondaryStorageSession(replacementSessionHeaders),
+			},
+		});
+
+		expect(passwordChange.data?.token).toBeDefined();
+		const previousSession = await secondaryStorageClient.getSession({
+			fetchOptions: { headers: previousSessionHeaders },
+		});
+		expect(previousSession.data).toBeNull();
+
+		const replacementSession = await secondaryStorageClient.getSession({
+			fetchOptions: {
+				headers: replacementSessionHeaders,
+				throw: true,
+			},
+		});
+		if (!replacementSession) {
+			throw new Error("Replacement session was not created");
+		}
+		expect(replacementSession.user.id).toBe(signedInUser.id);
+		expect(replacementSession.session.token).toBe(passwordChange.data?.token);
+
+		const activeSessions = JSON.parse(
+			store.get(`active-sessions-${signedInUser.id}`) ?? "[]",
+		) as { token: string; expiresAt: number }[];
+		expect(activeSessions).toEqual([
+			expect.objectContaining({ token: passwordChange.data?.token }),
+		]);
+	});
+
 	it("shouldn't pass defaults", async () => {
 		const { client, sessionSetter, db } = await getTestInstance(
 			{

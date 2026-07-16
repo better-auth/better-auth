@@ -155,21 +155,22 @@ export const queueAfterTransactionHook = async (
 		onError?: (error: unknown) => void | Promise<void>;
 	},
 ): Promise<void> => {
-	let storage: Awaited<ReturnType<typeof ensureAsyncStorage>>;
-	try {
-		storage = await ensureAsyncStorage();
-	} catch {
-		return hook();
-	}
-
-	const store = storage.getStore();
-	if (!store) return hook();
-	store.pendingHooks.push(async () => {
+	const executeHook = async () => {
 		try {
 			await hook();
 		} catch (error) {
 			if (!options?.onError) throw error;
 			await options.onError(error);
 		}
-	});
+	};
+	let storage: Awaited<ReturnType<typeof ensureAsyncStorage>>;
+	try {
+		storage = await ensureAsyncStorage();
+	} catch {
+		return executeHook();
+	}
+
+	const store = storage.getStore();
+	if (!store?.isTransactionActive) return executeHook();
+	store.pendingHooks.push(executeHook);
 };

@@ -11,7 +11,10 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { SCIM_DEMO_GROUP_LABELS } from "@/lib/scim-demo-catalog";
-import type { SCIMDemoUserKey, SCIMDemoUserState } from "@/lib/scim-demo-types";
+import type {
+	SCIMDemoUserKey,
+	SCIMDemoUserState,
+} from "@/lib/scim-demo-contract";
 import { cn } from "@/lib/utils";
 import {
 	formatRelativeTime,
@@ -130,7 +133,9 @@ export function UserList({
 												type="button"
 												disabled={isSelectionDisabled}
 												onClick={() => onSelectUser(user.key)}
-												aria-pressed={selectedUserKey === user.key}
+												aria-current={
+													selectedUserKey === user.key ? "true" : undefined
+												}
 												className="flex w-full items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 											>
 												<Avatar className="size-8 border">
@@ -182,7 +187,9 @@ export function UserList({
 									type="button"
 									disabled={isSelectionDisabled}
 									onClick={() => onSelectUser(user.key)}
-									aria-pressed={selectedUserKey === user.key}
+									aria-current={
+										selectedUserKey === user.key ? "true" : undefined
+									}
 									className={cn(
 										"w-full p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 										selectedUserKey === user.key && "bg-muted",

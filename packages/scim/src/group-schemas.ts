@@ -39,7 +39,6 @@ export const OpenAPIGroupResourceSchema = {
 					display: { type: "string" },
 					type: { type: "string", enum: ["User"] },
 				},
-				required: ["value", "$ref", "display", "type"],
 			},
 		},
 		meta: {
@@ -50,14 +49,13 @@ export const OpenAPIGroupResourceSchema = {
 				lastModified: { type: "string", format: "date-time" },
 				location: { type: "string" },
 			},
-			required: ["resourceType", "created", "lastModified", "location"],
 		},
 		schemas: {
 			type: "array",
 			items: { type: "string" },
 		},
 	},
-	required: ["schemas", "id", "displayName", "members", "meta"] as string[],
+	required: ["schemas", "id"] as string[],
 } as const;
 
 export const SCIMGroupResourceSchema = {

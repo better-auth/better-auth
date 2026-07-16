@@ -1,5 +1,6 @@
 import { HIDE_METADATA } from "better-auth";
 import { createAuthEndpoint } from "better-auth/api";
+import { SCIM_MAX_PAGE_SIZE } from "./collection-query";
 import { SCIM_RESOURCE_SCHEMAS } from "./resource-schema-registry";
 import { createSCIMError, SCIMErrorOpenAPISchemas } from "./scim-error";
 import {
@@ -16,7 +17,6 @@ const SCIM_LIST_RESPONSE_SCHEMA =
 	"urn:ietf:params:scim:api:messages:2.0:ListResponse";
 const SCIM_SERVICE_PROVIDER_CONFIG_SCHEMA =
 	"urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig";
-const SCIM_FILTER_MAX_RESULTS = 100;
 
 const supportedSCIMSchemas = SCIM_RESOURCE_SCHEMAS.map(
 	(resource) => resource.discoverySchema,
@@ -88,7 +88,7 @@ export const getSCIMServiceProviderConfig = createAuthEndpoint(
 			},
 			filter: {
 				supported: true,
-				maxResults: SCIM_FILTER_MAX_RESULTS,
+				maxResults: SCIM_MAX_PAGE_SIZE,
 			},
 			changePassword: { supported: false },
 			sort: { supported: false },

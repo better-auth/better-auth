@@ -44,6 +44,11 @@ function getTTLSeconds(expiresAt: Date | number, now = Date.now()): number {
 	return Math.max(Math.floor((expiresMs - now) / 1000), 0);
 }
 
+type ActiveSessionReference = {
+	readonly token: string;
+	readonly expiresAt: number;
+};
+
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
@@ -131,18 +136,47 @@ export const createInternalAdapter = (
 		);
 	}
 
-	async function deleteCachedUserSessions(userId: string) {
-		if (!secondaryStorage) return;
-		const activeSession = await secondaryStorage.get(
+	async function getActiveSessionReferences(userId: string) {
+		if (!secondaryStorage) return [];
+		const activeSessions = await secondaryStorage.get(
 			`active-sessions-${userId}`,
 		);
-		const sessions = activeSession
-			? safeJSONParse<{ token: string }[]>(activeSession)
+		return activeSessions
+			? safeJSONParse<ActiveSessionReference[]>(activeSessions) || []
 			: [];
-		for (const session of sessions ?? []) {
-			await secondaryStorage.delete(session.token);
+	}
+
+	async function deleteCachedUserSessions(
+		userId: string,
+		sessionReferences: readonly ActiveSessionReference[],
+	) {
+		if (!secondaryStorage) return;
+
+		const deletedTokens = new Set(
+			sessionReferences.map((session) => session.token),
+		);
+		for (const { token } of sessionReferences) {
+			await secondaryStorage.delete(token);
 		}
-		await secondaryStorage.delete(`active-sessions-${userId}`);
+
+		const activeSessionsKey = `active-sessions-${userId}`;
+		const currentSessionReferences = await getActiveSessionReferences(userId);
+		const now = Date.now();
+		const remainingSessionReferences = currentSessionReferences.filter(
+			(session) => session.expiresAt > now && !deletedTokens.has(session.token),
+		);
+		remainingSessionReferences.sort((a, b) => a.expiresAt - b.expiresAt);
+		const furthestExpiration = remainingSessionReferences.at(-1)?.expiresAt;
+
+		if (furthestExpiration) {
+			await secondaryStorage.set(
+				activeSessionsKey,
+				JSON.stringify(remainingSessionReferences),
+				getTTLSeconds(furthestExpiration, now),
+			);
+			return;
+		}
+		await secondaryStorage.delete(activeSessionsKey);
 	}
 
 	async function withVerificationConsumeLock<T>(
@@ -866,8 +900,11 @@ export const createInternalAdapter = (
 		},
 		deleteUserSessions: async (userId: string) => {
 			if (secondaryStorage) {
+				// Callers may create a replacement session before queued hooks run.
+				// Capture the revocation set now so that replacement remains active.
+				const sessionReferences = await getActiveSessionReferences(userId);
 				await queueAfterTransactionHook(
-					() => deleteCachedUserSessions(userId),
+					() => deleteCachedUserSessions(userId, sessionReferences),
 					{
 						onError(error) {
 							logger.error(

@@ -40,7 +40,7 @@ import type {
 	SCIMDemoOperation,
 	SCIMDemoUserAction,
 	SCIMDemoUserState,
-} from "@/lib/scim-demo-types";
+} from "@/lib/scim-demo-contract";
 import { cn } from "@/lib/utils";
 import {
 	EmptyActivity,

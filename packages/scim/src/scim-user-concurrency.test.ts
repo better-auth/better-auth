@@ -192,7 +192,10 @@ function createMembershipRaceAdapter(data: UserDeletionData) {
 						>(
 							input: IncrementOneInput,
 						) => {
-							if (input.model === "scimGroup") {
+							if (
+								input.model === "scimGroup" &&
+								input.increment.revision !== undefined
+							) {
 								const groupId = findWhereValue(input.where, "id");
 								if (typeof groupId === "string") groupLockOrder.push(groupId);
 							}

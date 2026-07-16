@@ -62,6 +62,24 @@ describe("runWithTransaction", () => {
 		expect(activeAdapter).toBe(transactionAdapter);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10390#discussion_r3585595438
+	 */
+	it("runs after-transaction hooks immediately in a plain adapter context", async () => {
+		const { adapter } = createTransactionHarness();
+		const events: string[] = [];
+
+		await runWithAdapter(adapter, async () => {
+			events.push("before");
+			await queueAfterTransactionHook(async () => {
+				events.push("hook");
+			});
+			events.push("after");
+		});
+
+		expect(events).toEqual(["before", "hook", "after"]);
+	});
+
 	it("runs hooks queued by nested calls after the outer transaction finishes", async () => {
 		const { adapter, getTransactionCalls } = createTransactionHarness();
 		let hookRuns = 0;

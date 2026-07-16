@@ -146,6 +146,7 @@ describe("collection filters", () => {
 
 	it.each([
 		["Group", 'userName eq "ada"', "unsupported-filter-attribute"],
+		["User", 'user Name eq "ada"', "unsupported-filter-attribute"],
 		["User", 'userName ne "ada"', "unsupported-filter-operator"],
 		["User", "userName pr", "invalid-filter-syntax"],
 		["User", "userName eq ada", "invalid-filter-value"],
@@ -160,6 +161,25 @@ describe("collection filters", () => {
 		expect(result).toMatchObject({
 			ok: false,
 			error: { code, parameter: "filter", scimType: "invalidFilter" },
+		});
+	});
+
+	it("allows SCIM whitespace around the supported work-email value path", () => {
+		const result = parseSCIMCollectionQuery("User", {
+			filter: 'emails[ type eq "work" ].value eq "ada@example.com"',
+		});
+
+		expect(result).toMatchObject({
+			ok: true,
+			value: {
+				filters: [
+					{
+						attribute: "emails.work.value",
+						operator: "eq",
+						value: "ada@example.com",
+					},
+				],
+			},
 		});
 	});
 });

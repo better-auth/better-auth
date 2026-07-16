@@ -31,6 +31,7 @@ import {
 } from "./projection";
 import { createSCIMError } from "./scim-error";
 import { SCIM_MEDIA_TYPE } from "./scim-metadata";
+import { assertNativeSCIMTransactions } from "./transaction";
 import {
 	createSCIMUser,
 	deleteSCIMUser,
@@ -56,12 +57,14 @@ function isSCIMErrorBody(value: unknown): boolean {
 	);
 }
 
-function isAPIErrorLike(value: unknown): value is {
+interface APIErrorLike {
 	body: unknown;
 	message: string;
 	status: keyof typeof statusCodes | Status;
 	statusCode: number;
-} {
+}
+
+function isAPIErrorLike(value: unknown): value is APIErrorLike {
 	const isStatus =
 		isRecord(value) &&
 		((typeof value.status === "string" && value.status in statusCodes) ||
@@ -74,12 +77,15 @@ function isAPIErrorLike(value: unknown): value is {
 		"body" in value
 	);
 }
-
 function createSCIMErrorResponse(
-	status: "UNSUPPORTED_MEDIA_TYPE",
+	status: "BAD_REQUEST" | "UNSUPPORTED_MEDIA_TYPE",
 	detail: string,
+	scimType?: "invalidSyntax",
 ) {
-	const error = createSCIMError(status, { detail });
+	const error = createSCIMError(status, {
+		detail,
+		...(scimType ? { scimType } : {}),
+	});
 	return new Response(JSON.stringify(error.body), {
 		status: error.statusCode,
 		headers: { "content-type": SCIM_MEDIA_TYPE },
@@ -189,6 +195,9 @@ function createSCIMPlugin(options: SCIMOptions) {
 	return {
 		id: "scim",
 		version: PACKAGE_VERSION,
+		init(ctx) {
+			assertNativeSCIMTransactions(ctx.adapter);
+		},
 		async onRequest(request) {
 			const path = new URL(request.url).pathname;
 			if (!path.includes("/scim/v2/")) return;
@@ -208,15 +217,25 @@ function createSCIMPlugin(options: SCIMOptions) {
 				?.split(";", 1)[0]
 				?.trim()
 				.toLowerCase();
-			if (mediaType === "application/json" || mediaType === SCIM_MEDIA_TYPE) {
-				return;
+			if (mediaType !== "application/json" && mediaType !== SCIM_MEDIA_TYPE) {
+				return {
+					response: createSCIMErrorResponse(
+						"UNSUPPORTED_MEDIA_TYPE",
+						"SCIM requests must use application/scim+json or application/json",
+					),
+				};
 			}
-			return {
-				response: createSCIMErrorResponse(
-					"UNSUPPORTED_MEDIA_TYPE",
-					"SCIM requests must use application/scim+json or application/json",
-				),
-			};
+			try {
+				JSON.parse(await request.clone().text());
+			} catch {
+				return {
+					response: createSCIMErrorResponse(
+						"BAD_REQUEST",
+						"SCIM request body must contain valid JSON",
+						"invalidSyntax",
+					),
+				};
+			}
 		},
 		endpoints: {
 			decommissionSCIMConnection: createDecommissionSCIMConnectionEndpoint(
@@ -285,11 +304,13 @@ function createSCIMPlugin(options: SCIMOptions) {
 							isRecord(body) && typeof body.message === "string"
 								? body.message
 								: returned.message;
+						const validationError =
+							returned.statusCode === 400 &&
+							isRecord(body) &&
+							body.code === "VALIDATION_ERROR";
 						throw createSCIMError(returned.status, {
 							detail,
-							...(returned.statusCode === 400
-								? { scimType: "invalidValue" as const }
-								: {}),
+							...(validationError ? { scimType: "invalidValue" as const } : {}),
 						});
 					}),
 				},

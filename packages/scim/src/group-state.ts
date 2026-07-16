@@ -131,14 +131,15 @@ export async function markSCIMGroupsModified(
 	updatedAt: Date,
 ): Promise<void> {
 	for (const group of groups) {
-		const updatedGroup = await database.update<SCIMGroup>({
+		const updatedGroup = await database.incrementOne<SCIMGroup>({
 			model: "scimGroup",
 			where: [
 				{ field: "id", value: group.id },
 				{ field: "connectionId", value: connectionId },
 				{ field: "revision", value: group.revision },
 			],
-			update: { updatedAt },
+			increment: {},
+			set: { updatedAt },
 		});
 		if (!updatedGroup) throwConcurrentSCIMGroupMutation();
 	}

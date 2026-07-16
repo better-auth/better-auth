@@ -462,6 +462,136 @@ describe("SCIM User PATCH provider compatibility", () => {
 		expect(persistedAfter.user.email).toBe(persistedBefore.user.email);
 	});
 
+	it.each([
+		"emails.value",
+		'emails[type eq "work"].value',
+	])("rejects %s replacements that collapse distinct email tuples", async (path) => {
+		const { auth, headers } = createTestContext();
+		const created = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "tuple-collision@example.com",
+				emails: [
+					{
+						value: "primary-work@example.com",
+						type: "work",
+						primary: true,
+					},
+					{ value: "secondary-work@example.com", type: "work" },
+				],
+			},
+			headers,
+		});
+		const resourceBefore = await auth.api.getSCIMUser({
+			params: { userId: created.id },
+			headers,
+		});
+
+		await expect(
+			auth.api.patchSCIMUser({
+				params: { userId: created.id },
+				body: {
+					schemas: [PATCH_OP_SCHEMA],
+					Operations: [
+						{
+							op: "replace",
+							path,
+							value: "collision@example.com",
+						},
+					],
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			statusCode: 400,
+			body: expect.objectContaining({ scimType: "invalidValue" }),
+		});
+
+		await expect(
+			auth.api.getSCIMUser({
+				params: { userId: created.id },
+				headers,
+			}),
+		).resolves.toEqual(resourceBefore);
+	});
+
+	it("preserves explicitly supplied formatted and display names when patching one name part", async () => {
+		const { auth, headers } = createTestContext();
+		const created = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "explicit-name@example.com",
+				displayName: "Ada Lovelace",
+				name: {
+					formatted: "Ada Lovelace",
+					givenName: "Ada",
+					familyName: "Lovelace",
+				},
+			},
+			headers,
+		});
+
+		await auth.api.patchSCIMUser({
+			params: { userId: created.id },
+			body: {
+				schemas: [PATCH_OP_SCHEMA],
+				Operations: [
+					{
+						op: "replace",
+						path: "name.givenName",
+						value: "Augusta",
+					},
+				],
+			},
+			headers,
+		});
+
+		await expect(
+			auth.api.getSCIMUser({
+				params: { userId: created.id },
+				headers,
+			}),
+		).resolves.toMatchObject({
+			displayName: "Ada Lovelace",
+			name: {
+				formatted: "Ada Lovelace",
+				givenName: "Augusta",
+				familyName: "Lovelace",
+			},
+		});
+	});
+
+	it("rejects whitespace inside a simple PATCH attribute path", async () => {
+		const { auth, headers } = createTestContext();
+		const created = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "path-whitespace@example.com",
+			},
+			headers,
+		});
+
+		await expect(
+			auth.api.patchSCIMUser({
+				params: { userId: created.id },
+				body: {
+					schemas: [PATCH_OP_SCHEMA],
+					Operations: [
+						{
+							op: "replace",
+							path: "user Name",
+							value: "unexpected@example.com",
+						},
+					],
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			statusCode: 400,
+			body: expect.objectContaining({ scimType: "invalidPath" }),
+		});
+	});
+
 	it("atomically applies pathless object updates and removes externalId", async () => {
 		const { auth, data, headers } = createTestContext();
 		const created = await auth.api.createSCIMUser({

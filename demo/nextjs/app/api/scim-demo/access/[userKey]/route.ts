@@ -1,8 +1,8 @@
 import { auth } from "@/lib/auth";
 import { getSCIMDemoBaseURL, isSCIMDemoEnabled } from "@/lib/scim-demo";
 import { SCIM_DEMO_USER_KEYS } from "@/lib/scim-demo-catalog";
+import type { SCIMDemoUserKey } from "@/lib/scim-demo-contract";
 import { checkSCIMDemoAccess, getSCIMDemoError } from "@/lib/scim-demo-service";
-import type { SCIMDemoUserKey } from "@/lib/scim-demo-types";
 
 export const runtime = "nodejs";
 

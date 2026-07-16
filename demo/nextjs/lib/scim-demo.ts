@@ -55,6 +55,7 @@ export function getSCIMDemoBaseURL() {
 
 export function createSCIMDemoPlugin() {
 	if (!isSCIMDemoEnabled()) return disabledSCIMDemoPlugin;
+	getSCIMDemoBaseURL();
 
 	return scim({
 		connections: [

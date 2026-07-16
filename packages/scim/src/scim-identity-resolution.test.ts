@@ -642,6 +642,45 @@ describe("SCIM explicit identity resolution", () => {
 		expect(data.session).toEqual([]);
 	});
 
+	it("does not let application callback mutation redirect session revocation", async () => {
+		const target = createBackingUser();
+		const session = createSession(target.id);
+		const { auth, data } = createIdentityFixture({
+			users: [target],
+			sessions: [session],
+			identity: {
+				...preserveExistingUser(target.id),
+				reconcileUser(state) {
+					if (state.active) return;
+					const mutableState = state as {
+						active: boolean;
+						userId: string;
+					};
+					mutableState.active = true;
+					mutableState.userId = "different-user";
+				},
+			},
+		});
+		const source = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "mutation-attempt@example.com",
+			},
+			headers: authorization("connection-a-token"),
+		});
+
+		await auth.api.patchSCIMUser({
+			params: { userId: source.id },
+			body: {
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+				Operations: [{ op: "replace", path: "active", value: false }],
+			},
+			headers: authorization("connection-a-token"),
+		});
+
+		expect(data.session).toEqual([]);
+	});
+
 	it("rejects a second source for the same User in one connection", async () => {
 		const target = createBackingUser();
 		const { auth, data } = createIdentityFixture({

@@ -353,13 +353,15 @@ export function createSCIMIdentityCoordinator(options: SCIMOptions) {
 					active: scimUser.active,
 				}))
 				.sort((left, right) => left.id.localeCompare(right.id));
+			const userId = input.subject.userId;
+			const active = sources.some((source) => source.active);
 			const state: SCIMIdentityState = {
-				userId: input.subject.userId,
-				active: sources.some((source) => source.active),
+				userId,
+				active,
 				...(subject.profileSourceId
 					? { profileSourceId: subject.profileSourceId }
 					: {}),
-				sources,
+				sources: sources.map((source) => ({ ...source })),
 			};
 			await runSCIMApplicationCallback(
 				() =>
@@ -368,10 +370,17 @@ export function createSCIMIdentityCoordinator(options: SCIMOptions) {
 					}),
 				"SCIM identity reconciliation failed",
 			);
-			if (!state.active) {
-				await input.auth.internalAdapter.deleteUserSessions(state.userId);
+			if (!active) {
+				await input.auth.internalAdapter.deleteUserSessions(userId);
 			}
-			return state;
+			return {
+				userId,
+				active,
+				...(subject.profileSourceId
+					? { profileSourceId: subject.profileSourceId }
+					: {}),
+				sources,
+			};
 		},
 	};
 }

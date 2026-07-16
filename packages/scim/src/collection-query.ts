@@ -8,7 +8,7 @@ import { stripSCIMCoreAttributePrefix } from "./resource-schema-registry";
 export type { SCIMResourceType } from "./resource-schema-registry";
 
 /** Maximum number of resources returned by one classic SCIM page. */
-const SCIM_MAX_PAGE_SIZE = 100;
+export const SCIM_MAX_PAGE_SIZE = 100;
 
 export type SCIMUserFilterAttribute =
 	(typeof SCIM_RESOURCE_SCHEMA_REGISTRY.User.filterAttributes)[number];
@@ -192,10 +192,19 @@ function canonicalizeFilterAttribute(
 		resourceType,
 		attribute,
 	);
-	const compactAttribute = normalizedAttribute
-		.replace(/\s+/g, "")
-		.toLowerCase();
-	switch (compactAttribute) {
+	if (
+		/^emails\[\s*type\s+eq\s+"work"\s*\]\.value$/i.test(normalizedAttribute)
+	) {
+		return resourceType === "User" ? "emails.work.value" : undefined;
+	}
+	if (
+		!/^[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)?$/.test(
+			normalizedAttribute,
+		)
+	) {
+		return undefined;
+	}
+	switch (normalizedAttribute.toLowerCase()) {
 		case "id":
 			return "id";
 		case "externalid":
@@ -204,8 +213,6 @@ function canonicalizeFilterAttribute(
 			return resourceType === "User" ? "userName" : undefined;
 		case "emails.value":
 			return resourceType === "User" ? "emails.value" : undefined;
-		case 'emails[typeeq"work"].value':
-			return resourceType === "User" ? "emails.work.value" : undefined;
 		case "displayname":
 			return resourceType === "Group" ? "displayName" : undefined;
 		default:

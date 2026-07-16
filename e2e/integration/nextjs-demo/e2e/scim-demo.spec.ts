@@ -8,6 +8,7 @@ import { dirname, join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
+import { getSCIMDemoCompletedOperations } from "../../../../demo/nextjs/lib/scim-demo-service.ts";
 
 function findRepositoryRoot() {
 	let directory = resolve(process.cwd());
@@ -156,6 +157,92 @@ function expectProvisionedUserCount(databasePath: string, expected: number) {
 	} finally {
 		database.close();
 	}
+}
+
+function addForeignIdentityTombstone(databasePath: string, userId: string) {
+	const database = new DatabaseSync(databasePath);
+	try {
+		const result = database
+			.prepare(
+				`INSERT INTO "scimIdentityTombstone"
+					("id", "connectionId", "provisioningDomainId", "externalId", "externalIdKey", "userId", "profile", "deletedAt")
+				 SELECT 'foreign-tombstone', 'foreign-directory', 'foreign-domain', "externalId",
+					'foreign-tombstone-key', "userId", "profile", "deletedAt"
+				 FROM "scimIdentityTombstone"
+				 WHERE "userId" = ?
+				 LIMIT 1`,
+			)
+			.run(userId);
+		expect(Number(result.changes)).toBe(1);
+	} finally {
+		database.close();
+	}
+}
+
+function removeForeignIdentityTombstone(databasePath: string) {
+	const database = new DatabaseSync(databasePath);
+	try {
+		database
+			.prepare(
+				`DELETE FROM "scimIdentityTombstone" WHERE "id" = 'foreign-tombstone'`,
+			)
+			.run();
+	} finally {
+		database.close();
+	}
+}
+
+function expectRetainedApplicationIdentity(
+	databasePath: string,
+	userId: string,
+) {
+	const database = new DatabaseSync(databasePath, { readOnly: true });
+	try {
+		const tombstoneCount = database
+			.prepare(
+				`SELECT COUNT(*) AS count FROM "scimIdentityTombstone" WHERE "userId" = ?`,
+			)
+			.get(userId)?.count;
+		const applicationUserCount = database
+			.prepare(`SELECT COUNT(*) AS count FROM "user" WHERE "id" = ?`)
+			.get(userId)?.count;
+		expect(Number(tombstoneCount)).toBe(2);
+		expect(Number(applicationUserCount)).toBe(1);
+	} finally {
+		database.close();
+	}
+}
+
+async function validateRemoteHTTPDemoConfiguration() {
+	const script = [
+		'const { createSCIMDemoPlugin } = await import("./lib/scim-demo.ts");',
+		"createSCIMDemoPlugin();",
+	].join("\n");
+	const child = spawn(
+		process.execPath,
+		["--experimental-strip-types", "--input-type=module", "--eval", script],
+		{
+			cwd: demoDirectory,
+			env: {
+				...process.env,
+				BETTER_AUTH_URL: "http://directory.example",
+				SCIM_DEMO_ENABLED: "true",
+				SCIM_DEMO_TOKEN: "configuration-test-token",
+			},
+			stdio: "pipe",
+		},
+	);
+	let output = "";
+	child.stdout.on("data", (chunk) => {
+		output += chunk.toString();
+	});
+	child.stderr.on("data", (chunk) => {
+		output += chunk.toString();
+	});
+	const exitCode = await new Promise<number | null>((resolveExit) => {
+		child.once("exit", resolveExit);
+	});
+	return { exitCode, output };
 }
 
 function createDeferred() {
@@ -315,6 +402,37 @@ test.describe("Next.js SCIM demo", () => {
 		expectNoTransientSCIMData(databasePath);
 	});
 
+	test("rejects a remote HTTP callback URL during demo startup", async () => {
+		const result = await validateRemoteHTTPDemoConfiguration();
+
+		expect(result.exitCode).not.toBe(0);
+		expect(result.output).toContain(
+			"BETTER_AUTH_URL must use HTTPS unless the SCIM demo runs on loopback",
+		);
+	});
+
+	test("keeps only complete operation records from partial failures", () => {
+		const completedOperation = {
+			createdAt: "2026-07-16T08:00:00.000Z",
+			effect: "Application access enabled",
+			id: "operation-1",
+			method: "POST",
+			requestBody: "{}",
+			resource: "/Users",
+			responseBody: "{}",
+			status: 201,
+			userKey: "maya-chen",
+		} as const;
+		const error = Object.assign(new Error("Partial SCIM failure"), {
+			operations: [
+				completedOperation,
+				{ id: "operation-2", effect: "Missing response contract" },
+			],
+		});
+
+		expect(getSCIMDemoCompletedOperations(error)).toEqual([completedOperation]);
+	});
+
 	test("reconciles a partially applied group change", async ({ page }) => {
 		const signUpResponse = await page.request.post(
 			`${baseURL}/api/auth/sign-up/email`,
@@ -434,6 +552,49 @@ test.describe("Next.js SCIM demo", () => {
 		expectNoTransientSCIMData(databasePath);
 	});
 
+	test("refuses to reset an identity owned by another SCIM connection", async ({
+		page,
+	}) => {
+		const signUpResponse = await page.request.post(
+			`${baseURL}/api/auth/sign-up/email`,
+			{
+				data: {
+					email: `scim-reset-ownership-${Date.now()}@example.com`,
+					name: "SCIM Reset Ownership Operator",
+					password: "correct-horse-battery-staple",
+				},
+			},
+		);
+		expect(signUpResponse.ok(), await signUpResponse.text()).toBe(true);
+
+		await page.goto(`${baseURL}/dashboard/scim`);
+		await provisionSelectedUser(page, "Maya Chen");
+		const identity = readMayaIdentity(databasePath);
+		await page.getByRole("button", { name: "Delete SCIM resource" }).click();
+		await page.getByRole("button", { name: "Delete resource" }).click();
+		await expect(
+			page.getByText("Deleted", { exact: true }).last(),
+		).toBeVisible();
+		addForeignIdentityTombstone(databasePath, identity.applicationUserId);
+
+		await page.getByRole("button", { name: "Reset sandbox" }).click();
+		await page.getByRole("button", { name: "Reset sandbox" }).last().click();
+		await expect(
+			page
+				.getByRole("alert")
+				.getByText("The application user is linked outside this demo sandbox", {
+					exact: false,
+				}),
+		).toBeVisible();
+		expectRetainedApplicationIdentity(databasePath, identity.applicationUserId);
+
+		removeForeignIdentityTombstone(databasePath);
+		await page.getByRole("button", { name: "Reset sandbox" }).click();
+		await page.getByRole("button", { name: "Reset sandbox" }).last().click();
+		await expectSuccessMessage(page, "SCIM sandbox reset");
+		expectNoTransientSCIMData(databasePath);
+	});
+
 	test("runs a real SCIM lifecycle from the authenticated demo UI", async ({
 		page,
 	}, testInfo) => {
@@ -497,10 +658,51 @@ test.describe("Next.js SCIM demo", () => {
 		await expect(
 			page.getByText("Showing 3 of 3 users", { exact: true }),
 		).toBeVisible();
+		const selectedMayaButton = page
+			.getByRole("button", { name: /Maya Chen/ })
+			.first();
+		await expect(selectedMayaButton).toHaveAttribute("aria-current", "true");
+		await expect(selectedMayaButton).not.toHaveAttribute("aria-pressed");
 		expect(initialBrowserWorkspaceRequests).toEqual([]);
 		await expect(page.locator("body")).not.toContainText(scimToken);
+		let invalidActionResponseReturned = false;
+		const demoActionURL = `${baseURL}/api/scim-demo`;
+		await page.route(demoActionURL, async (route) => {
+			if (
+				!invalidActionResponseReturned &&
+				route.request().method() === "POST"
+			) {
+				invalidActionResponseReturned = true;
+				await route.fulfill({
+					contentType: "application/json",
+					status: 200,
+					body: JSON.stringify({
+						operations: [],
+						workspace: {
+							connection: { id: "demo-directory", status: "connected" },
+							groups: [],
+							users: [],
+						},
+					}),
+				});
+				return;
+			}
+			await route.continue();
+		});
+		await page.getByRole("button", { name: "Provision user" }).click();
+		await expect(
+			page
+				.getByRole("alert")
+				.getByText("The directory change returned an invalid response", {
+					exact: false,
+				}),
+		).toBeVisible();
+		await page.unroute(demoActionURL);
 
 		await provisionSelectedUser(page, "Maya Chen");
+		await page.getByRole("link", { name: "Activity", exact: true }).click();
+		await expect(page.getByText("1 operation", { exact: true })).toBeVisible();
+		await page.getByRole("link", { name: "Users", exact: true }).click();
 		await assignSelectedUserToGroup(
 			page,
 			"Maya Chen",

@@ -1,5 +1,6 @@
+import { betterAuth } from "better-auth";
+import { memoryAdapter } from "better-auth/adapters/memory";
 import { openAPI } from "better-auth/plugins";
-import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
 import {
@@ -66,7 +67,20 @@ describe("SCIM core schema conformance", () => {
 	});
 
 	it("advertises the SCIM response media type through OpenAPI", async () => {
-		const { auth } = await getTestInstance({
+		const auth = betterAuth({
+			database: memoryAdapter({
+				user: [],
+				session: [],
+				verification: [],
+				account: [],
+				scimConnectionBinding: [],
+				scimIdentityTombstone: [],
+				scimSubject: [],
+				scimUser: [],
+				scimGroup: [],
+				scimGroupMember: [],
+				scimProjectionGrant: [],
+			}),
 			plugins: [
 				scim({
 					connections: [
@@ -305,51 +319,25 @@ describe("SCIM core schema conformance", () => {
 		});
 	});
 
-	it("marks every field emitted by resource responses as required", () => {
-		expect(OpenAPIUserResourceSchema.required).toEqual(
-			expect.arrayContaining([
-				"schemas",
-				"id",
-				"userName",
-				"name",
-				"displayName",
-				"active",
-				"emails",
-				"meta",
-			]),
-		);
+	it("requires only fields that survive every response projection", () => {
+		expect(OpenAPIUserResourceSchema.required).toEqual(["schemas", "id"]);
 		expect(OpenAPIUserResourceSchema.properties).toHaveProperty("externalId");
-		expect(OpenAPIUserResourceSchema.properties.name.required).toEqual([
-			"formatted",
-		]);
-		expect(OpenAPIUserResourceSchema.properties.emails.items.required).toEqual([
-			"value",
-			"primary",
-		]);
-		expect(OpenAPIUserResourceSchema.properties.meta.required).toEqual([
-			"resourceType",
-			"created",
-			"lastModified",
-			"location",
-		]);
-
-		expect(OpenAPIGroupResourceSchema.required).toEqual(
-			expect.arrayContaining([
-				"schemas",
-				"id",
-				"displayName",
-				"members",
-				"meta",
-			]),
+		expect(OpenAPIUserResourceSchema.properties.name).not.toHaveProperty(
+			"required",
 		);
 		expect(
-			OpenAPIGroupResourceSchema.properties.members.items.required,
-		).toEqual(["value", "$ref", "display", "type"]);
-		expect(OpenAPIGroupResourceSchema.properties.meta.required).toEqual([
-			"resourceType",
-			"created",
-			"lastModified",
-			"location",
-		]);
+			OpenAPIUserResourceSchema.properties.emails.items,
+		).not.toHaveProperty("required");
+		expect(OpenAPIUserResourceSchema.properties.meta).not.toHaveProperty(
+			"required",
+		);
+
+		expect(OpenAPIGroupResourceSchema.required).toEqual(["schemas", "id"]);
+		expect(
+			OpenAPIGroupResourceSchema.properties.members.items,
+		).not.toHaveProperty("required");
+		expect(OpenAPIGroupResourceSchema.properties.meta).not.toHaveProperty(
+			"required",
+		);
 	});
 });

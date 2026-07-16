@@ -170,17 +170,7 @@ function setNamePart(
 	attribute: "givenName" | "familyName",
 	value: string | undefined,
 ): void {
-	const previousComposedName = composeName(state);
-	const formattedNameWasDerived =
-		previousComposedName.length > 0 &&
-		state.formattedName === previousComposedName;
 	state[attribute] = value;
-	if (formattedNameWasDerived) {
-		setFormattedName(
-			state,
-			composeName(state) || state.displayName || state.primaryEmail,
-		);
-	}
 }
 
 function setEmails(
@@ -240,9 +230,7 @@ function replaceAllEmailValues(
 	const replacement = readEmail(value);
 	setEmails(
 		state,
-		coalesceEmailTuples(
-			state.emails.map((email) => ({ ...email, value: replacement })),
-		),
+		state.emails.map((email) => ({ ...email, value: replacement })),
 	);
 }
 
@@ -271,13 +259,11 @@ function replaceSelectedEmail(
 	const emails = state.emails.map((email) =>
 		matches(email) ? { ...email, value: replacement } : email,
 	);
-	setEmails(state, coalesceEmailTuples(emails));
+	setEmails(state, emails);
 }
 
 function normalizePatchPath(path: string): string {
-	return stripSCIMCoreAttributePrefix("User", path.trim())
-		.replace(/\s+/g, "")
-		.toLowerCase();
+	return stripSCIMCoreAttributePrefix("User", path.trim()).toLowerCase();
 }
 
 /** Apply ordered User PatchOp operations without mutating persisted state. */

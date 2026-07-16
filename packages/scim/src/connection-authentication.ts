@@ -11,7 +11,6 @@ import type {
 import { createSCIMConnectionKey } from "./connection-state";
 import type { SCIMConnectionBinding } from "./persistence";
 import { createSCIMError } from "./scim-error";
-import { assertNativeSCIMTransactions } from "./transaction";
 
 export type SCIMConnectionMiddleware = ReturnType<
 	typeof createSCIMConnectionMiddleware
@@ -149,7 +148,7 @@ export function createSCIMConnectionMiddleware(options: SCIMOptions) {
 				const active =
 					credential.expiresAt === undefined ||
 					credential.expiresAt.getTime() > Date.now();
-				if (matches && active) {
+				if (!principal && matches && active) {
 					principal = {
 						type: "static-bearer",
 						connectionId: configuredConnection.id,
@@ -210,7 +209,6 @@ export function createSCIMConnectionMiddleware(options: SCIMOptions) {
 			id: principal.connectionId,
 			provisioningDomainId: principal.provisioningDomainId,
 		};
-		assertNativeSCIMTransactions(ctx.context.adapter);
 		const binding = await bindSCIMConnection(ctx.context.adapter, connection);
 		if (binding.decommissionStatus !== "active") {
 			return rejectAuthentication("SCIM connection is decommissioned");

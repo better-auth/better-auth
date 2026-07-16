@@ -6,9 +6,26 @@ export interface SCIMProjectableResource {
 	id: string;
 }
 
+type SCIMProjectedAttributeValue<Value> = Value extends Date
+	? Value
+	: Value extends (infer Item)[]
+		? SCIMProjectedAttributeValue<Item>[]
+		: Value extends readonly (infer Item)[]
+			? readonly SCIMProjectedAttributeValue<Item>[]
+			: Value extends object
+				? {
+						[Key in keyof Value]?: SCIMProjectedAttributeValue<Value[Key]>;
+					}
+				: Value;
+
 /** A projected resource always retains the mandatory SCIM identity fields. */
 export type SCIMProjectedResource<Resource extends SCIMProjectableResource> =
-	Pick<Resource, "schemas" | "id"> & Partial<Omit<Resource, "schemas" | "id">>;
+	Pick<Resource, "schemas" | "id"> & {
+		[Key in keyof Omit<
+			Resource,
+			"schemas" | "id"
+		>]?: SCIMProjectedAttributeValue<Resource[Key]>;
+	};
 
 interface AttributePathNode {
 	selected: boolean;
@@ -124,7 +141,7 @@ export function projectSCIMResourceAttributes<
 	projection: SCIMAttributeProjection,
 ): SCIMProjectedResource<Resource> {
 	if (projection.mode === "default") {
-		return { ...resource };
+		return { ...resource } as SCIMProjectedResource<Resource>;
 	}
 
 	const attributePaths =

@@ -129,11 +129,28 @@ describe("SCIM HTTP contract", () => {
 		await expectSCIMError(duplicate, 409, "uniqueness");
 	});
 
-	it("returns a SCIM error for an invalid User body", async () => {
+	it("returns invalidValue for a constrained User attribute", async () => {
 		const auth = createSCIMAuth();
 		const response = await auth.handler(createUserRequest({ userName: "" }));
 
-		await expectSCIMError(response, 400);
+		await expectSCIMError(response, 400, "invalidValue");
+	});
+
+	it("returns invalidSyntax for malformed JSON before endpoint dispatch", async () => {
+		const auth = createSCIMAuth();
+		const response = await auth.handler(
+			new Request(SCIM_USERS_URL, {
+				method: "POST",
+				headers: {
+					accept: SCIM_MEDIA_TYPE,
+					authorization: "Bearer active-scim-token",
+					"content-type": SCIM_MEDIA_TYPE,
+				},
+				body: '{"schemas":',
+			}),
+		);
+
+		await expectSCIMError(response, 400, "invalidSyntax");
 	});
 
 	it("rejects a User resource without its core schema", async () => {
@@ -146,7 +163,7 @@ describe("SCIM HTTP contract", () => {
 			),
 		);
 
-		await expectSCIMError(response, 400);
+		await expectSCIMError(response, 400, "invalidValue");
 	});
 
 	it("rejects an unsupported User extension schema", async () => {

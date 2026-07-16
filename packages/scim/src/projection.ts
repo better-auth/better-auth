@@ -23,7 +23,6 @@ import type {
 } from "./persistence";
 import { createScopedKey } from "./resource-key";
 import { runSCIMApplicationCallback } from "./scim-error";
-import { assertNativeSCIMTransactions } from "./transaction";
 
 export type SCIMProjectionCoordinator = ReturnType<
 	typeof createSCIMProjectionCoordinator
@@ -420,7 +419,7 @@ async function reconcileSCIMUserBatch(
 	},
 ): Promise<void> {
 	if (input.scimUserIds.length === 0) return;
-	const subjects = await input.database.findMany<SCIMUser>({
+	const requestedSCIMUsers = await input.database.findMany<SCIMUser>({
 		model: "scimUser",
 		where: [
 			{ field: "id", value: [...input.scimUserIds], operator: "in" },
@@ -430,18 +429,20 @@ async function reconcileSCIMUserBatch(
 			},
 		],
 	});
-	const subjectById = new Map(subjects.map((subject) => [subject.id, subject]));
+	const requestedSCIMUserById = new Map(
+		requestedSCIMUsers.map((scimUser) => [scimUser.id, scimUser]),
+	);
 	const userIds: string[] = [];
 	const seenUserIds = new Set<string>();
 	for (const scimUserId of input.scimUserIds) {
-		const userId = subjectById.get(scimUserId)?.userId;
+		const userId = requestedSCIMUserById.get(scimUserId)?.userId;
 		if (!userId || seenUserIds.has(userId)) continue;
 		seenUserIds.add(userId);
 		userIds.push(userId);
 	}
 	if (userIds.length === 0) return;
 
-	const scimUsers = await input.database.findMany<SCIMUser>({
+	const provisioningDomainSCIMUsers = await input.database.findMany<SCIMUser>({
 		model: "scimUser",
 		where: [
 			{ field: "userId", value: userIds, operator: "in" },
@@ -452,13 +453,15 @@ async function reconcileSCIMUserBatch(
 		],
 	});
 	const connectionIds = [
-		...new Set(scimUsers.map((scimUser) => scimUser.connectionId)),
+		...new Set(
+			provisioningDomainSCIMUsers.map((scimUser) => scimUser.connectionId),
+		),
 	];
 	const decommissionedConnectionIds = await findDecommissionedSCIMConnectionIds(
 		input.database,
 		connectionIds,
 	);
-	const sourcesSCIMUsers = scimUsers.filter(
+	const sourcesSCIMUsers = provisioningDomainSCIMUsers.filter(
 		(scimUser) => !decommissionedConnectionIds.has(scimUser.connectionId),
 	);
 	const activeSCIMUserIds = sourcesSCIMUsers
@@ -499,7 +502,7 @@ async function reconcileSCIMUserBatch(
 	});
 
 	const scimUsersByUserId = new Map<string, SCIMUser[]>();
-	for (const scimUser of scimUsers) {
+	for (const scimUser of provisioningDomainSCIMUsers) {
 		const userSCIMUsers = scimUsersByUserId.get(scimUser.userId) ?? [];
 		userSCIMUsers.push(scimUser);
 		scimUsersByUserId.set(scimUser.userId, userSCIMUsers);
@@ -699,12 +702,14 @@ export async function reconcileSCIMProjectionDomainBatch(input: {
 	identity?: SCIMIdentityCoordinator;
 	provisioningDomainId: string;
 	batch: SCIMProjectionDomainBatch;
+	subjectLocksAcquired?: boolean;
 }): Promise<void> {
 	await input.projection.reconcileUsers({
 		database: input.database,
 		auth: input.auth,
 		provisioningDomainId: input.provisioningDomainId,
 		scimUserIds: input.batch.scimUserIds,
+		subjectLocksAcquired: input.subjectLocksAcquired,
 	});
 	if (!input.identity) return;
 
@@ -787,7 +792,6 @@ export function createReconcileSCIMProjectionEndpoint(
 		},
 		async (ctx) => {
 			requireConfiguredProjection(options);
-			assertNativeSCIMTransactions(ctx.context.adapter);
 			const result = await reconcileProjectionDomain({
 				database: ctx.context.adapter,
 				auth: ctx.context,

@@ -5,13 +5,13 @@ import {
 	SCIM_DEMO_GROUP_KEYS,
 	SCIM_DEMO_USER_KEYS,
 } from "@/lib/scim-demo-catalog";
+import type { SCIMDemoAction } from "@/lib/scim-demo-contract";
 import {
 	getSCIMDemoCompletedOperations,
 	getSCIMDemoError,
 	getSCIMDemoWorkspace,
 	performSCIMDemoAction,
 } from "@/lib/scim-demo-service";
-import type { SCIMDemoAction } from "@/lib/scim-demo-types";
 
 export const runtime = "nodejs";
 

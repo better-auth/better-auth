@@ -191,7 +191,9 @@ describe("SCIM connection-owned Groups", () => {
 		const updatedPersistedGroup = data.scimGroup.find(
 			(row) => row.id === group.id,
 		);
-		if (!retrievedGroup.meta) throw new Error("Expected SCIM Group metadata");
+		if (!retrievedGroup.meta?.lastModified) {
+			throw new Error("Expected SCIM Group last-modified metadata");
+		}
 		expect(retrievedGroup.members).toEqual([]);
 		expect(retrievedGroup.meta.lastModified.getTime()).toBeGreaterThan(0);
 		expect(updatedPersistedGroup?.revision).toBe(previousRevision + 1);

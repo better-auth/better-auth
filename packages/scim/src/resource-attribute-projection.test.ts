@@ -153,5 +153,23 @@ describe("projectSCIMResourceAttributes", () => {
 		expectTypeOf(projected.id).toEqualTypeOf<string>();
 		expectTypeOf(projected.schemas).toEqualTypeOf<string[]>();
 		expectTypeOf(projected.userName).toEqualTypeOf<string | undefined>();
+		if (projected.name) {
+			expectTypeOf(projected.name.formatted).toEqualTypeOf<
+				string | undefined
+			>();
+		}
+
+		const projectedEmails = projectSCIMResourceAttributes(
+			{
+				schemas: userResource.schemas,
+				id: userResource.id,
+				emails: [{ value: "ada@example.com", primary: true, type: "work" }],
+			},
+			{ mode: "include", attributes: new Set(["emails.value"]) },
+		);
+		const projectedEmail = projectedEmails.emails?.[0];
+		if (projectedEmail) {
+			expectTypeOf(projectedEmail.value).toEqualTypeOf<string | undefined>();
+		}
 	});
 });

@@ -21,7 +21,8 @@ import type {
 	SCIMDemoUserLifecycle,
 	SCIMDemoUserState,
 	SCIMDemoWorkspace,
-} from "./scim-demo-types.ts";
+} from "./scim-demo-contract.ts";
+import { isSCIMDemoOperation } from "./scim-demo-contract.ts";
 
 const SCIM_BASE_PATH = "/api/auth/scim/v2";
 const SCIM_MEDIA_TYPE = "application/scim+json";
@@ -212,12 +213,7 @@ export function getSCIMDemoCompletedOperations(error: unknown) {
 		"operations" in error &&
 		Array.isArray(error.operations)
 	) {
-		return error.operations.filter(
-			(operation): operation is SCIMDemoOperation =>
-				isRecord(operation) &&
-				typeof operation.id === "string" &&
-				typeof operation.effect === "string",
-		);
+		return error.operations.filter(isSCIMDemoOperation);
 	}
 	return [];
 }
@@ -1042,14 +1038,19 @@ async function cleanupApplicationUser(
 	});
 	if (
 		tombstones.some(
-			(tombstone) => !allowedExternalIds.has(tombstone.externalId),
+			(tombstone) =>
+				tombstone.connectionId !== SCIM_DEMO_CONNECTION_ID ||
+				!allowedExternalIds.has(tombstone.externalId),
 		)
 	) {
 		throw new Error("The application user is linked outside this demo sandbox");
 	}
 	await database.deleteMany({
 		model: "scimIdentityTombstone",
-		where: [{ field: "userId", value: userId }],
+		where: [
+			{ field: "userId", value: userId },
+			{ field: "connectionId", value: SCIM_DEMO_CONNECTION_ID },
+		],
 	});
 	await database.deleteMany({
 		model: "scimSubject",

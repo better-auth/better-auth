@@ -34,6 +34,7 @@ import type { SCIMProjectionCoordinator } from "./projection";
 import { projectSCIMResourceAttributes } from "./resource-attribute-projection";
 import { createSCIMOrderKey, createScopedKey } from "./resource-key";
 import { SCIM_RESOURCE_SCHEMA_REGISTRY } from "./resource-schema-registry";
+import { runSCIMCreateWithUniquenessCheck } from "./resource-uniqueness";
 import { createSCIMError, SCIMErrorOpenAPISchemas } from "./scim-error";
 import {
 	createSCIMOpenAPIContent,
@@ -426,114 +427,137 @@ export function createSCIMUser(
 			);
 			const { resolution } = resolvedIdentity;
 
-			const scimUser = await runIdentityMutationTransaction(
-				adapter,
-				async (trx) => {
-					await assertSCIMUserKeysAvailable(trx, {
+			const scimUser = await runSCIMCreateWithUniquenessCheck(
+				() =>
+					runIdentityMutationTransaction(
+						adapter,
+						async (trx) => {
+							await assertSCIMUserKeysAvailable(trx, {
+								connectionId: connection.id,
+								userNameKey,
+								externalIdKey,
+							});
+
+							let user: User;
+							if (resolution.action === "create") {
+								await assertBetterAuthEmailAvailable(trx, profile.primaryEmail);
+								user = await ctx.context.internalAdapter.createUser(
+									{ email: profile.primaryEmail, name: profile.displayName },
+									{ method: "scim" },
+								);
+							} else {
+								const linkedUser = await trx.findOne<User>({
+									model: "user",
+									where: [{ field: "id", value: resolution.userId }],
+								});
+								if (!linkedUser) {
+									throw createSCIMError("CONFLICT", {
+										detail: "The resolved Better Auth User does not exist",
+									});
+								}
+								user = linkedUser;
+							}
+
+							await assertConnectionUserAvailable(trx, connection.id, user.id);
+							const now = new Date();
+							let subject = await identity.acquireSubject(trx, user.id, now);
+							const createdSCIMUser = await trx.create<
+								Omit<SCIMUser, "id">,
+								SCIMUser
+							>({
+								model: "scimUser",
+								data: {
+									connectionId: connection.id,
+									provisioningDomainId: connection.provisioningDomainId,
+									userId: user.id,
+									connectionUserKey: createConnectionUserKey(
+										connection.id,
+										user.id,
+									),
+									userName: profile.userName,
+									userNameKey,
+									primaryEmail: profile.primaryEmail,
+									workEmailValueIndex: createSCIMEmailValueIndex(
+										profile.emails,
+										"work",
+									),
+									emailValueIndex: createSCIMEmailValueIndex(profile.emails),
+									displayName: profile.displayName,
+									formattedName: profile.formattedName,
+									givenName: profile.givenName,
+									familyName: profile.familyName,
+									serializedEmails: serializeSCIMEmails(profile.emails),
+									externalId: ctx.body.externalId,
+									externalIdKey,
+									active,
+									orderKey: createSCIMOrderKey(now),
+									createdAt: now,
+									updatedAt: now,
+								},
+							});
+
+							const managesProfile =
+								resolution.action === "create" ||
+								resolution.profile === "manage";
+							if (managesProfile) {
+								subject = await identity.claimProfileSource(
+									trx,
+									subject,
+									createdSCIMUser.id,
+									now,
+								);
+								if (resolution.action === "link") {
+									await updateManagedBetterAuthUser(
+										trx,
+										ctx.context.internalAdapter,
+										{
+											userId: user.id,
+											email: profile.primaryEmail,
+											name: profile.displayName,
+											updatedAt: now,
+										},
+									);
+								}
+							}
+							await identity.consumeTombstone(
+								trx,
+								resolvedIdentity.tombstoneId,
+							);
+
+							await projection.reconcileUser({
+								database: trx,
+								auth: ctx.context,
+								provisioningDomainId: connection.provisioningDomainId,
+								scimUserId: createdSCIMUser.id,
+							});
+							await identity.reconcileUser({
+								database: trx,
+								auth: ctx.context,
+								subject,
+							});
+							await fenceActiveSCIMConnection(trx, connection.id);
+							return createdSCIMUser;
+						},
+						resolution.action === "link"
+							? { subjectCreationUserId: resolution.userId }
+							: undefined,
+					),
+				async () => {
+					await assertSCIMUserKeysAvailable(adapter, {
 						connectionId: connection.id,
 						userNameKey,
 						externalIdKey,
 					});
-
-					let user: User;
 					if (resolution.action === "create") {
-						await assertBetterAuthEmailAvailable(trx, profile.primaryEmail);
-						user = await ctx.context.internalAdapter.createUser(
-							{ email: profile.primaryEmail, name: profile.displayName },
-							{ method: "scim" },
-						);
-					} else {
-						const linkedUser = await trx.findOne<User>({
-							model: "user",
-							where: [{ field: "id", value: resolution.userId }],
-						});
-						if (!linkedUser) {
-							throw createSCIMError("CONFLICT", {
-								detail: "The resolved Better Auth User does not exist",
-							});
-						}
-						user = linkedUser;
+						await assertBetterAuthEmailAvailable(adapter, profile.primaryEmail);
+						return;
 					}
-
-					await assertConnectionUserAvailable(trx, connection.id, user.id);
-					const now = new Date();
-					let subject = await identity.acquireSubject(trx, user.id, now);
-					const createdSCIMUser = await trx.create<
-						Omit<SCIMUser, "id">,
-						SCIMUser
-					>({
-						model: "scimUser",
-						data: {
-							connectionId: connection.id,
-							provisioningDomainId: connection.provisioningDomainId,
-							userId: user.id,
-							connectionUserKey: createConnectionUserKey(
-								connection.id,
-								user.id,
-							),
-							userName: profile.userName,
-							userNameKey,
-							primaryEmail: profile.primaryEmail,
-							workEmailValueIndex: createSCIMEmailValueIndex(
-								profile.emails,
-								"work",
-							),
-							emailValueIndex: createSCIMEmailValueIndex(profile.emails),
-							displayName: profile.displayName,
-							formattedName: profile.formattedName,
-							givenName: profile.givenName,
-							familyName: profile.familyName,
-							serializedEmails: serializeSCIMEmails(profile.emails),
-							externalId: ctx.body.externalId,
-							externalIdKey,
-							active,
-							orderKey: createSCIMOrderKey(now),
-							createdAt: now,
-							updatedAt: now,
-						},
-					});
-
-					const managesProfile =
-						resolution.action === "create" || resolution.profile === "manage";
-					if (managesProfile) {
-						subject = await identity.claimProfileSource(
-							trx,
-							subject,
-							createdSCIMUser.id,
-							now,
-						);
-						if (resolution.action === "link") {
-							await updateManagedBetterAuthUser(
-								trx,
-								ctx.context.internalAdapter,
-								{
-									userId: user.id,
-									email: profile.primaryEmail,
-									name: profile.displayName,
-									updatedAt: now,
-								},
-							);
-						}
-					}
-					await identity.consumeTombstone(trx, resolvedIdentity.tombstoneId);
-
-					await projection.reconcileUser({
-						database: trx,
-						auth: ctx.context,
-						provisioningDomainId: connection.provisioningDomainId,
-						scimUserId: createdSCIMUser.id,
-					});
-					await identity.reconcileUser({
-						database: trx,
-						auth: ctx.context,
-						subject,
-					});
-					await fenceActiveSCIMConnection(trx, connection.id);
-					return createdSCIMUser;
+					await assertConnectionUserAvailable(
+						adapter,
+						connection.id,
+						resolution.userId,
+					);
 				},
-				resolution.action === "link"
-					? { subjectCreationUserId: resolution.userId }
-					: undefined,
 			);
 
 			const completeResource = createUserResource(
@@ -934,6 +958,7 @@ export function patchSCIMUser(
 					}
 					const patch = applySCIMUserPatch(currentSource, ctx.body.Operations);
 					if (!scimUserPatchChangesState(currentSource, patch)) {
+						await fenceActiveSCIMConnection(trx, connection.id);
 						return currentSource;
 					}
 					const userNameKey = createUserNameKey(

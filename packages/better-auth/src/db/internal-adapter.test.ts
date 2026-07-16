@@ -1040,6 +1040,98 @@ describe("internal adapter test", async () => {
 		expect(testMap.has(`active-sessions-${user.id}`)).toBe(false);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10390#discussion_r3585595438
+	 */
+	it("preserves sessions created after user session deletion is requested", async () => {
+		const testMap = new Map<string, string>();
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(testMap),
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "replacement-session-user",
+				email: "replacement-session@example.com",
+			},
+			{ method: "test" },
+		);
+		const previousSession = await testCtx.internalAdapter.createSession(
+			user.id,
+		);
+
+		const replacementSession = await runWithTransaction(
+			testCtx.adapter,
+			async () => {
+				await testCtx.internalAdapter.deleteUserSessions(user.id);
+				const session = await testCtx.internalAdapter.createSession(user.id);
+
+				expect(testMap.has(previousSession.token)).toBe(true);
+				expect(testMap.has(session.token)).toBe(true);
+				return session;
+			},
+		);
+
+		expect(testMap.has(previousSession.token)).toBe(false);
+		expect(testMap.has(replacementSession.token)).toBe(true);
+		expect(
+			safeJSONParse<{ token: string }[]>(
+				testMap.get(`active-sessions-${user.id}`) ?? "[]",
+			),
+		).toEqual([expect.objectContaining({ token: replacementSession.token })]);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10390
+	 */
+	it("keeps stored sessions when the revocation snapshot cannot be read", async () => {
+		const testMap = new Map<string, string>();
+		const storage = createStringSecondaryStorage(testMap);
+		let shouldFailActiveSessionReads = false;
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				...storage,
+				get(key: string) {
+					if (
+						shouldFailActiveSessionReads &&
+						key.startsWith("active-sessions-")
+					) {
+						throw new Error("secondary storage is unavailable");
+					}
+					return storage.get(key);
+				},
+			},
+			session: {
+				storeSessionInDatabase: true,
+			},
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "snapshot-failure-user",
+				email: "snapshot-failure@example.com",
+			},
+			{ method: "test" },
+		);
+		const session = await testCtx.internalAdapter.createSession(user.id);
+
+		shouldFailActiveSessionReads = true;
+		await expect(
+			testCtx.internalAdapter.deleteUserSessions(user.id),
+		).rejects.toThrow("secondary storage is unavailable");
+
+		shouldFailActiveSessionReads = false;
+		testMap.delete(session.token);
+		const storedSession = await testCtx.internalAdapter.findSession(
+			session.token,
+		);
+		expect(storedSession?.session.token).toBe(session.token);
+	});
+
 	it("listSessions should skip malformed session data (valid JSON but wrong structure)", async () => {
 		const testMap = new Map<string, string>();
 

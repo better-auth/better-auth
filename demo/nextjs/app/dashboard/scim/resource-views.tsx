@@ -5,7 +5,7 @@ import { SCIM_DEMO_ROLE_MAPPINGS } from "@/lib/scim-demo-catalog";
 import type {
 	SCIMDemoGroupState,
 	SCIMDemoOperation,
-} from "@/lib/scim-demo-types";
+} from "@/lib/scim-demo-contract";
 import { cn } from "@/lib/utils";
 import {
 	EmptyActivity,
@@ -133,7 +133,10 @@ export function ActivityView({
 						effects
 					</p>
 				</div>
-				<Badge variant="outline">{operations.length} operations</Badge>
+				<Badge variant="outline">
+					{operations.length}{" "}
+					{operations.length === 1 ? "operation" : "operations"}
+				</Badge>
 			</div>
 			{operations.length ? (
 				<ol className="mt-5 border">

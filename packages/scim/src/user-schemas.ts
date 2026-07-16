@@ -66,7 +66,6 @@ export const OpenAPIUserResourceSchema = {
 				lastModified: { type: "string", format: "date-time" },
 				location: { type: "string" },
 			},
-			required: ["resourceType", "created", "lastModified", "location"],
 		},
 		userName: { type: "string" },
 		name: {
@@ -76,7 +75,6 @@ export const OpenAPIUserResourceSchema = {
 				givenName: { type: "string" },
 				familyName: { type: "string" },
 			},
-			required: ["formatted"],
 		},
 		displayName: { type: "string" },
 		active: { type: "boolean" },
@@ -89,7 +87,6 @@ export const OpenAPIUserResourceSchema = {
 					primary: { type: "boolean" },
 					type: { type: "string" },
 				},
-				required: ["value", "primary"],
 			},
 		},
 		schemas: {
@@ -97,16 +94,7 @@ export const OpenAPIUserResourceSchema = {
 			items: { type: "string" },
 		},
 	},
-	required: [
-		"schemas",
-		"id",
-		"userName",
-		"name",
-		"displayName",
-		"active",
-		"emails",
-		"meta",
-	] as string[],
+	required: ["schemas", "id"] as string[],
 } as const;
 
 export const SCIMUserResourceSchema = {

@@ -751,15 +751,7 @@ describe("SCIM connection provisioning", () => {
 			],
 		});
 
-		await expect(
-			auth.api.createSCIMUser({
-				body: {
-					schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
-					userName: "no-transaction@example.com",
-				},
-				headers: { authorization: "Bearer test-scim-token" },
-			}),
-		).rejects.toThrow("native transaction support");
+		await expect(auth.$context).rejects.toThrow("native transaction support");
 		expect(data.scimConnectionBinding).toEqual([]);
 		expect(data.user).toEqual([]);
 		expect(data.scimSubject).toEqual([]);

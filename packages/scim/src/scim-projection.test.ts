@@ -1,7 +1,14 @@
-import type { Session, User } from "better-auth";
+import type {
+	BetterAuthOptions,
+	DBAdapter,
+	DBTransactionAdapter,
+	Session,
+	User,
+} from "better-auth";
 import { betterAuth } from "better-auth";
+import type { MemoryDB } from "better-auth/adapters/memory";
 import { memoryAdapter } from "better-auth/adapters/memory";
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type {
 	SCIMAuthorizationSource,
 	SCIMProjectedRoleGrant,
@@ -108,6 +115,86 @@ type SCIMConnectionBindingRow = {
 	decommissionLeaseId?: string | null;
 	decommissionLeaseExpiresAt?: Date | null;
 };
+
+type IncrementOneRequest = Parameters<DBAdapter["incrementOne"]>[0];
+
+function createBindingLockingMemoryAdapter(
+	data: MemoryDB,
+	callbacks: {
+		onBindingLockWait: () => void;
+		onTransactionIncrement?: (model: string) => void;
+	},
+) {
+	let bindingLockTail: Promise<void> | undefined;
+
+	const acquireBindingLock = async () => {
+		const previousLock = bindingLockTail;
+		let releaseCurrentLock!: () => void;
+		const currentLock = new Promise<void>((resolve) => {
+			releaseCurrentLock = resolve;
+		});
+		bindingLockTail = currentLock;
+
+		if (previousLock !== undefined) {
+			callbacks.onBindingLockWait();
+			await previousLock;
+		}
+
+		return () => {
+			releaseCurrentLock();
+			if (bindingLockTail === currentLock) bindingLockTail = undefined;
+		};
+	};
+
+	return (options: BetterAuthOptions): DBAdapter => {
+		const adapter = memoryAdapter(data)(options);
+		const incrementOne: DBAdapter["incrementOne"] = async <Row>(
+			request: IncrementOneRequest,
+		): Promise<Row | null> => {
+			if (request.model !== "scimConnectionBinding") {
+				return adapter.incrementOne<Row>(request);
+			}
+			const releaseBindingLock = await acquireBindingLock();
+			try {
+				return await adapter.incrementOne<Row>(request);
+			} finally {
+				releaseBindingLock();
+			}
+		};
+
+		return {
+			...adapter,
+			incrementOne,
+			transaction: async <Result>(
+				callback: (transaction: DBTransactionAdapter) => Promise<Result>,
+			) => {
+				let releaseBindingLock: (() => void) | undefined;
+				try {
+					return await adapter.transaction(async (transaction) => {
+						const incrementOne: DBTransactionAdapter["incrementOne"] = async <
+							Row,
+						>(
+							request: IncrementOneRequest,
+						): Promise<Row | null> => {
+							callbacks.onTransactionIncrement?.(request.model);
+							if (
+								request.model === "scimConnectionBinding" &&
+								!releaseBindingLock
+							) {
+								releaseBindingLock = await acquireBindingLock();
+							}
+							return transaction.incrementOne<Row>(request);
+						};
+
+						return callback({ ...transaction, incrementOne });
+					});
+				} finally {
+					releaseBindingLock?.();
+				}
+			},
+		};
+	};
+}
 
 describe("SCIM role projection", () => {
 	it("projects an allowlisted custom role with source-aware provenance", async () => {
@@ -870,113 +957,147 @@ describe("SCIM role projection", () => {
 		});
 	});
 
-	it("allows only one live decommission worker to reconcile a batch", async () => {
-		const createdAt = new Date("2026-01-01T00:00:00.000Z");
-		const data = {
-			user: [] as User[],
-			session: [] as Session[],
-			verification: [] as { id: string }[],
-			account: [] as { id: string }[],
-			scimConnectionBinding: [
-				{
-					id: "binding",
-					connectionId: "workforce",
-					connectionKey: createSCIMConnectionKey("workforce"),
-					provisioningDomainId: "workspace-acme",
-					createdAt,
-					decommissionStatus: "active",
-					decommissionReconciledUserCount: 0,
-					decommissionBatchCount: 0,
-					decommissionRevision: 0,
-				},
-			] satisfies SCIMConnectionBindingRow[],
-			scimIdentityTombstone: [] as { id: string }[],
-			scimSubject: [
-				{
-					id: "subject",
-					userId: "user",
-					revision: 0,
-					createdAt,
-					updatedAt: createdAt,
-				},
-			],
-			scimUser: [
-				{
-					id: "scim-user",
-					connectionId: "workforce",
-					provisioningDomainId: "workspace-acme",
-					userId: "user",
-					active: true,
-				},
-			],
-			scimGroup: [] as SCIMGroupRow[],
-			scimGroupMember: [] as SCIMGroupMemberRow[],
-			scimProjectionGrant: [] as ProjectionGrantRow[],
-		};
+	it("prevents takeover after the renewed lease expires during reconciliation", async () => {
+		const clockStart = new Date("2026-01-01T00:00:00.000Z");
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(clockStart);
+
 		let releaseReconciliation: (() => void) | undefined;
-		const reconciliationReleased = new Promise<void>((resolve) => {
-			releaseReconciliation = resolve;
-		});
-		let markReconciliationStarted: (() => void) | undefined;
-		const reconciliationStarted = new Promise<void>((resolve) => {
-			markReconciliationStarted = resolve;
-		});
-		let calls = 0;
-		const auth = betterAuth({
-			baseURL: "http://localhost:3000",
-			database: memoryAdapter(data),
-			plugins: [
-				scim({
-					connections: [
-						{
-							id: "workforce",
-							credentials: [
-								{
-									type: "bearer",
-									id: "test-scim-token",
-									token: "test-scim-token",
-								},
-							],
-							provisioningDomainId: "workspace-acme",
-						},
-					],
-					projection: {
-						async reconcileUser() {
-							calls++;
-							markReconciliationStarted?.();
-							await reconciliationReleased;
-						},
+		try {
+			const data = {
+				user: [] as User[],
+				session: [] as Session[],
+				verification: [] as { id: string }[],
+				account: [] as { id: string }[],
+				scimConnectionBinding: [
+					{
+						id: "binding",
+						connectionId: "workforce",
+						connectionKey: createSCIMConnectionKey("workforce"),
+						provisioningDomainId: "workspace-acme",
+						createdAt: clockStart,
+						decommissionStatus: "active",
+						decommissionReconciledUserCount: 0,
+						decommissionBatchCount: 0,
+						decommissionRevision: 0,
+					},
+				] satisfies SCIMConnectionBindingRow[],
+				scimIdentityTombstone: [] as { id: string }[],
+				scimSubject: [
+					{
+						id: "subject",
+						userId: "user",
+						revision: 0,
+						createdAt: clockStart,
+						updatedAt: clockStart,
+					},
+				],
+				scimUser: [
+					{
+						id: "scim-user",
+						connectionId: "workforce",
+						provisioningDomainId: "workspace-acme",
+						userId: "user",
+						active: true,
+					},
+				],
+				scimGroup: [] as SCIMGroupRow[],
+				scimGroupMember: [] as SCIMGroupMemberRow[],
+				scimProjectionGrant: [] as ProjectionGrantRow[],
+			};
+			const reconciliationReleased = new Promise<void>((resolve) => {
+				releaseReconciliation = resolve;
+			});
+			let markReconciliationStarted: (() => void) | undefined;
+			const reconciliationStarted = new Promise<void>((resolve) => {
+				markReconciliationStarted = resolve;
+			});
+			let reportConcurrencyOutcome:
+				| ((outcome: "blocked" | "duplicate-callback") => void)
+				| undefined;
+			const concurrencyOutcome = new Promise<"blocked" | "duplicate-callback">(
+				(resolve) => {
+					reportConcurrencyOutcome = resolve;
+				},
+			);
+			let calls = 0;
+			const lockOrder: string[] = [];
+			const auth = betterAuth({
+				baseURL: "http://localhost:3000",
+				database: createBindingLockingMemoryAdapter(data, {
+					onBindingLockWait() {
+						reportConcurrencyOutcome?.("blocked");
+					},
+					onTransactionIncrement(model) {
+						lockOrder.push(model);
 					},
 				}),
-			],
-		});
+				plugins: [
+					scim({
+						connections: [
+							{
+								id: "workforce",
+								credentials: [
+									{
+										type: "bearer",
+										id: "test-scim-token",
+										token: "test-scim-token",
+									},
+								],
+								provisioningDomainId: "workspace-acme",
+							},
+						],
+						projection: {
+							async reconcileUser() {
+								lockOrder.push("callback");
+								calls++;
+								if (calls > 1) {
+									reportConcurrencyOutcome?.("duplicate-callback");
+								}
+								markReconciliationStarted?.();
+								await reconciliationReleased;
+							},
+						},
+					}),
+				],
+			});
 
-		const first = auth.api.decommissionSCIMConnection({
-			body: { connectionId: "workforce" },
-		});
-		await reconciliationStarted;
-		const concurrent = await auth.api.decommissionSCIMConnection({
-			body: { connectionId: "workforce" },
-		});
-		releaseReconciliation?.();
-		const completed = await first;
+			const first = auth.api.decommissionSCIMConnection({
+				body: { connectionId: "workforce" },
+			});
+			await reconciliationStarted;
+			vi.setSystemTime(new Date(clockStart.getTime() + 10 * 60 * 1000));
+			const concurrent = auth.api.decommissionSCIMConnection({
+				body: { connectionId: "workforce" },
+			});
+			const outcome = await concurrencyOutcome;
+			releaseReconciliation?.();
+			const [completed, concurrentResult] = await Promise.all([
+				first,
+				concurrent,
+			]);
 
-		expect(concurrent).toEqual({
-			connectionId: "workforce",
-			provisioningDomainId: "workspace-acme",
-			status: "reconciling",
-			decommissionedAt: expect.any(Date),
-			completedAt: null,
-			retryAfter: expect.any(Date),
-			reconciledUsers: 0,
-			batches: 0,
-		});
-		expect(completed).toMatchObject({
-			status: "complete",
-			reconciledUsers: 1,
-			batches: 1,
-		});
-		expect(calls).toBe(1);
+			expect(outcome).toBe("blocked");
+			expect(completed).toMatchObject({
+				status: "complete",
+				reconciledUsers: 1,
+				batches: 1,
+			});
+			expect(concurrentResult).toMatchObject({
+				status: "complete",
+				reconciledUsers: 1,
+				batches: 1,
+			});
+			expect(lockOrder.slice(0, 3)).toEqual([
+				"scimSubject",
+				"scimConnectionBinding",
+				"callback",
+			]);
+			expect(calls).toBe(1);
+		} finally {
+			releaseReconciliation?.();
+			vi.useRealTimers();
+		}
 	});
 
 	it("takes over an expired decommission worker lease", async () => {

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import type {
 	SCIMDemoOperation,
 	SCIMDemoUserState,
-} from "@/lib/scim-demo-types";
+} from "@/lib/scim-demo-contract";
 import { cn } from "@/lib/utils";
 
 const timestampFormatter = new Intl.DateTimeFormat("en-US", {

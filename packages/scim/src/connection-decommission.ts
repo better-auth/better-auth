@@ -14,7 +14,6 @@ import {
 	findSCIMProjectionDomainBatch,
 	reconcileSCIMProjectionDomainBatch,
 } from "./projection";
-import { assertNativeSCIMTransactions } from "./transaction";
 
 const SCIM_DECOMMISSION_LEASE_DURATION_MS = 5 * 60 * 1000;
 
@@ -151,6 +150,39 @@ async function releaseDecommissionLease(input: {
 	}
 }
 
+/**
+ * Renews the lease and holds the binding write through the current transaction.
+ * The write prevents an expired-lease takeover while reconciliation callbacks run.
+ */
+async function lockAndRenewDecommissionLease(input: {
+	database: Pick<DBAdapter, "incrementOne">;
+	binding: SCIMConnectionBinding;
+	leaseId: string;
+}): Promise<SCIMConnectionBinding> {
+	const renewed = await input.database.incrementOne<SCIMConnectionBinding>({
+		model: "scimConnectionBinding",
+		where: [
+			{ field: "id", value: input.binding.id },
+			{
+				field: "decommissionRevision",
+				value: input.binding.decommissionRevision,
+			},
+			{ field: "decommissionStatus", value: "reconciling" },
+			{ field: "decommissionLeaseId", value: input.leaseId },
+		],
+		increment: {},
+		set: {
+			decommissionLeaseExpiresAt: new Date(
+				Date.now() + SCIM_DECOMMISSION_LEASE_DURATION_MS,
+			),
+		},
+	});
+	if (renewed) return renewed;
+	throw new BetterAuthError(
+		`SCIM connection "${input.binding.connectionId}" decommission lease changed before reconciliation.`,
+	);
+}
+
 async function reconcileDecommissionedConnection(input: {
 	database: DBAdapter;
 	auth: AuthContext;
@@ -163,26 +195,41 @@ async function reconcileDecommissionedConnection(input: {
 		while (true) {
 			const checkpoint = await runWithTransaction(input.database, async () => {
 				const trx = await getCurrentAdapter(input.database);
-				const binding = await trx.findOne<SCIMConnectionBinding>({
+				const storedBinding = await trx.findOne<SCIMConnectionBinding>({
 					model: "scimConnectionBinding",
 					where: [{ field: "id", value: input.binding.id }],
 				});
-				if (!binding) {
+				if (!storedBinding) {
 					throw new BetterAuthError(
 						`SCIM connection "${input.binding.connectionId}" binding disappeared during decommissioning.`,
 					);
 				}
-				if (binding.decommissionStatus === "complete") return binding;
-				if (binding.decommissionLeaseId !== input.leaseId) {
+				if (storedBinding.decommissionStatus === "complete") {
+					return storedBinding;
+				}
+				if (storedBinding.decommissionLeaseId !== input.leaseId) {
 					throw new BetterAuthError(
-						`SCIM connection "${binding.connectionId}" decommission lease was taken over by another worker.`,
+						`SCIM connection "${storedBinding.connectionId}" decommission lease was taken over by another worker.`,
 					);
 				}
-
 				const batch = await findSCIMProjectionDomainBatch({
 					database: trx,
-					provisioningDomainId: binding.provisioningDomainId,
-					cursorUserId: binding.decommissionCursorUserId,
+					provisioningDomainId: storedBinding.provisioningDomainId,
+					cursorUserId: storedBinding.decommissionCursorUserId,
+				});
+				if (batch) {
+					// Resource mutations lock subjects before fencing the connection.
+					// Keep the same order here so provisioning and retirement cannot deadlock.
+					await input.projection.acquireUserLocks({
+						database: trx,
+						provisioningDomainId: storedBinding.provisioningDomainId,
+						scimUserIds: batch.scimUserIds,
+					});
+				}
+				const binding = await lockAndRenewDecommissionLease({
+					database: trx,
+					binding: storedBinding,
+					leaseId: input.leaseId,
 				});
 				if (!batch) {
 					const completed = await trx.incrementOne<SCIMConnectionBinding>({
@@ -216,6 +263,7 @@ async function reconcileDecommissionedConnection(input: {
 					identity: input.identity,
 					provisioningDomainId: binding.provisioningDomainId,
 					batch,
+					subjectLocksAcquired: true,
 				});
 				const now = new Date();
 				const set: Partial<SCIMConnectionBinding> = {
@@ -283,7 +331,6 @@ export function createDecommissionSCIMConnectionEndpoint(
 			body: decommissionConnectionBodySchema,
 		},
 		async (ctx) => {
-			assertNativeSCIMTransactions(ctx.context.adapter);
 			const acquired = await acquireDecommissionLease(
 				ctx.context.adapter,
 				ctx.body.connectionId,
