@@ -462,6 +462,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 				hooks: {
 					async onSuccess(context) {
 						if (isWeb) return;
+						const { pathname } = new URL(context.request.url);
 						const setCookie = context.response.headers.get("set-cookie");
 						if (setCookie) {
 							// Only process and notify if the Set-Cookie header contains better-auth cookies
@@ -484,21 +485,20 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							}
 						}
 
-						if (
-							context.request.url.toString().includes("/get-session") &&
-							!opts?.disableCache
-						) {
+						if (pathname.endsWith("/get-session") && !opts?.disableCache) {
 							const data = context.data;
 							await storage.setItemAsync(localCacheName, JSON.stringify(data));
 						}
-						if (context.request.url.toString().includes("/sign-out")) {
+						if (pathname.endsWith("/sign-out")) {
 							await clearSessionCache();
 						}
 
+						const isSignInRequest =
+							pathname.endsWith("/sign-in") || pathname.includes("/sign-in/");
+						const isLinkSocialRequest = pathname.endsWith("/link-social");
 						if (
 							context.data?.redirect &&
-							(context.request.url.toString().includes("/sign-in") ||
-								context.request.url.toString().includes("/link-social")) &&
+							(isSignInRequest || isLinkSocialRequest) &&
 							!context.request?.body.includes("idToken") // id token is used for silent sign-in
 						) {
 							const callbackURL = JSON.parse(context.request.body)?.callbackURL;
@@ -562,7 +562,8 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							options: options as ClientFetchOption,
 						};
 					}
-					if (url.includes("/get-session")) {
+					const { pathname } = new URL(url, options?.baseURL);
+					if (pathname.endsWith("/get-session")) {
 						await hydrateSessionCache();
 					}
 					options = options || {};
@@ -579,7 +580,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					const isIdTokenRequest = options.body?.idToken !== undefined;
 
 					if (isIdTokenRequest) {
-						const storedCookie = url.includes("/link-social")
+						const storedCookie = pathname.endsWith("/link-social")
 							? await storage.getItemAsync(cookieName)
 							: null;
 						const cookie = getCookie(storedCookie);
@@ -615,7 +616,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								options.body.errorCallbackURL = url;
 							}
 						}
-						if (url.includes("/sign-out")) {
+						if (pathname.endsWith("/sign-out")) {
 							await clearSessionCache();
 						}
 					}
