@@ -78,6 +78,7 @@
     "expo-constants": "~56.0.18",
     "expo-linking": "~56.0.14",
     "expo-network": "~56.0.5",
+    "expo-secure-store": "~56.0.4",
     "expo-web-browser": "~56.0.5",
     "react-native": "~0.86.0",
     "tsdown": "catalog:"
@@ -88,6 +89,7 @@
     "expo-constants": ">=17.0.0",
     "expo-linking": ">=7.0.0",
     "expo-network": ">=8.0.7",
+    "expo-secure-store": ">=12.5.0",
     "expo-web-browser": ">=14.0.0"
   },
   "peerDependenciesMeta": {
@@ -98,6 +100,9 @@
       "optional": true
     },
     "expo-network": {
+      "optional": true
+    },
+    "expo-secure-store": {
       "optional": true
     },
     "expo-web-browser": {
