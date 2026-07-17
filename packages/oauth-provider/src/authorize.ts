@@ -515,10 +515,25 @@ export async function authorizeEndpoint(
 		);
 	}
 
-	const redirectUri = findRegisteredRedirectUri(
+	let redirectUri = findRegisteredRedirectUri(
 		client.redirectUris,
 		query.redirect_uri,
 	);
+	// Last resort: let the server authorize a redirect_uri that isn't registered
+	// (e.g. a dynamic/ephemeral preview deployment). Only consulted when the
+	// built-in checks above did not match, and the implementer is responsible for
+	// validating it strictly — see `validateRedirectURI` in the plugin options.
+	if (!redirectUri && query.redirect_uri && opts.validateRedirectURI) {
+		const accepted = await opts.validateRedirectURI({
+			ctx,
+			client,
+			redirectURI: query.redirect_uri,
+			type: "authorize",
+		});
+		if (accepted) {
+			redirectUri = query.redirect_uri;
+		}
+	}
 	if (!redirectUri || !query.redirect_uri) {
 		return handleRedirect(
 			ctx,
