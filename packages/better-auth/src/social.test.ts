@@ -7,9 +7,10 @@ import type {
 	GoogleProfile,
 	MicrosoftEntraIDProfile,
 	RailwayProfile,
+	ThreadsProfile,
 	VercelProfile,
 } from "@better-auth/core/social-providers";
-import { reddit } from "@better-auth/core/social-providers";
+import { reddit, threads } from "@better-auth/core/social-providers";
 import { betterFetch } from "@better-fetch/fetch";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
@@ -3623,5 +3624,320 @@ describe("Google Provider - includeGrantedScopes", async () => {
 
 		const authUrl = new URL(signInRes.data!.url!);
 		expect(authUrl.searchParams.get("include_granted_scopes")).toBe("true");
+	});
+});
+
+describe("Threads Provider", async () => {
+	// Threads issues a SHORT-LIVED token (~1h) from the code exchange with no
+	// `expires_in` and no `refresh_token`, then requires a second call to upgrade
+	// it to a LONG-LIVED (60-day) token. These handlers model both hosts: the
+	// human-facing authorize host (threads.net) and the Graph API host used for
+	// token exchange and profile reads (graph.threads.net).
+	beforeAll(async () => {
+		mswServer.use(
+			// Step 1: authorization-code exchange -> short-lived token.
+			http.post("https://graph.threads.net/oauth/access_token", async () => {
+				return HttpResponse.json({
+					access_token: "threads_short_lived_token",
+					user_id: "threads_user_123",
+					token_type: "bearer",
+				});
+			}),
+			// Step 2: short-lived -> long-lived exchange (th_exchange_token).
+			http.get("https://graph.threads.net/access_token", async () => {
+				return HttpResponse.json({
+					access_token: "threads_long_lived_token",
+					token_type: "bearer",
+					expires_in: 5183944,
+				});
+			}),
+			// Self-refresh of a long-lived token (th_refresh_access_token).
+			http.get("https://graph.threads.net/refresh_access_token", async () => {
+				return HttpResponse.json({
+					access_token: "threads_refreshed_token",
+					token_type: "bearer",
+					expires_in: 5183944,
+				});
+			}),
+			// Profile read. `username` deliberately differs from `id` so tests can
+			// prove the synthetic email is keyed on the stable id, not the handle.
+			http.get("https://graph.threads.net/v1.0/me", async () => {
+				return HttpResponse.json({
+					id: "threads_user_123",
+					username: "cooluser",
+					name: "Cool User",
+					threads_profile_picture_url: "https://threads.net/avatar.jpg",
+					threads_biography: "just here for the threads",
+				});
+			}),
+		);
+	});
+
+	it("should configure Threads provider correctly", async () => {
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				threads: {
+					clientId: "threads-test-client-id",
+					clientSecret: "threads-test-client-secret",
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+		const threadsProvider = ctx.socialProviders.find((p) => p.id === "threads");
+
+		expect(threadsProvider).toBeDefined();
+		expect(threadsProvider?.id).toBe("threads");
+		expect(threadsProvider?.name).toBe("Threads");
+	});
+
+	it("should initiate Threads OAuth flow with the threads_basic scope", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: {
+				threads: {
+					clientId: "threads-test-client-id",
+					clientSecret: "threads-test-client-secret",
+				},
+			},
+		});
+
+		const signInRes = await client.signIn.social({
+			provider: "threads",
+			callbackURL: "/dashboard",
+		});
+
+		expect(signInRes.data).toBeDefined();
+		expect(signInRes.data?.url).toContain("threads.net/oauth/authorize");
+		expect(signInRes.data?.redirect).toBe(true);
+
+		const authUrl = new URL(signInRes.data!.url!);
+		expect(authUrl.searchParams.get("scope")).toBe("threads_basic");
+		expect(authUrl.searchParams.get("response_type")).toBe("code");
+		expect(authUrl.searchParams.get("client_id")).toBe(
+			"threads-test-client-id",
+		);
+	});
+
+	it("should upgrade to a long-lived token and key the synthetic email on the stable id", async () => {
+		const { client, cookieSetter, auth } = await getTestInstance(
+			{
+				socialProviders: {
+					threads: {
+						clientId: "threads-test-client-id",
+						clientSecret: "threads-test-client-secret",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "threads",
+			callbackURL: "/dashboard",
+			newUserCallbackURL: "/welcome",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/threads", {
+			query: {
+				state,
+				code: "threads_test_code",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: { headers },
+		});
+
+		expect(session.data).toBeDefined();
+		// Synthetic email is derived from the STABLE id, not the handle "cooluser",
+		// and uses the RFC 2606 reserved `.invalid` TLD so it can never route mail.
+		expect(session.data?.user.email).toBe("threads_user_123@threads.invalid");
+		expect(session.data?.user.name).toBe("Cool User");
+		expect(session.data?.user.image).toBe("https://threads.net/avatar.jpg");
+		expect(session.data?.user.emailVerified).toBe(false);
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]?.providerId).toBe("threads");
+		expect(accounts[0]?.providerAccountId).toBe("threads_user_123");
+		// The stored token is the LONG-LIVED one from the inline upgrade, with a
+		// real expiry recorded (the short-lived exchange carries none).
+		expect(accounts[0]?.accessToken).toBe("threads_long_lived_token");
+		expect(accounts[0]?.accessTokenExpiresAt).toBeDefined();
+	});
+
+	it("should fall back to the username when the profile has no name", async () => {
+		mswServer.use(
+			http.get("https://graph.threads.net/v1.0/me", async () => {
+				return HttpResponse.json({
+					id: "threads_user_456",
+					username: "nonamer",
+					threads_profile_picture_url: "https://threads.net/avatar2.jpg",
+				});
+			}),
+		);
+
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					threads: {
+						clientId: "threads-test-client-id",
+						clientSecret: "threads-test-client-secret",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "threads",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/threads", {
+			query: { state, code: "threads_test_code_2" },
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: { headers },
+		});
+
+		expect(session.data?.user.name).toBe("nonamer");
+		expect(session.data?.user.email).toBe("threads_user_456@threads.invalid");
+	});
+
+	it("should append additional scopes", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: {
+				threads: {
+					clientId: "threads-test-client-id",
+					clientSecret: "threads-test-client-secret",
+					scope: ["threads_content_publish"],
+				},
+			},
+		});
+
+		const signInRes = await client.signIn.social({
+			provider: "threads",
+			callbackURL: "/dashboard",
+		});
+
+		const authUrl = new URL(signInRes.data!.url!);
+		const scopes = authUrl.searchParams.get("scope");
+		// Threads uses Meta's comma-separated scope convention, not spaces.
+		expect(scopes).toBe("threads_basic,threads_content_publish");
+	});
+
+	it("should support mapProfileToUser", async () => {
+		mswServer.use(
+			http.get("https://graph.threads.net/v1.0/me", async () => {
+				return HttpResponse.json({
+					id: "threads_user_789",
+					username: "mappeduser",
+					name: "Mapped User",
+					threads_profile_picture_url: "https://threads.net/avatar3.jpg",
+				});
+			}),
+		);
+
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				user: {
+					additionalFields: {
+						threadsId: {
+							type: "string",
+						},
+					},
+				},
+				socialProviders: {
+					threads: {
+						clientId: "threads-test-client-id",
+						clientSecret: "threads-test-client-secret",
+						mapProfileToUser(profile: ThreadsProfile) {
+							return {
+								threadsId: profile.id,
+							};
+						},
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "threads",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/threads", {
+			query: { state, code: "threads_test_code_3" },
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: { headers },
+		});
+
+		expect((session.data?.user as any).threadsId).toBe("threads_user_789");
+	});
+
+	it("should self-refresh the long-lived token (Threads has no refresh token)", async () => {
+		const provider = threads({
+			clientId: "threads-test-client-id",
+			clientSecret: "threads-test-client-secret",
+		});
+
+		// better-auth stores the long-lived access token as the refresh credential,
+		// since Threads has no separate refresh token: the access token refreshes
+		// itself. The refreshed token is returned as BOTH accessToken and
+		// refreshToken so the next refresh cycle has a credential to present.
+		const refreshed = await provider.refreshAccessToken!(
+			"threads_long_lived_token",
+		);
+
+		expect(refreshed.accessToken).toBe("threads_refreshed_token");
+		expect(refreshed.refreshToken).toBe("threads_refreshed_token");
+		expect(refreshed.accessTokenExpiresAt).toBeInstanceOf(Date);
 	});
 });
