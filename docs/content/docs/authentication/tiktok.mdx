@@ -20,13 +20,13 @@ description: TikTok provider setup and usage.
     <Callout type="info">
       * The TikTok API does not work with localhost. You need to use a public domain for the redirect URL and HTTPS for local testing. You can use [NGROK](https://ngrok.com/) or another similar tool for this.
       * For testing, you will need to use the [Sandbox mode](https://developers.tiktok.com/blog/introducing-sandbox), which you can enable in the TikTok Developer Portal.
-      * The default scope is `user.info.profile`. For additional scopes, refer to the [Available Scopes](https://developers.tiktok.com/doc/tiktok-api-scopes/) documentation.
+      * The default scopes are `user.info.basic` and `user.info.profile`. Enable both on your TikTok app before signing in. For additional scopes, refer to the [Available Scopes](https://developers.tiktok.com/doc/tiktok-api-scopes/) documentation.
     </Callout>
 
     Make sure to set the redirect URL to a valid HTTPS domain for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
 
     <Callout type="info">
-      * The TikTok API does not provide email addresses. As a workaround, this implementation uses the user's `username` value for the `email` field, which is why it requires the `user.info.profile` scope instead of just `user.info.basic`.
+      * The TikTok API does not provide email addresses. As a workaround, this implementation uses the user's `username` value for the `email` field, which is why it requires `user.info.profile` alongside the `user.info.basic` scope that carries the identity subject, display name, and avatar.
       * Better Auth requests TikTok's `union_id` and uses it as the stable Identity subject for the same user across applications owned by the same developer.
       * For production use, you will need to request approval from TikTok for the scopes you intend to use.
     </Callout>

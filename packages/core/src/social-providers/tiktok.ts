@@ -146,7 +146,11 @@ export const tiktok = (options: TiktokOptions) => {
 			return unionId;
 		},
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
-			const _scopes = options.disableDefaultScope ? [] : ["user.info.profile"];
+			// `user.info.basic` carries the identity subject, display name, and
+			// avatar; `user.info.profile` carries the username used as the email.
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["user.info.basic", "user.info.profile"];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
 			// TikTok uses `client_key` instead of the standard `client_id`, so the

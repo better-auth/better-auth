@@ -394,7 +394,9 @@ describe("tiktok provider", () => {
 		expect(url.searchParams.get("response_type")).toBe("code");
 		expect(url.searchParams.get("redirect_uri")).toBe(baseCallback);
 		expect(url.searchParams.get("state")).toBe(baseState);
-		expect(url.searchParams.get("scope")).toBe("user.info.profile");
+		expect(url.searchParams.get("scope")).toBe(
+			"user.info.basic,user.info.profile",
+		);
 	});
 
 	it("forwards additionalParams but drops reserved keys and client_key", async () => {

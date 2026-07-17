@@ -3189,6 +3189,31 @@ describe("provider account binding across same-user session rotation", async () 
 		await expectProviderAccess(auth, jar);
 	});
 
+	it("preserves provider access when the user updates their profile", async () => {
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			account: { storeAccountCookie: true },
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test" },
+			},
+		});
+		const { headers } = await signInWithTestUser();
+		const jar = jarFromHeaders(headers);
+		await linkGoogleAccount(auth, jar, testUser.email);
+
+		const updateHeaders = headersFromJar(jar);
+		updateHeaders.set("content-type", "application/json");
+		const updateResponse = await auth.handler(
+			new Request("http://localhost:3000/api/auth/update-user", {
+				method: "POST",
+				headers: updateHeaders,
+				body: JSON.stringify({ name: "Renamed" }),
+			}),
+		);
+		expect(updateResponse.status).toBe(200);
+		collectResponseCookies(updateResponse, jar);
+		await expectProviderAccess(auth, jar);
+	});
+
 	it("preserves provider access when two-factor enrollment and removal rotate the session", async () => {
 		const { auth, signInWithTestUser, testUser } = await getTestInstance({
 			account: { storeAccountCookie: true },

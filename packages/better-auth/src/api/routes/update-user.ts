@@ -6,7 +6,6 @@ import * as z from "zod";
 import {
 	deleteSessionCookie,
 	rotateSessionCookiePreservingProviderAccountBinding,
-	setSessionCookie,
 } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
@@ -139,7 +138,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			/**
 			 * Update the session cookie with the new user data
 			 */
-			await setSessionCookie(ctx, {
+			await rotateSessionCookiePreservingProviderAccountBinding(ctx, {
 				session: session.session,
 				user: updatedUser,
 			});
@@ -800,7 +799,7 @@ export const changeEmail = createAuthEndpoint(
 				ctx.context.session.user.id,
 				{ email: newEmail },
 			);
-			await setSessionCookie(ctx, {
+			await rotateSessionCookiePreservingProviderAccountBinding(ctx, {
 				session: ctx.context.session.session,
 				user: {
 					...ctx.context.session.user,

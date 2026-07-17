@@ -2,7 +2,10 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import {
+	deleteSessionCookie,
+	rotateSessionCookiePreservingProviderAccountBinding,
+} from "../../cookies";
 import { parseSessionInput, parseSessionOutput } from "../../db/schema";
 import type { AdditionalSessionFieldsInput } from "../../types";
 import { isStateful, sessionMiddleware } from "./session";
@@ -99,7 +102,7 @@ export const updateSession = <O extends BetterAuthOptions>() =>
 				updatedAt: new Date(),
 			};
 
-			await setSessionCookie(ctx, {
+			await rotateSessionCookiePreservingProviderAccountBinding(ctx, {
 				session: newSession,
 				user: session.user,
 			});

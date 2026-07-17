@@ -18,7 +18,9 @@ Account APIs return the Identity under `account.identity`; `providerInstanceId` 
 
 OAuth providers without an issuer use the synthetic `local:oauth:<encoded providerId>` issuer, which stays separate from the `local:<providerId>` namespace that credential, SIWE, and the other built-in methods use.
 
-Implicit same-email linking now always requires the existing Better Auth User's local email to be verified. The `account.accountLinking.requireLocalEmailVerified` opt-out is removed. TikTok now uses `union_id` as its stable Identity subject instead of the app-scoped `open_id`, and rejects authentication when TikTok does not return that field.
+Implicit same-email linking now always requires the existing Better Auth User's local email to be verified. The `account.accountLinking.requireLocalEmailVerified` opt-out is removed.
+
+TikTok uses `union_id` as its stable Identity subject instead of the app-scoped `open_id`, and rejects authentication when TikTok does not return that field. TikTok sign-in now requests `user.info.basic` alongside `user.info.profile`, because the identity subject, display name, and avatar belong to that scope. Enable both scopes on your TikTok app.
 
 SSO provider IDs and domains are validated during registration, updates, and startup configuration. Provider IDs must be URL-segment-safe, and every entry in a provider's domain list must resolve to a hostname.
 
