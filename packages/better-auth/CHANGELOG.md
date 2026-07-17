@@ -1,5 +1,20 @@
 # better-auth
 
+## 1.6.23
+
+### Patch Changes
+
+- [#9138](https://github.com/better-auth/better-auth/pull/9138) [`8581f97`](https://github.com/better-auth/better-auth/commit/8581f97ea0000e03edd6aa7911efabf694a9ff95) Thanks [@vladflotsky](https://github.com/vladflotsky)! - Add a pre-configured Yandex provider helper for the generic OAuth plugin.
+
+- Updated dependencies [[`930b260`](https://github.com/better-auth/better-auth/commit/930b260cfd402e9f8886719a3ced503b9ceff7f6)]:
+  - @better-auth/drizzle-adapter@1.6.23
+  - @better-auth/core@1.6.23
+  - @better-auth/kysely-adapter@1.6.23
+  - @better-auth/memory-adapter@1.6.23
+  - @better-auth/mongo-adapter@1.6.23
+  - @better-auth/prisma-adapter@1.6.23
+  - @better-auth/telemetry@1.6.23
+
 ## 1.6.22
 
 ### Patch Changes

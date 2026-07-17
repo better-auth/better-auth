@@ -1,5 +1,7 @@
 # @better-auth/core
 
+## 1.6.23
+
 ## 1.6.22
 
 ### Patch Changes

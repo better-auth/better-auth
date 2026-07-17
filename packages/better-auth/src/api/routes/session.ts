@@ -72,6 +72,9 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			session: Session<Option["session"], Option["plugins"]>;
 			user: User<Option["user"], Option["plugins"]>;
 		} | null> => {
+			ctx.setHeader("cache-control", "no-store");
+			ctx.setHeader("pragma", "no-cache");
+
 			const deferSessionRefresh =
 				ctx.context.options.session?.deferSessionRefresh;
 			const isPostRequest = ctx.method === "POST";
@@ -584,9 +587,15 @@ export const getSessionFromCtx = async <
 	}
 	if (session.headers) {
 		session.headers.forEach((value, key) => {
+			const lowerKey = key.toLowerCase();
+			// /get-session response cache headers must not leak onto endpoints
+			// that resolve the session via getSessionFromCtx.
+			if (lowerKey === "cache-control" || lowerKey === "pragma") {
+				return;
+			}
 			if (!ctx.context.responseHeaders) {
 				ctx.context.responseHeaders = new Headers({ [key]: value });
-			} else if (key.toLowerCase() === "set-cookie") {
+			} else if (lowerKey === "set-cookie") {
 				ctx.context.responseHeaders.append(key, value);
 			} else {
 				ctx.context.responseHeaders.set(key, value);

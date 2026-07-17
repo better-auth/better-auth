@@ -1,5 +1,13 @@
 # @better-auth/passkey
 
+## 1.6.23
+
+### Patch Changes
+
+- Updated dependencies [[`8581f97`](https://github.com/better-auth/better-auth/commit/8581f97ea0000e03edd6aa7911efabf694a9ff95)]:
+  - better-auth@1.6.23
+  - @better-auth/core@1.6.23
+
 ## 1.6.22
 
 ### Patch Changes

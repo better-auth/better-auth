@@ -168,6 +168,7 @@ jobs:
             compose_services: "postgres-prisma mysql-prisma"
     env:
       COMPOSE_SERVICES: ${{ matrix.compose_services }}
+      FILTER: ${{ matrix.packages }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -196,6 +197,9 @@ jobs:
       - name: Reset Docker Containers
         run: docker compose down --volumes --remove-orphans
 
+      - name: Build Adapter Dependencies
+        run: pnpm exec turbo run build --filter="$FILTER..."
+
       - name: Start Docker Containers
         if: matrix.compose_services != ''
         run: |
@@ -203,8 +207,6 @@ jobs:
           docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
 
       - name: Adapter Integration
-        env:
-          FILTER: ${{ matrix.packages }}
         run: pnpm e2e:integration --filter="$FILTER"
 
       - name: Docker Compose Diagnostics
@@ -213,6 +215,14 @@ jobs:
           read -r -a compose_services <<< "$COMPOSE_SERVICES"
           docker compose ps --all || true
           docker compose logs --no-color "${compose_services[@]}" || true
+
+          # Capture container exit and OOM state without masking the test failure.
+          for compose_service in "${compose_services[@]}"; do
+            container_id="$(docker compose ps --all --quiet "$compose_service")"
+            if [[ -n "$container_id" ]]; then
+              docker inspect --format 'name={{.Name}} status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{.State.Error}}' "$container_id" || true
+            fi
+          done
 
       - name: Stop Docker Containers
         if: always() && hashFiles('docker-compose.yml') != ''
