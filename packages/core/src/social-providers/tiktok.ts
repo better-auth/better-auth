@@ -1,4 +1,5 @@
 import { betterFetch } from "@better-fetch/fetch";
+import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	RESERVED_AUTHORIZATION_PARAMS_SET,
@@ -27,7 +28,7 @@ export interface TiktokProfile extends Record<string, any> {
 			 *
 			 * To return this field, add `fields=union_id` in the user profile request's query parameter.
 			 */
-			union_id: string;
+			union_id?: string | undefined;
 			/**
 			 * User's profile image.
 			 *
@@ -135,7 +136,15 @@ export const tiktok = (options: TiktokOptions) => {
 	return {
 		id: "tiktok",
 		name: "TikTok",
-		identitySubject: ({ profile }) => profile.data.user.union_id,
+		identitySubject: ({ profile }) => {
+			const unionId = profile.data.user.union_id;
+			if (!unionId) {
+				throw new BetterAuthError(
+					"TikTok did not return `union_id`. The TikTok app must be authorized for the `union_id` field before it can establish a stable identity.",
+				);
+			}
+			return unionId;
+		},
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope ? [] : ["user.info.profile"];
 			if (options.scope) _scopes.push(...options.scope);

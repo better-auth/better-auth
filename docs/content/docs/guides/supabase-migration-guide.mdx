@@ -240,10 +240,10 @@ Before starting the migration process, set up Better Auth in your project. Follo
       tempEmailDomain: 'temp.better-auth.com',
       /**
        * Review every social provider in your Supabase export. Use the exact
-       * trusted issuer Better Auth uses, or local:<encoded providerId> when it has none.
+       * trusted issuer Better Auth uses, or local:oauth:<encoded providerId> when it has none.
        */
       identityIssuers: {
-        github: 'local:github',
+        github: 'local:oauth:github',
         google: 'https://accounts.google.com',
       } as Record<string, string>,
     };

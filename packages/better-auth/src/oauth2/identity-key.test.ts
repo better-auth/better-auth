@@ -1,3 +1,4 @@
+import { createLocalIdentityIssuer } from "@better-auth/core/db";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
 import { describe, expect, it, vi } from "vitest";
 import { resolveOAuthIdentityKey } from "./identity-key";
@@ -26,9 +27,23 @@ describe("resolveOAuthIdentityKey", () => {
 		await expect(
 			resolveOAuthIdentityKey(createProvider(), tokens, result.data),
 		).resolves.toEqual({
-			issuer: "local:company-oauth",
+			issuer: "local:oauth:company-oauth",
 			providerAccountId: "provider-subject",
 		});
+	});
+
+	it.each([
+		"credential",
+		"siwe",
+	])("keeps a provider named %j out of the local authentication namespace", async (providerId) => {
+		const { issuer } = await resolveOAuthIdentityKey(
+			createProvider({ id: providerId }),
+			tokens,
+			result.data,
+		);
+
+		expect(issuer).toBe(`local:oauth:${providerId}`);
+		expect(issuer).not.toBe(createLocalIdentityIssuer(providerId));
 	});
 
 	it.each([
@@ -42,7 +57,7 @@ describe("resolveOAuthIdentityKey", () => {
 				result.data,
 			),
 		).resolves.toEqual({
-			issuer: "local:company-oauth",
+			issuer: "local:oauth:company-oauth",
 			providerAccountId,
 		});
 	});

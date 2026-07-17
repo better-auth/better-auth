@@ -347,7 +347,7 @@ export async function authenticateProviderUser(
 	}
 
 	const requireEmailVerification = c.context.socialProviders.find(
-		(p) => p.id === account.providerId,
+		(p) => p.id === account.providerInstanceId,
 	)?.options?.requireEmailVerification;
 
 	if (

@@ -47,9 +47,6 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
   plugins: [
     sso({
-      saml: {
-        allowIdpInitiated: true, // Omit unless users start sign-in from Okta
-      },
       defaultSSO: [{
         domain: "localhost:3000", // Your domain
         providerId: "sso",

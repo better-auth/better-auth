@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import { getAuthTables } from "../get-tables";
 import { accountSchema } from "../schema/account";
 import type { IdentityKey } from "../schema/identity";
-import { createLocalIdentityIssuer, identitySchema } from "../schema/identity";
+import {
+	createLocalIdentityIssuer,
+	createOAuthIdentityIssuer,
+	identitySchema,
+} from "../schema/identity";
 import type { SecondaryStorage } from "../type";
 
 const secondaryStorageStub: SecondaryStorage = {
@@ -28,12 +32,24 @@ describe("getAuthTables", () => {
 
 	it("escapes provider IDs in synthetic identity issuers", () => {
 		expect(createLocalIdentityIssuer("credential")).toBe("local:credential");
+		expect(createOAuthIdentityIssuer("google")).toBe("local:oauth:google");
 		expect(createLocalIdentityIssuer("oauth:google")).toBe(
 			"local:oauth%3Agoogle",
 		);
-		expect(createLocalIdentityIssuer("team/google%prod")).toBe(
-			"local:team%2Fgoogle%25prod",
+		expect(createOAuthIdentityIssuer("team/google%prod")).toBe(
+			"local:oauth:team%2Fgoogle%25prod",
 		);
+	});
+
+	it("keeps OAuth issuers in a namespace local methods cannot reach", () => {
+		expect(createLocalIdentityIssuer("oauth:google")).not.toBe(
+			createOAuthIdentityIssuer("google"),
+		);
+		for (const providerId of ["credential", "siwe"]) {
+			expect(createOAuthIdentityIssuer(providerId)).not.toBe(
+				createLocalIdentityIssuer(providerId),
+			);
+		}
 	});
 
 	it("parses identities and provider accounts as separate records", () => {

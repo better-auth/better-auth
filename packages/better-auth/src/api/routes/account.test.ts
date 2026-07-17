@@ -2831,6 +2831,63 @@ describe("validateUserInfo account linking", async () => {
 	});
 });
 
+describe("provider alias token isolation", async () => {
+	const { auth, client, signInWithTestUser } = await getTestInstance({
+		socialProviders: {
+			google: { clientId: "google-client", clientSecret: "google-secret" },
+		},
+	});
+	const ctx = await auth.$context;
+	const { headers, user } = await signInWithTestUser();
+
+	it("does not resolve a social provider for an account that only aliases its providerId", async () => {
+		const { account } = await ctx.internalAdapter.linkAccount(
+			user.id,
+			{
+				issuer: "https://idp.example.com",
+				providerAccountId: "aliased-subject",
+			},
+			{
+				providerId: "google",
+				providerInstanceId: "sso:provider:aliased",
+				accessToken: "aliased-access-token",
+				refreshToken: "aliased-refresh-token",
+			},
+		);
+
+		const accessToken = await client.getAccessToken(
+			{ accountId: account.id },
+			{ headers },
+		);
+
+		expect(accessToken.error?.status).toBe(400);
+		expect(accessToken.data).toBeNull();
+	});
+
+	it("still resolves a social provider for a genuine social account", async () => {
+		const { account } = await ctx.internalAdapter.linkAccount(
+			user.id,
+			{
+				issuer: "https://accounts.google.com",
+				providerAccountId: "google-subject",
+			},
+			{
+				providerId: "google",
+				providerInstanceId: "google",
+				accessToken: "google-access-token",
+				accessTokenExpiresAt: new Date(Date.now() + 60 * 60 * 1000),
+			},
+		);
+
+		const accessToken = await client.getAccessToken(
+			{ accountId: account.id },
+			{ headers },
+		);
+
+		expect(accessToken.data?.accessToken).toBe("google-access-token");
+	});
+});
+
 describe("account selector validation", async () => {
 	const { auth, signInWithTestUser } = await getTestInstance();
 	const { headers: sessionHeaders } = await signInWithTestUser();

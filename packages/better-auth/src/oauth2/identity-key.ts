@@ -1,5 +1,5 @@
 import type { IdentityKey } from "@better-auth/core/db";
-import { createLocalIdentityIssuer } from "@better-auth/core/db";
+import { createOAuthIdentityIssuer } from "@better-auth/core/db";
 import {
 	APIError,
 	BASE_ERROR_CODES,
@@ -48,7 +48,7 @@ export async function resolveOAuthIdentityKey<Profile extends object>(
 			: identityIssuer;
 	const issuer =
 		resolvedIssuer === undefined
-			? createLocalIdentityIssuer(provider.id)
+			? createOAuthIdentityIssuer(provider.id)
 			: resolvedIssuer;
 	if (
 		typeof issuer !== "string" ||

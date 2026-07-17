@@ -32,6 +32,15 @@ export function createLocalIdentityIssuer(providerId: string): string {
 }
 
 /**
+ * Creates the synthetic issuer used by OAuth providers without an issuer of
+ * their own. OAuth identities use a distinct namespace so a provider ID
+ * cannot collide with an internal local authentication method.
+ */
+export function createOAuthIdentityIssuer(providerId: string): string {
+	return `local:oauth:${encodeIdentityIssuerProviderId(providerId)}`;
+}
+
+/**
  * Identity schema type used by Better Auth. Identities may include additional
  * application or plugin fields.
  */

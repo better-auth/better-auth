@@ -89,7 +89,7 @@ Deleting a persisted provider deletes only the Accounts attached to that provide
   Dynamically registered providers require a database adapter with native transaction support. Better Auth coordinates provider updates and deletion with in-flight authentication inside one transaction; a sequential fallback or `commitAtomicWrites` implementation alone cannot protect that boundary. Providers declared in `defaultSSO` do not have this requirement because their configuration is immutable at runtime.
 </Callout>
 
-Provider IDs are used as callback-path segments. They must be 1 to 128 characters and contain only letters, numbers, `.`, `_`, `~`, or `-`; `.` and `..` are not valid IDs. Domains may be comma-separated. Better Auth normalizes them to lowercase hostnames, removes duplicates, and rejects a provider with no valid domain. These rules apply to registration, updates, and `defaultSSO`; invalid `defaultSSO` configuration fails during startup.
+Provider IDs are used as callback-path segments. They must be 1 to 128 characters and contain only letters, numbers, `.`, `_`, `~`, or `-`; `.` and `..` are not valid IDs. Domains may be comma-separated. Better Auth normalizes them to lowercase hostnames, removes duplicates, and requires every entry to resolve to a hostname, so one unusable entry rejects the whole provider. These rules apply to registration, updates, and `defaultSSO`; invalid `defaultSSO` configuration fails during startup.
 
 An in-progress OIDC or SAML flow is bound to the provider configuration that started it. If a dynamically registered provider changes or is deleted before the callback completes, Better Auth rejects the callback and the user must start sign-in again.
 

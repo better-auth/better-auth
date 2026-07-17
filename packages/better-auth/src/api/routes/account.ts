@@ -798,8 +798,10 @@ async function getValidAccessToken(
 	}
 	const { account, identity } = accountWithIdentity;
 
+	// Resolved by instance so a provider alias cannot reach another provider's
+	// client credentials.
 	const provider = await getAwaitableValue(ctx.context.socialProviders, {
-		value: account.providerId,
+		value: account.providerInstanceId,
 	});
 	if (!provider) {
 		throw APIError.from("BAD_REQUEST", {
@@ -1008,7 +1010,7 @@ export const refreshToken = createAuthEndpoint(
 		);
 		const { account } = accountWithIdentity;
 		const provider = await getAwaitableValue(ctx.context.socialProviders, {
-			value: account.providerId,
+			value: account.providerInstanceId,
 		});
 		if (!provider) {
 			throw APIError.from("BAD_REQUEST", {
@@ -1194,7 +1196,7 @@ export const accountInfo = createAuthEndpoint(
 		const { account } = accountWithIdentity;
 
 		const provider = await getAwaitableValue(ctx.context.socialProviders, {
-			value: account.providerId,
+			value: account.providerInstanceId,
 		});
 
 		if (!provider) {

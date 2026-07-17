@@ -97,8 +97,8 @@ Several provider configurations can point to one Identity without sharing creden
    | --------------------------- | ----------------------------------------- | -------------------------------------- | ------------------------------- |
    | Credential                  | `local:credential`                        | Stable `id` from the linked `user` row | `credential`                    |
    | Trusted OAuth/OIDC provider | Exact trusted issuer used by the provider | Existing provider account identifier   | Existing `providerId`           |
-   | TikTok                      | `local:tiktok`                            | TikTok `union_id`                      | `tiktok`                        |
-   | Provider without an issuer  | `local:<encoded providerId>`              | Existing provider account identifier   | Existing `providerId`           |
+   | TikTok                      | `local:oauth:tiktok`                      | TikTok `union_id`                      | `tiktok`                        |
+   | Provider without an issuer  | `local:oauth:<encoded providerId>`              | Existing provider account identifier   | Existing `providerId`           |
    | Persisted OIDC SSO provider | `sso:provider:<ssoProvider.id>:oidc`      | Verified `sub`                         | `sso:provider:<ssoProvider.id>` |
    | Persisted SAML SSO provider | `sso:provider:<ssoProvider.id>:saml`      | Signed `NameID`                        | `sso:provider:<ssoProvider.id>` |
    | `defaultSSO` OIDC provider  | Exact verified issuer                     | Verified `sub`                         | `sso:config:<providerId>`       |
@@ -412,9 +412,9 @@ Persisted SSO Accounts keep the public routing alias in `providerId` and store `
 
 ### SSO provider identifiers and domains are validated
 
-An SSO `providerId` must be 1 to 128 characters and contain only letters, numbers, `.`, `_`, `~`, or `-`. The path segments `.` and `..` are invalid. Provider domains are normalized into a canonical, comma-separated list of hostnames, and a provider must contain at least one valid domain. The same validation runs against `defaultSSO` during startup.
+An SSO `providerId` must be 1 to 128 characters and contain only letters, numbers, `.`, `_`, `~`, or `-`. The path segments `.` and `..` are invalid. Provider domains are normalized into a canonical, comma-separated list of hostnames, and every entry in that list must resolve to a hostname. A single unusable entry rejects the whole provider, even when the other entries are valid. The same validation runs against `defaultSSO` during startup.
 
-**What to do:** during the paused-write migration, map each persisted ID that contains spaces, slashes, percent escapes, or other unsupported characters to a valid ID. Update the `ssoProvider.providerId` value, every Account that you can prove belongs to that provider, and the IdP callback URL together. `providerId` is immutable through the management endpoint, so do not try to rename a live provider through the API. If an old Account cannot be assigned unambiguously, remove it and require the user to authenticate through the replacement provider. Review stored domains for empty entries or values that do not resolve to a hostname. A new registration or update with invalid data is rejected, while an invalid `defaultSSO` entry prevents Better Auth from starting.
+**What to do:** during the paused-write migration, map each persisted ID that contains spaces, slashes, percent escapes, or other unsupported characters to a valid ID. Update the `ssoProvider.providerId` value, every Account that you can prove belongs to that provider, and the IdP callback URL together. `providerId` is immutable through the management endpoint, so do not try to rename a live provider through the API. If an old Account cannot be assigned unambiguously, remove it and require the user to authenticate through the replacement provider. Review every entry of each stored domain list, not just the first: a multi-domain provider is rejected outright when any one of its entries does not resolve to a hostname. A new registration or update with invalid data is rejected, while an invalid `defaultSSO` entry prevents Better Auth from starting.
 
 ### Provider changes invalidate in-progress SSO flows
 
@@ -729,6 +729,8 @@ A breaking change in one beta can be reverted in a later beta of the same line, 
 
 An earlier 1.7 prerelease used organization-scoped SCIM providers and interim Group tables. The final SCIM schema does not convert those tables. If you adopted that prerelease, follow the same [full SCIM reprovisioning cutover](#scim-requires-full-reprovisioning) as an upgrade from 1.6.
 
-An earlier 1.7 prerelease stored `issuer` and `providerAccountId` directly on `account` and exposed Generic OAuth options as `accountIssuer` and `accountSubject`. Reuse those populated columns and start the 2-table backfill at the collision checks, then rename the options to `identityIssuer` and `identitySubject`. Replace `OAuthAccountKeyContext` and `OAuthAccountSubject` imports with `OAuthIdentityKeyContext` and `OAuthIdentitySubject`.
+An earlier 1.7 prerelease stored `issuer` and `providerAccountId` directly on `account` and exposed Generic OAuth options as `accountIssuer` and `accountSubject`. Those columns already hold the final issuer values, so reuse them and start the 2-table backfill at the collision checks, then rename the options to `identityIssuer` and `identitySubject`. Replace `OAuthAccountKeyContext` and `OAuthAccountSubject` imports with `OAuthIdentityKeyContext` and `OAuthIdentitySubject`.
+
+One subject did change in the same window. That prerelease keyed TikTok on the app-scoped `open_id`, and the final release keys it on `union_id`, so convert those rows as described in the issuer table above before you run the collision checks.
 
 Two habits make this cheaper. Read `revert` entries in the changelog, not just `feat` and `fix`; a revert is a migration for you even though it does not announce itself as breaking. Bump only the packages that carry the change, and confirm your own plugins do not import the reverted surface before you rebuild them.

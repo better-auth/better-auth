@@ -230,7 +230,7 @@ type User = SupabaseUser & {
 };
 
 const identityIssuers: Record<string, string> = {
-  github: "local:github",
+  github: "local:oauth:github",
   google: "https://accounts.google.com",
 };
 

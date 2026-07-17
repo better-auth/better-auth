@@ -10,6 +10,7 @@ export {
 export {
 	type BaseIdentity,
 	createLocalIdentityIssuer,
+	createOAuthIdentityIssuer,
 	type Identity,
 	type IdentityKey,
 	identitySchema,

@@ -16,9 +16,13 @@ Separate durable provider identities from provider-specific authentication state
 
 Account APIs return the Identity under `account.identity`; `providerInstanceId` remains server-only. Generic OAuth replaces account-key callbacks with `OAuthIdentityKeyContext`, `identitySubject`, and `identityIssuer`. Deleting a persisted SSO provider removes only its Accounts, while retaining the User, Identity, and other provider Accounts. SSO callbacks are rejected if their provider changes or is deleted after authentication starts. SCIM exposes its `connectionId` through the typed `validateUserInfo` source.
 
-Implicit same-email linking now always requires the existing Better Auth User's local email to be verified. The `account.accountLinking.requireLocalEmailVerified` opt-out is removed. TikTok now uses `union_id` as its stable Identity subject instead of the app-scoped `open_id`.
+OAuth providers without an issuer use the synthetic `local:oauth:<encoded providerId>` issuer, which stays separate from the `local:<providerId>` namespace that credential, SIWE, and the other built-in methods use.
 
-SSO provider IDs and domains are validated during registration, updates, and startup configuration. Provider IDs must be URL-segment-safe, and every provider must contain at least one valid domain.
+Implicit same-email linking now always requires the existing Better Auth User's local email to be verified. The `account.accountLinking.requireLocalEmailVerified` opt-out is removed. TikTok now uses `union_id` as its stable Identity subject instead of the app-scoped `open_id`, and rejects authentication when TikTok does not return that field.
+
+SSO provider IDs and domains are validated during registration, updates, and startup configuration. Provider IDs must be URL-segment-safe, and every entry in a provider's domain list must resolve to a hostname.
+
+An SSO provider ID may reuse a built-in method ID, a social provider ID, a trusted provider ID, or a SCIM provider ID. Only a configured `defaultSSO` provider ID stays reserved. Registration previously rejected all of them.
 
 SIWE wallet records now belong to the corresponding Account through `accountId`. Unlinking the Account removes its wallet metadata on every adapter, including adapters without foreign-key cascades.
 

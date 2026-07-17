@@ -1854,7 +1854,7 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 			({ account }) => account.providerId === "github",
 		);
 		expect(githubAccount).toBeTruthy();
-		expect(githubAccount?.identity.issuer).toBe("local:github");
+		expect(githubAccount?.identity.issuer).toBe("local:oauth:github");
 		expect(githubAccount?.identity.providerAccountId).toBe(SHARED_ACCOUNT_ID);
 		expect(githubAccount?.identity.userId).toBe(userBId);
 
@@ -2111,7 +2111,7 @@ describe("oauth2 - providers without email", async () => {
 			expect(session.data?.user.email).toBe(email);
 
 			const identity = await ctx.internalAdapter.findIdentityByKey({
-				issuer: "local:discord",
+				issuer: "local:oauth:discord",
 				providerAccountId,
 			});
 			assert(identity, "Discord identity should use the raw profile subject");
