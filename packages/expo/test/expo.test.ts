@@ -1519,6 +1519,10 @@ describe("expo session cache hydration", async () => {
 			user: { favoriteColor: "blue" },
 			session: { deviceLabel: "test-device" },
 		});
+
+		getItemAsync.mockClear();
+		await coldStart.getSession();
+		expect(getItemAsync).not.toHaveBeenCalledWith("better-auth_session_data");
 	});
 
 	it.each([

@@ -396,7 +396,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 		}
 
 		const sessionAtom = store?.atoms.session;
-		if (!sessionAtom) {
+		if (!sessionAtom || sessionAtom.get().data !== null) {
 			return;
 		}
 
