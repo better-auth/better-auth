@@ -44,6 +44,12 @@ Any dialect supported by Kysely can be utilized with Better Auth, including capa
   You can see the full list of supported <Link href="https://kysely.dev/docs/dialects">Kysely dialects</Link>.
 </Callout>
 
+## Transactions
+
+The Kysely adapter enables interactive transactions by default. Better Auth requires an interactive transaction or a database-native atomic batch for lifecycle operations that change related User, Identity, and Account records.
+
+Set `transaction: false` only when your dialect cannot run interactive transactions. Without another atomic capability, Better Auth rejects these multi-record mutations before writing.
+
 ### Cloudflare D1
 
 Pass the D1 binding directly when Better Auth owns the Kysely instance:

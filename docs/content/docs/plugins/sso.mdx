@@ -89,6 +89,10 @@ Deleting a persisted provider deletes only the Accounts attached to that provide
   Dynamically registered providers require a database adapter with native transaction support. Better Auth coordinates provider updates and deletion with in-flight authentication inside one transaction; a sequential fallback or `commitAtomicWrites` implementation alone cannot protect that boundary. Providers declared in `defaultSSO` do not have this requirement because their configuration is immutable at runtime.
 </Callout>
 
+Provider IDs are used as callback-path segments. They must be 1 to 128 characters and contain only letters, numbers, `.`, `_`, `~`, or `-`; `.` and `..` are not valid IDs. Domains may be comma-separated. Better Auth normalizes them to lowercase hostnames, removes duplicates, and rejects a provider with no valid domain. These rules apply to registration, updates, and `defaultSSO`; invalid `defaultSSO` configuration fails during startup.
+
+An in-progress OIDC or SAML flow is bound to the provider configuration that started it. If a dynamically registered provider changes or is deleted before the callback completes, Better Auth rejects the callback and the user must start sign-in again.
+
 ### Register an OIDC Provider
 
 To register an OIDC provider, use the `registerSSOProvider` endpoint and provide the necessary configuration details for the provider.
@@ -1329,7 +1333,7 @@ The provider ID is stored in the OAuth state so the callback can identify which 
 Domain verification allows your application to automatically trust a new SSO provider
 by automatically validating ownership via the associated domain.
 
-When a provider's domain is verified, it is also trusted for **automatic account linking**. If a User signs in through an OIDC or SAML provider and a Better Auth User with the same email exists, Better Auth attaches the new SSO Identity and Account to that User, provided the email domain matches the provider's verified domain.
+When a provider's domain is verified, it is also trusted for **automatic account linking**. If a User signs in through an OIDC or SAML provider and a Better Auth User with the same email exists, Better Auth attaches the new SSO Identity and Account to that User only when the existing User's local email is verified and the email domain matches the provider's verified domain.
 
 <Tabs items={["client", "server"]}>
   <Tab value="client">
@@ -1462,7 +1466,7 @@ The plugin automatically creates the following SAML endpoints:
 
 ### SAML Callback URL Configuration
 
-The SAML ACS endpoint (`/api/auth/sso/saml2/sp/acs/{providerId}`) handles both **SP-initiated** and **IdP-initiated** SSO flows:
+The SAML ACS endpoint (`/api/auth/sso/saml2/sp/acs/{providerId}`) always handles **SP-initiated** SSO and handles **IdP-initiated** SSO when `saml.allowIdpInitiated` is `true`:
 
 * **SP-initiated**: User clicks "Sign in with SSO" in your app → redirects to IdP → IdP POSTs SAMLResponse to callback
 * **IdP-initiated**: User clicks app icon in IdP dashboard (Okta, Azure AD, etc.) → IdP POSTs SAMLResponse to callback

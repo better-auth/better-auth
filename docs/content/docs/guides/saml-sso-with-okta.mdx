@@ -12,7 +12,7 @@ SAML (Security Assertion Markup Language) is an XML-based standard for exchangin
 In this setup:
 
 * **IdP (Okta)**: Authenticates users and sends assertions about their identity.
-* **SP (Better Auth)**: Validates assertions and logs the user in.up.
+* **SP (Better Auth)**: Validates assertions and logs the user in.
 
 ### Step 1: Create a SAML Application in Okta
 
@@ -33,7 +33,7 @@ In this setup:
 6. Download the IdP metadata XML file and certificate
 
 <Callout type="info">
-  **IdP-Initiated SSO**: If you want users to access your app from the Okta dashboard, make sure the **Single Sign-on URL** points to the callback endpoint (`/api/auth/sso/saml2/sp/acs/{providerId}`). Better Auth automatically handles both SP-initiated and IdP-initiated flows.
+  **IdP-Initiated SSO**: If you want users to access your app from the Okta dashboard, point the **Single Sign-on URL** to `/api/auth/sso/saml2/sp/acs/{providerId}` and set `saml.allowIdpInitiated: true` in the SSO plugin. Better Auth rejects unsolicited SAML responses by default.
 </Callout>
 
 ### Step 2: Configure Better Auth
@@ -41,41 +41,41 @@ In this setup:
 Here’s an example configuration for Okta in a dev environment:
 
 ```typescript
-const ssoConfig = {
-  defaultSSO: [{
-    domain: "localhost:3000", // Your domain
-    providerId: "sso",
-    samlConfig: {
-      // SP Configuration
-      issuer: "http://localhost:3000/api/auth/sso/saml2/sp/metadata",
-      entryPoint: "https://trial-1076874.okta.com/app/trial-1076874_samltest_1/exktofb0a62hqLAUL697/sso/saml",
-      // IdP Configuration
-      idpMetadata: {
-        entityID: "https://trial-1076874.okta.com/app/exktofb0a62hqLAUL697/sso/saml/metadata",
-        singleSignOnService: [{
-          Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
-          Location: "https://trial-1076874.okta.com/app/trial-1076874_samltest_1/exktofb0a62hqLAUL697/sso/saml"
-        }],
+import { sso } from "@better-auth/sso";
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  plugins: [
+    sso({
+      saml: {
+        allowIdpInitiated: true, // Omit unless users start sign-in from Okta
       },
-      cert: `-----BEGIN CERTIFICATE-----
+      defaultSSO: [{
+        domain: "localhost:3000", // Your domain
+        providerId: "sso",
+        samlConfig: {
+          // SP Configuration
+          issuer: "http://localhost:3000/api/auth/sso/saml2/sp/metadata",
+          entryPoint: "https://trial-1076874.okta.com/app/trial-1076874_samltest_1/exktofb0a62hqLAUL697/sso/saml",
+          // IdP Configuration
+          idpMetadata: {
+            entityID: "https://trial-1076874.okta.com/app/exktofb0a62hqLAUL697/sso/saml/metadata",
+            singleSignOnService: [{
+              Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+              Location: "https://trial-1076874.okta.com/app/trial-1076874_samltest_1/exktofb0a62hqLAUL697/sso/saml"
+            }],
+          },
+          cert: `-----BEGIN CERTIFICATE-----
 MIIDqjCCApKgAwIBAgIGAZhVGMeUMA0GCSqGSIb3DQEBCwUAMIGVMQswCQYDVQQGEwJVUzETMBEG
 ...
 [Your Okta Certificate]
 ...
------END CERTIFICATE-----`,
-      
-      // SP Metadata
-      spMetadata: {
-        metadata: `<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" 
-          entityID="http://localhost:3000/api/sso/saml2/sp/metadata">
-          ...
-          [Your SP Metadata XML]
-          ...
-        </md:EntityDescriptor>`
-      }
-    }
-  }]
-}
+-----END CERTIFICATE-----`
+        }
+      }]
+    })
+  ]
+});
 ```
 
 ### Step 3: Multiple Default Providers (Optional)

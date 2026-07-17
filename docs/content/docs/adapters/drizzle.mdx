@@ -26,8 +26,7 @@ import { db } from "./database.ts";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, { // [!code highlight]
-    provider: "sqlite", // or "pg" or "mysql" // [!code highlight]
-    transaction: "sync", // use "sync" for synchronous SQLite drivers // [!code highlight]
+    provider: "pg", // or "mysql" or "sqlite" // [!code highlight]
   }), // [!code highlight]
   //... the rest of your config
 });
@@ -188,6 +187,8 @@ export const auth = betterAuth({
   }),
 });
 ```
+
+Model identifiers ending in a consonant followed by `y` use `ies`, so the `identity` model maps to `identities`. Generated Drizzle relation keys use the same pluralization.
 
 ## Custom Schema namespace
 

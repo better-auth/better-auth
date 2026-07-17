@@ -227,6 +227,10 @@ export const auth = betterAuth({
 
 Better Auth supports various database configurations including [PostgreSQL](/docs/adapters/postgresql), [MySQL](/docs/adapters/mysql), and [SQLite](/docs/adapters/sqlite).
 
+Kysely-backed configurations use interactive transactions by default. Set `transaction: false` only when the dialect cannot run them. Multi-record User, Identity, and Account lifecycle operations still require an interactive transaction or a database-native atomic batch and fail before writing when neither capability is available.
+
+When a community Kysely dialect uses Cloudflare D1, pass the raw binding as `d1Database`. Better Auth disables interactive transactions for that configuration and uses `D1Database.batch()` for atomic writes.
+
 Read more about [databases](/docs/concepts/database).
 
 ## `secondaryStorage`

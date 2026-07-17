@@ -120,17 +120,29 @@ if (!account) {
   throw new Error("Google account is not linked");
 }
 
-const { accessToken } = await authClient.getAccessToken({
+const { data: tokenData, error: tokenError } = await authClient.getAccessToken({
   accountId: account.id,
-})
+});
+
+if (tokenError) {
+  throw new Error(tokenError.message);
+}
+
+console.log(tokenData?.accessToken);
 ```
 
 When [`account.storeAccountCookie`](/docs/reference/options#storeaccountcookie) is enabled, select the account from the signed cookie explicitly:
 
 ```ts
-const { accessToken } = await authClient.getAccessToken({
+const { data: tokenData, error } = await authClient.getAccessToken({
   useAccountCookie: true,
 });
+
+if (error) {
+  throw new Error(error.message);
+}
+
+console.log(tokenData?.accessToken);
 ```
 
 For server-side usage, pass the same account record ID. A trusted server call can also provide `userId` when it does not include session headers.
@@ -149,9 +161,15 @@ await auth.api.getAccessToken({
 Use `refreshToken` when you need to refresh the selected account's access token immediately. It uses the same explicit selector contract as `getAccessToken`.
 
 ```ts
-const tokens = await authClient.refreshToken({
+const { data: tokens, error } = await authClient.refreshToken({
   accountId: account.id,
 });
+
+if (error) {
+  throw new Error(error.message);
+}
+
+console.log(tokens?.accessToken);
 ```
 
 To use the signed account cookie instead:

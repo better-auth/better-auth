@@ -1,44 +1,52 @@
 ---
 title: Upgrading to Better Auth 1.7
-description: Upgrade Better Auth from 1.6 to 1.7, including OAuth, OpenID Connect, MCP, SAML, SCIM, proxy, and custom adapter changes.
+description: Upgrade Better Auth from 1.6 to 1.7, including the Identity and Account migration, OAuth, OpenID Connect, MCP, SAML, SCIM, proxy, and adapter changes.
 ---
 
-Most Better Auth 1.7 changes are additive. Most projects start with one command:
+Better Auth 1.7 changes the Account schema used by every database-backed authentication method. Projects with existing Account rows need a reviewed Identity backfill before deploying 1.7. Updating packages and applying the generated schema is not enough.
+
+Update the packages on a migration branch:
 
 ```package-install
 npx auth@rc upgrade
 ```
 
-Some areas need more care: OAuth, OpenID Connect, SAML, SCIM, two-factor authentication, MCP, custom storage, and proxy setups. Use this table to choose the sections that apply to your project.
+Use this table to find the remaining sections that apply to your project.
 
-| If your project                                                        | Read                                                                            |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Uses Better Auth at all                                                | [Before you upgrade](#before-you-upgrade) and [Behind a proxy](#behind-a-proxy) |
-| Uses email and password, social login, generic OAuth, One Tap, or SSO  | [As a login client](#as-a-login-client)                                         |
-| Runs its own OAuth or OpenID provider                                  | [As an identity provider](#as-an-identity-provider)                             |
-| Runs MCP                                                               | [MCP](#mcp)                                                                     |
-| Uses SAML or SSO domain verification                                   | [Enterprise SSO](#enterprise-sso)                                               |
-| Uses SCIM                                                              | [SCIM](#scim)                                                                   |
-| Uses Stripe billing                                                    | [Stripe](#stripe)                                                               |
-| Uses two-factor auth, magic links, or email OTP                        | [Two-factor and passwordless security](#two-factor-and-passwordless-security)   |
-| Uses a custom database adapter, secondary storage, or rate-limit store | [Custom adapters and storage](#custom-adapters-and-storage)                     |
+| If your project                                                                             | Read                                                                                  |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Uses Better Auth with existing Account rows                                                 | [Before you upgrade](#before-you-upgrade) and [As a login client](#as-a-login-client) |
+| Uses email and password, social login, generic OAuth, One Tap, or SSO                       | [As a login client](#as-a-login-client)                                               |
+| Runs its own OAuth or OpenID provider                                                       | [As an identity provider](#as-an-identity-provider)                                   |
+| Runs MCP                                                                                    | [MCP](#mcp)                                                                           |
+| Uses SAML or SSO domain verification                                                        | [Enterprise SSO](#enterprise-sso)                                                     |
+| Uses SCIM                                                                                   | [SCIM](#scim)                                                                         |
+| Uses Stripe billing                                                                         | [Stripe](#stripe)                                                                     |
+| Uses two-factor auth, magic links, or email OTP                                             | [Two-factor and passwordless security](#two-factor-and-passwordless-security)         |
+| Uses database hooks, a built-in or custom adapter, secondary storage, or rate-limit storage | [Custom adapters and storage](#custom-adapters-and-storage)                           |
+| Defines a plugin that provisions users or accounts                                          | [Custom plugin APIs](#custom-plugin-apis)                                             |
 
 ## Before you upgrade
 
-The upgrade command handles package updates. The database needs more care. A few 1.7 features add or change tables, and some also need a manual data step.
+The upgrade command handles package updates. Schema generation describes the final 1.7 schema, but it cannot make application-specific identity or ownership decisions.
 
 <Callout type="warn">
-  Run the schema migration before deploying 1.7 if any changed feature applies to your project.
+  Do not apply an automatically generated migration to a populated Account table. It cannot choose trusted issuers, convert TikTok subjects, resolve ownership conflicts, or backfill `identityId`. Use the staged backfill in [Identities and provider accounts are separate](#identities-and-provider-accounts-are-separate), then apply the final constraints.
 </Callout>
 
-Use the CLI migration commands:
+Generate the target schema for review:
 
 ```bash title="Terminal"
 npx auth@latest generate
+```
+
+For changes marked as not needing data conversion, the built-in Kysely migration command can apply the schema after you review its plan:
+
+```bash title="Terminal"
 npx auth@latest migrate
 ```
 
-If you manage your own schema with Drizzle or Prisma, run `generate` and apply the result through your own migration tooling.
+Do not use that command as the Identity, SIWE, or SCIM data migration. If you manage your schema with Drizzle or Prisma, apply the reviewed migration through your own tooling.
 
 The `auth` CLI now requires Node.js 22.12 or newer to run.
 
@@ -58,7 +66,7 @@ These features change the schema:
 | SCIM                       | Seven provisioning models with layouts that replace the legacy SCIM models | **No, reprovision**      |
 | Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                  | Not needed               |
 
-The Identity and Account split, SIWE wallet ownership, and SCIM require a manual data step. Plan each applicable cutover before you deploy.
+The Identity and Account split applies to every populated Account table. SIWE wallet ownership and SCIM add feature-specific manual steps. Plan each applicable cutover before you deploy.
 
 <Callout type="warn">
   Do not run the generated SCIM migration over populated prerelease `scimGroup` or `scimGroupMember` tables. Follow the [SCIM cutover](#scim-requires-full-reprovisioning) before creating the new schema.
@@ -89,6 +97,7 @@ Several provider configurations can point to one Identity without sharing creden
    | --------------------------- | ----------------------------------------- | -------------------------------------- | ------------------------------- |
    | Credential                  | `local:credential`                        | Stable `id` from the linked `user` row | `credential`                    |
    | Trusted OAuth/OIDC provider | Exact trusted issuer used by the provider | Existing provider account identifier   | Existing `providerId`           |
+   | TikTok                      | `local:tiktok`                            | TikTok `union_id`                      | `tiktok`                        |
    | Provider without an issuer  | `local:<encoded providerId>`              | Existing provider account identifier   | Existing `providerId`           |
    | Persisted OIDC SSO provider | `sso:provider:<ssoProvider.id>:oidc`      | Verified `sub`                         | `sso:provider:<ssoProvider.id>` |
    | Persisted SAML SSO provider | `sso:provider:<ssoProvider.id>:saml`      | Signed `NameID`                        | `sso:provider:<ssoProvider.id>` |
@@ -96,6 +105,8 @@ Several provider configurations can point to one Identity without sharing creden
    | `defaultSSO` SAML provider  | `sso:config:<providerId>:saml`            | Signed `NameID`                        | `sso:config:<providerId>`       |
 
    Build an explicit `providerId`-to-issuer map for your deployment. Built-in, Generic OAuth, and `defaultSSO` OIDC configurations that intentionally share one verified OpenID Connect authority must use the same exact issuer. Keep persisted SSO providers in their immutable instance namespace. Do not derive an issuer from email, display name, an unverified request value, or a mutable authorization endpoint.
+
+   TikTok now uses `union_id` instead of the app-scoped `open_id`. The existing Account row contains only the old subject. Resolve each user's `union_id` from trusted TikTok data before inserting its Identity. If you cannot establish that mapping, remove the old TikTok Account and require the user to authenticate again. Do not copy `open_id` into the new TikTok Identity.
 3. Find identity keys that currently point to several users. Adapt this query to your physical table and field names:
 
    ```sql title="Identity ownership conflicts"
@@ -121,7 +132,7 @@ Several provider configurations can point to one Identity without sharing creden
 5. Create the `identity` table with `id`, `userId`, `issuer`, `providerAccountId`, `createdAt`, and `updatedAt`. Add a user foreign key with restricted deletion, a unique index on `(issuer, providerAccountId)`, and an index on `userId`.
 6. Insert one Identity for each distinct `(userId, issuer, providerAccountId)` tuple. Generate IDs with the same strategy as your Better Auth configuration, and preserve the earliest creation time plus the latest update time when several provider aliases collapse into one Identity.
 7. Add nullable `identityId` to `account`, then populate it by joining each staged `account` row to `identity` on `userId`, `issuer`, and `providerAccountId`. Confirm that every Account has exactly one match before making `identityId` non-nullable.
-8. Make `providerInstanceId` non-nullable. Add the Account foreign key to `identity.id` with restricted deletion and the unique index on `(identityId, providerInstanceId)`. Change the existing Session-to-User foreign key to restricted deletion as well. Better Auth deletes dependent rows through its lifecycle methods so hooks and atomicity checks run before a parent is removed. Remove `userId`, `issuer`, `providerAccountId`, and the old provider-side `accountId` from `account` only after you have verified the row counts and foreign keys.
+8. Make `providerInstanceId` non-nullable. Add the Account foreign key to `identity.id` with restricted deletion and the unique index on `(identityId, providerInstanceId)`. Change the existing Session-to-User foreign key to restricted deletion as well. Better Auth deletes dependent rows through its lifecycle methods so hooks and atomicity checks run before a parent is removed. Direct deletion of a User or Identity row now fails while dependent rows remain. Remove `userId`, `issuer`, `providerAccountId`, and the old provider-side `accountId` from `account` only after you have verified the row counts and foreign keys.
 9. Update custom adapters, database hooks, generated schemas, and field mappings. Identity hooks receive `userId`, `issuer`, and `providerAccountId`; Account hooks receive `identityId`, `providerId`, `providerInstanceId`, and provider-specific credential data.
 10. If you use SIWE, add nullable `accountId` to `walletAddress`. Match each row to the Identity whose issuer is `local:siwe` and whose `providerAccountId` is `<address>:<chainId>`, then select that Identity's `siwe` Account. Stop if a wallet row has zero or several matches. Populate `accountId`, add a cascading foreign key to `account.id`, make `accountId` unique, add a unique index on `(address, chainId)`, and remove `userId`. Update custom SIWE field mappings from `userId` to `accountId`.
 
@@ -136,13 +147,21 @@ Remove `providerId` from every account selector, and do not pass `providerAccoun
 
 Deploy only after the collision query returns no rows and the required unique index exists. Verify email-and-password sign-in, returning OAuth and SSO sign-in, explicit account linking, unlinking, provider profile retrieval, and token refresh against the migrated data.
 
-Account responses now nest the durable Identity under `account.identity`, while the Account retains its local `id` and `providerId`. Update callers of `listAccounts` and `accountInfo` that previously read `issuer` or `providerAccountId` directly from the Account.
+The public `Account` type no longer contains `userId`, `issuer`, or `providerAccountId`. Account responses now nest the durable Identity under `account.identity`, while the Account retains its local `id` and `providerId`. Update callers of `listAccounts` and `accountInfo` that previously read Identity fields directly from the Account.
 
-Review every custom OAuth provider's identity subject. OpenID Connect discovery providers now use verified `sub`; plain OAuth providers use `id`; the previous runtime fallback between those fields is removed. Set `identitySubject` when either default is not the provider's immutable identifier, and set `identityIssuer` when explicit provider configurations share a verified authority. Resolver functions receive `OAuthIdentityKeyContext`.
+`getAccountCookie` now returns `{ account, identity, accountBindingId }`. Update middleware and hooks that read the cookie, including `account.userId` reads that now use `identity.userId`. The binding ID is opaque authorization state and should not be persisted or reused. Account cookies issued before 1.7 do not contain this binding and are rejected. A user's session can remain valid, but `useAccountCookie: true` operations require that user to authenticate with the provider again so Better Auth can issue a bound cookie.
+
+Review every custom OAuth provider's identity subject. OpenID Connect discovery providers now use verified `sub`; plain OAuth providers use `id`; the previous runtime fallback between those fields is removed. Rename `accountSubject` to `identitySubject` and `accountIssuer` to `identityIssuer`. Replace `OAuthAccountKeyContext` and `OAuthAccountSubject` imports with `OAuthIdentityKeyContext` and `OAuthIdentitySubject`. Set the resolvers when the defaults do not describe the provider's immutable identifier and verified authority.
 
 `getUserInfo().user` now contains only mutable local-user fields; keep the provider identifier in `getUserInfo().data`. `mapProfileToUser` can no longer return `id`. The `accountInfo` response exposes the selected key as `account.identity.providerAccountId` instead of `user.id`.
 
 The generic `microsoftEntraId` helper now requires a concrete tenant GUID. Replace `common`, `organizations`, or `consumers` configurations with the built-in Microsoft social provider, which validates tenant claims and derives the token's actual issuer.
+
+### Implicit account linking always requires a verified local email
+
+The `account.accountLinking.requireLocalEmailVerified` opt-out is removed. An OAuth or SSO sign-in cannot implicitly attach a new Identity to an existing User whose local email is unverified, including when the provider is trusted and reports a verified email.
+
+**What to do:** remove `requireLocalEmailVerified` from your configuration. Verify the existing User's email before implicit linking, or let the authenticated User link the provider explicitly with `linkSocial()`.
 
 ### Generic OAuth is rebuilt on the social-provider path
 
@@ -218,7 +237,7 @@ Linking an anonymous account after a social login now works in Expo and other in
 
 ## As an identity provider
 
-This covers `@better-auth/oauth-provider`. Several changes need a schema migration; run `generate` and `migrate` once after applying them.
+This covers `@better-auth/oauth-provider`. Several changes need schema updates. Include them in the reviewed schema from [Before you upgrade](#before-you-upgrade), then apply them through the staged migration after the Identity backfill.
 
 ### Protected resources replace the audience list
 
@@ -228,7 +247,7 @@ Audiences are now resources. Each resource can have its own token lifetime, scop
 
 * Move each entry from `validAudiences` into `resources`.
 * Link clients to specific resources through `oauthClientResource` or registration.
-* Run `generate` and `migrate` to add the new tables and columns.
+* Add the new tables and columns to the reviewed migration.
 * Check your refresh-token lifetimes: the shortest applicable lifetime now wins, so a per-resource value longer than the provider default is capped at the default.
 
 **If you accept dynamically registered clients,** the resource model enforces per-client resource access by default. A dynamic client's token request can be rejected with `invalid_target`. Set `enforcePerClientResources: false` for that case, and register each client's `grant_types` explicitly, or the token endpoint rejects them with `unauthorized_client`.
@@ -237,13 +256,13 @@ Audiences are now resources. Each resource can have its own token lifetime, scop
 
 The API a token is for is now captured at login and locked to that grant. A later request can narrow the target API but cannot widen it. Asking for an API the login did not cover is rejected. A custom-claims callback now receives a list of resources instead of one value.
 
-**What to do:** run the migration to add the resource columns. Update custom-claims callbacks to read the resource list. Make sure clients ask only for resources their login covered.
+**What to do:** include the resource columns in the reviewed migration. Update custom-claims callbacks to read the resource list. Make sure clients ask only for resources their login covered.
 
 ### DPoP renames the token verifier
 
 The plain token-checking helper `verifyAccessToken` is renamed `verifyBearerToken` and now rejects DPoP tokens. Use the new `verifyAccessTokenRequest` on endpoints that may receive DPoP requests.
 
-**What to do:** rename `verifyAccessToken` to `verifyBearerToken`, and switch DPoP-capable endpoints to `verifyAccessTokenRequest`. Run `generate` and `migrate` to add the token-binding column. To support DPoP, configure database-backed verification storage.
+**What to do:** rename `verifyAccessToken` to `verifyBearerToken`, and switch DPoP-capable endpoints to `verifyAccessTokenRequest`. Include the token-binding column in the reviewed migration. To support DPoP, configure database-backed verification storage.
 
 **Watch the proxy case.** Native DPoP checks the proof's `htu` claim against the URL the token endpoint computes for itself. Behind a TLS-terminating proxy or a custom server, that computed URL can be the internal bind address (`http://0.0.0.0:3000`) or the proxy's internal scheme and port. The client signed `htu` from your public discovery URL, so a valid proof can be rejected. Canonicalize the incoming request's scheme and host to your configured `baseURL` at the route boundary before the provider reads it.
 
@@ -251,7 +270,7 @@ The plain token-checking helper `verifyAccessToken` is renamed `verifyBearerToke
 
 When a session ends, the access tokens tied to it are now revoked. They read as inactive at introspection and userinfo. Before, they lived until they expired. Your server also sends a logout message to each app that registered a logout URL.
 
-**What to do:** run `generate` and `migrate` to add the new columns. Expect session-bound tokens to stop working at sign-out. On serverless platforms, set `advanced.backgroundTasks.handler` so sending logout messages does not slow down sign-out.
+**What to do:** include the new columns in the reviewed migration. Expect session-bound tokens to stop working at sign-out. On serverless platforms, set `advanced.backgroundTasks.handler` so sending logout messages does not slow down sign-out.
 
 ### Custom ID-token claims cannot override protocol claims
 
@@ -359,7 +378,7 @@ A contribution written in an older or hand-rolled shape can fail silently here. 
 
 ### The old `oidcProvider` plugin is removed
 
-**What to do:** replace `oidcProvider` from `better-auth/plugins` with `oauthProvider` from `@better-auth/oauth-provider`, move your config across, and run the schema migration.
+**What to do:** replace `oidcProvider` from `better-auth/plugins` with `oauthProvider` from `@better-auth/oauth-provider`, move your config across, and include its schema changes in the reviewed migration.
 
 ***
 
@@ -375,7 +394,7 @@ The MCP plugin moves from `better-auth` into `@better-auth/mcp`, built on the OA
 2. Add the `jwt()` plugin, which is now required.
 3. Move options that were nested under `oidcConfig` up to the top level of `mcp({ ... })`, and add a resource identifier, for example `resource: "https://api.example.com/mcp"`.
 4. Rename `withMcpAuth` to `requireMcpAuth`, and `createMcpAuthClient` to `createMcpResourceClient`.
-5. Regenerate or migrate your schema.
+5. Include the MCP schema changes in the reviewed migration.
 
 The OAuth endpoints move from `/mcp/*` to `/oauth2/*`. Discovery-based MCP clients find the new locations on their own. MCP also defaults `refreshTokenReuseInterval` to 30 seconds for native and public clients; set it to `0` if you want strict refresh-token replay handling.
 
@@ -391,6 +410,18 @@ Persisted SSO Accounts keep the public routing alias in `providerId` and store `
 
 **What to do:** remove `id` from every OIDC and SAML mapping, then confirm that each OIDC provider returns a stable `sub` and each SAML provider returns a stable, signed `NameID`. Deleting a persisted provider removes only its Accounts; Better Auth retains that instance's Identity record so provider deletion does not discard identity ownership. The User and records for other provider instances remain unchanged.
 
+### SSO provider identifiers and domains are validated
+
+An SSO `providerId` must be 1 to 128 characters and contain only letters, numbers, `.`, `_`, `~`, or `-`. The path segments `.` and `..` are invalid. Provider domains are normalized into a canonical, comma-separated list of hostnames, and a provider must contain at least one valid domain. The same validation runs against `defaultSSO` during startup.
+
+**What to do:** during the paused-write migration, map each persisted ID that contains spaces, slashes, percent escapes, or other unsupported characters to a valid ID. Update the `ssoProvider.providerId` value, every Account that you can prove belongs to that provider, and the IdP callback URL together. `providerId` is immutable through the management endpoint, so do not try to rename a live provider through the API. If an old Account cannot be assigned unambiguously, remove it and require the user to authenticate through the replacement provider. Review stored domains for empty entries or values that do not resolve to a hostname. A new registration or update with invalid data is rejected, while an invalid `defaultSSO` entry prevents Better Auth from starting.
+
+### Provider changes invalidate in-progress SSO flows
+
+An OIDC or SAML flow is bound to the exact provider configuration that started it. If a dynamically registered provider is updated or deleted while the user is authenticating, the callback is rejected instead of continuing with stale configuration.
+
+**What to do:** expect users to restart SSO after a provider update or deletion. Do not rotate a provider configuration during an active cutover without accounting for in-progress logins.
+
 ### IdP-initiated SAML is off by default
 
 Unsolicited logins started by the identity provider are now disabled by default. A login response is validated for `InResponseTo`, so it cannot be replayed against a request it was not issued for, and Single Logout requests are matched to their session by `SessionIndex`.
@@ -405,9 +436,9 @@ Signing certificates now accept a single value or a list, which lets you rotate 
 
 ### SAML configuration is simplified
 
-The callback URL is derived automatically, service-provider metadata is generated for you, and several fields are removed. One endpoint path changes, and error codes in the redirect change from short aliases to the full lowercased internal code (for example `saml_multiple_assertions`).
+The ACS callback URL is derived automatically, service-provider metadata can be generated for you, and several fields are removed. `samlConfig.callbackUrl` no longer configures the ACS endpoint; it is only an optional post-authentication fallback when the flow has no RelayState callback. One endpoint path changes, and error codes in the redirect change from short aliases to the full lowercased internal code (for example `saml_multiple_assertions`).
 
-**What to do:** remove `callbackUrl`, the empty `spMetadata`, and the removed fields from your config. Update your provider callback URL to `/sso/saml2/sp/acs/:providerId`. Set the post-login redirect with `callbackURL` in `signIn.sso()`. If you read SAML error codes from the redirect URL, switch to the lowercased codes.
+**What to do:** remove an old `callbackUrl` that points to the ACS endpoint, and update the IdP callback to `/sso/saml2/sp/acs/:providerId`. Set the normal post-login destination with `callbackURL` in `signIn.sso()`; keep `samlConfig.callbackUrl` only when you need a provider-level fallback for a flow without RelayState. Remove an empty `spMetadata` object and let Better Auth generate it, or retain it when you provide custom SP metadata, signing keys, or encryption keys. Remove `additionalParams`; move `decryptionPvk` to `spMetadata.encPrivateKey`; and replace `idpMetadata.entityURL` or `redirectURL` with `idpMetadata.entityID` and `singleSignOnService`. If you read SAML error codes from the redirect URL, switch to the lowercased codes.
 
 ### `/sso/update-provider` rejects partial mappings
 
@@ -516,9 +547,48 @@ Two OAuth-provider behaviors read the incoming request origin. Behind a custom s
 
 ***
 
+## Custom plugin APIs
+
+### Provisioning methods use a typed registry
+
+`ValidateUserInfoMethod` is now derived from `UserProvisioningSourceRegistry` instead of accepting any string. A plugin that creates Users or links Accounts must register its method and method-specific metadata through declaration merging. This keeps `source.method` discriminated and prevents OAuth or SSO metadata from appearing on unrelated methods.
+
+**What to do:** augment `UserProvisioningSourceRegistry` for every custom provisioning method, then pass the registered shape to `createUser`, `createUserWithAccount`, or other provisioning seams.
+
+```ts title="custom-plugin.ts"
+declare module "@better-auth/core" {
+  interface UserProvisioningSourceRegistry {
+    "workforce-directory": {
+      directoryId: string;
+    };
+  }
+}
+
+const source = {
+  method: "workforce-directory",
+  directoryId: "directory-acme",
+} as const;
+```
+
+### Internal Account lifecycle methods changed
+
+The plugin-facing `internalAdapter` now treats User, Identity, and Account creation as one lifecycle operation. The old methods could write incomplete ownership graphs or select an Account without its Identity.
+
+**What to do:** update plugins that call `ctx.context.internalAdapter`:
+
+* Replace `createOAuthUser(user, account)` with `createUserWithAccount(user, options)`. Build the Identity and Account in `buildAuthentication`, and use `buildRelatedRecords` for plugin rows that must commit with them.
+* Replace direct `createAccount(account)` calls with `linkAccount(userId, identityKey, account, options?)`.
+* Replace `findAccounts(userId)` and `findAccountByUserId(userId)` with `listUserAccounts(userId)`. The result contains `{ account, identity }` entries.
+* Replace `deleteAccounts(userId)` with `deleteUserAccounts(userId)`.
+* Replace `findAccountOwnerByKey(accountKey)` with `findIdentityOwnerByKey(identityKey)`.
+* Pass `{ identityId, providerInstanceId }` to `findAccountByKey`. Use `findAccountWithIdentityById(id)` when you have the local Account primary key and need both records.
+* Treat `updateAccount` as nullable and stop attempting to change `identityId`, `providerId`, or `providerInstanceId`. Relinking an Account requires the lifecycle APIs.
+
+***
+
 ## Custom adapters and storage
 
-The atomic-state work introduces required methods. If you use only the built-in adapters and storage, you can skip this.
+The atomic-state work introduces required methods for custom adapters and changes transaction defaults for several built-in adapters. Review the subsections that match your database.
 
 ### Database adapters must implement `incrementOne` and `consumeOne`
 
@@ -540,6 +610,24 @@ The Drizzle adapter's boolean `transaction` option is replaced by `"async"`, `"s
 
 **What to do:** use `transaction: "sync"` with synchronous SQLite drivers, `transaction: "async"` with asynchronous drivers, and `transaction: false` when interactive transactions are unavailable. D1 continues to use `batch()` when transactions are disabled.
 
+### Kysely and Prisma enable transactions by default
+
+The Kysely and Prisma adapters now enable interactive transactions by default. This is required for User, Identity, and Account lifecycle mutations, but it can expose a driver or deployment that does not implement the transaction API.
+
+**What to do:** keep the default when your driver supports transactions. Set `transaction: false` only when the driver cannot run them, and expect multi-record identity mutations to fail unless the adapter also provides a database-native atomic batch. When a community Kysely dialect uses Cloudflare D1, pass the raw binding as `d1Database`; Better Auth disables interactive transactions and uses `D1Database.batch()`.
+
+### MongoDB identity mutations require a transactional deployment
+
+The MongoDB adapter enables transactions when it receives a `MongoClient`. Creating or linking a provider identity now requires those related records to commit together.
+
+**What to do:** pass `client` to `mongodbAdapter` and run MongoDB as a replica set or sharded cluster. A standalone MongoDB deployment cannot complete these identity mutations. Setting `transaction: false` does not restore the old sequential-write behavior; the mutation fails before writing.
+
+### Database after hooks run after commit
+
+Database `create.after`, `update.after`, and `delete.after` hooks now run after the surrounding database operation commits. If an after hook throws, the caller receives the error, but the committed write remains in the database.
+
+**What to do:** move validation or policy that must prevent a write into the corresponding `before` hook. Use `after` hooks only for work that observes or reacts to a committed result, and make retryable external side effects idempotent.
+
 ### Secondary storage must implement `increment` and `getAndDelete`
 
 `increment(key, ttl)` bumps a counter by one and sets the expiry only when the key is first created. `getAndDelete(key)` reads and removes a key in one step. Both were optional before and are now required.
@@ -557,6 +645,12 @@ Rate-limit storage now needs a single `consume(key, rule)` method that checks an
 The default Drizzle schema generator now emits singular relation keys.
 
 **What to do:** regenerate your Drizzle schema and review the relation keys.
+
+### Plural model names handle consonant-y endings
+
+With `usePlural: true`, model identifiers ending in a consonant followed by `y` now use `ies`, such as `identity` to `identities`, instead of appending `s`. Generated relation keys use the same pluralization.
+
+**What to do:** regenerate the schema and update custom table mappings or relation-property reads whose model name ends in consonant-`y`. Review the generated diff before renaming a populated table.
 
 ### `getIp` is renamed `getIP`
 
@@ -615,17 +709,15 @@ These do not need action for most setups, but they change what you see.
 
 ## Upgrade checklist
 
-Run once, after applying the changes that affect you:
+Complete these steps in order:
 
-```bash title="Terminal"
-npx auth@latest generate
-npx auth@latest migrate
-```
-
-Then complete the manual data step if it applies:
-
-* **Backfill Identities and Accounts:** assign every existing Account a reviewed Identity key, resolve ownership and provider collisions, populate both tables, and add their compound unique indexes before deploying.
-* **Reprovision SCIM:** follow the [full cutover](#scim-requires-full-reprovisioning), including reviewed handling of legacy core identities, then run a complete User and Group provisioning cycle.
+1. Upgrade all Better Auth packages together on a migration branch, inventory the affected features and custom integrations, and back up the authentication data.
+2. Run `npx auth@latest generate` to inspect the final 1.7 schema. Do not apply an automatically generated Identity, SIWE, or SCIM migration to populated tables.
+3. Pause authentication writes. Add the staging columns and tables, build explicit provider-to-issuer mappings, resolve ownership conflicts, and backfill every existing Account through the [Identity migration](#identities-and-provider-accounts-are-separate).
+4. Complete the [SIWE](#identities-and-provider-accounts-are-separate) and [SCIM](#scim-requires-full-reprovisioning) data steps if those plugins are enabled.
+5. Verify row counts and uniqueness, then apply the non-null constraints, foreign keys, indexes, and removal of legacy columns. Projects without any required data conversion may apply their reviewed schema through `npx auth@latest migrate` instead.
+6. Update configuration, custom OAuth providers, plugins, hooks, adapter capabilities, generated schemas, and account-cookie consumers described in the applicable sections above.
+7. Deploy 1.7 and verify email and password, returning OAuth and SSO sign-in, explicit linking and unlinking, token refresh, account-cookie selection, and User deletion against the migrated data before resuming normal traffic.
 
 ***
 
@@ -637,6 +729,6 @@ A breaking change in one beta can be reverted in a later beta of the same line, 
 
 An earlier 1.7 prerelease used organization-scoped SCIM providers and interim Group tables. The final SCIM schema does not convert those tables. If you adopted that prerelease, follow the same [full SCIM reprovisioning cutover](#scim-requires-full-reprovisioning) as an upgrade from 1.6.
 
-An earlier 1.7 prerelease stored `issuer` and `providerAccountId` directly on `account` and exposed Generic OAuth options as `accountIssuer` and `accountSubject`. Reuse those populated columns and start the 2-table backfill at the collision checks, then rename the options to `identityIssuer` and `identitySubject`. Replace `OAuthAccountKeyContext` imports with `OAuthIdentityKeyContext`.
+An earlier 1.7 prerelease stored `issuer` and `providerAccountId` directly on `account` and exposed Generic OAuth options as `accountIssuer` and `accountSubject`. Reuse those populated columns and start the 2-table backfill at the collision checks, then rename the options to `identityIssuer` and `identitySubject`. Replace `OAuthAccountKeyContext` and `OAuthAccountSubject` imports with `OAuthIdentityKeyContext` and `OAuthIdentitySubject`.
 
 Two habits make this cheaper. Read `revert` entries in the changelog, not just `feat` and `fix`; a revert is a migration for you even though it does not announce itself as breaking. Bump only the packages that carry the change, and confirm your own plugins do not import the reverted surface before you rebuild them.

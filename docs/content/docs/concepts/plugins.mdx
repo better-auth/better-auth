@@ -134,6 +134,49 @@ Create Auth endpoints wraps around `createEndpoint` from Better Call. Inside the
 
 For other properties, you can check the <Link href="https://github.com/bekacru/better-call">Better Call</Link> documentation and the <Link href="https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/context/create-context.ts">source code </Link>.
 
+### Provisioning Users and Accounts
+
+A plugin that provisions a User must give its method a typed source. Extend `UserProvisioningSourceRegistry` with declaration merging so `user.validateUserInfo` can discriminate the method and access only its metadata.
+
+```ts title="plugin.ts"
+declare module "@better-auth/core" {
+    interface UserProvisioningSourceRegistry {
+        "directory-sync": {
+            directoryId: string;
+        };
+    }
+}
+```
+
+Use `internalAdapter.createUserWithAccount` to create a User and the first Identity and Account in one atomic lifecycle operation. The Identity owns the stable issuer and provider subject. The Account owns the provider configuration and its credentials.
+
+```ts title="plugin.ts"
+const result = await ctx.context.internalAdapter.createUserWithAccount(
+    {
+        email: directoryUser.email,
+        name: directoryUser.name,
+    },
+    {
+        source: {
+            method: "directory-sync",
+            directoryId,
+        },
+        buildAuthentication: () => ({
+            identity: {
+                issuer: `directory:${directoryId}`,
+                providerAccountId: directoryUser.id,
+            },
+            account: {
+                providerId: "directory-sync",
+                providerInstanceId: `directory:${directoryId}`,
+            },
+        }),
+    },
+);
+```
+
+To attach a new authentication method to an existing User, use `internalAdapter.linkAccount(userId, identityKey, account)`. Use `buildRelatedRecords` on either lifecycle method when plugin-owned rows must commit with the authentication graph. Do not create Account or Identity rows independently, because that bypasses ownership checks, hooks, and atomicity guarantees.
+
 **Rules for Endpoints**
 
 * Makes sure you use kebab-case for the endpoint path

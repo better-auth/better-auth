@@ -37,7 +37,11 @@ By default, Better Auth uses the following cookies:
 
 * `session_token` to store the session token
 * `session_data` to store the session data if cookie cache is enabled
+* `account_data` to store encrypted provider account data when `account.storeAccountCookie` is enabled, which happens automatically when no database is configured
+* `provider_account_binding` to bind the authenticated provider Account and Identity to the exact session that may use `account_data`
 * `dont_remember` to store the flag when `rememberMe` is disabled
+
+The provider-account binding is authorization state, not a replacement for session validation. Better Auth verifies both cookies together before an API using `useAccountCookie: true` can access provider credentials. Copying `account_data` from another session does not authorize the operation.
 
 Plugins may also use cookies to store data. For example, the Two Factor Authentication plugin uses the `two_factor` cookie to store the two-factor authentication state.
 

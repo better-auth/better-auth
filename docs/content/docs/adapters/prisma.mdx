@@ -37,6 +37,12 @@ export const auth = betterAuth({
   Starting from Prisma 7, the `output` path field is required. If you have configured a custom output path in your `schema.prisma` file (e.g., `output = "../src/generated/prisma"`), make sure to [import the Prisma client from that location](https://www.prisma.io/docs/orm/prisma-client/setup-and-configuration/generating-prisma-client#the-location-of-prisma-client) instead of `@prisma/client`.
 </Callout>
 
+## Transactions
+
+The adapter uses Prisma interactive transactions by default. Better Auth requires them for lifecycle operations that create or remove related User, Identity, and Account records.
+
+Set `transaction: false` only when the database driver cannot run interactive transactions. Without transaction support or a database-native atomic batch capability, Better Auth rejects multi-record identity mutations before writing.
+
 ## Schema generation & migration
 
 The [Better Auth CLI](/docs/concepts/cli) allows you to generate or migrate

@@ -416,8 +416,13 @@ The response includes `providerId`, so callers can match an Account to its confi
 ```ts
 import { authClient } from "@/lib/auth-client"
 
-const accounts = await authClient.listAccounts();
-const googleAccount = accounts.find((account) => account.providerId === "google");
+const { data: accounts, error } = await authClient.listAccounts();
+
+if (error) {
+    throw new Error(error.message);
+}
+
+const googleAccount = accounts?.find((account) => account.providerId === "google");
 
 console.log(googleAccount?.identity.issuer);
 console.log(googleAccount?.identity.providerAccountId);
@@ -620,8 +625,13 @@ Unlink an account by passing the Better Auth account record's `id`, which you ca
 ```ts
 import { authClient } from "@/lib/auth-client"
 
-const accounts = await authClient.listAccounts();
-const account = accounts.find((account) => account.providerId === "google");
+const { data: accounts, error } = await authClient.listAccounts();
+
+if (error) {
+    throw new Error(error.message);
+}
+
+const account = accounts?.find((account) => account.providerId === "google");
 
 if (account) {
     await authClient.unlinkAccount({

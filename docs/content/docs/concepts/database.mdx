@@ -484,6 +484,8 @@ export const identityTableFields = [
 
 The database enforces a unique compound index on `issuer` and `providerAccountId`. Built-in and Generic OAuth providers with a trusted issuer use that authority, including the verified issuer for OpenID Connect. Providers without an issuer use the synthetic `local:<encoded providerId>` namespace, where the provider ID segment is percent-encoded. Persisted SSO providers use an immutable provider-instance namespace. Credential identities use `local:credential` and the linked user's stable `id`.
 
+Identity ownership uses a restricted foreign key. Delete a User through Better Auth's User lifecycle API so dependent Sessions, Accounts, and Identities are removed in the correct order and their hooks run. Directly deleting a User with dependent Identity or Session rows is rejected by the database.
+
 ### Account
 
 Table Name: `account`
@@ -573,6 +575,8 @@ export const accountTableFields = [
 
 The database enforces a unique compound index on `identityId` and `providerInstanceId`. `providerId` is the public configuration alias used by account APIs and provider lookup, while `providerInstanceId` is a stable internal namespace that prevents credentials and lifecycle operations from crossing provider instances. Built-in, social, Generic OAuth, and credential Accounts use their provider alias for both fields. Persisted SSO providers use `sso:provider:<recordId>` as the instance ID, and providers declared in `defaultSSO` use `sso:config:<providerId>`.
 
+The Account-to-Identity foreign key is also restricted. Unlink Accounts through Better Auth before deleting an Identity so account-owned records, credentials, and hooks are handled consistently.
+
 ### Verification
 
 Table Name: `verification`
@@ -615,7 +619,7 @@ export const verificationTableFields = [
 
 ## Custom Tables
 
-Better Auth allows you to customize the table names and column names for the core schema. You can also extend the core schema by adding additional fields to the user and session tables.
+Better Auth allows you to customize the table names and column names for the core schema. You can also extend the core schema by adding additional fields to the User, Session, Identity, and Account tables.
 
 ### Custom Table Names
 
