@@ -98,7 +98,7 @@ Several provider configurations can point to one Identity without sharing creden
    | Credential                  | `local:credential`                        | Stable `id` from the linked `user` row | `credential`                    |
    | Trusted OAuth/OIDC provider | Exact trusted issuer used by the provider | Existing provider account identifier   | Existing `providerId`           |
    | TikTok                      | `local:oauth:tiktok`                      | TikTok `union_id`                      | `tiktok`                        |
-   | Provider without an issuer  | `local:oauth:<encoded providerId>`              | Existing provider account identifier   | Existing `providerId`           |
+   | Provider without an issuer  | `local:oauth:<encoded providerId>`        | Existing provider account identifier   | Existing `providerId`           |
    | Persisted OIDC SSO provider | `sso:provider:<ssoProvider.id>:oidc`      | Verified `sub`                         | `sso:provider:<ssoProvider.id>` |
    | Persisted SAML SSO provider | `sso:provider:<ssoProvider.id>:saml`      | Signed `NameID`                        | `sso:provider:<ssoProvider.id>` |
    | `defaultSSO` OIDC provider  | Exact verified issuer                     | Verified `sub`                         | `sso:config:<providerId>`       |
