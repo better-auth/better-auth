@@ -41,6 +41,25 @@ describe("run time proxy", async () => {
 		expect(isProxy(atom)).toBe(false);
 	});
 
+	it("every framework client should expose the real $fetch and $store", async () => {
+		// A key missing from the proxy routes silently falls through to the
+		// dynamic path handler, so `client.$fetch(...)` would issue a request
+		// to a phantom `/fetch` action instead of using the better-fetch
+		// instance, and `$store.atoms.session` would resolve to a path proxy
+		// instead of the session atom.
+		const clients = {
+			vanilla: createVanillaClient(),
+			react: createReactClient(),
+			solid: createSolidClient(),
+			svelte: createSvelteClient(),
+			vue: createVueClient(),
+		};
+		for (const [framework, client] of Object.entries(clients)) {
+			expect(isProxy(client.$fetch), `${framework} $fetch`).toBe(false);
+			expect(isProxy(client.$store.atoms.session), `${framework} session atom`).toBe(false);
+		}
+	});
+
 	it("proxy api should be called", async () => {
 		let apiCalled = false;
 		const client = createSolidClient({
