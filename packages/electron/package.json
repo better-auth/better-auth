@@ -89,7 +89,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "better-auth": "workspace:*",
     "better-sqlite3": "^12.6.2",
-    "electron": "^41.2.2",
+    "electron": "^43.1.1",
     "tsdown": "catalog:"
   },
   "peerDependencies": {
@@ -99,7 +99,7 @@
     "better-auth": "workspace:^",
     "better-call": "catalog:",
     "conf": "^15.0.2",
-    "electron": ">=36.0.0"
+    "electron": ">=41.0.0"
   },
   "peerDependenciesMeta": {
     "electron": {
