@@ -99,7 +99,7 @@
     "better-auth": "workspace:^",
     "better-call": "catalog:",
     "conf": "^15.0.2",
-    "electron": ">=41.0.0"
+    "electron": ">=36.0.0"
   },
   "peerDependenciesMeta": {
     "electron": {
