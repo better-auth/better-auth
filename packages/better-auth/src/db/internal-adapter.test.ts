@@ -232,6 +232,32 @@ describe("internal adapter test", async () => {
 		});
 	});
 
+	it("should replace an existing verification row for the same identifier", async () => {
+		await internalAdapter.createVerificationValue({
+			identifier: "replace-id",
+			value: "old-value",
+			expiresAt: new Date(Date.now() + 60_000),
+		});
+		await internalAdapter.createVerificationValue({
+			identifier: "replace-id",
+			value: "stale-duplicate",
+			expiresAt: new Date(Date.now() + 60_000),
+		});
+
+		await internalAdapter.createOrReplaceVerificationValue({
+			identifier: "replace-id",
+			value: "new-value",
+			expiresAt: new Date(Date.now() + 60_000),
+		});
+
+		const rows = await authContext.adapter.findMany({
+			model: "verification",
+			where: [{ field: "identifier", value: "replace-id" }],
+		});
+		expect(rows).toHaveLength(1);
+		expect(rows[0]).toMatchObject({ value: "new-value" });
+	});
+
 	it("should delete verification by value with hooks", async () => {
 		await internalAdapter.createVerificationValue({
 			identifier: `test-id-1`,

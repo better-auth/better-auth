@@ -115,7 +115,7 @@ export const createInternalAdapter = (
 		}
 	}
 
-	return {
+	const internalAdapter: InternalAdapter = {
 		createOAuthUser: async (
 			user: Omit<User, "id" | "createdAt" | "updatedAt">,
 			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
@@ -1135,6 +1135,20 @@ export const createInternalAdapter = (
 			);
 			return verification as Verification;
 		},
+		/**
+		 * Create a verification value after deleting any existing rows with the
+		 * same identifier. Prefer this over `createVerificationValue` when the
+		 * identifier is deterministic and a previous unconsumed row may still
+		 * exist — the stock schema does not unique-constrain `identifier`, so a
+		 * create-then-catch fallback never fires.
+		 */
+		createOrReplaceVerificationValue: async (
+			data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
+				Partial<Verification>,
+		) => {
+			await internalAdapter.deleteVerificationByIdentifier(data.identifier);
+			return await internalAdapter.createVerificationValue(data);
+		},
 		findVerificationValue: async (identifier: string) => {
 			const storageOption = getStorageOption(
 				identifier,
@@ -1547,4 +1561,5 @@ export const createInternalAdapter = (
 		},
 		refreshUserSessions,
 	};
+	return internalAdapter;
 };

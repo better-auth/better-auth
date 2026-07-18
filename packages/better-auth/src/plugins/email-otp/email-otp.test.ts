@@ -2140,6 +2140,80 @@ describe("race condition protection", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10437
+ */
+describe("email-otp verification row singleton", async () => {
+	let otp = "";
+	const { client, auth } = await getTestInstance(
+		{
+			plugins: [
+				emailOTP({
+					storeOTP: "hashed",
+					async sendVerificationOTP({ otp: _otp }) {
+						otp = _otp;
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+	const authCtx = await auth.$context;
+
+	it("should keep a single verification row after wrong OTP then resend", async () => {
+		const email = "otp-singleton@example.com";
+		const identifier = `sign-in-otp-${email}`;
+
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		const firstOtp = otp;
+
+		const wrong = await client.signIn.emailOtp({
+			email,
+			otp: firstOtp === "000000" ? "111111" : "000000",
+		});
+		expect(wrong.error?.code).toBe("INVALID_OTP");
+
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		const secondOtp = otp;
+		expect(secondOtp).not.toBe(firstOtp);
+
+		const rows = await authCtx.adapter.findMany({
+			model: "verification",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(rows).toHaveLength(1);
+
+		const stale = await client.signIn.emailOtp({ email, otp: firstOtp });
+		expect(stale.error?.code).toBe("INVALID_OTP");
+
+		const success = await client.signIn.emailOtp({ email, otp: secondOtp });
+		expect(success.data?.token).toBeDefined();
+	});
+
+	it("should keep a single verification row across repeated resends", async () => {
+		const email = "otp-resend-singleton@example.com";
+		const identifier = `sign-in-otp-${email}`;
+
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		const latestOtp = otp;
+
+		const rows = await authCtx.adapter.findMany({
+			model: "verification",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(rows).toHaveLength(1);
+
+		const success = await client.signIn.emailOtp({ email, otp: latestOtp });
+		expect(success.data?.token).toBeDefined();
+	});
+});
+
 describe("email-otp-resendStrategy", async () => {
 	afterEach(() => {
 		vi.useRealTimers();
