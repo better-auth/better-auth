@@ -2145,11 +2145,16 @@ describe("race condition protection", async () => {
  */
 describe("email-otp verification row singleton", async () => {
 	let otp = "";
+	let otpSeq = 0;
 	const { client, auth } = await getTestInstance(
 		{
 			plugins: [
 				emailOTP({
 					storeOTP: "hashed",
+					generateOTP() {
+						otpSeq += 1;
+						return String(100000 + otpSeq);
+					},
 					async sendVerificationOTP({ otp: _otp }) {
 						otp = _otp;
 					},
@@ -2173,7 +2178,7 @@ describe("email-otp verification row singleton", async () => {
 
 		const wrong = await client.signIn.emailOtp({
 			email,
-			otp: firstOtp === "000000" ? "111111" : "000000",
+			otp: "000000",
 		});
 		expect(wrong.error?.code).toBe("INVALID_OTP");
 
