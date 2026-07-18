@@ -225,6 +225,8 @@ export interface InternalAdapter<
 	 *
 	 * Unlike relying on a unique constraint + create-then-catch, this works
 	 * on the stock verification schema where `identifier` is not unique.
+	 * Same-process callers are serialized; across processes the singleton is
+	 * best-effort without a unique constraint or upsert.
 	 */
 	createOrReplaceVerificationValue(
 		data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &

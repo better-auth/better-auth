@@ -1323,19 +1323,29 @@ async function atomicVerifyOTP(
 	const verified = await verifyStoredOTP(ctx, opts, otpValue, providedOTP);
 
 	if (!verified) {
-		// Recreate outside the consume transaction. If a concurrent send already
-		// wrote a row and the deployment unique-constrains OTP identifiers, the
-		// insert can fail — map that to INVALID_OTP instead of a raw DB error.
-		// Do not delete-before-create here: that would clobber a fresher OTP from
-		// a concurrent send.
+		// Recreate outside the consume transaction. A concurrent send may have
+		// already written a fresher OTP — skip recreate so we neither clobber it
+		// nor insert a stale sibling row. Do not delete-before-create here.
+		const existing =
+			await ctx.context.internalAdapter.findVerificationValue(identifier);
+		if (existing) {
+			throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+		}
 		try {
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${otpValue}:${usedAttempts + 1}`,
 				identifier,
 				expiresAt: consumed.expiresAt,
 			});
-		} catch {
-			throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+		} catch (error) {
+			// Unique-constraint deployments: a racing insert looks like a failed
+			// recreate. Other DB failures must surface (not masquerade as INVALID_OTP).
+			const raced =
+				await ctx.context.internalAdapter.findVerificationValue(identifier);
+			if (raced) {
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+			}
+			throw error;
 		}
 		throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
 	}

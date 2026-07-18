@@ -1141,13 +1141,25 @@ export const createInternalAdapter = (
 		 * identifier is deterministic and a previous unconsumed row may still
 		 * exist — the stock schema does not unique-constrain `identifier`, so a
 		 * create-then-catch fallback never fires.
+		 *
+		 * Same-process callers are serialized via a local lock and run inside a
+		 * transaction when the adapter supports one. Across processes the
+		 * singleton remains best-effort without a unique constraint or upsert.
 		 */
 		createOrReplaceVerificationValue: async (
 			data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
 				Partial<Verification>,
 		) => {
-			await internalAdapter.deleteVerificationByIdentifier(data.identifier);
-			return await internalAdapter.createVerificationValue(data);
+			return withVerificationConsumeLock(
+				`verification-replace:${data.identifier}`,
+				() =>
+					runWithTransaction(adapter, async () => {
+						await internalAdapter.deleteVerificationByIdentifier(
+							data.identifier,
+						);
+						return await internalAdapter.createVerificationValue(data);
+					}),
+			);
 		},
 		findVerificationValue: async (identifier: string) => {
 			const storageOption = getStorageOption(
