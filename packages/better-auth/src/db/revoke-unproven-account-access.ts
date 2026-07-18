@@ -47,24 +47,30 @@ export async function revokeUnprovenAccountAccess(
 	userId: string,
 ): Promise<User | null> {
 	const lockIdentifier = cleanupLockIdentifier(userId);
-	const lockAcquired = await ctx.context.internalAdapter
-		.reserveVerificationValue({
-			identifier: lockIdentifier,
-			value: userId,
-			expiresAt: new Date(Date.now() + cleanupLockExpiresInMs),
-		})
-		.catch((error) => {
-			if (
-				error instanceof BetterAuthError &&
-				error.message.includes("requires database-backed verification storage")
-			) {
-				return true;
-			}
-			throw error;
-		});
-	if (!lockAcquired) {
+	let lockAcquired = false;
+	while (!lockAcquired) {
+		lockAcquired = await ctx.context.internalAdapter
+			.reserveVerificationValue({
+				identifier: lockIdentifier,
+				value: userId,
+				expiresAt: new Date(Date.now() + cleanupLockExpiresInMs),
+			})
+			.catch((error) => {
+				if (
+					error instanceof BetterAuthError &&
+					error.message.includes(
+						"requires database-backed verification storage",
+					)
+				) {
+					return true;
+				}
+				throw error;
+			});
+		if (lockAcquired) break;
+
 		await waitForCleanupLock(ctx, lockIdentifier);
-		return ctx.context.internalAdapter.findUserById(userId);
+		const currentUser = await ctx.context.internalAdapter.findUserById(userId);
+		if (!currentUser || currentUser.emailVerified) return currentUser;
 	}
 
 	try {

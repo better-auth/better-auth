@@ -739,6 +739,90 @@ describe("oauth-proxy", async () => {
 			expect(previewSessions.length).toBe(1);
 		});
 
+		it("should override existing user info when the proxy provider enables it", async () => {
+			const production = await getTestInstance(
+				{
+					baseURL: "http://localhost:3000",
+					plugins: [oAuthProxy()],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					plugins: [oAuthProxy({ productionURL: "http://localhost:3000" })],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+							overrideUserInfoOnSignIn: true,
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+			const previewContext = await preview.auth.$context;
+			const existingUser = await previewContext.internalAdapter.createUser(
+				{
+					email: "user@email.com",
+					name: "Existing User",
+					emailVerified: true,
+				},
+				{ method: "test" },
+			);
+			await previewContext.internalAdapter.linkAccount(
+				existingUser.id,
+				{
+					issuer: "https://accounts.google.com",
+					providerAccountId: "1234567890",
+				},
+				{ providerId: "google", providerInstanceId: "google" },
+			);
+
+			const signIn = await preview.client.signIn.social(
+				{ provider: "google", callbackURL: "/dashboard" },
+				{ throw: true },
+			);
+			const state = new URL(signIn.url!).searchParams.get("state");
+			let encryptedProfile: string | null = null;
+			let callbackURL: string | null = null;
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${state}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						if (location?.includes("profile=")) {
+							const url = new URL(location);
+							encryptedProfile = url.searchParams.get("profile");
+							callbackURL = url.searchParams.get("callbackURL");
+						}
+					},
+				},
+			);
+			expect(encryptedProfile).toBeTruthy();
+
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL!)}&profile=${encodeURIComponent(encryptedProfile!)}`,
+				{
+					onError(context) {
+						expect(context.response.headers.get("location")).toContain(
+							"/dashboard",
+						);
+					},
+				},
+			);
+
+			await expect(
+				previewContext.internalAdapter.findUserById(existingUser.id),
+			).resolves.toMatchObject({ name: "First Last" });
+		});
+
 		it("should forward result.error verbatim instead of collapsing to user_creation_failed", async () => {
 			const production = await getTestInstance(
 				{

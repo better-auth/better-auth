@@ -61,6 +61,30 @@ type CachedSession = {
 	sessionVersion?: string | undefined;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
+}
+
+function parseCachedSession(value: unknown): CachedSession | null {
+	const parsed =
+		typeof value === "string" ? safeJSONParse<unknown>(value) : value;
+	if (
+		!isRecord(parsed) ||
+		!isRecord(parsed.session) ||
+		!isRecord(parsed.user)
+	) {
+		return null;
+	}
+	if (
+		typeof parsed.session.token !== "string" ||
+		typeof parsed.session.userId !== "string" ||
+		typeof parsed.user.id !== "string"
+	) {
+		return null;
+	}
+	return parsed as CachedSession;
+}
+
 const INITIAL_SESSION_VERSION = "initial";
 
 function getSessionVersionKey(userId: string): string {
@@ -194,7 +218,7 @@ export function createSessionAdapterModule<Options extends BetterAuthOptions>(
 			validSessions.map(async ({ token }) => {
 				const cached = await secondaryStorage.get(token);
 				if (!cached) return;
-				const parsed = safeJSONParse<CachedSession>(cached);
+				const parsed = parseCachedSession(cached);
 				if (!parsed) return;
 				if (!(await isCurrentCachedSession(parsed))) {
 					return;
@@ -287,10 +311,8 @@ export function createSessionAdapterModule<Options extends BetterAuthOptions>(
 					if (!data) continue;
 
 					try {
-						const parsed = (
-							typeof data === "string" ? JSON.parse(data) : data
-						) as CachedSession;
-						if (!parsed?.session) continue;
+						const parsed = parseCachedSession(data);
+						if (!parsed) continue;
 						if (!(await isCurrentCachedSession(parsed))) {
 							continue;
 						}
@@ -473,7 +495,7 @@ export function createSessionAdapterModule<Options extends BetterAuthOptions>(
 					return null;
 				}
 				if (sessionStringified) {
-					const s = safeJSONParse<CachedSession>(sessionStringified);
+					const s = parseCachedSession(sessionStringified);
 					if (!s) return null;
 					if (!(await isCurrentCachedSession(s))) {
 						return null;
@@ -539,12 +561,8 @@ export function createSessionAdapterModule<Options extends BetterAuthOptions>(
 					const sessionStringified = await secondaryStorage.get(sessionToken);
 					if (sessionStringified) {
 						try {
-							const s = (
-								typeof sessionStringified === "string"
-									? JSON.parse(sessionStringified)
-									: sessionStringified
-							) as CachedSession;
-							if (!s) return [];
+							const s = parseCachedSession(sessionStringified);
+							if (!s) continue;
 							if (!(await isCurrentCachedSession(s))) {
 								continue;
 							}
@@ -628,8 +646,7 @@ export function createSessionAdapterModule<Options extends BetterAuthOptions>(
 									return null;
 								}
 
-								const parsedSession =
-									safeJSONParse<CachedSession>(currentSession);
+								const parsedSession = parseCachedSession(currentSession);
 								if (!parsedSession) return null;
 								if (!(await isCurrentCachedSession(parsedSession))) {
 									return null;
@@ -666,33 +683,34 @@ export function createSessionAdapterModule<Options extends BetterAuthOptions>(
 										}),
 										sessionTTL,
 									);
+								} else {
+									await secondaryStorage.delete(sessionToken);
+								}
 
-									const listKey = `active-sessions-${updatedSession.userId}`;
-									const listRaw = await secondaryStorage.get(listKey);
-									const list: { token: string; expiresAt: number }[] = listRaw
-										? safeJSONParse(listRaw) || []
-										: [];
+								const listKey = `active-sessions-${updatedSession.userId}`;
+								const listRaw = await secondaryStorage.get(listKey);
+								const list: { token: string; expiresAt: number }[] = listRaw
+									? safeJSONParse(listRaw) || []
+									: [];
+								const filtered = list.filter(
+									(s) => s.token !== sessionToken && s.expiresAt > now,
+								);
+								if (sessionTTL > 0) {
+									filtered.push({ token: sessionToken, expiresAt: expiresMs });
+								}
 
-									const filtered = list
-										.filter(
-											(s) => s.token !== sessionToken && s.expiresAt > now,
-										)
-										.concat([{ token: sessionToken, expiresAt: expiresMs }]);
-
-									const sorted = filtered.sort(
-										(a, b) => a.expiresAt - b.expiresAt,
+								const sorted = filtered.sort(
+									(a, b) => a.expiresAt - b.expiresAt,
+								);
+								const furthestSessionExp = sorted.at(-1)?.expiresAt;
+								if (furthestSessionExp && furthestSessionExp > now) {
+									await secondaryStorage.set(
+										listKey,
+										JSON.stringify(sorted),
+										getTTLSeconds(furthestSessionExp, now),
 									);
-									const furthestSessionExp = sorted.at(-1)?.expiresAt;
-
-									if (furthestSessionExp && furthestSessionExp > now) {
-										await secondaryStorage.set(
-											listKey,
-											JSON.stringify(sorted),
-											getTTLSeconds(furthestSessionExp, now),
-										);
-									} else {
-										await secondaryStorage.delete(listKey);
-									}
+								} else {
+									await secondaryStorage.delete(listKey);
 								}
 
 								return updatedSession;

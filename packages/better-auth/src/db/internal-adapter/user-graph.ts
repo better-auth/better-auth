@@ -1435,14 +1435,16 @@ export function createUserGraphAdapterMethods<
 				"user",
 				undefined,
 			);
-			await queueAfterTransactionHook(() => refreshUserSessions(user), {
-				onError(error) {
-					logger.error(
-						"Failed to refresh committed user sessions in secondary storage",
-						error,
-					);
-				},
-			});
+			if (user) {
+				await queueAfterTransactionHook(() => refreshUserSessions(user), {
+					onError(error) {
+						logger.error(
+							"Failed to refresh committed user sessions in secondary storage",
+							error,
+						);
+					},
+				});
+			}
 			return user;
 		},
 		updateUserByEmail: async (
@@ -1463,14 +1465,16 @@ export function createUserGraphAdapterMethods<
 				"user",
 				undefined,
 			);
-			await queueAfterTransactionHook(() => refreshUserSessions(user), {
-				onError(error) {
-					logger.error(
-						"Failed to refresh committed user sessions in secondary storage",
-						error,
-					);
-				},
-			});
+			if (user) {
+				await queueAfterTransactionHook(() => refreshUserSessions(user), {
+					onError(error) {
+						logger.error(
+							"Failed to refresh committed user sessions in secondary storage",
+							error,
+						);
+					},
+				});
+			}
 			return user;
 		},
 		updatePassword: async (userId: string, password: string) => {

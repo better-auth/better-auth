@@ -284,6 +284,12 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						throw redirectOnError(ctx, errorURL, "state_mismatch");
 					}
 
+					const provider = ctx.context.socialProviders.find(
+						(provider) =>
+							provider.id ===
+							(payload.account.providerInstanceId ||
+								payload.account.providerId),
+					);
 					let result: Awaited<ReturnType<typeof authenticateProviderUser>>;
 					try {
 						result = await authenticateProviderUser(ctx, {
@@ -292,6 +298,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							account: payload.account,
 							callbackURL: payload.callbackURL,
 							disableSignUp: payload.disableSignUp,
+							overrideUserInfo: provider?.options?.overrideUserInfoOnSignIn,
 							source: {
 								method: "oauth",
 								oauth: {

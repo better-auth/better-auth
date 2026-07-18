@@ -28,6 +28,7 @@ import type {
 	UserProvisioningSource,
 } from "../types";
 import { getMigrations } from "./get-migration";
+import { revokeUnprovenAccountAccess } from "./revoke-unproven-account-access";
 
 function createStringSecondaryStorage(
 	store: Map<string, string>,
@@ -380,6 +381,118 @@ describe("internal adapter test", async () => {
 	});
 	const authContext = await init(opts);
 	const internalAdapter = authContext.internalAdapter;
+
+	it("retries account cleanup when another cleanup lock outlives the wait deadline", async () => {
+		vi.useFakeTimers();
+		const database = new DatabaseSync(":memory:");
+		const testOpts = { database } satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const context = await init(testOpts);
+		const endpointContext = {
+			context,
+		} as unknown as GenericEndpointContext;
+		const user = await context.internalAdapter.createUser(
+			{
+				email: "cleanup-lock@example.com",
+				name: "Cleanup Lock",
+				emailVerified: false,
+			},
+			{ method: "test" },
+		);
+		const lockIdentifier = `revoke-unproven-account-access:${user.id}`;
+		expect(user.emailVerified).toBe(false);
+		await context.internalAdapter.linkAccount(
+			user.id,
+			{
+				issuer: "https://cleanup-lock.example.com",
+				providerAccountId: "cleanup-lock-provider-user",
+			},
+			{
+				providerId: "cleanup-lock-provider",
+				providerInstanceId: "cleanup-lock-provider",
+			},
+		);
+		await context.internalAdapter.createSession(user.id);
+		await context.internalAdapter.reserveVerificationValue({
+			identifier: lockIdentifier,
+			value: user.id,
+			expiresAt: new Date(Date.now() + 5_000),
+		});
+		expect(
+			await context.internalAdapter.reserveVerificationValue({
+				identifier: lockIdentifier,
+				value: user.id,
+				expiresAt: new Date(Date.now() + 5_000),
+			}),
+		).toBe(false);
+
+		const reserveSpy = vi.spyOn(
+			context.internalAdapter,
+			"reserveVerificationValue",
+		);
+		try {
+			const cleanup = revokeUnprovenAccountAccess(endpointContext, user.id);
+			while (reserveSpy.mock.results.length === 0) {
+				await Promise.resolve();
+			}
+			await reserveSpy.mock.results[0]!.value;
+			await vi.advanceTimersByTimeAsync(0);
+			await vi.advanceTimersByTimeAsync(2_250);
+			await context.internalAdapter.deleteVerificationByIdentifier(
+				lockIdentifier,
+			);
+			await vi.advanceTimersByTimeAsync(250);
+
+			await expect(cleanup).resolves.toMatchObject({ emailVerified: true });
+			await expect(
+				context.internalAdapter.findUserById(user.id),
+			).resolves.toMatchObject({ emailVerified: true });
+			await expect(
+				context.internalAdapter.listUserAccounts(user.id),
+			).resolves.toEqual([]);
+			await expect(
+				context.internalAdapter.listSessions(user.id),
+			).resolves.toEqual([]);
+		} finally {
+			reserveSpy.mockRestore();
+			vi.useRealTimers();
+			database.close();
+		}
+	});
+
+	it("returns null when a cached user update matches no row", async () => {
+		const database = new DatabaseSync(":memory:");
+		const log = vi.fn();
+		const testOpts = {
+			database,
+			logger: { log },
+			secondaryStorage: createStringSecondaryStorage(new Map()),
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const context = await init(testOpts);
+
+		try {
+			await expect(
+				context.internalAdapter.updateUser("missing-user", {
+					name: "Missing User",
+				}),
+			).resolves.toBeNull();
+			await expect(
+				context.internalAdapter.updateUserByEmail("missing@example.com", {
+					name: "Missing User",
+				}),
+			).resolves.toBeNull();
+			expect(log).not.toHaveBeenCalledWith(
+				"error",
+				expect.stringContaining(
+					"Failed to refresh committed user sessions in secondary storage",
+				),
+				expect.anything(),
+			);
+		} finally {
+			database.close();
+		}
+	});
 
 	it("creates a user with one identity and one account", async () => {
 		const created = await internalAdapter.createUserWithAccount(
@@ -3337,6 +3450,29 @@ describe("internal adapter test", async () => {
 		);
 	});
 
+	it("findSession should return null for valid JSON with a malformed session shape", async () => {
+		const testMap = new Map<string, string>();
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(testMap),
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const testInternalAdapter = (await init(testOpts)).internalAdapter;
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-malformed-find",
+				email: "test-malformed-find@email.com",
+			},
+			{ method: "test" },
+		);
+		const session = await testInternalAdapter.createSession(user.id);
+		testMap.set(session.token, JSON.stringify({ session: null, user: null }));
+
+		await expect(
+			testInternalAdapter.findSession(session.token),
+		).resolves.toBeNull();
+	});
+
 	it("listSessions should skip corrupt/unparsable sessions without blanking the list", async () => {
 		const testMap = new Map<string, string>();
 
@@ -3407,7 +3543,7 @@ describe("internal adapter test", async () => {
 		expect(sessions.length).toBe(0);
 	});
 
-	it("findSessions should skip corrupt sessions without blanking the list", async () => {
+	it("findSessions should skip malformed JSON values without blanking the list", async () => {
 		const testMap = new Map<string, string>();
 
 		const testOpts = {
@@ -3433,8 +3569,8 @@ describe("internal adapter test", async () => {
 		const session2 = await testInternalAdapter.createSession(user.id);
 		const session3 = await testInternalAdapter.createSession(user.id);
 
-		// Corrupt session2 data
-		testMap.set(session2.token, "invalid-json{{{");
+		// JSON.parse succeeds, but the value is not a cached session.
+		testMap.set(session2.token, "null");
 
 		// findSessions should still return session1 and session3
 		const sessions = await testInternalAdapter.findSessions([
@@ -3543,6 +3679,41 @@ describe("internal adapter test", async () => {
 		expect(updatedTTL).toBeDefined();
 		expect(updatedTTL! - expectedTTL).toBeLessThanOrEqual(1);
 		expect(updatedTTL! - expectedTTL).toBeGreaterThanOrEqual(0);
+	});
+
+	it("should evict an expired session from secondary storage when it is updated", async () => {
+		const testMap = new Map<string, string>();
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(testMap),
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const testInternalAdapter = (await init(testOpts)).internalAdapter;
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-expired-update",
+				email: "test-expired-update@email.com",
+			},
+			{ method: "test" },
+		);
+		const expiredSession = await testInternalAdapter.createSession(user.id);
+		const liveSession = await testInternalAdapter.createSession(user.id);
+
+		await testInternalAdapter.updateSession(expiredSession.token, {
+			expiresAt: new Date(Date.now() - 1_000),
+		});
+
+		expect(testMap.has(expiredSession.token)).toBe(false);
+		expect(testMap.has(liveSession.token)).toBe(true);
+		const activeSessions = safeJSONParse<
+			{ token: string; expiresAt: number }[]
+		>(testMap.get(`active-sessions-${user.id}`)!);
+		expect(activeSessions?.map(({ token }) => token)).toEqual([
+			liveSession.token,
+		]);
+		await expect(
+			testInternalAdapter.findSession(expiredSession.token),
+		).resolves.toBeNull();
 	});
 
 	it("should deduplicate sessions when active-sessions list contains duplicates", async () => {
@@ -4794,6 +4965,42 @@ describe("internal adapter test", async () => {
 
 			expect(first).toBe(true);
 			expect(second).toBe(true);
+		});
+
+		it("rolls back reservation writes and their secondary-storage entries", async () => {
+			const database = new DatabaseSync(":memory:");
+			const secondaryStore = new Map<string, string>();
+			const opts = {
+				database,
+				secondaryStorage: createStringSecondaryStorage(secondaryStore),
+				verification: { storeInDatabase: true },
+			} satisfies BetterAuthOptions;
+			(await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+			const reservation = {
+				identifier: "reserve:rollback",
+				value: "jti-rollback",
+				expiresAt: new Date(Date.now() + 60_000),
+			};
+
+			try {
+				await expect(
+					runWithTransaction(ctx.adapter, async () => {
+						expect(
+							await ctx.internalAdapter.reserveVerificationValue(reservation),
+						).toBe(true);
+						throw new Error("rollback reservation");
+					}),
+				).rejects.toThrow("rollback reservation");
+
+				expect(secondaryStore.size).toBe(0);
+				expect(
+					await ctx.internalAdapter.reserveVerificationValue(reservation),
+				).toBe(true);
+				expect(secondaryStore.size).toBe(1);
+			} finally {
+				database.close();
+			}
 		});
 
 		it("fails closed when verification reservation is secondary-storage-only", async () => {

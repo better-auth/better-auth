@@ -1,6 +1,7 @@
 import type { BetterAuthOptions, InternalAdapter } from "@better-auth/core";
 import {
 	getCurrentAdapter,
+	queueAfterTransactionHook,
 	runAtomicMutation,
 } from "@better-auth/core/context";
 import type {
@@ -476,9 +477,10 @@ export function createVerificationAdapterMethods<
 					"reserveVerificationValue requires database-backed verification storage. Set verification.storeInDatabase to true for flows that reserve verification values.",
 				);
 			}
+			const currentAdapter = await getCurrentAdapter(adapter);
 
 			try {
-				await adapter.create({
+				await currentAdapter.create({
 					model: "verification",
 					data: {
 						id: reservationId,
@@ -494,7 +496,7 @@ export function createVerificationAdapterMethods<
 				// A create error is ambiguous across adapters: confirm it was a
 				// duplicate (the row exists) rather than a real failure before
 				// reporting "lost".
-				const existing = await adapter.findOne<Verification>({
+				const existing = await currentAdapter.findOne<Verification>({
 					model: "verification",
 					where: [{ field: "id", value: reservationId }],
 				});
@@ -505,16 +507,18 @@ export function createVerificationAdapterMethods<
 			if (secondaryStorage) {
 				const ttl = getTTLSeconds(data.expiresAt);
 				if (ttl > 0) {
-					await secondaryStorage.set(
-						`verification:${storedIdentifier}`,
-						JSON.stringify({
-							id: reservationId,
-							identifier: storedIdentifier,
-							value: data.value,
-							expiresAt: data.expiresAt,
-						}),
-						ttl,
-					);
+					await queueAfterTransactionHook(async () => {
+						await secondaryStorage.set(
+							`verification:${storedIdentifier}`,
+							JSON.stringify({
+								id: reservationId,
+								identifier: storedIdentifier,
+								value: data.value,
+								expiresAt: data.expiresAt,
+							}),
+							ttl,
+						);
+					});
 				}
 			}
 
