@@ -394,6 +394,43 @@ describe("open-api", async () => {
 		expect(updateUserSchema.required ?? []).not.toContain("preferences");
 	});
 
+	it("should mark explicitly required additionalFields as required on sign-up", async () => {
+		const { auth: authWithRequiredField } = await getTestInstance(
+			{
+				plugins: [openAPI()],
+				user: {
+					additionalFields: {
+						nickname: {
+							type: "string",
+							required: true,
+						},
+						optionalNote: {
+							type: "string",
+						},
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const schema = await authWithRequiredField.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+		const signUpSchema = getPostRequestBody(paths, "/sign-up/email").content[
+			"application/json"
+		].schema;
+
+		expect(getSchemaProperty(signUpSchema, "nickname")).toEqual({
+			type: "string",
+		});
+		expect(getSchemaProperty(signUpSchema, "optionalNote")).toEqual({
+			type: "string",
+		});
+		expect(signUpSchema.required).toContain("nickname");
+		// omitted required matches parseUserInput (only truthy required is enforced)
+		expect(signUpSchema.required).not.toContain("optionalNote");
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10430
 	 */

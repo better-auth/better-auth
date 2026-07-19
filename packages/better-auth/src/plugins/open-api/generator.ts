@@ -475,9 +475,9 @@ function getUserInputRequestBodyFields(options: BetterAuthOptions) {
 	for (const [key, field] of Object.entries(fields)) {
 		if (!field || field.input === false) continue;
 		properties[key] = dbFieldToRequestBodyProperty(field);
-		// Match parseUserInput create behavior: required unless explicitly false,
-		// and not when a static default fills the value for the client.
-		if (field.required !== false && field.defaultValue === undefined) {
+		// Match parseUserInput create behavior: only enforce required when the
+		// field explicitly opts in, and not when a static default fills the value.
+		if (field.required === true && field.defaultValue === undefined) {
 			required.push(key);
 		}
 	}
