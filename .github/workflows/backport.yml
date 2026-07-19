@@ -43,7 +43,7 @@ jobs:
           app-id: ${{ vars.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
           token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
@@ -64,7 +64,7 @@ jobs:
           echo "auto_merge=$HAS_LABEL" >> "$GITHUB_OUTPUT"
 
       - name: Create backport PRs
-        uses: korthout/backport-action@66065406958f46e82238fd59546f5a99e69e22aa # v4.5.2
+        uses: korthout/backport-action@2e830a1d0b8269505846ddd407a70876913ad1f8 # v4.6.0
         with:
           github_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           label_pattern: '^backport ([^ ]+)$'
