@@ -17,9 +17,7 @@ export interface CookieAttributes {
 	httponly?: boolean | undefined;
 	partitioned?: boolean | undefined;
 	samesite?: ("strict" | "lax" | "none") | undefined;
-	// TODO: tighten to `string | number | boolean | Date | undefined`.
-	// Kept as `any` for now to preserve the public type surface.
-	[key: string]: any;
+	[key: string]: string | number | boolean | Date | undefined;
 }
 
 interface ParsedCookieOptions {
