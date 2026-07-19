@@ -1283,3 +1283,106 @@ describe("custom verifyOTP", async () => {
 		expect(user.data?.user.phoneNumberVerified).toBe(true);
 	});
 });
+
+describe("phone-number sendOtp row deduplication", async () => {
+	let latestOtp = "";
+
+	const { client, auth } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						latestOtp = code;
+					},
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+	const authCtx = await auth.$context;
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10449
+	 */
+	it("should deduplicate verification rows when sending OTP multiple times for same phone number", async () => {
+		const phoneNumber = "+19998887777";
+		await client.phoneNumber.sendOtp({ phoneNumber });
+
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		const secondCode = latestOtp;
+
+		const verifyRes = await client.phoneNumber.verify({
+			phoneNumber,
+			code: secondCode,
+		});
+		expect(verifyRes.error).toBe(null);
+		expect(verifyRes.data?.status).toBe(true);
+
+		const afterVerify =
+			await authCtx.internalAdapter.findVerificationValue(phoneNumber);
+		expect(afterVerify).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10449
+	 */
+	it("should deduplicate verification rows on password reset request re-send", async () => {
+		const phoneNumber = "+19998887777";
+		await client.phoneNumber.requestPasswordReset({ phoneNumber });
+		await client.phoneNumber.requestPasswordReset({ phoneNumber });
+
+		const resetIdentifier = `${phoneNumber}-request-password-reset`;
+		const consumed =
+			await authCtx.internalAdapter.consumeVerificationValue(resetIdentifier);
+		expect(consumed).not.toBeNull();
+
+		const afterConsume =
+			await authCtx.internalAdapter.findVerificationValue(resetIdentifier);
+		expect(afterConsume).toBeNull();
+	});
+});
+
+describe("verifyPhoneNumber without signUpOnVerification", async () => {
+	let otp = "";
+
+	const { client } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10449
+	 */
+	it("should return 400 when verifying non-existent user without signUpOnVerification", async () => {
+		const phoneNumber = "+17776665555";
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		const res = await client.phoneNumber.verify({
+			phoneNumber,
+			code: otp,
+		});
+
+		expect(res.error).not.toBeNull();
+		expect(res.error?.status).toBe(400);
+	});
+});
