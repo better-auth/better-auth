@@ -3,6 +3,7 @@ import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
 import Script from "next/script";
 import type { ReactNode } from "react";
+import { HashSmoothScroll } from "@/components/hash-smooth-scroll";
 import { StaggeredNavFiles } from "@/components/landing/staggered-nav-files";
 import { Providers } from "@/components/providers";
 import { fontVariables } from "@/lib/fonts";
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                   `,
 					}}
 				/>
+				<Script src="/hash-scroll-boot.js" strategy="beforeInteractive" />
 				{process.env.NODE_ENV === "development" && (
 					<Script
 						src="//unpkg.com/react-grab/dist/index.global.js"
@@ -59,6 +61,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 			</head>
 			<body suppressHydrationWarning>
 				<Providers>
+					<HashSmoothScroll />
 					<div className="relative min-h-dvh">
 						<StaggeredNavFiles />
 						{children}

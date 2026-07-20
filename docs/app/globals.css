@@ -609,6 +609,9 @@
 }
 
 html {
+	/* auto: CSS smooth scroll is cancelled by Framer Motion measureAllKeyframes
+	   (window.scrollTo), breaking external hash links. Same-page smooth scroll
+	   is handled by HashSmoothScroll. */
 	scroll-behavior: auto;
 	scroll-padding-top: calc(
 		var(--fd-nav-height, 56px) +
@@ -616,10 +619,6 @@ html {
 		var(--fd-tocnav-height, 0px) +
 		24px
 	);
-}
-
-html:not([data-anchor-scrolling]) {
-	scroll-behavior: smooth;
 }
 
 /* Global custom scrollbars */

@@ -1,7 +1,18 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createMDX } from "fumadocs-mdx/next";
+
+const docsRoot = path.dirname(fileURLToPath(import.meta.url));
+// pnpm hoists `next` to the workspace root; Turbopack must include that path.
+const workspaceRoot = path.resolve(docsRoot, "..");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+	// Parent lockfiles (e.g. ~/package-lock.json) make Next infer the wrong
+	// Turbopack root and fail to resolve `next` / serve stale CSS.
+	turbopack: {
+		root: workspaceRoot,
+	},
 	experimental: {
 		optimizePackageImports: [
 			"lucide-react",
