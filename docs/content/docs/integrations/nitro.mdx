@@ -12,7 +12,7 @@ This guide aims to help you integrate Better Auth with your Nitro application in
 Start by scaffolding a new Nitro application using the following command:
 
 ```bash title="Terminal"
-npx giget@latest nitro nitro-app --install
+npx create-nitro-app
 ```
 
 This will create the `nitro-app` directory and install all the dependencies. You can now open the `nitro-app` directory in your code editor.
@@ -86,7 +86,8 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
-export const auth = betterAuth({
+
+export default betterAuth({
   database: prismaAdapter(prisma, { provider: "sqlite" }),
   emailAndPassword: { enabled: true },
 });
@@ -112,9 +113,11 @@ After saving the file, you can run the `npx prisma db push` command to update th
 
 You can now mount the Better Auth handler in your Nitro application. You can do this by adding the following code to your `server/routes/api/auth/[...all].ts` file:
 
-```ts title="server/routes/api/auth/[...all].ts"
-export default defineEventHandler((event) => {
-  return auth.handler(toWebRequest(event));
+```ts title="server/api/auth/[...all].ts"
+import { defineHandler } from "nitro";
+
+export default defineHandler((event) => {
+  return auth.handler(event.req);
 });
 ```
 
@@ -124,71 +127,68 @@ export default defineEventHandler((event) => {
 
 ### CORS
 
-You can configure CORS for your Nitro app by creating a plugin.
+You can configure CORS for your Nitro app using a [route rule](https://nitro.build/docs/routing#cors) in your `nitro.config.ts`:
 
-Start by installing the cors package:
+```ts title="nitro.config.ts"
+import { defineConfig } from "nitro";
 
-```package-install
-cors
-```
-
-You can now create a new file `server/plugins/cors.ts` and add the following code:
-
-```ts title="server/plugins/cors.ts"
-import cors from "cors";
-export default defineNitroPlugin((plugin) => {
-  plugin.h3App.use(
-    fromNodeMiddleware(
-      cors({
-        origin: "*",
-      }),
-    ),
-  );
+export default defineConfig({
+  routeRules: {
+    "/api/auth/**": {
+      cors: {
+        origin: ["http://localhost:3000"],
+        credentials: true,
+      },
+    },
+  },
 });
 ```
 
 <Callout>
-  This will enable CORS for all routes. You can customize the `origin` property to allow requests from specific domains. Ensure that the config is in sync with your frontend application.
+  If you use cookie-based sessions, set `credentials: true` and list your frontend's exact origin(s) in `origin`. A wildcard origin (`cors: true`) cannot be combined with credentials. If you only use bearer tokens, `credentials` isn't required. Ensure that the config is in sync with your frontend application.
 </Callout>
+
+Learn more about CORS on the [Nitro documentation](https://nitro.build/docs/routing#cors).
 
 ### Auth Guard/Middleware
 
 You can add an auth guard to your Nitro application to protect routes that require authentication. You can do this by creating a new file `server/utils/require-auth.ts` and adding the following code:
 
 ```ts title="server/utils/require-auth.ts"
-import { EventHandler, H3Event } from "h3";
-import { fromNodeHeaders } from "better-auth/node";
+import { defineHandler, HTTPError } from "nitro";
+import auth from "~/server/utils/auth.ts";
 
 /**
  * Middleware used to require authentication for a route.
  *
  * Can be extended to check for specific roles or permissions.
  */
-export const requireAuth: EventHandler = async (event: H3Event) => {
-  const headers = event.headers;
-
+export default defineHandler(async (event) => {
   const session = await auth.api.getSession({
-    headers: headers,
+    headers: event.req.headers,
   });
-  if (!session)
-    throw createError({
-      statusCode: 401,
-      statusMessage: "Unauthorized",
-    });
+
+  if (!session) {
+    throw HTTPError.status(401, "Unauthorized");
+  }
+
   // You can save the session to the event context for later use
   event.context.auth = session;
-};
+});
+
 ```
 
-You can now use this event handler/middleware in your routes to protect them:
+You can now use the [Object Syntax Event Handler](https://h3.dev/guide/basics/handler#object-syntax) to apply middlware to specific routes:
 
-```ts title="server/routes/api/secret.get.ts"
-// Object syntax of the route handler
-export default defineEventHandler({
-  // The user has to be logged in to access this route
-  onRequest: [requireAuth],
-  handler: async (event) => {
-    setResponseStatus(event, 201, "Secret data");
+```ts title="server/api/secret.get.ts"
+import { defineHandler } from "nitro";
+import requireAuth from "~/server/utils/require-auth.ts";
+
+export default defineHandler({
+  middleware: [requireAuth],
+  handler: (event) => {
+    event.res.status = 201;
+    event.res.statusText = "Secret data";
     return { message: "Secret data" };
   },
 });
