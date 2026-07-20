@@ -185,11 +185,11 @@ import requireAuth from "~/server/utils/require-auth.ts";
 
 export default defineHandler({
   middleware: [requireAuth],
-  handler: (event) => {
-    event.res.status = 201;
-    event.res.statusText = "Secret data";
-    return { message: "Secret data" };
-  },
+  handler: () =>
+    Response.json(
+      { message: "Secret data" },
+      { status: 201, statusText: "Secret data" },
+    ),
 });
 ```
 
