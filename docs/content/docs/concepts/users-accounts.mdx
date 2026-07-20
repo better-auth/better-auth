@@ -117,6 +117,81 @@ await authClient.changeEmail({
 });
 ```
 
+#### Verification Strategy
+
+By default the pending change is carried in a signed token in the verification URL and
+applied through `/verify-email`. Nothing is persisted until the user clicks the link, which
+means there is no way to show a pending address or to cancel a request.
+
+Set `strategy: "verification-table"` to store the pending change instead:
+
+```ts
+export const auth = betterAuth({
+    user: {
+        changeEmail: {
+            enabled: true,
+            strategy: "verification-table", // default: "jwt"
+            sendVerificationEmail: async ({ user, url }, request) => {
+                // `user.email` is the requested new address
+                await sendEmail({
+                    to: user.email,
+                    subject: "Confirm your new email address",
+                    text: `Confirm your new address: ${url}`,
+                });
+            },
+        },
+    },
+})
+```
+
+What this changes:
+
+* **`user.pendingEmail`** holds the address awaiting confirmation, so your UI can show it.
+  The column is only added to the user table under this strategy.
+* **A dedicated `sendVerificationEmail`** — separate from
+  `emailVerification.sendVerificationEmail`, so the email-change template and copy no longer
+  have to be shared with sign-up verification, and no request-URL inspection is needed to
+  tell the two flows apart.
+* **Verification runs through `/verify-email-change/:userId/:token`**, which consumes the
+  verification row atomically. A verification link cannot be replayed.
+* **`/cancel-email-change`** discards a pending change and clears `pendingEmail`.
+
+<Callout>
+  `sendChangeEmailConfirmation` and `updateEmailWithoutVerification` apply to the default
+  `"jwt"` strategy. The `"verification-table"` strategy replaces the confirmation email with
+  its own `sendVerificationEmail` and a cancellable pending state.
+</Callout>
+
+`pendingEmail` decides which **address** is current, which is what makes older links inert:
+
+* Requesting a **different** address, or cancelling, invalidates every link issued before —
+  they are rejected on use and their rows expire.
+* Requesting the **same** address again leaves the earlier link valid too. Both lead to the
+  same result, so there is nothing to arbitrate between them.
+* An **expired** link never applies the change and leaves `pendingEmail` untouched, so the
+  user can ask for a fresh email without retyping the address.
+
+Optional extras under this strategy:
+
+```ts
+changeEmail: {
+    enabled: true,
+    strategy: "verification-table",
+    sendVerificationEmail: async ({ user, url }) => { /* ... */ },
+    // Sign other devices out once the new address is confirmed
+    revokeOtherSessions: true,
+    onChangeEmailRequested: async ({ user, newEmail }) => { /* audit */ },
+    onChangeEmailCompleted: async ({ user, oldEmail, newEmail }) => { /* notify */ },
+    onChangeEmailCancelled: async ({ user }) => { /* audit */ },
+}
+```
+
+Cancelling a pending change from the client:
+
+```ts
+await authClient.cancelEmailChange();
+```
+
 ### Change Password
 
 A user's password isn't stored in the user table. Instead, it's stored in the account table. To change the password of a user, you can use one of the following approaches:
