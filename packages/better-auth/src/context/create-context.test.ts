@@ -6,6 +6,10 @@ import { getTestInstance } from "../test-utils/test-instance";
 import type { BetterAuthOptions } from "../types";
 import { createAuthContext } from "./create-context";
 import { getAwaitableValue } from "./helpers";
+import {
+	hasServerSessionStore,
+	shouldBindAccountCookieToSessionUser,
+} from "./store-capabilities";
 
 describe("base context creation", () => {
 	const initBase = async (options: Partial<BetterAuthOptions> = {}) => {
@@ -1903,6 +1907,55 @@ describe("base context creation", () => {
 			});
 			expect(ctx.options.session?.cookieCache?.enabled).toBe(false);
 			expect(ctx.oauthConfig.storeStateStrategy).toBe("database");
+		});
+
+		/**
+		 * Regression: a callable DBAdapterInstance (e.g. prismaAdapter(db))
+		 * must be classified as stateful, even when combined with cookie cache
+		 * and account cookie options. Previously the heuristic incorrectly
+		 * treated callable adapters as stateless when those cookie options were
+		 * enabled, allowing cookie-cached sessions to persist after server-side
+		 * revocation.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/10392
+		 */
+		it("should classify a callable DBAdapterInstance as stateful", () => {
+			const callableAdapter = vi.fn();
+			expect(
+				hasServerSessionStore({
+					database: callableAdapter as any,
+					session: { cookieCache: { enabled: true } },
+					account: { storeAccountCookie: true },
+				}),
+			).toBe(true);
+			expect(
+				shouldBindAccountCookieToSessionUser({
+					database: callableAdapter as any,
+					session: { cookieCache: { enabled: true } },
+					account: { storeAccountCookie: true },
+				}),
+			).toBe(true);
+		});
+
+		/**
+		 * The explicit advanced.database.stateless flag overrides the
+		 * stateful classification, allowing custom no-op adapters to be
+		 * used in cookie-only deployments.
+		 */
+		it("should respect explicit advanced.database.stateless override", () => {
+			const callableAdapter = vi.fn();
+			expect(
+				hasServerSessionStore({
+					database: callableAdapter as any,
+					advanced: { database: { stateless: true } },
+				}),
+			).toBe(false);
+			expect(
+				shouldBindAccountCookieToSessionUser({
+					database: callableAdapter as any,
+					advanced: { database: { stateless: true } },
+				}),
+			).toBe(false);
 		});
 	});
 

@@ -374,6 +374,27 @@ export type BetterAuthAdvancedOptions = {
 				 * function.
 				 */
 				generateId?: GenerateIdFn | false | "serial" | "uuid";
+				/**
+				 * Explicitly mark the deployment as stateless (cookie-only).
+				 *
+				 * When set to `true`, Better Auth treats the deployment as if no
+				 * persistent database store is available — even if a `database`
+				 * option is configured on the top-level `BetterAuthOptions`.
+				 *
+				 * This is an escape hatch for advanced setups where the provided
+				 * adapter is a no-op or stateless adapter that does not actually
+				 * persist session or account records, and all state lives in
+				 * encrypted cookies.
+				 *
+				 * Under normal conditions you should omit `database` entirely to
+				 * enable stateless mode, which automatically falls back to the
+				 * in-memory adapter. This flag is only needed when you must pass
+				 * a custom adapter function while still declaring cookie-only
+				 * semantics.
+				 *
+				 * @default false
+				 */
+				stateless?: boolean;
 		  }
 		| undefined;
 	/**
