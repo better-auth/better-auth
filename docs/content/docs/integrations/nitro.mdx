@@ -117,9 +117,7 @@ You can now mount the Better Auth handler in your Nitro application. You can do 
 import { defineHandler } from "nitro";
 import auth from "~/server/utils/auth";
 
-export default defineHandler((event) => {
-  return auth.handler(event.req);
-});
+export default auth;
 ```
 
 <Callout>
