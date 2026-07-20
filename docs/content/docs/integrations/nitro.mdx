@@ -114,7 +114,6 @@ After saving the file, you can run the `npx prisma db push` command to update th
 You can now mount the Better Auth handler in your Nitro application. You can do this by adding the following code to your `server/api/auth/[...all].ts` file:
 
 ```ts title="server/api/auth/[...all].ts"
-import { defineHandler } from "nitro";
 import auth from "~/server/utils/auth";
 
 export default auth;
