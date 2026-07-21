@@ -48,8 +48,28 @@ function BlogCover({
 }: {
 	title: string;
 	date: Date;
-	image?: string;
+	image?: string | { light: string; dark: string };
 }) {
+	if (typeof image === "object") {
+		return (
+			<>
+				<Image
+					src={image.light}
+					alt={title}
+					width={320}
+					height={168}
+					className="w-full h-full object-cover dark:hidden"
+				/>
+				<Image
+					src={image.dark}
+					alt={title}
+					width={320}
+					height={168}
+					className="w-full h-full object-cover hidden dark:block"
+				/>
+			</>
+		);
+	}
 	if (image) {
 		return (
 			<Image
@@ -329,7 +349,9 @@ export async function generateMetadata({
 	const { title, description, image, date } = page.data;
 
 	// Social cards have no theme preference; always use the dark variant.
-	const ogImage = image || generatedCoverUrl(title, date, "dark");
+	const ogImage =
+		(typeof image === "string" ? image : image?.dark) ??
+		generatedCoverUrl(title, date, "dark");
 
 	return createMetadata({
 		title,
