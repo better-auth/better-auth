@@ -43,6 +43,10 @@ export interface SAMLConfig {
 	entryPoint: string;
 	cert: string;
 	callbackUrl: string;
+	/**
+	 * Callback URL used after an IdP-initiated SAML login when no valid
+	 * RelayState callback is available.
+	 */
 	idpInitiatedCallbackUrl?: string | undefined;
 	audience?: string | undefined;
 	idpMetadata?:

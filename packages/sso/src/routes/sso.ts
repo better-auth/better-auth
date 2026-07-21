@@ -61,7 +61,12 @@ import {
 	findSAMLProvider,
 } from "./helpers";
 import { hasOrgAdminRole } from "./providers";
-import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
+import {
+	buildSAMLRedirectUrl,
+	getSAMLRedirectCandidates,
+	getSafeRedirectUrl,
+	processSAMLResponse,
+} from "./saml-pipeline";
 
 const BUILT_IN_ACCOUNT_PROVIDER_IDS = [
 	"credential",
@@ -1956,7 +1961,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 				const relayState = ctx.query?.RelayState as string | undefined;
 				const safeRedirectUrl = getSafeRedirectUrl(
-					relayState,
+					[relayState],
 					currentCallbackPath,
 					appOrigin,
 					(url, settings) => ctx.context.isTrustedOrigin(url, settings),
@@ -2064,25 +2069,21 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						ctx.context.adapter,
 					);
 					const parsedSamlConfig = provider?.samlConfig;
-					const idpInitiatedCallbackUrl =
-						parsedSamlConfig?.idpInitiatedCallbackUrl ||
-						options?.saml?.idpInitiatedCallbackUrl;
-					const rawRelayState = ctx.body.RelayState;
-					const isTrustedRelayState =
-						rawRelayState &&
-						(rawRelayState.startsWith("/")
-							? !rawRelayState.startsWith("//")
-							: ctx.context.isTrustedOrigin(rawRelayState, {
-									allowRelativePaths: false,
-								}));
 					const redirectUrl = getSafeRedirectUrl(
-						isTrustedRelayState ? rawRelayState : idpInitiatedCallbackUrl,
+						getSAMLRedirectCandidates(
+							ctx.body.RelayState,
+							parsedSamlConfig,
+							options?.saml,
+						),
 						currentCallbackPath,
 						appOrigin,
 						(url, settings) => ctx.context.isTrustedOrigin(url, settings),
 					);
 					throw ctx.redirect(
-						`${redirectUrl}${redirectUrl.includes("?") ? "&" : "?"}error=${encodeURIComponent(errorCode)}&error_description=${encodeURIComponent(error.message)}`,
+						buildSAMLRedirectUrl(redirectUrl, {
+							error: errorCode,
+							error_description: error.message,
+						}),
 					);
 				}
 				throw error;
@@ -2129,7 +2130,7 @@ export const sloEndpoint = (options?: SSOOptions) => {
 			const relayState = ctx.body?.RelayState || ctx.query?.RelayState;
 			const appOrigin = new URL(ctx.context.baseURL).origin;
 			const safeErrorURL = getSafeRedirectUrl(
-				relayState,
+				[relayState],
 				`${appOrigin}/sso/saml2/sp/slo/${providerId}`,
 				appOrigin,
 				(url, settings) => ctx.context.isTrustedOrigin(url, settings),
@@ -2237,7 +2238,7 @@ async function handleLogoutResponse(
 
 	const appOrigin = new URL(ctx.context.baseURL).origin;
 	const safeRedirectUrl = getSafeRedirectUrl(
-		relayState,
+		[relayState],
 		`${appOrigin}/sso/saml2/sp/slo/${providerId}`,
 		appOrigin,
 		(url, settings) => ctx.context.isTrustedOrigin(url, settings),

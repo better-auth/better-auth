@@ -6485,11 +6485,25 @@ describe("SAML SSO Hardening", () => {
 	 * @see https://github.com/better-auth/better-auth/issues/10329
 	 */
 	describe("IdP-initiated SAML login with split origin redirect", () => {
+		const frontendOrigin = "https://frontend.example.com";
+
+		async function getIdPInitiatedSAMLResponse(): Promise<string> {
+			let response: MockSAMLResponse | undefined;
+			await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+				onSuccess: async (context) => {
+					response = (await context.data) as MockSAMLResponse;
+				},
+			});
+			if (!response) throw new Error("Mock IdP did not return a SAML response");
+			return response.samlResponse;
+		}
+
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/10329
 		 */
 		it("should redirect to provider-level idpInitiatedCallbackUrl when RelayState is missing (IdP-initiated)", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
+				trustedOrigins: [frontendOrigin],
 				plugins: [
 					sso({
 						saml: {
@@ -6511,8 +6525,7 @@ describe("SAML SSO Hardening", () => {
 						cert: certificate,
 						callbackUrl:
 							"http://localhost:3000/api/auth/sso/saml2/callback/split-origin-provider",
-						idpInitiatedCallbackUrl:
-							"http://localhost:3000/provider-idp-redirect",
+						idpInitiatedCallbackUrl: `${frontendOrigin}/provider-idp-redirect`,
 						idpMetadata: { metadata: idpMetadata },
 						spMetadata: { metadata: spMetadata },
 					},
@@ -6520,18 +6533,12 @@ describe("SAML SSO Hardening", () => {
 				headers,
 			});
 
-			// Get unsolicited SAML response from mock IdP
-			let samlResponse: any;
-			await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
-				onSuccess: async (context) => {
-					samlResponse = await context.data;
-				},
-			});
+			const samlResponse = await getIdPInitiatedSAMLResponse();
 
 			const callbackResponse = (await auth.api.callbackSSOSAML({
 				method: "POST",
 				body: {
-					SAMLResponse: samlResponse.samlResponse,
+					SAMLResponse: samlResponse,
 				},
 				params: { providerId: "split-origin-provider" },
 				asResponse: true,
@@ -6539,7 +6546,7 @@ describe("SAML SSO Hardening", () => {
 
 			expect(callbackResponse.status).toBe(302);
 			expect(callbackResponse.headers.get("location")).toBe(
-				"http://localhost:3000/provider-idp-redirect",
+				`${frontendOrigin}/provider-idp-redirect`,
 			);
 		});
 
@@ -6548,12 +6555,12 @@ describe("SAML SSO Hardening", () => {
 		 */
 		it("should redirect to global idpInitiatedCallbackUrl when RelayState is missing (IdP-initiated fallback)", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
+				trustedOrigins: [frontendOrigin],
 				plugins: [
 					sso({
 						saml: {
 							allowIdpInitiated: true,
-							idpInitiatedCallbackUrl:
-								"http://localhost:3000/global-idp-redirect",
+							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
 						},
 					}),
 				],
@@ -6578,18 +6585,12 @@ describe("SAML SSO Hardening", () => {
 				headers,
 			});
 
-			// Get unsolicited SAML response from mock IdP
-			let samlResponse: any;
-			await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
-				onSuccess: async (context) => {
-					samlResponse = await context.data;
-				},
-			});
+			const samlResponse = await getIdPInitiatedSAMLResponse();
 
 			const fallbackResponse = (await auth.api.callbackSSOSAML({
 				method: "POST",
 				body: {
-					SAMLResponse: samlResponse.samlResponse,
+					SAMLResponse: samlResponse,
 				},
 				params: { providerId: "global-fallback-provider" },
 				asResponse: true,
@@ -6597,7 +6598,7 @@ describe("SAML SSO Hardening", () => {
 
 			expect(fallbackResponse.status).toBe(302);
 			expect(fallbackResponse.headers.get("location")).toBe(
-				"http://localhost:3000/global-idp-redirect",
+				`${frontendOrigin}/global-idp-redirect`,
 			);
 		});
 
@@ -6606,12 +6607,12 @@ describe("SAML SSO Hardening", () => {
 		 */
 		it("should prioritize SP-initiated RelayState over idpInitiatedCallbackUrl", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
+				trustedOrigins: [frontendOrigin],
 				plugins: [
 					sso({
 						saml: {
 							allowIdpInitiated: true,
-							idpInitiatedCallbackUrl:
-								"http://localhost:3000/global-idp-redirect",
+							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
 						},
 					}),
 				],
@@ -6628,8 +6629,7 @@ describe("SAML SSO Hardening", () => {
 						cert: certificate,
 						callbackUrl:
 							"http://localhost:3000/api/auth/sso/saml2/callback/priority-test-provider",
-						idpInitiatedCallbackUrl:
-							"http://localhost:3000/provider-idp-redirect",
+						idpInitiatedCallbackUrl: `${frontendOrigin}/provider-idp-redirect`,
 						idpMetadata: { metadata: idpMetadata },
 						spMetadata: { metadata: spMetadata },
 					},
@@ -6645,12 +6645,14 @@ describe("SAML SSO Hardening", () => {
 				},
 			});
 
-			let samlResponse: any;
+			let samlResponse: MockSAMLResponse | undefined;
 			await betterFetch(signInResponse.url as string, {
 				onSuccess: async (context) => {
-					samlResponse = await context.data;
+					samlResponse = (await context.data) as MockSAMLResponse;
 				},
 			});
+			if (!samlResponse)
+				throw new Error("Mock IdP did not return a SAML response");
 
 			const signInUrl = new URL(signInResponse.url as string);
 			const relayState = signInUrl.searchParams.get("RelayState") ?? "";
@@ -6705,17 +6707,12 @@ describe("SAML SSO Hardening", () => {
 				headers,
 			});
 
-			let samlResponse: any;
-			await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
-				onSuccess: async (context) => {
-					samlResponse = await context.data;
-				},
-			});
+			const samlResponse = await getIdPInitiatedSAMLResponse();
 
 			const callbackResponse = (await auth.api.callbackSSOSAML({
 				method: "POST",
 				body: {
-					SAMLResponse: samlResponse.samlResponse,
+					SAMLResponse: samlResponse,
 				},
 				params: { providerId: "unsafe-provider" },
 				asResponse: true,
@@ -6733,12 +6730,12 @@ describe("SAML SSO Hardening", () => {
 		 */
 		it("should redirect to idpInitiatedCallbackUrl on SAML validation error", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
+				trustedOrigins: [frontendOrigin],
 				plugins: [
 					sso({
 						saml: {
 							allowIdpInitiated: true,
-							idpInitiatedCallbackUrl:
-								"http://localhost:3000/global-idp-redirect",
+							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
 						},
 					}),
 				],
@@ -6755,8 +6752,7 @@ describe("SAML SSO Hardening", () => {
 						cert: certificate,
 						callbackUrl:
 							"http://localhost:3000/api/auth/sso/saml2/callback/error-provider",
-						idpInitiatedCallbackUrl:
-							"http://localhost:3000/provider-idp-redirect",
+						idpInitiatedCallbackUrl: `${frontendOrigin}/provider-idp-redirect#saml`,
 						idpMetadata: { metadata: idpMetadata },
 						spMetadata: { metadata: spMetadata },
 					},
@@ -6774,7 +6770,8 @@ describe("SAML SSO Hardening", () => {
 						},
 						body: new URLSearchParams({
 							SAMLResponse: "invalid-saml-response-garbage",
-							RelayState: "id-12345",
+							RelayState:
+								"http://localhost:3000/api/auth/sso/saml2/sp/acs/error-provider",
 						}),
 					},
 				),
@@ -6782,11 +6779,13 @@ describe("SAML SSO Hardening", () => {
 
 			expect(callbackResponse.status).toBe(302);
 			const location = callbackResponse.headers.get("location") || "";
-			expect(location).toContain("http://localhost:3000/provider-idp-redirect");
-			expect(location).not.toContain(
-				"http://localhost:3000/global-idp-redirect",
+			const redirectUrl = new URL(location);
+			expect(redirectUrl.origin).toBe(frontendOrigin);
+			expect(redirectUrl.pathname).toBe("/provider-idp-redirect");
+			expect(redirectUrl.searchParams.get("error")).toBe(
+				"saml_invalid_encoding",
 			);
-			expect(location).toContain("error=");
+			expect(redirectUrl.hash).toBe("#saml");
 		});
 	});
 });

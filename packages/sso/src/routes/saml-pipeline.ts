@@ -37,67 +37,115 @@ import { createIdP, createSP, findSAMLProvider } from "./helpers";
 
 type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
 
-/**
- * Validates and returns a safe redirect URL.
- * - Prevents open redirect attacks by validating against trusted origins
- * - Prevents redirect loops by checking if URL points to callback route
- * - Falls back to appOrigin if URL is invalid or unsafe
- */
-export function getSafeRedirectUrl(
+type IsTrustedOrigin = (
+	url: string,
+	settings?: { allowRelativePaths: boolean },
+) => boolean;
+
+function getSafeRedirectCandidate(
 	url: string | undefined,
-	callbackPath: string,
+	callbackPathname: string,
 	appOrigin: string,
-	isTrustedOrigin: (
-		url: string,
-		settings?: { allowRelativePaths: boolean },
-	) => boolean,
-): string {
-	if (!url) {
-		return appOrigin;
-	}
+	isTrustedOrigin: IsTrustedOrigin,
+): string | undefined {
+	if (!url) return;
 
 	if (url.startsWith("/") && !url.startsWith("//")) {
 		try {
 			const absoluteUrl = new URL(url, appOrigin);
-			if (absoluteUrl.origin !== appOrigin) {
-				return appOrigin;
+			if (
+				absoluteUrl.origin !== appOrigin ||
+				absoluteUrl.pathname === callbackPathname
+			) {
+				return;
 			}
-			const callbackPathname = new URL(callbackPath).pathname;
-			if (absoluteUrl.pathname === callbackPathname) {
-				return appOrigin;
-			}
+			return url;
 		} catch {
-			return appOrigin;
+			return;
 		}
-		return url;
 	}
 
-	if (!isTrustedOrigin(url, { allowRelativePaths: false })) {
-		return appOrigin;
-	}
-
+	let absoluteUrl: URL;
 	try {
-		const callbackPathname = new URL(callbackPath).pathname;
-		const urlPathname = new URL(url).pathname;
-		if (urlPathname === callbackPathname) {
-			return appOrigin;
-		}
+		absoluteUrl = new URL(url);
 	} catch {
-		if (url === callbackPath || url.startsWith(`${callbackPath}?`)) {
-			return appOrigin;
-		}
+		return;
 	}
+
+	if (
+		absoluteUrl.origin !== appOrigin &&
+		!isTrustedOrigin(url, { allowRelativePaths: false })
+	) {
+		return;
+	}
+
+	if (absoluteUrl.pathname === callbackPathname) return;
 
 	return url;
 }
 
-function buildSAMLRedirectUrl(
+/**
+ * Returns the first safe redirect URL from an ordered list of candidates.
+ * - Prevents open redirect attacks by validating against trusted origins
+ * - Prevents redirect loops by checking if URL points to callback route
+ * - Tries the next candidate when a URL is invalid or unsafe
+ * - Falls back to appOrigin when no candidate is safe
+ */
+export function getSafeRedirectUrl(
+	candidates: readonly (string | undefined)[],
+	callbackPath: string,
+	appOrigin: string,
+	isTrustedOrigin: IsTrustedOrigin,
+): string {
+	const callbackPathname = new URL(callbackPath).pathname;
+	for (const candidate of candidates) {
+		const safeCandidate = getSafeRedirectCandidate(
+			candidate,
+			callbackPathname,
+			appOrigin,
+			isTrustedOrigin,
+		);
+		if (safeCandidate) return safeCandidate;
+	}
+
+	return appOrigin;
+}
+
+export function buildSAMLRedirectUrl(
 	url: string,
 	params: Record<string, string>,
 ): string {
 	const searchParams = new URLSearchParams(params);
-	const separator = url.includes("?") ? "&" : "?";
-	return `${url}${separator}${searchParams.toString()}`;
+	try {
+		const isRelativePath = url.startsWith("/") && !url.startsWith("//");
+		const parsedUrl = new URL(url, "http://better-auth.local");
+		for (const [key, value] of searchParams) {
+			parsedUrl.searchParams.set(key, value);
+		}
+		if (isRelativePath) {
+			return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`;
+		}
+		return parsedUrl.toString();
+	} catch {
+		const hashIndex = url.indexOf("#");
+		const urlWithoutFragment = hashIndex === -1 ? url : url.slice(0, hashIndex);
+		const fragment = hashIndex === -1 ? "" : url.slice(hashIndex);
+		const separator = urlWithoutFragment.includes("?") ? "&" : "?";
+		return `${urlWithoutFragment}${separator}${searchParams.toString()}${fragment}`;
+	}
+}
+
+export function getSAMLRedirectCandidates(
+	relayStateCallbackUrl: string | undefined,
+	samlConfig: SAMLConfig | undefined,
+	samlOptions: SSOOptions["saml"] | undefined,
+): readonly (string | undefined)[] {
+	return [
+		relayStateCallbackUrl,
+		samlConfig?.idpInitiatedCallbackUrl,
+		samlOptions?.idpInitiatedCallbackUrl,
+		samlConfig?.callbackUrl,
+	];
 }
 
 function toArray<T>(value: T | T[] | undefined): T[] {
@@ -254,17 +302,14 @@ export async function processSAMLResponse(
 	});
 	const idp = createIdP(parsedSamlConfig);
 
-	const idpInitiatedCallbackUrl =
-		parsedSamlConfig.idpInitiatedCallbackUrl ||
-		options?.saml?.idpInitiatedCallbackUrl;
-
-	const redirectCandidate =
-		relayState?.callbackURL ||
-		idpInitiatedCallbackUrl ||
-		parsedSamlConfig.callbackUrl;
+	const redirectCandidates = getSAMLRedirectCandidates(
+		relayState?.callbackURL,
+		parsedSamlConfig,
+		options?.saml,
+	);
 
 	const samlRedirectUrl = getSafeRedirectUrl(
-		redirectCandidate,
+		redirectCandidates,
 		currentCallbackPath,
 		appOrigin,
 		(url: string, settings?: { allowRelativePaths: boolean }) =>
@@ -548,7 +593,9 @@ export async function processSAMLResponse(
 		!!(provider as { domainVerified?: boolean }).domainVerified &&
 		validateEmailDomain(userInfo.email as string, provider.domain);
 
-	const callbackUrl = redirectCandidate ? samlRedirectUrl : ctx.context.baseURL;
+	const callbackUrl = redirectCandidates.some(Boolean)
+		? samlRedirectUrl
+		: ctx.context.baseURL;
 	const errorUrl = relayState?.errorURL || samlRedirectUrl;
 
 	let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
