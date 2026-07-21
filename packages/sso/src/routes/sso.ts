@@ -310,7 +310,7 @@ const ssoProviderBodySchema = z.object({
 				.url()
 				.meta({
 					description:
-						"Callback URL to redirect to after successful IdP-initiated SAML login",
+						"Fallback URL for IdP-initiated SAML responses when RelayState does not contain a safe callback, including validation errors",
 				})
 				.optional(),
 			audience: z.string().optional(),
@@ -2063,12 +2063,20 @@ export const acsEndpoint = (options?: SSOOptions) => {
 							: internalCode === "SAML_NO_ASSERTION"
 								? "no_assertion"
 								: internalCode.toLowerCase() || "saml_error";
-					const provider = await findSAMLProvider(
-						providerId,
-						options,
-						ctx.context.adapter,
-					);
-					const parsedSamlConfig = provider?.samlConfig;
+					let parsedSamlConfig: SAMLConfig | undefined;
+					try {
+						const provider = await findSAMLProvider(
+							providerId,
+							options,
+							ctx.context.adapter,
+						);
+						parsedSamlConfig = provider?.samlConfig;
+					} catch (providerLookupError) {
+						ctx.context.logger.warn(
+							"Failed to resolve SAML provider for error redirect",
+							{ providerId, error: providerLookupError },
+						);
+					}
 					const redirectUrl = getSafeRedirectUrl(
 						getSAMLRedirectCandidates(
 							ctx.body.RelayState,

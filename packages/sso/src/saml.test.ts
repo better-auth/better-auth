@@ -6787,5 +6787,92 @@ describe("SAML SSO Hardening", () => {
 			);
 			expect(redirectUrl.hash).toBe("#saml");
 		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should use the global fallback when the provider lookup for an error redirect fails", async () => {
+			const data = {
+				user: [],
+				session: [],
+				verification: [],
+				account: [],
+				ssoProvider: [],
+			};
+			const memory = memoryAdapter(data);
+			let failSecondProviderLookup = false;
+			let providerLookupCount = 0;
+			const database: typeof memory = (options) => {
+				const adapter = memory(options);
+				const findOne: typeof adapter.findOne = async (query) => {
+					if (failSecondProviderLookup && query.model === "ssoProvider") {
+						providerLookupCount++;
+						if (providerLookupCount === 2) {
+							throw new Error("provider lookup unavailable");
+						}
+					}
+					return adapter.findOne(query);
+				};
+				return { ...adapter, findOne };
+			};
+			const { auth, signInWithTestUser } = await getTestInstance({
+				database,
+				trustedOrigins: [frontendOrigin],
+				plugins: [
+					sso({
+						saml: {
+							allowIdpInitiated: true,
+							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "error-lookup-provider",
+					issuer: "http://localhost:8081",
+					domain: "error-lookup.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl:
+							"http://localhost:3000/api/auth/sso/saml2/callback/error-lookup-provider",
+						idpInitiatedCallbackUrl: `${frontendOrigin}/provider-idp-redirect`,
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+					},
+				},
+				headers,
+			});
+
+			failSecondProviderLookup = true;
+			providerLookupCount = 0;
+			const callbackResponse = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/error-lookup-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: "invalid-saml-response-garbage",
+						}),
+					},
+				),
+			);
+
+			expect(callbackResponse.status).toBe(302);
+			const redirectUrl = new URL(
+				callbackResponse.headers.get("location") || "",
+			);
+			expect(redirectUrl.origin).toBe(frontendOrigin);
+			expect(redirectUrl.pathname).toBe("/global-idp-redirect");
+			expect(redirectUrl.searchParams.get("error")).toBe(
+				"saml_invalid_encoding",
+			);
+		});
 	});
 });

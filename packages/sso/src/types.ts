@@ -44,8 +44,8 @@ export interface SAMLConfig {
 	cert: string;
 	callbackUrl: string;
 	/**
-	 * Callback URL used after an IdP-initiated SAML login when no valid
-	 * RelayState callback is available.
+	 * Fallback URL for IdP-initiated SAML responses when `RelayState` does not
+	 * contain a safe callback, including validation error redirects.
 	 */
 	idpInitiatedCallbackUrl?: string | undefined;
 	audience?: string | undefined;
@@ -432,7 +432,8 @@ export interface SSOOptions {
 		 */
 		wantLogoutResponseSigned?: boolean;
 		/**
-		 * Callback URL to redirect to after successful IdP-initiated SAML login.
+		 * Fallback URL for IdP-initiated SAML responses when `RelayState` does not
+		 * contain a safe callback, including validation error redirects.
 		 */
 		idpInitiatedCallbackUrl?: string | undefined;
 	};
