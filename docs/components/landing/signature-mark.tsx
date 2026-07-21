@@ -31,13 +31,6 @@ export function SignatureMark({ compact = false }: { compact?: boolean }) {
 					>
 						Legal
 					</Link>
-					<span className="text-foreground/15">/</span>
-					<Link
-						href="/careers"
-						className="hover:text-foreground/80 transition-colors"
-					>
-						Careers
-					</Link>
 				</div>
 			)}
 			<div className="flex items-center gap-3">
