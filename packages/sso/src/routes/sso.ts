@@ -18,8 +18,6 @@ import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { decodeJwt } from "jose";
-import type { BindingContext } from "samlify/types/src/entity";
-import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { RequestInfo } from "samlify/types/src/types";
 import * as z from "zod";
 import * as constants from "../constants";
@@ -34,6 +32,7 @@ import {
 } from "../oidc";
 import { validateConfigAlgorithms } from "../saml";
 import { SAML_ERROR_CODES } from "../saml/error-codes";
+import { resolveSAMLExecutor } from "../saml/executor";
 import { generateRelayState } from "../saml-state";
 import { saml } from "../samlify";
 import type {
@@ -48,13 +47,13 @@ import type {
 } from "../types";
 import {
 	domainMatches,
-	normalizePem,
 	parseProviderEmailVerified,
 	safeJsonParse,
 	validateEmailDomain,
 } from "../utils";
 import { getVerificationIdentifier } from "./domain-verification";
 import {
+	assertAllowedIdPSSORedirectURL,
 	createIdP,
 	createSAMLPostForm,
 	createSP,
@@ -1305,7 +1304,9 @@ export const signInSSO = (options?: SSOOptions) => {
 				if (
 					parsedSamlConfig.authnRequestsSigned &&
 					!parsedSamlConfig.spMetadata?.privateKey &&
-					!parsedSamlConfig.privateKey
+					!parsedSamlConfig.privateKey &&
+					// Remote executors may hold the SP private key off-process.
+					!options?.saml?.executor
 				) {
 					throw new APIError("BAD_REQUEST", {
 						message:
@@ -1319,86 +1320,37 @@ export const signInSSO = (options?: SSOOptions) => {
 					false,
 				);
 
-				let metadata = parsedSamlConfig.spMetadata.metadata;
-
-				if (!metadata) {
-					metadata =
-						saml
-							.SPMetadata({
-								entityID:
-									parsedSamlConfig.spMetadata?.entityID ||
-									parsedSamlConfig.issuer,
-								assertionConsumerService: [
-									{
-										Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-										Location:
-											parsedSamlConfig.callbackUrl ||
-											`${ctx.context.baseURL}/sso/saml2/sp/acs/${provider.providerId}`,
-									},
-								],
-								wantMessageSigned:
-									parsedSamlConfig.wantAssertionsSigned || false,
-								authnRequestsSigned:
-									parsedSamlConfig.authnRequestsSigned || false,
-								nameIDFormat: parsedSamlConfig.identifierFormat
-									? [parsedSamlConfig.identifierFormat]
-									: undefined,
-							})
-							.getMetadata() || "";
-				}
-
-				const sp = saml.ServiceProvider({
-					metadata: metadata,
-					allowCreate: true,
-					privateKey: normalizePem(
-						parsedSamlConfig.spMetadata?.privateKey ||
-							parsedSamlConfig.privateKey,
-					),
-					privateKeyPass: parsedSamlConfig.spMetadata?.privateKeyPass,
-					relayState,
-				});
-
-				const idpData = parsedSamlConfig.idpMetadata;
-				let idp: IdentityProvider;
-				if (!idpData?.metadata) {
-					idp = saml.IdentityProvider({
-						entityID: idpData?.entityID || parsedSamlConfig.issuer,
-						singleSignOnService: idpData?.singleSignOnService || [
-							{
-								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
-								Location: parsedSamlConfig.entryPoint,
-							},
-						],
-						signingCert: idpData?.cert || parsedSamlConfig.cert,
-						wantAuthnRequestsSigned:
-							parsedSamlConfig.authnRequestsSigned || false,
-						isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
-						encPrivateKey: normalizePem(idpData?.encPrivateKey),
-						encPrivateKeyPass: idpData?.encPrivateKeyPass,
+				const executor = resolveSAMLExecutor(options?.saml?.executor);
+				let loginRequest: { redirectUrl: string; id: string };
+				try {
+					loginRequest = await executor.createLoginRequest({
+						providerId: provider.providerId,
+						samlConfig: parsedSamlConfig,
+						baseURL: ctx.context.baseURL,
+						relayState,
 					});
-				} else {
-					idp = saml.IdentityProvider({
-						metadata: idpData.metadata,
-						privateKey: normalizePem(idpData.privateKey),
-						privateKeyPass: idpData.privateKeyPass,
-						isAssertionEncrypted: idpData.isAssertionEncrypted,
-						encPrivateKey: normalizePem(idpData.encPrivateKey),
-						encPrivateKeyPass: idpData.encPrivateKeyPass,
+				} catch (error) {
+					// Preserve structured APIError from custom executors (e.g. 503).
+					// Do not leak raw remote/transport error text to the browser.
+					if (isAPIError(error)) throw error;
+					ctx.context.logger.error("SAML AuthnRequest executor failed", {
+						error,
+						providerId: provider.providerId,
 					});
-				}
-				const loginRequest = sp.createLoginRequest(
-					idp,
-					"redirect",
-				) as BindingContext & {
-					entityEndpoint: string;
-					type: string;
-					id: string;
-				};
-				if (!loginRequest) {
 					throw new APIError("BAD_REQUEST", {
 						message: "Invalid SAML request",
 					});
 				}
+				if (!loginRequest?.redirectUrl || !loginRequest.id) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Invalid SAML request",
+					});
+				}
+				// Host owns the provider registry: reject executor open redirects.
+				assertAllowedIdPSSORedirectURL(
+					loginRequest.redirectUrl,
+					parsedSamlConfig,
+				);
 
 				const shouldSaveRequest =
 					loginRequest.id &&
@@ -1420,7 +1372,7 @@ export const signInSSO = (options?: SSOOptions) => {
 				}
 
 				return ctx.json({
-					url: loginRequest.context,
+					url: loginRequest.redirectUrl,
 					redirect: true,
 				});
 			}

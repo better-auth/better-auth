@@ -4,18 +4,17 @@ import { APIError } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { XMLParser } from "fast-xml-parser";
-import type { FlowResult } from "samlify/types/src/flow";
 
 import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
 import {
+	enforceSAMLCryptoPolicy,
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
-	SAML_HTTP_POST_BINDING,
-	validateSAMLAlgorithms,
 	validateSAMLResponseBinding,
 	validateSingleAssertion,
 } from "../saml";
+import { resolveSAMLExecutor } from "../saml/executor";
 import type { SAMLConditions } from "../saml/timestamp";
 import { validateSAMLTimestamp } from "../saml/timestamp";
 import { parseRelayState } from "../saml-state";
@@ -33,7 +32,7 @@ import {
 	safeJsonParse,
 	validateEmailDomain,
 } from "../utils";
-import { createIdP, createSP, findSAMLProvider } from "./helpers";
+import { createSP, findSAMLProvider, resolveSPEntityID } from "./helpers";
 
 type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
 
@@ -153,16 +152,18 @@ function extractAssertionId(samlContent: string): string | null {
 		});
 		const parsed = parser.parse(samlContent);
 
+		// Support full Response wrappers and bare Assertion roots (custom executors).
 		const response = parsed.Response || parsed["samlp:Response"];
-		if (!response) return null;
-
-		const rawAssertion = response.Assertion || response["saml:Assertion"];
+		const rawAssertion = response
+			? response.Assertion || response["saml:Assertion"]
+			: parsed.Assertion || parsed["saml:Assertion"];
 		const assertion = Array.isArray(rawAssertion)
 			? rawAssertion[0]
 			: rawAssertion;
-		if (!assertion) return null;
+		if (!assertion || typeof assertion !== "object") return null;
 
-		return assertion["@_ID"] || null;
+		const id = (assertion as Record<string, unknown>)["@_ID"];
+		return typeof id === "string" && id.length > 0 ? id : null;
 	} catch {
 		return null;
 	}
@@ -248,12 +249,6 @@ export async function processSAMLResponse(
 		});
 	}
 
-	// 7. SP/IdP construction via helpers
-	const sp = createSP(parsedSamlConfig, ctx.context.baseURL, providerId, {
-		clockSkew: options?.saml?.clockSkew,
-	});
-	const idp = createIdP(parsedSamlConfig);
-
 	const samlRedirectUrl = getSafeRedirectUrl(
 		relayState?.callbackURL || parsedSamlConfig.callbackUrl,
 		params.currentCallbackPath,
@@ -267,35 +262,60 @@ export async function processSAMLResponse(
 	// with the SAMLResponse, not a flow-level error.
 	validateSingleAssertion(SAMLResponse);
 
-	// 9. Response parsing
-	let parsedResponse: FlowResult;
-	try {
-		parsedResponse = await sp.parseLoginResponse(idp, "post", {
-			body: {
-				SAMLResponse,
-				RelayState: params.RelayState || undefined,
-			},
-		});
+	// 9. Response parsing (default local samlify or pluggable executor)
+	const executor = resolveSAMLExecutor(options?.saml?.executor);
 
-		if (!parsedResponse?.extract) {
+	let parsedFromExecutor: Awaited<
+		ReturnType<typeof executor.parseLoginResponse>
+	>;
+	try {
+		parsedFromExecutor = await executor.parseLoginResponse({
+			providerId,
+			samlConfig: parsedSamlConfig,
+			baseURL: ctx.context.baseURL,
+			SAMLResponse,
+			RelayState: params.RelayState,
+			clockSkew: options?.saml?.clockSkew,
+			algorithms: options?.saml?.algorithms,
+		});
+		if (!parsedFromExecutor?.extract) {
 			throw new Error("Invalid SAML response structure");
 		}
 	} catch (error) {
+		if (isAPIError(error)) throw error;
+		// Log internal details; keep client message generic (no remote leak).
 		ctx.context.logger.error("SAML response validation failed", {
 			error,
 			samlResponsePreview: SAMLResponse.slice(0, 200),
 		});
 		throw new APIError("BAD_REQUEST", {
 			message: "Invalid SAML response",
-			details: error instanceof Error ? error.message : String(error),
 		});
 	}
 
-	const { extract } = parsedResponse!;
-	const samlContent = parsedResponse.samlContent;
+	const extract = parsedFromExecutor.extract;
+	const samlContent = parsedFromExecutor.samlContent;
+	// SP identity for audience checks is derived from local SP config/metadata
+	// (same resolution as ServiceProvider construction) — never from the executor.
+	const localEntityId = resolveSPEntityID(parsedSamlConfig);
+	const localAcsUrl =
+		parsedSamlConfig.callbackUrl ||
+		`${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`;
+	const idpEntityId =
+		parsedFromExecutor.idpEntityId ||
+		parsedSamlConfig.idpMetadata?.entityID ||
+		parsedSamlConfig.issuer;
+	let samlBindingContent: string;
 
-	// 10. Algorithm validation
-	validateSAMLAlgorithms(parsedResponse, options?.saml?.algorithms);
+	// 10. First-class crypto report + host-side operator algorithm policy.
+	// Same path for local and custom executors (no special-case allowlists).
+	if (!parsedFromExecutor.crypto) {
+		throw new APIError("BAD_REQUEST", {
+			message: "SAML executor must return a crypto verification report",
+			code: "SAML_CRYPTO_REPORT_MISSING",
+		});
+	}
+	enforceSAMLCryptoPolicy(parsedFromExecutor.crypto, options?.saml?.algorithms);
 
 	// 11. Timestamp validation
 	validateSAMLTimestamp((extract as SAMLAssertionExtract).conditions, {
@@ -304,24 +324,34 @@ export async function processSAMLResponse(
 		logger: ctx.context.logger,
 	});
 
-	// 11b. Response binding validation
-	const expectedAudiences = [
-		sp.entityMeta.getEntityID(),
-		parsedSamlConfig.audience,
-	];
-	const assertionConsumerServiceUrl = sp.entityMeta.getAssertionConsumerService(
-		SAML_HTTP_POST_BINDING,
-	);
+	// 11b. Response binding validation (audiences/recipients from local SP config)
+	const expectedAudiences = [localEntityId, parsedSamlConfig.audience];
+	// Recipients are host-owned (local SP config only) — never executor-supplied.
 	const expectedRecipients = getExpectedSAMLRecipients(
 		parsedSamlConfig,
 		ctx.context.baseURL,
 		providerId,
 		currentCallbackPath,
-		assertionConsumerServiceUrl,
+		localAcsUrl,
 	);
-	let samlBindingContent: string;
 	try {
-		samlBindingContent = await getSAMLResponseBindingContent(sp, samlContent);
+		// Local samlify path (including explicit createLocalSAMLExecutor()) returns
+		// rawParsedResponse so the host can decrypt EncryptedAssertion. Remote
+		// custom executors omit it and must return decrypted samlContent.
+		if (parsedFromExecutor.rawParsedResponse != null) {
+			const sp = createSP(parsedSamlConfig, ctx.context.baseURL, providerId, {
+				clockSkew: options?.saml?.clockSkew,
+			});
+			samlBindingContent = await getSAMLResponseBindingContent(sp, samlContent);
+		} else {
+			if (hasSAMLEncryptedAssertion(samlContent)) {
+				throw new APIError("BAD_REQUEST", {
+					message:
+						"SAML executor must return decrypted samlContent (EncryptedAssertion is not allowed)",
+				});
+			}
+			samlBindingContent = samlContent;
+		}
 		validateSAMLResponseBinding(samlBindingContent, {
 			expectedAudiences,
 			expectedRecipients,
@@ -436,7 +466,7 @@ export async function processSAMLResponse(
 	const assertionId = extractAssertionId(samlBindingContent);
 
 	if (assertionId) {
-		const issuer = idp.entityMeta.getEntityID();
+		const issuer = idpEntityId;
 		const conditions = (extract as SAMLAssertionExtract).conditions as
 			| SAMLConditions
 			| undefined;

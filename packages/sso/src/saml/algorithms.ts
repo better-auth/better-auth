@@ -141,6 +141,68 @@ function extractEncryptionAlgorithms(xml: string): {
 	}
 }
 
+/**
+ * Read SignatureMethod/@Algorithm only from Signature → SignedInfo → SignatureMethod.
+ * Ignores SignatureMethod nodes that appear outside a real XML-DSig structure
+ * (e.g. untrusted extension elements).
+ */
+function signatureMethodFromSignatureNode(signature: unknown): string | null {
+	if (!signature || typeof signature !== "object") return null;
+	const sig = signature as Record<string, unknown>;
+	const signedInfo = (sig.SignedInfo ?? sig["ds:SignedInfo"]) as
+		| Record<string, unknown>
+		| undefined;
+	if (!signedInfo || typeof signedInfo !== "object") return null;
+	const method = (signedInfo.SignatureMethod ??
+		signedInfo["ds:SignatureMethod"]) as Record<string, unknown> | undefined;
+	const algorithm = method?.["@_Algorithm"];
+	return typeof algorithm === "string" && algorithm.length > 0
+		? algorithm
+		: null;
+}
+
+/**
+ * Extract SignatureMethod/@Algorithm from Response or Assertion signatures only.
+ * Prefers Response-level Signature, then Assertion-level. Does not take the first
+ * SignatureMethod anywhere in the document (which could be an unsigned extension).
+ */
+export function extractSignatureAlgorithmFromXml(xml: string): string | null {
+	try {
+		const parsed = xmlParser.parse(xml) as Record<string, unknown>;
+		const response = (parsed.Response ??
+			parsed["samlp:Response"] ??
+			parsed) as Record<string, unknown>;
+
+		// Response-level Signature (direct child of Response)
+		const responseSig = response.Signature ?? response["ds:Signature"];
+		const fromResponse = Array.isArray(responseSig)
+			? signatureMethodFromSignatureNode(responseSig[0])
+			: signatureMethodFromSignatureNode(responseSig);
+		if (fromResponse) return fromResponse;
+
+		// Assertion-level Signature
+		const rawAssertion =
+			response.Assertion ??
+			response["saml:Assertion"] ??
+			parsed.Assertion ??
+			parsed["saml:Assertion"];
+		const assertion = (
+			Array.isArray(rawAssertion) ? rawAssertion[0] : rawAssertion
+		) as Record<string, unknown> | undefined;
+		if (assertion && typeof assertion === "object") {
+			const assertionSig = assertion.Signature ?? assertion["ds:Signature"];
+			const fromAssertion = Array.isArray(assertionSig)
+				? signatureMethodFromSignatureNode(assertionSig[0])
+				: signatureMethodFromSignatureNode(assertionSig);
+			if (fromAssertion) return fromAssertion;
+		}
+
+		return null;
+	} catch {
+		return null;
+	}
+}
+
 function hasEncryptedAssertion(xml: string): boolean {
 	try {
 		const parsed = xmlParser.parse(xml);
@@ -253,15 +315,193 @@ function validateEncryptionAlgorithms(
 	}
 }
 
-export function validateSAMLAlgorithms(
-	response: { sigAlg?: string | null; samlContent: string },
+/**
+ * First-class crypto verification report from a SAML executor.
+ *
+ * Better Auth uses this to apply operator algorithm policy without relying on
+ * whether `samlContent` is still encrypted. Every executor (local or remote)
+ * returns the same shape so the host path stays uniform.
+ */
+export interface SAMLCryptoReport {
+	/** Executor cryptographically verified the Response signature. */
+	signatureVerified: boolean;
+	/** Signature method Algorithm URI from the Response (if present). */
+	signatureAlgorithm?: string | null;
+	/**
+	 * Encryption metadata for the assertion before decryption.
+	 * - `null` — assertion was not encrypted
+	 * - object — was encrypted; both algorithm fields are required so typed
+	 *   integrations cannot omit them and fail only at runtime
+	 */
+	encryption: null | {
+		keyTransportAlgorithm: string;
+		dataEncryptionAlgorithm: string;
+	};
+}
+
+/**
+ * Build a {@link SAMLCryptoReport} for an executor implementation.
+ *
+ * Pass `sourceXml` (original Response XML, possibly still encrypted) to auto-fill
+ * encryption algorithms. Or set `encryption` explicitly.
+ */
+export function createSAMLCryptoReport(input: {
+	signatureVerified: boolean;
+	signatureAlgorithm?: string | null;
+	/** Original Response XML before decryption (optional). */
+	sourceXml?: string | null;
+	/**
+	 * Explicit encryption metadata; overrides auto-detect from sourceXml.
+	 * Pass `null` when the assertion was unencrypted and sourceXml is unavailable.
+	 * Omitting both `encryption` and `sourceXml` fails closed.
+	 */
+	encryption?: SAMLCryptoReport["encryption"];
+}): SAMLCryptoReport {
+	// Fail closed: defaulting omitted encryption to null would let custom
+	// executors skip encryption allowlists. Require sourceXml or explicit value.
+	let encryption: SAMLCryptoReport["encryption"];
+	if (input.encryption !== undefined) {
+		encryption = input.encryption;
+	} else if (input.sourceXml) {
+		if (hasEncryptedAssertion(input.sourceXml)) {
+			const enc = extractEncryptionAlgorithms(input.sourceXml);
+			// Incomplete extraction fails later in enforceSAMLCryptoPolicy.
+			encryption = {
+				keyTransportAlgorithm: enc.keyEncryption ?? "",
+				dataEncryptionAlgorithm: enc.dataEncryption ?? "",
+			};
+		} else {
+			encryption = null;
+		}
+	} else {
+		throw new APIError("BAD_REQUEST", {
+			message:
+				"SAML crypto report is missing encryption metadata (use null when unencrypted)",
+			code: "SAML_ENCRYPTION_METADATA_MISSING",
+		});
+	}
+
+	let signatureAlgorithm = input.signatureAlgorithm ?? null;
+	if (!signatureAlgorithm && input.sourceXml) {
+		signatureAlgorithm = extractSignatureAlgorithmFromXml(input.sourceXml);
+	}
+
+	return {
+		signatureVerified: input.signatureVerified,
+		signatureAlgorithm,
+		encryption,
+	};
+}
+
+/**
+ * Apply operator algorithm policy to an executor's crypto report.
+ * Call this on the Better Auth host after every successful parse.
+ *
+ * Fail-closed rules:
+ * - signatureVerified must be true
+ * - signatureAlgorithm must be present (prevents allowlist bypass via omission)
+ * - if encryption is non-null, both key and data algorithms must be present
+ */
+export function enforceSAMLCryptoPolicy(
+	report: SAMLCryptoReport,
 	options?: AlgorithmValidationOptions,
 ): void {
-	validateSignatureAlgorithm(response.sigAlg, options);
+	// Require the literal boolean true (transport payloads may send "true"/1).
+	if (report.signatureVerified !== true) {
+		throw new APIError("BAD_REQUEST", {
+			message: "SAML Response signature was not verified by the executor",
+			code: "SAML_SIGNATURE_NOT_VERIFIED",
+		});
+	}
 
-	if (hasEncryptedAssertion(response.samlContent)) {
-		const encAlgs = extractEncryptionAlgorithms(response.samlContent);
-		validateEncryptionAlgorithms(encAlgs, options);
+	// Require a non-empty string if present, but allow null for unsigned assertions.
+	if (report.signatureAlgorithm === undefined) {
+		throw new APIError("BAD_REQUEST", {
+			message: "SAML crypto report is missing signatureAlgorithm",
+			code: "SAML_SIGNATURE_ALGORITHM_MISSING",
+		});
+	}
+
+	if (report.signatureAlgorithm !== null) {
+		if (
+			typeof report.signatureAlgorithm !== "string" ||
+			report.signatureAlgorithm.length === 0
+		) {
+			throw new APIError("BAD_REQUEST", {
+				message: "SAML crypto report is missing signatureAlgorithm",
+				code: "SAML_SIGNATURE_ALGORITHM_MISSING",
+			});
+		}
+		validateSignatureAlgorithm(report.signatureAlgorithm, options);
+	}
+
+	// Fail closed: encryption must be explicit null (unencrypted) or a complete object.
+	// Omitting the field (undefined) must not bypass encryption algorithm policy.
+	if (report.encryption === undefined) {
+		throw new APIError("BAD_REQUEST", {
+			message:
+				"SAML crypto report is missing encryption metadata (use null when unencrypted)",
+			code: "SAML_ENCRYPTION_METADATA_MISSING",
+		});
+	}
+
+	if (report.encryption !== null) {
+		if (typeof report.encryption !== "object") {
+			throw new APIError("BAD_REQUEST", {
+				message: "SAML crypto report encryption metadata is invalid",
+				code: "SAML_ENCRYPTION_METADATA_INCOMPLETE",
+			});
+		}
+		const key = report.encryption.keyTransportAlgorithm;
+		const data = report.encryption.dataEncryptionAlgorithm;
+		if (
+			typeof key !== "string" ||
+			key.length === 0 ||
+			typeof data !== "string" ||
+			data.length === 0
+		) {
+			throw new APIError("BAD_REQUEST", {
+				message:
+					"SAML crypto report encryption metadata is incomplete (key and data algorithms required)",
+				code: "SAML_ENCRYPTION_METADATA_INCOMPLETE",
+			});
+		}
+		validateEncryptionAlgorithms(
+			{
+				keyEncryption: key,
+				dataEncryption: data,
+			},
+			options,
+		);
+	}
+}
+
+/**
+ * Validate algorithms from raw Response XML (and optional sigAlg).
+ * Used when the XML may still contain EncryptedAssertion (local samlify path).
+ */
+export function validateSAMLAlgorithms(
+	response: {
+		sigAlg?: string | null;
+		samlContent: string;
+	},
+	options?: AlgorithmValidationOptions,
+): void {
+	const report = createSAMLCryptoReport({
+		signatureVerified: true,
+		signatureAlgorithm: response.sigAlg,
+		sourceXml: response.samlContent,
+	});
+	// Signature presence is optional in XML-only checks (sigAlg may be null).
+	validateSignatureAlgorithm(report.signatureAlgorithm, options);
+	if (report.encryption) {
+		validateEncryptionAlgorithms(
+			{
+				keyEncryption: report.encryption.keyTransportAlgorithm ?? null,
+				dataEncryption: report.encryption.dataEncryptionAlgorithm ?? null,
+			},
+			options,
+		);
 	}
 }
 

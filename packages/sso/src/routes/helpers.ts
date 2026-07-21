@@ -1,8 +1,152 @@
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { APIError } from "better-auth/api";
+import { findNode, xmlParser } from "../saml/parser";
 import { saml } from "../samlify";
 import type { SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { normalizePem, safeJsonParse } from "../utils";
+
+/**
+ * Resolve the SP entityID the same way ServiceProvider construction does:
+ * explicit spMetadata.entityID → entityID inside spMetadata.metadata → issuer.
+ */
+export function resolveSPEntityID(config: SAMLConfig): string {
+	if (config.spMetadata?.entityID) {
+		return config.spMetadata.entityID;
+	}
+	const fromMetadata = extractEntityIdFromMetadata(config.spMetadata?.metadata);
+	if (fromMetadata) {
+		return fromMetadata;
+	}
+	return config.issuer;
+}
+
+function extractEntityIdFromMetadata(
+	metadata: string | undefined,
+): string | null {
+	if (!metadata) return null;
+	try {
+		const parsed = xmlParser.parse(metadata);
+		const descriptor = findNode(parsed, "EntityDescriptor") as
+			| Record<string, unknown>
+			| Array<Record<string, unknown>>
+			| null;
+		const node = Array.isArray(descriptor) ? descriptor[0] : descriptor;
+		const entityId = node?.["@_entityID"];
+		return typeof entityId === "string" && entityId.length > 0
+			? entityId
+			: null;
+	} catch {
+		return null;
+	}
+}
+
+/** Configured IdP SSO endpoints (entryPoint + singleSignOnService locations). */
+export function getConfiguredIdPSSOLocations(config: SAMLConfig): string[] {
+	const locations = new Set<string>();
+	if (config.entryPoint) {
+		locations.add(config.entryPoint);
+	}
+	for (const service of config.idpMetadata?.singleSignOnService ?? []) {
+		if (typeof service.Location === "string" && service.Location.length > 0) {
+			locations.add(service.Location);
+		}
+	}
+	if (config.idpMetadata?.metadata) {
+		try {
+			const parsed = xmlParser.parse(config.idpMetadata.metadata);
+			const collect = (node: unknown) => {
+				if (!node || typeof node !== "object") return;
+				if (Array.isArray(node)) {
+					for (const item of node) collect(item);
+					return;
+				}
+				const record = node as Record<string, unknown>;
+				if ("SingleSignOnService" in record) {
+					const sso = record.SingleSignOnService;
+					const list = Array.isArray(sso) ? sso : [sso];
+					for (const entry of list) {
+						if (
+							entry &&
+							typeof entry === "object" &&
+							typeof (entry as Record<string, unknown>)["@_Location"] ===
+								"string"
+						) {
+							locations.add(
+								(entry as Record<string, unknown>)["@_Location"] as string,
+							);
+						}
+					}
+				}
+				for (const value of Object.values(record)) {
+					if (value && typeof value === "object") collect(value);
+				}
+			};
+			collect(parsed);
+		} catch {
+			// ignore malformed metadata; entryPoint still applies
+		}
+	}
+	return [...locations];
+}
+
+/**
+ * Ensure an executor-supplied AuthnRequest redirect URL targets a configured
+ * IdP SSO endpoint (absolute http(s); query string allowed for Redirect binding).
+ */
+export function assertAllowedIdPSSORedirectURL(
+	redirectUrl: string,
+	config: SAMLConfig,
+): void {
+	let target: URL;
+	try {
+		target = new URL(redirectUrl);
+	} catch {
+		throw new APIError("BAD_REQUEST", {
+			message: "Invalid SAML request",
+			code: "SAML_REDIRECT_URL_INVALID",
+		});
+	}
+	if (target.protocol !== "http:" && target.protocol !== "https:") {
+		throw new APIError("BAD_REQUEST", {
+			message: "Invalid SAML request",
+			code: "SAML_REDIRECT_URL_INVALID",
+		});
+	}
+	// Fragment must never appear on IdP redirect (open-redirect / leakage surface).
+	// Check raw input too: URL.hash is empty for a bare trailing "#".
+	if (target.hash || redirectUrl.includes("#")) {
+		throw new APIError("BAD_REQUEST", {
+			message: "Invalid SAML request",
+			code: "SAML_REDIRECT_URL_INVALID",
+		});
+	}
+
+	const allowed = getConfiguredIdPSSOLocations(config);
+	if (allowed.length === 0) {
+		throw new APIError("BAD_REQUEST", {
+			message: "Invalid SAML request",
+			code: "SAML_IDP_SSO_NOT_CONFIGURED",
+		});
+	}
+
+	// Exact origin + pathname only (query OK for Redirect binding).
+	// Avoid startsWith — /sso would incorrectly allow /sso-evil.
+	const matches = allowed.some((location) => {
+		try {
+			const base = new URL(location);
+			return target.origin === base.origin && target.pathname === base.pathname;
+		} catch {
+			return false;
+		}
+	});
+
+	if (!matches) {
+		throw new APIError("BAD_REQUEST", {
+			message: "Invalid SAML request",
+			code: "SAML_REDIRECT_URL_NOT_ALLOWED",
+		});
+	}
+}
 
 export async function findSAMLProvider(
 	providerId: string,
@@ -61,7 +205,7 @@ export function createSP(
 		config.callbackUrl || `${baseURL}/sso/saml2/sp/acs/${providerId}`;
 
 	return saml.ServiceProvider({
-		entityID: spData?.entityID || config.issuer,
+		entityID: resolveSPEntityID(config),
 		assertionConsumerService: spData?.metadata
 			? undefined
 			: [

@@ -40,10 +40,20 @@ export {
 
 export {
 	type AlgorithmValidationOptions,
+	createLocalSAMLExecutor,
+	createSAMLCryptoReport,
 	DataEncryptionAlgorithm,
 	type DeprecatedAlgorithmBehavior,
 	DigestAlgorithm,
+	enforceSAMLCryptoPolicy,
 	KeyEncryptionAlgorithm,
+	resolveSAMLExecutor,
+	type SAMLCreateLoginRequestInput,
+	type SAMLCryptoReport,
+	type SAMLExecutor,
+	type SAMLLoginRequestResult,
+	type SAMLParseLoginResponseInput,
+	type SAMLParseLoginResponseResult,
 	SignatureAlgorithm,
 } from "./saml";
 
