@@ -2026,6 +2026,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			const { providerId } = ctx.params;
 			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`;
 			const appOrigin = new URL(ctx.context.baseURL).origin;
+			let resolvedErrorRedirectUrl: string | undefined;
 
 			try {
 				const safeRedirectUrl = await processSAMLResponse(
@@ -2035,6 +2036,9 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						RelayState: ctx.body.RelayState,
 						providerId,
 						currentCallbackPath,
+						onErrorRedirectResolved: (url) => {
+							resolvedErrorRedirectUrl = url;
+						},
 					},
 					options,
 				);
@@ -2063,30 +2067,33 @@ export const acsEndpoint = (options?: SSOOptions) => {
 							: internalCode === "SAML_NO_ASSERTION"
 								? "no_assertion"
 								: internalCode.toLowerCase() || "saml_error";
-					let parsedSamlConfig: SAMLConfig | undefined;
-					try {
-						const provider = await findSAMLProvider(
-							providerId,
-							options,
-							ctx.context.adapter,
-						);
-						parsedSamlConfig = provider?.samlConfig;
-					} catch (providerLookupError) {
-						ctx.context.logger.warn(
-							"Failed to resolve SAML provider for error redirect",
-							{ providerId, error: providerLookupError },
+					let redirectUrl = resolvedErrorRedirectUrl;
+					if (!redirectUrl) {
+						let parsedSamlConfig: SAMLConfig | undefined;
+						try {
+							const provider = await findSAMLProvider(
+								providerId,
+								options,
+								ctx.context.adapter,
+							);
+							parsedSamlConfig = provider?.samlConfig;
+						} catch (providerLookupError) {
+							ctx.context.logger.warn(
+								"Failed to resolve SAML provider for error redirect",
+								{ providerId, error: providerLookupError },
+							);
+						}
+						redirectUrl = getSafeRedirectUrl(
+							getSAMLRedirectCandidates(
+								ctx.body.RelayState,
+								parsedSamlConfig,
+								options?.saml,
+							),
+							currentCallbackPath,
+							appOrigin,
+							(url, settings) => ctx.context.isTrustedOrigin(url, settings),
 						);
 					}
-					const redirectUrl = getSafeRedirectUrl(
-						getSAMLRedirectCandidates(
-							ctx.body.RelayState,
-							parsedSamlConfig,
-							options?.saml,
-						),
-						currentCallbackPath,
-						appOrigin,
-						(url, settings) => ctx.context.isTrustedOrigin(url, settings),
-					);
 					throw ctx.redirect(
 						buildSAMLRedirectUrl(redirectUrl, {
 							error: errorCode,

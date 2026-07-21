@@ -6677,6 +6677,79 @@ describe("SAML SSO Hardening", () => {
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/10329
 		 */
+		it("should preserve the signed RelayState error callback on validation errors", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				trustedOrigins: [frontendOrigin],
+				plugins: [
+					sso({
+						saml: {
+							allowIdpInitiated: true,
+							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "error-relay-state-provider",
+					issuer: "http://localhost:8081",
+					domain: "error-relay-state.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl:
+							"http://localhost:3000/api/auth/sso/saml2/callback/error-relay-state-provider",
+						idpInitiatedCallbackUrl: `${frontendOrigin}/provider-idp-redirect`,
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+					},
+				},
+				headers,
+			});
+
+			const signInResponse = await auth.api.signInSSO({
+				body: {
+					providerId: "error-relay-state-provider",
+					callbackURL: `${frontendOrigin}/success`,
+					errorCallbackURL: `${frontendOrigin}/saml-error#details`,
+				},
+			});
+			const signInUrl = new URL(signInResponse.url as string);
+			const relayState = signInUrl.searchParams.get("RelayState") ?? "";
+
+			const callbackResponse = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/error-relay-state-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: "invalid-saml-response-garbage",
+							RelayState: relayState,
+						}),
+					},
+				),
+			);
+
+			expect(callbackResponse.status).toBe(302);
+			const redirectUrl = new URL(
+				callbackResponse.headers.get("location") || "",
+			);
+			expect(redirectUrl.origin).toBe(frontendOrigin);
+			expect(redirectUrl.pathname).toBe("/saml-error");
+			expect(redirectUrl.searchParams.get("error")).toBe(
+				"saml_invalid_encoding",
+			);
+			expect(redirectUrl.hash).toBe("#details");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
 		it("should prevent open redirect attacks on idpInitiatedCallbackUrl", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
 				plugins: [
@@ -6791,7 +6864,7 @@ describe("SAML SSO Hardening", () => {
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/10329
 		 */
-		it("should use the global fallback when the provider lookup for an error redirect fails", async () => {
+		it("should use the global fallback when provider lookup fails before error redirect resolution", async () => {
 			const data = {
 				user: [],
 				session: [],
@@ -6800,16 +6873,12 @@ describe("SAML SSO Hardening", () => {
 				ssoProvider: [],
 			};
 			const memory = memoryAdapter(data);
-			let failSecondProviderLookup = false;
-			let providerLookupCount = 0;
+			let failProviderLookup = false;
 			const database: typeof memory = (options) => {
 				const adapter = memory(options);
 				const findOne: typeof adapter.findOne = async (query) => {
-					if (failSecondProviderLookup && query.model === "ssoProvider") {
-						providerLookupCount++;
-						if (providerLookupCount === 2) {
-							throw new Error("provider lookup unavailable");
-						}
+					if (failProviderLookup && query.model === "ssoProvider") {
+						throw new Error("provider lookup unavailable");
 					}
 					return adapter.findOne(query);
 				};
@@ -6823,6 +6892,7 @@ describe("SAML SSO Hardening", () => {
 						saml: {
 							allowIdpInitiated: true,
 							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
+							maxResponseSize: 16,
 						},
 					}),
 				],
@@ -6847,8 +6917,7 @@ describe("SAML SSO Hardening", () => {
 				headers,
 			});
 
-			failSecondProviderLookup = true;
-			providerLookupCount = 0;
+			failProviderLookup = true;
 			const callbackResponse = await auth.handler(
 				new Request(
 					"http://localhost:3000/api/auth/sso/saml2/sp/acs/error-lookup-provider",
@@ -6858,7 +6927,7 @@ describe("SAML SSO Hardening", () => {
 							"Content-Type": "application/x-www-form-urlencoded",
 						},
 						body: new URLSearchParams({
-							SAMLResponse: "invalid-saml-response-garbage",
+							SAMLResponse: "response-exceeds-size-limit",
 						}),
 					},
 				),
@@ -6870,9 +6939,7 @@ describe("SAML SSO Hardening", () => {
 			);
 			expect(redirectUrl.origin).toBe(frontendOrigin);
 			expect(redirectUrl.pathname).toBe("/global-idp-redirect");
-			expect(redirectUrl.searchParams.get("error")).toBe(
-				"saml_invalid_encoding",
-			);
+			expect(redirectUrl.searchParams.get("error")).toBe("saml_error");
 		});
 	});
 });

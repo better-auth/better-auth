@@ -221,6 +221,8 @@ export interface SAMLResponseParams {
 	RelayState?: string;
 	providerId: string;
 	currentCallbackPath: string;
+	/** Receives the safe error destination after redirect context is resolved. */
+	onErrorRedirectResolved?: (url: string) => void;
 }
 
 /**
@@ -315,6 +317,14 @@ export async function processSAMLResponse(
 		(url: string, settings?: { allowRelativePaths: boolean }) =>
 			ctx.context.isTrustedOrigin(url, settings),
 	);
+	const samlErrorRedirectUrl = getSafeRedirectUrl(
+		[relayState?.errorURL, samlRedirectUrl],
+		currentCallbackPath,
+		appOrigin,
+		(url: string, settings?: { allowRelativePaths: boolean }) =>
+			ctx.context.isTrustedOrigin(url, settings),
+	);
+	params.onErrorRedirectResolved?.(samlErrorRedirectUrl);
 
 	// 8. Single assertion validation
 	// Throws APIError directly (not redirect) since this is a structural issue
@@ -596,7 +606,7 @@ export async function processSAMLResponse(
 	const callbackUrl = redirectCandidates.some(Boolean)
 		? samlRedirectUrl
 		: ctx.context.baseURL;
-	const errorUrl = relayState?.errorURL || samlRedirectUrl;
+	const errorUrl = samlErrorRedirectUrl;
 
 	let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 	try {
