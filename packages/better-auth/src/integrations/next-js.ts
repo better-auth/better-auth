@@ -1,5 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { isProduction } from "@better-auth/core/env";
 import { setShouldSkipSessionRefresh } from "../api/state/should-session-refresh";
 import { parseSetCookieHeader, toCookieOptions } from "../cookies";
 import { PACKAGE_VERSION } from "../version";
@@ -32,15 +33,19 @@ let nextHeadersModulePromise: Promise<typeof import("next/headers.js")> | null =
  * hooks registered (Sentry, OpenTelemetry) each resolution is a synchronous
  * round trip to the loader hooks thread. These hooks run on nearly every
  * request, so cache the import promise in production. In dev and test the
- * import stays per-call so module reloads and mocks keep working.
+ * import stays per-call so module reloads and mocks keep working. A failed
+ * import is not kept, so later requests retry like the uncached version did.
  *
  * @see https://github.com/better-auth/better-auth/issues/10466
  */
 const loadNextHeadersModule = () => {
-	if (process.env.NODE_ENV !== "production") {
+	if (!isProduction) {
 		return import("next/headers.js");
 	}
-	nextHeadersModulePromise ??= import("next/headers.js");
+	nextHeadersModulePromise ??= import("next/headers.js").catch((error) => {
+		nextHeadersModulePromise = null;
+		throw error;
+	});
 	return nextHeadersModulePromise;
 };
 
