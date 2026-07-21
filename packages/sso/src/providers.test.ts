@@ -1629,6 +1629,139 @@ describe("SSO provider read endpoints", () => {
 			expect(response.status).toBe(400);
 		});
 	});
+
+	describe("SAML forceAuthn persistence", () => {
+		type Auth = ReturnType<typeof createTestAuth>["auth"];
+
+		const registerWithForceAuthn = (
+			auth: Auth,
+			headers: Headers,
+			providerId: string,
+			forceAuthn?: boolean,
+		) =>
+			auth.api.registerSSOProvider({
+				body: {
+					providerId,
+					issuer: "https://idp.example.com",
+					domain: "example.com",
+					samlConfig: {
+						entryPoint: "https://idp.example.com/sso",
+						cert: TEST_CERT,
+						callbackUrl: "http://localhost:3000/api/sso/callback",
+						audience: "my-audience",
+						wantAssertionsSigned: true,
+						// Only include forceAuthn when the caller sets it, so the
+						// unset case exercises the opt-in default.
+						...(forceAuthn === undefined ? {} : { forceAuthn }),
+						spMetadata: {},
+					},
+				},
+				headers,
+			});
+
+		const ownerHeaders = (
+			getAuthHeaders: ReturnType<typeof createTestAuth>["getAuthHeaders"],
+		) =>
+			getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+		it("persists forceAuthn=true on register", async () => {
+			const { auth, getAuthHeaders } = createTestAuth(false);
+			const headers = await ownerHeaders(getAuthHeaders);
+
+			await registerWithForceAuthn(auth, headers, "saml-force-true", true);
+
+			const response = await auth.api.getSSOProvider({
+				query: { providerId: "saml-force-true" },
+				headers,
+			});
+
+			expect(response.samlConfig?.forceAuthn).toBe(true);
+		});
+
+		it("persists forceAuthn=false on register", async () => {
+			const { auth, getAuthHeaders } = createTestAuth(false);
+			const headers = await ownerHeaders(getAuthHeaders);
+
+			await registerWithForceAuthn(auth, headers, "saml-force-false", false);
+
+			const response = await auth.api.getSSOProvider({
+				query: { providerId: "saml-force-false" },
+				headers,
+			});
+
+			expect(response.samlConfig?.forceAuthn).toBe(false);
+		});
+
+		it("leaves forceAuthn unset on register when not provided (opt-in)", async () => {
+			const { auth, getAuthHeaders } = createTestAuth(false);
+			const headers = await ownerHeaders(getAuthHeaders);
+
+			await registerWithForceAuthn(auth, headers, "saml-force-unset");
+
+			const response = await auth.api.getSSOProvider({
+				query: { providerId: "saml-force-unset" },
+				headers,
+			});
+
+			expect(response.samlConfig?.forceAuthn).toBeUndefined();
+		});
+
+		it("enables forceAuthn via update-provider", async () => {
+			const { auth, getAuthHeaders } = createTestAuth(false);
+			const headers = await ownerHeaders(getAuthHeaders);
+
+			await registerWithForceAuthn(auth, headers, "saml-force-update");
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "saml-force-update",
+					samlConfig: { forceAuthn: true },
+				},
+				headers,
+			});
+
+			expect(updated.samlConfig?.forceAuthn).toBe(true);
+		});
+
+		it("disables forceAuthn via update-provider", async () => {
+			const { auth, getAuthHeaders } = createTestAuth(false);
+			const headers = await ownerHeaders(getAuthHeaders);
+
+			await registerWithForceAuthn(auth, headers, "saml-force-disable", true);
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "saml-force-disable",
+					samlConfig: { forceAuthn: false },
+				},
+				headers,
+			});
+
+			expect(updated.samlConfig?.forceAuthn).toBe(false);
+		});
+
+		it("preserves forceAuthn across unrelated partial updates", async () => {
+			const { auth, getAuthHeaders } = createTestAuth(false);
+			const headers = await ownerHeaders(getAuthHeaders);
+
+			await registerWithForceAuthn(auth, headers, "saml-force-preserve", true);
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "saml-force-preserve",
+					samlConfig: { audience: "new-audience" },
+				},
+				headers,
+			});
+
+			expect(updated.samlConfig?.audience).toBe("new-audience");
+			expect(updated.samlConfig?.forceAuthn).toBe(true);
+		});
+	});
 });
 
 /**
