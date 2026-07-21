@@ -134,7 +134,7 @@ export const communityAdapters: CommunityAdapter[] = [
 	},
 	{
 		name: "@zenstackhq/better-auth",
-		url: "https://github.com/zenstackhq/zenstack-v3/tree/main/packages/auth-adapters/better-auth",
+		url: "https://github.com/zenstackhq/zenstack/tree/main/packages/auth-adapters/better-auth",
 		database: "ZenStack",
 		databaseUrl: "https://zenstack.dev",
 		author: {
@@ -185,6 +185,17 @@ export const communityAdapters: CommunityAdapter[] = [
 			name: "octet-stream",
 			url: "https://github.com/octet-stream",
 			avatar: "https://github.com/octet-stream.png",
+		},
+	},
+	{
+		name: "@datar-platform/better-auth-dynamodb",
+		url: "https://github.com/datar-platform/better-auth-dynamodb",
+		database: "DynamoDB",
+		databaseUrl: "https://aws.amazon.com/dynamodb/",
+		author: {
+			name: "joesome-git",
+			url: "https://github.com/joesome-git",
+			avatar: "https://github.com/joesome-git.png",
 		},
 	},
 ];
