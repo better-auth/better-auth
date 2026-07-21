@@ -24,6 +24,26 @@ export function toNextJsHandler(
 	};
 }
 
+let nextHeadersModulePromise: Promise<typeof import("next/headers.js")> | null =
+	null;
+
+/**
+ * Node re-runs ESM resolution for every `import()` call, and with loader
+ * hooks registered (Sentry, OpenTelemetry) each resolution is a synchronous
+ * round trip to the loader hooks thread. These hooks run on nearly every
+ * request, so cache the import promise in production. In dev and test the
+ * import stays per-call so module reloads and mocks keep working.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10466
+ */
+const loadNextHeadersModule = () => {
+	if (process.env.NODE_ENV !== "production") {
+		return import("next/headers.js");
+	}
+	nextHeadersModulePromise ??= import("next/headers.js");
+	return nextHeadersModulePromise;
+};
+
 export const nextCookies = () => {
 	let hasWarned = false;
 
@@ -50,7 +70,7 @@ export const nextCookies = () => {
 							ReturnType<typeof import("next/headers.js").headers>
 						>;
 						try {
-							const { headers } = await import("next/headers.js");
+							const { headers } = await loadNextHeadersModule();
 							headersStore = await headers();
 						} catch {
 							return;
@@ -92,7 +112,7 @@ export const nextCookies = () => {
 								ReturnType<typeof import("next/headers.js").cookies>
 							>;
 							try {
-								const { cookies } = await import("next/headers.js");
+								const { cookies } = await loadNextHeadersModule();
 								cookieHelper = await cookies();
 							} catch (error) {
 								if (
