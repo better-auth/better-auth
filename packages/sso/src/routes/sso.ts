@@ -2026,6 +2026,9 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			const { providerId } = ctx.params;
 			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`;
 			const appOrigin = new URL(ctx.context.baseURL).origin;
+			// TODO(next): preserve this ordered fallback and pipeline-resolved error
+			// redirect handoff when reconciling next's ACS handler. Signed RelayState
+			// is consumed during parsing and must not be parsed again or used as a URL.
 			let resolvedErrorRedirectUrl: string | undefined;
 
 			try {

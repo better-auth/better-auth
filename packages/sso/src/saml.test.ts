@@ -34,6 +34,7 @@ import {
 import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
+import { getSafeRedirectUrl } from "./routes/saml-pipeline";
 import { saml } from "./samlify";
 import { normalizePem } from "./utils";
 
@@ -6487,6 +6488,24 @@ describe("SAML SSO Hardening", () => {
 	describe("IdP-initiated SAML login with split origin redirect", () => {
 		const frontendOrigin = "https://frontend.example.com";
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should allow a trusted cross-origin redirect with the ACS pathname", () => {
+			const appOrigin = "http://localhost:3000";
+			const callbackPath = `${appOrigin}/api/auth/sso/saml2/sp/acs/shared-path-provider`;
+			const frontendCallback = `${frontendOrigin}/api/auth/sso/saml2/sp/acs/shared-path-provider`;
+
+			expect(
+				getSafeRedirectUrl(
+					[frontendCallback],
+					callbackPath,
+					appOrigin,
+					() => true,
+				),
+			).toBe(frontendCallback);
+		});
+
 		async function getIdPInitiatedSAMLResponse(): Promise<string> {
 			let response: MockSAMLResponse | undefined;
 			await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
@@ -6743,6 +6762,92 @@ describe("SAML SSO Hardening", () => {
 			expect(redirectUrl.pathname).toBe("/saml-error");
 			expect(redirectUrl.searchParams.get("error")).toBe(
 				"saml_invalid_encoding",
+			);
+			expect(redirectUrl.hash).toBe("#details");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should preserve the signed error callback on binding validation errors", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				trustedOrigins: [frontendOrigin],
+				plugins: [
+					sso({
+						saml: {
+							allowIdpInitiated: true,
+							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "binding-error-relay-state-provider",
+					issuer: "http://localhost:8081",
+					domain: "binding-error.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl:
+							"http://localhost:3000/api/auth/sso/saml2/sp/acs/binding-error-relay-state-provider",
+						idpInitiatedCallbackUrl: `${frontendOrigin}/provider-idp-redirect`,
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+					},
+				},
+				headers,
+			});
+
+			const signInResponse = await auth.api.signInSSO({
+				body: {
+					providerId: "binding-error-relay-state-provider",
+					callbackURL: `${frontendOrigin}/success`,
+					errorCallbackURL: `${frontendOrigin}/binding-error#details`,
+				},
+			});
+			const idpResponseUrl = new URL(signInResponse.url as string);
+			idpResponseUrl.searchParams.set(
+				"audience",
+				"https://unexpected.example.com/saml/metadata",
+			);
+
+			let samlResponse: MockSAMLResponse | undefined;
+			await betterFetch(idpResponseUrl.toString(), {
+				onSuccess: async (context) => {
+					samlResponse = (await context.data) as MockSAMLResponse;
+				},
+			});
+			if (!samlResponse)
+				throw new Error("Mock IdP did not return a SAML response");
+
+			const relayState = idpResponseUrl.searchParams.get("RelayState") ?? "";
+			const callbackResponse = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/binding-error-relay-state-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: samlResponse.samlResponse,
+							RelayState: relayState,
+						}),
+					},
+				),
+			);
+
+			expect(callbackResponse.status).toBe(302);
+			const redirectUrl = new URL(
+				callbackResponse.headers.get("location") || "",
+			);
+			expect(redirectUrl.origin).toBe(frontendOrigin);
+			expect(redirectUrl.pathname).toBe("/binding-error");
+			expect(redirectUrl.searchParams.get("error")).toBe(
+				"invalid_saml_response",
 			);
 			expect(redirectUrl.hash).toBe("#details");
 		});

@@ -79,7 +79,15 @@ function getSafeRedirectCandidate(
 		return;
 	}
 
-	if (absoluteUrl.pathname === callbackPathname) return;
+	// TODO(next): retain this origin-qualified loop check when reconciling
+	// next's redirect helper. A trusted frontend can share the ACS pathname
+	// without routing back to this handler.
+	if (
+		absoluteUrl.origin === appOrigin &&
+		absoluteUrl.pathname === callbackPathname
+	) {
+		return;
+	}
 
 	return url;
 }
@@ -399,7 +407,7 @@ export async function processSAMLResponse(
 				expectedRecipients: expectedRecipients.filter(Boolean),
 			});
 			throw ctx.redirect(
-				buildSAMLRedirectUrl(samlRedirectUrl, {
+				buildSAMLRedirectUrl(samlErrorRedirectUrl, {
 					error: "invalid_saml_response",
 					error_description:
 						error.body?.message || error.message || "Invalid SAML response",
@@ -413,7 +421,7 @@ export async function processSAMLResponse(
 			expectedRecipients: expectedRecipients.filter(Boolean),
 		});
 		throw ctx.redirect(
-			buildSAMLRedirectUrl(samlRedirectUrl, {
+			buildSAMLRedirectUrl(samlErrorRedirectUrl, {
 				error: "invalid_saml_response",
 				error_description: "SAML response binding could not be validated",
 			}),
@@ -455,7 +463,7 @@ export async function processSAMLResponse(
 					{ inResponseTo, providerId },
 				);
 				throw ctx.redirect(
-					buildSAMLRedirectUrl(samlRedirectUrl, {
+					buildSAMLRedirectUrl(samlErrorRedirectUrl, {
 						error: "invalid_saml_response",
 						error_description: "Unknown or expired request ID",
 					}),
@@ -472,7 +480,7 @@ export async function processSAMLResponse(
 					},
 				);
 				throw ctx.redirect(
-					buildSAMLRedirectUrl(samlRedirectUrl, {
+					buildSAMLRedirectUrl(samlErrorRedirectUrl, {
 						error: "invalid_saml_response",
 						error_description: "Provider mismatch",
 					}),
@@ -484,7 +492,7 @@ export async function processSAMLResponse(
 				{ providerId },
 			);
 			throw ctx.redirect(
-				buildSAMLRedirectUrl(samlRedirectUrl, {
+				buildSAMLRedirectUrl(samlErrorRedirectUrl, {
 					error: "unsolicited_response",
 					error_description: "IdP-initiated SSO not allowed",
 				}),
@@ -530,7 +538,7 @@ export async function processSAMLResponse(
 				{ assertionId, issuer, providerId },
 			);
 			throw ctx.redirect(
-				buildSAMLRedirectUrl(samlRedirectUrl, {
+				buildSAMLRedirectUrl(samlErrorRedirectUrl, {
 					error: "replay_detected",
 					error_description: "SAML assertion has already been used",
 				}),
