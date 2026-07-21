@@ -43,6 +43,7 @@ export interface SAMLConfig {
 	entryPoint: string;
 	cert: string;
 	callbackUrl: string;
+	idpInitiatedCallbackUrl?: string | undefined;
 	audience?: string | undefined;
 	idpMetadata?:
 		| {
@@ -426,6 +427,10 @@ export interface SSOOptions {
 		 * @default false
 		 */
 		wantLogoutResponseSigned?: boolean;
+		/**
+		 * Callback URL to redirect to after successful IdP-initiated SAML login.
+		 */
+		idpInitiatedCallbackUrl?: string | undefined;
 	};
 }
 

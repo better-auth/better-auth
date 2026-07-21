@@ -254,9 +254,18 @@ export async function processSAMLResponse(
 	});
 	const idp = createIdP(parsedSamlConfig);
 
+	const idpInitiatedCallbackUrl =
+		parsedSamlConfig.idpInitiatedCallbackUrl ||
+		options?.saml?.idpInitiatedCallbackUrl;
+
+	const redirectCandidate =
+		relayState?.callbackURL ||
+		idpInitiatedCallbackUrl ||
+		parsedSamlConfig.callbackUrl;
+
 	const samlRedirectUrl = getSafeRedirectUrl(
-		relayState?.callbackURL || parsedSamlConfig.callbackUrl,
-		params.currentCallbackPath,
+		redirectCandidate,
+		currentCallbackPath,
 		appOrigin,
 		(url: string, settings?: { allowRelativePaths: boolean }) =>
 			ctx.context.isTrustedOrigin(url, settings),
@@ -539,14 +548,7 @@ export async function processSAMLResponse(
 		!!(provider as { domainVerified?: boolean }).domainVerified &&
 		validateEmailDomain(userInfo.email as string, provider.domain);
 
-	// TODO: split callbackUrl into separate ACS URL and post-auth redirect
-	// fields. Currently callbackUrl serves both purposes, which means
-	// IdP-initiated flows (no RelayState) fall back to either a URL that may be
-	// the ACS endpoint (blocked by loop protection) or baseURL.
-	const callbackUrl =
-		relayState?.callbackURL ||
-		parsedSamlConfig.callbackUrl ||
-		ctx.context.baseURL;
+	const callbackUrl = redirectCandidate ? samlRedirectUrl : ctx.context.baseURL;
 	const errorUrl = relayState?.errorURL || samlRedirectUrl;
 
 	let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
@@ -656,12 +658,6 @@ export async function processSAMLResponse(
 			);
 	}
 
-	// 20. Compute safe redirect URL
-	return getSafeRedirectUrl(
-		relayState?.callbackURL || parsedSamlConfig.callbackUrl,
-		currentCallbackPath,
-		appOrigin,
-		(url: string, settings?: { allowRelativePaths: boolean }) =>
-			ctx.context.isTrustedOrigin(url, settings),
-	);
+	// 20. Return precomputed safe redirect URL
+	return samlRedirectUrl;
 }

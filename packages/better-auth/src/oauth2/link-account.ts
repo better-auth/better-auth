@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { isDevelopment } from "@better-auth/core/env";
 import { createEmailVerificationToken } from "../api";
+import { hasServerSessionStore } from "../context/store-capabilities";
 import { setAccountCookie } from "../cookies/session-store";
 import { parseAdditionalUserInputFromProviderProfile } from "../db";
 import type { Account, User } from "../types";
@@ -149,7 +150,14 @@ export async function handleOAuthUserInfo(
 				});
 			}
 
-			if (Object.keys(freshTokens).length > 0) {
+			// When the account is stored in a cookie and there's no real
+			// server-side session store, the account cookie is the source of
+			// truth. Skip the database update to avoid unnecessary writes to
+			// the in-memory or stateless adapter.
+			if (
+				Object.keys(freshTokens).length > 0 &&
+				hasServerSessionStore(c.context.options)
+			) {
 				await c.context.internalAdapter.updateAccount(
 					linkedAccount.id,
 					freshTokens,
