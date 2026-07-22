@@ -1,5 +1,4 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
 import { SignatureMark } from "@/components/landing/signature-mark";
 
@@ -8,7 +7,6 @@ interface BlogPostData {
 	description?: string;
 	date?: Date;
 	author?: { name?: string; twitter?: string };
-	toc?: { title: ReactNode; url: string; depth: number }[];
 }
 
 interface BlogLeftPanelProps {

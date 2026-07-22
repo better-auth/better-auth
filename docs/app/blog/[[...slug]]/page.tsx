@@ -6,6 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BlogLeftPanel } from "@/components/blog/blog-left-panel";
+import { BlogTOC } from "@/components/blog/blog-toc";
 import Footer from "@/components/landing/footer";
 import { BlogTweet } from "@/components/mdx/tweet";
 import { Callout } from "@/components/ui/callout";
@@ -203,130 +204,144 @@ export default async function Page({
 	const toc = page.data.toc ?? [];
 
 	return (
-		<div className="flex flex-col lg:flex-row h-full min-h-dvh pt-14 lg:pt-0">
+		<div
+			id="fd-glass-layout"
+			className="flex flex-col lg:flex-row h-full min-h-dvh pt-14 lg:pt-0 [--fd-right-width:0px]"
+		>
 			<BlogLeftPanel
 				post={{
 					title,
 					description,
 					date,
 					author: page.data.author,
-					toc,
 				}}
 			/>
 
 			{/* Right panel — blog content */}
-			<div className="w-full lg:w-[70%] flex flex-col">
-				<div className="relative px-5 sm:px-6 lg:px-8 pb-24 pt-8 lg:py-24">
-					{/* Article body */}
-					<article className="prose prose-neutral dark:prose-invert max-w-3xl prose-headings:tracking-tight prose-a:decoration-dashed prose-a:underline-offset-4 prose-pre:rounded-none prose-pre:border prose-pre:border-foreground/10 prose-img:rounded-none [&_[data-header-label]+h2]:mt-2 [&_[data-header-label]+h3]:mt-2 [&_[data-header-label]+h4]:mt-1">
-						<MDX
-							components={{
-								...defaultMdxComponents,
-								Step,
-								Steps,
-								Tab,
-								Tabs,
-								Accordion,
-								Accordions,
-								Tweet: BlogTweet,
-								TLDR: ({ children }: { children: React.ReactNode }) => (
-									<div className="not-prose relative my-8 bg-foreground/[0.02] px-5 py-4">
-										<span className="block mb-2 text-[11px] font-mono uppercase tracking-wider text-foreground/50 select-none">
-											TL;DR
-										</span>
-										<div className="text-sm leading-relaxed text-foreground/80 [&_p]:m-0 [&_p+p]:mt-3">
-											{children}
+			<div
+				className="grid w-full lg:w-[70%] min-w-0"
+				style={{
+					gridTemplate:
+						'"content right" 1fr / minmax(0, 1fr) var(--fd-right-width)',
+				}}
+			>
+				<div className="flex min-w-0 flex-col [grid-area:content]">
+					<div className="relative min-w-0 px-5 sm:px-6 lg:px-8 pb-24 pt-8 lg:py-24">
+						{/* Article body */}
+						<article className="prose prose-neutral dark:prose-invert max-w-3xl prose-headings:tracking-tight prose-a:decoration-dashed prose-a:underline-offset-4 prose-pre:rounded-none prose-pre:border prose-pre:border-foreground/10 prose-img:rounded-none [&_[data-header-label]+h2]:mt-2 [&_[data-header-label]+h3]:mt-2 [&_[data-header-label]+h4]:mt-1">
+							<MDX
+								components={{
+									...defaultMdxComponents,
+									Step,
+									Steps,
+									Tab,
+									Tabs,
+									Accordion,
+									Accordions,
+									Tweet: BlogTweet,
+									TLDR: ({ children }: { children: React.ReactNode }) => (
+										<div className="not-prose relative my-8 bg-foreground/[0.02] px-5 py-4">
+											<span className="block mb-2 text-[11px] font-mono uppercase tracking-wider text-foreground/50 select-none">
+												TL;DR
+											</span>
+											<div className="text-sm leading-relaxed text-foreground/80 [&_p]:m-0 [&_p+p]:mt-3">
+												{children}
+											</div>
 										</div>
-									</div>
-								),
-								Callout: ({
-									children,
-									type,
-									...props
-								}: {
-									children: React.ReactNode;
-									type?:
-										| "info"
-										| "warn"
-										| "error"
-										| "success"
-										| "warning"
-										| "none";
-									[key: string]: any;
-								}) => (
-									<Callout type={type === "none" ? undefined : type} {...props}>
-										{children}
-									</Callout>
-								),
-								HeaderLabel: ({
-									children,
-									variant = "default",
-								}: {
-									children: React.ReactNode;
-									variant?: "default" | "info" | "warning";
-								}) => {
-									const colors = {
-										default: "text-neutral-600 dark:text-neutral-300",
-										info: "text-blue-500 dark:text-blue-400",
-										warning: "text-amber-600 dark:text-amber-400",
-									};
-									return (
-										<span
-											data-header-label="true"
-											className={`text-[11px] font-semibold tracking-wide not-prose block select-none ${colors[variant]}`}
+									),
+									Callout: ({
+										children,
+										type,
+										...props
+									}: {
+										children: React.ReactNode;
+										type?:
+											| "info"
+											| "warn"
+											| "error"
+											| "success"
+											| "warning"
+											| "none";
+										[key: string]: any;
+									}) => (
+										<Callout
+											type={type === "none" ? undefined : type}
+											{...props}
 										>
 											{children}
-										</span>
-									);
-								},
-								Contributors: ({ usernames }: { usernames: string[] }) => (
-									<div className="flex flex-wrap gap-1.5 not-prose">
-										{usernames.map((username) => (
-											<a
-												key={username}
-												href={`https://github.com/${username}`}
-												target="_blank"
-												rel="noreferrer noopener"
-												className="text-xs font-mono px-2 py-1 border border-foreground/10 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:border-foreground/20 transition-colors"
-											>
-												@{username}
-											</a>
-										))}
-									</div>
-								),
-								a: ({ className, href, children, ...props }: any) => {
-									const isExternal =
-										typeof href === "string" && /^(https?:)?\/\//.test(href);
-									const classes = cn(
-										"font-medium underline decoration-dashed underline-offset-4",
-										className,
-									);
-									if (isExternal) {
+										</Callout>
+									),
+									HeaderLabel: ({
+										children,
+										variant = "default",
+									}: {
+										children: React.ReactNode;
+										variant?: "default" | "info" | "warning";
+									}) => {
+										const colors = {
+											default: "text-neutral-600 dark:text-neutral-300",
+											info: "text-blue-500 dark:text-blue-400",
+											warning: "text-amber-600 dark:text-amber-400",
+										};
 										return (
-											<a
-												className={classes}
-												href={href}
-												target="_blank"
-												rel="noreferrer noopener"
-												{...props}
+											<span
+												data-header-label="true"
+												className={`text-[11px] font-semibold tracking-wide not-prose block select-none ${colors[variant]}`}
 											>
 												{children}
-											</a>
+											</span>
 										);
-									}
-									return (
-										<Link className={classes} href={href} {...(props as any)}>
-											{children}
-										</Link>
-									);
-								},
-							}}
-						/>
-					</article>
+									},
+									Contributors: ({ usernames }: { usernames: string[] }) => (
+										<div className="flex flex-wrap gap-1.5 not-prose">
+											{usernames.map((username) => (
+												<a
+													key={username}
+													href={`https://github.com/${username}`}
+													target="_blank"
+													rel="noreferrer noopener"
+													className="text-xs font-mono px-2 py-1 border border-foreground/10 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:border-foreground/20 transition-colors"
+												>
+													@{username}
+												</a>
+											))}
+										</div>
+									),
+									a: ({ className, href, children, ...props }: any) => {
+										const isExternal =
+											typeof href === "string" && /^(https?:)?\/\//.test(href);
+										const classes = cn(
+											"font-medium underline decoration-dashed underline-offset-4",
+											className,
+										);
+										if (isExternal) {
+											return (
+												<a
+													className={classes}
+													href={href}
+													target="_blank"
+													rel="noreferrer noopener"
+													{...props}
+												>
+													{children}
+												</a>
+											);
+										}
+										return (
+											<Link className={classes} href={href} {...(props as any)}>
+												{children}
+											</Link>
+										);
+									},
+								}}
+							/>
+						</article>
+					</div>
+					<div className="lg:hidden">
+						<Footer />
+					</div>
 				</div>
-				<div className="lg:hidden">
-					<Footer />
-				</div>
+				<BlogTOC items={toc} />
 			</div>
 		</div>
 	);
