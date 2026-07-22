@@ -638,16 +638,19 @@ describe("one-tap hosted domain (hd)", async () => {
 	});
 });
 
-describe("one-tap disableSignUp", async () => {
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10478
+ */
+describe("one-tap disableSignUp", () => {
 	afterEach(() => {
 		Object.assign(verifiedPayload, defaultVerifiedPayload);
 	});
 
-	it("rejects a new user when socialProviders.google.disableSignUp is true and creates no user", async () => {
+	it("rejects provider-disabled sign-up without creating a user", async () => {
 		verifiedPayload.email = "one-tap-disable-signup@example.com";
 		verifiedPayload.sub = "one-tap-disable-signup-sub";
 
-		const { auth, client } = await getTestInstance({
+		const { auth } = await getTestInstance({
 			socialProviders: {
 				google: {
 					clientId: "test-client",
@@ -659,15 +662,15 @@ describe("one-tap disableSignUp", async () => {
 			plugins: [oneTap()],
 		});
 
-		const res = await client.$fetch<{
-			data: unknown;
-			error: { status: number; message?: string } | null;
-		}>("/one-tap/callback", {
-			method: "POST",
-			body: { idToken: "stub-id-token" },
+		await expect(
+			auth.api.oneTapCallback({
+				body: { idToken: "stub-id-token" },
+			}),
+		).rejects.toMatchObject({
+			statusCode: 401,
+			status: "UNAUTHORIZED",
+			body: { message: "signup disabled" },
 		});
-
-		expect(res.error?.status).toBe(401);
 
 		const ctx = await auth.$context;
 		const users = await ctx.adapter.findMany<{ email: string }>({
