@@ -167,6 +167,7 @@ async function generateAction(opts: any) {
 		);
 		return;
 	}
+	await removeGeneratedStub();
 
 	let adapter: DBAdapter;
 	if (options.adapter) {

@@ -402,6 +402,37 @@ describe("open-api", async () => {
 		expect(schemas["User"]!.required).toContain("scores");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10430
+	 */
+	it("should allow every JSON value in additional field request bodies", async () => {
+		const { auth } = await getTestInstance(
+			{
+				plugins: [openAPI()],
+				user: {
+					additionalFields: {
+						metadata: {
+							type: "json",
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+
+		const signUpSchema = getPostRequestBody(paths, "/sign-up/email").content[
+			"application/json"
+		].schema;
+		expect(getSchemaProperty(signUpSchema, "metadata")).toEqual({});
+
+		const updateUserSchema = getPostRequestBody(paths, "/update-user").content[
+			"application/json"
+		].schema;
+		expect(getSchemaProperty(updateUserSchema, "metadata")).toEqual({});
+	});
+
 	it("should include additionalFields on sign-up and update-user request bodies", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const paths = schema.paths as Record<string, Path>;
