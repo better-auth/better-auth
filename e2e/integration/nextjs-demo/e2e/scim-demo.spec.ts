@@ -8,6 +8,7 @@ import { dirname, join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
+import { createSCIMDemoOIDCLoginHint } from "../../../../demo/nextjs/lib/scim-demo-oidc.ts";
 import { getSCIMDemoCompletedOperations } from "../../../../demo/nextjs/lib/scim-demo-service.ts";
 
 const SCIM_DEMO_SSO_PROVIDER_ID = "scim-demo-sso";
@@ -542,6 +543,7 @@ async function getMayaEmployeeURL(page: Page) {
 	if (!href) throw new Error("Maya Chen's employee link was not available");
 	const url = new URL(href, page.url());
 	expect(url.pathname).toBe("/scim-demo/employee");
+	expect(url.searchParams.get("access")).toMatch(/^[A-Za-z0-9_-]{43}$/);
 	expect(url.searchParams.get("workspace")).toMatch(/^[a-f0-9]{12}$/);
 	expect(url.searchParams.get("user")).toBe("maya-chen");
 	return url.toString();
@@ -563,11 +565,7 @@ async function selectIdentityProviderAccount(
 	await expect(
 		page.getByRole("button", { name: "Choose an account" }),
 	).toBeDisabled();
-	await expect(page.getByRole("radio", { name: /Maya Chen/ })).toBeVisible();
-	await expect(
-		page.getByRole("radio", { name: /Julian Foster/ }),
-	).toBeVisible();
-	await expect(page.getByRole("radio", { name: /Priya Shah/ })).toBeVisible();
+	await expect(page.getByRole("radio")).toHaveCount(1);
 	await account.click();
 	await expect(account).toBeChecked();
 	await onAccountSelected?.();
@@ -591,6 +589,9 @@ async function attemptMayaSSOSignInOverHTTP(
 	employeeURL: string,
 	email: string,
 ) {
+	const accessToken = new URL(employeeURL).searchParams.get("access");
+	if (!accessToken)
+		throw new Error("The employee link is missing its access token");
 	const response = await context.request.post(
 		`${baseURL}/api/auth/sign-in/sso`,
 		{
@@ -599,7 +600,7 @@ async function attemptMayaSSOSignInOverHTTP(
 				callbackURL: employeeURL,
 				email,
 				errorCallbackURL: employeeURL,
-				loginHint: email,
+				loginHint: createSCIMDemoOIDCLoginHint(email, accessToken),
 				providerId: SCIM_DEMO_SSO_PROVIDER_ID,
 			},
 		},
@@ -815,8 +816,10 @@ test.describe("Next.js SCIM demo", () => {
 			await runDemoModuleScript(
 				[
 					'import { base64url, createLocalJWKSet, jwtVerify } from "jose";',
+					'const identity = await import("./lib/scim-demo-identity.ts");',
 					'const oidc = await import("./lib/scim-demo-oidc.ts");',
 					'const workspaceId = "0123456789ab";',
+					'const accessToken = await identity.createSCIMDemoEmployeeAccessToken(workspaceId, "maya-chen");',
 					'const verifier = "a".repeat(43);',
 					'const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));',
 					"const challenge = base64url.encode(new Uint8Array(digest));",
@@ -827,7 +830,7 @@ test.describe("Next.js SCIM demo", () => {
 					"  client_id: oidc.SCIM_DEMO_OIDC_CLIENT_ID,",
 					"  code_challenge: challenge,",
 					'  code_challenge_method: "S256",',
-					"  login_hint: `maya.chen+${workspaceId}@acme.example`,",
+					"  login_hint: oidc.createSCIMDemoOIDCLoginHint(`maya.chen+${workspaceId}@acme.example`, accessToken),",
 					'  nonce: "cache-reset-proof",',
 					"  redirect_uri: oidc.getSCIMDemoOIDCRedirectURI(),",
 					'  response_type: "code",',
@@ -857,6 +860,8 @@ test.describe("Next.js SCIM demo", () => {
 				].join("\n"),
 				{
 					...process.env,
+					BETTER_AUTH_SECRET:
+						"better-auth-scim-demo-e2e-secret-at-least-thirty-two-characters",
 					BETTER_AUTH_URL: baseURL,
 					SCIM_DEMO_OIDC_CLIENT_SECRET: oidcClientSecret,
 					SCIM_DEMO_OIDC_SIGNING_PRIVATE_KEY: oidcSigningPrivateKey,
@@ -1496,14 +1501,64 @@ test.describe("Next.js SCIM demo", () => {
 				)
 				.toBe(true);
 
+			const tamperedEmployeeURL = new URL(employeeURL);
+			tamperedEmployeeURL.searchParams.set("user", "julian-foster");
+			await employeePage.goto(tamperedEmployeeURL.toString());
+			await expect(
+				employeePage.getByRole("heading", { name: "Access not available" }),
+			).toBeVisible();
+			const forgedEmployeeURL = new URL(employeeURL);
+			const employeeAccessToken = forgedEmployeeURL.searchParams.get("access");
+			if (!employeeAccessToken) {
+				throw new Error("The employee link is missing its access token");
+			}
+			forgedEmployeeURL.searchParams.set(
+				"access",
+				`${employeeAccessToken[0] === "A" ? "B" : "A"}${employeeAccessToken.slice(1)}`,
+			);
+			await employeePage.goto(forgedEmployeeURL.toString());
+			await expect(
+				employeePage.getByRole("heading", { name: "Access not available" }),
+			).toBeVisible();
+
 			await employeePage.goto(employeeURL);
 			await employeePage
 				.getByRole("button", { name: "Continue with Acme SSO" })
 				.click();
+			await expect(
+				employeePage.getByRole("heading", {
+					name: "Sign in with Acme Identity",
+				}),
+			).toBeVisible();
+			const authorizationPageURL = new URL(employeePage.url());
+			const maliciousAuthorizationForm = new URLSearchParams(
+				authorizationPageURL.searchParams,
+			);
+			maliciousAuthorizationForm.set(
+				"workspace_id",
+				employeePortalURL.searchParams.get("workspace") ?? "",
+			);
+			maliciousAuthorizationForm.set("user_key", "julian-foster");
+			const maliciousAuthorizationResponse = await fetch(
+				`${baseURL}/api/scim-demo/idp/authorize`,
+				{
+					method: "POST",
+					headers: {
+						"content-type": "application/x-www-form-urlencoded",
+						origin: baseURL,
+					},
+					body: maliciousAuthorizationForm,
+					redirect: "manual",
+				},
+			);
+			expect(maliciousAuthorizationResponse.status).toBe(400);
+			expect(await maliciousAuthorizationResponse.json()).toMatchObject({
+				error: "access_denied",
+			});
 			await selectIdentityProviderAccount(
 				employeePage,
-				"Julian Foster",
-				"Julian",
+				"Maya Chen",
+				"Maya",
 				async () => {
 					const identityProviderPickerScreenshotPath = testInfo.outputPath(
 						"scim-demo-identity-provider-picker.png",
@@ -1518,22 +1573,6 @@ test.describe("Next.js SCIM demo", () => {
 					});
 				},
 			);
-			await expect(
-				employeePage.getByRole("heading", {
-					name: "Switch employee account",
-				}),
-			).toBeVisible();
-			await expect(
-				employeePage.getByText(/signed in as Julian Foster/i),
-			).toBeVisible();
-			await employeePage
-				.getByRole("button", { name: "Sign out to switch account" })
-				.click();
-			await expect(
-				employeePage.getByRole("button", { name: "Continue with Acme SSO" }),
-			).toBeVisible();
-
-			await beginMayaSSOSignIn(employeePage, employeeURL);
 			await expect(
 				employeePage.getByRole("heading", { name: "You’re signed in" }),
 			).toBeVisible();

@@ -28,6 +28,7 @@ import {
 	createSCIMDemoUserExternalId,
 	isSCIMDemoWorkspaceId,
 	SCIM_DEMO_EXTERNAL_ID_PREFIX,
+	verifySCIMDemoEmployeeAccessToken,
 } from "./scim-demo-identity.ts";
 import {
 	getSCIMDemoOIDCIssuer,
@@ -647,7 +648,7 @@ export async function getSCIMDemoWorkspace({
 				defaultGroupKey: definition.defaultGroupKey,
 				lifecycle,
 				applicationUserId: applicationUser?.id ?? null,
-				employeePortalPath: createSCIMDemoEmployeePortalPath(
+				employeePortalPath: await createSCIMDemoEmployeePortalPath(
 					workspaceId,
 					definition.key,
 				),
@@ -709,9 +710,18 @@ export async function getSCIMDemoEmployeePortalState(
 	database: SCIMDemoServiceContext["database"],
 	workspaceId: string,
 	userKey: string,
+	accessToken: string,
 	authenticatedUserId?: string | null,
 ): Promise<SCIMDemoEmployeePortalState> {
-	if (!isSCIMDemoWorkspaceId(workspaceId) || !isSCIMDemoUserKey(userKey)) {
+	if (
+		!isSCIMDemoWorkspaceId(workspaceId) ||
+		!isSCIMDemoUserKey(userKey) ||
+		!(await verifySCIMDemoEmployeeAccessToken(
+			accessToken,
+			workspaceId,
+			userKey,
+		))
+	) {
 		return { status: "invalid", message: "This demo employee link is invalid" };
 	}
 	const definition = getUserDefinition(userKey);

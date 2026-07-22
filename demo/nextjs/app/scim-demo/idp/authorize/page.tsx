@@ -11,8 +11,6 @@ import {
 	CardHeader,
 } from "@/components/ui/card";
 import { isSCIMDemoEnabled } from "@/lib/scim-demo";
-import { SCIM_DEMO_DIRECTORY_USERS } from "@/lib/scim-demo-catalog";
-import { createSCIMDemoUserEmail } from "@/lib/scim-demo-identity";
 import type { SCIMDemoOIDCSearchParams } from "@/lib/scim-demo-oidc";
 import {
 	getSCIMDemoOIDCAuthorizationFormFields,
@@ -37,7 +35,7 @@ export default async function IdentityProviderPage({
 }: IdentityProviderPageProps) {
 	if (!isSCIMDemoEnabled()) notFound();
 	const parameters: SCIMDemoOIDCSearchParams = await searchParams;
-	const view = getSCIMDemoOIDCAuthorizationView(parameters);
+	const view = await getSCIMDemoOIDCAuthorizationView(parameters);
 
 	if (view.status === "invalid") {
 		return (
@@ -74,13 +72,15 @@ export default async function IdentityProviderPage({
 		),
 		{ name: "workspace_id", value: view.loginHintUser.workspaceId },
 	];
-	const accounts = SCIM_DEMO_DIRECTORY_USERS.map((user) => ({
-		displayName: user.displayName,
-		email: createSCIMDemoUserEmail(view.loginHintUser.workspaceId, user.key),
-		givenName: user.givenName,
-		initials: user.initials,
-		userKey: user.key,
-	}));
+	const accounts = [
+		{
+			displayName: view.loginHintUser.displayName,
+			email: view.loginHintUser.email,
+			givenName: view.loginHintUser.givenName,
+			initials: view.loginHintUser.initials,
+			userKey: view.loginHintUser.userKey,
+		},
+	];
 
 	return (
 		<main className="flex min-h-[70vh] items-center justify-center px-4 py-10">

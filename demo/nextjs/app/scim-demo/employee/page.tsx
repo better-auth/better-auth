@@ -19,6 +19,7 @@ import type {
 	SCIMDemoUserLifecycle,
 } from "@/lib/scim-demo-contract";
 import { createSCIMDemoEmployeePortalPath } from "@/lib/scim-demo-identity";
+import { createSCIMDemoOIDCLoginHint } from "@/lib/scim-demo-oidc";
 import {
 	getSCIMDemoEmployeePortalState,
 	hasSCIMDemoEmployeeRecord,
@@ -91,6 +92,7 @@ export default async function EmployeePortalPage({
 }: EmployeePortalPageProps) {
 	if (!isSCIMDemoEnabled()) notFound();
 	const parameters = await searchParams;
+	const accessToken = readSearchParameter(parameters, "access");
 	const workspaceId = readSearchParameter(parameters, "workspace");
 	const userKey = readSearchParameter(parameters, "user");
 	const callbackError = readSearchParameter(parameters, "error");
@@ -103,6 +105,7 @@ export default async function EmployeePortalPage({
 		context.adapter,
 		workspaceId,
 		userKey,
+		accessToken,
 		session?.user.id,
 	);
 
@@ -117,7 +120,7 @@ export default async function EmployeePortalPage({
 		);
 	}
 
-	const employeePortalPath = createSCIMDemoEmployeePortalPath(
+	const employeePortalPath = await createSCIMDemoEmployeePortalPath(
 		portal.workspaceId,
 		portal.userKey,
 	);
@@ -303,7 +306,7 @@ export default async function EmployeePortalPage({
 						buttonLabel={signInUnavailable ? "Try again" : undefined}
 						callbackURL={employeePortalPath}
 						email={portal.email}
-						loginHint={portal.email}
+						loginHint={createSCIMDemoOIDCLoginHint(portal.email, accessToken)}
 					/>
 				</CardContent>
 			</Card>

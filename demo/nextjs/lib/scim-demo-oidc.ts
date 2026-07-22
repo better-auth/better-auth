@@ -19,6 +19,7 @@ import {
 	createSCIMDemoUserExternalId,
 	isSCIMDemoWorkspaceId,
 	parseSCIMDemoUserEmail,
+	verifySCIMDemoEmployeeAccessToken,
 } from "./scim-demo-identity.ts";
 
 export const SCIM_DEMO_SSO_PROVIDER_ID = "scim-demo-sso";
@@ -33,6 +34,7 @@ export const SCIM_DEMO_OIDC_AUTHORIZATION_PAGE_PATH =
 const SCIM_DEMO_OIDC_CODE_PREFIX = "scim-demo:oidc:code:";
 const SCIM_DEMO_OIDC_CODE_TTL_MS = 2 * 60 * 1_000;
 const SCIM_DEMO_OIDC_TOKEN_TTL_SECONDS = 5 * 60;
+const SCIM_DEMO_OIDC_LOGIN_HINT_SEPARATOR = "~";
 const PKCE_VALUE_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/;
 
 export interface SCIMDemoOIDCAuthorizationRequest {
@@ -50,6 +52,8 @@ export interface SCIMDemoOIDCAuthorizationRequest {
 export interface SCIMDemoOIDCAuthorizationUser {
 	displayName: string;
 	email: string;
+	givenName: string;
+	initials: string;
 	userKey: SCIMDemoUserKey;
 	workspaceId: string;
 }
@@ -149,6 +153,40 @@ function getDirectoryUser(userKey: SCIMDemoUserKey) {
 	return user;
 }
 
+export function createSCIMDemoOIDCLoginHint(
+	email: string,
+	accessToken: string,
+) {
+	return `${email}${SCIM_DEMO_OIDC_LOGIN_HINT_SEPARATOR}${accessToken}`;
+}
+
+function parseSCIMDemoOIDCLoginHint(value: string) {
+	const separatorIndex = value.lastIndexOf(SCIM_DEMO_OIDC_LOGIN_HINT_SEPARATOR);
+	if (separatorIndex <= 0) return null;
+	const accessToken = value.slice(separatorIndex + 1);
+	const identity = parseSCIMDemoUserEmail(value.slice(0, separatorIndex));
+	if (!identity || !accessToken || accessToken.length > 128) return null;
+	return { accessToken, identity };
+}
+
+async function resolveSCIMDemoOIDCLoginHint(value: string) {
+	const loginHint = parseSCIMDemoOIDCLoginHint(value);
+	if (
+		!loginHint ||
+		!(await verifySCIMDemoEmployeeAccessToken(
+			loginHint.accessToken,
+			loginHint.identity.workspaceId,
+			loginHint.identity.userKey,
+		))
+	) {
+		throw createOIDCError(
+			"The demo employee sign-in link is invalid",
+			"access_denied",
+		);
+	}
+	return loginHint.identity;
+}
+
 function parseAuthorizationRequest(
 	searchParams: SCIMDemoOIDCSearchParams,
 ): SCIMDemoOIDCAuthorizationRequest {
@@ -195,7 +233,7 @@ function parseAuthorizationRequest(
 	if (codeChallengeMethod !== "S256") {
 		throw createOIDCError("PKCE S256 is required", "invalid_request");
 	}
-	if (!loginHint || !parseSCIMDemoUserEmail(loginHint)) {
+	if (!loginHint || !parseSCIMDemoOIDCLoginHint(loginHint)) {
 		throw createOIDCError(
 			"Choose a provisioned demo employee before continuing",
 			"login_required",
@@ -214,15 +252,12 @@ function parseAuthorizationRequest(
 	};
 }
 
-export function getSCIMDemoOIDCAuthorizationView(
+export async function getSCIMDemoOIDCAuthorizationView(
 	searchParams: SCIMDemoOIDCSearchParams,
-): SCIMDemoOIDCAuthorizationView {
+): Promise<SCIMDemoOIDCAuthorizationView> {
 	try {
 		const request = parseAuthorizationRequest(searchParams);
-		const identity = parseSCIMDemoUserEmail(request.loginHint);
-		if (!identity) {
-			return { status: "invalid", message: "Invalid demo employee identity" };
-		}
+		const identity = await resolveSCIMDemoOIDCLoginHint(request.loginHint);
 		const user = getDirectoryUser(identity.userKey);
 		return {
 			status: "ready",
@@ -230,6 +265,8 @@ export function getSCIMDemoOIDCAuthorizationView(
 			loginHintUser: {
 				displayName: user.displayName,
 				email: createSCIMDemoUserEmail(identity.workspaceId, identity.userKey),
+				givenName: user.givenName,
+				initials: user.initials,
 				userKey: identity.userKey,
 				workspaceId: identity.workspaceId,
 			},
@@ -441,10 +478,13 @@ export async function issueSCIMDemoOIDCAuthorizationCode(
 	) {
 		throw createOIDCError("Invalid demo employee selection", "access_denied");
 	}
-	const hintedIdentity = parseSCIMDemoUserEmail(request.loginHint);
-	if (!hintedIdentity || hintedIdentity.workspaceId !== selection.workspaceId) {
+	const hintedIdentity = await resolveSCIMDemoOIDCLoginHint(request.loginHint);
+	if (
+		hintedIdentity.workspaceId !== selection.workspaceId ||
+		hintedIdentity.userKey !== selection.userKey
+	) {
 		throw createOIDCError(
-			"The selected employee does not belong to this demo workspace",
+			"The selected employee does not match this sign-in request",
 			"access_denied",
 		);
 	}

@@ -25,11 +25,11 @@ function oauthError(error: unknown) {
 	);
 }
 
-export function GET(request: Request) {
+export async function GET(request: Request) {
 	if (!isSCIMDemoEnabled()) {
 		return Response.json({ error: "not_found" }, { status: 404 });
 	}
-	const view = getSCIMDemoOIDCAuthorizationView(
+	const view = await getSCIMDemoOIDCAuthorizationView(
 		new URL(request.url).searchParams,
 	);
 	if (view.status === "invalid") {
