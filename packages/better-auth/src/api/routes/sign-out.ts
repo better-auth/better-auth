@@ -5,6 +5,7 @@ export const signOut = createAuthEndpoint(
 	"/sign-out",
 	{
 		method: "POST",
+		disableBody: true,
 		operationId: "signOut",
 		requireHeaders: true,
 		metadata: {
