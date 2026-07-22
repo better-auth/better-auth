@@ -1341,6 +1341,9 @@ importers:
       expo-network:
         specifier: ~56.0.5
         version: 56.0.5(expo@54.0.33(@babel/core@7.29.0)(graphql@16.14.2)(react-native@0.86.0(@babel/core@7.29.0)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(typescript@5.9.3))(react@19.2.7)
+      expo-secure-store:
+        specifier: ~56.0.4
+        version: 56.0.4(expo@54.0.33(@babel/core@7.29.0)(graphql@16.14.2)(react-native@0.86.0(@babel/core@7.29.0)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(typescript@5.9.3))
       expo-web-browser:
         specifier: ~56.0.5
         version: 56.0.5(expo@54.0.33(@babel/core@7.29.0)(graphql@16.14.2)(react-native@0.86.0(@babel/core@7.29.0)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(typescript@5.9.3))(react-native@0.86.0(@babel/core@7.29.0)(@types/react@19.2.17)(react@19.2.7))
@@ -8907,6 +8910,11 @@ packages:
     peerDependencies:
       expo: '*'
       react: '*'
+
+  expo-secure-store@56.0.4:
+    resolution: {integrity: sha512-hjEi/gmpdFFJ9lYbdp3k3p/WchV7Gi0Qt8jt/m/0WJadqQrskafHAlDxbZkII1cN3Yd7zp9Lvkeq3UfGhSwirQ==}
+    peerDependencies:
+      expo: '*'
 
   expo-server@1.0.5:
     resolution: {integrity: sha512-IGR++flYH70rhLyeXF0Phle56/k4cee87WeQ4mamS+MkVAVP+dDlOHf2nN06Z9Y2KhU0Gp1k+y61KkghF7HdhA==}
@@ -21836,6 +21844,10 @@ snapshots:
     dependencies:
       expo: 54.0.33(@babel/core@7.29.0)(graphql@16.14.2)(react-native@0.86.0(@babel/core@7.29.0)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(typescript@5.9.3)
       react: 19.2.7
+
+  expo-secure-store@56.0.4(expo@54.0.33(@babel/core@7.29.0)(graphql@16.14.2)(react-native@0.86.0(@babel/core@7.29.0)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(typescript@5.9.3)):
+    dependencies:
+      expo: 54.0.33(@babel/core@7.29.0)(graphql@16.14.2)(react-native@0.86.0(@babel/core@7.29.0)(@types/react@19.2.17)(react@19.2.7))(react@19.2.7)(typescript@5.9.3)
 
   expo-server@1.0.5: {}
 
