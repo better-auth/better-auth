@@ -6,9 +6,27 @@ import { organization } from "better-auth/plugins";
 import { describe, expect, it } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
+import { samlRedirectUrlSchema } from "./routes/schemas";
 
 const TEST_CERT = `MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiUMA0Gcm9markup
 temporary cert for testing`;
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10329
+ */
+describe("SAML redirect URL schema", () => {
+	it.each([
+		["/dashboard", true],
+		["https://frontend.example.com/dashboard", true],
+		["//evil.example.com", false],
+		["/\\evil.example.com", false],
+		["/%2fevil.example.com", false],
+		["/%5cevil.example.com", false],
+		["dashboard", false],
+	])("validates %s", (url, expected) => {
+		expect(samlRedirectUrlSchema.safeParse(url).success).toBe(expected);
+	});
+});
 
 describe("SSO provider read endpoints", () => {
 	type TestUser = { email: string; password: string; name: string };
@@ -854,6 +872,9 @@ describe("SSO provider read endpoints", () => {
 			expect(updated.domainVerified).toBe(false);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
 		it("should perform partial update on SAML provider", async () => {
 			const { auth, getAuthHeaders, registerSAMLProvider } =
 				createTestAuth(false);
@@ -871,6 +892,7 @@ describe("SSO provider read endpoints", () => {
 					providerId: "my-saml-provider",
 					samlConfig: {
 						audience: "new-audience",
+						idpInitiatedCallbackUrl: "/dashboard",
 						wantAssertionsSigned: false,
 					},
 				},
@@ -878,6 +900,7 @@ describe("SSO provider read endpoints", () => {
 			});
 
 			expect(updated.samlConfig?.audience).toBe("new-audience");
+			expect(updated.samlConfig?.idpInitiatedCallbackUrl).toBe("/dashboard");
 			expect(updated.samlConfig?.wantAssertionsSigned).toBe(false);
 			expect(updated.samlConfig?.entryPoint).toBe(
 				"https://idp.example.com/sso",

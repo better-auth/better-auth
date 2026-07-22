@@ -1,6 +1,11 @@
 import { X509Certificate } from "node:crypto";
 import { getHostname } from "tldts";
 
+const unsafeSAMLRedirectPathPrefix = /^\/(?:\/|\\|%2f|%5c)/i;
+
+export const isSafeSAMLRedirectPath = (url: string): boolean =>
+	url.startsWith("/") && !unsafeSAMLRedirectPathPrefix.test(url);
+
 /**
  * Safely parses a value that might be a JSON string or already a parsed object.
  * This handles cases where ORMs like Drizzle might return already parsed objects
