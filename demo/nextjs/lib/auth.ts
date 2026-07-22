@@ -85,6 +85,20 @@ if (!database) {
 
 const scimDemoPlugin = createSCIMDemoPlugin();
 
+function isBetterAuthPlugin(plugin: unknown): plugin is BetterAuthPlugin {
+	return (
+		typeof plugin === "object" &&
+		plugin !== null &&
+		"id" in plugin &&
+		typeof plugin.id === "string"
+	);
+}
+
+const dashPlugin: unknown = dash();
+if (!isBetterAuthPlugin(dashPlugin)) {
+	throw new Error("The Dash integration did not return a Better Auth plugin");
+}
+
 const authOptions = {
 	appName: "Better Auth Demo",
 	database,
@@ -532,7 +546,7 @@ export const auth = betterAuth({
 			authOptions,
 			{ shouldMutateListDeviceSessionsEndpoint: true },
 		),
-		dash() as unknown as BetterAuthPlugin,
+		dashPlugin,
 		sentinel(),
 	],
 });

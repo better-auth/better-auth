@@ -94,7 +94,7 @@ export async function verifySCIMDemoEmployeeAccessToken(
 	return crypto.subtle.verify(
 		"HMAC",
 		await getSCIMDemoEmployeeAccessKey(),
-		base64url.decode(accessToken),
+		new Uint8Array(base64url.decode(accessToken)),
 		getSCIMDemoEmployeeAccessMessage(workspaceId, userKey),
 	);
 }
