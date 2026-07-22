@@ -7,7 +7,7 @@ import { isSafeSAMLRedirectPath } from "../utils";
 
 const absoluteUrlSchema = z.url();
 
-export const samlRedirectUrlSchema = z
+const samlRedirectUrlSchema = z
 	.string()
 	.refine(
 		(url) =>
