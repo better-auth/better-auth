@@ -1168,6 +1168,9 @@ export const verifyEmailChange = createAuthEndpoint(
 					},
 				],
 				responses: {
+					"200": {
+						description: "Email change verified successfully",
+					},
 					"302": {
 						description:
 							"Redirects to callbackURL, or back to it with ?error=INVALID_TOKEN",
@@ -1178,10 +1181,12 @@ export const verifyEmailChange = createAuthEndpoint(
 	},
 	async (ctx) => {
 		const { userId, token } = ctx.params;
-		const callbackURL = ctx.query?.callbackURL || "/";
-		const errorURL = `${callbackURL}${
-			callbackURL.includes("?") ? "&" : "?"
-		}error=INVALID_TOKEN`;
+		const callbackURL = ctx.query?.callbackURL;
+		const errorURL = callbackURL
+			? `${callbackURL}${
+					callbackURL.includes("?") ? "&" : "?"
+			  }error=INVALID_TOKEN`
+			: null;
 
 		/**
 		 * Registered unconditionally so the typed API surface stays stable (same
@@ -1192,11 +1197,13 @@ export const verifyEmailChange = createAuthEndpoint(
 			!ctx.context.options.user?.changeEmail?.enabled ||
 			ctx.context.options.user.changeEmail.strategy !== "verification-table"
 		) {
-			throw ctx.redirect(errorURL);
+			if (errorURL) throw ctx.redirect(errorURL);
+			throw APIError.fromStatus("BAD_REQUEST", { message: "INVALID_TOKEN" });
 		}
 
 		if (!userId || !token) {
-			throw ctx.redirect(errorURL);
+			if (errorURL) throw ctx.redirect(errorURL);
+			throw APIError.fromStatus("BAD_REQUEST", { message: "INVALID_TOKEN" });
 		}
 
 		/**
@@ -1211,14 +1218,16 @@ export const verifyEmailChange = createAuthEndpoint(
 			);
 
 		if (!verification || verification.expiresAt < new Date()) {
-			throw ctx.redirect(errorURL);
+			if (errorURL) throw ctx.redirect(errorURL);
+			throw APIError.fromStatus("BAD_REQUEST", { message: "INVALID_TOKEN" });
 		}
 
 		let pending: { oldEmail: string; newEmail: string };
 		try {
 			pending = JSON.parse(verification.value);
 		} catch {
-			throw ctx.redirect(errorURL);
+			if (errorURL) throw ctx.redirect(errorURL);
+			throw APIError.fromStatus("BAD_REQUEST", { message: "INVALID_TOKEN" });
 		}
 
 		/**
@@ -1236,7 +1245,8 @@ export const verifyEmailChange = createAuthEndpoint(
 			);
 		}
 		if (!user || currentPendingEmail !== pending.newEmail) {
-			throw ctx.redirect(errorURL);
+			if (errorURL) throw ctx.redirect(errorURL);
+			throw APIError.fromStatus("BAD_REQUEST", { message: "INVALID_TOKEN" });
 		}
 
 		/**
@@ -1249,7 +1259,8 @@ export const verifyEmailChange = createAuthEndpoint(
 			await ctx.context.internalAdapter.updateUser(userId, {
 				pendingEmail: null,
 			});
-			throw ctx.redirect(errorURL);
+			if (errorURL) throw ctx.redirect(errorURL);
+			throw APIError.fromStatus("BAD_REQUEST", { message: "INVALID_TOKEN" });
 		}
 
 		const updatedUser = await ctx.context.internalAdapter.updateUser(userId, {
@@ -1289,6 +1300,10 @@ export const verifyEmailChange = createAuthEndpoint(
 			});
 		}
 
-		throw ctx.redirect(callbackURL);
+		if (callbackURL) {
+			throw ctx.redirect(callbackURL);
+		}
+
+		return ctx.json({ status: true });
 	},
 );
