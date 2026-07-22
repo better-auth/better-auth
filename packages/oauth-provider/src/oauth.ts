@@ -23,9 +23,10 @@ import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { validateOAuthProviderExtensions } from "./extensions";
 import { introspectEndpoint } from "./introspect";
+import type { BackchannelLogoutPlan } from "./logout";
 import {
-	deliverBackchannelLogoutTokens,
-	revokeAndPlanBackchannelLogout,
+	applyBackchannelLogoutPlan,
+	prepareBackchannelLogoutPlan,
 	rpInitiatedLogoutEndpoint,
 } from "./logout";
 import {
@@ -93,6 +94,10 @@ export const oAuthState = defineRequestState<{
 	postLoginClearedForSession?: string;
 } | null>(() => null);
 export const getOAuthProviderState = oAuthState.get;
+const backchannelLogoutPlansByContext = new WeakMap<
+	GenericEndpointContext,
+	Map<string, BackchannelLogoutPlan>
+>();
 const signedQueryIssuedAtMsKey = "signedQueryIssuedAtMs";
 
 function getServerContextSignedQueryIssuedAt(value: unknown) {
@@ -523,12 +528,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			}
 
 			// The hook must register for every configuration path (including
-			// dynamic baseURL). Revocation runs inline because it mutates DB
-			// state we rely on. The HTTP fan-out goes through
-			// `runInBackgroundOrAwait`: with a background handler configured
-			// (Vercel `waitUntil`, CF `ctx.waitUntil`) it runs after the
-			// response; without one it is awaited inline so delivery is not lost
-			// on request teardown. Awaiting here keeps both paths reliable.
+			// dynamic baseURL). Core runs delete.after only after the session row is
+			// consumed and queues it until the surrounding transaction commits.
 			return {
 				options: {
 					databaseHooks: {
@@ -536,7 +537,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							delete: {
 								async before(session, hookCtx) {
 									if (!hookCtx) return;
-									const plan = await revokeAndPlanBackchannelLogout(
+									const plan = await prepareBackchannelLogoutPlan(
 										hookCtx,
 										opts,
 										{
@@ -545,14 +546,36 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 										},
 									);
 									if (!plan) return;
-									// TODO: re-evaluate this await. It makes delivery reliable on
-									// every runtime, but without an `advanced.backgroundTasks.handler`
-									// a hung RP can add up to the per-RP timeout to sign-out latency.
-									// Alternative to weigh: keep delivery non-blocking and instead
-									// hard-require a background handler when back-channel logout is on.
-									await hookCtx.context.runInBackgroundOrAwait(
-										deliverBackchannelLogoutTokens(hookCtx, plan),
+									const logoutPlanBySessionId =
+										backchannelLogoutPlansByContext.get(hookCtx) ??
+										new Map<string, BackchannelLogoutPlan>();
+									logoutPlanBySessionId.set(session.id, plan);
+									backchannelLogoutPlansByContext.set(
+										hookCtx,
+										logoutPlanBySessionId,
 									);
+								},
+								async after(session, hookCtx) {
+									if (!hookCtx) return;
+									const logoutPlanBySessionId =
+										backchannelLogoutPlansByContext.get(hookCtx);
+									if (!logoutPlanBySessionId) return;
+									const plan = logoutPlanBySessionId.get(session.id);
+									logoutPlanBySessionId.delete(session.id);
+									if (logoutPlanBySessionId.size === 0) {
+										backchannelLogoutPlansByContext.delete(hookCtx);
+									}
+									if (!plan) return;
+									const logoutTask = applyBackchannelLogoutPlan(
+										hookCtx,
+										plan,
+									).catch((error) => {
+										hookCtx.context.logger.error(
+											"Back-channel logout failed after session deletion",
+											error,
+										);
+									});
+									await hookCtx.context.runInBackgroundOrAwait(logoutTask);
 								},
 							},
 						},
