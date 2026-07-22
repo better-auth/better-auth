@@ -1,5 +1,18 @@
 # auth
 
+## 1.7.0-rc.2
+
+### Minor Changes
+
+- [#10402](https://github.com/better-auth/better-auth/pull/10402) [`763a267`](https://github.com/better-auth/better-auth/commit/763a2671c5372d88c291881977c8a1c2e29034b1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Plugin database schemas can now define named or generated table-level indexes across multiple fields. SQL migrations and generated Drizzle or Prisma schemas resolve configured table and column names consistently, while the MongoDB adapter creates the same indexes before the first index-enforcing write.
+
+### Patch Changes
+
+- Updated dependencies [[`763a267`](https://github.com/better-auth/better-auth/commit/763a2671c5372d88c291881977c8a1c2e29034b1), [`cf8eaac`](https://github.com/better-auth/better-auth/commit/cf8eaac26e11bcdb7309d537f1730b2559963861), [`dbd302e`](https://github.com/better-auth/better-auth/commit/dbd302e422c66620cde391f6a80ab90ee34182f9), [`8784c1c`](https://github.com/better-auth/better-auth/commit/8784c1c1f4301acf96d980e5bf81ff56435e2545), [`bb6c102`](https://github.com/better-auth/better-auth/commit/bb6c1021e8f6200e60ff852cbd95fb6841a0ec4b), [`ed61b47`](https://github.com/better-auth/better-auth/commit/ed61b4798e0ccedadc3b0c0e0a2d08b5d4b7ed5a), [`0de88f5`](https://github.com/better-auth/better-auth/commit/0de88f5e61d96f460e02b8a526e58acb16455d15), [`973fdde`](https://github.com/better-auth/better-auth/commit/973fdde79d9746b15d5ac0427049e8a008a7705c)]:
+  - @better-auth/core@1.7.0-rc.2
+  - better-auth@1.7.0-rc.2
+  - @better-auth/telemetry@1.7.0-rc.2
+
 ## 1.7.0-rc.1
 
 ### Patch Changes
