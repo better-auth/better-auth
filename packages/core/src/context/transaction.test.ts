@@ -136,6 +136,47 @@ describe("runWithTransaction", () => {
 		);
 	});
 
+	it("reports unhandled after-commit failures and continues later committed hooks", async () => {
+		const { adapter } = createTransactionHarness();
+		const onAfterCommitHookError = vi.fn(() => {
+			throw new Error("custom logger failed");
+		});
+		const events: string[] = [];
+
+		await expect(
+			runWithTransaction(
+				adapter,
+				async () => {
+					await queueAfterTransactionHook(async () => {
+						throw new Error("account after-hook failed");
+					});
+					await queueAfterTransactionHook(async () => {
+						events.push("later hook");
+					});
+					return "committed";
+				},
+				{ onAfterCommitHookError },
+			),
+		).resolves.toBe("committed");
+		expect(onAfterCommitHookError).toHaveBeenCalledWith(
+			expect.objectContaining({ message: "account after-hook failed" }),
+		);
+		expect(events).toEqual(["later hook"]);
+	});
+
+	it("keeps legacy after-commit failures rejecting when no handler is provided", async () => {
+		const { adapter } = createTransactionHarness();
+
+		await expect(
+			runWithTransaction(adapter, async () => {
+				await queueAfterTransactionHook(async () => {
+					throw new Error("legacy hook failure");
+				});
+				return "committed";
+			}),
+		).rejects.toThrow("legacy hook failure");
+	});
+
 	it("does not retry an immediately executed hook when it fails", async () => {
 		const hook = vi.fn(async () => {
 			throw new Error("hook failed");

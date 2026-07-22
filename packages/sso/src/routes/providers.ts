@@ -50,6 +50,7 @@ interface SSOProviderRecord {
 }
 
 type ProviderIdentitySnapshot = {
+	id?: string | undefined;
 	providerId: string;
 	issuer: string;
 	userId?: string | undefined;
@@ -206,14 +207,14 @@ export async function lockSSOProviderForAccountLink(
 	ctx: { context: AuthContext },
 	provider: ProviderIdentitySnapshot,
 ) {
+	if (typeof provider.id !== "string") {
+		return;
+	}
 	const lockedProvider = await lockSSOProviderRow(
 		ctx.context.adapter,
 		provider.providerId,
 	);
 	if (!lockedProvider) {
-		if (provider.userId === "default") {
-			return;
-		}
 		throw new APIError("CONFLICT", {
 			code: "SSO_PROVIDER_CHANGED",
 			message: "SSO provider changed while account linking was in progress",

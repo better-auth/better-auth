@@ -52,6 +52,10 @@ import type {
 	SSOOptions,
 	SSOProvider,
 	SSOProviderSchema,
+	SSOProviderUserProfile,
+	SSOUserResolution,
+	SSOUserResolutionContext,
+	SSOUserResolutionInput,
 } from "./types";
 import { PACKAGE_VERSION } from "./version";
 
@@ -61,6 +65,10 @@ export type {
 	SAMLIdentityProviderMetadata,
 	SSOOptions,
 	SSOProvider,
+	SSOProviderUserProfile,
+	SSOUserResolution,
+	SSOUserResolutionContext,
+	SSOUserResolutionInput,
 };
 
 declare module "@better-auth/core" {

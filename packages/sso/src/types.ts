@@ -1,4 +1,9 @@
-import type { Awaitable, OAuth2Tokens, User } from "better-auth";
+import type {
+	Awaitable,
+	DBTransactionAdapter,
+	OAuth2Tokens,
+	User,
+} from "better-auth";
 import type {
 	DBFieldAttribute,
 	FieldAttributeToObject,
@@ -276,7 +281,56 @@ export type SSOProviderSchema<O extends SSOOptions> = {
 	};
 };
 
+/** Decision returned by an SSO user resolver. */
+export type SSOUserResolution =
+	| { action: "continue" }
+	| {
+			action: "link";
+			userId: string;
+			profile: "preserve" | "update";
+	  }
+	| { action: "reject"; code: string; message?: string | undefined };
+
+/** Normalized provider attributes available to an SSO user resolver. */
+export type SSOProviderUserProfile = {
+	email: string;
+	emailVerified: boolean;
+	name: string;
+	image?: string | null | undefined;
+} & Record<string, unknown>;
+
+/** OIDC identity and profile data available to an application's SSO resolver. */
+export interface SSOUserResolutionInput {
+	protocol: "oidc";
+	providerId: string;
+	accountKey: {
+		issuer: string;
+		providerAccountId: string;
+	};
+	providerUser: SSOProviderUserProfile;
+	providerClaims: Record<string, unknown>;
+}
+
+/** Transaction-bound capabilities available while resolving an SSO user. */
+export interface SSOUserResolutionContext {
+	database: DBTransactionAdapter;
+}
+
 export interface SSOOptions {
+	/**
+	 * Resolve a verified OIDC issuer and subject to a Better Auth user.
+	 *
+	 * `accountKey` is derived from the validated ID Token. Profile fields and raw
+	 * claims are protocol-accepted provider data and may require application-level
+	 * validation. The callback runs on every OIDC sign-in inside the same native
+	 * database transaction as account finalization and session creation.
+	 */
+	resolveUser?:
+		| ((
+				input: SSOUserResolutionInput,
+				context: SSOUserResolutionContext,
+		  ) => Awaitable<SSOUserResolution>)
+		| undefined;
 	/**
 	 * custom function to provision a user when they sign in with an SSO provider.
 	 */

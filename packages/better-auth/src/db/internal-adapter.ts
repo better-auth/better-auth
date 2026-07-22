@@ -441,6 +441,9 @@ export const createInternalAdapter = (
 			dontRememberMe?: boolean | undefined,
 			override?: (Partial<Session> & Record<string, any>) | undefined,
 			overrideAll?: boolean | undefined,
+			storageOptions?:
+				| { deferSecondaryStorageWrites?: boolean | undefined }
+				| undefined,
 		) => {
 			const headers: Headers | undefined = await (async () => {
 				const ctx = await getCurrentAuthContext().catch(() => null);
@@ -484,78 +487,84 @@ export const createInternalAdapter = (
 				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
 			} satisfies Partial<Session>;
+			const mirrorSessionToSecondaryStorage = async (sessionData: Session) => {
+				if (!secondaryStorage) return sessionData;
+				const currentList = await secondaryStorage.get(
+					`active-sessions-${userId}`,
+				);
+
+				let list: { token: string; expiresAt: number }[] = [];
+				const now = Date.now();
+				if (currentList) {
+					list = safeJSONParse(currentList) || [];
+					list = list.filter(
+						(session) =>
+							session.expiresAt > now && session.token !== data.token,
+					);
+				}
+
+				const sorted = [
+					...list,
+					{ token: data.token, expiresAt: data.expiresAt.getTime() },
+				].sort((a, b) => a.expiresAt - b.expiresAt);
+				const furthestSessionExp =
+					sorted.at(-1)?.expiresAt ?? data.expiresAt.getTime();
+				const furthestSessionTTL = getTTLSeconds(furthestSessionExp, now);
+				if (furthestSessionTTL > 0) {
+					await secondaryStorage.set(
+						`active-sessions-${userId}`,
+						JSON.stringify(sorted),
+						furthestSessionTTL,
+					);
+				}
+
+				const user = await (await getCurrentAdapter(adapter)).findOne<User>({
+					model: "user",
+					where: [{ field: "id", value: userId }],
+				});
+				const sessionTTL = getTTLSeconds(data.expiresAt, now);
+				if (sessionTTL > 0) {
+					await secondaryStorage.set(
+						data.token,
+						JSON.stringify({ session: sessionData, user }),
+						sessionTTL,
+					);
+				}
+				return sessionData;
+			};
 			const res = await createWithHooks(
 				data,
 				"session",
 				secondaryStorage
 					? {
 							fn: async (sessionData) => {
-								/**
-								 * store the session token for the user
-								 * so we can retrieve it later for listing sessions
-								 */
-								const currentList = await secondaryStorage.get(
-									`active-sessions-${userId}`,
-								);
-
-								let list: { token: string; expiresAt: number }[] = [];
-								const now = Date.now();
-
-								if (currentList) {
-									list = safeJSONParse(currentList) || [];
-									list = list.filter(
-										(session) =>
-											session.expiresAt > now && session.token !== data.token,
-									);
-								}
-
-								const sorted = [
-									...list,
-									{ token: data.token, expiresAt: data.expiresAt.getTime() },
-								].sort((a, b) => a.expiresAt - b.expiresAt);
-								const furthestSessionExp =
-									sorted.at(-1)?.expiresAt ?? data.expiresAt.getTime();
-								const furthestSessionTTL = getTTLSeconds(
-									furthestSessionExp,
-									now,
-								);
-								if (furthestSessionTTL > 0) {
-									await secondaryStorage.set(
-										`active-sessions-${userId}`,
-										JSON.stringify(sorted),
-										furthestSessionTTL,
-									);
-								}
-
-								const user = await (
-									await getCurrentAdapter(adapter)
-								).findOne<User>({
-									model: "user",
-									where: [
-										{
-											field: "id",
-											value: userId,
-										},
-									],
-								});
-								const sessionTTL = getTTLSeconds(data.expiresAt, now);
-								if (sessionTTL > 0) {
-									await secondaryStorage.set(
-										data.token,
-										JSON.stringify({
-											session: sessionData,
-											user,
-										}),
-										sessionTTL,
-									);
-								}
-
-								return sessionData;
+								return storageOptions?.deferSecondaryStorageWrites
+									? sessionData
+									: mirrorSessionToSecondaryStorage(sessionData as Session);
 							},
 							executeMainFn: storeInDb,
 						}
 					: undefined,
 			);
+			if (
+				secondaryStorage &&
+				storageOptions?.deferSecondaryStorageWrites &&
+				res
+			) {
+				await queueAfterTransactionHook(
+					async () => {
+						await mirrorSessionToSecondaryStorage(res as Session);
+					},
+					{
+						onError(error) {
+							logger.error(
+								"Failed to mirror committed session to secondary storage",
+								error,
+							);
+						},
+					},
+				);
+			}
 			return res as Session;
 		},
 		findSession: async (
