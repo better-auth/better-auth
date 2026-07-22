@@ -13,6 +13,11 @@ import {
 } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
 import { isSCIMDemoEnabled } from "@/lib/scim-demo";
+import type {
+	SCIMDemoAccountLinkStatus,
+	SCIMDemoSessionStatus,
+	SCIMDemoUserLifecycle,
+} from "@/lib/scim-demo-contract";
 import { createSCIMDemoEmployeePortalPath } from "@/lib/scim-demo-identity";
 import {
 	getSCIMDemoEmployeePortalState,
@@ -30,6 +35,21 @@ interface EmployeePortalPageProps {
 		Readonly<Record<string, string | string[] | undefined>>
 	>;
 }
+
+type SCIMDemoEmployeePortalStatus =
+	| SCIMDemoAccountLinkStatus
+	| SCIMDemoSessionStatus
+	| SCIMDemoUserLifecycle;
+
+const SCIMDemoEmployeePortalStatusLabels = {
+	active: "Active",
+	deleted: "Deleted",
+	inactive: "Inactive",
+	linked: "Linked",
+	none: "No active session",
+	"not-linked": "Not linked",
+	"not-provisioned": "Not provisioned",
+} as const satisfies Record<SCIMDemoEmployeePortalStatus, string>;
 
 function readSearchParameter(
 	searchParams: Readonly<Record<string, string | string[] | undefined>>,
@@ -196,9 +216,20 @@ export default async function EmployeePortalPage({
 									["Better Auth user ID", session.user.id],
 									["Provisioned role", portal.role ?? "No provisioned role"],
 									["Profile source", "Directory (SCIM)"],
-									["Directory status", "Active"],
-									["SSO account", "Linked"],
-									["Session", "Active"],
+									[
+										"Directory status",
+										SCIMDemoEmployeePortalStatusLabels[portal.directoryStatus],
+									],
+									[
+										"SSO account",
+										SCIMDemoEmployeePortalStatusLabels[
+											portal.accountLinkStatus
+										],
+									],
+									[
+										"Session",
+										SCIMDemoEmployeePortalStatusLabels[portal.sessionStatus],
+									],
 								].map(([label, value]) => (
 									<div
 										key={label}

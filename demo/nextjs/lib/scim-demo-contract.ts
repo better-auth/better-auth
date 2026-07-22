@@ -1,10 +1,11 @@
 import type { SCIMDemoGroupKey, SCIMDemoUserKey } from "./scim-demo-catalog.ts";
 import {
+	isSCIMDemoUserKey,
 	SCIM_DEMO_GROUP_KEYS,
-	SCIM_DEMO_USER_KEYS,
 } from "./scim-demo-catalog.ts";
 
 export type { SCIMDemoGroupKey, SCIMDemoUserKey };
+export { isSCIMDemoUserKey };
 
 export type SCIMDemoView = "users" | "groups" | "role-mappings" | "activity";
 
@@ -132,10 +133,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isNullableString(value: unknown): value is string | null {
 	return value === null || typeof value === "string";
-}
-
-export function isSCIMDemoUserKey(value: unknown): value is SCIMDemoUserKey {
-	return SCIM_DEMO_USER_KEYS.some((userKey) => userKey === value);
 }
 
 export function isSCIMDemoGroupKey(value: unknown): value is SCIMDemoGroupKey {
