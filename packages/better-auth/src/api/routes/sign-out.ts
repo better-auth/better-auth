@@ -151,10 +151,14 @@ export const signOut = createAuthEndpoint(
 			}
 		})();
 		if (providerLogoutResult) {
+			const shouldRedirect = !ctx.body?.disableRedirect;
+			if (shouldRedirect) {
+				ctx.setHeader("Location", providerLogoutResult);
+			}
 			return ctx.json(
 				signOutResponse({
 					url: providerLogoutResult,
-					redirect: !ctx.body?.disableRedirect,
+					redirect: shouldRedirect,
 				}),
 			);
 		}

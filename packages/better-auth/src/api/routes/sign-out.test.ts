@@ -101,10 +101,14 @@ describe("sign-out", async () => {
 		const { client, headers } = await setupGenericOAuthSignOut({
 			endSessionEndpoint: "https://idp.example.com/logout",
 		});
+		let locationHeader: string | null = null;
 
 		const res = await client.signOut({
 			fetchOptions: {
 				headers,
+				onSuccess(context) {
+					locationHeader = context.response.headers.get("location");
+				},
 			},
 		});
 
@@ -116,6 +120,7 @@ describe("sign-out", async () => {
 		expect(new URL(res.data!.url!).searchParams.get("id_token_hint")).toBe(
 			"id-token",
 		);
+		expect(locationHeader).toBe(res.data!.url);
 	});
 
 	it("should keep local-only sign out when provider has no logout endpoint", async () => {
@@ -201,11 +206,15 @@ describe("sign-out", async () => {
 		const { client, headers } = await setupGenericOAuthSignOut({
 			endSessionEndpoint: "https://idp.example.com/logout",
 		});
+		let locationHeader: string | null = null;
 
 		const res = await client.signOut({
 			disableRedirect: true,
 			fetchOptions: {
 				headers,
+				onSuccess(context) {
+					locationHeader = context.response.headers.get("location");
+				},
 			},
 		});
 
@@ -214,6 +223,7 @@ describe("sign-out", async () => {
 			redirect: false,
 			url: expect.stringContaining("https://idp.example.com/logout"),
 		});
+		expect(locationHeader).toBeNull();
 	});
 
 	it("should use the most recently updated provider when multiple linked accounts exist", async () => {
