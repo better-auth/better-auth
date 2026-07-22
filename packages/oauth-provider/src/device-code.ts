@@ -77,6 +77,11 @@ function tokenError(
 	});
 }
 
+function parseScopes(scope: string | null | undefined): string[] {
+	const normalized = scope?.trim();
+	return normalized ? normalized.split(/\s+/) : [];
+}
+
 function parseStoredResource(
 	resource: string | null | undefined,
 ): string | string[] | undefined {
@@ -161,7 +166,7 @@ async function handleDeviceCodeGrant(
 	// registered for the device-code grant is rejected here as unauthorized_client.
 	// Scope validation is intentionally deferred until ownership is confirmed so
 	// no authentication method can probe another client's requested scopes.
-	const scopes = record.scope ? record.scope.split(" ") : [];
+	const scopes = parseScopes(record.scope);
 	const { client, confirmation } = await provider.authenticateClient({
 		requireCredentials: false,
 	});
@@ -264,7 +269,7 @@ async function handleDeviceCodeGrant(
 
 		return provider.issueTokens({
 			client,
-			scopes: claimed.scope ? claimed.scope.split(" ") : [],
+			scopes,
 			user,
 			resources,
 			// Forward a sender-constraint a confidential client-auth strategy proved.
@@ -368,7 +373,10 @@ export function deviceCodeGrant(
 						// first-party flow. Registered OAuth clients are authenticated and
 						// authorized before their request is shown to the user.
 						if (!oauthClient) return;
-						const scopes = body.scope?.split(" ").filter(Boolean) ?? [];
+						const scopes = parseScopes(body.scope);
+						if (body.scope !== undefined) {
+							body.scope = scopes.join(" ");
+						}
 						const api = getOAuthProviderApi(
 							endpointCtx,
 							provider.options,

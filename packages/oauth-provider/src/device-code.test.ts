@@ -152,6 +152,30 @@ describe("oauth-provider device-code grant", async () => {
 		expect(idToken.aud).toBe(clientId);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10135
+	 */
+	it("normalizes whitespace in approved scopes", async () => {
+		const clientId = await createDeviceClient();
+		const deviceCode = await approvedDeviceCode(
+			clientId,
+			"  openid\tprofile  email  ",
+			resource,
+		);
+
+		const res = await pollToken({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: deviceCode,
+			client_id: clientId,
+			resource,
+		});
+
+		expect(res.error).toBeNull();
+		expect(res.data?.scope).toBe("openid profile email");
+		const accessToken = decodeJwt(res.data!.access_token as string);
+		expect(accessToken.scope).toBe("openid profile email");
+	});
+
 	it("validates registered client scopes before creating a device code", async () => {
 		const clientId = await createDeviceClient();
 
