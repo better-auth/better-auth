@@ -187,6 +187,56 @@ describe("stripe customer", () => {
 		});
 	});
 
+	test("should remove the user ID from the Stripe customer when the user is deleted", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+				user: { deleteUser: { enabled: true } },
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		const email = "deleted-user@example.com";
+		const userRes = await client.signUp.email(
+			{ email, password: "password", name: "Deleted User" },
+			{ throw: true },
+		);
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email, password: "password" },
+			{ throw: true, onSuccess: sessionSetter(headers) },
+		);
+
+		vi.clearAllMocks();
+		stripeMock.customers.retrieve.mockResolvedValueOnce({
+			id: "cus_mock123",
+			deleted: false,
+			metadata: {
+				customerType: "user",
+				userId: userRes.user.id,
+			},
+		});
+
+		await client.deleteUser({
+			fetchOptions: { headers },
+			password: "password",
+		});
+
+		expect(stripeMock.customers.update).toHaveBeenCalledWith("cus_mock123", {
+			metadata: { userId: "" },
+		});
+	});
+
 	describe("getCustomerCreateParams", () => {
 		test("should call getCustomerCreateParams and merge with default params", async ({
 			stripeMock,
@@ -429,6 +479,68 @@ describe("stripe customer", () => {
 	});
 
 	describe("Duplicate customer prevention on signup", () => {
+		test("should reuse a customer when its original user was deleted", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			const email = "reclaimed-customer@example.com";
+			const customerId = "cus_reclaimed_123";
+
+			stripeMock.customers.search.mockResolvedValueOnce({
+				data: [
+					{
+						id: customerId,
+						email,
+						metadata: {
+							customerType: "user",
+							userId: "deleted-user-id",
+						},
+					},
+				],
+			});
+			stripeMock.customers.update.mockImplementationOnce(
+				async (id, params) => ({ id, email, metadata: params.metadata }),
+			);
+
+			const { client, auth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe({ ...stripeOptions, createCustomerOnSignUp: true })],
+					databaseHooks: autoVerifyUserHooks,
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			vi.clearAllMocks();
+			const userRes = await client.signUp.email(
+				{ email, password: "password", name: "Replacement User" },
+				{ throw: true },
+			);
+
+			expect(stripeMock.customers.update).toHaveBeenCalledWith(customerId, {
+				metadata: {
+					customerType: "user",
+					userId: userRes.user.id,
+				},
+			});
+			expect(stripeMock.customers.create).not.toHaveBeenCalled();
+
+			const user = await ctx.adapter.findOne<
+				User & { stripeCustomerId?: string }
+			>({
+				model: "user",
+				where: [{ field: "id", value: userRes.user.id }],
+			});
+			expect(user?.stripeCustomerId).toBe(customerId);
+		});
+
 		test("should NOT create duplicate customer when email already exists in Stripe", async ({
 			stripeMock,
 			memory,
