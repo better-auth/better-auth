@@ -1,5 +1,11 @@
 # @better-auth/oauth-provider
 
+## 1.7.0-rc.2
+
+### Patch Changes
+
+- [#10472](https://github.com/better-auth/better-auth/pull/10472) [`69acb7a`](https://github.com/better-auth/better-auth/commit/69acb7a3db3cd148a9cd1db5063dbdc69909165a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Revoke session-bound OAuth tokens and deliver back-channel logout only after the related session deletion succeeds.
+
 ## 1.7.0-rc.1
 
 ## 1.7.0-rc.0

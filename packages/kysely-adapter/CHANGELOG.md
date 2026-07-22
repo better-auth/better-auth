@@ -1,5 +1,11 @@
 # @better-auth/kysely-adapter
 
+## 1.7.0-rc.2
+
+### Patch Changes
+
+- [#10377](https://github.com/better-auth/better-auth/pull/10377) [`e4818b5`](https://github.com/better-auth/better-auth/commit/e4818b545984dce99e3c798ead5691c5bf775a70) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Fix SQLite dialect bundles with Kysely 0.29 by using locally mirrored migration-table constants.
+
 ## 1.7.0-rc.1
 
 ## 1.7.0-rc.0
