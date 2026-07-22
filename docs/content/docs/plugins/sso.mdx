@@ -852,7 +852,7 @@ const auth = betterAuth({
 });
 ```
 
-The mapper runs before Better Auth writes the session cookie. It assigns roles to new provider-linked members and synchronizes existing provider-linked members on every SSO login, so manual role changes may be overwritten. Set `syncRoleOnLogin: false` to map only new memberships. Domain-based organization assignment does not call `mapClaimsToRoles` because it has no SSO claims.
+The mapper runs before Better Auth writes the session cookie. It assigns roles to new provider-linked members and synchronizes existing provider-linked members on every SSO login, so manual role changes may be overwritten. Set `syncRoleOnLogin: false` to map only new memberships. Synchronization requires `mapClaimsToRoles` or `getRole`; `defaultRole` remains a default for new memberships even when `syncRoleOnLogin` is `true`. Domain-based organization assignment does not call `mapClaimsToRoles` because it has no SSO claims.
 
 Automatic SSO synchronization never removes an organization's creator role. Better Auth skips the update and logs a warning with the organization, member, and provider IDs; remove the creator role through the organization member-role API when that change is intentional.
 
@@ -1757,7 +1757,7 @@ export const ssoOptionsType = {
 				type: "function",
 			},
 			syncRoleOnLogin: {
-				description: "Synchronize existing provider-linked member roles during SSO login without removing creator roles. Defaults to true when mapClaimsToRoles is configured and false otherwise.",
+				description: "Synchronize existing provider-linked member roles through mapClaimsToRoles or getRole during SSO login without removing creator roles. Has no effect without a role resolver. Defaults to true when mapClaimsToRoles is configured and false otherwise.",
 				type: "boolean",
 			},
 		},

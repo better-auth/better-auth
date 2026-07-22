@@ -226,9 +226,12 @@ function getLegacyRoleUserInfo(profile: NormalizedSSOProfile) {
 function shouldSyncRoleOnLogin(
 	provisioningOptions?: OrganizationProvisioningOptions,
 ) {
+	if (!provisioningOptions?.mapClaimsToRoles && !provisioningOptions?.getRole) {
+		return false;
+	}
 	return (
-		provisioningOptions?.syncRoleOnLogin ??
-		Boolean(provisioningOptions?.mapClaimsToRoles)
+		provisioningOptions.syncRoleOnLogin ??
+		Boolean(provisioningOptions.mapClaimsToRoles)
 	);
 }
 

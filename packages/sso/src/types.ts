@@ -62,7 +62,15 @@ export type OrganizationRoleResolverData = {
 
 export interface OrganizationProvisioningOptions {
 	disabled?: boolean;
+	/**
+	 * The role assigned to new organization members when no role resolver is configured.
+	 * This value is not used to synchronize existing memberships.
+	 */
 	defaultRole?: OrganizationProvisioningRole;
+	/**
+	 * Resolve the role for a new organization member from provider data.
+	 * Set `syncRoleOnLogin` to `true` to use this resolver for existing members.
+	 */
 	getRole?: (
 		data: Omit<OrganizationRoleResolverData, "claims"> & {
 			claims?: Record<string, unknown>;
@@ -80,7 +88,8 @@ export interface OrganizationProvisioningOptions {
 		data: OrganizationRoleResolverData,
 	) => Awaitable<OrganizationProvisioningRole>;
 	/**
-	 * Update an existing organization member's role on every SSO login.
+	 * Update an existing organization member's role from `mapClaimsToRoles` or
+	 * `getRole` on every SSO login. Has no effect without one of these resolvers.
 	 * Automatic synchronization never removes the organization creator role.
 	 *
 	 * Defaults to `true` when `mapClaimsToRoles` is configured, otherwise `false`.

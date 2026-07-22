@@ -667,6 +667,49 @@ describe("organization assignment", () => {
 		expect(members[0]?.role).toBe("member");
 	});
 
+	it("should not use defaultRole to synchronize an existing provider organization member", async () => {
+		const { data, createContext } = createTestContext();
+
+		const org = createOrg();
+		const provider = {
+			...createProvider({ organizationId: org.id }),
+			organizationId: org.id,
+		};
+		const user = createUser();
+		data.organization.push(org);
+		data.user.push(user);
+		data.member.push({
+			id: "member-1",
+			organizationId: org.id,
+			userId: user.id,
+			role: "admin",
+			createdAt: new Date(),
+		});
+
+		const ctx = (await createContext()) as GenericEndpointContext;
+		await assignOrganizationFromProvider(ctx, {
+			user,
+			provider,
+			profile: {
+				providerType: "oidc",
+				providerId: provider.providerId,
+				providerAccountId: "idp-user-1",
+				email: user.email,
+				emailVerified: true,
+				rawAttributes: { email: user.email },
+				claims: { groups: ["engineering-admins"] },
+			},
+			provisioningOptions: {
+				defaultRole: "member",
+				syncRoleOnLogin: true,
+			},
+		});
+
+		const members = data.member.filter((m) => m.userId === user.id);
+		expect(members).toHaveLength(1);
+		expect(members[0]?.role).toBe("admin");
+	});
+
 	it("should update an existing provider organization member role by default with mapClaimsToRoles", async () => {
 		const { data, createContext } = createTestContext();
 
