@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/auth";
 import { getSCIMDemoBaseURL, isSCIMDemoEnabled } from "@/lib/scim-demo";
 import {
+	assertSCIMDemoOperatorAccess,
 	getSCIMDemoError,
 	getSCIMDemoWorkspace,
 } from "@/lib/scim-demo-service";
@@ -19,21 +20,30 @@ export default async function Page() {
 	let initialWorkspace = null;
 	let initialError: string | null = null;
 	if (demoEnabled) {
+		const context = await auth.$context;
 		try {
-			const context = await auth.$context;
-			initialWorkspace = await getSCIMDemoWorkspace({
-				baseURL: getSCIMDemoBaseURL(),
-				database: context.adapter,
-				operatorId: session.user.id,
-			});
+			await assertSCIMDemoOperatorAccess(context.adapter, session.user.id);
 		} catch (error) {
-			initialError = getSCIMDemoError(error).message;
+			const failure = getSCIMDemoError(error);
+			if (failure.status === 403) redirect("/dashboard");
+			initialError = failure.message;
+		}
+		if (!initialError) {
+			try {
+				initialWorkspace = await getSCIMDemoWorkspace({
+					baseURL: getSCIMDemoBaseURL(),
+					database: context.adapter,
+					operatorId: session.user.id,
+				});
+			} catch (error) {
+				initialError = getSCIMDemoError(error).message;
+			}
 		}
 	}
 
 	return (
 		<main className="relative left-1/2 w-[min(1440px,calc(100vw-2rem))] -translate-x-1/2 space-y-5">
-			<Button variant="ghost" size="sm" asChild>
+			<Button variant="ghost" size="sm" className="min-h-11" asChild>
 				<Link href="/dashboard">
 					<ArrowLeft className="size-4" aria-hidden="true" />
 					Back to dashboard

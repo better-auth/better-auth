@@ -144,6 +144,7 @@ jobs:
           BETTER_AUTH_URL: http://127.0.0.1:3000
           DEMO_SQLITE_PATH: ${{ runner.temp }}/better-auth-scim-demo-build.sqlite
           SCIM_DEMO_ENABLED: "true"
+          SCIM_DEMO_OIDC_CLIENT_SECRET: better-auth-scim-demo-ci-oidc-client-secret
           SCIM_DEMO_TOKEN: better-auth-scim-demo-ci-token
         run: pnpm build
 

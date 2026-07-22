@@ -15,6 +15,10 @@ export const SCIM_DEMO_GROUP_KEYS = [
 export type SCIMDemoUserKey = (typeof SCIM_DEMO_USER_KEYS)[number];
 export type SCIMDemoGroupKey = (typeof SCIM_DEMO_GROUP_KEYS)[number];
 
+export function isSCIMDemoUserKey(value: unknown): value is SCIMDemoUserKey {
+	return SCIM_DEMO_USER_KEYS.some((userKey) => userKey === value);
+}
+
 export const SCIM_DEMO_DIRECTORY_USERS = [
 	{
 		key: "maya-chen",
