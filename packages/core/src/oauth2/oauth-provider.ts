@@ -228,6 +228,10 @@ export interface OAuthProvider<
 		  ) => Promise<OAuth2Tokens>)
 		| undefined;
 	revokeToken?: ((token: string) => Promise<void>) | undefined;
+	/**
+	 * Builds an OpenID Connect RP-Initiated Logout URL for this provider.
+	 * Returns `null` when provider logout is unavailable or disabled.
+	 */
 	createEndSessionURL?:
 		| ((data: {
 				idToken?: string | null | undefined;

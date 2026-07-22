@@ -136,6 +136,7 @@ describe("oauth2", async () => {
 		const fetchMock = vi.fn(async () => {
 			return new Response(
 				JSON.stringify({
+					issuer: "https://idp.example.com",
 					end_session_endpoint: "https://idp.example.com/logout",
 				}),
 				{
@@ -3028,6 +3029,9 @@ describe("oauth2", async () => {
 			const yandexConfig = yandex({
 				clientId: "yandex-client-id",
 				clientSecret: "yandex-client-secret",
+				endSessionEndpoint: "https://oauth.yandex.com/logout",
+				postLogoutRedirectURI: "https://example.com/signed-out",
+				disableProviderLogout: true,
 			});
 
 			expect(yandexConfig.providerId).toBe("yandex");
@@ -3042,6 +3046,13 @@ describe("oauth2", async () => {
 			]);
 			expect(yandexConfig.clientId).toBe("yandex-client-id");
 			expect(yandexConfig.clientSecret).toBe("yandex-client-secret");
+			expect(yandexConfig.endSessionEndpoint).toBe(
+				"https://oauth.yandex.com/logout",
+			);
+			expect(yandexConfig.postLogoutRedirectURI).toBe(
+				"https://example.com/signed-out",
+			);
+			expect(yandexConfig.disableProviderLogout).toBe(true);
 			expect(yandexConfig.getUserInfo).toBeDefined();
 			expect(typeof yandexConfig.getUserInfo).toBe("function");
 		});

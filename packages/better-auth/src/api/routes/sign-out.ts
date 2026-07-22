@@ -26,13 +26,10 @@ const signOutBodySchema = z
 	.optional();
 
 const signOutResponse = (
-	providerLogout?:
-		| { url: string; urls?: string[]; redirect: boolean }
-		| undefined,
+	providerLogout?: { url: string; redirect: boolean } | undefined,
 ) => ({
 	success: true,
 	url: providerLogout?.url,
-	...(providerLogout?.urls ? { urls: providerLogout.urls } : undefined),
 	redirect: providerLogout?.redirect,
 });
 
@@ -62,14 +59,6 @@ export const signOut = createAuthEndpoint(
 											type: "string",
 											description:
 												"Provider logout URL when RP-initiated logout is available",
-										},
-										urls: {
-											type: "array",
-											items: {
-												type: "string",
-											},
-											description:
-												"All unique provider logout URLs when RP-initiated logout is available. Use this to build a client-side redirect chain or postMessage bridge to complete logout across multiple providers.",
 										},
 										redirect: {
 											type: "boolean",
@@ -131,19 +120,13 @@ export const signOut = createAuthEndpoint(
 				if (logoutAccounts.length === 0) {
 					return null;
 				}
-				const uniqueLogoutAccounts = [];
 				const seenProviderIds = new Set<string>();
-				for (const account of logoutAccounts) {
-					if (!seenProviderIds.has(account.providerId)) {
-						seenProviderIds.add(account.providerId);
-						uniqueLogoutAccounts.push(account);
-					}
-				}
 				const postLogoutRedirectURI = ctx.body?.callbackURL
 					? new URL(ctx.body.callbackURL, ctx.context.baseURL).toString()
 					: undefined;
-				const urls: URL[] = [];
-				for (const account of uniqueLogoutAccounts) {
+				for (const account of logoutAccounts) {
+					if (seenProviderIds.has(account.providerId)) continue;
+					seenProviderIds.add(account.providerId);
 					const provider = providersById.get(account.providerId);
 					try {
 						const url = await provider?.createEndSessionURL?.({
@@ -152,7 +135,7 @@ export const signOut = createAuthEndpoint(
 							state: ctx.body?.state,
 						});
 						if (url) {
-							urls.push(url);
+							return url.toString();
 						}
 					} catch (e) {
 						ctx.context.logger.error(
@@ -161,13 +144,7 @@ export const signOut = createAuthEndpoint(
 						);
 					}
 				}
-				if (urls.length === 0) {
-					return null;
-				}
-				return {
-					url: urls[0]!.toString(),
-					urls: urls.map((u) => u.toString()),
-				};
+				return null;
 			} catch (e) {
 				ctx.context.logger.error("Failed to create provider logout URL", e);
 				return null;
@@ -176,7 +153,7 @@ export const signOut = createAuthEndpoint(
 		if (providerLogoutResult) {
 			return ctx.json(
 				signOutResponse({
-					...providerLogoutResult,
+					url: providerLogoutResult,
 					redirect: !ctx.body?.disableRedirect,
 				}),
 			);

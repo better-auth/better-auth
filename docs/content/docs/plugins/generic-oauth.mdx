@@ -160,6 +160,20 @@ await authClient.signOut({
 })
 ```
 
+If multiple linked providers support RP-Initiated Logout, Better Auth redirects to the provider for the most recently updated account. A browser navigation can complete logout with only one provider at a time.
+
+To handle the provider navigation yourself, set `disableRedirect` and use the returned `url`.
+
+```ts
+const { data } = await authClient.signOut({
+  disableRedirect: true,
+})
+
+if (data?.url) {
+  window.location.assign(data.url)
+}
+```
+
 To keep sign-out local to Better Auth, disable provider logout for that config.
 
 ```ts

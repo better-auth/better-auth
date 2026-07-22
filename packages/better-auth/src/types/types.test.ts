@@ -400,6 +400,20 @@ describe("any-poisoning guards", () => {
 		expectTypeOf<AccountCookieSelection>().not.toHaveProperty("accountId");
 	});
 
+	it("InferCtx should preserve fields from an optional body", () => {
+		type Result = InferCtx<
+			{
+				body: { callbackURL: string } | undefined;
+				query: undefined;
+				method: "POST";
+			},
+			{}
+		>;
+		expectTypeOf<Result>().toHaveProperty("callbackURL");
+		expectTypeOf<Result["callbackURL"]>().toEqualTypeOf<string>();
+		expectTypeOf<HasRequiredKeys<Result>>().toEqualTypeOf<true>();
+	});
+
 	/**
 	 * InferPluginTypes: an untyped plugin (`{} as any`) in the plugins array
 	 * should not collapse auth.$Infer to `any`.

@@ -86,7 +86,8 @@ describe("sign-out", async () => {
 		await context.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: baseOAuthConfig.providerId,
-			accountId: "oauth-user",
+			issuer: "local:oauth:oidc-provider",
+			providerAccountId: "oauth-user",
 			idToken: "id-token",
 		});
 		return {
@@ -215,7 +216,7 @@ describe("sign-out", async () => {
 		});
 	});
 
-	it("should return all provider logout URLs when multiple linked accounts exist", async () => {
+	it("should use the most recently updated provider when multiple linked accounts exist", async () => {
 		const secondProviderConfig = {
 			...baseOAuthConfig,
 			providerId: "second-provider",
@@ -239,14 +240,18 @@ describe("sign-out", async () => {
 		await context.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: baseOAuthConfig.providerId,
-			accountId: "oauth-user",
+			issuer: "local:oauth:oidc-provider",
+			providerAccountId: "oauth-user",
 			idToken: "id-token-first",
+			updatedAt: new Date("2026-01-01T00:00:00.000Z"),
 		});
 		await context.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: secondProviderConfig.providerId,
-			accountId: "oauth-user-2",
+			issuer: "local:oauth:second-provider",
+			providerAccountId: "oauth-user-2",
 			idToken: "id-token-second",
+			updatedAt: new Date("2026-01-02T00:00:00.000Z"),
 		});
 
 		const res = await instance.client.signOut({
@@ -258,10 +263,7 @@ describe("sign-out", async () => {
 		expect(res.data).toMatchObject({
 			success: true,
 			redirect: true,
-			url: expect.any(String),
+			url: expect.stringContaining("https://idp2.example.com/logout"),
 		});
-		expect(res.data!.urls).toHaveLength(2);
-		expect(res.data!.urls![0]).toContain("example.com/logout");
-		expect(res.data!.urls![1]).toContain("example.com/logout");
 	});
 });
