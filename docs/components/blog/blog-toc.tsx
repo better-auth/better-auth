@@ -10,7 +10,7 @@ interface BlogTOCProps {
 export function BlogTOC({ items }: BlogTOCProps) {
 	return (
 		<TOCProvider toc={items}>
-			<TOC />
+			<TOC container={{ className: "blog-toc" }} />
 		</TOCProvider>
 	);
 }

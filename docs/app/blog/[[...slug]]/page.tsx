@@ -226,7 +226,7 @@ export default async function Page({
 				}}
 			>
 				<div className="flex min-w-0 flex-col [grid-area:content]">
-					<div className="relative min-w-0 px-5 sm:px-6 lg:px-8 pb-24 pt-8 lg:py-24">
+					<div className="relative min-w-0 pl-5 pr-7 lg:px-8 pb-24 pt-8 lg:py-24">
 						{/* Article body */}
 						<article className="prose prose-neutral dark:prose-invert max-w-3xl prose-headings:tracking-tight prose-a:decoration-dashed prose-a:underline-offset-4 prose-pre:rounded-none prose-pre:border prose-pre:border-foreground/10 prose-img:rounded-none [&_[data-header-label]+h2]:mt-2 [&_[data-header-label]+h3]:mt-2 [&_[data-header-label]+h4]:mt-1">
 							<MDX
