@@ -24,6 +24,14 @@ export function toNextJsHandler(
 	};
 }
 
+let nextHeadersPromise: Promise<typeof import("next/headers.js")> | undefined;
+const loadNextHeaders = () => {
+	if (process.env.NODE_ENV === "production") {
+		return (nextHeadersPromise ??= import("next/headers.js"));
+	}
+	return import("next/headers.js");
+};
+
 export const nextCookies = () => {
 	let hasWarned = false;
 
@@ -50,7 +58,7 @@ export const nextCookies = () => {
 							ReturnType<typeof import("next/headers.js").headers>
 						>;
 						try {
-							const { headers } = await import("next/headers.js");
+							const { headers } = await loadNextHeaders();
 							headersStore = await headers();
 						} catch {
 							return;
@@ -92,7 +100,7 @@ export const nextCookies = () => {
 								ReturnType<typeof import("next/headers.js").cookies>
 							>;
 							try {
-								const { cookies } = await import("next/headers.js");
+								const { cookies } = await loadNextHeaders();
 								cookieHelper = await cookies();
 							} catch (error) {
 								if (
