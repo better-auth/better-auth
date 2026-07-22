@@ -3004,7 +3004,10 @@ describe("oauth2", async () => {
 			).toBe("token-stable-oid");
 		});
 
-		it("should ignore Graph userinfo when its subject does not match the ID token", async () => {
+		it.each([
+			["does not match", "different-graph-sub"],
+			["is missing", undefined],
+		])("should ignore Graph userinfo when its subject %s", async (_, graphSub) => {
 			const msConfig = microsoftEntraId({
 				clientId: "ms-client-id",
 				clientSecret: "ms-client-secret",
@@ -3013,7 +3016,7 @@ describe("oauth2", async () => {
 			mswServer.use(
 				http.get("https://graph.microsoft.com/oidc/userinfo", () =>
 					HttpResponse.json({
-						sub: "different-graph-sub",
+						sub: graphSub,
 						email: "graph@example.com",
 						name: "Graph User",
 						picture: "https://example.com/graph.png",
@@ -3222,7 +3225,6 @@ describe("oauth2", async () => {
 			});
 			expect(graphCalls).toBe(0);
 		});
-
 	});
 
 	describe("Slack Provider Helper", () => {

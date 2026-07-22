@@ -279,7 +279,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 				return null;
 			}
 			const user = decodeJwt(token.idToken) as MicrosoftEntraIDProfile;
-			if (typeof user.oid !== "string" || user.oid.length === 0) {
+			if (typeof user.oid !== "string" || user.oid.trim().length === 0) {
 				logger.error(
 					"Microsoft Entra ID token did not include a valid oid claim; unable to resolve a stable account identifier.",
 				);

@@ -101,8 +101,8 @@ export function microsoftEntraId(
 			return null;
 		}
 
-		const accountId =
-			typeof tokenProfile.oid === "string" && tokenProfile.oid.length > 0
+		const oid =
+			typeof tokenProfile.oid === "string" && tokenProfile.oid.trim().length > 0
 				? tokenProfile.oid
 				: undefined;
 		const tokenUserInfo = {
@@ -112,7 +112,7 @@ export function microsoftEntraId(
 			image: tokenProfile.picture,
 			emailVerified: tokenProfile.email_verified ?? false,
 		};
-		if (!accountId || !tokens.accessToken) {
+		if (!oid || !tokens.accessToken) {
 			return tokenUserInfo;
 		}
 
@@ -129,8 +129,7 @@ export function microsoftEntraId(
 			return tokenUserInfo;
 		}
 		if (
-			typeof profile.sub === "string" &&
-			typeof tokenProfile.sub === "string" &&
+			typeof tokenProfile.sub !== "string" ||
 			profile.sub !== tokenProfile.sub
 		) {
 			return tokenUserInfo;
@@ -160,7 +159,8 @@ export function microsoftEntraId(
 
 	return {
 		providerId: "microsoft-entra-id",
-		accountSubject: ({ profile }) => profile.oid as string,
+		accountSubject: ({ profile }) =>
+			typeof profile.oid === "string" ? profile.oid : "",
 		accountIssuer: tenantIssuer,
 		discoveryUrl,
 		authorizationUrl,
