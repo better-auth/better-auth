@@ -3,4 +3,4 @@
 "@better-auth/core": minor
 ---
 
-Use Microsoft Entra ID's stable `oid` claim as `providerAccountId`, paired with the trusted issuer, instead of the pairwise `sub` claim. Existing Microsoft account rows created with `sub` must be migrated to `oid` before upgrading production traffic.
+Microsoft sign-in now identifies Entra accounts with the stable `oid` claim in both the built-in `microsoft` provider and the Generic OAuth `microsoftEntraId` helper. Tokens without a valid `oid` are rejected, and existing Microsoft account rows created from `sub` must be migrated before upgrading.
