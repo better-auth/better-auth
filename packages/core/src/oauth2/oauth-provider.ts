@@ -1,5 +1,9 @@
 import type { JWTVerifyGetKey } from "jose";
-import type { Awaitable, LiteralString } from "../types";
+import type {
+	Awaitable,
+	GenericEndpointContext,
+	LiteralString,
+} from "../types";
 
 /**
  * id_token verification config for a social provider.
@@ -51,7 +55,11 @@ export type OAuthIdTokenConfig =
 			 * Custom verifier for providers that cannot verify against a local JWKS, such as a
 			 * remote verification endpoint (e.g. LINE).
 			 */
-			verify: (token: string, nonce?: string) => Promise<boolean>;
+			verify: (
+				token: string,
+				nonce?: string,
+				ctx?: GenericEndpointContext,
+			) => Promise<boolean>;
 	  };
 
 export interface OAuth2Tokens {
@@ -327,10 +335,17 @@ export type ProviderOptions<Profile extends object = object> = {
 	 */
 	disableIdTokenSignIn?: boolean | undefined;
 	/**
-	 * verifyIdToken function to verify the id token
+	 * verifyIdToken function to verify the id token.
+	 *
+	 * The optional endpoint context exposes request metadata to custom
+	 * verifiers without coupling built-in provider verification to a runtime.
 	 */
 	verifyIdToken?:
-		| ((token: string, nonce?: string) => Promise<boolean>)
+		| ((
+				token: string,
+				nonce?: string,
+				ctx?: GenericEndpointContext,
+		  ) => Promise<boolean>)
 		| undefined;
 	/**
 	 * Custom function to get user info from the provider

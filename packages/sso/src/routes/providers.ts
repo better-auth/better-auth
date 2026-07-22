@@ -392,6 +392,8 @@ function sanitizeProvider(
 		samlConfig: samlConfig
 			? {
 					entryPoint: samlConfig.entryPoint,
+					callbackUrl: samlConfig.callbackUrl,
+					idpInitiatedCallbackUrl: samlConfig.idpInitiatedCallbackUrl,
 					audience: samlConfig.audience,
 					wantAssertionsSigned: samlConfig.wantAssertionsSigned,
 					authnRequestsSigned: samlConfig.authnRequestsSigned,
@@ -588,8 +590,9 @@ function parseAndValidateConfig<T>(
 
 type SAMLConfigUpdate = Omit<
 	Partial<SAMLConfig>,
-	"idpMetadata" | "spMetadata"
+	"idpInitiatedCallbackUrl" | "idpMetadata" | "spMetadata"
 > & {
+	idpInitiatedCallbackUrl?: string | null | undefined;
 	idpMetadata?: Partial<SAMLIdentityProviderMetadata> | undefined;
 	spMetadata?: Partial<NonNullable<SAMLConfig["spMetadata"]>> | undefined;
 };
@@ -628,6 +631,10 @@ function mergeSAMLConfig(
 		mapping: updates.mapping ?? current.mapping,
 		audience: updates.audience ?? current.audience,
 		callbackUrl: updates.callbackUrl ?? current.callbackUrl,
+		idpInitiatedCallbackUrl:
+			updates.idpInitiatedCallbackUrl === null
+				? undefined
+				: (updates.idpInitiatedCallbackUrl ?? current.idpInitiatedCallbackUrl),
 		wantAssertionsSigned:
 			updates.wantAssertionsSigned ?? current.wantAssertionsSigned,
 		authnRequestsSigned:

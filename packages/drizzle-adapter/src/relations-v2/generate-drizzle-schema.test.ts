@@ -23,6 +23,8 @@ const generateFor = (
 /**
  * Type-checks the generated schema and returns its diagnostics, ignoring
  * module-resolution errors for `drizzle-orm` (not resolvable in this sandbox).
+ * Without that module, TypeScript cannot infer the callback parameter types
+ * supplied by Drizzle, so implicit-any diagnostics are disabled explicitly.
  *
  * @see https://github.com/dotansimha/graphql-code-generator/blob/2784ada257836190ded7ca8be290970e3c30fd69/packages/utils/graphql-codegen-testing/src/typescript.ts
  */
@@ -31,7 +33,11 @@ function typeErrors(code: string): string[] {
 	const host = ts.createCompilerHost({});
 	const program = ts.createProgram(
 		[fileName],
-		{ noEmit: true, skipLibCheck: true },
+		{
+			noEmit: true,
+			noImplicitAny: false,
+			skipLibCheck: true,
+		},
 		{
 			...host,
 			getSourceFile: (name, languageVersion, onError, shouldCreate) =>

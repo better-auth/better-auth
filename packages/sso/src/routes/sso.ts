@@ -97,7 +97,12 @@ import {
 	hasOrgAdminRole,
 	lockSSOProviderForAccountLink,
 } from "./providers";
-import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
+import {
+	buildSAMLRedirectUrl,
+	getSAMLRedirectCandidates,
+	getSafeRedirectUrl,
+	processSAMLResponse,
+} from "./saml-pipeline";
 import {
 	getRegisterSSOProviderBodySchema,
 	parseSSOProviderAdditionalFields,
@@ -709,6 +714,8 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 								cert: body.samlConfig.cert,
 								audience: body.samlConfig.audience,
 								callbackUrl: body.samlConfig.callbackUrl,
+								idpInitiatedCallbackUrl:
+									body.samlConfig.idpInitiatedCallbackUrl,
 								idpMetadata: body.samlConfig.idpMetadata,
 								spMetadata: body.samlConfig.spMetadata,
 								wantAssertionsSigned: body.samlConfig.wantAssertionsSigned,
@@ -2091,6 +2098,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			const { providerId } = ctx.params;
 			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`;
 			const appOrigin = new URL(ctx.context.baseURL).origin;
+			let resolvedErrorRedirectUrl: string | undefined;
 
 			// GET: post-auth redirect (e.g., after IdP-initiated flow completes)
 			const isGetRequest = ctx.method === "GET" && !ctx.body?.SAMLResponse;
@@ -2104,7 +2112,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				const relayState = ctx.query?.RelayState as string | undefined;
 				throw ctx.redirect(
 					getSafeRedirectUrl(
-						relayState,
+						[relayState],
 						currentCallbackPath,
 						appOrigin,
 						(url, settings) => ctx.context.isTrustedOrigin(url, settings),
@@ -2127,6 +2135,9 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						RelayState: ctx.body.RelayState,
 						providerId,
 						currentCallbackPath,
+						onErrorRedirectResolved: (url) => {
+							resolvedErrorRedirectUrl = url;
+						},
 					},
 					options,
 				);
@@ -2143,14 +2154,38 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				}
 				if (error instanceof APIError && error.statusCode === 400) {
 					const errorCode = (error.body?.code || "saml_error").toLowerCase();
-					const redirectUrl = getSafeRedirectUrl(
-						ctx.body?.RelayState || undefined,
-						currentCallbackPath,
-						appOrigin,
-						(url, settings) => ctx.context.isTrustedOrigin(url, settings),
-					);
+					let redirectUrl = resolvedErrorRedirectUrl;
+					if (!redirectUrl) {
+						let parsedSamlConfig: SAMLConfig | undefined;
+						try {
+							const provider = await findSAMLProvider(
+								providerId,
+								options,
+								ctx.context.adapter,
+							);
+							parsedSamlConfig = provider?.samlConfig;
+						} catch (providerLookupError) {
+							ctx.context.logger.warn(
+								"Failed to resolve SAML provider for error redirect",
+								{ providerId, error: providerLookupError },
+							);
+						}
+						redirectUrl = getSafeRedirectUrl(
+							getSAMLRedirectCandidates(
+								undefined,
+								parsedSamlConfig,
+								options?.saml,
+							),
+							currentCallbackPath,
+							appOrigin,
+							(url, settings) => ctx.context.isTrustedOrigin(url, settings),
+						);
+					}
 					throw ctx.redirect(
-						`${redirectUrl}${redirectUrl.includes("?") ? "&" : "?"}error=${encodeURIComponent(errorCode)}&error_description=${encodeURIComponent(error.message)}`,
+						buildSAMLRedirectUrl(redirectUrl, {
+							error: errorCode,
+							error_description: error.message,
+						}),
 					);
 				}
 				throw error;
@@ -2197,7 +2232,7 @@ export const sloEndpoint = (options?: SSOOptions) => {
 			const relayState = ctx.body?.RelayState || ctx.query?.RelayState;
 			const appOrigin = new URL(ctx.context.baseURL).origin;
 			const safeErrorURL = getSafeRedirectUrl(
-				relayState,
+				[relayState],
 				`${appOrigin}/sso/saml2/sp/slo/${providerId}`,
 				appOrigin,
 				(url, settings) => ctx.context.isTrustedOrigin(url, settings),
@@ -2305,7 +2340,7 @@ async function handleLogoutResponse(
 
 	const appOrigin = new URL(ctx.context.baseURL).origin;
 	const safeRedirectUrl = getSafeRedirectUrl(
-		relayState,
+		[relayState],
 		`${appOrigin}/sso/saml2/sp/slo/${providerId}`,
 		appOrigin,
 		(url, settings) => ctx.context.isTrustedOrigin(url, settings),

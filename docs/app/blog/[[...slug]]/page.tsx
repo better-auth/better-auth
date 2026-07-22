@@ -7,6 +7,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BlogLeftPanel } from "@/components/blog/blog-left-panel";
 import Footer from "@/components/landing/footer";
+import { BlogTweet } from "@/components/mdx/tweet";
 import { Callout } from "@/components/ui/callout";
 import { createMetadata } from "@/lib/metadata";
 import { blogs } from "@/lib/source";
@@ -47,8 +48,28 @@ function BlogCover({
 }: {
 	title: string;
 	date: Date;
-	image?: string;
+	image?: string | { light: string; dark: string };
 }) {
+	if (typeof image === "object") {
+		return (
+			<>
+				<Image
+					src={image.light}
+					alt={title}
+					width={320}
+					height={168}
+					className="w-full h-full object-cover dark:hidden"
+				/>
+				<Image
+					src={image.dark}
+					alt={title}
+					width={320}
+					height={168}
+					className="w-full h-full object-cover hidden dark:block"
+				/>
+			</>
+		);
+	}
 	if (image) {
 		return (
 			<Image
@@ -154,7 +175,9 @@ function BlogList() {
 						</Link>
 					))}
 				</div>
-				<Footer />
+				<div className="lg:hidden">
+					<Footer />
+				</div>
 			</div>
 		</div>
 	);
@@ -205,6 +228,17 @@ export default async function Page({
 								Tabs,
 								Accordion,
 								Accordions,
+								Tweet: BlogTweet,
+								TLDR: ({ children }: { children: React.ReactNode }) => (
+									<div className="not-prose relative my-8 bg-foreground/[0.02] px-5 py-4">
+										<span className="block mb-2 text-[11px] font-mono uppercase tracking-wider text-foreground/50 select-none">
+											TL;DR
+										</span>
+										<div className="text-sm leading-relaxed text-foreground/80 [&_p]:m-0 [&_p+p]:mt-3">
+											{children}
+										</div>
+									</div>
+								),
 								Callout: ({
 									children,
 									type,
@@ -290,7 +324,9 @@ export default async function Page({
 						/>
 					</article>
 				</div>
-				<Footer />
+				<div className="lg:hidden">
+					<Footer />
+				</div>
 			</div>
 		</div>
 	);
@@ -313,7 +349,9 @@ export async function generateMetadata({
 	const { title, description, image, date } = page.data;
 
 	// Social cards have no theme preference; always use the dark variant.
-	const ogImage = image || generatedCoverUrl(title, date, "dark");
+	const ogImage =
+		(typeof image === "string" ? image : image?.dark) ??
+		generatedCoverUrl(title, date, "dark");
 
 	return createMetadata({
 		title,

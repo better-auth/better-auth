@@ -461,17 +461,23 @@ export interface OrganizationOptions {
 				/**
 				 * A callback that runs before the organization is deleted
 				 */
-				beforeDeleteOrganization?: (data: {
-					organization: Organization & Record<string, any>;
-					user: User & Record<string, any>;
-				}) => Promise<void>;
+				beforeDeleteOrganization?: (
+					data: {
+						organization: Organization & Record<string, any>;
+						user: User & Record<string, any>;
+					},
+					ctx?: GenericEndpointContext,
+				) => Promise<void>;
 				/**
 				 * A callback that runs after the organization is deleted
 				 */
-				afterDeleteOrganization?: (data: {
-					organization: Organization & Record<string, any>;
-					user: User & Record<string, any>;
-				}) => Promise<void>;
+				afterDeleteOrganization?: (
+					data: {
+						organization: Organization & Record<string, any>;
+						user: User & Record<string, any>;
+					},
+					ctx?: GenericEndpointContext,
+				) => Promise<void>;
 				/**
 				 * Member hooks
 				 */

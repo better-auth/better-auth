@@ -310,13 +310,64 @@ const isServerOnlyError = (e: unknown): boolean =>
 
 const SERVER_ONLY_HINT = `Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`;
 
+/** Strips a source extension so paths can be compared across TS and JS inputs. */
+function withoutSourceExtension(filePath: string): string {
+	const ext = path.extname(filePath);
+	return SOURCE_EXTENSIONS_SET.has(ext)
+		? filePath.slice(0, -ext.length)
+		: filePath;
+}
+
+/**
+ * Detects a first-run config import of the exact schema file being generated.
+ * Only relative imports are eligible, so unrelated packages and missing files
+ * continue to fail normally.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10136
+ */
+function resolvesMissingOutputModule(
+	error: unknown,
+	configFilePath: string,
+	resolvedOutputPath: string,
+): boolean {
+	if (
+		!error ||
+		typeof error !== "object" ||
+		(error as { code?: unknown }).code !== "MODULE_NOT_FOUND"
+	) {
+		return false;
+	}
+	const message =
+		"message" in error && typeof error.message === "string"
+			? error.message
+			: "";
+	const match = message.match(/Cannot find module ['"](\.\.?\/[^'"]+)['"]/);
+	const specifier = match?.[1];
+	if (!specifier) return false;
+
+	const requireStack =
+		"requireStack" in error && Array.isArray(error.requireStack)
+			? (error.requireStack as unknown[])
+			: [];
+	const importedFrom =
+		typeof requireStack[0] === "string" ? requireStack[0] : configFilePath;
+	const resolvedImport = path.resolve(path.dirname(importedFrom), specifier);
+	return (
+		withoutSourceExtension(resolvedImport) ===
+		withoutSourceExtension(resolvedOutputPath)
+	);
+}
+
 export async function getConfig({
 	cwd,
 	configPath,
+	outputPath,
 	shouldThrowOnError = false,
 }: {
 	cwd: string;
 	configPath?: string;
+	/** Schema output used to recover an exact first-run self-import. */
+	outputPath?: string;
 	shouldThrowOnError?: boolean;
 }) {
 	const fail = (message: string, error?: unknown): never => {
@@ -328,14 +379,50 @@ export async function getConfig({
 		process.exit(1);
 	};
 
-	const load = (configFile: string) =>
-		loadConfig<{ options?: BetterAuthOptions }>({
-			configFile,
-			dotenv: { fileName: [".env", ".env.local"] },
-			jitiOptions: jitiOptions(cwd),
-			resolveModule: resolveAuthModule,
-			cwd,
-		});
+	const resolvedOutputPath = outputPath
+		? path.resolve(cwd, outputPath)
+		: undefined;
+	const load = async (configFile: string) => {
+		const loadOnce = () =>
+			loadConfig<{ options?: BetterAuthOptions }>({
+				configFile,
+				dotenv: { fileName: [".env", ".env.local"] },
+				jitiOptions: jitiOptions(cwd),
+				resolveModule: resolveAuthModule,
+				cwd,
+			});
+		try {
+			return await loadOnce();
+		} catch (error) {
+			const resolvedConfigPath = path.isAbsolute(configFile)
+				? configFile
+				: path.resolve(cwd, configFile);
+			if (
+				!resolvedOutputPath ||
+				existsSync(resolvedOutputPath) ||
+				!resolvesMissingOutputModule(
+					error,
+					resolvedConfigPath,
+					resolvedOutputPath,
+				)
+			) {
+				throw error;
+			}
+
+			await fs.promises.mkdir(path.dirname(resolvedOutputPath), {
+				recursive: true,
+			});
+			await fs.promises.writeFile(resolvedOutputPath, "");
+			try {
+				return await loadOnce();
+			} catch (retryError) {
+				await fs.promises
+					.rm(resolvedOutputPath, { force: true })
+					.catch(() => {});
+				throw retryError;
+			}
+		}
+	};
 
 	try {
 		if (configPath) {
