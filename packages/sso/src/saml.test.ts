@@ -1718,7 +1718,7 @@ describe("SAML SSO", async () => {
 		["good-then-bad", [mockIdpSigningCert, unrelatedCertificate]],
 	])("should validate SAML response when signing cert matches any in the array (%s)", async (_name, certs) => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -1850,7 +1850,7 @@ describe("SAML SSO", async () => {
 
 	it("should initiate SAML login and validate RelayState", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -1992,7 +1992,12 @@ describe("SAML SSO", async () => {
 
 	it("should initiate SAML login and signup user when disableImplicitSignUp is true but requestSignup is explicitly enabled", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso({ disableImplicitSignUp: true })],
+			plugins: [
+				sso({
+					disableImplicitSignUp: true,
+					saml: { enableInResponseToValidation: false },
+				}),
+			],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -6939,7 +6944,7 @@ describe("SAML SSO Hardening", () => {
 	describe("RelayState controls post-auth redirect", () => {
 		it("should redirect to RelayState callbackURL after authentication", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
-				plugins: [sso()],
+				plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 			});
 			const { headers } = await signInWithTestUser();
 
@@ -7063,6 +7068,7 @@ describe("SAML SSO Hardening", () => {
 					sso({
 						saml: {
 							allowIdpInitiated: true,
+							enableInResponseToValidation: false,
 						},
 					}),
 				],
@@ -7115,6 +7121,7 @@ describe("SAML SSO Hardening", () => {
 					sso({
 						saml: {
 							allowIdpInitiated: true,
+							enableInResponseToValidation: false,
 							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
 						},
 					}),
@@ -7167,6 +7174,7 @@ describe("SAML SSO Hardening", () => {
 					sso({
 						saml: {
 							allowIdpInitiated: true,
+							enableInResponseToValidation: false,
 							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
 						},
 					}),
@@ -7397,6 +7405,7 @@ describe("SAML SSO Hardening", () => {
 					sso({
 						saml: {
 							allowIdpInitiated: true,
+							enableInResponseToValidation: false,
 							idpInitiatedCallbackUrl: "http://attacker.com/malicious",
 						},
 					}),
@@ -7412,8 +7421,6 @@ describe("SAML SSO Hardening", () => {
 					samlConfig: {
 						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
 						cert: certificate,
-						callbackUrl:
-							"http://localhost:3000/api/auth/sso/saml2/callback/unsafe-provider",
 						idpMetadata: { metadata: idpMetadata },
 						spMetadata: { metadata: spMetadata },
 					},

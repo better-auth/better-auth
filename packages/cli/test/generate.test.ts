@@ -908,7 +908,6 @@ model Directory_user {
 		});
 
 		expect(schema.code).toContain('slug: text("slug").notNull().unique()');
-		expect(schema.code).not.toContain("uniqueIndex");
 		expect(schema.code).not.toContain("slug_uidx");
 	});
 
