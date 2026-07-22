@@ -637,3 +637,48 @@ describe("one-tap hosted domain (hd)", async () => {
 		expect(res.data?.token).toBeTruthy();
 	});
 });
+
+describe("one-tap disableSignUp", async () => {
+	afterEach(() => {
+		Object.assign(verifiedPayload, defaultVerifiedPayload);
+	});
+
+	it("rejects a new user when socialProviders.google.disableSignUp is true and creates no user", async () => {
+		verifiedPayload.email = "one-tap-disable-signup@example.com";
+		verifiedPayload.sub = "one-tap-disable-signup-sub";
+
+		const { auth, client } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+					disableSignUp: true,
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{
+			data: unknown;
+			error: { status: number; message?: string } | null;
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error?.status).toBe(401);
+
+		const ctx = await auth.$context;
+		const users = await ctx.adapter.findMany<{ email: string }>({
+			model: "user",
+			where: [
+				{
+					field: "email",
+					value: verifiedPayload.email,
+				},
+			],
+		});
+		expect(users).toHaveLength(0);
+	});
+});
