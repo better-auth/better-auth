@@ -53,6 +53,7 @@ describe("SSO OIDC user resolution HTTP", () => {
 	const identityProvider = new OAuth2Server();
 	let subject = "directory-user-1";
 	let email = "idp.employee@example.com";
+	let emailVerified = true;
 	let userInfoSubject: string | undefined;
 	let omitIdToken = false;
 	let beforeTokenSigning: (() => void) | undefined;
@@ -65,7 +66,7 @@ describe("SSO OIDC user resolution HTTP", () => {
 				sub: userInfoSubject ?? subject,
 				email,
 				name: "Directory Employee",
-				email_verified: true,
+				email_verified: emailVerified,
 			};
 			response.statusCode = 200;
 		});
@@ -74,7 +75,7 @@ describe("SSO OIDC user resolution HTTP", () => {
 			token.payload.sub = subject;
 			token.payload.email = email;
 			token.payload.name = "Directory Employee";
-			token.payload.email_verified = true;
+			token.payload.email_verified = emailVerified;
 		});
 		identityProvider.service.on("beforeResponse", (response) => {
 			if (omitIdToken) response.body.id_token = undefined;
@@ -91,6 +92,7 @@ describe("SSO OIDC user resolution HTTP", () => {
 			await cleanup();
 		}
 		userInfoSubject = undefined;
+		emailVerified = true;
 		omitIdToken = false;
 		beforeTokenSigning = undefined;
 	});
@@ -444,12 +446,18 @@ describe("SSO OIDC user resolution HTTP", () => {
 		expect(await instance.db.count({ model: "session", where: [] })).toBe(0);
 	});
 
-	it("rolls back resolver and authentication writes without publishing cookies", async ({
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10473#discussion_r3629488656
+	 */
+	it("rolls back resolver and authentication writes without publishing side effects", async ({
 		onTestFinished,
 	}) => {
 		subject = "rollback-user";
 		email = "rollback@example.com";
+		emailVerified = false;
 		let markerUserId = "";
+		let rejectSessionCreation = true;
+		const sendVerificationEmail = vi.fn();
 		const instance = await createInstance(
 			{
 				resolveUser: async (_input, context) => {
@@ -464,8 +472,16 @@ describe("SSO OIDC user resolution HTTP", () => {
 			onTestFinished,
 			{
 				account: { storeAccountCookie: true },
+				emailVerification: {
+					sendOnSignUp: true,
+					sendVerificationEmail,
+				},
 				databaseHooks: {
-					session: { create: { before: () => false } },
+					session: {
+						create: {
+							before: () => (rejectSessionCreation ? false : undefined),
+						},
+					},
 				},
 			},
 		);
@@ -497,12 +513,20 @@ describe("SSO OIDC user resolution HTTP", () => {
 		);
 		expect(await instance.db.count({ model: "account", where: [] })).toBe(0);
 		expect(await instance.db.count({ model: "session", where: [] })).toBe(0);
+		expect(sendVerificationEmail).not.toHaveBeenCalled();
 		expect(
 			await instance.db.findOne<User>({
 				model: "user",
 				where: [{ field: "id", value: marker.id }],
 			}),
 		).toMatchObject({ name: "marker" });
+
+		rejectSessionCreation = false;
+		const committedSignIn = await completeSignIn(instance.baseURL);
+		expect(committedSignIn.callback.headers.get("location")).toBe(
+			`${instance.baseURL}/employee`,
+		);
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
 
 	it("rejects another provider alias for an existing subject even on default resolution", async ({

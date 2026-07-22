@@ -2,7 +2,10 @@ import type {
 	GenericEndpointContext,
 	UserProvisioningSource,
 } from "@better-auth/core";
-import { runWithTransaction } from "@better-auth/core/context";
+import {
+	queueAfterTransactionHook,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError } from "@better-auth/core/error";
 import { createEmailVerificationToken } from "../api";
@@ -478,12 +481,22 @@ export async function handleOAuthUserInfo(
 		(c.context.options.emailVerification?.sendOnSignUp ??
 			requireEmailVerification)
 	) {
-		await dispatchVerificationEmail(c, user, callbackURL);
+		await dispatchVerificationEmail(
+			c,
+			user,
+			callbackURL,
+			opts.deferNonDatabaseWrites,
+		);
 	}
 
 	if (requireEmailVerification && !user.emailVerified) {
 		if (!isRegister && c.context.options.emailVerification?.sendOnSignIn) {
-			await dispatchVerificationEmail(c, user, callbackURL);
+			await dispatchVerificationEmail(
+				c,
+				user,
+				callbackURL,
+				opts.deferNonDatabaseWrites,
+			);
 		}
 		return {
 			error: OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_VERIFIED,
@@ -531,34 +544,42 @@ async function dispatchVerificationEmail(
 	c: GenericEndpointContext,
 	user: User,
 	callbackURL: string | undefined,
+	deferUntilAfterTransaction?: boolean | undefined,
 ) {
 	const sendVerificationEmail =
 		c.context.options.emailVerification?.sendVerificationEmail;
 	if (!sendVerificationEmail) {
 		return;
 	}
-	try {
-		const token = await createEmailVerificationToken(
-			c.context.secret,
-			user.email,
-			undefined,
-			c.context.options.emailVerification?.expiresIn,
-		);
-		const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
-			callbackURL || "/",
-		)}`;
-		await c.context.runInBackgroundOrAwait(
-			sendVerificationEmail(
-				{
-					user,
-					url,
-					token,
-				},
-				c.request,
-			),
-		);
-	} catch (e) {
-		c.context.logger.error("Failed to send OAuth verification email", e);
+	const send = async () => {
+		try {
+			const token = await createEmailVerificationToken(
+				c.context.secret,
+				user.email,
+				undefined,
+				c.context.options.emailVerification?.expiresIn,
+			);
+			const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+				callbackURL || "/",
+			)}`;
+			await c.context.runInBackgroundOrAwait(
+				sendVerificationEmail(
+					{
+						user,
+						url,
+						token,
+					},
+					c.request,
+				),
+			);
+		} catch (e) {
+			c.context.logger.error("Failed to send OAuth verification email", e);
+		}
+	};
+	if (deferUntilAfterTransaction) {
+		await queueAfterTransactionHook(send);
+	} else {
+		await send();
 	}
 }
 
