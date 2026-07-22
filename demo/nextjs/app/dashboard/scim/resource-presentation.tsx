@@ -96,17 +96,6 @@ export function getLifecycleLabel(user: SCIMDemoUserState) {
 	}
 }
 
-export function getAccessLabel(user: SCIMDemoUserState) {
-	switch (user.applicationAccess) {
-		case "active":
-			return "Active";
-		case "disabled":
-			return "Disabled";
-		case "none":
-			return "None";
-	}
-}
-
 export function StatusMark({ active }: { active: boolean }) {
 	return active ? (
 		<CheckCircle2

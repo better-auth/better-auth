@@ -1,9 +1,10 @@
 import {
 	CircleOff,
+	Copy,
+	ExternalLink,
 	Loader2,
 	Pencil,
 	Play,
-	ShieldCheck,
 	Trash2,
 	UsersRound,
 } from "lucide-react";
@@ -33,7 +34,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { SCIM_DEMO_GROUP_LABELS } from "@/lib/scim-demo-catalog";
 import type {
-	SCIMDemoAccessDecision,
 	SCIMDemoAction,
 	SCIMDemoGroupKey,
 	SCIMDemoGroupState,
@@ -41,27 +41,22 @@ import type {
 	SCIMDemoUserAction,
 	SCIMDemoUserState,
 } from "@/lib/scim-demo-contract";
-import { cn } from "@/lib/utils";
 import {
 	EmptyActivity,
-	getAccessLabel,
+	getLifecycleLabel,
 	OperationItem,
 	UserStatusBadge,
 } from "./resource-presentation";
 
 interface UserInspectorProps {
-	accessDecision: SCIMDemoAccessDecision | null;
-	accessError: string | null;
 	actionError: string | null;
 	connectionReady: boolean;
 	draftAction: SCIMDemoUserAction | null;
 	draftSummary: string | null;
 	groups: SCIMDemoGroupState[];
 	hasMoreOperations: boolean;
-	isCheckingAccess: boolean;
 	isPending: boolean;
 	onApplyDraft: () => void;
-	onCheckApplicationAccess: () => void;
 	onRunAction: (action: SCIMDemoAction, successMessage: string) => void;
 	onStageAction: (action: SCIMDemoUserAction) => void;
 	onViewAllActivity: () => void;
@@ -71,18 +66,14 @@ interface UserInspectorProps {
 }
 
 export function UserInspector({
-	accessDecision,
-	accessError,
 	actionError,
 	connectionReady,
 	draftAction,
 	draftSummary,
 	groups,
 	hasMoreOperations,
-	isCheckingAccess,
 	isPending,
 	onApplyDraft,
-	onCheckApplicationAccess,
 	onRunAction,
 	onStageAction,
 	onViewAllActivity,
@@ -92,13 +83,15 @@ export function UserInspector({
 }: UserInspectorProps) {
 	const [profileDialogOpen, setProfileDialogOpen] = useState(false);
 	const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+	const [copyStatus, setCopyStatus] = useState<string | null>(null);
 	const [profileName, setProfileName] = useState(user.displayName);
 	const [selectedGroups, setSelectedGroups] = useState<SCIMDemoGroupKey[]>(
 		user.groups,
 	);
-	const isBusy = isPending || isCheckingAccess;
+	const isBusy = isPending;
 
 	useEffect(() => {
+		setCopyStatus(null);
 		setProfileName(
 			draftAction?.type === "update-profile"
 				? draftAction.displayName
@@ -108,6 +101,21 @@ export function UserInspector({
 			draftAction?.type === "set-groups" ? draftAction.groupKeys : user.groups,
 		);
 	}, [draftAction, user]);
+
+	const copyEmployeeLink = async () => {
+		try {
+			const employeeSignInURL = new URL(
+				user.employeePortalPath,
+				window.location.origin,
+			).toString();
+			await navigator.clipboard.writeText(employeeSignInURL);
+			setCopyStatus("Employee link copied");
+		} catch {
+			setCopyStatus(
+				"Copy unavailable. Open the preview, then copy its address into a private window.",
+			);
+		}
+	};
 
 	const stageProfileUpdate = () => {
 		onStageAction({
@@ -145,7 +153,7 @@ export function UserInspector({
 			>
 				<div>
 					<h3 id="simulator-heading" className="text-sm font-semibold">
-						Directory simulator
+						Directory changes
 					</h3>
 					<p className="mt-1 text-xs text-muted-foreground">
 						Stage a change in Acme directory, then send it through the real SCIM
@@ -157,13 +165,13 @@ export function UserInspector({
 				user.lifecycle === "deleted" ? (
 					<Button
 						type="button"
-						className="w-full gap-2 sm:w-auto"
+						className="min-h-11 w-full gap-2 sm:w-auto"
 						disabled={!connectionReady || isBusy}
 						onClick={() =>
 							onRunAction(
 								{ type: "provision-user", userKey: user.key },
 								user.lifecycle === "deleted"
-									? `${user.displayName} was reprovisioned with the retained application identity`
+									? `${user.displayName} was reprovisioned with the retained application user`
 									: `${user.displayName} was provisioned`,
 							)
 						}
@@ -187,7 +195,7 @@ export function UserInspector({
 								type="button"
 								variant="outline"
 								size="sm"
-								className="gap-2"
+								className="min-h-11 gap-2"
 								disabled={isBusy}
 								onClick={() => {
 									setProfileName(
@@ -205,7 +213,7 @@ export function UserInspector({
 								type="button"
 								variant="outline"
 								size="sm"
-								className="gap-2"
+								className="min-h-11 gap-2"
 								disabled={isBusy}
 								onClick={() => {
 									setSelectedGroups(
@@ -223,7 +231,7 @@ export function UserInspector({
 								type="button"
 								variant="outline"
 								size="sm"
-								className="gap-2"
+								className="min-h-11 gap-2"
 								disabled={isBusy}
 								onClick={() =>
 									onStageAction({
@@ -245,7 +253,7 @@ export function UserInspector({
 						) : null}
 						<Button
 							type="button"
-							className="w-full gap-2 sm:w-auto"
+							className="min-h-11 w-full gap-2 sm:w-auto"
 							disabled={!draftAction || !connectionReady || isBusy}
 							onClick={onApplyDraft}
 						>
@@ -257,7 +265,7 @@ export function UserInspector({
 							) : (
 								<Play className="size-4" aria-hidden="true" />
 							)}
-							Apply directory change
+							Apply change
 						</Button>
 					</>
 				)}
@@ -273,6 +281,7 @@ export function UserInspector({
 									type="button"
 									size="sm"
 									variant="outline"
+									className="min-h-11"
 									disabled={isBusy}
 									onClick={onApplyDraft}
 								>
@@ -286,11 +295,12 @@ export function UserInspector({
 
 			<section className="border-b p-5" aria-labelledby="identity-heading">
 				<h3 id="identity-heading" className="text-sm font-semibold">
-					Identity &amp; access
+					Identity and access
 				</h3>
 				<dl className="mt-3 divide-y text-xs">
 					{[
 						["Directory username", user.email, "Directory"],
+						["Directory status", getLifecycleLabel(user), "Directory"],
 						[
 							"SCIM resource ID",
 							user.scimResourceId ?? "Not provisioned",
@@ -301,7 +311,18 @@ export function UserInspector({
 							user.applicationUserId ?? "Not created",
 							"Better Auth",
 						],
-						["Source", "Acme directory", "SCIM connection"],
+						[
+							"SSO account",
+							user.accountLinkStatus === "linked" ? "Linked" : "Not linked",
+							"Better Auth",
+						],
+						[
+							"Employee session",
+							user.sessionStatus === "active"
+								? "Active session"
+								: "No active session",
+							"Better Auth",
+						],
 						[
 							"Groups",
 							user.groups.length
@@ -311,8 +332,7 @@ export function UserInspector({
 								: "None",
 							"Directory",
 						],
-						["Role", user.role ?? "None", "Derived"],
-						["Application access", getAccessLabel(user), "Application"],
+						["Provisioned role", user.role ?? "None", "Application"],
 					].map(([label, value, provenance]) => (
 						<div
 							key={label}
@@ -328,59 +348,41 @@ export function UserInspector({
 						</div>
 					))}
 				</dl>
-				<div className="mt-4 border bg-muted/20 p-3">
-					<p className="text-xs font-medium">Application access check</p>
-					<p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-						Run the demo application’s authorization check for this Better Auth
-						user. SCIM provisions access; it does not create a sign-in method.
-					</p>
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						className="mt-3 gap-2"
-						disabled={!user.applicationUserId || isBusy}
-						onClick={onCheckApplicationAccess}
-					>
-						{isCheckingAccess ? (
-							<Loader2
-								className="size-3.5 animate-spin motion-reduce:animate-none"
-								aria-hidden="true"
-							/>
-						) : (
-							<ShieldCheck className="size-3.5" aria-hidden="true" />
-						)}
-						Check application access
-					</Button>
-					{accessDecision ? (
-						<div
-							role="status"
-							className={cn(
-								"mt-3 border p-2.5 text-xs",
-								accessDecision.allowed
-									? "border-green-600/40 bg-green-500/10 text-green-700 dark:text-green-400"
-									: "border-destructive/40 bg-destructive/10 text-destructive",
-							)}
-						>
-							<span className="font-medium">
-								{accessDecision.allowed ? "Authorized" : "Denied"}
-							</span>
-							{" · "}
-							{accessDecision.allowed
-								? accessDecision.role
-									? `Role: ${accessDecision.role}`
-									: "No mapped role"
-								: "Application access is disabled"}
+				{user.applicationUserId ? (
+					<div className="mt-4 border bg-muted/20 p-3">
+						<p className="text-xs font-medium">Employee sign-in</p>
+						<p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+							Open this link in a private window or another browser so the
+							employee session stays separate from this administrator session.
+						</p>
+						<div className="mt-3 flex flex-col gap-2 sm:flex-row">
+							<Button
+								type="button"
+								className="min-h-11 gap-2"
+								onClick={() => void copyEmployeeLink()}
+							>
+								<Copy className="size-4" aria-hidden="true" />
+								Copy employee link
+							</Button>
+							<Button variant="outline" className="min-h-11 gap-2" asChild>
+								<a
+									href={user.employeePortalPath}
+									target="_blank"
+									rel="noreferrer"
+								>
+									<ExternalLink className="size-4" aria-hidden="true" />
+									Preview in this session
+								</a>
+							</Button>
 						</div>
-					) : null}
-					{accessError ? (
-						<Alert variant="destructive" className="mt-3">
-							<CircleOff className="size-4" aria-hidden="true" />
-							<AlertTitle>Access check unavailable</AlertTitle>
-							<AlertDescription>{accessError}</AlertDescription>
-						</Alert>
-					) : null}
-				</div>
+						<p
+							className="mt-2 min-h-4 text-xs text-muted-foreground"
+							aria-live="polite"
+						>
+							{copyStatus}
+						</p>
+					</div>
+				) : null}
 				{user.scimResourceId ? (
 					<AlertDialog>
 						<AlertDialogTrigger asChild>
@@ -388,7 +390,7 @@ export function UserInspector({
 								type="button"
 								variant="ghost"
 								size="sm"
-								className="mt-3 gap-2 text-destructive hover:text-destructive"
+								className="mt-3 min-h-11 gap-2 text-destructive hover:text-destructive"
 								disabled={isBusy}
 							>
 								<Trash2 className="size-3.5" aria-hidden="true" />
@@ -402,7 +404,7 @@ export function UserInspector({
 								</AlertDialogTitle>
 								<AlertDialogDescription>
 									Better Auth will disable access and retain the application
-									identity. You can reprovision the same directory user later.
+									user. You can reprovision the same directory user later.
 								</AlertDialogDescription>
 							</AlertDialogHeader>
 							<AlertDialogFooter>
@@ -413,7 +415,7 @@ export function UserInspector({
 									onClick={() =>
 										onRunAction(
 											{ type: "delete-user", userKey: user.key },
-											`${user.displayName}’s SCIM resource was deleted; the application identity was retained`,
+											`${user.displayName}’s SCIM resource was deleted; the Better Auth user was retained`,
 										)
 									}
 								>
@@ -448,7 +450,7 @@ export function UserInspector({
 						type="button"
 						variant="link"
 						size="sm"
-						className="mt-2 px-2"
+						className="mt-2 min-h-11 px-2"
 						onClick={onViewAllActivity}
 					>
 						View all activity
@@ -487,11 +489,14 @@ export function UserInspector({
 							<Button
 								type="button"
 								variant="outline"
+								className="min-h-11"
 								onClick={() => setProfileDialogOpen(false)}
 							>
 								Cancel
 							</Button>
-							<Button type="submit">Stage profile update</Button>
+							<Button type="submit" className="min-h-11">
+								Stage profile update
+							</Button>
 						</DialogFooter>
 					</form>
 				</DialogContent>
@@ -543,11 +548,16 @@ export function UserInspector({
 						<Button
 							type="button"
 							variant="outline"
+							className="min-h-11"
 							onClick={() => setGroupDialogOpen(false)}
 						>
 							Cancel
 						</Button>
-						<Button type="button" onClick={stageGroupChanges}>
+						<Button
+							type="button"
+							className="min-h-11"
+							onClick={stageGroupChanges}
+						>
 							Stage group changes
 						</Button>
 					</DialogFooter>

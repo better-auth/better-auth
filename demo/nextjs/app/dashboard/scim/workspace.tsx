@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -25,10 +25,10 @@ import {
 	AlertDialogTitle,
 	AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SCIM_DEMO_GROUP_LABELS } from "@/lib/scim-demo-catalog";
 import type {
-	SCIMDemoAccessDecision,
 	SCIMDemoAction,
 	SCIMDemoOperation,
 	SCIMDemoUserAction,
@@ -37,7 +37,6 @@ import type {
 	SCIMDemoWorkspace,
 } from "@/lib/scim-demo-contract";
 import {
-	isSCIMDemoAccessDecision,
 	isSCIMDemoActionFailure,
 	isSCIMDemoActionResult,
 	isSCIMDemoUserKey,
@@ -143,18 +142,8 @@ export function SCIMWorkspace({
 		message: string;
 		userKey: SCIMDemoUserKey | null;
 	} | null>(null);
-	const [accessError, setAccessError] = useState<{
-		message: string;
-		userKey: SCIMDemoUserKey;
-	} | null>(null);
-	const [announcement, setAnnouncement] = useState("");
 	const [search, setSearch] = useState("");
 	const [filter, setFilter] = useState<UserFilter>("all");
-	const [accessDecision, setAccessDecision] =
-		useState<SCIMDemoAccessDecision | null>(null);
-	const [isCheckingAccess, setIsCheckingAccess] = useState(false);
-	const accessRequestId = useRef(0);
-	const accessRequestInFlight = useRef(false);
 	const actionInFlight = useRef(false);
 
 	const reloadWorkspace = async () => {
@@ -176,6 +165,7 @@ export function SCIMWorkspace({
 		setWorkspaceError(null);
 		try {
 			await reloadWorkspace();
+			toast.success("Directory status refreshed");
 		} catch (loadError) {
 			const message =
 				loadError instanceof Error
@@ -204,13 +194,6 @@ export function SCIMWorkspace({
 	);
 	const draftAction = draftActions[selectedUserKey] ?? null;
 
-	useEffect(() => {
-		accessRequestId.current += 1;
-		accessRequestInFlight.current = false;
-		setAccessDecision(null);
-		setIsCheckingAccess(false);
-	}, [selectedUserKey]);
-
 	const getRouteHref = (nextView: SCIMDemoView, userKey?: SCIMDemoUserKey) => {
 		const params = new URLSearchParams(searchParams.toString());
 		params.set("view", nextView);
@@ -226,15 +209,8 @@ export function SCIMWorkspace({
 		if (actionInFlight.current) return;
 		actionInFlight.current = true;
 		const actionUserKey = "userKey" in action ? action.userKey : null;
-		accessRequestId.current += 1;
-		accessRequestInFlight.current = false;
 		setPendingAction(action.type);
-		setAccessDecision(null);
-		setIsCheckingAccess(false);
 		setActionError(null);
-		if (actionUserKey === null || accessError?.userKey === actionUserKey) {
-			setAccessError(null);
-		}
 		let partialFailureReconciled = false;
 		try {
 			const response = await fetch("/api/scim-demo", {
@@ -266,7 +242,6 @@ export function SCIMWorkspace({
 			if (action.type === "reset-sandbox") {
 				setOperations([]);
 				setDraftActions({});
-				setAccessError(null);
 			} else {
 				setOperations((current) => prependOperations(current, body.operations));
 				setDraftActions((current) => {
@@ -275,7 +250,6 @@ export function SCIMWorkspace({
 					return nextDrafts;
 				});
 			}
-			setAnnouncement(successMessage);
 			toast.success(successMessage);
 		} catch (actionError) {
 			const actionMessage =
@@ -296,52 +270,6 @@ export function SCIMWorkspace({
 		} finally {
 			actionInFlight.current = false;
 			setPendingAction(null);
-		}
-	};
-
-	const checkApplicationAccess = async () => {
-		if (
-			!selectedUser ||
-			actionInFlight.current ||
-			accessRequestInFlight.current
-		) {
-			return;
-		}
-		const requestId = accessRequestId.current + 1;
-		accessRequestId.current = requestId;
-		accessRequestInFlight.current = true;
-		setIsCheckingAccess(true);
-		setAccessDecision(null);
-		setAccessError(null);
-		try {
-			const response = await fetch(
-				`/api/scim-demo/access/${encodeURIComponent(selectedUser.key)}`,
-				{ headers: { accept: "application/json" }, cache: "no-store" },
-			);
-			const body: unknown = await response.json().catch(() => undefined);
-			if (requestId !== accessRequestId.current) return;
-			if (isSCIMDemoAccessDecision(body) && body.userKey === selectedUser.key) {
-				setAccessDecision(body);
-				setAnnouncement(body.message);
-				return;
-			}
-			if (!response.ok) {
-				throw new Error(getResponseError(body, response.status));
-			}
-			throw new Error("The application returned an invalid access decision");
-		} catch (accessError) {
-			if (requestId !== accessRequestId.current) return;
-			const message =
-				accessError instanceof Error
-					? accessError.message
-					: "Application access could not be checked";
-			setAccessError({ message, userKey: selectedUser.key });
-			toast.error(message);
-		} finally {
-			if (requestId === accessRequestId.current) {
-				accessRequestInFlight.current = false;
-				setIsCheckingAccess(false);
-			}
 		}
 	};
 
@@ -373,11 +301,6 @@ export function SCIMWorkspace({
 	const isPending = pendingAction !== null;
 	const selectedActionError =
 		actionError?.userKey === selectedUserKey ? actionError.message : null;
-	const selectedAccessError =
-		accessError?.userKey === selectedUserKey ? accessError.message : null;
-	const selectedAccessDecision =
-		accessDecision?.userKey === selectedUserKey ? accessDecision : null;
-
 	const clearUserFilters = () => {
 		setSearch("");
 		setFilter("all");
@@ -389,16 +312,6 @@ export function SCIMWorkspace({
 			[action.userKey]: action,
 		}));
 		if (actionError?.userKey === action.userKey) setActionError(null);
-	};
-
-	const selectUser = (userKey: SCIMDemoUserKey) => {
-		if (actionInFlight.current) return;
-		accessRequestId.current += 1;
-		accessRequestInFlight.current = false;
-		setAccessDecision(null);
-		setIsCheckingAccess(false);
-		setAnnouncement("");
-		updateRoute("users", userKey);
 	};
 
 	const applyDraft = () => {
@@ -437,15 +350,13 @@ export function SCIMWorkspace({
 		<div className="space-y-5">
 			<div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
 				<div className="space-y-1.5">
+					<Badge variant="outline">Administrator</Badge>
 					<h1 className="text-3xl font-semibold tracking-tight">
-						Resource-first operations
+						Directory provisioning
 					</h1>
-					<p className="text-sm font-medium text-muted-foreground">
-						Directory sync
-					</p>
 					<p className="max-w-2xl text-sm text-muted-foreground">
-						Inspect how changes in Acme directory are synchronized to your
-						application.
+						Provision users and groups from Acme, then verify employee sign-in
+						in a separate browser session.
 					</p>
 				</div>
 				<div className="grid gap-3 sm:grid-cols-[minmax(18rem,1fr)_auto]">
@@ -476,32 +387,32 @@ export function SCIMWorkspace({
 										: "Credential configured on server"}
 							</p>
 						</div>
-						{workspace?.connection.status === "error" ? (
-							<Button
-								type="button"
-								variant="outline"
-								size="sm"
-								className="shrink-0 gap-2"
-								disabled={isLoading || isPending || isCheckingAccess}
-								onClick={() => void retryWorkspace()}
-							>
-								<RefreshCcw
-									className={cn(
-										"size-3.5",
-										isLoading && "animate-spin motion-reduce:animate-none",
-									)}
-									aria-hidden="true"
-								/>
-								Retry connection
-							</Button>
-						) : null}
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							className="min-h-11 shrink-0 gap-2"
+							disabled={isLoading || isPending}
+							onClick={() => void retryWorkspace()}
+						>
+							<RefreshCcw
+								className={cn(
+									"size-3.5",
+									isLoading && "animate-spin motion-reduce:animate-none",
+								)}
+								aria-hidden="true"
+							/>
+							{workspace?.connection.status === "error"
+								? "Retry connection"
+								: "Refresh status"}
+						</Button>
 					</div>
 					<AlertDialog>
 						<AlertDialogTrigger asChild>
 							<Button
 								variant="outline"
 								className="h-16 gap-2 px-5"
-								disabled={isPending || isCheckingAccess || !connectionReady}
+								disabled={isPending || !connectionReady}
 							>
 								<RefreshCcw className="size-4" aria-hidden="true" />
 								Reset sandbox
@@ -519,7 +430,7 @@ export function SCIMWorkspace({
 							<AlertDialogFooter>
 								<AlertDialogCancel>Cancel</AlertDialogCancel>
 								<AlertDialogAction
-									disabled={isPending || isCheckingAccess || !connectionReady}
+									disabled={isPending || !connectionReady}
 									onClick={() =>
 										void runAction(
 											{ type: "reset-sandbox" },
@@ -535,9 +446,48 @@ export function SCIMWorkspace({
 				</div>
 			</div>
 
-			<p className="sr-only" aria-live="polite">
-				{announcement}
-			</p>
+			<section
+				className="border bg-background/95 p-4"
+				aria-labelledby="demo-guide-heading"
+			>
+				<h2 id="demo-guide-heading" className="text-sm font-semibold">
+					Demo guide
+				</h2>
+				<ol className="mt-3 grid gap-3 md:grid-cols-3">
+					{[
+						{
+							title: "Provision a user",
+							description:
+								"Create the Better Auth user from the directory record",
+						},
+						{
+							title: "Sign in as employee",
+							description:
+								"Open the employee portal in a private window and continue with Acme SSO",
+						},
+						{
+							title: "Change access",
+							description:
+								"Deactivate the user or change their groups, then retry from the employee session",
+						},
+					].map((step, index) => (
+						<li key={step.title} className="flex gap-3 border bg-muted/10 p-3">
+							<span
+								className="flex size-7 shrink-0 items-center justify-center rounded-full border bg-background text-xs font-semibold"
+								aria-hidden="true"
+							>
+								{index + 1}
+							</span>
+							<div>
+								<p className="text-sm font-medium">{step.title}</p>
+								<p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+									{step.description}
+								</p>
+							</div>
+						</li>
+					))}
+				</ol>
+			</section>
 
 			{isLoading && !workspace ? <LoadingWorkspace /> : null}
 			{!isLoading && !workspace ? (
@@ -581,7 +531,7 @@ export function SCIMWorkspace({
 												href={getRouteHref(item.view)}
 												aria-current={view === item.view ? "page" : undefined}
 												className={cn(
-													"flex min-h-10 w-full items-center gap-3 whitespace-nowrap px-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+													"flex min-h-11 w-full items-center gap-3 whitespace-nowrap px-3 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 													view === item.view &&
 														"bg-muted font-medium text-foreground",
 												)}
@@ -600,18 +550,16 @@ export function SCIMWorkspace({
 								<UserList
 									filter={filter}
 									filteredUsers={filteredUsers}
+									getUserHref={(userKey) => getRouteHref("users", userKey)}
 									isSelectionDisabled={isPending}
 									onFilterChange={setFilter}
 									onSearchChange={setSearch}
-									onSelectUser={selectUser}
 									search={search}
 									selectedUserKey={selectedUserKey}
 									totalUserCount={workspace.users.length}
 								/>
 								{selectedUser && selectedUserIsVisible ? (
 									<UserInspector
-										accessDecision={selectedAccessDecision}
-										accessError={selectedAccessError}
 										actionError={selectedActionError}
 										connectionReady={connectionReady}
 										draftAction={draftAction}
@@ -620,12 +568,8 @@ export function SCIMWorkspace({
 										hasMoreOperations={
 											operations.length > selectedUserOperations.length
 										}
-										isCheckingAccess={isCheckingAccess}
 										isPending={isPending}
 										onApplyDraft={applyDraft}
-										onCheckApplicationAccess={() =>
-											void checkApplicationAccess()
-										}
 										onRunAction={(action, successMessage) =>
 											void runAction(action, successMessage)
 										}
@@ -649,7 +593,7 @@ export function SCIMWorkspace({
 											type="button"
 											variant="outline"
 											size="sm"
-											className="mt-4"
+											className="mt-4 min-h-11"
 											onClick={clearUserFilters}
 										>
 											Clear search and filters

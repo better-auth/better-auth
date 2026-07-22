@@ -5,10 +5,11 @@ import { dash, sendEmail, sentinel } from "@better-auth/infra";
 import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
+import { acquireActiveSCIMUserLink } from "@better-auth/scim";
 import { sso } from "@better-auth/sso";
 import { stripe } from "@better-auth/stripe";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
-import type { BetterAuthOptions } from "better-auth";
+import type { BetterAuthOptions, BetterAuthPlugin } from "better-auth";
 import { APIError, betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import type { Organization } from "better-auth/plugins";
@@ -29,7 +30,16 @@ import {
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { Stripe } from "stripe";
-import { createSCIMDemoPlugin } from "./scim-demo.ts";
+import {
+	createSCIMDemoPlugin,
+	isSCIMDemoEnabled,
+	SCIM_DEMO_CONNECTION_ID,
+} from "./scim-demo.ts";
+import {
+	getSCIMDemoOIDCIssuer,
+	getSCIMDemoOIDCProvider,
+	SCIM_DEMO_SSO_PROVIDER_ID,
+} from "./scim-demo-oidc.ts";
 
 const database = (() => {
 	if (process.env.DEMO_SQLITE_PATH) {
@@ -75,18 +85,25 @@ if (!database) {
 
 const scimDemoPlugin = createSCIMDemoPlugin();
 
+function isBetterAuthPlugin(plugin: unknown): plugin is BetterAuthPlugin {
+	return (
+		typeof plugin === "object" &&
+		plugin !== null &&
+		"id" in plugin &&
+		typeof plugin.id === "string"
+	);
+}
+
+const dashPlugin: unknown = dash();
+if (!isBetterAuthPlugin(dashPlugin)) {
+	throw new Error("The Dash integration did not return a Better Auth plugin");
+}
+
 const authOptions = {
 	appName: "Better Auth Demo",
 	database,
 	user: {
 		additionalFields: {
-			scimDemoActive: {
-				type: "boolean",
-				required: false,
-				defaultValue: false,
-				input: false,
-				returned: false,
-			},
 			scimDemoRole: {
 				type: "string",
 				required: false,
@@ -274,6 +291,36 @@ const authOptions = {
 			},
 		}),
 		sso({
+			resolveUser: async (input, context) => {
+				if (input.providerId !== SCIM_DEMO_SSO_PROVIDER_ID) {
+					return { action: "continue" };
+				}
+				if (input.accountKey.issuer !== getSCIMDemoOIDCIssuer()) {
+					return {
+						action: "reject",
+						code: "SCIM_DEMO_ISSUER_MISMATCH",
+						message: "The SCIM demo identity provider issuer did not match",
+					};
+				}
+				const link = await acquireActiveSCIMUserLink(
+					{
+						connectionId: SCIM_DEMO_CONNECTION_ID,
+						externalId: input.accountKey.providerAccountId,
+					},
+					context,
+				);
+				return link
+					? {
+							action: "link",
+							profile: "preserve",
+							userId: link.userId,
+						}
+					: {
+							action: "reject",
+							code: "SCIM_USER_NOT_ACTIVE",
+							message: "This directory user is not active",
+						};
+			},
 			defaultSSO: [
 				{
 					domain: "http://localhost:3000",
@@ -341,12 +388,8 @@ const authOptions = {
 		  `,
 						},
 						idpMetadata: {
-							entityURL:
-								"https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435/metadata",
 							entityID:
 								"https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435",
-							redirectURL:
-								"https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435/sso",
 							singleSignOnService: [
 								{
 									Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
@@ -377,6 +420,7 @@ const authOptions = {
 						callbackUrl: "/dashboard",
 					},
 				},
+				...(isSCIMDemoEnabled() ? [getSCIMDemoOIDCProvider()] : []),
 			],
 		}),
 		scimDemoPlugin,
@@ -502,7 +546,7 @@ export const auth = betterAuth({
 			authOptions,
 			{ shouldMutateListDeviceSessionsEndpoint: true },
 		),
-		dash(),
+		dashPlugin,
 		sentinel(),
 	],
 });
