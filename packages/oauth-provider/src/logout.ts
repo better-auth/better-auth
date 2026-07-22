@@ -218,16 +218,17 @@ async function applyBackchannelLogoutPlan(
 	plan: BackchannelLogoutPlan,
 ): Promise<void> {
 	const revokedAt = new Date();
+	const adapter = await getCurrentAdapter(ctx.context.adapter);
 	const revocations = await Promise.allSettled([
 		plan.accessTokenIds.length > 0
-			? ctx.context.adapter.updateMany({
+			? adapter.updateMany({
 					model: "oauthAccessToken",
 					where: [{ field: "id", operator: "in", value: plan.accessTokenIds }],
 					update: { revoked: revokedAt },
 				})
 			: Promise.resolve(),
 		plan.refreshTokenIds.length > 0
-			? ctx.context.adapter.updateMany({
+			? adapter.updateMany({
 					model: "oauthRefreshToken",
 					where: [{ field: "id", operator: "in", value: plan.refreshTokenIds }],
 					update: { revoked: revokedAt },

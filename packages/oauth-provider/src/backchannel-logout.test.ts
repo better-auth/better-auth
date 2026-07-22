@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import {
 	getCurrentAdapter,
+	runWithAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
 import {
@@ -139,48 +140,76 @@ describe("oauth back-channel logout", async () => {
 								clientId: z.string().optional(),
 								rollback: z.boolean(),
 								sessionToken: z.string(),
+								trackActiveAdapterWrites: z.boolean().optional(),
 								transactionAccessTokenId: z.string().optional(),
 							}),
 						},
 						async (ctx) => {
 							const rollbackMarker = Symbol("rollback session revocation");
-							try {
-								await runWithTransaction(ctx.context.adapter, async () => {
-									if (ctx.body.clientId && ctx.body.transactionAccessTokenId) {
-										const activeSession =
-											await ctx.context.internalAdapter.findSession(
-												ctx.body.sessionToken,
+							const updatedModelsThroughActiveAdapter: string[] = [];
+							const revokeSession = async () => {
+								try {
+									await runWithTransaction(ctx.context.adapter, async () => {
+										if (
+											ctx.body.clientId &&
+											ctx.body.transactionAccessTokenId
+										) {
+											const activeSession =
+												await ctx.context.internalAdapter.findSession(
+													ctx.body.sessionToken,
+												);
+											if (!activeSession) throw new Error("Session not found");
+											const adapter = await getCurrentAdapter(
+												ctx.context.adapter,
 											);
-										if (!activeSession) throw new Error("Session not found");
-										const adapter = await getCurrentAdapter(
+											await adapter.create({
+												model: "oauthAccessToken",
+												forceAllowId: true,
+												data: {
+													id: ctx.body.transactionAccessTokenId,
+													token: ctx.body.transactionAccessTokenId,
+													clientId: ctx.body.clientId,
+													sessionId: activeSession.session.id,
+													userId: activeSession.user.id,
+													scopes: ["openid"],
+													expiresAt: new Date(Date.now() + 60_000),
+													createdAt: new Date(),
+													revoked: null,
+												},
+											});
+										}
+										await ctx.context.internalAdapter.deleteSession(
+											ctx.body.sessionToken,
+										);
+										if (ctx.body.rollback) throw rollbackMarker;
+									});
+								} catch (error) {
+									if (error !== rollbackMarker) throw error;
+									return false;
+								}
+								return true;
+							};
+							const committed = ctx.body.trackActiveAdapterWrites
+								? await (async () => {
+										const baseAdapter = await getCurrentAdapter(
 											ctx.context.adapter,
 										);
-										await adapter.create({
-											model: "oauthAccessToken",
-											forceAllowId: true,
-											data: {
-												id: ctx.body.transactionAccessTokenId,
-												token: ctx.body.transactionAccessTokenId,
-												clientId: ctx.body.clientId,
-												sessionId: activeSession.session.id,
-												userId: activeSession.user.id,
-												scopes: ["openid"],
-												expiresAt: new Date(Date.now() + 60_000),
-												createdAt: new Date(),
-												revoked: null,
+										const activeAdapter = {
+											...baseAdapter,
+											async updateMany(input) {
+												updatedModelsThroughActiveAdapter.push(input.model);
+												return baseAdapter.updateMany(input);
 											},
-										});
-									}
-									await ctx.context.internalAdapter.deleteSession(
-										ctx.body.sessionToken,
-									);
-									if (ctx.body.rollback) throw rollbackMarker;
-								});
-							} catch (error) {
-								if (error !== rollbackMarker) throw error;
-								return ctx.json({ committed: false });
-							}
-							return ctx.json({ committed: true });
+										} satisfies typeof baseAdapter;
+										return runWithAdapter(activeAdapter, revokeSession);
+									})()
+								: await revokeSession();
+							return ctx.json({
+								committed,
+								...(ctx.body.trackActiveAdapterWrites
+									? { updatedModelsThroughActiveAdapter }
+									: {}),
+							});
 						},
 					),
 				},
@@ -308,6 +337,7 @@ describe("oauth back-channel logout", async () => {
 		clientId?: string;
 		rollback: boolean;
 		sessionToken: string;
+		trackActiveAdapterWrites?: boolean;
 		transactionAccessTokenId?: string;
 	}) {
 		const response = await fetch(
@@ -323,7 +353,10 @@ describe("oauth back-channel logout", async () => {
 				`Transactional session revocation failed: ${await response.text()}`,
 			);
 		}
-		return (await response.json()) as { committed: boolean };
+		return (await response.json()) as {
+			committed: boolean;
+			updatedModelsThroughActiveAdapter?: string[];
+		};
 	}
 
 	async function readClientTokenRevocation(clientId: string) {
@@ -440,6 +473,27 @@ describe("oauth back-channel logout", async () => {
 			where: [{ field: "id", value: "transaction-only-access-token" }],
 		});
 		expect(transactionOnlyToken?.revoked).toBeInstanceOf(Date);
+	});
+
+	it("applies committed token revocation through the active adapter", async () => {
+		const signedIn = await signInWithTestUser();
+		headers = signedIn.headers;
+		const oauthClient = await registerClient();
+		await issueTokens({
+			client: oauthClient,
+			requestScopes: ["openid", "email", "profile"],
+		});
+
+		const committed = await revokeSessionOverHTTP({
+			rollback: false,
+			sessionToken: await getSessionToken(headers),
+			trackActiveAdapterWrites: true,
+		});
+
+		expect(committed).toEqual({
+			committed: true,
+			updatedModelsThroughActiveAdapter: ["oauthAccessToken"],
+		});
 	});
 
 	it("keeps the session and tokens active when a later hook vetoes deletion", async () => {
