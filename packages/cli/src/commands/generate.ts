@@ -132,11 +132,36 @@ async function generateAction(opts: any) {
 		process.exit(1);
 	}
 
+	let outputIsDirectory = false;
+	if (options.output) {
+		try {
+			outputIsDirectory = (
+				await fs.stat(path.resolve(cwd, options.output))
+			).isDirectory();
+		} catch {
+			// A path that does not exist yet is an output file.
+		}
+	}
+	const configOutputPath =
+		options.output && !outputIsDirectory ? options.output : undefined;
+	const resolvedConfigOutputPath = configOutputPath
+		? path.resolve(cwd, configOutputPath)
+		: undefined;
+	const outputExistedBefore = resolvedConfigOutputPath
+		? existsSync(resolvedConfigOutputPath)
+		: true;
+	const removeGeneratedStub = async () => {
+		if (!resolvedConfigOutputPath || outputExistedBefore) return;
+		await fs.rm(resolvedConfigOutputPath, { force: true }).catch(() => {});
+	};
+
 	const config = await getConfig({
 		cwd,
 		configPath: options.config,
+		outputPath: configOutputPath,
 	});
 	if (!config) {
+		await removeGeneratedStub();
 		console.error(
 			"No configuration file found. Add a `auth.ts` file to your project or pass the path to the configuration file using the `--config` flag.",
 		);
@@ -149,8 +174,9 @@ async function generateAction(opts: any) {
 		adapter = createMockAdapter(options.adapter, options.dialect);
 	} else {
 		// Get adapter from config (existing behavior)
-		adapter = await getAdapter(config).catch((e) => {
+		adapter = await getAdapter(config).catch(async (e) => {
 			console.error(e.message);
+			await removeGeneratedStub();
 			process.exit(1);
 		});
 	}
@@ -160,17 +186,21 @@ async function generateAction(opts: any) {
 		output: options.output,
 		adapterId: adapter.id,
 	});
+	const resolvedOutputPath = options.output
+		? path.resolve(cwd, options.output)
+		: undefined;
 
 	const spinner = yoctoSpinner({ text: "preparing schema..." }).start();
 
 	const schema = await generateSchema({
 		adapter,
-		file: options.output,
+		file: resolvedOutputPath ?? options.output,
 		options: config,
 	});
 
 	spinner.stop();
 	if (!schema.code) {
+		await removeGeneratedStub();
 		console.log("Your schema is already up to date.");
 		// telemetry: track generate attempted, no changes
 		try {
@@ -205,16 +235,19 @@ async function generateAction(opts: any) {
 		}
 
 		if (confirm) {
-			const exist = existsSync(path.join(cwd, schema.fileName));
+			const schemaPath = path.isAbsolute(schema.fileName)
+				? schema.fileName
+				: path.join(cwd, schema.fileName);
+			const exist = existsSync(schemaPath);
 			if (!exist) {
-				await fs.mkdir(path.dirname(path.join(cwd, schema.fileName)), {
+				await fs.mkdir(path.dirname(schemaPath), {
 					recursive: true,
 				});
 			}
 			if (schema.overwrite) {
-				await fs.writeFile(path.join(cwd, schema.fileName), schema.code);
+				await fs.writeFile(schemaPath, schema.code);
 			} else {
-				await fs.appendFile(path.join(cwd, schema.fileName), schema.code);
+				await fs.appendFile(schemaPath, schema.code);
 			}
 			console.log(
 				`🚀 Schema was ${
@@ -235,6 +268,7 @@ async function generateAction(opts: any) {
 			process.exit(0);
 		} else {
 			console.error("Schema generation aborted.");
+			await removeGeneratedStub();
 			// telemetry: track generate aborted
 			try {
 				const telemetry = await createTelemetry(config);
@@ -270,6 +304,7 @@ async function generateAction(opts: any) {
 
 	if (!confirm) {
 		console.error("Schema generation aborted.");
+		await removeGeneratedStub();
 		// telemetry: track generate aborted before write
 		try {
 			const telemetry = await createTelemetry(config);
@@ -284,18 +319,14 @@ async function generateAction(opts: any) {
 		process.exit(1);
 	}
 
-	if (!options.output) {
-		const dirExist = existsSync(path.dirname(path.join(cwd, schema.fileName)));
-		if (!dirExist) {
-			await fs.mkdir(path.dirname(path.join(cwd, schema.fileName)), {
-				recursive: true,
-			});
-		}
+	const writePath = resolvedOutputPath ?? path.join(cwd, schema.fileName);
+	const dirExist = existsSync(path.dirname(writePath));
+	if (!dirExist) {
+		await fs.mkdir(path.dirname(writePath), {
+			recursive: true,
+		});
 	}
-	await fs.writeFile(
-		options.output || path.join(cwd, schema.fileName),
-		schema.code,
-	);
+	await fs.writeFile(writePath, schema.code);
 	console.log(`🚀 Schema was generated successfully!`);
 	// telemetry: track generate success
 	try {

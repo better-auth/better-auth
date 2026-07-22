@@ -55,7 +55,9 @@ interface NodeLikeRequest {
 
 interface NodeLikeResponse {
 	set?: (name: string, value: string) => void;
+	get?: (name: string) => string | undefined;
 	setHeader?: (name: string, value: string) => void;
+	getHeader?: (name: string) => string | number | string[] | undefined;
 	status?: (code: number) => { json: (body: unknown) => void };
 	writeHead?: (code: number, headers: Record<string, string>) => void;
 	end?: (body: string) => void;
@@ -131,7 +133,34 @@ export function makeDpopWWWAuthenticate(algorithms: readonly string[]): string {
 	return `DPoP algs="${safe.join(" ")}"`;
 }
 
-function make401Response(wwwAuth: string): Response {
+function addExposeHeader(
+	headers: Record<string, string>,
+	headerName: string,
+): Record<string, string> {
+	const exposedHeaders = headers["Access-Control-Expose-Headers"];
+	if (!exposedHeaders) {
+		return {
+			...headers,
+			"Access-Control-Expose-Headers": headerName,
+		};
+	}
+
+	const alreadyExposed = exposedHeaders
+		.split(",")
+		.some((header) => header.trim().toLowerCase() === headerName.toLowerCase());
+
+	return {
+		...headers,
+		"Access-Control-Expose-Headers": alreadyExposed
+			? exposedHeaders
+			: `${exposedHeaders}, ${headerName}`,
+	};
+}
+
+function make401Response(
+	wwwAuth: string,
+	corsHeaders: Record<string, string>,
+): Response {
 	return Response.json(
 		{
 			jsonrpc: "2.0",
@@ -145,6 +174,7 @@ function make401Response(wwwAuth: string): Response {
 		{
 			status: 401,
 			headers: {
+				...addExposeHeader(corsHeaders, "WWW-Authenticate"),
 				"WWW-Authenticate": wwwAuth,
 			},
 		},
@@ -155,20 +185,45 @@ function send401Node(
 	res: NodeLikeResponse,
 	wwwAuth: string,
 	message: string,
+	corsHeaders: Record<string, string>,
 ): void {
 	const body = JSON.stringify({
 		jsonrpc: "2.0",
 		error: { code: -32000, message },
 		id: null,
 	});
+	const existingExposedHeaders =
+		res.get?.("Access-Control-Expose-Headers") ??
+		res.getHeader?.("Access-Control-Expose-Headers") ??
+		res.getHeader?.("access-control-expose-headers");
+	const headers = {
+		...addExposeHeader(
+			{
+				...corsHeaders,
+				...(existingExposedHeaders
+					? {
+							"Access-Control-Expose-Headers": Array.isArray(
+								existingExposedHeaders,
+							)
+								? existingExposedHeaders.join(", ")
+								: String(existingExposedHeaders),
+						}
+					: {}),
+			},
+			"WWW-Authenticate",
+		),
+		"WWW-Authenticate": wwwAuth,
+	};
 
 	if (typeof res.set === "function") {
-		res.set("WWW-Authenticate", wwwAuth);
+		for (const [name, value] of Object.entries(headers)) {
+			res.set(name, value);
+		}
 		res.status?.(401).json(JSON.parse(body));
 	} else if (typeof res.writeHead === "function") {
 		res.writeHead(401, {
 			"Content-Type": "application/json",
-			"WWW-Authenticate": wwwAuth,
+			...headers,
 		});
 		res.end?.(body);
 	}
@@ -317,6 +372,7 @@ export function createMcpResourceClient(
 				if (isDpopBindingError(error)) {
 					return make401Response(
 						makeDpopWWWAuthenticate(dpopSigningAlgorithms),
+						corsHeaders,
 					);
 				}
 				throw error;
@@ -327,6 +383,7 @@ export function createMcpResourceClient(
 						req.headers.get("Authorization"),
 						req.headers.has("DPoP"),
 					),
+					corsHeaders,
 				);
 			}
 
@@ -410,6 +467,7 @@ export function createMcpResourceClient(
 						res,
 						makeDpopWWWAuthenticate(dpopSigningAlgorithms),
 						"Invalid or expired token",
+						corsHeaders,
 					);
 					return;
 				}
@@ -422,6 +480,7 @@ export function createMcpResourceClient(
 					authHeader
 						? "Invalid or expired token"
 						: "Unauthorized: Authentication required",
+					corsHeaders,
 				);
 				return;
 			}

@@ -134,6 +134,11 @@ export interface SAMLConfig {
 	 * flows when no RelayState callback URL is available.
 	 */
 	callbackUrl?: string | undefined;
+	/**
+	 * Fallback absolute URL or same-origin relative path for IdP-initiated SAML
+	 * responses when RelayState has no safe callback, including error redirects.
+	 */
+	idpInitiatedCallbackUrl?: string | undefined;
 	idpMetadata: SAMLIdentityProviderMetadata;
 	/**
 	 * SP metadata configuration. All fields are optional; when omitted,
@@ -678,6 +683,11 @@ export interface SSOOptions {
 		 * @default false
 		 */
 		wantLogoutResponseSigned?: boolean;
+		/**
+		 * Global fallback absolute URL or same-origin relative path for
+		 * IdP-initiated SAML responses when the provider has no safe callback.
+		 */
+		idpInitiatedCallbackUrl?: string | undefined;
 	};
 }
 

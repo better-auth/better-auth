@@ -24,6 +24,7 @@ import {
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { getOAuthCallbackPath } from "../../oauth2/utils";
 import { generateIdTokenNonce, generateState } from "../../utils";
+import { safeCloneRequest } from "../../utils/request";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
@@ -285,7 +286,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					);
 				}
 				const { token, nonce } = c.body.idToken;
-				const valid = await verifyProviderIdToken(provider, token, nonce);
+				const valid = await verifyProviderIdToken(provider, token, nonce, c);
 				if (!valid) {
 					c.context.logger.warn("Invalid id token", {
 						provider: c.body.provider,
@@ -595,7 +596,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 								url,
 								token,
 							},
-							ctx.request?.clone(),
+							safeCloneRequest(ctx.request),
 						),
 					);
 				}

@@ -9,6 +9,10 @@ Most Better Auth 1.7 changes are additive. Most projects start with one command:
 npx auth@rc upgrade
 ```
 
+<Callout type="warn">
+  The commands in this guide use the `rc` tag because 1.7 is a release candidate. The `latest` tag still resolves the 1.6 CLI until 1.7 is stable, so `auth@latest` or an untagged `auth` would generate a 1.6 schema. Upgrade `better-auth` and every `@better-auth/*` package to the `rc` version too. Once 1.7 is stable, use `@latest` or drop the tag.
+</Callout>
+
 Some areas need more care: OAuth, OpenID Connect, SAML, SCIM, two-factor authentication, MCP, custom storage, and proxy setups. Use this table to choose the sections that apply to your project.
 
 | If your project                                                        | Read                                                                            |
@@ -34,8 +38,8 @@ The upgrade command handles package updates. The database needs more care. A few
 Use the CLI migration commands:
 
 ```bash title="Terminal"
-npx auth@latest generate
-npx auth@latest migrate
+npx auth@rc generate
+npx auth@rc migrate
 ```
 
 If you manage your own schema with Drizzle or Prisma, run `generate` and apply the result through your own migration tooling.
@@ -56,11 +60,16 @@ These features change the schema:
 | Account identity           | An issuer column, a renamed provider-account column, and a compound index  | **No, backfill**         |
 | SCIM                       | Seven provisioning models with layouts that replace the legacy SCIM models | **No, reprovision**      |
 | Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                  | Not needed               |
+| Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables            | **No, move client data** |
 
-Account identity and SCIM both require a manual data step. Plan each applicable cutover before you deploy.
+Account identity, SCIM, and the provider client store require manual data steps. Plan each applicable cutover before you deploy.
 
 <Callout type="warn">
   Do not run the generated SCIM migration over populated prerelease `scimGroup` or `scimGroupMember` tables. Follow the [SCIM cutover](#scim-requires-full-reprovisioning) before creating the new schema.
+</Callout>
+
+<Callout type="warn">
+  **Migrating from `oidcProvider` or the in-core MCP plugin moves client data.** `@better-auth/oauth-provider` stores registered clients in `oauthClient`, not the old `oauthApplication`, and renames the `oauthAccessToken.accessToken` column to `token`. `auth migrate` only adds tables and columns; it never renames or copies data. Copy clients with an explicit field mapping or re-register them before cutover. The old and new client tables are not column-compatible: `redirectUrls` becomes the `redirectUris` array, `metadata` becomes JSON, and fields such as `grantTypes` and `tokenEndpointAuthMethod` are new. Dynamically registered clients can re-register. Drop or rename the legacy `oauthAccessToken` table before migrating because its rows are ephemeral access tokens and the new required `token` column cannot be added to populated rows automatically.
 </Callout>
 
 ***
@@ -350,7 +359,7 @@ The MCP plugin moves from `better-auth` into `@better-auth/mcp`, built on the OA
 4. Rename `withMcpAuth` to `requireMcpAuth`, and `createMcpAuthClient` to `createMcpResourceClient`.
 5. Regenerate or migrate your schema.
 
-The OAuth endpoints move from `/mcp/*` to `/oauth2/*`. Discovery-based MCP clients find the new locations on their own. MCP also defaults `refreshTokenReuseInterval` to 30 seconds for native and public clients; set it to `0` if you want strict refresh-token replay handling.
+The OAuth endpoints move from `/mcp/*` to `/oauth2/*`. Discovery-based MCP clients find the new locations on their own. Existing registered clients move to the shared `oauthClient` store and are not copied automatically; complete the provider-client data step in [Before you upgrade](#before-you-upgrade) before cutover. MCP also defaults `refreshTokenReuseInterval` to 30 seconds for native and public clients; set it to `0` if you want strict refresh-token replay handling.
 
 ***
 
@@ -380,7 +389,7 @@ Signing certificates now accept a single value or a list, which lets you rotate 
 
 The callback URL is derived automatically, service-provider metadata is generated for you, and several fields are removed. One endpoint path changes, and error codes in the redirect change from short aliases to the full lowercased internal code (for example `saml_multiple_assertions`).
 
-**What to do:** remove `callbackUrl`, the empty `spMetadata`, and the removed fields from your config. Update your provider callback URL to `/sso/saml2/sp/acs/:providerId`. Set the post-login redirect with `callbackURL` in `signIn.sso()`. If you read SAML error codes from the redirect URL, switch to the lowercased codes.
+**What to do:** remove the empty `spMetadata` and the removed fields from your config. Register the ACS URL with your IdP as your base URL plus `/sso/saml2/sp/acs/:providerId`; with the default base path that is `https://yourapp.com/api/auth/sso/saml2/sp/acs/:providerId`. For SP-initiated logins, set the post-login redirect with `callbackURL` in `signIn.sso()`. The `callbackUrl` config field is no longer the ACS URL and is now optional, but it remains the post-login redirect for IdP-initiated logins. Keep it if you enable `allowIdpInitiated` and need a specific landing page. If you read SAML error codes from the redirect URL, switch to the lowercased codes.
 
 ### `/sso/update-provider` rejects partial mappings
 
@@ -577,13 +586,14 @@ These do not need action for most setups, but they change what you see.
 Run once, after applying the changes that affect you:
 
 ```bash title="Terminal"
-npx auth@latest generate
-npx auth@latest migrate
+npx auth@rc generate
+npx auth@rc migrate
 ```
 
 Then complete the manual data step if it applies:
 
 * **Backfill account identities:** assign every account a reviewed issuer and provider account identifier, resolve collisions, and add the compound unique index before deploying.
+* **Move provider clients:** copy or re-register clients from `oidcProvider` or the in-core MCP plugin before switching to the shared OAuth provider tables.
 * **Reprovision SCIM:** follow the [full cutover](#scim-requires-full-reprovisioning), including reviewed handling of legacy core identities, then run a complete User and Group provisioning cycle.
 
 ***
