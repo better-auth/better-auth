@@ -29,6 +29,7 @@ import type {
 	SSOProvider,
 } from "../types";
 import {
+	isSafeSAMLRedirectPath,
 	parseProviderEmailVerified,
 	safeJsonParse,
 	validateEmailDomain,
@@ -50,7 +51,8 @@ function getSafeRedirectCandidate(
 ): string | undefined {
 	if (!url) return;
 
-	if (url.startsWith("/") && !url.startsWith("//")) {
+	if (url.startsWith("/")) {
+		if (!isSafeSAMLRedirectPath(url)) return;
 		try {
 			const absoluteUrl = new URL(url, appOrigin);
 			if (

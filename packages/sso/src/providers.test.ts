@@ -20,6 +20,8 @@ describe("SAML redirect URL schema", () => {
 		["https://frontend.example.com/dashboard", true],
 		["//evil.example.com", false],
 		["/\\evil.example.com", false],
+		["/%2fevil.example.com", false],
+		["/%5cevil.example.com", false],
 		["dashboard", false],
 	])("validates %s", (url, expected) => {
 		expect(samlRedirectUrlSchema.safeParse(url).success).toBe(expected);

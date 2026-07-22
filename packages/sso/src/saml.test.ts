@@ -6511,6 +6511,27 @@ describe("SAML SSO Hardening", () => {
 			).toBe(frontendCallback);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it.each([
+			"/\\evil.example.com",
+			"/%2fevil.example.com",
+			"/%5cevil.example.com",
+		])("should skip unsafe relative redirect candidate %s", (candidate) => {
+			const appOrigin = "http://localhost:3000";
+			const callbackPath = `${appOrigin}/api/auth/sso/saml2/sp/acs/provider`;
+
+			expect(
+				getSafeRedirectUrl(
+					[candidate, "/dashboard"],
+					callbackPath,
+					appOrigin,
+					() => true,
+				),
+			).toBe("/dashboard");
+		});
+
 		async function getIdPInitiatedSAMLResponse(): Promise<string> {
 			let response: MockSAMLResponse | undefined;
 			await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
