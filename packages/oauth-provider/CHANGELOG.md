@@ -188,8 +188,6 @@
 
   Migration: run the schema migration (`npx @better-auth/cli migrate`, or `generate` if you manage the schema yourself) to add the new resource columns.
 
-# @better-auth/oauth-provider
-
 ## 1.6.24
 
 ### Patch Changes

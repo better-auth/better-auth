@@ -43,8 +43,6 @@
 
 ## 1.7.0-beta.4
 
-# @better-auth/kysely-adapter
-
 ## 1.6.24
 
 ### Patch Changes

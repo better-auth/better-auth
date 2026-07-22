@@ -60,8 +60,6 @@
 
 ## 1.7.0-beta.3
 
-# @better-auth/stripe
-
 ## 1.6.24
 
 ### Patch Changes
