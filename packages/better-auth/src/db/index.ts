@@ -1,4 +1,11 @@
 export * from "@better-auth/core/db";
+export {
+	handleExpiredSession,
+	handleExpiredSessionIfNeeded,
+	isSessionExpired,
+	notifySessionExpired,
+	notifySessionExpiredIfNeeded,
+} from "../utils/session-expired";
 export * from "./field";
 export * from "./field-converter";
 export * from "./get-schema";

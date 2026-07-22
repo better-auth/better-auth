@@ -31,6 +31,10 @@ import {
 import type { Prettify, Session, User } from "../../types";
 import { getDate } from "../../utils/date";
 import { isAPIError } from "../../utils/is-api-error";
+import {
+	handleExpiredSession,
+	isSessionExpired,
+} from "../../utils/session-expired";
 import { getShouldSkipSessionRefresh } from "../state/should-session-refresh";
 
 export const getSession = <Option extends BetterAuthOptions>() =>
@@ -229,6 +233,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					ctx.context.secret,
 				);
 
+				let expiredSessionFromCache: {
+					session: Session;
+					user: User;
+				} | null = null;
+
 				/**
 				 * If session data is present in the cookie, check if it should be used or refreshed
 				 */
@@ -265,10 +274,28 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						const cachedSessionExpiresAt = new Date(
 							session.session.expiresAt as unknown as string | number | Date,
 						).getTime();
+						const sessionExpired = isSessionExpired(session.session);
 						shouldExpireCookieCache =
 							sessionDataPayload.expiresAt < now ||
 							!Number.isFinite(cachedSessionExpiresAt) ||
-							cachedSessionExpiresAt < now;
+							cachedSessionExpiresAt < now ||
+							sessionExpired;
+
+						if (sessionExpired) {
+							expiredSessionFromCache = {
+								session: parseSessionOutput(ctx.context.options, {
+									...session.session,
+									expiresAt: new Date(session.session.expiresAt),
+									createdAt: new Date(session.session.createdAt),
+									updatedAt: new Date(session.session.updatedAt),
+								}),
+								user: parseUserOutput(ctx.context.options, {
+									...session.user,
+									createdAt: new Date(session.user.createdAt),
+									updatedAt: new Date(session.user.updatedAt),
+								}),
+							};
+						}
 					}
 
 					if (shouldExpireCookieCache) {
@@ -394,18 +421,18 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				const session =
 					await ctx.context.internalAdapter.findSession(sessionCookieToken);
 				ctx.context.session = session;
-				if (!session || session.session.expiresAt < new Date()) {
-					deleteSessionCookie(ctx);
+				if (!session || isSessionExpired(session.session)) {
 					if (session) {
-						/**
-						 * if session expired clean up the session
-						 * Only delete on POST when deferSessionRefresh is enabled
-						 */
-						if (!deferSessionRefresh || isPostRequest) {
-							await ctx.context.internalAdapter.deleteSession(
-								session.session.token,
-							);
-						}
+						const shouldDelete = !deferSessionRefresh || isPostRequest;
+						await handleExpiredSession(ctx, session, {
+							deleteFromStore: shouldDelete,
+						});
+					} else if (expiredSessionFromCache) {
+						await handleExpiredSession(ctx, expiredSessionFromCache, {
+							deleteFromStore: false,
+						});
+					} else {
+						deleteSessionCookie(ctx);
 					}
 					return ctx.json(null);
 				}

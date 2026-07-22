@@ -447,13 +447,16 @@ export const auth = betterAuth({
 		preserveSessionInDatabase: false, // Preserve session records in database when deleted from secondary storage (default: `false`)
 		cookieCache: {
 			enabled: true, // Enable caching session in cookie (default: `false`)	
-				maxAge: 300, // 5 minutes
-				strategy: "jwt",
-				jwt: {
-					signingKey: "jwt-plugin" // or "secret" (default for JWT strategy)
-				}
+			maxAge: 300, // 5 minutes
+			strategy: "jwt",
+			jwt: {
+				signingKey: "jwt-plugin" // or "secret" (default for JWT strategy)
 			}
 		},
+		onSessionExpired: async ({ session, user }, ctx) => {
+			// Called when Better Auth detects an expired session
+		},
+	},
 })
 ```
 
@@ -466,6 +469,7 @@ export const auth = betterAuth({
 * `preserveSessionInDatabase`: Preserve session records in database when deleted from secondary storage (default: `false`)
 * `cookieCache`: Enable caching session in cookie
 * `cookieCache.jwt.signingKey`: For `strategy: "jwt"`, choose `"secret"` (HS256, default) or `"jwt-plugin"` (asymmetric JWTs backed by the `jwt()` plugin)
+* `onSessionExpired`: Callback invoked when Better Auth detects an expired session during validation (including `getSession`, `findSession`, and OAuth Provider checks). Receives `{ session, user }` and the endpoint `ctx` (`GenericEndpointContext`). Not called for explicit revocation (sign-out, revoke).
 
 ## `account`
 

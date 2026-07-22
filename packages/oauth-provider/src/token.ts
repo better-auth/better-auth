@@ -5,6 +5,7 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "better-auth/crypto";
+import { handleExpiredSessionIfNeeded } from "better-auth/db";
 import {
 	createDpopReplayStore,
 	generateCodeChallenge,
@@ -1653,7 +1654,7 @@ async function handleAuthorizationCodeGrant(
 			},
 		],
 	});
-	if (!session || session.expiresAt < new Date()) {
+	if (!session || (await handleExpiredSessionIfNeeded(ctx, session))) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "session no longer exists",
 			error: "invalid_request",

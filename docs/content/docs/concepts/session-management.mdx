@@ -67,6 +67,33 @@ export const auth = betterAuth({
 })
 ```
 
+### Session Expired Hook
+
+When Better Auth detects that a session has expired during validation (for example in `getSession`, `internalAdapter.findSession`, or OAuth token/introspection checks), it can invoke an `onSessionExpired` callback before performing expiry-related cleanup.
+
+This is useful for informing users that their session expired (for example, setting a short-lived flash cookie for a toast notification) rather than treating every unauthenticated response as a fresh visit.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    session: {
+        onSessionExpired: async ({ session, user }, ctx) => {
+            ctx.context.responseHeaders?.append(
+                "Set-Cookie",
+                "session_expired=1; Path=/; Max-Age=60; SameSite=Lax",
+            )
+        },
+    },
+})
+```
+
+<Callout type="info">
+  `onSessionExpired` is **not** called for explicit session revocation such as sign-out or `revokeSession`. It runs when Better Auth detects natural session expiry during validation — including `getSession`, session lookups via `findSession`, and OAuth Provider token/introspection checks.
+
+  With `deferSessionRefresh`, the hook still runs on GET when a session is expired, but the session row is not deleted until a POST request to `/get-session`.
+</Callout>
+
 ## Session Freshness
 
 Some endpoints in Better Auth require the session to be **fresh**. A session is considered fresh if its `createdAt` is within the `freshAge` limit. By default, the `freshAge` is set to **1 day** (60 \* 60 \* 24).

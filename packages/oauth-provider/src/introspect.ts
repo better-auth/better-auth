@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
+import { handleExpiredSessionIfNeeded } from "better-auth/db";
 import {
 	getJwks,
 	stripAccessTokenAuthorizationScheme,
@@ -233,7 +234,7 @@ async function validateJwtAccessToken(
 			model: "session",
 			where: [{ field: "id", value: sessionId }],
 		});
-		if (!session || session.expiresAt < new Date()) {
+		if (!session || (await handleExpiredSessionIfNeeded(ctx, session))) {
 			return { active: false };
 		}
 	}
@@ -337,7 +338,7 @@ async function validateOpaqueAccessToken(
 				},
 			],
 		});
-		if (!session || session.expiresAt < new Date()) {
+		if (!session || (await handleExpiredSessionIfNeeded(ctx, session))) {
 			return inactiveAccessToken();
 		}
 	}
@@ -478,7 +479,7 @@ async function validateRefreshToken(
 				},
 			],
 		});
-		if (!session || session.expiresAt < new Date()) {
+		if (!session || (await handleExpiredSessionIfNeeded(ctx, session))) {
 			sessionId = undefined;
 		}
 	}
