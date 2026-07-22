@@ -49,6 +49,7 @@ describe("SSO", async () => {
 	});
 
 	server.service.on("beforeTokenSigning", (token, req) => {
+		token.payload.sub = "oauth2";
 		token.payload.email = "sso-user@localhost:8000.com";
 		token.payload.email_verified = true;
 		token.payload.name = "Test User";
@@ -1079,6 +1080,7 @@ describe("provisionUser should only be called for new users", async () => {
 			userInfoResponse.statusCode = 200;
 		});
 		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.sub = "provision-test-sub";
 			token.payload.email = "provision-test@localhost.com";
 			token.payload.email_verified = true;
 			token.payload.name = "Provision Test";
@@ -1236,6 +1238,7 @@ describe("provisionUserOnEveryLogin should call provisionUser on every sign-in",
 			userInfoResponse.statusCode = 200;
 		});
 		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.sub = "provision-every-login-sub";
 			token.payload.email = "provision-every-login@localhost.com";
 			token.payload.email_verified = true;
 			token.payload.name = "Provision Every Login";
@@ -1367,6 +1370,7 @@ describe("SSO shared redirectURI", async () => {
 	};
 
 	const tokenHandler = (token: any) => {
+		token.payload.sub = "shared-redirect-user";
 		token.payload.email = "shared-redirect@test.com";
 		token.payload.email_verified = true;
 		token.payload.name = "Shared Redirect User";
@@ -2418,6 +2422,7 @@ describe("SSO OIDC hook rejection redirect", async () => {
 	});
 
 	hookServer.service.on("beforeTokenSigning", (token) => {
+		token.payload.sub = "rejected-sub";
 		token.payload.email = "rejected@test.com";
 		token.payload.email_verified = true;
 	});
@@ -2648,7 +2653,7 @@ describe("SSO OIDC IDP-initiated bounce", async () => {
 			stateNonce!,
 		);
 		const parsedState = JSON.parse(verification!.value);
-		expect(parsedState.serverContext?.ssoProviderId).toBe(
+		expect(parsedState.serverContext?.ssoProviderReference?.providerId).toBe(
 			"idp-initiated-shared",
 		);
 		expect(parsedState.ssoProviderId).toBeUndefined();

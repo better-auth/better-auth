@@ -2,8 +2,12 @@ import type {
 	GenericEndpointContext,
 	UserProvisioningSource,
 } from "@better-auth/core";
-import { runWithTransaction } from "@better-auth/core/context";
+import {
+	queueAfterTransactionHook,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
+import { APIError } from "@better-auth/core/error";
 import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
 import { parseAdditionalUserInputFromProviderProfile } from "../db";
@@ -27,6 +31,14 @@ export async function handleOAuthUserInfo(
 		isTrustedProvider?: boolean | undefined;
 		trustProviderByName?: boolean | undefined;
 		source?: UserProvisioningSource | undefined;
+		selectedUser?:
+			| {
+					userId: string;
+					profile: "preserve" | "update";
+			  }
+			| undefined;
+		deferNonDatabaseWrites?: boolean | undefined;
+		requireExactAccountBinding?: boolean | undefined;
 	},
 ) {
 	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
@@ -35,6 +47,9 @@ export async function handleOAuthUserInfo(
 		method: "oauth",
 		oauth: { providerId: account.providerId },
 	};
+	const requireExactAccountBinding =
+		!!opts.selectedUser || opts.requireExactAccountBinding === true;
+	let pendingAccountCookie: Account | null = null;
 	const accountOwner = await c.context.internalAdapter
 		.findAccountOwnerByKey({
 			issuer: account.issuer,
@@ -61,10 +76,44 @@ export async function handleOAuthUserInfo(
 	}
 	const dbUser = await (async () => {
 		if (accountOwner?.kind === "owned") {
+			if (
+				opts.selectedUser &&
+				accountOwner.user.id !== opts.selectedUser.userId
+			) {
+				throw new APIError("CONFLICT", {
+					code: "account_ownership_conflict",
+					message: "Account is already linked to another user",
+				});
+			}
+			if (
+				requireExactAccountBinding &&
+				accountOwner.account.providerId !== account.providerId
+			) {
+				throw new APIError("CONFLICT", {
+					code: "account_provider_conflict",
+					message: "Account is already linked through another provider",
+				});
+			}
 			return {
 				user: accountOwner.user,
 				linkedAccount: accountOwner.account,
 				accounts: [accountOwner.account],
+			};
+		}
+		if (opts.selectedUser) {
+			const selectedUser = await c.context.internalAdapter.findUserById(
+				opts.selectedUser.userId,
+			);
+			if (!selectedUser) {
+				throw new APIError("NOT_FOUND", {
+					code: "user_not_found",
+					message: "User not found",
+				});
+			}
+			return {
+				user: selectedUser,
+				linkedAccount: null,
+				accounts: [],
 			};
 		}
 
@@ -79,6 +128,7 @@ export async function handleOAuthUserInfo(
 			accounts: emailMatch.accounts,
 		};
 	})().catch((e) => {
+		if (isAPIError(e)) throw e;
 		c.context.logger.error(
 			"Better auth was unable to query your database.\nError: ",
 			e,
@@ -109,10 +159,11 @@ export async function handleOAuthUserInfo(
 			const requireLocalEmailVerified =
 				accountLinking?.requireLocalEmailVerified ?? true;
 			if (
-				(!isTrustedProvider && !userInfo.emailVerified) ||
-				(requireLocalEmailVerified && !dbUser.user.emailVerified) ||
-				accountLinking?.enabled === false ||
-				accountLinking?.disableImplicitLinking === true
+				!opts.selectedUser &&
+				((!isTrustedProvider && !userInfo.emailVerified) ||
+					(requireLocalEmailVerified && !dbUser.user.emailVerified) ||
+					accountLinking?.enabled === false ||
+					accountLinking?.disableImplicitLinking === true)
 			) {
 				if (isDevelopment()) {
 					c.context.logger.warn(
@@ -134,7 +185,7 @@ export async function handleOAuthUserInfo(
 					},
 					source: { ...source, action: "link-account" },
 				});
-				await c.context.internalAdapter.linkAccount({
+				const createdAccount = await c.context.internalAdapter.linkAccount({
 					providerId: account.providerId,
 					issuer: account.issuer,
 					providerAccountId: account.providerAccountId,
@@ -146,6 +197,29 @@ export async function handleOAuthUserInfo(
 					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 					scope: account.scope,
 				});
+				if (!createdAccount) {
+					return {
+						error: "unable to link account",
+						data: null,
+					};
+				}
+				if (
+					requireExactAccountBinding &&
+					(createdAccount.issuer !== account.issuer ||
+						createdAccount.providerAccountId !== account.providerAccountId ||
+						createdAccount.providerId !== account.providerId ||
+						createdAccount.userId !== dbUser.user.id)
+				) {
+					throw new APIError("CONFLICT", {
+						code: "account_hook_binding_conflict",
+						message: "Account hook changed the selected authentication binding",
+					});
+				}
+				if (c.context.options.account?.storeAccountCookie) {
+					if (opts.deferNonDatabaseWrites)
+						pendingAccountCookie = createdAccount;
+					else await setAccountCookie(c, createdAccount);
+				}
 			} catch (e) {
 				if (isAPIError(e)) {
 					throw e;
@@ -162,6 +236,7 @@ export async function handleOAuthUserInfo(
 			// promoted to the local row so subsequent flows treat it as verified.
 			// FIXME(next-minor): unreachable once the gate becomes unconditional.
 			if (
+				!opts.selectedUser &&
 				userInfo.emailVerified &&
 				!dbUser.user.emailVerified &&
 				userInfo.email.toLowerCase() === dbUser.user.email
@@ -171,8 +246,11 @@ export async function handleOAuthUserInfo(
 				});
 			}
 
-			user =
-				(await applyUpdateUserInfoOnLink(c, dbUser.user.id, userInfo)) ?? user;
+			if (!opts.selectedUser) {
+				user =
+					(await applyUpdateUserInfoOnLink(c, dbUser.user.id, userInfo)) ??
+					user;
+			}
 		} else {
 			const { id: _providerAccountId, ...providerUserInfo } = userInfo;
 			await assertValidUserInfo(c, {
@@ -207,20 +285,44 @@ export async function handleOAuthUserInfo(
 					: {};
 
 			if (c.context.options.account?.storeAccountCookie) {
-				await setAccountCookie(c, {
+				const accountCookie = {
 					...linkedAccount,
 					...freshTokens,
-				});
+				};
+				if (opts.deferNonDatabaseWrites) pendingAccountCookie = accountCookie;
+				else await setAccountCookie(c, accountCookie);
 			}
 
 			if (Object.keys(freshTokens).length > 0) {
-				await c.context.internalAdapter.updateAccount(
+				const updatedAccount = await c.context.internalAdapter.updateAccount(
 					linkedAccount.id,
 					freshTokens,
 				);
+				if (!updatedAccount) {
+					return {
+						error: "unable to update account",
+						data: null,
+					};
+				}
+				if (
+					requireExactAccountBinding &&
+					(updatedAccount.issuer !== account.issuer ||
+						updatedAccount.providerAccountId !== account.providerAccountId ||
+						updatedAccount.providerId !== account.providerId ||
+						updatedAccount.userId !== dbUser.user.id)
+				) {
+					throw new APIError("CONFLICT", {
+						code: "account_hook_binding_conflict",
+						message: "Account hook changed the selected authentication binding",
+					});
+				}
+				if (opts.deferNonDatabaseWrites && pendingAccountCookie) {
+					pendingAccountCookie = updatedAccount;
+				}
 			}
 
 			if (
+				!opts.selectedUser &&
 				userInfo.emailVerified &&
 				!dbUser.user.emailVerified &&
 				userInfo.email.toLowerCase() === dbUser.user.email
@@ -230,7 +332,11 @@ export async function handleOAuthUserInfo(
 				});
 			}
 		}
-		if (overrideUserInfo) {
+		if (
+			opts.selectedUser
+				? opts.selectedUser.profile === "update"
+				: overrideUserInfo
+		) {
 			const {
 				id: _id,
 				email: _email,
@@ -262,6 +368,16 @@ export async function handleOAuthUserInfo(
 				c.context.logger.warn(
 					"Could not update user info during OAuth sign in; preserving existing user for session.",
 				);
+			}
+			if (
+				opts.selectedUser &&
+				updatedUser &&
+				updatedUser.id !== opts.selectedUser.userId
+			) {
+				throw new APIError("CONFLICT", {
+					code: "user_hook_selection_conflict",
+					message: "User hook changed the selected user",
+				});
 			}
 			user = updatedUser ?? user;
 		}
@@ -318,9 +434,22 @@ export async function handleOAuthUserInfo(
 					return { createdUser, createdAccount };
 				},
 			);
+			if (
+				requireExactAccountBinding &&
+				(createdAccount.issuer !== account.issuer ||
+					createdAccount.providerAccountId !== account.providerAccountId ||
+					createdAccount.providerId !== account.providerId ||
+					createdAccount.userId !== createdUser.id)
+			) {
+				throw new APIError("CONFLICT", {
+					code: "account_hook_binding_conflict",
+					message: "Account hook changed the selected authentication binding",
+				});
+			}
 			user = createdUser;
 			if (c.context.options.account?.storeAccountCookie) {
-				await setAccountCookie(c, createdAccount);
+				if (opts.deferNonDatabaseWrites) pendingAccountCookie = createdAccount;
+				else await setAccountCookie(c, createdAccount);
 			}
 		} catch (e) {
 			if (isAPIError(e)) {
@@ -352,12 +481,22 @@ export async function handleOAuthUserInfo(
 		(c.context.options.emailVerification?.sendOnSignUp ??
 			requireEmailVerification)
 	) {
-		await dispatchVerificationEmail(c, user, callbackURL);
+		await dispatchVerificationEmail(
+			c,
+			user,
+			callbackURL,
+			opts.deferNonDatabaseWrites,
+		);
 	}
 
 	if (requireEmailVerification && !user.emailVerified) {
 		if (!isRegister && c.context.options.emailVerification?.sendOnSignIn) {
-			await dispatchVerificationEmail(c, user, callbackURL);
+			await dispatchVerificationEmail(
+				c,
+				user,
+				callbackURL,
+				opts.deferNonDatabaseWrites,
+			);
 		}
 		return {
 			error: OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_VERIFIED,
@@ -366,13 +505,28 @@ export async function handleOAuthUserInfo(
 		};
 	}
 
-	const session = await c.context.internalAdapter.createSession(user.id);
+	const session = await c.context.internalAdapter.createSession(
+		user.id,
+		undefined,
+		undefined,
+		undefined,
+		{ deferSecondaryStorageWrites: opts.deferNonDatabaseWrites === true },
+	);
 	if (!session) {
 		return {
 			error: "unable to create session",
 			data: null,
 			isRegister: false,
 		};
+	}
+	if (
+		requireExactAccountBinding &&
+		session.userId !== (opts.selectedUser?.userId ?? user.id)
+	) {
+		throw new APIError("CONFLICT", {
+			code: "session_hook_user_conflict",
+			message: "Session hook changed the selected user",
+		});
 	}
 
 	return {
@@ -382,6 +536,7 @@ export async function handleOAuthUserInfo(
 		},
 		error: null,
 		isRegister,
+		accountCookie: pendingAccountCookie,
 	};
 }
 
@@ -389,34 +544,42 @@ async function dispatchVerificationEmail(
 	c: GenericEndpointContext,
 	user: User,
 	callbackURL: string | undefined,
+	deferUntilAfterTransaction?: boolean | undefined,
 ) {
 	const sendVerificationEmail =
 		c.context.options.emailVerification?.sendVerificationEmail;
 	if (!sendVerificationEmail) {
 		return;
 	}
-	try {
-		const token = await createEmailVerificationToken(
-			c.context.secret,
-			user.email,
-			undefined,
-			c.context.options.emailVerification?.expiresIn,
-		);
-		const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
-			callbackURL || "/",
-		)}`;
-		await c.context.runInBackgroundOrAwait(
-			sendVerificationEmail(
-				{
-					user,
-					url,
-					token,
-				},
-				c.request,
-			),
-		);
-	} catch (e) {
-		c.context.logger.error("Failed to send OAuth verification email", e);
+	const send = async () => {
+		try {
+			const token = await createEmailVerificationToken(
+				c.context.secret,
+				user.email,
+				undefined,
+				c.context.options.emailVerification?.expiresIn,
+			);
+			const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+				callbackURL || "/",
+			)}`;
+			await c.context.runInBackgroundOrAwait(
+				sendVerificationEmail(
+					{
+						user,
+						url,
+						token,
+					},
+					c.request,
+				),
+			);
+		} catch (e) {
+			c.context.logger.error("Failed to send OAuth verification email", e);
+		}
+	};
+	if (deferUntilAfterTransaction) {
+		await queueAfterTransactionHook(send);
+	} else {
+		await send();
 	}
 }
 

@@ -73,12 +73,14 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
+    "@better-auth/kysely-adapter": "workspace:*",
     "@types/body-parser": "^1.19.6",
     "@types/express": "^5.0.6",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
     "body-parser": "^2.2.2",
     "express": "^5.2.1",
+    "kysely": "catalog:",
     "oauth2-mock-server": "^9.0.0",
     "tsdown": "catalog:"
   },

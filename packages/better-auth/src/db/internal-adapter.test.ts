@@ -1171,6 +1171,92 @@ describe("internal adapter test", async () => {
 		expect(testMap.has(`active-sessions-${user.id}`)).toBe(false);
 	});
 
+	it("defers secondary session creation until commit and discards it on rollback", async () => {
+		const testMap = new Map<string, string>();
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(testMap),
+			session: { storeSessionInDatabase: true },
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "deferred-session-user",
+				email: "deferred-session@example.com",
+			},
+			{ method: "test" },
+		);
+
+		const committed = await runWithTransaction(testCtx.adapter, async () => {
+			const session = await testCtx.internalAdapter.createSession(
+				user.id,
+				undefined,
+				undefined,
+				undefined,
+				{ deferSecondaryStorageWrites: true },
+			);
+			expect(testMap.has(session.token)).toBe(false);
+			return session;
+		});
+		expect(testMap.has(committed.token)).toBe(true);
+
+		let rolledBackToken = "";
+		await expect(
+			runWithTransaction(testCtx.adapter, async () => {
+				const session = await testCtx.internalAdapter.createSession(
+					user.id,
+					undefined,
+					undefined,
+					undefined,
+					{ deferSecondaryStorageWrites: true },
+				);
+				rolledBackToken = session.token;
+				expect(testMap.has(session.token)).toBe(false);
+				throw new Error("rollback");
+			}),
+		).rejects.toThrow("rollback");
+		expect(testMap.has(rolledBackToken)).toBe(false);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10473#discussion_r3626724281
+	 */
+	it("rejects deferred secondary-only session creation when persistence fails", async () => {
+		const testMap = new Map<string, string>();
+		const secondaryStorage = createStringSecondaryStorage(testMap);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				...secondaryStorage,
+				set: async () => {
+					throw new Error("secondary storage unavailable");
+				},
+			},
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "failed-deferred-session-user",
+				email: "failed-deferred-session@example.com",
+			},
+			{ method: "test" },
+		);
+
+		await expect(
+			runWithTransaction(testCtx.adapter, () =>
+				testCtx.internalAdapter.createSession(
+					user.id,
+					undefined,
+					undefined,
+					undefined,
+					{ deferSecondaryStorageWrites: true },
+				),
+			),
+		).rejects.toThrow("secondary storage unavailable");
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10390#discussion_r3585595438
 	 */
