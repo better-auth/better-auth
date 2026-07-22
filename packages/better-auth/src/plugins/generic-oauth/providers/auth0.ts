@@ -34,11 +34,12 @@ export function auth0(options: Auth0Options): GenericOAuthConfig<"auth0"> {
 	const defaultScopes = ["openid", "profile", "email"];
 
 	// Ensure domain doesn't have protocol prefix
-	const domain = options.domain.replace(/^https?:\/\//, "");
+	const domain = options.domain.replace(/^https?:\/\//, "").replace(/\/+$/, "");
 	const discoveryUrl = `https://${domain}/.well-known/openid-configuration`;
 
 	return {
 		providerId: "auth0",
+		accountIssuer: `https://${domain}/`,
 		discoveryUrl,
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,

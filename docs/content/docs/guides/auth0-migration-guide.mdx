@@ -203,7 +203,52 @@ Before starting the migration process, set up Better Auth in your project. Follo
         clientSecret: process.env.AUTH0_SECRET!,
     });
 
+    // Map every social provider in your Auth0 export to the exact trusted issuer
+    // Better Auth uses. For OAuth providers without one, use
+    // local:oauth:<encoded providerId>, with the provider ID segment
+    // percent-encoded.
+    const accountIssuers: Record<string, string> = {
+        github: "local:oauth:github",
+        google: "https://accounts.google.com",
+    };
 
+    function getAccountIssuer(providerId: string) {
+        const issuer = accountIssuers[providerId];
+        if (!issuer) {
+            throw new Error(`Missing trusted issuer for ${providerId}`);
+        }
+        return issuer;
+    }
+
+    function getAccountProviderId(identity: { provider: string }) {
+        return identity.provider === "auth0"
+            ? "credential"
+            : (identity.provider.split("-")[0] ?? identity.provider);
+    }
+
+    function assertAccountIssuerCoverage(
+        users: ReadonlyArray<{
+            identities?: ReadonlyArray<{ provider: string }>;
+        }>,
+    ) {
+        const missingProviderIds = [
+            ...new Set(
+                users
+                    .flatMap((user) => user.identities ?? [])
+                    .map(getAccountProviderId)
+                    .filter(
+                        (providerId) =>
+                            providerId !== "credential" && !accountIssuers[providerId],
+                    ),
+            ),
+        ].sort();
+
+        if (missingProviderIds.length > 0) {
+            throw new Error(
+                `Missing trusted issuers for Auth0 providers: ${missingProviderIds.join(", ")}. Update accountIssuers before running the migration.`,
+            );
+        }
+    }
 
     function safeDateConversion(timestamp?: string | number): Date {
         if (!timestamp) return new Date();
@@ -333,7 +378,13 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
         for (const identity of auth0User.identities) {
             try {
-                const providerId = identity.provider === 'auth0' ? "credential" : identity.provider.split("-")[0];
+                const providerId = getAccountProviderId(identity);
+                const issuer = providerId === "credential"
+                    ? "local:credential"
+                    : getAccountIssuer(providerId);
+                const providerAccountId = providerId === "credential"
+                    ? userId
+                    : identity.user_id;
                 await ctx.adapter.create({
                     model: "account",
                     data: {
@@ -341,7 +392,8 @@ Before starting the migration process, set up Better Auth in your project. Follo
                         userId: userId,
                         password: await migratePassword(auth0User),
                         providerId: providerId || identity.provider,
-                        accountId: identity.user_id,
+                        issuer,
+                        providerAccountId,
                         accessToken: identity.access_token,
                         tokenType: identity.token_type,
                         refreshToken: identity.refresh_token,
@@ -365,7 +417,8 @@ Before starting the migration process, set up Better Auth in your project. Follo
                             userId: userId,
                             password: migratePassword(auth0User),
                             providerId: providerId,
-                            accountId: identity.user_id,
+                            issuer,
+                            providerAccountId,
                             accessToken: identity.access_token,
                             tokenType: identity.token_type,
                             refreshToken: identity.refresh_token,
@@ -473,6 +526,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
 
             console.log(`Found ${auth0Users.length} users to migrate`);
+            assertAccountIssuerCoverage(auth0Users);
 
             for (const auth0User of auth0Users) {
                 try {

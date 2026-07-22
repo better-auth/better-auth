@@ -1,3 +1,9 @@
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import { filterOutputFields } from "@better-auth/core/utils/db";
 import type { AuthContext } from "better-auth";
 import {
 	APIError,
@@ -9,18 +15,29 @@ import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
 import {
 	DiscoveryError,
 	mapDiscoveryErrorToAPIError,
-	validateSkipDiscoveryEndpoints,
+	validateOIDCEndpointUrls,
 } from "../oidc";
 import {
 	resolveSigningCerts,
 	validateCertSources,
 	validateConfigAlgorithms,
 } from "../saml";
-import type { Member, OIDCConfig, SAMLConfig, SSOOptions } from "../types";
+import type {
+	Member,
+	OIDCConfig,
+	SAMLConfig,
+	SAMLIdentityProviderMetadata,
+	SSOOptions,
+} from "../types";
 import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
-import { updateSSOProviderBodySchema } from "./schemas";
+import { assertSAMLIdentityProviderAuthority } from "./helpers";
+import {
+	getUpdateSSOProviderBodySchema,
+	parseSSOProviderAdditionalFields,
+} from "./schemas";
 
 interface SSOProviderRecord {
+	[key: string]: unknown;
 	id: string;
 	providerId: string;
 	issuer: string;
@@ -32,7 +49,215 @@ interface SSOProviderRecord {
 	samlConfig?: string | null;
 }
 
+type ProviderIdentitySnapshot = {
+	id?: string | undefined;
+	providerId: string;
+	issuer: string;
+	userId?: string | undefined;
+	oidcConfig?: OIDCConfig | string | null | undefined;
+	samlConfig?: SAMLConfig | string | null | undefined;
+};
+
 const ADMIN_ROLES = ["owner", "admin"];
+const OIDC_IDENTITY_BOUNDARY_FIELDS = [
+	"authorizationEndpoint",
+	"clientId",
+	"discoveryEndpoint",
+	"jwksEndpoint",
+	"tokenEndpoint",
+	"userInfoEndpoint",
+] as const;
+const SAML_IDENTITY_BOUNDARY_FIELDS = [
+	"audience",
+	"callbackUrl",
+	"entryPoint",
+	"identifierFormat",
+] as const;
+const SAML_IDP_BOUNDARY_FIELDS = [
+	"metadata",
+	"entityID",
+	"singleSignOnService",
+] as const;
+const SAML_SP_BOUNDARY_FIELDS = ["metadata", "entityID"] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stableStringify(value: unknown): string {
+	if (Array.isArray(value)) {
+		return `[${value.map(stableStringify).join(",")}]`;
+	}
+
+	if (isRecord(value)) {
+		return `{${Object.keys(value)
+			.sort()
+			.map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+			.join(",")}}`;
+	}
+
+	return JSON.stringify(value) ?? String(value);
+}
+
+function identityValueChanged(current: unknown, updated: unknown): boolean {
+	return stableStringify(current) !== stableStringify(updated);
+}
+
+function hasChangedField<T extends object>(
+	current: T | null | undefined,
+	updated: T | null | undefined,
+	fields: readonly (keyof T)[],
+): boolean {
+	return fields.some((field) =>
+		identityValueChanged(current?.[field], updated?.[field]),
+	);
+}
+
+function oidcIdentityBoundaryChanged(
+	current: OIDCConfig,
+	updated: OIDCConfig,
+): boolean {
+	return hasChangedField(current, updated, OIDC_IDENTITY_BOUNDARY_FIELDS);
+}
+
+function samlIdentityBoundaryChanged(
+	current: SAMLConfig,
+	updated: SAMLConfig,
+): boolean {
+	return (
+		hasChangedField(current, updated, SAML_IDENTITY_BOUNDARY_FIELDS) ||
+		hasChangedField(
+			current.idpMetadata,
+			updated.idpMetadata,
+			SAML_IDP_BOUNDARY_FIELDS,
+		) ||
+		hasChangedField(
+			current.spMetadata,
+			updated.spMetadata,
+			SAML_SP_BOUNDARY_FIELDS,
+		)
+	);
+}
+
+function parseConfigSnapshot<T>(
+	config: T | string | null | undefined,
+	configType: "SAML" | "OIDC",
+): T | undefined {
+	if (!config) {
+		return undefined;
+	}
+	if (typeof config === "string") {
+		return parseAndValidateConfig<T>(config, configType);
+	}
+	return config;
+}
+
+function ssoProviderIdentityBoundaryChanged(
+	current: ProviderIdentitySnapshot,
+	updated: ProviderIdentitySnapshot,
+): boolean {
+	if (identityValueChanged(current.issuer, updated.issuer)) {
+		return true;
+	}
+
+	const currentSamlConfig = parseConfigSnapshot<SAMLConfig>(
+		current.samlConfig,
+		"SAML",
+	);
+	const updatedSamlConfig = parseConfigSnapshot<SAMLConfig>(
+		updated.samlConfig,
+		"SAML",
+	);
+	if (
+		currentSamlConfig &&
+		(!updatedSamlConfig ||
+			samlIdentityBoundaryChanged(currentSamlConfig, updatedSamlConfig))
+	) {
+		return true;
+	}
+
+	const currentOidcConfig = parseConfigSnapshot<OIDCConfig>(
+		current.oidcConfig,
+		"OIDC",
+	);
+	const updatedOidcConfig = parseConfigSnapshot<OIDCConfig>(
+		updated.oidcConfig,
+		"OIDC",
+	);
+	return Boolean(
+		currentOidcConfig &&
+			(!updatedOidcConfig ||
+				oidcIdentityBoundaryChanged(currentOidcConfig, updatedOidcConfig)),
+	);
+}
+
+async function lockSSOProviderRow(
+	adapter: AuthContext["adapter"],
+	providerId: string,
+): Promise<SSOProviderRecord | null> {
+	const trx = await getCurrentAdapter(adapter);
+	return trx.update<SSOProviderRecord>({
+		model: "ssoProvider",
+		where: [{ field: "providerId", value: providerId }],
+		update: { providerId },
+	});
+}
+
+export async function lockSSOProviderForAccountLink(
+	ctx: { context: AuthContext },
+	provider: ProviderIdentitySnapshot,
+) {
+	if (typeof provider.id !== "string") {
+		return;
+	}
+	const lockedProvider = await lockSSOProviderRow(
+		ctx.context.adapter,
+		provider.providerId,
+	);
+	if (!lockedProvider) {
+		throw new APIError("CONFLICT", {
+			code: "SSO_PROVIDER_CHANGED",
+			message: "SSO provider changed while account linking was in progress",
+		});
+	}
+
+	if (ssoProviderIdentityBoundaryChanged(provider, lockedProvider)) {
+		throw new APIError("CONFLICT", {
+			code: "SSO_PROVIDER_CHANGED",
+			message: "SSO provider changed while account linking was in progress",
+		});
+	}
+}
+
+function getSSOProviderAdditionalFields(options?: SSOOptions) {
+	return (options?.schema?.ssoProvider?.additionalFields ?? {}) as Record<
+		string,
+		DBFieldAttribute
+	>;
+}
+
+export function filterSSOProviderAdditionalFields<
+	T extends Record<string, unknown>,
+>(provider: T, options?: SSOOptions) {
+	return filterOutputFields(provider, getSSOProviderAdditionalFields(options));
+}
+
+function getReturnedSSOProviderAdditionalFields(
+	provider: Record<string, unknown>,
+	options?: SSOOptions,
+) {
+	const additionalFields = getSSOProviderAdditionalFields(options);
+	const result: Record<string, unknown> = {};
+	for (const key in additionalFields) {
+		if (additionalFields[key]?.returned === false) {
+			continue;
+		}
+		if (key in provider) {
+			result[key] = provider[key];
+		}
+	}
+	return result;
+}
 
 export function hasOrgAdminRole(member: Pick<Member, "role">): boolean {
 	return member.role.split(",").some((r) => ADMIN_ROLES.includes(r.trim()));
@@ -110,6 +335,7 @@ async function batchCheckOrgAdmin(
 
 function sanitizeProvider(
 	provider: {
+		[key: string]: unknown;
 		providerId: string;
 		issuer: string;
 		domain: string;
@@ -119,6 +345,7 @@ function sanitizeProvider(
 		samlConfig?: string | SAMLConfig | null;
 	},
 	baseURL: string,
+	options?: SSOOptions,
 ) {
 	let oidcConfig: OIDCConfig | null = null;
 	let samlConfig: SAMLConfig | null = null;
@@ -136,8 +363,13 @@ function sanitizeProvider(
 	}
 
 	const type = samlConfig ? "saml" : "oidc";
+	const returnedAdditionalFields = getReturnedSSOProviderAdditionalFields(
+		provider,
+		options,
+	);
 
 	return {
+		...returnedAdditionalFields,
 		providerId: provider.providerId,
 		type,
 		issuer: provider.issuer,
@@ -173,7 +405,7 @@ function sanitizeProvider(
 	};
 }
 
-export const listSSOProviders = () => {
+export const listSSOProviders = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/providers",
 		{
@@ -246,7 +478,7 @@ export const listSSOProviders = () => {
 			}
 
 			const providers = accessibleProviders.map((p) =>
-				sanitizeProvider(p, ctx.context.baseURL),
+				sanitizeProvider(p, ctx.context.baseURL, options),
 			);
 
 			return ctx.json({ providers });
@@ -258,7 +490,7 @@ const getSSOProviderQuerySchema = z.object({
 	providerId: z.string(),
 });
 
-async function checkProviderAccess(
+export async function checkProviderAccess(
 	ctx: {
 		context: AuthContext & {
 			session: { user: { id: string } };
@@ -299,7 +531,7 @@ async function checkProviderAccess(
 	return provider;
 }
 
-export const getSSOProvider = () => {
+export const getSSOProvider = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/get-provider",
 		{
@@ -331,7 +563,7 @@ export const getSSOProvider = () => {
 
 			const provider = await checkProviderAccess(ctx, providerId);
 
-			return ctx.json(sanitizeProvider(provider, ctx.context.baseURL));
+			return ctx.json(sanitizeProvider(provider, ctx.context.baseURL, options));
 		},
 	);
 };
@@ -354,9 +586,30 @@ function parseAndValidateConfig<T>(
 	return config;
 }
 
+type SAMLConfigUpdate = Omit<
+	Partial<SAMLConfig>,
+	"idpMetadata" | "spMetadata"
+> & {
+	idpMetadata?: Partial<SAMLIdentityProviderMetadata> | undefined;
+	spMetadata?: Partial<NonNullable<SAMLConfig["spMetadata"]>> | undefined;
+};
+
+function mergeSAMLIdentityProviderMetadata(
+	current: SAMLIdentityProviderMetadata,
+	updates: Partial<SAMLIdentityProviderMetadata> | undefined,
+): SAMLIdentityProviderMetadata {
+	if (!updates) {
+		return current;
+	}
+
+	const config = { idpMetadata: { ...current, ...updates } };
+	assertSAMLIdentityProviderAuthority(config);
+	return config.idpMetadata;
+}
+
 function mergeSAMLConfig(
 	current: SAMLConfig,
-	updates: Partial<SAMLConfig>,
+	updates: SAMLConfigUpdate,
 	issuer: string,
 ): SAMLConfig {
 	return {
@@ -365,10 +618,16 @@ function mergeSAMLConfig(
 		issuer,
 		entryPoint: updates.entryPoint ?? current.entryPoint,
 		cert: updates.cert ?? current.cert,
-		spMetadata: updates.spMetadata ?? current.spMetadata,
-		idpMetadata: updates.idpMetadata ?? current.idpMetadata,
+		spMetadata: updates.spMetadata
+			? { ...current.spMetadata, ...updates.spMetadata }
+			: current.spMetadata,
+		idpMetadata: mergeSAMLIdentityProviderMetadata(
+			current.idpMetadata,
+			updates.idpMetadata,
+		),
 		mapping: updates.mapping ?? current.mapping,
 		audience: updates.audience ?? current.audience,
+		callbackUrl: updates.callbackUrl ?? current.callbackUrl,
 		wantAssertionsSigned:
 			updates.wantAssertionsSigned ?? current.wantAssertionsSigned,
 		authnRequestsSigned:
@@ -410,14 +669,14 @@ function mergeOIDCConfig(
 }
 
 export const updateSSOProvider = (options: SSOOptions) => {
+	const updateBodySchema = getUpdateSSOProviderBodySchema(options);
+
 	return createAuthEndpoint(
 		"/sso/update-provider",
 		{
 			method: "POST",
 			use: [sessionMiddleware],
-			body: updateSSOProviderBodySchema.extend({
-				providerId: z.string(),
-			}),
+			body: updateBodySchema,
 			metadata: {
 				openapi: {
 					operationId: "updateSSOProvider",
@@ -443,145 +702,211 @@ export const updateSSOProvider = (options: SSOOptions) => {
 			const { providerId, ...body } = ctx.body;
 
 			const { issuer, domain, samlConfig, oidcConfig } = body;
-			if (!issuer && !domain && !samlConfig && !oidcConfig) {
+			const additionalFields = parseSSOProviderAdditionalFields(
+				options,
+				body,
+				"update",
+			);
+			if (
+				!issuer &&
+				!domain &&
+				!samlConfig &&
+				!oidcConfig &&
+				Object.keys(additionalFields).length === 0
+			) {
 				throw new APIError("BAD_REQUEST", {
 					message: "No fields provided for update",
 				});
 			}
 
-			const existingProvider = await checkProviderAccess(ctx, providerId);
+			await checkProviderAccess(ctx, providerId);
 
-			const updateData: Partial<SSOProviderRecord> = {};
-
-			if (body.issuer !== undefined) {
-				updateData.issuer = body.issuer;
-			}
-
-			if (body.domain !== undefined) {
-				updateData.domain = body.domain;
-				if (body.domain !== existingProvider.domain) {
-					updateData.domainVerified = false;
-				}
-			}
-
-			if (body.samlConfig) {
-				if (body.samlConfig.idpMetadata?.metadata) {
-					const maxMetadataSize =
-						options?.saml?.maxMetadataSize ?? DEFAULT_MAX_SAML_METADATA_SIZE;
-					if (
-						new TextEncoder().encode(body.samlConfig.idpMetadata.metadata)
-							.length > maxMetadataSize
-					) {
-						throw new APIError("BAD_REQUEST", {
-							message: `IdP metadata exceeds maximum allowed size (${maxMetadataSize} bytes)`,
+			const fullProvider = await runWithTransaction(
+				ctx.context.adapter,
+				async () => {
+					const trx = await getCurrentAdapter(ctx.context.adapter);
+					const existingProvider = await lockSSOProviderRow(
+						ctx.context.adapter,
+						providerId,
+					);
+					if (!existingProvider) {
+						throw new APIError("NOT_FOUND", {
+							message: "Provider not found",
 						});
 					}
-				}
 
-				if (
-					body.samlConfig.signatureAlgorithm !== undefined ||
-					body.samlConfig.digestAlgorithm !== undefined
-				) {
-					validateConfigAlgorithms(
-						{
-							signatureAlgorithm: body.samlConfig.signatureAlgorithm,
-							digestAlgorithm: body.samlConfig.digestAlgorithm,
-						},
-						options?.saml?.algorithms,
-					);
-				}
+					const updateData: Partial<SSOProviderRecord> = {
+						...additionalFields,
+					};
+					let providerIdentityBoundaryChanged =
+						body.issuer !== undefined &&
+						body.issuer !== existingProvider.issuer;
 
-				const currentSamlConfig = parseAndValidateConfig<SAMLConfig>(
-					existingProvider.samlConfig,
-					"SAML",
-				);
-
-				const updatedSamlConfig = mergeSAMLConfig(
-					currentSamlConfig,
-					body.samlConfig,
-					updateData.issuer ||
-						currentSamlConfig.issuer ||
-						existingProvider.issuer,
-				);
-
-				validateCertSources(updatedSamlConfig);
-
-				updateData.samlConfig = JSON.stringify(updatedSamlConfig);
-			}
-
-			if (body.oidcConfig) {
-				try {
-					validateSkipDiscoveryEndpoints(body.oidcConfig, (url) =>
-						ctx.context.isTrustedOrigin(url),
-					);
-				} catch (error) {
-					if (error instanceof DiscoveryError) {
-						throw mapDiscoveryErrorToAPIError(error);
+					if (body.issuer !== undefined) {
+						updateData.issuer = body.issuer;
 					}
-					throw error;
-				}
 
-				const currentOidcConfig = parseAndValidateConfig<OIDCConfig>(
-					existingProvider.oidcConfig,
-					"OIDC",
-				);
+					if (body.domain !== undefined) {
+						updateData.domain = body.domain;
+						if (body.domain !== existingProvider.domain) {
+							updateData.domainVerified = false;
+						}
+					}
 
-				const updatedOidcConfig = mergeOIDCConfig(
-					currentOidcConfig,
-					body.oidcConfig,
-					updateData.issuer ||
-						currentOidcConfig.issuer ||
-						existingProvider.issuer,
-				);
+					if (body.samlConfig) {
+						if (body.samlConfig.idpMetadata?.metadata) {
+							const maxMetadataSize =
+								options?.saml?.maxMetadataSize ??
+								DEFAULT_MAX_SAML_METADATA_SIZE;
+							if (
+								new TextEncoder().encode(body.samlConfig.idpMetadata.metadata)
+									.length > maxMetadataSize
+							) {
+								throw new APIError("BAD_REQUEST", {
+									message: `IdP metadata exceeds maximum allowed size (${maxMetadataSize} bytes)`,
+								});
+							}
+						}
 
-				// Validate: clientSecret is required for non-private_key_jwt auth
-				if (
-					updatedOidcConfig.tokenEndpointAuthentication !== "private_key_jwt" &&
-					!updatedOidcConfig.clientSecret
-				) {
-					throw new APIError("BAD_REQUEST", {
-						message:
-							"clientSecret is required when using client_secret_basic or client_secret_post authentication",
+						if (
+							body.samlConfig.signatureAlgorithm !== undefined ||
+							body.samlConfig.digestAlgorithm !== undefined
+						) {
+							validateConfigAlgorithms(
+								{
+									signatureAlgorithm: body.samlConfig.signatureAlgorithm,
+									digestAlgorithm: body.samlConfig.digestAlgorithm,
+								},
+								options?.saml?.algorithms,
+							);
+						}
+
+						const currentSamlConfig = parseAndValidateConfig<SAMLConfig>(
+							existingProvider.samlConfig,
+							"SAML",
+						);
+
+						const updatedSamlConfig = mergeSAMLConfig(
+							currentSamlConfig,
+							body.samlConfig,
+							updateData.issuer ||
+								currentSamlConfig.issuer ||
+								existingProvider.issuer,
+						);
+
+						validateCertSources(updatedSamlConfig);
+						assertSAMLIdentityProviderAuthority(updatedSamlConfig);
+						if (
+							samlIdentityBoundaryChanged(currentSamlConfig, updatedSamlConfig)
+						) {
+							providerIdentityBoundaryChanged = true;
+						}
+
+						updateData.samlConfig = JSON.stringify(updatedSamlConfig);
+					}
+
+					if (body.oidcConfig) {
+						try {
+							validateOIDCEndpointUrls(body.oidcConfig, (url) =>
+								ctx.context.isTrustedOrigin(url),
+							);
+						} catch (error) {
+							if (error instanceof DiscoveryError) {
+								throw mapDiscoveryErrorToAPIError(error);
+							}
+							throw error;
+						}
+
+						const currentOidcConfig = parseAndValidateConfig<OIDCConfig>(
+							existingProvider.oidcConfig,
+							"OIDC",
+						);
+
+						const updatedOidcConfig = mergeOIDCConfig(
+							currentOidcConfig,
+							body.oidcConfig,
+							updateData.issuer ||
+								currentOidcConfig.issuer ||
+								existingProvider.issuer,
+						);
+
+						// Validate: clientSecret is required for non-private_key_jwt auth
+						if (
+							updatedOidcConfig.tokenEndpointAuthentication !==
+								"private_key_jwt" &&
+							!updatedOidcConfig.clientSecret
+						) {
+							throw new APIError("BAD_REQUEST", {
+								message:
+									"clientSecret is required when using client_secret_basic or client_secret_post authentication",
+							});
+						}
+						// Validate: private_key_jwt requires a key source at runtime
+						if (
+							updatedOidcConfig.tokenEndpointAuthentication ===
+								"private_key_jwt" &&
+							!options?.resolvePrivateKey &&
+							!options?.defaultSSO?.some(
+								(p: Record<string, unknown>) =>
+									p.providerId === providerId &&
+									"privateKey" in p &&
+									p.privateKey,
+							)
+						) {
+							throw new APIError("BAD_REQUEST", {
+								message:
+									"private_key_jwt authentication requires either a resolvePrivateKey callback or a privateKey in defaultSSO",
+							});
+						}
+
+						if (
+							oidcIdentityBoundaryChanged(currentOidcConfig, updatedOidcConfig)
+						) {
+							providerIdentityBoundaryChanged = true;
+						}
+
+						updateData.oidcConfig = JSON.stringify(updatedOidcConfig);
+					}
+
+					if (providerIdentityBoundaryChanged) {
+						const linkedAccount = await trx.findOne<{ id: string }>({
+							model: "account",
+							where: [{ field: "providerId", value: providerId }],
+						});
+						if (linkedAccount) {
+							// TODO(next): move SSO account links to immutable provider instance
+							// ids, then expose explicit relinking for identity-boundary changes.
+							throw new APIError("CONFLICT", {
+								message:
+									"Cannot change SSO provider identity fields while linked accounts exist",
+							});
+						}
+					}
+
+					await trx.update({
+						model: "ssoProvider",
+						where: [{ field: "providerId", value: providerId }],
+						update: updateData,
 					});
-				}
-				// Validate: private_key_jwt requires a key source at runtime
-				if (
-					updatedOidcConfig.tokenEndpointAuthentication === "private_key_jwt" &&
-					!options?.resolvePrivateKey &&
-					!options?.defaultSSO?.some(
-						(p: Record<string, unknown>) =>
-							p.providerId === providerId && "privateKey" in p && p.privateKey,
-					)
-				) {
-					throw new APIError("BAD_REQUEST", {
-						message:
-							"private_key_jwt authentication requires either a resolvePrivateKey callback or a privateKey in defaultSSO",
+
+					const updatedProvider = await trx.findOne<SSOProviderRecord>({
+						model: "ssoProvider",
+						where: [{ field: "providerId", value: providerId }],
 					});
-				}
 
-				updateData.oidcConfig = JSON.stringify(updatedOidcConfig);
-			}
+					if (!updatedProvider) {
+						throw new APIError("NOT_FOUND", {
+							message: "Provider not found after update",
+						});
+					}
 
-			await ctx.context.adapter.update({
-				model: "ssoProvider",
-				where: [{ field: "providerId", value: providerId }],
-				update: updateData,
-			});
-
-			const fullProvider = await ctx.context.adapter.findOne<SSOProviderRecord>(
-				{
-					model: "ssoProvider",
-					where: [{ field: "providerId", value: providerId }],
+					return updatedProvider;
 				},
 			);
 
-			if (!fullProvider) {
-				throw new APIError("NOT_FOUND", {
-					message: "Provider not found after update",
-				});
-			}
-
-			return ctx.json(sanitizeProvider(fullProvider, ctx.context.baseURL));
+			return ctx.json(
+				sanitizeProvider(fullProvider, ctx.context.baseURL, options),
+			);
 		},
 	);
 };
@@ -619,9 +944,16 @@ export const deleteSSOProvider = () => {
 
 			await checkProviderAccess(ctx, providerId);
 
-			await ctx.context.adapter.delete({
-				model: "ssoProvider",
-				where: [{ field: "providerId", value: providerId }],
+			await runWithTransaction(ctx.context.adapter, async () => {
+				const trx = await getCurrentAdapter(ctx.context.adapter);
+				await trx.deleteMany({
+					model: "account",
+					where: [{ field: "providerId", value: providerId }],
+				});
+				await trx.delete({
+					model: "ssoProvider",
+					where: [{ field: "providerId", value: providerId }],
+				});
 			});
 
 			return ctx.json({ success: true });

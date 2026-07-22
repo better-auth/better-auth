@@ -178,6 +178,22 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
     import { auth } from "@/lib/auth"; // import your auth instance
 
+    // Review every provider in your Clerk export. Use the exact trusted issuer
+    // Better Auth uses, or local:oauth:<encoded providerId> when it has no
+    // issuer. The provider ID segment is percent-encoded.
+    const accountIssuers: Record<string, string> = {
+      github: "local:oauth:github",
+      google: "https://accounts.google.com",
+    };
+
+    function getAccountIssuer(providerId: string) {
+      const issuer = accountIssuers[providerId];
+      if (!issuer) {
+        throw new Error(`Missing trusted issuer for ${providerId}`);
+      }
+      return issuer;
+    }
+
     function getCSVData(csv: string) {
       const lines = csv.split('\n').filter(line => line.trim());
       const headers = lines[0]?.split(',').map(header => header.trim()) || [];
@@ -351,6 +367,9 @@ Before starting the migration process, set up Better Auth in your project. Follo
                   }]
               })
           })
+          if (!createdUser) {
+              throw new Error(`Unable to create or find user ${id}`);
+          }
           // create external account
           const externalAccounts = clerkUser?.external_accounts;
           if (externalAccounts) {
@@ -362,23 +381,26 @@ Before starting the migration process, set up Better Auth in your project. Follo
                           data: {
                               id,
                               providerId: provider,
-                              accountId: externalAccount.provider_user_id,
+                              issuer: "local:credential",
+                              providerAccountId: createdUser.id,
                               scope: approved_scopes,
-                              userId: createdUser?.id,
+                              userId: createdUser.id,
                               createdAt: safeDateConversion(created_at),
                               updatedAt: safeDateConversion(updated_at),
                               password: password_digest,
                           }
                       })
                   } else {
+                      const providerId = provider.replace("oauth_", "");
                       await ctx.adapter.create({
                           model: "account",
                           data: {
                               id,
-                              providerId: provider.replace("oauth_", ""),
-                              accountId: externalAccount.provider_user_id,
+                              providerId,
+                              issuer: getAccountIssuer(providerId),
+                              providerAccountId: externalAccount.provider_user_id,
                               scope: approved_scopes,
-                              userId: createdUser?.id,
+                              userId: createdUser.id,
                               createdAt: safeDateConversion(created_at),
                               updatedAt: safeDateConversion(updated_at),
                           },
@@ -393,7 +415,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
               await ctx.adapter.create({
                   model: "twoFactor",
                   data: {
-                      userId: createdUser?.id,
+                      userId: createdUser.id,
                       secret: totp_secret,
                       backupCodes: await generateBackupCodes(totp_secret)
                   }

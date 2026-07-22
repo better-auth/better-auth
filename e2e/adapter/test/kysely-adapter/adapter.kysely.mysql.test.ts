@@ -13,6 +13,7 @@ import {
 	transactionsTestSuite,
 	uuidTestSuite,
 } from "../adapter-factory";
+import { compoundIndexTestSuite } from "../adapter-factory/compound-index-test-suite";
 
 const mysqlDB = createPool({
 	uri: "mysql://user:password@localhost:3307/better_auth",
@@ -55,6 +56,37 @@ const { execute } = await testAdapter({
 		caseInsensitiveTestSuite({
 			disableTests: {
 				"findOne - eq with mode sensitive (default) should not match different case": true,
+			},
+		}),
+		compoundIndexTestSuite({
+			async rerunMigrations(options) {
+				const migrations = await getMigrations({
+					...options,
+					database: mysqlDB,
+				});
+				const pendingMigration = await migrations.compileMigrations();
+				await migrations.runMigrations();
+				return pendingMigration;
+			},
+			mismatchError:
+				'Database index "compound_identity_uidx" on table "compound_index_subject" does not match the configured fields and uniqueness.',
+			async verifyMismatchedIndexRejected(options) {
+				await mysqlDB.query(
+					"ALTER TABLE `compound_index_subject` DROP INDEX `compound_identity_uidx`",
+				);
+				await mysqlDB.query(
+					"CREATE INDEX `compound_identity_uidx` ON `compound_index_subject` (`provider_subject`)",
+				);
+				try {
+					await getMigrations({ ...options, database: mysqlDB });
+				} finally {
+					await mysqlDB.query(
+						"ALTER TABLE `compound_index_subject` DROP INDEX `compound_identity_uidx`",
+					);
+					await mysqlDB.query(
+						"CREATE UNIQUE INDEX `compound_identity_uidx` ON `compound_index_subject` (`issuer_url`, `provider_subject`)",
+					);
+				}
 			},
 		}),
 	],

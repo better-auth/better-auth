@@ -31,6 +31,7 @@ export const dropbox = (options: DropboxOptions) => {
 	return {
 		id: "dropbox",
 		name: "Dropbox",
+		accountSubject: ({ profile }) => profile.account_id,
 		createAuthorizationURL: async ({
 			state,
 			scopes,
@@ -99,7 +100,6 @@ export const dropbox = (options: DropboxOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.account_id,
 					name: profile.name?.display_name,
 					email: profile.email,
 					emailVerified: profile.email_verified || false,

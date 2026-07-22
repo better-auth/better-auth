@@ -1,6 +1,10 @@
-import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
-import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
+import type {
+	BaseOAuthProviderOptions,
+	GenericOAuthConfig,
+	GenericOAuthUserInfo,
+} from "../index";
 
 export interface PatreonOptions extends BaseOAuthProviderOptions {}
 
@@ -44,7 +48,7 @@ export function patreon(
 
 	const getUserInfo = async (
 		tokens: OAuth2Tokens,
-	): Promise<OAuth2UserInfo | null> => {
+	): Promise<GenericOAuthUserInfo | null> => {
 		const { data: profile, error } = await betterFetch<PatreonProfile>(
 			"https://www.patreon.com/api/oauth2/v2/identity?fields[user]=email,full_name,image_url,is_email_verified",
 			{
@@ -70,6 +74,7 @@ export function patreon(
 
 	return {
 		providerId: "patreon",
+		accountSubject: ({ profile }) => profile.id ?? "",
 		authorizationUrl: "https://www.patreon.com/oauth2/authorize",
 		tokenUrl: "https://www.patreon.com/api/oauth2/token",
 		clientId: options.clientId,

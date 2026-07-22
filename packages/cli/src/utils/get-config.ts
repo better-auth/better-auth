@@ -10,8 +10,9 @@ import { loadConfig } from "c12";
 import type { TsConfigResult } from "get-tsconfig";
 import { createPathsMatcher, getTsconfig, parseTsconfig } from "get-tsconfig";
 import type { JitiOptions } from "jiti";
-import { addCloudflareModules } from "./add-cloudflare-modules";
-import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
+import { addCloudflareVirtualModules } from "./cloudflare-virtual-modules";
+import { addSvelteKitVirtualModules } from "./sveltekit-virtual-modules";
+import { getViteAssetStub } from "./vite-virtual-modules";
 
 let possiblePaths = [
 	"auth.ts",
@@ -205,6 +206,13 @@ function createRewriteImportPathsPlugin(matchers: PathsMatcher[]) {
 	return ({ types: t }: { types: BabelTypes }) => {
 		const rewrite = (source: StringLiteralNode | null | undefined): void => {
 			if (!source) return;
+			// Vite asset/query imports have no file on disk; stub them first so a
+			// resolved alias prefix never sends them down the filesystem path.
+			const stub = getViteAssetStub(source.value);
+			if (stub) {
+				source.value = stub;
+				return;
+			}
 			const resolved = resolveWithMatchers(source.value, matchers);
 			if (resolved) source.value = resolved;
 		};
@@ -248,8 +256,8 @@ function createRewriteImportPathsPlugin(matchers: PathsMatcher[]) {
 /** Virtual module aliases; real tsconfig paths go through the babel plugin. */
 function getVirtualModuleAliases(): Record<string, string> {
 	const result: Record<string, string> = {};
-	addSvelteKitEnvModules(result);
-	addCloudflareModules(result);
+	addSvelteKitVirtualModules(result);
+	addCloudflareVirtualModules(result);
 	return result;
 }
 /**
@@ -257,8 +265,9 @@ function getVirtualModuleAliases(): Record<string, string> {
  */
 const jitiOptions = (cwd: string): JitiOptions => {
 	const matchers = collectPathsMatchers(cwd);
-	const plugins =
-		matchers.length > 0 ? [createRewriteImportPathsPlugin(matchers)] : [];
+	// The plugin always runs: even with no tsconfig paths, it stubs Vite asset
+	// and query imports (`?raw`, `.css`, `.svg`, ...) that jiti cannot load.
+	const plugins = [createRewriteImportPathsPlugin(matchers)];
 	return {
 		transformOptions: {
 			babel: {

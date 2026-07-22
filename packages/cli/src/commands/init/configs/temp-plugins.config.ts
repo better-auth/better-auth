@@ -636,29 +636,6 @@ export const tempPluginsConfig = {
 			],
 		},
 	},
-	oidc: {
-		displayName: "OIDC",
-		auth: {
-			function: "oidc",
-			imports: [
-				{
-					path: "better-auth/plugins",
-					imports: [createImport({ name: "oidc" })],
-					isNamedImport: false,
-				},
-			],
-		},
-		authClient: {
-			function: "oidcClient",
-			imports: [
-				{
-					path: "better-auth/client/plugins",
-					imports: [createImport({ name: "oidcClient" })],
-					isNamedImport: false,
-				},
-			],
-		},
-	},
 	admin: {
 		displayName: "Admin",
 		auth: {
@@ -1571,30 +1548,6 @@ export const tempPluginsConfig = {
 				{
 					path: "better-auth/client/plugins",
 					imports: [createImport({ name: "siweClient" })],
-					isNamedImport: false,
-				},
-			],
-		},
-	},
-	scim: {
-		displayName: "SCIM",
-		dependencies: ["@better-auth/scim"],
-		auth: {
-			function: "scim",
-			imports: [
-				{
-					path: "@better-auth/scim",
-					imports: [createImport({ name: "scim" })],
-					isNamedImport: false,
-				},
-			],
-		},
-		authClient: {
-			function: "scimClient",
-			imports: [
-				{
-					path: "@better-auth/scim/client",
-					imports: [createImport({ name: "scimClient" })],
 					isNamedImport: false,
 				},
 			],

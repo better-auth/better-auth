@@ -1,5 +1,21 @@
 import type { BetterAuthOptions } from "@better-auth/core";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { safeJSONParse } from "@better-auth/core/utils/json";
+import { base64Url } from "@better-auth/utils/base64";
+import { createHMAC } from "@better-auth/utils/hmac";
+import { serializeCookie } from "better-call";
+import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import {
 	expireCookie,
 	getChunkedCookie,
@@ -8,7 +24,10 @@ import {
 	getSessionCookie,
 	parseCookies,
 } from "../cookies";
+import { signJWT, symmetricDecodeJWT } from "../crypto";
+import { jwt } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
+import { DEFAULT_SECRET } from "../utils/constants";
 import {
 	applySetCookies,
 	HOST_COOKIE_PREFIX,
@@ -18,6 +37,9 @@ import {
 	stripSecureCookiePrefix,
 	toCookieOptions,
 } from "./cookie-utils";
+
+const COOKIE_CACHE_JWT_TYPE = "better-auth.session-cache+jwt";
+const COOKIE_CACHE_JWT_AUDIENCE = "better-auth:session-cache";
 
 describe("cookies", async () => {
 	const { client, testUser } = await getTestInstance();
@@ -538,6 +560,30 @@ describe("getSessionCookie", async () => {
 		});
 	});
 
+	it("prefers the __Secure- cookie when a non-secure leftover is also present", () => {
+		const headers = new Headers();
+		headers.set(
+			"cookie",
+			"better-auth.session_token=stale; __Secure-better-auth.session_token=current",
+		);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		expect(getSessionCookie(request)).toBe("current");
+	});
+
+	it("does not fall back to a non-secure cookie when the __Secure- value is empty", () => {
+		const headers = new Headers();
+		headers.set(
+			"cookie",
+			"better-auth.session_token=stale; __Secure-better-auth.session_token=",
+		);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		expect(getSessionCookie(request)).toBeNull();
+	});
+
 	it("should allow override cookie prefix with secure cookies", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			advanced: {
@@ -774,6 +820,61 @@ describe("getSessionCookie", async () => {
 
 		// Verify that chunking happened (instead of logging an error and not caching)
 		expect(hasCookieChunks).toBe(true);
+	});
+});
+
+describe("sensitive session middleware cookie cache", () => {
+	/**
+	 * Sensitive endpoints use `sensitiveSessionMiddleware`, which forces a
+	 * database-backed session lookup via `disableCookieCache: true`. A request
+	 * query parameter (e.g. `?disableCookieCache=`, which coerces to `false`)
+	 * must NOT be able to override that internal flag and re-enable the cookie
+	 * cache, otherwise a revoked session could still pass sensitive operations.
+	 */
+	it("should not let request query re-enable cookie cache on sensitive endpoints", async () => {
+		const { client, testUser, cookieSetter, db } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		const userId = signInRes.data?.user.id!;
+		expect(userId).toBeDefined();
+
+		// Simulate the server-side session being revoked/deleted while the
+		// still-valid signed session_data cookie remains in the client.
+		await db.deleteMany({
+			model: "session",
+			where: [{ field: "userId", value: userId }],
+		});
+
+		// Set the internal flag to a falsy value through the request query so it
+		// would skip the forced DB lookup if it took effect. The sensitive
+		// endpoint must still reject the request because the session no longer
+		// exists.
+		const res = await client.changePassword(
+			{
+				newPassword: "new-password",
+				currentPassword: testUser.password,
+			},
+			{
+				headers,
+				query: { disableCookieCache: "" },
+			},
+		);
+		expect(res.error?.status).toBe(401);
 	});
 });
 
@@ -1072,6 +1173,71 @@ describe("Cookie Cache Field Filtering", () => {
 		expect(cache?.session?.token).toEqual(expect.any(String));
 	});
 
+	it("should work with JWT strategy backed by JWKS keys", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwt",
+					jwt: {
+						signingKey: "jwt-plugin",
+					},
+				},
+			},
+			plugins: [jwt()],
+		});
+
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const token = parseCookies(headers.get("cookie") || "").get(
+			"better-auth.session_data",
+		);
+		if (!token) {
+			throw new Error("Cookie-cache JWT not found");
+		}
+
+		const header = decodeProtectedHeader(token);
+		expect(header.alg).toBe("EdDSA");
+		expect(header.kid).toEqual(expect.any(String));
+
+		const jwks = await auth.api.getJwks();
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			strategy: "jwt",
+			jwt: {
+				signingKey: "jwt-plugin",
+				jwks,
+			},
+		});
+		expect(cache).not.toBeNull();
+		expect(cache?.user?.email).toEqual(testUser.email);
+
+		const localJwks = createLocalJWKSet(jwks);
+		const verified = await jwtVerify(token, localJwks, {
+			audience: COOKIE_CACHE_JWT_AUDIENCE,
+		});
+		expect(header.typ).toBe(COOKIE_CACHE_JWT_TYPE);
+		expect(verified.payload.session).toBeDefined();
+		expect(verified.payload.user).toBeDefined();
+		expect(verified.payload.iss).toEqual(expect.any(String));
+		expect(verified.payload.aud).toBe(COOKIE_CACHE_JWT_AUDIENCE);
+		expect(verified.payload.sub).toBe(cache?.user?.id);
+		expect(verified.payload.sid).toBe(cache?.session?.token);
+	});
+
 	it("should work with compact strategy", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			secret: "better-auth.secret",
@@ -1124,13 +1290,107 @@ describe("Cookie Cache Field Filtering", () => {
 		expect(cache).toBeNull();
 	});
 
-	it("should default to JWT strategy when not specified", async () => {
+	it("should require JWKS input for helper verification in JWKS mode", async () => {
+		const headers = new Headers();
+		headers.set("cookie", "better-auth.session_data=token");
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		await expect(
+			getCookieCache(request, {
+				strategy: "jwt",
+				jwt: {
+					signingKey: "jwt-plugin",
+				},
+			}),
+		).rejects.toThrow(
+			'getCookieCache requires `jwt.jwks` when `jwt.signingKey` is set to `"jwt-plugin"`.',
+		);
+	});
+
+	it("should reject JWT plugin tokens that are not cookie-cache JWTs", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [jwt()],
+		});
+		const token = await auth.api.signJWT({
+			body: {
+				payload: {
+					sub: "user-id",
+				},
+			},
+		});
+		const jwks = await auth.api.getJwks();
+
+		const headers = new Headers();
+		headers.set("cookie", `better-auth.session_data=${token.token}`);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+
+		const cache = await getCookieCache(request, {
+			strategy: "jwt",
+			jwt: {
+				signingKey: "jwt-plugin",
+				jwks,
+			},
+		});
+
+		expect(cache).toBeNull();
+	});
+
+	it("should return null when JWKS verification uses the wrong key set", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwt",
+					jwt: {
+						signingKey: "jwt-plugin",
+					},
+				},
+			},
+			plugins: [jwt()],
+		});
+
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		expect((await auth.api.getJwks()).keys.length).toBeGreaterThan(0);
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		const cache = await getCookieCache(request, {
+			strategy: "jwt",
+			jwt: {
+				signingKey: "jwt-plugin",
+				jwks: {
+					keys: [],
+				},
+			},
+		});
+
+		expect(cache).toBeNull();
+	});
+
+	it("should default to compact strategy when not specified", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			secret: "better-auth.secret",
 			session: {
 				cookieCache: {
 					enabled: true,
-					// No strategy specified, should default to "jwt"
+					// No strategy specified, should default to "compact"
 				},
 			},
 		});
@@ -1153,7 +1413,7 @@ describe("Cookie Cache Field Filtering", () => {
 
 		const cache = await getCookieCache(request, {
 			secret: "better-auth.secret",
-			// No strategy specified, should default to "jwt"
+			// No strategy specified, should default to "compact"
 		});
 		expect(cache).not.toBeNull();
 		expect(cache?.user?.email).toEqual(testUser.email);
@@ -1238,6 +1498,83 @@ describe("Cookie Chunking", () => {
 
 		expect(cache).not.toBeNull();
 		expect(cache?.user?.email).toEqual("chunk-test@example.com");
+		expect(cache?.session?.token).toEqual(expect.any(String));
+	});
+
+	it("should chunk JWKS-backed JWT cookies when they exceed 4KB", async () => {
+		const largeString = "j".repeat(2000);
+
+		const { auth, client } = await getTestInstance({
+			user: {
+				additionalFields: {
+					field1: {
+						type: "string",
+						defaultValue: "",
+					},
+					field2: {
+						type: "string",
+						defaultValue: "",
+					},
+				},
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwt",
+					jwt: {
+						signingKey: "jwt-plugin",
+					},
+				},
+			},
+			plugins: [jwt()],
+		});
+
+		const headers = new Headers();
+
+		await client.signUp.email(
+			{
+				name: "JWKS Chunk User",
+				email: "jwks-chunk-test@example.com",
+				password: "password123",
+				field1: largeString,
+				field2: largeString,
+			} as any,
+			{
+				onSuccess(context) {
+					const setCookie = context.response.headers.get("set-cookie");
+					expect(setCookie).toBeDefined();
+
+					const parsed = parseSetCookieHeader(setCookie!);
+					let hasChunks = false;
+
+					parsed.forEach((value, name) => {
+						if (
+							name.includes("session_data.0") ||
+							name.includes("session_data.1")
+						) {
+							hasChunks = true;
+						}
+						headers.append("cookie", `${name}=${value.value}`);
+					});
+
+					expect(hasChunks).toBe(true);
+				},
+			},
+		);
+
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		const cache = await getCookieCache(request, {
+			strategy: "jwt",
+			jwt: {
+				signingKey: "jwt-plugin",
+				jwks: await auth.api.getJwks(),
+			},
+		});
+
+		expect(cache).not.toBeNull();
+		expect(cache?.user?.email).toEqual("jwks-chunk-test@example.com");
 		expect(cache?.session?.token).toEqual(expect.any(String));
 	});
 
@@ -1420,6 +1757,175 @@ describe("Cookie Chunking", () => {
 
 		expect(cache).not.toBeNull();
 		expect(cache?.user?.email).toEqual(testUser.email);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8585
+	 */
+	it("should chunk session cache when attributes push the line over the limit", async () => {
+		// Long prefix shrinks the per-cookie value budget; the value alone
+		// lands under 4093 (so the old value-only gate skipped chunking) yet
+		// the serialized line overflows once name + attributes are added.
+		const longPrefix = "better-auth-" + "x".repeat(80);
+		const { client } = await getTestInstance({
+			secret: "better-auth.secret",
+			advanced: { cookiePrefix: longPrefix },
+			user: {
+				additionalFields: {
+					entraProfile: { type: "string", defaultValue: "" },
+				},
+			},
+			session: { cookieCache: { enabled: true } },
+		});
+
+		let rawSetCookie = "";
+		await client.signUp.email(
+			{
+				name: "Entra User",
+				email: "entra-chunk@example.com",
+				password: "password123",
+				entraProfile: "x".repeat(2400),
+			} as any,
+			{
+				onSuccess(context) {
+					rawSetCookie = context.response.headers.get("set-cookie") ?? "";
+				},
+			},
+		);
+
+		const sessionDataCookies = [...parseSetCookieHeader(rawSetCookie)].filter(
+			([name]) => name.includes("session_data"),
+		);
+
+		// Every emitted session_data cookie must fit the per-cookie limit.
+		for (const [name, attr] of sessionDataCookies) {
+			const line = serializeCookie(name, attr.value, toCookieOptions(attr));
+			expect(
+				line.length,
+				`session_data cookie "${name}" serialized to ${line.length} bytes`,
+			).toBeLessThanOrEqual(4093);
+		}
+
+		// The value was split rather than emitted as one oversized cookie.
+		const isChunked = sessionDataCookies.some(([name]) =>
+			/session_data\.\d+$/.test(name),
+		);
+		expect(isChunked).toBe(true);
+
+		// The chunks reassemble back into a readable cache.
+		const headers = new Headers();
+		for (const [name, attr] of sessionDataCookies) {
+			headers.append("cookie", `${name}=${attr.value}`);
+		}
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		const cache = await getCookieCache(request, {
+			secret: "better-auth.secret",
+			cookiePrefix: longPrefix,
+		});
+		expect(cache).not.toBeNull();
+		expect(cache?.user?.email).toEqual("entra-chunk@example.com");
+	});
+
+	it("skips the session cache and warns when it is too large to chunk", async () => {
+		const warn = vi.fn();
+		const { client, auth, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			logger: {
+				log: (level, message) => {
+					if (level === "warn") warn(message);
+				},
+			},
+			user: {
+				additionalFields: { blob: { type: "string", defaultValue: "" } },
+			},
+			session: { cookieCache: { enabled: true } },
+		});
+
+		// Far beyond the chunk-count cap, so chunking cannot make it fit.
+		const headers = new Headers();
+		let rawSetCookie = "";
+		const res = await client.signUp.email(
+			{
+				name: "Big",
+				email: "too-big@example.com",
+				password: "password123",
+				blob: "x".repeat(420_000),
+			} as any,
+			{
+				onSuccess(context) {
+					rawSetCookie = context.response.headers.get("set-cookie") ?? "";
+					cookieSetter(headers)(context);
+				},
+			},
+		);
+
+		// Sign-up still succeeds: the optional cache failing does not break auth.
+		expect(res.data).not.toBeNull();
+
+		const names = [...parseSetCookieHeader(rawSetCookie)].map(([name]) => name);
+		// The oversized cache cookie is skipped entirely, ...
+		expect(names.some((name) => name.includes("session_data"))).toBe(false);
+		// ... but the session token cookie is still set.
+		expect(names.some((name) => name.includes("session_token"))).toBe(true);
+
+		// The user is told why the cache was skipped.
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("too large to store even after chunking"),
+		);
+
+		// With no cache cookie, the session still resolves from the token via the
+		// database, so auth keeps working.
+		const session = await auth.api.getSession({ headers });
+		expect(session?.user.email).toBe("too-big@example.com");
+	});
+
+	it("skips the session cache and warns when the prefix alone overflows", async () => {
+		const warn = vi.fn();
+		// A prefix this long leaves no room for any value, even a single chunk.
+		// The store must skip the cache instead of throwing on the request.
+		const longPrefix = "better-auth-" + "x".repeat(4100);
+		const { client, auth, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			advanced: { cookiePrefix: longPrefix },
+			logger: {
+				log: (level, message) => {
+					if (level === "warn") warn(message);
+				},
+			},
+			session: { cookieCache: { enabled: true } },
+		});
+
+		const headers = new Headers();
+		let rawSetCookie = "";
+		const res = await client.signUp.email(
+			{
+				name: "No Room",
+				email: "no-room@example.com",
+				password: "password123",
+			},
+			{
+				onSuccess(context) {
+					rawSetCookie = context.response.headers.get("set-cookie") ?? "";
+					cookieSetter(headers)(context);
+				},
+			},
+		);
+
+		// Sign-up still succeeds: the optional cache failing does not break auth.
+		expect(res.data).not.toBeNull();
+
+		const names = [...parseSetCookieHeader(rawSetCookie)].map(([name]) => name);
+		expect(names.some((name) => name.includes("session_data"))).toBe(false);
+		expect(names.some((name) => name.includes("session_token"))).toBe(true);
+
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("too large to store even after chunking"),
+		);
+
+		const session = await auth.api.getSession({ headers });
+		expect(session?.user.email).toBe("no-room@example.com");
 	});
 });
 
@@ -1658,5 +2164,261 @@ describe("expireCookie", () => {
 		expect(setCookieHeader).not.toContain("target=valid");
 		expect(setCookieHeader).not.toContain("target.0=chunk");
 		expect(setCookieHeader).toContain("target=; Path=/; Max-Age=0");
+	});
+});
+
+describe("account cookie sync on user switch", () => {
+	const server = setupServer();
+	let googleUser = { email: "first@test.com", sub: "first-google-sub" };
+
+	beforeAll(() => {
+		server.listen({ onUnhandledRequest: "bypass" });
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const data: GoogleProfile = {
+					email: googleUser.email,
+					email_verified: true,
+					name: "Test User",
+					picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+					exp: 1234567890,
+					sub: googleUser.sub,
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "Test",
+					family_name: "User",
+				};
+				const idToken = await signJWT(data, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: `access-token-${googleUser.sub}`,
+					refresh_token: `refresh-token-${googleUser.sub}`,
+					id_token: idToken,
+				});
+			}),
+		);
+	});
+
+	afterAll(() => server.close());
+
+	const getInstance = () =>
+		getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				storeAccountCookie: true,
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+
+	it("keeps the fresh account cookie issued for the new user when the request carries another user's stale account cookie", async () => {
+		const { auth, client, cookieSetter } = await getInstance();
+		const ctx = await auth.$context;
+		const accountDataCookieName = ctx.authCookies.accountData.name;
+
+		const headers = new Headers();
+		googleUser = { email: "switch-first@test.com", sub: "switch-first-sub" };
+		const firstSignIn = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const firstState =
+			firstSignIn.data && "url" in firstSignIn.data && firstSignIn.data.url
+				? new URL(firstSignIn.data.url).searchParams.get("state") || ""
+				: "";
+		await client.$fetch("/callback/google", {
+			query: { state: firstState, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		googleUser = { email: "switch-second@test.com", sub: "switch-second-sub" };
+		const secondSignIn = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const secondState =
+			secondSignIn.data && "url" in secondSignIn.data && secondSignIn.data.url
+				? new URL(secondSignIn.data.url).searchParams.get("state") || ""
+				: "";
+		let secondCallbackSetCookie = "";
+		await client.$fetch("/callback/google", {
+			query: { state: secondState, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				secondCallbackSetCookie =
+					context.response.headers.get("set-cookie") || "";
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		const accountSetCookie = parseSetCookieHeader(secondCallbackSetCookie).get(
+			accountDataCookieName,
+		);
+		expect(accountSetCookie?.value).toBeTruthy();
+		expect(accountSetCookie?.["max-age"]).not.toBe(0);
+
+		const session = await auth.api.getSession({ headers });
+		expect(session?.user.email).toBe("switch-second@test.com");
+		const accountData = safeJSONParse<{ userId: string }>(
+			await symmetricDecodeJWT(
+				accountSetCookie?.value || "",
+				ctx.secretConfig,
+				"better-auth-account",
+			),
+		);
+		expect(accountData?.userId).toBe(session?.user.id);
+	});
+
+	it("still expires another user's stale account cookie when the response issues no fresh one", async () => {
+		const { auth, client, cookieSetter } = await getInstance();
+		const ctx = await auth.$context;
+		const accountDataCookieName = ctx.authCookies.accountData.name;
+
+		const headers = new Headers();
+		googleUser = { email: "expire-first@test.com", sub: "expire-first-sub" };
+		const firstSignIn = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const firstState =
+			firstSignIn.data && "url" in firstSignIn.data && firstSignIn.data.url
+				? new URL(firstSignIn.data.url).searchParams.get("state") || ""
+				: "";
+		await client.$fetch("/callback/google", {
+			query: { state: firstState, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		let signUpSetCookie = "";
+		await client.signUp.email(
+			{
+				email: "expire-second@test.com",
+				password: "password123456",
+				name: "Second User",
+			},
+			{
+				headers,
+				onSuccess(context) {
+					signUpSetCookie = context.response.headers.get("set-cookie") || "";
+				},
+			},
+		);
+
+		const accountSetCookie = parseSetCookieHeader(signUpSetCookie).get(
+			accountDataCookieName,
+		);
+		expect(accountSetCookie?.value).toBeFalsy();
+		expect(accountSetCookie?.["max-age"]).toBe(0);
+	});
+});
+
+describe("getCookieCache expiry (compact strategy)", () => {
+	const SECRET = "better-auth.secret";
+
+	// Build a validly-signed compact session_data cookie, mirroring the encoding
+	// in setCookieCache, so the only variable under test is freshness.
+	async function buildCompactCookie(
+		embeddedExpiresAt: Date,
+		outerExpiresAt: number | undefined,
+	) {
+		const sessionData = {
+			session: {
+				id: "s1",
+				token: "session-token",
+				userId: "u1",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+				expiresAt: embeddedExpiresAt,
+			},
+			user: {
+				id: "u1",
+				email: "cache@test.com",
+				emailVerified: true,
+				name: "Cache User",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			updatedAt: Date.now(),
+			version: "1",
+		};
+		const signature = await createHMAC("SHA-256", "base64urlnopad").sign(
+			SECRET,
+			JSON.stringify({ ...sessionData, expiresAt: outerExpiresAt }),
+		);
+		return base64Url.encode(
+			JSON.stringify({
+				session: sessionData,
+				expiresAt: outerExpiresAt,
+				signature,
+			}),
+			{ padding: false },
+		);
+	}
+
+	function requestWith(cookieValue: string) {
+		const headers = new Headers();
+		headers.set("cookie", `better-auth.session_data=${cookieValue}`);
+		return new Request("https://example.com/api/auth/session", { headers });
+	}
+
+	it("returns the session for a fresh snapshot", async () => {
+		const cookie = await buildCompactCookie(
+			new Date(Date.now() + 60 * 60 * 1000),
+			Date.now() + 5 * 60 * 1000,
+		);
+		const cache = await getCookieCache(requestWith(cookie), { secret: SECRET });
+		expect(cache?.user?.email).toBe("cache@test.com");
+	});
+
+	it("returns null when the embedded session has expired", async () => {
+		const cookie = await buildCompactCookie(
+			new Date(Date.now() - 60 * 1000),
+			Date.now() + 5 * 60 * 1000,
+		);
+		const cache = await getCookieCache(requestWith(cookie), { secret: SECRET });
+		expect(cache).toBeNull();
+	});
+
+	it("returns null when the cache window has elapsed", async () => {
+		const cookie = await buildCompactCookie(
+			new Date(Date.now() + 60 * 60 * 1000),
+			Date.now() - 60 * 1000,
+		);
+		const cache = await getCookieCache(requestWith(cookie), { secret: SECRET });
+		expect(cache).toBeNull();
 	});
 });

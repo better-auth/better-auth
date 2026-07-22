@@ -1,7 +1,4 @@
-import type {
-	BetterAuthClientOptions,
-	BetterAuthClientPlugin,
-} from "@better-auth/core";
+import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
@@ -28,8 +25,10 @@ type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
 	plugins: Array<infer Plugin>;
 }
 	? UnionToIntersection<
-			Plugin extends BetterAuthClientPlugin
-				? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
+			Plugin extends {
+				getAtoms?: infer GetAtoms;
+			}
+				? GetAtoms extends (fetch: any) => infer Atoms
 					? Atoms extends Record<string, any>
 						? {
 								[key in keyof Atoms as IsSignal<key> extends true
@@ -44,9 +43,46 @@ type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
 		>
 	: {};
 
+type ClientConfig = ReturnType<typeof getClientConfig>;
+type ClientSession<Option extends BetterAuthClientOptions> =
+	InferClientAPI<Option> extends {
+		getSession: () => Promise<infer Res>;
+	}
+		? Res extends BetterFetchResponse<infer S>
+			? S
+			: Res
+		: never;
+
+/**
+ * React client returned by `createAuthClient`.
+ */
+export type ReactAuthClient<Option extends BetterAuthClientOptions> =
+	UnionToIntersection<InferResolvedHooks<Option>> &
+		InferClientAPI<Option> &
+		InferActions<Option> & {
+			hydrateSession: (
+				session: NonNullable<ClientSession<Option>> | null,
+			) => void;
+			useSession: () => {
+				data: ClientSession<Option>;
+				isPending: boolean;
+				isRefetching: boolean;
+				error: BetterFetchError | null;
+				refetch: (
+					queryParams?: { query?: SessionQueryParams } | undefined,
+				) => Promise<void>;
+			};
+			$Infer: {
+				Session: NonNullable<ClientSession<Option>>;
+			};
+			$fetch: ClientConfig["$fetch"];
+			$store: ClientConfig["$store"];
+			$ERROR_CODES: InferErrorCodes<Option> & typeof BASE_ERROR_CODES;
+		};
+
 export function createAuthClient<Option extends BetterAuthClientOptions>(
 	options?: Option | undefined,
-) {
+): ReactAuthClient<Option> {
 	const {
 		pluginPathMethods,
 		pluginsActions,
@@ -76,38 +112,11 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		atomListeners,
 	);
 
-	type ClientAPI = InferClientAPI<Option>;
-	type Session = ClientAPI extends {
-		getSession: () => Promise<infer Res>;
-	}
-		? Res extends BetterFetchResponse<infer S>
-			? S
-			: Res
-		: never;
-	return proxy as UnionToIntersection<InferResolvedHooks<Option>> &
-		ClientAPI &
-		InferActions<Option> & {
-			hydrateSession: (session: NonNullable<Session> | null) => void;
-			useSession: () => {
-				data: Session;
-				isPending: boolean;
-				isRefetching: boolean;
-				error: BetterFetchError | null;
-				refetch: (
-					queryParams?: { query?: SessionQueryParams } | undefined,
-				) => Promise<void>;
-			};
-			$Infer: {
-				Session: NonNullable<Session>;
-			};
-			$fetch: typeof $fetch;
-			$store: typeof $store;
-			$ERROR_CODES: InferErrorCodes<Option> & typeof BASE_ERROR_CODES;
-		};
+	return proxy as ReactAuthClient<Option>;
 }
 
-export { useStore };
 export type * from "@better-fetch/fetch";
 export type * from "nanostores";
 export type * from "../../types/helper";
 export type { UnionToIntersection } from "../../types/helper";
+export { useStore };

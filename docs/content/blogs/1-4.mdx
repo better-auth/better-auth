@@ -6,7 +6,6 @@ author:
   name: "Bereket Engida"
   avatar: "/avatars/beka.jpg"
   twitter: "bekacru"
-image: "https://docs.better-auth.com/release-og/1-4.png"
 tags: ["1.4", "stateless sessions", "SCIM", "database indexing", "database join", "SSO domain verification", "uuid", "device authorization"]
 ---
 
@@ -110,27 +109,29 @@ const auth = betterAuth({
 
 ***
 
-### Database Joins Improvements (experimental)
+### Database Joins Improvements
 
 Better-Auth now supports database joins, improving over 50 endpoints by 2 to 3x in latency. This is achieved by using database joins under the hood.
 
-To enable, simply set the `joins` flag to `true` under `experimental` in your auth config.
+To enable, set `advanced.database.joins` to `true` in your auth config.
 Then, re-run migrations or schema generation to get the updated schema which supports joins!
 
-[👉 Read more about database joins](/docs/concepts/database#experimental-joins)
+[👉 Read more about database joins](/docs/concepts/database#joins)
 
 ```ts
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-    experimental: {
-        joins: true,
+    advanced: {
+        database: {
+            joins: true,
+        },
     },
 });
 ```
 
 <Callout type="info">
-  Although joins are experimental, they are supported by all adapters and will be enabled by default in the next release.
+  Joins are supported by all adapters. When disabled (the default), Better Auth falls back to separate queries.
 </Callout>
 
 ***

@@ -5,8 +5,19 @@ import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
+import { UNSPECIFIED_ACR } from "./authentication-context";
+import { getRequestedUserInfoClaims } from "./claims-request";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
+import { mapIssuesToOAuthError } from "./oauth-endpoint";
+import { resolveResourcePolicy } from "./resources";
+import {
+	canonicalizeOAuthQueryParams,
+	postLoginClearedParam,
+	setSignedOAuthQueryParameterNames,
+	signedQueryIssuedAtParam,
+} from "./signed-query";
+import { getSupportedClaims } from "./standard-claims";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
@@ -14,18 +25,43 @@ import type {
 	Scope,
 	VerificationValue,
 } from "./types";
+import { authorizationQuerySchema } from "./types/zod";
 
 import {
-	checkResource,
+	clientAllowsGrant,
 	getClient,
 	getJwtPlugin,
 	isPKCERequired,
 	parsePrompt,
-	postLoginClearedParam,
-	signedQueryIssuedAtParam,
 	storeToken,
 	toResourceList,
 } from "./utils";
+
+/**
+ * Whether a past authentication is still fresh enough for an OIDC `max_age`
+ * request: true when no more than `maxAge` seconds have elapsed since the user
+ * last authenticated. The caller supplies `now`, keeping this pure.
+ */
+function isWithinMaxAge(
+	sessionCreatedAt: Date,
+	maxAgeSeconds: number,
+	now: Date,
+): boolean {
+	if (maxAgeSeconds === 0) return false;
+	return now.getTime() - sessionCreatedAt.getTime() <= maxAgeSeconds * 1000;
+}
+
+export type OAuthRedirectResult = {
+	redirect: true;
+	url: string;
+};
+
+function removeMaxAgeFromAuthorizationQuery(
+	query: OAuthAuthorizationQuery,
+): OAuthAuthorizationQuery {
+	const { max_age: _maxAge, ...queryWithoutMaxAge } = query;
+	return queryWithoutMaxAge;
+}
 
 /**
  * Formats an error url. Per OIDC Core 1.0 §5 / RFC 6749 §4.2.2.1, errors on
@@ -76,7 +112,41 @@ function deriveResponseMode(
 	return "query";
 }
 
-export const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
+const authorizationQueryErrorCodesByField = {
+	response_type: { invalid: "unsupported_response_type" },
+	resource: { invalid: "invalid_target" },
+} as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getStringParameter(value: unknown): string | undefined {
+	return typeof value === "string" ? value : undefined;
+}
+
+function getAuthorizationRequestParameters(
+	ctx: GenericEndpointContext,
+	settings: AuthorizeEndpointSettings | undefined,
+): OAuthAuthorizationQuery {
+	const source =
+		ctx.method === "POST" && settings?.isAuthorize === true
+			? ctx.body
+			: ctx.query;
+	const parameters = isRecord(source) ? source : {};
+	return { ...parameters } as unknown as OAuthAuthorizationQuery;
+}
+
+function isAcrValuesRequestSupported(acrValues: string | undefined): boolean {
+	if (acrValues === undefined) return true;
+	const requestedAcrValues = acrValues.split(" ").filter(Boolean);
+	return requestedAcrValues.includes(UNSPECIFIED_ACR);
+}
+
+export const handleRedirect = (
+	ctx: GenericEndpointContext,
+	uri: string,
+): OAuthRedirectResult => {
 	const fromFetch = isBrowserFetchRequest(ctx.request?.headers);
 	const acceptJson = ctx.headers?.get("accept")?.includes("application/json");
 	if (fromFetch || acceptJson) {
@@ -245,7 +315,7 @@ async function resolveTrustedRedirectUri(
  */
 export function authorizeRedirectOnError(
 	opts: OAuthOptions<Scope[]>,
-): OAuthRedirectOnError<GenericEndpointContext> {
+): OAuthRedirectOnError<GenericEndpointContext, OAuthRedirectResult> {
 	return async ({ error, error_description, ctx }) => {
 		const raw = (ctx.query ?? {}) as Record<string, unknown>;
 		const clientId =
@@ -275,14 +345,16 @@ export function authorizeRedirectOnError(
 	};
 }
 
+export type AuthorizeEndpointSettings = {
+	isAuthorize?: boolean;
+	postLogin?: boolean;
+};
+
 export async function authorizeEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	settings?: {
-		isAuthorize?: boolean;
-		postLogin?: boolean;
-	},
-) {
+	settings?: AuthorizeEndpointSettings,
+): Promise<OAuthRedirectResult> {
 	// Grant type must include authorization_code to use this endpoint
 	if (opts.grantTypes && !opts.grantTypes.includes("authorization_code")) {
 		throw new APIError("NOT_FOUND");
@@ -294,30 +366,60 @@ export async function authorizeEndpoint(
 			error: "invalid_request",
 		});
 	}
+	const request = ctx.request;
+
+	// Normalize GET query serialization and POST form serialization through one
+	// authorization-request path (OIDC Core §3.1.2.1).
+	let query: OAuthAuthorizationQuery = getAuthorizationRequestParameters(
+		ctx,
+		settings,
+	);
+	ctx.query = query;
+	const requestObject = getStringParameter(query.request);
+	const requestUri = getStringParameter(query.request_uri);
+	if (requestObject !== undefined && requestUri !== undefined) {
+		return authorizeRedirectOnError(opts)({
+			error: "invalid_request",
+			error_description: "request and request_uri cannot be used together",
+			ctx,
+		});
+	}
+	if (requestObject !== undefined) {
+		return authorizeRedirectOnError(opts)({
+			error: "request_not_supported",
+			error_description: "request object not supported",
+			ctx,
+		});
+	}
 
 	// Resolve request_uri (PAR) before processing
-	let query: OAuthAuthorizationQuery = ctx.query;
-	if (query.request_uri) {
-		if (!opts.requestUriResolver) {
-			return handleRedirect(
+	if (requestUri !== undefined) {
+		const clientId = getStringParameter(query.client_id);
+		if (!clientId) {
+			return authorizeRedirectOnError(opts)({
+				error: "invalid_request",
+				error_description: "client_id is required",
 				ctx,
-				getErrorURL(ctx, "invalid_request_uri", "request_uri not supported"),
-			);
+			});
+		}
+		if (!opts.requestUriResolver) {
+			return authorizeRedirectOnError(opts)({
+				error: "request_uri_not_supported",
+				error_description: "request_uri not supported",
+				ctx,
+			});
 		}
 		const resolvedParams = await opts.requestUriResolver({
-			requestUri: query.request_uri,
-			clientId: query.client_id ?? "",
+			requestUri,
+			clientId,
 			ctx,
 		});
 		if (!resolvedParams) {
-			return handleRedirect(
+			return authorizeRedirectOnError(opts)({
+				error: "invalid_request_uri",
+				error_description: "request_uri is invalid or expired",
 				ctx,
-				getErrorURL(
-					ctx,
-					"invalid_request_uri",
-					"request_uri is invalid or expired",
-				),
-			);
+			});
 		}
 		// RFC 9126 §4: all params come from the stored request, not the URL.
 		// Only client_id is carried from the authorization URL.
@@ -328,22 +430,36 @@ export async function authorizeEndpoint(
 		}
 	}
 	ctx.query = query;
+	const parsedQuery = authorizationQuerySchema.safeParse(query);
+	if (!parsedQuery.success) {
+		const mappedError = mapIssuesToOAuthError(
+			parsedQuery.error.issues,
+			authorizationQueryErrorCodesByField,
+		);
+		return authorizeRedirectOnError(opts)({
+			...mappedError,
+			ctx,
+		});
+	}
+	query = parsedQuery.data as OAuthAuthorizationQuery;
+	ctx.query = query;
+	if (!isAcrValuesRequestSupported(query.acr_values)) {
+		return authorizeRedirectOnError(opts)({
+			error: "invalid_request",
+			error_description: "unsupported acr_values",
+			ctx,
+		});
+	}
 	await oAuthState.set({
 		query: serializeAuthorizationQuery(query).toString(),
 	});
 
-	if (!query.client_id) {
-		return handleRedirect(
-			ctx,
-			getErrorURL(ctx, "invalid_client", "client_id is required"),
-		);
-	}
-
 	if (!query.response_type) {
-		return handleRedirect(
+		return authorizeRedirectOnError(opts)({
+			error: "invalid_request",
+			error_description: "response_type is required",
 			ctx,
-			getErrorURL(ctx, "invalid_request", "response_type is required"),
-		);
+		});
 	}
 
 	const promptSet = ctx.query?.prompt
@@ -386,6 +502,18 @@ export async function authorizeEndpoint(
 			getErrorURL(ctx, "client_disabled", "client is disabled"),
 		);
 	}
+	// The authorize endpoint only serves the authorization_code grant; reject
+	// clients that are not registered for it.
+	if (!clientAllowsGrant(client, "authorization_code")) {
+		return handleRedirect(
+			ctx,
+			getErrorURL(
+				ctx,
+				"unauthorized_client",
+				"client is not authorized to use the authorization_code grant",
+			),
+		);
+	}
 
 	const redirectUri = findRegisteredRedirectUri(
 		client.redirectUris,
@@ -423,9 +551,49 @@ export async function authorizeEndpoint(
 		requestedScopes = client.scopes ?? opts.scopes ?? [];
 		query.scope = requestedScopes.join(" ");
 	}
+	const requestedUserInfoClaims = getRequestedUserInfoClaims(
+		query.claims,
+		getSupportedClaims(opts),
+	);
 
-	// Check if PKCE is required for this client and scope
-	const pkceRequired = isPKCERequired(client, requestedScopes);
+	// Validate `resource` (RFC 8707 §2) against the configured resource
+	// entities — fail-fast at /authorize so clients see misconfigured
+	// resources before consent UI. Re-validated at /oauth2/token because
+	// clients typically re-supply the parameter there.
+	if (query.resource !== undefined) {
+		try {
+			await resolveResourcePolicy(ctx, opts, {
+				resource: query.resource,
+				clientId: client.clientId,
+				requestedScopes,
+			});
+		} catch (err) {
+			if (err instanceof APIError) {
+				const error =
+					(err.body as { error?: string })?.error ?? "invalid_target";
+				const description =
+					(err.body as { error_description?: string })?.error_description ??
+					"requested resource invalid";
+				return handleRedirect(
+					ctx,
+					formatErrorURL(
+						query.redirect_uri,
+						error,
+						description,
+						query.state,
+						getIssuer(ctx, opts),
+					),
+				);
+			}
+			throw err;
+		}
+	}
+
+	// Check if PKCE is required for this client and authorization request
+	const pkceRequired = isPKCERequired(client, {
+		scopes: requestedScopes,
+		nonce: query.nonce,
+	});
 
 	// Validate PKCE parameters if required
 	if (pkceRequired) {
@@ -475,31 +643,33 @@ export async function authorizeEndpoint(
 		}
 	}
 
-	// Validate the resource sent to the authorize endpoint
-	const resource = query.resource;
-	const resourceResult = await checkResource(
-		ctx,
-		opts,
-		resource,
-		requestedScopes,
-	);
-	if (!resourceResult.success) {
-		return handleRedirect(
-			ctx,
-			formatErrorURL(
-				query.redirect_uri,
-				"invalid_target",
-				"requested resource invalid",
-				query.state,
-				getIssuer(ctx, opts),
-			),
-		);
-	}
-	const requestedResources = toResourceList(resource) ?? [];
+	// `resource` was already validated above via resolveResourcePolicy (entity
+	// + legacy fallback aware). Just normalize it for downstream consent/binding.
+	const requestedResources = toResourceList(query.resource) ?? [];
 
 	// Check for session
 	const session = await getSessionFromCtx(ctx);
-	if (!session || promptSet?.has("login") || promptSet?.has("create")) {
+	// A stale session under `max_age` requires re-authentication, which the host
+	// login page performs (minting a fresh session whose createdAt becomes the
+	// new auth_time). Reuse the prompt=login redirect rather than deleting the
+	// session, so other relying parties are not back-channel logged out.
+	const maxAgeSeconds = query.max_age;
+	const hasSatisfiedMaxAge =
+		session != null &&
+		maxAgeSeconds !== undefined &&
+		isWithinMaxAge(
+			new Date(session.session.createdAt),
+			maxAgeSeconds,
+			new Date(),
+		);
+	const staleForMaxAge =
+		session != null && maxAgeSeconds !== undefined && !hasSatisfiedMaxAge;
+	if (
+		!session ||
+		staleForMaxAge ||
+		promptSet?.has("login") ||
+		promptSet?.has("create")
+	) {
 		if (promptNone) {
 			return redirectWithPromptNoneError(
 				ctx,
@@ -515,6 +685,10 @@ export async function authorizeEndpoint(
 			promptSet?.has("create") ? "create" : "login",
 		);
 	}
+	if (hasSatisfiedMaxAge) {
+		query = removeMaxAgeFromAuthorizationQuery(query);
+		ctx.query = query;
+	}
 
 	// Force account selection (eg. multi-session)
 	if (settings?.isAuthorize && promptSet?.has("select_account")) {
@@ -527,7 +701,7 @@ export async function authorizeEndpoint(
 		opts.selectAccount
 	) {
 		const selectedAccountRedirect = await opts.selectAccount.shouldRedirect({
-			headers: ctx.request.headers,
+			headers: request.headers,
 			user: session.user,
 			session: session.session,
 			scopes: requestedScopes,
@@ -549,7 +723,7 @@ export async function authorizeEndpoint(
 	// Redirect to complete registration steps
 	if (opts.signup?.shouldRedirect) {
 		const signupRedirect = await opts.signup.shouldRedirect({
-			headers: ctx.request.headers,
+			headers: request.headers,
 			user: session.user,
 			session: session.session,
 			scopes: requestedScopes,
@@ -572,7 +746,7 @@ export async function authorizeEndpoint(
 
 	if (!settings?.postLogin && opts.postLogin) {
 		const postLoginRedirect = await opts.postLogin.shouldRedirect({
-			headers: ctx.request.headers,
+			headers: request.headers,
 			user: session.user,
 			session: session.session,
 			scopes: requestedScopes,
@@ -640,7 +814,10 @@ export async function authorizeEndpoint(
 
 	if (
 		!consent ||
-		!requestedScopes.every((val) => consent.scopes.includes(val))
+		!requestedScopes.every((val) => consent.scopes.includes(val)) ||
+		!requestedUserInfoClaims.every((claim) =>
+			(consent.requestedUserInfoClaims ?? []).includes(claim),
+		)
 	) {
 		if (promptNone) {
 			return redirectWithPromptNoneError(
@@ -696,6 +873,8 @@ function serializeAuthorizationQuery(query: OAuthAuthorizationQuery) {
 			for (const v of value) {
 				params.append(key, String(v));
 			}
+		} else if (key === "claims" && typeof value === "object") {
+			params.set(key, JSON.stringify(value));
 		} else {
 			params.set(key, String(value));
 		}
@@ -798,13 +977,18 @@ async function signParams(
 	);
 	params.set("exp", String(exp));
 	params.set(signedQueryIssuedAtParam, String(issuedAt));
+	params.delete("sig");
 	// Reserved marker: only server-issued consent redirects may sign this.
 	params.delete(postLoginClearedParam);
 	if (flags?.postLoginClearedForSession) {
 		params.set(postLoginClearedParam, flags.postLoginClearedForSession);
 	}
+	setSignedOAuthQueryParameterNames(params);
 
-	const signature = await makeSignature(params.toString(), ctx.context.secret);
-	params.append("sig", signature);
+	const signature = await makeSignature(
+		canonicalizeOAuthQueryParams(params).toString(),
+		ctx.context.secret,
+	);
+	params.set("sig", signature);
 	return params.toString();
 }

@@ -135,6 +135,15 @@ export type InferUserUpdateCtx<
 	UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>
 >;
 
+export type InferSessionUpdateCtx<
+	ClientOpts extends BetterAuthClientOptions,
+	FetchOptions extends ClientFetchOption,
+> = {
+	fetchOptions?: FetchOptions | undefined;
+} & Partial<
+	UnionToIntersection<InferAdditionalFromClient<ClientOpts, "session", "input">>
+>;
+
 type InferCtxQuery<
 	C extends InputContext<any, any>,
 	FetchOptions extends ClientFetchOption,
@@ -153,6 +162,23 @@ type InferCtxQuery<
 					fetchOptions?: FetchOptions | undefined;
 				};
 
+type InferBodyCtx<Body, FetchOptions extends ClientFetchOption> =
+	Body extends Record<string, unknown>
+		? Body & {
+				fetchOptions?: FetchOptions | undefined;
+			}
+		: never;
+
+type PrettifyUnion<T> = T extends unknown ? Prettify<T> : never;
+
+type HasRequiredKeysInUnion<T> = true extends (
+	T extends unknown
+		? HasRequiredKeys<T>
+		: never
+)
+	? true
+	: false;
+
 export type InferCtx<
 	C extends InputContext<any, any>,
 	FetchOptions extends ClientFetchOption,
@@ -160,9 +186,7 @@ export type InferCtx<
 	IsAny<C["body"]> extends true
 		? InferCtxQuery<C, FetchOptions>
 		: C["body"] extends Record<string, any>
-			? C["body"] & {
-					fetchOptions?: FetchOptions | undefined;
-				}
+			? InferBodyCtx<C["body"], FetchOptions>
 			: InferCtxQuery<C, FetchOptions>;
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
@@ -195,11 +219,11 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 											C["params"]
 										>,
 									>(
-										...data: HasRequiredKeys<
+										...data: HasRequiredKeysInUnion<
 											InferCtx<C, FetchOptions>
 										> extends true
 											? [
-													Prettify<
+													PrettifyUnion<
 														T["path"] extends `/sign-up/email`
 															? InferSignUpEmailCtx<COpts, FetchOptions>
 															: T["path"] extends `/sign-in/social`
@@ -218,10 +242,12 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 													FetchOptions?,
 												]
 											: [
-													Prettify<
+													PrettifyUnion<
 														T["path"] extends `/update-user`
 															? InferUserUpdateCtx<COpts, FetchOptions>
-															: InferCtx<C, FetchOptions>
+															: T["path"] extends `/update-session`
+																? InferSessionUpdateCtx<COpts, FetchOptions>
+																: InferCtx<C, FetchOptions>
 													>?,
 													FetchOptions?,
 												]

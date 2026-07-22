@@ -377,7 +377,7 @@ describe("oauthClient", async () => {
  * gate as the create-client endpoints. The gate lives in the shared creation
  * chokepoint, so every creation route inherits it; a forbidden authenticated
  * user cannot mint a client through registration, while the unauthenticated
- * public-client path stays open and never consults the hook.
+ * open-registration path stays open and never consults the hook.
  *
  * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-jmcv-4jfc-6qqj
  */
@@ -481,6 +481,17 @@ describe("oauthClient dynamic registration privileges", async () => {
 		expect(client.data?.client_id).toBeDefined();
 		expect(client.data?.client_secret).toBeUndefined();
 		expect(client.data?.public).toBe(true);
+		expect(clientPrivileges).not.toHaveBeenCalled();
+	});
+
+	it("should allow unauthenticated confidential registration without invoking the gate", async () => {
+		const client = await unauthedAuthClient.oauth2.register({
+			redirect_uris: [redirectUri],
+		});
+		expect(client.data?.client_id).toBeDefined();
+		expect(client.data?.client_secret).toBeDefined();
+		expect(client.data?.token_endpoint_auth_method).toBe("client_secret_basic");
+		expect(client.data?.public).toBe(false);
 		expect(clientPrivileges).not.toHaveBeenCalled();
 	});
 });

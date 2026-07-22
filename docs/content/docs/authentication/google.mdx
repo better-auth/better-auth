@@ -145,6 +145,22 @@ await authClient.signIn.social({
   The array only expands ID token audience verification. The authorization code flow still uses the first entry paired with the single `clientSecret` and `redirectURI`, so those cannot vary per platform within one provider block.
 </Callout>
 
+### Restrict Sign-In to Google Workspace
+
+Set `hd` on the Google provider to require a verified Google Workspace hosted-domain claim. Google also receives this value as an account-selection hint, but Better Auth enforces the returned ID token/profile claim after Google signs the response.
+
+```ts title="auth.ts"
+socialProviders: {
+    google: {
+        clientId: process.env.GOOGLE_CLIENT_ID as string,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+        hd: "company.com", // [!code highlight]
+    },
+}
+```
+
+Set `hd: "*"` to allow any Google Workspace hosted domain. Tokens with no `hd` claim are rejected whenever `hd` is configured.
+
 ### Always ask to select an account
 
 If you want to always ask the user to select an account, you pass the `prompt` parameter to the provider, setting it to `select_account`.
@@ -186,6 +202,24 @@ This will trigger a new OAuth flow that requests the additional scopes. After co
   account already linked" errors when requesting additional scopes from the same
   provider.
 </Callout>
+
+### Disable incremental authorization
+
+By default, Better Auth sends `include_granted_scopes=true` to Google's authorization endpoint so newly issued access tokens cover scopes from prior grants in addition to the ones requested for the current flow. Set `includeGrantedScopes: false` if each OAuth flow should request only its own scopes.
+
+```ts
+socialProviders: {
+    google: {
+        clientId: process.env.GOOGLE_CLIENT_ID as string,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+        includeGrantedScopes: false, // [!code highlight]
+    },
+}
+```
+
+Call-time `additionalParams.include_granted_scopes` still follows the general OAuth parameter precedence rules and can override this provider default for a single flow.
+
+See Google's [Incremental authorization](https://developers.google.com/identity/protocols/oauth2/web-server#incrementalAuth) docs for the underlying parameter behavior.
 
 ### Always get refresh token
 

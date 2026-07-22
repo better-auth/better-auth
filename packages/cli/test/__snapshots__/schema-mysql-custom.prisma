@@ -49,7 +49,8 @@ model Session {
 
 model Account {
   id                    String    @id
-  accountId             String    @db.Text
+  issuer                String    @db.VarChar(191)
+  providerAccountId     String    @db.VarChar(191)
   providerId            String    @db.Text
   userId                String
   user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -63,6 +64,7 @@ model Account {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
+  @@unique([issuer, providerAccountId], map: "account_issuer_providerAccountId_uidx")
   @@index([userId(length: 191)])
   @@map("account")
 }
@@ -80,12 +82,14 @@ model Verification {
 }
 
 model TwoFactor {
-  id          String   @id
-  secret      String   @db.Text
-  backupCodes String   @db.Text
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  verified    Boolean? @default(true)
+  id                      String    @id
+  secret                  String    @db.Text
+  backupCodes             String    @db.Text
+  userId                  String
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verified                Boolean?  @default(true)
+  failedVerificationCount Int?      @default(0)
+  lockedUntil             DateTime?
 
   @@index([secret(length: 191)])
   @@index([userId(length: 191)])

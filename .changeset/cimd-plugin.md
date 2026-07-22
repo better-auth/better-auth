@@ -24,26 +24,30 @@ betterAuth({
 });
 ```
 
-Ships with §3/§4.1 validation, SSRF protection for private/reserved IPs and cloud metadata endpoints, a 5-second fetch timeout, a 5 KB response size limit (UTF-8 byte-counted), origin binding for redirect URIs, and lifecycle hooks (`onClientCreated`, `onClientRefreshed`). Advertises `client_id_metadata_document_supported` in OAuth/OIDC discovery metadata.
+Ships with §3/§4.1 validation, SSRF protection that rejects private, reserved, link-local, unspecified, and cloud-metadata hosts (including IPv4-mapped IPv6 and 6to4/NAT64/Teredo tunnel forms), a 5-second fetch timeout, a 5 KB response size limit (UTF-8 byte-counted), origin binding for redirect URIs, and lifecycle hooks (`onClientCreated`, `onClientRefreshed`). Advertises `client_id_metadata_document_supported` in OAuth/OIDC discovery metadata.
+
+Loopback `client_id` URLs (`localhost`, `127.0.0.0/8`, `::1`, `*.localhost`), including plain HTTP, are fetched only when the new `allowLoopback` option is enabled, so a production server never fetches its own loopback interface. Loopback `redirect_uris` stay allowed for native and desktop flows.
 
 The `allowFetch` pre-fetch gate lets operators add origin allowlists, per-host rate limits, or DNS-level defenses beyond the built-in IP-literal check.
 
 Admin-controlled fields (`disabled`, `skipConsent`, `enableEndSession`) are preserved across refreshes so admin decisions survive document updates.
 
-### `@better-auth/oauth-provider`: new `clientDiscovery` option
+### `@better-auth/oauth-provider`: `clientDiscovery` extension field
 
 ```ts
 import type { ClientDiscovery } from "@better-auth/oauth-provider";
 
 oauthProvider({
-  clientDiscovery: [
+  extensions: [
     {
-      id: "my-resolver",
-      matches: (clientId) => clientId.startsWith("custom://"),
-      resolve: async (ctx, clientId, existing) => {
-        // create, refresh, or return null to pass through
+      clientDiscovery: {
+        id: "my-resolver",
+        matches: (clientId) => clientId.startsWith("custom://"),
+        resolve: async (ctx, clientId, existing) => {
+          // create, refresh, or return null to pass through
+        },
+        discoveryMetadata: { custom_flow_supported: true },
       },
-      discoveryMetadata: { custom_flow_supported: true },
     },
   ],
 });
@@ -51,7 +55,7 @@ oauthProvider({
 
 `clientDiscovery` accepts a single `ClientDiscovery` or an array. `getClient()` walks the entries in order after the database lookup; the first entry whose `matches()` returns `true` and whose `resolve()` returns a non-null client wins. Each entry can also contribute `discoveryMetadata` fields that are merged into `/.well-known/oauth-authorization-server` and `/.well-known/openid-configuration` responses.
 
-Plugins like `@better-auth/cimd` append an entry here at init time, so multiple discoveries can coexist.
+Plugins like `@better-auth/cimd` contribute an entry through the extension surface at init time, so multiple discoveries can coexist.
 
 The `checkOAuthClient` and `oauthToSchema` helpers are now exported for plugins that create client records directly.
 

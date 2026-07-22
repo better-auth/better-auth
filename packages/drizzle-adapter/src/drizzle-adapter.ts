@@ -41,6 +41,80 @@ export interface DB {
 	[key: string]: any;
 }
 
+/**
+ * Derive the number of affected rows from a Drizzle write result.
+ *
+ * Drizzle returns the raw per-driver result for a non-returning write, so the
+ * count lives under a different field per driver: node-postgres / neon expose
+ * `rowCount`, postgres-js / bun-sql carry `count` on an Array subclass, mysql2
+ * reports `affectedRows` (in a result-header array), planetscale and other
+ * serverless drivers use `rowsAffected`, better-sqlite3 uses `changes`, and
+ * Cloudflare D1 nests the count under `meta.changes`. This normalizes them so
+ * write methods that depend on affected rows honor the adapter contract instead
+ * of leaking the raw driver result.
+ */
+function getAffectedRowCount(
+	result: unknown,
+	operation: "updateMany" | "deleteMany" | "consumeOne",
+	context: { model: string; where: Where[] },
+): number {
+	let count: unknown = 0;
+	if (result && typeof result === "object" && "rowCount" in result) {
+		// node-postgres / neon expose `rowCount`.
+		count = (result as { rowCount: unknown }).rowCount;
+	} else if (
+		result &&
+		typeof result === "object" &&
+		typeof (result as { count?: unknown }).count === "number"
+	) {
+		// postgres-js / bun-sql return an Array subclass carrying `count`.
+		// A non-returning write has length 0, so read this before the Array
+		// branch falls back to `result.length`.
+		count = (result as { count: number }).count;
+	} else if (Array.isArray(result)) {
+		// mysql2 returns a `[ResultSetHeader]` tuple.
+		count =
+			result.length > 0 && hasDriverRowCount(result[0])
+				? readDriverRowCount(result[0])
+				: result.length;
+	} else if (hasDriverRowCount(result)) {
+		count = readDriverRowCount(result);
+	}
+	if (typeof count !== "number" || !Number.isFinite(count)) {
+		logger.error(
+			`[Drizzle Adapter] The result of the ${operation} operation is not a finite number. This is likely a bug in the adapter. Please report this issue to the Better Auth team.`,
+			{ result, ...context },
+		);
+		throw new BetterAuthError(
+			`Drizzle adapter ${operation} returned an invalid affected row count`,
+		);
+	}
+	return count;
+}
+
+function readDriverRowCount(result: unknown): unknown {
+	if (!result || typeof result !== "object") return undefined;
+	const driverResult = result as Record<string, unknown>;
+	if ("affectedRows" in driverResult) return driverResult.affectedRows;
+	if ("rowsAffected" in driverResult) return driverResult.rowsAffected;
+	if ("changes" in driverResult) return driverResult.changes;
+
+	// Cloudflare D1 nests the affected-row count under `meta.changes`.
+	// @see https://developers.cloudflare.com/d1/worker-api/return-object/
+	if ("meta" in driverResult) {
+		const meta = driverResult.meta;
+		if (meta && typeof meta === "object" && "changes" in meta) {
+			return meta.changes;
+		}
+	}
+
+	return undefined;
+}
+
+function hasDriverRowCount(result: unknown): boolean {
+	return readDriverRowCount(result) !== undefined;
+}
+
 export interface DrizzleAdapterConfig {
 	/**
 	 * The schema object that defines the tables and fields
@@ -77,6 +151,22 @@ export interface DrizzleAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
+	/**
+	 * Database schema namespace, used during the Better Auth CLI to generate the schema.
+	 *
+	 * Only applies to PostgreSQL. It will generate something like this:
+	 *
+	 * ```ts
+	 * const authSchema = pgSchema("auth");
+	 *
+	 * export const user = authSchema.table("user", {...});
+	 * export const session = authSchema.table("session", {...});
+	 * ```
+	 *
+	 * @example "auth"
+	 * @default undefined
+	 */
+	schemaName?: string | undefined;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
@@ -632,6 +722,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			 *    corresponds to the same table object
 			 */
 			function getQueryModel(model: string): string | null {
+				if (!db.query) return null;
 				if (db.query[model]) return model;
 
 				if (config.usePlural) {
@@ -668,7 +759,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
 
-					if (options.experimental?.joins) {
+					if (join) {
 						const queryModel = getQueryModel(model);
 						if (!db.query || !queryModel) {
 							logger.error(
@@ -681,22 +772,20 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| undefined;
 
 							const pluralJoinResults: string[] = [];
-							if (join) {
-								includes = {};
-								const joinEntries = Object.entries(join);
-								for (const [model, joinAttr] of joinEntries) {
-									const limit =
-										joinAttr.limit ??
-										options.advanced?.database?.defaultFindManyLimit ??
-										100;
-									const isUnique = joinAttr.relation === "one-to-one";
-									const pluralSuffix = isUnique || config.usePlural ? "" : "s";
-									includes[`${model}${pluralSuffix}`] = isUnique
-										? true
-										: { limit };
-									if (!isUnique) {
-										pluralJoinResults.push(`${model}${pluralSuffix}`);
-									}
+							includes = {};
+							const joinEntries = Object.entries(join);
+							for (const [model, joinAttr] of joinEntries) {
+								const limit =
+									joinAttr.limit ??
+									options.advanced?.database?.defaultFindManyLimit ??
+									100;
+								const isUnique = joinAttr.relation === "one-to-one";
+								const pluralSuffix = isUnique || config.usePlural ? "" : "s";
+								includes[`${model}${pluralSuffix}`] = isUnique
+									? true
+									: { limit };
+								if (!isUnique) {
+									pluralJoinResults.push(`${model}${pluralSuffix}`);
 								}
 							}
 							const query = db.query[queryModel].findFirst({
@@ -755,9 +844,9 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const clause = where ? convertWhereClause(where, model) : [];
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
 
-					if (options.experimental?.joins) {
+					if (join) {
 						const queryModel = getQueryModel(model);
-						if (!queryModel) {
+						if (!db.query || !queryModel) {
 							logger.error(
 								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx auth@latest generate".`,
 							);
@@ -768,22 +857,20 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| undefined;
 
 							const pluralJoinResults: string[] = [];
-							if (join) {
-								includes = {};
-								const joinEntries = Object.entries(join);
-								for (const [model, joinAttr] of joinEntries) {
-									const isUnique = joinAttr.relation === "one-to-one";
-									const limit =
-										joinAttr.limit ??
-										options.advanced?.database?.defaultFindManyLimit ??
-										100;
-									const pluralSuffix = isUnique || config.usePlural ? "" : "s";
-									includes[`${model}${pluralSuffix}`] = isUnique
-										? true
-										: { limit };
-									if (!isUnique)
-										pluralJoinResults.push(`${model}${pluralSuffix}`);
-								}
+							includes = {};
+							const joinEntries = Object.entries(join);
+							for (const [model, joinAttr] of joinEntries) {
+								const isUnique = joinAttr.relation === "one-to-one";
+								const limit =
+									joinAttr.limit ??
+									options.advanced?.database?.defaultFindManyLimit ??
+									100;
+								const pluralSuffix = isUnique || config.usePlural ? "" : "s";
+								includes[`${model}${pluralSuffix}`] = isUnique
+									? true
+									: { limit };
+								if (!isUnique)
+									pluralJoinResults.push(`${model}${pluralSuffix}`);
 							}
 							let orderBy: SQL<unknown>[] | undefined = undefined;
 							if (sortBy?.field) {
@@ -888,7 +975,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.update(schemaModel)
 						.set(values)
 						.where(...clause);
-					return await builder;
+					const res = await builder;
+					return getAffectedRowCount(res, "updateMany", { model, where });
 				},
 				async delete({ model, where }) {
 					const schemaModel = getSchema(model);
@@ -901,21 +989,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const clause = convertWhereClause(where, model);
 					const builder = db.delete(schemaModel).where(...clause);
 					const res = await builder;
-					let count = 0;
-					if (res && "rowCount" in res) count = res.rowCount;
-					else if (Array.isArray(res)) count = res.length;
-					else if (
-						res &&
-						("affectedRows" in res || "rowsAffected" in res || "changes" in res)
-					)
-						count = res.affectedRows ?? res.rowsAffected ?? res.changes;
-					if (typeof count !== "number") {
-						logger.error(
-							"[Drizzle Adapter] The result of the deleteMany operation is not a number. This is likely a bug in the adapter. Please report this issue to the Better Auth team.",
-							{ res, model, where },
-						);
-					}
-					return count;
+					return getAffectedRowCount(res, "deleteMany", { model, where });
 				},
 				async consumeOne({ model, where }) {
 					const schemaModel = getSchema(model);
@@ -944,12 +1018,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								.delete(schemaModel)
 								.where(eq(idColumn, targetId))
 								.execute();
-							const count =
-								(delRes &&
-									(delRes.rowsAffected ??
-										delRes.affectedRows ??
-										delRes.changes)) ??
-								0;
+							const count = getAffectedRowCount(delRes, "consumeOne", {
+								model,
+								where,
+							});
 							return count > 0 ? (target as any) : null;
 						};
 						return inTransaction
@@ -970,6 +1042,91 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.where(inArray(idColumn, targetIds))
 						.returning();
 					return (deleted[0] as any) ?? null;
+				},
+				async incrementOne({ model, where, increment, set }) {
+					const schemaModel = getSchema(model);
+					const clause = convertWhereClause(where, model);
+					const idField = getFieldName({ model, field: "id" });
+					const idColumn = schemaModel[idField];
+
+					// Build `field = field + delta` for each increment plus the absolute
+					// `set` assignments. The where clause selects and guards the row, but
+					// the mutation is pinned to a single id so a non-unique guard cannot
+					// touch more than one row (single-row contract, like consumeOne).
+					const assignments: Record<string, unknown> = {};
+					for (const [field, delta] of Object.entries(increment)) {
+						const columnName = getFieldName({ model, field });
+						const column = schemaModel[columnName];
+						if (!column) {
+							throw new BetterAuthError(
+								`The field "${field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+							);
+						}
+						assignments[columnName] = sql`${column} + ${sql.param(delta)}`;
+					}
+					if (set) {
+						for (const [field, value] of Object.entries(set)) {
+							const columnName = getFieldName({ model, field });
+							if (!schemaModel[columnName]) {
+								throw new BetterAuthError(
+									`The field "${field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+								);
+							}
+							assignments[columnName] = value;
+						}
+					}
+
+					if (config.provider === "mysql") {
+						// MySQL has no UPDATE ... RETURNING. Hold the guarded row under
+						// SELECT ... FOR UPDATE inside a transaction so concurrent updates
+						// serialize, then read the mutated row back by id.
+						const mutateInTransaction = async (tx: DB) => {
+							const rows = await tx
+								.select()
+								.from(schemaModel)
+								.where(...clause)
+								.for("update")
+								.limit(1);
+							const target = rows[0];
+							if (!target) return null;
+							const targetId = target[idField] ?? (target as any).id;
+							if (targetId === undefined || targetId === null || !idColumn) {
+								return null;
+							}
+							await tx
+								.update(schemaModel)
+								.set(assignments)
+								.where(eq(idColumn, targetId))
+								.execute();
+							const updated = await tx
+								.select()
+								.from(schemaModel)
+								.where(eq(idColumn, targetId))
+								.limit(1)
+								.execute();
+							return (updated[0] as any) ?? null;
+						};
+						return inTransaction
+							? mutateInTransaction(db)
+							: db.transaction(mutateInTransaction);
+					}
+
+					if (!idColumn) {
+						return null;
+					}
+					// Pin the update to one selected id so a non-unique guard mutates at
+					// most one row, mirroring consumeOne's single-row selection.
+					const targetIds = db
+						.select({ id: idColumn })
+						.from(schemaModel)
+						.where(...clause)
+						.limit(1);
+					const updated = await db
+						.update(schemaModel)
+						.set(assignments)
+						.where(inArray(idColumn, targetIds))
+						.returning();
+					return (updated[0] as any) ?? null;
 				},
 				options: config,
 			};

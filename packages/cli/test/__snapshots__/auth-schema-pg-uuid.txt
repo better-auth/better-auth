@@ -4,8 +4,10 @@ import {
   text,
   timestamp,
   boolean,
+  integer,
   uuid,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const custom_user = pgTable("custom_user", {
@@ -53,7 +55,8 @@ export const custom_account = pgTable(
     id: uuid("id")
       .default(sql`pg_catalog.gen_random_uuid()`)
       .primaryKey(),
-    accountId: text("account_id").notNull(),
+    issuer: text("issuer").notNull(),
+    providerAccountId: text("provider_account_id").notNull(),
     providerId: text("provider_id").notNull(),
     userId: uuid("user_id")
       .notNull()
@@ -70,7 +73,13 @@ export const custom_account = pgTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [index("custom_account_userId_idx").on(table.userId)],
+  (table) => [
+    uniqueIndex("custom_account_issuer_providerAccountId_uidx").on(
+      table.issuer,
+      table.providerAccountId,
+    ),
+    index("custom_account_userId_idx").on(table.userId),
+  ],
 );
 
 export const custom_verification = pgTable(
@@ -103,6 +112,8 @@ export const twoFactor = pgTable(
       .notNull()
       .references(() => custom_user.id, { onDelete: "cascade" }),
     verified: boolean("verified").default(true),
+    failedVerificationCount: integer("failed_verification_count").default(0),
+    lockedUntil: timestamp("locked_until"),
   },
   (table) => [
     index("twoFactor_secret_idx").on(table.secret),

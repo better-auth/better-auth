@@ -1,4 +1,5 @@
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { APIError } from "better-auth/api";
 import { resolveSigningCerts } from "../saml";
 import { saml } from "../samlify";
 import type { SAMLConfig, SSOOptions, SSOProvider } from "../types";
@@ -53,6 +54,7 @@ export function createSP(
 	baseURL: string,
 	providerId: string,
 	opts?: {
+		clockSkew?: number;
 		relayState?: string;
 		sloOptions?: {
 			wantLogoutRequestSigned?: boolean;
@@ -111,10 +113,43 @@ export function createSP(
 		encPrivateKey: normalizePem(spData?.encPrivateKey),
 		encPrivateKeyPass: spData?.encPrivateKeyPass,
 		relayState: opts?.relayState,
+		clockDrifts:
+			opts?.clockSkew && opts?.clockSkew !== 0
+				? [-opts.clockSkew, opts.clockSkew]
+				: undefined,
+	});
+}
+
+export function assertSAMLIdentityProviderAuthority<
+	Config extends {
+		idpMetadata?:
+			| {
+					metadata?: string | undefined;
+					entityID?: string | undefined;
+			  }
+			| undefined;
+	},
+>(
+	config: Config,
+): asserts config is Config & {
+	idpMetadata: NonNullable<Config["idpMetadata"]> &
+		(
+			| { metadata: string; entityID?: string | undefined }
+			| { metadata?: undefined; entityID: string }
+		);
+} {
+	if (config.idpMetadata?.metadata || config.idpMetadata?.entityID) {
+		return;
+	}
+
+	throw new APIError("BAD_REQUEST", {
+		message:
+			"SAML manual IdP configuration requires idpMetadata.entityID; issuer identifies the service provider and cannot identify the IdP",
 	});
 }
 
 export function createIdP(config: SAMLConfig) {
+	assertSAMLIdentityProviderAuthority(config);
 	const idpData = config.idpMetadata;
 	if (idpData?.metadata) {
 		return saml.IdentityProvider({
@@ -127,19 +162,19 @@ export function createIdP(config: SAMLConfig) {
 		});
 	}
 	return saml.IdentityProvider({
-		entityID: idpData?.entityID || config.issuer,
-		singleSignOnService: idpData?.singleSignOnService || [
+		entityID: idpData.entityID,
+		singleSignOnService: idpData.singleSignOnService || [
 			{
 				Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
 				Location: config.entryPoint,
 			},
 		],
-		singleLogoutService: idpData?.singleLogoutService,
+		singleLogoutService: idpData.singleLogoutService,
 		signingCert: normalizePemList(resolveSigningCerts(config)),
 		wantAuthnRequestsSigned: config.authnRequestsSigned || false,
-		isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
-		encPrivateKey: normalizePem(idpData?.encPrivateKey),
-		encPrivateKeyPass: idpData?.encPrivateKeyPass,
+		isAssertionEncrypted: idpData.isAssertionEncrypted || false,
+		encPrivateKey: normalizePem(idpData.encPrivateKey),
+		encPrivateKeyPass: idpData.encPrivateKeyPass,
 	});
 }
 
@@ -153,12 +188,30 @@ function escapeHtml(str: string | undefined | null): string {
 		.replace(/'/g, "&#39;");
 }
 
+function isSAMLPostBindingLocation(value: string): boolean {
+	let url: URL;
+	try {
+		url = new URL(value);
+	} catch {
+		return false;
+	}
+	return url.protocol === "http:" || url.protocol === "https:";
+}
+
 export function createSAMLPostForm(
 	action: string,
 	samlParam: string,
 	samlValue: string,
 	relayState?: string,
 ): Response {
+	// `action` is an IdP-supplied endpoint (e.g. the SLO Location); only emit
+	// http(s) URLs into the auto-submitting form.
+	if (!isSAMLPostBindingLocation(action)) {
+		throw new APIError("BAD_REQUEST", {
+			message:
+				"SAML POST binding location must be an absolute http or https URL",
+		});
+	}
 	const safeAction = escapeHtml(action);
 	const safeSamlParam = escapeHtml(samlParam);
 	const safeSamlValue = escapeHtml(samlValue);

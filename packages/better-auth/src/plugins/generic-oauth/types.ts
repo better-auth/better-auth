@@ -1,9 +1,19 @@
-import type { User } from "@better-auth/core/db";
+import type { Awaitable } from "@better-auth/core";
 import type {
 	OAuth2Tokens,
 	OAuth2UserInfo,
+	OAuthAccountKeyContext,
+	OAuthMappedUser,
+	OAuthRefreshContext,
 	TokenEndpointAuth,
 } from "@better-auth/core/oauth2";
+
+/** Raw profile returned by a Generic OAuth provider. */
+export type GenericOAuthUserInfo = Omit<OAuth2UserInfo, "id"> & {
+	id?: string | number | null | undefined;
+	sub?: string | number | null | undefined;
+	[key: string]: unknown;
+};
 
 export interface GenericOAuthOptions<ID extends string = string> {
 	/**
@@ -23,6 +33,35 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * Defaults to `providerId` if not set.
 	 */
 	name?: string | undefined;
+	/**
+	 * Stable subject assigned by the provider.
+	 *
+	 * OpenID Connect discovery providers use the verified profile's `sub` field
+	 * by default. Plain OAuth providers use `id`. Configure this resolver when
+	 * the provider uses a different immutable identifier. Better Auth never
+	 * switches between fields at runtime because that could change an account's
+	 * identity. The resolver never receives the mapped local user, so profile
+	 * mapping cannot redefine provider identity.
+	 */
+	accountSubject?:
+		| ((
+				context: OAuthAccountKeyContext<GenericOAuthUserInfo>,
+		  ) => Awaitable<string | number>)
+		| undefined;
+	/**
+	 * Stable issuer namespace paired with the provider account ID.
+	 *
+	 * Discovery providers use the discovered issuer by default. Set this for
+	 * providers without discovery, provider aliases that share one identity
+	 * namespace, or tenant-specific issuers derived from verified provider data.
+	 * The resolver must not use unverified request input.
+	 */
+	accountIssuer?:
+		| string
+		| ((
+				context: OAuthAccountKeyContext<GenericOAuthUserInfo>,
+		  ) => Awaitable<string>)
+		| undefined;
 	/**
 	 * URL to fetch OAuth 2.0 configuration.
 	 * If provided, the authorization and token endpoints will be fetched from this URL.
@@ -128,10 +167,10 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * Custom function to fetch user info.
 	 * If provided, this function will be used instead of the default user info fetching logic.
 	 * @param tokens - The OAuth tokens received after successful authentication
-	 * @returns A promise that resolves to a User object or null
+	 * @returns A promise that resolves to a raw provider profile or null
 	 */
 	getUserInfo?:
-		| ((tokens: OAuth2Tokens) => Promise<OAuth2UserInfo | null>)
+		| ((tokens: OAuth2Tokens) => Promise<GenericOAuthUserInfo | null>)
 		| undefined;
 	/**
 	 * Custom function to map the provider's user profile to your app's user fields.
@@ -139,8 +178,8 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 */
 	mapProfileToUser?:
 		| ((
-				profile: OAuth2UserInfo & Record<string, unknown>,
-		  ) => Partial<User> | Promise<Partial<User>>)
+				profile: GenericOAuthUserInfo,
+		  ) => OAuthMappedUser | Promise<OAuthMappedUser>)
 		| undefined;
 	/**
 	 * Additional search-params to add to the authorizationUrl.
@@ -154,6 +193,31 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * tokenEndpointAuth.
 	 */
 	tokenUrlParams?: Record<string, string> | undefined;
+	/**
+	 * Additional body params merged into the token endpoint request when
+	 * refreshing an access token. Useful for multi-tenant OIDC providers that
+	 * need to change `scope`, `audience`, `resource`, or a tenant identifier on
+	 * the refresh call — e.g. Zitadel's `urn:zitadel:iam:org:id:{orgId}` scope
+	 * on workspace switch or Auth0 `audience` rotation — without forcing a new
+	 * authorization redirect.
+	 *
+	 * The function form is invoked at refresh time and receives request
+	 * metadata for the triggering request, so dynamic
+	 * per-request values like an active organization id read from cookies or
+	 * headers can be injected directly. Headers and cookies are
+	 * attacker-controlled: callers MUST validate any value derived from them
+	 * against the authenticated user's entitlements before forwarding it as a
+	 * `scope`, `audience`, or tenant claim. Resolved values are merged into the
+	 * form body; `grant_type` and `refresh_token` are protected from override,
+	 * and `client_id` is set by the configured token-endpoint authentication
+	 * after the merge so it cannot be overridden here.
+	 */
+	refreshTokenParams?:
+		| Record<string, string>
+		| ((
+				ctx?: OAuthRefreshContext,
+		  ) => Awaitable<Record<string, string> | undefined>)
+		| undefined;
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
@@ -188,6 +252,19 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 */
 	overrideUserInfo?: boolean | undefined;
 	/**
+	 * Require this provider's email to be verified before a session is created.
+	 *
+	 * When the provider reports the email as unverified, the user and account are
+	 * still created or linked, but no session is issued: the callback redirects
+	 * with `?error=email_not_verified`. The gate checks the local user's
+	 * verification state, so a user already verified through another method keeps
+	 * access. Only enable it for providers that report a trustworthy
+	 * `email_verified` signal.
+	 *
+	 * @default false
+	 */
+	requireEmailVerification?: boolean | undefined;
+	/**
 	 * Accept callbacks from providers that initiate the OAuth flow without
 	 * sending a `state` parameter (e.g. Clever). When enabled, stateless
 	 * callbacks restart the OAuth flow server-side with a fresh `state` and
@@ -196,4 +273,17 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * @default false
 	 */
 	allowIdpInitiated?: boolean | undefined;
+	/**
+	 * Disable OIDC `nonce` binding for this provider's `id_token`.
+	 *
+	 * Providers configured with `discoveryUrl` that publish a JWKS bind the
+	 * `id_token` to the authorization request by default: Better Auth sends a
+	 * server-generated `nonce` and rejects a callback whose `id_token` does not
+	 * echo it (OIDC Core 1.0 §3.1.3.7). Set this to `true` only for OIDC
+	 * providers that do not return the `nonce` claim in the authorization-code
+	 * flow; doing so removes `id_token` replay protection for this provider.
+	 *
+	 * @default false
+	 */
+	disableIdTokenNonceBinding?: boolean | undefined;
 }

@@ -1,6 +1,10 @@
-import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
-import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
+import type {
+	BaseOAuthProviderOptions,
+	GenericOAuthConfig,
+	GenericOAuthUserInfo,
+} from "../index";
 
 export interface HubSpotOptions extends BaseOAuthProviderOptions {
 	/**
@@ -23,7 +27,7 @@ interface HubSpotProfile extends Record<string, any> {
 	hub_id: string;
 	signed_access_token?: {
 		userId?: string;
-		[key: string]: any;
+		[key: string]: unknown;
 	};
 }
 
@@ -56,7 +60,7 @@ export function hubspot(
 
 	const getUserInfo = async (
 		tokens: OAuth2Tokens,
-	): Promise<OAuth2UserInfo | null> => {
+	): Promise<GenericOAuthUserInfo | null> => {
 		const tokenInfoUrl = `https://api.hubapi.com/oauth/v1/access-tokens/${tokens.accessToken}`;
 
 		const { data: profile, error } = await betterFetch<HubSpotProfile>(
@@ -92,6 +96,7 @@ export function hubspot(
 
 	return {
 		providerId: "hubspot",
+		accountSubject: ({ profile }) => profile.id ?? "",
 		authorizationUrl: "https://app.hubspot.com/oauth/authorize",
 		tokenUrl: "https://api.hubapi.com/oauth/v1/token",
 		clientId: options.clientId,

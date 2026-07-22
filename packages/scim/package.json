@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/scim",
-  "version": "1.7.0-beta.4",
+  "version": "1.7.0-rc.1",
   "description": "SCIM plugin for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -41,29 +41,24 @@
       "dev-source": "./src/index.ts",
       "types": "./dist/index.d.mts",
       "default": "./dist/index.mjs"
-    },
-    "./client": {
-      "dev-source": "./src/client.ts",
-      "types": "./dist/client.d.mts",
-      "default": "./dist/client.mjs"
     }
   },
   "typesVersions": {
     "*": {
       "*": [
         "./dist/index.d.mts"
-      ],
-      "client": [
-        "./dist/client.d.mts"
       ]
     }
   },
   "dependencies": {
+    "@noble/hashes": "^2.2.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@better-auth/sso": "workspace:*",
+    "@better-auth/kysely-adapter": "workspace:*",
+    "@better-auth/test-utils": "workspace:*",
+    "kysely": "catalog:",
     "tsdown": "catalog:"
   },
   "peerDependencies": {

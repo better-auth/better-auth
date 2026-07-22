@@ -17,7 +17,7 @@ describe("pairwise subject identifiers", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const rpBaseUrl2 = "http://localhost:6000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
@@ -31,7 +31,8 @@ describe("pairwise subject identifiers", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				pairwiseSecret: "test-pairwise-secret-key-32chars!!",
-				validAudiences: [validAudience],
+				resources: [validResource],
+				enforcePerClientResources: false,
 				allowDynamicClientRegistration: true,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
@@ -288,7 +289,7 @@ describe("pairwise subject identifiers", async () => {
 
 	it("should keep user.id in JWT access token sub (not pairwise)", async () => {
 		const tokens = await getTokensForClient(pairwiseClientA!, redirectUriA, {
-			resource: validAudience,
+			resource: validResource,
 		});
 
 		const accessToken = decodeJwt(tokens.data!.access_token!);

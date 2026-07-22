@@ -1,8 +1,18 @@
-import type { Awaitable, OAuth2Tokens, User } from "better-auth";
+import type {
+	Awaitable,
+	DBTransactionAdapter,
+	OAuth2Tokens,
+	User,
+} from "better-auth";
+import type {
+	DBFieldAttribute,
+	FieldAttributeToObject,
+	InferAdditionalFieldsFromPluginOptions,
+	RemoveFieldsWithReturnedFalse,
+} from "better-auth/db";
 import type { AlgorithmValidationOptions } from "./saml/algorithms";
 
 export interface OIDCMapping {
-	id?: string | undefined;
 	email?: string | undefined;
 	emailVerified?: string | undefined;
 	name?: string | undefined;
@@ -11,7 +21,6 @@ export interface OIDCMapping {
 }
 
 export interface SAMLMapping {
-	id?: string | undefined;
 	email?: string | undefined;
 	emailVerified?: string | undefined;
 	name?: string | undefined;
@@ -52,6 +61,51 @@ export interface OIDCConfig {
 	allowIdpInitiated?: boolean | undefined;
 }
 
+interface SAMLIdentityProviderMetadataBase {
+	/**
+	 * IdP signing certificate(s). Pass a single PEM string or an array for
+	 * rolling rotation. Takes precedence over the top-level `cert` when both
+	 * are set. Omit when `metadata` XML is supplied.
+	 */
+	cert?: string | string[] | undefined;
+	privateKey?: string | undefined;
+	privateKeyPass?: string | undefined;
+	isAssertionEncrypted?: boolean | undefined;
+	encPrivateKey?: string | undefined;
+	encPrivateKeyPass?: string | undefined;
+	singleSignOnService?:
+		| Array<{
+				Binding: string;
+				Location: string;
+		  }>
+		| undefined;
+	singleLogoutService?:
+		| Array<{
+				Binding: string;
+				Location: string;
+		  }>
+		| undefined;
+}
+
+/**
+ * The trusted identity-provider authority for a SAML connection.
+ *
+ * Metadata XML carries the IdP entity ID. Manual configurations must declare
+ * `entityID` explicitly so the service provider's issuer is never mistaken
+ * for the identity provider's authority.
+ */
+export type SAMLIdentityProviderMetadata = SAMLIdentityProviderMetadataBase &
+	(
+		| {
+				metadata: string;
+				entityID?: string | undefined;
+		  }
+		| {
+				metadata?: undefined;
+				entityID: string;
+		  }
+	);
+
 export interface SAMLConfig {
 	/**
 	 * SP Entity ID. Used as the `entityID` in SP metadata when
@@ -75,31 +129,12 @@ export interface SAMLConfig {
 	 */
 	cert?: string | string[];
 	audience?: string | undefined;
-	idpMetadata?:
-		| {
-				metadata?: string;
-				entityID?: string;
-				/**
-				 * IdP signing certificate(s). Pass a single PEM string or an array
-				 * for rolling rotation. Takes precedence over the top-level `cert`
-				 * when both are set. Omit when `metadata` XML is supplied.
-				 */
-				cert?: string | string[];
-				privateKey?: string;
-				privateKeyPass?: string;
-				isAssertionEncrypted?: boolean;
-				encPrivateKey?: string;
-				encPrivateKeyPass?: string;
-				singleSignOnService?: Array<{
-					Binding: string;
-					Location: string;
-				}>;
-				singleLogoutService?: Array<{
-					Binding: string;
-					Location: string;
-				}>;
-		  }
-		| undefined;
+	/**
+	 * Provider-level post-auth redirect URL for IdP-initiated or fallback SAML
+	 * flows when no RelayState callback URL is available.
+	 */
+	callbackUrl?: string | undefined;
+	idpMetadata: SAMLIdentityProviderMetadata;
 	/**
 	 * SP metadata configuration. All fields are optional; when omitted,
 	 * SP metadata is auto-generated from `issuer`, `wantAssertionsSigned`,
@@ -193,14 +228,115 @@ type BaseSSOProvider = {
 	domain: string;
 };
 
+type SSOProviderAdditionalFields<
+	O extends SSOOptions,
+	IsClientSide extends boolean,
+> = O["schema"] extends {
+	ssoProvider?: {
+		additionalFields: infer Field extends Record<string, DBFieldAttribute>;
+	};
+}
+	? IsClientSide extends true
+		? FieldAttributeToObject<RemoveFieldsWithReturnedFalse<Field>>
+		: FieldAttributeToObject<Field>
+	: {};
+
+export type SSOProviderAdditionalFieldsInput<
+	O extends SSOOptions,
+	IsClientSide extends boolean = true,
+> = InferAdditionalFieldsFromPluginOptions<"ssoProvider", O, IsClientSide>;
+
+export type InferSSOProvider<
+	O extends SSOOptions,
+	IsClientSide extends boolean = true,
+> = (O["domainVerification"] extends { enabled: true }
+	? {
+			domainVerified: boolean;
+		} & BaseSSOProvider
+	: BaseSSOProvider) &
+	SSOProviderAdditionalFields<O, IsClientSide>;
+
 export type SSOProvider<O extends SSOOptions> =
 	O["domainVerification"] extends { enabled: true }
 		? {
 				domainVerified: boolean;
-			} & BaseSSOProvider
-		: BaseSSOProvider;
+			} & BaseSSOProvider &
+				SSOProviderAdditionalFields<O, false>
+		: BaseSSOProvider & SSOProviderAdditionalFields<O, false>;
+
+export type SSOProviderSchema<O extends SSOOptions> = {
+	ssoProvider: {
+		modelName: string;
+		fields: Record<string, DBFieldAttribute> &
+			(O["schema"] extends {
+				ssoProvider?: {
+					additionalFields: infer Field extends Record<
+						string,
+						DBFieldAttribute
+					>;
+				};
+			}
+				? Field
+				: {});
+	};
+};
+
+/** Decision returned by an SSO user resolver. */
+export type SSOUserResolution =
+	| { action: "continue" }
+	| {
+			action: "link";
+			userId: string;
+			profile: "preserve" | "update";
+	  }
+	| { action: "reject"; code: string; message?: string | undefined };
+
+/** Normalized provider attributes available to an SSO user resolver. */
+export type SSOProviderUserProfile = {
+	email: string;
+	emailVerified: boolean;
+	name: string;
+	image?: string | null | undefined;
+} & Record<string, unknown>;
+
+/** OIDC identity and profile data available to an application's SSO resolver. */
+export interface SSOUserResolutionInput {
+	protocol: "oidc";
+	providerId: string;
+	accountKey: {
+		issuer: string;
+		providerAccountId: string;
+	};
+	providerUser: SSOProviderUserProfile;
+	providerClaims: Record<string, unknown>;
+}
+
+/** Transaction-bound capabilities available while resolving an SSO user. */
+export interface SSOUserResolutionContext {
+	database: DBTransactionAdapter;
+}
 
 export interface SSOOptions {
+	/**
+	 * Resolve a verified provider identity to a Better Auth user.
+	 *
+	 * Currently invoked for OIDC callbacks only.
+	 *
+	 * TODO: Invoke this resolver for SAML callbacks after normalizing the verified
+	 * IdP entity ID as `accountKey.issuer` and the signed NameID as
+	 * `accountKey.providerAccountId`.
+	 *
+	 * `accountKey` is derived from the validated ID Token. Profile fields and raw
+	 * claims are protocol-accepted provider data and may require application-level
+	 * validation. The callback runs on every OIDC sign-in inside the same native
+	 * database transaction as account finalization and session creation.
+	 */
+	resolveUser?:
+		| ((
+				input: SSOUserResolutionInput,
+				context: SSOUserResolutionContext,
+		  ) => Awaitable<SSOUserResolution>)
+		| undefined;
 	/**
 	 * custom function to provision a user when they sign in with an SSO provider.
 	 */
@@ -327,6 +463,29 @@ export interface SSOOptions {
 		organizationId?: string | undefined;
 		domain?: string | undefined;
 	};
+	/**
+	 * The schema for the SSO plugin.
+	 */
+	schema?:
+		| {
+				ssoProvider?: {
+					modelName?: string | undefined;
+					fields?: {
+						issuer?: string | undefined;
+						oidcConfig?: string | undefined;
+						samlConfig?: string | undefined;
+						userId?: string | undefined;
+						providerId?: string | undefined;
+						organizationId?: string | undefined;
+						domain?: string | undefined;
+						domainVerified?: string | undefined;
+					};
+					additionalFields?: {
+						[key in string]: DBFieldAttribute;
+					};
+				};
+		  }
+		| undefined;
 	/**
 	 * Configure the maximum number of SSO providers a user can register.
 	 * You can also pass a function that returns a number.

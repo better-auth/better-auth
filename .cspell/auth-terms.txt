@@ -4,7 +4,10 @@ pkce
 unban
 siwe
 scim
+SCIMO
 aaguid
+aaguids
+Nord
 unionid
 appleid
 ciam
@@ -33,4 +36,8 @@ Vercel
 rgba
 idtoken
 HIBP
-cimd
+dpop
+mtls
+jkt
+reissuance
+TOCTOU

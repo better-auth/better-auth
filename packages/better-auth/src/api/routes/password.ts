@@ -1,5 +1,6 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
@@ -110,7 +111,7 @@ export const requestPasswordReset = createAuthEndpoint(
 			await ctx.context.internalAdapter.findVerificationValue(
 				"dummy-verification-token",
 			);
-			ctx.context.logger.error("Reset Password: User not found", { email });
+			ctx.context.logger.warn("Reset Password: User not found");
 			return ctx.json({
 				status: true,
 				message:
@@ -290,37 +291,41 @@ export const resetPassword = createAuthEndpoint(
 
 		const id = `reset-password:${token}`;
 
+		// Consume the single-use reset token before any password change so two
+		// concurrent requests with the same token cannot both proceed: the first
+		// caller wins, every racer (and any expired token) gets null.
 		const verification =
-			await ctx.context.internalAdapter.findVerificationValue(id);
-		if (!verification || verification.expiresAt < new Date()) {
+			await ctx.context.internalAdapter.consumeVerificationValue(id);
+		if (!verification) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const userId = verification.value;
+		const user = await ctx.context.internalAdapter.findUserById(userId);
+		if (!user) {
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
+		}
 		const hashedPassword = await ctx.context.password.hash(newPassword);
-		const accounts = await ctx.context.internalAdapter.findAccounts(userId);
-		const account = accounts.find((ac) => ac.providerId === "credential");
+		const account =
+			await ctx.context.internalAdapter.findCredentialAccount(userId);
 		if (!account) {
 			await ctx.context.internalAdapter.createAccount({
 				userId,
 				providerId: "credential",
+				issuer: createLocalAccountIssuer("credential"),
+				providerAccountId: user.id,
 				password: hashedPassword,
-				accountId: userId,
 			});
 		} else {
 			await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
 		}
-		await ctx.context.internalAdapter.deleteVerificationByIdentifier(id);
 
 		if (ctx.context.options.emailAndPassword?.onPasswordReset) {
-			const user = await ctx.context.internalAdapter.findUserById(userId);
-			if (user) {
-				await ctx.context.options.emailAndPassword.onPasswordReset(
-					{
-						user,
-					},
-					ctx.request,
-				);
-			}
+			await ctx.context.options.emailAndPassword.onPasswordReset(
+				{
+					user,
+				},
+				ctx.request,
+			);
 		}
 		if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
 			await ctx.context.internalAdapter.deleteUserSessions(userId);

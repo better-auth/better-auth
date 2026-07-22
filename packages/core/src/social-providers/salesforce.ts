@@ -63,6 +63,7 @@ export const salesforce = (options: SalesforceOptions) => {
 	return {
 		id: "salesforce",
 		name: "Salesforce",
+		accountSubject: ({ profile }) => profile.user_id,
 
 		async createAuthorizationURL({
 			state,
@@ -146,7 +147,6 @@ export const salesforce = (options: SalesforceOptions) => {
 
 				return {
 					user: {
-						id: user.user_id,
 						name: user.name,
 						email: user.email,
 						image: user.photos?.picture || user.photos?.thumbnail,

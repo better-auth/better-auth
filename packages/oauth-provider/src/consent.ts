@@ -1,18 +1,26 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
-import { authorizeEndpoint, formatErrorURL, getIssuer } from "./authorize";
+import { formatErrorURL, getIssuer } from "./authorize";
+import {
+	filterClaimsRequestUserInfoClaims,
+	getRequestedUserInfoClaims,
+} from "./claims-request";
+import type { AuthorizeEndpointCaller } from "./continue";
 import { oAuthState } from "./oauth";
+import { getSupportedClaims } from "./standard-claims";
 import type { OAuthConsent, OAuthOptions, Scope } from "./types";
 import {
-	normalizeTimestampValue,
+	isSessionFreshForSignedQuery,
 	parsePrompt,
+	removeMaxAgeFromQuery,
 	removePromptFromQuery,
 	searchParamsToQuery,
 } from "./utils";
 
-export async function consentEndpoint(
+export async function consentEndpoint<Result>(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
+	authorize: AuthorizeEndpointCaller<Result>,
 ) {
 	// Obtain oauth query
 	const oauthRequest = await oAuthState.get();
@@ -25,6 +33,11 @@ export async function consentEndpoint(
 	}
 	const query = new URLSearchParams(_query);
 	const originalRequestedScopes = query.get("scope")?.split(" ") ?? [];
+	const supportedClaims = getSupportedClaims(opts);
+	const originalRequestedUserInfoClaims = getRequestedUserInfoClaims(
+		query.get("claims"),
+		supportedClaims,
+	);
 	const clientId = query.get("client_id");
 	if (!clientId) {
 		throw new APIError("BAD_REQUEST", {
@@ -42,6 +55,22 @@ export async function consentEndpoint(
 				error: "invalid_request",
 			});
 		}
+	}
+	const acceptedClaims = ctx.body.claims as unknown | undefined;
+	const acceptedUserInfoClaims =
+		acceptedClaims !== undefined
+			? getRequestedUserInfoClaims(acceptedClaims, supportedClaims)
+			: originalRequestedUserInfoClaims;
+	if (
+		acceptedClaims !== undefined &&
+		!acceptedUserInfoClaims.every((claim) =>
+			originalRequestedUserInfoClaims.includes(claim),
+		)
+	) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "Claim not originally requested",
+			error: "invalid_request",
+		});
 	}
 
 	// Consent not accepted (ensure it's strictly boolean true)
@@ -65,18 +94,14 @@ export async function consentEndpoint(
 	const hasLoginPrompt = promptSet.has("login");
 	const hasSatisfiedLoginPrompt =
 		hasLoginPrompt &&
-		sessionSatisfiesLoginPrompt(
+		isSessionFreshForSignedQuery(
 			session?.session.createdAt,
 			oauthRequest?.signedQueryIssuedAt,
 		);
 	if (hasLoginPrompt && !hasSatisfiedLoginPrompt) {
 		ctx?.headers?.set("accept", "application/json");
 		ctx.query = searchParamsToQuery(query);
-		const { url } = await authorizeEndpoint(ctx, opts);
-		return {
-			redirect: true,
-			url,
-		};
+		return await authorize(ctx);
 	}
 
 	const referenceId = await opts.postLogin?.consentReferenceId?.({
@@ -113,6 +138,7 @@ export async function consentEndpoint(
 		clientId: clientId,
 		userId: session?.user.id!,
 		scopes: requestedScopes ?? originalRequestedScopes,
+		requestedUserInfoClaims: acceptedUserInfoClaims,
 		createdAt: new Date(iat * 1000),
 		updatedAt: new Date(iat * 1000),
 		resources: resource.length ? resource : undefined,
@@ -130,6 +156,7 @@ export async function consentEndpoint(
 				update: {
 					resources: consent.resources,
 					scopes: consent.scopes,
+					requestedUserInfoClaims: consent.requestedUserInfoClaims,
 					updatedAt: new Date(iat * 1000),
 				},
 			})
@@ -145,32 +172,28 @@ export async function consentEndpoint(
 	if (requestedScopes) {
 		query.set("scope", consent.scopes.join(" "));
 	}
+	if (acceptedClaims !== undefined) {
+		const claimsRequest = filterClaimsRequestUserInfoClaims(
+			query.get("claims"),
+			acceptedUserInfoClaims,
+		);
+		if (claimsRequest) {
+			query.set("claims", JSON.stringify(claimsRequest));
+		} else {
+			query.delete("claims");
+		}
+	}
 	ctx?.headers?.set("accept", "application/json");
 	let authorizationQuery = removePromptFromQuery(query, "consent");
 	if (hasSatisfiedLoginPrompt) {
 		authorizationQuery = removePromptFromQuery(authorizationQuery, "login");
+		authorizationQuery = removeMaxAgeFromQuery(authorizationQuery);
 	}
 	ctx.query = searchParamsToQuery(authorizationQuery);
 	const postLoginClearedForThisSession =
 		oauthRequest?.postLoginClearedForSession !== undefined &&
 		oauthRequest.postLoginClearedForSession === session?.session.id;
-	const { url } = await authorizeEndpoint(ctx, opts, {
+	return await authorize(ctx, {
 		postLogin: postLoginClearedForThisSession,
 	});
-	return {
-		redirect: true,
-		url,
-	};
-}
-
-// Relies on session.createdAt being immutable for the session's lifetime; a
-// refresh path that rewrites it would silently accept a pre-request session.
-function sessionSatisfiesLoginPrompt(
-	sessionCreatedAt: Date | string | undefined,
-	signedQueryIssuedAt: Date | undefined,
-) {
-	if (!signedQueryIssuedAt) return false;
-	const normalized = normalizeTimestampValue(sessionCreatedAt);
-	if (!normalized) return false;
-	return normalized.getTime() >= signedQueryIssuedAt.getTime();
 }

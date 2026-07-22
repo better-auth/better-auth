@@ -1,10 +1,59 @@
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import { APIError } from "better-auth/api";
+import { parseInputData, toZodSchema } from "better-auth/db";
 import * as z from "zod";
+import type { SSOOptions } from "../types";
+
+function getSSOProviderAdditionalFields(options?: SSOOptions) {
+	return (options?.schema?.ssoProvider?.additionalFields ?? {}) as Record<
+		string,
+		DBFieldAttribute
+	>;
+}
+
+function getSSOProviderAdditionalFieldsSchema(options?: SSOOptions) {
+	const additionalFields = getSSOProviderAdditionalFields(options);
+	const schema = toZodSchema({
+		fields: additionalFields,
+		isClientSide: true,
+	});
+	const blockedInputFields: Record<string, z.ZodOptional<z.ZodAny>> = {};
+	for (const key in additionalFields) {
+		if (additionalFields[key]?.input === false) {
+			blockedInputFields[key] = z.any().optional();
+		}
+	}
+	return schema.extend(blockedInputFields);
+}
+
+function assertNoBlockedAdditionalFieldInput(
+	fields: Record<string, DBFieldAttribute>,
+	data: Record<string, unknown>,
+) {
+	for (const key in fields) {
+		if (fields[key]?.input === false && key in data) {
+			throw new APIError("BAD_REQUEST", {
+				message: `${key} is not allowed to be set`,
+			});
+		}
+	}
+}
+
+export function parseSSOProviderAdditionalFields(
+	options: SSOOptions | undefined,
+	data: Record<string, unknown>,
+	action: "create" | "update",
+) {
+	const fields = getSSOProviderAdditionalFields(options);
+	assertNoBlockedAdditionalFieldInput(fields, data);
+	return parseInputData(data, {
+		fields,
+		action,
+	});
+}
 
 const oidcMappingSchema = z
-	.object({
-		id: z.string().meta({
-			description: "Field mapping for user ID (defaults to 'sub')",
-		}),
+	.strictObject({
 		email: z.string().meta({
 			description: "Field mapping for email (defaults to 'email')",
 		}),
@@ -29,10 +78,7 @@ const oidcMappingSchema = z
 	.optional();
 
 const samlMappingSchema = z
-	.object({
-		id: z.string().meta({
-			description: "Field mapping for user ID (defaults to 'nameID')",
-		}),
+	.strictObject({
 		email: z.string().meta({
 			description: "Field mapping for email (defaults to 'email')",
 		}),
@@ -124,6 +170,62 @@ const oidcConfigSchema = z.object({
 	mapping: oidcMappingSchema,
 });
 
+const samlIdentityProviderConfigSchema = z.object({
+	cert: signingCertSchema
+		.meta({
+			description:
+				"IdP signing certificate(s). Pass a single PEM string or an array for rolling rotation. Takes precedence over the top-level `cert`.",
+		})
+		.optional(),
+	privateKey: z.string().optional(),
+	privateKeyPass: z.string().optional(),
+	isAssertionEncrypted: z.boolean().optional(),
+	encPrivateKey: z.string().optional(),
+	encPrivateKeyPass: z.string().optional(),
+	singleSignOnService: z
+		.array(
+			z.object({
+				Binding: z
+					.string()
+					.meta({ description: "The binding type for the SSO service" }),
+				Location: z
+					.string()
+					.url()
+					.meta({ description: "The URL for the SSO service" }),
+			}),
+		)
+		.meta({ description: "Single Sign-On service configuration" })
+		.optional(),
+	singleLogoutService: z
+		.array(
+			z.object({
+				Binding: z.string(),
+				Location: z.string().url(),
+			}),
+		)
+		.optional(),
+});
+
+const samlIdentityProviderMetadataSchema = z.union(
+	[
+		samlIdentityProviderConfigSchema.extend({
+			metadata: z.string().min(1),
+			entityID: z.string().optional(),
+		}),
+		samlIdentityProviderConfigSchema.extend({
+			metadata: z.undefined().optional(),
+			entityID: z.string().min(1),
+		}),
+	],
+	"idpMetadata.entityID is required when IdP metadata XML is not provided",
+);
+
+const samlIdentityProviderMetadataUpdateSchema =
+	samlIdentityProviderConfigSchema.extend({
+		metadata: z.string().min(1).optional(),
+		entityID: z.string().min(1).optional(),
+	});
+
 const samlConfigSchema = z.object({
 	entryPoint: z
 		.string()
@@ -136,45 +238,13 @@ const samlConfigSchema = z.object({
 		})
 		.optional(),
 	audience: z.string().optional(),
-	idpMetadata: z
-		.object({
-			metadata: z.string().optional(),
-			entityID: z.string().optional(),
-			cert: signingCertSchema
-				.meta({
-					description:
-						"IdP signing certificate(s). Pass a single PEM string or an array for rolling rotation. Takes precedence over the top-level `cert`.",
-				})
-				.optional(),
-			privateKey: z.string().optional(),
-			privateKeyPass: z.string().optional(),
-			isAssertionEncrypted: z.boolean().optional(),
-			encPrivateKey: z.string().optional(),
-			encPrivateKeyPass: z.string().optional(),
-			singleSignOnService: z
-				.array(
-					z.object({
-						Binding: z
-							.string()
-							.meta({ description: "The binding type for the SSO service" }),
-						Location: z
-							.string()
-							.url()
-							.meta({ description: "The URL for the SSO service" }),
-					}),
-				)
-				.meta({ description: "Single Sign-On service configuration" })
-				.optional(),
-			singleLogoutService: z
-				.array(
-					z.object({
-						Binding: z.string(),
-						Location: z.string().url(),
-					}),
-				)
-				.optional(),
+	callbackUrl: z
+		.string()
+		.refine((url) => !url.includes("#"), {
+			message: "callbackUrl must not contain a fragment",
 		})
 		.optional(),
+	idpMetadata: samlIdentityProviderMetadataSchema,
 	spMetadata: z
 		.object({
 			metadata: z.string().optional(),
@@ -196,7 +266,7 @@ const samlConfigSchema = z.object({
 	mapping: samlMappingSchema,
 });
 
-export const registerSSOProviderBodySchema = z.object({
+const registerSSOProviderBodySchema = z.object({
 	providerId: z.string().meta({
 		description:
 			"The ID of the provider. This is used to identify the provider during login and callback",
@@ -228,9 +298,28 @@ export const registerSSOProviderBodySchema = z.object({
 		.optional(),
 });
 
-export const updateSSOProviderBodySchema = z.object({
+export function getRegisterSSOProviderBodySchema(options?: SSOOptions) {
+	return registerSSOProviderBodySchema.extend({
+		...getSSOProviderAdditionalFieldsSchema(options).shape,
+	});
+}
+
+const updateSSOProviderBodySchema = z.object({
 	issuer: z.string().url().optional(),
 	domain: z.string().optional(),
 	oidcConfig: oidcConfigSchema.partial().optional(),
-	samlConfig: samlConfigSchema.partial().optional(),
+	samlConfig: samlConfigSchema
+		.omit({ idpMetadata: true })
+		.partial()
+		.extend({
+			idpMetadata: samlIdentityProviderMetadataUpdateSchema.optional(),
+		})
+		.optional(),
 });
+
+export function getUpdateSSOProviderBodySchema(options?: SSOOptions) {
+	return updateSSOProviderBodySchema.extend({
+		providerId: z.string(),
+		...getSSOProviderAdditionalFieldsSchema(options).partial().shape,
+	});
+}

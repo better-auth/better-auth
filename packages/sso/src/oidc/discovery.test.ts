@@ -1,9 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+	assertEndpointResolvesPublic,
+	assertServerFetchedOIDCEndpointsAllowed,
 	computeDiscoveryUrl,
 	discoverOIDCConfig,
 	ensureRuntimeDiscovery,
 	fetchDiscoveryDocument,
+	fetchOIDCEndpointResponse,
 	needsRuntimeDiscovery,
 	normalizeDiscoveryUrls,
 	normalizeUrl,
@@ -18,7 +21,20 @@ vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
 }));
 
+const { lookupMock } = vi.hoisted(() => ({ lookupMock: vi.fn() }));
+vi.mock("node:dns/promises", () => ({ lookup: lookupMock }));
+
 import { betterFetch } from "@better-fetch/fetch";
+
+beforeEach(() => {
+	vi.mocked(betterFetch).mockReset();
+	lookupMock.mockReset();
+	lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+});
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+});
 
 /**
  * Mock OIDC Discovery Document
@@ -1277,6 +1293,213 @@ describe("ensureRuntimeDiscovery", () => {
 			ensureRuntimeDiscovery(baseConfig, issuer, () => false),
 		).rejects.toThrow(
 			expect.objectContaining({ code: "discovery_untrusted_origin" }),
+		);
+	});
+
+	it("rejects a stored endpoint whose DNS resolves to an internal address", async () => {
+		const completeConfig = {
+			...baseConfig,
+			authorizationEndpoint: "https://idp.internal.example/oauth2/authorize",
+			tokenEndpoint: "https://idp.internal.example/oauth2/token",
+			jwksEndpoint: "https://idp.internal.example/.well-known/jwks.json",
+		};
+		lookupMock.mockResolvedValue([{ address: "169.254.169.254", family: 4 }]);
+		await expect(
+			ensureRuntimeDiscovery(completeConfig, issuer, () => false),
+		).rejects.toThrow(
+			expect.objectContaining({ code: "discovery_private_host" }),
+		);
+		expect(betterFetch).not.toHaveBeenCalled();
+	});
+});
+
+describe("resolved-address guard", () => {
+	beforeEach(() => {
+		lookupMock.mockReset();
+	});
+
+	const notTrusted = () => false;
+
+	describe("assertEndpointResolvesPublic", () => {
+		it.each([
+			["loopback", "127.0.0.1"],
+			["link-local / cloud metadata", "169.254.169.254"],
+			["private RFC 1918", "10.0.0.5"],
+			["IPv6 loopback", "::1"],
+		])("rejects an FQDN that resolves to %s (%s)", async (_label, address) => {
+			lookupMock.mockResolvedValue([{ address, family: 4 }]);
+			await expect(
+				assertEndpointResolvesPublic(
+					"tokenEndpoint",
+					"https://idp.internal.example/token",
+					notTrusted,
+				),
+			).rejects.toThrow(
+				expect.objectContaining({ code: "discovery_private_host" }),
+			);
+		});
+
+		it("allows an FQDN that resolves to a public address", async () => {
+			lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+			await expect(
+				assertEndpointResolvesPublic(
+					"tokenEndpoint",
+					"https://idp.example.com/token",
+					notTrusted,
+				),
+			).resolves.toBeUndefined();
+		});
+
+		it("rejects if ANY resolved address is internal (mixed result)", async () => {
+			lookupMock.mockResolvedValue([
+				{ address: "93.184.216.34", family: 4 },
+				{ address: "127.0.0.1", family: 4 },
+			]);
+			await expect(
+				assertEndpointResolvesPublic(
+					"jwksEndpoint",
+					"https://idp.internal.example/jwks",
+					notTrusted,
+				),
+			).rejects.toThrow(
+				expect.objectContaining({ code: "discovery_private_host" }),
+			);
+		});
+
+		it("skips DNS resolution for operator-allowlisted origins (internal IdP escape hatch)", async () => {
+			await assertEndpointResolvesPublic(
+				"tokenEndpoint",
+				"https://internal-idp.corp/token",
+				() => true,
+			);
+			expect(lookupMock).not.toHaveBeenCalled();
+		});
+
+		it("does not resolve IP-literal hosts (already covered by the sync check)", async () => {
+			await assertEndpointResolvesPublic(
+				"tokenEndpoint",
+				"https://93.184.216.34/token",
+				notTrusted,
+			);
+			expect(lookupMock).not.toHaveBeenCalled();
+		});
+
+		it("does not throw when resolution itself fails (lets the fetch surface it)", async () => {
+			lookupMock.mockRejectedValue(new Error("ENOTFOUND"));
+			await expect(
+				assertEndpointResolvesPublic(
+					"tokenEndpoint",
+					"https://idp.example.com/token",
+					notTrusted,
+				),
+			).resolves.toBeUndefined();
+		});
+	});
+
+	describe("assertServerFetchedOIDCEndpointsAllowed", () => {
+		it("checks token, userinfo, and jwks endpoints", async () => {
+			lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+			await assertServerFetchedOIDCEndpointsAllowed(
+				{
+					tokenEndpoint: "https://idp.example.com/token",
+					userInfoEndpoint: "https://idp.example.com/userinfo",
+					jwksEndpoint: "https://idp.example.com/jwks",
+				},
+				notTrusted,
+			);
+			expect(lookupMock).toHaveBeenCalledTimes(3);
+		});
+
+		it("rejects when the userinfo endpoint resolves internally", async () => {
+			lookupMock.mockResolvedValue([{ address: "10.1.2.3", family: 4 }]);
+			await expect(
+				assertServerFetchedOIDCEndpointsAllowed(
+					{ userInfoEndpoint: "https://idp.internal.example/userinfo" },
+					notTrusted,
+				),
+			).rejects.toThrow(
+				expect.objectContaining({ code: "discovery_private_host" }),
+			);
+		});
+
+		it("rejects a syntactically-private endpoint before any DNS lookup", async () => {
+			await expect(
+				assertServerFetchedOIDCEndpointsAllowed(
+					{ tokenEndpoint: "https://169.254.169.254/token" },
+					notTrusted,
+				),
+			).rejects.toThrow(
+				expect.objectContaining({ code: "discovery_private_host" }),
+			);
+			expect(lookupMock).not.toHaveBeenCalled();
+		});
+	});
+});
+
+describe("fetchDiscoveryDocument redirect handling", () => {
+	it("disables automatic redirect following", async () => {
+		vi.mocked(betterFetch).mockResolvedValueOnce({
+			data: createMockDiscoveryDocument(),
+			error: null,
+		});
+		await fetchDiscoveryDocument(
+			"https://idp.example.com/.well-known/openid-configuration",
+			undefined,
+			() => true,
+		);
+		expect(betterFetch).toHaveBeenCalledWith(
+			"https://idp.example.com/.well-known/openid-configuration",
+			expect.objectContaining({ redirect: "manual" }),
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10052
+	 */
+	it("rejects redirect responses after using manual redirect mode", async () => {
+		vi.mocked(betterFetch).mockResolvedValueOnce({
+			data: null,
+			error: { status: 302, statusText: "Found", message: "Found" },
+		});
+		await expect(
+			fetchDiscoveryDocument(
+				"https://idp.example.com/.well-known/openid-configuration",
+				undefined,
+				() => true,
+			),
+		).rejects.toThrow(
+			expect.objectContaining({
+				code: "oidc_endpoint_redirect",
+			}),
+		);
+	});
+});
+
+describe("fetchOIDCEndpointResponse redirect handling", () => {
+	it("uses manual redirect mode and rejects redirect responses", async () => {
+		const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+			new Response(null, {
+				status: 302,
+				headers: { location: "https://idp.example.com/final-jwks" },
+			}),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(
+			fetchOIDCEndpointResponse(
+				"jwksEndpoint",
+				"https://idp.example.com/jwks",
+				{ method: "GET" },
+				() => true,
+			),
+		).rejects.toThrow(
+			expect.objectContaining({
+				code: "oidc_endpoint_redirect",
+			}),
+		);
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://idp.example.com/jwks",
+			expect.objectContaining({ redirect: "manual" }),
 		);
 	});
 });
