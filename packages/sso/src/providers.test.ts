@@ -6,7 +6,7 @@ import { organization } from "better-auth/plugins";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
-import { samlRedirectUrlSchema } from "./routes/schemas";
+import { getRegisterSSOProviderBodySchema } from "./routes/schemas";
 import type { SAMLConfig, SSOOptions } from "./types";
 import { safeJsonParse } from "./utils";
 
@@ -17,6 +17,8 @@ temporary cert for testing`;
  * @see https://github.com/better-auth/better-auth/issues/10329
  */
 describe("SAML redirect URL schema", () => {
+	const registerProviderSchema = getRegisterSSOProviderBodySchema();
+
 	it.each([
 		["/dashboard", true],
 		["https://frontend.example.com/dashboard", true],
@@ -26,7 +28,18 @@ describe("SAML redirect URL schema", () => {
 		["/%5cevil.example.com", false],
 		["dashboard", false],
 	])("validates %s", (url, expected) => {
-		expect(samlRedirectUrlSchema.safeParse(url).success).toBe(expected);
+		expect(
+			registerProviderSchema.safeParse({
+				providerId: "saml-provider",
+				issuer: "https://idp.example.com",
+				domain: "example.com",
+				samlConfig: {
+					entryPoint: "https://idp.example.com/sso",
+					idpInitiatedCallbackUrl: url,
+					idpMetadata: { entityID: "https://idp.example.com" },
+				},
+			}).success,
+		).toBe(expected);
 	});
 });
 
