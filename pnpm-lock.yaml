@@ -1623,6 +1623,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/kysely-adapter':
+        specifier: workspace:*
+        version: link:../kysely-adapter
       '@types/body-parser':
         specifier: ^1.19.6
         version: 1.19.6
@@ -1641,6 +1644,9 @@ importers:
       express:
         specifier: ^5.2.1
         version: 5.2.1
+      kysely:
+        specifier: 0.28.17
+        version: 0.28.17
       oauth2-mock-server:
         specifier: ^9.0.0
         version: 9.0.0

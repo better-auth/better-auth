@@ -133,6 +133,9 @@ export interface InternalAdapter<
 		dontRememberMe?: boolean | undefined,
 		override?: (Partial<Session> & Record<string, any>) | undefined,
 		overrideAll?: boolean | undefined,
+		storageOptions?:
+			| { deferSecondaryStorageWrites?: boolean | undefined }
+			| undefined,
 	): Promise<Session>;
 
 	findSession(token: string): Promise<{

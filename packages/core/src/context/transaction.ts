@@ -100,6 +100,9 @@ export const runWithTransaction = async <
 >(
 	adapter: DBAdapter<Options>,
 	fn: () => R,
+	options?: {
+		onAfterCommitHookError?: (error: unknown) => void | Promise<void>;
+	},
 ): Promise<R> => {
 	let called = false;
 	return ensureAsyncStorage()
@@ -132,7 +135,16 @@ export const runWithTransaction = async <
 				throw error;
 			}
 			for (const hook of pendingHooks) {
-				await hook();
+				try {
+					await hook();
+				} catch (error) {
+					if (!options?.onAfterCommitHookError) throw error;
+					try {
+						await options.onAfterCommitHookError(error);
+					} catch {
+						// Reporting cannot roll back committed work or suppress later hooks.
+					}
+				}
 			}
 			return result!;
 		})
