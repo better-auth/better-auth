@@ -128,6 +128,69 @@ export const auth = betterAuth({
 				}
 			}
 		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10136
+		 */
+		it("should remove a config import stub before generating a new Prisma schema", async () => {
+			const cacheDir = path.join(
+				process.cwd(),
+				"node_modules",
+				".cache",
+				"generate-output-",
+			);
+			fs.mkdirSync(path.dirname(cacheDir), { recursive: true });
+			const tmpDir = fs.mkdtempSync(cacheDir);
+			const outputPath = path.join(tmpDir, "schema.ts");
+			fs.writeFileSync(
+				path.join(tmpDir, "auth.ts"),
+				`import schema from "./schema";
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+	secret: "test-secret",
+	baseURL: "http://localhost:3000",
+});
+
+export const __schema = schema;
+`,
+			);
+
+			try {
+				await execFileAsync(
+					process.execPath,
+					[
+						cliPath,
+						"generate",
+						"--cwd",
+						tmpDir,
+						"--config",
+						"auth.ts",
+						"--adapter",
+						"prisma",
+						"--dialect",
+						"sqlite",
+						"--output",
+						"schema.ts",
+						"--yes",
+					],
+					{
+						cwd: tmpDir,
+						env: {
+							...process.env,
+							BETTER_AUTH_TELEMETRY_DISABLED: "true",
+						},
+					},
+				);
+
+				const schema = fs.readFileSync(outputPath, "utf-8");
+				expect(schema).toContain("generator client");
+				expect(schema).toContain("datasource db");
+				expect(schema).toContain("model User");
+			} finally {
+				fs.rmSync(tmpDir, { recursive: true, force: true });
+			}
+		});
 	});
 
 	it("should generate prisma schema", async () => {

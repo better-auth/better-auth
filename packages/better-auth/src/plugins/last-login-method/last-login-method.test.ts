@@ -1096,7 +1096,7 @@ describe("lastLoginMethod", async () => {
 			consentGiven = true;
 
 			// Second login with consent - cookie should be set
-			await client.signOut();
+			await client.signOut({ fetchOptions: { headers: headers1 } });
 			const headers2 = new Headers();
 			await client.signIn.email(
 				{

@@ -440,7 +440,7 @@ function dbFieldToRequestBodyProperty(field: DBFieldAttribute): OpenAPISchema {
 		return { type: "string", format: "date-time" };
 	}
 	if (field.type === "json") {
-		return { type: "object", additionalProperties: true };
+		return {};
 	}
 	if (field.type === "string[]") {
 		return { type: "array", items: { type: "string" } };

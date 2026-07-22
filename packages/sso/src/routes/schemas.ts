@@ -326,6 +326,7 @@ const updateSSOProviderBodySchema = z.object({
 		.omit({ idpMetadata: true })
 		.partial()
 		.extend({
+			idpInitiatedCallbackUrl: samlRedirectUrlSchema.nullable().optional(),
 			idpMetadata: samlIdentityProviderMetadataUpdateSchema.optional(),
 		})
 		.optional(),

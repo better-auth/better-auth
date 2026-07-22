@@ -590,8 +590,9 @@ function parseAndValidateConfig<T>(
 
 type SAMLConfigUpdate = Omit<
 	Partial<SAMLConfig>,
-	"idpMetadata" | "spMetadata"
+	"idpInitiatedCallbackUrl" | "idpMetadata" | "spMetadata"
 > & {
+	idpInitiatedCallbackUrl?: string | null | undefined;
 	idpMetadata?: Partial<SAMLIdentityProviderMetadata> | undefined;
 	spMetadata?: Partial<NonNullable<SAMLConfig["spMetadata"]>> | undefined;
 };
@@ -631,7 +632,9 @@ function mergeSAMLConfig(
 		audience: updates.audience ?? current.audience,
 		callbackUrl: updates.callbackUrl ?? current.callbackUrl,
 		idpInitiatedCallbackUrl:
-			updates.idpInitiatedCallbackUrl ?? current.idpInitiatedCallbackUrl,
+			updates.idpInitiatedCallbackUrl === null
+				? undefined
+				: (updates.idpInitiatedCallbackUrl ?? current.idpInitiatedCallbackUrl),
 		wantAssertionsSigned:
 			updates.wantAssertionsSigned ?? current.wantAssertionsSigned,
 		authnRequestsSigned:
