@@ -85,7 +85,6 @@ export function microsoftEntraId(
 	const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
 	const discoveryUrl = `https://login.microsoftonline.com/${tenantId}/v2.0/.well-known/openid-configuration`;
 	const userInfoUrl = "https://graph.microsoft.com/oidc/userinfo";
-	const tenantIssuer = `https://login.microsoftonline.com/${tenantId}/v2.0`;
 
 	const getUserInfo = async (
 		tokens: OAuth2Tokens,
@@ -112,7 +111,10 @@ export function microsoftEntraId(
 			image: tokenProfile.picture,
 			emailVerified: tokenProfile.email_verified ?? false,
 		};
-		if (!oid || !tokens.accessToken) {
+		if (!oid) {
+			return null;
+		}
+		if (!tokens.accessToken) {
 			return tokenUserInfo;
 		}
 
@@ -161,7 +163,6 @@ export function microsoftEntraId(
 		providerId: "microsoft-entra-id",
 		accountSubject: ({ profile }) =>
 			typeof profile.oid === "string" ? profile.oid : "",
-		accountIssuer: tenantIssuer,
 		discoveryUrl,
 		authorizationUrl,
 		tokenUrl,

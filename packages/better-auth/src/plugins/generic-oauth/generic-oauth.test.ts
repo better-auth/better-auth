@@ -2932,6 +2932,35 @@ describe("oauth2", async () => {
 			expect(msConfig.disableImplicitSignUp).toBe(true);
 		});
 
+		it("fails initialization when Microsoft discovery is unavailable", async () => {
+			mswServer.use(
+				http.get(
+					`https://login.microsoftonline.com/${tenantId}/v2.0/.well-known/openid-configuration`,
+					() => new HttpResponse(null, { status: 503 }),
+				),
+			);
+			const { auth } = await getTestInstance(
+				{
+					plugins: [
+						genericOAuth({
+							config: [
+								microsoftEntraId({
+									clientId: "ms-client-id",
+									clientSecret: "ms-client-secret",
+									tenantId,
+								}),
+							],
+						}),
+					],
+				},
+				{ disableTestUser: true },
+			);
+
+			await expect(auth.$context).rejects.toThrow(
+				"discovery returned no valid data",
+			);
+		});
+
 		it.each([
 			"common",
 			"organizations",
@@ -3151,7 +3180,11 @@ describe("oauth2", async () => {
 			expect(graphCalls).toBe(0);
 		});
 
-		it("should return token claims without fetching Graph when the ID token is missing oid", async () => {
+		it.each([
+			["missing", undefined],
+			["not a string", 123],
+			["blank", " \t"],
+		])("rejects an ID token whose oid is %s", async (_, oid) => {
 			const msConfig = microsoftEntraId({
 				clientId: "ms-client-id",
 				clientSecret: "ms-client-secret",
@@ -3170,6 +3203,7 @@ describe("oauth2", async () => {
 			);
 			const idToken = await createMicrosoftIdToken({
 				sub: "legacy-sub",
+				oid,
 				email: "legacy@example.com",
 				name: "Legacy User",
 			});
@@ -3179,50 +3213,7 @@ describe("oauth2", async () => {
 				idToken,
 			});
 
-			expect(userInfo).toMatchObject({
-				sub: "legacy-sub",
-				email: "legacy@example.com",
-				name: "Legacy User",
-				emailVerified: false,
-			});
-			expect(graphCalls).toBe(0);
-		});
-
-		it("should return token claims without fetching Graph when the ID token oid is not a string", async () => {
-			const msConfig = microsoftEntraId({
-				clientId: "ms-client-id",
-				clientSecret: "ms-client-secret",
-				tenantId,
-			});
-			let graphCalls = 0;
-			mswServer.use(
-				http.get("https://graph.microsoft.com/oidc/userinfo", () => {
-					graphCalls++;
-					return HttpResponse.json({
-						sub: "legacy-sub",
-						email: "legacy@example.com",
-						name: "Legacy User",
-					});
-				}),
-			);
-			const idToken = await createMicrosoftIdToken({
-				sub: "legacy-sub",
-				oid: 123,
-				email: "legacy@example.com",
-				name: "Legacy User",
-			});
-
-			const userInfo = await msConfig.getUserInfo!({
-				accessToken: "ms-access-token",
-				idToken,
-			});
-
-			expect(userInfo).toMatchObject({
-				sub: "legacy-sub",
-				email: "legacy@example.com",
-				name: "Legacy User",
-				emailVerified: false,
-			});
+			expect(userInfo).toBeNull();
 			expect(graphCalls).toBe(0);
 		});
 	});
@@ -3428,6 +3419,20 @@ describe("oauth2", async () => {
 	});
 
 	it("should integrate microsoftEntraId provider helper with genericOAuth", async () => {
+		const tenantId = "12345678-1234-1234-1234-123456789012";
+		const issuer = `https://login.microsoftonline.com/${tenantId}/v2.0`;
+		mswServer.use(
+			http.get(`${issuer}/.well-known/openid-configuration`, () =>
+				HttpResponse.json({
+					issuer,
+					authorization_endpoint: `${issuer}/authorize`,
+					token_endpoint: `${issuer}/token`,
+					userinfo_endpoint: "https://graph.microsoft.com/oidc/userinfo",
+					jwks_uri: `${issuer}/discovery/v2.0/keys`,
+					id_token_signing_alg_values_supported: ["RS256"],
+				}),
+			),
+		);
 		const { auth: testAuth } = await getTestInstance({
 			plugins: [
 				genericOAuth({
@@ -3435,7 +3440,7 @@ describe("oauth2", async () => {
 						microsoftEntraId({
 							clientId: "ms-client-id",
 							clientSecret: "ms-client-secret",
-							tenantId: "12345678-1234-1234-1234-123456789012",
+							tenantId,
 						}),
 					],
 				}),
