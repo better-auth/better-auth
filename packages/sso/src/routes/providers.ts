@@ -392,6 +392,8 @@ function sanitizeProvider(
 		samlConfig: samlConfig
 			? {
 					entryPoint: samlConfig.entryPoint,
+					callbackUrl: samlConfig.callbackUrl,
+					idpInitiatedCallbackUrl: samlConfig.idpInitiatedCallbackUrl,
 					audience: samlConfig.audience,
 					wantAssertionsSigned: samlConfig.wantAssertionsSigned,
 					authnRequestsSigned: samlConfig.authnRequestsSigned,
@@ -628,6 +630,8 @@ function mergeSAMLConfig(
 		mapping: updates.mapping ?? current.mapping,
 		audience: updates.audience ?? current.audience,
 		callbackUrl: updates.callbackUrl ?? current.callbackUrl,
+		idpInitiatedCallbackUrl:
+			updates.idpInitiatedCallbackUrl ?? current.idpInitiatedCallbackUrl,
 		wantAssertionsSigned:
 			updates.wantAssertionsSigned ?? current.wantAssertionsSigned,
 		authnRequestsSigned:

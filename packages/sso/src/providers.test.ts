@@ -6,11 +6,29 @@ import { organization } from "better-auth/plugins";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
+import { samlRedirectUrlSchema } from "./routes/schemas";
 import type { SAMLConfig, SSOOptions } from "./types";
 import { safeJsonParse } from "./utils";
 
 const TEST_CERT = `MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiUMA0Gcm9markup
 temporary cert for testing`;
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10329
+ */
+describe("SAML redirect URL schema", () => {
+	it.each([
+		["/dashboard", true],
+		["https://frontend.example.com/dashboard", true],
+		["//evil.example.com", false],
+		["/\\evil.example.com", false],
+		["/%2fevil.example.com", false],
+		["/%5cevil.example.com", false],
+		["dashboard", false],
+	])("validates %s", (url, expected) => {
+		expect(samlRedirectUrlSchema.safeParse(url).success).toBe(expected);
+	});
+});
 
 describe("SSO provider read endpoints", () => {
 	type TestUser = { email: string; password: string; name: string };

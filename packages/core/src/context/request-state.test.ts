@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { RequestStateWeakMap } from "./request-state";
 import {
 	defineRequestState,
@@ -89,6 +89,43 @@ describe("request-state", () => {
 				const currentStore = await getCurrentRequestState();
 				expect(currentStore).toBe(store);
 			});
+		});
+	});
+
+	describe("AsyncLocalStorage init race", () => {
+		it("shares one AsyncLocalStorage across concurrent first-callers", async () => {
+			// Force a cold start: reset the module (clears the memoized init) and
+			// clear the global singleton, so the concurrent burst below all races
+			// through ensureAsyncStorage()'s lazy initialization.
+			vi.resetModules();
+			const betterAuthGlobalSymbol = Symbol.for("better-auth:global");
+			const betterAuthGlobal = (globalThis as any)[betterAuthGlobalSymbol];
+			if (betterAuthGlobal?.context) {
+				betterAuthGlobal.context.requestStateAsyncStorage = undefined;
+			}
+			const mod = await import("./request-state");
+
+			const N = 32;
+			const outcomes = await Promise.all(
+				Array.from({ length: N }, () =>
+					mod
+						.runWithRequestState(new WeakMap(), async () => {
+							// Yield so every caller interleaves through the cold init
+							// window before any of them reads its state back.
+							await Promise.resolve();
+							await new Promise((resolve) => setTimeout(resolve, 0));
+							// Throws "No request state found" if this caller's run()
+							// executed on a different instance than the one resolved here.
+							await mod.getCurrentRequestState();
+						})
+						.then(
+							() => true,
+							() => false,
+						),
+				),
+			);
+
+			expect(outcomes.every(Boolean)).toBe(true);
 		});
 	});
 });

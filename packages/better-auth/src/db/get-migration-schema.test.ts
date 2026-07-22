@@ -502,6 +502,54 @@ describe("index generation for columns added to existing tables", () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10356
+	 */
+	it("should enforce unique indexed fields on new tables without a duplicate index", async () => {
+		const db = new DatabaseSync(":memory:");
+		const config: BetterAuthOptions = {
+			database: db,
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [
+				{
+					id: "test-unique-index",
+					schema: {
+						uniqueTable: {
+							fields: {
+								slug: {
+									type: "string",
+									index: true,
+									unique: true,
+									required: true,
+								},
+							},
+						},
+					},
+				},
+			],
+		};
+
+		const { compileMigrations, runMigrations } = await getMigrations(config);
+		const sql = (await compileMigrations()).toLowerCase();
+
+		expect(sql).toMatch(
+			/create table "uniquetable"[^;]*"slug" text not null unique/s,
+		);
+		expect(sql).not.toContain("uniquetable_slug_uidx");
+
+		await runMigrations();
+		db.exec(
+			`INSERT INTO "uniqueTable" ("id", "slug") VALUES ('first', 'shared')`,
+		);
+		expect(() =>
+			db.exec(
+				`INSERT INTO "uniqueTable" ("id", "slug") VALUES ('second', 'shared')`,
+			),
+		).toThrow();
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9689
 	 */
 	it("should execute runMigrations without error when adding indexed columns to existing tables", async () => {
@@ -685,5 +733,29 @@ describe("index generation for columns added to existing tables", () => {
 		expect(apikeyAdded!.fields).toHaveProperty("referenceId");
 
 		await expect(runMigrations()).resolves.not.toThrow();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10306
+	 */
+	it("should not detect migration changes for SQLite bigint fields on subsequent runs", async () => {
+		const config: BetterAuthOptions = {
+			database: new DatabaseSync(":memory:"),
+			rateLimit: {
+				storage: "database",
+			},
+		};
+
+		const initial = await getMigrations(config);
+		await initial.runMigrations();
+
+		const second = await getMigrations(config);
+		const { toBeCreated, toBeAdded } = second;
+
+		expect(toBeCreated.length).toBe(0);
+		expect(toBeAdded.length).toBe(0);
+
+		const sql = await second.compileMigrations();
+		expect(sql).toBe(";");
 	});
 });
