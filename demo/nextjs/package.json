@@ -69,6 +69,7 @@
     "framer-motion": "^12.34.3",
     "geist": "^1.7.0",
     "input-otp": "^1.4.2",
+    "jose": "^6.2.3",
     "kysely": "0.28.17",
     "lucide-react": "^0.575.0",
     "mcp-handler": "^1.1.0",
