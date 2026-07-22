@@ -10,6 +10,14 @@ export function createScopedKey(parts: readonly string[]): string {
 	});
 }
 
+/** Create the canonical lookup key for a connection-owned SCIM User externalId. */
+export function createSCIMUserExternalIdKey(
+	connectionId: string,
+	externalId: string,
+): string {
+	return createScopedKey(["scim-user-external-id", connectionId, externalId]);
+}
+
 /** Create one unique, lexicographically stable classic-pagination key. */
 export function createSCIMOrderKey(createdAt: Date): string {
 	return `${createdAt.getTime().toString().padStart(15, "0")}:${generateId(16)}`;

@@ -37,22 +37,31 @@ export async function findDecommissionedSCIMConnectionIds(
  * or fails the transaction when retirement won the race.
  */
 export async function fenceActiveSCIMConnection(
-	database: DBTransactionAdapter,
+	database: Pick<DBTransactionAdapter, "incrementOne">,
 	connectionId: string,
-): Promise<void> {
-	const binding = await database.incrementOne<SCIMConnectionBinding>({
+): Promise<SCIMConnectionBinding> {
+	const binding = await tryFenceActiveSCIMConnection(database, connectionId);
+	if (binding) return binding;
+	throw createSCIMError("UNAUTHORIZED", {
+		detail: "SCIM connection is decommissioned",
+	});
+}
+
+/** Attempts to fence a connection without assigning an HTTP failure policy. */
+export async function tryFenceActiveSCIMConnection(
+	database: Pick<DBTransactionAdapter, "incrementOne">,
+	connectionId: string,
+): Promise<SCIMConnectionBinding | null> {
+	return database.incrementOne<SCIMConnectionBinding>({
 		model: "scimConnectionBinding",
 		where: [
 			{
 				field: "connectionKey",
 				value: createSCIMConnectionKey(connectionId),
 			},
+			{ field: "connectionId", value: connectionId },
 			{ field: "decommissionStatus", value: "active" },
 		],
 		increment: { decommissionRevision: 1 },
-	});
-	if (binding) return;
-	throw createSCIMError("UNAUTHORIZED", {
-		detail: "SCIM connection is decommissioned",
 	});
 }
