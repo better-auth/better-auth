@@ -48,15 +48,21 @@ describe("passkey open-api", async () => {
 				"application/json"
 			].schema;
 		expect(responseSchema).toEqual({
-			$ref: "#/components/schemas/Passkey",
-			properties: {
-				session: {
-					$ref: "#/components/schemas/Session",
+			type: "object",
+			allOf: [
+				{ $ref: "#/components/schemas/Passkey" },
+				{
+					type: "object",
+					properties: {
+						session: {
+							$ref: "#/components/schemas/Session",
+						},
+						user: {
+							$ref: "#/components/schemas/User",
+						},
+					},
 				},
-				user: {
-					$ref: "#/components/schemas/User",
-				},
-			},
+			],
 		});
 	});
 });

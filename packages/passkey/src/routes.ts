@@ -547,6 +547,20 @@ const verifyPasskeyRegistrationBodySchema = z.object({
 		.optional(),
 });
 
+const passkeyRegistrationResponseSchema = {
+	type: "object",
+	allOf: [
+		{ $ref: "#/components/schemas/Passkey" },
+		{
+			type: "object",
+			properties: {
+				session: { $ref: "#/components/schemas/Session" },
+				user: { $ref: "#/components/schemas/User" },
+			},
+		},
+	],
+} as const;
+
 export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 	const requireSession = options.registration?.requireSession ?? true;
 	return createAuthEndpoint(
@@ -564,17 +578,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 							description: "Success",
 							content: {
 								"application/json": {
-									schema: {
-										$ref: "#/components/schemas/Passkey",
-										properties: {
-											session: {
-												$ref: "#/components/schemas/Session",
-											},
-											user: {
-												$ref: "#/components/schemas/User",
-											},
-										},
-									},
+									schema: passkeyRegistrationResponseSchema,
 								},
 							},
 						},
