@@ -89,6 +89,19 @@ describe("drizzle-adapter", () => {
 		expect(db.transaction).toHaveBeenCalled();
 	});
 
+	it("should create drizzle adapter with mssql provider", () => {
+		const db = {
+			_: {
+				fullSchema: {},
+			},
+		} as any;
+		const config = {
+			provider: "mssql" as const,
+		};
+		const adapter = drizzleAdapter(db, config);
+		expect(adapter).toBeDefined();
+	});
+
 	describe("checkMissingFields", () => {
 		function createMockDb(schema: Record<string, Record<string, any>>) {
 			return {
@@ -186,6 +199,62 @@ describe("drizzle-adapter", () => {
 			);
 		});
 
+		it("should not call .returning() on mssql (uses execute + re-select)", async () => {
+			const userTable = {
+				id: { name: "id" },
+				name: { name: "name" },
+				email: { name: "email" },
+				emailVerified: { name: "emailVerified" },
+				image: { name: "image" },
+				createdAt: { name: "createdAt" },
+				updatedAt: { name: "updatedAt" },
+			};
+			const insertedRow = {
+				id: "abc",
+				name: "Test",
+				email: "test@example.com",
+			};
+			const returning = vi.fn();
+			const execute = vi.fn().mockResolvedValue(undefined);
+			// MSSQL select shape: db.select().top(1).from(table).where(...).execute()
+			// — no .limit() in the chain. Asserting that .top() is called and
+			// .limit() is not is what makes this test meaningful for MSSQL.
+			const top = vi.fn();
+			const limit = vi.fn();
+			const finalExecute = vi.fn().mockResolvedValue([insertedRow]);
+			const where = vi.fn().mockReturnValue({ execute: finalExecute, limit });
+			const orderBy = vi.fn().mockReturnValue({ execute: finalExecute, limit });
+			const from = vi.fn().mockReturnValue({ where, orderBy });
+			top.mockReturnValue({ from });
+			const select = vi.fn().mockReturnValue({ from, top });
+			const db = {
+				_: { fullSchema: { user: userTable } },
+				insert: vi.fn().mockReturnValue({
+					values: vi.fn().mockReturnValue({
+						config: { values: [{ id: { value: "abc" } }] },
+						execute,
+						returning,
+					}),
+				}),
+				select,
+				transaction: vi.fn().mockImplementation((fn: any) => fn(db)),
+			} as any;
+			const factory = drizzleAdapter(db, { provider: "mssql" });
+			const adapter = factory({ secret: defaultSecret });
+
+			await adapter.create({
+				model: "user",
+				data: { name: "Test", email: "test@example.com" },
+			});
+
+			expect(execute).toHaveBeenCalledTimes(1);
+			expect(returning).not.toHaveBeenCalled();
+			// MSSQL re-select must use TOP(1), not .limit(1) — the latter
+			// throws at runtime because mssql-core doesn't expose .limit().
+			expect(top).toHaveBeenCalledWith(1);
+			expect(limit).not.toHaveBeenCalled();
+		});
+
 		it("should throw when schema is not provided", async () => {
 			const db = {
 				_: {},
@@ -248,6 +317,18 @@ describe("drizzle-adapter", () => {
 			{
 				provider: "mysql" as const,
 				result: [{ affectedRows: 2 }],
+				expected: 2,
+			},
+			// MSSQL returns rowsAffected as number[] (one entry per batch
+			// statement) rather than a plain number.
+			{
+				provider: "mssql" as const,
+				result: { rowsAffected: [2] },
+				expected: 2,
+			},
+			{
+				provider: "mssql" as const,
+				result: { rowsAffected: [1, 1] },
 				expected: 2,
 			},
 			// postgres-js / bun-sql return an Array subclass carrying `count`;
@@ -367,6 +448,60 @@ describe("drizzle-adapter", () => {
 		it("returns null when the MySQL delete does not affect a row", async () => {
 			const { db } = createMysqlConsumeDb([{ affectedRows: 0 }]);
 			const adapter = drizzleAdapter(db, { provider: "mysql" })({
+				secret: defaultSecret,
+			});
+
+			const result = await adapter.consumeOne({
+				model: "verification",
+				where: [{ field: "id", value: verificationRow.id }],
+			});
+
+			expect(result).toBeNull();
+		});
+
+		// mssql-core has no .for("update")/.limit(); the guard-select must use
+		// .top(1) instead, and the DELETE must go through .execute() rather than
+		// .returning() (which mssql-core also doesn't support).
+		function createMssqlConsumeDb(driverResult: unknown) {
+			const selectExecute = vi.fn().mockResolvedValue([verificationRow]);
+			const selectWhere = vi.fn().mockReturnValue({ execute: selectExecute });
+			const selectFrom = vi.fn().mockReturnValue({ where: selectWhere });
+			const top = vi.fn().mockReturnValue({ from: selectFrom });
+			const execute = vi.fn().mockResolvedValue(driverResult);
+			const deleteWhere = vi.fn().mockReturnValue({ execute });
+			const tx = {
+				select: vi.fn().mockReturnValue({ top, from: selectFrom }),
+				delete: vi.fn().mockReturnValue({ where: deleteWhere }),
+			};
+			const db = {
+				_: { fullSchema: { verification: verificationTable } },
+				transaction: vi
+					.fn()
+					.mockImplementation((fn: (transaction: typeof tx) => unknown) =>
+						fn(tx),
+					),
+			} as Parameters<typeof drizzleAdapter>[0];
+			return { db, top };
+		}
+
+		it("returns the consumed row for MSSQL via TOP(1) instead of .limit()", async () => {
+			const { db, top } = createMssqlConsumeDb({ rowsAffected: [1] });
+			const adapter = drizzleAdapter(db, { provider: "mssql" })({
+				secret: defaultSecret,
+			});
+
+			const result = await adapter.consumeOne({
+				model: "verification",
+				where: [{ field: "id", value: verificationRow.id }],
+			});
+
+			expect(result).toEqual(verificationRow);
+			expect(top).toHaveBeenCalledWith(1);
+		});
+
+		it("returns null when the MSSQL delete does not affect a row", async () => {
+			const { db } = createMssqlConsumeDb({ rowsAffected: [0] });
+			const adapter = drizzleAdapter(db, { provider: "mssql" })({
 				secret: defaultSecret,
 			});
 
@@ -533,6 +668,128 @@ describe("drizzle-adapter", () => {
 				// A `gt` guard that no row satisfies must yield null, never a row.
 				where: [{ field: "attempts", value: 100, operator: "gt" }],
 				increment: { attempts: -1 },
+			});
+
+			expect(result).toBeNull();
+		});
+
+		// mssql-core has no .for("update")/.limit(); the guard-select and the
+		// post-update re-select must both use .top(1), and the UPDATE must go
+		// through .execute() rather than .returning() (unsupported on mssql-core).
+		function createMssqlIncrementDb(
+			guardRow: unknown,
+			updatedRow: unknown,
+			updateResult: unknown = { rowsAffected: [1] },
+		) {
+			const guardExecute = vi
+				.fn()
+				.mockResolvedValue(guardRow ? [guardRow] : []);
+			const guardWhere = vi.fn().mockReturnValue({ execute: guardExecute });
+			const guardFrom = vi.fn().mockReturnValue({ where: guardWhere });
+			const guardTop = vi.fn().mockReturnValue({ from: guardFrom });
+
+			const reselectExecute = vi
+				.fn()
+				.mockResolvedValue(updatedRow ? [updatedRow] : []);
+			const reselectWhere = vi
+				.fn()
+				.mockReturnValue({ execute: reselectExecute });
+			const reselectFrom = vi.fn().mockReturnValue({ where: reselectWhere });
+			const reselectTop = vi.fn().mockReturnValue({ from: reselectFrom });
+
+			const top = vi
+				.fn()
+				.mockReturnValueOnce({ from: guardFrom })
+				.mockReturnValueOnce({ from: reselectFrom });
+
+			const updateExecute = vi.fn().mockResolvedValue(updateResult);
+			const updateWhere = vi.fn().mockReturnValue({ execute: updateExecute });
+			const set = vi.fn().mockReturnValue({ where: updateWhere });
+
+			const tx = {
+				select: vi.fn().mockReturnValue({ top }),
+				update: vi.fn().mockReturnValue({ set }),
+			};
+			const db = {
+				_: { fullSchema: { user: userTable } },
+				transaction: vi
+					.fn()
+					.mockImplementation((fn: (transaction: typeof tx) => unknown) =>
+						fn(tx),
+					),
+			} as any;
+			return { db, top, guardTop, reselectTop };
+		}
+
+		it("increments and re-reads via TOP(1) on MSSQL instead of .limit()", async () => {
+			const guardRow = { id: "user-1", attempts: 4 };
+			const updatedRow = { id: "user-1", attempts: 5 };
+			const { db, top } = createMssqlIncrementDb(guardRow, updatedRow);
+			const adapter = drizzleAdapter(db, { provider: "mssql" })({
+				secret: defaultSecret,
+				user: {
+					additionalFields: {
+						attempts: { type: "number", required: false },
+					},
+				},
+			});
+
+			const result = await adapter.incrementOne({
+				model: "user",
+				where: [{ field: "id", value: "user-1" }],
+				increment: { attempts: 1 },
+			});
+
+			expect(result).toEqual(updatedRow);
+			expect(top).toHaveBeenCalledWith(1);
+			expect(top).toHaveBeenCalledTimes(2);
+		});
+
+		it("returns null on MSSQL when the guard no longer matches at update time", async () => {
+			// The guard-select finds a row, but the row's guarded fields changed
+			// before the UPDATE runs (e.g. a concurrent request already mutated
+			// it) — the UPDATE re-checks the original clause, affects zero rows,
+			// and must report null rather than the stale guard-select snapshot.
+			const guardRow = { id: "user-1", attempts: 4 };
+			const { db, top } = createMssqlIncrementDb(guardRow, null, {
+				rowsAffected: [0],
+			});
+			const adapter = drizzleAdapter(db, { provider: "mssql" })({
+				secret: defaultSecret,
+				user: {
+					additionalFields: {
+						attempts: { type: "number", required: false },
+					},
+				},
+			});
+
+			const result = await adapter.incrementOne({
+				model: "user",
+				where: [{ field: "id", value: "user-1" }],
+				increment: { attempts: 1 },
+			});
+
+			expect(result).toBeNull();
+			// The guard-select still ran, but the re-select after the update must
+			// not — the function must short-circuit on the zero-row update.
+			expect(top).toHaveBeenCalledTimes(1);
+		});
+
+		it("returns null when the MSSQL guard matches no row", async () => {
+			const { db } = createMssqlIncrementDb(null, null);
+			const adapter = drizzleAdapter(db, { provider: "mssql" })({
+				secret: defaultSecret,
+				user: {
+					additionalFields: {
+						attempts: { type: "number", required: false },
+					},
+				},
+			});
+
+			const result = await adapter.incrementOne({
+				model: "user",
+				where: [{ field: "id", value: "user-1" }],
+				increment: { attempts: 1 },
 			});
 
 			expect(result).toBeNull();

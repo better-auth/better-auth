@@ -496,4 +496,95 @@ describe("generate drizzle schema for all databases with passkey plugin", async 
 			"./__snapshots__/auth-schema-sqlite-passkey-number-id.txt",
 		);
 	});
+
+	it("should generate drizzle schema for MSSQL", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "mssql",
+					schema: {},
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "mssql",
+						schema: {},
+					},
+				),
+				plugins: [twoFactor(), username()],
+				user: { modelName: "custom_user" },
+				account: { modelName: "custom_account" },
+				session: { modelName: "custom_session" },
+				verification: { modelName: "custom_verification" },
+			},
+		});
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-mssql.txt",
+		);
+	});
+
+	it("should generate drizzle schema for MSSQL with number id", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "mssql",
+					schema: {},
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "mssql",
+						schema: {},
+					},
+				),
+				plugins: [twoFactor(), username()],
+				advanced: {
+					database: {
+						generateId: "serial",
+					},
+				},
+				user: { modelName: "custom_user" },
+				account: { modelName: "custom_account" },
+				session: { modelName: "custom_session" },
+				verification: { modelName: "custom_verification" },
+			},
+		});
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-mssql-number-id.txt",
+		);
+	});
+
+	it("should generate drizzle schema for MSSQL with passkey plugin", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "mssql",
+					schema: {},
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "mssql",
+						schema: {},
+					},
+				),
+				plugins: [passkey()],
+			},
+		});
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-mssql-passkey.txt",
+		);
+	});
 });

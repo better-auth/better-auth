@@ -1,0 +1,142 @@
+import { relations, sql } from "drizzle-orm";
+import {
+  mssqlTable,
+  varchar,
+  datetime2,
+  bit,
+  int,
+  index,
+} from "drizzle-orm/mssql-core";
+
+export const custom_user = mssqlTable("custom_user", {
+  id: int("id").identity().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  emailVerified: bit("email_verified").default(false).notNull(),
+  image: varchar("image", { length: "max" }),
+  createdAt: datetime2("created_at", { precision: 3 })
+    .default(sql`SYSUTCDATETIME()`)
+    .notNull(),
+  updatedAt: datetime2("updated_at", { precision: 3 })
+    .default(sql`SYSUTCDATETIME()`)
+    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .notNull(),
+  twoFactorEnabled: bit("two_factor_enabled").default(false),
+  username: varchar("username", { length: 255 }).unique(),
+  displayUsername: varchar("display_username", { length: "max" }),
+});
+
+export const custom_session = mssqlTable(
+  "custom_session",
+  {
+    id: int("id").identity().primaryKey(),
+    expiresAt: datetime2("expires_at", { precision: 3 }).notNull(),
+    token: varchar("token", { length: 255 }).notNull().unique(),
+    createdAt: datetime2("created_at", { precision: 3 })
+      .default(sql`SYSUTCDATETIME()`)
+      .notNull(),
+    updatedAt: datetime2("updated_at", { precision: 3 })
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    ipAddress: varchar("ip_address", { length: "max" }),
+    userAgent: varchar("user_agent", { length: "max" }),
+    userId: int("user_id")
+      .notNull()
+      .references(() => custom_user.id, { onDelete: "cascade" }),
+  },
+  (table) => [index("custom_session_userId_idx").on(table.userId)],
+);
+
+export const custom_account = mssqlTable(
+  "custom_account",
+  {
+    id: int("id").identity().primaryKey(),
+    accountId: varchar("account_id", { length: "max" }).notNull(),
+    providerId: varchar("provider_id", { length: "max" }).notNull(),
+    userId: int("user_id")
+      .notNull()
+      .references(() => custom_user.id, { onDelete: "cascade" }),
+    accessToken: varchar("access_token", { length: "max" }),
+    refreshToken: varchar("refresh_token", { length: "max" }),
+    idToken: varchar("id_token", { length: "max" }),
+    accessTokenExpiresAt: datetime2("access_token_expires_at", {
+      precision: 3,
+    }),
+    refreshTokenExpiresAt: datetime2("refresh_token_expires_at", {
+      precision: 3,
+    }),
+    scope: varchar("scope", { length: "max" }),
+    password: varchar("password", { length: "max" }),
+    createdAt: datetime2("created_at", { precision: 3 })
+      .default(sql`SYSUTCDATETIME()`)
+      .notNull(),
+    updatedAt: datetime2("updated_at", { precision: 3 })
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [index("custom_account_userId_idx").on(table.userId)],
+);
+
+export const custom_verification = mssqlTable(
+  "custom_verification",
+  {
+    id: int("id").identity().primaryKey(),
+    identifier: varchar("identifier", { length: 255 }).notNull(),
+    value: varchar("value", { length: "max" }).notNull(),
+    expiresAt: datetime2("expires_at", { precision: 3 }).notNull(),
+    createdAt: datetime2("created_at", { precision: 3 })
+      .default(sql`SYSUTCDATETIME()`)
+      .notNull(),
+    updatedAt: datetime2("updated_at", { precision: 3 })
+      .default(sql`SYSUTCDATETIME()`)
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [index("custom_verification_identifier_idx").on(table.identifier)],
+);
+
+export const twoFactor = mssqlTable(
+  "two_factor",
+  {
+    id: int("id").identity().primaryKey(),
+    secret: varchar("secret", { length: 255 }).notNull(),
+    backupCodes: varchar("backup_codes", { length: "max" }).notNull(),
+    userId: int("user_id")
+      .notNull()
+      .references(() => custom_user.id, { onDelete: "cascade" }),
+    verified: bit("verified").default(true),
+    failedVerificationCount: int("failed_verification_count").default(0),
+    lockedUntil: datetime2("locked_until", { precision: 3 }),
+  },
+  (table) => [
+    index("twoFactor_secret_idx").on(table.secret),
+    index("twoFactor_userId_idx").on(table.userId),
+  ],
+);
+
+export const custom_userRelations = relations(custom_user, ({ many }) => ({
+  custom_sessions: many(custom_session),
+  custom_accounts: many(custom_account),
+  twoFactors: many(twoFactor),
+}));
+
+export const custom_sessionRelations = relations(custom_session, ({ one }) => ({
+  custom_user: one(custom_user, {
+    fields: [custom_session.userId],
+    references: [custom_user.id],
+  }),
+}));
+
+export const custom_accountRelations = relations(custom_account, ({ one }) => ({
+  custom_user: one(custom_user, {
+    fields: [custom_account.userId],
+    references: [custom_user.id],
+  }),
+}));
+
+export const twoFactorRelations = relations(twoFactor, ({ one }) => ({
+  custom_user: one(custom_user, {
+    fields: [twoFactor.userId],
+    references: [custom_user.id],
+  }),
+}));
