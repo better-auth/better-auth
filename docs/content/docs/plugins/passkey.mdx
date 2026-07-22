@@ -124,6 +124,8 @@ await authClient.passkey.addPasskey({
 })
 ```
 
+When `createSession` is `true`, successful verification sets the session cookie and returns the `session` and `user` with the registered passkey. If you want to avoid creating a user before the WebAuthn ceremony succeeds, create or load the user in `registration.afterVerification` and return its `userId`.
+
 ## Usage
 
 ### Add/Register a passkey
@@ -154,7 +156,8 @@ To add or register a passkey make sure a user is authenticated and then call the
        */
       context?: string
       /**
-       * Create a session after successfully registering the passkey.
+       * Create a session after successfully registering the passkey. The
+       * response includes the session and user when enabled.
        */
       createSession?: boolean
   }

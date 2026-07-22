@@ -1,5 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { base64 } from "@better-auth/utils/base64";
 import type {
@@ -562,6 +566,14 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 								"application/json": {
 									schema: {
 										$ref: "#/components/schemas/Passkey",
+										properties: {
+											session: {
+												$ref: "#/components/schemas/Session",
+											},
+											user: {
+												$ref: "#/components/schemas/User",
+											},
+										},
 									},
 								},
 							},
@@ -650,99 +662,116 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 				}
 				const { aaguid, credentialDeviceType, credentialBackedUp, credential } =
 					registrationInfo;
-				const resolvedUser: PasskeyRegistrationUser = {
-					id: userData.id,
-					name: userData.name || userData.id,
-					displayName: userData.displayName,
-				};
-				let targetUserId = resolvedUser.id;
-				let resolvedName = ctx.body.name || undefined;
-				if (options.registration?.afterVerification) {
-					const result = await options.registration.afterVerification({
-						ctx,
-						verification,
-						user: resolvedUser,
-						clientData: resp,
-						context,
-					});
-					if (result?.userId) {
-						if (typeof result.userId !== "string" || !result.userId) {
-							throw APIError.from(
-								"BAD_REQUEST",
-								PASSKEY_ERROR_CODES.RESOLVED_USER_INVALID,
-							);
+				const persistRegistration = async () => {
+					const resolvedUser: PasskeyRegistrationUser = {
+						id: userData.id,
+						name: userData.name || userData.id,
+						displayName: userData.displayName,
+					};
+					let targetUserId = resolvedUser.id;
+					let resolvedName = ctx.body.name || undefined;
+					if (options.registration?.afterVerification) {
+						const result = await options.registration.afterVerification({
+							ctx,
+							verification,
+							user: resolvedUser,
+							clientData: resp,
+							context,
+						});
+						if (result?.userId) {
+							if (typeof result.userId !== "string" || !result.userId) {
+								throw APIError.from(
+									"BAD_REQUEST",
+									PASSKEY_ERROR_CODES.RESOLVED_USER_INVALID,
+								);
+							}
+							if (session?.user?.id && result.userId !== session.user.id) {
+								throw APIError.from(
+									"UNAUTHORIZED",
+									PASSKEY_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
+								);
+							}
+							targetUserId = result.userId;
 						}
-						if (session?.user?.id && result.userId !== session.user.id) {
-							throw APIError.from(
-								"UNAUTHORIZED",
-								PASSKEY_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
-							);
+						if (!resolvedName) {
+							resolvedName = result?.name?.trim() || undefined;
 						}
-						targetUserId = result.userId;
 					}
-					if (!resolvedName) {
-						resolvedName = result?.name?.trim() || undefined;
+					if (!targetUserId) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							PASSKEY_ERROR_CODES.RESOLVED_USER_INVALID,
+						);
 					}
-				}
-				if (!targetUserId) {
-					throw APIError.from(
-						"BAD_REQUEST",
-						PASSKEY_ERROR_CODES.RESOLVED_USER_INVALID,
-					);
-				}
-				const pubKey = base64.encode(credential.publicKey);
-				const newPasskey: Omit<Passkey, "id"> = {
-					name: resolvedName,
-					userId: targetUserId,
-					credentialID: credential.id,
-					publicKey: pubKey,
-					counter: credential.counter,
-					deviceType: credentialDeviceType,
-					transports: resp.response.transports?.join(",") ?? "",
-					backedUp: credentialBackedUp,
-					createdAt: new Date(),
-					aaguid: aaguid,
-				};
-				const newPasskeyRes = await ctx.context.adapter.create<
-					Omit<Passkey, "id">,
-					Passkey
-				>({
-					model: "passkey",
-					data: newPasskey,
-				});
-				if (ctx.body.createSession) {
-					const user =
-						await ctx.context.internalAdapter.findUserById(targetUserId);
-					if (!user) {
+
+					const user = ctx.body.createSession
+						? await ctx.context.internalAdapter.findUserById(targetUserId)
+						: null;
+					if (ctx.body.createSession && !user) {
 						throw APIError.from(
 							"INTERNAL_SERVER_ERROR",
 							PASSKEY_ERROR_CODES.USER_NOT_FOUND,
 						);
 					}
-					const session =
-						await ctx.context.internalAdapter.createSession(targetUserId);
-					if (!session) {
+
+					const pubKey = base64.encode(credential.publicKey);
+					const adapter = await getCurrentAdapter(ctx.context.adapter);
+					const passkey = await adapter.create<Omit<Passkey, "id">, Passkey>({
+						model: "passkey",
+						data: {
+							name: resolvedName,
+							userId: targetUserId,
+							credentialID: credential.id,
+							publicKey: pubKey,
+							counter: credential.counter,
+							deviceType: credentialDeviceType,
+							transports: resp.response.transports?.join(",") ?? "",
+							backedUp: credentialBackedUp,
+							createdAt: new Date(),
+							aaguid,
+						},
+					});
+					if (!user) {
+						return { passkey };
+					}
+
+					const createdSession =
+						await ctx.context.internalAdapter.createSession(
+							targetUserId,
+							undefined,
+							undefined,
+							undefined,
+							{ deferSecondaryStorageWrites: true },
+						);
+					if (!createdSession) {
 						throw APIError.from(
 							"INTERNAL_SERVER_ERROR",
 							PASSKEY_ERROR_CODES.UNABLE_TO_CREATE_SESSION,
 						);
 					}
+					return { passkey, session: createdSession, user };
+				};
+				const registration = ctx.body.createSession
+					? await runWithTransaction(ctx.context.adapter, persistRegistration)
+					: await persistRegistration();
+
+				if (registration.session && registration.user) {
 					await setSessionCookie(ctx, {
-						session,
-						user,
+						session: registration.session,
+						user: registration.user,
 					});
 					return ctx.json(
 						{
-							...newPasskeyRes,
-							session,
-							user,
+							...registration.passkey,
+							session: registration.session,
+							user: registration.user,
 						},
 						{
 							status: 200,
 						},
 					);
 				}
-				return ctx.json(newPasskeyRes, {
+				return ctx.json(registration.passkey, {
 					status: 200,
 				});
 			} catch (e) {
