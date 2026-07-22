@@ -1,5 +1,13 @@
 # @better-auth/core
 
+## 1.6.24
+
+### Patch Changes
+
+- [#9862](https://github.com/better-auth/better-auth/pull/9862) [`54fab08`](https://github.com/better-auth/better-auth/commit/54fab084469a27257e66a0814523ebac7145ef5d) Thanks [@OrangeManLi](https://github.com/OrangeManLi)! - Fix a request-state `AsyncLocalStorage` initialization race that could intermittently throw `No request state found. Please make sure you are calling this function within a runWithRequestState callback.` `ensureAsyncStorage()` now memoizes its in-flight initialization so concurrent first-callers share a single `AsyncLocalStorage` instance instead of each constructing one and the last write winning. This surfaced on serverless cold start (e.g. Cloudflare Workers) where the first requests arrive before the lazy `node:async_hooks` import settles, causing `runWithRequestState().run()` and a nested `getCurrentRequestState()` to land on different instances.
+
+- [#10376](https://github.com/better-auth/better-auth/pull/10376) [`c4d1dda`](https://github.com/better-auth/better-auth/commit/c4d1ddaa952eab7edfec942fab223f35798518ab) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Pass the request endpoint context as a third argument to `verifyIdToken`, so custom ID token verifiers can read request headers (for example Apple's `user-agent` requirement).
+
 ## 1.6.23
 
 ## 1.6.22
