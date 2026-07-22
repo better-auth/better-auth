@@ -1667,7 +1667,9 @@ async function handleOIDCCallback(
 	}
 	const userInfoEmail = userInfo.email;
 	const userInfoId = userInfo.id;
-	const { id: _providerSubject, ...providerUserAttributes } = userInfo;
+	const providerUserAttributes = Object.fromEntries(
+		Object.entries(userInfo).filter(([key]) => key !== "id"),
+	);
 	const providerUser = {
 		...providerUserAttributes,
 		email: userInfoEmail,

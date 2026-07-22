@@ -60,6 +60,7 @@ describe("SSO provider references", () => {
 			type: "persisted",
 			recordId: "provider-row-1",
 		});
+		expect(await isCurrentSSOProviderReference(provider, reference)).toBe(true);
 		expect(
 			await isCurrentSSOProviderReference(
 				{ ...provider, id: "provider-row-2" },
