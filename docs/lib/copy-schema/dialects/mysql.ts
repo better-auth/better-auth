@@ -5,7 +5,7 @@ import type {
 } from "../types";
 import {
 	filterForeignKeys,
-	filterIndexes,
+	filterNonUniqueIndexes,
 	getIndexName,
 	getTypeFactory,
 } from "../utils";
@@ -51,12 +51,12 @@ const escapeSqlString = (value: string) => value.replace(/'/g, "''");
 
 const formatIndexedColumn = (field: DBFieldAttribute) =>
 	field.type === "string"
-		? `\`${field.fieldName}\`(255)`
+		? `\`${field.fieldName}\`(191)`
 		: `\`${field.fieldName}\``;
 
 const formatIndex = (field: DBFieldAttribute, tableName: string) => {
 	const indexName = getIndexName(tableName, field);
-	const createIndex = `CREATE ${field.unique ? "UNIQUE " : ""}INDEX \`${indexName}\` ON \`${tableName}\` (${formatIndexedColumn(field)})`;
+	const createIndex = `CREATE INDEX \`${indexName}\` ON \`${tableName}\` (${formatIndexedColumn(field)})`;
 	return [
 		`SET @table_exists = (SELECT COUNT(1) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = '${escapeSqlString(tableName)}');`,
 		`SET @index_exists = (SELECT COUNT(1) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = '${escapeSqlString(tableName)}' AND index_name = '${escapeSqlString(indexName)}');`,
@@ -75,7 +75,7 @@ export const mysqlResolver = {
 				: field.references
 					? "varchar(36)"
 					: field.index
-						? "varchar(255)"
+						? "varchar(191)"
 						: "text",
 			boolean: "boolean",
 			number: field.bigint ? "bigint" : "integer",
@@ -114,7 +114,7 @@ export const mysqlResolver = {
 		if (ctx.mode === "create") {
 			lines.push(`);`);
 		}
-		for (const field of filterIndexes(ctx.schema)) {
+		for (const field of filterNonUniqueIndexes(ctx.schema)) {
 			lines.push(formatIndex(field, ctx.schema.modelName));
 		}
 		return lines.join("\n");

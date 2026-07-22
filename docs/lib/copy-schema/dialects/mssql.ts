@@ -5,7 +5,7 @@ import type {
 } from "../types";
 import {
 	filterForeignKeys,
-	filterIndexes,
+	filterNonUniqueIndexes,
 	getIndexName,
 	getTypeFactory,
 } from "../utils";
@@ -58,7 +58,7 @@ const formatIndex = (field: DBFieldAttribute, tableName: string) => {
 		`\t\t\tAND object_id = OBJECT_ID(N'${tableObject}')`,
 		"\t)",
 		"BEGIN",
-		`\tCREATE ${field.unique ? "UNIQUE " : ""}INDEX [${indexName}] ON [${tableName}] ([${field.fieldName}]);`,
+		`\tCREATE INDEX [${indexName}] ON [${tableName}] ([${field.fieldName}]);`,
 		"END;",
 	].join("\n");
 };
@@ -112,7 +112,7 @@ export const mssqlResolver = {
 			lines.push(`\t);`);
 		}
 		lines.push("END;");
-		for (const field of filterIndexes(ctx.schema)) {
+		for (const field of filterNonUniqueIndexes(ctx.schema)) {
 			lines.push(formatIndex(field, ctx.schema.modelName));
 		}
 		return lines.join("\n");

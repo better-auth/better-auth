@@ -71,6 +71,7 @@ export type DBFieldAttribute = {
 	unique?: boolean;
 	/**
 	 * If the field should be indexed.
+	 * @default false
 	 */
 	index?: boolean;
 	/**

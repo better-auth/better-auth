@@ -594,13 +594,13 @@ authenticateCLI().catch((err) => {
 
 **interval**: The minimum polling interval. Default: `"5s"` (5 seconds).
 
-**userCodeLength**: The length of the user code. Default: `8`.
+**userCodeLength**: The length of the user code. Maximum: `191`. Default: `8`.
 
-**deviceCodeLength**: The length of the device code. Default: `40`.
+**deviceCodeLength**: The length of the device code. Maximum: `191`. Default: `40`.
 
-**generateDeviceCode**: Custom function to generate device codes. Returns a string or `Promise<string>`.
+**generateDeviceCode**: Custom function to generate device codes. Returns a string or `Promise<string>` with at most 191 characters.
 
-**generateUserCode**: Custom function to generate user codes. Returns a string or `Promise<string>`.
+**generateUserCode**: Custom function to generate user codes. Returns a string or `Promise<string>` with at most 191 characters.
 
 **validateClient**: Function to validate client IDs. Takes a clientId and returns boolean or `Promise<boolean>`.
 
@@ -622,7 +622,11 @@ The plugin requires a new table to store device authorization data.
 
 Table Name: `deviceCode`
 
-`deviceCode` and `userCode` are indexed by the generated schema because the device token, verification, approval, and denial flows use them as lookup fields.
+`deviceCode` and `userCode` are indexed by the generated schema because the device token, verification, approval, and denial flows use them as lookup fields. Both values are limited to 191 characters so these indexes remain portable across supported databases.
+
+<Callout type="warn">
+  Existing MySQL and SQL Server installations may use unbounded columns for these values. Before running the migration, convert `deviceCode` and `userCode` to strings bounded at 191 characters and resolve any longer values. The migration stops with an error when the existing columns cannot support portable indexes.
+</Callout>
 
 export const deviceCodeTableFields = [
 	{

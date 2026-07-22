@@ -5,7 +5,7 @@ import type {
 } from "../types";
 import {
 	filterForeignKeys,
-	filterIndexes,
+	filterNonUniqueIndexes,
 	getIndexName,
 	getTypeFactory,
 } from "../utils";
@@ -45,7 +45,7 @@ const formatForeignKey = (field: DBFieldAttribute) => {
 };
 
 const formatIndex = (field: DBFieldAttribute, tableName: string) =>
-	`CREATE ${field.unique ? "UNIQUE " : ""}INDEX IF NOT EXISTS "${getIndexName(tableName, field)}" ON "${tableName}" ("${field.fieldName}");`;
+	`CREATE INDEX IF NOT EXISTS "${getIndexName(tableName, field)}" ON "${tableName}" ("${field.fieldName}");`;
 
 export const postgresqlResolver = {
 	handler: (ctx) => {
@@ -86,7 +86,7 @@ export const postgresqlResolver = {
 		if (ctx.mode === "create") {
 			lines.push(`);`);
 		}
-		for (const field of filterIndexes(ctx.schema)) {
+		for (const field of filterNonUniqueIndexes(ctx.schema)) {
 			lines.push(formatIndex(field, ctx.schema.modelName));
 		}
 		return lines.join("\n");

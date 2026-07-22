@@ -13,7 +13,7 @@ import {
 	deviceToken,
 	deviceVerify,
 } from "./routes";
-import { schema } from "./schema";
+import { DEVICE_AUTHORIZATION_CODE_MAX_LENGTH, schema } from "./schema";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -54,17 +54,19 @@ export const deviceAuthorizationOptionsSchema = z.object({
 		.number()
 		.int()
 		.positive()
+		.max(DEVICE_AUTHORIZATION_CODE_MAX_LENGTH)
 		.default(40)
 		.describe(
-			"Length of the device code to be generated. Default is 40 characters.",
+			`Length of the device code to be generated. Must be at most ${DEVICE_AUTHORIZATION_CODE_MAX_LENGTH} characters. Default is 40 characters.`,
 		),
 	userCodeLength: z
 		.number()
 		.int()
 		.positive()
+		.max(DEVICE_AUTHORIZATION_CODE_MAX_LENGTH)
 		.default(8)
 		.describe(
-			"Length of the user code to be generated. Default is 8 characters.",
+			`Length of the user code to be generated. Must be at most ${DEVICE_AUTHORIZATION_CODE_MAX_LENGTH} characters. Default is 8 characters.`,
 		),
 	generateDeviceCode: z
 		.custom<() => string | Promise<string>>(
