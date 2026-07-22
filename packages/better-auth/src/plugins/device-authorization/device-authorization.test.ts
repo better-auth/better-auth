@@ -1267,6 +1267,57 @@ describe("device authorization with custom options", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10025
+	 */
+	it.each([
+		"device",
+		"user",
+	] as const)("should reject a non-string custom %s code", async (label) => {
+		const options = deviceAuthorizationOptionsSchema.parse(
+			label === "device"
+				? { generateDeviceCode: () => 42 }
+				: { generateUserCode: () => 42 },
+		);
+		const { auth } = await getTestInstance({
+			plugins: [deviceAuthorization(options)],
+		});
+
+		await expect(
+			auth.api.deviceCode({
+				body: {
+					client_id: "test-client",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_request",
+				error_description: `Generated ${label} code must be a string`,
+			},
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10025
+	 */
+	it("should count Unicode code points when validating custom codes", async () => {
+		const customDeviceCode = "🦋".repeat(191);
+		const { auth } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					generateDeviceCode: () => customDeviceCode,
+				}),
+			],
+		});
+
+		const response = await auth.api.deviceCode({
+			body: {
+				client_id: "test-client",
+			},
+		});
+		expect(response.device_code).toBe(customDeviceCode);
+	});
+
 	it("should respect custom expiration time", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [

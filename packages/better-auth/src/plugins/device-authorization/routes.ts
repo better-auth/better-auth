@@ -12,8 +12,14 @@ import { DEVICE_AUTHORIZATION_CODE_MAX_LENGTH } from "./schema";
 /* cspell:disable-next-line */
 const defaultCharset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
-function validateGeneratedCode(code: string, label: "device" | "user") {
-	if (code.length > DEVICE_AUTHORIZATION_CODE_MAX_LENGTH) {
+function validateGeneratedCode(code: unknown, label: "device" | "user") {
+	if (typeof code !== "string") {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_request",
+			error_description: `Generated ${label} code must be a string`,
+		});
+	}
+	if (Array.from(code).length > DEVICE_AUTHORIZATION_CODE_MAX_LENGTH) {
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_request",
 			error_description: `Generated ${label} code must be at most ${DEVICE_AUTHORIZATION_CODE_MAX_LENGTH} characters`,
