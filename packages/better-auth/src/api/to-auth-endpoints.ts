@@ -16,7 +16,11 @@ import {
 	resolveDynamicTrustedProxyHeaders,
 	resolveRequestContext,
 } from "../context/helpers";
-import { isDynamicBaseURLConfig, isRequestLike } from "../utils/url";
+import {
+	isDynamicBaseURLConfig,
+	isPerRequestBaseURL,
+	isRequestLike,
+} from "../utils/url";
 import { dispatchAuthEndpoint, getOperationId } from "./dispatch";
 
 type UserInputContext = Partial<
@@ -91,7 +95,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 
 			const run = async () => {
 				const rawContext = await ctx;
-				const authContext = isDynamicBaseURLConfig(rawContext.options.baseURL)
+				const authContext = isPerRequestBaseURL(rawContext.options.baseURL)
 					? await resolveDynamicContext(rawContext, context)
 					: rawContext;
 

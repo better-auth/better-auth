@@ -180,10 +180,16 @@ export type DynamicBaseURLConfig = {
 };
 
 /**
- * Base URL configuration.
- * Can be a static string or a dynamic config for multi-domain deployments.
+ * Resolves the base URL for the current request.
  */
-export type BaseURLConfig = string | DynamicBaseURLConfig;
+export type BaseURLResolver = (request: Request) => Awaitable<string | URL>;
+
+/**
+ * Base URL configuration.
+ * Can be a static string, a dynamic config with allowed hosts,
+ * or a function for fully dynamic per-request resolution.
+ */
+export type BaseURLConfig = string | DynamicBaseURLConfig | BaseURLResolver;
 
 export interface BetterAuthRateLimitStorage {
 	/**
@@ -539,6 +545,7 @@ export type BetterAuthOptions = {
 	 * Can be configured as:
 	 * - A static string: `"https://myapp.com"`
 	 * - A dynamic config with allowed hosts for multi-domain deployments
+	 * - A function for fully dynamic per-request resolution
 	 *
 	 * If not explicitly set, the system will check environment variables:
 	 * `BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, etc.
@@ -552,6 +559,12 @@ export type BetterAuthOptions = {
 	 * baseURL: {
 	 *   allowedHosts: ["myapp.com", "*.vercel.app", "preview-*.myapp.com"],
 	 *   fallback: "https://myapp.com"
+	 * }
+	 *
+	 * // Function (for multi-tenant, white-label, etc.)
+	 * baseURL: async (request) => {
+	 *   const host = request.headers.get("host");
+	 *   return `https://${host}`;
 	 * }
 	 * ```
 	 */
