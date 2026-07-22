@@ -179,7 +179,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							idToken,
 							scope: "openid,profile,email",
 						},
-						disableSignUp: options?.disableSignup,
+						disableSignUp: options?.disableSignup ?? googleProvider?.disableSignUp,
 					});
 					if (result.error) {
 						throw new APIError("UNAUTHORIZED", {
