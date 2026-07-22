@@ -450,6 +450,9 @@ export const createInternalAdapter = (
 				return ctx?.headers || ctx?.request?.headers;
 			})();
 			const storeInDb = options.session?.storeSessionInDatabase;
+			const databaseSessionFallbackEnabled =
+				storeInDb === true &&
+				options.session?.preserveSessionInDatabase !== true;
 			const {
 				// always ignore override id - new sessions must have new ids
 				id: _,
@@ -555,14 +558,16 @@ export const createInternalAdapter = (
 					async () => {
 						await mirrorSessionToSecondaryStorage(res as Session);
 					},
-					{
-						onError(error) {
-							logger.error(
-								"Failed to mirror committed session to secondary storage",
-								error,
-							);
-						},
-					},
+					databaseSessionFallbackEnabled
+						? {
+								onError(error: unknown) {
+									logger.error(
+										"Failed to mirror committed session to secondary storage",
+										error,
+									);
+								},
+							}
+						: undefined,
 				);
 			}
 			return res as Session;

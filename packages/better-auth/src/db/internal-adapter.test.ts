@@ -1220,6 +1220,44 @@ describe("internal adapter test", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10473#discussion_r3626724281
+	 */
+	it("rejects deferred secondary-only session creation when persistence fails", async () => {
+		const testMap = new Map<string, string>();
+		const secondaryStorage = createStringSecondaryStorage(testMap);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				...secondaryStorage,
+				set: async () => {
+					throw new Error("secondary storage unavailable");
+				},
+			},
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "failed-deferred-session-user",
+				email: "failed-deferred-session@example.com",
+			},
+			{ method: "test" },
+		);
+
+		await expect(
+			runWithTransaction(testCtx.adapter, () =>
+				testCtx.internalAdapter.createSession(
+					user.id,
+					undefined,
+					undefined,
+					undefined,
+					{ deferSecondaryStorageWrites: true },
+				),
+			),
+		).rejects.toThrow("secondary storage unavailable");
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10390#discussion_r3585595438
 	 */
 	it("preserves sessions created after user session deletion is requested", async () => {
