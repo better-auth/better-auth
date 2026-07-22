@@ -203,6 +203,71 @@ Choose the profile behavior when you link a user:
 
 Only one source can manage a Better Auth User's profile. Separate connections may link preserved sources to the same User, but one connection cannot create two SCIM resources for the same linked User.
 
+## Authenticate provisioned users with SSO
+
+Use `acquireActiveSCIMUserLink` inside the SSO plugin's `resolveUser` callback when one SCIM connection controls who can sign in through a paired OIDC provider. The helper finds an active SCIM User by its exact connection ID and `externalId`, returning `{ scimUserId, userId }` for the active link. It returns `null` for missing, inactive, deleted, tombstoned, orphaned, or decommissioned links.
+
+```ts title="auth.ts"
+import { acquireActiveSCIMUserLink, scim } from "@better-auth/scim";
+import { sso } from "@better-auth/sso";
+import { betterAuth } from "better-auth";
+
+const workforceProviderId = "acme-workforce-oidc";
+const workforceConnectionId = "workforce-acme";
+
+export const auth = betterAuth({
+  plugins: [
+    scim({ connections }),
+    sso({
+      defaultSSO: [
+        {
+          providerId: workforceProviderId,
+          domain: "acme.example",
+          oidcConfig: {
+            issuer: "https://idp.acme.example",
+            clientId: "acme-workforce-client-id",
+            clientSecret: "acme-workforce-client-secret",
+            pkce: true,
+            discoveryEndpoint:
+              "https://idp.acme.example/.well-known/openid-configuration",
+          },
+        },
+      ],
+      async resolveUser(input, context) {
+        if (input.providerId !== workforceProviderId) {
+          return { action: "continue" };
+        }
+
+        const link = await acquireActiveSCIMUserLink(
+          {
+            connectionId: workforceConnectionId,
+            externalId: input.accountKey.providerAccountId,
+          },
+          context,
+        );
+
+        return link
+          ? {
+              action: "link",
+              userId: link.userId,
+              profile: "preserve",
+            }
+          : {
+              action: "reject",
+              code: "SCIM_USER_NOT_ACTIVE",
+            };
+      },
+    }),
+  ],
+});
+```
+
+Configure the directory to send the OIDC provider's immutable, case-exact subject as the SCIM User's `externalId`. The example uses the validated OIDC `sub` from `input.accountKey.providerAccountId`. The helper never falls back to `userName`, email, another connection, or a deleted-resource tombstone.
+
+Call the helper with the `context` supplied by `resolveUser`; its `database` is the same native transaction adapter used for account linking and session creation. The helper fences the link against concurrent subject changes, source deactivation or deletion, and connection decommissioning. A direct helper caller can retry its entire transaction after a conflict.
+
+During SSO, a lifecycle conflict aborts the current authentication attempt and is returned as `SSO_USER_RESOLUTION_FAILED`; no Account or Session is created. SSO does not retry the callback automatically, and the original OIDC callback cannot be replayed. The user or client must start a fresh SSO authentication attempt, which re-evaluates the current SCIM state.
+
 ## Handle activation and deletion
 
 Use `identity.reconcileUser` to apply the combined SCIM lifecycle state to your application. The callback receives every source linked to the Better Auth User and an `active` value that is `true` while at least one source remains active.

@@ -57,8 +57,10 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/kysely-adapter": "workspace:*",
+    "@better-auth/sso": "workspace:*",
     "@better-auth/test-utils": "workspace:*",
     "kysely": "catalog:",
+    "oauth2-mock-server": "^9.0.0",
     "tsdown": "catalog:"
   },
   "peerDependencies": {
