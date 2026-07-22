@@ -862,7 +862,7 @@ export const changeEmail = createAuthEndpoint(
 				if (!verify) {
 					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
 				}
-			} else if (ctx.context.sessionConfig.freshAge !== 0) {
+			} else {
 				const createdAt = new Date(
 					ctx.context.session.session.createdAt,
 				).getTime();
