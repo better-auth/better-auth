@@ -3,4 +3,8 @@
 "better-auth": minor
 ---
 
-Add `deviceCodeGrant()` so limited-input clients (CLIs, smart TVs, IoT) can get an OAuth access token through the RFC 8628 device flow. Used alongside the device-authorization and oauth-provider plugins, the device requests a code, the user reviews its client, scopes, and resources, and the client polls `/oauth2/token` for a scoped, audience-bound token instead of a Better Auth session token. The provider also advertises `device_authorization_endpoint` in its discovery metadata.
+Registered OAuth clients can now use the RFC 8628 device flow to obtain provider-managed OAuth tokens. Add `deviceCodeGrant()` alongside `deviceAuthorization()` and `oauthProvider()`; clients request a code at `/device/code` and exchange it at `/oauth2/token` after the user approves it. OAuth and OpenID discovery now advertise `device_authorization_endpoint`.
+
+Device authorization requests can bind RFC 8707 resource indicators. `GET /device` now returns the requesting `client_id`, `scope`, and `resource` values for approval pages, and `onDeviceAuthRequest` receives the resource as its third argument. Token requests can reuse or narrow the approved resource set, but requests that add a resource are rejected. Existing first-party device clients continue to receive Better Auth session tokens from `/device/token`.
+
+The `deviceCode` table adds an optional `resource` field. Run `npx @better-auth/cli generate` and apply the migration before deploying this update.
