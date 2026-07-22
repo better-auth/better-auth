@@ -26,4 +26,6 @@ export const DEVICE_AUTHORIZATION_ERROR_CODES = defineErrorCodes({
 		"The requested resource exceeds the resource authorized for this device code",
 	JWT_PLUGIN_REQUIRED:
 		"The jwt plugin is required to issue JWT access tokens for a requested resource",
+	INVALID_CUSTOM_ACCESS_TOKEN_CLAIMS:
+		"customAccessTokenClaims must return an object",
 });

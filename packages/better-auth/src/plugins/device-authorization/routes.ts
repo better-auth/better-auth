@@ -258,6 +258,7 @@ const deviceTokenErrorSchema = z.object({
 			"invalid_request",
 			"invalid_grant",
 			"invalid_target",
+			"server_error",
 		])
 		.meta({
 			description: "Error code",
@@ -324,6 +325,25 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 													"invalid_grant",
 													"invalid_target",
 												],
+											},
+											error_description: {
+												type: "string",
+											},
+										},
+									},
+								},
+							},
+						},
+						500: {
+							description: "Token issuance failed",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											error: {
+												type: "string",
+												enum: ["server_error"],
 											},
 											error_description: {
 												type: "string",

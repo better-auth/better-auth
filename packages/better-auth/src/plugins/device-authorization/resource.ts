@@ -31,10 +31,19 @@ const RESERVED_CLAIMS = new Set([
 	"cnf",
 ]);
 
-function stripReservedClaims(
+function sanitizeCustomClaims(
 	ctx: GenericEndpointContext,
-	claims: Record<string, unknown>,
+	claims: unknown,
 ): Record<string, unknown> {
+	if (typeof claims !== "object" || claims === null || Array.isArray(claims)) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "server_error",
+			error_description:
+				DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_CUSTOM_ACCESS_TOKEN_CLAIMS
+					.message,
+		});
+	}
+
 	const stripped: string[] = [];
 	const safe: Record<string, unknown> = {};
 	for (const [claim, value] of Object.entries(claims)) {
@@ -185,7 +194,7 @@ export function parseStoredResource(
 }
 
 /**
- * Recover repeated RFC 8707 `resource` values from a form body. Better Call's
+ * Recover repeated RFC 8707 `resource` values from a form body. `better-call`'s
  * parsed body keeps only the final value for repeated form keys, so both device
  * endpoints clone and re-read the request before resolving the audience.
  */
@@ -254,7 +263,7 @@ export async function createDeviceJwtAccessToken(params: {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = toExpJWT(jwtOptions?.jwt?.expirationTime ?? "15m", iat);
 	const scopes = scope ? scope.split(" ") : [];
-	const rawCustomClaims = opts.customAccessTokenClaims
+	const rawCustomClaims: unknown = opts.customAccessTokenClaims
 		? await opts.customAccessTokenClaims({
 				user,
 				scopes,
@@ -264,7 +273,7 @@ export async function createDeviceJwtAccessToken(params: {
 		: {};
 	// Strip reserved/registered claims so the hook can never forge protocol
 	// claims (e.g. `iss`, `sub`, `aud`); those are set authoritatively below.
-	const customClaims = stripReservedClaims(ctx, rawCustomClaims);
+	const customClaims = sanitizeCustomClaims(ctx, rawCustomClaims);
 
 	const token = await signJWT(ctx, {
 		options: jwtOptions,

@@ -9,6 +9,7 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { jwt } from "../jwt";
 import { deviceAuthorization, deviceAuthorizationOptionsSchema } from ".";
 import { deviceAuthorizationClient } from "./client";
+import { deviceToken } from "./routes";
 import type { DeviceCode } from "./schema";
 
 describe("device authorization plugin input validation", () => {
@@ -73,6 +74,35 @@ describe("device authorization plugin input validation", () => {
 				allowedResources: ["https://api.example.com"],
 			}).allowedResources,
 		).toEqual(["https://api.example.com"]);
+	});
+
+	it("declares server_error as a device token failure", () => {
+		const endpoint = deviceToken(deviceAuthorizationOptionsSchema.parse({}));
+		const errorSchema = endpoint.options.error;
+		expect(
+			errorSchema.safeParse({
+				error: "server_error",
+				error_description: "Token issuance failed",
+			}).success,
+		).toBe(true);
+
+		const responses = endpoint.options.metadata.openapi.responses as Record<
+			number,
+			{
+				content?: Record<
+					string,
+					{
+						schema?: {
+							properties?: { error?: { enum?: string[] } };
+						};
+					}
+				>;
+			}
+		>;
+		expect(
+			responses[500]?.content?.["application/json"]?.schema?.properties?.error
+				?.enum,
+		).toContain("server_error");
 	});
 });
 
@@ -1728,6 +1758,58 @@ describe("device authorization resource indicators", async () => {
 			expect(payload.auth_time).toBeUndefined();
 			expect(payload.acr).toBeUndefined();
 			expect(payload.amr).toBeUndefined();
+		});
+
+		it.each([
+			["null", null],
+			["an array", []],
+			["a primitive", "claims"],
+		] as const)("rejects customAccessTokenClaims that returns %s", async (_label, invalidClaims) => {
+			const { auth: authWithInvalidClaims, signInWithTestUser: signIn } =
+				await getTestInstance(
+					{
+						plugins: [
+							jwt(),
+							deviceAuthorization({
+								allowedResources,
+								customAccessTokenClaims: () =>
+									invalidClaims as unknown as Record<string, unknown>,
+							}),
+						],
+					},
+					{ clientOptions: { plugins: [deviceAuthorizationClient()] } },
+				);
+			const { device_code, user_code } =
+				await authWithInvalidClaims.api.deviceCode({
+					body: {
+						client_id: "test-client",
+						resource: "https://api.example.com",
+					},
+				});
+			const { headers } = await signIn();
+			await authWithInvalidClaims.api.deviceVerify({
+				query: { user_code },
+				headers,
+			});
+			await authWithInvalidClaims.api.deviceApprove({
+				body: { userCode: user_code },
+				headers,
+			});
+
+			await expect(
+				authWithInvalidClaims.api.deviceToken({
+					body: {
+						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+						device_code,
+						client_id: "test-client",
+					},
+				}),
+			).rejects.toMatchObject({
+				body: {
+					error: "server_error",
+					error_description: "customAccessTokenClaims must return an object",
+				},
+			});
 		});
 
 		it("errors without consuming the code when a resource is requested but the jwt plugin is missing", async () => {
