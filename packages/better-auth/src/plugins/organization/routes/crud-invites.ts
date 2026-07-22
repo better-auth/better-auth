@@ -273,7 +273,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				ctx,
 			);
 
-			if (!canInvite) {
+			if (!canInvite.success) {
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION,
@@ -1048,7 +1048,7 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 				ctx,
 			);
 
-			if (!canCancel) {
+			if (!canCancel.success) {
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CANCEL_THIS_INVITATION,
