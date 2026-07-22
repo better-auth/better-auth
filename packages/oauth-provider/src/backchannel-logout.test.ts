@@ -1,9 +1,15 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
 } from "@better-auth/core/oauth2";
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import { toNodeHandler } from "better-auth/node";
@@ -21,6 +27,7 @@ import {
 	expect,
 	it,
 } from "vitest";
+import * as z from "zod";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 
@@ -74,18 +81,46 @@ async function startMockRp(
 type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 
 describe("oauth back-channel logout", async () => {
+	const database = {
+		account: [],
+		jwks: [],
+		oauthAccessToken: [],
+		oauthClient: [],
+		oauthClientAssertion: [],
+		oauthClientResource: [],
+		oauthConsent: [],
+		oauthRefreshToken: [],
+		oauthResource: [],
+		session: [],
+		user: [],
+		verification: [],
+	};
 	const port = 3010;
 	const baseUrl = `http://localhost:${port}`;
 	const state = "123";
 	const scopes = ["openid", "email", "profile", "offline_access"];
+	let shouldVetoSessionDeletion = false;
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,
+		database: memoryAdapter(database),
+		databaseHooks: {
+			session: {
+				delete: {
+					async before() {
+						if (!shouldVetoSessionDeletion) return;
+						shouldVetoSessionDeletion = false;
+						return false;
+					},
+				},
+			},
+		},
 		plugins: [
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
+				pairwiseSecret: "test-backchannel-pairwise-secret-32-chars",
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -93,6 +128,63 @@ describe("oauth back-channel logout", async () => {
 				scopes,
 			}),
 			jwt(),
+			{
+				id: "transactional-session-revocation-test",
+				endpoints: {
+					testTransactionalSessionRevocation: createAuthEndpoint(
+						"/test/transactional-session-revocation",
+						{
+							method: "POST",
+							body: z.object({
+								clientId: z.string().optional(),
+								rollback: z.boolean(),
+								sessionToken: z.string(),
+								transactionAccessTokenId: z.string().optional(),
+							}),
+						},
+						async (ctx) => {
+							const rollbackMarker = Symbol("rollback session revocation");
+							try {
+								await runWithTransaction(ctx.context.adapter, async () => {
+									if (ctx.body.clientId && ctx.body.transactionAccessTokenId) {
+										const activeSession =
+											await ctx.context.internalAdapter.findSession(
+												ctx.body.sessionToken,
+											);
+										if (!activeSession) throw new Error("Session not found");
+										const adapter = await getCurrentAdapter(
+											ctx.context.adapter,
+										);
+										await adapter.create({
+											model: "oauthAccessToken",
+											forceAllowId: true,
+											data: {
+												id: ctx.body.transactionAccessTokenId,
+												token: ctx.body.transactionAccessTokenId,
+												clientId: ctx.body.clientId,
+												sessionId: activeSession.session.id,
+												userId: activeSession.user.id,
+												scopes: ["openid"],
+												expiresAt: new Date(Date.now() + 60_000),
+												createdAt: new Date(),
+												revoked: null,
+											},
+										});
+									}
+									await ctx.context.internalAdapter.deleteSession(
+										ctx.body.sessionToken,
+									);
+									if (ctx.body.rollback) throw rollbackMarker;
+								});
+							} catch (error) {
+								if (error !== rollbackMarker) throw error;
+								return ctx.json({ committed: false });
+							}
+							return ctx.json({ committed: true });
+						},
+					),
+				},
+			},
 		],
 	});
 	let { headers } = await signInWithTestUser();
@@ -112,6 +204,7 @@ describe("oauth back-channel logout", async () => {
 		if (server) await server.close();
 	});
 	beforeEach(async () => {
+		shouldVetoSessionDeletion = false;
 		rp = await startMockRp();
 		const signed = await signInWithTestUser();
 		headers = signed.headers;
@@ -125,6 +218,7 @@ describe("oauth back-channel logout", async () => {
 			enable_end_session: boolean;
 			backchannel_logout_uri: string | undefined;
 			backchannel_logout_session_required: boolean;
+			subject_type: "pairwise" | "public";
 		}> = {},
 	) {
 		const response = await auth.api.adminCreateOAuthClient({
@@ -210,6 +304,49 @@ describe("oauth back-channel logout", async () => {
 		}
 	}
 
+	async function revokeSessionOverHTTP(input: {
+		clientId?: string;
+		rollback: boolean;
+		sessionToken: string;
+		transactionAccessTokenId?: string;
+	}) {
+		const response = await fetch(
+			`${baseUrl}/api/auth/test/transactional-session-revocation`,
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(input),
+			},
+		);
+		if (!response.ok) {
+			throw new Error(
+				`Transactional session revocation failed: ${await response.text()}`,
+			);
+		}
+		return (await response.json()) as { committed: boolean };
+	}
+
+	async function readClientTokenRevocation(clientId: string) {
+		const ctx = await auth.$context;
+		const [accessTokens, refreshTokens] = await Promise.all([
+			ctx.adapter.findMany<{ revoked?: Date | null }>({
+				model: "oauthAccessToken",
+				where: [{ field: "clientId", value: clientId }],
+			}),
+			ctx.adapter.findMany<{ revoked?: Date | null }>({
+				model: "oauthRefreshToken",
+				where: [{ field: "clientId", value: clientId }],
+			}),
+		]);
+		return { accessTokens, refreshTokens };
+	}
+
+	async function getSessionToken(requestHeaders: Headers) {
+		const session = await auth.api.getSession({ headers: requestHeaders });
+		if (!session) throw new Error("Expected an active test session");
+		return session.session.token;
+	}
+
 	it("dispatches a conformant logout token when the session is signed out", async () => {
 		const oauthClient = await registerClient();
 		const tokens = await issueTokens({ client: oauthClient });
@@ -249,6 +386,82 @@ describe("oauth back-channel logout", async () => {
 			Buffer.from(idTokenPayloadB64!, "base64url").toString("utf8"),
 		);
 		expect(payload.sid).toBe(idTokenPayload.sid);
+	});
+
+	it("dispatches logout only after a transactional session revocation commits", async () => {
+		const signedIn = await signInWithTestUser();
+		headers = signedIn.headers;
+		const oauthClient = await registerClient();
+		await issueTokens({ client: oauthClient });
+
+		const rolledBack = await revokeSessionOverHTTP({
+			rollback: true,
+			sessionToken: await getSessionToken(headers),
+		});
+		expect(rolledBack).toEqual({ committed: false });
+		await new Promise((resolve) => setTimeout(resolve, 200));
+		expect(rp.received).toHaveLength(0);
+		expect(await auth.api.getSession({ headers })).not.toBeNull();
+		const tokensAfterRollback = await readClientTokenRevocation(
+			oauthClient.client_id,
+		);
+		expect(tokensAfterRollback.accessTokens.length).toBeGreaterThan(0);
+		expect(tokensAfterRollback.refreshTokens.length).toBeGreaterThan(0);
+		for (const token of tokensAfterRollback.accessTokens) {
+			expect(token.revoked ?? null).toBeNull();
+		}
+		for (const token of tokensAfterRollback.refreshTokens) {
+			expect(token.revoked ?? null).toBeNull();
+		}
+
+		const committed = await revokeSessionOverHTTP({
+			clientId: oauthClient.client_id,
+			rollback: false,
+			sessionToken: await getSessionToken(headers),
+			transactionAccessTokenId: "transaction-only-access-token",
+		});
+		expect(committed).toEqual({ committed: true });
+		await waitForDispatches();
+		expect(rp.received).toHaveLength(1);
+		expect(await auth.api.getSession({ headers })).toBeNull();
+		const tokensAfterCommit = await readClientTokenRevocation(
+			oauthClient.client_id,
+		);
+		for (const token of tokensAfterCommit.accessTokens) {
+			expect(token.revoked).toBeInstanceOf(Date);
+		}
+		for (const token of tokensAfterCommit.refreshTokens) {
+			expect(token.revoked ?? null).toBeNull();
+		}
+		const transactionOnlyToken = await (await auth.$context).adapter.findOne<{
+			revoked?: Date | null;
+		}>({
+			model: "oauthAccessToken",
+			where: [{ field: "id", value: "transaction-only-access-token" }],
+		});
+		expect(transactionOnlyToken?.revoked).toBeInstanceOf(Date);
+	});
+
+	it("keeps the session and tokens active when a later hook vetoes deletion", async () => {
+		const signedIn = await signInWithTestUser();
+		headers = signedIn.headers;
+		const oauthClient = await registerClient();
+		await issueTokens({ client: oauthClient });
+		shouldVetoSessionDeletion = true;
+
+		const result = await revokeSessionOverHTTP({
+			rollback: false,
+			sessionToken: await getSessionToken(headers),
+		});
+		expect(result).toEqual({ committed: true });
+		await new Promise((resolve) => setTimeout(resolve, 200));
+
+		expect(await auth.api.getSession({ headers })).not.toBeNull();
+		expect(rp.received).toHaveLength(0);
+		const tokens = await readClientTokenRevocation(oauthClient.client_id);
+		for (const token of [...tokens.accessTokens, ...tokens.refreshTokens]) {
+			expect(token.revoked ?? null).toBeNull();
+		}
 	});
 
 	it("dispatches when RP-Initiated Logout tears down the session", async () => {
@@ -371,6 +584,35 @@ describe("oauth back-channel logout", async () => {
 		await waitForDispatches();
 		expect(rp.received).toHaveLength(1);
 	});
+
+	it("isolates a malformed pairwise client from revocation and healthy RP delivery", async () => {
+		const healthyClient = await registerClient();
+		const malformedClient = await registerClient({ subject_type: "pairwise" });
+		await issueTokens({ client: healthyClient });
+		await issueTokens({ client: malformedClient });
+
+		const ctx = await auth.$context;
+		await ctx.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: malformedClient.client_id }],
+			update: { redirectUris: [] },
+		});
+
+		await client.signOut({ fetchOptions: { headers } });
+		await waitForDispatches();
+
+		expect(rp.received).toHaveLength(1);
+		for (const clientId of [
+			healthyClient.client_id,
+			malformedClient.client_id,
+		]) {
+			const tokens = await readClientTokenRevocation(clientId);
+			expect(tokens.accessTokens.length).toBeGreaterThan(0);
+			for (const token of tokens.accessTokens) {
+				expect(token.revoked).toBeInstanceOf(Date);
+			}
+		}
+	});
 });
 
 describe("oauth back-channel logout (jwt plugin disabled)", async () => {
@@ -466,8 +708,8 @@ describe("oauth back-channel logout (jwt plugin disabled)", async () => {
 		expect(before.length).toBeGreaterThan(0);
 		for (const t of before) expect(t.revoked ?? null).toBeNull();
 
-		// Revocation runs inline in `session.delete.before`; with no jwt plugin
-		// there is no async delivery to wait for.
+		// With no JWT plugin, the post-delete phase revokes tokens without
+		// attempting Logout Token delivery.
 		await client.signOut({ fetchOptions: { headers } });
 
 		const after = await ctx.adapter.findMany<{ revoked?: Date | null }>({
