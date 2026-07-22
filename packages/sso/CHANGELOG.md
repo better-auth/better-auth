@@ -124,8 +124,6 @@
   Closes [#5604](https://github.com/better-auth/better-auth/issues/5604).
   Supersedes [#4992](https://github.com/better-auth/better-auth/issues/4992) and [#5443](https://github.com/better-auth/better-auth/issues/5443).
 
-# @better-auth/sso
-
 ## 1.6.24
 
 ### Patch Changes

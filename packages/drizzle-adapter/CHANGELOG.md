@@ -47,8 +47,6 @@
 
 ## 1.7.0-beta.4
 
-# @better-auth/drizzle-adapter
-
 ## 1.6.24
 
 ### Patch Changes
