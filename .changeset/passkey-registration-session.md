@@ -2,4 +2,4 @@
 "@better-auth/passkey": minor
 ---
 
-Add `createSession` to passkey registration so passkey-first onboarding can sign the user in immediately after a successful registration.
+Add the optional `createSession` setting to passkey registration. When enabled, successful registration signs the user in, sets the session cookie, and returns the session and user with the registered passkey.
