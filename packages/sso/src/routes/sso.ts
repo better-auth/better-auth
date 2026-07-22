@@ -67,6 +67,7 @@ import {
 	getSafeRedirectUrl,
 	processSAMLResponse,
 } from "./saml-pipeline";
+import { samlRedirectUrlSchema } from "./schemas";
 
 const BUILT_IN_ACCOUNT_PROVIDER_IDS = [
 	"credential",
@@ -305,12 +306,10 @@ const ssoProviderBodySchema = z.object({
 			callbackUrl: z.string({}).meta({
 				description: "The callback URL of the provider",
 			}),
-			idpInitiatedCallbackUrl: z
-				.string()
-				.url()
+			idpInitiatedCallbackUrl: samlRedirectUrlSchema
 				.meta({
 					description:
-						"Fallback URL for IdP-initiated SAML responses when RelayState does not contain a safe callback, including validation errors",
+						"Fallback absolute URL or same-origin relative path for IdP-initiated SAML responses when RelayState does not contain a safe callback, including validation errors",
 				})
 				.optional(),
 			audience: z.string().optional(),

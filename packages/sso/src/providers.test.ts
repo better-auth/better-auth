@@ -854,6 +854,9 @@ describe("SSO provider read endpoints", () => {
 			expect(updated.domainVerified).toBe(false);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
 		it("should perform partial update on SAML provider", async () => {
 			const { auth, getAuthHeaders, registerSAMLProvider } =
 				createTestAuth(false);
@@ -871,6 +874,7 @@ describe("SSO provider read endpoints", () => {
 					providerId: "my-saml-provider",
 					samlConfig: {
 						audience: "new-audience",
+						idpInitiatedCallbackUrl: "/dashboard",
 						wantAssertionsSigned: false,
 					},
 				},
@@ -878,6 +882,7 @@ describe("SSO provider read endpoints", () => {
 			});
 
 			expect(updated.samlConfig?.audience).toBe("new-audience");
+			expect(updated.samlConfig?.idpInitiatedCallbackUrl).toBe("/dashboard");
 			expect(updated.samlConfig?.wantAssertionsSigned).toBe(false);
 			expect(updated.samlConfig?.entryPoint).toBe(
 				"https://idp.example.com/sso",

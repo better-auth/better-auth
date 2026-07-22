@@ -227,6 +227,7 @@ function sanitizeProvider(
 			? {
 					entryPoint: samlConfig.entryPoint,
 					callbackUrl: samlConfig.callbackUrl,
+					idpInitiatedCallbackUrl: samlConfig.idpInitiatedCallbackUrl,
 					audience: samlConfig.audience,
 					wantAssertionsSigned: samlConfig.wantAssertionsSigned,
 					authnRequestsSigned: samlConfig.authnRequestsSigned,

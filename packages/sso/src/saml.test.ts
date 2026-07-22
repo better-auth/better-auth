@@ -3067,6 +3067,9 @@ describe("safeJsonParse", () => {
 });
 
 describe("SSO Provider Config Parsing", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10329
+	 */
 	it("returns parsed SAML config and avoids [object Object] in response", async () => {
 		const data = {
 			user: [] as any[],
@@ -3114,6 +3117,7 @@ describe("SSO Provider Config Parsing", () => {
 					entryPoint: "http://localhost:8081/sso",
 					cert: "test-cert",
 					callbackUrl: "http://localhost:3000/callback",
+					idpInitiatedCallbackUrl: "/dashboard",
 					spMetadata: {
 						entityID: "test-entity",
 					},
@@ -3126,6 +3130,7 @@ describe("SSO Provider Config Parsing", () => {
 		expect(typeof provider.samlConfig).toBe("object");
 		expect(provider.samlConfig?.entryPoint).toBe("http://localhost:8081/sso");
 		expect(provider.samlConfig?.cert).toBe("test-cert");
+		expect(provider.samlConfig?.idpInitiatedCallbackUrl).toBe("/dashboard");
 
 		const serialized = JSON.stringify(provider.samlConfig);
 		expect(serialized).not.toContain("[object Object]");
