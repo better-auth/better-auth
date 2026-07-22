@@ -24,7 +24,7 @@ export async function assignOrganizationFromProvider(
 	ctx: GenericEndpointContext,
 	options: AssignOrganizationFromProviderOptions,
 ): Promise<void> {
-	const { user, profile, provider, token, provisioningOptions } = options;
+	const { user, provider, provisioningOptions } = options;
 
 	if (!provider.organizationId) {
 		return;
@@ -53,25 +53,24 @@ export async function assignOrganizationFromProvider(
 		if (!shouldSyncRoleOnLogin(provisioningOptions)) {
 			return;
 		}
-		const role = await resolveOrganizationRole({
-			provisioningOptions,
-			user,
-			userInfo: profile.rawAttributes || {},
-			getRoleUserInfo: getLegacyRoleUserInfo(profile),
-			claims: profile.claims || profile.rawAttributes || {},
-			token,
-			provider,
-		});
+		const role = await resolveOrganizationRole(options);
 		if (existingMember.role === role) {
 			return;
 		}
-		if (
-			await wouldRemoveOnlyCreatorRole(ctx, {
-				member: existingMember,
-				organizationId: provider.organizationId,
-				role,
-			})
-		) {
+		const creatorRole =
+			ctx.context.getPlugin("organization")?.options?.creatorRole || "owner";
+		const removesCreatorRole =
+			roleIncludes(existingMember.role, creatorRole) &&
+			!roleIncludes(role, creatorRole);
+		if (removesCreatorRole) {
+			ctx.context.logger.warn(
+				"Skipped SSO organization role sync because automatic synchronization cannot remove a creator role",
+				{
+					memberId: existingMember.id,
+					organizationId: provider.organizationId,
+					providerId: provider.providerId,
+				},
+			);
 			return;
 		}
 		await ctx.context.adapter.update({
@@ -82,15 +81,7 @@ export async function assignOrganizationFromProvider(
 		return;
 	}
 
-	const role = await resolveOrganizationRole({
-		provisioningOptions,
-		user,
-		userInfo: profile.rawAttributes || {},
-		getRoleUserInfo: getLegacyRoleUserInfo(profile),
-		claims: profile.claims || profile.rawAttributes || {},
-		token,
-		provider,
-	});
+	const role = await resolveOrganizationRole(options);
 
 	await ctx.context.adapter.create({
 		model: "member",
@@ -183,14 +174,13 @@ export async function assignOrganizationByDomain(
 		return;
 	}
 
-	const role = await resolveOrganizationRole({
-		provisioningOptions,
-		user,
-		userInfo: {},
-		claims: {},
-		provider: ssoProvider,
-		useClaimsMapper: false,
-	});
+	const role = provisioningOptions?.getRole
+		? await provisioningOptions.getRole({
+				user,
+				userInfo: {},
+				provider: ssoProvider,
+			})
+		: provisioningOptions?.defaultRole || "member";
 
 	await ctx.context.adapter.create({
 		model: "member",
@@ -204,25 +194,23 @@ export async function assignOrganizationByDomain(
 }
 
 async function resolveOrganizationRole(
-	data: OrganizationRoleResolverData & {
-		provisioningOptions?: OrganizationProvisioningOptions;
-		useClaimsMapper?: boolean;
-		getRoleUserInfo?: Record<string, any>;
-	},
+	options: AssignOrganizationFromProviderOptions,
 ) {
-	const {
-		provisioningOptions,
-		useClaimsMapper = true,
-		getRoleUserInfo,
-		...resolverData
-	} = data;
-	if (useClaimsMapper && provisioningOptions?.mapClaimsToRoles) {
+	const { user, profile, provider, token, provisioningOptions } = options;
+	const resolverData: OrganizationRoleResolverData = {
+		user,
+		userInfo: profile.rawAttributes || {},
+		claims: profile.claims || profile.rawAttributes || {},
+		token,
+		provider,
+	};
+	if (provisioningOptions?.mapClaimsToRoles) {
 		return provisioningOptions.mapClaimsToRoles(resolverData);
 	}
 	if (provisioningOptions?.getRole) {
 		return provisioningOptions.getRole({
 			...resolverData,
-			userInfo: getRoleUserInfo ?? resolverData.userInfo,
+			userInfo: getLegacyRoleUserInfo(profile),
 		});
 	}
 	return provisioningOptions?.defaultRole || "member";
@@ -230,12 +218,9 @@ async function resolveOrganizationRole(
 
 function getLegacyRoleUserInfo(profile: NormalizedSSOProfile) {
 	if (profile.providerType === "saml") {
-		return (profile.claims || profile.rawAttributes || {}) as Record<
-			string,
-			any
-		>;
+		return profile.claims || profile.rawAttributes || {};
 	}
-	return (profile.rawAttributes || {}) as Record<string, any>;
+	return profile.rawAttributes || {};
 }
 
 function shouldSyncRoleOnLogin(
@@ -252,33 +237,4 @@ function roleIncludes(role: string, targetRole: string) {
 		.split(",")
 		.map((entry) => entry.trim())
 		.includes(targetRole);
-}
-
-async function wouldRemoveOnlyCreatorRole(
-	ctx: GenericEndpointContext,
-	data: {
-		member: { id: string; role: string };
-		organizationId: string;
-		role: string;
-	},
-) {
-	const creatorRole =
-		ctx.context.getPlugin("organization")?.options?.creatorRole || "owner";
-	if (
-		!roleIncludes(data.member.role, creatorRole) ||
-		roleIncludes(data.role, creatorRole)
-	) {
-		return false;
-	}
-	const members = await ctx.context.adapter.findMany<{
-		id: string;
-		role: string;
-	}>({
-		model: "member",
-		where: [{ field: "organizationId", value: data.organizationId }],
-	});
-	return !members.some(
-		(member) =>
-			member.id !== data.member.id && roleIncludes(member.role, creatorRole),
-	);
 }

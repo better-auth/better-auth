@@ -81,6 +81,7 @@ export interface OrganizationProvisioningOptions {
 	) => Awaitable<OrganizationProvisioningRole>;
 	/**
 	 * Update an existing organization member's role on every SSO login.
+	 * Automatic synchronization never removes the organization creator role.
 	 *
 	 * Defaults to `true` when `mapClaimsToRoles` is configured, otherwise `false`.
 	 */

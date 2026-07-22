@@ -826,6 +826,38 @@ const auth = betterAuth({
 });
 ```
 
+#### Map Identity Provider Claims to Roles
+
+Use `mapClaimsToRoles` when the identity provider carries the authoritative organization role. For OIDC providers, `claims` contains the userinfo response when a userinfo endpoint is configured; otherwise, it contains the verified ID token payload. For SAML providers, `claims` contains the assertion attributes.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
+const auth = betterAuth({
+    plugins: [
+        sso({
+            organizationProvisioning: {
+                defaultRole: "member",
+                mapClaimsToRoles: ({ claims }) => {
+                    const groups = claims.groups;
+                    return Array.isArray(groups) &&
+                        groups.includes("engineering-admins")
+                        ? "admin"
+                        : "member";
+                },
+            },
+        }),
+    ],
+});
+```
+
+The mapper runs before Better Auth writes the session cookie. It assigns roles to new provider-linked members and synchronizes existing provider-linked members on every SSO login, so manual role changes may be overwritten. Set `syncRoleOnLogin: false` to map only new memberships. Domain-based organization assignment does not call `mapClaimsToRoles` because it has no SSO claims.
+
+Automatic SSO synchronization never removes an organization's creator role. Better Auth skips the update and logs a warning with the organization, member, and provider IDs; remove the creator role through the organization member-role API when that change is intentional.
+
+Errors from `mapClaimsToRoles` stop the SSO callback, and Better Auth does not write a session cookie. Handle recoverable errors inside the mapper when sign-in should continue.
+
 #### Linking SSO Providers to Organizations
 
 When registering an SSO provider, you can link it to a specific organization:
@@ -1712,14 +1744,21 @@ export const ssoOptionsType = {
 				default: false,
 			},
 			defaultRole: {
-				description: "The default role for new users.",
+				description: "The default role for new organization members.",
 				type: "string",
-				enum: ["member", "admin"],
 				default: "member",
 			},
 			getRole: {
-				description: "A custom function to determine the role for new users.",
+				description: "A custom function to determine the role for new organization members. Set syncRoleOnLogin to true to use it for existing provider-linked members.",
 				type: "function",
+			},
+			mapClaimsToRoles: {
+				description: "Maps OIDC claims or SAML attributes to an organization role. Existing provider-linked members are synchronized by default.",
+				type: "function",
+			},
+			syncRoleOnLogin: {
+				description: "Synchronize existing provider-linked member roles during SSO login without removing creator roles. Defaults to true when mapClaimsToRoles is configured and false otherwise.",
+				type: "boolean",
 			},
 		},
 	},

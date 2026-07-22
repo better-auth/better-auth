@@ -2,7 +2,7 @@ import type { GenericEndpointContext, User } from "better-auth";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { organization } from "better-auth/plugins";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { sso } from "..";
 import {
 	assignOrganizationByDomain,
@@ -462,7 +462,7 @@ describe("organization assignment", () => {
 			profile: {
 				providerType: "oidc",
 				providerId: provider.providerId,
-				accountId: "idp-user-1",
+				providerAccountId: "idp-user-1",
 				email: user.email,
 				emailVerified: true,
 				rawAttributes: { email: user.email },
@@ -505,7 +505,7 @@ describe("organization assignment", () => {
 			groups: ["engineering-admins"],
 			"urn:example:email": user.email,
 		};
-		let resolvedUserInfo: Record<string, any> | undefined;
+		let resolvedUserInfo: Record<string, unknown> | undefined;
 		let resolvedClaims: Record<string, unknown> | undefined;
 
 		const ctx = (await createContext()) as GenericEndpointContext;
@@ -515,7 +515,7 @@ describe("organization assignment", () => {
 			profile: {
 				providerType: "saml",
 				providerId: provider.providerId,
-				accountId: "idp-user-1",
+				providerAccountId: "idp-user-1",
 				email: user.email,
 				emailVerified: true,
 				rawAttributes: normalizedUserInfo,
@@ -554,7 +554,7 @@ describe("organization assignment", () => {
 			groups: ["engineering-admins"],
 			"urn:example:email": user.email,
 		};
-		let resolvedUserInfo: Record<string, any> | undefined;
+		let resolvedUserInfo: Record<string, unknown> | undefined;
 
 		const ctx = (await createContext()) as GenericEndpointContext;
 		await assignOrganizationFromProvider(ctx, {
@@ -563,7 +563,7 @@ describe("organization assignment", () => {
 			profile: {
 				providerType: "saml",
 				providerId: provider.providerId,
-				accountId: "idp-user-1",
+				providerAccountId: "idp-user-1",
 				email: user.email,
 				emailVerified: true,
 				rawAttributes: normalizedUserInfo,
@@ -607,7 +607,7 @@ describe("organization assignment", () => {
 				profile: {
 					providerType: "oidc",
 					providerId: provider.providerId,
-					accountId: "idp-user-1",
+					providerAccountId: "idp-user-1",
 					email: user.email,
 					emailVerified: true,
 					rawAttributes: { email: user.email },
@@ -651,7 +651,7 @@ describe("organization assignment", () => {
 			profile: {
 				providerType: "oidc",
 				providerId: provider.providerId,
-				accountId: "idp-user-1",
+				providerAccountId: "idp-user-1",
 				email: user.email,
 				emailVerified: true,
 				rawAttributes: { email: user.email },
@@ -693,7 +693,7 @@ describe("organization assignment", () => {
 			profile: {
 				providerType: "oidc",
 				providerId: provider.providerId,
-				accountId: "idp-user-1",
+				providerAccountId: "idp-user-1",
 				email: user.email,
 				emailVerified: true,
 				rawAttributes: { email: user.email },
@@ -740,7 +740,7 @@ describe("organization assignment", () => {
 			profile: {
 				providerType: "oidc",
 				providerId: provider.providerId,
-				accountId: "idp-user-1",
+				providerAccountId: "idp-user-1",
 				email: user.email,
 				emailVerified: true,
 				rawAttributes: { email: user.email },
@@ -783,7 +783,7 @@ describe("organization assignment", () => {
 			profile: {
 				providerType: "saml",
 				providerId: provider.providerId,
-				accountId: "idp-user-1",
+				providerAccountId: "idp-user-1",
 				email: user.email,
 				emailVerified: true,
 				rawAttributes: { email: user.email },
@@ -806,7 +806,7 @@ describe("organization assignment", () => {
 		expect(members[0]?.role).toBe("admin");
 	});
 
-	it("should not remove the only creator role during provider role sync", async () => {
+	it("should not remove a creator role during provider role sync", async () => {
 		const { data, createContext } = createTestContext();
 
 		const org = createOrg();
@@ -826,13 +826,14 @@ describe("organization assignment", () => {
 		});
 
 		const ctx = (await createContext()) as GenericEndpointContext;
+		const warn = vi.spyOn(ctx.context.logger, "warn");
 		await assignOrganizationFromProvider(ctx, {
 			user,
 			provider,
 			profile: {
 				providerType: "saml",
 				providerId: provider.providerId,
-				accountId: "idp-user-1",
+				providerAccountId: "idp-user-1",
 				email: user.email,
 				emailVerified: true,
 				rawAttributes: { email: user.email },
@@ -846,9 +847,17 @@ describe("organization assignment", () => {
 		const members = data.member.filter((m) => m.userId === user.id);
 		expect(members).toHaveLength(1);
 		expect(members[0]?.role).toBe("owner");
+		expect(warn).toHaveBeenCalledWith(
+			"Skipped SSO organization role sync because automatic synchronization cannot remove a creator role",
+			{
+				memberId: "member-1",
+				organizationId: org.id,
+				providerId: provider.providerId,
+			},
+		);
 	});
 
-	it("should update a creator role when another creator remains", async () => {
+	it("should not remove a creator role when another creator remains", async () => {
 		const { data, createContext } = createTestContext();
 
 		const org = createOrg();
@@ -888,7 +897,7 @@ describe("organization assignment", () => {
 			profile: {
 				providerType: "saml",
 				providerId: provider.providerId,
-				accountId: "idp-user-1",
+				providerAccountId: "idp-user-1",
 				email: user.email,
 				emailVerified: true,
 				rawAttributes: { email: user.email },
@@ -901,7 +910,7 @@ describe("organization assignment", () => {
 
 		const member = data.member.find((m) => m.id === "member-1");
 		const otherMember = data.member.find((m) => m.id === "member-2");
-		expect(member?.role).toBe("member");
+		expect(member?.role).toBe("owner");
 		expect(otherMember?.role).toBe("admin,owner");
 	});
 });
