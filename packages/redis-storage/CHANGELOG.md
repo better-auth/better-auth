@@ -1,5 +1,7 @@
 # @better-auth/redis-storage
 
+## 1.7.0-rc.2
+
 ## 1.7.0-rc.1
 
 ## 1.7.0-rc.0
