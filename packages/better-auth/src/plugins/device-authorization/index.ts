@@ -106,7 +106,11 @@ export const deviceAuthorizationOptionsSchema = z.object({
 		),
 	onDeviceAuthRequest: z
 		.custom<
-			(clientId: string, scope: string | undefined) => void | Promise<void>
+			(
+				clientId: string,
+				scope: string | undefined,
+				resource?: string | string[],
+			) => void | Promise<void>
 		>((val) => typeof val === "function", {
 			message:
 				"onDeviceAuthRequest must be a function that returns void or a promise that resolves to void.",

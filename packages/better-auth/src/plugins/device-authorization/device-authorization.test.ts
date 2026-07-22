@@ -137,7 +137,7 @@ describe("client validation", async () => {
 });
 
 describe("device authorization flow", async () => {
-	const { auth, signInWithTestUser, db } = await getTestInstance(
+	const { auth, client, signInWithTestUser, db } = await getTestInstance(
 		{
 			plugins: [
 				deviceAuthorization({
@@ -185,6 +185,35 @@ describe("device authorization flow", async () => {
 
 			expect(response.device_code).toBeDefined();
 			expect(response.user_code).toBeDefined();
+		});
+
+		it("should preserve repeated resources from a form request", async () => {
+			const form = new URLSearchParams({
+				client_id: "test-client",
+				scope: "read",
+			});
+			form.append("resource", "https://api.example.com");
+			form.append("resource", "https://files.example.com");
+
+			const created = await client.$fetch<Record<string, unknown>>(
+				"/device/code",
+				{
+					method: "POST",
+					body: form,
+					headers: {
+						"content-type": "application/x-www-form-urlencoded",
+					},
+				},
+			);
+			expect(created.error).toBeNull();
+
+			const verification = await auth.api.deviceVerify({
+				query: { user_code: created.data!.user_code as string },
+			});
+			expect(verification.resource).toEqual([
+				"https://api.example.com",
+				"https://files.example.com",
+			]);
 		});
 	});
 
@@ -268,6 +297,8 @@ describe("device authorization flow", async () => {
 			const { user_code } = await auth.api.deviceCode({
 				body: {
 					client_id: "test-client",
+					scope: "read write",
+					resource: ["https://api.example.com", "https://files.example.com"],
 				},
 			});
 
@@ -278,6 +309,12 @@ describe("device authorization flow", async () => {
 			if (!("error" in response)) {
 				expect(response.user_code).toBe(user_code);
 				expect(response.status).toBe("pending");
+				expect(response.client_id).toBe("test-client");
+				expect(response.scope).toBe("read write");
+				expect(response.resource).toEqual([
+					"https://api.example.com",
+					"https://files.example.com",
+				]);
 			}
 		});
 

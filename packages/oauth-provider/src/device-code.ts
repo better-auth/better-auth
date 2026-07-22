@@ -3,13 +3,18 @@ import { BetterAuthError } from "@better-auth/core/error";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import type { BetterAuthPlugin } from "better-auth/types";
 import { extendOAuthProvider } from "./extensions";
+import { resolveResourcePolicy } from "./resources";
+import { getOAuthProviderApi } from "./token";
 import type {
 	OAuthExtensionGrantHandlerInput,
-	OAuthOptions,
 	OAuthTokenResponse,
-	Scope,
 } from "./types";
-import { getClient, toResourceList } from "./utils";
+import {
+	getClient,
+	getOAuthProviderPlugin,
+	toResourceList,
+	validateClientScopes,
+} from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
 /**
@@ -49,6 +54,7 @@ interface DeviceCodeRecord {
 	pollingInterval?: number | null;
 	clientId?: string | null;
 	scope?: string | null;
+	resource?: string | null;
 }
 
 export interface DeviceCodeGrantOptions {
@@ -69,6 +75,41 @@ function tokenError(
 		error,
 		error_description: errorDescription,
 	});
+}
+
+function parseStoredResource(
+	resource: string | null | undefined,
+): string | string[] | undefined {
+	if (!resource) return undefined;
+	if (!resource.startsWith("[")) return resource;
+	try {
+		const parsed: unknown = JSON.parse(resource);
+		if (
+			Array.isArray(parsed) &&
+			parsed.every((value): value is string => typeof value === "string")
+		) {
+			return parsed;
+		}
+	} catch {
+		// Treat legacy/unrecognized stored values as a single resource string.
+	}
+	return resource;
+}
+
+async function extractFormResources(
+	request: Request | undefined,
+): Promise<string[] | undefined> {
+	const contentType = request?.headers.get("content-type")?.toLowerCase() ?? "";
+	if (!request || !contentType.includes("application/x-www-form-urlencoded")) {
+		return undefined;
+	}
+	try {
+		const params = new URLSearchParams(await request.text());
+		if (!params.has("resource")) return undefined;
+		return params.getAll("resource").filter(Boolean);
+	} catch {
+		return undefined;
+	}
 }
 
 /**
@@ -114,20 +155,21 @@ async function handleDeviceCodeGrant(
 		tokenError("BAD_REQUEST", "invalid_grant", "Client ID mismatch");
 	}
 
-	// Authenticate the polling client against the scopes captured at the device
-	// authorization request. Public clients (the common device-flow shape) need
-	// only client_id; confidential clients still authenticate. The grant type is
-	// bound by the dispatcher, so a client not registered for the device-code
-	// grant is rejected here as unauthorized_client.
+	// Authenticate before validating the recorded scopes. Public clients (the
+	// common device-flow shape) need only client_id; confidential clients still
+	// authenticate. The grant type is bound by the dispatcher, so a client not
+	// registered for the device-code grant is rejected here as unauthorized_client.
+	// Scope validation is intentionally deferred until ownership is confirmed so
+	// no authentication method can probe another client's requested scopes.
 	const scopes = record.scope ? record.scope.split(" ") : [];
 	const { client, confirmation } = await provider.authenticateClient({
-		scopes,
 		requireCredentials: false,
 	});
 
 	if (record.clientId && record.clientId !== client.clientId) {
 		tokenError("BAD_REQUEST", "invalid_grant", "Client ID mismatch");
 	}
+	validateClientScopes(client, scopes);
 
 	// RFC 8628 §3.5 slow_down: reject polls faster than the advertised interval.
 	if (record.lastPolledAt && record.pollingInterval) {
@@ -171,6 +213,31 @@ async function handleDeviceCodeGrant(
 	}
 
 	if (record.status === "approved" && record.userId) {
+		const requestedResources = toResourceList(body?.resource);
+		const boundResources = toResourceList(parseStoredResource(record.resource));
+		if (requestedResources) {
+			const boundResourceSet = new Set(boundResources);
+			if (
+				!boundResources ||
+				requestedResources.some((resource) => !boundResourceSet.has(resource))
+			) {
+				tokenError(
+					"BAD_REQUEST",
+					"invalid_target",
+					"Requested resource was not authorized by the user",
+				);
+			}
+		}
+		const resources = requestedResources ?? boundResources;
+		// Validate the bound resource policy before the approved code is consumed.
+		// Token issuance validates it again while applying its TTL, signing, and
+		// claims policy, but an invalid request must not burn a one-time device code.
+		await resolveResourcePolicy(ctx, input.opts, {
+			resource: resources,
+			clientId: client.clientId,
+			requestedScopes: scopes,
+		});
+
 		// Atomically claim the approved code as the single race gate, mirroring the
 		// device-authorization session flow: concurrent polls contend on this
 		// delete-and-return and only the caller that removes the row issues tokens.
@@ -195,7 +262,6 @@ async function handleDeviceCodeGrant(
 			);
 		}
 
-		const resources = toResourceList(body?.resource);
 		return provider.issueTokens({
 			client,
 			scopes: claimed.scope ? claimed.scope.split(" ") : [],
@@ -245,10 +311,6 @@ export function deviceCodeGrant(
 ): BetterAuthPlugin {
 	const deviceAuthorizationPath =
 		options.deviceAuthorizationPath ?? DEFAULT_DEVICE_AUTHORIZATION_PATH;
-	// Captured at init (the oauth-provider options object is mutated in place by
-	// extendOAuthProvider, so the reference stays current) and read by the
-	// /device/token guard to resolve registered OAuth clients.
-	let oauthOptions: OAuthOptions<Scope[]> | undefined;
 
 	return {
 		id: "oauth-provider-device-code",
@@ -265,7 +327,6 @@ export function deviceCodeGrant(
 					"deviceCodeGrant requires the oauth-provider plugin.",
 				);
 			}
-			oauthOptions = provider.options as OAuthOptions<Scope[]>;
 			extendOAuthProvider(ctx, {
 				grants: {
 					[DEVICE_CODE_GRANT_TYPE]: handleDeviceCodeGrant,
@@ -279,19 +340,70 @@ export function deviceCodeGrant(
 			before: [
 				{
 					matcher(ctx) {
+						return ctx.path === deviceAuthorizationPath;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const body = ctx.body as
+							| {
+									client_id?: string;
+									scope?: string;
+									resource?: string | string[];
+							  }
+							| undefined;
+						if (!body?.client_id) return;
+						const formResources = await extractFormResources(ctx.request);
+						if (formResources) {
+							body.resource =
+								formResources.length === 1 ? formResources[0] : formResources;
+						}
+						const provider = getOAuthProviderPlugin(ctx.context);
+						if (!provider) return;
+						const endpointCtx = ctx as GenericEndpointContext;
+						const oauthClient = await getClient(
+							endpointCtx,
+							provider.options,
+							body.client_id,
+						);
+						// Unknown ids belong to the device-authorization plugin's existing
+						// first-party flow. Registered OAuth clients are authenticated and
+						// authorized before their request is shown to the user.
+						if (!oauthClient) return;
+						const scopes = body.scope?.split(" ").filter(Boolean) ?? [];
+						const api = getOAuthProviderApi(
+							endpointCtx,
+							provider.options,
+							DEVICE_CODE_GRANT_TYPE,
+						);
+						const authenticated = await api.authenticateClient({
+							scopes,
+							requireCredentials: false,
+						});
+						if (authenticated.clientId !== body.client_id) {
+							tokenError("BAD_REQUEST", "invalid_grant", "Client ID mismatch");
+						}
+						await resolveResourcePolicy(endpointCtx, provider.options, {
+							resource: body.resource,
+							clientId: authenticated.clientId,
+							requestedScopes: scopes,
+						});
+					}),
+				},
+				{
+					matcher(ctx) {
 						return ctx.path === DEVICE_TOKEN_PATH;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						if (!oauthOptions) return;
 						const clientId = (ctx.body as { client_id?: string } | undefined)
 							?.client_id;
 						if (!clientId) return;
+						const provider = getOAuthProviderPlugin(ctx.context);
+						if (!provider) return;
 						// A device code minted for a registered OAuth client must yield an
 						// OAuth token at /oauth2/token, never a first-party session token
 						// here. Public/first-party client ids resolve to null and pass.
 						const oauthClient = await getClient(
 							ctx as GenericEndpointContext,
-							oauthOptions,
+							provider.options,
 							clientId,
 						);
 						if (oauthClient) {

@@ -122,9 +122,9 @@ This registers the `urn:ietf:params:oauth:grant-type:device_code` grant on the p
 
 The flow for a registered OAuth client:
 
-1. The client requests codes at `/device/code` (the advertised `device_authorization_endpoint`).
-2. The user approves at the verification URL, exactly as with the first-party flow.
-3. The client polls **`/oauth2/token`** (not `/device/token`) with `grant_type=urn:ietf:params:oauth:grant-type:device_code`, `device_code`, and `client_id`. It receives an OAuth token set governed by the provider's scope, resource, and token policy.
+1. The client requests codes at `/device/code` (the advertised `device_authorization_endpoint`). The provider validates registered clients, scopes, and resource indicators before creating the authorization request.
+2. The user approves at the verification URL. The `GET /device` response includes `client_id`, `scope`, and `resource` so the approval page can show exactly what is requesting access.
+3. The client polls **`/oauth2/token`** (not `/device/token`) with `grant_type=urn:ietf:params:oauth:grant-type:device_code`, `device_code`, and `client_id`. A `resource` parameter may be omitted to use the approved resource set, or may request a subset; it cannot add a resource after approval.
 
 ```ts title="register the client with the device-code grant"
 await auth.api.adminCreateOAuthClient({
@@ -159,6 +159,10 @@ To initiate device authorization, call `device.code` with the client ID:
        * Space-separated list of requested scopes (optional)
        */
       scope?: string;
+      /**
+       * RFC 8707 resource indicator(s) to bind to this request (optional)
+       */
+      resource?: string | string[];
       /**
        * The user ID to which the device code should be pre-bound.
        * When set, only that user can approve or deny the code.
@@ -374,6 +378,18 @@ export default function DeviceApprovalPage() {
   const searchParams = useSearchParams();
   const userCode = searchParams.get("user_code");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [request, setRequest] = useState<{
+    client_id?: string;
+    scope?: string;
+    resource?: string | string[];
+  } | null>(null);
+
+  useEffect(() => {
+    if (!user || !userCode) return;
+    authClient.device({ query: { user_code: userCode } }).then(({ data }) => {
+      setRequest(data);
+    });
+  }, [user, userCode]);
   
   const handleApprove = async () => {
     setIsProcessing(true);
@@ -414,7 +430,13 @@ export default function DeviceApprovalPage() {
   return (
     <div>
       <h2>Device Authorization Request</h2>
-      <p>A device is requesting access to your account.</p>
+      <p>Client: {request?.client_id}</p>
+      <p>Scopes: {request?.scope || "None"}</p>
+      <p>
+        Resources: {Array.isArray(request?.resource)
+          ? request.resource.join(", ")
+          : request?.resource || "None"}
+      </p>
       <p>Code: {userCode}</p>
       
       <button onClick={handleApprove} disabled={isProcessing}>
@@ -442,9 +464,9 @@ deviceAuthorization({
     return client && client.allowDeviceFlow;
   },
   
-  onDeviceAuthRequest: async (clientId, scope) => {
+  onDeviceAuthRequest: async (clientId, scope, resource) => {
     // Log device authorization requests
-    await logDeviceAuthRequest(clientId, scope);
+    await logDeviceAuthRequest(clientId, scope, resource);
   },
 })
 ```
@@ -648,7 +670,7 @@ authenticateCLI().catch((err) => {
 
 **validateClient**: Function to validate client IDs. Takes a clientId and returns boolean or `Promise<boolean>`.
 
-**onDeviceAuthRequest**: Hook called when device authorization is requested. Takes clientId and optional scope.
+**onDeviceAuthRequest**: Hook called when device authorization is requested. Takes clientId, optional scope, and optional resource indicator(s).
 
 ### Client
 
@@ -707,6 +729,12 @@ export const deviceCodeTableFields = [
 		name: "scope",
 		type: "string",
 		description: "Requested OAuth scopes",
+		isOptional: true,
+	},
+	{
+		name: "resource",
+		type: "string",
+		description: "Requested resource indicator or serialized resource list",
 		isOptional: true,
 	},
 	{
