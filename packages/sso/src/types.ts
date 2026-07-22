@@ -318,7 +318,13 @@ export interface SSOUserResolutionContext {
 
 export interface SSOOptions {
 	/**
-	 * Resolve a verified OIDC issuer and subject to a Better Auth user.
+	 * Resolve a verified provider identity to a Better Auth user.
+	 *
+	 * Currently invoked for OIDC callbacks only.
+	 *
+	 * TODO: Invoke this resolver for SAML callbacks after normalizing the verified
+	 * IdP entity ID as `accountKey.issuer` and the signed NameID as
+	 * `accountKey.providerAccountId`.
 	 *
 	 * `accountKey` is derived from the validated ID Token. Profile fields and raw
 	 * claims are protocol-accepted provider data and may require application-level
