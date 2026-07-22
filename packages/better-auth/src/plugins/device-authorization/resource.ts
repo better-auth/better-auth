@@ -24,9 +24,35 @@ const RESERVED_CLAIMS = new Set([
 	"client_id",
 	"azp",
 	"scope",
+	"auth_time",
+	"acr",
+	"amr",
 	"typ",
 	"cnf",
 ]);
+
+function stripReservedClaims(
+	ctx: GenericEndpointContext,
+	claims: Record<string, unknown>,
+): Record<string, unknown> {
+	const stripped: string[] = [];
+	const safe: Record<string, unknown> = {};
+	for (const [claim, value] of Object.entries(claims)) {
+		if (RESERVED_CLAIMS.has(claim)) {
+			stripped.push(claim);
+			continue;
+		}
+		safe[claim] = value;
+	}
+	if (stripped.length > 0) {
+		ctx.context.logger.warn(
+			`device-authorization: stripped reserved access-token claim name(s): ${stripped.join(
+				", ",
+			)}. The authorization server owns these claim values.`,
+		);
+	}
+	return safe;
+}
 
 /**
  * Normalize an RFC 8707 `resource` value (string or repeated string) into a
@@ -159,10 +185,37 @@ export function parseStoredResource(
 }
 
 /**
+ * Recover repeated RFC 8707 `resource` values from a form body. Better Call's
+ * parsed body keeps only the final value for repeated form keys, so both device
+ * endpoints clone and re-read the request before resolving the audience.
+ */
+export async function extractRepeatedResourceFromForm(
+	request: Request,
+): Promise<string[] | undefined> {
+	const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+	if (!contentType.includes("application/x-www-form-urlencoded")) {
+		return undefined;
+	}
+
+	let text: string;
+	try {
+		text = await request.text();
+	} catch {
+		return undefined;
+	}
+	if (!text) return undefined;
+
+	const params = new URLSearchParams(text);
+	if (!params.has("resource")) return undefined;
+	return params.getAll("resource").filter((resource) => resource.length > 0);
+}
+
+/**
  * Resolve the `jwt` plugin's options, throwing `server_error` if the plugin is
- * not registered (it is required to sign JWT access tokens and to expose the
- * `/jwks` verification endpoint). Call this before consuming the device code so
- * a misconfigured server does not burn the user's approval.
+ * not registered. The plugin supplies the signer and publishes verification
+ * keys through its local or remote JWKS configuration. Call this before
+ * consuming the device code so a misconfigured server does not burn the user's
+ * approval.
  */
 export function requireJwtOptions(
 	ctx: GenericEndpointContext,
@@ -183,8 +236,8 @@ export function requireJwtOptions(
 
 /**
  * Mint an RFC 9068 JWT access token audience-restricted to `audience`.
- * Requires the `jwt` plugin (for JWKS signing + the /jwks verification
- * endpoint). Returns the compact JWT and its lifetime in seconds.
+ * Requires the `jwt` plugin for signing and JWKS publication. Returns the
+ * compact JWT and its lifetime in seconds.
  */
 export async function createDeviceJwtAccessToken(params: {
 	ctx: GenericEndpointContext;
@@ -211,11 +264,7 @@ export async function createDeviceJwtAccessToken(params: {
 		: {};
 	// Strip reserved/registered claims so the hook can never forge protocol
 	// claims (e.g. `iss`, `sub`, `aud`); those are set authoritatively below.
-	const customClaims = Object.fromEntries(
-		Object.entries(rawCustomClaims).filter(
-			([claim]) => !RESERVED_CLAIMS.has(claim),
-		),
-	);
+	const customClaims = stripReservedClaims(ctx, rawCustomClaims);
 
 	const token = await signJWT(ctx, {
 		options: jwtOptions,

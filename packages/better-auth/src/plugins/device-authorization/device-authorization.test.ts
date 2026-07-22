@@ -1420,6 +1420,58 @@ describe("device authorization resource indicators", async () => {
 			expect(record?.resource).toBe("https://api.example.com");
 		});
 
+		it("preserves repeated resource parameters from a form-encoded request", async () => {
+			const body = new URLSearchParams({ client_id: "test-client" });
+			body.append("resource", "https://api.example.com");
+			body.append("resource", "https://api.other.com");
+
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/device/code", {
+					method: "POST",
+					headers: { "content-type": "application/x-www-form-urlencoded" },
+					body,
+				}),
+			);
+			expect(response.status).toBe(200);
+			const result = (await response.json()) as { device_code: string };
+			const record = await db.findOne<{ resource?: string }>({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: result.device_code }],
+			});
+			expect(record?.resource).toBe(
+				JSON.stringify(["https://api.example.com", "https://api.other.com"]),
+			);
+		});
+
+		it("returns request details needed for informed approval", async () => {
+			const { user_code } = await auth.api.deviceCode({
+				body: {
+					client_id: "test-client",
+					scope: "read write",
+					resource: ["https://api.example.com", "https://api.other.com"],
+				},
+			});
+			const unauthenticatedResponse = await auth.api.deviceVerify({
+				query: { user_code },
+			});
+			expect(unauthenticatedResponse).not.toHaveProperty("client_id");
+			expect(unauthenticatedResponse).not.toHaveProperty("scope");
+			expect(unauthenticatedResponse).not.toHaveProperty("resource");
+
+			const { headers } = await signInWithTestUser();
+
+			const response = await auth.api.deviceVerify({
+				query: { user_code },
+				headers,
+			});
+
+			expect(response).toMatchObject({
+				client_id: "test-client",
+				scope: "read write",
+				resource: ["https://api.example.com", "https://api.other.com"],
+			});
+		});
+
 		it("rejects a resource not in allowedResources", async () => {
 			await expect(
 				auth.api.deviceCode({
@@ -1587,6 +1639,39 @@ describe("device authorization resource indicators", async () => {
 			]);
 		});
 
+		it("preserves repeated resource parameters at the form-encoded token endpoint", async () => {
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: {
+					client_id: "test-client",
+					resource: ["https://api.example.com", "https://api.other.com"],
+				},
+			});
+			await approve(user_code);
+
+			const body = new URLSearchParams({
+				grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+				device_code,
+				client_id: "test-client",
+			});
+			body.append("resource", "https://api.example.com");
+			body.append("resource", "https://api.other.com");
+
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/device/token", {
+					method: "POST",
+					headers: { "content-type": "application/x-www-form-urlencoded" },
+					body,
+				}),
+			);
+			expect(response.status).toBe(200);
+			const result = (await response.json()) as { access_token: string };
+			const { payload } = await decode(result.access_token);
+			expect(payload.aud).toEqual([
+				"https://api.example.com",
+				"https://api.other.com",
+			]);
+		});
+
 		it("reflects customAccessTokenClaims in the JWT", async () => {
 			const { auth: authWithClaims, signInWithTestUser: signIn } =
 				await getTestInstance(
@@ -1601,6 +1686,9 @@ describe("device authorization resource indicators", async () => {
 									iss: "https://evil.example.com",
 									sub: "evil-user",
 									aud: "https://evil.example.com",
+									auth_time: 0,
+									acr: "evil-acr",
+									amr: ["evil-amr"],
 								}),
 							}),
 						],
@@ -1637,6 +1725,9 @@ describe("device authorization resource indicators", async () => {
 			expect(payload.sub).not.toBe("evil-user");
 			expect(payload.aud).toBe("https://api.example.com");
 			expect(payload.iss).not.toBe("https://evil.example.com");
+			expect(payload.auth_time).toBeUndefined();
+			expect(payload.acr).toBeUndefined();
+			expect(payload.amr).toBeUndefined();
 		});
 
 		it("errors without consuming the code when a resource is requested but the jwt plugin is missing", async () => {

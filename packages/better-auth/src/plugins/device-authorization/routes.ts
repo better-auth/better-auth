@@ -8,6 +8,7 @@ import type { DeviceAuthorizationOptions } from ".";
 import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
 import {
 	createDeviceJwtAccessToken,
+	extractRepeatedResourceFromForm,
 	parseStoredResource,
 	requireJwtOptions,
 	resolveResourceAudience,
@@ -70,10 +71,15 @@ export const deviceCode = (opts: DeviceAuthorizationOptions) => {
 		"/device/code",
 		{
 			method: "POST",
+			cloneRequest: true,
 			body: deviceCodeBodySchema,
 			error: deviceCodeErrorSchema,
 			metadata: {
 				noStore: true,
+				allowedMediaTypes: [
+					"application/json",
+					"application/x-www-form-urlencoded",
+				],
 				openapi: {
 					description: `Request a device and user code
 
@@ -147,6 +153,13 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			},
 		},
 		async (ctx) => {
+			if (ctx.request) {
+				const resources = await extractRepeatedResourceFromForm(ctx.request);
+				if (resources) {
+					ctx.body.resource = resources.length > 1 ? resources : resources[0];
+				}
+			}
+
 			if (opts.validateClient) {
 				const isValid = await opts.validateClient(ctx.body.client_id);
 				if (!isValid) {
@@ -259,10 +272,15 @@ export const deviceToken = (opts: DeviceAuthorizationOptions) =>
 		"/device/token",
 		{
 			method: "POST",
+			cloneRequest: true,
 			body: deviceTokenBodySchema,
 			error: deviceTokenErrorSchema,
 			metadata: {
 				noStore: true,
+				allowedMediaTypes: [
+					"application/json",
+					"application/x-www-form-urlencoded",
+				],
 				openapi: {
 					description: `Exchange device code for access token
 
@@ -320,6 +338,13 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			},
 		},
 		async (ctx) => {
+			if (ctx.request) {
+				const resources = await extractRepeatedResourceFromForm(ctx.request);
+				if (resources) {
+					ctx.body.resource = resources.length > 1 ? resources : resources[0];
+				}
+			}
+
 			const { device_code, client_id } = ctx.body;
 
 			if (opts.validateClient) {
@@ -615,6 +640,22 @@ export const deviceVerify = createAuthEndpoint(
 											enum: ["pending", "approved", "denied"],
 											description: "Current status of the device authorization",
 										},
+										client_id: {
+											type: "string",
+											description: "The client requesting authorization",
+										},
+										scope: {
+											type: "string",
+											description: "The requested OAuth scopes",
+										},
+										resource: {
+											oneOf: [
+												{ type: "string" },
+												{ type: "array", items: { type: "string" } },
+											],
+											description:
+												"The RFC 8707 resource indicator(s) bound to this request",
+										},
 									},
 								},
 							},
@@ -676,9 +717,19 @@ export const deviceVerify = createAuthEndpoint(
 			}
 		}
 
+		const canReviewRequest =
+			session?.user.id !== undefined &&
+			deviceCodeRecord.userId === session.user.id;
 		return ctx.json({
 			user_code: user_code,
 			status: deviceCodeRecord.status,
+			...(canReviewRequest
+				? {
+						client_id: deviceCodeRecord.clientId,
+						scope: deviceCodeRecord.scope,
+						resource: parseStoredResource(deviceCodeRecord.resource),
+					}
+				: {}),
 		});
 	},
 );
