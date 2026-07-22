@@ -635,7 +635,8 @@ To add custom fields, use the `additionalFields` property in the `user` or `sess
 * `type`: The data type of the field (e.g., "string", "number", "boolean").
 * `required`: A boolean indicating if the field is mandatory.
 * `defaultValue`: The default value for the field (note: this only applies in the JavaScript layer; in the database, the field will be optional).
-* `input`: This determines whether a value can be provided when creating a new record (default: `true`). If there are additional fields, like `role`, that should not be provided by the user during signup, you can set this to `false`.
+* `input`: Whether Better Auth accepts the field when creating or updating a record (default: `true`). For user fields, this includes values from API input and `mapProfileToUser`. Set this to `false` for server-owned fields such as `role`.
+* `returned`: Whether Better Auth includes the stored field in response bodies (default: `true`). This does not affect whether input can write the field.
 
 Here's an example of how to extend the user schema with additional fields:
 
@@ -675,7 +676,7 @@ const res = await auth.api.signUpEmail({
 });
 
 //user object
-res.user.role; // > "admin"
+res.user.role; // > "user"
 res.user.lang; // > "fr"
 ```
 
@@ -686,9 +687,16 @@ res.user.lang; // > "fr"
   client side.
 </Callout>
 
-If you're using social / OAuth providers, you may want to provide `mapProfileToUser` to map the profile data to the user object. This can populate additional fields from the provider's profile when those fields allow input.
+For `user.additionalFields`, `input` and `returned` are independent:
 
-Fields marked `input: false` stay server-owned during OAuth provisioning. Provider profile values for those fields are ignored, and configured `defaultValue` values still apply when OAuth creates a user.
+| Configuration                       | Input behavior                                                                                                                                                    | Response behavior             |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `{ input: true, returned: true }`   | API input and provider profile mapping can supply the field.                                                                                                      | The stored field is included. |
+| `{ input: true, returned: false }`  | API input and provider profile mapping can supply the field.                                                                                                      | The stored field is omitted.  |
+| `{ input: false, returned: true }`  | API input and provider profile mapping cannot supply the field. A configured `defaultValue` can initialize it; otherwise use an application-owned database write. | The stored field is included. |
+| `{ input: false, returned: false }` | API input and provider profile mapping cannot supply the field. A configured `defaultValue` can initialize it; otherwise use an application-owned database write. | The stored field is omitted.  |
+
+If you're using a social or OAuth provider, `mapProfileToUser` can populate additional fields from the provider profile when those fields allow input. The mapper runs on your server, but Better Auth still treats its return value as provider input. Fields marked `input: false` stay server-owned, provider values for those fields are ignored, and configured `defaultValue` values still apply when OAuth creates a user. See [server-owned fields and authorization claims](/docs/concepts/oauth#server-owned-fields-and-authorization-claims) for secure handling patterns.
 
 **Example: Mapping Profile to User For `firstName` and `lastName`**
 

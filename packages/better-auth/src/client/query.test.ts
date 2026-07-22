@@ -145,14 +145,20 @@ describe("useAuthQuery - error handling", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9077
 	 */
-	it("should not refetch when atom re-mounts before the initial fetch resolves", async () => {
+	it("should defer remount refetch until the initial fetch resolves", async () => {
 		let fetchCount = 0;
+		let resolveInitialFetch: ((response: Response) => void) | undefined;
 		const $fetch = createFetch({
 			baseURL: "http://localhost:3000",
 			customFetchImpl: async () => {
 				fetchCount++;
-				// Keep the fetch pending to widen the race window.
-				return new Promise<Response>(() => {});
+				if (fetchCount === 1) {
+					// Keep the first fetch pending to widen the race window.
+					return new Promise<Response>((resolve) => {
+						resolveInitialFetch = resolve;
+					});
+				}
+				return new Response(JSON.stringify({ data: "fresh" }));
 			},
 		});
 
@@ -174,18 +180,67 @@ describe("useAuthQuery - error handling", () => {
 		await vi.advanceTimersByTimeAsync(0);
 		expect(fetchCount).toBe(1);
 
+		if (!resolveInitialFetch) throw new Error("Initial fetch did not start");
+		resolveInitialFetch(new Response(JSON.stringify({ data: "stale" })));
+		await vi.runAllTimersAsync();
+		expect(fetchCount).toBe(2);
+
 		unsubscribe2();
 	});
 
 	/**
-	 * Reproduces the actual storm mechanism from
-	 * https://github.com/better-auth/better-auth/issues/9077: multiple
-	 * `onMount` callbacks accumulate on the value atom (nanostores appends
-	 * MOUNT listeners) and all fire inside a single mount cycle, each
-	 * scheduling its own `setTimeout(0)`. Before the fix they all drained
-	 * before the flag flipped and each started a fetch.
+	 * @see https://github.com/better-auth/better-auth/issues/10363
 	 */
-	it("should fire only one fetch when multiple onMount callbacks run in one mount cycle", async () => {
+	it("should revalidate and restore signal listeners after remount", async () => {
+		let fetchCount = 0;
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async () => {
+				fetchCount++;
+				return new Response(
+					JSON.stringify({
+						data: `request-${fetchCount}`,
+					}),
+				);
+			},
+		});
+
+		const $signal = atom(false);
+		const queryAtom = useAuthQuery<{ data: string }>($signal, "/test", $fetch, {
+			method: "GET",
+		});
+
+		const unsubscribe1 = queryAtom.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		expect(fetchCount).toBe(1);
+		expect(queryAtom.get().data).toEqual({ data: "request-1" });
+
+		unsubscribe1();
+		await vi.advanceTimersByTimeAsync(1000);
+
+		// Signals emitted while unmounted are recovered by remount revalidation.
+		$signal.set(true);
+		await vi.runAllTimersAsync();
+		expect(fetchCount).toBe(1);
+
+		const unsubscribe2 = queryAtom.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		expect(fetchCount).toBe(2);
+		expect(queryAtom.get().data).toEqual({ data: "request-2" });
+
+		// The signal listener must be active again after remount.
+		$signal.set(false);
+		await vi.runAllTimersAsync();
+		expect(fetchCount).toBe(3);
+		expect(queryAtom.get().data).toEqual({ data: "request-3" });
+
+		unsubscribe2();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9077
+	 */
+	it("should fire only one initial fetch when signals change around mount", async () => {
 		let fetchCount = 0;
 		const $fetch = createFetch({
 			baseURL: "http://localhost:3000",
@@ -200,14 +255,14 @@ describe("useAuthQuery - error handling", () => {
 			method: "GET",
 		});
 
-		// Flipping the signal before any listener attaches re-runs the
-		// subscribe callback, which appends another onMount listener each
-		// time. After three flips there are four queued callbacks.
+		// Signals emitted before the query mounts must not create extra initial
+		// fetches or lifecycle callbacks.
 		$signal.set(true);
 		$signal.set(false);
 		$signal.set(true);
 
 		const unsubscribe = queryAtom.listen(() => {});
+		$signal.set(false);
 		await vi.advanceTimersByTimeAsync(0);
 
 		expect(fetchCount).toBe(1);

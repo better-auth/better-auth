@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BetterAuthOptions } from "../../types";
 import { createAdapterFactory } from "./factory";
-import type { CustomAdapter, Where } from "./index";
+import type { CleanedWhere, CustomAdapter, Where } from "./index";
 
 function createCustomAdapter(
 	overrides: Partial<CustomAdapter> = {},
@@ -254,5 +254,83 @@ describe("createAdapterFactory atomic primitives", () => {
 				update: { value: "next" },
 			}),
 		).rejects.toThrow(/updateMany must return a finite number/);
+	});
+});
+
+/**
+ * HTTP query params arrive as strings. Coercion must happen in the adapter
+ * factory before the underlying store sees the where clause — SQL engines
+ * often cast silently, which can hide missing coercion in integration tests.
+ */
+describe("createAdapterFactory where value coercion", () => {
+	it("coerces string where values to match field types before querying", async () => {
+		const seenWhere: CleanedWhere[][] = [];
+		const adapter = createAdapterFactory({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+				supportsBooleans: true,
+			},
+			adapter: () =>
+				createCustomAdapter({
+					findMany: async <T>(
+						params: Parameters<CustomAdapter["findMany"]>[0],
+					) => {
+						if (params.where) {
+							seenWhere.push(params.where);
+						}
+						return [] as T[];
+					},
+				}),
+		})({
+			user: {
+				additionalFields: {
+					age: { type: "number", required: false },
+				},
+			},
+		});
+
+		await adapter.findMany({
+			model: "user",
+			where: [{ field: "emailVerified", operator: "eq", value: "false" }],
+		});
+		await adapter.findMany({
+			model: "user",
+			where: [{ field: "age", operator: "eq", value: "25" }],
+		});
+		await adapter.findMany({
+			model: "user",
+			where: [{ field: "age", operator: "in", value: ["25", "30"] }],
+		});
+
+		expect(seenWhere).toEqual([
+			[
+				{
+					field: "emailVerified",
+					value: false,
+					operator: "eq",
+					connector: "AND",
+					mode: "sensitive",
+				},
+			],
+			[
+				{
+					field: "age",
+					value: 25,
+					operator: "eq",
+					connector: "AND",
+					mode: "sensitive",
+				},
+			],
+			[
+				{
+					field: "age",
+					value: [25, 30],
+					operator: "in",
+					connector: "AND",
+					mode: "sensitive",
+				},
+			],
+		]);
 	});
 });

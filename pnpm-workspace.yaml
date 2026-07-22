@@ -59,8 +59,8 @@ catalog:
   better-call: 1.3.7
   kysely: ^0.28.17 || ^0.29.0
   nanostores: ^1.3.0
-  tsdown: 0.21.1
-  typescript: ^5.9.3
+  tsdown: 0.22.7
+  typescript: ^6.0.3
 
 catalogs:
   peer:

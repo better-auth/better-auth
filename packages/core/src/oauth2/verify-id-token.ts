@@ -1,4 +1,5 @@
 import { decodeProtectedHeader, jwtVerify } from "jose";
+import type { GenericEndpointContext } from "../types";
 import type { OAuthProvider, ProviderOptions } from "./oauth-provider";
 
 type ProviderWithIdTokenConfig = Pick<OAuthProvider, "idToken" | "options">;
@@ -59,6 +60,7 @@ export async function verifyProviderIdToken(
 	provider: ProviderWithIdTokenConfig,
 	token: string,
 	nonce?: string,
+	ctx?: GenericEndpointContext,
 ): Promise<boolean> {
 	const options = (provider.options ?? {}) as Partial<ProviderOptions>;
 	if (options.disableIdTokenSignIn) {
@@ -69,14 +71,14 @@ export async function verifyProviderIdToken(
 	// escaping to the caller as a server error.
 	try {
 		if (options.verifyIdToken) {
-			return await options.verifyIdToken(token, nonce);
+			return await options.verifyIdToken(token, nonce, ctx);
 		}
 		const config = provider.idToken;
 		if (!config) {
 			return false;
 		}
 		if ("verify" in config) {
-			return await config.verify(token, nonce);
+			return await config.verify(token, nonce, ctx);
 		}
 		// Opaque (non-JWS) tokens carry no signature to check. They are accepted only when the
 		// provider opts in, in which case getUserInfo resolves identity from the access token via

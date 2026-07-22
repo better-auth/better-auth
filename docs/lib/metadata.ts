@@ -43,5 +43,9 @@ export const baseUrl =
 	(!process.env.VERCEL_PROJECT_PRODUCTION_URL && !process.env.VERCEL_URL)
 		? new URL("http://localhost:3000")
 		: new URL(
-				`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL}`,
+				// On preview deployments, resolve metadata (og:image, etc.) against the
+				// deployment's own URL so link previews work before assets hit production.
+				process.env.VERCEL_ENV === "preview" && process.env.VERCEL_URL
+					? `https://${process.env.VERCEL_URL}`
+					: `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL}`,
 			);

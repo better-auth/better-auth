@@ -54,7 +54,7 @@ The other half of the OAuth work is about Better Auth as the app receiving a log
 * **Generic OAuth is rebuilt** on the same path as built-in social providers, with PKCE on by default and automatic issuer validation through discovery. The API you call and the callback URL both change.
 * **Identity tokens are verified consistently** against a provider's published keys, including for mobile and single-page apps. Custom providers move from a `verifyIdToken` method to an `idToken` config.
 * **Granted scopes are preserved** across re-login and token refresh instead of being overwritten, and Google's `includeGrantedScopes` is now configurable (still on by default).
-* **Google One Tap** signs in the account owner by validating the identity token subject, not just the email.
+* **Google One Tap** validates identity tokens more strictly, rejecting malformed tokens and honoring `requireEmailVerification`.
 * **Per-request login options** (`additionalParams`) unlock Cognito upstream routing, Microsoft Entra ID `domain_hint`, and offline or incremental Google access. **Certificate and signed-assertion login** (`clientAssertion`, `tokenEndpointAuth`) add Entra ID certificate login and generic `private_key_jwt`.
 * **Provider-started login** restarts safely with `allowIdpInitiated: true`, **per-provider email verification** (`requireEmailVerification`) withholds the session until the email is verified, and **anonymous account linking** now works in Expo and other in-app browsers.
 
@@ -200,10 +200,11 @@ export const auth = betterAuth({
 | Token introspection is consistent                               | Opaque tokens return the same claims as a JWT, and a resource server can introspect another client's token.                         |
 | ID-token claims stay protocol-safe                              | Custom claims can no longer overwrite reserved protocol claims, and ID tokens report `acr: "0"`.                                    |
 | Granted scopes are preserved                                    | Later logins no longer erase scopes granted earlier.                                                                                |
-| Google One Tap validates the token subject                      | One Tap signs in the account owner instead of matching on email.                                                                    |
+| Google One Tap validates tokens more strictly                   | Malformed identity tokens are rejected with `400`, and `requireEmailVerification` returns `403`.                                    |
 | Magic-link and email-OTP sign-in can clear unproven credentials | Proven mailbox control wins over an unconfirmed password on the same account.                                                       |
 | userinfo rejects bad access tokens with 401                     | Invalid tokens get `401 invalid_token` with a `WWW-Authenticate` header.                                                            |
 | OAuth authorize redirects missing-`response_type` errors        | The error goes to the verified client `redirect_uri` instead of a generic error.                                                    |
+| OAuth client creation returns `201`                             | Creating a client returns `201 Created` instead of `200 OK`, and registration enforces the same permission checks.                  |
 | Drizzle adapter validates affected-row counts                   | An invalid affected-row count throws instead of returning `0`.                                                                      |
 | `organization.updateTeam` ignores immutable fields              | `id`, `createdAt`, and `updatedAt` are no longer accepted in the request body.                                                      |
 | `updateMemberRole` checks authorization first                   | Role-existence validation runs after authorization checks.                                                                          |
@@ -250,7 +251,7 @@ Install it from the `rc` tag, and do the same for any `@better-auth/*` packages 
 better-auth@rc
 ```
 
-Then run `npx auth generate` for any schema changes. The table below shows whether these changes affect you. For the detailed migration guide, see the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide).
+Then run `npx auth@rc generate` for any schema changes; the unscoped `npx auth` still resolves the 1.6 CLI until 1.7 is stable. The table below shows whether these changes affect you. For the detailed migration guide, see the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide).
 
 | If you use                                     | What to expect                                                                                       |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------- |

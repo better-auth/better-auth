@@ -3,6 +3,19 @@ import { APIError } from "better-auth/api";
 import { parseInputData, toZodSchema } from "better-auth/db";
 import * as z from "zod";
 import type { SSOOptions } from "../types";
+import { isSafeSAMLRedirectPath } from "../utils";
+
+const absoluteUrlSchema = z.url();
+
+const samlRedirectUrlSchema = z
+	.string()
+	.refine(
+		(url) =>
+			isSafeSAMLRedirectPath(url) || absoluteUrlSchema.safeParse(url).success,
+		{
+			message: "Expected an absolute URL or a relative path starting with /",
+		},
+	);
 
 function getSSOProviderAdditionalFields(options?: SSOOptions) {
 	return (options?.schema?.ssoProvider?.additionalFields ?? {}) as Record<
@@ -244,6 +257,7 @@ const samlConfigSchema = z.object({
 			message: "callbackUrl must not contain a fragment",
 		})
 		.optional(),
+	idpInitiatedCallbackUrl: samlRedirectUrlSchema.optional(),
 	idpMetadata: samlIdentityProviderMetadataSchema,
 	spMetadata: z
 		.object({
@@ -312,6 +326,7 @@ const updateSSOProviderBodySchema = z.object({
 		.omit({ idpMetadata: true })
 		.partial()
 		.extend({
+			idpInitiatedCallbackUrl: samlRedirectUrlSchema.nullable().optional(),
 			idpMetadata: samlIdentityProviderMetadataUpdateSchema.optional(),
 		})
 		.optional(),
