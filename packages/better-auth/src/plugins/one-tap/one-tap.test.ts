@@ -684,4 +684,31 @@ describe("one-tap disableSignUp", () => {
 		});
 		expect(users).toHaveLength(0);
 	});
+
+	it("keeps provider sign-up disabled when One Tap enables it", async () => {
+		verifiedPayload.email = "one-tap-signup-override@example.com";
+		verifiedPayload.sub = "one-tap-signup-override-sub";
+
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+					disableSignUp: true,
+				},
+			},
+			plugins: [oneTap({ disableSignup: false })],
+		});
+
+		await expect(
+			auth.api.oneTapCallback({
+				body: { idToken: "stub-id-token" },
+			}),
+		).rejects.toMatchObject({
+			statusCode: 401,
+			status: "UNAUTHORIZED",
+			body: { message: "signup disabled" },
+		});
+	});
 });
