@@ -104,6 +104,9 @@ export function microsoftEntraId(
 			typeof tokenProfile.oid === "string" && tokenProfile.oid.trim().length > 0
 				? tokenProfile.oid
 				: undefined;
+		if (!oid) {
+			return null;
+		}
 		const tokenUserInfo = {
 			...tokenProfile,
 			name: getMicrosoftProfileName(tokenProfile),
@@ -111,9 +114,6 @@ export function microsoftEntraId(
 			image: tokenProfile.picture,
 			emailVerified: tokenProfile.email_verified ?? false,
 		};
-		if (!oid) {
-			return null;
-		}
 		if (!tokens.accessToken) {
 			return tokenUserInfo;
 		}
@@ -164,6 +164,7 @@ export function microsoftEntraId(
 		accountSubject: ({ profile }) =>
 			typeof profile.oid === "string" ? profile.oid : "",
 		discoveryUrl,
+		requireIdTokenVerification: true,
 		authorizationUrl,
 		tokenUrl,
 		userInfoUrl,

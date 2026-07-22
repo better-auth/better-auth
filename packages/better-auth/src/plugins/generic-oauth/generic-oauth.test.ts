@@ -2894,6 +2894,7 @@ describe("oauth2", async () => {
 			expect(msConfig.clientSecret).toBe("ms-client-secret");
 			expect(msConfig.getUserInfo).toBeDefined();
 			expect(typeof msConfig.getUserInfo).toBe("function");
+			expect(msConfig.requireIdTokenVerification).toBe(true);
 		});
 
 		it("should handle tenant ID as GUID", () => {
@@ -5015,6 +5016,52 @@ describe("oauth2", async () => {
 
 				await expect(auth.$context).rejects.toThrow(
 					"discovery did not return an issuer",
+				);
+			} finally {
+				await new Promise<void>((resolve, reject) =>
+					discoveryServer.close((error) => (error ? reject(error) : resolve())),
+				);
+			}
+		});
+
+		it("fails provider initialization when required ID token verification metadata is unavailable", async () => {
+			const discoveryServer = createServer((_req, res) => {
+				res.setHeader("content-type", "application/json");
+				res.end(
+					JSON.stringify({
+						issuer: `http://localhost:${port}`,
+						authorization_endpoint: `http://localhost:${port}/authorize`,
+						token_endpoint: `http://localhost:${port}/token`,
+					}),
+				);
+			});
+			await new Promise<void>((resolve) => discoveryServer.listen(0, resolve));
+			const discoveryPort = (discoveryServer.address() as AddressInfo).port;
+			try {
+				const { auth } = await getTestInstance(
+					{
+						plugins: [
+							genericOAuth({
+								config: [
+									{
+										providerId: "verified-id-token-required",
+										discoveryUrl: `http://localhost:${discoveryPort}/.well-known/openid-configuration`,
+										authorizationUrl: `http://localhost:${port}/authorize`,
+										tokenUrl: `http://localhost:${port}/token`,
+										accountIssuer: `http://localhost:${port}`,
+										requireIdTokenVerification: true,
+										clientId,
+										clientSecret,
+									},
+								],
+							}),
+						],
+					},
+					{ disableTestUser: true },
+				);
+
+				await expect(auth.$context).rejects.toThrow(
+					"requires verified ID tokens",
 				);
 			} finally {
 				await new Promise<void>((resolve, reject) =>

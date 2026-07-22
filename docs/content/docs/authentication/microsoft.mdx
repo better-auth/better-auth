@@ -100,7 +100,7 @@ If stored Microsoft ID tokens are not available, Better Auth's account row only 
 
 If you are also upgrading from a schema that still uses `accountId` or does not have `issuer`, complete the [1.7 account identity backfill](/docs/guides/1-7-upgrade-guide#account-identity-and-selection) as part of the same maintenance window.
 
-If you use the Generic OAuth `microsoftEntraId` helper with custom scopes or a custom `getToken`, make sure the token exchange still returns Microsoft's `id_token`; the helper reads `oid` from that token.
+If you use the Generic OAuth `microsoftEntraId` helper with custom scopes or a custom `getToken`, make sure the token exchange still returns Microsoft's `id_token`; the helper reads `oid` from that token. The helper also requires Microsoft discovery to provide the issuer and JWKS metadata used to verify ID tokens, and provider initialization fails when that metadata is unavailable.
 
 ## Large Profile Images ⚠️
 
