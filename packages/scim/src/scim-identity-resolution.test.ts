@@ -7,13 +7,20 @@ import type {
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, expectTypeOf, it } from "vitest";
-import type { SCIMCanonicalUser, SCIMConnectionOptions, SCIMIdentity } from ".";
-import { scim } from ".";
 import type {
+	SCIMCanonicalUser,
+	SCIMConnectionOptions,
+	SCIMIdentity,
+	SCIMUserExternalIdReference,
+} from ".";
+import { acquireActiveSCIMUserLink, scim } from ".";
+import type {
+	SCIMConnectionBinding,
 	SCIMIdentityTombstone,
 	SCIMSubject,
 	SCIMUser,
 } from "./persistence";
+import { createSCIMUserExternalIdKey } from "./resource-key";
 
 const BASE_URL = "http://localhost:3000";
 const CONNECTION_A = {
@@ -95,7 +102,7 @@ function createIdentityFixture(
 		session: [...(options.sessions ?? [])],
 		verification: [] as { id: string }[],
 		account: [] as { id: string }[],
-		scimConnectionBinding: [] as { id: string }[],
+		scimConnectionBinding: [] as SCIMConnectionBinding[],
 		scimIdentityTombstone: [] as SCIMIdentityTombstone[],
 		scimSubject: [] as SCIMSubject[],
 		scimUser: [] as SCIMUser[],
@@ -118,6 +125,19 @@ function createIdentityFixture(
 	});
 
 	return { auth, data };
+}
+
+async function acquireUserLink(
+	auth: ReturnType<typeof createIdentityFixture>["auth"],
+	reference: SCIMUserExternalIdReference,
+) {
+	const context = await auth.$context;
+	if (!context.adapter.transaction) {
+		throw new Error("Expected native transaction support");
+	}
+	return context.adapter.transaction((database) =>
+		acquireActiveSCIMUserLink(reference, { database }),
+	);
 }
 
 function authorization(token: string) {
@@ -807,5 +827,203 @@ describe("SCIM explicit identity resolution", () => {
 		expect(data.user[0]).toMatchObject({ name: "Managed Before Failure" });
 		expect(data.session).toEqual([session]);
 		expect(data.scimSubject[0]?.revision).toBe(revisionBeforeFailure);
+	});
+});
+
+describe("SCIM active User links", () => {
+	it("acquires exact case-sensitive links isolated by connection", async () => {
+		const { auth, data } = createIdentityFixture({
+			connections: [CONNECTION_A, CONNECTION_B],
+		});
+		const sourceA = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "connection-a@example.com",
+				externalId: "Case-Exact-Subject",
+			},
+			headers: authorization("connection-a-token"),
+		});
+		const sourceB = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "connection-b@example.com",
+				externalId: "Case-Exact-Subject",
+			},
+			headers: authorization("connection-b-token"),
+		});
+
+		await expect(
+			acquireUserLink(auth, {
+				connectionId: CONNECTION_A.id,
+				externalId: "Case-Exact-Subject",
+			}),
+		).resolves.toEqual({
+			scimUserId: sourceA.id,
+			userId: data.scimUser.find(({ id }) => id === sourceA.id)?.userId,
+		});
+		await expect(
+			acquireUserLink(auth, {
+				connectionId: CONNECTION_B.id,
+				externalId: "Case-Exact-Subject",
+			}),
+		).resolves.toEqual({
+			scimUserId: sourceB.id,
+			userId: data.scimUser.find(({ id }) => id === sourceB.id)?.userId,
+		});
+		await expect(
+			acquireUserLink(auth, {
+				connectionId: CONNECTION_A.id,
+				externalId: "case-exact-subject",
+			}),
+		).resolves.toBeNull();
+	});
+
+	it("rejects inactive and deleted links, then follows explicit reprovisioning", async () => {
+		const { auth, data } = createIdentityFixture();
+		const firstSource = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "lifecycle@example.com",
+				externalId: "lifecycle-subject",
+			},
+			headers: authorization("connection-a-token"),
+		});
+		const originalUserId = data.scimUser[0]?.userId;
+
+		await auth.api.patchSCIMUser({
+			params: { userId: firstSource.id },
+			body: {
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+				Operations: [{ op: "replace", path: "active", value: false }],
+			},
+			headers: authorization("connection-a-token"),
+		});
+		await expect(
+			acquireUserLink(auth, {
+				connectionId: CONNECTION_A.id,
+				externalId: "lifecycle-subject",
+			}),
+		).resolves.toBeNull();
+
+		await auth.api.deleteSCIMUser({
+			params: { userId: firstSource.id },
+			headers: authorization("connection-a-token"),
+		});
+		await expect(
+			acquireUserLink(auth, {
+				connectionId: CONNECTION_A.id,
+				externalId: "lifecycle-subject",
+			}),
+		).resolves.toBeNull();
+
+		const reprovisioned = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "restored@example.com",
+				externalId: "lifecycle-subject",
+			},
+			headers: authorization("connection-a-token"),
+		});
+		await expect(
+			acquireUserLink(auth, {
+				connectionId: CONNECTION_A.id,
+				externalId: "lifecycle-subject",
+			}),
+		).resolves.toEqual({
+			scimUserId: reprovisioned.id,
+			userId: originalUserId,
+		});
+	});
+
+	it("rejects tombstoned, orphaned, and missing-subject links", async () => {
+		const createProvisionedFixture = async (externalId: string) => {
+			const fixture = createIdentityFixture();
+			await fixture.auth.api.createSCIMUser({
+				body: {
+					schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+					userName: `${externalId}@example.com`,
+					externalId,
+				},
+				headers: authorization("connection-a-token"),
+			});
+			return fixture;
+		};
+
+		const tombstoned = await createProvisionedFixture("tombstoned-subject");
+		const tombstonedSource = tombstoned.data.scimUser[0]!;
+		tombstoned.data.scimIdentityTombstone.push({
+			id: "stale-tombstone",
+			connectionId: CONNECTION_A.id,
+			provisioningDomainId: tombstonedSource.provisioningDomainId,
+			externalId: "tombstoned-subject",
+			externalIdKey: createSCIMUserExternalIdKey(
+				CONNECTION_A.id,
+				"tombstoned-subject",
+			),
+			userId: tombstonedSource.userId,
+			profile: "preserve",
+			deletedAt: new Date(),
+		});
+		await expect(
+			acquireUserLink(tombstoned.auth, {
+				connectionId: CONNECTION_A.id,
+				externalId: "tombstoned-subject",
+			}),
+		).resolves.toBeNull();
+
+		const orphaned = await createProvisionedFixture("orphaned-subject");
+		orphaned.data.user.splice(0);
+		await expect(
+			acquireUserLink(orphaned.auth, {
+				connectionId: CONNECTION_A.id,
+				externalId: "orphaned-subject",
+			}),
+		).resolves.toBeNull();
+
+		const missingSubject = await createProvisionedFixture("missing-subject");
+		missingSubject.data.scimSubject.splice(0);
+		await expect(
+			acquireUserLink(missingSubject.auth, {
+				connectionId: CONNECTION_A.id,
+				externalId: "missing-subject",
+			}),
+		).resolves.toBeNull();
+	});
+
+	it("rejects decommissioned and provisioning-domain-inconsistent links", async () => {
+		const decommissioned = createIdentityFixture();
+		await decommissioned.auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "decommissioned@example.com",
+				externalId: "decommissioned-subject",
+			},
+			headers: authorization("connection-a-token"),
+		});
+		decommissioned.data.scimConnectionBinding[0]!.decommissionStatus =
+			"complete";
+		await expect(
+			acquireUserLink(decommissioned.auth, {
+				connectionId: CONNECTION_A.id,
+				externalId: "decommissioned-subject",
+			}),
+		).resolves.toBeNull();
+
+		const inconsistent = createIdentityFixture();
+		await inconsistent.auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "inconsistent@example.com",
+				externalId: "inconsistent-subject",
+			},
+			headers: authorization("connection-a-token"),
+		});
+		inconsistent.data.scimUser[0]!.provisioningDomainId = "different-domain";
+		await expect(
+			acquireUserLink(inconsistent.auth, {
+				connectionId: CONNECTION_A.id,
+				externalId: "inconsistent-subject",
+			}),
+		).resolves.toBeNull();
 	});
 });
