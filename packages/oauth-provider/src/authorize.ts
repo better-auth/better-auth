@@ -281,9 +281,11 @@ function findRegisteredRedirectUri(
 
 /**
  * Loads the client, verifies it's enabled, and returns the requested
- * redirect_uri when it matches a registered entry. Returns null whenever the
- * RP cannot be safely reached, so callers can fall back to the server error
- * page (avoiding open-redirect risk on validation failures).
+ * redirect_uri when it matches a registered entry (or is accepted by the
+ * custom `validateRedirectUri` option, mirroring the authorize endpoint's
+ * validation). Returns null whenever the RP cannot be safely reached, so
+ * callers can fall back to the server error page (avoiding open-redirect
+ * risk on validation failures).
  */
 async function resolveTrustedRedirectUri(
 	ctx: GenericEndpointContext,
@@ -299,7 +301,20 @@ async function resolveTrustedRedirectUri(
 		return null;
 	}
 	if (!client || client.disabled) return null;
-	const matched = findRegisteredRedirectUri(client.redirectUris, redirectUri);
+	const registeredUris = client.redirectUris ?? [];
+	const matched = findRegisteredRedirectUri(registeredUris, redirectUri);
+	if (opts.validateRedirectUri) {
+		try {
+			const isValid = await opts.validateRedirectUri(
+				redirectUri,
+				registeredUris,
+				Boolean(matched),
+			);
+			return isValid ? redirectUri : null;
+		} catch {
+			return null;
+		}
+	}
 	return matched ? redirectUri : null;
 }
 
@@ -515,11 +530,30 @@ export async function authorizeEndpoint(
 		);
 	}
 
-	const redirectUri = findRegisteredRedirectUri(
-		client.redirectUris,
-		query.redirect_uri,
-	);
-	if (!redirectUri || !query.redirect_uri) {
+	const registeredUris = client.redirectUris ?? [];
+	let isValidRedirectUri = false;
+	if (query.redirect_uri) {
+		// Default validation: exact match + RFC 8252 §7.3 loopback IP support
+		const defaultResult = Boolean(
+			findRegisteredRedirectUri(registeredUris, query.redirect_uri),
+		);
+		if (opts.validateRedirectUri) {
+			try {
+				// Custom validator receives defaultResult for composition
+				isValidRedirectUri = await opts.validateRedirectUri(
+					query.redirect_uri,
+					registeredUris,
+					defaultResult,
+				);
+			} catch {
+				// Fail closed: a throwing validator rejects the request
+				isValidRedirectUri = false;
+			}
+		} else {
+			isValidRedirectUri = defaultResult;
+		}
+	}
+	if (!isValidRedirectUri) {
 		return handleRedirect(
 			ctx,
 			getErrorURL(ctx, "invalid_redirect", "invalid redirect uri"),
