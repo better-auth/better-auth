@@ -445,5 +445,6 @@ export interface Member {
 	id: string;
 	userId: string;
 	organizationId: string;
-	role: string;
+	/** Comma-separated string, or string[] when mapped to an array column. */
+	role: string | string[];
 }
