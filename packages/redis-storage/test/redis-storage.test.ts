@@ -167,6 +167,31 @@ describe("redisStorage", () => {
 		expect(delMock).not.toHaveBeenCalled();
 	});
 
+	it("propagates a mid-iteration failure, leaving earlier pages deleted", async () => {
+		// clear() is documented as non-atomic: pages already deleted stay
+		// deleted when a later page fails. This pins that contract so a future
+		// change to atomic-only deletion is a conscious, tested decision.
+		const scanMock = vi
+			.fn()
+			.mockResolvedValueOnce(["9", ["ba:session:1"]])
+			.mockResolvedValueOnce(["0", ["ba:session:2"]]);
+		const delMock = vi
+			.fn()
+			.mockResolvedValueOnce(1)
+			.mockRejectedValueOnce(
+				new Error("READONLY You can't write against a read only replica."),
+			);
+		const storage = redisStorage({
+			client: { scan: scanMock, del: delMock } as any,
+			keyPrefix: "ba:",
+		});
+
+		await expect(storage.clear()).rejects.toThrow("READONLY");
+		// The first page was deleted before the second page threw.
+		expect(delMock).toHaveBeenNthCalledWith(1, "ba:session:1");
+		expect(delMock).toHaveBeenNthCalledWith(2, "ba:session:2");
+	});
+
 	it("lists keys via SCAN, stripping the prefix and deduping across pages", async () => {
 		// SCAN may return the same key on more than one page; the deduped
 		// result must still contain each key exactly once.

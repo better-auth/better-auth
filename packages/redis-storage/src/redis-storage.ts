@@ -127,6 +127,12 @@ return value
 			await client.del(prefixKey(key));
 		},
 
+		/**
+		 * Lists every key under the configured prefix, with the prefix stripped.
+		 *
+		 * Keys are enumerated with `SCAN`, which may report the same key on more
+		 * than one page, so the result is de-duplicated. Order is not guaranteed.
+		 */
 		async listKeys(): Promise<string[]> {
 			const keys = new Set<string>();
 			for await (const batch of scanBatches()) {
@@ -137,9 +143,24 @@ return value
 			return [...keys];
 		},
 
+		/**
+		 * Deletes every key under the configured prefix.
+		 *
+		 * **Not atomic.** Keys are enumerated with `SCAN` and deleted page by
+		 * page, so if Redis errors or the connection drops mid-iteration the
+		 * returned promise rejects *after* earlier pages have already been
+		 * deleted, leaving the store partially cleared. A rejection therefore
+		 * means "an unknown subset of keys may already be gone", not "nothing
+		 * changed" — unlike a single blocking `DEL`, which either removes
+		 * everything or nothing.
+		 *
+		 * `clear()` is safe to call again: it is idempotent, so callers that need
+		 * a fully empty store (e.g. revoking every session or rate-limit counter)
+		 * should retry until it resolves. An already-empty store is a no-op.
+		 */
 		async clear(): Promise<void> {
-			// Batches from `scanBatches` are always non-empty, so DEL always
-			// receives at least one key and an empty store is a safe no-op.
+			// `scanBatches` only yields non-empty pages, so DEL always receives at
+			// least one key and an empty store never issues an invalid zero-arg DEL.
 			for await (const batch of scanBatches()) {
 				await client.del(...batch);
 			}
