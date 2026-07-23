@@ -61,7 +61,13 @@ import {
 	findSAMLProvider,
 } from "./helpers";
 import { hasOrgAdminRole } from "./providers";
-import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
+import {
+	buildSAMLRedirectUrl,
+	getSAMLRedirectCandidates,
+	getSafeRedirectUrl,
+	processSAMLResponse,
+} from "./saml-pipeline";
+import { samlRedirectUrlSchema } from "./schemas";
 
 const BUILT_IN_ACCOUNT_PROVIDER_IDS = [
 	"credential",
@@ -300,6 +306,12 @@ const ssoProviderBodySchema = z.object({
 			callbackUrl: z.string({}).meta({
 				description: "The callback URL of the provider",
 			}),
+			idpInitiatedCallbackUrl: samlRedirectUrlSchema
+				.meta({
+					description:
+						"Fallback absolute URL or same-origin relative path for IdP-initiated SAML responses when RelayState does not contain a safe callback, including validation errors",
+				})
+				.optional(),
 			audience: z.string().optional(),
 			idpMetadata: z
 				.object({
@@ -863,6 +875,8 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 								entryPoint: body.samlConfig.entryPoint,
 								cert: body.samlConfig.cert,
 								callbackUrl: body.samlConfig.callbackUrl,
+								idpInitiatedCallbackUrl:
+									body.samlConfig.idpInitiatedCallbackUrl,
 								audience: body.samlConfig.audience,
 								idpMetadata: body.samlConfig.idpMetadata,
 								spMetadata: body.samlConfig.spMetadata,
@@ -1946,7 +1960,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 				const relayState = ctx.query?.RelayState as string | undefined;
 				const safeRedirectUrl = getSafeRedirectUrl(
-					relayState,
+					[relayState],
 					currentCallbackPath,
 					appOrigin,
 					(url, settings) => ctx.context.isTrustedOrigin(url, settings),
@@ -2011,6 +2025,10 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			const { providerId } = ctx.params;
 			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`;
 			const appOrigin = new URL(ctx.context.baseURL).origin;
+			// TODO(next): preserve this ordered fallback and pipeline-resolved error
+			// redirect handoff when reconciling next's ACS handler. Signed RelayState
+			// is consumed during parsing and must not be parsed again or used as a URL.
+			let resolvedErrorRedirectUrl: string | undefined;
 
 			try {
 				const safeRedirectUrl = await processSAMLResponse(
@@ -2020,6 +2038,9 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						RelayState: ctx.body.RelayState,
 						providerId,
 						currentCallbackPath,
+						onErrorRedirectResolved: (url) => {
+							resolvedErrorRedirectUrl = url;
+						},
 					},
 					options,
 				);
@@ -2048,14 +2069,38 @@ export const acsEndpoint = (options?: SSOOptions) => {
 							: internalCode === "SAML_NO_ASSERTION"
 								? "no_assertion"
 								: internalCode.toLowerCase() || "saml_error";
-					const redirectUrl = getSafeRedirectUrl(
-						ctx.body.RelayState || undefined,
-						currentCallbackPath,
-						appOrigin,
-						(url, settings) => ctx.context.isTrustedOrigin(url, settings),
-					);
+					let redirectUrl = resolvedErrorRedirectUrl;
+					if (!redirectUrl) {
+						let parsedSamlConfig: SAMLConfig | undefined;
+						try {
+							const provider = await findSAMLProvider(
+								providerId,
+								options,
+								ctx.context.adapter,
+							);
+							parsedSamlConfig = provider?.samlConfig;
+						} catch (providerLookupError) {
+							ctx.context.logger.warn(
+								"Failed to resolve SAML provider for error redirect",
+								{ providerId, error: providerLookupError },
+							);
+						}
+						redirectUrl = getSafeRedirectUrl(
+							getSAMLRedirectCandidates(
+								ctx.body.RelayState,
+								parsedSamlConfig,
+								options?.saml,
+							),
+							currentCallbackPath,
+							appOrigin,
+							(url, settings) => ctx.context.isTrustedOrigin(url, settings),
+						);
+					}
 					throw ctx.redirect(
-						`${redirectUrl}${redirectUrl.includes("?") ? "&" : "?"}error=${encodeURIComponent(errorCode)}&error_description=${encodeURIComponent(error.message)}`,
+						buildSAMLRedirectUrl(redirectUrl, {
+							error: errorCode,
+							error_description: error.message,
+						}),
 					);
 				}
 				throw error;
@@ -2102,7 +2147,7 @@ export const sloEndpoint = (options?: SSOOptions) => {
 			const relayState = ctx.body?.RelayState || ctx.query?.RelayState;
 			const appOrigin = new URL(ctx.context.baseURL).origin;
 			const safeErrorURL = getSafeRedirectUrl(
-				relayState,
+				[relayState],
 				`${appOrigin}/sso/saml2/sp/slo/${providerId}`,
 				appOrigin,
 				(url, settings) => ctx.context.isTrustedOrigin(url, settings),
@@ -2210,7 +2255,7 @@ async function handleLogoutResponse(
 
 	const appOrigin = new URL(ctx.context.baseURL).origin;
 	const safeRedirectUrl = getSafeRedirectUrl(
-		relayState,
+		[relayState],
 		`${appOrigin}/sso/saml2/sp/slo/${providerId}`,
 		appOrigin,
 		(url, settings) => ctx.context.isTrustedOrigin(url, settings),
