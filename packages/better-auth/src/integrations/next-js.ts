@@ -1,6 +1,5 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { setShouldSkipSessionRefresh } from "../api/state/should-session-refresh";
 import { parseSetCookieHeader, toCookieOptions } from "../cookies";
 import { PACKAGE_VERSION } from "../version";
 import { warnIfCookiePluginNotLast } from "./cookie-plugin-guard";
@@ -30,6 +29,19 @@ export const nextCookies = () => {
 	return {
 		id: "next-cookies",
 		version: PACKAGE_VERSION,
+		// Keep GET /get-session read-only so RSC navigation never writes to the
+		// DB. Cookies cannot be written during an RSC render, so a GET-side
+		// refresh would only drift the DB ahead of the stale cookie. The client
+		// re-issues the refresh as a POST, where cookies are writable. The RSC
+		// context cannot be detected from request headers.
+		// @see https://github.com/better-auth/better-auth/issues/9776
+		init() {
+			// `defu` preserves an explicit user value, so this applies only when
+			// `deferSessionRefresh` is unset. Escape hatch: set it to `false`.
+			return {
+				options: { session: { deferSessionRefresh: true } },
+			};
+		},
 		hooks: {
 			before: [
 				{
@@ -40,36 +52,6 @@ export const nextCookies = () => {
 						if (!hasWarned) {
 							warnIfCookiePluginNotLast(ctx.context, "next-cookies");
 							hasWarned = true;
-						}
-						// Real HTTP requests (via router) set cookies through
-						// response headers -- no need to skip refresh.
-						if ("_flag" in ctx && ctx._flag === "router") {
-							return;
-						}
-						let headersStore: Awaited<
-							ReturnType<typeof import("next/headers.js").headers>
-						>;
-						try {
-							const { headers } = await import("next/headers.js");
-							headersStore = await headers();
-						} catch {
-							return;
-						}
-						/**
-						 * Detect RSC via headers, NOT by probing cookies().set().
-						 * In Next.js, cookies().set() unconditionally triggers router
-						 * cache invalidation -- even if the value is unchanged.
-						 *
-						 * RSC sends `RSC: 1` without `next-action`. Only in that
-						 * context cookies cannot be written -- skip session refresh
-						 * to avoid DB/cookie mismatch.
-						 *
-						 * @see https://github.com/vercel/next.js/blob/8c5af211d580/packages/next/src/server/web/spec-extension/adapters/request-cookies.ts#L112-L157
-						 */
-						const isRSC = headersStore.get("RSC") === "1";
-						const isServerAction = !!headersStore.get("next-action");
-						if (isRSC && !isServerAction) {
-							await setShouldSkipSessionRefresh(true);
 						}
 					}),
 				},
