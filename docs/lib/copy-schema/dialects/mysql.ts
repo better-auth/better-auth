@@ -3,7 +3,12 @@ import type {
 	Resolver,
 	ResolverHandlerContext,
 } from "../types";
-import { filterForeignKeys, getTypeFactory } from "../utils";
+import {
+	filterForeignKeys,
+	filterNonUniqueIndexes,
+	getIndexName,
+	getTypeFactory,
+} from "../utils";
 
 type CustomResolverContext = ResolverHandlerContext & {
 	getType: ReturnType<typeof getTypeFactory>;
@@ -42,6 +47,26 @@ const formatForeignKey = (field: DBFieldAttribute) => {
 	return newLine;
 };
 
+const escapeSqlString = (value: string) => value.replace(/'/g, "''");
+
+const formatIndexedColumn = (field: DBFieldAttribute) =>
+	field.type === "string"
+		? `\`${field.fieldName}\`(191)`
+		: `\`${field.fieldName}\``;
+
+const formatIndex = (field: DBFieldAttribute, tableName: string) => {
+	const indexName = getIndexName(tableName, field);
+	const createIndex = `CREATE INDEX \`${indexName}\` ON \`${tableName}\` (${formatIndexedColumn(field)})`;
+	return [
+		`SET @table_exists = (SELECT COUNT(1) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = '${escapeSqlString(tableName)}');`,
+		`SET @index_exists = (SELECT COUNT(1) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = '${escapeSqlString(tableName)}' AND index_name = '${escapeSqlString(indexName)}');`,
+		`SET @create_index_sql = IF(@table_exists > 0 AND @index_exists = 0, '${escapeSqlString(createIndex)}', 'SELECT 1');`,
+		"PREPARE create_index_stmt FROM @create_index_sql;",
+		"EXECUTE create_index_stmt;",
+		"DEALLOCATE PREPARE create_index_stmt;",
+	].join("\n");
+};
+
 export const mysqlResolver = {
 	handler: (ctx) => {
 		const getType = getTypeFactory((field) => ({
@@ -49,7 +74,9 @@ export const mysqlResolver = {
 				? "varchar(255)"
 				: field.references
 					? "varchar(36)"
-					: "text",
+					: field.index
+						? "varchar(191)"
+						: "text",
 			boolean: "boolean",
 			number: field.bigint ? "bigint" : "integer",
 			date: "timestamp(3)",
@@ -86,6 +113,9 @@ export const mysqlResolver = {
 		}
 		if (ctx.mode === "create") {
 			lines.push(`);`);
+		}
+		for (const field of filterNonUniqueIndexes(ctx.schema)) {
+			lines.push(formatIndex(field, ctx.schema.modelName));
 		}
 		return lines.join("\n");
 	},

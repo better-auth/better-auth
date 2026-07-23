@@ -7,9 +7,26 @@ import { ms } from "../../utils/time";
 import type { DeviceAuthorizationOptions } from ".";
 import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
 import type { DeviceCode } from "./schema";
+import { DEVICE_AUTHORIZATION_CODE_MAX_LENGTH } from "./schema";
 
 /* cspell:disable-next-line */
 const defaultCharset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+function validateGeneratedCode(code: unknown, label: "device" | "user") {
+	if (typeof code !== "string") {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_request",
+			error_description: `Generated ${label} code must be a string`,
+		});
+	}
+	if (Array.from(code).length > DEVICE_AUTHORIZATION_CODE_MAX_LENGTH) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_request",
+			error_description: `Generated ${label} code must be at most ${DEVICE_AUTHORIZATION_CODE_MAX_LENGTH} characters`,
+		});
+	}
+	return code;
+}
 
 const deviceCodeBodySchema = z.object({
 	client_id: z.string().meta({
@@ -40,17 +57,17 @@ const deviceCodeErrorSchema = z.object({
 
 export const deviceCode = (opts: DeviceAuthorizationOptions) => {
 	const generateDeviceCode = async () => {
-		if (opts.generateDeviceCode) {
-			return opts.generateDeviceCode();
-		}
-		return defaultGenerateDeviceCode(opts.deviceCodeLength);
+		const code = opts.generateDeviceCode
+			? await opts.generateDeviceCode()
+			: defaultGenerateDeviceCode(opts.deviceCodeLength);
+		return validateGeneratedCode(code, "device");
 	};
 
 	const generateUserCode = async () => {
-		if (opts.generateUserCode) {
-			return opts.generateUserCode();
-		}
-		return defaultGenerateUserCode(opts.userCodeLength);
+		const code = opts.generateUserCode
+			? await opts.generateUserCode()
+			: defaultGenerateUserCode(opts.userCodeLength);
+		return validateGeneratedCode(code, "user");
 	};
 	return createAuthEndpoint(
 		"/device/code",

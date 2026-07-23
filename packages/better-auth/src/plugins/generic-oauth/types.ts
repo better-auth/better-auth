@@ -68,6 +68,17 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 */
 	discoveryUrl?: string | undefined;
 	/**
+	 * Require discovery to provide the issuer and JWKS metadata needed to verify
+	 * ID tokens before this provider is registered.
+	 *
+	 * Enable this when provider identity is derived from ID-token claims. This
+	 * prevents an unavailable or incomplete discovery document from silently
+	 * downgrading the provider to unverified token decoding.
+	 *
+	 * @default false
+	 */
+	requireIdTokenVerification?: boolean | undefined;
+	/**
 	 * URL for the authorization endpoint.
 	 * Optional if using discoveryUrl.
 	 */
@@ -82,6 +93,22 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * Optional if using discoveryUrl.
 	 */
 	userInfoUrl?: string | undefined;
+	/**
+	 * URL for the OIDC RP-Initiated Logout endpoint.
+	 * Optional if using discoveryUrl and the discovery document includes
+	 * `end_session_endpoint`.
+	 */
+	endSessionEndpoint?: string | undefined;
+	/**
+	 * URL the provider should redirect back to after logout.
+	 * This must also be registered with the provider as a post-logout redirect URI.
+	 */
+	postLogoutRedirectURI?: string | undefined;
+	/**
+	 * Disable automatic provider logout on `authClient.signOut()`.
+	 * When set, sign out only clears the Better Auth session.
+	 */
+	disableProviderLogout?: boolean | undefined;
 	/** OAuth client ID */
 	clientId: string;
 	/** OAuth client secret */

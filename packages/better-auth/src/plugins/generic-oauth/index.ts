@@ -49,6 +49,9 @@ export type BaseOAuthProviderOptions = Pick<
 	| "tokenEndpointAuth"
 	| "scopes"
 	| "redirectURI"
+	| "endSessionEndpoint"
+	| "postLogoutRedirectURI"
+	| "disableProviderLogout"
 	| "pkce"
 	| "disableImplicitSignUp"
 	| "disableSignUp"
@@ -61,6 +64,7 @@ interface DiscoveryDocument {
 	userinfo_endpoint?: string;
 	issuer?: string;
 	jwks_uri?: string;
+	end_session_endpoint?: string;
 	id_token_signing_alg_values_supported?: string[];
 }
 
@@ -201,6 +205,7 @@ export const genericOAuth = <const ID extends string>(
 				let authorizationUrl = c.authorizationUrl;
 				let tokenUrl = c.tokenUrl;
 				let userInfoUrl = c.userInfoUrl;
+				let endSessionEndpoint = c.endSessionEndpoint;
 
 				let issuer: string | undefined;
 				let isOidc = false;
@@ -225,6 +230,7 @@ export const genericOAuth = <const ID extends string>(
 						authorizationUrl ??= discovered.authorization_endpoint;
 						tokenUrl ??= discovered.token_endpoint;
 						userInfoUrl ??= discovered.userinfo_endpoint;
+						endSessionEndpoint ??= discovered.end_session_endpoint;
 						issuer = discovered.issuer;
 						const signingAlgs =
 							discovered.id_token_signing_alg_values_supported;
@@ -254,6 +260,11 @@ export const genericOAuth = <const ID extends string>(
 							`Provider "${c.providerId}": discovery returned no data and no explicit endpoints configured. OAuth sign-in will fail for this provider.`,
 						);
 					}
+				}
+				if (c.requireIdTokenVerification && !idTokenConfig) {
+					throw new Error(
+						`Provider "${c.providerId}": requires verified ID tokens, but discovery did not provide a usable issuer and jwks_uri.`,
+					);
 				}
 
 				const tokenEndpointAuth = c.tokenEndpointAuth;
@@ -315,6 +326,45 @@ export const genericOAuth = <const ID extends string>(
 						idTokenConfig !== undefined &&
 						c.disableIdTokenNonceBinding !== true,
 					allowIdpInitiated: c.allowIdpInitiated,
+					async createEndSessionURL(data: {
+						idToken?: string | null | undefined;
+						postLogoutRedirectURI?: string | undefined;
+						state?: string | undefined;
+					}) {
+						if (c.disableProviderLogout) {
+							return null;
+						}
+						if (!endSessionEndpoint) {
+							return null;
+						}
+						let url: URL;
+						try {
+							url = new URL(endSessionEndpoint);
+						} catch {
+							return null;
+						}
+						if (data.idToken) {
+							url.searchParams.set("id_token_hint", data.idToken);
+						}
+						const configuredRedirectURI =
+							data.postLogoutRedirectURI ?? c.postLogoutRedirectURI;
+						const postLogoutRedirectURI = configuredRedirectURI
+							? new URL(configuredRedirectURI, ctx.baseURL).toString()
+							: undefined;
+						if (postLogoutRedirectURI) {
+							url.searchParams.set(
+								"post_logout_redirect_uri",
+								postLogoutRedirectURI,
+							);
+							url.searchParams.set("client_id", c.clientId);
+							if (data.state) {
+								url.searchParams.set("state", data.state);
+							}
+						} else if (!data.idToken) {
+							url.searchParams.set("client_id", c.clientId);
+						}
+						return url;
+					},
 					createAuthorizationURL(data) {
 						if (!authorizationUrl) {
 							throw APIError.from(

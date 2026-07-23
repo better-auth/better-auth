@@ -4331,11 +4331,25 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           "content": {
             "application/json": {
               "schema": {
-                "properties": {},
+                "properties": {
+                  "callbackURL": {
+                    "description": "The URL to redirect to after provider logout",
+                    "type": "string",
+                  },
+                  "disableRedirect": {
+                    "description": "Return the provider logout URL without redirecting",
+                    "type": "boolean",
+                  },
+                  "state": {
+                    "description": "State to pass to the provider logout endpoint",
+                    "type": "string",
+                  },
+                },
                 "type": "object",
               },
             },
           },
+          "required": false,
         },
         "responses": {
           "200": {
@@ -4343,8 +4357,16 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
+                    "redirect": {
+                      "description": "Whether the client should redirect to the provider logout URL",
+                      "type": "boolean",
+                    },
                     "success": {
                       "type": "boolean",
+                    },
+                    "url": {
+                      "description": "Provider logout URL when RP-initiated logout is available",
+                      "type": "string",
                     },
                   },
                   "type": "object",
