@@ -522,6 +522,27 @@ export function clientAllowsGrant(
 }
 
 /**
+ * Validates requested scopes against a registered client's allowed scopes.
+ *
+ * @internal
+ */
+export function validateClientScopes(
+	client: Pick<SchemaClient<Scope[]>, "scopes">,
+	scopes?: string[],
+) {
+	if (!scopes || !client.scopes) return;
+	const validScopes = new Set(client.scopes);
+	for (const scope of scopes) {
+		if (!validScopes.has(scope)) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: `client does not allow scope ${scope}`,
+				error: "invalid_scope",
+			});
+		}
+	}
+}
+
+/**
  * Resolves the registered client by id and authorizes it: existence, disabled
  * state, registered auth method, requested scopes, and grant type. The record is
  * always resolved here via `getClient`, so a client-auth strategy proves the
@@ -615,18 +636,7 @@ export async function validateClientCredentials(
 		}
 	}
 
-	// If scopes set, check against client allowed scopes
-	if (scopes && client.scopes) {
-		const validScopes = new Set(client.scopes);
-		for (const sc of scopes) {
-			if (!validScopes.has(sc)) {
-				throw new APIError("BAD_REQUEST", {
-					error_description: `client does not allow scope ${sc}`,
-					error: "invalid_scope",
-				});
-			}
-		}
-	}
+	validateClientScopes(client, scopes);
 
 	// Enforce the client is registered for the requested grant type
 	if (grantType && !clientAllowsGrant(client, grantType)) {
