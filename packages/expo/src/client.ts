@@ -24,6 +24,8 @@ if (Platform.OS !== "web") {
 
 interface ExpoClientOptions {
 	scheme?: string | undefined;
+	origin?: string | undefined;
+	rewriteCallbackToDeepLink?: boolean | undefined;
 	storage: {
 		setItem: (key: string, value: string) => any;
 		getItem: (key: string) => string | null;
@@ -140,9 +142,8 @@ function getOAuthStateValue(
 	return null;
 }
 
-function getOrigin(scheme: string) {
-	const schemeURI = Linking.createURL("", { scheme });
-	return schemeURI;
+function getOrigin(scheme: string, origin?: string) {
+	return origin ?? Linking.createURL("", { scheme });
 }
 
 /**
@@ -460,6 +461,14 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							!context.request?.body.includes("idToken") // id token is used for silent sign-in
 						) {
 							const callbackURL = JSON.parse(context.request.body)?.callbackURL;
+							if (
+								opts?.rewriteCallbackToDeepLink === false &&
+								callbackURL?.startsWith("/")
+							) {
+								throw new Error(
+									'Relative callbackURL values are not supported when "rewriteCallbackToDeepLink" is false. Pass an absolute callback URL or omit "rewriteCallbackToDeepLink" to preserve deep-link rewriting.',
+								);
+							}
 							const to = callbackURL;
 							const signInURL = context.data?.url;
 							let Browser: typeof import("expo-web-browser") | undefined =
@@ -548,25 +557,29 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						options.headers = {
 							...options.headers,
 							...(cookie ? { cookie } : {}),
-							"expo-origin": getOrigin(scheme!),
+							"expo-origin": getOrigin(scheme!, opts?.origin),
 							"x-skip-oauth-proxy": "true",
 						};
-						if (options.body?.callbackURL) {
-							if (options.body.callbackURL.startsWith("/")) {
-								const url = Linking.createURL(options.body.callbackURL);
-								options.body.callbackURL = url;
+						if (opts?.rewriteCallbackToDeepLink !== false) {
+							if (options.body?.callbackURL) {
+								if (options.body.callbackURL.startsWith("/")) {
+									const url = Linking.createURL(options.body.callbackURL);
+									options.body.callbackURL = url;
+								}
 							}
-						}
-						if (options.body?.newUserCallbackURL) {
-							if (options.body.newUserCallbackURL.startsWith("/")) {
-								const url = Linking.createURL(options.body.newUserCallbackURL);
-								options.body.newUserCallbackURL = url;
+							if (options.body?.newUserCallbackURL) {
+								if (options.body.newUserCallbackURL.startsWith("/")) {
+									const url = Linking.createURL(
+										options.body.newUserCallbackURL,
+									);
+									options.body.newUserCallbackURL = url;
+								}
 							}
-						}
-						if (options.body?.errorCallbackURL) {
-							if (options.body.errorCallbackURL.startsWith("/")) {
-								const url = Linking.createURL(options.body.errorCallbackURL);
-								options.body.errorCallbackURL = url;
+							if (options.body?.errorCallbackURL) {
+								if (options.body.errorCallbackURL.startsWith("/")) {
+									const url = Linking.createURL(options.body.errorCallbackURL);
+									options.body.errorCallbackURL = url;
+								}
 							}
 						}
 						if (url.includes("/sign-out")) {

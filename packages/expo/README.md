@@ -58,7 +58,7 @@ export const auth = betterAuth({
     enabled: true,
   },
   // Add other configurations like trustedOrigins
-  trustedOrigins: ['myapp://'], // Replace "myapp" with your app's scheme
+  trustedOrigins: ['myapp://'], // Replace "myapp" with your app's scheme. Also add your HTTPS origin here if you configure expoClient({ origin: "https://..." }).
 });
 ```
 
@@ -88,6 +88,35 @@ export const authClient = createAuthClient({
 ```
 
 Make sure your app’s scheme (e.g., “myapp”) is defined in your `app.json`.
+Use `origin` for HTTPS App Links / Universal Links and email-based flows. If you
+omit it, the client keeps using the scheme-based origin derived from
+`Linking.createURL`, and `rewriteCallbackToDeepLink` defaults to `true` to
+preserve the existing deep-link callback behavior.
+When you set `origin`, add that HTTPS origin to your server's
+`trustedOrigins` list too, or Better Auth will reject the request during
+origin validation.
+
+If you want to use HTTPS callback URLs instead of rewriting relative callbacks
+into deep links, configure the options explicitly:
+
+```typescript
+expoClient({
+  storage: SecureStore,
+  storagePrefix: 'myapp',
+  origin: 'https://myapp.example.com',
+  rewriteCallbackToDeepLink: false,
+});
+```
+
+On the backend, include that HTTPS origin in `trustedOrigins` as well:
+
+```typescript
+trustedOrigins: ['myapp://', 'https://myapp.example.com']
+```
+
+When `rewriteCallbackToDeepLink` is `false`, pass an absolute callback URL
+(for example an HTTPS App Link / Universal Link). Relative callback paths like
+`/dashboard` are only supported when the default deep-link rewriting is enabled.
 
 ## Documentation
 
