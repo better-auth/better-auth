@@ -1,6 +1,6 @@
 {
   "name": "auth",
-  "version": "1.7.0-rc.1",
+  "version": "1.7.0-rc.2",
   "description": "The CLI for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -62,7 +62,7 @@
     "@better-auth/core": "workspace:*",
     "@better-auth/telemetry": "workspace:*",
     "@better-auth/utils": "catalog:",
-    "@clack/prompts": "^1.5.1",
+    "@clack/prompts": "^1.6.0",
     "@mrleebo/prisma-ast": "^0.16.0",
     "better-auth": "workspace:*",
     "c12": "^4.0.0-beta.5",

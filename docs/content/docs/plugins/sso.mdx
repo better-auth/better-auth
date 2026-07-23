@@ -1528,6 +1528,10 @@ await authClient.signIn.sso({
 });
 ```
 
+For unsolicited **IdP-initiated** flows where `signIn.sso()` is not used (and therefore no client-side `callbackURL` is set), configure `idpInitiatedCallbackUrl` in the provider's `samlConfig` or in the global `saml` plugin options. The provider setting takes precedence over the global setting, and the same fallback applies to validation error redirects. Better Auth-generated `RelayState` success and error callbacks retain higher priority. If neither fallback is configured, the existing redirect behavior is preserved.
+
+When updating a provider, pass `null` for `samlConfig.idpInitiatedCallbackUrl` to remove its override and fall back to the global setting.
+
 The callback route supports both GET and POST methods automatically, so you don't need to create any additional route handlers in your framework.
 
 ### Additional Provider Fields
@@ -1656,10 +1660,10 @@ Better Auth supports **IdP-initiated SSO flows**, where users access your applic
 3. Better Auth processes the assertion, creates a session, and redirects to your application
 4. Browser follows the redirect with a GET request (handled automatically)
 
-**No additional configuration required** - the callback route automatically handles both GET and POST requests.
+No additional route handler is required. The callback route automatically handles both GET and POST requests.
 
 <Callout type="warn">
-  IdP-initiated flows do not carry a RelayState, so the post-login redirect falls back to your application's base URL. To control where users land after SP-initiated SSO, pass the destination via `callbackURL` in the `signIn.sso()` call.
+  IdP-initiated flows do not carry a Better Auth-generated RelayState containing a client-side callback URL, so the redirect falls back to the Better Auth base URL. In split-origin setups (where the app frontend is on a different origin than the Better Auth server), this lands on the auth server origin and can result in a 404. Configure `idpInitiatedCallbackUrl` globally under the `saml` plugin options or per provider under `samlConfig` (e.g., `https://app.example.com/dashboard`) to return successful sign-ins and validation errors to the frontend.
 </Callout>
 
 <Callout type="info">

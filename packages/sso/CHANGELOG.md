@@ -1,5 +1,21 @@
 # @better-auth/sso
 
+## 1.7.0-rc.2
+
+### Minor Changes
+
+- [#10403](https://github.com/better-auth/better-auth/pull/10403) [`dbd302e`](https://github.com/better-auth/better-auth/commit/dbd302e422c66620cde391f6a80ab90ee34182f9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Scope account identity by trusted issuer instead of provider configuration. Accounts now use the unique `(issuer, providerAccountId)` key, so aliases for one OpenID Connect issuer deduplicate one external identity while equal subjects from different issuers remain separate. This identity deduplication does not introduce independent grant or provider lifecycle records for aliases.
+
+  This release is breaking. `Account.accountId` is renamed to `Account.providerAccountId`, and `Account.issuer` is required. Account-specific APIs select the local `Account.id` through `accountId`; token and provider-profile APIs can instead select the signed account cookie with `useAccountCookie: true`. Credential accounts use `local:credential` and the linked user's stable `id` as their provider identity.
+
+  OAuth provider identity now comes from raw verified profiles. OpenID Connect discovery uses `sub`, plain OAuth uses `id`, and providers can declare `accountSubject` for another immutable field; Better Auth no longer switches between `sub` and `id` at runtime. `getUserInfo().user` no longer carries provider identity, and `mapProfileToUser` cannot return `id`. Read the selected identity from `accountInfo.account.providerAccountId` instead of `accountInfo.user.id`. The generic `microsoftEntraId` helper now requires a concrete tenant GUID; use the built-in Microsoft provider for multi-tenant authorities.
+
+  SSO account subjects are now protocol-defined. OIDC uses the verified `sub` claim, and SAML uses the signed `NameID`; `mapping.id` is removed from both configurations. A manual SAML configuration without metadata XML must set `idpMetadata.entityID`, because `samlConfig.issuer` identifies the service provider and no longer acts as the IdP identity.
+
+  Apply the reviewed account-identity backfill in the Better Auth 1.7 upgrade guide before deploying. The generated schema migration cannot assign trusted issuers or resolve existing identity collisions automatically.
+
+- [#10473](https://github.com/better-auth/better-auth/pull/10473) [`ed61b47`](https://github.com/better-auth/better-auth/commit/ed61b4798e0ccedadc3b0c0e0a2d08b5d4b7ed5a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add transactional OIDC user resolution so applications can link verified issuer and subject pairs to exact existing users while preserving or updating the local profile.
+
 ## 1.7.0-rc.1
 
 ## 1.7.0-rc.0
@@ -123,6 +139,16 @@
   Closes [#5592](https://github.com/better-auth/better-auth/issues/5592).
   Closes [#5604](https://github.com/better-auth/better-auth/issues/5604).
   Supersedes [#4992](https://github.com/better-auth/better-auth/issues/4992) and [#5443](https://github.com/better-auth/better-auth/issues/5443).
+
+## 1.6.24
+
+### Patch Changes
+
+- [#10388](https://github.com/better-auth/better-auth/pull/10388) [`c020a9d`](https://github.com/better-auth/better-auth/commit/c020a9d6a2e7782f388363a85fc0748ae8b3b0c9) Thanks [@ayushman46](https://github.com/ayushman46)! - IdP-initiated SAML sign-ins in split-origin deployments can now return users to a configured application URL after authentication or a validation error, instead of falling back to the authentication server. Configure `idpInitiatedCallbackUrl` globally or per provider.
+
+- Updated dependencies [[`03dc5a0`](https://github.com/better-auth/better-auth/commit/03dc5a046f536994950800ea557b8e2e2e0cdfdd), [`7508940`](https://github.com/better-auth/better-auth/commit/750894037639c4158472cc1d4994b0e07bf1f59a), [`bae7198`](https://github.com/better-auth/better-auth/commit/bae71988ab79aeb4f19f245ceabac9eca8706a50), [`ef4d273`](https://github.com/better-auth/better-auth/commit/ef4d27360cec8a0bc11a94e135ea4a3dd32b1969), [`6758231`](https://github.com/better-auth/better-auth/commit/6758231905d2e86a7b3f058dd05c17ba739aa80f), [`99dbdd7`](https://github.com/better-auth/better-auth/commit/99dbdd7ea98740d11689394220a718dfb9579276), [`086ca91`](https://github.com/better-auth/better-auth/commit/086ca91f51dd8158aff6cbf54c4f9c7ce220914d), [`8f2dedd`](https://github.com/better-auth/better-auth/commit/8f2dedd89301da9fb52c1a64df6a9683f9be55fd), [`4e685ee`](https://github.com/better-auth/better-auth/commit/4e685eef420b5576913b9803b58c7e7ee7342203), [`3bf0e49`](https://github.com/better-auth/better-auth/commit/3bf0e4981e025ba9af684013a27b0102a04f7c56), [`f59a0ee`](https://github.com/better-auth/better-auth/commit/f59a0ee7895a024ddd4c5c387344173888e17be4), [`54fab08`](https://github.com/better-auth/better-auth/commit/54fab084469a27257e66a0814523ebac7145ef5d), [`0f2cc1b`](https://github.com/better-auth/better-auth/commit/0f2cc1b33b77850948dac4d889e5f46bba41e8d5), [`ae78109`](https://github.com/better-auth/better-auth/commit/ae781091186f321b4e4ec9e84f64b6e4d5ea1043), [`46d2bf0`](https://github.com/better-auth/better-auth/commit/46d2bf02c98902da7b344753372d48cfe0e5ebb3), [`29a373e`](https://github.com/better-auth/better-auth/commit/29a373eaf1778820061a9380c29831c2de2ce704), [`f6d18fa`](https://github.com/better-auth/better-auth/commit/f6d18fa8f79b9323e10b50f72e2b1a088844e4bb), [`f23ce50`](https://github.com/better-auth/better-auth/commit/f23ce5012ea47fac1a69b1dad203dfdef3830fd0), [`c4d1dda`](https://github.com/better-auth/better-auth/commit/c4d1ddaa952eab7edfec942fab223f35798518ab)]:
+  - better-auth@1.6.24
+  - @better-auth/core@1.6.24
 
 ## 1.6.23
 

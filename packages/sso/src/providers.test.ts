@@ -6,11 +6,42 @@ import { organization } from "better-auth/plugins";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
+import { getRegisterSSOProviderBodySchema } from "./routes/schemas";
 import type { SAMLConfig, SSOOptions } from "./types";
 import { safeJsonParse } from "./utils";
 
 const TEST_CERT = `MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiUMA0Gcm9markup
 temporary cert for testing`;
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10329
+ */
+describe("SAML redirect URL schema", () => {
+	const registerProviderSchema = getRegisterSSOProviderBodySchema();
+
+	it.each([
+		["/dashboard", true],
+		["https://frontend.example.com/dashboard", true],
+		["//evil.example.com", false],
+		["/\\evil.example.com", false],
+		["/%2fevil.example.com", false],
+		["/%5cevil.example.com", false],
+		["dashboard", false],
+	])("validates %s", (url, expected) => {
+		expect(
+			registerProviderSchema.safeParse({
+				providerId: "saml-provider",
+				issuer: "https://idp.example.com",
+				domain: "example.com",
+				samlConfig: {
+					entryPoint: "https://idp.example.com/sso",
+					idpInitiatedCallbackUrl: url,
+					idpMetadata: { entityID: "https://idp.example.com" },
+				},
+			}).success,
+		).toBe(expected);
+	});
+});
 
 describe("SSO provider read endpoints", () => {
 	type TestUser = { email: string; password: string; name: string };
@@ -1035,6 +1066,47 @@ kBGIJYs=
 			expect(updated.samlConfig?.entryPoint).toBe(
 				"https://idp.example.com/sso",
 			);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should clear a provider-level IdP-initiated callback URL", async () => {
+			const { auth, getAuthHeaders, data } = createTestAuth(false);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "my-saml-provider",
+					issuer: "https://idp.example.com",
+					domain: "example.com",
+					samlConfig: {
+						entryPoint: "https://idp.example.com/sso",
+						cert: TEST_CERT,
+						idpInitiatedCallbackUrl: "/dashboard",
+						idpMetadata: { entityID: "https://idp.example.com" },
+					},
+				},
+				headers,
+			});
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "my-saml-provider",
+					samlConfig: { idpInitiatedCallbackUrl: null },
+				},
+				headers,
+			});
+
+			expect(updated.samlConfig?.idpInitiatedCallbackUrl).toBeUndefined();
+			const storedConfig = safeJsonParse<SAMLConfig>(
+				data.ssoProvider[0]!.samlConfig!,
+			);
+			expect(storedConfig?.idpInitiatedCallbackUrl).toBeUndefined();
 		});
 
 		it("should perform partial update on OIDC provider", async () => {

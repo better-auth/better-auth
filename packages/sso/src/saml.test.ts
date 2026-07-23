@@ -34,6 +34,7 @@ import {
 import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
+import { getSafeRedirectUrl } from "./routes/saml-pipeline";
 import { saml } from "./samlify";
 import { normalizePem } from "./utils";
 
@@ -1717,7 +1718,7 @@ describe("SAML SSO", async () => {
 		["good-then-bad", [mockIdpSigningCert, unrelatedCertificate]],
 	])("should validate SAML response when signing cert matches any in the array (%s)", async (_name, certs) => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -1849,7 +1850,7 @@ describe("SAML SSO", async () => {
 
 	it("should initiate SAML login and validate RelayState", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso()],
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -1991,7 +1992,12 @@ describe("SAML SSO", async () => {
 
 	it("should initiate SAML login and signup user when disableImplicitSignUp is true but requestSignup is explicitly enabled", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [sso({ disableImplicitSignUp: true })],
+			plugins: [
+				sso({
+					disableImplicitSignUp: true,
+					saml: { enableInResponseToValidation: false },
+				}),
+			],
 		});
 
 		const { headers } = await signInWithTestUser();
@@ -3342,6 +3348,9 @@ describe("safeJsonParse", () => {
 });
 
 describe("SSO Provider Config Parsing", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10329
+	 */
 	it("returns parsed SAML config and avoids [object Object] in response", async () => {
 		const data = {
 			user: [] as any[],
@@ -3389,6 +3398,8 @@ describe("SSO Provider Config Parsing", () => {
 					entryPoint: "http://localhost:8081/sso",
 					cert: "test-cert",
 					idpMetadata: mockIdentityProviderMetadata,
+					callbackUrl: "http://localhost:3000/callback",
+					idpInitiatedCallbackUrl: "/dashboard",
 					spMetadata: {
 						entityID: "test-entity",
 					},
@@ -3401,6 +3412,7 @@ describe("SSO Provider Config Parsing", () => {
 		expect(typeof provider.samlConfig).toBe("object");
 		expect(provider.samlConfig?.entryPoint).toBe("http://localhost:8081/sso");
 		expect(provider.samlConfig?.cert).toBe("test-cert");
+		expect(provider.samlConfig?.idpInitiatedCallbackUrl).toBe("/dashboard");
 
 		const serialized = JSON.stringify(provider.samlConfig);
 		expect(serialized).not.toContain("[object Object]");
@@ -6932,7 +6944,7 @@ describe("SAML SSO Hardening", () => {
 	describe("RelayState controls post-auth redirect", () => {
 		it("should redirect to RelayState callbackURL after authentication", async () => {
 			const { auth, signInWithTestUser } = await getTestInstance({
-				plugins: [sso()],
+				plugins: [sso({ saml: { enableInResponseToValidation: false } })],
 			});
 			const { headers } = await signInWithTestUser();
 
@@ -6987,6 +6999,595 @@ describe("SAML SSO Hardening", () => {
 			// MUST redirect to the RelayState callbackURL
 			expect(location).toContain("/from-relay-state");
 			expect(location).not.toContain("/from-config");
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10329
+	 */
+	describe("IdP-initiated SAML login with split origin redirect", () => {
+		const frontendOrigin = "https://frontend.example.com";
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should allow a trusted cross-origin redirect with the ACS pathname", () => {
+			const appOrigin = "http://localhost:3000";
+			const callbackPath = `${appOrigin}/api/auth/sso/saml2/sp/acs/shared-path-provider`;
+			const frontendCallback = `${frontendOrigin}/api/auth/sso/saml2/sp/acs/shared-path-provider`;
+
+			expect(
+				getSafeRedirectUrl(
+					[frontendCallback],
+					callbackPath,
+					appOrigin,
+					() => true,
+				),
+			).toBe(frontendCallback);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it.each([
+			"/\\evil.example.com",
+			"/%2fevil.example.com",
+			"/%5cevil.example.com",
+		])("should skip unsafe relative redirect candidate %s", (candidate) => {
+			const appOrigin = "http://localhost:3000";
+			const callbackPath = `${appOrigin}/api/auth/sso/saml2/sp/acs/provider`;
+
+			expect(
+				getSafeRedirectUrl(
+					[candidate, "/dashboard"],
+					callbackPath,
+					appOrigin,
+					() => true,
+				),
+			).toBe("/dashboard");
+		});
+
+		async function getIdPInitiatedSAMLResponse(): Promise<string> {
+			let response: MockSAMLResponse | undefined;
+			await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+				onSuccess: async (context) => {
+					response = (await context.data) as MockSAMLResponse;
+				},
+			});
+			if (!response) throw new Error("Mock IdP did not return a SAML response");
+			return response.samlResponse;
+		}
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should redirect to provider-level idpInitiatedCallbackUrl when RelayState is missing (IdP-initiated)", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				trustedOrigins: [frontendOrigin],
+				plugins: [
+					sso({
+						saml: {
+							allowIdpInitiated: true,
+							enableInResponseToValidation: false,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			// Provider with provider-level idpInitiatedCallbackUrl
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "split-origin-provider",
+					issuer: "http://localhost:8081",
+					domain: "split.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl:
+							"http://localhost:3000/api/auth/sso/saml2/callback/split-origin-provider",
+						idpInitiatedCallbackUrl: `${frontendOrigin}/provider-idp-redirect`,
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+					},
+				},
+				headers,
+			});
+
+			const samlResponse = await getIdPInitiatedSAMLResponse();
+
+			const callbackResponse = (await auth.api.acsEndpoint({
+				method: "POST",
+				body: {
+					SAMLResponse: samlResponse,
+				},
+				params: { providerId: "split-origin-provider" },
+				asResponse: true,
+			})) as unknown as Response;
+
+			expect(callbackResponse.status).toBe(302);
+			expect(callbackResponse.headers.get("location")).toBe(
+				`${frontendOrigin}/provider-idp-redirect`,
+			);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should redirect to global idpInitiatedCallbackUrl when RelayState is missing (IdP-initiated fallback)", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				trustedOrigins: [frontendOrigin],
+				plugins: [
+					sso({
+						saml: {
+							allowIdpInitiated: true,
+							enableInResponseToValidation: false,
+							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			// Provider without provider-level idpInitiatedCallbackUrl (should fall back to global plugin option)
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "global-fallback-provider",
+					issuer: "http://localhost:8081",
+					domain: "fallback.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl:
+							"http://localhost:3000/api/auth/sso/saml2/callback/global-fallback-provider",
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+					},
+				},
+				headers,
+			});
+
+			const samlResponse = await getIdPInitiatedSAMLResponse();
+
+			const fallbackResponse = (await auth.api.acsEndpoint({
+				method: "POST",
+				body: {
+					SAMLResponse: samlResponse,
+				},
+				params: { providerId: "global-fallback-provider" },
+				asResponse: true,
+			})) as unknown as Response;
+
+			expect(fallbackResponse.status).toBe(302);
+			expect(fallbackResponse.headers.get("location")).toBe(
+				`${frontendOrigin}/global-idp-redirect`,
+			);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should prioritize SP-initiated RelayState over idpInitiatedCallbackUrl", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				trustedOrigins: [frontendOrigin],
+				plugins: [
+					sso({
+						saml: {
+							allowIdpInitiated: true,
+							enableInResponseToValidation: false,
+							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "priority-test-provider",
+					issuer: "http://localhost:8081",
+					domain: "priority.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl:
+							"http://localhost:3000/api/auth/sso/saml2/callback/priority-test-provider",
+						idpInitiatedCallbackUrl: `${frontendOrigin}/provider-idp-redirect`,
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+					},
+				},
+				headers,
+			});
+
+			// Sign in with SP-initiated flow requesting a specific callbackURL
+			const signInResponse = await auth.api.signInSSO({
+				body: {
+					providerId: "priority-test-provider",
+					callbackURL: "/from-relay-state",
+				},
+			});
+
+			let samlResponse: MockSAMLResponse | undefined;
+			await betterFetch(signInResponse.url as string, {
+				onSuccess: async (context) => {
+					samlResponse = (await context.data) as MockSAMLResponse;
+				},
+			});
+			if (!samlResponse)
+				throw new Error("Mock IdP did not return a SAML response");
+
+			const signInUrl = new URL(signInResponse.url as string);
+			const relayState = signInUrl.searchParams.get("RelayState") ?? "";
+
+			const callbackResponse = (await auth.api.acsEndpoint({
+				method: "POST",
+				body: {
+					SAMLResponse: samlResponse.samlResponse,
+					RelayState: relayState,
+				},
+				params: { providerId: "priority-test-provider" },
+				asResponse: true,
+			})) as unknown as Response;
+
+			expect(callbackResponse.status).toBe(302);
+			const location = callbackResponse.headers.get("location") || "";
+			expect(location).toContain("/from-relay-state");
+			expect(location).not.toContain("/provider-idp-redirect");
+			expect(location).not.toContain("/global-idp-redirect");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should preserve the signed RelayState error callback on validation errors", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				trustedOrigins: [frontendOrigin],
+				plugins: [
+					sso({
+						saml: {
+							allowIdpInitiated: true,
+							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "error-relay-state-provider",
+					issuer: "http://localhost:8081",
+					domain: "error-relay-state.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl:
+							"http://localhost:3000/api/auth/sso/saml2/callback/error-relay-state-provider",
+						idpInitiatedCallbackUrl: `${frontendOrigin}/provider-idp-redirect`,
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+					},
+				},
+				headers,
+			});
+
+			const signInResponse = await auth.api.signInSSO({
+				body: {
+					providerId: "error-relay-state-provider",
+					callbackURL: `${frontendOrigin}/success`,
+					errorCallbackURL: `${frontendOrigin}/saml-error#details`,
+				},
+			});
+			const signInUrl = new URL(signInResponse.url as string);
+			const relayState = signInUrl.searchParams.get("RelayState") ?? "";
+
+			const callbackResponse = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/error-relay-state-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: "invalid-saml-response-garbage",
+							RelayState: relayState,
+						}),
+					},
+				),
+			);
+
+			expect(callbackResponse.status).toBe(302);
+			const redirectUrl = new URL(
+				callbackResponse.headers.get("location") || "",
+			);
+			expect(redirectUrl.origin).toBe(frontendOrigin);
+			expect(redirectUrl.pathname).toBe("/saml-error");
+			expect(redirectUrl.searchParams.get("error")).toBe(
+				"saml_invalid_encoding",
+			);
+			expect(redirectUrl.hash).toBe("#details");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should preserve the signed error callback on binding validation errors", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				trustedOrigins: [frontendOrigin],
+				plugins: [
+					sso({
+						saml: {
+							allowIdpInitiated: true,
+							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "binding-error-relay-state-provider",
+					issuer: "http://localhost:8081",
+					domain: "binding-error.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl:
+							"http://localhost:3000/api/auth/sso/saml2/sp/acs/binding-error-relay-state-provider",
+						idpInitiatedCallbackUrl: `${frontendOrigin}/provider-idp-redirect`,
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+					},
+				},
+				headers,
+			});
+
+			const signInResponse = await auth.api.signInSSO({
+				body: {
+					providerId: "binding-error-relay-state-provider",
+					callbackURL: `${frontendOrigin}/success`,
+					errorCallbackURL: `${frontendOrigin}/binding-error#details`,
+				},
+			});
+			const idpResponseUrl = new URL(signInResponse.url as string);
+			idpResponseUrl.searchParams.set(
+				"audience",
+				"https://unexpected.example.com/saml/metadata",
+			);
+
+			let samlResponse: MockSAMLResponse | undefined;
+			await betterFetch(idpResponseUrl.toString(), {
+				onSuccess: async (context) => {
+					samlResponse = (await context.data) as MockSAMLResponse;
+				},
+			});
+			if (!samlResponse)
+				throw new Error("Mock IdP did not return a SAML response");
+
+			const relayState = idpResponseUrl.searchParams.get("RelayState") ?? "";
+			const callbackResponse = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/binding-error-relay-state-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: samlResponse.samlResponse,
+							RelayState: relayState,
+						}),
+					},
+				),
+			);
+
+			expect(callbackResponse.status).toBe(302);
+			const redirectUrl = new URL(
+				callbackResponse.headers.get("location") || "",
+			);
+			expect(redirectUrl.origin).toBe(frontendOrigin);
+			expect(redirectUrl.pathname).toBe("/binding-error");
+			expect(redirectUrl.searchParams.get("error")).toBe(
+				"invalid_saml_response",
+			);
+			expect(redirectUrl.hash).toBe("#details");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should prevent open redirect attacks on idpInitiatedCallbackUrl", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					sso({
+						saml: {
+							allowIdpInitiated: true,
+							enableInResponseToValidation: false,
+							idpInitiatedCallbackUrl: "http://attacker.com/malicious",
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "unsafe-provider",
+					issuer: "http://localhost:8081",
+					domain: "unsafe.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+					},
+				},
+				headers,
+			});
+
+			const samlResponse = await getIdPInitiatedSAMLResponse();
+
+			const callbackResponse = (await auth.api.acsEndpoint({
+				method: "POST",
+				body: {
+					SAMLResponse: samlResponse,
+				},
+				params: { providerId: "unsafe-provider" },
+				asResponse: true,
+			})) as unknown as Response;
+
+			expect(callbackResponse.status).toBe(302);
+			const location = callbackResponse.headers.get("location") || "";
+			// Should fall back to appOrigin because http://attacker.com/malicious is not a trusted origin
+			expect(location).not.toContain("attacker.com");
+			expect(location).toBe("http://localhost:3000"); // appOrigin
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should redirect to idpInitiatedCallbackUrl on SAML validation error", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				trustedOrigins: [frontendOrigin],
+				plugins: [
+					sso({
+						saml: {
+							allowIdpInitiated: true,
+							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "error-provider",
+					issuer: "http://localhost:8081",
+					domain: "error.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl:
+							"http://localhost:3000/api/auth/sso/saml2/callback/error-provider",
+						idpInitiatedCallbackUrl: `${frontendOrigin}/provider-idp-redirect#saml`,
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+					},
+				},
+				headers,
+			});
+
+			const callbackResponse = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/error-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: "invalid-saml-response-garbage",
+							RelayState:
+								"http://localhost:3000/api/auth/sso/saml2/sp/acs/error-provider",
+						}),
+					},
+				),
+			);
+
+			expect(callbackResponse.status).toBe(302);
+			const location = callbackResponse.headers.get("location") || "";
+			const redirectUrl = new URL(location);
+			expect(redirectUrl.origin).toBe(frontendOrigin);
+			expect(redirectUrl.pathname).toBe("/provider-idp-redirect");
+			expect(redirectUrl.searchParams.get("error")).toBe(
+				"saml_invalid_encoding",
+			);
+			expect(redirectUrl.hash).toBe("#saml");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should use the global fallback when provider lookup fails before error redirect resolution", async () => {
+			const data = {
+				user: [],
+				session: [],
+				verification: [],
+				account: [],
+				ssoProvider: [],
+			};
+			const memory = memoryAdapter(data);
+			let failProviderLookup = false;
+			const database: typeof memory = (options) => {
+				const adapter = memory(options);
+				const findOne: typeof adapter.findOne = async (query) => {
+					if (failProviderLookup && query.model === "ssoProvider") {
+						throw new Error("provider lookup unavailable");
+					}
+					return adapter.findOne(query);
+				};
+				return { ...adapter, findOne };
+			};
+			const { auth, signInWithTestUser } = await getTestInstance({
+				database,
+				trustedOrigins: [frontendOrigin],
+				plugins: [
+					sso({
+						saml: {
+							allowIdpInitiated: true,
+							idpInitiatedCallbackUrl: `${frontendOrigin}/global-idp-redirect`,
+							maxResponseSize: 16,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "error-lookup-provider",
+					issuer: "http://localhost:8081",
+					domain: "error-lookup.example.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl:
+							"http://localhost:3000/api/auth/sso/saml2/callback/error-lookup-provider",
+						idpInitiatedCallbackUrl: `${frontendOrigin}/provider-idp-redirect`,
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+					},
+				},
+				headers,
+			});
+
+			failProviderLookup = true;
+			const callbackResponse = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/error-lookup-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: "response-exceeds-size-limit",
+						}),
+					},
+				),
+			);
+
+			expect(callbackResponse.status).toBe(302);
+			const redirectUrl = new URL(
+				callbackResponse.headers.get("location") || "",
+			);
+			expect(redirectUrl.origin).toBe(frontendOrigin);
+			expect(redirectUrl.pathname).toBe("/global-idp-redirect");
+			expect(redirectUrl.searchParams.get("error")).toBe("saml_error");
 		});
 	});
 });

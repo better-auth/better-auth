@@ -4497,9 +4497,16 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "description": "The password of the user",
                     "type": "string",
                   },
+                  "preferences": {
+                    "type": "string",
+                  },
                   "rememberMe": {
                     "description": "If this is false, the session will not be remembered. Default is \`true\`.",
                     "type": "boolean",
+                  },
+                  "role": {
+                    "default": "user",
+                    "type": "string",
                   },
                 },
                 "required": [
@@ -5009,6 +5016,13 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                   },
                   "name": {
                     "description": "The name of the user",
+                    "type": "string",
+                  },
+                  "preferences": {
+                    "type": "string",
+                  },
+                  "role": {
+                    "default": "user",
                     "type": "string",
                   },
                 },

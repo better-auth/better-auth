@@ -3,7 +3,11 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { betterFetch } from "@better-fetch/fetch";
 import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
-import { setSessionCookie } from "better-auth/cookies";
+import {
+	parseSetCookieHeader,
+	setSessionCookie,
+	toCookieOptions,
+} from "better-auth/cookies";
 import type { User } from "better-auth/db";
 import { parseUserOutput } from "better-auth/db";
 import { generateCodeChallenge } from "better-auth/oauth2";
@@ -182,7 +186,7 @@ export const electronInitOAuthProxy = (opts: ElectronOptions) =>
 		async (ctx) => {
 			const headers = new Headers(ctx.request?.headers);
 			headers.set("origin", new URL(ctx.context.baseURL).origin);
-			let setCookie: string | null = null;
+			let setCookies: string[] = [];
 			const searchParams = new URLSearchParams();
 			searchParams.set("client_id", opts.clientID || "electron");
 			searchParams.set("code_challenge", ctx.query.code_challenge);
@@ -198,9 +202,8 @@ export const electronInitOAuthProxy = (opts: ElectronOptions) =>
 				body: {
 					provider: ctx.query.provider,
 				},
-				onResponse: (ctx) => {
-					const headers = ctx.response.headers;
-					setCookie = headers.get("set-cookie") ?? null;
+				onResponse: (innerCtx) => {
+					setCookies = innerCtx.response.headers.getSetCookie();
 				},
 				headers,
 			});
@@ -211,8 +214,11 @@ export const electronInitOAuthProxy = (opts: ElectronOptions) =>
 				});
 			}
 
-			if (setCookie) {
-				ctx.setHeader("set-cookie", setCookie);
+			for (const cookieStr of setCookies) {
+				const parsed = parseSetCookieHeader(cookieStr);
+				parsed.forEach((attrs, name) => {
+					ctx.setCookie(name, attrs.value, toCookieOptions(attrs));
+				});
 			}
 			if (res.data.url && res.data.redirect) {
 				ctx.setHeader("Location", res.data.url);

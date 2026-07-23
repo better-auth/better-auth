@@ -6,6 +6,7 @@ import { deprecate } from "@better-auth/core/utils/deprecate";
 import * as z from "zod";
 import {
 	APIError,
+	formCsrfMiddleware,
 	getSessionFromCtx,
 	sensitiveSessionMiddleware,
 } from "../../api";
@@ -98,6 +99,7 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 		"/email-otp/send-verification-otp",
 		{
 			method: "POST",
+			use: [formCsrfMiddleware],
 			body: sendVerificationOTPBodySchema,
 			metadata: {
 				openapi: {

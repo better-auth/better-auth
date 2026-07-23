@@ -1,5 +1,19 @@
 # @better-auth/scim
 
+## 1.7.0-rc.2
+
+### Minor Changes
+
+- [#10474](https://github.com/better-auth/better-auth/pull/10474) [`dec763e`](https://github.com/better-auth/better-auth/commit/dec763ef2c5af1217888a4d7f3e8b6815cd0df52) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `acquireActiveSCIMUserLink` for transaction-safe authentication of provisioned users. The helper maps an exact SCIM connection ID and `externalId` to an active Better Auth User while fencing concurrent subject changes, deactivation, deletion, and connection decommissioning.
+
+  Compose the helper with SSO `resolveUser` to link the provisioned User without matching by email or `userName`.
+
+- [#10390](https://github.com/better-auth/better-auth/pull/10390) [`0de88f5`](https://github.com/better-auth/better-auth/commit/0de88f5e61d96f460e02b8a526e58acb16455d15) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SCIM connections can now provision Users, Groups, and direct memberships into application-defined provisioning domains without the organization or SSO plugins. Applications can map Group membership to validated custom roles through projections. The service also supports SCIM 2.0 discovery, filtering, pagination, response attribute selection, atomic PATCH operations, and common request patterns used by Microsoft Entra ID and Okta.
+
+  This replaces the previous SCIM configuration, client APIs, database schema, and organization-backed Group model. Existing SCIM installations cannot migrate provisioning state in place. Follow the SCIM cutover in the 1.7 upgrade guide, including full directory reprovisioning, before resuming traffic.
+
+  Deferred database side effects now run only after a successful transaction. A rolled-back User update no longer refreshes its cached profile, and a rolled-back bulk session revocation no longer invalidates sessions.
+
 ## 1.7.0-rc.1
 
 ## 1.7.0-rc.0
@@ -77,6 +91,14 @@
   This release is breaking. It removes the `providerOwnership` option, and owner binding can no longer be disabled. The `scimProvider.userId` column is now a permanent part of the schema, so run a migration after upgrading with `npx auth migrate` or `npx auth generate`.
 
   Connections created before this release carry no owner. Access now fails closed, so those connections are no longer reachable through the management endpoints, including token regeneration. Reclaim them at the database level: delete `scimProvider` rows that have neither `organizationId` nor `userId`, or set `userId` to the intended owner, then regenerate tokens as needed. Organization-scoped connections are not affected.
+
+## 1.6.24
+
+### Patch Changes
+
+- Updated dependencies [[`03dc5a0`](https://github.com/better-auth/better-auth/commit/03dc5a046f536994950800ea557b8e2e2e0cdfdd), [`7508940`](https://github.com/better-auth/better-auth/commit/750894037639c4158472cc1d4994b0e07bf1f59a), [`bae7198`](https://github.com/better-auth/better-auth/commit/bae71988ab79aeb4f19f245ceabac9eca8706a50), [`ef4d273`](https://github.com/better-auth/better-auth/commit/ef4d27360cec8a0bc11a94e135ea4a3dd32b1969), [`6758231`](https://github.com/better-auth/better-auth/commit/6758231905d2e86a7b3f058dd05c17ba739aa80f), [`99dbdd7`](https://github.com/better-auth/better-auth/commit/99dbdd7ea98740d11689394220a718dfb9579276), [`086ca91`](https://github.com/better-auth/better-auth/commit/086ca91f51dd8158aff6cbf54c4f9c7ce220914d), [`8f2dedd`](https://github.com/better-auth/better-auth/commit/8f2dedd89301da9fb52c1a64df6a9683f9be55fd), [`4e685ee`](https://github.com/better-auth/better-auth/commit/4e685eef420b5576913b9803b58c7e7ee7342203), [`3bf0e49`](https://github.com/better-auth/better-auth/commit/3bf0e4981e025ba9af684013a27b0102a04f7c56), [`f59a0ee`](https://github.com/better-auth/better-auth/commit/f59a0ee7895a024ddd4c5c387344173888e17be4), [`54fab08`](https://github.com/better-auth/better-auth/commit/54fab084469a27257e66a0814523ebac7145ef5d), [`0f2cc1b`](https://github.com/better-auth/better-auth/commit/0f2cc1b33b77850948dac4d889e5f46bba41e8d5), [`ae78109`](https://github.com/better-auth/better-auth/commit/ae781091186f321b4e4ec9e84f64b6e4d5ea1043), [`46d2bf0`](https://github.com/better-auth/better-auth/commit/46d2bf02c98902da7b344753372d48cfe0e5ebb3), [`29a373e`](https://github.com/better-auth/better-auth/commit/29a373eaf1778820061a9380c29831c2de2ce704), [`f6d18fa`](https://github.com/better-auth/better-auth/commit/f6d18fa8f79b9323e10b50f72e2b1a088844e4bb), [`f23ce50`](https://github.com/better-auth/better-auth/commit/f23ce5012ea47fac1a69b1dad203dfdef3830fd0), [`c4d1dda`](https://github.com/better-auth/better-auth/commit/c4d1ddaa952eab7edfec942fab223f35798518ab)]:
+  - better-auth@1.6.24
+  - @better-auth/core@1.6.24
 
 ## 1.6.23
 

@@ -47,4 +47,5 @@ korthout
 esac
 elif
 zitadel
-
+anthropics
+nextjs

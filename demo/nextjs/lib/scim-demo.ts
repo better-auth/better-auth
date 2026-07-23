@@ -1,11 +1,10 @@
 import { scim } from "@better-auth/scim";
 import type { BetterAuthPlugin } from "better-auth";
 import { SCIM_DEMO_ROLE } from "./scim-demo-catalog.ts";
+import { SCIM_DEMO_EXTERNAL_ID_PREFIX } from "./scim-demo-identity.ts";
 
 export const SCIM_DEMO_CONNECTION_ID = "demo-directory";
 export const SCIM_DEMO_PROVISIONING_DOMAIN_ID = "scim-demo";
-export const SCIM_DEMO_EXTERNAL_ID_PREFIX = "scim-demo:";
-
 export { SCIM_DEMO_ROLE };
 
 const disabledSCIMDemoPlugin = {
@@ -14,7 +13,6 @@ const disabledSCIMDemoPlugin = {
 
 interface SCIMDemoUserRow {
 	id: string;
-	scimDemoActive?: boolean | null;
 	scimDemoRole?: string | null;
 }
 
@@ -67,18 +65,6 @@ export function createSCIMDemoPlugin() {
 				],
 			},
 		],
-		identity: {
-			async reconcileUser({ userId, active }, { database }) {
-				const user = await database.update<SCIMDemoUserRow>({
-					model: "user",
-					where: [{ field: "id", value: userId }],
-					update: { scimDemoActive: active },
-				});
-				if (!user) {
-					throw new Error("The provisioned application user is missing");
-				}
-			},
-		},
 		projection: {
 			roles: {
 				map: ({ source }) =>
