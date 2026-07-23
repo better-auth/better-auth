@@ -1,5 +1,7 @@
 # @better-auth/sso
 
+## 1.7.0-rc.3
+
 ## 1.7.0-rc.2
 
 ### Minor Changes

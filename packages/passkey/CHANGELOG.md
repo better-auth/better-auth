@@ -1,5 +1,11 @@
 # @better-auth/passkey
 
+## 1.7.0-rc.3
+
+### Minor Changes
+
+- [#9873](https://github.com/better-auth/better-auth/pull/9873) [`2f3a714`](https://github.com/better-auth/better-auth/commit/2f3a71458db9d6a37f2d666acbd24255330ba8a3) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Add the optional `createSession` setting to passkey registration. When enabled, successful registration signs the user in, sets the session cookie, and returns the session and user with the registered passkey.
+
 ## 1.7.0-rc.2
 
 ## 1.7.0-rc.1
