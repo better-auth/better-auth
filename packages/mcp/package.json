@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/mcp",
-  "version": "1.7.0-rc.2",
+  "version": "1.7.0-rc.3",
   "description": "Model Context Protocol (MCP) plugin for Better Auth",
   "type": "module",
   "license": "MIT",
