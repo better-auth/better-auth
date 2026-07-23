@@ -32,5 +32,9 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "components/ui/**/*.tsx"]
+  "exclude": [
+    "node_modules",
+    "components/ui/**/*.tsx",
+    "typecheck/dash/**/*.ts"
+  ]
 }

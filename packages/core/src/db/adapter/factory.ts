@@ -178,8 +178,12 @@ export const createAdapterFactory =
 		const idField = initGetIdField({
 			schema,
 			options,
-			usePlural: config.usePlural,
-			disableIdGeneration: config.disableIdGeneration,
+			...(config.usePlural !== undefined
+				? { usePlural: config.usePlural }
+				: {}),
+			...(config.disableIdGeneration !== undefined
+				? { disableIdGeneration: config.disableIdGeneration }
+				: {}),
 			customIdGenerator: config.customIdGenerator,
 			supportsUUIDs: config.supportsUUIDs,
 		});
@@ -187,8 +191,12 @@ export const createAdapterFactory =
 		const getFieldAttributes = initGetFieldAttributes({
 			schema,
 			options,
-			usePlural: config.usePlural,
-			disableIdGeneration: config.disableIdGeneration,
+			...(config.usePlural !== undefined
+				? { usePlural: config.usePlural }
+				: {}),
+			...(config.disableIdGeneration !== undefined
+				? { disableIdGeneration: config.disableIdGeneration }
+				: {}),
 			customIdGenerator: config.customIdGenerator,
 		});
 
@@ -205,7 +213,9 @@ export const createAdapterFactory =
 			const useNumberId = options.advanced?.database?.generateId === "serial";
 			fields.id = idField({
 				customModelName: defaultModelName,
-				forceAllowId: forceAllowId && "id" in data,
+				...(forceAllowId !== undefined
+					? { forceAllowId: forceAllowId && "id" in data }
+					: {}),
 			});
 			for (const field in fields) {
 				let value = data[field];
@@ -863,8 +873,8 @@ export const createAdapterFactory =
 			}: {
 				model: string;
 				data: T;
-				select?: string[];
-				forceAllowId?: boolean;
+				select?: string[] | undefined;
+				forceAllowId?: boolean | undefined;
 			}): Promise<R> => {
 				transactionId++;
 				const thisTransactionId = transactionId;
@@ -1098,8 +1108,8 @@ export const createAdapterFactory =
 			}: {
 				model: string;
 				where: Where[];
-				select?: string[];
-				join?: JoinOption;
+				select?: string[] | undefined;
+				join?: JoinOption | undefined;
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
@@ -1181,12 +1191,12 @@ export const createAdapterFactory =
 				join: unsafeJoin,
 			}: {
 				model: string;
-				where?: Where[];
-				limit?: number;
+				where?: Where[] | undefined;
+				limit?: number | undefined;
 				select?: string[] | undefined;
-				sortBy?: { field: string; direction: "asc" | "desc" };
-				offset?: number;
-				join?: JoinOption;
+				sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
+				offset?: number | undefined;
+				join?: JoinOption | undefined;
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
@@ -1509,7 +1519,7 @@ export const createAdapterFactory =
 				where: unsafeWhere,
 			}: {
 				model: string;
-				where?: Where[];
+				where?: Where[] | undefined;
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
@@ -1560,7 +1570,10 @@ export const createAdapterFactory =
 							delete tables.session;
 						}
 
-						return adapterInstance.createSchema!({ file, tables });
+						return adapterInstance.createSchema!({
+							tables,
+							...(file !== undefined ? { file } : {}),
+						});
 					}
 				: undefined,
 			options: {

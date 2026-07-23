@@ -1,0 +1,910 @@
+{
+  "rootConfigs": [
+    {
+      "path": "tsconfig.base.json",
+      "role": "shared-base",
+      "reason": "Shared compiler options are consumed by executable TypeScript projects."
+    },
+    {
+      "path": "tsconfig.dist-check.json",
+      "role": "declaration-check",
+      "reason": "The existing typecheck:dist command owns declaration checks."
+    },
+    {
+      "path": "tsconfig.json",
+      "role": "root-build",
+      "reason": "The existing typecheck command owns the root project-reference build."
+    }
+  ],
+  "packages": [
+    {
+      "path": "packages/api-key/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/api-key/tsconfig.test.json",
+      "role": "test-only",
+      "reason": "Direct compiler coverage verifies this package test project.",
+      "verification": {
+        "kind": "semantic-typecheck",
+        "runner": {
+          "cwd": ".",
+          "command": [
+            "exec",
+            "tsc",
+            "--noEmit",
+            "--project",
+            "packages/api-key/tsconfig.test.json"
+          ]
+        }
+      }
+    },
+    {
+      "path": "packages/better-auth/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/cimd/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/cli/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/core/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/drizzle-adapter/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/electron/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/expo/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/expo/tsconfig.test.json",
+      "role": "test-only",
+      "reason": "Direct compiler coverage verifies this package test project.",
+      "verification": {
+        "kind": "semantic-typecheck",
+        "runner": {
+          "cwd": ".",
+          "command": [
+            "exec",
+            "tsc",
+            "--noEmit",
+            "--project",
+            "packages/expo/tsconfig.test.json"
+          ]
+        }
+      }
+    },
+    {
+      "path": "packages/i18n/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/kysely-adapter/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/mcp/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/memory-adapter/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/mongo-adapter/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/oauth-provider/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/passkey/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/prisma-adapter/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/redis-storage/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/scim/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/sso/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/stripe/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/telemetry/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    },
+    {
+      "path": "packages/test-utils/tsconfig.json",
+      "role": "source",
+      "runner": "package-source-solution"
+    }
+  ],
+  "consumers": [
+    {
+      "path": "demo/electron/tsconfig.json",
+      "role": "solution",
+      "reason": "Its node and web leaf projects have independent local-compiler runners."
+    },
+    {
+      "path": "demo/electron/tsconfig.node.json",
+      "role": "checked",
+      "runner": {
+        "cwd": "demo/electron",
+        "build": "all-package-declarations",
+        "prepare": [
+          {
+            "label": "Electron frozen dependency install",
+            "command": ["install", "--frozen-lockfile"]
+          }
+        ],
+        "command": [
+          "exec",
+          "tsc",
+          "--noEmit",
+          "--project",
+          "tsconfig.node.json",
+          "--composite",
+          "false"
+        ]
+      }
+    },
+    {
+      "path": "demo/electron/tsconfig.web.json",
+      "role": "checked",
+      "runner": {
+        "cwd": "demo/electron",
+        "build": "all-package-declarations",
+        "prepare": [
+          {
+            "label": "Electron frozen dependency install",
+            "command": ["install", "--frozen-lockfile"]
+          }
+        ],
+        "command": [
+          "exec",
+          "tsc",
+          "--noEmit",
+          "--project",
+          "tsconfig.web.json",
+          "--composite",
+          "false"
+        ]
+      }
+    },
+    {
+      "path": "demo/expo/tsconfig.json",
+      "role": "checked",
+      "runner": {
+        "cwd": "demo/expo",
+        "build": "all-package-declarations",
+        "prepare": [
+          {
+            "label": "Expo frozen dependency install",
+            "command": ["install", "--frozen-lockfile"]
+          }
+        ],
+        "command": ["exec", "tsc", "--noEmit", "--project", "tsconfig.json"]
+      }
+    },
+    {
+      "path": "demo/nextjs/tsconfig.json",
+      "role": "checked",
+      "runner": {
+        "cwd": "demo/nextjs",
+        "build": "all-package-declarations",
+        "prepare": [
+          {
+            "label": "Next.js frozen dependency install",
+            "command": ["install", "--frozen-lockfile"]
+          },
+          {
+            "label": "Next.js route type generation",
+            "command": ["exec", "next", "typegen"]
+          }
+        ],
+        "cleanPaths": [".next", "tsconfig.tsbuildinfo"],
+        "command": ["exec", "tsc", "--noEmit", "--project", "tsconfig.json"]
+      }
+    },
+    {
+      "path": "demo/nextjs/typecheck/dash/tsconfig.json",
+      "role": "contract-check",
+      "reason": "An explicit Dash contract command checks either the frozen published dependency or an opt-in local Infrastructure candidate.",
+      "runner": {
+        "cwd": "demo/nextjs",
+        "build": "better-auth-declarations",
+        "prepare": [
+          {
+            "label": "Next.js frozen dependency install",
+            "command": ["install", "--frozen-lockfile"]
+          }
+        ],
+        "candidatePackage": "@better-auth/infra",
+        "candidateWorkspacePackages": [
+          "packages/better-auth",
+          "packages/core",
+          "packages/scim",
+          "packages/sso"
+        ],
+        "candidateAllowedFamilyNodeModulesPackages": ["@better-auth/utils"],
+        "command": [
+          "exec",
+          "tsc",
+          "--noEmit",
+          "--project",
+          "typecheck/dash/tsconfig.json"
+        ]
+      }
+    },
+    {
+      "path": "demo/oidc-client/tsconfig.json",
+      "role": "checked",
+      "runner": {
+        "cwd": "demo/oidc-client",
+        "build": "all-package-declarations",
+        "prepare": [
+          {
+            "label": "OIDC client frozen dependency install",
+            "command": ["install", "--frozen-lockfile"]
+          }
+        ],
+        "command": ["exec", "tsc", "--noEmit", "--project", "tsconfig.json"]
+      }
+    },
+    {
+      "path": "demo/oidc-client/tsconfig.node.json",
+      "role": "checked",
+      "runner": {
+        "cwd": "demo/oidc-client",
+        "build": "all-package-declarations",
+        "prepare": [
+          {
+            "label": "OIDC client frozen dependency install",
+            "command": ["install", "--frozen-lockfile"]
+          }
+        ],
+        "command": [
+          "exec",
+          "tsc",
+          "--noEmit",
+          "--project",
+          "tsconfig.node.json"
+        ]
+      }
+    },
+    {
+      "path": "demo/stateless/tsconfig.json",
+      "role": "checked",
+      "runner": {
+        "cwd": "demo/stateless",
+        "build": "all-package-declarations",
+        "prepare": [
+          {
+            "label": "Stateless frozen dependency install",
+            "command": ["install", "--frozen-lockfile"]
+          },
+          {
+            "label": "Next.js route type generation",
+            "command": ["exec", "next", "typegen"]
+          }
+        ],
+        "cleanPaths": [".next", "tsconfig.tsbuildinfo"],
+        "command": ["exec", "tsc", "--noEmit", "--project", "tsconfig.json"]
+      }
+    },
+    {
+      "path": "docs/tsconfig.json",
+      "role": "checked",
+      "runner": {
+        "cwd": "docs",
+        "build": "all-package-declarations",
+        "prepare": [
+          {
+            "label": "Docs frozen dependency install",
+            "command": ["install", "--frozen-lockfile"]
+          },
+          {
+            "label": "Next.js route type generation",
+            "command": ["exec", "next", "typegen"]
+          },
+          {
+            "label": "Fumadocs content generation",
+            "command": ["exec", "fumadocs-mdx"]
+          }
+        ],
+        "cleanPaths": [".next", ".source", "tsconfig.tsbuildinfo"],
+        "command": ["exec", "tsc", "--noEmit", "--project", "tsconfig.json"]
+      }
+    }
+  ],
+  "tests": [
+    {
+      "path": ".github/scripts/fixtures/type-safety-audit/tsconfig.json",
+      "role": "test-fixture",
+      "reason": "Direct compiler coverage verifies this AST audit fixture.",
+      "verification": {
+        "kind": "semantic-typecheck",
+        "runner": {
+          "cwd": ".",
+          "command": [
+            "exec",
+            "tsc",
+            "--noEmit",
+            "--project",
+            ".github/scripts/fixtures/type-safety-audit/tsconfig.json"
+          ]
+        }
+      }
+    },
+    {
+      "path": "e2e/adapter/tsconfig.json",
+      "role": "test-runner",
+      "reason": "Direct compiler coverage verifies the adapter test project after generating its Prisma client.",
+      "verification": {
+        "kind": "semantic-typecheck",
+        "runner": {
+          "cwd": ".",
+          "prepare": [
+            {
+              "label": "Adapter Prisma client generation",
+              "command": [
+                "--dir",
+                "e2e/adapter/test/prisma-adapter",
+                "exec",
+                "prisma",
+                "generate"
+              ]
+            }
+          ],
+          "command": [
+            "exec",
+            "tsc",
+            "--noEmit",
+            "--project",
+            "e2e/adapter/tsconfig.json"
+          ]
+        }
+      }
+    },
+    {
+      "path": "e2e/integration/solid-vinxi/tsconfig.json",
+      "role": "test-fixture",
+      "reason": "This Vinxi fixture is executed by integration CI; its standalone compiler graph depends on incompatible third-party Vite/Vinxi declarations.",
+      "verification": {
+        "kind": "transpile-runtime-only",
+        "owner": "integration-e2e"
+      }
+    },
+    {
+      "path": "e2e/integration/vanilla-node/tsconfig.json",
+      "role": "test-fixture",
+      "reason": "Direct compiler coverage verifies this integration fixture.",
+      "verification": {
+        "kind": "semantic-typecheck",
+        "runner": {
+          "cwd": ".",
+          "command": [
+            "exec",
+            "tsc",
+            "--noEmit",
+            "--project",
+            "e2e/integration/vanilla-node/tsconfig.json"
+          ]
+        }
+      }
+    },
+    {
+      "path": "e2e/smoke/tsconfig.json",
+      "role": "test-runner",
+      "reason": "This orchestration config is executed by smoke CI; a standalone compiler run crosses runtime-specific Cloudflare declaration graphs.",
+      "verification": {
+        "kind": "transpile-runtime-only",
+        "owner": "smoke-e2e"
+      }
+    },
+    {
+      "path": "e2e/smoke/test/fixtures/cloudflare/tsconfig.json",
+      "role": "test-fixture",
+      "reason": "Direct compiler coverage verifies this smoke fixture.",
+      "verification": {
+        "kind": "semantic-typecheck",
+        "runner": {
+          "cwd": ".",
+          "command": [
+            "exec",
+            "tsc",
+            "--noEmit",
+            "--project",
+            "e2e/smoke/test/fixtures/cloudflare/tsconfig.json"
+          ]
+        }
+      }
+    },
+    {
+      "path": "e2e/smoke/test/fixtures/esbuild/tsconfig.json",
+      "role": "test-fixture",
+      "reason": "Direct compiler coverage verifies this smoke fixture.",
+      "verification": {
+        "kind": "semantic-typecheck",
+        "runner": {
+          "cwd": ".",
+          "command": [
+            "exec",
+            "tsc",
+            "--noEmit",
+            "--project",
+            "e2e/smoke/test/fixtures/esbuild/tsconfig.json"
+          ]
+        }
+      }
+    },
+    {
+      "path": "e2e/smoke/test/fixtures/ipv6/tsconfig.json",
+      "role": "test-fixture",
+      "reason": "This Node runtime fixture is executed by smoke CI; its standalone compiler graph needs the runtime-provided node:sqlite surface.",
+      "verification": {
+        "kind": "transpile-runtime-only",
+        "owner": "smoke-e2e"
+      }
+    },
+    {
+      "path": "e2e/smoke/test/fixtures/tsconfig-composite-client/tsconfig.json",
+      "role": "test-fixture",
+      "solution": true,
+      "reason": "Direct compiler coverage verifies this smoke fixture solution.",
+      "verification": {
+        "kind": "semantic-typecheck",
+        "runner": {
+          "cwd": ".",
+          "command": [
+            "exec",
+            "tsc",
+            "--noEmit",
+            "--project",
+            "e2e/smoke/test/fixtures/tsconfig-composite-client/tsconfig.json"
+          ]
+        }
+      }
+    },
+    {
+      "path": "e2e/smoke/test/fixtures/tsconfig-composite-client/packages/app/tsconfig.json",
+      "role": "test-fixture",
+      "reason": "Direct compiler coverage verifies this smoke fixture leaf project.",
+      "verification": {
+        "kind": "semantic-typecheck",
+        "runner": {
+          "cwd": ".",
+          "command": [
+            "exec",
+            "tsc",
+            "--noEmit",
+            "--project",
+            "e2e/smoke/test/fixtures/tsconfig-composite-client/packages/app/tsconfig.json"
+          ]
+        }
+      }
+    },
+    {
+      "path": "e2e/smoke/test/fixtures/tsconfig-declaration/tsconfig.json",
+      "role": "test-fixture",
+      "reason": "Direct compiler coverage verifies this smoke fixture.",
+      "verification": {
+        "kind": "semantic-typecheck",
+        "runner": {
+          "cwd": ".",
+          "command": [
+            "exec",
+            "tsc",
+            "--noEmit",
+            "--project",
+            "e2e/smoke/test/fixtures/tsconfig-declaration/tsconfig.json"
+          ]
+        }
+      }
+    },
+    {
+      "path": "e2e/smoke/test/fixtures/tsconfig-exact-optional-property-types/tsconfig.json",
+      "role": "test-fixture",
+      "reason": "Direct compiler coverage verifies this smoke fixture.",
+      "verification": {
+        "kind": "semantic-typecheck",
+        "runner": {
+          "cwd": ".",
+          "command": [
+            "exec",
+            "tsc",
+            "--noEmit",
+            "--project",
+            "e2e/smoke/test/fixtures/tsconfig-exact-optional-property-types/tsconfig.json"
+          ]
+        }
+      }
+    },
+    {
+      "path": "e2e/smoke/test/fixtures/tsconfig-isolated-module-bundler/tsconfig.json",
+      "role": "test-fixture",
+      "reason": "Direct compiler coverage verifies this smoke fixture.",
+      "verification": {
+        "kind": "semantic-typecheck",
+        "runner": {
+          "cwd": ".",
+          "command": [
+            "exec",
+            "tsc",
+            "--noEmit",
+            "--project",
+            "e2e/smoke/test/fixtures/tsconfig-isolated-module-bundler/tsconfig.json"
+          ]
+        }
+      }
+    },
+    {
+      "path": "e2e/smoke/test/fixtures/tsconfig-verbatim-module-syntax-node10/tsconfig.json",
+      "role": "test-fixture",
+      "reason": "Direct compiler coverage verifies this smoke fixture.",
+      "verification": {
+        "kind": "semantic-typecheck",
+        "runner": {
+          "cwd": ".",
+          "command": [
+            "exec",
+            "tsc",
+            "--noEmit",
+            "--project",
+            "e2e/smoke/test/fixtures/tsconfig-verbatim-module-syntax-node10/tsconfig.json"
+          ]
+        }
+      }
+    },
+    {
+      "path": "e2e/smoke/test/fixtures/vite/tsconfig.json",
+      "role": "test-fixture",
+      "reason": "Direct compiler coverage verifies this smoke fixture.",
+      "verification": {
+        "kind": "semantic-typecheck",
+        "runner": {
+          "cwd": ".",
+          "command": [
+            "exec",
+            "tsc",
+            "--noEmit",
+            "--project",
+            "e2e/smoke/test/fixtures/vite/tsconfig.json"
+          ]
+        }
+      }
+    },
+    {
+      "path": "test/tsconfig.json",
+      "role": "test-runner",
+      "reason": "Direct compiler coverage verifies the shared test project.",
+      "verification": {
+        "kind": "semantic-typecheck",
+        "runner": {
+          "cwd": ".",
+          "command": [
+            "exec",
+            "tsc",
+            "--noEmit",
+            "--project",
+            "test/tsconfig.json"
+          ]
+        }
+      }
+    }
+  ],
+  "testOwners": [
+    {
+      "id": "integration-e2e",
+      "workflow": ".github/workflows/e2e.yml",
+      "command": ["e2e:integration", "--filter=./e2e/integration"]
+    },
+    {
+      "id": "smoke-e2e",
+      "workflow": ".github/workflows/e2e.yml",
+      "command": ["e2e:smoke"]
+    }
+  ],
+  "workspaces": [
+    {
+      "path": ".",
+      "role": "root",
+      "reason": "Owns repository-wide commands and project references."
+    },
+    {
+      "path": "docs",
+      "role": "consumer",
+      "reason": "Checked as an application consumer."
+    },
+    {
+      "path": "e2e/adapter",
+      "role": "test-runner",
+      "reason": "Owns adapter integration coverage."
+    },
+    {
+      "path": "e2e/adapter/test/adapter-factory",
+      "role": "test-fixture",
+      "reason": "Adapter integration fixture without an independent tsconfig."
+    },
+    {
+      "path": "e2e/adapter/test/drizzle-adapter",
+      "role": "test-fixture",
+      "reason": "Adapter integration fixture without an independent tsconfig."
+    },
+    {
+      "path": "e2e/adapter/test/drizzle-v2-relations-adapter",
+      "role": "test-fixture",
+      "reason": "Adapter integration fixture without an independent tsconfig."
+    },
+    {
+      "path": "e2e/adapter/test/kysely-adapter",
+      "role": "test-fixture",
+      "reason": "Adapter integration fixture without an independent tsconfig."
+    },
+    {
+      "path": "e2e/adapter/test/memory-adapter",
+      "role": "test-fixture",
+      "reason": "Adapter integration fixture without an independent tsconfig."
+    },
+    {
+      "path": "e2e/adapter/test/mongo-adapter",
+      "role": "test-fixture",
+      "reason": "Adapter integration fixture without an independent tsconfig."
+    },
+    {
+      "path": "e2e/adapter/test/prisma-adapter",
+      "role": "test-fixture",
+      "reason": "Adapter integration fixture without an independent tsconfig."
+    },
+    {
+      "path": "e2e/integration",
+      "role": "test-runner",
+      "reason": "Owns integration coverage."
+    },
+    {
+      "path": "e2e/integration/solid-vinxi",
+      "role": "test-fixture",
+      "reason": "Integration fixture with an explicit tsconfig."
+    },
+    {
+      "path": "e2e/integration/test-utils",
+      "role": "test-helper",
+      "reason": "Integration helper workspace without an independent tsconfig."
+    },
+    {
+      "path": "e2e/integration/vanilla-node",
+      "role": "test-fixture",
+      "reason": "Integration fixture with an explicit tsconfig."
+    },
+    {
+      "path": "e2e/smoke",
+      "role": "test-runner",
+      "reason": "Owns smoke coverage."
+    },
+    {
+      "path": "e2e/smoke/test/fixtures/cloudflare",
+      "role": "test-fixture",
+      "reason": "Smoke fixture with an explicit tsconfig."
+    },
+    {
+      "path": "e2e/smoke/test/fixtures/esbuild",
+      "role": "test-fixture",
+      "reason": "Smoke fixture with an explicit tsconfig."
+    },
+    {
+      "path": "e2e/smoke/test/fixtures/ipv6",
+      "role": "test-fixture",
+      "reason": "Smoke fixture with an explicit tsconfig."
+    },
+    {
+      "path": "e2e/smoke/test/fixtures/tsconfig-composite-client",
+      "role": "test-fixture",
+      "reason": "Smoke fixture solution with explicit tsconfigs."
+    },
+    {
+      "path": "e2e/smoke/test/fixtures/tsconfig-declaration",
+      "role": "test-fixture",
+      "reason": "Smoke fixture with an explicit tsconfig."
+    },
+    {
+      "path": "e2e/smoke/test/fixtures/tsconfig-exact-optional-property-types",
+      "role": "test-fixture",
+      "reason": "Smoke fixture with an explicit tsconfig."
+    },
+    {
+      "path": "e2e/smoke/test/fixtures/tsconfig-isolated-module-bundler",
+      "role": "test-fixture",
+      "reason": "Smoke fixture with an explicit tsconfig."
+    },
+    {
+      "path": "e2e/smoke/test/fixtures/tsconfig-verbatim-module-syntax-node10",
+      "role": "test-fixture",
+      "reason": "Smoke fixture with an explicit tsconfig."
+    },
+    {
+      "path": "e2e/smoke/test/fixtures/vite",
+      "role": "test-fixture",
+      "reason": "Smoke fixture with an explicit tsconfig."
+    },
+    {
+      "path": "packages/api-key",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/better-auth",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/cimd",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/cli",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/core",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/drizzle-adapter",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/electron",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/expo",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/i18n",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/kysely-adapter",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/mcp",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/memory-adapter",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/mongo-adapter",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/oauth-provider",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/passkey",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/prisma-adapter",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/redis-storage",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/scim",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/sso",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/stripe",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/telemetry",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "packages/test-utils",
+      "role": "package-source",
+      "reason": "Checked by the package source solution."
+    },
+    {
+      "path": "test",
+      "role": "test-runner",
+      "reason": "Owns shared Vitest coverage."
+    }
+  ],
+  "consumerBuilds": [
+    {
+      "id": "all-package-declarations",
+      "cwd": ".",
+      "command": ["exec", "turbo", "run", "build", "--filter=./packages/*"]
+    },
+    {
+      "id": "better-auth-declarations",
+      "cwd": ".",
+      "command": [
+        "exec",
+        "turbo",
+        "run",
+        "build",
+        "--filter=better-auth...",
+        "--filter=@better-auth/scim...",
+        "--filter=@better-auth/sso..."
+      ]
+    }
+  ]
+}

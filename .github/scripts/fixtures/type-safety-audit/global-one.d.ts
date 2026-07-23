@@ -1,0 +1,3 @@
+interface SharedGlobalFixture {
+	first: string;
+}

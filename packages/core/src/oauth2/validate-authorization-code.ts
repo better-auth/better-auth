@@ -177,8 +177,8 @@ export async function validateToken(
 		},
 	});
 	const verified = await jwtVerify(token, jwks, {
-		audience: options?.audience,
-		issuer: options?.issuer,
+		...(options?.audience !== undefined ? { audience: options.audience } : {}),
+		...(options?.issuer !== undefined ? { issuer: options.issuer } : {}),
 	});
 	return verified;
 }

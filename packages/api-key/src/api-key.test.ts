@@ -3663,6 +3663,16 @@ describe("api-key", async () => {
 								customGetCalled = true;
 								return customStore.get(key) || null;
 							},
+							getAndDelete(key) {
+								const value = customStore.get(key) || null;
+								customStore.delete(key);
+								return value;
+							},
+							increment(key) {
+								const count = Number(customStore.get(key) ?? 0) + 1;
+								customStore.set(key, String(count));
+								return count;
+							},
 							delete(key) {
 								customDeleteCalled = true;
 								customStore.delete(key);

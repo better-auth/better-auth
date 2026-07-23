@@ -110,6 +110,18 @@ async function createTestAdapter<Options extends BetterAuthOptions>(
 					}
 					return 0;
 				},
+				async consumeOne(data) {
+					if (x.consumeOne) {
+						return await x.consumeOne(data);
+					}
+					return null;
+				},
+				async incrementOne(data) {
+					if (x.incrementOne) {
+						return await x.incrementOne(data);
+					}
+					return null;
+				},
 				async findMany(data) {
 					if (x.findMany) {
 						return await x.findMany(data);

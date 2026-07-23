@@ -34,7 +34,19 @@
     "e2e:smoke": "turbo e2e:smoke",
     "e2e:integration": "turbo e2e:integration",
     "typecheck": "tsc --build",
-    "typecheck:dist": "tsc --project tsconfig.dist-check.json"
+    "typecheck:dist": "tsc --project tsconfig.dist-check.json",
+    "typecheck:inventory": "node .github/scripts/typecheck-coverage.mjs",
+    "typecheck:packages": "node .github/scripts/typecheck-packages.mjs",
+    "typecheck:tests": "node .github/scripts/typecheck-test-configs.mjs",
+    "typecheck:consumers": "node .github/scripts/typecheck-consumers.mjs",
+    "typecheck:consumers:clean": "node .github/scripts/typecheck-consumers.mjs --clean",
+    "typecheck:dash-contract": "node .github/scripts/typecheck-consumers.mjs --dash",
+    "typecheck:dash-contract:clean": "node .github/scripts/typecheck-consumers.mjs --dash --clean",
+    "typecheck:escape-hatches": "node .github/scripts/type-safety-audit.mjs",
+    "typecheck:escape-hatches:check": "node .github/scripts/type-safety-audit.mjs --check",
+    "typecheck:escape-hatches:baseline": "node .github/scripts/type-safety-audit.mjs --write-policy",
+    "test:type-safety-audit": "node --test .github/scripts/type-safety-audit.test.mjs",
+    "test:typecheck-consumers": "node --test .github/scripts/typecheck-consumers.test.mjs"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.3",

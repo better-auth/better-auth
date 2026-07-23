@@ -191,9 +191,7 @@ describe("oauth back-channel logout", async () => {
 							};
 							const committed = ctx.body.trackActiveAdapterWrites
 								? await (async () => {
-										const baseAdapter = await getCurrentAdapter(
-											ctx.context.adapter,
-										);
+										const baseAdapter = ctx.context.adapter;
 										const activeAdapter = {
 											...baseAdapter,
 											async updateMany(input) {

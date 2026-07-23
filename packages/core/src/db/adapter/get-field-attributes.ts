@@ -29,11 +29,11 @@ export const initGetFieldAttributes = ({
 	});
 
 	const idField = initGetIdField({
-		usePlural,
 		schema,
 		options,
 		customIdGenerator,
-		disableIdGeneration,
+		...(usePlural !== undefined ? { usePlural } : {}),
+		...(disableIdGeneration !== undefined ? { disableIdGeneration } : {}),
 	});
 
 	const getFieldAttributes = ({
