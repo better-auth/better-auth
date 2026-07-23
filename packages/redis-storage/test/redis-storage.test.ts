@@ -104,6 +104,93 @@ describe("redisStorage", () => {
 		);
 	});
 
+	it("clears every prefixed key by paging through SCAN", async () => {
+		const scanMock = vi
+			.fn()
+			.mockResolvedValueOnce(["42", ["ba:session:1"]])
+			.mockResolvedValueOnce(["0", ["ba:rate:1"]]);
+		const delMock = vi.fn().mockResolvedValue(1);
+		const keysMock = vi.fn();
+		const storage = redisStorage({
+			client: {
+				scan: scanMock,
+				del: delMock,
+				keys: keysMock,
+			} as any,
+			keyPrefix: "ba:",
+		});
+
+		await expect(storage.clear()).resolves.toBeUndefined();
+		// KEYS blocks the server on large keyspaces and must never be used.
+		expect(keysMock).not.toHaveBeenCalled();
+		expect(scanMock).toHaveBeenNthCalledWith(
+			1,
+			"0",
+			"MATCH",
+			"ba:*",
+			"COUNT",
+			100,
+		);
+		// The second call resumes from the cursor returned by the first.
+		expect(scanMock).toHaveBeenNthCalledWith(
+			2,
+			"42",
+			"MATCH",
+			"ba:*",
+			"COUNT",
+			100,
+		);
+		expect(delMock).toHaveBeenCalledTimes(2);
+		expect(delMock).toHaveBeenNthCalledWith(1, "ba:session:1");
+		expect(delMock).toHaveBeenNthCalledWith(2, "ba:rate:1");
+	});
+
+	it("does not call DEL when clearing an empty store", async () => {
+		const scanMock = vi.fn().mockResolvedValue(["0", []]);
+		// Redis rejects DEL with zero keys ("ERR wrong number of arguments"),
+		// so an empty clear must never reach the client.
+		const delMock = vi
+			.fn()
+			.mockRejectedValue(
+				new Error("ERR wrong number of arguments for 'del' command"),
+			);
+		const storage = redisStorage({
+			client: {
+				scan: scanMock,
+				del: delMock,
+			} as any,
+			keyPrefix: "ba:",
+		});
+
+		await expect(storage.clear()).resolves.toBeUndefined();
+		expect(scanMock).toHaveBeenCalledTimes(1);
+		expect(delMock).not.toHaveBeenCalled();
+	});
+
+	it("lists keys via SCAN, stripping the prefix and deduping across pages", async () => {
+		// SCAN may return the same key on more than one page; the deduped
+		// result must still contain each key exactly once.
+		const scanMock = vi
+			.fn()
+			.mockResolvedValueOnce(["7", ["ba:session:1", "ba:session:2"]])
+			.mockResolvedValueOnce(["0", ["ba:session:2", "ba:rate:1"]]);
+		const keysMock = vi.fn();
+		const storage = redisStorage({
+			client: {
+				scan: scanMock,
+				keys: keysMock,
+			} as any,
+			keyPrefix: "ba:",
+		});
+
+		await expect(storage.listKeys()).resolves.toEqual([
+			"session:1",
+			"session:2",
+			"rate:1",
+		]);
+		expect(keysMock).not.toHaveBeenCalled();
+	});
+
 	it("only sets the ttl on the call that creates the key", async () => {
 		const evalMock = vi.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(2);
 		const storage = redisStorage({
