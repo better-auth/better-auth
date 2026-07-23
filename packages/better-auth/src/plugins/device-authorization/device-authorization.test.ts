@@ -1807,7 +1807,8 @@ describe("device authorization resource indicators", async () => {
 			).rejects.toMatchObject({
 				body: {
 					error: "server_error",
-					error_description: "customAccessTokenClaims must return an object",
+					error_description:
+						"The customAccessTokenClaims option must return an object",
 				},
 			});
 		});
