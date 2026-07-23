@@ -120,8 +120,11 @@ When using passkey-first flows (`registration.requireSession: false`), pass the 
 await authClient.passkey.addPasskey({
   name: "Primary passkey",
   context: "signed-registration-token",
+  createSession: true,
 })
 ```
+
+When `createSession` is `true`, successful verification sets the session cookie and returns the `session` and `user` with the registered passkey. If you want to avoid creating a user before the WebAuthn ceremony succeeds, create or load the user in `registration.afterVerification` and return its `userId`.
 
 ## Usage
 
@@ -152,6 +155,11 @@ To add or register a passkey make sure a user is authenticated and then call the
        * Optional context for passkey-first registration flows. Forwarded to `registration.resolveUser`.
        */
       context?: string
+      /**
+       * Create a session after successfully registering the passkey. The
+       * response includes the session and user when enabled.
+       */
+      createSession?: boolean
   }
   ```
 </APIMethod>
