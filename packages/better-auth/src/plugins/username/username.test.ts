@@ -978,3 +978,117 @@ describe("username sign-in verify-email callbackURL", async () => {
 		);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10312
+ */
+describe("username with displayUsername disabled", async () => {
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				username({
+					displayUsername: false,
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [usernameClient({ displayUsername: false })],
+			},
+		},
+	);
+
+	it("should sign up and normalize username without writing displayUsername", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "no-display@example.com",
+				username: "No_Display_User",
+				password: "new-password",
+				name: "No Display",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("no_display_user");
+		expect("displayUsername" in (session?.user ?? {})).toBe(false);
+		// @ts-expect-error displayUsername should be excluded from inferred types
+		expect(session?.user.displayUsername).toBeUndefined();
+	});
+
+	it("should update username without writing displayUsername", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "no-display-update@example.com",
+				username: "update_no_display",
+				password: "new-password",
+				name: "Update No Display",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.updateUser({
+			username: "Updated_No_Display",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.error).toBeNull();
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("updated_no_display");
+		expect("displayUsername" in (session?.user ?? {})).toBe(false);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10312
+ */
+describe("username with displayUsername disabled and a validator", async () => {
+	const { client } = await getTestInstance(
+		{
+			plugins: [
+				username({
+					displayUsername: false,
+					displayUsernameValidator: (displayUsername) =>
+						/^[a-zA-Z0-9_-]+$/.test(displayUsername),
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [usernameClient({ displayUsername: false })],
+			},
+		},
+	);
+
+	it("should not validate displayUsername from the body when the field is disabled", async () => {
+		const res = await client.signUp.email({
+			email: "disabled-validator@example.com",
+			username: "disabled_validator_user",
+			password: "new-password",
+			name: "Disabled Validator",
+			// displayUsername is disabled, so an invalid value must not be rejected
+			displayUsername: "Invalid Display!",
+		} as Parameters<typeof client.signUp.email>[0]);
+
+		expect(res.error).toBeNull();
+		expect(res.data?.user.username).toBe("disabled_validator_user");
+		expect("displayUsername" in (res.data?.user ?? {})).toBe(false);
+	});
+});
