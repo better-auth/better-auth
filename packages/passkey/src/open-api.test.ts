@@ -38,4 +38,31 @@ describe("passkey open-api", async () => {
 		);
 		expect(operation.responses["200"].parameters).toBeUndefined();
 	});
+
+	it("should describe the optional registration session response", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, any>;
+
+		const responseSchema =
+			paths["/passkey/verify-registration"].post.responses["200"].content[
+				"application/json"
+			].schema;
+		expect(responseSchema).toEqual({
+			type: "object",
+			allOf: [
+				{ $ref: "#/components/schemas/Passkey" },
+				{
+					type: "object",
+					properties: {
+						session: {
+							$ref: "#/components/schemas/Session",
+						},
+						user: {
+							$ref: "#/components/schemas/User",
+						},
+					},
+				},
+			],
+		});
+	});
 });
