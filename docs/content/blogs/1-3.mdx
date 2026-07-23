@@ -45,7 +45,7 @@ export const auth = betterAuth({
         issuer: "better-auth-example",
         certificate: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
       },
-      providersLimit: async (user) => {
+      providersLimit: async ({ user }) => {
         const plan = await getUserPlan(user);
         return plan.name === "pro" ? 10 : 1;
       },

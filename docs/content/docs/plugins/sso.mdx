@@ -1734,8 +1734,8 @@ export const ssoOptionsType = {
 		default: false,
 	},
 	providersLimit: {
-		description: "Configure the maximum number of SSO providers a user can register. Set to 0 to disable SSO provider registration.",
-		type: "number | function",
+		description: "Configure the maximum number of SSO providers a user can register. Can be a number or a function that receives `{ user, organizationId }` and returns a number. The `organizationId` is provided when the registration includes an organization. Set to 0 to disable SSO provider registration.",
+		type: "number | ((data: { user: User; organizationId?: string }) => number | Promise<number>)",
 		default: 10,
 	},
 	redirectURI: {
