@@ -1,5 +1,11 @@
 # @better-auth/core
 
+## 1.6.25
+
+### Patch Changes
+
+- [#10294](https://github.com/better-auth/better-auth/pull/10294) [`0ffd1fb`](https://github.com/better-auth/better-auth/commit/0ffd1fb28d44a8266d62791cd4c97e263444d03b) Thanks [@jsj](https://github.com/jsj)! - Send Apple OAuth PKCE code challenges during authorization so callback token exchanges include a matching code verifier.
+
 ## 1.6.24
 
 ### Patch Changes
