@@ -1,6 +1,7 @@
+import { APIError } from "better-auth/api";
 import { parseSetCookieHeader } from "better-auth/cookies";
 import { getTestInstance } from "better-auth/test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { refreshableSession } from "../src";
 import { refreshableSessionClient } from "../src/client";
 
@@ -111,6 +112,81 @@ describe("refreshable-session", async () => {
 		);
 	});
 
+	it("keeps the browser session token out of explicit refresh responses", async () => {
+		let signInHeaders = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess(context) {
+					signInHeaders = context.response.headers;
+				},
+			},
+		);
+
+		let refreshHeaders = new Headers();
+		const refresh = await client.refreshSession(
+			{},
+			{
+				headers: { cookie: cookieHeaderFromResponse(signInHeaders) },
+				onSuccess(context) {
+					refreshHeaders = context.response.headers;
+				},
+			},
+		);
+
+		expect(refresh.error).toBeNull();
+		expect(refresh.data?.session).not.toHaveProperty("token");
+		expect(getCookie(refreshHeaders, "session_token")).toBeDefined();
+	});
+
+	it("preserves a browser refresh credential after an operational error", async () => {
+		let signInHeaders = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess(context) {
+					signInHeaders = context.response.headers;
+				},
+			},
+		);
+
+		const context = await auth.$context;
+		const rawSessionToken = getCookie(signInHeaders, "session_token")!.split(
+			".",
+		)[0]!;
+		await context.internalAdapter.updateSession(rawSessionToken, {
+			expiresAt: new Date(Date.now() - 1_000),
+		});
+		const findUser = vi
+			.spyOn(context.internalAdapter, "findUserById")
+			.mockRejectedValueOnce(
+				APIError.from("INTERNAL_SERVER_ERROR", {
+					code: "TRANSIENT_BACKEND_FAILURE",
+					message: "Transient backend failure",
+				}),
+			);
+		const cookie = cookieHeaderFromResponse(signInHeaders);
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				headers: { cookie },
+			}),
+		);
+
+		expect(response.status).toBe(500);
+		expect(getCookie(response.headers, "refresh_token")).toBeUndefined();
+		findUser.mockRestore();
+
+		const retry = await client.refreshSession({}, { headers: { cookie } });
+		expect(retry.error).toBeNull();
+	});
+
 	it("issues native tokens and returns the same pair for a rotation retry", async () => {
 		let signInHeaders = new Headers();
 		await client.signIn.email(
@@ -205,6 +281,7 @@ describe("refreshable-session", async () => {
 		expect(responseHeaders.get("set-auth-token-expires-at")).toBeTruthy();
 		expect(responseHeaders.get("set-refresh-token")).toBeNull();
 		expect(getCookie(responseHeaders, "session_token")).toBe("");
+		expect(getCookie(responseHeaders, "dont_remember")).toBe("");
 	});
 
 	it("clears a stale browser refresh cookie after revocation", async () => {

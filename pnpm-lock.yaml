@@ -1571,7 +1571,7 @@ importers:
         specifier: 'catalog:'
         version: 1.3.7(zod@4.3.6)
       zod:
-        specifier: ^4.3.6
+        specifier: 4.3.6
         version: 4.3.6
     devDependencies:
       '@better-auth/core':
@@ -1582,7 +1582,7 @@ importers:
         version: link:../better-auth
       tsdown:
         specifier: 'catalog:'
-        version: 0.22.7(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(tsx@4.22.4)(typescript@6.0.3)
+        version: 0.22.7(@arethetypeswrong/core@0.18.3)(oxc-resolver@11.21.3)(publint@0.3.21)(tsx@4.21.0)(typescript@6.0.3)
 
   packages/scim:
     dependencies:

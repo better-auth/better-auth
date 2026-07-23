@@ -27,6 +27,7 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "better-auth/crypto";
+import { parseSessionOutput, parseUserOutput } from "better-auth/db";
 import type { Session, User } from "better-auth/types";
 import { serializeSignedCookie } from "better-call";
 import * as z from "zod";
@@ -173,6 +174,20 @@ function injectSessionCookie(
 	return headers;
 }
 
+function getPublicSessionResponse(
+	ctx: GenericEndpointContext,
+	sessionWithUser: SessionWithUser,
+) {
+	const { token: _token, ...session } = parseSessionOutput(
+		ctx.context.options,
+		sessionWithUser.session,
+	);
+	return {
+		session,
+		user: parseUserOutput(ctx.context.options, sessionWithUser.user),
+	};
+}
+
 export function refreshableSession(
 	options?: RefreshableSessionOptions | undefined,
 ) {
@@ -309,6 +324,7 @@ export function refreshableSession(
 		// Native clients authenticate with the configured header, not cookies.
 		expireCookie(ctx, ctx.context.authCookies.sessionToken);
 		expireCookie(ctx, ctx.context.authCookies.sessionData);
+		expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
 	}
 
 	async function applyNativeAccessLifetime(
@@ -744,7 +760,9 @@ export function refreshableSession(
 						rotated.refreshToken,
 						credential.clientId ?? null,
 					);
-					return ctx.json(rotated.sessionWithUser);
+					return ctx.json(
+						getPublicSessionResponse(ctx, rotated.sessionWithUser),
+					);
 				},
 			),
 			revokeRefreshSession: createAuthEndpoint(
@@ -848,7 +866,7 @@ export function refreshableSession(
 								},
 							};
 						} catch (error) {
-							if (error instanceof APIError) {
+							if (error instanceof APIError && error.statusCode === 401) {
 								return {
 									context: { refreshableSessionExpireCookie: true },
 								};
