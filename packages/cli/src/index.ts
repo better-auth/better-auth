@@ -5,6 +5,7 @@ import { ai } from "./commands/ai";
 import { generate } from "./commands/generate";
 import { info } from "./commands/info";
 import { init } from "./commands/init";
+import { internalSchemaSnapshot } from "./commands/internal-schema-snapshot";
 import { login, logout } from "./commands/login";
 import { mcp } from "./commands/mcp";
 import { migrate } from "./commands/migrate";
@@ -41,6 +42,7 @@ async function main() {
 		.addCommand(logout)
 		.addCommand(mcp)
 		.addCommand(upgrade)
+		.addCommand(internalSchemaSnapshot, { hidden: true })
 		.version(cliVersion)
 		.description("Better Auth CLI")
 		.action(() => program.help());
