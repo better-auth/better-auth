@@ -850,6 +850,8 @@ export function refreshableSession(
 									// Core get-session deletes expired rows. Keep a native
 									// session until rotation can preserve its fields and
 									// delete it without revoking the refresh family.
+									ctx.setHeader("cache-control", "no-store");
+									ctx.setHeader("pragma", "no-cache");
 									return ctx.json(null);
 								}
 								return {

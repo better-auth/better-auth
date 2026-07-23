@@ -250,6 +250,7 @@ describe("refreshable-session", async () => {
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10495#discussion_r3637905873
+	 * @see https://github.com/better-auth/better-auth/pull/10495#discussion_r3638134011
 	 */
 	it("keeps native refresh valid after checking an expired access session", async () => {
 		let signInHeaders = new Headers();
@@ -274,11 +275,19 @@ describe("refreshable-session", async () => {
 			expiresAt: new Date(Date.now() - 1_000),
 		});
 
+		let expiredSessionHeaders = new Headers();
 		const expiredSession = await client.getSession({
-			fetchOptions: { headers: { [ACCESS_HEADER]: accessToken } },
+			fetchOptions: {
+				headers: { [ACCESS_HEADER]: accessToken },
+				onSuccess(context) {
+					expiredSessionHeaders = context.response.headers;
+				},
+			},
 		});
 		expect(expiredSession.data).toBeNull();
 		expect(expiredSession.error).toBeNull();
+		expect(expiredSessionHeaders.get("cache-control")).toContain("no-store");
+		expect(expiredSessionHeaders.get("pragma")).toBe("no-cache");
 
 		const refresh = await client.refreshSession({
 			refreshToken,
