@@ -74,6 +74,7 @@ export type SolidAuthClient<Option extends BetterAuthClientOptions> =
 				Session: NonNullable<ClientSession<Option>>;
 			};
 			$fetch: ClientConfig["$fetch"];
+			$store: ClientConfig["$store"];
 			$ERROR_CODES: PrettifyDeep<
 				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
 			>;
@@ -87,6 +88,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		pluginsActions,
 		pluginsAtoms,
 		$fetch,
+		$store,
 		atomListeners,
 	} = getClientConfig(options);
 	const resolvedHooks: Record<string, any> = {};
@@ -96,6 +98,8 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	const routes = {
 		...pluginsActions,
 		...resolvedHooks,
+		$fetch,
+		$store,
 	};
 	const proxy = createDynamicPathProxy(
 		routes,
