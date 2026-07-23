@@ -383,6 +383,13 @@ export function refreshableSession(
 	}
 
 	async function revokeFamily(ctx: GenericEndpointContext, familyId: string) {
+		const now = new Date();
+		await ctx.context.adapter.updateMany({
+			model: "refreshableSession",
+			where: [{ field: "familyId", value: familyId }],
+			update: { revokedAt: now, updatedAt: now },
+		});
+
 		const records =
 			await ctx.context.adapter.findMany<RefreshableSessionRecord>({
 				model: "refreshableSession",
@@ -391,12 +398,6 @@ export function refreshableSession(
 		const sessionIds = records
 			.map((record) => record.sessionId)
 			.filter((sessionId): sessionId is string => Boolean(sessionId));
-
-		await ctx.context.adapter.updateMany({
-			model: "refreshableSession",
-			where: [{ field: "familyId", value: familyId }],
-			update: { revokedAt: new Date(), updatedAt: new Date() },
-		});
 
 		if (sessionIds.length === 0) return;
 		const sessions = await ctx.context.adapter.findMany<Session>({

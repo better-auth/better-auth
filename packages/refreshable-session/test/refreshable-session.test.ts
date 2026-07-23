@@ -343,6 +343,75 @@ describe("refreshable-session", async () => {
 		expect(refresh.error?.status).toBe(401);
 	});
 
+	it("revokes a replacement session created during family revocation", async () => {
+		let signInHeaders = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				headers: { "x-better-auth-client-id": CLIENT_ID },
+				onSuccess(context) {
+					signInHeaders = context.response.headers;
+				},
+			},
+		);
+		const refreshToken = signInHeaders.get("set-refresh-token")!;
+		const context = await auth.$context;
+		const originalUpdateMany = context.adapter.updateMany.bind(context.adapter);
+		let releaseRevocation!: () => void;
+		let revocationReached!: () => void;
+		const waitForRelease = new Promise<void>((resolve) => {
+			releaseRevocation = resolve;
+		});
+		const waitForRevocation = new Promise<void>((resolve) => {
+			revocationReached = resolve;
+		});
+		let pauseNextFamilyRevocation = true;
+		const updateMany = vi
+			.spyOn(context.adapter, "updateMany")
+			.mockImplementation(async (args) => {
+				if (
+					pauseNextFamilyRevocation &&
+					args.model === "refreshableSession" &&
+					"revokedAt" in args.update
+				) {
+					pauseNextFamilyRevocation = false;
+					revocationReached();
+					await waitForRelease;
+				}
+				return originalUpdateMany(args);
+			});
+
+		const revocation = client.revokeRefreshSession({
+			refreshToken,
+			clientId: CLIENT_ID,
+		});
+		await waitForRevocation;
+
+		let refreshHeaders = new Headers();
+		const refresh = await client.refreshSession(
+			{ refreshToken, clientId: CLIENT_ID },
+			{
+				onSuccess(result) {
+					refreshHeaders = result.response.headers;
+				},
+			},
+		);
+		expect(refresh.error).toBeNull();
+
+		releaseRevocation();
+		expect((await revocation).error).toBeNull();
+		updateMany.mockRestore();
+
+		const accessToken = refreshHeaders.get("set-auth-token")!;
+		const session = await client.getSession({
+			fetchOptions: { headers: { [ACCESS_HEADER]: accessToken } },
+		});
+		expect(session.data).toBeNull();
+	});
+
 	it("rejects an unknown native client before issuing credentials", async () => {
 		const response = await client.signIn.email(
 			{
