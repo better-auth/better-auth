@@ -56,7 +56,10 @@ describe("run time proxy", async () => {
 		};
 		for (const [framework, client] of Object.entries(clients)) {
 			expect(isProxy(client.$fetch), `${framework} $fetch`).toBe(false);
-			expect(isProxy(client.$store.atoms.session), `${framework} session atom`).toBe(false);
+			expect(
+				isProxy(client.$store.atoms.session),
+				`${framework} session atom`,
+			).toBe(false);
 		}
 	});
 
