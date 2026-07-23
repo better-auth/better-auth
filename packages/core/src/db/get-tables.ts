@@ -224,10 +224,13 @@ export const getAuthTables = (
 							pendingEmail: {
 								type: "string" as const,
 								required: false,
-								fieldName:
-									(options.user?.fields as Record<string, string> | undefined)
-										?.pendingEmail || "pendingEmail",
 								input: false,
+								...options.user?.additionalFields?.pendingEmail,
+								fieldName:
+									options.user?.additionalFields?.pendingEmail?.fieldName ||
+									(options.user?.fields as Record<string, string> | undefined)
+										?.pendingEmail ||
+									"pendingEmail",
 							},
 						}
 					: {}),

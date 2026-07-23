@@ -979,9 +979,17 @@ export const changeEmail = createAuthEndpoint(
 					ctx.request,
 				);
 			} catch (e) {
-				await ctx.context.internalAdapter.updateUser(userId, {
-					pendingEmail: null,
-				});
+				const currentUser =
+					await ctx.context.internalAdapter.findUserById(userId);
+				if (
+					currentUser &&
+					(currentUser as { pendingEmail?: string | null }).pendingEmail ===
+						newEmail
+				) {
+					await ctx.context.internalAdapter.updateUser(userId, {
+						pendingEmail: null,
+					});
+				}
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 					identifier,
 				);
@@ -1206,16 +1214,10 @@ export const verifyEmailChange = createAuthEndpoint(
 			throw APIError.fromStatus("BAD_REQUEST", { message: "INVALID_TOKEN" });
 		}
 
-		/**
-		 * The token is part of the key, so this claims exactly the row this link refers
-		 * to — atomically, and without touching any other pending request. A bogus token
-		 * addresses a row that doesn't exist and therefore consumes nothing; two
-		 * concurrent clicks on the same link race for one row and only one wins.
-		 */
-		const verification =
-			await ctx.context.internalAdapter.consumeVerificationValue(
-				changeEmailIdentifier(userId, token),
-			);
+		const verificationIdentifier = changeEmailIdentifier(userId, token);
+		const verification = await ctx.context.internalAdapter.findVerificationValue(
+			verificationIdentifier,
+		);
 
 		if (!verification || verification.expiresAt < new Date()) {
 			if (errorURL) throw ctx.redirect(errorURL);
@@ -1255,7 +1257,7 @@ export const verifyEmailChange = createAuthEndpoint(
 		const existingUser = await ctx.context.internalAdapter.findUserByEmail(
 			pending.newEmail,
 		);
-		if (existingUser) {
+		if (existingUser && existingUser.user.id !== userId) {
 			await ctx.context.internalAdapter.updateUser(userId, {
 				pendingEmail: null,
 			});
@@ -1263,11 +1265,31 @@ export const verifyEmailChange = createAuthEndpoint(
 			throw APIError.fromStatus("BAD_REQUEST", { message: "INVALID_TOKEN" });
 		}
 
-		const updatedUser = await ctx.context.internalAdapter.updateUser(userId, {
-			email: pending.newEmail,
-			emailVerified: true,
-			pendingEmail: null,
-		});
+		/**
+		 * Now that we have validated everything, we consume the token atomically.
+		 */
+		const consumed = await ctx.context.internalAdapter.consumeVerificationValue(
+			verificationIdentifier,
+		);
+		if (!consumed) {
+			if (errorURL) throw ctx.redirect(errorURL);
+			throw APIError.fromStatus("BAD_REQUEST", { message: "INVALID_TOKEN" });
+		}
+
+		let updatedUser;
+		try {
+			updatedUser = await ctx.context.internalAdapter.updateUser(userId, {
+				email: pending.newEmail,
+				emailVerified: true,
+				pendingEmail: null,
+			});
+		} catch (e) {
+			/**
+			 * If updateUser throws (e.g. unique constraint violation due to a concurrent
+			 * signup), the token is consumed and the user will have to retry.
+			 */
+			throw e;
+		}
 
 		if (ctx.context.options.user?.changeEmail?.onChangeEmailCompleted) {
 			await ctx.context.runInBackgroundOrAwait(
@@ -1277,6 +1299,15 @@ export const verifyEmailChange = createAuthEndpoint(
 						oldEmail: pending.oldEmail,
 						newEmail: pending.newEmail,
 					},
+					ctx.request,
+				),
+			);
+		}
+
+		if (ctx.context.options.emailVerification?.afterEmailVerification) {
+			await ctx.context.runInBackgroundOrAwait(
+				ctx.context.options.emailVerification.afterEmailVerification(
+					updatedUser,
 					ctx.request,
 				),
 			);

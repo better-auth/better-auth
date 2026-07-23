@@ -133,7 +133,7 @@ export const auth = betterAuth({
             strategy: "verification-table", // default: "jwt"
             sendVerificationEmail: async ({ user, url }, request) => {
                 // `user.email` is the requested new address
-                await sendEmail({
+                void sendEmail({
                     to: user.email,
                     subject: "Confirm your new email address",
                     text: `Confirm your new address: ${url}`,

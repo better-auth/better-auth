@@ -1,6 +1,6 @@
 ---
-"better-auth": minor
-"@better-auth/core": minor
+"better-auth": patch
+"@better-auth/core": patch
 ---
 
 Add an opt-in `user.changeEmail.strategy` for the email-change flow.
