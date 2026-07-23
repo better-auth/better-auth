@@ -7,6 +7,7 @@ import type { Accessor } from "solid-js";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { Ref } from "vue";
 import type { Session, SessionQueryParams } from "../types";
+import { createAuthClient as createLynxClient } from "./lynx";
 import {
 	adminClient,
 	deviceAuthorizationClient,
@@ -29,6 +30,12 @@ import {
 } from "./test-plugin";
 import { createAuthClient as createVanillaClient } from "./vanilla";
 import { createAuthClient as createVueClient } from "./vue";
+
+vi.mock("@lynx-js/react", () => ({
+	useCallback: vi.fn(),
+	useRef: vi.fn(),
+	useSyncExternalStore: vi.fn(),
+}));
 
 describe("run time proxy", async () => {
 	afterEach(() => {
@@ -53,6 +60,7 @@ describe("run time proxy", async () => {
 			solid: createSolidClient(),
 			svelte: createSvelteClient(),
 			vue: createVueClient(),
+			lynx: createLynxClient(),
 		};
 		for (const [framework, client] of Object.entries(clients)) {
 			expect(isProxy(client.$fetch), `${framework} $fetch`).toBe(false);
