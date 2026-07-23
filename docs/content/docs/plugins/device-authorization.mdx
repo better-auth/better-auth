@@ -121,6 +121,12 @@ To initiate device authorization, call `device.code` with the client ID:
        * Pass this from trusted server-side code only. (optional)
        */
       user_id?: string;
+      /**
+       * RFC 8707 resource indicator(s) the issued access token should be
+       * scoped to. Requesting a valid resource yields a JWT access token
+       * whose audience is that resource, instead of an opaque token. (optional)
+       */
+      resource?: string | string[];
   }
   ```
 </APIMethod>
@@ -181,6 +187,12 @@ After displaying the user code, poll for the access token:
        * The OAuth client identifier
        */
       client_id: string;
+      /**
+       * RFC 8707 resource indicator(s). Must equal or be a subset of the
+       * resource bound at /device/code. A valid resource yields a JWT
+       * access token. (optional)
+       */
+      resource?: string | string[];
   }
   ```
 </APIMethod>
@@ -235,8 +247,10 @@ The user authorization flow requires two steps:
 1. **Code Verification**: Validate the user code via `GET /device`. The verification request claims the pending device code for the calling session.
 2. **Authorization**: The session that claimed the code can approve or deny it.
 
+The verification response includes the requesting `client_id`, `scope`, and `resource` for the authenticated user who owns the code. Display these values before offering approval so the user can review which client is requesting which permissions and audiences.
+
 <Callout type="warn">
-  Users must be authenticated when calling `GET /device`, because the verification step binds the pending device code to that session. Only the same session can later approve or deny. If the user is not authenticated when entering the code, redirect them to the login page with a return URL and re-call `GET /device` after sign-in.
+  Authenticate the user before using `GET /device` for approval. An unauthenticated request can validate the code status, but it does not claim the request or receive its client, scope, and resource details. After sign-in, call `GET /device` again so the request is bound to that session; only the same session can later approve or deny it.
 </Callout>
 
 Create a page where users can enter their code:
@@ -398,9 +412,10 @@ deviceAuthorization({
     return client && client.allowDeviceFlow;
   },
   
-  onDeviceAuthRequest: async (clientId, scope) => {
-    // Log device authorization requests
-    await logDeviceAuthRequest(clientId, scope);
+  onDeviceAuthRequest: async (clientId, scope, resource) => {
+    // Enforce the client-to-resource and scope policy for this deployment.
+    await authorizeDeviceRequest({ clientId, scope, resource });
+    await logDeviceAuthRequest(clientId, scope, resource);
   },
 })
 ```
@@ -434,13 +449,14 @@ deviceAuthorization({
 
 The device flow defines specific error codes:
 
-| Error Code              | Description                                 |
-| ----------------------- | ------------------------------------------- |
-| `authorization_pending` | User hasn't approved yet (continue polling) |
-| `slow_down`             | Polling too frequently (increase interval)  |
-| `expired_token`         | Device code has expired                     |
-| `access_denied`         | User denied the authorization               |
-| `invalid_grant`         | Invalid device code or client ID            |
+| Error Code              | Description                                                                  |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| `authorization_pending` | User hasn't approved yet (continue polling)                                  |
+| `slow_down`             | Polling too frequently (increase interval)                                   |
+| `expired_token`         | Device code has expired                                                      |
+| `access_denied`         | User denied the authorization                                                |
+| `invalid_grant`         | Invalid device code or client ID                                             |
+| `invalid_target`        | Requested `resource` is unknown, disallowed, malformed, or exceeds the grant |
 
 ## Example: CLI Application
 
@@ -581,8 +597,10 @@ authenticateCLI().catch((err) => {
 3. **Client Validation**: Always validate client IDs in production to prevent unauthorized access
 4. **HTTPS Only**: Always use HTTPS in production for device authorization
 5. **User Code Format**: User codes use a limited character set (excluding similar-looking characters like 0/O, 1/I) to reduce typing errors
-6. **Authentication Required**: Users must be authenticated when calling `GET /device`. The verification step claims the pending device code for the calling session, and only that session can later approve or deny it
+6. **Authentication Required**: Users must be authenticated for `GET /device` to claim the pending code and return its approval details. Only the same session can later approve or deny it
 7. **Pre-binding**: Device codes issued with `user_id` skip the claiming step and can only be approved or denied by that user. Pass `user_id` from trusted server-side code only
+8. **Informed Approval**: Display the `client_id`, `scope`, and `resource` returned by `GET /device` before the user approves the request
+9. **Resource Policy**: `allowedResources` is a global allow-list. Use `onDeviceAuthRequest` to enforce which resources and scopes each client may request. If you permit multiple resources, ensure every requested scope has the same meaning for every resource in the resulting `aud` claim
 
 ## Options
 
@@ -604,7 +622,11 @@ authenticateCLI().catch((err) => {
 
 **validateClient**: Function to validate client IDs. Takes a clientId and returns boolean or `Promise<boolean>`.
 
-**onDeviceAuthRequest**: Hook called when device authorization is requested. Takes clientId and optional scope.
+**onDeviceAuthRequest**: Hook called when device authorization is requested. Takes clientId, optional scope, and the optional requested `resource`.
+
+**allowedResources**: Allow-list of RFC 8707 resource indicator URIs clients may request via `resource`. See [Requesting a JWT Access Token](#requesting-a-jwt-access-token-resource-indicators) below.
+
+**customAccessTokenClaims**: Hook to add custom claims to the JWT access token issued when a `resource` is requested. See [Requesting a JWT Access Token](#requesting-a-jwt-access-token-resource-indicators) below.
 
 ### Client
 
@@ -615,6 +637,62 @@ No client-specific configuration options. The plugin adds the following methods:
 * **device.token()**: Poll for access token
 * **device.approve()**: Approve device (requires authentication)
 * **device.deny()**: Deny device (requires authentication)
+
+## Requesting a JWT Access Token (Resource Indicators)
+
+By default the device flow returns an **opaque** access token. To obtain a JWT-formatted access token ([RFC 9068](https://datatracker.ietf.org/doc/html/rfc9068)) that a resource server can validate locally, request an [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707) `resource` indicator and configure the allow-list.
+
+This requires the [JWT plugin](/docs/plugins/jwt) to be enabled: its signing key signs the token, and its configured JWKS endpoint publishes the verification keys. If a `resource` is requested while the JWT plugin isn't registered, the token exchange (`POST /device/token`) fails with a `server_error`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { jwt, deviceAuthorization } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  plugins: [
+    jwt(),
+    deviceAuthorization({
+      // Only these resource URIs may be requested; anything else is
+      // rejected with `invalid_target`.
+      allowedResources: ["https://api.example.com"],
+    }),
+  ],
+});
+```
+
+Pass `resource` when **requesting the device code** — this binds the audience to what the user approves. At the **token exchange** the `resource` is optional: when supplied it must equal or be a subset of the resource bound at code-request time. A `resource` sent at the token exchange that was never bound at the device-code request is rejected with `invalid_target`, so the issued token's audience always reflects what was authorized.
+
+```http
+POST /device/code
+Content-Type: application/x-www-form-urlencoded
+
+client_id=my-client&scope=read&resource=https://api.example.com
+```
+
+```http
+POST /device/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=urn:ietf:params:oauth:grant-type:device_code&device_code=...&client_id=my-client
+```
+
+When a valid `resource` is present, `access_token` in the `/device/token` response is a signed JWT whose `aud` claim is the requested resource (an array if multiple were requested). With no `resource` at all, behavior is unchanged: `access_token` is the existing opaque session token.
+
+### Options
+
+**allowedResources**: Allow-list of absolute-URI resource indicators (RFC 8707). A requested resource outside this list, one that is not an absolute URI, or one that contains a fragment is rejected with `invalid_target`. When unset or empty, any `resource` request is rejected.
+
+`allowedResources` does not assign resources to individual clients. Use `onDeviceAuthRequest` to reject client, resource, or scope combinations that your deployment does not authorize. RFC 9068 requires every scope in a multi-audience token to apply unambiguously to every audience, so reject a multi-resource request when that condition does not hold.
+
+**customAccessTokenClaims**: Adds custom claims to the issued JWT access token. Receives `{ user, scopes, resource, clientId }` and returns a claims object, or a `Promise` of one.
+
+<Callout type="info">
+  The JWT access token is stateless: it isn't stored, and it can't be revoked before it expires. Keep the JWT plugin's `expirationTime` short. Requesting a `resource` does not create a Better Auth session.
+</Callout>
+
+<Callout type="warn">
+  After upgrading, re-run the schema migration or generation (`npx auth migrate` or `npx auth generate`) so the `deviceCode` table gains the new, nullable `resource` column.
+</Callout>
 
 ## Schema
 
@@ -677,6 +755,12 @@ export const deviceCodeTableFields = [
 		name: "pollingInterval",
 		type: "number",
 		description: "Minimum seconds between polls",
+		isOptional: true,
+	},
+	{
+		name: "resource",
+		type: "string",
+		description: "RFC 8707 resource indicator(s) bound to this device code (JSON-encoded when there are multiple)",
 		isOptional: true,
 	},
 ];

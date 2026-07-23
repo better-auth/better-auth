@@ -6,6 +6,14 @@ import { generateRandomString } from "../../crypto";
 import { ms } from "../../utils/time";
 import type { DeviceAuthorizationOptions } from ".";
 import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
+import {
+	createDeviceJwtAccessToken,
+	extractRepeatedResourceFromForm,
+	parseStoredResource,
+	requireJwtOptions,
+	resolveResourceAudience,
+	serializeResource,
+} from "./resource";
 import type { DeviceCode } from "./schema";
 
 /* cspell:disable-next-line */
@@ -27,10 +35,17 @@ const deviceCodeBodySchema = z.object({
 			description: "Space-separated list of scopes",
 		})
 		.optional(),
+	resource: z
+		.union([z.string(), z.array(z.string())])
+		.meta({
+			description:
+				"RFC 8707 resource indicator(s) the issued access token is intended for. Requesting a valid resource yields a JWT access token audienced at it.",
+		})
+		.optional(),
 });
 
 const deviceCodeErrorSchema = z.object({
-	error: z.enum(["invalid_request", "invalid_client"]).meta({
+	error: z.enum(["invalid_request", "invalid_client", "invalid_target"]).meta({
 		description: "Error code",
 	}),
 	error_description: z.string().meta({
@@ -56,10 +71,15 @@ export const deviceCode = (opts: DeviceAuthorizationOptions) => {
 		"/device/code",
 		{
 			method: "POST",
+			cloneRequest: true,
 			body: deviceCodeBodySchema,
 			error: deviceCodeErrorSchema,
 			metadata: {
 				noStore: true,
+				allowedMediaTypes: [
+					"application/json",
+					"application/x-www-form-urlencoded",
+				],
 				openapi: {
 					description: `Request a device and user code
 
@@ -114,7 +134,11 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 										properties: {
 											error: {
 												type: "string",
-												enum: ["invalid_request", "invalid_client"],
+												enum: [
+													"invalid_request",
+													"invalid_client",
+													"invalid_target",
+												],
 											},
 											error_description: {
 												type: "string",
@@ -129,6 +153,13 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			},
 		},
 		async (ctx) => {
+			if (ctx.request) {
+				const resources = await extractRepeatedResourceFromForm(ctx.request);
+				if (resources) {
+					ctx.body.resource = resources.length > 1 ? resources : resources[0];
+				}
+			}
+
 			if (opts.validateClient) {
 				const isValid = await opts.validateClient(ctx.body.client_id);
 				if (!isValid) {
@@ -139,8 +170,22 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				}
 			}
 
+			let resourceToStore: string | null = null;
+			if (ctx.body.resource !== undefined) {
+				const audience = resolveResourceAudience({
+					opts,
+					boundResource: undefined,
+					requestedResource: ctx.body.resource,
+				});
+				resourceToStore = audience ? serializeResource(audience) : null;
+			}
+
 			if (opts.onDeviceAuthRequest) {
-				await opts.onDeviceAuthRequest(ctx.body.client_id, ctx.body.scope);
+				await opts.onDeviceAuthRequest(
+					ctx.body.client_id,
+					ctx.body.scope,
+					ctx.body.resource,
+				);
 			}
 
 			const deviceCode = await generateDeviceCode();
@@ -159,6 +204,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					pollingInterval: ms(opts.interval),
 					clientId: ctx.body.client_id,
 					scope: ctx.body.scope,
+					resource: resourceToStore,
 				},
 			});
 
@@ -193,6 +239,13 @@ const deviceTokenBodySchema = z.object({
 	client_id: z.string().meta({
 		description: "The client ID of the application",
 	}),
+	resource: z
+		.union([z.string(), z.array(z.string())])
+		.meta({
+			description:
+				"RFC 8707 resource indicator(s). Must equal or be a subset of the resource bound at /device/code. A valid resource yields a JWT access token.",
+		})
+		.optional(),
 });
 
 const deviceTokenErrorSchema = z.object({
@@ -204,6 +257,8 @@ const deviceTokenErrorSchema = z.object({
 			"access_denied",
 			"invalid_request",
 			"invalid_grant",
+			"invalid_target",
+			"server_error",
 		])
 		.meta({
 			description: "Error code",
@@ -218,10 +273,15 @@ export const deviceToken = (opts: DeviceAuthorizationOptions) =>
 		"/device/token",
 		{
 			method: "POST",
+			cloneRequest: true,
 			body: deviceTokenBodySchema,
 			error: deviceTokenErrorSchema,
 			metadata: {
 				noStore: true,
+				allowedMediaTypes: [
+					"application/json",
+					"application/x-www-form-urlencoded",
+				],
 				openapi: {
 					description: `Exchange device code for access token
 
@@ -234,12 +294,14 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 									schema: {
 										type: "object",
 										properties: {
-											session: {
-												$ref: "#/components/schemas/Session",
+											access_token: {
+												type: "string",
+												description:
+													"The access token. An opaque session token by default, or an RFC 9068 JWT when a valid `resource` was requested.",
 											},
-											user: {
-												$ref: "#/components/schemas/User",
-											},
+											token_type: { type: "string", enum: ["Bearer"] },
+											expires_in: { type: "number" },
+											scope: { type: "string" },
 										},
 									},
 								},
@@ -261,7 +323,27 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 													"access_denied",
 													"invalid_request",
 													"invalid_grant",
+													"invalid_target",
 												],
+											},
+											error_description: {
+												type: "string",
+											},
+										},
+									},
+								},
+							},
+						},
+						500: {
+							description: "Token issuance failed",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											error: {
+												type: "string",
+												enum: ["server_error"],
 											},
 											error_description: {
 												type: "string",
@@ -276,6 +358,13 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			},
 		},
 		async (ctx) => {
+			if (ctx.request) {
+				const resources = await extractRepeatedResourceFromForm(ctx.request);
+				if (resources) {
+					ctx.body.resource = resources.length > 1 ? resources : resources[0];
+				}
+			}
+
 			const { device_code, client_id } = ctx.body;
 
 			if (opts.validateClient) {
@@ -299,6 +388,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				pollingInterval?: number | undefined;
 				clientId?: string | undefined;
 				scope?: string | undefined;
+				resource?: string | undefined;
 			}>({
 				model: "deviceCode",
 				where: [
@@ -399,9 +489,30 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			}
 
 			if (deviceCodeRecord.status === "approved" && deviceCodeRecord.userId) {
+				// Resolve/validate the requested resource BEFORE consuming the code.
+				// Validation is read-only and idempotent, so a malformed or
+				// disallowed `resource` (or an `allowedResources` change after the
+				// code was issued) returns `invalid_target` without burning the
+				// approved code and forcing a full device-flow restart (RFC 8707 §2.2).
+				const audience = resolveResourceAudience({
+					opts,
+					boundResource: parseStoredResource(deviceCodeRecord.resource),
+					requestedResource: ctx.body.resource,
+					// Token-endpoint policy: a resource must have been authorized at
+					// `/device/code`; reject a token-time-only resource.
+					requireBinding: true,
+				});
+
+				// If a JWT will be minted, confirm the jwt plugin is available
+				// BEFORE consuming the code, so a misconfigured server (resource
+				// allowed but jwt() not registered) doesn't burn the approval.
+				if (audience) {
+					requireJwtOptions(ctx);
+				}
+
 				// Atomically claim the approved code as the single race gate:
 				// concurrent polls contend on this delete-and-return, and only the
-				// caller that removes the row may issue a session. Losers receive
+				// caller that removes the row may issue a token. Losers receive
 				// null and are rejected, so the code is redeemed at most once.
 				const claimedDeviceCode = await ctx.context.adapter.consumeOne<{
 					id: string;
@@ -433,6 +544,27 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						error: "server_error",
 						error_description:
 							DEVICE_AUTHORIZATION_ERROR_CODES.USER_NOT_FOUND.message,
+					});
+				}
+
+				// RFC 8707 / RFC 9068: when a resource resolved, issue a stateless
+				// JWT access token scoped to that audience instead of an opaque session.
+				if (audience) {
+					const { token, expiresIn } = await createDeviceJwtAccessToken({
+						ctx,
+						opts,
+						user,
+						clientId: client_id,
+						scope: claimedDeviceCode.scope || "",
+						audience,
+					});
+					ctx.setHeader("Cache-Control", "no-store");
+					ctx.setHeader("Pragma", "no-cache");
+					return ctx.json({
+						access_token: token,
+						token_type: "Bearer",
+						expires_in: expiresIn,
+						scope: claimedDeviceCode.scope || "",
 					});
 				}
 
@@ -528,6 +660,22 @@ export const deviceVerify = createAuthEndpoint(
 											enum: ["pending", "approved", "denied"],
 											description: "Current status of the device authorization",
 										},
+										client_id: {
+											type: "string",
+											description: "The client requesting authorization",
+										},
+										scope: {
+											type: "string",
+											description: "The requested OAuth scopes",
+										},
+										resource: {
+											oneOf: [
+												{ type: "string" },
+												{ type: "array", items: { type: "string" } },
+											],
+											description:
+												"The RFC 8707 resource indicator(s) bound to this request",
+										},
 									},
 								},
 							},
@@ -589,9 +737,19 @@ export const deviceVerify = createAuthEndpoint(
 			}
 		}
 
+		const canReviewRequest =
+			session?.user.id !== undefined &&
+			deviceCodeRecord.userId === session.user.id;
 		return ctx.json({
 			user_code: user_code,
 			status: deviceCodeRecord.status,
+			...(canReviewRequest
+				? {
+						client_id: deviceCodeRecord.clientId,
+						scope: deviceCodeRecord.scope,
+						resource: parseStoredResource(deviceCodeRecord.resource),
+					}
+				: {}),
 		});
 	},
 );
