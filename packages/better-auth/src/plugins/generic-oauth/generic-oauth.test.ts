@@ -5,12 +5,22 @@ import { runWithEndpointContext } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { betterFetch } from "@better-fetch/fetch";
 import { generateKeyPair, SignJWT } from "jose";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
 import type {
 	MutableResponse,
 	TokenRequestIncomingMessage,
 } from "oauth2-mock-server";
 import { OAuth2Server } from "oauth2-mock-server";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { createAuthClient } from "../../client";
 import { getAwaitableValue } from "../../context/helpers";
 import { parseSetCookieHeader } from "../../cookies";
@@ -30,10 +40,20 @@ describe("oauth2", async () => {
 	const clientId = "test-client-id";
 	const clientSecret = "test-client-secret";
 	const server = new OAuth2Server();
+	const mswServer = setupServer();
 	await server.start();
 	const port = Number(server.issuer.url?.split(":")[2]!);
 
+	beforeAll(() => {
+		mswServer.listen({ onUnhandledRequest: "bypass" });
+	});
+
+	afterEach(() => {
+		mswServer.resetHandlers();
+	});
+
 	afterAll(async () => {
+		mswServer.close();
 		await server.stop();
 	});
 
@@ -68,6 +88,14 @@ describe("oauth2", async () => {
 			customFetchImpl,
 		},
 	});
+
+	async function createMicrosoftIdToken(payload: Record<string, unknown>) {
+		return new SignJWT(payload)
+			.setProtectedHeader({ alg: "HS256" })
+			.setIssuedAt()
+			.setExpirationTime("1h")
+			.sign(new TextEncoder().encode("microsoft-test-secret"));
+	}
 
 	beforeAll(async () => {
 		const context = await auth.$context;
@@ -2839,11 +2867,13 @@ describe("oauth2", async () => {
 	});
 
 	describe("Microsoft Entra ID Provider Helper", () => {
+		const tenantId = "12345678-1234-1234-1234-123456789012";
+
 		it("should return correct GenericOAuthConfig", () => {
 			const msConfig = microsoftEntraId({
 				clientId: "ms-client-id",
 				clientSecret: "ms-client-secret",
-				tenantId: "12345678-1234-1234-1234-123456789012",
+				tenantId,
 			});
 
 			expect(msConfig.providerId).toBe("microsoft-entra-id");
@@ -2856,15 +2886,18 @@ describe("oauth2", async () => {
 			expect(msConfig.userInfoUrl).toBe(
 				"https://graph.microsoft.com/oidc/userinfo",
 			);
+			expect(msConfig.discoveryUrl).toBe(
+				`https://login.microsoftonline.com/${tenantId}/v2.0/.well-known/openid-configuration`,
+			);
 			expect(msConfig.scopes).toEqual(["openid", "profile", "email"]);
 			expect(msConfig.clientId).toBe("ms-client-id");
 			expect(msConfig.clientSecret).toBe("ms-client-secret");
 			expect(msConfig.getUserInfo).toBeDefined();
 			expect(typeof msConfig.getUserInfo).toBe("function");
+			expect(msConfig.requireIdTokenVerification).toBe(true);
 		});
 
 		it("should handle tenant ID as GUID", () => {
-			const tenantId = "12345678-1234-1234-1234-123456789012";
 			const msConfig = microsoftEntraId({
 				clientId: "ms-client-id",
 				clientSecret: "ms-client-secret",
@@ -2880,7 +2913,7 @@ describe("oauth2", async () => {
 			const msConfig = microsoftEntraId({
 				clientId: "ms-client-id",
 				clientSecret: "ms-client-secret",
-				tenantId: "12345678-1234-1234-1234-123456789012",
+				tenantId,
 				scopes: ["openid", "profile"],
 			});
 
@@ -2891,13 +2924,42 @@ describe("oauth2", async () => {
 			const msConfig = microsoftEntraId({
 				clientId: "ms-client-id",
 				clientSecret: "ms-client-secret",
-				tenantId: "12345678-1234-1234-1234-123456789012",
+				tenantId,
 				pkce: true,
 				disableImplicitSignUp: true,
 			});
 
 			expect(msConfig.pkce).toBe(true);
 			expect(msConfig.disableImplicitSignUp).toBe(true);
+		});
+
+		it("fails initialization when Microsoft discovery is unavailable", async () => {
+			mswServer.use(
+				http.get(
+					`https://login.microsoftonline.com/${tenantId}/v2.0/.well-known/openid-configuration`,
+					() => new HttpResponse(null, { status: 503 }),
+				),
+			);
+			const { auth } = await getTestInstance(
+				{
+					plugins: [
+						genericOAuth({
+							config: [
+								microsoftEntraId({
+									clientId: "ms-client-id",
+									clientSecret: "ms-client-secret",
+									tenantId,
+								}),
+							],
+						}),
+					],
+				},
+				{ disableTestUser: true },
+			);
+
+			await expect(auth.$context).rejects.toThrow(
+				"discovery returned no valid data",
+			);
 		});
 
 		it.each([
@@ -2922,6 +2984,238 @@ describe("oauth2", async () => {
 					tenantId: undefined,
 				} as unknown as Parameters<typeof microsoftEntraId>[0]),
 			).toThrow("requires a concrete Microsoft Entra tenant GUID");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10194
+		 */
+		it("should use oid from the ID token as the account id instead of sub", async () => {
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				clientSecret: "ms-client-secret",
+				tenantId,
+			});
+			mswServer.use(
+				http.get("https://graph.microsoft.com/oidc/userinfo", () =>
+					HttpResponse.json({
+						sub: "token-pairwise-sub",
+						email: "graph@example.com",
+						name: "Graph User",
+						picture: "https://example.com/graph.png",
+					}),
+				),
+			);
+			const idToken = await createMicrosoftIdToken({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+				email: "token@example.com",
+				name: "Token User",
+			});
+
+			const userInfo = await msConfig.getUserInfo!({
+				accessToken: "ms-access-token",
+				idToken,
+			});
+
+			expect(userInfo).toMatchObject({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+				email: "token@example.com",
+				name: "Token User",
+				image: "https://example.com/graph.png",
+			});
+			expect(
+				await msConfig.accountSubject?.({
+					tokens: { accessToken: "ms-access-token", idToken },
+					profile: userInfo!,
+				}),
+			).toBe("token-stable-oid");
+		});
+
+		it.each([
+			["does not match", "different-graph-sub"],
+			["is missing", undefined],
+		])("should ignore Graph userinfo when its subject %s", async (_, graphSub) => {
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				clientSecret: "ms-client-secret",
+				tenantId,
+			});
+			mswServer.use(
+				http.get("https://graph.microsoft.com/oidc/userinfo", () =>
+					HttpResponse.json({
+						sub: graphSub,
+						email: "graph@example.com",
+						name: "Graph User",
+						picture: "https://example.com/graph.png",
+					}),
+				),
+			);
+			const idToken = await createMicrosoftIdToken({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+			});
+
+			const userInfo = await msConfig.getUserInfo!({
+				accessToken: "ms-access-token",
+				idToken,
+			});
+
+			expect(userInfo).toMatchObject({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+				emailVerified: false,
+			});
+			expect(userInfo?.email).toBeUndefined();
+			expect(userInfo?.name).toBeUndefined();
+			expect(userInfo?.image).toBeUndefined();
+		});
+
+		it("should normalize personal Microsoft account givenname and familyname claims", async () => {
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				clientSecret: "ms-client-secret",
+				tenantId,
+			});
+			mswServer.use(
+				http.get("https://graph.microsoft.com/oidc/userinfo", () =>
+					HttpResponse.json({
+						sub: "token-pairwise-sub",
+					}),
+				),
+			);
+			const idToken = await createMicrosoftIdToken({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+				givenname: "Personal",
+				familyname: "Account",
+			});
+
+			const userInfo = await msConfig.getUserInfo!({
+				accessToken: "ms-access-token",
+				idToken,
+			});
+
+			expect(userInfo?.name).toBe("Personal Account");
+		});
+
+		it("should fall back to ID token claims when Graph userinfo fails", async () => {
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				clientSecret: "ms-client-secret",
+				tenantId,
+			});
+			let graphCalls = 0;
+			mswServer.use(
+				http.get("https://graph.microsoft.com/oidc/userinfo", () => {
+					graphCalls++;
+					return new HttpResponse(null, { status: 503 });
+				}),
+			);
+			const idToken = await createMicrosoftIdToken({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+				email: "token@example.com",
+				name: "Token User",
+				picture: "https://example.com/token.png",
+			});
+
+			const userInfo = await msConfig.getUserInfo!({
+				accessToken: "ms-access-token",
+				idToken,
+			});
+
+			expect(userInfo).toMatchObject({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+				email: "token@example.com",
+				name: "Token User",
+				image: "https://example.com/token.png",
+				emailVerified: false,
+			});
+			expect(graphCalls).toBe(1);
+		});
+
+		it("should return token claims without fetching Graph when accessToken is missing", async () => {
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				clientSecret: "ms-client-secret",
+				tenantId,
+			});
+			let graphCalls = 0;
+			mswServer.use(
+				http.get("https://graph.microsoft.com/oidc/userinfo", () => {
+					graphCalls++;
+					return HttpResponse.json({
+						sub: "token-pairwise-sub",
+						email: "graph@example.com",
+						name: "Graph User",
+					});
+				}),
+			);
+			const idToken = await createMicrosoftIdToken({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+				email: "token@example.com",
+				name: "Token User",
+			});
+
+			const userInfo = await msConfig.getUserInfo!({ idToken });
+
+			expect(userInfo).toMatchObject({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+				email: "token@example.com",
+				name: "Token User",
+				emailVerified: false,
+			});
+			expect(graphCalls).toBe(0);
+		});
+
+		it.each([
+			["missing", undefined],
+			["not a string", 123],
+			["blank", " \t"],
+		])("rejects an ID token whose oid is %s", async (_, oid) => {
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				clientSecret: "ms-client-secret",
+				tenantId,
+			});
+			let graphCalls = 0;
+			mswServer.use(
+				http.get("https://graph.microsoft.com/oidc/userinfo", () => {
+					graphCalls++;
+					return HttpResponse.json({
+						sub: "legacy-sub",
+						email: "legacy@example.com",
+						name: "Legacy User",
+					});
+				}),
+			);
+			const idToken = await createMicrosoftIdToken({
+				sub: "legacy-sub",
+				oid,
+				email: "legacy@example.com",
+				name: "Legacy User",
+			});
+
+			const userInfo = await msConfig.getUserInfo!({
+				accessToken: "ms-access-token",
+				idToken,
+			});
+
+			expect(userInfo).toBeNull();
+			expect(graphCalls).toBe(0);
 		});
 	});
 
@@ -3126,6 +3420,20 @@ describe("oauth2", async () => {
 	});
 
 	it("should integrate microsoftEntraId provider helper with genericOAuth", async () => {
+		const tenantId = "12345678-1234-1234-1234-123456789012";
+		const issuer = `https://login.microsoftonline.com/${tenantId}/v2.0`;
+		mswServer.use(
+			http.get(`${issuer}/.well-known/openid-configuration`, () =>
+				HttpResponse.json({
+					issuer,
+					authorization_endpoint: `${issuer}/authorize`,
+					token_endpoint: `${issuer}/token`,
+					userinfo_endpoint: "https://graph.microsoft.com/oidc/userinfo",
+					jwks_uri: `${issuer}/discovery/v2.0/keys`,
+					id_token_signing_alg_values_supported: ["RS256"],
+				}),
+			),
+		);
 		const { auth: testAuth } = await getTestInstance({
 			plugins: [
 				genericOAuth({
@@ -3133,7 +3441,7 @@ describe("oauth2", async () => {
 						microsoftEntraId({
 							clientId: "ms-client-id",
 							clientSecret: "ms-client-secret",
-							tenantId: "12345678-1234-1234-1234-123456789012",
+							tenantId,
 						}),
 					],
 				}),
@@ -4708,6 +5016,52 @@ describe("oauth2", async () => {
 
 				await expect(auth.$context).rejects.toThrow(
 					"discovery did not return an issuer",
+				);
+			} finally {
+				await new Promise<void>((resolve, reject) =>
+					discoveryServer.close((error) => (error ? reject(error) : resolve())),
+				);
+			}
+		});
+
+		it("fails provider initialization when required ID token verification metadata is unavailable", async () => {
+			const discoveryServer = createServer((_req, res) => {
+				res.setHeader("content-type", "application/json");
+				res.end(
+					JSON.stringify({
+						issuer: `http://localhost:${port}`,
+						authorization_endpoint: `http://localhost:${port}/authorize`,
+						token_endpoint: `http://localhost:${port}/token`,
+					}),
+				);
+			});
+			await new Promise<void>((resolve) => discoveryServer.listen(0, resolve));
+			const discoveryPort = (discoveryServer.address() as AddressInfo).port;
+			try {
+				const { auth } = await getTestInstance(
+					{
+						plugins: [
+							genericOAuth({
+								config: [
+									{
+										providerId: "verified-id-token-required",
+										discoveryUrl: `http://localhost:${discoveryPort}/.well-known/openid-configuration`,
+										authorizationUrl: `http://localhost:${port}/authorize`,
+										tokenUrl: `http://localhost:${port}/token`,
+										accountIssuer: `http://localhost:${port}`,
+										requireIdTokenVerification: true,
+										clientId,
+										clientSecret,
+									},
+								],
+							}),
+						],
+					},
+					{ disableTestUser: true },
+				);
+
+				await expect(auth.$context).rejects.toThrow(
+					"requires verified ID tokens",
 				);
 			} finally {
 				await new Promise<void>((resolve, reject) =>
