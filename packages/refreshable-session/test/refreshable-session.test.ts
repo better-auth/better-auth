@@ -30,6 +30,12 @@ describe("refreshable-session", async () => {
 		{
 			session: {
 				expiresIn: 60,
+				additionalFields: {
+					activeAccountId: {
+						type: "string",
+						required: false,
+					},
+				},
 			},
 			plugins: [
 				refreshableSession({
@@ -240,6 +246,94 @@ describe("refreshable-session", async () => {
 		expect(retryHeaders.get("set-refresh-token")).toBe(
 			firstRefreshHeaders.get("set-refresh-token"),
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10495#discussion_r3637905873
+	 */
+	it("keeps native refresh valid after checking an expired access session", async () => {
+		let signInHeaders = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				headers: { "x-better-auth-client-id": CLIENT_ID },
+				onSuccess(context) {
+					signInHeaders = context.response.headers;
+				},
+			},
+		);
+
+		const accessToken = signInHeaders.get("set-auth-token")!;
+		const refreshToken = signInHeaders.get("set-refresh-token")!;
+		const rawSessionToken = decodeURIComponent(accessToken).split(".")[0]!;
+		const context = await auth.$context;
+		await context.internalAdapter.updateSession(rawSessionToken, {
+			expiresAt: new Date(Date.now() - 1_000),
+		});
+
+		const expiredSession = await client.getSession({
+			fetchOptions: { headers: { [ACCESS_HEADER]: accessToken } },
+		});
+		expect(expiredSession.data).toBeNull();
+		expect(expiredSession.error).toBeNull();
+
+		const refresh = await client.refreshSession({
+			refreshToken,
+			clientId: CLIENT_ID,
+		});
+		expect(refresh.error).toBeNull();
+		expect(refresh.data?.user.email).toBe(testUser.email);
+		expect(
+			await context.internalAdapter.findSession(rawSessionToken),
+		).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10495#discussion_r3637905879
+	 */
+	it("preserves session-scoped fields when rotating", async () => {
+		let signInHeaders = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				headers: { "x-better-auth-client-id": CLIENT_ID },
+				onSuccess(context) {
+					signInHeaders = context.response.headers;
+				},
+			},
+		);
+
+		const accessToken = signInHeaders.get("set-auth-token")!;
+		const refreshToken = signInHeaders.get("set-refresh-token")!;
+		const rawSessionToken = decodeURIComponent(accessToken).split(".")[0]!;
+		const context = await auth.$context;
+		await context.internalAdapter.updateSession(rawSessionToken, {
+			activeAccountId: "account-123",
+		});
+
+		let refreshHeaders = new Headers();
+		const refresh = await client.refreshSession(
+			{ refreshToken, clientId: CLIENT_ID },
+			{
+				onSuccess(result) {
+					refreshHeaders = result.response.headers;
+				},
+			},
+		);
+		expect(refresh.error).toBeNull();
+
+		const nextAccessToken = refreshHeaders.get("set-auth-token")!;
+		const nextRawSessionToken =
+			decodeURIComponent(nextAccessToken).split(".")[0]!;
+		const nextSession =
+			await context.internalAdapter.findSession(nextRawSessionToken);
+		expect(nextSession?.session.activeAccountId).toBe("account-123");
 	});
 
 	it("does not issue a refresh credential when rememberMe is false", async () => {
@@ -575,5 +669,63 @@ describe("refreshable-session replay", async () => {
 		});
 		expect(replay.data).toBeNull();
 		expect(replay.error?.status).toBe(401);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/10495#discussion_r3637905882
+ */
+describe("refreshable-session option validation", () => {
+	it.each([
+		[
+			"default refresh lifetime",
+			() =>
+				refreshableSession({
+					refreshTokenExpiresIn: Number.NaN,
+				}),
+		],
+		[
+			"reuse interval",
+			() =>
+				refreshableSession({
+					refreshTokenReuseInterval: Number.POSITIVE_INFINITY,
+				}),
+		],
+		[
+			"native access lifetime",
+			() =>
+				refreshableSession({
+					nativeClients: [
+						{
+							clientId: CLIENT_ID,
+							accessTokenExpiresIn: Number.POSITIVE_INFINITY,
+						},
+					],
+				}),
+		],
+		[
+			"native refresh lifetime",
+			() =>
+				refreshableSession({
+					nativeClients: [
+						{
+							clientId: CLIENT_ID,
+							refreshTokenExpiresIn: Number.NaN,
+						},
+					],
+				}),
+		],
+		[
+			"browser refresh lifetime",
+			() =>
+				refreshableSession({
+					browser: {
+						enabled: true,
+						refreshTokenExpiresIn: Number.POSITIVE_INFINITY,
+					},
+				}),
+		],
+	])("rejects a non-finite %s", (_name, createPlugin) => {
+		expect(createPlugin).toThrow();
 	});
 });

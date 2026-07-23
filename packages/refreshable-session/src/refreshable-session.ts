@@ -47,6 +47,14 @@ const CLIENT_ID_HEADER = "x-better-auth-client-id";
 const SET_ACCESS_TOKEN_HEADER = "set-auth-token";
 const SET_REFRESH_TOKEN_HEADER = "set-refresh-token";
 const SET_ACCESS_TOKEN_EXPIRES_AT_HEADER = "set-auth-token-expires-at";
+const SESSION_ROTATION_MANAGED_FIELDS = new Set([
+	"id",
+	"userId",
+	"token",
+	"expiresAt",
+	"createdAt",
+	"updatedAt",
+]);
 
 type SessionWithUser = {
 	session: Session & Record<string, unknown>;
@@ -100,6 +108,17 @@ function findNativeClient(
 ): RefreshableSessionNativeClient | null {
 	if (!clientId) return null;
 	return clients.find((client) => client.clientId === clientId) ?? null;
+}
+
+function getPreservedSessionFields(
+	session: (Session & Record<string, unknown>) | null,
+): Record<string, unknown> {
+	if (!session) return {};
+	return Object.fromEntries(
+		Object.entries(session).filter(
+			([field]) => !SESSION_ROTATION_MANAGED_FIELDS.has(field),
+		),
+	);
 }
 
 function getAccessTokenHeader(client: RefreshableSessionNativeClient): string {
@@ -199,12 +218,15 @@ export function refreshableSession(
 	const browser = options?.browser;
 	const browserEnabled = browser?.enabled ?? false;
 
-	if (refreshTokenExpiresIn <= 0) {
+	if (!Number.isFinite(refreshTokenExpiresIn) || refreshTokenExpiresIn <= 0) {
 		throw new BetterAuthError(
 			"refreshTokenExpiresIn must be greater than zero",
 		);
 	}
-	if (refreshTokenReuseInterval < 0) {
+	if (
+		!Number.isFinite(refreshTokenReuseInterval) ||
+		refreshTokenReuseInterval < 0
+	) {
 		throw new BetterAuthError(
 			"refreshTokenReuseInterval must be greater than or equal to zero",
 		);
@@ -216,7 +238,8 @@ export function refreshableSession(
 	for (const client of nativeClients) {
 		if (
 			client.accessTokenExpiresIn !== undefined &&
-			client.accessTokenExpiresIn <= 0
+			(!Number.isFinite(client.accessTokenExpiresIn) ||
+				client.accessTokenExpiresIn <= 0)
 		) {
 			throw new BetterAuthError(
 				`accessTokenExpiresIn for native client "${client.clientId}" must be greater than zero`,
@@ -224,7 +247,8 @@ export function refreshableSession(
 		}
 		if (
 			client.refreshTokenExpiresIn !== undefined &&
-			client.refreshTokenExpiresIn <= 0
+			(!Number.isFinite(client.refreshTokenExpiresIn) ||
+				client.refreshTokenExpiresIn <= 0)
 		) {
 			throw new BetterAuthError(
 				`refreshTokenExpiresIn for native client "${client.clientId}" must be greater than zero`,
@@ -233,7 +257,8 @@ export function refreshableSession(
 	}
 	if (
 		browser?.refreshTokenExpiresIn !== undefined &&
-		browser.refreshTokenExpiresIn <= 0
+		(!Number.isFinite(browser.refreshTokenExpiresIn) ||
+			browser.refreshTokenExpiresIn <= 0)
 	) {
 		throw new BetterAuthError(
 			"refreshTokenExpiresIn for the browser must be greater than zero",
@@ -541,10 +566,17 @@ export function refreshableSession(
 			});
 			if (!won) return null;
 
+			const previousSession = record!.sessionId
+				? await adapter.findOne<Session & Record<string, unknown>>({
+						model: "session",
+						where: [{ field: "id", value: record!.sessionId }],
+					})
+				: null;
 			const newSession = await ctx.context.internalAdapter.createSession(
 				record!.userId,
 				false,
 				{
+					...getPreservedSessionFields(previousSession),
 					token: nextSessionToken,
 					createdAt: record!.authTime,
 					updatedAt: now,
@@ -581,21 +613,15 @@ export function refreshableSession(
 				},
 			});
 
-			if (record!.sessionId) {
-				const previousSession = await adapter.findOne<Session>({
-					model: "session",
-					where: [{ field: "id", value: record!.sessionId }],
-				});
-				if (previousSession && previousSession.token !== nextSessionToken) {
-					const hookContext = ctx as RefreshableDatabaseHookContext;
-					hookContext.refreshableSessionRotatingFamilyId = record!.familyId;
-					try {
-						await ctx.context.internalAdapter.deleteSession(
-							previousSession.token,
-						);
-					} finally {
-						hookContext.refreshableSessionRotatingFamilyId = undefined;
-					}
+			if (previousSession && previousSession.token !== nextSessionToken) {
+				const hookContext = ctx as RefreshableDatabaseHookContext;
+				hookContext.refreshableSessionRotatingFamilyId = record!.familyId;
+				try {
+					await ctx.context.internalAdapter.deleteSession(
+						previousSession.token,
+					);
+				} finally {
+					hookContext.refreshableSessionRotatingFamilyId = undefined;
 				}
 			}
 
@@ -810,8 +836,22 @@ export function refreshableSession(
 							if (!token || !(await isValidSignedSessionToken(ctx, token))) {
 								continue;
 							}
-							const headers = injectSessionCookie(ctx, tryDecode(token));
+							const signedSessionToken = tryDecode(token);
+							const headers = injectSessionCookie(ctx, signedSessionToken);
 							if (ctx.path === "/get-session") {
+								const sessionToken = signedSessionToken.split(".")[0];
+								const session = sessionToken
+									? await ctx.context.internalAdapter.findSession(sessionToken)
+									: null;
+								if (
+									session &&
+									session.session.expiresAt.getTime() <= Date.now()
+								) {
+									// Core get-session deletes expired rows. Keep a native
+									// session until rotation can preserve its fields and
+									// delete it without revoking the refresh family.
+									return ctx.json(null);
+								}
 								return {
 									context: {
 										headers,
