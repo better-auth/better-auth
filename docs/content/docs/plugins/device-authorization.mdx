@@ -123,7 +123,7 @@ This registers the `urn:ietf:params:oauth:grant-type:device_code` grant on the p
 The flow for a registered OAuth client:
 
 1. The client requests codes at `/device/code` (the advertised `device_authorization_endpoint`). The provider validates registered clients, scopes, and resource indicators before creating the authorization request.
-2. The user approves at the verification URL. The `GET /device` response includes `client_id`, `scope`, and `resource` so the approval page can show exactly what is requesting access.
+2. The user signs in and approves at the verification URL. The `GET /device` response includes `client_id`, `scope`, and `resource` only for the user who owns the request, so the approval page can show exactly what is requesting access without exposing that context to unauthenticated or unrelated users.
 3. The client polls **`/oauth2/token`** (not `/device/token`) with `grant_type=urn:ietf:params:oauth:grant-type:device_code`, `device_code`, and `client_id`. A `resource` parameter may be omitted to use the approved resource set, or may request a subset; it cannot add a resource after approval.
 
 ```ts title="register the client with the device-code grant"

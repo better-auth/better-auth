@@ -1,7 +1,6 @@
 export { getIssuer } from "./authorize";
 export {
 	DEVICE_CODE_GRANT_TYPE,
-	type DeviceCodeGrantOptions,
 	deviceCodeGrant,
 } from "./device-code";
 export { extendOAuthProvider } from "./extensions";

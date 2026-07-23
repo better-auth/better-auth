@@ -207,8 +207,10 @@ describe("device authorization flow", async () => {
 			);
 			expect(created.error).toBeNull();
 
+			const { headers } = await signInWithTestUser();
 			const verification = await auth.api.deviceVerify({
 				query: { user_code: created.data!.user_code as string },
+				headers,
 			});
 			expect(verification.resource).toEqual([
 				"https://api.example.com",
@@ -293,7 +295,7 @@ describe("device authorization flow", async () => {
 	});
 
 	describe("device verification", () => {
-		it("should verify valid user code", async () => {
+		it("only returns authorization context to the authenticated owner", async () => {
 			const { user_code } = await auth.api.deviceCode({
 				body: {
 					client_id: "test-client",
@@ -302,8 +304,21 @@ describe("device authorization flow", async () => {
 				},
 			});
 
+			const anonymousResponse = await auth.api.deviceVerify({
+				query: { user_code },
+			});
+			expect(anonymousResponse).toMatchObject({
+				user_code,
+				status: "pending",
+			});
+			expect(anonymousResponse).not.toHaveProperty("client_id");
+			expect(anonymousResponse).not.toHaveProperty("scope");
+			expect(anonymousResponse).not.toHaveProperty("resource");
+
+			const { headers } = await signInWithTestUser();
 			const response = await auth.api.deviceVerify({
 				query: { user_code },
+				headers,
 			});
 			expect("error" in response).toBe(false);
 			if (!("error" in response)) {
@@ -906,7 +921,7 @@ describe("device authorization ownership gate", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-cq3f-vc6p-68fh
 	 */
-	it("rejects approve from a different user after another claimed the code", async () => {
+	it("does not expose or authorize a code claimed by a different user", async () => {
 		const { auth, client, signInWithTestUser, signInWithUser } =
 			await getTestInstance(
 				{
@@ -937,13 +952,25 @@ describe("device authorization ownership gate", () => {
 		);
 
 		const { user_code } = await auth.api.deviceCode({
-			body: { client_id: "test-client" },
+			body: {
+				client_id: "test-client",
+				scope: "read write",
+				resource: "https://api.example.com",
+			},
 		});
 
 		await auth.api.deviceVerify({
 			query: { user_code },
 			headers: claimerHeaders,
 		});
+
+		const verification = await auth.api.deviceVerify({
+			query: { user_code },
+			headers: attackerHeaders,
+		});
+		expect(verification).not.toHaveProperty("client_id");
+		expect(verification).not.toHaveProperty("scope");
+		expect(verification).not.toHaveProperty("resource");
 
 		await expect(
 			auth.api.deviceApprove({

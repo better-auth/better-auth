@@ -26,11 +26,10 @@ export const DEVICE_CODE_GRANT_TYPE =
 	"urn:ietf:params:oauth:grant-type:device_code";
 
 /**
- * Default path of the device authorization request endpoint contributed by the
- * `device-authorization` plugin, advertised as `device_authorization_endpoint`
- * in the provider's discovery metadata.
+ * Path of the device authorization request endpoint contributed by the
+ * `device-authorization` plugin and advertised in provider discovery metadata.
  */
-const DEFAULT_DEVICE_AUTHORIZATION_PATH = "/device/code";
+const DEVICE_AUTHORIZATION_PATH = "/device/code";
 
 /** Path of the first-party session token endpoint this grant guards. */
 const DEVICE_TOKEN_PATH = "/device/token";
@@ -55,15 +54,6 @@ interface DeviceCodeRecord {
 	clientId?: string | null;
 	scope?: string | null;
 	resource?: string | null;
-}
-
-export interface DeviceCodeGrantOptions {
-	/**
-	 * Path of the device authorization request endpoint to advertise as
-	 * `device_authorization_endpoint`. Defaults to the `device-authorization`
-	 * plugin's `/device/code`.
-	 */
-	deviceAuthorizationPath?: string;
 }
 
 function tokenError(
@@ -311,12 +301,7 @@ async function handleDeviceCodeGrant(
  * });
  * ```
  */
-export function deviceCodeGrant(
-	options: DeviceCodeGrantOptions = {},
-): BetterAuthPlugin {
-	const deviceAuthorizationPath =
-		options.deviceAuthorizationPath ?? DEFAULT_DEVICE_AUTHORIZATION_PATH;
-
+export function deviceCodeGrant(): BetterAuthPlugin {
 	return {
 		id: "oauth-provider-device-code",
 		version: PACKAGE_VERSION,
@@ -337,7 +322,7 @@ export function deviceCodeGrant(
 					[DEVICE_CODE_GRANT_TYPE]: handleDeviceCodeGrant,
 				},
 				metadata: (metadataInput) => ({
-					device_authorization_endpoint: `${metadataInput.ctx.context.baseURL}${deviceAuthorizationPath}`,
+					device_authorization_endpoint: `${metadataInput.ctx.context.baseURL}${DEVICE_AUTHORIZATION_PATH}`,
 				}),
 			});
 		},
@@ -345,7 +330,7 @@ export function deviceCodeGrant(
 			before: [
 				{
 					matcher(ctx) {
-						return ctx.path === deviceAuthorizationPath;
+						return ctx.path === DEVICE_AUTHORIZATION_PATH;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const body = ctx.body as

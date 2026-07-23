@@ -624,18 +624,21 @@ export const deviceVerify = createAuthEndpoint(
 										},
 										client_id: {
 											type: "string",
-											description: "The client requesting authorization",
+											description:
+												"The client requesting authorization, returned only to the authenticated user who owns this request",
 										},
 										scope: {
 											type: "string",
-											description: "The requested scopes",
+											description:
+												"The requested scopes, returned only to the authenticated user who owns this request",
 										},
 										resource: {
 											oneOf: [
 												{ type: "string" },
 												{ type: "array", items: { type: "string" } },
 											],
-											description: "The requested resource indicators",
+											description:
+												"The requested resource indicators, returned only to the authenticated user who owns this request",
 										},
 									},
 								},
@@ -698,12 +701,19 @@ export const deviceVerify = createAuthEndpoint(
 			}
 		}
 
+		const canReviewRequest =
+			session?.user.id !== undefined &&
+			deviceCodeRecord.userId === session.user.id;
 		return ctx.json({
 			user_code: user_code,
 			status: deviceCodeRecord.status,
-			client_id: deviceCodeRecord.clientId,
-			scope: deviceCodeRecord.scope,
-			resource: parseStoredResource(deviceCodeRecord.resource),
+			...(canReviewRequest
+				? {
+						client_id: deviceCodeRecord.clientId,
+						scope: deviceCodeRecord.scope,
+						resource: parseStoredResource(deviceCodeRecord.resource),
+					}
+				: {}),
 		});
 	},
 );
