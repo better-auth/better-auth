@@ -84,6 +84,69 @@ describe("magic link", async () => {
 		expect(betterAuthCookie).toBeDefined();
 	});
 
+	it("should reject new-user magic link verify when validateUserInfo returns error", async () => {
+		let blockedEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const { customFetchImpl } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo({ source }) {
+						expect(source.method).toBe("magic-link");
+						return {
+							error: "magic_link_blocked",
+							errorDescription: "Magic link sign-up is not allowed",
+						};
+					},
+				},
+				plugins: [
+					magicLink({
+						async sendMagicLink(data) {
+							blockedEmail = data;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [magicLinkClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+		const blockedClient = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		await blockedClient.signIn.magicLink({
+			email: "new-magic-link@example.com",
+		});
+		await blockedClient.magicLink.verify(
+			{
+				query: {
+					token: new URL(blockedEmail.url).searchParams.get("token") || "",
+				},
+			},
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("error=magic_link_blocked");
+					expect(location).toContain(
+						"error_description=Magic+link+sign-up+is+not+allowed",
+					);
+				},
+			},
+		);
+	});
+
 	it("shouldn't verify magic link with the same token", async () => {
 		await client.magicLink.verify(
 			{
@@ -304,6 +367,12 @@ describe("magic link", async () => {
 		});
 		const userId = created.user!.id;
 		expect(created.user?.emailVerified).toBe(false);
+		await internalAdapter.createAccount({
+			userId,
+			providerId: "google",
+			issuer: "local:google",
+			providerAccountId: "attacker-google",
+		});
 
 		// Precondition: the password is blocked behind the verification gate.
 		await expect(
@@ -324,11 +393,10 @@ describe("magic link", async () => {
 		const session = await testClient.getSession({ fetchOptions: { headers } });
 		expect(session.data?.user.emailVerified).toBe(true);
 
-		// The credential is gone, so the password no longer works.
+		// Pre-proof account links are gone, so the password no longer works and
+		// an OAuth link cannot survive the email-owner proof.
 		const accounts = await internalAdapter.findAccounts(userId);
-		expect(
-			accounts.find((account) => account.providerId === "credential"),
-		).toBeUndefined();
+		expect(accounts).toHaveLength(0);
 		await expect(
 			auth.api.signInEmail({ body: { email, password: existingPassword } }),
 		).rejects.toThrow();

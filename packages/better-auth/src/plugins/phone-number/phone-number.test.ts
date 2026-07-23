@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
 import { phoneNumber } from ".";
@@ -103,6 +103,126 @@ describe("phone-number", async () => {
 			code: otp,
 		});
 		expect(res.error?.status).toBe(400);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9754
+ */
+describe("consume phone-number OTP", async () => {
+	let otp = "";
+	const callbackOnVerification = vi.fn();
+	const { auth, client, db } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					callbackOnVerification,
+				}),
+			],
+		},
+		{
+			disableTestUser: true,
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	it("consumes an OTP server-side without creating a user or session", async () => {
+		const phoneNumber = "+251911121301";
+		await client.phoneNumber.sendOtp({ phoneNumber });
+
+		const result = await auth.api.consumePhoneNumberOTP({
+			body: { phoneNumber, code: otp },
+		});
+
+		expect(result).toEqual({ status: true });
+		expect(callbackOnVerification).not.toHaveBeenCalled();
+		expect(
+			await db.findMany({
+				model: "user",
+				where: [{ field: "phoneNumber", value: phoneNumber }],
+			}),
+		).toHaveLength(0);
+		expect(
+			await (await auth.$context).internalAdapter.findVerificationValue(
+				phoneNumber,
+			),
+		).toBeNull();
+	});
+
+	it("is exposed through the server API only", async () => {
+		expectTypeOf<typeof auth.api>().toHaveProperty("consumePhoneNumberOTP");
+		expectTypeOf<typeof client.phoneNumber>().not.toHaveProperty("consumeOtp");
+
+		const response = await client.$fetch("/phone-number/consume-otp", {
+			method: "POST",
+			body: { phoneNumber: "+251911121302", code: "123456" },
+		});
+		expect(response.error?.status).toBe(404);
+	});
+
+	it("keeps attempt limiting active when a stored attempt count is corrupt", async () => {
+		const phoneNumber = "+251911121303";
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		await (await auth.$context).internalAdapter.updateVerificationByIdentifier(
+			phoneNumber,
+			{
+				value: `${otp}:not-a-number`,
+			},
+		);
+
+		for (let attempt = 0; attempt < 3; attempt++) {
+			const res = await client.phoneNumber.verify({
+				phoneNumber,
+				code: "000000",
+			});
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.message).toBe("Invalid OTP");
+		}
+
+		const blocked = await client.phoneNumber.verify({
+			phoneNumber,
+			code: "000000",
+		});
+		expect(blocked.error?.status).toBe(403);
+		expect(blocked.error?.message).toBe("Too many attempts");
+	});
+
+	it("honors allowedAttempts set to 0", async () => {
+		let zeroAttemptOtp = "";
+		const { auth: zeroAttemptAuth, client: zeroAttemptClient } =
+			await getTestInstance(
+				{
+					plugins: [
+						phoneNumber({
+							async sendOTP({ code }) {
+								zeroAttemptOtp = code;
+							},
+							allowedAttempts: 0,
+						}),
+					],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [phoneNumberClient()],
+					},
+				},
+			);
+		const testPhoneNumber = "+251911121304";
+		await zeroAttemptClient.phoneNumber.sendOtp({
+			phoneNumber: testPhoneNumber,
+		});
+
+		await expect(
+			zeroAttemptAuth.api.consumePhoneNumberOTP({
+				body: { phoneNumber: testPhoneNumber, code: zeroAttemptOtp },
+			}),
+		).rejects.toThrow("Too many attempts");
 	});
 });
 
@@ -375,6 +495,23 @@ describe("phone auth flow", async () => {
 		});
 		expect(changedEmailRes.error).toBe(null);
 		expect(changedEmailRes.data?.status).toBe(true);
+		const session = await client.getSession({
+			fetchOptions: { headers, throw: true },
+		});
+		const userId = session!.user.id;
+		await expect(
+			(await auth.$context).internalAdapter.findCredentialAccount(userId),
+		).resolves.toMatchObject({
+			userId,
+			providerId: "credential",
+			issuer: "local:credential",
+			providerAccountId: userId,
+		});
+		const emailSignIn = await client.signIn.email({
+			email: newEmail,
+			password: "password",
+		});
+		expect(emailSignIn.data?.user.id).toBe(userId);
 	});
 
 	it("should sign in with phone number and password", async () => {
@@ -597,7 +734,7 @@ describe("reset password flow attempts", async () => {
 	let otp = "";
 	let resetOtp = "";
 
-	const { client, db } = await getTestInstance(
+	const { auth, client, db } = await getTestInstance(
 		{
 			plugins: [
 				phoneNumber({
@@ -703,6 +840,15 @@ describe("reset password flow attempts", async () => {
 			password: "password",
 		});
 		expect(res.data?.token).toBeDefined();
+		const userId = res.data!.user.id;
+		await expect(
+			(await auth.$context).internalAdapter.findCredentialAccount(userId),
+		).resolves.toMatchObject({
+			userId,
+			providerId: "credential",
+			issuer: "local:credential",
+			providerAccountId: userId,
+		});
 	});
 
 	it("shouldn't allow to re-use the same OTP code", async () => {
@@ -1149,7 +1295,7 @@ describe("signUpOnVerification with additionalFields", async () => {
 describe("custom verifyOTP", async () => {
 	const mockVerifyOTP = vi.fn();
 
-	const { client, sessionSetter } = await getTestInstance(
+	const { auth, client, sessionSetter } = await getTestInstance(
 		{
 			plugins: [
 				phoneNumber({
@@ -1281,5 +1427,80 @@ describe("custom verifyOTP", async () => {
 		});
 		expect(user.data?.user.phoneNumber).toBe(updatedPhoneNumber);
 		expect(user.data?.user.phoneNumberVerified).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9754
+	 */
+	it("should delegate server-side consumption to custom verifyOTP without an internal record", async () => {
+		const externalPhoneNumber = "+12223334444";
+		mockVerifyOTP.mockResolvedValueOnce(true);
+
+		const result = await auth.api.consumePhoneNumberOTP({
+			body: {
+				phoneNumber: externalPhoneNumber,
+				code: "external-code",
+			},
+		});
+
+		expect(result).toEqual({ status: true });
+		expect(mockVerifyOTP).toHaveBeenCalledWith(
+			{
+				phoneNumber: externalPhoneNumber,
+				code: "external-code",
+			},
+			expect.anything(),
+		);
+	});
+});
+
+// The provisioning gate reaches phone-number sign-up through the createUser
+// seam, even though this plugin never calls the gate itself.
+describe("phone-number validateUserInfo provisioning gate", async () => {
+	let otp = "";
+	const { client } = await getTestInstance(
+		{
+			user: {
+				validateUserInfo({ source }) {
+					if (source.method !== "phone-number") {
+						return;
+					}
+					expect(source.action).toBe("create-user");
+					return {
+						error: "phone_blocked",
+						errorDescription: "Phone sign-up is not allowed",
+					};
+				},
+			},
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+			disableTestUser: true,
+		},
+	);
+
+	it("rejects phone-number sign-up when validateUserInfo returns error", async () => {
+		const blockedPhone = "+251900000000";
+		await client.phoneNumber.sendOtp({ phoneNumber: blockedPhone });
+		const res = await client.phoneNumber.verify({
+			phoneNumber: blockedPhone,
+			code: otp,
+		});
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("phone_blocked");
 	});
 });

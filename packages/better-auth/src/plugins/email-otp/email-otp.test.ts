@@ -115,6 +115,12 @@ describe("email-otp", async () => {
 		});
 		const userId = created.user!.id;
 		expect(created.user?.emailVerified).toBe(false);
+		await internalAdapter.createAccount({
+			userId,
+			providerId: "google",
+			issuer: "local:google",
+			providerAccountId: "attacker-google",
+		});
 
 		// Precondition: the password is blocked behind the verification gate.
 		await expect(
@@ -132,11 +138,10 @@ describe("email-otp", async () => {
 		const verifiedRow = await internalAdapter.findUserByEmail(email);
 		expect(verifiedRow?.user.emailVerified).toBe(true);
 
-		// The credential is gone, so the password no longer works.
+		// Pre-proof account links are gone, so the password no longer works and
+		// an OAuth link cannot survive the email-owner proof.
 		const accounts = await internalAdapter.findAccounts(userId);
-		expect(
-			accounts.find((account) => account.providerId === "credential"),
-		).toBeUndefined();
+		expect(accounts).toHaveLength(0);
 		await expect(
 			scopedAuth.api.signInEmail({
 				body: { email, password: existingPassword },
@@ -165,6 +170,50 @@ describe("email-otp", async () => {
 			},
 		);
 		expect(newUser.data?.token).toBeDefined();
+	});
+
+	it("should reject sign-up with otp when validateUserInfo returns error", async () => {
+		let blockedOtp = "";
+		const { client } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo({ user, source }) {
+						expect(source.method).toBe("email-otp");
+						if ((user.email as string).endsWith("@blocked.com")) {
+							return {
+								error: "email_otp_blocked",
+								errorDescription: "OTP sign-up is not allowed",
+							};
+						}
+					},
+				},
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP({ otp: _otp }) {
+							blockedOtp = _otp;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+
+		await client.emailOtp.sendVerificationOtp({
+			email: "new@blocked.com",
+			type: "sign-in",
+		});
+		const res = await client.signIn.emailOtp({
+			email: "new@blocked.com",
+			otp: blockedOtp,
+		});
+
+		expect(res.error?.code).toBe("email_otp_blocked");
+		expect(res.error?.message).toBe("OTP sign-up is not allowed");
 	});
 
 	it("should sign-up with otp and set name and image", async () => {
@@ -343,6 +392,15 @@ describe("email-otp", async () => {
 			password: "password",
 		});
 		expect(res.data?.token).toBeDefined();
+		const userId = res.data!.user.id;
+		await expect(
+			(await auth.$context).internalAdapter.findCredentialAccount(userId),
+		).resolves.toMatchObject({
+			userId,
+			providerId: "credential",
+			issuer: "local:credential",
+			providerAccountId: userId,
+		});
 	});
 
 	it("should fail on invalid email", async () => {

@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/test-utils",
-  "version": "1.6.23",
+  "version": "1.7.0-rc.2",
   "description": "Testing utilities for Better Auth adapter development",
   "type": "module",
   "license": "MIT",
@@ -32,6 +32,11 @@
       "dev-source": "./src/adapter/index.ts",
       "default": "./dist/adapter.mjs",
       "types": "./dist/adapter.d.mts"
+    },
+    "./scim": {
+      "dev-source": "./src/scim-lifecycle.ts",
+      "default": "./dist/scim.mjs",
+      "types": "./dist/scim.d.mts"
     }
   },
   "devDependencies": {

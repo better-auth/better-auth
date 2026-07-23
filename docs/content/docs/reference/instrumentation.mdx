@@ -68,7 +68,7 @@ Middlewares are also supported:
 | ------------------------ | ----------------------------- | ---------------------------------------------- |
 | `db {operation} {model}` | Span for a database operation | All adapter operations (create, findOne, etc.) |
 
-* **Operations:** `create`, `findOne`, `findMany`, `update`, `updateMany`, `delete`, `deleteMany`, `count`
+* **Operations:** `create`, `findOne`, `findMany`, `update`, `updateMany`, `delete`, `deleteMany`, `consumeOne`, `incrementOne`, `count`
 * **Models:** Core models include `user`, `account`, `session`, `verification`, plus plugin-defined models (e.g. `organization`, `rateLimit`).
 * **Attributes:**
   * `db.operation.name` - The database operation name (e.g. `create`)

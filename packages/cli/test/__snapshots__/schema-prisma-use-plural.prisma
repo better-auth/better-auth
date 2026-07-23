@@ -41,7 +41,8 @@ model Sessions {
 
 model Accounts {
   id                    String    @id
-  accountId             String
+  issuer                String
+  providerAccountId     String
   providerId            String
   userId                String
   users                 Users     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -55,6 +56,7 @@ model Accounts {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
+  @@unique([issuer, providerAccountId], map: "accounts_issuer_providerAccountId_uidx")
   @@index([userId])
   @@map("accounts")
 }

@@ -270,6 +270,35 @@ describe("useAuthQuery - error handling", () => {
 		unsubscribe();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10015#discussion_r3400409998
+	 */
+	it("should clean up the equality gate when the query atom unmounts", async () => {
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async () => {
+				return new Promise<Response>(() => {});
+			},
+		});
+
+		const $signal = atom(false);
+		const queryAtom = useAuthQuery<{ data: string }>($signal, "/test", $fetch, {
+			method: "GET",
+		});
+
+		const unsubscribe = queryAtom.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		const previousState = queryAtom.get();
+
+		unsubscribe();
+		await vi.advanceTimersByTimeAsync(1000);
+
+		const equalState = { ...previousState };
+		queryAtom.set(equalState);
+
+		expect(queryAtom.get()).toBe(equalState);
+	});
+
 	it("should preserve stale data on 500 server error", async () => {
 		let returnServerError = false;
 

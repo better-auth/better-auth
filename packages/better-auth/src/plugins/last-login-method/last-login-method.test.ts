@@ -15,7 +15,6 @@ import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
-import { genericOAuthClient } from "../generic-oauth/client";
 import { genericOAuth } from "../generic-oauth/index";
 import { magicLink } from "../magic-link";
 import { magicLinkClient } from "../magic-link/client";
@@ -132,15 +131,11 @@ describe("lastLoginMethod", async () => {
 
 	it("should set the last login method cookie for siwe", async () => {
 		const headers = new Headers();
-		const walletAddress = SIWE_WALLET;
-		const chainId = SIWE_CHAIN_ID;
-		await client.siwe.nonce({ walletAddress, chainId });
+		await client.siwe.nonce();
 		await client.siwe.verify(
 			{
 				message: siweMessage(),
 				signature: "valid_signature",
-				walletAddress,
-				chainId,
 				email: "user@example.com",
 			},
 			{
@@ -275,8 +270,6 @@ describe("lastLoginMethod", async () => {
 	});
 
 	it("should set the last login method for siwe in the database", async () => {
-		const walletAddress = SIWE_WALLET;
-		const chainId = SIWE_CHAIN_ID;
 		const { client, auth } = await getTestInstance(
 			{
 				plugins: [
@@ -298,12 +291,10 @@ describe("lastLoginMethod", async () => {
 				},
 			},
 		);
-		await client.siwe.nonce({ walletAddress, chainId });
+		await client.siwe.nonce();
 		const { data } = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
-			walletAddress,
-			chainId,
 			email: "user@example.com",
 		});
 		const session = await auth.api.getSession({
@@ -621,7 +612,7 @@ describe("lastLoginMethod", async () => {
 		expect((oauthSession?.data?.user as any).lastLoginMethod).toBe("google");
 	});
 
-	it("should set the last login method for generic OAuth provider with /oauth2/callback/:providerId", async () => {
+	it("should set the last login method for generic OAuth provider with /callback/:providerId", async () => {
 		const { client, cookieSetter } = await getTestInstance(
 			{
 				plugins: [
@@ -652,14 +643,14 @@ describe("lastLoginMethod", async () => {
 			},
 			{
 				clientOptions: {
-					plugins: [lastLoginMethodClient(), genericOAuthClient()],
+					plugins: [lastLoginMethodClient()],
 				},
 			},
 		);
 
 		const oAuthHeaders = new Headers();
-		const signInRes = await client.signIn.oauth2({
-			providerId: "my-provider-id",
+		const signInRes = await client.signIn.social({
+			provider: "my-provider-id",
 			fetchOptions: {
 				onSuccess: cookieSetter(oAuthHeaders),
 			},
@@ -667,7 +658,7 @@ describe("lastLoginMethod", async () => {
 		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
 
 		const headers = new Headers();
-		await client.$fetch("/oauth2/callback/my-provider-id", {
+		await client.$fetch("/callback/my-provider-id", {
 			query: {
 				state,
 				code: "test",
@@ -1097,7 +1088,7 @@ describe("lastLoginMethod", async () => {
 			consentGiven = true;
 
 			// Second login with consent - cookie should be set
-			await client.signOut();
+			await client.signOut({ fetchOptions: { headers: headers1 } });
 			const headers2 = new Headers();
 			await client.signIn.email(
 				{

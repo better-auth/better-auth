@@ -1,5 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import {
 	isGoogleHostedDomainAllowed,
@@ -9,6 +10,7 @@ import * as z from "zod";
 import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
+import { OAUTH_CALLBACK_ERROR_CODES } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { toBoolean } from "../../utils/boolean";
 import { PACKAGE_VERSION } from "../../version";
@@ -151,8 +153,15 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						picture,
 						sub,
 					} = payload;
-					if (!rawEmail) {
-						return ctx.json({ error: "Email not available in token" });
+					if (typeof rawEmail !== "string" || !rawEmail) {
+						throw new APIError("BAD_REQUEST", {
+							message: "Email not available in token",
+						});
+					}
+					if (typeof sub !== "string" || !sub) {
+						throw new APIError("BAD_REQUEST", {
+							message: "invalid id token",
+						});
 					}
 					const email = rawEmail.toLowerCase();
 
@@ -170,18 +179,34 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							id: sub,
 							email,
 							emailVerified,
-							name: name ?? "",
-							image: picture,
+							name: typeof name === "string" ? name : "",
+							image: typeof picture === "string" ? picture : undefined,
 						},
 						account: {
 							providerId: "google",
-							accountId: sub,
+							issuer: "https://accounts.google.com",
+							providerAccountId: sub,
 							idToken,
 							scope: "openid,profile,email",
 						},
 						disableSignUp: options?.disableSignup,
+						source: {
+							method: "oauth",
+							oauth: {
+								providerId: "google",
+								profile: payload as Record<string, unknown>,
+							},
+						},
 					});
 					if (result.error) {
+						if (
+							result.error === OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_VERIFIED
+						) {
+							throw APIError.from(
+								"FORBIDDEN",
+								BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
+							);
+						}
 						throw new APIError("UNAUTHORIZED", {
 							message: result.error,
 						});

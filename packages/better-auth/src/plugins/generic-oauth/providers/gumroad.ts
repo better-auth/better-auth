@@ -1,6 +1,10 @@
-import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
-import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
+import type {
+	BaseOAuthProviderOptions,
+	GenericOAuthConfig,
+	GenericOAuthUserInfo,
+} from "../index";
 
 export interface GumroadOptions extends BaseOAuthProviderOptions {}
 
@@ -39,10 +43,12 @@ interface GumroadProfile {
  *
  * @see https://app.gumroad.com/oauth
  */
-export function gumroad(options: GumroadOptions): GenericOAuthConfig {
+export function gumroad(
+	options: GumroadOptions,
+): GenericOAuthConfig<"gumroad"> {
 	const getUserInfo = async (
 		tokens: OAuth2Tokens,
-	): Promise<OAuth2UserInfo | null> => {
+	): Promise<GenericOAuthUserInfo | null> => {
 		const { data: profile, error } = await betterFetch<GumroadProfile>(
 			"https://api.gumroad.com/v2/user",
 			{
@@ -70,10 +76,12 @@ export function gumroad(options: GumroadOptions): GenericOAuthConfig {
 
 	return {
 		providerId: "gumroad",
+		accountSubject: ({ profile }) => profile.id ?? "",
 		authorizationUrl: "https://gumroad.com/oauth/authorize",
 		tokenUrl: "https://api.gumroad.com/oauth/token",
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		tokenEndpointAuth: options.tokenEndpointAuth,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		pkce: options.pkce,

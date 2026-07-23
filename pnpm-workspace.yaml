@@ -5,6 +5,8 @@ packages:
   - test
 
 overrides:
+  kysely: 0.28.17
+  zod@>=4: 4.3.6
   axios: '>=1.15.2 <2'
   node-forge: '>=1.4.0 <2'
   h3@<2: '>=1.15.9'
@@ -56,25 +58,27 @@ catalog:
   '@better-fetch/fetch': 1.3.1
   better-call: 1.3.7
   kysely: ^0.28.17 || ^0.29.0
+  nanostores: ^1.3.0
   tsdown: 0.22.7
   typescript: ^6.0.3
 
 catalogs:
   peer:
     kysely: ^0.28.5 || ^0.29.0
+    nanostores: ^1.0.1
   react19:
-    '@types/react': ^19.2.14
+    '@types/react': ^19.2.17
     '@types/react-dom': ^19.2.3
-    react: ^19.2.4
-    react-dom: ^19.2.4
+    react: ^19.2.7
+    react-dom: ^19.2.7
   tailwind:
-    '@tailwindcss/postcss': ^4.2.1
-    tailwindcss: ^4.2.1
+    '@tailwindcss/postcss': ^4.3.1
+    tailwindcss: ^4.3.1
     tailwindcss-animate: ^1.0.7
   vitest:
-    '@vitest/coverage-istanbul': ^4.1.5
-    '@vitest/ui': ^4.1.5
-    vitest: ^4.1.5
+    '@vitest/coverage-istanbul': ^4.1.9
+    '@vitest/ui': ^4.1.9
+    vitest: ^4.1.9
 
 allowBuilds:
   '@parcel/watcher': true
@@ -100,6 +104,20 @@ minimumReleaseAgeExclude:
   - '@better-auth/*'
   - '@better-fetch/fetch'
   - 'better-call'
+
+packageExtensions:
+  # @hookform/resolvers imports Zod from its Zod adapter without declaring it.
+  '@hookform/resolvers@5.4.0':
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
+    peerDependenciesMeta:
+      zod:
+        optional: true
+  # drizzle-kit has no drizzle-orm peer, so a monorepo can feed it the wrong version.
+  # https://github.com/drizzle-team/drizzle-orm/issues/5573
+  drizzle-kit:
+    peerDependencies:
+      drizzle-orm: '*'
 
 patchedDependencies:
   '@changesets/assemble-release-plan': patches/@changesets__assemble-release-plan.patch

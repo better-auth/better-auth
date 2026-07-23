@@ -1,8 +1,18 @@
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { APIError } from "better-auth/api";
+import { resolveSigningCerts } from "../saml";
 import { saml } from "../samlify";
 import type { SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { normalizePem, safeJsonParse } from "../utils";
+
+/**
+ * Same as `normalizePem`, but applied across the resolved list of IdP signing
+ * certificates so multi-cert rotation configs survive the line-trim step.
+ */
+function normalizePemList(certs: string[] | undefined): string[] | undefined {
+	if (!certs) return certs;
+	return certs.map((pem) => normalizePem(pem) ?? pem);
+}
 
 export async function findSAMLProvider(
 	providerId: string,
@@ -54,45 +64,54 @@ export function createSP(
 ) {
 	const spData = config.spMetadata;
 	const sloLocation = `${baseURL}/sso/saml2/sp/slo/${providerId}`;
-	// TODO: derive ACS URL exclusively from baseURL + providerId.
-	// callbackUrl doubles as both ACS and post-auth redirect, which breaks
-	// when it points to an app destination (e.g., /dashboard).
-	const acsUrl =
-		config.callbackUrl || `${baseURL}/sso/saml2/sp/acs/${providerId}`;
+	const acsUrl = `${baseURL}/sso/saml2/sp/acs/${providerId}`;
+
+	// When no SP metadata XML is provided, generate it so samlify can read
+	// authnRequestsSigned and other flags that only work via metadata.
+	let metadata = spData?.metadata;
+	if (!metadata) {
+		metadata =
+			saml
+				.SPMetadata({
+					entityID: spData?.entityID || config.issuer,
+					assertionConsumerService: [
+						{
+							Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+							Location: acsUrl,
+						},
+					],
+					singleLogoutService: opts?.sloOptions
+						? [
+								{
+									Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+									Location: sloLocation,
+								},
+								{
+									Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+									Location: sloLocation,
+								},
+							]
+						: undefined,
+					wantMessageSigned: config.wantAssertionsSigned || false,
+					authnRequestsSigned: config.authnRequestsSigned || false,
+					nameIDFormat: config.identifierFormat
+						? [config.identifierFormat]
+						: undefined,
+				})
+				.getMetadata() || "";
+	}
 
 	return saml.ServiceProvider({
-		entityID: spData?.entityID || config.issuer,
-		assertionConsumerService: spData?.metadata
-			? undefined
-			: [
-					{
-						Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-						Location: acsUrl,
-					},
-				],
-		singleLogoutService: [
-			{
-				Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-				Location: sloLocation,
-			},
-			{
-				Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
-				Location: sloLocation,
-			},
-		],
-		wantMessageSigned: config.wantAssertionsSigned || false,
+		metadata,
+		allowCreate: true,
 		wantLogoutRequestSigned: opts?.sloOptions?.wantLogoutRequestSigned ?? false,
 		wantLogoutResponseSigned:
 			opts?.sloOptions?.wantLogoutResponseSigned ?? false,
-		metadata: spData?.metadata,
 		privateKey: normalizePem(spData?.privateKey || config.privateKey),
 		privateKeyPass: spData?.privateKeyPass,
 		isAssertionEncrypted: spData?.isAssertionEncrypted || false,
 		encPrivateKey: normalizePem(spData?.encPrivateKey),
 		encPrivateKeyPass: spData?.encPrivateKeyPass,
-		nameIDFormat: config.identifierFormat
-			? [config.identifierFormat]
-			: undefined,
 		relayState: opts?.relayState,
 		clockDrifts:
 			opts?.clockSkew && opts?.clockSkew !== 0
@@ -101,7 +120,36 @@ export function createSP(
 	});
 }
 
+export function assertSAMLIdentityProviderAuthority<
+	Config extends {
+		idpMetadata?:
+			| {
+					metadata?: string | undefined;
+					entityID?: string | undefined;
+			  }
+			| undefined;
+	},
+>(
+	config: Config,
+): asserts config is Config & {
+	idpMetadata: NonNullable<Config["idpMetadata"]> &
+		(
+			| { metadata: string; entityID?: string | undefined }
+			| { metadata?: undefined; entityID: string }
+		);
+} {
+	if (config.idpMetadata?.metadata || config.idpMetadata?.entityID) {
+		return;
+	}
+
+	throw new APIError("BAD_REQUEST", {
+		message:
+			"SAML manual IdP configuration requires idpMetadata.entityID; issuer identifies the service provider and cannot identify the IdP",
+	});
+}
+
 export function createIdP(config: SAMLConfig) {
+	assertSAMLIdentityProviderAuthority(config);
 	const idpData = config.idpMetadata;
 	if (idpData?.metadata) {
 		return saml.IdentityProvider({
@@ -114,19 +162,19 @@ export function createIdP(config: SAMLConfig) {
 		});
 	}
 	return saml.IdentityProvider({
-		entityID: idpData?.entityID || config.issuer,
-		singleSignOnService: idpData?.singleSignOnService || [
+		entityID: idpData.entityID,
+		singleSignOnService: idpData.singleSignOnService || [
 			{
 				Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
 				Location: config.entryPoint,
 			},
 		],
-		singleLogoutService: idpData?.singleLogoutService,
-		signingCert: idpData?.cert || config.cert,
+		singleLogoutService: idpData.singleLogoutService,
+		signingCert: normalizePemList(resolveSigningCerts(config)),
 		wantAuthnRequestsSigned: config.authnRequestsSigned || false,
-		isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
-		encPrivateKey: normalizePem(idpData?.encPrivateKey),
-		encPrivateKeyPass: idpData?.encPrivateKeyPass,
+		isAssertionEncrypted: idpData.isAssertionEncrypted || false,
+		encPrivateKey: normalizePem(idpData.encPrivateKey),
+		encPrivateKeyPass: idpData.encPrivateKeyPass,
 	});
 }
 

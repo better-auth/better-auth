@@ -261,6 +261,7 @@ const wrapperSemanticsPlugin = {
 					prefaulted: z.string().prefault("prefaulted-value"),
 					nonOptional: z.string().optional().nonoptional(),
 					unionOptional: z.union([z.string(), z.undefined()]),
+					unknownPayload: z.unknown(),
 				}),
 			},
 			async () => ({ success: true }),
@@ -362,6 +363,74 @@ describe("open-api", async () => {
 		});
 		expect(schemas["User"]!.required).toContain("role");
 		expect(schemas["User"]!.required).not.toContain("preferences");
+	});
+
+	it("should map array additionalFields to OpenAPI array schemas", async () => {
+		const { auth } = await getTestInstance(
+			{
+				plugins: [openAPI()],
+				user: {
+					additionalFields: {
+						tags: {
+							type: "string[]",
+							required: false,
+						},
+						scores: {
+							type: "number[]",
+							required: true,
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const schema = await auth.api.generateOpenAPISchema();
+		const schemas = schema.components.schemas as Record<
+			string,
+			Record<string, any>
+		>;
+
+		expect(schemas["User"]!.properties.tags).toEqual({
+			type: "array",
+			items: { type: "string" },
+		});
+		expect(schemas["User"]!.properties.scores).toEqual({
+			type: "array",
+			items: { type: "number" },
+		});
+		expect(schemas["User"]!.required).not.toContain("tags");
+		expect(schemas["User"]!.required).toContain("scores");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10430
+	 */
+	it("should allow every JSON value in additional field request bodies", async () => {
+		const { auth } = await getTestInstance(
+			{
+				plugins: [openAPI()],
+				user: {
+					additionalFields: {
+						metadata: {
+							type: "json",
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+
+		const signUpSchema = getPostRequestBody(paths, "/sign-up/email").content[
+			"application/json"
+		].schema;
+		expect(getSchemaProperty(signUpSchema, "metadata")).toEqual({});
+
+		const updateUserSchema = getPostRequestBody(paths, "/update-user").content[
+			"application/json"
+		].schema;
+		expect(getSchemaProperty(updateUserSchema, "metadata")).toEqual({});
 	});
 
 	it("should include additionalFields on sign-up and update-user request bodies", async () => {
@@ -977,5 +1046,7 @@ describe("open-api", async () => {
 		expect(getSchemaProperty(requestBodySchema, "unionOptional").type).toBe(
 			"string",
 		);
+		expect(getSchemaProperty(requestBodySchema, "unknownPayload")).toEqual({});
+		expect(requestBodySchema.required).not.toContain("unknownPayload");
 	});
 });

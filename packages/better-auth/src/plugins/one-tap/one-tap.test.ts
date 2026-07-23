@@ -1,4 +1,5 @@
 // cspell:ignore AQAB
+import { jwtVerify } from "jose";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { oneTap } from "./index";
@@ -49,6 +50,10 @@ vi.mock("jose", async (importOriginal) => {
 			protectedHeader: { alg: "RS256" },
 		})),
 	};
+});
+
+afterEach(() => {
+	vi.mocked(jwtVerify).mockClear();
 });
 
 describe("one-tap implicit linking gate", async () => {
@@ -189,6 +194,39 @@ describe("one-tap implicit linking gate", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9486
+	 */
+	it("returns 403 EMAIL_NOT_VERIFIED when the provider requires a verified email", async () => {
+		verifiedPayload.email = "one-tap-unverified@example.com";
+		verifiedPayload.email_verified = false;
+		verifiedPayload.sub = "one_tap_unverified_sub";
+
+		const { client } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		const res = await client.$fetch<{
+			data: unknown;
+			error: { status: number } | null;
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		// 403 distinguishes the mapped EMAIL_NOT_VERIFIED gate from the generic
+		// 401 the unverified-linking path returns.
+		expect(res.error?.status).toBe(403);
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9502
 	 */
 	it("links Google One Tap when another provider has the same account ID", async () => {
@@ -212,14 +250,18 @@ describe("one-tap implicit linking gate", async () => {
 		});
 
 		const ctx = await auth.$context;
-		const otherUser = await ctx.internalAdapter.createUser({
-			name: "Other Provider User",
-			email: "one-tap-other-provider@example.com",
-		});
+		const otherUser = await ctx.internalAdapter.createUser(
+			{
+				name: "Other Provider User",
+				email: "one-tap-other-provider@example.com",
+			},
+			{ method: "test" },
+		);
 		await ctx.internalAdapter.createAccount({
 			userId: otherUser.id,
 			providerId: "github",
-			accountId: verifiedPayload.sub,
+			issuer: "local:github",
+			providerAccountId: verifiedPayload.sub,
 		});
 
 		await client.signUp.email({
@@ -241,7 +283,8 @@ describe("one-tap implicit linking gate", async () => {
 			model: "account",
 			where: [
 				{ field: "providerId", value: "google" },
-				{ field: "accountId", value: verifiedPayload.sub },
+				{ field: "issuer", value: "https://accounts.google.com" },
+				{ field: "providerAccountId", value: verifiedPayload.sub },
 			],
 		});
 		expect(googleAccounts).toHaveLength(1);
@@ -285,7 +328,8 @@ describe("one-tap implicit linking gate", async () => {
 			model: "account",
 			where: [
 				{ field: "providerId", value: "google" },
-				{ field: "accountId", value: verifiedPayload.sub },
+				{ field: "issuer", value: "https://accounts.google.com" },
+				{ field: "providerAccountId", value: verifiedPayload.sub },
 			],
 		});
 		expect(googleAccounts).toHaveLength(1);
@@ -315,19 +359,26 @@ describe("one-tap implicit linking gate", async () => {
 		});
 		const ctx = await auth.$context;
 
-		const userA = await ctx.internalAdapter.createUser({
-			name: "Sub Owner A",
-			email: "one-tap-sub-owner-a@example.com",
-		});
+		const userA = await ctx.internalAdapter.createUser(
+			{
+				name: "Sub Owner A",
+				email: "one-tap-sub-owner-a@example.com",
+			},
+			{ method: "test" },
+		);
 		await ctx.internalAdapter.createAccount({
 			userId: userA.id,
 			providerId: "google",
-			accountId: sharedSub,
+			issuer: "https://accounts.google.com",
+			providerAccountId: sharedSub,
 		});
-		const userB = await ctx.internalAdapter.createUser({
-			name: "Email Match B",
-			email: verifiedPayload.email,
-		});
+		const userB = await ctx.internalAdapter.createUser(
+			{
+				name: "Email Match B",
+				email: verifiedPayload.email,
+			},
+			{ method: "test" },
+		);
 
 		const res = await client.$fetch<{ user?: { id: string } }>(
 			"/one-tap/callback",
@@ -444,6 +495,10 @@ describe("one-tap callbackURL origin validation", async () => {
 });
 
 describe("one-tap audience enforcement", async () => {
+	afterEach(() => {
+		Object.assign(verifiedPayload, defaultVerifiedPayload);
+	});
+
 	it("rejects the callback when no Google client ID is configured", async () => {
 		// No `socialProviders.google` and no `oneTap({ clientId })`, so there is no
 		// expected audience. Without one, jose would verify Google's signature but
@@ -466,6 +521,7 @@ describe("one-tap audience enforcement", async () => {
 
 		expect(res.error?.status).toBe(400);
 		expect(res.error?.message).toContain("Google client ID is required");
+		expect(jwtVerify).not.toHaveBeenCalled();
 	});
 
 	it("accepts the oneTap-level clientId as the audience without a Google provider", async () => {
@@ -487,6 +543,33 @@ describe("one-tap audience enforcement", async () => {
 		expect(res.error?.message ?? "").not.toContain(
 			"Google client ID is required",
 		);
+		expect(jwtVerify).toHaveBeenCalledWith(
+			"stub-id-token",
+			expect.any(Object),
+			expect.objectContaining({
+				audience: "explicit-one-tap-client",
+			}),
+		);
+	});
+
+	it("rejects the callback when the verified token has no email", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: {},
+			plugins: [oneTap({ clientId: "explicit-one-tap-client" })],
+		});
+
+		verifiedPayload.email = "";
+
+		const res = await client.$fetch<{
+			data: unknown;
+			error: { status: number; message?: string } | null;
+		}>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.message).toContain("Email not available in token");
 	});
 });
 

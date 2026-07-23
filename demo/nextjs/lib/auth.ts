@@ -1,12 +1,15 @@
+import { DatabaseSync } from "node:sqlite";
+import { cimd } from "@better-auth/cimd";
 import { electron } from "@better-auth/electron";
 import { dash, sendEmail, sentinel } from "@better-auth/infra";
+import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
-import { scim } from "@better-auth/scim";
+import { acquireActiveSCIMUserLink } from "@better-auth/scim";
 import { sso } from "@better-auth/sso";
 import { stripe } from "@better-auth/stripe";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
-import type { BetterAuthOptions } from "better-auth";
+import type { BetterAuthOptions, BetterAuthPlugin } from "better-auth";
 import { APIError, betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import type { Organization } from "better-auth/plugins";
@@ -27,35 +30,87 @@ import {
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { Stripe } from "stripe";
+import {
+	createSCIMDemoPlugin,
+	isSCIMDemoEnabled,
+	SCIM_DEMO_CONNECTION_ID,
+} from "./scim-demo.ts";
+import {
+	getSCIMDemoOIDCIssuer,
+	getSCIMDemoOIDCProvider,
+	SCIM_DEMO_SSO_PROVIDER_ID,
+} from "./scim-demo-oidc.ts";
 
-const dialect = (() => {
+const database = (() => {
+	if (process.env.DEMO_SQLITE_PATH) {
+		return {
+			dialect: new NodeSqliteDialect({
+				database: new DatabaseSync(process.env.DEMO_SQLITE_PATH),
+			}),
+			type: "sqlite" as const,
+			transaction: true,
+		};
+	}
 	if (process.env.USE_MYSQL) {
 		if (!process.env.MYSQL_DATABASE_URL) {
 			throw new Error(
 				"Using MySQL dialect without MYSQL_DATABASE_URL. Please set it in your environment variables.",
 			);
 		}
-		return new MysqlDialect(createPool(process.env.MYSQL_DATABASE_URL || ""));
+		return {
+			dialect: new MysqlDialect(
+				createPool(process.env.MYSQL_DATABASE_URL || ""),
+			),
+			type: "mysql" as const,
+			transaction: true,
+		};
 	} else {
 		if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
-			return new LibsqlDialect({
-				url: process.env.TURSO_DATABASE_URL,
-				authToken: process.env.TURSO_AUTH_TOKEN,
-			});
+			return {
+				dialect: new LibsqlDialect({
+					url: process.env.TURSO_DATABASE_URL,
+					authToken: process.env.TURSO_AUTH_TOKEN,
+				}),
+				type: "sqlite" as const,
+				transaction: true,
+			};
 		}
 	}
 	return null;
 })();
 
-if (!dialect) {
+if (!database) {
 	throw new Error("No dialect found");
+}
+
+const scimDemoPlugin = createSCIMDemoPlugin();
+
+function isBetterAuthPlugin(plugin: unknown): plugin is BetterAuthPlugin {
+	return (
+		typeof plugin === "object" &&
+		plugin !== null &&
+		"id" in plugin &&
+		typeof plugin.id === "string"
+	);
+}
+
+const dashPlugin: unknown = dash();
+if (!isBetterAuthPlugin(dashPlugin)) {
+	throw new Error("The Dash integration did not return a Better Auth plugin");
 }
 
 const authOptions = {
 	appName: "Better Auth Demo",
-	database: {
-		dialect,
-		type: "sqlite",
+	database,
+	user: {
+		additionalFields: {
+			scimDemoRole: {
+				type: "string",
+				required: false,
+				input: false,
+				returned: false,
+			},
+		},
 	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
@@ -146,7 +201,7 @@ const authOptions = {
 	plugins: [
 		organization({
 			async sendInvitationEmail(data) {
-				sendEmail({
+				await sendEmail({
 					to: data.email,
 					subject: "You've been invited to join an organization",
 					template: "invitation",
@@ -236,6 +291,36 @@ const authOptions = {
 			},
 		}),
 		sso({
+			resolveUser: async (input, context) => {
+				if (input.providerId !== SCIM_DEMO_SSO_PROVIDER_ID) {
+					return { action: "continue" };
+				}
+				if (input.accountKey.issuer !== getSCIMDemoOIDCIssuer()) {
+					return {
+						action: "reject",
+						code: "SCIM_DEMO_ISSUER_MISMATCH",
+						message: "The SCIM demo identity provider issuer did not match",
+					};
+				}
+				const link = await acquireActiveSCIMUserLink(
+					{
+						connectionId: SCIM_DEMO_CONNECTION_ID,
+						externalId: input.accountKey.providerAccountId,
+					},
+					context,
+				);
+				return link
+					? {
+							action: "link",
+							profile: "preserve",
+							userId: link.userId,
+						}
+					: {
+							action: "reject",
+							code: "SCIM_USER_NOT_ACTIVE",
+							message: "This directory user is not active",
+						};
+			},
 			defaultSSO: [
 				{
 					domain: "http://localhost:3000",
@@ -303,12 +388,8 @@ const authOptions = {
 		  `,
 						},
 						idpMetadata: {
-							entityURL:
-								"https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435/metadata",
 							entityID:
 								"https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435",
-							redirectURL:
-								"https://dummyidp.com/apps/app_01k16v4vb5yytywqjjvv2b3435/sso",
 							singleSignOnService: [
 								{
 									Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
@@ -339,9 +420,10 @@ const authOptions = {
 						callbackUrl: "/dashboard",
 					},
 				},
+				...(isSCIMDemoEnabled() ? [getSCIMDemoOIDCProvider()] : []),
 			],
 		}),
-		scim(),
+		scimDemoPlugin,
 		deviceAuthorization({
 			expiresIn: "3min",
 			interval: "5s",
@@ -364,7 +446,7 @@ const authOptions = {
 				"offline_access",
 				"read:organization",
 			],
-			validAudiences: [
+			resources: [
 				process.env.BETTER_AUTH_URL || "https://demo.better-auth.com",
 				(process.env.BETTER_AUTH_URL || "https://demo.better-auth.com") +
 					"/api/mcp",
@@ -435,6 +517,7 @@ const authOptions = {
 				oauthAuthServerConfig: true,
 			},
 		}),
+		cimd(),
 		electron(),
 	],
 	trustedOrigins: [
@@ -463,7 +546,7 @@ export const auth = betterAuth({
 			authOptions,
 			{ shouldMutateListDeviceSessionsEndpoint: true },
 		),
-		dash(),
+		dashPlugin,
 		sentinel(),
 	],
 });

@@ -5,10 +5,19 @@
     "e2e:integration": "playwright test"
   },
   "dependencies": {
+    "@better-auth/cimd": "workspace:*",
+    "@better-auth/electron": "workspace:*",
+    "@better-auth/kysely-adapter": "workspace:*",
+    "@better-auth/mcp": "workspace:*",
     "@better-auth/oauth-provider": "workspace:*",
+    "@better-auth/passkey": "workspace:*",
+    "@better-auth/scim": "workspace:*",
+    "@better-auth/sso": "workspace:*",
+    "@better-auth/stripe": "workspace:*",
     "better-auth": "workspace:*"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2"
+    "@better-auth-test/test-utils": "workspace:*",
+    "@playwright/test": "~1.58.2"
   }
 }

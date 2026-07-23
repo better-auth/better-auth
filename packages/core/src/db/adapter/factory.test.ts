@@ -1,24 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { runWithTransaction } from "../../context/transaction";
 import type { BetterAuthOptions } from "../../types";
 import { createAdapterFactory } from "./factory";
-import type {
-	CleanedWhere,
-	CustomAdapter,
-	DBAdapter,
-	DBTransactionAdapter,
-} from "./index";
+import type { CleanedWhere, CustomAdapter, Where } from "./index";
 
-function createCustomAdapter(overrides: Partial<CustomAdapter>): CustomAdapter {
+function createCustomAdapter(
+	overrides: Partial<CustomAdapter> = {},
+): CustomAdapter {
 	return {
-		create: async <T extends Record<string, any>>({ data }: { data: T }) =>
-			data,
-		update: async <T>() => null as T | null,
+		create: async ({ data }) => data,
+		update: async () => null,
 		updateMany: async () => 0,
-		findOne: async <T>() => null as T | null,
-		findMany: async <T>() => [] as T[],
+		findOne: async () => null,
+		findMany: async () => [],
 		delete: async () => {},
 		deleteMany: async () => 0,
+		consumeOne: async () => null,
+		incrementOne: async () => null,
 		count: async () => 0,
 		...overrides,
 	};
@@ -27,13 +24,9 @@ function createCustomAdapter(overrides: Partial<CustomAdapter>): CustomAdapter {
 function createTestAdapter({
 	adapter,
 	options = {},
-	transaction,
 }: {
 	adapter: CustomAdapter;
 	options?: BetterAuthOptions;
-	transaction?: <R>(
-		callback: (trx: DBTransactionAdapter<BetterAuthOptions>) => Promise<R>,
-	) => Promise<R>;
 }) {
 	return createAdapterFactory<BetterAuthOptions>({
 		config: {
@@ -52,7 +45,6 @@ function createTestAdapter({
 				}
 				return data;
 			},
-			transaction,
 		},
 		adapter: () => adapter,
 	})({
@@ -62,63 +54,44 @@ function createTestAdapter({
 			fields: {
 				identifier: "identifier_text",
 			},
+			additionalFields: {
+				attempts: {
+					type: "number",
+					required: false,
+					fieldName: "attempt_count",
+				},
+			},
 			...options.verification,
 		},
 	});
 }
 
-describe("createAdapterFactory consumeOne fallback", () => {
-	it("uses transaction adapter methods without double-transforming input or output", async () => {
-		const findMany: CustomAdapter["findMany"] = async <T>(
-			params: Parameters<CustomAdapter["findMany"]>[0],
-		) => {
-			const { model, where, limit } = params;
-			expect(model).toBe("verificationRecords");
-			expect(limit).toBe(1);
-			expect(where).toEqual([
-				{
-					field: "identifier_text",
-					value: "token:findMany",
-					operator: "eq",
-					connector: "AND",
-					mode: "sensitive",
-				},
-			]);
-			return [
-				{
-					id: "verification-id",
-					identifier_text: "stored-token",
-				},
-			] as T[];
-		};
-		const deleteMany: CustomAdapter["deleteMany"] = async ({
-			model,
-			where,
-		}) => {
-			expect(model).toBe("verificationRecords");
-			expect(where).toEqual([
-				{
-					field: "identifier_text",
-					value: "token:deleteMany",
-					operator: "eq",
-					connector: "AND",
-					mode: "sensitive",
-				},
-				{
-					field: "id",
-					value: "verification-id",
-					operator: "eq",
-					connector: "AND",
-					mode: "sensitive",
-				},
-			] satisfies CleanedWhere[]);
-			return 1;
-		};
-
+describe("createAdapterFactory atomic primitives", () => {
+	it("delegates consumeOne to the native adapter with transformed where and output", async () => {
 		const adapter = createTestAdapter({
 			adapter: createCustomAdapter({
-				findMany,
-				deleteMany,
+				consumeOne: async <T>({
+					model,
+					where,
+				}: {
+					model: string;
+					where: Required<Where>[];
+				}) => {
+					expect(model).toBe("verificationRecords");
+					expect(where).toEqual([
+						{
+							field: "identifier_text",
+							value: "token:consumeOne",
+							operator: "eq",
+							connector: "AND",
+							mode: "sensitive",
+						},
+					]);
+					return {
+						id: "verification-id",
+						identifier_text: "stored-token",
+					} as T;
+				},
 			}),
 		});
 
@@ -129,97 +102,117 @@ describe("createAdapterFactory consumeOne fallback", () => {
 			},
 		);
 
-		expect(result?.id).toBe("verification-id");
-		expect(result?.identifier).toBe("stored-token:output");
+		expect(result).toEqual({
+			id: "verification-id",
+			identifier: "stored-token:output",
+		});
 	});
 
-	it("returns null when the delete loses the consume race", async () => {
+	it("delegates incrementOne to the native adapter with mapped increment fields", async () => {
 		const adapter = createTestAdapter({
 			adapter: createCustomAdapter({
-				findMany: async <T>() =>
-					[
+				incrementOne: async <T>({
+					model,
+					where,
+					increment,
+					set,
+				}: {
+					model: string;
+					where: Required<Where>[];
+					increment: Record<string, number>;
+					set?: Record<string, unknown> | undefined;
+				}) => {
+					expect(model).toBe("verificationRecords");
+					expect(where).toEqual([
 						{
-							id: "verification-id",
-							identifier_text: "stored-token",
+							field: "identifier_text",
+							value: "token:incrementOne",
+							operator: "eq",
+							connector: "AND",
+							mode: "sensitive",
 						},
-					] as T[],
-				deleteMany: async () => 0,
+					]);
+					expect(increment).toEqual({ attempt_count: 1 });
+					expect(set).toEqual({
+						value: "next",
+						updatedAt: expect.any(Date),
+					});
+					return {
+						id: "verification-id",
+						identifier_text: "stored-token",
+						attempt_count: 2,
+						value: "next",
+					} as T;
+				},
 			}),
 		});
 
-		const result = await adapter.consumeOne({
+		const result = await adapter.incrementOne<{
+			id: string;
+			identifier: string;
+			attempts: number;
+			value: string;
+		}>({
 			model: "verification",
 			where: [{ field: "identifier", value: "token" }],
+			increment: { attempts: 1 },
+			set: { value: "next" },
 		});
 
-		expect(result).toBeNull();
+		expect(result).toEqual({
+			id: "verification-id",
+			identifier: "stored-token:output",
+			attempts: 2,
+			value: "next",
+		});
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/9869
-	 */
-	it("reuses the active transaction for the fallback", async () => {
-		let transactionCalls = 0;
-		let isTransactionActive = false;
-		let adapter: DBAdapter<BetterAuthOptions> | null = null;
-
-		const transaction = async <R>(
-			callback: (trx: DBTransactionAdapter<BetterAuthOptions>) => Promise<R>,
-		): Promise<R> => {
-			transactionCalls += 1;
-			if (isTransactionActive) {
-				throw new Error("nested transaction");
-			}
-			if (!adapter) {
-				throw new Error("adapter has not been initialized");
-			}
-			isTransactionActive = true;
-			try {
-				return await callback(adapter);
-			} finally {
-				isTransactionActive = false;
-			}
-		};
-
-		adapter = createTestAdapter({
-			transaction,
-			adapter: createCustomAdapter({
-				findMany: async <T>() =>
-					[
-						{
-							id: "verification-id",
-							identifier_text: "stored-token",
-						},
-					] as T[],
-				deleteMany: async () => 1,
-			}),
+	it("throws before native incrementOne when every update field is transformed away", async () => {
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+				usePlural: true,
+				customTransformInput({ action, data }) {
+					if (action === "update") {
+						return undefined;
+					}
+					return data;
+				},
+			},
+			adapter: () =>
+				createCustomAdapter({
+					incrementOne: async () => {
+						throw new Error("incrementOne should not be called");
+					},
+				}),
+		})({
+			verification: {
+				modelName: "verificationRecord",
+				additionalFields: {
+					attempts: {
+						type: "number",
+						required: false,
+						fieldName: "attempt_count",
+					},
+				},
+			},
 		});
 
-		const result = await runWithTransaction(adapter, async () =>
-			adapter!.consumeOne<{ id: string; identifier: string }>({
+		await expect(
+			adapter.incrementOne({
 				model: "verification",
 				where: [{ field: "identifier", value: "token" }],
+				increment: {},
+				set: { attempts: 1 },
 			}),
-		);
-
-		expect(result?.id).toBe("verification-id");
-		expect(transactionCalls).toBe(1);
+		).rejects.toThrow(/resolved to an empty update/);
 	});
 
-	it("throws when deleteMany returns a non-numeric value", async () => {
+	it("throws a clear error when consumeOne is missing at runtime", async () => {
 		const adapter = createTestAdapter({
 			adapter: createCustomAdapter({
-				findMany: async <T>() =>
-					[
-						{
-							id: "verification-id",
-							identifier_text: "stored-token",
-						},
-					] as T[],
-				// A misbehaving adapter (e.g. a document store returning the raw
-				// delete response) breaks the count-based race gate. The fallback
-				// must surface this instead of reporting a spurious miss.
-				deleteMany: async () => ({ deleted: true }) as unknown as number,
+				consumeOne: undefined as unknown as CustomAdapter["consumeOne"],
 			}),
 		});
 
@@ -228,7 +221,39 @@ describe("createAdapterFactory consumeOne fallback", () => {
 				model: "verification",
 				where: [{ field: "identifier", value: "token" }],
 			}),
-		).rejects.toThrowError(/non-numeric value from deleteMany/);
+		).rejects.toThrow(/must implement consumeOne/);
+	});
+
+	it("throws a clear error when incrementOne is missing at runtime", async () => {
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				incrementOne: undefined as unknown as CustomAdapter["incrementOne"],
+			}),
+		});
+
+		await expect(
+			adapter.incrementOne({
+				model: "verification",
+				where: [{ field: "identifier", value: "token" }],
+				increment: { attempts: 1 },
+			}),
+		).rejects.toThrow(/must implement incrementOne/);
+	});
+
+	it("throws a clear error when updateMany does not return a finite count", async () => {
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({
+				updateMany: async () => Number.NaN,
+			}),
+		});
+
+		await expect(
+			adapter.updateMany({
+				model: "verification",
+				where: [{ field: "identifier", value: "token" }],
+				update: { value: "next" },
+			}),
+		).rejects.toThrow(/updateMany must return a finite number/);
 	});
 });
 

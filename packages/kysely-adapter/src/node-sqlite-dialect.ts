@@ -6,9 +6,11 @@ import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import type {
 	DatabaseConnection,
 	DatabaseIntrospector,
+	DatabaseMetadata,
 	DatabaseMetadataOptions,
 	Dialect,
 	DialectAdapter,
+	DialectAdapterBase,
 	Driver,
 	Kysely,
 	QueryCompiler,
@@ -22,16 +24,12 @@ import {
 	DEFAULT_MIGRATION_TABLE,
 } from "./kysely-migration-tables";
 
-class NodeSqliteAdapter implements DialectAdapter {
+class NodeSqliteAdapter implements DialectAdapterBase {
 	get supportsCreateIfNotExists(): boolean {
 		return true;
 	}
 
 	get supportsTransactionalDdl(): boolean {
-		return false;
-	}
-
-	get supportsMultipleConnections(): boolean {
 		return false;
 	}
 
@@ -221,6 +219,14 @@ class NodeSqliteIntrospector implements DatabaseIntrospector {
 		return Promise.all(tables.map(({ name }) => this.#getTableMetadata(name)));
 	}
 
+	async getMetadata(
+		options?: DatabaseMetadataOptions | undefined,
+	): Promise<DatabaseMetadata> {
+		return {
+			tables: await this.getTables(options),
+		};
+	}
+
 	async #getTableMetadata(table: string): Promise<TableMetadata> {
 		const db = this.#db;
 
@@ -263,7 +269,6 @@ class NodeSqliteIntrospector implements DatabaseIntrospector {
 				hasDefaultValue: col.dflt_value != null,
 			})),
 			isView: false,
-			isForeign: false,
 		};
 	}
 }

@@ -8,6 +8,7 @@ vi.mock("@better-fetch/fetch", () => ({
 
 import { betterFetch } from "@better-fetch/fetch";
 
+import { verifyProviderIdToken } from "../oauth2";
 import { microsoft } from "./microsoft-entra-id";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
@@ -53,14 +54,16 @@ async function signMicrosoftToken(opts: {
 		.sign(privateKey);
 }
 
-describe("microsoft.verifyIdToken tenant enforcement", () => {
+describe("microsoft id_token tenant enforcement", () => {
 	it("rejects a consumer-tenant token when restricted to organizations", async () => {
 		const provider = microsoft({
 			clientId: CLIENT_ID,
 			tenantId: "organizations",
 		});
 		const token = await signMicrosoftToken({ tid: CONSUMER_TENANT_ID });
-		await expect(provider.verifyIdToken(token, undefined)).resolves.toBe(false);
+		await expect(
+			verifyProviderIdToken(provider, token, undefined),
+		).resolves.toBe(false);
 	});
 
 	it("rejects a work-tenant token when restricted to consumers", async () => {
@@ -69,7 +72,9 @@ describe("microsoft.verifyIdToken tenant enforcement", () => {
 			tenantId: "consumers",
 		});
 		const token = await signMicrosoftToken({ tid: WORK_TENANT_ID });
-		await expect(provider.verifyIdToken(token, undefined)).resolves.toBe(false);
+		await expect(
+			verifyProviderIdToken(provider, token, undefined),
+		).resolves.toBe(false);
 	});
 
 	it("accepts a work-tenant token under organizations", async () => {
@@ -78,7 +83,9 @@ describe("microsoft.verifyIdToken tenant enforcement", () => {
 			tenantId: "organizations",
 		});
 		const token = await signMicrosoftToken({ tid: WORK_TENANT_ID });
-		await expect(provider.verifyIdToken(token, undefined)).resolves.toBe(true);
+		await expect(
+			verifyProviderIdToken(provider, token, undefined),
+		).resolves.toBe(true);
 	});
 
 	it("accepts a consumer-tenant token under consumers", async () => {
@@ -87,19 +94,23 @@ describe("microsoft.verifyIdToken tenant enforcement", () => {
 			tenantId: "consumers",
 		});
 		const token = await signMicrosoftToken({ tid: CONSUMER_TENANT_ID });
-		await expect(provider.verifyIdToken(token, undefined)).resolves.toBe(true);
+		await expect(
+			verifyProviderIdToken(provider, token, undefined),
+		).resolves.toBe(true);
 	});
 
 	it("accepts any tenant under common", async () => {
 		const provider = microsoft({ clientId: CLIENT_ID, tenantId: "common" });
 		await expect(
-			provider.verifyIdToken(
+			verifyProviderIdToken(
+				provider,
 				await signMicrosoftToken({ tid: WORK_TENANT_ID }),
 				undefined,
 			),
 		).resolves.toBe(true);
 		await expect(
-			provider.verifyIdToken(
+			verifyProviderIdToken(
+				provider,
 				await signMicrosoftToken({ tid: CONSUMER_TENANT_ID }),
 				undefined,
 			),
@@ -114,7 +125,9 @@ describe("microsoft.verifyIdToken tenant enforcement", () => {
 			tid: WORK_TENANT_ID,
 			iss: `${AUTHORITY}/${CONSUMER_TENANT_ID}/v2.0`,
 		});
-		await expect(provider.verifyIdToken(token, undefined)).resolves.toBe(false);
+		await expect(
+			verifyProviderIdToken(provider, token, undefined),
+		).resolves.toBe(false);
 	});
 
 	it("accepts a valid token when the authority is configured with a trailing slash", async () => {
@@ -124,7 +137,9 @@ describe("microsoft.verifyIdToken tenant enforcement", () => {
 			authority: `${AUTHORITY}/`,
 		});
 		const token = await signMicrosoftToken({ tid: WORK_TENANT_ID });
-		await expect(provider.verifyIdToken(token, undefined)).resolves.toBe(true);
+		await expect(
+			verifyProviderIdToken(provider, token, undefined),
+		).resolves.toBe(true);
 	});
 
 	it("rejects a token with a non-string tid", async () => {
@@ -136,6 +151,8 @@ describe("microsoft.verifyIdToken tenant enforcement", () => {
 			.setIssuedAt()
 			.setExpirationTime("1h")
 			.sign(privateKey);
-		await expect(provider.verifyIdToken(token, undefined)).resolves.toBe(false);
+		await expect(
+			verifyProviderIdToken(provider, token, undefined),
+		).resolves.toBe(false);
 	});
 });

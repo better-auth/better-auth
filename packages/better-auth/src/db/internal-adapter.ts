@@ -1,22 +1,32 @@
 import type {
 	AuthContext,
 	BetterAuthOptions,
+	GenericEndpointContext,
 	InternalAdapter,
+	UserProvisioningSource,
+	ValidateUserInfoSource,
 } from "@better-auth/core";
 import {
 	getCurrentAdapter,
 	getCurrentAuthContext,
+	queueAfterTransactionHook,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import { createLocalAccountIssuer } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
+import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
-import { getIp } from "@better-auth/core/utils/ip";
+import { getIP } from "@better-auth/core/utils/ip";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
+import {
+	assertValidUserInfo,
+	assertValidUserInfoSource,
+} from "../utils/validate-user-info";
 import {
 	getSessionDefaultFields,
 	parseSessionOutput,
@@ -35,6 +45,11 @@ function getTTLSeconds(expiresAt: Date | number, now = Date.now()): number {
 	return Math.max(Math.floor((expiresMs - now) / 1000), 0);
 }
 
+type ActiveSessionReference = {
+	readonly token: string;
+	readonly expiresAt: number;
+};
+
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
@@ -48,9 +63,6 @@ export const createInternalAdapter = (
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
 	const verificationConsumeLocks = new Map<string, Promise<void>>();
-	// Warn at most once when a single-use value is consumed through the
-	// non-atomic secondary-storage fallback (see consumeVerificationValue).
-	let warnedNonAtomicConsume = false;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
 	const {
 		createWithHooks,
@@ -60,6 +72,38 @@ export const createInternalAdapter = (
 		deleteManyWithHooks,
 		consumeOneWithHooks,
 	} = getWithHooks(adapter, ctx);
+
+	/**
+	 * Ends the live session rows matched by `where` without physically deleting
+	 * them.
+	 *
+	 * Used for `secondaryStorage` + `preserveSessionInDatabase`, where the row is
+	 * kept for audit. The session-delete hooks still run (so OAuth token
+	 * revocation and back-channel logout fire on session end), and the preserved
+	 * row's `expiresAt` is set to now so every liveness check that keys off the
+	 * session row (introspection, `/userinfo`) treats it as ended.
+	 *
+	 * Matching is restricted to still-live rows. The preserved row outlives the
+	 * session, so without this a later delete call (a repeated `deleteSession`,
+	 * or `deleteUserSessions` sweeping a user's accumulated preserved rows) would
+	 * re-match it and re-fire the hooks, re-dispatching back-channel logout.
+	 */
+	const endPreservedSessions = (where: Where[]) => {
+		const liveSessions: Where[] = [
+			...where,
+			{ field: "expiresAt", value: new Date(), operator: "gt" },
+		];
+		return deleteManyWithHooks(liveSessions, "session", {
+			fn: async () => {
+				await (await getCurrentAdapter(adapter)).updateMany({
+					model: "session",
+					where: liveSessions,
+					update: { expiresAt: new Date() },
+				});
+			},
+			executeMainFn: false,
+		});
+	};
 
 	async function refreshUserSessions(user: User) {
 		if (!secondaryStorage) return;
@@ -91,6 +135,49 @@ export const createInternalAdapter = (
 				);
 			}),
 		);
+	}
+
+	async function getActiveSessionReferences(userId: string) {
+		if (!secondaryStorage) return [];
+		const activeSessions = await secondaryStorage.get(
+			`active-sessions-${userId}`,
+		);
+		return activeSessions
+			? safeJSONParse<ActiveSessionReference[]>(activeSessions) || []
+			: [];
+	}
+
+	async function deleteCachedUserSessions(
+		userId: string,
+		sessionReferences: readonly ActiveSessionReference[],
+	) {
+		if (!secondaryStorage) return;
+
+		const deletedTokens = new Set(
+			sessionReferences.map((session) => session.token),
+		);
+		for (const { token } of sessionReferences) {
+			await secondaryStorage.delete(token);
+		}
+
+		const activeSessionsKey = `active-sessions-${userId}`;
+		const currentSessionReferences = await getActiveSessionReferences(userId);
+		const now = Date.now();
+		const remainingSessionReferences = currentSessionReferences.filter(
+			(session) => session.expiresAt > now && !deletedTokens.has(session.token),
+		);
+		remainingSessionReferences.sort((a, b) => a.expiresAt - b.expiresAt);
+		const furthestExpiration = remainingSessionReferences.at(-1)?.expiresAt;
+
+		if (furthestExpiration) {
+			await secondaryStorage.set(
+				activeSessionsKey,
+				JSON.stringify(remainingSessionReferences),
+				getTTLSeconds(furthestExpiration, now),
+			);
+			return;
+		}
+		await secondaryStorage.delete(activeSessionsKey);
 	}
 
 	async function withVerificationConsumeLock<T>(
@@ -133,10 +220,15 @@ export const createInternalAdapter = (
 					"user",
 					undefined,
 				);
+				if (!createdUser) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Failed to create user",
+					});
+				}
 				const createdAccount = await createWithHooks(
 					{
 						...account,
-						userId: createdUser!.id,
+						userId: createdUser.id,
 						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 						createdAt: new Date(),
 						updatedAt: new Date(),
@@ -154,18 +246,43 @@ export const createInternalAdapter = (
 			user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 				Partial<User> &
 				Record<string, any>,
+			source: UserProvisioningSource,
 		) => {
-			const createdUser = await createWithHooks(
-				{
-					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-					createdAt: new Date(),
-					updatedAt: new Date(),
-					...user,
-					email: user.email?.toLowerCase(),
-				},
-				"user",
-				undefined,
-			);
+			const data = {
+				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+				createdAt: new Date(),
+				updatedAt: new Date(),
+				...user,
+				email: user.email?.toLowerCase(),
+			};
+
+			if (options.user?.validateUserInfo) {
+				const validationSource: ValidateUserInfoSource = {
+					...source,
+					action: "create-user",
+				};
+				assertValidUserInfoSource(validationSource);
+				let endpointContext: GenericEndpointContext;
+				try {
+					endpointContext =
+						(await getCurrentAuthContext()) as GenericEndpointContext;
+				} catch (error) {
+					logger.error(
+						"Unable to run validateUserInfo: missing endpoint context",
+						error,
+					);
+					throw new APIError("FORBIDDEN", {
+						code: "validation_context_missing",
+						message: "User validation requires an endpoint context",
+					});
+				}
+				await assertValidUserInfo(endpointContext, {
+					user: data,
+					source: validationSource,
+				});
+			}
+
+			const createdUser = await createWithHooks(data, "user", undefined);
 
 			return createdUser as T & User;
 		},
@@ -324,12 +441,18 @@ export const createInternalAdapter = (
 			dontRememberMe?: boolean | undefined,
 			override?: (Partial<Session> & Record<string, any>) | undefined,
 			overrideAll?: boolean | undefined,
+			storageOptions?:
+				| { deferSecondaryStorageWrites?: boolean | undefined }
+				| undefined,
 		) => {
 			const headers: Headers | undefined = await (async () => {
 				const ctx = await getCurrentAuthContext().catch(() => null);
 				return ctx?.headers || ctx?.request?.headers;
 			})();
 			const storeInDb = options.session?.storeSessionInDatabase;
+			const databaseSessionFallbackEnabled =
+				storeInDb === true &&
+				options.session?.preserveSessionInDatabase !== true;
 			const {
 				// always ignore override id - new sessions must have new ids
 				id: _,
@@ -348,7 +471,7 @@ export const createInternalAdapter = (
 			const defaultAdditionalFields = getSessionDefaultFields(options);
 			const data = {
 				...(sessionId ? { id: sessionId } : {}),
-				ipAddress: headers ? getIp(headers, options) || "" : "",
+				ipAddress: headers ? getIP(headers, options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
 				/**
@@ -367,78 +490,86 @@ export const createInternalAdapter = (
 				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
 			} satisfies Partial<Session>;
+			const mirrorSessionToSecondaryStorage = async (sessionData: Session) => {
+				if (!secondaryStorage) return sessionData;
+				const currentList = await secondaryStorage.get(
+					`active-sessions-${userId}`,
+				);
+
+				let list: { token: string; expiresAt: number }[] = [];
+				const now = Date.now();
+				if (currentList) {
+					list = safeJSONParse(currentList) || [];
+					list = list.filter(
+						(session) =>
+							session.expiresAt > now && session.token !== data.token,
+					);
+				}
+
+				const sorted = [
+					...list,
+					{ token: data.token, expiresAt: data.expiresAt.getTime() },
+				].sort((a, b) => a.expiresAt - b.expiresAt);
+				const furthestSessionExp =
+					sorted.at(-1)?.expiresAt ?? data.expiresAt.getTime();
+				const furthestSessionTTL = getTTLSeconds(furthestSessionExp, now);
+				if (furthestSessionTTL > 0) {
+					await secondaryStorage.set(
+						`active-sessions-${userId}`,
+						JSON.stringify(sorted),
+						furthestSessionTTL,
+					);
+				}
+
+				const user = await (await getCurrentAdapter(adapter)).findOne<User>({
+					model: "user",
+					where: [{ field: "id", value: userId }],
+				});
+				const sessionTTL = getTTLSeconds(data.expiresAt, now);
+				if (sessionTTL > 0) {
+					await secondaryStorage.set(
+						data.token,
+						JSON.stringify({ session: sessionData, user }),
+						sessionTTL,
+					);
+				}
+				return sessionData;
+			};
 			const res = await createWithHooks(
 				data,
 				"session",
 				secondaryStorage
 					? {
 							fn: async (sessionData) => {
-								/**
-								 * store the session token for the user
-								 * so we can retrieve it later for listing sessions
-								 */
-								const currentList = await secondaryStorage.get(
-									`active-sessions-${userId}`,
-								);
-
-								let list: { token: string; expiresAt: number }[] = [];
-								const now = Date.now();
-
-								if (currentList) {
-									list = safeJSONParse(currentList) || [];
-									list = list.filter(
-										(session) =>
-											session.expiresAt > now && session.token !== data.token,
-									);
-								}
-
-								const sorted = [
-									...list,
-									{ token: data.token, expiresAt: data.expiresAt.getTime() },
-								].sort((a, b) => a.expiresAt - b.expiresAt);
-								const furthestSessionExp =
-									sorted.at(-1)?.expiresAt ?? data.expiresAt.getTime();
-								const furthestSessionTTL = getTTLSeconds(
-									furthestSessionExp,
-									now,
-								);
-								if (furthestSessionTTL > 0) {
-									await secondaryStorage.set(
-										`active-sessions-${userId}`,
-										JSON.stringify(sorted),
-										furthestSessionTTL,
-									);
-								}
-
-								const user = await (
-									await getCurrentAdapter(adapter)
-								).findOne<User>({
-									model: "user",
-									where: [
-										{
-											field: "id",
-											value: userId,
-										},
-									],
-								});
-								const sessionTTL = getTTLSeconds(data.expiresAt, now);
-								if (sessionTTL > 0) {
-									await secondaryStorage.set(
-										data.token,
-										JSON.stringify({
-											session: sessionData,
-											user,
-										}),
-										sessionTTL,
-									);
-								}
-
-								return sessionData;
+								return storageOptions?.deferSecondaryStorageWrites
+									? sessionData
+									: mirrorSessionToSecondaryStorage(sessionData as Session);
 							},
 							executeMainFn: storeInDb,
 						}
 					: undefined,
 			);
+			if (
+				secondaryStorage &&
+				storageOptions?.deferSecondaryStorageWrites &&
+				res
+			) {
+				await queueAfterTransactionHook(
+					async () => {
+						await mirrorSessionToSecondaryStorage(res as Session);
+					},
+					databaseSessionFallbackEnabled
+						? {
+								onError(error: unknown) {
+									logger.error(
+										"Failed to mirror committed session to secondary storage",
+										error,
+									);
+								},
+							}
+						: undefined,
+				);
+			}
 			return res as Session;
 		},
 		findSession: async (
@@ -738,10 +869,11 @@ export const createInternalAdapter = (
 
 				await secondaryStorage.delete(token);
 
-				if (
-					!options.session?.storeSessionInDatabase ||
-					ctx.options.session?.preserveSessionInDatabase
-				) {
+				if (!options.session?.storeSessionInDatabase) {
+					return;
+				}
+				if (ctx.options.session?.preserveSessionInDatabase) {
+					await endPreservedSessions([{ field: "token", value: token }]);
 					return;
 				}
 			}
@@ -767,7 +899,7 @@ export const createInternalAdapter = (
 		/**
 		 * Delete an account by its primary key.
 		 *
-		 * @param id - The account row's primary key (the `id` column, not the `accountId` column).
+		 * @param id - The account row's primary key, not its providerAccountId.
 		 */
 		deleteAccount: async (id: string) => {
 			await deleteWithHooks(
@@ -783,22 +915,26 @@ export const createInternalAdapter = (
 		},
 		deleteUserSessions: async (userId: string) => {
 			if (secondaryStorage) {
-				const activeSession = await secondaryStorage.get(
-					`active-sessions-${userId}`,
+				// Callers may create a replacement session before queued hooks run.
+				// Capture the revocation set now so that replacement remains active.
+				const sessionReferences = await getActiveSessionReferences(userId);
+				await queueAfterTransactionHook(
+					() => deleteCachedUserSessions(userId, sessionReferences),
+					{
+						onError(error) {
+							logger.error(
+								"Failed to delete committed user sessions from secondary storage",
+								error,
+							);
+						},
+					},
 				);
-				const sessions = activeSession
-					? safeJSONParse<{ token: string }[]>(activeSession)
-					: [];
-				if (!sessions) return;
-				for (const session of sessions) {
-					await secondaryStorage.delete(session.token);
-				}
-				await secondaryStorage.delete(`active-sessions-${userId}`);
 
-				if (
-					!options.session?.storeSessionInDatabase ||
-					ctx.options.session?.preserveSessionInDatabase
-				) {
+				if (!options.session?.storeSessionInDatabase) {
+					return;
+				}
+				if (ctx.options.session?.preserveSessionInDatabase) {
+					await endPreservedSessions([{ field: "userId", value: userId }]);
 					return;
 				}
 			}
@@ -822,10 +958,13 @@ export const createInternalAdapter = (
 					}
 				}
 
-				if (
-					!options.session?.storeSessionInDatabase ||
-					ctx.options.session?.preserveSessionInDatabase
-				) {
+				if (!options.session?.storeSessionInDatabase) {
+					return;
+				}
+				if (ctx.options.session?.preserveSessionInDatabase) {
+					await endPreservedSessions([
+						{ field: "token", value: sessionTokens, operator: "in" },
+					]);
 					return;
 				}
 			}
@@ -841,87 +980,30 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
-		findOAuthUser: async (
-			email: string,
-			accountId: string,
-			providerId: string,
-		) => {
-			// we need to find account first to avoid missing user if the email changed with the provider for the same account
-			const account = await (await getCurrentAdapter(adapter)).findOne<
+		findAccountOwnerByKey: async ({ issuer, providerAccountId }) => {
+			const accountWithUser = await (await getCurrentAdapter(adapter)).findOne<
 				Account & { user: User | null }
 			>({
 				model: "account",
 				where: [
 					{
-						value: accountId,
-						field: "accountId",
+						field: "issuer",
+						value: issuer,
 					},
 					{
-						value: providerId,
-						field: "providerId",
+						field: "providerAccountId",
+						value: providerAccountId,
 					},
 				],
 				join: {
 					user: true,
 				},
 			});
-			if (account) {
-				if (account.user) {
-					return {
-						user: account.user,
-						linkedAccount: account,
-						accounts: [account],
-					};
-				} else {
-					const user = await (await getCurrentAdapter(adapter)).findOne<User>({
-						model: "user",
-						where: [
-							{
-								value: email.toLowerCase(),
-								field: "email",
-							},
-						],
-					});
-					if (user) {
-						return {
-							user,
-							linkedAccount: account,
-							accounts: [account],
-						};
-					}
-					return null;
-				}
-			} else {
-				const user = await (await getCurrentAdapter(adapter)).findOne<User>({
-					model: "user",
-					where: [
-						{
-							value: email.toLowerCase(),
-							field: "email",
-						},
-					],
-				});
-				if (user) {
-					const accounts = await (
-						await getCurrentAdapter(adapter)
-					).findMany<Account>({
-						model: "account",
-						where: [
-							{
-								value: user.id,
-								field: "userId",
-							},
-						],
-					});
-					return {
-						user,
-						linkedAccount: null,
-						accounts: accounts || [],
-					};
-				} else {
-					return null;
-				}
-			}
+			if (!accountWithUser) return null;
+			const { user, ...account } = accountWithUser;
+			return user
+				? { kind: "owned" as const, user, account }
+				: { kind: "orphaned" as const, account };
 		},
 		findUserByEmail: async (
 			email: string,
@@ -996,7 +1078,14 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
-			await refreshUserSessions(user);
+			await queueAfterTransactionHook(() => refreshUserSessions(user), {
+				onError(error) {
+					logger.error(
+						"Failed to refresh committed user sessions in secondary storage",
+						error,
+					);
+				},
+			});
 			return user;
 		},
 		updateUserByEmail: async (
@@ -1017,7 +1106,14 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
-			await refreshUserSessions(user);
+			await queueAfterTransactionHook(() => refreshUserSessions(user), {
+				onError(error) {
+					logger.error(
+						"Failed to refresh committed user sessions in secondary storage",
+						error,
+					);
+				},
+			});
 			return user;
 		},
 		updatePassword: async (userId: string, password: string) => {
@@ -1033,6 +1129,14 @@ export const createInternalAdapter = (
 					{
 						field: "providerId",
 						value: "credential",
+					},
+					{
+						field: "issuer",
+						value: createLocalAccountIssuer("credential"),
+					},
+					{
+						field: "providerAccountId",
+						value: userId,
 					},
 				],
 				"account",
@@ -1053,18 +1157,32 @@ export const createInternalAdapter = (
 			});
 			return accounts;
 		},
-		findAccountByProviderId: async (accountId: string, providerId: string) => {
+		findCredentialAccount: async (userId: string) => {
+			return (await getCurrentAdapter(adapter)).findOne<Account>({
+				model: "account",
+				where: [
+					{ field: "userId", value: userId },
+					{ field: "providerId", value: "credential" },
+					{
+						field: "issuer",
+						value: createLocalAccountIssuer("credential"),
+					},
+					{ field: "providerAccountId", value: userId },
+				],
+			});
+		},
+		findAccountByKey: async ({ issuer, providerAccountId }) => {
 			const account = await (await getCurrentAdapter(adapter)).findOne<Account>(
 				{
 					model: "account",
 					where: [
 						{
-							field: "accountId",
-							value: accountId,
+							field: "issuer",
+							value: issuer,
 						},
 						{
-							field: "providerId",
-							value: providerId,
+							field: "providerAccountId",
+							value: providerAccountId,
 						},
 					],
 				},
@@ -1241,15 +1359,9 @@ export const createInternalAdapter = (
 		 * is still deleted (so it cannot be replayed later) but `null` is
 		 * returned. Callers do not need their own `expiresAt` gate.
 		 *
-		 * The secondary-storage-only path (`storeInDatabase: false`) is atomic
-		 * only when the configured storage implements `getAndDelete`; otherwise
-		 * it falls back to an in-process lock around `get` then `delete` and
-		 * warns once, since that fallback cannot coordinate across processes.
-		 *
-		 * FIXME(consume-atomic): make `SecondaryStorage.getAndDelete` required
-		 * in the next breaking release, or require database-backed verification
-		 * storage for security-sensitive consume paths, so the non-atomic
-		 * fallback can be removed entirely.
+		 * The secondary-storage-only path (`storeInDatabase: false`) consumes
+		 * through `getAndDelete`, which is required on `SecondaryStorage` so
+		 * single-use values are not read and deleted as separate operations.
 		 */
 		consumeVerificationValue: async (
 			identifier: string,
@@ -1287,24 +1399,9 @@ export const createInternalAdapter = (
 
 			if (secondaryStorage && !options.verification?.storeInDatabase) {
 				const consumeCacheKey = async (key: string) => {
-					if (secondaryStorage.getAndDelete) {
-						return hydrateCachedVerification(
-							await secondaryStorage.getAndDelete(key),
-						);
-					}
-					if (!warnedNonAtomicConsume) {
-						warnedNonAtomicConsume = true;
-						logger.warn(
-							"Secondary storage does not implement `getAndDelete`, so single-use verification values cannot be consumed atomically across processes. Implement `getAndDelete` or use database-backed verification storage to guarantee single use.",
-						);
-					}
-					return withVerificationConsumeLock(key, async () => {
-						const raw = await secondaryStorage.get(key);
-						const parsed = hydrateCachedVerification(raw);
-						if (!parsed) return null;
-						await secondaryStorage.delete(key);
-						return parsed;
-					});
+					return hydrateCachedVerification(
+						await secondaryStorage.getAndDelete(key),
+					);
 				};
 
 				for (const stored of identifiersToTry) {
@@ -1396,9 +1493,10 @@ export const createInternalAdapter = (
 		 * from a deterministic primary key (`SHA-256` of `reserve:<identifier>`).
 		 * The database path is atomic: the primary key turns the INSERT into the
 		 * first-writer-wins gate, and a duplicate is detected portably by
-		 * re-reading the row rather than matching adapter-specific errors. The
-		 * secondary-storage-only path has no primary key to enforce uniqueness, so
-		 * it is best-effort under concurrency.
+		 * re-reading the row rather than matching adapter-specific errors.
+		 * Secondary-storage-only verification cannot enforce the deterministic
+		 * primary-key gate, so this operation fails closed unless verification is
+		 * backed by the database.
 		 *
 		 * The atomic guarantee requires the configured adapter to reject a
 		 * duplicate primary key on insert, which every real database enforces. The
@@ -1428,28 +1526,9 @@ export const createInternalAdapter = (
 			);
 
 			if (secondaryStorage && !options.verification?.storeInDatabase) {
-				// Best-effort under concurrency: without a database primary key there
-				// is no first-writer-wins gate, so two callers racing a get-then-set
-				// can both observe an empty key and both win (mirrors the non-atomic
-				// secondary fallback in consumeVerificationValue).
-				// FIXME(reserve-secondary-atomic): require an atomic conditional set
-				// (set-if-absent) on SecondaryStorage, or require database-backed
-				// verification storage for reservations, so this path can guarantee
-				// first-writer-wins across processes.
-				const cacheKey = `verification:${storedIdentifier}`;
-				const existing = await secondaryStorage.get(cacheKey);
-				if (existing) return false;
-				await secondaryStorage.set(
-					cacheKey,
-					JSON.stringify({
-						id: reservationId,
-						identifier: storedIdentifier,
-						value: data.value,
-						expiresAt: data.expiresAt,
-					}),
-					getTTLSeconds(data.expiresAt),
+				throw new BetterAuthError(
+					"reserveVerificationValue requires database-backed verification storage. Set verification.storeInDatabase to true for flows that reserve verification values.",
 				);
-				return true;
 			}
 
 			try {

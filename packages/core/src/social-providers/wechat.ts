@@ -1,5 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuth2Tokens, OAuthProvider, ProviderOptions } from "../oauth2";
+import { RESERVED_AUTHORIZATION_PARAMS_SET } from "../oauth2";
 
 /**
  * WeChat user profile information
@@ -58,7 +59,8 @@ export const wechat = (options: WeChatOptions) => {
 	return {
 		id: "wechat",
 		name: "WeChat",
-		createAuthorizationURL({ state, scopes, redirectURI }) {
+		accountSubject: ({ profile }) => profile.unionid || profile.openid,
+		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope ? [] : ["snsapi_login"];
 			options.scope && _scopes.push(...options.scope);
 			scopes && _scopes.push(...scopes);
@@ -72,6 +74,13 @@ export const wechat = (options: WeChatOptions) => {
 			url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
 			url.searchParams.set("state", state);
 			url.searchParams.set("lang", options.lang || "cn");
+			if (additionalParams) {
+				for (const [key, value] of Object.entries(additionalParams)) {
+					if (RESERVED_AUTHORIZATION_PARAMS_SET.has(key)) continue;
+					if (key === "appid") continue;
+					url.searchParams.set(key, value);
+				}
+			}
 			url.hash = "wechat_redirect";
 
 			return url;
@@ -198,7 +207,6 @@ export const wechat = (options: WeChatOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.unionid || profile.openid || openid,
 					name: profile.nickname,
 					// WeChat does not return an email, and the OAuth callback rejects a
 					// missing one, so the default sign-in would always fail. Synthesize a

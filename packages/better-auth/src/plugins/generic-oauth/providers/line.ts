@@ -1,7 +1,11 @@
-import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
-import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
+import type {
+	BaseOAuthProviderOptions,
+	GenericOAuthConfig,
+	GenericOAuthUserInfo,
+} from "../index";
 
 export interface LineOptions extends BaseOAuthProviderOptions {
 	/**
@@ -79,7 +83,7 @@ export function line(options: LineOptions): GenericOAuthConfig {
 
 	const getUserInfo = async (
 		tokens: OAuth2Tokens,
-	): Promise<OAuth2UserInfo | null> => {
+	): Promise<GenericOAuthUserInfo | null> => {
 		let profile: LineUserInfo | LineIdTokenPayload | null = null;
 
 		if (tokens.idToken) {
@@ -109,7 +113,7 @@ export function line(options: LineOptions): GenericOAuthConfig {
 		}
 
 		return {
-			id: profile.sub,
+			sub: profile.sub,
 			name: profile.name,
 			email: profile.email,
 			image: profile.picture,
@@ -119,11 +123,14 @@ export function line(options: LineOptions): GenericOAuthConfig {
 
 	return {
 		providerId: options.providerId ?? "line",
+		accountSubject: ({ profile }) => profile.sub ?? "",
+		accountIssuer: "https://access.line.me",
 		authorizationUrl,
 		tokenUrl,
 		userInfoUrl,
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		tokenEndpointAuth: options.tokenEndpointAuth,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		pkce: options.pkce,

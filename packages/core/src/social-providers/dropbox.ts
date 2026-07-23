@@ -31,19 +31,17 @@ export const dropbox = (options: DropboxOptions) => {
 	return {
 		id: "dropbox",
 		name: "Dropbox",
+		accountSubject: ({ profile }) => profile.account_id,
 		createAuthorizationURL: async ({
 			state,
 			scopes,
 			codeVerifier,
 			redirectURI,
+			additionalParams,
 		}) => {
 			const _scopes = options.disableDefaultScope ? [] : ["account_info.read"];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
-			const additionalParams: Record<string, string> = {};
-			if (options.accessType) {
-				additionalParams.token_access_type = options.accessType;
-			}
 			return await createAuthorizationURL({
 				id: "dropbox",
 				options,
@@ -52,7 +50,12 @@ export const dropbox = (options: DropboxOptions) => {
 				state,
 				redirectURI,
 				codeVerifier,
-				additionalParams,
+				additionalParams: {
+					...(options.accessType
+						? { token_access_type: options.accessType }
+						: {}),
+					...(additionalParams ?? {}),
+				},
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
@@ -97,7 +100,6 @@ export const dropbox = (options: DropboxOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.account_id,
 					name: profile.name?.display_name,
 					email: profile.email,
 					emailVerified: profile.email_verified || false,

@@ -1,15 +1,29 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { User } from "@better-auth/core/db";
+import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import {
+	additionalAuthorizationParamsSchema,
+	supportsIdTokenSignIn,
+	verifyProviderIdToken,
+} from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
-import { missingEmailLogMessage } from "../../oauth2/errors";
+import {
+	resolveOAuthAccountKeyForAPI,
+	toOAuthProfileRecord,
+} from "../../oauth2/account-key";
+import {
+	missingEmailLogMessage,
+	OAUTH_CALLBACK_ERROR_CODES,
+} from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import { generateState } from "../../utils";
+import { getOAuthCallbackPath } from "../../oauth2/utils";
+import { generateIdTokenNonce, generateState } from "../../utils";
 import { safeCloneRequest } from "../../utils/request";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
@@ -167,6 +181,12 @@ const socialSignInBodySchema = z.object({
 		})
 		.optional(),
 	/**
+	 * Extra query parameters to append to the provider authorization URL.
+	 * Reserved OAuth keys (state, client_id, redirect_uri, response_type,
+	 * code_challenge, code_challenge_method, nonce, scope) are rejected.
+	 */
+	additionalParams: additionalAuthorizationParamsSchema,
+	/**
 	 * Additional data to be passed through the OAuth flow
 	 */
 	additionalData: z.record(z.string(), z.any()).optional().meta({
@@ -253,7 +273,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 			}
 
 			if (c.body.idToken) {
-				if (!provider.verifyIdToken) {
+				if (!supportsIdTokenSignIn(provider)) {
 					c.context.logger.error(
 						"Provider does not support id token verification",
 						{
@@ -266,19 +286,20 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					);
 				}
 				const { token, nonce } = c.body.idToken;
-				const valid = await provider.verifyIdToken(token, nonce, c);
+				const valid = await verifyProviderIdToken(provider, token, nonce, c);
 				if (!valid) {
 					c.context.logger.warn("Invalid id token", {
 						provider: c.body.provider,
 					});
 					throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.INVALID_TOKEN);
 				}
-				const userInfo = await provider.getUserInfo({
+				const oauthTokens = {
 					idToken: token,
 					accessToken: c.body.idToken.accessToken,
 					refreshToken: c.body.idToken.refreshToken,
 					user: c.body.idToken.user,
-				});
+				};
+				const userInfo = await provider.getUserInfo(oauthTokens);
 				if (!userInfo || !userInfo?.user) {
 					c.context.logger.error("Failed to get user info", {
 						provider: c.body.provider,
@@ -298,26 +319,43 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
 					);
 				}
+				const accountKey = await resolveOAuthAccountKeyForAPI(
+					provider,
+					oauthTokens,
+					userInfo.data,
+				);
+				const providerProfile = toOAuthProfileRecord(userInfo.data);
 				const data = await handleOAuthUserInfo(c, {
 					userInfo: {
 						...userInfo.user,
 						email: userInfo.user.email,
-						id: String(userInfo.user.id),
+						id: accountKey.providerAccountId,
 						name: userInfo.user.name || "",
 						image: userInfo.user.image,
 						emailVerified: userInfo.user.emailVerified || false,
 					},
 					account: {
 						providerId: provider.id,
-						accountId: String(userInfo.user.id),
+						...accountKey,
 						accessToken: c.body.idToken.accessToken,
+						idToken: token,
 					},
 					callbackURL: c.body.callbackURL,
 					disableSignUp:
 						(provider.disableImplicitSignUp && !c.body.requestSignUp) ||
 						provider.disableSignUp,
+					source: {
+						method: "oauth",
+						oauth: { providerId: provider.id, profile: providerProfile },
+					},
 				});
 				if (data.error) {
+					if (data.error === OAUTH_CALLBACK_ERROR_CODES.EMAIL_NOT_VERIFIED) {
+						throw APIError.from(
+							"FORBIDDEN",
+							BASE_ERROR_CODES.EMAIL_NOT_VERIFIED,
+						);
+					}
 					throw APIError.from("UNAUTHORIZED", {
 						message: data.error,
 						code: "OAUTH_LINK_ERROR",
@@ -335,17 +373,19 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 				});
 			}
 
-			const { codeVerifier, state } = await generateState(
-				c,
-				undefined,
-				c.body.additionalData,
-			);
+			const idTokenNonce = generateIdTokenNonce(provider);
+			const { codeVerifier, state } = await generateState(c, {
+				additionalData: c.body.additionalData,
+				idTokenNonce,
+			});
 			const url = await provider.createAuthorizationURL({
 				state,
 				codeVerifier,
-				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+				idTokenNonce,
+				redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
 				scopes: c.body.scopes,
 				loginHint: c.body.loginHint,
+				additionalParams: c.body.additionalParams,
 			});
 
 			if (!c.body.disableRedirect) {
@@ -485,11 +525,19 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			if (!isValidEmail.success) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
-			const user = await ctx.context.internalAdapter.findUserByEmail(email, {
-				includeAccounts: true,
-			});
+			const userRecord = await ctx.context.internalAdapter.findUserByEmail(
+				email.toLowerCase(),
+				{ includeAccounts: true },
+			);
+			const credentialIssuer = createLocalAccountIssuer("credential");
+			const credentialAccount = userRecord?.accounts.find(
+				(account) =>
+					account.providerId === "credential" &&
+					account.issuer === credentialIssuer &&
+					account.providerAccountId === userRecord.user.id,
+			);
 
-			if (!user) {
+			if (!userRecord || !credentialAccount) {
 				// Hash password to prevent timing attacks from revealing valid email addresses
 				// By hashing passwords for invalid emails, we ensure consistent response times
 				await ctx.context.password.hash(password);
@@ -500,18 +548,8 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				);
 			}
 
-			const credentialAccount = user.accounts.find(
-				(a) => a.providerId === "credential",
-			);
-			if (!credentialAccount) {
-				await ctx.context.password.hash(password);
-				ctx.context.logger.warn("Credential account not found");
-				throw APIError.from(
-					"UNAUTHORIZED",
-					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
-				);
-			}
-			const currentPassword = credentialAccount?.password;
+			const user = userRecord.user;
+			const currentPassword = credentialAccount.password;
 			if (!currentPassword) {
 				await ctx.context.password.hash(password);
 				ctx.context.logger.warn("Password not found");
@@ -534,7 +572,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 
 			if (
 				ctx.context.options?.emailAndPassword?.requireEmailVerification &&
-				!user.user.emailVerified
+				!user.emailVerified
 			) {
 				if (!ctx.context.options?.emailVerification?.sendVerificationEmail) {
 					throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.EMAIL_NOT_VERIFIED);
@@ -543,7 +581,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				if (ctx.context.options?.emailVerification?.sendOnSignIn) {
 					const token = await createEmailVerificationToken(
 						ctx.context.secret,
-						user.user.email,
+						user.email,
 						undefined,
 						ctx.context.options.emailVerification?.expiresIn,
 					);
@@ -554,7 +592,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 					await ctx.context.runInBackgroundOrAwait(
 						ctx.context.options.emailVerification.sendVerificationEmail(
 							{
-								user: user.user,
+								user,
 								url,
 								token,
 							},
@@ -567,7 +605,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			}
 
 			const session = await ctx.context.internalAdapter.createSession(
-				user.user.id,
+				user.id,
 				ctx.body.rememberMe === false,
 			);
 
@@ -583,7 +621,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				ctx,
 				{
 					session,
-					user: user.user,
+					user,
 				},
 				ctx.body.rememberMe === false,
 			);
@@ -596,7 +634,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				redirect: !!ctx.body.callbackURL,
 				token: session.token,
 				url: ctx.body.callbackURL,
-				user: parseUserOutput(ctx.context.options, user.user) as User<
+				user: parseUserOutput(ctx.context.options, user) as User<
 					O["user"],
 					O["plugins"]
 				>,

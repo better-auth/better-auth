@@ -1,27 +1,70 @@
 import type { Status } from "better-auth";
 import { APIError } from "better-auth";
+import { isAPIError } from "better-auth/api";
 import { statusCodes } from "better-call";
+import { createSCIMOpenAPIContent } from "./scim-metadata";
+
+const SCIM_ERROR_SCHEMA =
+	"urn:ietf:params:scim:api:messages:2.0:Error" as const;
+
+export type SCIMErrorType =
+	| "invalidFilter"
+	| "tooMany"
+	| "uniqueness"
+	| "mutability"
+	| "invalidSyntax"
+	| "invalidPath"
+	| "noTarget"
+	| "invalidValue"
+	| "invalidVers"
+	| "sensitive";
+
+export interface SCIMErrorOptions {
+	detail?: string;
+	scimType?: SCIMErrorType;
+}
 
 /**
- * SCIM compliant error
+ * Create a SCIM-compliant API error.
+ *
  * See: https://datatracker.ietf.org/doc/html/rfc7644#section-3.12
  */
-export class SCIMAPIError extends APIError {
-	constructor(
-		status: keyof typeof statusCodes | Status = "INTERNAL_SERVER_ERROR",
-		overrides: any = {},
-	) {
-		const body = {
-			schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
-			status: (typeof status === "number"
-				? status
-				: statusCodes[status]
-			).toString(),
-			detail: overrides.detail,
-			...overrides,
-		};
-		super(status, body);
-		this.message = body.detail ?? body.message;
+export function createSCIMError(
+	status: keyof typeof statusCodes | Status = "INTERNAL_SERVER_ERROR",
+	options: SCIMErrorOptions = {},
+): APIError {
+	const body = {
+		schemas: [SCIM_ERROR_SCHEMA],
+		status: (typeof status === "number"
+			? status
+			: statusCodes[status]
+		).toString(),
+		...(options.detail !== undefined ? { detail: options.detail } : {}),
+		...(options.scimType !== undefined ? { scimType: options.scimType } : {}),
+	};
+	const error = new APIError(status, body);
+	if (options.detail !== undefined) error.message = options.detail;
+	return error;
+}
+
+/**
+ * Keeps application-owned SCIM extension failures inside the SCIM error
+ * contract while preserving the original exception as a non-response cause.
+ */
+export async function runSCIMApplicationCallback<Result>(
+	callback: () => Result | Promise<Result>,
+	detail: string,
+): Promise<Result> {
+	try {
+		return await callback();
+	} catch (error) {
+		if (isAPIError(error)) throw error;
+		const scimError = createSCIMError("INTERNAL_SERVER_ERROR", { detail });
+		Object.defineProperty(scimError, "cause", {
+			configurable: true,
+			value: error,
+		});
+		throw scimError;
 	}
 }
 
@@ -42,58 +85,43 @@ const SCIMErrorOpenAPISchema = {
 			type: "string",
 		},
 	},
+	required: ["schemas", "status"] as string[],
 } as const;
 
 export const SCIMErrorOpenAPISchemas = {
 	"400": {
 		description:
 			"Bad Request. Usually due to missing parameters, or invalid parameters",
-		content: {
-			"application/json": {
-				schema: SCIMErrorOpenAPISchema,
-			},
-		},
+		content: createSCIMOpenAPIContent(SCIMErrorOpenAPISchema),
 	},
 	"401": {
 		description: "Unauthorized. Due to missing or invalid authentication.",
-		content: {
-			"application/json": {
-				schema: SCIMErrorOpenAPISchema,
-			},
-		},
+		content: createSCIMOpenAPIContent(SCIMErrorOpenAPISchema),
 	},
 	"403": {
-		description: "Unauthorized. Due to missing or invalid authentication.",
-		content: {
-			"application/json": {
-				schema: SCIMErrorOpenAPISchema,
-			},
-		},
+		description: "Forbidden. The authenticated principal lacks permission.",
+		content: createSCIMOpenAPIContent(SCIMErrorOpenAPISchema),
 	},
 	"404": {
 		description: "Not Found. The requested resource was not found.",
-		content: {
-			"application/json": {
-				schema: SCIMErrorOpenAPISchema,
-			},
-		},
+		content: createSCIMOpenAPIContent(SCIMErrorOpenAPISchema),
+	},
+	"409": {
+		description: "Conflict. A resource uniqueness constraint was violated.",
+		content: createSCIMOpenAPIContent(SCIMErrorOpenAPISchema),
+	},
+	"415": {
+		description: "Unsupported Media Type.",
+		content: createSCIMOpenAPIContent(SCIMErrorOpenAPISchema),
 	},
 	"429": {
 		description:
 			"Too Many Requests. You have exceeded the rate limit. Try again later.",
-		content: {
-			"application/json": {
-				schema: SCIMErrorOpenAPISchema,
-			},
-		},
+		content: createSCIMOpenAPIContent(SCIMErrorOpenAPISchema),
 	},
 	"500": {
 		description:
 			"Internal Server Error. This is a problem with the server that you cannot fix.",
-		content: {
-			"application/json": {
-				schema: SCIMErrorOpenAPISchema,
-			},
-		},
+		content: createSCIMOpenAPIContent(SCIMErrorOpenAPISchema),
 	},
 };

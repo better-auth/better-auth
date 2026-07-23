@@ -5,7 +5,7 @@ import type {
 	User,
 	Verification,
 } from "@better-auth/core/db";
-import { getAuthTables } from "@better-auth/core/db";
+import { createLocalAccountIssuer, getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import {
 	createAdapterFactory,
@@ -271,16 +271,25 @@ export const createTestSuite = <
 					disableTransformInput: true,
 					disableTransformJoin: true,
 				};
+				// Snapshot the real adapter's transaction here so the wrapper always
+				// delegates to it, even when subsequent helper calls reassign
+				// `adapter` (e.g. `adapter = await helpers.adapter()` inside the
+				// proxied methods below). Previously this code mutated
+				// `adapter.transaction = undefined`, which left later
+				// `wrapperAdapter()` invocations with a snapshot of `undefined` and
+				// silently degraded `wrapper.transaction(cb)` to the no-op
+				// `createAsIsTransaction` path — breaking real rollback semantics
+				// for adapters that opt into `transaction: true`.
+				const adapterTransaction = adapter.transaction;
 				const adapterCreator = (
 					options: BetterAuthOptions,
 				): DBAdapter<BetterAuthOptions> =>
 					createAdapterFactory({
 						config: {
 							...adapterConfig,
-							transaction: adapter.transaction,
+							transaction: adapterTransaction,
 						},
 						adapter: ({ getDefaultModelName }) => {
-							adapter.transaction = undefined as any;
 							return {
 								count: async (args: any) => {
 									adapter = await helpers.adapter();
@@ -513,7 +522,8 @@ export const createTestSuite = <
 						id,
 						createdAt: randomDate,
 						updatedAt: new Date(),
-						accountId: generateId(),
+						issuer: createLocalAccountIssuer("test"),
+						providerAccountId: generateId(),
 						providerId: "test",
 						userId: generateId(),
 						accessToken: generateId(),

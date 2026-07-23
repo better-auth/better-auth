@@ -4,6 +4,7 @@ pkce
 unban
 siwe
 scim
+SCIMO
 aaguid
 aaguids
 Nord
@@ -35,3 +36,8 @@ Vercel
 rgba
 idtoken
 HIBP
+dpop
+mtls
+jkt
+reissuance
+TOCTOU

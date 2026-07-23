@@ -1,12 +1,16 @@
+import { DatabaseSync } from "node:sqlite";
 import type {
 	DiscordProfile,
 	GoogleProfile,
 } from "@better-auth/core/social-providers";
+import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
+import { Kysely } from "kysely";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import {
 	afterAll,
 	afterEach,
+	assert,
 	beforeAll,
 	describe,
 	expect,
@@ -14,7 +18,11 @@ import {
 	vi,
 } from "vitest";
 import * as z from "zod";
+import { betterAuth } from "../auth/full";
+import { createAuthClient } from "../client";
+import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
 import { signJWT } from "../crypto";
+import { getMigrations } from "../db/get-migration";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { User } from "../types";
 import { DEFAULT_SECRET } from "../utils/constants";
@@ -429,7 +437,7 @@ describe("oauth2 - account linking with case insensitive email", async () => {
 			name: "Test User",
 			picture: "https://example.com/photo.jpg",
 			exp: 1234567890,
-			sub: "google_oauth_sub_casing",
+			sub: "google_oauth_sub_casing_id_token",
 			iat: 1234567890,
 			aud: "test",
 			azp: "test",
@@ -1316,73 +1324,58 @@ describe("oauth2 - first sign-in provisioning applies user input rules", async (
 
 	it("does not copy fields marked input: false from the provider on first sign-in", async () => {
 		const testEmail = "implicit-create-input-false@example.com";
-		const createOAuthUserSpy = vi.spyOn(ctx.internalAdapter, "createOAuthUser");
 
-		try {
-			server.use(
-				http.post("https://oauth2.googleapis.com/token", async () => {
-					const profile = {
-						sub: "google_create_input_false",
-						email: testEmail,
-						email_verified: true,
-						name: "Created From Google",
-					} as GoogleProfile;
-					const idToken = await signJWT(profile, DEFAULT_SECRET);
-					return HttpResponse.json({
-						access_token: "test_token",
-						id_token: idToken,
-					});
-				}),
-			);
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile = {
+					sub: "google_create_input_false",
+					email: testEmail,
+					email_verified: true,
+					name: "Created From Google",
+				} as GoogleProfile;
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_token",
+					id_token: idToken,
+				});
+			}),
+		);
 
-			const oAuthHeaders = new Headers();
-			const signInRes = await client.signIn.social({
-				provider: "google",
-				callbackURL: "/",
-				fetchOptions: { onSuccess: cookieSetter(oAuthHeaders) },
-			});
-			const state =
-				new URL(signInRes.data!.url!).searchParams.get("state") || "";
-			await client.$fetch("/callback/google", {
-				query: { state, code: "test_code" },
-				method: "GET",
-				headers: oAuthHeaders,
-				onError(context) {
-					expect(context.response.status).toBe(302);
-					cookieSetter(oAuthHeaders)(context as any);
-				},
-			});
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: { onSuccess: cookieSetter(oAuthHeaders) },
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(oAuthHeaders)(context as any);
+			},
+		});
 
-			expect(createOAuthUserSpy).toHaveBeenCalledWith(
-				expect.objectContaining({
-					googleSub: "google_create_input_false",
-					profileCode: "provider-code",
-					serverManagedDefault: "member",
-				}),
-				expect.any(Object),
-			);
-
-			const user = await ctx.adapter.findOne<
-				User & {
-					googleSub?: string;
-					profileCode?: string;
-					serverManagedField?: string | null;
-					serverManagedDefault?: string | null;
-				}
-			>({
-				model: "user",
-				where: [{ field: "email", value: testEmail }],
-			});
-			// The mapped, input-enabled field is still written...
-			expect(user?.googleSub).toBe("google_create_input_false");
-			expect(user?.profileCode).toBe("provider-code");
-			// ...while the input: false provider value is ignored.
-			expect(user?.serverManagedField ?? null).toBeNull();
-			// The schema-owned default still applies on create.
-			expect(user?.serverManagedDefault).toBe("member");
-		} finally {
-			createOAuthUserSpy.mockRestore();
-		}
+		const user = await ctx.adapter.findOne<
+			User & {
+				googleSub?: string;
+				profileCode?: string;
+				serverManagedField?: string | null;
+				serverManagedDefault?: string | null;
+			}
+		>({
+			model: "user",
+			where: [{ field: "email", value: testEmail }],
+		});
+		// The mapped, input-enabled field is still written...
+		expect(user?.googleSub).toBe("google_create_input_false");
+		expect(user?.profileCode).toBe("provider-code");
+		// ...while the input: false provider value is ignored.
+		expect(user?.serverManagedField ?? null).toBeNull();
+		// The schema-owned default still applies on create.
+		expect(user?.serverManagedDefault).toBe("member");
 	});
 });
 
@@ -1423,6 +1416,10 @@ describe("oauth2 - override user info on sign-in", async () => {
 	});
 
 	const ctx = await auth.$context;
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
 
 	it("should update user info when overrideUserInfo is enabled", async () => {
 		const testEmail = "override@example.com";
@@ -1492,6 +1489,68 @@ describe("oauth2 - override user info on sign-in", async () => {
 		expect(session.data?.user.name).toBe("Updated Name");
 	});
 
+	it("should preserve the resolved user when overrideUserInfo update returns null", async () => {
+		const testEmail = "override-null@example.com";
+
+		await ctx.adapter.create({
+			model: "user",
+			data: {
+				email: testEmail,
+				name: "Initial Name",
+				emailVerified: true,
+			},
+		});
+
+		const originalUpdate = ctx.adapter.update.bind(ctx.adapter);
+		vi.spyOn(ctx.adapter, "update").mockImplementation(async (payload) => {
+			const result = await originalUpdate(payload);
+			return payload.model === "user" ? null : result;
+		});
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					sub: "google_null_update",
+					email: testEmail,
+					email_verified: true,
+					name: "Updated Name",
+				} as GoogleProfile;
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: {
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(oAuthHeaders)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: oAuthHeaders,
+			},
+		});
+
+		expect(session.data?.user.email).toBe(testEmail);
+	});
+
 	it("does not copy fields marked input: false from the provider when overriding", async () => {
 		const testEmail = "override-input-false@example.com";
 
@@ -1552,16 +1611,113 @@ describe("oauth2 - override user info on sign-in", async () => {
 	});
 });
 
+describe("oauth2 - sign-up account creation rollback", async () => {
+	const sqlite = new DatabaseSync(":memory:");
+	const database = new Kysely({
+		dialect: new NodeSqliteDialect({ database: sqlite }),
+	});
+	const auth = betterAuth({
+		baseURL: "http://localhost:3000",
+		database: {
+			db: database,
+			type: "sqlite",
+			transaction: true,
+		},
+		account: {
+			additionalFields: {
+				requiredAccountField: {
+					type: "string",
+					required: true,
+				},
+			},
+		},
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+			},
+		},
+		rateLimit: {
+			enabled: false,
+		},
+	});
+	const { runMigrations } = await getMigrations(auth.options);
+	await runMigrations();
+
+	const client = createAuthClient({
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: (url, init) => auth.handler(new Request(url, init)),
+		},
+	});
+
+	const ctx = await auth.$context;
+
+	afterAll(async () => {
+		await database.destroy();
+	});
+
+	it("rolls back the user row when the first OAuth account cannot be created", async () => {
+		const testEmail = "oauth-rollback@example.com";
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					sub: "google_rollback",
+					email: testEmail,
+					email_verified: true,
+					name: "Rollback User",
+				} as GoogleProfile;
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: {
+				onSuccess: setCookieToHeader(oAuthHeaders),
+			},
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				redirectLocation = context.response.headers.get("location") || "";
+				setCookieToHeader(oAuthHeaders)(context);
+			},
+		});
+
+		expect(redirectLocation).toContain("error=unable_to_create_user");
+
+		const user = await ctx.adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: testEmail }],
+		});
+		expect(user).toBeNull();
+	});
+});
+
 /**
  * @see https://github.com/better-auth/better-auth/issues/8906
  *
- * Regression: linkSocial callback looked up the account by accountId
- * alone, without filtering by providerId. When two different providers share the same
- * numeric account ID, the wrong account could be matched, causing a
+ * Regression: linkSocial callback looked up the provider subject without its
+ * issuer namespace. When two different issuers share the same numeric subject,
+ * the wrong account could be matched, causing a
  * spurious "account_already_linked_to_different_user" error or silently
  * updating the wrong account record.
  */
-describe("oauth2 - link-social uses provider-scoped account lookup", async () => {
+describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 	// Shared numeric ID used by both Google and GitHub to trigger the bug
 	const SHARED_ACCOUNT_ID = "99999";
 
@@ -1627,8 +1783,8 @@ describe("oauth2 - link-social uses provider-scoped account lookup", async () =>
 		);
 	}
 
-	it("should not match a different provider's account when the accountId is the same", async () => {
-		// User A: signed up via Google with accountId = SHARED_ACCOUNT_ID
+	it("does not match a different issuer with the same provider account id", async () => {
+		// User A signs up through Google with a shared provider account ID.
 		const userAEmail = "user-a@example.com";
 		mockGoogleToken(userAEmail, SHARED_ACCOUNT_ID);
 
@@ -1667,8 +1823,8 @@ describe("oauth2 - link-social uses provider-scoped account lookup", async () =>
 			{ onSuccess: cookieSetter(userBHeaders) },
 		);
 
-		// User B tries to link GitHub — GitHub returns the SAME accountId
-		// as User A's Google account. Without the fix, an accountId-only lookup
+		// User B tries to link GitHub — GitHub returns the same provider account ID
+		// as User A's Google account. Without the issuer-scoped key, the lookup
 		// would find User A's Google account and return "account_already_linked_to_different_user".
 		mockGithubToken("user-b-gh", Number(SHARED_ACCOUNT_ID), userBEmail);
 
@@ -1702,7 +1858,8 @@ describe("oauth2 - link-social uses provider-scoped account lookup", async () =>
 
 		const accountsB = await ctx.adapter.findMany<{
 			providerId: string;
-			accountId: string;
+			issuer: string;
+			providerAccountId: string;
 			userId: string;
 		}>({
 			model: "account",
@@ -1711,7 +1868,8 @@ describe("oauth2 - link-social uses provider-scoped account lookup", async () =>
 
 		const githubAccount = accountsB.find((a) => a.providerId === "github");
 		expect(githubAccount).toBeTruthy();
-		expect(githubAccount?.accountId).toBe(SHARED_ACCOUNT_ID);
+		expect(githubAccount?.issuer).toBe("local:oauth:github");
+		expect(githubAccount?.providerAccountId).toBe(SHARED_ACCOUNT_ID);
 		expect(githubAccount?.userId).toBe(userBId);
 
 		// User A's Google account must remain untouched
@@ -1725,6 +1883,106 @@ describe("oauth2 - link-social uses provider-scoped account lookup", async () =>
 		const googleAccount = accountsA.find((a) => a.providerId === "google");
 		expect(googleAccount).toBeTruthy();
 		expect(googleAccount?.userId).toBe(userAId);
+	});
+});
+
+describe("oauth2 - orphaned account identity", () => {
+	it("does not fall back to email when a matching account has no user", async () => {
+		const database = new DatabaseSync(":memory:");
+		(await getMigrations({ database })).runMigrations();
+		const { auth, client, cookieSetter } = await getTestInstance({
+			database,
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					verifyIdToken: async () => true,
+				},
+			},
+			emailAndPassword: { enabled: true },
+			account: {
+				accountLinking: { enabled: false },
+			},
+		});
+		const ctx = await auth.$context;
+		const email = "orphaned-account@example.com";
+		const providerAccountId = "orphaned-google-subject";
+		const { data } = await client.signUp.email({
+			email,
+			password: "password123",
+			name: "Existing User",
+		});
+
+		database.exec("PRAGMA foreign_keys = OFF");
+		try {
+			await ctx.adapter.create({
+				model: "account",
+				data: {
+					providerId: "google",
+					issuer: "https://accounts.google.com",
+					providerAccountId,
+					userId: "missing-account-owner",
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+		} finally {
+			database.exec("PRAGMA foreign_keys = ON");
+		}
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					email,
+					email_verified: true,
+					name: "Existing User",
+					picture: "https://example.com/photo.jpg",
+					exp: 1234567890,
+					sub: providerAccountId,
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "https://accounts.google.com",
+					locale: "en",
+					jti: "test",
+					given_name: "Existing",
+					family_name: "User",
+				};
+				return HttpResponse.json({
+					access_token: "google-access-token",
+					id_token: await signJWT(profile, DEFAULT_SECRET),
+				});
+			}),
+		);
+
+		const headers = new Headers();
+		const signIn = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const state = new URL(signIn.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers,
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(redirectLocation).toContain("error=unable_to_link_account");
+		const userAccounts = await ctx.adapter.findMany<{ providerId: string }>({
+			model: "account",
+			where: [{ field: "userId", value: data!.user.id }],
+		});
+		expect(
+			userAccounts.some((account) => account.providerId === "google"),
+		).toBe(false);
 	});
 });
 
@@ -1773,15 +2031,16 @@ describe("oauth2 - providers without email", async () => {
 		);
 	}
 
-	describe("with mapProfileToUser omitting provider id", async () => {
-		const missingProviderId = undefined as unknown as string;
+	describe("with mapProfileToUser attempting to redefine provider identity", async () => {
 		const { auth, client, cookieSetter } = await getTestInstance({
 			socialProviders: {
 				discord: {
 					clientId: "test",
 					clientSecret: "test",
 					enabled: true,
-					mapProfileToUser: () => ({ id: missingProviderId }),
+					// Simulate an untyped JavaScript integration. TypeScript rejects this
+					// field, and the runtime must ignore it as an identity source.
+					mapProfileToUser: () => ({ id: "mapped-profile-id" }) as never,
 				},
 			},
 		});
@@ -1791,9 +2050,27 @@ describe("oauth2 - providers without email", async () => {
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/9454
 		 */
-		it("rejects provider user info with a missing id before creating an account", async () => {
-			const email = "missing-id@example.com";
-			mockDiscordToken("920138789012345000", "missing-id", email);
+		it("uses the verified raw profile subject instead of a mapped id", async () => {
+			const providerAccountId = "920138789012345000";
+			const email = "mapped-id@example.com";
+			mockDiscordToken(providerAccountId, "mapped-id", email);
+			const discordProvider = ctx.socialProviders.find(
+				(provider) => provider.id === "discord",
+			)!;
+			const providerInfo = await discordProvider.getUserInfo({
+				accessToken: discordTokenResponse.access_token,
+			});
+			expect(providerInfo?.data).toMatchObject({ id: providerAccountId });
+			expect(providerInfo?.user).toMatchObject({
+				id: "mapped-profile-id",
+			});
+			const originalAccountSubject = discordProvider.accountSubject;
+			assert(
+				typeof originalAccountSubject === "function",
+				"Discord should resolve its subject from the raw profile",
+			);
+			const accountSubject = vi.fn(originalAccountSubject);
+			discordProvider.accountSubject = accountSubject;
 
 			const oAuthHeaders = new Headers();
 			const signInRes = await client.signIn.social({
@@ -1806,35 +2083,37 @@ describe("oauth2 - providers without email", async () => {
 
 			const state =
 				new URL(signInRes.data!.url!).searchParams.get("state") || "";
-			let redirectLocation = "";
+			let sessionHeaders = new Headers();
 			await client.$fetch("/callback/discord", {
 				query: { state, code: "test_code" },
 				method: "GET",
 				headers: oAuthHeaders,
 				onError(context) {
-					redirectLocation = context.response.headers.get("location") || "";
+					sessionHeaders = new Headers();
+					cookieSetter(sessionHeaders)(context);
 				},
 			});
-
-			expect(redirectLocation).toContain("error=unable_to_get_user_info");
+			expect(accountSubject).toHaveBeenCalledWith(
+				expect.objectContaining({
+					profile: expect.objectContaining({ id: providerAccountId }),
+				}),
+			);
+			const session = await client.getSession({
+				fetchOptions: { headers: sessionHeaders },
+			});
+			expect(session.data?.user.email).toBe(email);
 
 			const account = await ctx.adapter.findOne<{
-				accountId: string;
+				providerAccountId: string;
 				providerId: string;
 			}>({
 				model: "account",
 				where: [
-					{ field: "accountId", value: "undefined" },
+					{ field: "providerAccountId", value: providerAccountId },
 					{ field: "providerId", value: "discord" },
 				],
 			});
-			expect(account).toBeNull();
-
-			const user = await ctx.adapter.findOne<User>({
-				model: "user",
-				where: [{ field: "email", value: email }],
-			});
-			expect(user).toBeNull();
+			expect(account).not.toBeNull();
 		});
 	});
 
@@ -1894,14 +2173,14 @@ describe("oauth2 - providers without email", async () => {
 
 			const accounts = await ctx.adapter.findMany<{
 				providerId: string;
-				accountId: string;
+				providerAccountId: string;
 			}>({
 				model: "account",
 				where: [{ field: "userId", value: user!.id }],
 			});
 			const discordAccount = accounts.find((a) => a.providerId === "discord");
 			expect(discordAccount).toBeTruthy();
-			expect(discordAccount?.accountId).toBe(discordId);
+			expect(discordAccount?.providerAccountId).toBe(discordId);
 		});
 	});
 
@@ -2045,6 +2324,246 @@ describe("oauth2 - accountLinking.requireLocalEmailVerified: false opt-out", asy
 			where: [{ field: "id", value: userId }],
 		});
 		expect(promoted?.emailVerified).toBe(true);
+	});
+});
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9486
+ */
+describe("oauth2 - per-provider requireEmailVerification gate", async () => {
+	async function setup(config: {
+		requireEmailVerification?: boolean | undefined;
+		emailPasswordRequireEmailVerification?: boolean | undefined;
+		sendOnSignUp?: boolean | undefined;
+		sendOnSignIn?: boolean | undefined;
+		withoutSendVerificationEmail?: boolean | undefined;
+	}) {
+		const sendVerificationEmail = vi.fn(async () => {});
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						enabled: true,
+						requireEmailVerification: config.requireEmailVerification,
+					},
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification:
+						config.emailPasswordRequireEmailVerification,
+				},
+				emailVerification: {
+					sendOnSignUp: config.sendOnSignUp,
+					sendOnSignIn: config.sendOnSignIn,
+					sendVerificationEmail: config.withoutSendVerificationEmail
+						? undefined
+						: sendVerificationEmail,
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const ctx = await auth.$context;
+
+		async function signInViaCallback(profile: {
+			email: string;
+			email_verified: boolean;
+			sub: string;
+		}) {
+			server.use(
+				http.post("https://oauth2.googleapis.com/token", async () => {
+					const idToken = await signJWT(
+						{
+							email: profile.email,
+							email_verified: profile.email_verified,
+							name: "OAuth User",
+							sub: profile.sub,
+							iat: 1234567890,
+							exp: 1234567890,
+							aud: "test",
+							iss: "test",
+						},
+						DEFAULT_SECRET,
+					);
+					return HttpResponse.json({
+						access_token: "test_access_token",
+						refresh_token: "test_refresh_token",
+						id_token: idToken,
+					});
+				}),
+			);
+			const headers = new Headers();
+			const signInRes = await client.signIn.social({
+				provider: "google",
+				callbackURL: "/dashboard",
+				newUserCallbackURL: "/welcome",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const state =
+				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+			let redirectLocation = "";
+			let setCookie = "";
+			await client.$fetch("/callback/google", {
+				query: { state, code: "test_code" },
+				method: "GET",
+				headers,
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					redirectLocation = context.response.headers.get("location") || "";
+					setCookie = context.response.headers.get("set-cookie") || "";
+				},
+			});
+			return { redirectLocation, setCookie };
+		}
+
+		return { ctx, signInViaCallback, sendVerificationEmail };
+	}
+
+	function sessionToken(setCookie: string) {
+		return parseSetCookieHeader(setCookie).get("better-auth.session_token")
+			?.value;
+	}
+
+	it("blocks the session for a new user whose provider email is unverified", async () => {
+		// No sendOnSignUp: the send is driven by requireEmailVerification (the
+		// credential sign-up rule), so a blocked new user still receives a link.
+		const { ctx, signInViaCallback, sendVerificationEmail } = await setup({
+			requireEmailVerification: true,
+		});
+		const email = "gate-new-unverified@example.com";
+
+		const { redirectLocation, setCookie } = await signInViaCallback({
+			email,
+			email_verified: false,
+			sub: "gate_new_unverified",
+		});
+
+		expect(redirectLocation).toContain("error=email_not_verified");
+		expect(sessionToken(setCookie)).toBeUndefined();
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+
+		// The user and account are still created; only the session is withheld.
+		const user = await ctx.adapter.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: email }],
+		});
+		expect(user?.emailVerified).toBe(false);
+	});
+
+	it("creates a session for a new user whose provider email is verified", async () => {
+		const { signInViaCallback, sendVerificationEmail } = await setup({
+			requireEmailVerification: true,
+			sendOnSignUp: true,
+		});
+
+		const { redirectLocation, setCookie } = await signInViaCallback({
+			email: "gate-new-verified@example.com",
+			email_verified: true,
+			sub: "gate_new_verified",
+		});
+
+		expect(redirectLocation).toContain("/welcome");
+		expect(redirectLocation).not.toContain("error");
+		expect(sessionToken(setCookie)).toBeDefined();
+		expect(sendVerificationEmail).not.toHaveBeenCalled();
+	});
+
+	it("re-sends and blocks a returning unverified user when sendOnSignIn is set", async () => {
+		const { signInViaCallback, sendVerificationEmail } = await setup({
+			requireEmailVerification: true,
+			sendOnSignIn: true,
+		});
+		const profile = {
+			email: "gate-returning@example.com",
+			email_verified: false,
+			sub: "gate_returning",
+		};
+
+		// The first sign-in creates the user and account, then blocks the session.
+		await signInViaCallback(profile);
+		sendVerificationEmail.mockClear();
+
+		// The returning sign-in is blocked again and re-sends the email.
+		const { redirectLocation, setCookie } = await signInViaCallback(profile);
+
+		expect(redirectLocation).toContain("error=email_not_verified");
+		expect(sessionToken(setCookie)).toBeUndefined();
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not gate social sign-in from emailAndPassword.requireEmailVerification", async () => {
+		// Only the credential flag is on; the provider opted out, so social
+		// sign-in must still succeed for an unverified provider email.
+		const { signInViaCallback } = await setup({
+			emailPasswordRequireEmailVerification: true,
+		});
+
+		const { redirectLocation, setCookie } = await signInViaCallback({
+			email: "gate-credential-only@example.com",
+			email_verified: false,
+			sub: "gate_credential_only",
+		});
+
+		expect(redirectLocation).not.toContain("error");
+		expect(sessionToken(setCookie)).toBeDefined();
+	});
+
+	it("lets a returning verified user through the gate without re-sending", async () => {
+		const { signInViaCallback, sendVerificationEmail } = await setup({
+			requireEmailVerification: true,
+			sendOnSignIn: true,
+		});
+		const profile = {
+			email: "gate-returning-verified@example.com",
+			email_verified: true,
+			sub: "gate_returning_verified",
+		};
+
+		// First sign-in creates the user and issues a session (verified).
+		const first = await signInViaCallback(profile);
+		expect(sessionToken(first.setCookie)).toBeDefined();
+
+		// The returning, already-verified user still gets a session and no email.
+		const { redirectLocation, setCookie } = await signInViaCallback(profile);
+		expect(redirectLocation).toContain("/dashboard");
+		expect(redirectLocation).not.toContain("error");
+		expect(sessionToken(setCookie)).toBeDefined();
+		expect(sendVerificationEmail).not.toHaveBeenCalled();
+	});
+
+	it("blocks a returning unverified user without re-sending when sendOnSignIn is unset", async () => {
+		const { signInViaCallback, sendVerificationEmail } = await setup({
+			requireEmailVerification: true,
+		});
+		const profile = {
+			email: "gate-returning-no-resend@example.com",
+			email_verified: false,
+			sub: "gate_returning_no_resend",
+		};
+
+		await signInViaCallback(profile);
+		sendVerificationEmail.mockClear();
+
+		const { redirectLocation, setCookie } = await signInViaCallback(profile);
+		expect(redirectLocation).toContain("error=email_not_verified");
+		expect(sessionToken(setCookie)).toBeUndefined();
+		expect(sendVerificationEmail).not.toHaveBeenCalled();
+	});
+
+	it("blocks an unverified user even when no sendVerificationEmail is configured", async () => {
+		const { signInViaCallback } = await setup({
+			requireEmailVerification: true,
+			withoutSendVerificationEmail: true,
+		});
+
+		const { redirectLocation, setCookie } = await signInViaCallback({
+			email: "gate-no-send@example.com",
+			email_verified: false,
+			sub: "gate_no_send",
+		});
+
+		expect(redirectLocation).toContain("error=email_not_verified");
+		expect(sessionToken(setCookie)).toBeUndefined();
 	});
 });
 

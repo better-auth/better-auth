@@ -253,6 +253,197 @@ describe("get-full-organization", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10243
+ */
+describe("get-organization", async () => {
+	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
+		plugins: [organization()],
+	});
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+	const org = await client.organization.create({
+		name: "meta-org",
+		slug: "meta-org",
+		metadata: {
+			plan: "pro",
+		},
+		fetchOptions: {
+			headers,
+		},
+	});
+	const secondOrg = await client.organization.create({
+		name: "meta-org-second",
+		slug: "meta-org-second",
+		metadata: {
+			plan: "free",
+		},
+		fetchOptions: {
+			headers,
+		},
+	});
+
+	it("should get organization metadata by organizationId", async () => {
+		const { headers } = await signInWithTestUser();
+		await client.organization.setActive({
+			organizationId: secondOrg.data?.id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+		const result = await client.organization.getOrganization({
+			query: {
+				organizationId: org.data?.id as string,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(result.data?.id).toBe(org.data?.id);
+		expect(result.data?.name).toBe("meta-org");
+		expect(result.data?.slug).toBe("meta-org");
+		expect(result.data).not.toHaveProperty("members");
+		expect(result.data).not.toHaveProperty("invitations");
+		expect(result.data).not.toHaveProperty("teams");
+	});
+
+	it("should get organization metadata by organizationSlug", async () => {
+		const { headers } = await signInWithTestUser();
+		const result = await client.organization.getOrganization({
+			query: {
+				organizationSlug: "meta-org",
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(result.data?.name).toBe("meta-org");
+		expect(result.data?.slug).toBe("meta-org");
+		expect(result.data).not.toHaveProperty("members");
+		expect(result.data).not.toHaveProperty("invitations");
+	});
+
+	it("should fall back to the active organization", async () => {
+		const { headers } = await signInWithTestUser();
+		await client.organization.setActive({
+			organizationId: secondOrg.data?.id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+		const result = await client.organization.getOrganization({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(result.data?.id).toBe(secondOrg.data?.id);
+		expect(result.data?.name).toBe("meta-org-second");
+		expect(result.data).not.toHaveProperty("members");
+	});
+
+	it("should return null when no active organization and no query params", async () => {
+		await client.organization.setActive({
+			organizationId: null,
+			fetchOptions: {
+				headers,
+			},
+		});
+		const result = await client.organization.getOrganization({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(result.data).toBeNull();
+		expect(result.error).toBeNull();
+	});
+
+	it("should throw FORBIDDEN when user is not a member of the organization", async () => {
+		const newHeaders = new Headers();
+		await client.signUp.email(
+			{
+				email: "get-org-outsider@test.com",
+				password: "password",
+				name: "outsider",
+			},
+			{
+				onSuccess: cookieSetter(newHeaders),
+			},
+		);
+		const result = await client.organization.getOrganization({
+			query: {
+				organizationId: org.data?.id as string,
+			},
+			fetchOptions: {
+				headers: newHeaders,
+			},
+		});
+		expect(result.error?.status).toBe(403);
+		expect(result.error?.code).toContain(
+			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION.code,
+		);
+	});
+
+	it("should throw BAD_REQUEST when organization doesn't exist", async () => {
+		const result = await client.organization.getOrganization({
+			query: {
+				organizationId: "non-existent-org-id",
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(result.error?.status).toBe(400);
+		expect(result.error?.code).toContain(
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND.code,
+		);
+	});
+
+	it("should not include members or invitations unlike getFullOrganization", async () => {
+		const { headers } = await signInWithTestUser();
+		await client.organization.setActive({
+			organizationId: org.data?.id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+		await client.organization.inviteMember({
+			email: "get-org-invited@test.com",
+			role: "member",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const metadataOnly = await client.organization.getOrganization({
+			fetchOptions: {
+				headers,
+			},
+		});
+		const fullOrg = await client.organization.getFullOrganization({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(metadataOnly.data).not.toHaveProperty("members");
+		expect(metadataOnly.data).not.toHaveProperty("invitations");
+		expect(fullOrg.data?.members).toBeDefined();
+		expect(Array.isArray(fullOrg.data?.members)).toBe(true);
+		expect(fullOrg.data?.invitations).toBeDefined();
+		expect(Array.isArray(fullOrg.data?.invitations)).toBe(true);
+		expect(metadataOnly.data?.id).toBe(fullOrg.data?.id);
+		expect(metadataOnly.data?.name).toBe(fullOrg.data?.name);
+	});
+});
+
 describe("organization hooks", async () => {
 	it("should apply beforeCreateOrganization hook", async () => {
 		const beforeCreateOrganization = vi.fn();

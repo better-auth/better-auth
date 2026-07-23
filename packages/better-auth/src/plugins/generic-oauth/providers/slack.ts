@@ -1,6 +1,10 @@
-import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
-import type { BaseOAuthProviderOptions, GenericOAuthConfig } from "../index";
+import type {
+	BaseOAuthProviderOptions,
+	GenericOAuthConfig,
+	GenericOAuthUserInfo,
+} from "../index";
 
 export interface SlackOptions extends BaseOAuthProviderOptions {}
 
@@ -18,7 +22,7 @@ interface SlackProfile {
 	"https://slack.com/team_name"?: string;
 	"https://slack.com/team_domain"?: string;
 	"https://slack.com/user_image_512"?: string;
-	[key: string]: any;
+	[key: string]: unknown;
 }
 
 /**
@@ -42,12 +46,12 @@ interface SlackProfile {
  * });
  * ```
  */
-export function slack(options: SlackOptions): GenericOAuthConfig {
+export function slack(options: SlackOptions): GenericOAuthConfig<"slack"> {
 	const defaultScopes = ["openid", "profile", "email"];
 
 	const getUserInfo = async (
 		tokens: OAuth2Tokens,
-	): Promise<OAuth2UserInfo | null> => {
+	): Promise<GenericOAuthUserInfo | null> => {
 		const { data: profile, error } = await betterFetch<SlackProfile>(
 			"https://slack.com/api/openid.connect.userInfo",
 			{
@@ -62,7 +66,7 @@ export function slack(options: SlackOptions): GenericOAuthConfig {
 		}
 
 		return {
-			id: profile["https://slack.com/user_id"] ?? profile.sub,
+			sub: profile.sub,
 			name: profile.name,
 			email: profile.email,
 			image: profile.picture ?? profile["https://slack.com/user_image_512"],
@@ -72,11 +76,14 @@ export function slack(options: SlackOptions): GenericOAuthConfig {
 
 	return {
 		providerId: "slack",
+		accountSubject: ({ profile }) => profile.sub ?? "",
+		accountIssuer: "https://slack.com",
 		authorizationUrl: "https://slack.com/openid/connect/authorize",
 		tokenUrl: "https://slack.com/api/openid.connect.token",
 		userInfoUrl: "https://slack.com/api/openid.connect.userInfo",
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		tokenEndpointAuth: options.tokenEndpointAuth,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
 		pkce: options.pkce,

@@ -68,6 +68,13 @@ function isMissingKyselyMigrationModule(
 		return true;
 	}
 
+	if (
+		error.message.includes('Missing "./migration" specifier') &&
+		error.message.includes('"kysely" package')
+	) {
+		return true;
+	}
+
 	return (
 		(code === "ERR_MODULE_NOT_FOUND" ||
 			code === "MODULE_NOT_FOUND" ||
@@ -128,7 +135,7 @@ describe("sqlite introspector", () => {
 	});
 
 	/**
-	 * @see https://github.com/better-auth/better-auth/issues/9810
+	 * @see https://github.com/better-auth/better-auth/issues/10366
 	 */
 	it("hides Kysely's internal migration tables during introspection", async () => {
 		const sqlite = new DatabaseSync(":memory:");
@@ -151,12 +158,6 @@ describe("sqlite introspector", () => {
 		expect(names).not.toContain(DEFAULT_MIGRATION_LOCK_TABLE);
 	});
 
-	/**
-	 * Guards against drift: the dialects mirror these constants instead of
-	 * importing them, so they must stay equal to Kysely's own values.
-	 *
-	 * @see https://github.com/better-auth/better-auth/issues/9810
-	 */
 	it("mirrors Kysely's migration-table constants", async () => {
 		const {
 			DEFAULT_MIGRATION_LOCK_TABLE: KYSELY_DEFAULT_MIGRATION_LOCK_TABLE,

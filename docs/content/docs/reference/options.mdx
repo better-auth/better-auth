@@ -156,7 +156,7 @@ export const auth = betterAuth({
   **Notes**
 
   * For `http://` and `https://` URLs, patterns match the full origin. Paths and query strings are ignored.
-  * For custom schemes (like `exp://` or `myapp://`), patterns match against the full URL including paths when wildcards are present, or use prefix matching when no wildcards exist.
+  * For custom schemes (like `exp://` or `myapp://`), wildcard patterns match against the full URL including paths. A non-wildcard pattern matches by scheme and authority: a host-less entry such as `myapp://` or `exp://` trusts every host of that scheme, while a host-bearing entry such as `myapp://callback` must match that host exactly (so it is not satisfied by `myapp://callback.attacker.tld`).
   * The separator is `/` (forward slash). This means `http://*.example.com` matches both `http://api.example.com` and `http://api.app.example.com`.
 </Callout>
 
@@ -347,6 +347,7 @@ export const auth = betterAuth({
 * `disableSignUp`: Disable sign up for new users (optional)
 * `disableImplicitSignUp`: Disable implicit sign up for new users (optional)
 * `overrideUserInfoOnSignIn`: Override user info with provider user info on sign in (optional)
+* `requireEmailVerification`: Require this provider's email to be verified before a session is created. Opt-in per provider and independent of `emailAndPassword.requireEmailVerification`. Only enable it for providers that report a trustworthy `email_verified` signal (optional)
 * `prompt`: The prompt to use for the authorization code request (`"select_account"`, `"consent"`, `"login"`, `"none"`, `"select_account consent"`) (optional)
 * `responseMode`: The response mode to use (`"query"`, `"form_post"`) (optional)
 * `getUserInfo`: Custom function to get user info from the provider (optional)
@@ -446,9 +447,13 @@ export const auth = betterAuth({
 		preserveSessionInDatabase: false, // Preserve session records in database when deleted from secondary storage (default: `false`)
 		cookieCache: {
 			enabled: true, // Enable caching session in cookie (default: `false`)	
-			maxAge: 300 // 5 minutes
-		}
-	},
+				maxAge: 300, // 5 minutes
+				strategy: "jwt",
+				jwt: {
+					signingKey: "jwt-plugin" // or "secret" (default for JWT strategy)
+				}
+			}
+		},
 })
 ```
 
@@ -460,6 +465,7 @@ export const auth = betterAuth({
 * `storeSessionInDatabase`: Store session in database when secondary storage is provided (default: `false`)
 * `preserveSessionInDatabase`: Preserve session records in database when deleted from secondary storage (default: `false`)
 * `cookieCache`: Enable caching session in cookie
+* `cookieCache.jwt.signingKey`: For `strategy: "jwt"`, choose `"secret"` (HS256, default) or `"jwt-plugin"` (asymmetric JWTs backed by the `jwt()` plugin)
 
 ## `account`
 
@@ -514,6 +520,8 @@ Store provider account data after an OAuth flow in an encrypted cookie. This is 
 * Automatically set to `true` if no database is provided
 
 The account cookie has a five-minute max age and is refreshed when Better Auth writes updated provider account data, for example after `getAccessToken` or `/refresh-token` refreshes provider tokens. When this happens in server-side code, forward the returned `Set-Cookie` header to the browser so the refreshed account cookie is retained.
+
+Pass `useAccountCookie: true` to `getAccessToken`, `refreshToken`, or `accountInfo` when the signed cookie should select the account. These APIs require an explicit `accountId` or `useAccountCookie: true`; omitting both selectors is invalid.
 
 Better Auth chunks oversized account cookies, but browsers and proxies can still enforce total cookie or header limits. Prefer database-backed account storage for providers that issue large JWTs or for production flows that need durable token storage.
 
@@ -642,7 +650,7 @@ export const auth = betterAuth({
 				return "my-super-unique-id";
 			})) | false | "serial" | "uuid",
 			defaultFindManyLimit: 100,
-			experimentalJoins: false,
+			joins: false,
 		},
 		backgroundTasks: {
 			handler: (promise) => { /* e.g. waitUntil(promise) */ }
@@ -670,10 +678,11 @@ export const auth = betterAuth({
 
 <h3 id="advanced-database"><code>database</code></h3>
 
-Set custom strategies for ID generation and findMany queries.
+Set custom strategies for ID generation, findMany queries, and database joins.
 
 * `generateId`: Controls how record IDs are generated. Accepts a custom function, `false`, `"serial"`, or `"uuid"` (default: [random base62 string](https://github.com/better-auth/better-auth/blob/main/packages/core/src/utils/id.ts)). See the [Database documentation](/docs/concepts/database#id-generation) for more info.
 * `defaultFindManyLimit`: The default maximum number of records returned by the `findMany` adapter method. (default: `100`)
+* `joins`: Enable database joins for adapters that support them. When disabled (default), related data is fetched via separate queries. See the [Database documentation](/docs/concepts/database#joins) for more info. (default: `false`)
 
 ```ts
 import { betterAuth } from "better-auth";
@@ -683,6 +692,7 @@ export const auth = betterAuth({
 		database: {
 			generateId: "uuid",
 			defaultFindManyLimit: 50,
+			joins: true,
 		},
 	},
 });

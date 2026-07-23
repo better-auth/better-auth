@@ -3,6 +3,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { Session } from "@better-auth/core/db";
+import { createLocalAccountIssuer } from "@better-auth/core/db";
 import type { Where } from "@better-auth/core/db/adapter";
 import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
@@ -434,15 +435,18 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				);
 			}
-			const user = await ctx.context.internalAdapter.createUser<UserWithRole>({
-				...userData,
-				email: email,
-				name: ctx.body.name,
-				role:
-					requestedRole !== undefined
-						? parseRoles(requestedRole as string | string[])
-						: (opts?.defaultRole ?? "user"),
-			});
+			const user = await ctx.context.internalAdapter.createUser<UserWithRole>(
+				{
+					...userData,
+					email: email,
+					name: ctx.body.name,
+					role:
+						requestedRole !== undefined
+							? parseRoles(requestedRole as string | string[])
+							: (opts?.defaultRole ?? "user"),
+				},
+				{ method: "admin" },
+			);
 
 			if (!user) {
 				throw APIError.from(
@@ -456,8 +460,9 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					ctx.body.password,
 				);
 				await ctx.context.internalAdapter.linkAccount({
-					accountId: user.id,
 					providerId: "credential",
+					issuer: createLocalAccountIssuer("credential"),
+					providerAccountId: user.id,
 					password: hashedPassword,
 					userId: user.id,
 				});
@@ -1724,10 +1729,8 @@ export const setUserPassword = (opts: AdminOptions) =>
 				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 			const hashedPassword = await ctx.context.password.hash(newPassword);
-			const accounts = await ctx.context.internalAdapter.findAccounts(userId);
-			const credentialAccount = accounts.find(
-				(account) => account.providerId === "credential",
-			);
+			const credentialAccount =
+				await ctx.context.internalAdapter.findCredentialAccount(userId);
 			if (credentialAccount) {
 				await ctx.context.internalAdapter.updatePassword(
 					userId,
@@ -1737,7 +1740,8 @@ export const setUserPassword = (opts: AdminOptions) =>
 				await ctx.context.internalAdapter.createAccount({
 					userId,
 					providerId: "credential",
-					accountId: userId,
+					issuer: createLocalAccountIssuer("credential"),
+					providerAccountId: user.id,
 					password: hashedPassword,
 				});
 			}
