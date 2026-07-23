@@ -64,6 +64,13 @@ return value
 	// How many keys Redis samples per SCAN round-trip. A hint, not a limit.
 	const SCAN_COUNT = 100;
 
+	// The SCAN MATCH argument is a glob pattern, so any glob metacharacter in
+	// the prefix (`* ? [ ] \`) would match unrelated keys and let `clear()`
+	// delete data outside this store. Escape them so the prefix matches
+	// literally. Stored keys still use the raw prefix (see `prefixKey`), so
+	// `keyPrefix.length` remains the correct amount to strip in `listKeys`.
+	const escapedPrefix = keyPrefix.replace(/[\\*?[\]]/g, "\\$&");
+
 	// Iterate every prefixed key with SCAN instead of KEYS. KEYS walks the
 	// entire keyspace in a single blocking call, which stalls the Redis
 	// server on large datasets; SCAN pages through the keyspace cursor by
@@ -76,7 +83,7 @@ return value
 			const [nextCursor, batch] = await client.scan(
 				cursor,
 				"MATCH",
-				`${keyPrefix}*`,
+				`${escapedPrefix}*`,
 				"COUNT",
 				SCAN_COUNT,
 			);
@@ -144,15 +151,21 @@ return value
 		},
 
 		/**
-		 * Deletes every key under the configured prefix.
+		 * Deletes the keys under the configured prefix that exist for the full
+		 * duration of the scan.
 		 *
 		 * **Not atomic.** Keys are enumerated with `SCAN` and deleted page by
 		 * page, so if Redis errors or the connection drops mid-iteration the
 		 * returned promise rejects *after* earlier pages have already been
 		 * deleted, leaving the store partially cleared. A rejection therefore
 		 * means "an unknown subset of keys may already be gone", not "nothing
-		 * changed" — unlike a single blocking `DEL`, which either removes
+		 * changed", unlike a single blocking `DEL`, which either removes
 		 * everything or nothing.
+		 *
+		 * **Concurrent writes may survive.** `SCAN` only guarantees keys present
+		 * throughout the walk are returned, so a key written by another client
+		 * while `clear()` is running may be missed. A resolved call is therefore
+		 * not proof the store is empty when writes happen concurrently.
 		 *
 		 * `clear()` is safe to call again: it is idempotent, so callers that need
 		 * a fully empty store (e.g. revoking every session or rate-limit counter)

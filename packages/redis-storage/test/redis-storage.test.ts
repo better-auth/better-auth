@@ -208,12 +208,30 @@ describe("redisStorage", () => {
 			keyPrefix: "ba:",
 		});
 
-		await expect(storage.listKeys()).resolves.toEqual([
-			"session:1",
-			"session:2",
-			"rate:1",
-		]);
+		// listKeys() documents that order is not guaranteed, so assert on
+		// contents (sorted) rather than a specific order.
+		const result = await storage.listKeys();
+		expect([...result].sort()).toEqual(["rate:1", "session:1", "session:2"]);
 		expect(keysMock).not.toHaveBeenCalled();
+	});
+
+	it("escapes glob metacharacters in the prefix so SCAN matches it literally", async () => {
+		// A prefix like "ba[1]:" is a glob pattern to Redis; unescaped it would
+		// match unrelated keys (e.g. "ba1:...") and let clear() delete them.
+		const scanMock = vi.fn().mockResolvedValue(["0", []]);
+		const storage = redisStorage({
+			client: { scan: scanMock } as any,
+			keyPrefix: "ba[1]:",
+		});
+
+		await storage.clear();
+		expect(scanMock).toHaveBeenCalledWith(
+			"0",
+			"MATCH",
+			"ba\\[1\\]:*",
+			"COUNT",
+			100,
+		);
 	});
 
 	it("only sets the ttl on the call that creates the key", async () => {
