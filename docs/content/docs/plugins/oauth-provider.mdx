@@ -616,6 +616,10 @@ The default is `0`, which keeps strict replay detection. During the interval, Be
 
 The cached response is stored encrypted on the consumed refresh-token row and includes the replacement refresh token. `expires_in` is recalculated from the cached `expires_at` each time the response is replayed.
 
+#### Device code grant
+
+The device authorization grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) lets limited-input clients (CLIs, smart TVs, IoT) obtain an OAuth access token. It is opt-in: add the `deviceCodeGrant()` companion plugin (which requires the [Device Authorization](/docs/plugins/device-authorization) plugin) to register the `urn:ietf:params:oauth:grant-type:device_code` grant and advertise `device_authorization_endpoint`. The device requests codes at `/device/code`, the user approves them, and the client polls `/oauth2/token` for a first-class OAuth token. See [Issuing OAuth access tokens](/docs/plugins/device-authorization#issuing-oauth-access-tokens-oauth-provider-integration).
+
 ### Consent Endpoint
 
 Accept or deny user consent for a set of scopes. Note that when denying scopes, the consent cancels and pre-existing consent remains. To remove consent, delete that user's "oauthConsent" for that client.

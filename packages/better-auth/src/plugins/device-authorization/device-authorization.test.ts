@@ -137,7 +137,7 @@ describe("client validation", async () => {
 });
 
 describe("device authorization flow", async () => {
-	const { auth, signInWithTestUser, db } = await getTestInstance(
+	const { auth, client, signInWithTestUser, db } = await getTestInstance(
 		{
 			plugins: [
 				deviceAuthorization({
@@ -185,6 +185,37 @@ describe("device authorization flow", async () => {
 
 			expect(response.device_code).toBeDefined();
 			expect(response.user_code).toBeDefined();
+		});
+
+		it("should preserve repeated resources from a form request", async () => {
+			const form = new URLSearchParams({
+				client_id: "test-client",
+				scope: "read",
+			});
+			form.append("resource", "https://api.example.com");
+			form.append("resource", "https://files.example.com");
+
+			const created = await client.$fetch<Record<string, unknown>>(
+				"/device/code",
+				{
+					method: "POST",
+					body: form,
+					headers: {
+						"content-type": "application/x-www-form-urlencoded",
+					},
+				},
+			);
+			expect(created.error).toBeNull();
+
+			const { headers } = await signInWithTestUser();
+			const verification = await auth.api.deviceVerify({
+				query: { user_code: created.data!.user_code as string },
+				headers,
+			});
+			expect(verification.resource).toEqual([
+				"https://api.example.com",
+				"https://files.example.com",
+			]);
 		});
 	});
 
@@ -264,20 +295,41 @@ describe("device authorization flow", async () => {
 	});
 
 	describe("device verification", () => {
-		it("should verify valid user code", async () => {
+		it("only returns authorization context to the authenticated owner", async () => {
 			const { user_code } = await auth.api.deviceCode({
 				body: {
 					client_id: "test-client",
+					scope: "read write",
+					resource: ["https://api.example.com", "https://files.example.com"],
 				},
 			});
 
+			const anonymousResponse = await auth.api.deviceVerify({
+				query: { user_code },
+			});
+			expect(anonymousResponse).toMatchObject({
+				user_code,
+				status: "pending",
+			});
+			expect(anonymousResponse).not.toHaveProperty("client_id");
+			expect(anonymousResponse).not.toHaveProperty("scope");
+			expect(anonymousResponse).not.toHaveProperty("resource");
+
+			const { headers } = await signInWithTestUser();
 			const response = await auth.api.deviceVerify({
 				query: { user_code },
+				headers,
 			});
 			expect("error" in response).toBe(false);
 			if (!("error" in response)) {
 				expect(response.user_code).toBe(user_code);
 				expect(response.status).toBe("pending");
+				expect(response.client_id).toBe("test-client");
+				expect(response.scope).toBe("read write");
+				expect(response.resource).toEqual([
+					"https://api.example.com",
+					"https://files.example.com",
+				]);
 			}
 		});
 
@@ -869,7 +921,7 @@ describe("device authorization ownership gate", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-cq3f-vc6p-68fh
 	 */
-	it("rejects approve from a different user after another claimed the code", async () => {
+	it("does not expose or authorize a code claimed by a different user", async () => {
 		const { auth, client, signInWithTestUser, signInWithUser } =
 			await getTestInstance(
 				{
@@ -900,13 +952,25 @@ describe("device authorization ownership gate", () => {
 		);
 
 		const { user_code } = await auth.api.deviceCode({
-			body: { client_id: "test-client" },
+			body: {
+				client_id: "test-client",
+				scope: "read write",
+				resource: "https://api.example.com",
+			},
 		});
 
 		await auth.api.deviceVerify({
 			query: { user_code },
 			headers: claimerHeaders,
 		});
+
+		const verification = await auth.api.deviceVerify({
+			query: { user_code },
+			headers: attackerHeaders,
+		});
+		expect(verification).not.toHaveProperty("client_id");
+		expect(verification).not.toHaveProperty("scope");
+		expect(verification).not.toHaveProperty("resource");
 
 		await expect(
 			auth.api.deviceApprove({
