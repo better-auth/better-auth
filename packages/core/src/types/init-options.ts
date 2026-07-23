@@ -1289,6 +1289,12 @@ export type BetterAuthOptions = {
 									data: Optional<User> & Record<string, any>;
 							  }
 						>;
+
+						afterTransaction?: (
+							user: User & Record<string, unknown>,
+							context: GenericEndpointContext | null,
+						) => Promise<void>;
+
 						/**
 						 * Hook that is called after a user is created.
 						 */
