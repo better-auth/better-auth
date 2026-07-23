@@ -44,6 +44,17 @@ export const getPasskeyActions = (
 					extensions?: AuthenticationExtensionsClientInputs;
 					returnWebAuthnResponse?: boolean;
 					fetchOptions?: ClientFetchOption;
+					/**
+					 * Override the server-issued `allowCredentials` list to scope the
+					 * WebAuthn credential picker to specific credential IDs. Client-side
+					 * picker hint only — the server still verifies the assertion against
+					 * the stored public key for whichever credential ID the authenticator
+					 * returns, and the challenge remains server-issued and session-bound.
+					 *
+					 * narrow the next sign-in to it" flows. Omit `allowCredentials` to allow
+					 * discoverable credentials / resident-key flows without constraining the picker.
+					 */
+					allowCredentials?: PublicKeyCredentialRequestOptionsJSON["allowCredentials"];
 			  }
 			| undefined,
 		options?: ClientFetchOption | undefined,
@@ -71,6 +82,9 @@ export const getPasskeyActions = (
 				optionsJSON: {
 					...response.data,
 					extensions: mergedExtensions,
+					...(opts?.allowCredentials !== undefined && {
+						allowCredentials: opts.allowCredentials,
+					}),
 				},
 				useBrowserAutofill: opts?.autoFill,
 			});
