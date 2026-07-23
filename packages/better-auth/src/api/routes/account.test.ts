@@ -1,3 +1,5 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthMiddleware } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type {
 	CognitoProfile,
@@ -24,6 +26,7 @@ import { genericOAuth } from "../../plugins/generic-oauth";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account } from "../../types";
 import { DEFAULT_SECRET } from "../../utils/constants";
+import { getSessionFromCtx } from "./session";
 
 let email = "";
 let handlers: ReturnType<typeof http.post>[];
@@ -2209,6 +2212,57 @@ describe("token routes cookie cache revocation", async () => {
 			},
 		);
 		expect(bypass.error?.status).toBe(401);
+	});
+
+	/**
+	 * Resolving the session from a `before` hook is a documented plugin pattern,
+	 * and it memoizes the cookie-cached session on `ctx.context.session`. The
+	 * authoritative re-read the token routes rely on must not be satisfied by
+	 * that memoized value, or a revoked session can still mint provider tokens.
+	 *
+	 * @see https://github.com/better-auth/better-auth/pull/10187
+	 */
+	it("get-access-token fails closed after revocation when an earlier hook already resolved the session", async () => {
+		const sessionReadingPlugin = {
+			id: "session-reading-hook",
+			hooks: {
+				before: [
+					{
+						matcher: (ctx) => ctx.path === "/get-access-token",
+						handler: createAuthMiddleware(async (ctx) => {
+							// Pins `ctx.context.session` to the cookie-cached session.
+							await getSessionFromCtx(ctx);
+						}),
+					},
+				],
+			},
+		} satisfies BetterAuthPlugin;
+
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [sessionReadingPlugin],
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: testUser.email, password: testUser.password },
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const initial = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const sessionToken = initial.data!.session.token;
+		expect(headers.get("cookie")).toContain("session_data");
+
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(sessionToken);
+
+		const res = await client.$fetch("/get-access-token", {
+			method: "POST",
+			body: { providerId: "google" },
+			headers,
+		});
+		expect(res.error?.status).toBe(401);
 	});
 });
 

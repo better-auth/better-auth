@@ -19,8 +19,7 @@ import { generateState } from "../../oauth2/state";
 import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
 import {
 	freshSessionMiddleware,
-	getSessionFromCtx,
-	isStateful,
+	getAuthoritativeSessionFromCtx,
 	sessionMiddleware,
 } from "./session";
 
@@ -452,15 +451,15 @@ export const unlinkAccount = createAuthEndpoint(
  * routes mint or refresh provider access tokens, so a server-side session
  * revocation must take effect immediately rather than waiting for the cached
  * cookie to expire. DB-less deployments keep the session in the cookie itself,
- * so the cache is left in place for them.
+ * so the cache is left in place for them. `getAuthoritativeSessionFromCtx`
+ * clears any session an earlier hook memoized on the context first, so the
+ * bypass cannot be satisfied by a cookie-cached read that already happened.
  */
 async function resolveUserId(
 	ctx: GenericEndpointContext,
 	userId?: string,
 ): Promise<string> {
-	const session = await getSessionFromCtx(ctx, {
-		disableCookieCache: isStateful(ctx),
-	});
+	const session = await getAuthoritativeSessionFromCtx(ctx);
 	if (!session && (ctx.request || ctx.headers)) {
 		throw ctx.error("UNAUTHORIZED");
 	}
