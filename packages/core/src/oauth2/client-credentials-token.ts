@@ -1,4 +1,4 @@
-import { base64Url } from "@better-auth/utils/base64";
+import { base64 } from "@better-auth/utils/base64";
 import type { AwaitableFunction } from "../types";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 import { fetchRefusingRedirects } from "./reject-redirects";
@@ -58,7 +58,9 @@ export function createClientCredentialsTokenRequest({
 		const primaryClientId = Array.isArray(options.clientId)
 			? options.clientId[0]
 			: options.clientId;
-		const encodedCredentials = base64Url.encode(
+		// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617),
+		// matching validate-authorization-code.ts and refresh-access-token.ts.
+		const encodedCredentials = base64.encode(
 			`${primaryClientId}:${options.clientSecret}`,
 		);
 		headers["authorization"] = `Basic ${encodedCredentials}`;
