@@ -84,6 +84,24 @@ Enabling OAuth with Microsoft Azure Entra ID (formerly Active Directory) allows 
   </Step>
 </Steps>
 
+## Account Identifier Migration
+
+Better Auth stores the Microsoft Entra `oid` claim as the account identifier for the built-in `microsoft` provider and the Generic OAuth `microsoftEntraId` helper. Microsoft documents `sub` as a pairwise, app-specific identifier, so changing or recreating an app registration can change `sub` for the same user.
+
+If you already have Microsoft accounts created with an older Better Auth version, migrate their account rows before upgrading production traffic:
+
+* Built-in provider rows use `providerId: "microsoft"`.
+* Generic OAuth helper rows use `providerId: "microsoft-entra-id"`.
+* Preserve the row's trusted `issuer` and update `providerAccountId` from the old `sub` value to the user's `oid` value.
+
+When stored Microsoft ID tokens are available, verify each token and copy its `oid` claim into that row's `providerAccountId`. `mapProfileToUser` only maps local user fields and cannot override this provider-owned account identifier.
+
+If stored Microsoft ID tokens are not available, Better Auth's account row only has the old `sub` value and cannot derive `oid` from Better Auth data alone. Run this as a controlled migration: pause Microsoft sign-in and account linking during the cutover, or migrate from an external Microsoft Entra export before accepting production traffic on the new identifier. Otherwise, users who were not migrated can create duplicate Microsoft account rows.
+
+If you are also upgrading from a schema that still uses `accountId` or does not have `issuer`, complete the [1.7 account identity backfill](/docs/guides/1-7-upgrade-guide#account-identity-and-selection) as part of the same maintenance window.
+
+If you use the Generic OAuth `microsoftEntraId` helper with custom scopes or a custom `getToken`, make sure the token exchange still returns Microsoft's `id_token`; the helper reads `oid` from that token. The helper also requires Microsoft discovery to provide the issuer and JWKS metadata used to verify ID tokens, and provider initialization fails when that metadata is unavailable.
+
 ## Large Profile Images ⚠️
 
 Microsoft returns profile images as base64-encoded strings, which can exceed HTTP header size limits and cause request failures.

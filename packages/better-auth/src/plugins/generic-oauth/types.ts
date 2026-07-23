@@ -68,6 +68,17 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 */
 	discoveryUrl?: string | undefined;
 	/**
+	 * Require discovery to provide the issuer and JWKS metadata needed to verify
+	 * ID tokens before this provider is registered.
+	 *
+	 * Enable this when provider identity is derived from ID-token claims. This
+	 * prevents an unavailable or incomplete discovery document from silently
+	 * downgrading the provider to unverified token decoding.
+	 *
+	 * @default false
+	 */
+	requireIdTokenVerification?: boolean | undefined;
+	/**
 	 * URL for the authorization endpoint.
 	 * Optional if using discoveryUrl.
 	 */

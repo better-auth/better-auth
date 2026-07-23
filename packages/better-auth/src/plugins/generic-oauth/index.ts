@@ -255,6 +255,11 @@ export const genericOAuth = <const ID extends string>(
 						);
 					}
 				}
+				if (c.requireIdTokenVerification && !idTokenConfig) {
+					throw new Error(
+						`Provider "${c.providerId}": requires verified ID tokens, but discovery did not provide a usable issuer and jwks_uri.`,
+					);
+				}
 
 				const tokenEndpointAuth = c.tokenEndpointAuth;
 				if (
