@@ -7,6 +7,7 @@ import type { Accessor } from "solid-js";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { Ref } from "vue";
 import type { Session, SessionQueryParams } from "../types";
+import { createAuthClient as createLynxClient } from "./lynx";
 import {
 	adminClient,
 	deviceAuthorizationClient,
@@ -30,6 +31,12 @@ import {
 import { createAuthClient as createVanillaClient } from "./vanilla";
 import { createAuthClient as createVueClient } from "./vue";
 
+vi.mock("@lynx-js/react", () => ({
+	useCallback: vi.fn(),
+	useRef: vi.fn(),
+	useSyncExternalStore: vi.fn(),
+}));
+
 describe("run time proxy", async () => {
 	afterEach(() => {
 		vi.useRealTimers();
@@ -39,6 +46,29 @@ describe("run time proxy", async () => {
 		const client = createVanillaClient();
 		const atom = client.$store.atoms.session;
 		expect(isProxy(atom)).toBe(false);
+	});
+
+	it("every framework client should expose the real $fetch and $store", async () => {
+		// A key missing from the proxy routes silently falls through to the
+		// dynamic path handler, so `client.$fetch(...)` would issue a request
+		// to a phantom `/fetch` action instead of using the better-fetch
+		// instance, and `$store.atoms.session` would resolve to a path proxy
+		// instead of the session atom.
+		const clients = {
+			vanilla: createVanillaClient(),
+			react: createReactClient(),
+			solid: createSolidClient(),
+			svelte: createSvelteClient(),
+			vue: createVueClient(),
+			lynx: createLynxClient(),
+		};
+		for (const [framework, client] of Object.entries(clients)) {
+			expect(isProxy(client.$fetch), `${framework} $fetch`).toBe(false);
+			expect(
+				isProxy(client.$store.atoms.session),
+				`${framework} session atom`,
+			).toBe(false);
+		}
 	});
 
 	it("proxy api should be called", async () => {
