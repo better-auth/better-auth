@@ -239,7 +239,7 @@ export const callbackOAuth = createAuthEndpoint(
 			throw c.redirect(toRedirectTo);
 		}
 
-		if (!userInfo.email) {
+		if (!userInfo.email?.trim() && !provider.options?.allowSignUpWithoutEmail) {
 			c.context.logger.error(missingEmailLogMessage(provider.id));
 			redirectOnError(c, resolvedErrorURL, "email_not_found");
 		}
@@ -263,6 +263,7 @@ export const callbackOAuth = createAuthEndpoint(
 				disableSignUp:
 					(provider.disableImplicitSignUp && !requestSignUp) ||
 					provider.options?.disableSignUp,
+				allowSignUpWithoutEmail: provider.options?.allowSignUpWithoutEmail,
 				overrideUserInfo: provider.options?.overrideUserInfoOnSignIn,
 			});
 		} catch (e) {

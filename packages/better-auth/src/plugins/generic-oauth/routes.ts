@@ -432,67 +432,69 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 					GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIG,
 				);
 			}
-			const userInfo: Omit<User, "createdAt" | "updatedAt"> =
-				await (async function handleUserInfo() {
-					const userInfo = (
-						providerConfig.getUserInfo
-							? await providerConfig.getUserInfo(tokens)
-							: await getUserInfo(tokens, finalUserInfoUrl)
-					) as GenericOAuthUserInfo | null;
-					if (!userInfo) {
-						redirectOnError(ctx, resolvedErrorURL, "user_info_is_missing");
-					}
-					const mapUser = providerConfig.mapProfileToUser
-						? await providerConfig.mapProfileToUser(userInfo)
-						: userInfo;
-					const email = mapUser.email
-						? mapUser.email.toLowerCase()
-						: userInfo.email?.toLowerCase();
-					if (!email) {
-						ctx.context.logger.error(
-							missingEmailLogMessage(providerConfig.providerId, {
-								source: "generic",
-							}),
-							userInfo,
-						);
-						redirectOnError(ctx, resolvedErrorURL, "email_is_missing");
-					}
-					const rawId = isNonEmptyOAuthId(mapUser.id)
-						? mapUser.id
-						: isNonEmptyOAuthId(userInfo.id)
-							? userInfo.id
-							: isNonEmptyOAuthId(userInfo.sub)
-								? userInfo.sub
-								: undefined;
-					const id = rawId !== undefined ? String(rawId) : "";
-					// A provider must return a stable account id (e.g. `sub`).
-					// Without one, every account would be stored under the same
-					// empty id, letting different users resolve to the same account.
-					if (!id) {
-						ctx.context.logger.error(
-							"Provider did not return an account id (e.g. `sub`). Unable to sign in.",
-							userInfo,
-						);
-						redirectOnError(ctx, resolvedErrorURL, "id_is_missing");
-					}
-					const name = mapUser.name ? mapUser.name : userInfo.name;
-					if (!name) {
-						ctx.context.logger.error("Unable to get user info", userInfo);
-						redirectOnError(ctx, resolvedErrorURL, "name_is_missing");
-					}
-					return {
-						...userInfo,
-						...mapUser,
-						email,
-						id,
-						name,
-					};
-				})();
+			const userInfo: Omit<User, "createdAt" | "updatedAt" | "email"> & {
+				email?: string | null | undefined;
+			} = await (async function handleUserInfo() {
+				const userInfo = (
+					providerConfig.getUserInfo
+						? await providerConfig.getUserInfo(tokens)
+						: await getUserInfo(tokens, finalUserInfoUrl)
+				) as GenericOAuthUserInfo | null;
+				if (!userInfo) {
+					redirectOnError(ctx, resolvedErrorURL, "user_info_is_missing");
+				}
+				const mapUser = providerConfig.mapProfileToUser
+					? await providerConfig.mapProfileToUser(userInfo)
+					: userInfo;
+				const email =
+					mapUser.email?.trim().toLowerCase() ||
+					userInfo.email?.trim().toLowerCase() ||
+					undefined;
+				if (!email && !providerConfig.allowSignUpWithoutEmail) {
+					ctx.context.logger.error(
+						missingEmailLogMessage(providerConfig.providerId, {
+							source: "generic",
+						}),
+						userInfo,
+					);
+					redirectOnError(ctx, resolvedErrorURL, "email_is_missing");
+				}
+				const rawId = isNonEmptyOAuthId(mapUser.id)
+					? mapUser.id
+					: isNonEmptyOAuthId(userInfo.id)
+						? userInfo.id
+						: isNonEmptyOAuthId(userInfo.sub)
+							? userInfo.sub
+							: undefined;
+				const id = rawId !== undefined ? String(rawId) : "";
+				// A provider must return a stable account id (e.g. `sub`).
+				// Without one, every account would be stored under the same
+				// empty id, letting different users resolve to the same account.
+				if (!id) {
+					ctx.context.logger.error(
+						"Provider did not return an account id (e.g. `sub`). Unable to sign in.",
+						userInfo,
+					);
+					redirectOnError(ctx, resolvedErrorURL, "id_is_missing");
+				}
+				const name = mapUser.name ? mapUser.name : userInfo.name;
+				if (!name) {
+					ctx.context.logger.error("Unable to get user info", userInfo);
+					redirectOnError(ctx, resolvedErrorURL, "name_is_missing");
+				}
+				return {
+					...userInfo,
+					...mapUser,
+					email,
+					id,
+					name,
+				};
+			})();
 			if (link) {
 				if (
 					ctx.context.options.account?.accountLinking?.allowDifferentEmails !==
 						true &&
-					link.email.toLowerCase() !== userInfo.email.toLowerCase()
+					link.email.toLowerCase() !== userInfo.email?.toLowerCase()
 				) {
 					redirectOnError(ctx, resolvedErrorURL, "email_doesn't_match");
 				}
@@ -569,6 +571,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 					disableSignUp:
 						(providerConfig.disableImplicitSignUp && !requestSignUp) ||
 						providerConfig.disableSignUp,
+					allowSignUpWithoutEmail: providerConfig.allowSignUpWithoutEmail,
 					overrideUserInfo: providerConfig.overrideUserInfo,
 				});
 			} catch (e) {

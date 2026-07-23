@@ -1,3 +1,4 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import type {
 	DiscordProfile,
 	GoogleProfile,
@@ -18,6 +19,7 @@ import { signJWT } from "../crypto";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { User } from "../types";
 import { DEFAULT_SECRET } from "../utils/constants";
+import { handleOAuthUserInfo } from "./link-account";
 
 let mockEmail = "";
 let mockEmailVerified = true;
@@ -33,6 +35,50 @@ afterEach(() => {
 });
 
 afterAll(() => server.close());
+
+describe("oauth2 - missing email guard", () => {
+	it("rejects a missing email unless the caller explicitly opts in", async () => {
+		const findOAuthUser = vi.fn().mockResolvedValue(null);
+		const createOAuthUser = vi.fn().mockResolvedValue({
+			user: {
+				id: "local-user",
+				email: "placeholder@example.com",
+				name: "No Email",
+				emailVerified: false,
+			},
+			account: { id: "account" },
+		});
+		const createSession = vi.fn().mockResolvedValue({ id: "session" });
+		const ctx = {
+			context: {
+				internalAdapter: {
+					findOAuthUser,
+					createOAuthUser,
+					createSession,
+				},
+				options: {},
+				logger: { error: vi.fn(), warn: vi.fn() },
+			},
+		} as unknown as GenericEndpointContext;
+
+		const result = await handleOAuthUserInfo(ctx, {
+			userInfo: {
+				id: "provider-user",
+				email: "   ",
+				name: "No Email",
+				emailVerified: false,
+			},
+			account: {
+				providerId: "provider",
+				accountId: "provider-user",
+			},
+		});
+
+		expect(result).toMatchObject({ error: "email not found", data: null });
+		expect(findOAuthUser).not.toHaveBeenCalled();
+		expect(createOAuthUser).not.toHaveBeenCalled();
+	});
+});
 
 describe("oauth2 - email verification on link", async () => {
 	const { auth, client, cookieSetter } = await getTestInstance({
@@ -1941,6 +1987,53 @@ describe("oauth2 - providers without email", async () => {
 			});
 
 			expect(redirectLocation).toContain("error=email_not_found");
+		});
+	});
+
+	describe("without mapProfileToUser and with missing-email opt-in", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					discord: {
+						clientId: "test",
+						clientSecret: "test",
+						enabled: true,
+						allowSignUpWithoutEmail: true,
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		it("creates a user through the built-in redirect callback", async () => {
+			mockDiscordToken("920138789012345003", "phoneonly3");
+
+			const headers = new Headers();
+			const signInRes = await client.signIn.social({
+				provider: "discord",
+				callbackURL: "/",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const state =
+				new URL(signInRes.data!.url!).searchParams.get("state") || "";
+			let redirectLocation = "";
+			await client.$fetch("/callback/discord", {
+				query: { state, code: "test_code" },
+				method: "GET",
+				headers,
+				onError(context) {
+					redirectLocation = context.response.headers.get("location") || "";
+					cookieSetter(headers)(context as any);
+				},
+			});
+
+			expect(redirectLocation).not.toContain("error=");
+			const ctx = await auth.$context;
+			const users = await ctx.internalAdapter.listUsers();
+			expect(users).toHaveLength(1);
+			expect(users[0]?.email).toMatch(
+				/^no-email\+[a-f0-9]{40}@better-auth\.invalid$/,
+			);
 		});
 	});
 });

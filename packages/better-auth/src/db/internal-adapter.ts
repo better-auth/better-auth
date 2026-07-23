@@ -842,12 +842,17 @@ export const createInternalAdapter = (
 			);
 		},
 		findOAuthUser: async (
-			email: string,
+			// `email` is nullable: a provider may return a profile without one
+			// (see #9124). A missing email must never be used as a match key, so
+			// the fall-back user lookup below is skipped entirely in that case.
+			email: string | null | undefined,
 			accountId: string,
 			providerId: string,
 		) => {
+			const normalizedEmail = email?.trim().toLowerCase() || null;
+			const currentAdapter = await getCurrentAdapter(adapter);
 			// we need to find account first to avoid missing user if the email changed with the provider for the same account
-			const account = await (await getCurrentAdapter(adapter)).findOne<
+			const account = await currentAdapter.findOne<
 				Account & { user: User | null }
 			>({
 				model: "account",
@@ -866,18 +871,27 @@ export const createInternalAdapter = (
 				},
 			});
 			if (account) {
-				if (account.user) {
+				const accountUser =
+					account.user ??
+					(await currentAdapter.findOne<User>({
+						model: "user",
+						where: [{ value: account.userId, field: "id" }],
+					}));
+				if (accountUser) {
 					return {
-						user: account.user,
+						user: accountUser,
 						linkedAccount: account,
 						accounts: [account],
 					};
 				} else {
-					const user = await (await getCurrentAdapter(adapter)).findOne<User>({
+					if (!normalizedEmail) {
+						return null;
+					}
+					const user = await currentAdapter.findOne<User>({
 						model: "user",
 						where: [
 							{
-								value: email.toLowerCase(),
+								value: normalizedEmail,
 								field: "email",
 							},
 						],
@@ -892,19 +906,20 @@ export const createInternalAdapter = (
 					return null;
 				}
 			} else {
-				const user = await (await getCurrentAdapter(adapter)).findOne<User>({
+				if (!normalizedEmail) {
+					return null;
+				}
+				const user = await currentAdapter.findOne<User>({
 					model: "user",
 					where: [
 						{
-							value: email.toLowerCase(),
+							value: normalizedEmail,
 							field: "email",
 						},
 					],
 				});
 				if (user) {
-					const accounts = await (
-						await getCurrentAdapter(adapter)
-					).findMany<Account>({
+					const accounts = await currentAdapter.findMany<Account>({
 						model: "account",
 						where: [
 							{

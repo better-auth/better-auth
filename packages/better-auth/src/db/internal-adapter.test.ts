@@ -182,6 +182,48 @@ describe("internal adapter test", async () => {
 		expect(hookUserCreateAfter).toHaveBeenCalledOnce();
 		expect(hookUserCreateBefore).toHaveBeenCalledOnce();
 	});
+
+	it("should resolve an OAuth account by userId when the joined user is missing", async () => {
+		const created = await internalAdapter.createOAuthUser(
+			{
+				email: "join-fallback@example.com",
+				name: "Join Fallback",
+				emailVerified: true,
+			},
+			{
+				providerId: "join-fallback-provider",
+				accountId: "join-fallback-account",
+			},
+		);
+		expect(created).not.toBeNull();
+
+		const originalFindOne = authContext.adapter.findOne.bind(
+			authContext.adapter,
+		);
+		const findOneSpy = vi
+			.spyOn(authContext.adapter, "findOne")
+			.mockImplementation(async (query) => {
+				if (query.model === "account" && query.join) {
+					return { ...created!.account, user: null };
+				}
+				return originalFindOne(query);
+			});
+
+		try {
+			const result = await internalAdapter.findOAuthUser(
+				undefined,
+				"join-fallback-account",
+				"join-fallback-provider",
+			);
+
+			expect(result?.user.id).toBe(created!.user.id);
+			expect(result?.accounts).toEqual([
+				expect.objectContaining({ userId: created!.user.id }),
+			]);
+		} finally {
+			findOneSpy.mockRestore();
+		}
+	});
 	it("should find session with custom userId", async () => {
 		const { client, signInWithTestUser } = await getTestInstance({
 			session: {

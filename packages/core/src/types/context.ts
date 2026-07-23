@@ -169,7 +169,7 @@ export interface InternalAdapter<
 	deleteSessions(sessionTokens: string[]): Promise<void>;
 
 	findOAuthUser(
-		email: string,
+		email: string | null | undefined,
 		accountId: string,
 		providerId: string,
 	): Promise<{
