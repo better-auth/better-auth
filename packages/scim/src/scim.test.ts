@@ -217,9 +217,20 @@ describe("SCIM", () => {
 				          "mutability": "readOnly",
 				          "name": "id",
 				          "required": false,
-				          "returned": "default",
+				          "returned": "always",
 				          "type": "string",
 				          "uniqueness": "server",
+				        },
+				        {
+				          "caseExact": true,
+				          "description": "A String that is an identifier for the resource as defined by the provisioning client.",
+				          "multiValued": false,
+				          "mutability": "readWrite",
+				          "name": "externalId",
+				          "required": false,
+				          "returned": "default",
+				          "type": "string",
+				          "uniqueness": "none",
 				        },
 				        {
 				          "caseExact": false,
@@ -236,7 +247,7 @@ describe("SCIM", () => {
 				          "caseExact": true,
 				          "description": "The name of the User, suitable for display to end-users.  The name SHOULD be the full name of the User being described, if known.",
 				          "multiValued": false,
-				          "mutability": "readOnly",
+				          "mutability": "readWrite",
 				          "name": "displayName",
 				          "required": false,
 				          "returned": "default",
@@ -367,9 +378,20 @@ describe("SCIM", () => {
 				      "mutability": "readOnly",
 				      "name": "id",
 				      "required": false,
-				      "returned": "default",
+				      "returned": "always",
 				      "type": "string",
 				      "uniqueness": "server",
+				    },
+				    {
+				      "caseExact": true,
+				      "description": "A String that is an identifier for the resource as defined by the provisioning client.",
+				      "multiValued": false,
+				      "mutability": "readWrite",
+				      "name": "externalId",
+				      "required": false,
+				      "returned": "default",
+				      "type": "string",
+				      "uniqueness": "none",
 				    },
 				    {
 				      "caseExact": false,
@@ -386,7 +408,7 @@ describe("SCIM", () => {
 				      "caseExact": true,
 				      "description": "The name of the User, suitable for display to end-users.  The name SHOULD be the full name of the User being described, if known.",
 				      "multiValued": false,
-				      "mutability": "readOnly",
+				      "mutability": "readWrite",
 				      "name": "displayName",
 				      "required": false,
 				      "returned": "default",
@@ -906,6 +928,52 @@ describe("SCIM", () => {
 			});
 		});
 
+		it("should create a new user using displayName when name is not provided", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			const user = await auth.api.createSCIMUser({
+				body: {
+					userName: "the-username",
+					displayName: "Juan Perez",
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(user).toMatchObject({
+				displayName: "Juan Perez",
+				name: {
+					formatted: "Juan Perez",
+				},
+				userName: "the-username",
+			});
+		});
+
+		it("should prefer name.formatted over displayName when both are provided", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			const user = await auth.api.createSCIMUser({
+				body: {
+					userName: "the-username",
+					name: { formatted: "Juan Perez" },
+					displayName: "Ignored Display Name",
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(user).toMatchObject({
+				displayName: "Juan Perez",
+				name: {
+					formatted: "Juan Perez",
+				},
+			});
+		});
+
 		it("should create a new user with a primary email", async () => {
 			const { auth, getSCIMToken } = createTestInstance();
 			const scimToken = await getSCIMToken();
@@ -1108,6 +1176,41 @@ describe("SCIM", () => {
 					"urn:ietf:params:scim:schemas:core:2.0:User",
 				]),
 				userName: "other-email@test.com",
+			});
+		});
+
+		it("should update the name via displayName when name is not provided", async () => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			const user = await auth.api.createSCIMUser({
+				body: {
+					userName: "the-username",
+					name: { formatted: "Juan Perez" },
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			const updatedUser = await auth.api.updateSCIMUser({
+				params: {
+					userId: user.id,
+				},
+				body: {
+					userName: "the-username",
+					displayName: "Daniel Lopez",
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(updatedUser).toMatchObject({
+				displayName: "Daniel Lopez",
+				name: {
+					formatted: "Daniel Lopez",
+				},
 			});
 		});
 

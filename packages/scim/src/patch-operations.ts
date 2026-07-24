@@ -58,6 +58,9 @@ const active = (user: User, op: Operation, resources: Resources) => {
 
 const userPatchMappings: Record<string, Mapping> = {
 	"/active": { resource: "user", target: "banned", map: active },
+	// `displayName` reads as `user.name` (see `createUserResource`), so a
+	// direct replace/add is equivalent to `/name/formatted`.
+	"/displayName": { resource: "user", target: "name", map: identity },
 	"/name/formatted": { resource: "user", target: "name", map: identity },
 	"/name/givenName": { resource: "user", target: "name", map: givenName },
 	"/name/familyName": {
