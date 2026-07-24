@@ -84,6 +84,12 @@ export interface SAMLConfig {
 	};
 	wantAssertionsSigned?: boolean | undefined;
 	authnRequestsSigned?: boolean | undefined;
+	/**
+	 * When `true`, the generated SAML AuthnRequest sets `ForceAuthn="true"`,
+	 * asking the IdP to re-authenticate the user even if they have an existing
+	 * session. Opt-in: when unset, no `ForceAuthn` attribute is emitted.
+	 */
+	forceAuthn?: boolean | undefined;
 	signatureAlgorithm?: string | undefined;
 	digestAlgorithm?: string | undefined;
 	identifierFormat?: string | undefined;

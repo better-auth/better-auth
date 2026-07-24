@@ -352,6 +352,13 @@ const ssoProviderBodySchema = z.object({
 			}),
 			wantAssertionsSigned: z.boolean().optional(),
 			authnRequestsSigned: z.boolean().optional(),
+			forceAuthn: z
+				.boolean()
+				.meta({
+					description:
+						'Emit ForceAuthn="true" on the SAML AuthnRequest, asking the IdP to re-authenticate the user. Opt-in: omitted from the request when unset.',
+				})
+				.optional(),
 			signatureAlgorithm: z.string().optional(),
 			digestAlgorithm: z.string().optional(),
 			identifierFormat: z.string().optional(),
@@ -882,6 +889,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 								spMetadata: body.samlConfig.spMetadata,
 								wantAssertionsSigned: body.samlConfig.wantAssertionsSigned,
 								authnRequestsSigned: body.samlConfig.authnRequestsSigned,
+								forceAuthn: body.samlConfig.forceAuthn,
 								signatureAlgorithm: body.samlConfig.signatureAlgorithm,
 								digestAlgorithm: body.samlConfig.digestAlgorithm,
 								identifierFormat: body.samlConfig.identifierFormat,
@@ -1400,10 +1408,9 @@ export const signInSSO = (options?: SSOOptions) => {
 						encPrivateKeyPass: idpData.encPrivateKeyPass,
 					});
 				}
-				const loginRequest = sp.createLoginRequest(
-					idp,
-					"redirect",
-				) as BindingContext & {
+				const loginRequest = sp.createLoginRequest(idp, "redirect", {
+					forceAuthn: parsedSamlConfig.forceAuthn,
+				}) as BindingContext & {
 					entityEndpoint: string;
 					type: string;
 					id: string;

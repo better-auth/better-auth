@@ -231,6 +231,7 @@ function sanitizeProvider(
 					audience: samlConfig.audience,
 					wantAssertionsSigned: samlConfig.wantAssertionsSigned,
 					authnRequestsSigned: samlConfig.authnRequestsSigned,
+					forceAuthn: samlConfig.forceAuthn,
 					identifierFormat: samlConfig.identifierFormat,
 					signatureAlgorithm: samlConfig.signatureAlgorithm,
 					digestAlgorithm: samlConfig.digestAlgorithm,
@@ -448,6 +449,7 @@ function mergeSAMLConfig(
 			updates.wantAssertionsSigned ?? current.wantAssertionsSigned,
 		authnRequestsSigned:
 			updates.authnRequestsSigned ?? current.authnRequestsSigned,
+		forceAuthn: updates.forceAuthn ?? current.forceAuthn,
 		identifierFormat: updates.identifierFormat ?? current.identifierFormat,
 		signatureAlgorithm:
 			updates.signatureAlgorithm ?? current.signatureAlgorithm,
