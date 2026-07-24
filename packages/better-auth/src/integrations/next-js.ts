@@ -27,7 +27,13 @@ export function toNextJsHandler(
 let nextHeadersPromise: Promise<typeof import("next/headers.js")> | undefined;
 const loadNextHeaders = () => {
 	if (process.env.NODE_ENV === "production") {
-		return (nextHeadersPromise ??= import("next/headers.js"));
+		if (!nextHeadersPromise) {
+			nextHeadersPromise = import("next/headers.js").catch((err) => {
+				nextHeadersPromise = undefined;
+				throw err;
+			});
+		}
+		return nextHeadersPromise;
 	}
 	return import("next/headers.js");
 };
