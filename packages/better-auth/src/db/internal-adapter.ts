@@ -115,6 +115,35 @@ export const createInternalAdapter = (
 		}
 	}
 
+	const deleteSecondaryStorageSessions = async (userId: string) => {
+		if (!secondaryStorage) return;
+
+		const activeSession = await secondaryStorage.get(
+			`active-sessions-${userId}`,
+		);
+		const sessions = activeSession
+			? safeJSONParse<{ token: string }[]>(activeSession)
+			: [];
+		if (!sessions) return;
+		for (const session of sessions) {
+			await secondaryStorage.delete(session.token);
+		}
+		await secondaryStorage.delete(`active-sessions-${userId}`);
+	};
+
+	const deleteDatabaseSessions = async (userId: string) => {
+		await deleteManyWithHooks(
+			[
+				{
+					field: "userId",
+					value: userId,
+				},
+			],
+			"session",
+			undefined,
+		);
+	};
+
 	return {
 		createOAuthUser: async (
 			user: Omit<User, "id" | "createdAt" | "updatedAt">,
@@ -285,17 +314,9 @@ export const createInternalAdapter = (
 			return total;
 		},
 		deleteUser: async (userId: string) => {
+			await deleteSecondaryStorageSessions(userId);
 			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
-				await deleteManyWithHooks(
-					[
-						{
-							field: "userId",
-							value: userId,
-						},
-					],
-					"session",
-					undefined,
-				);
+				await deleteDatabaseSessions(userId);
 			}
 			await deleteManyWithHooks(
 				[
@@ -782,36 +803,15 @@ export const createInternalAdapter = (
 			);
 		},
 		deleteUserSessions: async (userId: string) => {
-			if (secondaryStorage) {
-				const activeSession = await secondaryStorage.get(
-					`active-sessions-${userId}`,
-				);
-				const sessions = activeSession
-					? safeJSONParse<{ token: string }[]>(activeSession)
-					: [];
-				if (!sessions) return;
-				for (const session of sessions) {
-					await secondaryStorage.delete(session.token);
-				}
-				await secondaryStorage.delete(`active-sessions-${userId}`);
-
-				if (
-					!options.session?.storeSessionInDatabase ||
-					ctx.options.session?.preserveSessionInDatabase
-				) {
-					return;
-				}
+			await deleteSecondaryStorageSessions(userId);
+			if (
+				secondaryStorage &&
+				(!options.session?.storeSessionInDatabase ||
+					ctx.options.session?.preserveSessionInDatabase)
+			) {
+				return;
 			}
-			await deleteManyWithHooks(
-				[
-					{
-						field: "userId",
-						value: userId,
-					},
-				],
-				"session",
-				undefined,
-			);
+			await deleteDatabaseSessions(userId);
 		},
 		deleteSessions: async (sessionTokens: string[]) => {
 			if (secondaryStorage) {
