@@ -1600,6 +1600,8 @@ This requires the `ac` resource with the `read` permission for the member to be 
 
 To update a role, you can use the `updateOrgRole` function and pass either a `roleName` or `roleId` parameter.
 
+If you rename a role via `data.roleName`, member and invitation role assignments that reference the old name are updated to the new name automatically.
+
 <APIMethod path="/organization/update-role" method="POST" requireSession resultVariable="updatedRole">
   ```ts
   type updateOrgRole = {

@@ -728,6 +728,120 @@ describe("dynamic access control", async () => {
 		expect(res2.role).toBe(`updated-${roleName}`);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10391
+	 */
+	it("should keep members attached when a dynamic role is renamed", async () => {
+		const { headers: orphanHeaders, member: orphanMember } = await createUser({
+			role: "member",
+		});
+		const { headers: multiHeaders, member: multiMember } = await createUser({
+			role: "member",
+		});
+		const oldRoleName = `orphan-role-${crypto.randomUUID()}`;
+		const newRoleName = `renamed-${oldRoleName}`;
+
+		const testRole = await authClient.organization.createRole(
+			{
+				role: oldRoleName,
+				permission: {
+					project: ["create"],
+				},
+				additionalFields: {
+					color: "#000000",
+				},
+			},
+			{ headers },
+		);
+		if (!testRole.data) throw testRole.error;
+
+		await auth.api.updateMemberRole({
+			body: { memberId: orphanMember.id, role: oldRoleName },
+			headers,
+		});
+		await auth.api.updateMemberRole({
+			body: {
+				memberId: multiMember.id,
+				role: ["member", oldRoleName],
+			},
+			headers,
+		});
+
+		const invite = await auth.api.createInvitation({
+			body: {
+				email: `invite-${crypto.randomUUID()}@email.com`,
+				role: oldRoleName,
+				organizationId: org.data?.id,
+			},
+			headers,
+		});
+
+		const beforeRename = await auth.api.hasPermission({
+			body: {
+				organizationId: org.data?.id,
+				permissions: {
+					project: ["create"],
+				},
+			},
+			headers: orphanHeaders,
+		});
+		expect(beforeRename.success).toBe(true);
+
+		await auth.api.updateOrgRole({
+			body: {
+				roleId: testRole.data.roleData.id,
+				data: { roleName: newRoleName },
+			},
+			headers,
+		});
+
+		const roles = await auth.api.listOrgRoles({ headers });
+		const roleNames = roles.map((r) => r.role);
+		expect(roleNames).toContain(newRoleName);
+		expect(roleNames).not.toContain(oldRoleName);
+
+		const memberAfterRename = await auth.api.getActiveMember({
+			headers: orphanHeaders,
+		});
+		expect(memberAfterRename?.role).toBe(newRoleName);
+
+		const multiMemberAfterRename = await auth.api.getActiveMember({
+			headers: multiHeaders,
+		});
+		expect(multiMemberAfterRename?.role.split(",").sort()).toEqual(
+			["member", newRoleName].sort(),
+		);
+
+		const invitations = await auth.api.listInvitations({
+			query: { organizationId: org.data?.id },
+			headers,
+		});
+		const renamedInvite = invitations.find((i) => i.id === invite.id);
+		expect(renamedInvite?.role).toBe(newRoleName);
+
+		const afterRename = await auth.api.hasPermission({
+			body: {
+				organizationId: org.data?.id,
+				permissions: {
+					project: ["create"],
+				},
+			},
+			headers: orphanHeaders,
+		});
+		expect(afterRename.success).toBe(true);
+
+		const multiAfterRename = await auth.api.hasPermission({
+			body: {
+				organizationId: org.data?.id,
+				permissions: {
+					project: ["create"],
+				},
+			},
+			headers: multiHeaders,
+		});
+		expect(multiAfterRename.success).toBe(true);
+	});
+
 	it("should not be allowed to update a role without the right ac resource permissions", async () => {
 		const testRole = await authClient.organization.createRole(
 			{
