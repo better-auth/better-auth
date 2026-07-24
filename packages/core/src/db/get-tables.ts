@@ -213,6 +213,24 @@ export const getAuthTables = (
 				},
 				...user?.fields,
 				...options.user?.additionalFields,
+				/**
+				 * Only the `verification-table` change-email strategy persists a pending
+				 * address, so the column is opt-in with the strategy. The default `jwt`
+				 * strategy leaves the schema untouched.
+				 */
+				...(options.user?.changeEmail?.enabled &&
+				options.user?.changeEmail?.strategy === "verification-table"
+					? {
+							pendingEmail: {
+								type: "string" as const,
+								required: false,
+								fieldName:
+									(options.user?.fields as Record<string, string> | undefined)
+										?.pendingEmail || "pendingEmail",
+								input: false,
+							},
+						}
+					: {}),
 			},
 			order: 1,
 		},

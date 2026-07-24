@@ -105,6 +105,7 @@ export const getClientConfig = (
 		"/revoke-sessions": "POST",
 		"/revoke-other-sessions": "POST",
 		"/delete-user": "POST",
+		"/cancel-email-change": "POST",
 	};
 	const atomListeners: ClientAtomListener[] = [
 		{
@@ -122,7 +123,8 @@ export const getClientConfig = (
 					path === "/revoke-session" ||
 					path === "/revoke-other-sessions" ||
 					path === "/change-email" ||
-					path === "/change-password";
+					path === "/change-password" ||
+					path === "/cancel-email-change";
 
 				return matchesCommonPaths;
 			},
