@@ -115,7 +115,7 @@ export const createInternalAdapter = (
 		}
 	}
 
-	const deleteUserSessions = async (userId: string) => {
+	const deleteUserSessions = async (userId: string, forceDatabaseDelete?: boolean) => {
 		if (secondaryStorage) {
 			const activeSession = await secondaryStorage.get(
 				`active-sessions-${userId}`,
@@ -131,7 +131,7 @@ export const createInternalAdapter = (
 
 			if (
 				!options.session?.storeSessionInDatabase ||
-				ctx.options.session?.preserveSessionInDatabase
+				(!forceDatabaseDelete && ctx.options.session?.preserveSessionInDatabase)
 			) {
 				return;
 			}
@@ -318,7 +318,7 @@ export const createInternalAdapter = (
 			return total;
 		},
 		deleteUser: async (userId: string) => {
-			await deleteUserSessions(userId);
+			await deleteUserSessions(userId, true);
 			await deleteManyWithHooks(
 				[
 					{
