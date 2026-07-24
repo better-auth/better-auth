@@ -146,14 +146,16 @@ export const createOrganization = <O extends OrganizationOptions>(
 				);
 			}
 
-			const existingOrganization = await adapter.findOrganizationBySlug(
-				ctx.body.slug,
-			);
-			if (existingOrganization) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_ALREADY_EXISTS,
+			if (typeof ctx.body.slug === "string") {
+				const existingOrganization = await adapter.findOrganizationBySlug(
+					ctx.body.slug,
 				);
+				if (existingOrganization) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.ORGANIZATION_ALREADY_EXISTS,
+					);
+				}
 			}
 
 			let {
@@ -385,8 +387,8 @@ export const updateOrganization = <O extends OrganizationOptions>(
 			body: z.object({
 				data: z
 					.object({
-						...additionalFieldsSchema.shape,
 						...baseUpdateOrganizationSchema.shape,
+						...additionalFieldsSchema.shape,
 					})
 					.partial(),
 				organizationId: z
