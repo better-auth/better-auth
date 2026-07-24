@@ -429,7 +429,13 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					},
 					rememberMe === false,
 				);
+
+				if (ctx.body.callbackURL) {
+					ctx.setHeader("Location", ctx.body.callbackURL);
+				}
+
 				return ctx.json({
+					redirect: !!ctx.body.callbackURL,
 					token: session.token,
 					user: parseUserOutput(ctx.context.options, createdUser) as User<
 						O["user"],
