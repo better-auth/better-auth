@@ -253,6 +253,9 @@ describe("get-full-organization", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/6662
+ */
 describe("slug optional", async () => {
 	it("allows creating organization without slug when slug is optional", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
