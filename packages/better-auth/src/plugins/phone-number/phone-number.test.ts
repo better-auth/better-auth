@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
 import { phoneNumber } from ".";
@@ -1281,5 +1282,87 @@ describe("custom verifyOTP", async () => {
 		});
 		expect(user.data?.user.phoneNumber).toBe(updatedPhoneNumber);
 		expect(user.data?.user.phoneNumberVerified).toBe(true);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10412
+ */
+describe("phone-number rememberMe", async () => {
+	let otp = "";
+	const testPhoneNumber = "+15551234567";
+
+	const { client } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}@example.com`;
+						},
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	it("should set a persistent session cookie by default on phone OTP verify", async () => {
+		expect.assertions(3);
+		await client.phoneNumber.sendOtp({
+			phoneNumber: testPhoneNumber,
+		});
+
+		await client.phoneNumber.verify(
+			{
+				phoneNumber: testPhoneNumber,
+				code: otp,
+			},
+			{
+				onSuccess(ctx) {
+					const cookies = parseSetCookieHeader(
+						ctx.response.headers.get("set-cookie") || "",
+					);
+					const sessionToken = cookies.get("better-auth.session_token");
+					expect(sessionToken).toBeDefined();
+					expect(sessionToken?.["max-age"]).toBeDefined();
+					expect(cookies.get("better-auth.dont_remember")).toBeUndefined();
+				},
+			},
+		);
+	});
+
+	it("should clear max-age when phone OTP verify uses rememberMe: false", async () => {
+		expect.assertions(3);
+		const otherPhone = "+15559876543";
+		await client.phoneNumber.sendOtp({
+			phoneNumber: otherPhone,
+		});
+
+		await client.phoneNumber.verify(
+			{
+				phoneNumber: otherPhone,
+				code: otp,
+				rememberMe: false,
+			},
+			{
+				onSuccess(ctx) {
+					const cookies = parseSetCookieHeader(
+						ctx.response.headers.get("set-cookie") || "",
+					);
+					const sessionToken = cookies.get("better-auth.session_token");
+					expect(sessionToken).toBeDefined();
+					expect(sessionToken?.["max-age"]).toBeUndefined();
+					expect(cookies.get("better-auth.dont_remember")).toBeDefined();
+				},
+			},
+		);
 	});
 });

@@ -136,6 +136,10 @@ Once the user provides the OTP, you can sign in the user using the `signIn.email
        * User profile image URL. Only used when the user is registering for the first time.
        */
       image?: string = "https://example.com/image.png"
+      /**
+       * If false, the user will be signed out when the browser is closed. (optional) (default: true)
+       */
+      rememberMe?: boolean = true
   }
   ```
 </APIMethod>
