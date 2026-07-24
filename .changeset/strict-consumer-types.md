@@ -5,4 +5,4 @@
 "better-auth": patch
 ---
 
-Strict TypeScript consumers can now compose the One Tap, Electron, and Expo client plugins without incompatible fetch signatures. OAuth and Web Crypto helpers also compile with exact optional properties and browser buffer types without consumer-side casts.
+One Tap, Electron, and Expo client plugins now compose with `createAuthClient` without TypeScript errors, and the resulting client preserves each plugin's inferred actions.
