@@ -415,7 +415,6 @@ describe("slug optional", async () => {
 								slug: {
 									type: "string",
 									required: false,
-									nullable: true,
 								},
 							},
 						},
