@@ -134,9 +134,15 @@ export interface GoogleOneTapOptions {
 				 */
 				maxAttempts?: number;
 				/**
-				 * Whether to support FedCM (Federated Credential Management) support.
+				 * Whether to opt into FedCM for the One Tap prompt
+				 * (`use_fedcm_for_prompt`) and clear FedCM credential state on
+				 * sign-out via `navigator.credentials.preventSilentAccess()`.
+				 *
+				 * When enabled, display-moment APIs and `getSkippedReason` are
+				 * not called (Google FedCM migration guide).
 				 *
 				 * @see {@link https://developer.chrome.com/docs/identity/fedcm/overview}
+				 * @see {@link https://developers.google.com/identity/gsi/web/guides/fedcm-migration}
 				 * @default true
 				 */
 				fedCM?: boolean | undefined;
@@ -190,6 +196,72 @@ const noRetryReasons = {
 	dismissed: ["credential_returned", "cancel_called"],
 	skipped: ["user_cancel", "tap_outside"],
 } as const;
+
+/**
+ * Minimal prompt-moment surface used by {@link decidePromptNotification}.
+ * Kept narrow so FedCM paths never need to touch display-moment APIs.
+ */
+export interface OneTapPromptNotification {
+	isDismissedMoment?: (() => boolean) | undefined;
+	getDismissedReason?: (() => string) | undefined;
+	isSkippedMoment?: (() => boolean) | undefined;
+	getSkippedReason?: (() => string) | undefined;
+	isNotDisplayed?: (() => boolean) | undefined;
+}
+
+export type PromptNotificationDecision = "retry" | "stop" | null;
+
+/**
+ * Decide whether to retry or stop after a Google One Tap prompt notification.
+ *
+ * Under FedCM, Google's migration guide requires not calling display-moment
+ * APIs (`isNotDisplayed`, etc.) or `getSkippedReason`. Those are only used
+ * when FedCM is disabled.
+ *
+ * @see https://developers.google.com/identity/gsi/web/guides/fedcm-migration
+ * @see https://github.com/better-auth/better-auth/issues/10380
+ */
+export function decidePromptNotification(args: {
+	useFedCM: boolean;
+	attempt: number;
+	maxAttempts: number;
+	notification: OneTapPromptNotification;
+}): PromptNotificationDecision {
+	const { useFedCM, attempt, maxAttempts, notification } = args;
+
+	if (notification.isDismissedMoment?.()) {
+		const reason = notification.getDismissedReason?.();
+		if (
+			reason &&
+			(noRetryReasons.dismissed as readonly string[]).includes(reason)
+		) {
+			return "stop";
+		}
+		return attempt < maxAttempts ? "retry" : "stop";
+	}
+
+	if (notification.isSkippedMoment?.()) {
+		// Under FedCM, getSkippedReason() is deprecated — treat skip as terminal.
+		if (useFedCM) {
+			return "stop";
+		}
+		const reason = notification.getSkippedReason?.();
+		if (
+			!reason ||
+			(noRetryReasons.skipped as readonly string[]).includes(reason)
+		) {
+			return "stop";
+		}
+		return attempt < maxAttempts ? "retry" : "stop";
+	}
+
+	// Display-moment APIs are unsupported under FedCM — never call them there.
+	if (!useFedCM && notification.isNotDisplayed?.()) {
+		return "stop";
+	}
+
+	return null;
+}
 
 export const oneTapClient = (options: GoogleOneTapOptions) => {
 	return {
@@ -290,8 +362,9 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							ux_mode: opts?.uxMode || "popup",
 							nonce: opts?.nonce,
 							itp_support: true,
-							use_fedcm_for_prompt: useFedCM,
 							...options.additionalOptions,
+							// Keep after additionalOptions so promptOptions.fedCM wins.
+							use_fedcm_for_prompt: useFedCM,
 						});
 
 						window.google?.accounts.id.renderButton(
@@ -359,53 +432,37 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 								 * @see {@link https://developers.google.com/identity/gsi/web/guides/overview}
 								 */
 								itp_support: true,
-								use_fedcm_for_prompt: useFedCM,
 								...options.additionalOptions,
+								// Keep after additionalOptions so promptOptions.fedCM wins.
+								use_fedcm_for_prompt: useFedCM,
 							});
 
 							const handlePrompt = (attempt: number) => {
 								if (isResolved) return;
 
-								window.google?.accounts.id.prompt((notification: any) => {
-									if (isResolved) return;
+								window.google?.accounts.id.prompt(
+									(notification: OneTapPromptNotification) => {
+										if (isResolved) return;
 
-									if (notification.isDismissedMoment?.()) {
-										const reason = notification.getDismissedReason?.();
-										if (noRetryReasons.dismissed.includes(reason)) {
-											opts?.onPromptNotification?.(notification);
-											resolve();
-											return;
-										}
-										if (attempt < maxAttempts) {
+										const decision = decidePromptNotification({
+											useFedCM,
+											attempt,
+											maxAttempts,
+											notification,
+										});
+
+										if (decision === "retry") {
 											const delay = Math.pow(2, attempt) * baseDelay;
 											setTimeout(() => handlePrompt(attempt + 1), delay);
-										} else {
-											opts?.onPromptNotification?.(notification);
-											resolve();
-										}
-									} else if (notification.isSkippedMoment?.()) {
-										// Under FedCM, getSkippedReason() is not available.
-										// Treat missing reason the same as a no-retry reason.
-										const reason = notification.getSkippedReason?.();
-										if (!reason || noRetryReasons.skipped.includes(reason)) {
-											opts?.onPromptNotification?.(notification);
-											resolve();
 											return;
 										}
-										if (attempt < maxAttempts) {
-											const delay = Math.pow(2, attempt) * baseDelay;
-											setTimeout(() => handlePrompt(attempt + 1), delay);
-										} else {
+
+										if (decision === "stop") {
 											opts?.onPromptNotification?.(notification);
 											resolve();
 										}
-									} else if (notification.isNotDisplayed?.()) {
-										// Under FedCM, isNotDisplayed() is deprecated.
-										// Still handle it for non-FedCM fallback.
-										opts?.onPromptNotification?.(notification);
-										resolve();
-									}
-								});
+									},
+								);
 							};
 
 							handlePrompt(0);
