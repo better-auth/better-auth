@@ -113,10 +113,6 @@ describe("mcp - server-client flows", async () => {
 					allowDynamicClientRegistration: true,
 					allowUnauthenticatedClientRegistration: true,
 					scopes,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});

@@ -60,10 +60,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -80,10 +76,6 @@ describe("oauth - init", () => {
 						loginPage: "/login",
 						consentPage: "/consent",
 						disableJwtPlugin: true,
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -98,10 +90,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -117,10 +105,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -141,10 +125,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -165,10 +145,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -187,10 +163,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -209,10 +181,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -237,10 +205,6 @@ describe("oauth", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -1045,10 +1009,6 @@ describe("oauth - prompt", async () => {
 					shouldRedirect() {
 						return isUserRegistered ? false : "/setup";
 					},
-				},
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
 				},
 				scopes,
 				selectAccount: {
@@ -2934,10 +2894,6 @@ describe("oauth - config", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			});
@@ -3021,10 +2977,6 @@ describe("oauth - config", () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					storeClientSecret,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 				jwt(),
 			],
@@ -3129,10 +3081,6 @@ describe("oauth - config", () => {
 					consentPage: "/consent",
 					storeClientSecret,
 					disableJwtPlugin: true,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -3245,10 +3193,6 @@ describe("oauth - config", () => {
 					consentPage: "/consent",
 					disableJwtPlugin: disableJwtPlugin,
 					validAudiences: resource ? [validAudience] : undefined,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 				...(disableJwtPlugin ? [] : [jwt()]),
 			],
@@ -3437,10 +3381,6 @@ describe("oauth - rate limiting", () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -3499,10 +3439,6 @@ describe("oauth - rate limiting", () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 					rateLimit: {
 						token: { window: 1, max: 4 },
 						introspect: { window: 1, max: 50 },
@@ -3542,10 +3478,6 @@ describe("oauth - rate limiting", () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 					rateLimit: {
 						token: false,
 						introspect: false,
@@ -3587,10 +3519,6 @@ describe("oauth - rate limiting", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 						rateLimit: {
 							token: { window: 60, max: 3 },
 						},
@@ -3652,10 +3580,6 @@ describe("oauth - rate limiting", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 						rateLimit: {
 							token: false, // Disable rate limiting for token endpoint
 						},
