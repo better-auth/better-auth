@@ -710,6 +710,68 @@ describe("username email verification flow (no info leak)", async () => {
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.code).toBe("EMAIL_NOT_VERIFIED");
 	});
+
+	/**
+	 * R1 / U1: unverified user with no email on file must NOT 500. The
+	 * null-email guard skips the token-creation block and throws
+	 * EMAIL_NOT_VERIFIED directly so timing and no-info-leak semantics stay
+	 * intact. Inserted via the adapter to bypass the sign-up schema's
+	 * `email: z.string()` requirement (the DB permits null today even though
+	 * the type doesn't).
+	 */
+	it("returns EMAIL_NOT_VERIFIED and does not crash for an unverified user with null email (R1)", async () => {
+		let emailSent = 0;
+		const { client: c, db } = await getTestInstance(
+			{
+				emailAndPassword: { enabled: true, requireEmailVerification: true },
+				emailVerification: {
+					sendOnSignIn: true,
+					async sendVerificationEmail() {
+						emailSent++;
+					},
+				},
+				plugins: [username()],
+			},
+			{
+				clientOptions: { plugins: [usernameClient()] },
+				disableTestUser: true,
+			},
+		);
+
+		// Sign up via the normal flow so the password is hashed by the real
+		// hasher, then null the email at the adapter level. The DB column is
+		// NOT NULL but accepts "" (the schema currently requires string;
+		// widening to nullish is scheduled for v2 per #9124). The endpoint's
+		// `!user.email` guard treats "" the same as null — both falsy — so the
+		// null-email branch is exercised.
+		await c.signUp.email({
+			email: "no-email-tmp@example.com",
+			username: "no_email_user",
+			password: "correct-password",
+			name: "No Email User",
+		});
+		// signUp.email also fires sendVerificationEmail (requireEmailVerification
+		// is true), so wait for that background send before resetting the
+		// counter — otherwise the signUp fire would falsely count toward the
+		// assertion below.
+		await new Promise((r) => setTimeout(r, 50));
+		emailSent = 0;
+
+		await db.update({
+			model: "user",
+			where: [{ field: "username", value: "no_email_user" }],
+			update: { email: "" },
+		});
+
+		const res = await c.signIn.username({
+			username: "no_email_user",
+			password: "correct-password",
+		});
+
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("EMAIL_NOT_VERIFIED");
+		expect(emailSent).toBe(0);
+	});
 });
 
 describe("username sign-in verify-email callbackURL", async () => {
@@ -758,5 +820,258 @@ describe("username sign-in verify-email callbackURL", async () => {
 		expect(new URL(capturedUrl).searchParams.get("callbackURL")).toBe(
 			callbackURL,
 		);
+	});
+});
+
+describe("username send-verification-email (POST /username/send-verification-email)", async () => {
+	it("triggers the configured sendVerificationEmail handler for an unverified user with email on file (R2/R3)", async () => {
+		let captured: { url: string; user: { username: string } } | null = null;
+		const { client } = await getTestInstance(
+			{
+				emailAndPassword: { enabled: true, requireEmailVerification: true },
+				emailVerification: {
+					sendOnSignIn: false,
+					async sendVerificationEmail(data) {
+						captured = {
+							url: data.url,
+							user: data.user as unknown as { username: string },
+						};
+					},
+				},
+				plugins: [username()],
+			},
+			{
+				clientOptions: { plugins: [usernameClient()] },
+			},
+		);
+
+		await client.signUp.email({
+			email: "resend@example.com",
+			username: "resend_user",
+			password: "correct-password",
+			name: "Resend User",
+		});
+
+		const res = await client.username.sendVerificationEmail({
+			username: "resend_user",
+			password: "correct-password",
+		});
+
+		expect(res.data?.success).toBe(true);
+		expect(captured).not.toBeNull();
+		expect(captured!.user.username).toBe("resend_user");
+		expect(new URL(captured!.url).searchParams.get("callbackURL")).toBe("/");
+	});
+
+	it("echoes callbackURL into the verify-email link (parity with /sign-in/username)", async () => {
+		let capturedUrl = "";
+		const { client } = await getTestInstance(
+			{
+				emailAndPassword: { enabled: true, requireEmailVerification: true },
+				emailVerification: {
+					async sendVerificationEmail({ url }) {
+						capturedUrl = url;
+					},
+				},
+				plugins: [username()],
+			},
+			{
+				clientOptions: { plugins: [usernameClient()] },
+			},
+		);
+
+		await client.signUp.email({
+			email: "resend-cb@example.com",
+			username: "resend_cb_user",
+			password: "correct-password",
+			name: "Resend CB",
+		});
+
+		const callbackURL = "/welcome?ref=resend&plan=pro";
+		await client.username.sendVerificationEmail({
+			username: "resend_cb_user",
+			password: "correct-password",
+			callbackURL,
+		});
+
+		expect(capturedUrl).not.toBe("");
+		expect(new URL(capturedUrl).searchParams.get("callbackURL")).toBe(
+			callbackURL,
+		);
+	});
+
+	it("returns success without sending when the user has no email on file (R2 + U1 reuse)", async () => {
+		let emailSent = 0;
+		const { client, db } = await getTestInstance(
+			{
+				emailAndPassword: { enabled: true, requireEmailVerification: true },
+				emailVerification: {
+					async sendVerificationEmail() {
+						emailSent++;
+					},
+				},
+				plugins: [username()],
+			},
+			{
+				clientOptions: { plugins: [usernameClient()] },
+				disableTestUser: true,
+			},
+		);
+
+		await client.signUp.email({
+			email: "no-email-resend@example.com",
+			username: "no_email_resend",
+			password: "correct-password",
+			name: "No Email Resend",
+		});
+		// Wait for the signUp-time sendVerificationEmail (requireEmailVerification
+		// is true) to drain before resetting the counter.
+		await new Promise((r) => setTimeout(r, 50));
+		emailSent = 0;
+
+		await db.update({
+			model: "user",
+			where: [{ field: "username", value: "no_email_resend" }],
+			update: { email: "" },
+		});
+
+		const res = await client.username.sendVerificationEmail({
+			username: "no_email_resend",
+			password: "correct-password",
+		});
+
+		expect(res.data?.success).toBe(true);
+		expect(emailSent).toBe(0);
+	});
+
+	it("returns EMAIL_NOT_VERIFIED when sendVerificationEmail is not configured (R4)", async () => {
+		const { client } = await getTestInstance(
+			{
+				emailAndPassword: { enabled: true, requireEmailVerification: true },
+				plugins: [username()],
+			},
+			{
+				clientOptions: { plugins: [usernameClient()] },
+			},
+		);
+
+		await client.signUp.email({
+			email: "no-handler@example.com",
+			username: "no_handler_user",
+			password: "correct-password",
+			name: "No Handler",
+		});
+
+		const res = await client.username.sendVerificationEmail({
+			username: "no_handler_user",
+			password: "correct-password",
+		});
+
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.code).toBe("EMAIL_NOT_VERIFIED");
+	});
+
+	it("returns INVALID_USERNAME_OR_PASSWORD for a missing username (no info leak)", async () => {
+		const { client } = await getTestInstance(
+			{
+				emailAndPassword: { enabled: true, requireEmailVerification: true },
+				emailVerification: {
+					async sendVerificationEmail() {},
+				},
+				plugins: [username()],
+			},
+			{
+				clientOptions: { plugins: [usernameClient()] },
+			},
+		);
+
+		const res = await client.username.sendVerificationEmail({
+			username: "ghost_user_zzz",
+			password: "any-password",
+		});
+
+		expect(res.error?.status).toBe(401);
+		expect(res.error?.code).toBe("INVALID_USERNAME_OR_PASSWORD");
+	});
+
+	it("returns INVALID_USERNAME_OR_PASSWORD for a wrong password (no info leak)", async () => {
+		let emailSent = 0;
+		const { client } = await getTestInstance(
+			{
+				emailAndPassword: { enabled: true, requireEmailVerification: true },
+				emailVerification: {
+					async sendVerificationEmail() {
+						emailSent++;
+					},
+				},
+				plugins: [username()],
+			},
+			{
+				clientOptions: { plugins: [usernameClient()] },
+			},
+		);
+
+		await client.signUp.email({
+			email: "wrong-pwd@example.com",
+			username: "wrong_pwd_user",
+			password: "correct-password",
+			name: "Wrong Pwd",
+		});
+		await new Promise((r) => setTimeout(r, 50));
+		emailSent = 0;
+
+		const res = await client.username.sendVerificationEmail({
+			username: "wrong_pwd_user",
+			password: "wrong-password",
+		});
+
+		expect(res.error?.status).toBe(401);
+		expect(res.error?.code).toBe("INVALID_USERNAME_OR_PASSWORD");
+		expect(emailSent).toBe(0);
+	});
+
+	it("returns success idempotently for an already-verified user", async () => {
+		let emailSent = 0;
+		const { client, db } = await getTestInstance(
+			{
+				emailAndPassword: { enabled: true, requireEmailVerification: true },
+				emailVerification: {
+					async sendVerificationEmail() {
+						emailSent++;
+					},
+				},
+				plugins: [username()],
+			},
+			{
+				clientOptions: { plugins: [usernameClient()] },
+			},
+		);
+
+		await client.signUp.email({
+			email: "verified@example.com",
+			username: "verified_user",
+			password: "correct-password",
+			name: "Verified User",
+		});
+		// signUp.email leaves the user unverified when requireEmailVerification
+		// is true, so flip the flag at the adapter level to model "already
+		// verified". The endpoint should respond idempotently without sending.
+		await db.update({
+			model: "user",
+			where: [{ field: "username", value: "verified_user" }],
+			update: { emailVerified: true },
+		});
+		// Wait for the signUp-time sendVerificationEmail (requireEmailVerification
+		// is true) to drain before resetting the counter.
+		await new Promise((r) => setTimeout(r, 50));
+		emailSent = 0;
+
+		const res = await client.username.sendVerificationEmail({
+			username: "verified_user",
+			password: "correct-password",
+		});
+
+		expect(res.data?.success).toBe(true);
+		expect(emailSent).toBe(0);
 	});
 });

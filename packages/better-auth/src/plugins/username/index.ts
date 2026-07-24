@@ -121,6 +121,24 @@ const isUsernameAvailableBodySchema = z.object({
 	}),
 });
 
+const sendVerificationEmailBodySchema = z.object({
+	username: z.string().meta({
+		description:
+			"The username of the user to send a verification email for. Used to look up the account when the email is unknown to the client.",
+	}),
+	password: z.string().meta({
+		description:
+			"Password of the user. Required to keep response timing constant with /sign-in/username and avoid username enumeration.",
+	}),
+	callbackURL: z
+		.string()
+		.meta({
+			description:
+				"URL to redirect to after the verification link is followed. Echoed into the verification email URL.",
+		})
+		.optional(),
+});
+
 export const username = (options?: UsernameOptions | undefined) => {
 	const normalizer = (username: string) => {
 		if (options?.usernameNormalization === false) {
@@ -502,7 +520,10 @@ export const username = (options?: UsernameOptions | undefined) => {
 							throw APIError.from("FORBIDDEN", ERROR_CODES.EMAIL_NOT_VERIFIED);
 						}
 
-						if (ctx.context.options?.emailVerification?.sendOnSignIn) {
+						if (
+							user.email &&
+							ctx.context.options?.emailVerification?.sendOnSignIn
+						) {
 							const token = await createEmailVerificationToken(
 								ctx.context.secret,
 								user.email,
@@ -551,6 +572,188 @@ export const username = (options?: UsernameOptions | undefined) => {
 						url: ctx.body.callbackURL,
 						user: parseUserOutput(ctx.context.options, user),
 					});
+				},
+			),
+			sendUsernameVerificationEmail: createAuthEndpoint(
+				"/username/send-verification-email",
+				{
+					method: "POST",
+					body: sendVerificationEmailBodySchema,
+					metadata: {
+						openapi: {
+							summary: "Send verification email by username",
+							description:
+								"Triggers the configured sendVerificationEmail handler for a user resolved by username. Use when the client does not know the user's email (e.g. username-only signup). Does not create a session; this is a resend/trigger flow, not a sign-in.",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													success: {
+														type: "boolean",
+														description:
+															"True when the request was accepted (email sent, or no email on file, or user already verified). False is not returned by this endpoint.",
+													},
+												},
+												required: ["success"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					if (!ctx.body.username || !ctx.body.password) {
+						ctx.context.logger.warn("Username or password not found");
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+						);
+					}
+
+					const username = getUsernameToValidate(ctx.body.username);
+
+					const minUsernameLength = options?.minUsernameLength || 3;
+					const maxUsernameLength = options?.maxUsernameLength || 30;
+
+					if (username.length < minUsernameLength) {
+						ctx.context.logger.warn("Username too short");
+						throw APIError.from(
+							"UNPROCESSABLE_ENTITY",
+							ERROR_CODES.USERNAME_TOO_SHORT,
+						);
+					}
+
+					if (username.length > maxUsernameLength) {
+						ctx.context.logger.warn("Username too long");
+						throw APIError.from(
+							"UNPROCESSABLE_ENTITY",
+							ERROR_CODES.USERNAME_TOO_LONG,
+						);
+					}
+
+					const validator =
+						options?.usernameValidator || defaultUsernameValidator;
+
+					const valid = await validator(username);
+					if (!valid) {
+						throw APIError.from(
+							"UNPROCESSABLE_ENTITY",
+							ERROR_CODES.INVALID_USERNAME,
+						);
+					}
+
+					const user = await ctx.context.adapter.findOne<
+						User & { username: string; displayUsername: string }
+					>({
+						model: "user",
+						where: [
+							{
+								field: "username",
+								value: normalizer(ctx.body.username),
+							},
+						],
+					});
+
+					if (!user) {
+						// Hash password to prevent timing attacks from revealing valid usernames
+						// By hashing passwords for invalid usernames, we ensure consistent response times
+						await ctx.context.password.hash(ctx.body.password);
+						ctx.context.logger.warn("User not found");
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+						);
+					}
+
+					// Verify password: the endpoint must authenticate the caller
+					// before sending a verification email, otherwise anyone could
+					// spam verification emails to any user just by knowing their
+					// username.
+					const account = await ctx.context.adapter.findOne<Account>({
+						model: "account",
+						where: [
+							{ field: "userId", value: user.id },
+							{ field: "providerId", value: "credential" },
+						],
+					});
+					if (!account) {
+						// Hash password to keep timing constant with the !user
+						// branch — otherwise "exists but no credential account"
+						// becomes a distinguishable side channel.
+						await ctx.context.password.hash(ctx.body.password);
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+						);
+					}
+					const currentPassword = account.password;
+					if (!currentPassword) {
+						// Same dummy-hash pattern as above — the "exists but no
+						// stored hash" path must not be faster than the
+						// "user not found" path.
+						await ctx.context.password.hash(ctx.body.password);
+						ctx.context.logger.warn("Password not found");
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+						);
+					}
+					const validPassword = await ctx.context.password.verify({
+						hash: currentPassword,
+						password: ctx.body.password,
+					});
+					if (!validPassword) {
+						ctx.context.logger.warn("Invalid password");
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+						);
+					}
+
+					// Already verified: nothing to do, return success idempotently.
+					if (user.emailVerified) {
+						return ctx.json({ success: true });
+					}
+
+					// No email on file: the explicit-resend flow has nothing to send.
+					// Decline silently rather than fabricate an address.
+					if (!user.email) {
+						return ctx.json({ success: true });
+					}
+
+					// R4: if no handler is configured, fall back to the EMAIL_NOT_VERIFIED
+					// response shape used by the sign-in branch — never a generic 500.
+					if (!ctx.context.options?.emailVerification?.sendVerificationEmail) {
+						throw APIError.from("FORBIDDEN", ERROR_CODES.EMAIL_NOT_VERIFIED);
+					}
+
+					const token = await createEmailVerificationToken(
+						ctx.context.secret,
+						user.email,
+						undefined,
+						ctx.context.options.emailVerification?.expiresIn,
+					);
+					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
+						ctx.body.callbackURL || "/",
+					)}`;
+					await ctx.context.runInBackgroundOrAwait(
+						ctx.context.options.emailVerification.sendVerificationEmail(
+							{
+								user,
+								url,
+								token,
+							},
+							ctx.request,
+						),
+					);
+
+					return ctx.json({ success: true });
 				},
 			),
 			isUsernameAvailable: createAuthEndpoint(
