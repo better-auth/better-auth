@@ -1425,9 +1425,15 @@ export const getSCIMServiceProviderConfig = createAuthEndpoint(
 	},
 	async (ctx) => {
 		return ctx.json({
+			id: "ServiceProviderConfig",
 			patch: { supported: true },
-			bulk: { supported: false },
-			filter: { supported: true },
+			// `bulk.maxOperations`/`maxPayloadSize` are REQUIRED by RFC 7643 §5
+			// even when `supported` is `false`.
+			bulk: { supported: false, maxOperations: 0, maxPayloadSize: 0 },
+			// `maxResults` is REQUIRED when `filter.supported` is `true`. This
+			// mirrors the adapter's default `findMany` cap enforced in
+			// `listSCIMUsers` (see the pagination issue tracked separately).
+			filter: { supported: true, maxResults: 100 },
 			changePassword: { supported: false },
 			sort: { supported: false },
 			etag: { supported: false },
@@ -1444,6 +1450,10 @@ export const getSCIMServiceProviderConfig = createAuthEndpoint(
 			schemas: ["urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"],
 			meta: {
 				resourceType: "ServiceProviderConfig",
+				location: getResourceURL(
+					"/scim/v2/ServiceProviderConfig",
+					ctx.context.baseURL,
+				),
 			},
 		});
 	},
