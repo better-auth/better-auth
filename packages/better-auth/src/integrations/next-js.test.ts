@@ -6,6 +6,7 @@ describe("next-js integration", () => {
 		vi.clearAllMocks();
 		vi.resetModules();
 		vi.doUnmock("next/headers.js");
+		vi.unstubAllEnvs();
 	});
 
 	async function getSessionWithNextHeaders(
@@ -214,5 +215,60 @@ describe("next-js integration", () => {
 			([name]) => name === "better-auth.session_data",
 		);
 		expect(sessionDataCall?.[2]).toMatchObject({ maxAge: 600 });
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10466
+	 */
+	describe("next/headers import caching", () => {
+		function mockNextHeadersModule(headersMock: ReturnType<typeof vi.fn>) {
+			vi.doMock("next/headers.js", () => ({
+				headers: headersMock,
+				cookies: vi.fn(async () => ({
+					set: vi.fn(),
+					get: vi.fn(),
+					delete: vi.fn(),
+				})),
+			}));
+		}
+
+		async function getSessionTwiceWithSwappedMocks() {
+			const firstHeaders = vi.fn(async () => new Headers());
+			const secondHeaders = vi.fn(async () => new Headers());
+
+			mockNextHeadersModule(firstHeaders);
+			const [{ getTestInstance }, { nextCookies }] = await Promise.all([
+				import("../test-utils/test-instance"),
+				import("./next-js"),
+			]);
+			const { auth } = await getTestInstance({ plugins: [nextCookies()] });
+
+			await auth.api.getSession({ headers: new Headers() });
+
+			vi.resetModules();
+			vi.doUnmock("next/headers.js");
+			mockNextHeadersModule(secondHeaders);
+
+			await auth.api.getSession({ headers: new Headers() });
+
+			return { firstHeaders, secondHeaders };
+		}
+
+		it("reuses the cached next/headers import in production", async () => {
+			vi.stubEnv("NODE_ENV", "production");
+			const { firstHeaders, secondHeaders } =
+				await getSessionTwiceWithSwappedMocks();
+
+			expect(firstHeaders).toHaveBeenCalledTimes(2);
+			expect(secondHeaders).not.toHaveBeenCalled();
+		});
+
+		it("imports next/headers per call outside production", async () => {
+			const { firstHeaders, secondHeaders } =
+				await getSessionTwiceWithSwappedMocks();
+
+			expect(firstHeaders).toHaveBeenCalledTimes(1);
+			expect(secondHeaders).toHaveBeenCalledTimes(1);
+		});
 	});
 });

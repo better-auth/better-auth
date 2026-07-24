@@ -1,5 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { isProduction } from "@better-auth/core/env";
 import { setShouldSkipSessionRefresh } from "../api/state/should-session-refresh";
 import { parseSetCookieHeader, toCookieOptions } from "../cookies";
 import { PACKAGE_VERSION } from "../version";
@@ -23,6 +24,30 @@ export function toNextJsHandler(
 		DELETE: handler,
 	};
 }
+
+let nextHeadersModulePromise: Promise<typeof import("next/headers.js")> | null =
+	null;
+
+/**
+ * Node re-runs ESM resolution for every `import()` call, and with loader
+ * hooks registered (Sentry, OpenTelemetry) each resolution is a synchronous
+ * round trip to the loader hooks thread. These hooks run on nearly every
+ * request, so cache the import promise in production. In dev and test the
+ * import stays per-call so module reloads and mocks keep working. A failed
+ * import is not kept, so later requests retry like the uncached version did.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10466
+ */
+const loadNextHeadersModule = () => {
+	if (!isProduction) {
+		return import("next/headers.js");
+	}
+	nextHeadersModulePromise ??= import("next/headers.js").catch((error) => {
+		nextHeadersModulePromise = null;
+		throw error;
+	});
+	return nextHeadersModulePromise;
+};
 
 export const nextCookies = () => {
 	let hasWarned = false;
@@ -50,7 +75,7 @@ export const nextCookies = () => {
 							ReturnType<typeof import("next/headers.js").headers>
 						>;
 						try {
-							const { headers } = await import("next/headers.js");
+							const { headers } = await loadNextHeadersModule();
 							headersStore = await headers();
 						} catch {
 							return;
@@ -92,7 +117,7 @@ export const nextCookies = () => {
 								ReturnType<typeof import("next/headers.js").cookies>
 							>;
 							try {
-								const { cookies } = await import("next/headers.js");
+								const { cookies } = await loadNextHeadersModule();
 								cookieHelper = await cookies();
 							} catch (error) {
 								if (
