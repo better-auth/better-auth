@@ -1,5 +1,5 @@
 import type { GenericEndpointContext, OAuth2Tokens, User } from "better-auth";
-import type { SSOOptions, SSOProvider } from "../types";
+import type { Organization, SSOOptions, SSOProvider } from "../types";
 import { domainMatches } from "../utils";
 import type { NormalizedSSOProfile } from "./types";
 
@@ -12,6 +12,22 @@ export interface OrganizationProvisioningOptions {
 		token?: OAuth2Tokens;
 		provider: SSOProvider<SSOOptions>;
 	}) => Promise<string>;
+	getMemberData?: (data: {
+		user: User & Record<string, any>;
+		userInfo: Record<string, any>;
+		token?: OAuth2Tokens;
+		provider: SSOProvider<SSOOptions>;
+		organization: Organization & Record<string, any>;
+		defaultData: {
+			organizationId: string;
+			userId: string;
+			role: string;
+			createdAt: Date;
+		};
+	}) =>
+		| Promise<Record<string, any> | undefined>
+		| Record<string, any>
+		| undefined;
 }
 
 export interface AssignOrganizationFromProviderOptions {
@@ -31,7 +47,6 @@ export async function assignOrganizationFromProvider(
 	options: AssignOrganizationFromProviderOptions,
 ): Promise<void> {
 	const { user, profile, provider, token, provisioningOptions } = options;
-
 	if (!provider.organizationId) {
 		return;
 	}
@@ -65,14 +80,44 @@ export async function assignOrganizationFromProvider(
 			})
 		: provisioningOptions?.defaultRole || "member";
 
+	const defaultData = {
+		organizationId: provider.organizationId,
+		userId: user.id,
+		role,
+		createdAt: new Date(),
+	};
+
+	let memberData: Record<string, any> = defaultData;
+
+	if (provisioningOptions?.getMemberData) {
+		const organization = await ctx.context.adapter.findOne<
+			Organization & Record<string, any>
+		>({
+			model: "organization",
+			where: [{ field: "id", value: provider.organizationId }],
+		});
+
+		if (organization) {
+			const customData = await provisioningOptions.getMemberData({
+				user,
+				userInfo: profile.rawAttributes || {},
+				token,
+				provider,
+				organization,
+				defaultData,
+			});
+
+			if (customData) {
+				// Prevent overriding identity fields while allowing custom fields
+				const { organizationId: _, userId: __, ...safeCustomData } = customData;
+				memberData = { ...defaultData, ...safeCustomData };
+			}
+		}
+	}
+
 	await ctx.context.adapter.create({
 		model: "member",
-		data: {
-			organizationId: provider.organizationId,
-			userId: user.id,
-			role,
-			createdAt: new Date(),
-		},
+		data: memberData,
 	});
 }
 
@@ -156,21 +201,59 @@ export async function assignOrganizationByDomain(
 		return;
 	}
 
+	const userInfoFromUser = {
+		id: user.id,
+		email: user.email,
+		name: user.name,
+		image: user.image,
+		emailVerified: user.emailVerified,
+	};
+
 	const role = provisioningOptions?.getRole
 		? await provisioningOptions.getRole({
 				user,
-				userInfo: {},
+				userInfo: userInfoFromUser,
 				provider: ssoProvider,
 			})
 		: provisioningOptions?.defaultRole || "member";
 
+	const defaultData = {
+		organizationId: ssoProvider.organizationId,
+		userId: user.id,
+		role,
+		createdAt: new Date(),
+	};
+
+	let memberData: Record<string, any> = defaultData;
+
+	if (provisioningOptions?.getMemberData) {
+		// Fetch the organization for the hook
+		const organization = await ctx.context.adapter.findOne<
+			Organization & Record<string, any>
+		>({
+			model: "organization",
+			where: [{ field: "id", value: ssoProvider.organizationId }],
+		});
+
+		if (organization) {
+			const customData = await provisioningOptions.getMemberData({
+				user,
+				userInfo: userInfoFromUser,
+				provider: ssoProvider,
+				organization,
+				defaultData,
+			});
+
+			if (customData) {
+				// Prevent overriding identity fields while allowing custom fields
+				const { organizationId: _, userId: __, ...safeCustomData } = customData;
+				memberData = { ...defaultData, ...safeCustomData };
+			}
+		}
+	}
+
 	await ctx.context.adapter.create({
 		model: "member",
-		data: {
-			organizationId: ssoProvider.organizationId,
-			userId: user.id,
-			role,
-			createdAt: new Date(),
-		},
+		data: memberData,
 	});
 }
