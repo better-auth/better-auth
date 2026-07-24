@@ -57,6 +57,10 @@ type OpenAPIMediaTypeObject = {
 	schema?: OpenAPISchema;
 };
 
+type OpenAPIRequestMediaTypeObject = {
+	schema: OpenAPISchema;
+};
+
 type OpenAPIResponseContent = {
 	"application/json"?: OpenAPIMediaTypeObject;
 	"text/plain"?: OpenAPIMediaTypeObject;
@@ -71,11 +75,7 @@ type OpenAPIResponse = {
 
 type OpenAPIRequestBody = {
 	required?: boolean;
-	content: {
-		"application/json": {
-			schema: OpenAPISchema;
-		};
-	};
+	content: Record<string, OpenAPIRequestMediaTypeObject | undefined>;
 };
 
 type OpenAPIOperation = {
@@ -397,8 +397,34 @@ function mergeObjectSchemas(
 function getRequestBody(
 	options: EndpointOptions,
 ): OpenAPIRequestBody | undefined {
+	const allowedContentTypes = options.metadata?.allowedMediaTypes?.filter(
+		(type) => type.length > 0,
+	);
+	const contentTypes = allowedContentTypes?.length
+		? allowedContentTypes
+		: ["application/json"];
 	if (options.metadata?.openapi?.requestBody) {
-		return options.metadata.openapi.requestBody;
+		const requestBody = options.metadata.openapi.requestBody;
+		const requestBodyContent =
+			requestBody.content as OpenAPIRequestBody["content"];
+		const fallbackMediaType =
+			requestBodyContent["application/json"] ??
+			Object.values(requestBodyContent).find((value) => value !== undefined);
+		const content = Object.fromEntries(
+			contentTypes
+				.map((contentType) => {
+					const mediaType =
+						requestBodyContent[contentType] ?? fallbackMediaType;
+					return mediaType
+						? ([contentType, cloneOpenAPIValue(mediaType)] as const)
+						: undefined;
+				})
+				.filter((entry) => entry !== undefined),
+		);
+		return {
+			...requestBody,
+			content,
+		};
 	}
 	if (!options.body) return undefined;
 	const requestBodySchemaInfo = getRequestBodySchemaInfo(
@@ -407,11 +433,9 @@ function getRequestBody(
 	const schema = toOpenApiSchema(requestBodySchemaInfo.schema);
 	return {
 		required: requestBodySchemaInfo.required,
-		content: {
-			"application/json": {
-				schema,
-			},
-		},
+		content: Object.fromEntries(
+			contentTypes.map((contentType) => [contentType, { schema }]),
+		) as OpenAPIRequestBody["content"],
 	};
 }
 

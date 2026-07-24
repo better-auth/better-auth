@@ -6,6 +6,7 @@ import {
 	organizationClient,
 } from "better-auth/client/plugins";
 import { toNodeHandler } from "better-auth/node";
+import { openAPI } from "better-auth/plugins";
 import type { GenericOAuthConfig } from "better-auth/plugins/generic-oauth";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { jwt } from "better-auth/plugins/jwt";
@@ -44,6 +45,18 @@ function isRedirectResult(
 	);
 }
 
+type OpenAPIRequestBody = {
+	content: Record<string, unknown>;
+};
+
+type OpenAPIPostOperation = {
+	requestBody?: OpenAPIRequestBody;
+};
+
+type OpenAPIPath = {
+	post?: OpenAPIPostOperation;
+};
+
 describe("oauth - init", () => {
 	const createSecondaryStorage = () => ({
 		set(key: string, value: string, ttl?: number) {},
@@ -68,6 +81,36 @@ describe("oauth - init", () => {
 				],
 			}),
 		).rejects.toThrowError("jwt_config");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10346
+	 */
+	it("should document the revoke endpoint as form encoded", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				openAPI(),
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+				}),
+			],
+		});
+
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, OpenAPIPath>;
+		const requestBody = paths["/oauth2/revoke"]?.post?.requestBody;
+
+		expect(requestBody).toBeDefined();
+		expect(requestBody?.content["application/json"]).toBeUndefined();
+		expect(
+			requestBody?.content["application/x-www-form-urlencoded"],
+		).toBeDefined();
 	});
 
 	it("should pass without the jwt plugin and disableJwtPlugin set", async ({
