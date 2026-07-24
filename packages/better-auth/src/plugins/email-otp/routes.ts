@@ -49,22 +49,11 @@ async function resolveOTP(
 		opts.generateOTP({ email, type }, ctx) || defaultOTPGenerator(opts);
 	const storedOTP = await storeOTP(ctx, opts, otp);
 
-	await ctx.context.internalAdapter
-		.createVerificationValue({
-			value: `${storedOTP}:0`,
-			identifier,
-			expiresAt: getDate(opts.expiresIn, "sec"),
-		})
-		.catch(async () => {
-			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-				identifier,
-			);
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${storedOTP}:0`,
-				identifier,
-				expiresAt: getDate(opts.expiresIn, "sec"),
-			});
-		});
+	await ctx.context.internalAdapter.createOrReplaceVerificationValue({
+		value: `${storedOTP}:0`,
+		identifier,
+		expiresAt: getDate(opts.expiresIn, "sec"),
+	});
 
 	return otp;
 }
@@ -205,7 +194,7 @@ export const createVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 				opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 				defaultOTPGenerator(opts);
 			const storedOTP = await storeOTP(ctx, opts, otp);
-			await ctx.context.internalAdapter.createVerificationValue({
+			await ctx.context.internalAdapter.createOrReplaceVerificationValue({
 				value: `${storedOTP}:0`,
 				identifier: toOTPIdentifier(ctx.body.type, email),
 				expiresAt: getDate(opts.expiresIn, "sec"),
@@ -1103,16 +1092,20 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				opts.generateOTP({ email: newEmail, type: "change-email" }, ctx) ||
 				defaultOTPGenerator(opts);
 			const storedOTP = await storeOTP(ctx, opts, otp);
-			await ctx.context.internalAdapter.createVerificationValue({
+			const changeEmailIdentifier = toOTPIdentifier(
+				"change-email",
+				`${email}-${newEmail}`,
+			);
+			await ctx.context.internalAdapter.createOrReplaceVerificationValue({
 				value: `${storedOTP}:0`,
-				identifier: toOTPIdentifier("change-email", `${email}-${newEmail}`),
+				identifier: changeEmailIdentifier,
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
 
 			const user = await ctx.context.internalAdapter.findUserByEmail(newEmail);
 			if (user) {
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					toOTPIdentifier("change-email", `${email}-${newEmail}`),
+					changeEmailIdentifier,
 				);
 				return ctx.json({
 					success: true,
@@ -1330,11 +1323,30 @@ async function atomicVerifyOTP(
 	const verified = await verifyStoredOTP(ctx, opts, otpValue, providedOTP);
 
 	if (!verified) {
-		await ctx.context.internalAdapter.createVerificationValue({
-			value: `${otpValue}:${usedAttempts + 1}`,
-			identifier,
-			expiresAt: consumed.expiresAt,
-		});
+		// Recreate outside the consume transaction. A concurrent send may have
+		// already written a fresher OTP — skip recreate so we neither clobber it
+		// nor insert a stale sibling row. Do not delete-before-create here.
+		const existing =
+			await ctx.context.internalAdapter.findVerificationValue(identifier);
+		if (existing) {
+			throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+		}
+		try {
+			await ctx.context.internalAdapter.createVerificationValue({
+				value: `${otpValue}:${usedAttempts + 1}`,
+				identifier,
+				expiresAt: consumed.expiresAt,
+			});
+		} catch (error) {
+			// Unique-constraint deployments: a racing insert looks like a failed
+			// recreate. Other DB failures must surface (not masquerade as INVALID_OTP).
+			const raced =
+				await ctx.context.internalAdapter.findVerificationValue(identifier);
+			if (raced) {
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+			}
+			throw error;
+		}
 		throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
 	}
 }

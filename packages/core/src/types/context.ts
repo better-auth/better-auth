@@ -218,6 +218,21 @@ export interface InternalAdapter<
 			Partial<Verification>,
 	): Promise<Verification>;
 
+	/**
+	 * Create a verification value after deleting any existing rows with the
+	 * same identifier. Use this when the identifier is deterministic (e.g.
+	 * email-otp / phone-otp) and a previous unconsumed row may still exist.
+	 *
+	 * Unlike relying on a unique constraint + create-then-catch, this works
+	 * on the stock verification schema where `identifier` is not unique.
+	 * Same-process callers are serialized; across processes the singleton is
+	 * best-effort without a unique constraint or upsert.
+	 */
+	createOrReplaceVerificationValue(
+		data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
+			Partial<Verification>,
+	): Promise<Verification>;
+
 	findVerificationValue(identifier: string): Promise<Verification | null>;
 
 	deleteVerificationByIdentifier(identifier: string): Promise<void>;
