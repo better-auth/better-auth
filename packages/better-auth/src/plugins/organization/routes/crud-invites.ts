@@ -1182,9 +1182,10 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 				invitation.status !== "pending" ||
 				invitation.expiresAt < new Date()
 			) {
-				throw APIError.fromStatus("BAD_REQUEST", {
-					message: "Invitation not found!",
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
+				);
 			}
 			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
 				throw APIError.from(
