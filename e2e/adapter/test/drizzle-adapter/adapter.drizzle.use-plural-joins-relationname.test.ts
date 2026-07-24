@@ -261,7 +261,7 @@ describe("drizzle adapter: usePlural + joins + ambiguous relations (#8849)", () 
 			provider: "sqlite",
 			usePlural: true,
 		})({
-			experimental: { joins: true },
+			advanced: { database: { joins: true } },
 		});
 
 		const userWithAccounts = await adapter.findOne<
