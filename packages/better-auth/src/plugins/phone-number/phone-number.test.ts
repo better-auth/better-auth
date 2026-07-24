@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { admin } from "../admin";
+import { adminClient } from "../admin/client";
 import { bearer } from "../bearer";
 import { phoneNumber } from ".";
 import { phoneNumberClient } from "./client";
+import { defaultMaskPhoneNumber } from "./mask";
 
 describe("phone-number", async () => {
 	let otp = "";
@@ -1281,5 +1284,222 @@ describe("custom verifyOTP", async () => {
 		});
 		expect(user.data?.user.phoneNumber).toBe(updatedPhoneNumber);
 		expect(user.data?.user.phoneNumberVerified).toBe(true);
+	});
+});
+
+describe("defaultMaskPhoneNumber", () => {
+	it("masks digits and keeps last 4 with + prefix", () => {
+		expect(defaultMaskPhoneNumber("+15551234567")).toBe("+*******4567");
+		expect(defaultMaskPhoneNumber("+251911121314")).toBe("+********1314");
+	});
+
+	it("is idempotent for the default mask format", () => {
+		const masked = defaultMaskPhoneNumber("+15551234567");
+		expect(defaultMaskPhoneNumber(masked)).toBe(masked);
+	});
+
+	it("still masks numbers that contain a literal asterisk", () => {
+		// Digits are extracted ignoring `*`, so this masks like +15551234567.
+		expect(defaultMaskPhoneNumber("+1*5551234567")).toBe("+*******4567");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/5305
+ */
+describe("phone-number maskPhoneNumber", async () => {
+	let otp = "";
+	const testPhone = "+15551234567";
+	const maskedPhone = "+*******4567";
+
+	const { client, sessionSetter, signInWithTestUser, auth } =
+		await getTestInstance(
+			{
+				session: {
+					cookieCache: {
+						enabled: true,
+					},
+				},
+				plugins: [
+					phoneNumber({
+						maskPhoneNumber: true,
+						async sendOTP({ code }) {
+							otp = code;
+						},
+						signUpOnVerification: {
+							getTempEmail(phoneNumber) {
+								return `temp-${phoneNumber}@example.com`;
+							},
+						},
+					}),
+					admin(),
+				],
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => ({
+								data: {
+									...user,
+									emailVerified: true,
+									...(user.name === "Admin" ? { role: "admin" } : {}),
+								},
+							}),
+						},
+					},
+				},
+			},
+			{
+				testUser: {
+					name: "Admin",
+				},
+				clientOptions: {
+					plugins: [phoneNumberClient(), adminClient()],
+				},
+			},
+		);
+
+	const headers = new Headers();
+
+	it("should return full phone number on verify", async () => {
+		await client.phoneNumber.sendOtp({
+			phoneNumber: testPhone,
+		});
+		const res = await client.phoneNumber.verify(
+			{
+				phoneNumber: testPhone,
+				code: otp,
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+		expect(res.error).toBe(null);
+		expect(res.data?.user.phoneNumber).toBe(testPhone);
+	});
+
+	it("should mask phone number on get-session", async () => {
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.user.phoneNumber).toBe(maskedPhone);
+	});
+
+	it("should return full phone number on sign-in/phone-number", async () => {
+		await auth.api.setPassword({
+			body: {
+				newPassword: "password",
+			},
+			headers,
+		});
+		const res = await client.signIn.phoneNumber({
+			phoneNumber: testPhone,
+			password: "password",
+		});
+		expect(res.error).toBe(null);
+		expect(res.data?.user.phoneNumber).toBe(testPhone);
+	});
+
+	it("should mask phone number on email sign-in", async () => {
+		const res = await client.signIn.email({
+			email: `temp-${testPhone}@example.com`,
+			password: "password",
+		});
+		expect(res.error).toBe(null);
+		expect(res.data?.user.phoneNumber).toBe(maskedPhone);
+	});
+
+	it("should return full phone number on admin get-user", async () => {
+		const { headers: adminHeaders } = await signInWithTestUser();
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		const userId = session.data?.user.id;
+		expect(userId).toBeDefined();
+
+		const res = await client.admin.getUser(
+			{
+				query: {
+					id: userId!,
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error).toBe(null);
+		expect(
+			(res.data as { phoneNumber?: string } | null | undefined)?.phoneNumber,
+		).toBe(testPhone);
+	});
+
+	it("should keep cookie cache masked across get-session", async () => {
+		const first = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(first.data?.user.phoneNumber).toBe(maskedPhone);
+		const second = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(second.data?.user.phoneNumber).toBe(maskedPhone);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/5305
+ */
+describe("phone-number maskPhoneNumber disabled by default", async () => {
+	let otp = "";
+	const testPhone = "+15559876543";
+
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}@example.com`;
+						},
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	it("should return full phone number on get-session when masking is off", async () => {
+		const headers = new Headers();
+		await client.phoneNumber.sendOtp({
+			phoneNumber: testPhone,
+		});
+		await client.phoneNumber.verify(
+			{
+				phoneNumber: testPhone,
+				code: otp,
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.user.phoneNumber).toBe(testPhone);
 	});
 });
