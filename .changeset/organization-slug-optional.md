@@ -11,9 +11,12 @@ plugins: [
       organization: {
         additionalFields: {
           slug: {
-            type: 'string',
-            // Optional
+            type: "string",
+            // Required schema changes
             required: false,
+            // Optional schema changes
+            unique: false,
+            sortable: false,
             // Optional - forces `slug` to be returned as null in responses
             transform: {
               output: () => null,
