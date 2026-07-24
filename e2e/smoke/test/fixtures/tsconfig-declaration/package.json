@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --project tsconfig.json",
-    "typecheck:consumer": "tsc --project tsconfig.json"
+    "typecheck:consumer": "tsc --noEmit --project tsconfig.json"
   },
   "dependencies": {
     "@better-auth/api-key": "workspace:*",

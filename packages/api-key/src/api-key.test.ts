@@ -3668,7 +3668,7 @@ describe("api-key", async () => {
 								customStore.delete(key);
 								return value;
 							},
-							increment(key) {
+							increment(key, _ttl) {
 								const count = Number(customStore.get(key) ?? 0) + 1;
 								customStore.set(key, String(count));
 								return count;
