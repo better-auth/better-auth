@@ -284,10 +284,8 @@ describe("slug optional", async () => {
 		});
 		expect(org).toBeDefined();
 		expect(org?.name).toBe("no-slug-org");
-		// slug should not be required; allow undefined, null, or empty
-		expect(
-			org?.slug === undefined || org?.slug === null || org?.slug === "",
-		).toBeTruthy();
+		// slug should not be required; allow undefined or null (empty string should remain invalid)
+		expect(org?.slug === undefined || org?.slug === null).toBeTruthy();
 	});
 
 	it("allows updating organization name when slug is optional", async () => {
