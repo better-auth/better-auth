@@ -12,13 +12,11 @@ plugins: [
         additionalFields: {
           slug: {
             type: 'string',
-            // Required - allows optional
+            // Optional
             required: false,
-            // optional - allows setting to null is future updates
-            nullable: true,
-            // optional - prevents slug from return on existing records
+            // Optional - forces `slug` to be returned as null in responses
             transform: {
-              output: (value) => (value = null),
+              output: () => null,
             },
           },
         }
