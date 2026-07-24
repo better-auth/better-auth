@@ -1,3 +1,4 @@
+import type { Awaitable } from "@better-auth/core";
 import type { InferOptionSchema, Session, User } from "../../types";
 import type { AccessControl, Role } from "../access";
 import type { AdminSchema } from "./schema";
@@ -74,8 +75,13 @@ export interface AdminOptions {
 	 * Message to show when a user is banned
 	 *
 	 * By default, the message is "You have been banned from this application"
+	 *
+	 * Can also be a function that receives the banned user and returns a message.
 	 */
-	bannedUserMessage?: string | undefined;
+	bannedUserMessage?:
+		| string
+		| ((user: UserWithRole) => Awaitable<string>)
+		| undefined;
 	/**
 	 * Whether to allow impersonating other admins.
 	 *
