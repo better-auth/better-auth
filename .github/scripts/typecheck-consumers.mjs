@@ -130,6 +130,10 @@ function isPathInside(root, path) {
 	return relation !== "" && !relation.startsWith("..") && !isAbsolute(relation);
 }
 
+export function normalizePath(path) {
+	return path.replaceAll("\\", "/");
+}
+
 function resolvePackageTarget(packageRoot, target, label) {
 	if (typeof target !== "string" || target.length === 0) {
 		throw new Error(`${label} must declare a non-empty type target`);
@@ -151,7 +155,7 @@ function assertCanonicalPackageTarget(packageRoot, path, label) {
 }
 
 function matchingWildcardTargets(wildcardRoot, target, packageRoot, label) {
-	const normalizedTarget = target.replace(/^\.\//, "").replaceAll("\\\\", "/");
+	const normalizedTarget = normalizePath(target.replace(/^\.\//, ""));
 	const expression = new RegExp(
 		`^${normalizedTarget
 			.split("*")
@@ -174,7 +178,7 @@ function matchingWildcardTargets(wildcardRoot, target, packageRoot, label) {
 				directories.push(path);
 			} else if (
 				entry.isFile() &&
-				expression.test(relative(packageRoot, path).replaceAll("\\\\", "/"))
+				expression.test(normalizePath(relative(packageRoot, path)))
 			) {
 				matches.push(path);
 			}
@@ -306,7 +310,7 @@ function importsPackage(imports, packageName) {
 }
 
 function nodeModulesPackageName(path) {
-	const normalized = path.replaceAll("\\\\", "/");
+	const normalized = normalizePath(path);
 	const marker = "/node_modules/";
 	const index = normalized.lastIndexOf(marker);
 	if (index === -1) return undefined;

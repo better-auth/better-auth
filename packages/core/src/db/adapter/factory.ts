@@ -178,12 +178,8 @@ export const createAdapterFactory =
 		const idField = initGetIdField({
 			schema,
 			options,
-			...(config.usePlural !== undefined
-				? { usePlural: config.usePlural }
-				: {}),
-			...(config.disableIdGeneration !== undefined
-				? { disableIdGeneration: config.disableIdGeneration }
-				: {}),
+			usePlural: config.usePlural,
+			disableIdGeneration: config.disableIdGeneration,
 			customIdGenerator: config.customIdGenerator,
 			supportsUUIDs: config.supportsUUIDs,
 		});
@@ -191,12 +187,8 @@ export const createAdapterFactory =
 		const getFieldAttributes = initGetFieldAttributes({
 			schema,
 			options,
-			...(config.usePlural !== undefined
-				? { usePlural: config.usePlural }
-				: {}),
-			...(config.disableIdGeneration !== undefined
-				? { disableIdGeneration: config.disableIdGeneration }
-				: {}),
+			usePlural: config.usePlural,
+			disableIdGeneration: config.disableIdGeneration,
 			customIdGenerator: config.customIdGenerator,
 		});
 
@@ -213,9 +205,7 @@ export const createAdapterFactory =
 			const useNumberId = options.advanced?.database?.generateId === "serial";
 			fields.id = idField({
 				customModelName: defaultModelName,
-				...(forceAllowId !== undefined
-					? { forceAllowId: forceAllowId && "id" in data }
-					: {}),
+				forceAllowId: forceAllowId && "id" in data,
 			});
 			for (const field in fields) {
 				let value = data[field];
@@ -1570,10 +1560,7 @@ export const createAdapterFactory =
 							delete tables.session;
 						}
 
-						return adapterInstance.createSchema!({
-							tables,
-							...(file !== undefined ? { file } : {}),
-						});
+						return adapterInstance.createSchema!({ file, tables });
 					}
 				: undefined,
 			options: {

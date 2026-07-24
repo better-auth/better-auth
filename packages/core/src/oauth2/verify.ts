@@ -538,12 +538,8 @@ export async function verifyAccessTokenRequest(
 			method: request.method,
 			url: request.url,
 			replayStore: opts.dpop?.replayStore ?? defaultDpopReplayStore,
-			...(opts.dpop?.proofMaxAgeSeconds !== undefined
-				? { proofMaxAgeSeconds: opts.dpop.proofMaxAgeSeconds }
-				: {}),
-			...(opts.dpop?.signingAlgorithms !== undefined
-				? { signingAlgorithms: opts.dpop.signingAlgorithms }
-				: {}),
+			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
+			signingAlgorithms: opts.dpop?.signingAlgorithms,
 		});
 	} catch (error) {
 		if (isDpopBindingError(error)) {

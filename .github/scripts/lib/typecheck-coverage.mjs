@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
+import ts from "typescript";
 
 const manifestPath = "typecheck.coverage.json";
 const groupRoles = {
@@ -72,11 +73,14 @@ function listWorkspacePaths(root) {
 		.sort();
 }
 
-function parseJsonWithComments(path) {
-	const contents = readFileSync(path, "utf8")
-		.replace(/\/\*[\s\S]*?\*\//g, "")
-		.replace(/(^|[^:])\/\/.*$/gm, "$1");
-	return JSON.parse(contents);
+export function parseJsonWithComments(path) {
+	const result = ts.readConfigFile(path, ts.sys.readFile);
+	if (result.error) {
+		throw new Error(
+			ts.flattenDiagnosticMessageText(result.error.messageText, "\n"),
+		);
+	}
+	return result.config;
 }
 
 function relativePath(root, path) {
@@ -105,51 +109,50 @@ function assertRole(group, entry) {
 	}
 }
 
-function assertVerificationRunner(root, entry) {
-	const runner = entry.verification?.runner;
-	if (!runner || typeof runner.cwd !== "string") {
-		throw new Error(
-			`${entry.path}: semantic-typecheck entries require a runner`,
-		);
-	}
-	const runnerRoot = resolve(root, runner.cwd);
-	const relativeRunnerRoot = relative(root, runnerRoot);
-	if (
-		relativeRunnerRoot.startsWith("..") ||
-		isAbsolute(relativeRunnerRoot) ||
-		!existsSync(runnerRoot)
-	) {
-		throw new Error(
-			`${entry.path}: runner.cwd must stay within the repository`,
-		);
-	}
-	assertStringArray(runner.command, "runner.command", entry.path);
-	if (runner.command[0] !== "exec" || runner.command[1] !== "tsc") {
-		throw new Error(`${entry.path}: runner.command must invoke pnpm exec tsc`);
-	}
-	const projectIndex = runner.command.findIndex(
-		(argument) => argument === "--project" || argument === "-p",
+export function semanticTypecheckRunner(entry) {
+	return {
+		command: ["exec", "tsc", "--noEmit", "--project", entry.path],
+		cwd: ".",
+		prepare: entry.verification.prepare ?? [],
+	};
+}
+
+export function assertRootPackageReferences(
+	rootReferencePaths,
+	sourceConfigPaths,
+) {
+	const rootReferences = new Set(rootReferencePaths);
+	const omissions = sourceConfigPaths.filter(
+		(path) => !rootReferences.has(path),
 	);
-	const expectedProject = relativePath(runnerRoot, join(root, entry.path));
-	if (
-		projectIndex === -1 ||
-		runner.command[projectIndex + 1] !== expectedProject
-	) {
+	if (omissions.length > 0) {
 		throw new Error(
-			`${entry.path}: runner.command must select ${expectedProject} from ${runner.cwd}`,
+			`root tsconfig is missing package source references:\n${omissions
+				.map((path) => `  ${path}`)
+				.join("\n")}`,
 		);
-	}
-	for (const step of runner.prepare ?? []) {
-		if (typeof step?.label !== "string") {
-			throw new Error(`${entry.path}: runner.prepare steps require a label`);
-		}
-		assertStringArray(step.command, "runner.prepare.command", entry.path);
 	}
 }
 
-function assertVerification(root, entry, runtimeOwnerIds) {
+function assertSemanticVerification(entry) {
+	if (entry.verification.runner !== undefined) {
+		throw new Error(
+			`${entry.path}: semantic typecheck commands are derived from the config path`,
+		);
+	}
+	for (const step of entry.verification.prepare ?? []) {
+		if (typeof step?.label !== "string") {
+			throw new Error(
+				`${entry.path}: verification.prepare steps require a label`,
+			);
+		}
+		assertStringArray(step.command, "verification.prepare.command", entry.path);
+	}
+}
+
+function assertVerification(entry, runtimeOwnerIds) {
 	if (entry.verification?.kind === "semantic-typecheck") {
-		assertVerificationRunner(root, entry);
+		assertSemanticVerification(entry);
 		return;
 	}
 	if (entry.verification?.kind === "transpile-runtime-only") {
@@ -426,17 +429,17 @@ function assertManifestEntries(root, manifest) {
 					}
 				}
 			} else if (group === "packages" && entry.role === "source") {
-				if (entry.runner !== "package-source-solution") {
+				if (entry.runner !== undefined) {
 					throw new Error(
-						`${entry.path}: source entries require package-source-solution runner semantics`,
+						`${entry.path}: source coverage is owned by the root project-reference graph`,
 					);
 				}
 			} else if (group === "packages" && entry.role === "test-only") {
 				assertReason(entry);
-				assertVerification(root, entry, runtimeOwnerIds);
+				assertVerification(entry, runtimeOwnerIds);
 			} else if (group === "tests") {
 				assertReason(entry);
-				assertVerification(root, entry, runtimeOwnerIds);
+				assertVerification(entry, runtimeOwnerIds);
 			} else {
 				assertReason(entry);
 			}
@@ -551,14 +554,11 @@ export function assertCoverageInventory(root) {
 	const sourceConfigs = manifest.packages
 		.filter((entry) => entry.role === "source")
 		.map((entry) => entry.path);
-	const rootOmissions = sourceConfigs.filter(
-		(path) => !rootReferences.has(path),
-	);
+	assertRootPackageReferences(rootReferences, sourceConfigs);
 
 	return {
 		tsconfigFiles,
 		workspacePaths,
-		rootOmissions,
 		manifest,
 	};
 }

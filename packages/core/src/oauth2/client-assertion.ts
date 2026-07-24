@@ -131,9 +131,9 @@ export async function signPrivateKeyJwtClientAssertion({
 	expiresIn?: number;
 }): Promise<string> {
 	const resolvedAlg = resolveValidPrivateKeyJwtOptions({
-		...(privateKeyJwk !== undefined ? { privateKeyJwk } : {}),
-		...(privateKeyPem !== undefined ? { privateKeyPem } : {}),
-		...(algorithm !== undefined ? { algorithm } : {}),
+		privateKeyJwk,
+		privateKeyPem,
+		algorithm,
 	});
 	// Fall back to the JWK-embedded kid when not explicitly provided (RFC 7517).
 	// JsonWebKey types include alg but not kid; access kid via index.
@@ -175,33 +175,19 @@ export function createPrivateKeyJwtClientAssertionGetter(
 	options: PrivateKeyJwtClientAssertionGetterOptions,
 ): ClientAssertionGetter {
 	resolveValidPrivateKeyJwtOptions({
-		...(options.privateKeyJwk !== undefined
-			? { privateKeyJwk: options.privateKeyJwk }
-			: {}),
-		...(options.privateKeyPem !== undefined
-			? { privateKeyPem: options.privateKeyPem }
-			: {}),
-		...(options.algorithm !== undefined
-			? { algorithm: options.algorithm }
-			: {}),
+		privateKeyJwk: options.privateKeyJwk,
+		privateKeyPem: options.privateKeyPem,
+		algorithm: options.algorithm,
 	});
 	return ({ clientId, tokenEndpoint }) =>
 		signPrivateKeyJwtClientAssertion({
 			clientId,
 			tokenEndpoint,
-			...(options.privateKeyJwk !== undefined
-				? { privateKeyJwk: options.privateKeyJwk }
-				: {}),
-			...(options.privateKeyPem !== undefined
-				? { privateKeyPem: options.privateKeyPem }
-				: {}),
-			...(options.kid !== undefined ? { kid: options.kid } : {}),
-			...(options.algorithm !== undefined
-				? { algorithm: options.algorithm }
-				: {}),
-			...(options.expiresIn !== undefined
-				? { expiresIn: options.expiresIn }
-				: {}),
+			privateKeyJwk: options.privateKeyJwk,
+			privateKeyPem: options.privateKeyPem,
+			kid: options.kid,
+			algorithm: options.algorithm,
+			expiresIn: options.expiresIn,
 		});
 }
 

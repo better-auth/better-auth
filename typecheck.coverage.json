@@ -19,149 +19,107 @@
   "packages": [
     {
       "path": "packages/api-key/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/api-key/tsconfig.test.json",
       "role": "test-only",
       "reason": "Direct compiler coverage verifies this package test project.",
       "verification": {
-        "kind": "semantic-typecheck",
-        "runner": {
-          "cwd": ".",
-          "command": [
-            "exec",
-            "tsc",
-            "--noEmit",
-            "--project",
-            "packages/api-key/tsconfig.test.json"
-          ]
-        }
+        "kind": "semantic-typecheck"
       }
     },
     {
       "path": "packages/better-auth/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/cimd/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/cli/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/core/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/drizzle-adapter/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/electron/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/expo/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/expo/tsconfig.test.json",
       "role": "test-only",
       "reason": "Direct compiler coverage verifies this package test project.",
       "verification": {
-        "kind": "semantic-typecheck",
-        "runner": {
-          "cwd": ".",
-          "command": [
-            "exec",
-            "tsc",
-            "--noEmit",
-            "--project",
-            "packages/expo/tsconfig.test.json"
-          ]
-        }
+        "kind": "semantic-typecheck"
       }
     },
     {
       "path": "packages/i18n/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/kysely-adapter/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/mcp/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/memory-adapter/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/mongo-adapter/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/oauth-provider/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/passkey/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/prisma-adapter/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/redis-storage/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/scim/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/sso/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/stripe/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/telemetry/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     },
     {
       "path": "packages/test-utils/tsconfig.json",
-      "role": "source",
-      "runner": "package-source-solution"
+      "role": "source"
     }
   ],
   "consumers": [
@@ -368,17 +326,7 @@
       "role": "test-fixture",
       "reason": "Direct compiler coverage verifies this AST audit fixture.",
       "verification": {
-        "kind": "semantic-typecheck",
-        "runner": {
-          "cwd": ".",
-          "command": [
-            "exec",
-            "tsc",
-            "--noEmit",
-            "--project",
-            ".github/scripts/fixtures/type-safety-audit/tsconfig.json"
-          ]
-        }
+        "kind": "semantic-typecheck"
       }
     },
     {
@@ -387,28 +335,18 @@
       "reason": "Direct compiler coverage verifies the adapter test project after generating its Prisma client.",
       "verification": {
         "kind": "semantic-typecheck",
-        "runner": {
-          "cwd": ".",
-          "prepare": [
-            {
-              "label": "Adapter Prisma client generation",
-              "command": [
-                "--dir",
-                "e2e/adapter/test/prisma-adapter",
-                "exec",
-                "prisma",
-                "generate"
-              ]
-            }
-          ],
-          "command": [
-            "exec",
-            "tsc",
-            "--noEmit",
-            "--project",
-            "e2e/adapter/tsconfig.json"
-          ]
-        }
+        "prepare": [
+          {
+            "label": "Adapter Prisma client generation",
+            "command": [
+              "--dir",
+              "e2e/adapter/test/prisma-adapter",
+              "exec",
+              "prisma",
+              "generate"
+            ]
+          }
+        ]
       }
     },
     {
@@ -425,17 +363,7 @@
       "role": "test-fixture",
       "reason": "Direct compiler coverage verifies this integration fixture.",
       "verification": {
-        "kind": "semantic-typecheck",
-        "runner": {
-          "cwd": ".",
-          "command": [
-            "exec",
-            "tsc",
-            "--noEmit",
-            "--project",
-            "e2e/integration/vanilla-node/tsconfig.json"
-          ]
-        }
+        "kind": "semantic-typecheck"
       }
     },
     {
@@ -452,17 +380,7 @@
       "role": "test-fixture",
       "reason": "Direct compiler coverage verifies this smoke fixture.",
       "verification": {
-        "kind": "semantic-typecheck",
-        "runner": {
-          "cwd": ".",
-          "command": [
-            "exec",
-            "tsc",
-            "--noEmit",
-            "--project",
-            "e2e/smoke/test/fixtures/cloudflare/tsconfig.json"
-          ]
-        }
+        "kind": "semantic-typecheck"
       }
     },
     {
@@ -470,17 +388,7 @@
       "role": "test-fixture",
       "reason": "Direct compiler coverage verifies this smoke fixture.",
       "verification": {
-        "kind": "semantic-typecheck",
-        "runner": {
-          "cwd": ".",
-          "command": [
-            "exec",
-            "tsc",
-            "--noEmit",
-            "--project",
-            "e2e/smoke/test/fixtures/esbuild/tsconfig.json"
-          ]
-        }
+        "kind": "semantic-typecheck"
       }
     },
     {
@@ -498,17 +406,7 @@
       "solution": true,
       "reason": "Direct compiler coverage verifies this smoke fixture solution.",
       "verification": {
-        "kind": "semantic-typecheck",
-        "runner": {
-          "cwd": ".",
-          "command": [
-            "exec",
-            "tsc",
-            "--noEmit",
-            "--project",
-            "e2e/smoke/test/fixtures/tsconfig-composite-client/tsconfig.json"
-          ]
-        }
+        "kind": "semantic-typecheck"
       }
     },
     {
@@ -516,17 +414,7 @@
       "role": "test-fixture",
       "reason": "Direct compiler coverage verifies this smoke fixture leaf project.",
       "verification": {
-        "kind": "semantic-typecheck",
-        "runner": {
-          "cwd": ".",
-          "command": [
-            "exec",
-            "tsc",
-            "--noEmit",
-            "--project",
-            "e2e/smoke/test/fixtures/tsconfig-composite-client/packages/app/tsconfig.json"
-          ]
-        }
+        "kind": "semantic-typecheck"
       }
     },
     {
@@ -534,17 +422,7 @@
       "role": "test-fixture",
       "reason": "Direct compiler coverage verifies this smoke fixture.",
       "verification": {
-        "kind": "semantic-typecheck",
-        "runner": {
-          "cwd": ".",
-          "command": [
-            "exec",
-            "tsc",
-            "--noEmit",
-            "--project",
-            "e2e/smoke/test/fixtures/tsconfig-declaration/tsconfig.json"
-          ]
-        }
+        "kind": "semantic-typecheck"
       }
     },
     {
@@ -552,17 +430,7 @@
       "role": "test-fixture",
       "reason": "Direct compiler coverage verifies this smoke fixture.",
       "verification": {
-        "kind": "semantic-typecheck",
-        "runner": {
-          "cwd": ".",
-          "command": [
-            "exec",
-            "tsc",
-            "--noEmit",
-            "--project",
-            "e2e/smoke/test/fixtures/tsconfig-exact-optional-property-types/tsconfig.json"
-          ]
-        }
+        "kind": "semantic-typecheck"
       }
     },
     {
@@ -570,17 +438,7 @@
       "role": "test-fixture",
       "reason": "Direct compiler coverage verifies this smoke fixture.",
       "verification": {
-        "kind": "semantic-typecheck",
-        "runner": {
-          "cwd": ".",
-          "command": [
-            "exec",
-            "tsc",
-            "--noEmit",
-            "--project",
-            "e2e/smoke/test/fixtures/tsconfig-isolated-module-bundler/tsconfig.json"
-          ]
-        }
+        "kind": "semantic-typecheck"
       }
     },
     {
@@ -588,17 +446,7 @@
       "role": "test-fixture",
       "reason": "Direct compiler coverage verifies this smoke fixture.",
       "verification": {
-        "kind": "semantic-typecheck",
-        "runner": {
-          "cwd": ".",
-          "command": [
-            "exec",
-            "tsc",
-            "--noEmit",
-            "--project",
-            "e2e/smoke/test/fixtures/tsconfig-verbatim-module-syntax-node10/tsconfig.json"
-          ]
-        }
+        "kind": "semantic-typecheck"
       }
     },
     {
@@ -606,17 +454,7 @@
       "role": "test-fixture",
       "reason": "Direct compiler coverage verifies this smoke fixture.",
       "verification": {
-        "kind": "semantic-typecheck",
-        "runner": {
-          "cwd": ".",
-          "command": [
-            "exec",
-            "tsc",
-            "--noEmit",
-            "--project",
-            "e2e/smoke/test/fixtures/vite/tsconfig.json"
-          ]
-        }
+        "kind": "semantic-typecheck"
       }
     },
     {
@@ -624,17 +462,7 @@
       "role": "test-runner",
       "reason": "Direct compiler coverage verifies the shared test project.",
       "verification": {
-        "kind": "semantic-typecheck",
-        "runner": {
-          "cwd": ".",
-          "command": [
-            "exec",
-            "tsc",
-            "--noEmit",
-            "--project",
-            "test/tsconfig.json"
-          ]
-        }
+        "kind": "semantic-typecheck"
       }
     }
   ],

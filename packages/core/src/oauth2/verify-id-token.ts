@@ -93,16 +93,10 @@ export async function verifyProviderIdToken(
 		// allowed-algorithms list when the provider does not pin one.
 		const { alg } = decodeProtectedHeader(token);
 		const { payload } = await jwtVerify(token, config.jwks, {
+			issuer: config.issuer,
 			audience: config.audience,
-			...(config.issuer !== undefined ? { issuer: config.issuer } : {}),
-			...(config.algorithms !== undefined
-				? { algorithms: config.algorithms }
-				: alg
-					? { algorithms: [alg] }
-					: {}),
-			...(config.maxTokenAge !== undefined
-				? { maxTokenAge: config.maxTokenAge }
-				: {}),
+			algorithms: config.algorithms ?? (alg ? [alg] : undefined),
+			maxTokenAge: config.maxTokenAge,
 		});
 		if (
 			nonce &&

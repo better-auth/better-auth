@@ -283,7 +283,7 @@ function declarationScope(sourceFile, node) {
 	return `${base}:${names.reverse().join(".")}`;
 }
 
-function scanSourceFile(root, absolutePath) {
+function scanSourceFile(root, absolutePath, declarationCandidates) {
 	const path = relativePath(root, absolutePath);
 	const scope = classifyScope(path);
 	const sourceFile = ts.createSourceFile(
@@ -388,6 +388,20 @@ function scanSourceFile(root, absolutePath) {
 			);
 		}
 
+		if (
+			ts.isInterfaceDeclaration(node) ||
+			ts.isClassDeclaration(node) ||
+			ts.isModuleDeclaration(node)
+		) {
+			const name = node.name?.getText(sourceFile);
+			if (name) {
+				const key = `${declarationScope(sourceFile, node)}:${name}`;
+				const declarations = declarationCandidates.get(key) ?? [];
+				declarations.push({ node, path, scope, sourceFile });
+				declarationCandidates.set(key, declarations);
+			}
+		}
+
 		ts.forEachChild(node, visit);
 	}
 
@@ -396,37 +410,7 @@ function scanSourceFile(root, absolutePath) {
 	return occurrences;
 }
 
-function declarationMergeOccurrences(root, absolutePaths) {
-	const candidates = new Map();
-	for (const absolutePath of absolutePaths) {
-		const path = relativePath(root, absolutePath);
-		const sourceFile = ts.createSourceFile(
-			path,
-			readFileSync(absolutePath, "utf8"),
-			ts.ScriptTarget.Latest,
-			true,
-			getScriptKind(path),
-		);
-		const scope = classifyScope(path);
-		function visit(node) {
-			if (
-				ts.isInterfaceDeclaration(node) ||
-				ts.isClassDeclaration(node) ||
-				ts.isModuleDeclaration(node)
-			) {
-				const name = node.name?.getText(sourceFile);
-				if (name) {
-					const key = `${declarationScope(sourceFile, node)}:${name}`;
-					const declarations = candidates.get(key) ?? [];
-					declarations.push({ node, path, scope, sourceFile });
-					candidates.set(key, declarations);
-				}
-			}
-			ts.forEachChild(node, visit);
-		}
-		visit(sourceFile);
-	}
-
+function declarationMergeOccurrences(candidates) {
 	const occurrences = [];
 	for (const declarations of candidates.values()) {
 		if (declarations.length > 1) {
@@ -518,7 +502,7 @@ function listTsconfigFiles(root) {
 			const absolutePath = join(directory, entry.name);
 			if (
 				entry.isDirectory() &&
-				(entry.name === ".git" || entry.name === "node_modules")
+				[".git", ".next", ".turbo", "dist", "node_modules"].includes(entry.name)
 			) {
 				continue;
 			}
@@ -655,12 +639,11 @@ function summarize(occurrences) {
 export function scanRepository(root) {
 	const absoluteRoot = resolve(root);
 	const sourceInventory = listRepositoryFiles(absoluteRoot);
+	const declarationCandidates = new Map();
 	const occurrences = sourceInventory.files.flatMap((path) =>
-		scanSourceFile(absoluteRoot, path),
+		scanSourceFile(absoluteRoot, path, declarationCandidates),
 	);
-	occurrences.push(
-		...declarationMergeOccurrences(absoluteRoot, sourceInventory.files),
-	);
+	occurrences.push(...declarationMergeOccurrences(declarationCandidates));
 	const tsconfigFiles = listTsconfigFiles(absoluteRoot);
 	for (const path of tsconfigFiles) {
 		occurrences.push(...scanTsconfig(absoluteRoot, path));
@@ -695,7 +678,6 @@ export function createPolicy(inventory) {
 	return {
 		policyVersion: 1,
 		scanRules,
-		summary: inventory.summary,
 		highRiskProduction: [...grouped.values()].sort(
 			(left, right) =>
 				left.category.localeCompare(right.category) ||

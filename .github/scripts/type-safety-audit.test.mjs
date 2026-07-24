@@ -129,6 +129,18 @@ test("scans TypeScript AST escape hatches and tsconfig posture deterministically
 			formatInventory(inventory),
 			formatInventory(scanRepository(root)),
 		);
+		for (const directory of [".next", ".turbo", "dist"]) {
+			const generatedConfig = join(root, directory, "tsconfig.generated.json");
+			mkdirSync(dirname(generatedConfig), { recursive: true });
+			writeFileSync(
+				generatedConfig,
+				'{"compilerOptions":{"skipLibCheck":true}}',
+			);
+		}
+		assert.equal(
+			formatInventory(inventory),
+			formatInventory(scanRepository(root)),
+		);
 		writeFileSync(
 			join(root, ".gitignore"),
 			"demo/nextjs/next-env.d.ts\ndemo/stateless/next-env.d.ts\ndocs/next-env.d.ts\ndocs/.source/\n",
@@ -180,6 +192,7 @@ test("rejects a new production high-risk escape hatch with a stable content fing
 
 	try {
 		const baseline = createPolicy(scanRepository(temporaryRoot));
+		assert.equal("summary" in baseline, false);
 		const sourcePath = join(
 			temporaryRoot,
 			"packages/example/src/escape-hatches.ts",
@@ -209,7 +222,7 @@ export const newDouble = value as unknown as { id: string };
 		for (const addition of additions) {
 			assert.equal(
 				addition.path,
-				relative(temporaryRoot, sourcePath).replaceAll("\\\\", "/"),
+				relative(temporaryRoot, sourcePath).replaceAll("\\", "/"),
 			);
 			assert.ok(addition.line > 0);
 		}

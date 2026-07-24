@@ -1,6 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { assertCoverageInventory } from "./lib/typecheck-coverage.mjs";
+import {
+	assertCoverageInventory,
+	semanticTypecheckRunner,
+} from "./lib/typecheck-coverage.mjs";
 
 function runPnpm(cwd, label, args) {
 	console.log(`\n==> ${label}`);
@@ -20,7 +23,7 @@ const entries = [...inventory.manifest.packages, ...inventory.manifest.tests]
 
 let passed = true;
 for (const entry of entries) {
-	const runner = entry.verification.runner;
+	const runner = semanticTypecheckRunner(entry);
 	const cwd = join(root, runner.cwd);
 	for (const step of runner.prepare ?? []) {
 		passed =

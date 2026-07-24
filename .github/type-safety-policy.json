@@ -40,242 +40,6 @@
     "sourceInventory": "git-tracked-untracked-and-ignored-non-vendor-source",
     "sourceExtensions": [".cts", ".mts", ".ts", ".tsx"]
   },
-  "summary": [
-    {
-      "category": "tsconfig-exclude-posture",
-      "count": 53,
-      "risk": "reviewed-pattern",
-      "scope": "config"
-    },
-    {
-      "category": "tsconfig-files-posture",
-      "count": 53,
-      "risk": "reviewed-pattern",
-      "scope": "config"
-    },
-    {
-      "category": "tsconfig-implicit-any-posture",
-      "count": 5,
-      "risk": "medium",
-      "scope": "config"
-    },
-    {
-      "category": "tsconfig-implicit-any-posture",
-      "count": 48,
-      "risk": "reviewed-pattern",
-      "scope": "config"
-    },
-    {
-      "category": "tsconfig-include-posture",
-      "count": 53,
-      "risk": "reviewed-pattern",
-      "scope": "config"
-    },
-    {
-      "category": "tsconfig-references-posture",
-      "count": 53,
-      "risk": "reviewed-pattern",
-      "scope": "config"
-    },
-    {
-      "category": "tsconfig-skip-lib-check",
-      "count": 50,
-      "risk": "medium",
-      "scope": "config"
-    },
-    {
-      "category": "tsconfig-skip-lib-check",
-      "count": 3,
-      "risk": "reviewed-pattern",
-      "scope": "config"
-    },
-    {
-      "category": "as-any-assertion",
-      "count": 2,
-      "risk": "contextual",
-      "scope": "demo"
-    },
-    {
-      "category": "assertion-function",
-      "count": 1,
-      "risk": "contextual",
-      "scope": "demo"
-    },
-    {
-      "category": "broad-as-assertion",
-      "count": 59,
-      "risk": "contextual",
-      "scope": "demo"
-    },
-    {
-      "category": "explicit-any",
-      "count": 17,
-      "risk": "contextual",
-      "scope": "demo"
-    },
-    {
-      "category": "non-null-assertion",
-      "count": 9,
-      "risk": "contextual",
-      "scope": "demo"
-    },
-    {
-      "category": "ts-expect-error",
-      "count": 1,
-      "risk": "contextual",
-      "scope": "demo"
-    },
-    {
-      "category": "ts-nocheck",
-      "count": 1,
-      "risk": "contextual",
-      "scope": "demo"
-    },
-    {
-      "category": "type-predicate",
-      "count": 24,
-      "risk": "contextual",
-      "scope": "demo"
-    },
-    {
-      "category": "as-any-assertion",
-      "count": 152,
-      "risk": "high",
-      "scope": "production"
-    },
-    {
-      "category": "assertion-function",
-      "count": 5,
-      "risk": "reviewed-pattern",
-      "scope": "production"
-    },
-    {
-      "category": "broad-as-assertion",
-      "count": 1035,
-      "risk": "medium",
-      "scope": "production"
-    },
-    {
-      "category": "double-assertion",
-      "count": 72,
-      "risk": "high",
-      "scope": "production"
-    },
-    {
-      "category": "explicit-any",
-      "count": 930,
-      "risk": "high",
-      "scope": "production"
-    },
-    {
-      "category": "module-augmentation",
-      "count": 36,
-      "risk": "reviewed-pattern",
-      "scope": "production"
-    },
-    {
-      "category": "non-null-assertion",
-      "count": 434,
-      "risk": "medium",
-      "scope": "production"
-    },
-    {
-      "category": "ts-expect-error",
-      "count": 41,
-      "risk": "medium",
-      "scope": "production"
-    },
-    {
-      "category": "type-predicate",
-      "count": 69,
-      "risk": "reviewed-pattern",
-      "scope": "production"
-    },
-    {
-      "category": "unsafe-generic-default",
-      "count": 6,
-      "risk": "medium",
-      "scope": "production"
-    },
-    {
-      "category": "as-any-assertion",
-      "count": 442,
-      "risk": "contextual",
-      "scope": "test"
-    },
-    {
-      "category": "assertion-function",
-      "count": 1,
-      "risk": "contextual",
-      "scope": "test"
-    },
-    {
-      "category": "broad-as-assertion",
-      "count": 1718,
-      "risk": "contextual",
-      "scope": "test"
-    },
-    {
-      "category": "declaration-merging",
-      "count": 11,
-      "risk": "contextual",
-      "scope": "test"
-    },
-    {
-      "category": "double-assertion",
-      "count": 175,
-      "risk": "contextual",
-      "scope": "test"
-    },
-    {
-      "category": "explicit-any",
-      "count": 873,
-      "risk": "contextual",
-      "scope": "test"
-    },
-    {
-      "category": "module-augmentation",
-      "count": 11,
-      "risk": "contextual",
-      "scope": "test"
-    },
-    {
-      "category": "non-null-assertion",
-      "count": 1790,
-      "risk": "contextual",
-      "scope": "test"
-    },
-    {
-      "category": "ts-expect-error",
-      "count": 18,
-      "risk": "contextual",
-      "scope": "test"
-    },
-    {
-      "category": "ts-ignore",
-      "count": 1,
-      "risk": "contextual",
-      "scope": "test"
-    },
-    {
-      "category": "ts-nocheck",
-      "count": 1,
-      "risk": "contextual",
-      "scope": "test"
-    },
-    {
-      "category": "type-predicate",
-      "count": 7,
-      "risk": "contextual",
-      "scope": "test"
-    },
-    {
-      "category": "unsafe-generic-default",
-      "count": 22,
-      "risk": "contextual",
-      "scope": "test"
-    }
-  ],
   "highRiskProduction": [
     {
       "category": "as-any-assertion",
@@ -480,7 +244,7 @@
     {
       "category": "as-any-assertion",
       "count": 2,
-      "fingerprint": "5849588524f65897c2e0"
+      "fingerprint": "57a8b30b5a96ed7d96c8"
     },
     {
       "category": "as-any-assertion",
@@ -879,11 +643,6 @@
     },
     {
       "category": "double-assertion",
-      "count": 2,
-      "fingerprint": "0d6d7332f389ab09adf9"
-    },
-    {
-      "category": "double-assertion",
       "count": 1,
       "fingerprint": "0dc51c45dd0210bc20d2"
     },
@@ -1094,6 +853,11 @@
     },
     {
       "category": "double-assertion",
+      "count": 2,
+      "fingerprint": "cf945d385fda6586579c"
+    },
+    {
+      "category": "double-assertion",
       "count": 1,
       "fingerprint": "d151519b6debc4e44e75"
     },
@@ -1196,6 +960,11 @@
       "category": "explicit-any",
       "count": 1,
       "fingerprint": "02551db96a4eca9e4e73"
+    },
+    {
+      "category": "explicit-any",
+      "count": 7,
+      "fingerprint": "02a15c2108a1c2d6c34b"
     },
     {
       "category": "explicit-any",
@@ -1756,11 +1525,6 @@
       "category": "explicit-any",
       "count": 1,
       "fingerprint": "2ed48d191ff54235911c"
-    },
-    {
-      "category": "explicit-any",
-      "count": 7,
-      "fingerprint": "2eeaf22ce326d7d31515"
     },
     {
       "category": "explicit-any",

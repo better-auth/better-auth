@@ -460,7 +460,7 @@ export async function verifyDpopProof({
 		htm,
 		htu: normalizedHtu,
 		iat,
-		...(ath !== undefined ? { ath } : {}),
+		ath,
 		replayKey,
 		expiresAt,
 	};
@@ -555,9 +555,9 @@ export async function enforceDpopBinding({
 			accessToken: authorization.token,
 			expectedJkt: dpopJkt,
 			requireAth: true,
-			...(proofMaxAgeSeconds !== undefined ? { proofMaxAgeSeconds } : {}),
-			...(signingAlgorithms !== undefined ? { signingAlgorithms } : {}),
-			...(replayStore !== undefined ? { replayStore } : {}),
+			proofMaxAgeSeconds,
+			signingAlgorithms,
+			replayStore,
 		});
 	} catch (error) {
 		if (isDpopProofError(error)) {

@@ -6,7 +6,7 @@ try {
 		`Typecheck coverage inventory: ${inventory.workspacePaths.length} pnpm workspaces and ${inventory.tsconfigFiles.length} TypeScript configs.`,
 	);
 	console.log(
-		`Root tsconfig omits ${inventory.rootOmissions.length} package source configs; package coverage owns them separately.`,
+		`Root project-reference coverage: ${inventory.manifest.packages.filter((entry) => entry.role === "source").length} package source configs.`,
 	);
 	const semanticTests = [
 		...inventory.manifest.packages,

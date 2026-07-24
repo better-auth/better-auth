@@ -17,6 +17,7 @@ import {
 import {
 	assertCandidateOrigins,
 	candidateCommand,
+	normalizePath,
 } from "./typecheck-consumers.mjs";
 
 function writePackage(root, name, types, source = "export {};\n") {
@@ -101,6 +102,25 @@ export {};\n`,
 	);
 	return root;
 }
+
+test("normalizes Windows paths for declaration-origin checks", () => {
+	assert.equal(
+		normalizePath("C:\\repo\\node_modules\\@better-auth\\core\\index.d.ts"),
+		"C:/repo/node_modules/@better-auth/core/index.d.ts",
+	);
+});
+
+test("CI prepares clean consumer state before auditing effective configs", () => {
+	const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
+	const consumerCheck = workflow.indexOf("run: pnpm typecheck:consumers:clean");
+	const escapeHatchCheck = workflow.indexOf(
+		"run: pnpm typecheck:escape-hatches:check",
+	);
+	const distCheck = workflow.indexOf("run: pnpm typecheck:dist");
+	assert.ok(consumerCheck !== -1);
+	assert.ok(escapeHatchCheck > consumerCheck);
+	assert.ok(distCheck > consumerCheck);
+});
 
 test("docs consumer regenerates Fumadocs source after Next type generation", () => {
 	const manifest = loadCoverageManifest(process.cwd());
