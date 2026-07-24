@@ -374,7 +374,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 	type Body = {
 		data: {
 			name?: string | undefined;
-			slug?: string | undefined;
+			slug?: string | null | undefined;
 			logo?: string | null | undefined;
 			metadata?: Record<string, any> | undefined;
 		} & Partial<InferAdditionalFieldsFromPluginOptions<"organization", O>>;
