@@ -1,8 +1,10 @@
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { JSONWebKeySet } from "jose";
 import { createLocalJWKSet, jwtVerify } from "jose";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { inferAdditionalFields } from "../additional-fields/client";
 import { jwt } from ".";
 import { jwtClient } from "./client";
 import type { JWKOptions, Jwk, JwtOptions } from "./types";
@@ -831,5 +833,42 @@ describe("toExpJWT", () => {
 			expect(() => toExpJWT("" as any, iat)).toThrow(TypeError);
 			expect(() => toExpJWT("abc123" as any, iat)).toThrow(TypeError);
 		});
+	});
+});
+
+/**
+ * Declaration emit previously narrowed `$fetch` from `$fetch<JSONWebKeySet>(...)`,
+ * making `jwtClient()` unassignable to `BetterAuthClientPlugin` and collapsing
+ * `createAuthClient` option inference when combined with other plugins.
+ *
+ * @see https://github.com/masumi-network/sokosumi/pull/3403
+ */
+describe("jwtClient types", () => {
+	it("should be assignable to BetterAuthClientPlugin", () => {
+		const plugin: BetterAuthClientPlugin = jwtClient();
+		const plugins: BetterAuthClientPlugin[] = [jwtClient()];
+		expect(plugin.id).toBe("better-auth-client");
+		expect(plugins).toHaveLength(1);
+	});
+
+	it("should preserve additional user fields when combined with inferAdditionalFields", () => {
+		const client = createAuthClient({
+			plugins: [
+				inferAdditionalFields({
+					user: {
+						logo: {
+							type: "string",
+							required: false,
+						},
+					},
+				}),
+				jwtClient(),
+			],
+		});
+
+		expectTypeOf(client.updateUser).parameter(0).toMatchTypeOf<{
+			logo?: string | undefined;
+		}>();
+		expectTypeOf(client.jwks).toBeFunction();
 	});
 });
