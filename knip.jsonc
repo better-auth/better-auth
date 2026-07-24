@@ -64,7 +64,8 @@
 			"ignoreDependencies": ["@better-fetch/fetch", "better-call"]
 		},
 		"packages/electron": {
-			"entry": ["src/index.ts!", "src/client.typecheck.ts"]
+			"entry": ["src/index.ts!", "src/client.typecheck.ts"],
+			"project": ["src/**/*.ts!"]
 		}
 	},
 	"vitest": {

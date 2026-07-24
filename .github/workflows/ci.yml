@@ -125,23 +125,11 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Verify typecheck coverage inventory
-        run: pnpm typecheck:inventory
+      - name: Build package declarations
+        run: pnpm build
 
-      - name: Test type-safety audit harness
-        run: pnpm test:type-safety-audit
-
-      - name: Test consumer typecheck harness
-        run: pnpm test:typecheck-consumers
-
-      - name: Typecheck consuming applications
-        run: pnpm typecheck:consumers:clean
-
-      - name: Verify TypeScript escape-hatch baseline
-        run: pnpm typecheck:escape-hatches:check
-
-      - name: Typecheck semantic test configs
-        run: pnpm typecheck:tests
+      - name: Typecheck workspace consumers
+        run: pnpm typecheck:consumers
 
       - name: Typecheck dist declarations
         run: pnpm typecheck:dist

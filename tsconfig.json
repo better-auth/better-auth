@@ -10,6 +10,9 @@
       "path": "./packages/api-key/tsconfig.json"
     },
     {
+      "path": "./packages/api-key/tsconfig.test.json"
+    },
+    {
       "path": "./packages/better-auth/tsconfig.json"
     },
     {
@@ -26,6 +29,9 @@
     },
     {
       "path": "./packages/expo/tsconfig.json"
+    },
+    {
+      "path": "./packages/expo/tsconfig.test.json"
     },
     {
       "path": "./packages/i18n/tsconfig.json"
@@ -71,6 +77,9 @@
     },
     {
       "path": "./packages/scim/tsconfig.json"
+    },
+    {
+      "path": "./e2e/adapter/tsconfig.json"
     },
     {
       "path": "./test/tsconfig.json"

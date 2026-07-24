@@ -1,7 +1,0 @@
-{
-  "compilerOptions": {
-    "skipLibCheck": true
-  },
-  "include": ["packages/**/*.ts"],
-  "exclude": ["vendor"]
-}
