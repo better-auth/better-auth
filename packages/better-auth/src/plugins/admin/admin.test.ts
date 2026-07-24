@@ -2595,3 +2595,168 @@ describe("admin authorization is revocation-aware with cookie cache", async () =
 		expect(listUsers.error?.status).toBe(401);
 	});
 });
+
+describe("admin bannedUserMessage function", async () => {
+	const { client, signInWithTestUser, cookieSetter } = await getTestInstance(
+		{
+			trustedOrigins: ["https://frontend.example.com"],
+			plugins: [
+				admin({
+					bannedUserMessage: (user) =>
+						user.banReason
+							? `Banned: ${user.banReason}`
+							: "Custom banned user message",
+				}),
+			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: {
+								...user,
+								emailVerified: true,
+								...(user.name === "Admin" ? { role: "admin" } : {}),
+							},
+						}),
+					},
+				},
+			},
+		},
+		{
+			clientOptions: {
+				plugins: [adminClient()],
+			},
+			testUser: {
+				name: "Admin",
+			},
+		},
+	);
+
+	const { headers: adminHeaders } = await signInWithTestUser();
+
+	const banned = await client.admin.createUser(
+		{
+			name: "Banned Callback User",
+			email: "user@email.com",
+			password: "test",
+			role: "user",
+		},
+		{ headers: adminHeaders },
+	);
+	const bannedUserId = banned.data?.user.id || "";
+
+	await client.admin.banUser(
+		{
+			userId: bannedUserId,
+			banReason: "Test reason",
+		},
+		{ headers: adminHeaders },
+	);
+
+	it("should use bannedUserMessage callback on email sign-in", async () => {
+		const res = await client.signIn.email({
+			email: "user@email.com",
+			password: "test",
+		});
+		expect(res.error?.code).toBe("BANNED_USER");
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.message).toBe("Banned: Test reason");
+	});
+
+	it("should use bannedUserMessage callback as OAuth error_description", async () => {
+		const errorCallbackURL = "https://frontend.example.com/auth-error";
+		const headers = new Headers();
+		const res = await client.signIn.social(
+			{
+				provider: "google",
+				errorCallbackURL,
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		const state = new URL(res.url!).searchParams.get("state");
+		let errorLocation: string | null = null;
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				errorLocation = context.response.headers.get("location");
+			},
+		});
+		expect(errorLocation).toBeTruthy();
+		const url = new URL(errorLocation!);
+		expect(url.searchParams.get("error")).toBe("BANNED_USER");
+		expect(url.searchParams.get("error_description")).toBe(
+			"Banned: Test reason",
+		);
+	});
+});
+
+describe("admin bannedUserMessage async function", async () => {
+	const { client, signInWithTestUser } = await getTestInstance(
+		{
+			plugins: [
+				admin({
+					bannedUserMessage: async (user) =>
+						`async:${user.banReason ?? "none"}`,
+				}),
+			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: {
+								...user,
+								emailVerified: true,
+								...(user.name === "Admin" ? { role: "admin" } : {}),
+							},
+						}),
+					},
+				},
+			},
+		},
+		{
+			clientOptions: {
+				plugins: [adminClient()],
+			},
+			testUser: {
+				name: "Admin",
+			},
+		},
+	);
+	const { headers: adminHeaders } = await signInWithTestUser();
+
+	const banned = await client.admin.createUser(
+		{
+			name: "Banned Async User",
+			email: "banned-async@test.com",
+			password: "test",
+			role: "user",
+		},
+		{ headers: adminHeaders },
+	);
+
+	await client.admin.banUser(
+		{
+			userId: banned.data?.user.id || "",
+			banReason: "async-reason",
+		},
+		{ headers: adminHeaders },
+	);
+
+	it("should support async bannedUserMessage callback", async () => {
+		const res = await client.signIn.email({
+			email: "banned-async@test.com",
+			password: "test",
+		});
+		expect(res.error?.code).toBe("BANNED_USER");
+		expect(res.error?.message).toBe("async:async-reason");
+	});
+});
