@@ -28,7 +28,10 @@ export type BaseRateLimit = z.infer<typeof rateLimitSchema>;
 export type RateLimit<
 	DBOptions extends
 		BetterAuthOptions["rateLimit"] = BetterAuthOptions["rateLimit"],
-	Plugins extends BetterAuthOptions["plugins"] = BetterAuthOptions["plugins"],
+	Plugins extends
+		| BetterAuthOptions["plugins"]
+		| readonly unknown[]
+		| undefined = BetterAuthOptions["plugins"],
 > = Prettify<
 	BaseRateLimit &
 		InferDBFieldsFromOptions<DBOptions> &

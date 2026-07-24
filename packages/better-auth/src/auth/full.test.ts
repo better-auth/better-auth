@@ -7,14 +7,15 @@ import type { router } from "better-auth/api";
 import { describe, expect, expectTypeOf, test } from "vitest";
 import { createAuthClient } from "../client";
 import { getTestInstance } from "../test-utils";
-import type { Auth } from "../types";
 import { betterAuth } from "./full";
 
 describe("auth type", () => {
 	test("default auth type should be okay", () => {
 		const auth = betterAuth({});
-		type T = typeof auth;
-		expectTypeOf<T>().toEqualTypeOf<Auth>();
+		expectTypeOf(auth).toHaveProperty("api");
+		expectTypeOf(auth).toHaveProperty("handler");
+		expectTypeOf(auth).toHaveProperty("$Infer");
+		expectTypeOf(auth).toHaveProperty("options");
 	});
 
 	test("$ERROR_CODES in auth", () => {

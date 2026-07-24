@@ -9,6 +9,12 @@ export * from "@better-auth/core/oauth2";
 export * from "@better-auth/core/utils/error-codes";
 export * from "@better-auth/core/utils/id";
 export * from "@better-auth/core/utils/json";
+export type {
+	AuthModelsSlice,
+	BetterAuthConfigInput,
+	ResolvedAuthOptions,
+	WritableTuple,
+} from "./auth/config-types";
 //#endregion
 export { betterAuth } from "./auth/full";
 // @ts-expect-error

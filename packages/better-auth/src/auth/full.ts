@@ -1,10 +1,17 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { init } from "../context/init";
 import type { Auth } from "../types";
 import { createBetterAuth } from "./base";
+import type {
+	BetterAuthConfigInput,
+	ResolvedAuthOptions,
+} from "./config-types";
 
 /**
  * Better Auth initializer for full mode (with Kysely)
+ *
+ * Const type-params for `plugins` / model options let `databaseHooks` callbacks
+ * see sibling plugin and additionalFields types without a helper wrapper.
  *
  * @example
  * ```ts
@@ -24,8 +31,32 @@ import { createBetterAuth } from "./base";
  *	  database: drizzleAdapter(db, { provider: "pg" }),
  * });
  */
-export const betterAuth = <Options extends BetterAuthOptions>(
-	options: Options & {},
-): Auth<Options> => {
-	return createBetterAuth(options, init);
+export const betterAuth = <
+	const Plugins extends readonly BetterAuthPlugin[] | undefined = undefined,
+	const UserConfig extends BetterAuthOptions["user"] = undefined,
+	const SessionConfig extends BetterAuthOptions["session"] = undefined,
+	const AccountConfig extends BetterAuthOptions["account"] = undefined,
+	const VerificationConfig extends
+		BetterAuthOptions["verification"] = undefined,
+	const Options extends BetterAuthOptions = BetterAuthOptions,
+>(
+	options: BetterAuthConfigInput<
+		Plugins,
+		UserConfig,
+		SessionConfig,
+		AccountConfig,
+		VerificationConfig,
+		Options
+	> & {},
+): Auth<
+	ResolvedAuthOptions<
+		Plugins,
+		UserConfig,
+		SessionConfig,
+		AccountConfig,
+		VerificationConfig,
+		Options
+	>
+> => {
+	return createBetterAuth(options as never, init) as never;
 };

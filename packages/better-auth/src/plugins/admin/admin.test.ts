@@ -175,7 +175,7 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		);
-		newUser = res.data?.user;
+		newUser = res.data?.user as UserWithRole | undefined;
 		expect(newUser?.role).toBe("user");
 	});
 

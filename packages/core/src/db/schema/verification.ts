@@ -20,7 +20,10 @@ export type BaseVerification = z.infer<typeof verificationSchema>;
 export type Verification<
 	DBOptions extends
 		BetterAuthOptions["verification"] = BetterAuthOptions["verification"],
-	Plugins extends BetterAuthOptions["plugins"] = BetterAuthOptions["plugins"],
+	Plugins extends
+		| BetterAuthOptions["plugins"]
+		| readonly unknown[]
+		| undefined = BetterAuthOptions["plugins"],
 > = Prettify<
 	BaseVerification &
 		InferDBFieldsFromOptions<DBOptions> &
