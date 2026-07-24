@@ -47,6 +47,11 @@ export const createInternalAdapter = (
 	const logger = ctx.logger;
 	const options = ctx.options;
 	const secondaryStorage = options.secondaryStorage;
+	const databaseStoresSessions =
+		!secondaryStorage || options.session?.storeSessionInDatabase === true;
+	const preservesDatabaseSessions =
+		secondaryStorage !== undefined &&
+		options.session?.preserveSessionInDatabase === true;
 	const verificationConsumeLocks = new Map<string, Promise<void>>();
 	// Warn at most once when a single-use value is consumed through the
 	// non-atomic secondary-storage fallback (see consumeVerificationValue).
@@ -315,7 +320,7 @@ export const createInternalAdapter = (
 		},
 		deleteUser: async (userId: string) => {
 			await deleteSecondaryStorageSessions(userId);
-			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
+			if (databaseStoresSessions) {
 				await deleteDatabaseSessions(userId);
 			}
 			await deleteManyWithHooks(
@@ -758,20 +763,15 @@ export const createInternalAdapter = (
 				}
 
 				await secondaryStorage.delete(token);
-
-				if (
-					!options.session?.storeSessionInDatabase ||
-					ctx.options.session?.preserveSessionInDatabase
-				) {
-					return;
-				}
 			}
 
-			await deleteWithHooks(
-				[{ field: "token", value: token }],
-				"session",
-				undefined,
-			);
+			if (databaseStoresSessions && !preservesDatabaseSessions) {
+				await deleteWithHooks(
+					[{ field: "token", value: token }],
+					"session",
+					undefined,
+				);
+			}
 		},
 		deleteAccounts: async (userId: string) => {
 			await deleteManyWithHooks(
@@ -804,14 +804,9 @@ export const createInternalAdapter = (
 		},
 		deleteUserSessions: async (userId: string) => {
 			await deleteSecondaryStorageSessions(userId);
-			if (
-				secondaryStorage &&
-				(!options.session?.storeSessionInDatabase ||
-					ctx.options.session?.preserveSessionInDatabase)
-			) {
-				return;
+			if (databaseStoresSessions && !preservesDatabaseSessions) {
+				await deleteDatabaseSessions(userId);
 			}
-			await deleteDatabaseSessions(userId);
 		},
 		deleteSessions: async (sessionTokens: string[]) => {
 			if (secondaryStorage) {
@@ -821,25 +816,20 @@ export const createInternalAdapter = (
 						await secondaryStorage.delete(sessionToken);
 					}
 				}
-
-				if (
-					!options.session?.storeSessionInDatabase ||
-					ctx.options.session?.preserveSessionInDatabase
-				) {
-					return;
-				}
 			}
-			await deleteManyWithHooks(
-				[
-					{
-						field: "token",
-						value: sessionTokens,
-						operator: "in",
-					},
-				],
-				"session",
-				undefined,
-			);
+			if (databaseStoresSessions && !preservesDatabaseSessions) {
+				await deleteManyWithHooks(
+					[
+						{
+							field: "token",
+							value: sessionTokens,
+							operator: "in",
+						},
+					],
+					"session",
+					undefined,
+				);
+			}
 		},
 		findOAuthUser: async (
 			email: string,
