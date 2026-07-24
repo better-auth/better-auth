@@ -866,8 +866,14 @@ describe("jwtClient types", () => {
 			],
 		});
 
-		expectTypeOf(client.updateUser).parameter(0).toMatchTypeOf<{
-			logo?: string | undefined;
+		type UpdateUserBody = NonNullable<Parameters<typeof client.updateUser>[0]>;
+
+		const body = {
+			logo: "https://example.com/logo.png",
+		} satisfies UpdateUserBody;
+		expect(body.logo).toBe("https://example.com/logo.png");
+		expectTypeOf<UpdateUserBody>().toMatchTypeOf<{
+			logo?: string | null | undefined;
 		}>();
 		expectTypeOf(client.jwks).toBeFunction();
 	});
