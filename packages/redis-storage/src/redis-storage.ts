@@ -135,10 +135,12 @@ return value
 		},
 
 		/**
-		 * Lists every key under the configured prefix, with the prefix stripped.
+		 * Lists the keys under the configured prefix, with the prefix stripped.
 		 *
-		 * Keys are enumerated with `SCAN`, which may report the same key on more
-		 * than one page, so the result is de-duplicated. Order is not guaranteed.
+		 * Keys are enumerated with `SCAN`, a best-effort walk: it may report the
+		 * same key on more than one page, so the result is de-duplicated, and
+		 * keys added or removed while the scan runs may or may not appear. Order
+		 * is not guaranteed.
 		 */
 		async listKeys(): Promise<string[]> {
 			const keys = new Set<string>();
@@ -151,8 +153,7 @@ return value
 		},
 
 		/**
-		 * Deletes the keys under the configured prefix that exist for the full
-		 * duration of the scan.
+		 * Deletes keys under the configured prefix.
 		 *
 		 * **Not atomic.** Keys are enumerated with `SCAN` and deleted page by
 		 * page, so if Redis errors or the connection drops mid-iteration the
@@ -162,10 +163,11 @@ return value
 		 * changed", unlike a single blocking `DEL`, which either removes
 		 * everything or nothing.
 		 *
-		 * **Concurrent writes may survive.** `SCAN` only guarantees keys present
-		 * throughout the walk are returned, so a key written by another client
-		 * while `clear()` is running may be missed. A resolved call is therefore
-		 * not proof the store is empty when writes happen concurrently.
+		 * **Best-effort while the keyspace changes.** `SCAN` is a best-effort
+		 * enumeration: keys added or removed while the scan runs may or may not
+		 * be returned, and a key may be returned more than once. A resolved call
+		 * is therefore not proof the store is empty when other clients are
+		 * writing concurrently.
 		 *
 		 * `clear()` is safe to call again: it is idempotent, so callers that need
 		 * a fully empty store (e.g. revoking every session or rate-limit counter)
