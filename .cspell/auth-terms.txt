@@ -1,5 +1,7 @@
 totp
 otps
+dbsc
+nostr
 pkce
 unban
 siwe

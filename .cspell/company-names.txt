@@ -1,11 +1,13 @@
 creem
 incommon
 dyno
+dymo
 koyeb
 hcaptcha
 qonto
 inkeep
 turso
+usos
 orama
 hubspot
 kakao
