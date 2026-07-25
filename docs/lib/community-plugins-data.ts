@@ -342,4 +342,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/stewartjarod.png",
 		},
 	},
+	{
+		name: "@mailkite/better-auth",
+		url: "https://github.com/mailkite/mailkite-better-auth",
+		description:
+			"Send magic links, email OTPs, verification, password resets and organization invitations through MailKite. One adapter for all five callbacks, with app-branded templates and no runtime dependencies.",
+		author: {
+			name: "MailKite",
+			github: "mailkite",
+			avatar: "https://github.com/mailkite.png",
+		},
+	},
 ];
