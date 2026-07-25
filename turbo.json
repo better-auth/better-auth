@@ -6,7 +6,7 @@
   },
   "global": {
     "inputs": ["tsconfig.json", "tsconfig.base.json", "pnpm-workspace.yaml"],
-    "concurrency": 25
+    "concurrency": "25"
   },
   "tasks": {
     "dev": {
