@@ -101,7 +101,7 @@ export const apple = (options: AppleOptions) => {
 	return {
 		id: "apple",
 		name: "Apple",
-		async createAuthorizationURL({ state, scopes, redirectURI }) {
+		async createAuthorizationURL({ state, scopes, redirectURI, codeVerifier }) {
 			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
 				logger.error(
 					"Client ID and client secret are required for Apple. Make sure to provide them in the options.",
@@ -118,6 +118,7 @@ export const apple = (options: AppleOptions) => {
 				scopes: _scope,
 				state,
 				redirectURI,
+				codeVerifier,
 				responseMode: "form_post",
 				responseType: "code id_token",
 			});

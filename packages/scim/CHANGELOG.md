@@ -1,5 +1,13 @@
 # @better-auth/scim
 
+## 1.6.25
+
+### Patch Changes
+
+- Updated dependencies [[`5124c34`](https://github.com/better-auth/better-auth/commit/5124c3487903e96223bb3f54347724bb0204bb95), [`0ffd1fb`](https://github.com/better-auth/better-auth/commit/0ffd1fb28d44a8266d62791cd4c97e263444d03b), [`7439359`](https://github.com/better-auth/better-auth/commit/743935991f9991e8243d6c3d14773b9cfca462e8)]:
+  - better-auth@1.6.25
+  - @better-auth/core@1.6.25
+
 ## 1.6.24
 
 ### Patch Changes

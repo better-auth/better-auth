@@ -279,7 +279,7 @@ importers:
         version: 1.36.4
       '@vercel/analytics':
         specifier: ^1.6.1
-        version: 1.6.1(@sveltejs/kit@2.60.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.55.7)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(svelte@5.55.7)(typescript@6.0.3)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(next@16.2.11(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(svelte@5.55.7)(vue@3.5.29(typescript@6.0.3))
+        version: 1.6.1(@sveltejs/kit@2.70.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.55.7)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(svelte@5.55.7)(typescript@6.0.3)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(next@16.2.11(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(svelte@5.55.7)(vue@3.5.29(typescript@6.0.3))
       '@vercel/og':
         specifier: ^0.10.1
         version: 0.10.1
@@ -462,8 +462,8 @@ importers:
         specifier: ^17.3.1
         version: 17.3.1
       postcss:
-        specifier: '>=8.5.14 <9'
-        version: 8.5.14
+        specifier: ^8.5.22
+        version: 8.5.22
       remark-cli:
         specifier: ^12.0.1
         version: 12.0.1
@@ -734,8 +734,8 @@ importers:
         specifier: ^0.45.2
         version: 0.45.2(@cloudflare/workers-types@4.20260226.1)(@electric-sql/pglite@0.3.15)(@opentelemetry/api@1.9.0)(@prisma/client@7.4.1(prisma@7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))(typescript@6.0.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@upstash/redis@1.36.4)(better-sqlite3@12.6.2)(bun-types@1.3.9)(kysely@0.29.2)(mysql2@3.18.2(@types/node@25.9.5))(pg@8.19.0)(postgres@3.4.8)(prisma@7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.2)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@6.0.3))
       hono:
-        specifier: ^4.12.25
-        version: 4.12.25
+        specifier: ^4.12.31
+        version: 4.12.31
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: ^0.12.18
@@ -764,13 +764,13 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^1.19.14
-        version: 1.19.14(hono@4.12.25)
+        version: 1.19.14(hono@4.12.31)
       better-auth:
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
       hono:
-        specifier: ^4.12.25
-        version: 4.12.25
+        specifier: ^4.12.31
+        version: 4.12.31
 
   e2e/smoke/test/fixtures/tsconfig-composite-client:
     dependencies:
@@ -961,8 +961,8 @@ importers:
         specifier: ^1.30.0
         version: 1.30.1(@opentelemetry/api@1.9.0)
       '@sveltejs/kit':
-        specifier: ^2.60.1
-        version: 2.60.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.55.7)(vite@7.3.2(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(svelte@5.55.7)(typescript@6.0.3)(vite@7.3.2(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0))
+        specifier: ^2.70.1
+        version: 2.70.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.55.7)(vite@7.3.2(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(svelte@5.55.7)(typescript@6.0.3)(vite@7.3.2(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0))
       '@tanstack/react-start':
         specifier: ^1.168.4
         version: 1.168.4(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(vite-plugin-solid@2.11.10(solid-js@1.9.11)(vite@7.3.2(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(vite@7.3.2(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0))
@@ -6252,13 +6252,13 @@ packages:
   '@standard-schema/utils@0.3.0':
     resolution: {integrity: sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g==}
 
-  '@sveltejs/acorn-typescript@1.0.9':
-    resolution: {integrity: sha512-lVJX6qEgs/4DOcRTpo56tmKzVPtoWAaVbL4hfO7t7NVwl9AAXzQR6cihesW1BmNMPl+bK6dreu2sOKBP2Q9CIA==}
+  '@sveltejs/acorn-typescript@1.0.11':
+    resolution: {integrity: sha512-LFuZUkjJ9iF7JZye/aG5XM0SFcQ5VyL0oVX4WJ9dc0Va3R3s0OauX1BESVCb+YN/ol8TAfqGDDAQsTG627Y5kw==}
     peerDependencies:
       acorn: ^8.9.0
 
-  '@sveltejs/kit@2.60.1':
-    resolution: {integrity: sha512-mQjlkNo+rJvpln7V2IGY2j99BqhcFbS4UN0AQNKNYfhBAFZTuCDAdW3a1sgf330mvtNvsBXn3HpAhcmvdJTcIQ==}
+  '@sveltejs/kit@2.70.1':
+    resolution: {integrity: sha512-nY9SPHGOZro3doud9vZXDBwl9tCZIouuJztjgSHs6PAIrv9M/z5O7eOhPV5xU7CgVHA976Jwu3BA1hIFvXztkA==}
     engines: {node: '>=18.13'}
     hasBin: true
     peerDependencies:
@@ -8530,8 +8530,8 @@ packages:
   detect-node-es@1.1.0:
     resolution: {integrity: sha512-ypdmJU/TbBby2Dxibuv7ZLW3Bs1QEmM7nHjEANfohJLvE0XVujisn1qPJcZxg+qDucsr+bP6fLD1rPS3AhJ7EQ==}
 
-  devalue@5.8.1:
-    resolution: {integrity: sha512-4CXDYRBGqN+57wVJkuXBYmpAVUSg3L6JAQa/DFqm238G73E1wuyc/JhGQJzN7vUf/CMphYau2zXbfWzDR5aTEw==}
+  devalue@5.8.2:
+    resolution: {integrity: sha512-DObPPAfdtFbXjxLqK8s2Xk9ZuWz5+ZoFEhC7J76es4GU/rEiXwHTmbImoCdyoCOcBH1UF3+Cz6Z2sYD4hyl5TA==}
 
   devlop@1.1.0:
     resolution: {integrity: sha512-RWmIqhcFf1lRYBvNmr7qTNuyCt/7/ns2jbpp1+PalgE/rDQcBT0fioSMUpJ93irlUhC5hrg4cYqe6U+0ImW0rA==}
@@ -8720,8 +8720,8 @@ packages:
   electron-to-chromium@1.5.302:
     resolution: {integrity: sha512-sM6HAN2LyK82IyPBpznDRqlTQAtuSaO+ShzFiWTvoMJLHyZ+Y39r8VMfHzwbU8MVBzQ4Wdn85+wlZl2TLGIlwg==}
 
-  electron-to-chromium@1.5.395:
-    resolution: {integrity: sha512-7zt9Aw+SrmxLWLN0zhaTWZQiCdryLVrYTq5R7iZakLvi2UQPYMMsROYV/2qVCzMeCiSXHwKOU+sZ4zOVVlrtKA==}
+  electron-to-chromium@1.5.396:
+    resolution: {integrity: sha512-yHiw2Y3C3H9U6TMbOfoWK/BPreiOPXRfTWPBwQBoZG6/8TB6eOPnsy5oaRYuatR7Fw2SJ4kKforgufeo7fq0EQ==}
 
   electron@43.1.1:
     resolution: {integrity: sha512-I5c5vfuVvaXpWx3IZdwvXgxQW44+e7OP1wXGVQkogLeSFSkUZ6sLCcWV05AdEcs65AO5tAIJJwbp7ixw+LdarA==}
@@ -9724,8 +9724,8 @@ packages:
     resolution: {integrity: sha512-Xwwo44whKBVCYoliBQwaPvtd/2tYFkRQtXDWj1nackaV2JPXx3L0+Jvd8/qCJ2p+ML0/XVkJ2q+Mr+UVdpJK5w==}
     engines: {node: '>=12.0.0'}
 
-  hono@4.12.25:
-    resolution: {integrity: sha512-2NFaIyNVgJmBs/ecmtGzlmluTFs5cHEWGTdu0t1HBwYzoGXOL5nUQBRMXsXWla5i4KkG//QMzVP88m1+I3fdAQ==}
+  hono@4.12.31:
+    resolution: {integrity: sha512-zJIHFrl6bq3RDd2YusFNCDlM8qUprxKswyi/OPzPyzKDdyBXDqWx8bZlZ7R+saTdSTatUmb3O7K4SspGPaEOQg==}
     engines: {node: '>=16.9.0'}
 
   hookable@5.5.3:
@@ -11292,11 +11292,6 @@ packages:
     resolution: {integrity: sha512-Tz09sEL2EEuv5fFowm419c1+a/jSMiBjI9gHxVLrVdbUkkNUUfjsVYs9pVZu5oCon/kmRh9TfLEObFtkVxmY0w==}
     engines: {node: '>=8.0.0'}
 
-  nanoid@3.3.12:
-    resolution: {integrity: sha512-ZB9RH/39qpq5Vu6Y+NmUaFhQR6pp+M2Xt76XBnEwDaGcVAqhlvxrl3B2bKS5D3NH3QR76v3aSrKaF/Kiy7lEtQ==}
-    engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
-    hasBin: true
-
   nanoid@3.3.16:
     resolution: {integrity: sha512-bzlKTyNJ7+LdGIIwy8ijFpIqEQIvafahV7eYykJ8Cvh42EdJeODoJ6gUJXpQJvej1BddH8OqTXZNE/KfbWAu8Q==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
@@ -11855,10 +11850,6 @@ packages:
 
   postcss-value-parser@4.2.0:
     resolution: {integrity: sha512-1NNCs6uurfkVbeXG4S8JFT9t19m45ICnif8zWLd5oPSZ50QnwMfK+H3jv408d4jw/7Bttv5axS5IiHoLaVNHeQ==}
-
-  postcss@8.5.14:
-    resolution: {integrity: sha512-SoSL4+OSEtR99LHFZQiJLkT59C5B1amGO1NzTwj7TT1qCUgUO6hxOvzkOYxD+vMrXBM3XJIKzokoERdqQq/Zmg==}
-    engines: {node: ^10 || ^12 || >=14}
 
   postcss@8.5.22:
     resolution: {integrity: sha512-KBDEIpLrvpv16pp3K0Fw+UCoZfopFjjgeB+0tA/aaThfEE74kKDLrgg603YvOWJyg3+WYtyq3xYsQWsIyZlPqQ==}
@@ -12716,6 +12707,9 @@ packages:
   set-cookie-parser@3.1.0:
     resolution: {integrity: sha512-kjnC1DXBHcxaOaOXBHBeRtltsDG2nUiUni+jP92M9gYdW12rsmx92UsfpH7o5tDRs7I1ZZPSQJQGv3UaRfCiuw==}
 
+  set-cookie-parser@3.1.2:
+    resolution: {integrity: sha512-5/r/lTwbJ3zQ+qwdUFZYeRNqda7P5HD8zQKqlSjdGt1/S0cjLAphHusj4Y58ahDtWn/g32xrIS58/ikOvwl0Lw==}
+
   setprototypeof@1.2.0:
     resolution: {integrity: sha512-E5LDX7Wrp85Kil5bhZv46j8jOeboKq5JMmYM3gVGdGH8xFpPWXUMsNrlODCrkoxMEeNi/XZIwuRvY4XNwYMJpw==}
 
@@ -13167,10 +13161,6 @@ packages:
 
   tar@7.5.15:
     resolution: {integrity: sha512-dzGK0boVlC4W5QFuQN1EFSl3bIDYsk7Tj40U6eIBnK2k/8ml7TZ5agbI5j5+qnoVcAA+rNtBml8SEiLxZpNqRQ==}
-    engines: {node: '>=18'}
-
-  tar@7.5.21:
-    resolution: {integrity: sha512-XdhtCvlMywwxpCW8YEq3lOXBJpUPTR2OHHcwLPO3HwsJqOHa2Ok/oJ7ruGzp+JrKoRPVCzJwAdEjqLW/vNRPHA==}
     engines: {node: '>=18'}
 
   tarn@3.0.2:
@@ -16317,7 +16307,7 @@ snapshots:
       source-map-support: 0.5.21
       stacktrace-parser: 0.1.11
       structured-headers: 0.4.1
-      tar: 7.5.21
+      tar: 7.5.15
       terminal-link: 2.1.1
       undici: 6.27.0
       wrap-ansi: 7.0.0
@@ -16661,9 +16651,9 @@ snapshots:
 
   '@hongzhiyuan/preact@10.28.0-fc4af453': {}
 
-  '@hono/node-server@1.19.14(hono@4.12.25)':
+  '@hono/node-server@1.19.14(hono@4.12.31)':
     dependencies:
-      hono: 4.12.25
+      hono: 4.12.31
 
   '@hookform/resolvers@5.2.2(react-hook-form@7.71.2(react@19.2.4))':
     dependencies:
@@ -17160,7 +17150,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.27.1(zod@3.25.76)':
     dependencies:
-      '@hono/node-server': 1.19.14(hono@4.12.25)
+      '@hono/node-server': 1.19.14(hono@4.12.31)
       ajv: 8.18.0
       ajv-formats: 3.0.1(ajv@8.18.0)
       content-type: 1.0.5
@@ -17170,7 +17160,7 @@ snapshots:
       eventsource-parser: 3.0.6
       express: 5.2.1
       express-rate-limit: 8.3.2(express@5.2.1)
-      hono: 4.12.25
+      hono: 4.12.31
       jose: 6.1.3
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -17182,7 +17172,7 @@ snapshots:
 
   '@modelcontextprotocol/sdk@1.27.1(zod@4.3.6)':
     dependencies:
-      '@hono/node-server': 1.19.14(hono@4.12.25)
+      '@hono/node-server': 1.19.14(hono@4.12.31)
       ajv: 8.18.0
       ajv-formats: 3.0.1(ajv@8.18.0)
       content-type: 1.0.5
@@ -17192,7 +17182,7 @@ snapshots:
       eventsource-parser: 3.0.6
       express: 5.2.1
       express-rate-limit: 8.3.2(express@5.2.1)
-      hono: 4.12.25
+      hono: 4.12.31
       jose: 6.1.3
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
@@ -17716,13 +17706,13 @@ snapshots:
       '@electric-sql/pglite': 0.3.15
       '@electric-sql/pglite-socket': 0.0.20(@electric-sql/pglite@0.3.15)
       '@electric-sql/pglite-tools': 0.2.20(@electric-sql/pglite@0.3.15)
-      '@hono/node-server': 1.19.14(hono@4.12.25)
+      '@hono/node-server': 1.19.14(hono@4.12.31)
       '@mrleebo/prisma-ast': 0.13.1
       '@prisma/get-platform': 7.2.0
       '@prisma/query-plan-executor': 7.2.0
       foreground-child: 3.3.1
       get-port-please: 3.2.0
-      hono: 4.12.25
+      hono: 4.12.31
       http-status-codes: 2.3.0
       pathe: 2.0.3
       proper-lockfile: 4.1.2
@@ -19684,24 +19674,24 @@ snapshots:
 
   '@standard-schema/utils@0.3.0': {}
 
-  '@sveltejs/acorn-typescript@1.0.9(acorn@8.16.0)':
+  '@sveltejs/acorn-typescript@1.0.11(acorn@8.17.0)':
     dependencies:
-      acorn: 8.16.0
+      acorn: 8.17.0
 
-  '@sveltejs/kit@2.60.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.55.7)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(svelte@5.55.7)(typescript@6.0.3)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0))':
+  '@sveltejs/kit@2.70.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.55.7)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(svelte@5.55.7)(typescript@6.0.3)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0))':
     dependencies:
       '@standard-schema/spec': 1.1.0
-      '@sveltejs/acorn-typescript': 1.0.9(acorn@8.16.0)
+      '@sveltejs/acorn-typescript': 1.0.11(acorn@8.17.0)
       '@sveltejs/vite-plugin-svelte': 6.2.1(svelte@5.55.7)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0))
       '@types/cookie': 0.6.0
-      acorn: 8.16.0
+      acorn: 8.17.0
       cookie: 0.7.2
-      devalue: 5.8.1
+      devalue: 5.8.2
       esm-env: 1.2.2
       kleur: 4.1.5
       magic-string: 0.30.21
       mrmime: 2.0.1
-      set-cookie-parser: 3.1.0
+      set-cookie-parser: 3.1.2
       sirv: 3.0.2
       svelte: 5.55.7
       vite: 6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)
@@ -19710,20 +19700,20 @@ snapshots:
       typescript: 6.0.3
     optional: true
 
-  '@sveltejs/kit@2.60.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.55.7)(vite@7.3.2(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(svelte@5.55.7)(typescript@6.0.3)(vite@7.3.2(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0))':
+  '@sveltejs/kit@2.70.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.55.7)(vite@7.3.2(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(svelte@5.55.7)(typescript@6.0.3)(vite@7.3.2(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0))':
     dependencies:
       '@standard-schema/spec': 1.1.0
-      '@sveltejs/acorn-typescript': 1.0.9(acorn@8.16.0)
+      '@sveltejs/acorn-typescript': 1.0.11(acorn@8.17.0)
       '@sveltejs/vite-plugin-svelte': 6.2.1(svelte@5.55.7)(vite@7.3.2(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0))
       '@types/cookie': 0.6.0
-      acorn: 8.16.0
+      acorn: 8.17.0
       cookie: 0.7.2
-      devalue: 5.8.1
+      devalue: 5.8.2
       esm-env: 1.2.2
       kleur: 4.1.5
       magic-string: 0.30.21
       mrmime: 2.0.1
-      set-cookie-parser: 3.1.0
+      set-cookie-parser: 3.1.2
       sirv: 3.0.2
       svelte: 5.55.7
       vite: 7.3.2(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)
@@ -19841,7 +19831,7 @@ snapshots:
       '@alloc/quick-lru': 5.2.0
       '@tailwindcss/node': 4.2.1
       '@tailwindcss/oxide': 4.2.1
-      postcss: 8.5.14
+      postcss: 8.5.22
       tailwindcss: 4.2.1
 
   '@tanstack/directive-functions-plugin@1.121.21(vite@6.4.2(@types/node@25.9.5)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0))':
@@ -20564,9 +20554,9 @@ snapshots:
       '@urql/core': 5.2.0(graphql@16.13.0)
       wonka: 6.3.6
 
-  '@vercel/analytics@1.6.1(@sveltejs/kit@2.60.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.55.7)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(svelte@5.55.7)(typescript@6.0.3)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(next@16.2.11(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(svelte@5.55.7)(vue@3.5.29(typescript@6.0.3))':
+  '@vercel/analytics@1.6.1(@sveltejs/kit@2.70.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.55.7)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(svelte@5.55.7)(typescript@6.0.3)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(next@16.2.11(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)(svelte@5.55.7)(vue@3.5.29(typescript@6.0.3))':
     optionalDependencies:
-      '@sveltejs/kit': 2.60.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.55.7)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(svelte@5.55.7)(typescript@6.0.3)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0))
+      '@sveltejs/kit': 2.70.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.55.7)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(svelte@5.55.7)(typescript@6.0.3)(vite@6.4.2(@types/node@25.5.0)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0))
       next: 16.2.11(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react: 19.2.4
       svelte: 5.55.7
@@ -20576,8 +20566,8 @@ snapshots:
     dependencies:
       '@mapbox/node-pre-gyp': 2.0.3
       '@rollup/pluginutils': 5.3.0(rollup@4.60.4)
-      acorn: 8.16.0
-      acorn-import-attributes: 1.9.5(acorn@8.16.0)
+      acorn: 8.17.0
+      acorn-import-attributes: 1.9.5(acorn@8.17.0)
       async-sema: 3.1.1
       bindings: 1.5.0
       estree-walker: 2.0.2
@@ -20917,9 +20907,9 @@ snapshots:
       mime-types: 3.0.2
       negotiator: 1.0.0
 
-  acorn-import-attributes@1.9.5(acorn@8.16.0):
+  acorn-import-attributes@1.9.5(acorn@8.17.0):
     dependencies:
-      acorn: 8.16.0
+      acorn: 8.17.0
 
   acorn-jsx@5.3.2(acorn@8.16.0):
     dependencies:
@@ -20927,7 +20917,7 @@ snapshots:
 
   acorn-loose@8.5.2:
     dependencies:
-      acorn: 8.16.0
+      acorn: 8.17.0
 
   acorn-typescript@1.4.13(acorn@8.16.0):
     dependencies:
@@ -21424,7 +21414,7 @@ snapshots:
     dependencies:
       baseline-browser-mapping: 2.11.1
       caniuse-lite: 1.0.30001806
-      electron-to-chromium: 1.5.395
+      electron-to-chromium: 1.5.396
       node-releases: 2.0.51
       update-browserslist-db: 1.2.3(browserslist@4.28.7)
 
@@ -22332,7 +22322,7 @@ snapshots:
 
   detect-node-es@1.1.0: {}
 
-  devalue@5.8.1: {}
+  devalue@5.8.2: {}
 
   devlop@1.1.0:
     dependencies:
@@ -22449,7 +22439,7 @@ snapshots:
 
   electron-to-chromium@1.5.302: {}
 
-  electron-to-chromium@1.5.395: {}
+  electron-to-chromium@1.5.396: {}
 
   electron@43.1.1:
     dependencies:
@@ -22575,7 +22565,7 @@ snapshots:
   esast-util-from-js@2.0.1:
     dependencies:
       '@types/estree-jsx': 1.0.5
-      acorn: 8.16.0
+      acorn: 8.17.0
       esast-util-from-estree: 2.0.0
       vfile-message: 4.0.3
 
@@ -23592,7 +23582,7 @@ snapshots:
 
   highlight.js@11.11.1: {}
 
-  hono@4.12.25: {}
+  hono@4.12.31: {}
 
   hookable@5.5.3: {}
 
@@ -25519,14 +25509,14 @@ snapshots:
 
   mlly@1.8.0:
     dependencies:
-      acorn: 8.16.0
+      acorn: 8.17.0
       pathe: 2.0.3
       pkg-types: 1.3.1
       ufo: 1.6.3
 
   mlly@1.8.2:
     dependencies:
-      acorn: 8.16.0
+      acorn: 8.17.0
       pathe: 2.0.3
       pkg-types: 1.3.1
       ufo: 1.6.3
@@ -25656,8 +25646,6 @@ snapshots:
   named-placeholders@1.1.6:
     dependencies:
       lru.min: 1.1.4
-
-  nanoid@3.3.12: {}
 
   nanoid@3.3.16: {}
 
@@ -26347,12 +26335,6 @@ snapshots:
   postal-mime@2.7.3: {}
 
   postcss-value-parser@4.2.0: {}
-
-  postcss@8.5.14:
-    dependencies:
-      nanoid: 3.3.12
-      picocolors: 1.1.1
-      source-map-js: 1.2.1
 
   postcss@8.5.22:
     dependencies:
@@ -27651,6 +27633,8 @@ snapshots:
 
   set-cookie-parser@3.1.0: {}
 
+  set-cookie-parser@3.1.2: {}
+
   setprototypeof@1.2.0: {}
 
   sharp@0.34.5:
@@ -28091,14 +28075,14 @@ snapshots:
     dependencies:
       '@jridgewell/remapping': 2.3.5
       '@jridgewell/sourcemap-codec': 1.5.5
-      '@sveltejs/acorn-typescript': 1.0.9(acorn@8.16.0)
+      '@sveltejs/acorn-typescript': 1.0.11(acorn@8.17.0)
       '@types/estree': 1.0.8
       '@types/trusted-types': 2.0.7
-      acorn: 8.16.0
+      acorn: 8.17.0
       aria-query: 5.3.1
       axobject-query: 4.1.0
       clsx: 2.1.1
-      devalue: 5.8.1
+      devalue: 5.8.2
       esm-env: 1.2.2
       esrap: 2.2.9
       is-reference: 3.0.3
@@ -28165,14 +28149,6 @@ snapshots:
       minizlib: 3.1.0
       yallist: 5.0.0
 
-  tar@7.5.21:
-    dependencies:
-      '@isaacs/fs-minipass': 4.0.1
-      chownr: 3.0.0
-      minipass: 7.1.3
-      minizlib: 3.1.0
-      yallist: 5.0.0
-
   tarn@3.0.2: {}
 
   taskkill@5.0.0:
@@ -28214,14 +28190,14 @@ snapshots:
   terser@5.46.0:
     dependencies:
       '@jridgewell/source-map': 0.3.11
-      acorn: 8.16.0
+      acorn: 8.17.0
       commander: 2.20.3
       source-map-support: 0.5.21
 
   terser@5.47.1:
     dependencies:
       '@jridgewell/source-map': 0.3.11
-      acorn: 8.16.0
+      acorn: 8.17.0
       commander: 2.20.3
       source-map-support: 0.5.21
 
@@ -28614,7 +28590,7 @@ snapshots:
 
   unimport@6.3.0(rolldown@1.1.5):
     dependencies:
-      acorn: 8.16.0
+      acorn: 8.17.0
       escape-string-regexp: 5.0.0
       estree-walker: 3.0.3
       local-pkg: 1.1.2
@@ -28690,7 +28666,7 @@ snapshots:
   unplugin@2.3.11:
     dependencies:
       '@jridgewell/remapping': 2.3.5
-      acorn: 8.16.0
+      acorn: 8.17.0
       picomatch: 4.0.4
       webpack-virtual-modules: 0.6.2
 
@@ -29046,7 +29022,7 @@ snapshots:
       esbuild: 0.28.1
       fdir: 6.5.0(picomatch@4.0.4)
       picomatch: 4.0.4
-      postcss: 8.5.14
+      postcss: 8.5.22
       rollup: 4.60.1
       tinyglobby: 0.2.16
     optionalDependencies:

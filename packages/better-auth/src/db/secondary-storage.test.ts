@@ -181,7 +181,7 @@ describe("secondary storage - storeSessionInDatabase", () => {
 	describe("preserveSessionInDatabase: true", async () => {
 		const store = new Map<string, string>();
 
-		const { client, signInWithTestUser } = await getTestInstance({
+		const { client, db, signInWithTestUser } = await getTestInstance({
 			secondaryStorage: {
 				set(key, value, ttl) {
 					store.set(key, value);
@@ -225,11 +225,67 @@ describe("secondary storage - storeSessionInDatabase", () => {
 
 			// Session should be removed from secondary storage
 			expect(store.has(token)).toBe(false);
+			expect(
+				await db.findMany({
+					model: "session",
+					where: [{ field: "token", value: token }],
+				}),
+			).toHaveLength(1);
 
 			// Session should NOT be usable anymore, even though it's preserved in database
 			const after = await client.getSession({ fetchOptions: { headers } });
 			expect(after.data).toBeNull();
 		});
+	});
+});
+
+describe("secondary storage - deleteUser", () => {
+	it("deletes user sessions from secondary storage and database", async () => {
+		const store = new Map<string, string>();
+		const { auth, db } = await getTestInstance({
+			secondaryStorage: {
+				set(key, value) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+			session: {
+				storeSessionInDatabase: true,
+				preserveSessionInDatabase: true,
+			},
+		});
+		const { internalAdapter } = await auth.$context;
+		const user = await internalAdapter.createUser({
+			name: "Deleted User",
+			email: "deleted-user@test.com",
+		});
+		const session = await internalAdapter.createSession(user.id);
+		const activeSessionsKey = `active-sessions-${user.id}`;
+
+		expect(store.has(session.token)).toBe(true);
+		expect(store.has(activeSessionsKey)).toBe(true);
+		expect(
+			await db.findMany({
+				model: "session",
+				where: [{ field: "userId", value: user.id }],
+			}),
+		).toHaveLength(1);
+
+		await internalAdapter.deleteUser(user.id);
+
+		expect(store.has(session.token)).toBe(false);
+		expect(store.has(activeSessionsKey)).toBe(false);
+		expect(
+			await db.findMany({
+				model: "session",
+				where: [{ field: "userId", value: user.id }],
+			}),
+		).toHaveLength(0);
 	});
 });
 

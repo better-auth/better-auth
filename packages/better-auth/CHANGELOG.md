@@ -1,5 +1,22 @@
 # better-auth
 
+## 1.6.25
+
+### Patch Changes
+
+- [#10479](https://github.com/better-auth/better-auth/pull/10479) [`5124c34`](https://github.com/better-auth/better-auth/commit/5124c3487903e96223bb3f54347724bb0204bb95) Thanks [@krish-vachhani](https://github.com/krish-vachhani)! - Prevent Google One Tap from creating new users when sign-up is disabled for the Google provider.
+
+- [#10444](https://github.com/better-auth/better-auth/pull/10444) [`7439359`](https://github.com/better-auth/better-auth/commit/743935991f9991e8243d6c3d14773b9cfca462e8) Thanks [@birkskyum](https://github.com/birkskyum)! - Expose the real `$fetch` instance and `$store` atoms from the Solid client instead of resolving them as dynamic API routes.
+
+- Updated dependencies [[`0ffd1fb`](https://github.com/better-auth/better-auth/commit/0ffd1fb28d44a8266d62791cd4c97e263444d03b)]:
+  - @better-auth/core@1.6.25
+  - @better-auth/drizzle-adapter@1.6.25
+  - @better-auth/kysely-adapter@1.6.25
+  - @better-auth/memory-adapter@1.6.25
+  - @better-auth/mongo-adapter@1.6.25
+  - @better-auth/prisma-adapter@1.6.25
+  - @better-auth/telemetry@1.6.25
+
 ## 1.6.24
 
 ### Patch Changes
