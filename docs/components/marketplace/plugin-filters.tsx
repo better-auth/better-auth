@@ -47,6 +47,7 @@ export function PluginFilters({
 						value={query}
 						onChange={(e) => onQueryChange(e.target.value)}
 						placeholder="Search plugins, authors, tags…"
+						aria-label="Search plugins"
 						className="w-full border border-foreground/10 bg-transparent py-2.5 pr-3 pl-10 text-sm text-foreground placeholder:text-foreground/40 outline-none transition-colors focus:border-foreground/25"
 					/>
 				</div>
@@ -75,6 +76,7 @@ export function PluginFilters({
 							key={item}
 							type="button"
 							onClick={() => onCategoryChange(item)}
+							aria-pressed={active}
 							className={cn(
 								"border px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors",
 								active

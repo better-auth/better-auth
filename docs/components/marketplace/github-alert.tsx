@@ -57,7 +57,17 @@ const alertConfig: Record<
 };
 
 export function isGithubAlertType(value: unknown): value is GithubAlertType {
-	return typeof value === "string" && value.toLowerCase() in alertConfig;
+	if (typeof value !== "string") return false;
+	return Object.hasOwn(alertConfig, value.toLowerCase());
+}
+
+/** Canonicalize README alert type strings (`NOTE` → `note`). */
+export function normalizeGithubAlertType(
+	value: unknown,
+): GithubAlertType | null {
+	if (typeof value !== "string") return null;
+	const key = value.toLowerCase();
+	return Object.hasOwn(alertConfig, key) ? (key as GithubAlertType) : null;
 }
 
 export function GithubAlert({
@@ -68,6 +78,7 @@ export function GithubAlert({
 	children: ReactNode;
 }) {
 	const config = alertConfig[type];
+	if (!config) return null;
 	const { Icon } = config;
 
 	return (

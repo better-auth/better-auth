@@ -20,11 +20,12 @@ export function resolveReadmeUrl(
 		return isSafeReadmeUrl(absolute, kind) ? absolute : undefined;
 	}
 
+	const lower = trimmed.toLowerCase();
 	if (
-		trimmed.startsWith("http://") ||
-		trimmed.startsWith("https://") ||
+		lower.startsWith("http://") ||
+		lower.startsWith("https://") ||
 		trimmed.startsWith("#") ||
-		trimmed.startsWith("mailto:")
+		lower.startsWith("mailto:")
 	) {
 		return isSafeReadmeUrl(trimmed, kind) ? trimmed : undefined;
 	}

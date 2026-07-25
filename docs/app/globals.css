@@ -1007,7 +1007,8 @@ figure.shiki > div:first-child,
 
 	::view-transition-old(*),
 	::view-transition-new(*),
-	::view-transition-group(*) {
+	::view-transition-group(*),
+	::view-transition-image-pair(*) {
 		animation-duration: 0s !important;
 		animation-delay: 0s !important;
 	}

@@ -16,7 +16,11 @@ export interface CommunityPlugin {
 export const communityPlugins: CommunityPlugin[] = marketplacePlugins.map(
 	(plugin) => ({
 		name: plugin.name,
-		url: `https://github.com/${plugin.repo}`,
+		// Preserve the historical npm listing URL for this package.
+		url:
+			plugin.slug === "dbsc-toolkit-better-auth" && plugin.npmPackage
+				? `https://www.npmjs.com/package/${plugin.npmPackage}`
+				: `https://github.com/${plugin.repo}`,
 		description: plugin.description,
 		author: plugin.author,
 	}),

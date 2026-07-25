@@ -11,11 +11,33 @@ import { DynamicCodeBlock } from "@/components/ui/dynamic-code-block";
 import { remarkGithubAlerts } from "@/lib/marketplace/remark-github-alerts";
 import { readmeBaseDir, resolveReadmeUrl } from "@/lib/marketplace/urls";
 import { cn } from "@/lib/utils";
-import { GithubAlert, isGithubAlertType } from "./github-alert";
+import { GithubAlert, normalizeGithubAlertType } from "./github-alert";
 
 function getLanguage(className?: string): string {
-	const match = /language-(\w+)/.exec(className ?? "");
+	const match = /language-([^\s]+)/.exec(className ?? "");
 	return match?.[1] ?? "text";
+}
+
+function resolveSrcSet(
+	srcSet: string | undefined,
+	repo: string,
+	branch: string,
+	baseDir: string,
+): string | undefined {
+	if (!srcSet?.trim()) return undefined;
+	const parts = srcSet
+		.split(",")
+		.map((part) => part.trim())
+		.filter(Boolean);
+	const resolved: string[] = [];
+	for (const part of parts) {
+		const [url, ...descriptors] = part.split(/\s+/);
+		if (!url) return undefined;
+		const safe = resolveReadmeUrl(url, repo, branch, "image", baseDir);
+		if (!safe) return undefined;
+		resolved.push([safe, ...descriptors].join(" "));
+	}
+	return resolved.length > 0 ? resolved.join(", ") : undefined;
 }
 
 function getNodeClassName(
@@ -96,9 +118,6 @@ const marketplaceSanitizeSchema: typeof defaultSchema = {
 		src: ["http", "https"],
 		srcSet: ["http", "https"],
 	},
-	// Keep heading ids stable so in-README TOC anchors (#email) still work.
-	// Content is sandboxed in .marketplace-readme; DOM clobber risk is low.
-	clobber: [],
 };
 
 export function MarketplaceReadme({
@@ -248,7 +267,7 @@ export function MarketplaceReadme({
 				</a>
 			);
 		},
-		img: ({ src, alt, width, height }) => {
+		img: ({ src, srcSet, alt, width, height }) => {
 			const safeSrc = resolveReadmeUrl(
 				typeof src === "string" ? src : undefined,
 				repo,
@@ -256,16 +275,24 @@ export function MarketplaceReadme({
 				"image",
 				baseDir,
 			);
-			if (!safeSrc) return null;
+			const safeSrcSet = resolveSrcSet(
+				typeof srcSet === "string" ? srcSet : undefined,
+				repo,
+				branch,
+				baseDir,
+			);
+			if (!safeSrc && !safeSrcSet) return null;
 			// Tailwind preflight sets img { display:block }, which stacks GitHub
 			// shield badges vertically — force inline-block to match GitHub.
 			const isBadge =
+				safeSrc != null &&
 				/shields\.io|badge\.fury|img\.shields|badgen\.net|cdn\.jsdelivr\.net\/gh\/badges/i.test(
 					safeSrc,
 				);
 			return (
 				<img
 					src={safeSrc}
+					srcSet={safeSrcSet}
 					alt={alt ?? ""}
 					width={
 						typeof width === "string" || typeof width === "number"
@@ -301,11 +328,9 @@ export function MarketplaceReadme({
 			const alertFromClass = classes
 				.find((c) => c.startsWith("markdown-alert-") && c !== "markdown-alert")
 				?.replace("markdown-alert-", "");
-			const candidate =
-				typeof alertAttr === "string"
-					? alertAttr.toLowerCase()
-					: (alertFromClass ?? "");
-			const alertType = isGithubAlertType(candidate) ? candidate : null;
+			const alertType = normalizeGithubAlertType(
+				typeof alertAttr === "string" ? alertAttr : (alertFromClass ?? ""),
+			);
 
 			if (alertType) {
 				return <GithubAlert type={alertType}>{children}</GithubAlert>;
@@ -383,18 +408,20 @@ export function MarketplaceReadme({
 			<Markdown
 				remarkPlugins={[remarkGfm, remarkEmoji, remarkGithubAlerts]}
 				rehypePlugins={[
-					rehypeSlug,
+					// Raw HTML before slug so HTML headings also get anchor ids.
 					rehypeRaw,
+					rehypeSlug,
 					[rehypeSanitize, marketplaceSanitizeSchema],
 				]}
 				urlTransform={(url) => {
 					// react-markdown's default already blocks javascript:;
 					// keep only schemes we accept, as a first-pass filter.
+					const lower = url.toLowerCase();
 					if (
 						url.startsWith("#") ||
-						url.startsWith("mailto:") ||
-						url.startsWith("http://") ||
-						url.startsWith("https://") ||
+						lower.startsWith("mailto:") ||
+						lower.startsWith("http://") ||
+						lower.startsWith("https://") ||
 						url.startsWith("/") ||
 						url.startsWith("./") ||
 						url.startsWith("../") ||

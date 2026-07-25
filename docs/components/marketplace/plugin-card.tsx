@@ -4,19 +4,9 @@ import { motion } from "framer-motion";
 import { Download, Star } from "lucide-react";
 import Link from "next/link";
 import { ViewTransition } from "react";
+import { formatCount } from "@/lib/marketplace/format";
 import type { EnrichedMarketplacePlugin } from "@/lib/marketplace/types";
 import { cn } from "@/lib/utils";
-
-function formatCount(value: number | null): string {
-	if (value == null) return "—";
-	if (value >= 1_000_000) {
-		return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
-	}
-	if (value >= 1_000) {
-		return `${(value / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
-	}
-	return String(value);
-}
 
 export function PluginCard({
 	plugin,
