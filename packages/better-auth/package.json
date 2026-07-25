@@ -509,7 +509,7 @@
   },
   "devDependencies": {
     "@lynx-js/react": "^0.116.3",
-    "@sveltejs/kit": "^2.60.1",
+    "@sveltejs/kit": "^2.70.1",
     "@tanstack/react-start": "^1.168.4",
     "@tanstack/solid-start": "^1.168.4",
     "@types/bun": "^1.3.9",
