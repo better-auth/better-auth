@@ -80,6 +80,75 @@ describe("email-otp", async () => {
 		expect(verifiedUser.data?.token).toBeDefined();
 	});
 
+	it("should clear an unverified account's password when sign-in adopts it", async () => {
+		// An account created with a password but never email-verified must not keep
+		// that password once a sign-in OTP proves control of the mailbox.
+		const email = "otp-unverified-pw-user@email.com";
+		const existingPassword = "existing-password-123";
+		let signInOtp = "";
+
+		const { client: scopedClient, auth: scopedAuth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP({ otp: _otp }) {
+							signInOtp = _otp;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+
+		const internalAdapter = (await scopedAuth.$context).internalAdapter;
+
+		const created = await scopedAuth.api.signUpEmail({
+			body: { email, name: "Test User", password: existingPassword },
+		});
+		const userId = created.user!.id;
+		expect(created.user?.emailVerified).toBe(false);
+		await internalAdapter.createAccount({
+			userId,
+			providerId: "google",
+			issuer: "local:google",
+			providerAccountId: "attacker-google",
+		});
+
+		// Precondition: the password is blocked behind the verification gate.
+		await expect(
+			scopedAuth.api.signInEmail({
+				body: { email, password: existingPassword },
+			}),
+		).rejects.toThrow();
+
+		await scopedClient.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		const signedIn = await scopedClient.signIn.emailOtp({
+			email,
+			otp: signInOtp,
+		});
+		expect(signedIn.data?.token).toBeDefined();
+		const verifiedRow = await internalAdapter.findUserByEmail(email);
+		expect(verifiedRow?.user.emailVerified).toBe(true);
+
+		// Pre-proof account links are gone, so the password no longer works and
+		// an OAuth link cannot survive the email-owner proof.
+		const accounts = await internalAdapter.findAccounts(userId);
+		expect(accounts).toHaveLength(0);
+		await expect(
+			scopedAuth.api.signInEmail({
+				body: { email, password: existingPassword },
+			}),
+		).rejects.toThrow();
+	});
+
 	it("should sign-up with otp", async () => {
 		const testUser2 = {
 			email: "test-email@domain.com",
@@ -323,6 +392,15 @@ describe("email-otp", async () => {
 			password: "password",
 		});
 		expect(res.data?.token).toBeDefined();
+		const userId = res.data!.user.id;
+		await expect(
+			(await auth.$context).internalAdapter.findCredentialAccount(userId),
+		).resolves.toMatchObject({
+			userId,
+			providerId: "credential",
+			issuer: "local:credential",
+			providerAccountId: userId,
+		});
 	});
 
 	it("should fail on invalid email", async () => {
@@ -2459,5 +2537,95 @@ describe("email-otp verify-email cookie cache isolation", async () => {
 		});
 		expect(session.data?.user.email).toBe(currentUserEmail);
 		expect(session.data?.user.emailVerified).toBe(false);
+	});
+});
+
+/**
+ * The built-in `/sign-in/email` and `/sign-up/email` routes force-validate the
+ * request `Origin` even on cookieless requests (via `formCsrfMiddleware`). The
+ * email-otp send endpoint must match that behavior so a cookieless cross-origin
+ * POST cannot trigger an outbound verification OTP email to an arbitrary address.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10304
+ */
+describe("email-otp send origin/CSRF protection", async () => {
+	const sendVerificationOTP = vi.fn(async () => {});
+	const { auth, testUser } = await getTestInstance({
+		trustedOrigins: ["http://localhost:3000"],
+		advanced: {
+			disableCSRFCheck: false,
+			disableOriginCheck: false,
+		},
+		plugins: [
+			emailOTP({
+				sendVerificationOTP,
+			}),
+		],
+	});
+
+	it("should block cross-site navigation to the send endpoint (no cookies)", async () => {
+		sendVerificationOTP.mockClear();
+		const maliciousRequest = new Request(
+			"http://localhost:3000/api/auth/email-otp/send-verification-otp",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Sec-Fetch-Site": "cross-site",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "https://evil.com",
+				},
+				body: JSON.stringify({
+					email: "attacker@evil.com",
+					type: "sign-in",
+				}),
+			},
+		);
+
+		const response = await auth.handler(maliciousRequest);
+		expect(response.status).toBe(403);
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
+	});
+
+	it("should reject a cookieless cross-origin POST to the send endpoint", async () => {
+		sendVerificationOTP.mockClear();
+		const maliciousRequest = new Request(
+			"http://localhost:3000/api/auth/email-otp/send-verification-otp",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: "https://evil.com",
+				},
+				body: JSON.stringify({
+					email: "attacker@evil.com",
+					type: "sign-in",
+				}),
+			},
+		);
+
+		const response = await auth.handler(maliciousRequest);
+		expect(response.status).toBe(403);
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
+	});
+
+	it("should still allow a cookieless request with no Origin (server-to-server)", async () => {
+		sendVerificationOTP.mockClear();
+		const legitimateRequest = new Request(
+			"http://localhost:3000/api/auth/email-otp/send-verification-otp",
+			{
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					email: testUser.email,
+					type: "email-verification",
+				}),
+			},
+		);
+
+		const response = await auth.handler(legitimateRequest);
+		expect(response.status).toBe(200);
+		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
 	});
 });

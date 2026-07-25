@@ -18,13 +18,15 @@ import type { BetterAuthPlugin } from "better-auth/types";
 import * as z from "zod";
 import type { AuthorizeEndpointSettings } from "./authorize";
 import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
+import { claimsRequestParameterSchema } from "./claims-request";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { validateOAuthProviderExtensions } from "./extensions";
 import { introspectEndpoint } from "./introspect";
+import type { BackchannelLogoutPlan } from "./logout";
 import {
-	deliverBackchannelLogoutTokens,
-	revokeAndPlanBackchannelLogout,
+	applyBackchannelLogoutPlan,
+	prepareBackchannelLogoutPlan,
 	rpInitiatedLogoutEndpoint,
 } from "./logout";
 import {
@@ -44,10 +46,10 @@ import {
 } from "./resources";
 import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
+import { STANDARD_CLAIM_NAMES, STANDARD_CLAIMS } from "./standard-claims";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import {
-	authorizationQuerySchema,
 	clientRegistrationRequestSchema,
 	ResourceUriSchema,
 	SafeUrlSchema,
@@ -92,6 +94,10 @@ export const oAuthState = defineRequestState<{
 	postLoginClearedForSession?: string;
 } | null>(() => null);
 export const getOAuthProviderState = oAuthState.get;
+const backchannelLogoutPlansByContext = new WeakMap<
+	GenericEndpointContext,
+	Map<string, BackchannelLogoutPlan>
+>();
 const signedQueryIssuedAtMsKey = "signedQueryIssuedAtMs";
 
 function getServerContextSignedQueryIssuedAt(value: unknown) {
@@ -147,7 +153,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		}
 	}
 
-	// Validate claims
+	// Discovery `claims_supported`: protocol claims that are always present, plus
+	// the standard identity claims whose backing scope is configured. The
+	// identity set is derived from the one claim registry so the advertisement
+	// cannot drift from what UserInfo actually resolves.
 	const claims = new Set([
 		"sub",
 		"iss",
@@ -157,10 +166,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		"sid",
 		"scope",
 		"azp",
-		...(scopes.has("email") ? ["email", "email_verified"] : []),
-		...(scopes.has("profile")
-			? ["name", "picture", "family_name", "given_name"]
-			: []),
+		...STANDARD_CLAIM_NAMES.filter((name) =>
+			scopes.has(STANDARD_CLAIMS[name].scope),
+		),
 	]);
 
 	const opts: O & { claims?: string[] } = {
@@ -168,6 +176,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		accessTokenExpiresIn: 3600, // 1 hour
 		m2mAccessTokenExpiresIn: 3600, // 1 hour
 		refreshTokenExpiresIn: 2592000, // 30 days
+		refreshTokenReuseInterval: 0,
 		allowUnauthenticatedClientRegistration: false,
 		allowDynamicClientRegistration: false,
 		disableJwtPlugin: false,
@@ -303,51 +312,49 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 	const oauth2AuthorizeEndpoint = createOAuthEndpoint(
 		"/oauth2/authorize",
 		{
-			method: "GET",
-			query: authorizationQuerySchema,
+			method: ["GET", "POST"],
+			body: z.object({}).passthrough(),
 			redirectOnError: authorizeRedirectOnError(opts),
-			errorCodesByField: {
-				response_type: { invalid: "unsupported_response_type" },
-				resource: { invalid: "invalid_target" },
-			},
 			metadata: {
+				allowedMediaTypes: ["application/x-www-form-urlencoded"],
 				openapi: {
-					description: "Authorize an OAuth2 request",
+					description:
+						"Authorize an OAuth 2.1 request from query parameters or an application/x-www-form-urlencoded POST body",
 					parameters: [
 						{
 							name: "response_type",
 							in: "query",
 							required: false,
 							schema: { type: "string" },
-							description: "OAuth2 response type (e.g., 'code')",
+							description: "OAuth 2.1 response type (e.g., 'code')",
 						},
 						{
 							name: "client_id",
 							in: "query",
 							required: true,
 							schema: { type: "string" },
-							description: "OAuth2 client ID",
+							description: "OAuth 2.1 client ID",
 						},
 						{
 							name: "redirect_uri",
 							in: "query",
 							required: false,
 							schema: { type: "string", format: "uri" },
-							description: "OAuth2 redirect URI",
+							description: "OAuth 2.1 redirect URI",
 						},
 						{
 							name: "scope",
 							in: "query",
 							required: false,
 							schema: { type: "string" },
-							description: "OAuth2 scopes (space-separated)",
+							description: "OAuth 2.1 scopes (space-separated)",
 						},
 						{
 							name: "state",
 							in: "query",
 							required: false,
 							schema: { type: "string" },
-							description: "OAuth2 state parameter",
+							description: "OAuth 2.1 state parameter",
 						},
 						{
 							name: "request_uri",
@@ -521,12 +528,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			}
 
 			// The hook must register for every configuration path (including
-			// dynamic baseURL). Revocation runs inline because it mutates DB
-			// state we rely on. The HTTP fan-out goes through
-			// `runInBackgroundOrAwait`: with a background handler configured
-			// (Vercel `waitUntil`, CF `ctx.waitUntil`) it runs after the
-			// response; without one it is awaited inline so delivery is not lost
-			// on request teardown. Awaiting here keeps both paths reliable.
+			// dynamic baseURL). Core runs delete.after only after the session row is
+			// consumed and queues it until the surrounding transaction commits.
 			return {
 				options: {
 					databaseHooks: {
@@ -534,7 +537,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							delete: {
 								async before(session, hookCtx) {
 									if (!hookCtx) return;
-									const plan = await revokeAndPlanBackchannelLogout(
+									const plan = await prepareBackchannelLogoutPlan(
 										hookCtx,
 										opts,
 										{
@@ -543,14 +546,36 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 										},
 									);
 									if (!plan) return;
-									// TODO: re-evaluate this await. It makes delivery reliable on
-									// every runtime, but without an `advanced.backgroundTasks.handler`
-									// a hung RP can add up to the per-RP timeout to sign-out latency.
-									// Alternative to weigh: keep delivery non-blocking and instead
-									// hard-require a background handler when back-channel logout is on.
-									await hookCtx.context.runInBackgroundOrAwait(
-										deliverBackchannelLogoutTokens(hookCtx, plan),
+									const logoutPlanBySessionId =
+										backchannelLogoutPlansByContext.get(hookCtx) ??
+										new Map<string, BackchannelLogoutPlan>();
+									logoutPlanBySessionId.set(session.id, plan);
+									backchannelLogoutPlansByContext.set(
+										hookCtx,
+										logoutPlanBySessionId,
 									);
+								},
+								async after(session, hookCtx) {
+									if (!hookCtx) return;
+									const logoutPlanBySessionId =
+										backchannelLogoutPlansByContext.get(hookCtx);
+									if (!logoutPlanBySessionId) return;
+									const plan = logoutPlanBySessionId.get(session.id);
+									logoutPlanBySessionId.delete(session.id);
+									if (logoutPlanBySessionId.size === 0) {
+										backchannelLogoutPlansByContext.delete(hookCtx);
+									}
+									if (!plan) return;
+									const logoutTask = applyBackchannelLogoutPlan(
+										hookCtx,
+										plan,
+									).catch((error) => {
+										hookCtx.context.logger.error(
+											"Back-channel logout failed after session deletion",
+											error,
+										);
+									});
+									await hookCtx.context.runInBackgroundOrAwait(logoutTask);
 								},
 							},
 						},
@@ -733,6 +758,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						scope: z.string().optional().meta({
 							description:
 								"List of accept of accepted space-separated scopes. If none is provided, then all originally requested scopes are accepted.",
+						}),
+						claims: claimsRequestParameterSchema.optional().meta({
+							description:
+								"Accepted OIDC claims request object. If none is provided, then all originally requested claims are accepted.",
 						}),
 						oauth_query: z.string().optional().meta({
 							description: "The redirected page's query parameters",
@@ -1247,8 +1276,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/userinfo",
 				{
 					method: ["GET", "POST"],
+					body: z
+						.object({
+							access_token: z.string().optional(),
+						})
+						.passthrough()
+						.optional(),
 					metadata: {
 						noStore: true,
+						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
 							description:
 								"Get OpenID Connect user information (UserInfo endpoint)",

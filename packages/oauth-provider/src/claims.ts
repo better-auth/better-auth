@@ -85,6 +85,8 @@ export interface AccessTokenClaimsInput {
 	 * contributed access-token claims must be grant-type-stable.
 	 */
 	grantType: GrantType | undefined;
+	/** Session the tokens are issued for; `undefined` at introspection. See {@link OAuthClaimExtensionInput.sessionId}. */
+	sessionId: string | undefined;
 	/**
 	 * Per-issuance claims a grant handler supplied via `accessTokenClaims`.
 	 * Available only at issuance; `undefined` at introspection.
@@ -122,6 +124,7 @@ export async function resolveAccessTokenClaims(
 		referenceId,
 		metadata,
 		grantType,
+		sessionId,
 		perRequestClaims,
 		resourcePolicyClaims,
 	} = input;
@@ -133,6 +136,7 @@ export async function resolveAccessTokenClaims(
 		scopes,
 		grantType,
 		referenceId,
+		sessionId,
 		resources,
 		metadata,
 	});

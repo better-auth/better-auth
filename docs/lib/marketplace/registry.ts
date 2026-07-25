@@ -1,8 +1,8 @@
 import type { MarketplacePlugin } from "./types";
 import { marketplaceCategories } from "./types";
 
-export { marketplaceCategories };
 export type { MarketplacePlugin };
+export { marketplaceCategories };
 
 /**
  * Curated community plugin registry for the marketplace.
@@ -392,6 +392,77 @@ export const marketplacePlugins: MarketplacePlugin[] = [
 			name: "SulimanAbdulrazzaq",
 			github: "SulimanAbdulrazzaq",
 			avatar: "https://github.com/SulimanAbdulrazzaq.png",
+		},
+	},
+	{
+		slug: "better-auth-referral",
+		name: "@marinedotsh/better-auth-referral",
+		repo: "marinedotsh/better-auth-referral",
+		description: "A Better Auth plugin for adding user referrals to your app.",
+		category: "Utility",
+		tags: ["referral", "growth"],
+		npmPackage: "@marinedotsh/better-auth-referral",
+		author: {
+			name: "Shivam Gupta",
+			github: "shivamrun",
+			avatar: "https://github.com/shivamrun.png",
+		},
+	},
+	{
+		slug: "better-auth-instagram",
+		name: "better-auth-instagram",
+		repo: "rajatsandeepsen/better-auth-instagram",
+		description: "Instagram Provider for Better Auth",
+		category: "Auth",
+		tags: ["instagram", "oauth", "social"],
+		npmPackage: "better-auth-instagram",
+		author: {
+			name: "Rajat Sandeep",
+			github: "rajatsandeepsen",
+			avatar: "https://github.com/rajatsandeepsen.png",
+		},
+	},
+	{
+		slug: "better-auth-zoho",
+		name: "better-auth-zoho",
+		repo: "rajatsandeepsen/better-auth-zoho",
+		description: "Zoho Provider for Better Auth",
+		category: "Auth",
+		tags: ["zoho", "oauth", "social"],
+		npmPackage: "better-auth-zoho",
+		author: {
+			name: "Rajat Sandeep",
+			github: "rajatsandeepsen",
+			avatar: "https://github.com/rajatsandeepsen.png",
+		},
+	},
+	{
+		slug: "better-auth-snapchat",
+		name: "better-auth-snapchat",
+		repo: "rajatsandeepsen/better-auth-snapchat",
+		description: "Snapchat Provider for Better Auth",
+		category: "Auth",
+		tags: ["snapchat", "oauth", "social"],
+		npmPackage: "better-auth-snapchat",
+		author: {
+			name: "Rajat Sandeep",
+			github: "rajatsandeepsen",
+			avatar: "https://github.com/rajatsandeepsen.png",
+		},
+	},
+	{
+		slug: "better-inbox",
+		name: "better-inbox",
+		repo: "better-inbox/better-inbox",
+		description:
+			"In-app notifications for Better Auth apps. One plugin, one migration, one component — notifications live in your database, addressed to your users.",
+		category: "Utility",
+		tags: ["notifications", "inbox"],
+		npmPackage: "better-inbox",
+		author: {
+			name: "stewartjarod",
+			github: "stewartjarod",
+			avatar: "https://github.com/stewartjarod.png",
 		},
 	},
 ];

@@ -1,6 +1,26 @@
 import { base64Url } from "@better-auth/utils/base64";
 import type { OAuth2Tokens } from "./oauth-provider";
-import { parseScopeField } from "./scopes";
+
+/**
+ * Parse a provider's `scope` token-response field into a string array.
+ *
+ * RFC 6749 Section 3.3 defines `scope` as a space-delimited string, but
+ * providers vary: some return an already-split array. Accept both forms and
+ * drop empty or non-string entries.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/9076
+ */
+export function parseScopeField(scope: unknown): string[] {
+	if (Array.isArray(scope)) {
+		return scope
+			.map((s) => (typeof s === "string" ? s.trim() : ""))
+			.filter(Boolean);
+	}
+	if (typeof scope === "string") {
+		return scope.trim().split(/\s+/).filter(Boolean);
+	}
+	return [];
+}
 
 export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 	const getDate = (seconds: number) => {
@@ -42,6 +62,24 @@ export function applyDefaultAccessTokenExpiry(
 		);
 	}
 	return tokens;
+}
+
+/**
+ * Compute the union of stored and incoming OAuth scopes, preserving
+ * stored insertion order and dropping duplicates.
+ */
+export function mergeScopes(
+	stored: string | null | undefined,
+	incoming: string[] | undefined,
+): string {
+	const existing = stored
+		? stored
+				.split(",")
+				.map((scope) => scope.trim())
+				.filter(Boolean)
+		: [];
+	const next = (incoming ?? []).map((scope) => scope.trim()).filter(Boolean);
+	return [...new Set([...existing, ...next])].join(",");
 }
 
 /**

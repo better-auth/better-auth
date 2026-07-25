@@ -6,10 +6,42 @@ import { organization } from "better-auth/plugins";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
-import type { SSOOptions } from "./types";
+import { getRegisterSSOProviderBodySchema } from "./routes/schemas";
+import type { SAMLConfig, SSOOptions } from "./types";
+import { safeJsonParse } from "./utils";
 
 const TEST_CERT = `MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiUMA0Gcm9markup
 temporary cert for testing`;
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10329
+ */
+describe("SAML redirect URL schema", () => {
+	const registerProviderSchema = getRegisterSSOProviderBodySchema();
+
+	it.each([
+		["/dashboard", true],
+		["https://frontend.example.com/dashboard", true],
+		["//evil.example.com", false],
+		["/\\evil.example.com", false],
+		["/%2fevil.example.com", false],
+		["/%5cevil.example.com", false],
+		["dashboard", false],
+	])("validates %s", (url, expected) => {
+		expect(
+			registerProviderSchema.safeParse({
+				providerId: "saml-provider",
+				issuer: "https://idp.example.com",
+				domain: "example.com",
+				samlConfig: {
+					entryPoint: "https://idp.example.com/sso",
+					idpInitiatedCallbackUrl: url,
+					idpMetadata: { entityID: "https://idp.example.com" },
+				},
+			}).success,
+		).toBe(expected);
+	});
+});
 
 describe("SSO provider read endpoints", () => {
 	type TestUser = { email: string; password: string; name: string };
@@ -136,6 +168,7 @@ describe("SSO provider read endpoints", () => {
 						cert: TEST_CERT,
 						audience: "my-audience",
 						wantAssertionsSigned: true,
+						idpMetadata: { entityID: "https://idp.example.com" },
 						spMetadata: {},
 					},
 					organizationId,
@@ -739,6 +772,38 @@ epyw0Ikhqk/BFtQCRei+t1HJ9GIu6qnsC7CxrUA80IcxZjeg7N6ua+uctzRWzDhn
 kBGIJYs=
 -----END CERTIFICATE-----`;
 
+		it("should preserve the IdP authority during a nested certificate update", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "manual-saml-provider");
+
+			await auth.api.updateSSOProvider({
+				body: {
+					providerId: "manual-saml-provider",
+					samlConfig: {
+						idpMetadata: { cert: ROTATION_CERT_1 },
+					},
+				},
+				headers,
+			});
+
+			const storedProvider = data.ssoProvider.find(
+				(provider) => provider.providerId === "manual-saml-provider",
+			);
+			const storedConfig = safeJsonParse<SAMLConfig>(
+				storedProvider?.samlConfig ?? "",
+			);
+			expect(storedConfig?.idpMetadata.entityID).toBe(
+				"https://idp.example.com",
+			);
+			expect(storedConfig?.idpMetadata.cert).toBe(ROTATION_CERT_1);
+		});
+
 		it("should not expose raw certificate PEM", async () => {
 			const { auth, getAuthHeaders, registerSAMLProvider } =
 				createTestAuth(false);
@@ -1003,6 +1068,47 @@ kBGIJYs=
 			);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10329
+		 */
+		it("should clear a provider-level IdP-initiated callback URL", async () => {
+			const { auth, getAuthHeaders, data } = createTestAuth(false);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "my-saml-provider",
+					issuer: "https://idp.example.com",
+					domain: "example.com",
+					samlConfig: {
+						entryPoint: "https://idp.example.com/sso",
+						cert: TEST_CERT,
+						idpInitiatedCallbackUrl: "/dashboard",
+						idpMetadata: { entityID: "https://idp.example.com" },
+					},
+				},
+				headers,
+			});
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "my-saml-provider",
+					samlConfig: { idpInitiatedCallbackUrl: null },
+				},
+				headers,
+			});
+
+			expect(updated.samlConfig?.idpInitiatedCallbackUrl).toBeUndefined();
+			const storedConfig = safeJsonParse<SAMLConfig>(
+				data.ssoProvider[0]!.samlConfig!,
+			);
+			expect(storedConfig?.idpInitiatedCallbackUrl).toBeUndefined();
+		});
+
 		it("should perform partial update on OIDC provider", async () => {
 			const { auth, getAuthHeaders, createOIDCProviderData, data } =
 				createTestAuth(false);
@@ -1061,6 +1167,174 @@ kBGIJYs=
 			expect(updated.issuer).toBe("https://new-issuer.example.com");
 		});
 
+		it("rejects issuer updates when linked account rows exist", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			await registerSAMLProvider(headers, "my-saml-provider");
+
+			const user = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+			data.account.push({
+				id: "linked-saml-account",
+				userId: user!.id,
+				providerId: "my-saml-provider",
+				providerAccountId: "saml-account-id",
+			});
+
+			const response = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "my-saml-provider",
+					issuer: "https://new-issuer.example.com",
+				},
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(409);
+		});
+
+		it("allows same-value issuer updates when linked account rows exist", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			await registerSAMLProvider(headers, "my-saml-provider");
+
+			const user = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+			data.account.push({
+				id: "linked-saml-account",
+				userId: user!.id,
+				providerId: "my-saml-provider",
+				providerAccountId: "saml-account-id",
+			});
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "my-saml-provider",
+					issuer: "https://idp.example.com",
+				},
+				headers,
+			});
+
+			expect(updated.issuer).toBe("https://idp.example.com");
+		});
+
+		it("rejects OIDC client id updates when linked account rows exist", async () => {
+			const { auth, getAuthHeaders, createOIDCProviderData, data } =
+				createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const user = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+			createOIDCProviderData(user!.id, "my-oidc-provider", "client123");
+			data.account.push({
+				id: "linked-oidc-account",
+				userId: user!.id,
+				providerId: "my-oidc-provider",
+				providerAccountId: "oidc-account-id",
+			});
+
+			const response = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "my-oidc-provider",
+					oidcConfig: { clientId: "new-client-id" },
+				},
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(409);
+		});
+
+		it("allows OIDC secret rotation with same identity fields when linked account rows exist", async () => {
+			const { auth, getAuthHeaders, createOIDCProviderData, data } =
+				createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const user = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+			createOIDCProviderData(user!.id, "my-oidc-provider", "client123");
+			data.account.push({
+				id: "linked-oidc-account",
+				userId: user!.id,
+				providerId: "my-oidc-provider",
+				providerAccountId: "oidc-account-id",
+			});
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "my-oidc-provider",
+					oidcConfig: {
+						clientId: "client123",
+						clientSecret: "rotated-secret-value",
+						discoveryEndpoint: "https://idp.example.com/.well-known",
+					},
+				},
+				headers,
+			});
+
+			expect(updated.oidcConfig?.clientIdLastFour).toBe("****t123");
+		});
+
+		it("allows OIDC client secret updates when linked account rows exist", async () => {
+			const { auth, getAuthHeaders, createOIDCProviderData, data } =
+				createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const user = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "owner@example.com",
+			);
+			createOIDCProviderData(user!.id, "my-oidc-provider", "client123");
+			data.account.push({
+				id: "linked-oidc-account",
+				userId: user!.id,
+				providerId: "my-oidc-provider",
+				providerAccountId: "oidc-account-id",
+			});
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "my-oidc-provider",
+					oidcConfig: { clientSecret: "new-secret" },
+				},
+				headers,
+			});
+
+			expect(updated.oidcConfig?.clientIdLastFour).toBe("****t123");
+		});
+
 		it("should return 400 when issuer is invalid URL", async () => {
 			const { auth, getAuthHeaders, registerSAMLProvider } =
 				createTestAuth(false);
@@ -1075,6 +1349,34 @@ kBGIJYs=
 
 			const response = await auth.api.updateSSOProvider({
 				body: { providerId: "my-saml-provider", issuer: "invalid-url" },
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(400);
+		});
+
+		it("should return 400 when SAML callbackUrl contains a fragment", async () => {
+			const { auth, getAuthHeaders } = createTestAuth(false);
+
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+
+			const response = await auth.api.registerSSOProvider({
+				body: {
+					providerId: "fragment-callback-provider",
+					issuer: "https://idp.example.com",
+					domain: "example.com",
+					samlConfig: {
+						entryPoint: "https://idp.example.com/sso",
+						cert: TEST_CERT,
+						callbackUrl: "http://localhost:3000/dashboard#saml",
+						spMetadata: {},
+					},
+				},
 				headers,
 				asResponse: true,
 			});
@@ -1640,7 +1942,7 @@ kBGIJYs=
 			expect(response.status).toBe(403);
 		});
 
-		it("should not delete linked accounts when provider is deleted", async () => {
+		it("deletes linked account rows when the provider is deleted", async () => {
 			const { auth, getAuthHeaders, registerSAMLProvider, data } =
 				createTestAuth(false);
 
@@ -1660,19 +1962,21 @@ kBGIJYs=
 				id: "account-1",
 				userId: user!.id,
 				providerId: "my-saml-provider",
-				accountId: "saml-account-id",
+				providerAccountId: "saml-account-id",
 				accessToken: "token",
 				refreshToken: "refresh",
 			});
-
-			const accountCountBefore = data.account.length;
 
 			await auth.api.deleteSSOProvider({
 				body: { providerId: "my-saml-provider" },
 				headers,
 			});
 
-			expect(data.account.length).toBe(accountCountBefore);
+			const accounts = data.account as { providerId: string }[];
+			expect(accounts.some((a) => a.providerId === "my-saml-provider")).toBe(
+				false,
+			);
+			expect(accounts.some((a) => a.providerId === "credential")).toBe(true);
 		});
 	});
 
@@ -1714,6 +2018,7 @@ kBGIJYs=
 						cert: TEST_CERT,
 						audience: "my-audience",
 						wantAssertionsSigned: true,
+						idpMetadata: { entityID: "https://idp.example.com" },
 						spMetadata: {},
 					},
 					organizationId: org!.id,
@@ -1762,6 +2067,7 @@ kBGIJYs=
 						cert: TEST_CERT,
 						audience: "my-audience",
 						wantAssertionsSigned: true,
+						idpMetadata: { entityID: "https://idp.example.com" },
 						spMetadata: {},
 					},
 					organizationId: org!.id,
@@ -1803,6 +2109,7 @@ kBGIJYs=
 						cert: TEST_CERT,
 						audience: "my-audience",
 						wantAssertionsSigned: true,
+						idpMetadata: { entityID: "https://idp.example.com" },
 						spMetadata: {},
 					},
 					organizationId: org!.id,
@@ -1824,7 +2131,7 @@ kBGIJYs=
  * Registration must reject such colliding ids.
  */
 describe("SSO providerId namespace collisions", () => {
-	const setup = () => {
+	const setup = (ssoOptions?: Parameters<typeof sso>[0]) => {
 		const data: Record<string, any[]> = {
 			user: [],
 			session: [],
@@ -1845,7 +2152,7 @@ describe("SSO providerId namespace collisions", () => {
 					trustedProviders: ["github"],
 				},
 			},
-			plugins: [sso()],
+			plugins: [sso(ssoOptions)],
 		});
 		const authClient = createAuthClient({
 			baseURL: "http://localhost:3000",
@@ -1881,6 +2188,7 @@ describe("SSO providerId namespace collisions", () => {
 			callbackUrl: "http://localhost:3000/api/sso/callback",
 			audience: "my-audience",
 			wantAssertionsSigned: true,
+			idpMetadata: { entityID: "https://idp.example.com" },
 			spMetadata: {},
 		},
 	});
@@ -1912,6 +2220,32 @@ describe("SSO providerId namespace collisions", () => {
 		const headers = await signIn();
 		const response = await auth.api.registerSSOProvider({
 			body: registerBody("credential"),
+			headers,
+			asResponse: true,
+		});
+		expect(response.status).toBe(422);
+	});
+
+	it("rejects a providerId that collides with a default SSO provider", async () => {
+		const { auth, signIn } = setup({
+			defaultSSO: [
+				{
+					domain: "example.com",
+					providerId: "default-sso",
+					samlConfig: {
+						issuer: "https://sp.example.com/saml",
+						entryPoint: "https://idp.example.com/sso",
+						cert: TEST_CERT,
+						callbackUrl: "http://localhost:3000/api/sso/callback",
+						idpMetadata: { entityID: "https://idp.example.com" },
+						spMetadata: {},
+					},
+				},
+			],
+		});
+		const headers = await signIn();
+		const response = await auth.api.registerSSOProvider({
+			body: registerBody("default-sso"),
 			headers,
 			asResponse: true,
 		});

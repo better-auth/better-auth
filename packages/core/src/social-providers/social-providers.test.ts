@@ -5,10 +5,15 @@ vi.mock("@better-fetch/fetch", () => ({
 }));
 
 import { betterFetch } from "@better-fetch/fetch";
-import type { ClientAssertionContext } from "../oauth2";
+import type {
+	ClientAssertionContext,
+	OAuthProvider,
+	ProviderOptions,
+} from "../oauth2";
 import { CLIENT_ASSERTION_TYPE } from "../oauth2";
 import { cognito } from "./cognito";
 import { discord } from "./discord";
+import { socialProviders } from "./index";
 import { microsoft } from "./microsoft-entra-id";
 import { roblox } from "./roblox";
 import { slack } from "./slack";
@@ -33,6 +38,129 @@ const baseInput = {
 	codeVerifier: baseVerifier,
 	redirectURI: baseCallback,
 };
+
+describe("OAuth account identity contract", () => {
+	const providerOptions = {
+		clientId: credentials.clientId,
+		clientSecret: credentials.clientSecret,
+		clientKey: "client-key",
+		domain: "test.auth.us-east-1.amazoncognito.com",
+		region: "us-east-1",
+		userPoolId: "us-east-1_test",
+	};
+	const providers: OAuthProvider[] = [
+		socialProviders.apple(providerOptions),
+		socialProviders.atlassian(providerOptions),
+		socialProviders.cognito(providerOptions),
+		socialProviders.discord(providerOptions),
+		socialProviders.dropbox(providerOptions),
+		socialProviders.facebook(providerOptions),
+		socialProviders.figma(providerOptions),
+		socialProviders.github(providerOptions),
+		socialProviders.gitlab(providerOptions),
+		socialProviders.google(providerOptions),
+		socialProviders.huggingface(providerOptions),
+		socialProviders.kakao(providerOptions),
+		socialProviders.kick(providerOptions),
+		socialProviders.line(providerOptions),
+		socialProviders.linear(providerOptions),
+		socialProviders.linkedin(providerOptions),
+		socialProviders.microsoft(providerOptions),
+		socialProviders.naver(providerOptions),
+		socialProviders.notion(providerOptions),
+		socialProviders.paybin(providerOptions),
+		socialProviders.paypal(providerOptions),
+		socialProviders.polar(providerOptions),
+		socialProviders.railway(providerOptions),
+		socialProviders.reddit(providerOptions),
+		socialProviders.roblox(providerOptions),
+		socialProviders.salesforce(providerOptions),
+		socialProviders.slack(providerOptions),
+		socialProviders.spotify(providerOptions),
+		socialProviders.tiktok({
+			clientKey: providerOptions.clientKey,
+			clientSecret: providerOptions.clientSecret,
+		}),
+		socialProviders.twitch(providerOptions),
+		socialProviders.twitter(providerOptions),
+		socialProviders.vercel(providerOptions),
+		socialProviders.vk(providerOptions),
+		socialProviders.wechat(providerOptions),
+		socialProviders.zoom(providerOptions),
+	];
+
+	it.each(providers)("$id declares a stable account subject", (provider) => {
+		expect(provider.accountSubject).toBeDefined();
+	});
+
+	it("keeps mapped local-user fields separate from provider identity", () => {
+		const mapProfile: NonNullable<
+			ProviderOptions<{ subject: string }>["mapProfileToUser"]
+		> = () => ({
+			// @ts-expect-error Provider identity must be declared through accountSubject.
+			id: "mapped-provider-subject",
+		});
+
+		expect(mapProfile).toBeTypeOf("function");
+	});
+
+	it("keeps custom profile loading aligned with account-subject resolution", () => {
+		type GetUserInfo = NonNullable<
+			ProviderOptions<{ subject: string }>["getUserInfo"]
+		>;
+
+		// @ts-expect-error The declared raw profile requires a subject.
+		const getUserInfo: GetUserInfo = async () => ({
+			user: { emailVerified: true },
+			data: { unstableId: "mapped-provider-subject" },
+		});
+
+		expect(getUserInfo).toBeTypeOf("function");
+	});
+
+	it("keeps provider identity out of mutable user info", () => {
+		type GetUserInfo = NonNullable<
+			ProviderOptions<{ subject: string }>["getUserInfo"]
+		>;
+
+		// @ts-expect-error Mutable user info cannot carry provider identity.
+		const getUserInfo: GetUserInfo = async () => ({
+			user: {
+				emailVerified: true,
+				id: "mapped-provider-subject",
+			},
+			data: { subject: "provider-subject" },
+		});
+
+		expect(getUserInfo).toBeTypeOf("function");
+	});
+
+	it("uses canonical issuers only for providers with verified OIDC identity", () => {
+		expect(
+			providers
+				.filter((provider) => provider.accountIssuer !== undefined)
+				.map((provider) => provider.id)
+				.sort(),
+		).toEqual([
+			"apple",
+			"cognito",
+			"facebook",
+			"google",
+			"line",
+			"microsoft",
+			"paybin",
+		]);
+	});
+
+	it("uses the configured Paybin issuer as the account namespace", () => {
+		const provider = socialProviders.paybin({
+			...providerOptions,
+			issuer: "https://idp.sandbox.paybin.example",
+		});
+
+		expect(provider.accountIssuer).toBe("https://idp.sandbox.paybin.example");
+	});
+});
 
 describe("microsoft provider", () => {
 	it("sends client assertions instead of client secrets for authorization code exchange", async () => {
@@ -141,7 +269,7 @@ describe("microsoft provider", () => {
 describe("discord provider", () => {
 	it("preserves the authorize URL shape after the shared-helper refactor", async () => {
 		const provider = discord({ ...credentials });
-		const { url } = await provider.createAuthorizationURL(baseInput);
+		const url = await provider.createAuthorizationURL(baseInput);
 		expect(url.origin + url.pathname).toBe(
 			"https://discord.com/api/oauth2/authorize",
 		);
@@ -156,7 +284,7 @@ describe("discord provider", () => {
 
 	it("appends permissions when bot scope is requested with options.permissions", async () => {
 		const provider = discord({ ...credentials, permissions: 8 });
-		const { url } = await provider.createAuthorizationURL({
+		const url = await provider.createAuthorizationURL({
 			...baseInput,
 			scopes: ["bot"],
 		});
@@ -165,7 +293,7 @@ describe("discord provider", () => {
 
 	it("forwards additionalParams while dropping reserved keys", async () => {
 		const provider = discord({ ...credentials });
-		const { url } = await provider.createAuthorizationURL({
+		const url = await provider.createAuthorizationURL({
 			...baseInput,
 			additionalParams: { custom: "value", state: "attacker" },
 		});
@@ -177,7 +305,7 @@ describe("discord provider", () => {
 describe("roblox provider", () => {
 	it("preserves the authorize URL shape after the shared-helper refactor", async () => {
 		const provider = roblox({ ...credentials });
-		const { url } = await provider.createAuthorizationURL(baseInput);
+		const url = await provider.createAuthorizationURL(baseInput);
 		expect(url.origin + url.pathname).toBe(
 			"https://apis.roblox.com/oauth/v1/authorize",
 		);
@@ -189,7 +317,7 @@ describe("roblox provider", () => {
 
 	it("forwards additionalParams while dropping reserved keys", async () => {
 		const provider = roblox({ ...credentials });
-		const { url } = await provider.createAuthorizationURL({
+		const url = await provider.createAuthorizationURL({
 			...baseInput,
 			additionalParams: { custom: "value", scope: "admin" },
 		});
@@ -201,7 +329,7 @@ describe("roblox provider", () => {
 describe("slack provider", () => {
 	it("preserves the authorize URL shape after the shared-helper refactor", async () => {
 		const provider = slack({ ...credentials });
-		const { url } = await provider.createAuthorizationURL(baseInput);
+		const url = await provider.createAuthorizationURL(baseInput);
 		expect(url.origin + url.pathname).toBe(
 			"https://slack.com/openid/connect/authorize",
 		);
@@ -213,7 +341,7 @@ describe("slack provider", () => {
 
 	it("forwards additionalParams while dropping reserved keys", async () => {
 		const provider = slack({ ...credentials });
-		const { url } = await provider.createAuthorizationURL({
+		const url = await provider.createAuthorizationURL({
 			...baseInput,
 			additionalParams: { team: "T01ABC", client_id: "attacker" },
 		});
@@ -225,7 +353,7 @@ describe("slack provider", () => {
 describe("zoom provider", () => {
 	it("preserves the authorize URL shape after the shared-helper refactor", async () => {
 		const provider = zoom({ ...credentials, pkce: false });
-		const { url } = await provider.createAuthorizationURL(baseInput);
+		const url = await provider.createAuthorizationURL(baseInput);
 		expect(url.origin + url.pathname).toBe("https://zoom.us/oauth/authorize");
 		expect(url.searchParams.get("client_id")).toBe(credentials.clientId);
 		expect(url.searchParams.get("response_type")).toBe("code");
@@ -236,14 +364,14 @@ describe("zoom provider", () => {
 
 	it("adds PKCE challenge by default", async () => {
 		const provider = zoom({ ...credentials });
-		const { url } = await provider.createAuthorizationURL(baseInput);
+		const url = await provider.createAuthorizationURL(baseInput);
 		expect(url.searchParams.get("code_challenge_method")).toBe("S256");
 		expect(url.searchParams.get("code_challenge")).not.toBeNull();
 	});
 
 	it("forwards additionalParams while dropping reserved keys", async () => {
 		const provider = zoom({ ...credentials, pkce: false });
-		const { url } = await provider.createAuthorizationURL({
+		const url = await provider.createAuthorizationURL({
 			...baseInput,
 			additionalParams: { custom: "value", redirect_uri: "https://attacker" },
 		});
@@ -258,7 +386,7 @@ describe("tiktok provider", () => {
 			clientKey: "tk-key-1",
 			clientSecret: "secret",
 		});
-		const { url } = await provider.createAuthorizationURL(baseInput);
+		const url = await provider.createAuthorizationURL(baseInput);
 		expect(url.origin + url.pathname).toBe(
 			"https://www.tiktok.com/v2/auth/authorize",
 		);
@@ -274,7 +402,7 @@ describe("tiktok provider", () => {
 			clientKey: "tk-key-1",
 			clientSecret: "secret",
 		});
-		const { url } = await provider.createAuthorizationURL({
+		const url = await provider.createAuthorizationURL({
 			...baseInput,
 			additionalParams: {
 				custom: "value",
@@ -291,7 +419,7 @@ describe("tiktok provider", () => {
 describe("wechat provider", () => {
 	it("preserves the manual authorize URL shape with appid and wechat_redirect fragment", async () => {
 		const provider = wechat({ clientId: "wx-app-1", clientSecret: "secret" });
-		const { url } = await provider.createAuthorizationURL(baseInput);
+		const url = await provider.createAuthorizationURL(baseInput);
 		expect(url.origin + url.pathname).toBe(
 			"https://open.weixin.qq.com/connect/qrconnect",
 		);
@@ -304,7 +432,7 @@ describe("wechat provider", () => {
 
 	it("forwards additionalParams but drops reserved keys and appid", async () => {
 		const provider = wechat({ clientId: "wx-app-1", clientSecret: "secret" });
-		const { url } = await provider.createAuthorizationURL({
+		const url = await provider.createAuthorizationURL({
 			...baseInput,
 			additionalParams: {
 				custom: "value",
@@ -331,7 +459,7 @@ describe("cognito provider", () => {
 			...cognitoConfig,
 			identityProvider: "Google",
 		});
-		const { url } = await provider.createAuthorizationURL(baseInput);
+		const url = await provider.createAuthorizationURL(baseInput);
 		expect(url.searchParams.get("identity_provider")).toBe("Google");
 	});
 
@@ -340,7 +468,7 @@ describe("cognito provider", () => {
 			...cognitoConfig,
 			identityProvider: "Google",
 		});
-		const { url } = await provider.createAuthorizationURL({
+		const url = await provider.createAuthorizationURL({
 			...baseInput,
 			additionalParams: { identity_provider: "Okta" },
 		});
@@ -349,7 +477,7 @@ describe("cognito provider", () => {
 
 	it("omits identity_provider when neither config nor additionalParams set it", async () => {
 		const provider = cognito(cognitoConfig);
-		const { url } = await provider.createAuthorizationURL(baseInput);
+		const url = await provider.createAuthorizationURL(baseInput);
 		expect(url.searchParams.get("identity_provider")).toBeNull();
 	});
 });

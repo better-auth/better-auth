@@ -2,15 +2,14 @@ import { betterFetch } from "@better-fetch/fetch";
 import { createRemoteJWKSet, decodeJwt } from "jose";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getPrimaryClientId,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
-export interface FacebookProfile {
+export interface FacebookGraphProfile {
 	id: string;
 	name: string;
 	email?: string;
@@ -24,6 +23,17 @@ export interface FacebookProfile {
 		};
 	};
 }
+
+export interface FacebookLimitedLoginProfile {
+	sub: string;
+	email: string;
+	name: string;
+	picture: string;
+}
+
+export type FacebookProfile =
+	| FacebookGraphProfile
+	| FacebookLimitedLoginProfile;
 
 interface FacebookDebugTokenData {
 	app_id?: string;
@@ -92,13 +102,13 @@ export interface FacebookOptions extends ProviderOptions<FacebookProfile> {
 	configId?: string | undefined;
 }
 
-const FACEBOOK_DEFAULT_SCOPES = ["email", "public_profile"];
-
 export const facebook = (options: FacebookOptions) => {
 	return {
 		id: "facebook",
 		name: "Facebook",
-		callbackPath: "/callback/facebook",
+		accountSubject: ({ profile }) =>
+			"sub" in profile ? profile.sub : profile.id,
+		accountIssuer: "https://www.facebook.com",
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -112,16 +122,16 @@ export const facebook = (options: FacebookOptions) => {
 				);
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				FACEBOOK_DEFAULT_SCOPES,
-				scopes,
-			);
-			return createAuthorizationURL({
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["email", "public_profile"];
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
+			return await createAuthorizationURL({
 				id: "facebook",
 				options,
 				authorizationEndpoint: "https://www.facebook.com/v24.0/dialog/oauth",
-				scopes: requestedScopes,
+				scopes: _scopes,
 				state,
 				redirectURI,
 				loginHint,
@@ -171,38 +181,18 @@ export const facebook = (options: FacebookOptions) => {
 			}
 
 			if (token.idToken && token.idToken.split(".").length === 3) {
-				const profile = decodeJwt(token.idToken) as {
-					sub: string;
-					email: string;
-					name: string;
-					picture: string;
-				};
-
-				const user = {
-					id: profile.sub,
-					name: profile.name,
-					email: profile.email,
-					picture: {
-						data: {
-							url: profile.picture,
-							height: 100,
-							width: 100,
-							is_silhouette: false,
-						},
-					},
-				};
+				const profile = decodeJwt(token.idToken) as FacebookLimitedLoginProfile;
 
 				// https://developers.facebook.com/docs/facebook-login/limited-login/permissions
 				// Facebook ID token does not include email_verified claim.
 				// We default to false for security consistency.
-				const userMap = await options.mapProfileToUser?.({
-					...user,
-					email_verified: false,
-				});
+				const userMap = await options.mapProfileToUser?.(profile);
 
 				return {
 					user: {
-						...user,
+						name: profile.name,
+						email: profile.email,
+						image: profile.picture,
 						emailVerified: false,
 						...userMap,
 					},
@@ -232,7 +222,7 @@ export const facebook = (options: FacebookOptions) => {
 				"picture",
 				...(options?.fields || []),
 			];
-			const { data: profile, error } = await betterFetch<FacebookProfile>(
+			const { data: profile, error } = await betterFetch<FacebookGraphProfile>(
 				"https://graph.facebook.com/me?fields=" + fields.join(","),
 				{
 					auth: {
@@ -251,7 +241,6 @@ export const facebook = (options: FacebookOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.id,
 					name: profile.name,
 					email: profile.email,
 					image: profile.picture.data.url,
@@ -262,5 +251,5 @@ export const facebook = (options: FacebookOptions) => {
 			};
 		},
 		options,
-	} satisfies UpstreamProvider<FacebookProfile>;
+	} satisfies OAuthProvider<FacebookProfile>;
 };

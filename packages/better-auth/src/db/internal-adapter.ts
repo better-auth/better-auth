@@ -9,18 +9,20 @@ import type {
 import {
 	getCurrentAdapter,
 	getCurrentAuthContext,
+	queueAfterTransactionHook,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import { createLocalAccountIssuer } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
+import { getIP } from "@better-auth/core/utils/ip";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
-import { getIp } from "../utils/get-request-ip";
 import {
 	assertValidUserInfo,
 	assertValidUserInfoSource,
@@ -42,6 +44,11 @@ function getTTLSeconds(expiresAt: Date | number, now = Date.now()): number {
 		typeof expiresAt === "number" ? expiresAt : expiresAt.getTime();
 	return Math.max(Math.floor((expiresMs - now) / 1000), 0);
 }
+
+type ActiveSessionReference = {
+	readonly token: string;
+	readonly expiresAt: number;
+};
 
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
@@ -130,6 +137,49 @@ export const createInternalAdapter = (
 		);
 	}
 
+	async function getActiveSessionReferences(userId: string) {
+		if (!secondaryStorage) return [];
+		const activeSessions = await secondaryStorage.get(
+			`active-sessions-${userId}`,
+		);
+		return activeSessions
+			? safeJSONParse<ActiveSessionReference[]>(activeSessions) || []
+			: [];
+	}
+
+	async function deleteCachedUserSessions(
+		userId: string,
+		sessionReferences: readonly ActiveSessionReference[],
+	) {
+		if (!secondaryStorage) return;
+
+		const deletedTokens = new Set(
+			sessionReferences.map((session) => session.token),
+		);
+		for (const { token } of sessionReferences) {
+			await secondaryStorage.delete(token);
+		}
+
+		const activeSessionsKey = `active-sessions-${userId}`;
+		const currentSessionReferences = await getActiveSessionReferences(userId);
+		const now = Date.now();
+		const remainingSessionReferences = currentSessionReferences.filter(
+			(session) => session.expiresAt > now && !deletedTokens.has(session.token),
+		);
+		remainingSessionReferences.sort((a, b) => a.expiresAt - b.expiresAt);
+		const furthestExpiration = remainingSessionReferences.at(-1)?.expiresAt;
+
+		if (furthestExpiration) {
+			await secondaryStorage.set(
+				activeSessionsKey,
+				JSON.stringify(remainingSessionReferences),
+				getTTLSeconds(furthestExpiration, now),
+			);
+			return;
+		}
+		await secondaryStorage.delete(activeSessionsKey);
+	}
+
 	async function withVerificationConsumeLock<T>(
 		key: string,
 		fn: () => Promise<T>,
@@ -153,6 +203,45 @@ export const createInternalAdapter = (
 	}
 
 	return {
+		createOAuthUser: async (
+			user: Omit<User, "id" | "createdAt" | "updatedAt">,
+			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
+				Partial<Account>,
+		) => {
+			return runWithTransaction(adapter, async () => {
+				const createdUser = await createWithHooks(
+					{
+						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						...user,
+						email: user.email?.toLowerCase(),
+					},
+					"user",
+					undefined,
+				);
+				if (!createdUser) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Failed to create user",
+					});
+				}
+				const createdAccount = await createWithHooks(
+					{
+						...account,
+						userId: createdUser.id,
+						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+					"account",
+					undefined,
+				);
+				return {
+					user: createdUser,
+					account: createdAccount,
+				};
+			});
+		},
 		createUser: async <T>(
 			user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 				Partial<User> &
@@ -352,12 +441,18 @@ export const createInternalAdapter = (
 			dontRememberMe?: boolean | undefined,
 			override?: (Partial<Session> & Record<string, any>) | undefined,
 			overrideAll?: boolean | undefined,
+			storageOptions?:
+				| { deferSecondaryStorageWrites?: boolean | undefined }
+				| undefined,
 		) => {
 			const headers: Headers | undefined = await (async () => {
 				const ctx = await getCurrentAuthContext().catch(() => null);
 				return ctx?.headers || ctx?.request?.headers;
 			})();
 			const storeInDb = options.session?.storeSessionInDatabase;
+			const databaseSessionFallbackEnabled =
+				storeInDb === true &&
+				options.session?.preserveSessionInDatabase !== true;
 			const {
 				// always ignore override id - new sessions must have new ids
 				id: _,
@@ -376,7 +471,7 @@ export const createInternalAdapter = (
 			const defaultAdditionalFields = getSessionDefaultFields(options);
 			const data = {
 				...(sessionId ? { id: sessionId } : {}),
-				ipAddress: headers ? getIp(headers, options) || "" : "",
+				ipAddress: headers ? getIP(headers, options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
 				/**
@@ -395,78 +490,86 @@ export const createInternalAdapter = (
 				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
 			} satisfies Partial<Session>;
+			const mirrorSessionToSecondaryStorage = async (sessionData: Session) => {
+				if (!secondaryStorage) return sessionData;
+				const currentList = await secondaryStorage.get(
+					`active-sessions-${userId}`,
+				);
+
+				let list: { token: string; expiresAt: number }[] = [];
+				const now = Date.now();
+				if (currentList) {
+					list = safeJSONParse(currentList) || [];
+					list = list.filter(
+						(session) =>
+							session.expiresAt > now && session.token !== data.token,
+					);
+				}
+
+				const sorted = [
+					...list,
+					{ token: data.token, expiresAt: data.expiresAt.getTime() },
+				].sort((a, b) => a.expiresAt - b.expiresAt);
+				const furthestSessionExp =
+					sorted.at(-1)?.expiresAt ?? data.expiresAt.getTime();
+				const furthestSessionTTL = getTTLSeconds(furthestSessionExp, now);
+				if (furthestSessionTTL > 0) {
+					await secondaryStorage.set(
+						`active-sessions-${userId}`,
+						JSON.stringify(sorted),
+						furthestSessionTTL,
+					);
+				}
+
+				const user = await (await getCurrentAdapter(adapter)).findOne<User>({
+					model: "user",
+					where: [{ field: "id", value: userId }],
+				});
+				const sessionTTL = getTTLSeconds(data.expiresAt, now);
+				if (sessionTTL > 0) {
+					await secondaryStorage.set(
+						data.token,
+						JSON.stringify({ session: sessionData, user }),
+						sessionTTL,
+					);
+				}
+				return sessionData;
+			};
 			const res = await createWithHooks(
 				data,
 				"session",
 				secondaryStorage
 					? {
 							fn: async (sessionData) => {
-								/**
-								 * store the session token for the user
-								 * so we can retrieve it later for listing sessions
-								 */
-								const currentList = await secondaryStorage.get(
-									`active-sessions-${userId}`,
-								);
-
-								let list: { token: string; expiresAt: number }[] = [];
-								const now = Date.now();
-
-								if (currentList) {
-									list = safeJSONParse(currentList) || [];
-									list = list.filter(
-										(session) =>
-											session.expiresAt > now && session.token !== data.token,
-									);
-								}
-
-								const sorted = [
-									...list,
-									{ token: data.token, expiresAt: data.expiresAt.getTime() },
-								].sort((a, b) => a.expiresAt - b.expiresAt);
-								const furthestSessionExp =
-									sorted.at(-1)?.expiresAt ?? data.expiresAt.getTime();
-								const furthestSessionTTL = getTTLSeconds(
-									furthestSessionExp,
-									now,
-								);
-								if (furthestSessionTTL > 0) {
-									await secondaryStorage.set(
-										`active-sessions-${userId}`,
-										JSON.stringify(sorted),
-										furthestSessionTTL,
-									);
-								}
-
-								const user = await (
-									await getCurrentAdapter(adapter)
-								).findOne<User>({
-									model: "user",
-									where: [
-										{
-											field: "id",
-											value: userId,
-										},
-									],
-								});
-								const sessionTTL = getTTLSeconds(data.expiresAt, now);
-								if (sessionTTL > 0) {
-									await secondaryStorage.set(
-										data.token,
-										JSON.stringify({
-											session: sessionData,
-											user,
-										}),
-										sessionTTL,
-									);
-								}
-
-								return sessionData;
+								return storageOptions?.deferSecondaryStorageWrites
+									? sessionData
+									: mirrorSessionToSecondaryStorage(sessionData as Session);
 							},
 							executeMainFn: storeInDb,
 						}
 					: undefined,
 			);
+			if (
+				secondaryStorage &&
+				storageOptions?.deferSecondaryStorageWrites &&
+				res
+			) {
+				await queueAfterTransactionHook(
+					async () => {
+						await mirrorSessionToSecondaryStorage(res as Session);
+					},
+					databaseSessionFallbackEnabled
+						? {
+								onError(error: unknown) {
+									logger.error(
+										"Failed to mirror committed session to secondary storage",
+										error,
+									);
+								},
+							}
+						: undefined,
+				);
+			}
 			return res as Session;
 		},
 		findSession: async (
@@ -796,7 +899,7 @@ export const createInternalAdapter = (
 		/**
 		 * Delete an account by its primary key.
 		 *
-		 * @param id - The account row's primary key (the `id` column, not the `accountId` column).
+		 * @param id - The account row's primary key, not its providerAccountId.
 		 */
 		deleteAccount: async (id: string) => {
 			await deleteWithHooks(
@@ -812,17 +915,20 @@ export const createInternalAdapter = (
 		},
 		deleteUserSessions: async (userId: string) => {
 			if (secondaryStorage) {
-				const activeSession = await secondaryStorage.get(
-					`active-sessions-${userId}`,
+				// Callers may create a replacement session before queued hooks run.
+				// Capture the revocation set now so that replacement remains active.
+				const sessionReferences = await getActiveSessionReferences(userId);
+				await queueAfterTransactionHook(
+					() => deleteCachedUserSessions(userId, sessionReferences),
+					{
+						onError(error) {
+							logger.error(
+								"Failed to delete committed user sessions from secondary storage",
+								error,
+							);
+						},
+					},
 				);
-				const sessions = activeSession
-					? safeJSONParse<{ token: string }[]>(activeSession)
-					: [];
-				if (!sessions) return;
-				for (const session of sessions) {
-					await secondaryStorage.delete(session.token);
-				}
-				await secondaryStorage.delete(`active-sessions-${userId}`);
 
 				if (!options.session?.storeSessionInDatabase) {
 					return;
@@ -874,87 +980,30 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
-		findOAuthUser: async (
-			email: string,
-			accountId: string,
-			providerId: string,
-		) => {
-			// we need to find account first to avoid missing user if the email changed with the provider for the same account
-			const account = await (await getCurrentAdapter(adapter)).findOne<
+		findAccountOwnerByKey: async ({ issuer, providerAccountId }) => {
+			const accountWithUser = await (await getCurrentAdapter(adapter)).findOne<
 				Account & { user: User | null }
 			>({
 				model: "account",
 				where: [
 					{
-						value: accountId,
-						field: "accountId",
+						field: "issuer",
+						value: issuer,
 					},
 					{
-						value: providerId,
-						field: "providerId",
+						field: "providerAccountId",
+						value: providerAccountId,
 					},
 				],
 				join: {
 					user: true,
 				},
 			});
-			if (account) {
-				if (account.user) {
-					return {
-						user: account.user,
-						linkedAccount: account,
-						accounts: [account],
-					};
-				} else {
-					const user = await (await getCurrentAdapter(adapter)).findOne<User>({
-						model: "user",
-						where: [
-							{
-								value: email.toLowerCase(),
-								field: "email",
-							},
-						],
-					});
-					if (user) {
-						return {
-							user,
-							linkedAccount: account,
-							accounts: [account],
-						};
-					}
-					return null;
-				}
-			} else {
-				const user = await (await getCurrentAdapter(adapter)).findOne<User>({
-					model: "user",
-					where: [
-						{
-							value: email.toLowerCase(),
-							field: "email",
-						},
-					],
-				});
-				if (user) {
-					const accounts = await (
-						await getCurrentAdapter(adapter)
-					).findMany<Account>({
-						model: "account",
-						where: [
-							{
-								value: user.id,
-								field: "userId",
-							},
-						],
-					});
-					return {
-						user,
-						linkedAccount: null,
-						accounts: accounts || [],
-					};
-				} else {
-					return null;
-				}
-			}
+			if (!accountWithUser) return null;
+			const { user, ...account } = accountWithUser;
+			return user
+				? { kind: "owned" as const, user, account }
+				: { kind: "orphaned" as const, account };
 		},
 		findUserByEmail: async (
 			email: string,
@@ -1029,7 +1078,14 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
-			await refreshUserSessions(user);
+			await queueAfterTransactionHook(() => refreshUserSessions(user), {
+				onError(error) {
+					logger.error(
+						"Failed to refresh committed user sessions in secondary storage",
+						error,
+					);
+				},
+			});
 			return user;
 		},
 		updateUserByEmail: async (
@@ -1050,7 +1106,14 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
-			await refreshUserSessions(user);
+			await queueAfterTransactionHook(() => refreshUserSessions(user), {
+				onError(error) {
+					logger.error(
+						"Failed to refresh committed user sessions in secondary storage",
+						error,
+					);
+				},
+			});
 			return user;
 		},
 		updatePassword: async (userId: string, password: string) => {
@@ -1066,6 +1129,14 @@ export const createInternalAdapter = (
 					{
 						field: "providerId",
 						value: "credential",
+					},
+					{
+						field: "issuer",
+						value: createLocalAccountIssuer("credential"),
+					},
+					{
+						field: "providerAccountId",
+						value: userId,
 					},
 				],
 				"account",
@@ -1086,18 +1157,32 @@ export const createInternalAdapter = (
 			});
 			return accounts;
 		},
-		findAccountByProviderId: async (accountId: string, providerId: string) => {
+		findCredentialAccount: async (userId: string) => {
+			return (await getCurrentAdapter(adapter)).findOne<Account>({
+				model: "account",
+				where: [
+					{ field: "userId", value: userId },
+					{ field: "providerId", value: "credential" },
+					{
+						field: "issuer",
+						value: createLocalAccountIssuer("credential"),
+					},
+					{ field: "providerAccountId", value: userId },
+				],
+			});
+		},
+		findAccountByKey: async ({ issuer, providerAccountId }) => {
 			const account = await (await getCurrentAdapter(adapter)).findOne<Account>(
 				{
 					model: "account",
 					where: [
 						{
-							field: "accountId",
-							value: accountId,
+							field: "issuer",
+							value: issuer,
 						},
 						{
-							field: "providerId",
-							value: providerId,
+							field: "providerAccountId",
+							value: providerAccountId,
 						},
 					],
 				},

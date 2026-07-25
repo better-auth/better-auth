@@ -1,5 +1,9 @@
 import type { JWTVerifyGetKey } from "jose";
-import type { Awaitable, LiteralString } from "../types";
+import type {
+	Awaitable,
+	GenericEndpointContext,
+	LiteralString,
+} from "../types";
 
 /**
  * id_token verification config for a social provider.
@@ -51,7 +55,11 @@ export type OAuthIdTokenConfig =
 			 * Custom verifier for providers that cannot verify against a local JWKS, such as a
 			 * remote verification endpoint (e.g. LINE).
 			 */
-			verify: (token: string, nonce?: string) => Promise<boolean>;
+			verify: (
+				token: string,
+				nonce?: string,
+				ctx?: GenericEndpointContext,
+			) => Promise<boolean>;
 	  };
 
 export interface OAuth2Tokens {
@@ -69,8 +77,10 @@ export interface OAuth2Tokens {
 	raw?: Record<string, unknown> | undefined;
 }
 
+/** Mutable local-user attributes normalized from an OAuth provider profile. */
 export type OAuth2UserInfo = {
-	id: string | number;
+	/** Provider identity belongs in raw profile data and `accountSubject`. */
+	id?: never;
 	name?: string | undefined;
 	email?: (string | null) | undefined;
 	image?: string | undefined;
@@ -78,63 +88,69 @@ export type OAuth2UserInfo = {
 };
 
 /**
- * The result of building a provider authorization URL.
+ * Verified provider data available when deriving a stable OAuth account key.
  *
- * `requestedScopes` is the effective set of scopes encoded in the URL (the
- * provider's built-in defaults + configured `options.scope` + per-request
- * `scopes`, composed by `resolveRequestedScopes`). Callers persist it so the
- * callback can fall back to the request when the provider omits `scope` from
- * its token response (RFC 6749 §5.1).
+ * Account-key resolvers must use the raw provider profile or verified token
+ * response. They never receive the mapped local user, so profile mapping
+ * cannot redefine provider identity.
  */
-export interface AuthorizationURLResult {
-	url: URL;
-	requestedScopes: string[];
+export interface OAuthAccountKeyContext<Profile extends object = object> {
+	tokens: OAuth2Tokens;
+	profile: Profile;
 }
 
 /**
- * How much an RP trusts a provider's echoed token-response `scope` when
- * persisting `account.grantedScopes`.
- *
- * - `"full-grant"`: the echo is the user's complete current grant, so the seam
- *   replaces the stored grant with it. This is the only path that may narrow
- *   the grant. Declare it only for providers whose token response reports the
- *   full combined grant, e.g. Google with `include_granted_scopes`.
- * - `"projection"`: the echo is this request's subset, so the seam unions it
- *   onto the stored grant. The safe default for every provider.
- * - `"absent-echo"`: the provider omitted `scope`, so the grant equals what was
- *   requested (RFC 6749 §5.1) and the seam unions the requested set. Resolved
- *   at runtime by the persistence seam, never declared by a provider.
- *
- * @see https://www.rfc-editor.org/rfc/rfc6749#section-5.1
+ * Resolves one part of an account key from a profile returned by the same
+ * provider. The method-derived callback keeps that profile pairing intact when
+ * providers with different profile shapes share an `OAuthProvider[]`.
  */
-export type GrantAuthority = "full-grant" | "projection" | "absent-echo";
+type OAuthAccountKeyResolver<Profile extends object, Value> = {
+	resolve(context: OAuthAccountKeyContext<Profile>): Awaitable<Value>;
+}["resolve"];
+
+/** Resolves the stable provider subject used to build an OAuth account key. */
+export type OAuthAccountSubject<Profile extends object = object> =
+	OAuthAccountKeyResolver<Profile, string | number>;
+
+/** Mutable local-user attributes returned by `mapProfileToUser`. */
+export type OAuthMappedUser = {
+	/** Provider identity is defined by `accountSubject`, not local user mapping. */
+	id?: never;
+	name?: string;
+	email?: string | null;
+	image?: string;
+	emailVerified?: boolean;
+	[key: string]: unknown;
+};
 
 /**
- * The authority a provider may declare for its own echoed scope. `"absent-echo"`
- * is excluded because it is a runtime condition (an omitted echo), not a
- * provider trait.
+ * Request metadata available to provider refresh hooks.
+ *
+ * The refresh flow may be triggered by endpoints such as `getAccessToken` or
+ * `refreshToken`; this context gives provider hooks access to the triggering
+ * request without exposing the full endpoint implementation surface.
  */
-export type ProviderGrantAuthority = Exclude<GrantAuthority, "absent-echo">;
+export interface OAuthRefreshContext {
+	headers?: Headers | undefined;
+	request?: Request | undefined;
+}
 
-export interface UpstreamProvider<
-	T extends Record<string, any> = Record<string, any>,
-	O extends Record<string, any> = Partial<ProviderOptions>,
+export interface OAuthProvider<
+	T extends object = object,
+	O extends object = Partial<ProviderOptions>,
 > {
 	id: LiteralString;
 	/**
-	 * The path the provider redirects back to, relative to the app base URL,
-	 * e.g. `/callback/google`.
-	 */
-	callbackPath: string;
-	/**
-	 * How the persistence seam treats this provider's echoed token-response
-	 * `scope`. Declare `"full-grant"` only when the echo is the user's complete
-	 * current grant (e.g. Google with `include_granted_scopes`); otherwise the
-	 * echo is unioned onto the stored grant.
+	 * Optional path under the resolved per-request `baseURL` where this
+	 * provider's OAuth callback handler is mounted. Providers that use the
+	 * shared `/callback/<id>` route can omit this.
 	 *
-	 * @default "projection"
+	 * Custom paths must start with `/`.
+	 *
+	 * Endpoints compose `redirectURI = ctx.context.baseURL + callbackPath` per
+	 * request, so the provider must not hardcode an origin or `baseURL` here.
 	 */
-	grantAuthority?: ProviderGrantAuthority | undefined;
+	callbackPath?: string | undefined;
 	createAuthorizationURL: (data: {
 		state: string;
 		codeVerifier: string;
@@ -143,14 +159,29 @@ export interface UpstreamProvider<
 		display?: string | undefined;
 		loginHint?: string | undefined;
 		/**
+		 * OIDC nonce generated by the redirect initiator and persisted in OAuth
+		 * state. Providers that set `requiresIdTokenNonce` must forward this to
+		 * the authorization URL as the `nonce` parameter.
+		 */
+		idTokenNonce?: string | undefined;
+		/**
 		 * Extra query parameters to append to the authorization URL.
 		 * Providers forward these to the shared `createAuthorizationURL` helper,
 		 * which drops any keys present in `RESERVED_AUTHORIZATION_PARAMS`
 		 * before applying them.
 		 */
 		additionalParams?: Record<string, string> | undefined;
-	}) => Awaitable<AuthorizationURLResult>;
+	}) => Awaitable<URL>;
 	name: string;
+	/**
+	 * Stable subject that identifies the provider account.
+	 *
+	 * Read this value from the raw, provider-verified profile. For OpenID
+	 * Connect providers, use the `sub` claim. For OAuth providers, use the
+	 * provider's documented immutable user identifier. Never derive this value
+	 * from `mapProfileToUser`.
+	 */
+	accountSubject: OAuthAccountSubject<T>;
 	validateAuthorizationCode: (data: {
 		code: string;
 		redirectURI: string;
@@ -159,6 +190,12 @@ export interface UpstreamProvider<
 	}) => Promise<OAuth2Tokens | null>;
 	getUserInfo: (
 		token: OAuth2Tokens & {
+			/**
+			 * OIDC nonce recovered from OAuth state. Providers that required an
+			 * ID-token nonce must pass this to `verifyProviderIdToken` before
+			 * trusting ID-token claims.
+			 */
+			expectedIdTokenNonce?: string | undefined;
 			/**
 			 * The user object from the provider
 			 * This is only available for some providers like Apple
@@ -178,10 +215,29 @@ export interface UpstreamProvider<
 		data: T;
 	} | null>;
 	/**
-	 * Custom function to refresh a token
+	 * Custom function to refresh a token.
+	 *
+	 * Receives request metadata from the endpoint that triggered the refresh.
+	 * Providers that don't need request-scoped data can ignore the second
+	 * argument.
 	 */
 	refreshAccessToken?:
-		| ((refreshToken: string) => Promise<OAuth2Tokens>)
+		| ((
+				refreshToken: string,
+				ctx?: OAuthRefreshContext,
+		  ) => Promise<OAuth2Tokens>)
+		| undefined;
+	revokeToken?: ((token: string) => Promise<void>) | undefined;
+	/**
+	 * Builds an OpenID Connect RP-Initiated Logout URL for this provider.
+	 * Returns `null` when provider logout is unavailable or disabled.
+	 */
+	createEndSessionURL?:
+		| ((data: {
+				idToken?: string | null | undefined;
+				postLogoutRedirectURI?: string | undefined;
+				state?: string | undefined;
+		  }) => Awaitable<URL | null>)
 		| undefined;
 	/**
 	 * Declarative id_token verification config consumed by the shared
@@ -195,6 +251,23 @@ export interface UpstreamProvider<
 	 * against this value to prevent authorization server mix-up attacks.
 	 */
 	issuer?: string | undefined;
+	/**
+	 * Stable issuer used with the provider subject to recognize an account.
+	 *
+	 * Use the validated OpenID Connect issuer for OIDC providers. A resolver is
+	 * supported for tenant-specific issuers and receives only provider-verified
+	 * data. OAuth providers without an issuer omit this property and are scoped
+	 * to the synthetic `local:oauth:<encoded providerId>` issuer, where the
+	 * provider ID segment is percent-encoded.
+	 */
+	accountIssuer?: string | OAuthAccountKeyResolver<T, string> | undefined;
+	/**
+	 * Require shared OAuth redirect routes to bind ID-token verification to an
+	 * authorization request nonce. When true, routes generate `idTokenNonce`,
+	 * pass it to `createAuthorizationURL`, persist it in state, and provide it
+	 * back to `getUserInfo` as `expectedIdTokenNonce`.
+	 */
+	requiresIdTokenNonce?: boolean | undefined;
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.
@@ -221,7 +294,15 @@ export interface UpstreamProvider<
 	options?: O | undefined;
 }
 
-export type ProviderOptions<Profile extends Record<string, any> = any> = {
+/**
+ * Maps a provider-specific profile while remaining compatible with the erased
+ * profile type used by shared OAuth helpers.
+ */
+type OAuthProfileMapper<Profile extends object> = {
+	map(profile: Profile): Awaitable<OAuthMappedUser>;
+}["map"];
+
+export type ProviderOptions<Profile extends object = object> = {
 	/**
 	 * The client ID of your application.
 	 *
@@ -265,29 +346,28 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 */
 	disableIdTokenSignIn?: boolean | undefined;
 	/**
-	 * verifyIdToken function to verify the id token
+	 * verifyIdToken function to verify the id token.
+	 *
+	 * The optional endpoint context exposes request metadata to custom
+	 * verifiers without coupling built-in provider verification to a runtime.
 	 */
 	verifyIdToken?:
-		| ((token: string, nonce?: string) => Promise<boolean>)
+		| ((
+				token: string,
+				nonce?: string,
+				ctx?: GenericEndpointContext,
+		  ) => Promise<boolean>)
 		| undefined;
 	/**
 	 * Custom function to get user info from the provider
+	 *
+	 * `data` must preserve the declared raw profile shape because account-key
+	 * resolvers consume it after this hook returns.
 	 */
 	getUserInfo?:
 		| ((token: OAuth2Tokens) => Promise<{
-				user: {
-					id: string;
-					name?: string;
-					email?: string | null;
-					image?: string;
-					emailVerified: boolean;
-					[key: string]: any;
-				};
-				// TODO: type as `Profile` once provider getUserInfo paths that return a
-				// narrower data shape than their declared profile are reconciled; today
-				// `any` is load-bearing for those (e.g. facebook) and tightening it ripples
-				// across ~10 providers, out of scope for the grant refactor.
-				data: any;
+				user: OAuth2UserInfo & Record<string, unknown>;
+				data: Profile;
 		  } | null>)
 		| undefined;
 	/**
@@ -300,25 +380,7 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 * Custom function to map the provider profile to a
 	 * user.
 	 */
-	mapProfileToUser?:
-		| ((profile: Profile) =>
-				| {
-						id?: string;
-						name?: string;
-						email?: string | null;
-						image?: string;
-						emailVerified?: boolean;
-						[key: string]: any;
-				  }
-				| Promise<{
-						id?: string;
-						name?: string;
-						email?: string | null;
-						image?: string;
-						emailVerified?: boolean;
-						[key: string]: any;
-				  }>)
-		| undefined;
+	mapProfileToUser?: OAuthProfileMapper<Profile> | undefined;
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.

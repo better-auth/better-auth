@@ -4,11 +4,13 @@ import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, it } from "vitest";
 import { facebook } from "../social-providers/facebook";
 import { paypal } from "../social-providers/paypal";
-import type { OAuthIdTokenConfig, UpstreamProvider } from "./oauth-provider";
+import type { OAuthIdTokenConfig } from "./oauth-provider";
 import {
 	supportsIdTokenSignIn,
 	verifyProviderIdToken,
 } from "./verify-id-token";
+
+type ProviderWithIdTokenConfig = Parameters<typeof verifyProviderIdToken>[0];
 
 const ISSUER = "https://issuer.test";
 const AUDIENCE = "client-123";
@@ -36,8 +38,8 @@ async function makeKeyset() {
 function providerWith(
 	idToken: OAuthIdTokenConfig | undefined,
 	options: Record<string, unknown> = {},
-): UpstreamProvider<any, any> {
-	return { idToken, options } as UpstreamProvider<any, any>;
+): ProviderWithIdTokenConfig {
+	return { idToken, options };
 }
 
 const sha256Hex = (value: string) =>

@@ -351,7 +351,16 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			authorizationCodeId: {
+				type: "string",
+				required: false,
+				index: true,
+			},
 			resources: {
+				type: "string[]",
+				required: false,
+			},
+			requestedUserInfoClaims: {
 				type: "string[]",
 				required: false,
 			},
@@ -362,6 +371,18 @@ export const schema = {
 				type: "date",
 			},
 			revoked: {
+				type: "date",
+				required: false,
+			},
+			rotatedAt: {
+				type: "date",
+				required: false,
+			},
+			rotationReplayResponse: {
+				type: "string",
+				required: false,
+			},
+			rotationReplayExpiresAt: {
 				type: "date",
 				required: false,
 			},
@@ -436,7 +457,16 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			authorizationCodeId: {
+				type: "string",
+				required: false,
+				index: true,
+			},
 			resources: {
+				type: "string[]",
+				required: false,
+			},
+			requestedUserInfoClaims: {
 				type: "string[]",
 				required: false,
 			},
@@ -498,6 +528,10 @@ export const schema = {
 				required: false,
 			},
 			resources: {
+				type: "string[]",
+				required: false,
+			},
+			requestedUserInfoClaims: {
 				type: "string[]",
 				required: false,
 			},

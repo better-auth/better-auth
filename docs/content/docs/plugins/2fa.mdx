@@ -514,6 +514,19 @@ export const twoFactorTableFields = [
 		type: "boolean",
 		description: "Whether this TOTP secret has been verified during enrollment",
 	},
+	{
+		name: "failedVerificationCount",
+		type: "number",
+		description:
+			"Consecutive failed second-factor verifications, used for account lockout.",
+	},
+	{
+		name: "lockedUntil",
+		type: "date",
+		description:
+			"When the account lockout expires; null when the account is not locked.",
+		isOptional: true,
+	},
 ];
 
 <DatabaseTable name="twoFactor" fields={twoFactorTableFields} />
@@ -601,6 +614,30 @@ export const twoFactorBackupCodeOptionsType = {
 }
 
 <TypeTable type={twoFactorBackupCodeOptionsType} />
+
+**Account lockout**
+
+After repeated failed verifications during sign-in, the account is temporarily locked. The limit applies per account across sign-in challenges and across factors: TOTP, OTP, and backup codes share one counter, and a successful verification resets it. Locked attempts return `429` with the `ACCOUNT_TEMPORARILY_LOCKED` error code. Enabled by default.
+
+export const twoFactorAccountLockoutOptionsType = {
+  enabled: {
+    description: "Whether account-level lockout is enforced.",
+    type: "boolean",
+    default: true,
+  },
+  maxFailedAttempts: {
+    description: "Consecutive failed verifications, across challenges and factors, before the account is locked.",
+    type: "number",
+    default: 10,
+  },
+  durationSeconds: {
+    description: "How long the account stays locked, in seconds.",
+    type: "number",
+    default: 900,
+  },
+}
+
+<TypeTable type={twoFactorAccountLockoutOptionsType} />
 
 ### Client
 

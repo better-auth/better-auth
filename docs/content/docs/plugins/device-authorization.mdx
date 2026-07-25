@@ -98,6 +98,50 @@ The device flow follows these steps:
 3. **Device polls for token**: The device polls the server until the user completes authorization
 4. **Access granted**: Once authorized, the device receives an access token
 
+## Issuing OAuth access tokens (OAuth Provider integration)
+
+By default, `/device/token` issues a **Better Auth session token** — ideal when the device is your own first-party app signing a user into your service.
+
+If you run Better Auth as an [OAuth Provider](/docs/plugins/oauth-provider) and want **third-party / registered OAuth clients** (external CLIs, smart-TV apps) to use the device flow and receive a real **OAuth access token** (scoped, audience-bound, introspectable, optionally a JWT and ID token) instead of a session token, add the `deviceCodeGrant()` companion plugin from `@better-auth/oauth-provider`:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { deviceAuthorization } from "better-auth/plugins";
+import { oauthProvider, deviceCodeGrant } from "@better-auth/oauth-provider"; // [!code highlight]
+
+export const auth = betterAuth({
+  plugins: [
+    deviceAuthorization(),
+    oauthProvider({ /* ... */ }),
+    deviceCodeGrant(), // [!code highlight]
+  ],
+});
+```
+
+This registers the `urn:ietf:params:oauth:grant-type:device_code` grant on the provider's `/oauth2/token` endpoint and advertises `device_authorization_endpoint` (pointing at `/device/code`) in the provider's discovery metadata.
+
+The flow for a registered OAuth client:
+
+1. The client requests codes at `/device/code` (the advertised `device_authorization_endpoint`). The provider validates registered clients, scopes, and resource indicators before creating the authorization request.
+2. The user signs in and approves at the verification URL. The `GET /device` response includes `client_id`, `scope`, and `resource` only for the user who owns the request, so the approval page can show exactly what is requesting access without exposing that context to unauthenticated or unrelated users.
+3. The client polls **`/oauth2/token`** (not `/device/token`) with `grant_type=urn:ietf:params:oauth:grant-type:device_code`, `device_code`, and `client_id`. A `resource` parameter may be omitted to use the approved resource set, or may request a subset; it cannot add a resource after approval.
+
+```ts title="register the client with the device-code grant"
+await auth.api.adminCreateOAuthClient({
+  headers,
+  body: {
+    token_endpoint_auth_method: "none", // public client (CLI, TV, IoT)
+    type: "native",
+    grant_types: ["urn:ietf:params:oauth:grant-type:device_code"],
+    scope: "openid profile email",
+  },
+});
+```
+
+<Callout type="info">
+  Both flows can coexist. First-party device login keeps using `/device/token` (session token). To prevent a registered OAuth client's device code from being redeemed at `/device/token` for a session token, `deviceCodeGrant()` rejects `/device/token` requests whose `client_id` is a registered OAuth client and directs them to `/oauth2/token`. `deviceCodeGrant()` requires both the `deviceAuthorization()` and `oauthProvider()` plugins.
+</Callout>
+
 ## Basic Usage
 
 ### Requesting Device Authorization
@@ -115,6 +159,10 @@ To initiate device authorization, call `device.code` with the client ID:
        * Space-separated list of requested scopes (optional)
        */
       scope?: string;
+      /**
+       * RFC 8707 resource indicator(s) to bind to this request (optional)
+       */
+      resource?: string | string[];
       /**
        * The user ID to which the device code should be pre-bound.
        * When set, only that user can approve or deny the code.
@@ -330,6 +378,18 @@ export default function DeviceApprovalPage() {
   const searchParams = useSearchParams();
   const userCode = searchParams.get("user_code");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [request, setRequest] = useState<{
+    client_id?: string;
+    scope?: string;
+    resource?: string | string[];
+  } | null>(null);
+
+  useEffect(() => {
+    if (!user || !userCode) return;
+    authClient.device({ query: { user_code: userCode } }).then(({ data }) => {
+      setRequest(data);
+    });
+  }, [user, userCode]);
   
   const handleApprove = async () => {
     setIsProcessing(true);
@@ -370,7 +430,13 @@ export default function DeviceApprovalPage() {
   return (
     <div>
       <h2>Device Authorization Request</h2>
-      <p>A device is requesting access to your account.</p>
+      <p>Client: {request?.client_id}</p>
+      <p>Scopes: {request?.scope || "None"}</p>
+      <p>
+        Resources: {Array.isArray(request?.resource)
+          ? request.resource.join(", ")
+          : request?.resource || "None"}
+      </p>
       <p>Code: {userCode}</p>
       
       <button onClick={handleApprove} disabled={isProcessing}>
@@ -398,9 +464,9 @@ deviceAuthorization({
     return client && client.allowDeviceFlow;
   },
   
-  onDeviceAuthRequest: async (clientId, scope) => {
+  onDeviceAuthRequest: async (clientId, scope, resource) => {
     // Log device authorization requests
-    await logDeviceAuthRequest(clientId, scope);
+    await logDeviceAuthRequest(clientId, scope, resource);
   },
 })
 ```
@@ -594,17 +660,17 @@ authenticateCLI().catch((err) => {
 
 **interval**: The minimum polling interval. Default: `"5s"` (5 seconds).
 
-**userCodeLength**: The length of the user code. Default: `8`.
+**userCodeLength**: The length of the user code. Maximum: `191`. Default: `8`.
 
-**deviceCodeLength**: The length of the device code. Default: `40`.
+**deviceCodeLength**: The length of the device code. Maximum: `191`. Default: `40`.
 
-**generateDeviceCode**: Custom function to generate device codes. Returns a string or `Promise<string>`.
+**generateDeviceCode**: Custom function to generate device codes. Returns a string or `Promise<string>` with at most 191 characters.
 
-**generateUserCode**: Custom function to generate user codes. Returns a string or `Promise<string>`.
+**generateUserCode**: Custom function to generate user codes. Returns a string or `Promise<string>` with at most 191 characters.
 
 **validateClient**: Function to validate client IDs. Takes a clientId and returns boolean or `Promise<boolean>`.
 
-**onDeviceAuthRequest**: Hook called when device authorization is requested. Takes clientId and optional scope.
+**onDeviceAuthRequest**: Hook called when device authorization is requested. Takes clientId, optional scope, and optional resource indicator(s).
 
 ### Client
 
@@ -622,6 +688,12 @@ The plugin requires a new table to store device authorization data.
 
 Table Name: `deviceCode`
 
+`deviceCode` and `userCode` are indexed by the generated schema because the device token, verification, approval, and denial flows use them as lookup fields. Both values are limited to 191 characters so these indexes remain portable across supported databases.
+
+<Callout type="warn">
+  Existing MySQL and SQL Server installations may use unbounded columns for these values. Before running the migration, convert `deviceCode` and `userCode` to strings bounded at 191 characters and resolve any longer values. The migration stops with an error when the existing columns cannot support portable indexes.
+</Callout>
+
 export const deviceCodeTableFields = [
 	{
 		name: "id",
@@ -633,11 +705,13 @@ export const deviceCodeTableFields = [
 		name: "deviceCode",
 		type: "string",
 		description: "The device verification code",
+		isIndexed: true,
 	},
 	{
 		name: "userCode",
 		type: "string",
 		description: "The user-friendly code for verification",
+		isIndexed: true,
 	},
 	{
 		name: "userId",
@@ -655,6 +729,12 @@ export const deviceCodeTableFields = [
 		name: "scope",
 		type: "string",
 		description: "Requested OAuth scopes",
+		isOptional: true,
+	},
+	{
+		name: "resource",
+		type: "string",
+		description: "Requested resource indicator or serialized resource list",
 		isOptional: true,
 	},
 	{

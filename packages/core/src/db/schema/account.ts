@@ -9,7 +9,8 @@ import { coreSchema } from "./shared";
 
 export const accountSchema = coreSchema.extend({
 	providerId: z.string(),
-	accountId: z.string(),
+	issuer: z.string(),
+	providerAccountId: z.string(),
 	userId: z.coerce.string(),
 	accessToken: z.string().nullish(),
 	refreshToken: z.string().nullish(),
@@ -23,21 +24,12 @@ export const accountSchema = coreSchema.extend({
 	 */
 	refreshTokenExpiresAt: z.date().nullish(),
 	/**
-	 * The scopes the user has granted, as last observed (durable, per-account,
-	 * the unit of revocation and the refresh ceiling). A native array, not a
-	 * delimited string: scope order is insignificant per RFC 6749 §3.3, so the
-	 * value is normalized (trimmed, deduped, sorted) on write.
-	 *
-	 * Renamed from the legacy comma-joined `scope` string. Breaking, with no
-	 * automatic data migration (and no read-time shim): the migration generator
-	 * only adds the new `grantedScopes` column, so legacy accounts read as empty
-	 * here until an upgrade backfills `grantedScopes` from the old `scope` values
-	 * (split on comma/space, trim, drop empties, dedupe). See the release
-	 * changeset for the backfill.
-	 *
-	 * @see https://www.rfc-editor.org/rfc/rfc6749#section-3.3
+	 * The set of OAuth scopes the user has granted to this account, stored
+	 * as a comma-separated list. Represents the accumulated grant rather
+	 * than the latest token's `scope` claim, since per RFC 6749 Section 1.5 a
+	 * token's scope may be narrower than the user's grant.
 	 */
-	grantedScopes: z.array(z.string()).nullish(),
+	scope: z.string().nullish(),
 	/**
 	 * Password is only stored in the credential provider
 	 */
@@ -45,6 +37,31 @@ export const accountSchema = coreSchema.extend({
 });
 
 export type BaseAccount = z.infer<typeof accountSchema>;
+
+/** The stable provider-side key used to recognize an account. */
+export type AccountKey = Readonly<
+	Pick<BaseAccount, "issuer" | "providerAccountId">
+>;
+
+function encodeAccountIssuerProviderId(providerId: string): string {
+	return encodeURIComponent(providerId);
+}
+
+/**
+ * Creates the synthetic issuer used by providers without an issuer of their own.
+ */
+export function createLocalAccountIssuer(providerId: string): string {
+	return `local:${encodeAccountIssuerProviderId(providerId)}`;
+}
+
+/**
+ * Creates the synthetic issuer used by OAuth providers without an issuer of
+ * their own. OAuth identities use a distinct namespace so a provider ID
+ * cannot collide with an internal local authentication method.
+ */
+export function createOAuthAccountIssuer(providerId: string): string {
+	return `local:oauth:${encodeAccountIssuerProviderId(providerId)}`;
+}
 
 /**
  * Account schema type used by better-auth, note that it's possible that account could have additional fields

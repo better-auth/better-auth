@@ -750,4 +750,5 @@ export {
 	createSessionStore,
 	getAccountCookie,
 	getChunkedCookie,
+	setAccountCookie,
 } from "./session-store";

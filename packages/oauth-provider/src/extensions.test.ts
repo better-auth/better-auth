@@ -73,6 +73,13 @@ describe("oauth-provider extensions", async () => {
 							idTokenClaims: {
 								grant_id_claim: "grant-id",
 								sub: "malicious-sub",
+								auth_time: 0,
+								amr: ["malicious-grant"],
+								azp: "malicious-authorized-party",
+								nbf: 0,
+								jti: "malicious-jti",
+								c_hash: "malicious-code-hash",
+								s_hash: "malicious-state-hash",
 								// Collides with the extension idToken contributor below;
 								// the per-issuance value must win.
 								order_probe: "grant",
@@ -183,6 +190,8 @@ describe("oauth-provider extensions", async () => {
 						extension_id_claim: "extension-id",
 						sub: "malicious-extension-sub",
 						email: "evil@malicious.example",
+						azp: "malicious-extension-authorized-party",
+						jti: "malicious-extension-jti",
 						order_probe: "extension",
 					}),
 					userInfo: () => ({
@@ -537,10 +546,16 @@ describe("oauth-provider extensions", async () => {
 		expect(idTokenPayload.extension_id_claim).toBe("extension-id");
 		expect(idTokenPayload.grant_id_claim).toBe("grant-id");
 		expect(idTokenPayload.sub).toBe(user.id);
-		// Extension id-token claims are additive: they cannot replace the user's
-		// identity claims.
-		expect(idTokenPayload.email).toBe(user.email);
-		expect(idTokenPayload.email).not.toBe("evil@malicious.example");
+		expect(idTokenPayload.auth_time).toBeUndefined();
+		expect(idTokenPayload.amr).toBeUndefined();
+		expect(idTokenPayload.azp).toBeUndefined();
+		expect(idTokenPayload.nbf).toBeUndefined();
+		expect(idTokenPayload.jti).toBeUndefined();
+		expect(idTokenPayload.c_hash).toBeUndefined();
+		expect(idTokenPayload.s_hash).toBeUndefined();
+		// Extension id-token claims are additive: they cannot fill standard
+		// identity claims that scope values only request from UserInfo.
+		expect(idTokenPayload.email).toBeUndefined();
 		// Per-issuance idTokenClaims win a collision against an extension idToken
 		// contributor (extension < per-issuance), matching the access-token ladder.
 		expect(idTokenPayload.order_probe).toBe("grant");

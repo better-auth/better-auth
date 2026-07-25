@@ -105,6 +105,12 @@ export const cimdOptionsType = {
 		description:
 			"Metadata fields whose URL values must share the same origin as the `client_id` URL. Localhost is accepted for redirect URI fields (for native and desktop flows) but never for `client_uri` or custom fields. Pass an empty array to disable origin binding.",
 	},
+	allowLoopback: {
+		type: "boolean",
+		default: "false",
+		description:
+			"Permit loopback `client_id` URLs (`localhost`, `127.0.0.0/8`, `::1`, `*.localhost`), including plain HTTP, so an auth server can fetch a metadata document hosted on the same machine. Off by default; enable only for local development.",
+	},
 	allowFetch: {
 		type: "(url, ctx) => boolean | Promise<boolean>",
 		default: "always allow",
@@ -130,7 +136,7 @@ export const cimdOptionsType = {
 The fetched document must satisfy both §3 and §4.1 of the draft. Key rules enforced by the plugin:
 
 * `client_id` in the body must equal the fetch URL byte-for-byte.
-* HTTPS only. HTTP is allowed only for `localhost`, `127.0.0.1`, `[::1]`, and `*.localhost` to support local development.
+* HTTPS only. Loopback URLs (`localhost`, `127.0.0.0/8`, `::1`, `*.localhost`), including plain HTTP, are accepted only when `allowLoopback` is enabled for local development.
 * No fragments, credentials, or `./` / `../` dot segments in the URL.
 * A path component is required (`https://example.com/` is rejected; `https://example.com/meta.json` is accepted).
 * `client_secret` and `client_secret_expires_at` are prohibited.
@@ -163,7 +169,7 @@ The fetched document must satisfy both §3 and §4.1 of the draft. Key rules enf
 
 The plugin ships defense in depth against common abuses of unauthenticated client discovery:
 
-* **SSRF protection (server-side request forgery).** Private and reserved IP ranges (RFC 6890), IPv4-mapped IPv6, link-local addresses, and cloud metadata endpoints (`metadata.google.internal`, `169.254.169.254`) are all rejected. The plugin does no DNS resolution, so the same rules run identically on Node, Bun, Deno, and Cloudflare Workers.
+* **SSRF protection (server-side request forgery).** `client_id` URLs that resolve to private, reserved, link-local, unspecified, or cloud-metadata hosts (RFC 6890), including IPv4-mapped IPv6 and 6to4/NAT64/Teredo tunnel forms, are rejected; loopback is rejected too unless `allowLoopback` is enabled. Host classification uses the framework's shared classifier, so it stays in step with the other SSRF gates. The plugin does no DNS resolution, so the same rules run identically on Node, Bun, Deno, and Cloudflare Workers.
 * **Fetch hardening.** 5s timeout, 5 KB response size limit (UTF-8 byte-counted), no redirect following, `Accept: application/json` only.
 * **Origin binding.** Fields in `originBoundFields` must share the `client_id` origin. Cross-domain redirect injection is blocked by default.
 * **No secrets from documents.** Symmetric authentication methods and `client_secret` fields are rejected before anything is written to the database.
@@ -175,7 +181,7 @@ The plugin ships defense in depth against common abuses of unauthenticated clien
 
 * **Refresh runs on the OAuth hot path.** When a CIMD client's record is older than `refreshRate`, the next OAuth request for that client awaits the metadata document refresh before completing. A slow or unreachable metadata host raises tail latency on `/oauth2/authorize`, `/oauth2/token`, `/oauth2/introspect`, and friends for that client. Pick `refreshRate` generous enough that the refresh stays rare, and keep `allowFetch` aligned with your metadata hosts' reliability profile.
 * **No fetch deduplication yet.** Concurrent requests for the same stale client can all trigger independent metadata fetches. An external coordination layer or higher `refreshRate` is the practical mitigation today.
-* **HTTP allowed only for localhost.** `localhost`, `127.0.0.1`, `[::1]`, and `*.localhost` are accepted over plain HTTP so you can develop locally. Every other host must use HTTPS.
+* **Loopback is opt-in.** Loopback `client_id` URLs (`localhost`, `127.0.0.0/8`, `::1`, `*.localhost`), including plain HTTP, are fetched only when `allowLoopback` is set. Leave it off in production so the server never fetches its own loopback interface. Loopback `redirect_uris` remain allowed for native/desktop flows regardless.
 
 ## Composition with `clientDiscovery`
 

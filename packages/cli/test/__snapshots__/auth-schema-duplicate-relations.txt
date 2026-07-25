@@ -1,5 +1,11 @@
 import { relations, sql } from "drizzle-orm";
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import {
+  sqliteTable,
+  text,
+  integer,
+  index,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
 export const user = sqliteTable("user", {
   id: text("id").primaryKey(),
@@ -43,7 +49,8 @@ export const account = sqliteTable(
   "account",
   {
     id: text("id").primaryKey(),
-    accountId: text("account_id").notNull(),
+    issuer: text("issuer").notNull(),
+    providerAccountId: text("provider_account_id").notNull(),
     providerId: text("provider_id").notNull(),
     userId: text("user_id")
       .notNull()
@@ -57,7 +64,7 @@ export const account = sqliteTable(
     refreshTokenExpiresAt: integer("refresh_token_expires_at", {
       mode: "timestamp_ms",
     }),
-    grantedScopes: text("granted_scopes", { mode: "json" }),
+    scope: text("scope"),
     password: text("password"),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
@@ -66,7 +73,13 @@ export const account = sqliteTable(
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [index("account_userId_idx").on(table.userId)],
+  (table) => [
+    uniqueIndex("account_issuer_providerAccountId_uidx").on(
+      table.issuer,
+      table.providerAccountId,
+    ),
+    index("account_userId_idx").on(table.userId),
+  ],
 );
 
 export const verification = sqliteTable(
@@ -98,7 +111,8 @@ export const test = sqliteTable("test", {
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
-  tests: many(test),
+  testsByUserId: many(test, { relationName: "test_userId" }),
+  testsByManagerId: many(test, { relationName: "test_managerId" }),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -115,16 +129,15 @@ export const accountRelations = relations(account, ({ one }) => ({
   }),
 }));
 
-export const testUserIdRelations = relations(test, ({ one }) => ({
+export const testRelations = relations(test, ({ one }) => ({
   user: one(user, {
     fields: [test.userId],
     references: [user.id],
+    relationName: "test_userId",
   }),
-}));
-
-export const testManagerIdRelations = relations(test, ({ one }) => ({
-  user: one(user, {
+  manager: one(user, {
     fields: [test.managerId],
     references: [user.id],
+    relationName: "test_managerId",
   }),
 }));

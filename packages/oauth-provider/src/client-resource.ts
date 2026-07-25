@@ -22,10 +22,7 @@ import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
 type ResourceClientAuth = {
-	options: {
-		baseURL?: BetterAuthOptions["baseURL"];
-		basePath?: BetterAuthOptions["basePath"];
-	};
+	options: BetterAuthOptions;
 	$context: Promise<unknown>;
 };
 

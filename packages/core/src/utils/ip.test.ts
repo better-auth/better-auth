@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { createRateLimitKey, isValidIP, normalizeIP } from "./ip";
+import {
+	createRateLimitKey,
+	findInvalidTrustedProxies,
+	getIPFromHeader,
+	isValidIP,
+	normalizeIP,
+} from "./ip";
 
 describe("IP Normalization", () => {
 	describe("isValidIP", () => {
@@ -194,6 +200,132 @@ describe("IP Normalization", () => {
 			expect(key1).not.toBe(key2);
 			expect(key1).toBe("192.0.2.1|/sign-in");
 			expect(key2).toBe("192.0.2|.1/sign-in");
+		});
+	});
+
+	describe("Header IP Selection", () => {
+		it("should accept a single trusted header value", () => {
+			expect(getIPFromHeader(" 198.51.100.10 ")).toBe("198.51.100.10");
+		});
+
+		it("should reject forwarded chains without a single trusted header", () => {
+			expect(getIPFromHeader("198.51.100.10, 10.0.0.5")).toBeNull();
+		});
+
+		it("should reject invalid header values", () => {
+			expect(getIPFromHeader("")).toBeNull();
+			expect(getIPFromHeader("not-an-ip")).toBeNull();
+		});
+
+		it("should normalize selected forwarded values", () => {
+			expect(
+				getIPFromHeader("2001:db8::1", {
+					ipv6Subnet: 128,
+				}),
+			).toBe("2001:0db8:0000:0000:0000:0000:0000:0001");
+		});
+	});
+
+	describe("Header IP Selection with trusted proxies", () => {
+		const trustedProxies = ["10.0.0.0/8"];
+
+		it("should take the rightmost untrusted hop, ignoring spoofed left entries", () => {
+			// `<spoofed>, <real client>, <trusted proxy>`: skip trusted, take rightmost untrusted.
+			expect(
+				getIPFromHeader("1.2.3.4, 198.51.100.10, 10.0.0.5", {
+					trustedProxies,
+				}),
+			).toBe("198.51.100.10");
+		});
+
+		it("should not be moved by a rotating spoofed leftmost hop", () => {
+			expect(
+				getIPFromHeader("203.0.113.7, 198.51.100.10, 10.0.0.5", {
+					trustedProxies,
+				}),
+			).toBe("198.51.100.10");
+			expect(
+				getIPFromHeader("203.0.113.8, 198.51.100.10, 10.0.0.5", {
+					trustedProxies,
+				}),
+			).toBe("198.51.100.10");
+		});
+
+		it("should fail closed when every hop is a trusted proxy", () => {
+			expect(
+				getIPFromHeader("10.0.0.9, 10.0.0.5", { trustedProxies }),
+			).toBeNull();
+		});
+
+		it("should fail closed on a malformed rightmost hop", () => {
+			expect(
+				getIPFromHeader("198.51.100.10, not-an-ip", { trustedProxies }),
+			).toBeNull();
+		});
+
+		it("should support CIDR and bare-IP trusted entries", () => {
+			expect(
+				getIPFromHeader("198.51.100.10, 192.0.2.1", {
+					trustedProxies: ["192.0.2.1"],
+				}),
+			).toBe("198.51.100.10");
+		});
+
+		it("should skip trusted IPv6 proxy hops", () => {
+			expect(
+				getIPFromHeader("2001:db8::1, fc00::1", {
+					trustedProxies: ["fc00::/7"],
+					ipv6Subnet: 128,
+				}),
+			).toBe("2001:0db8:0000:0000:0000:0000:0000:0001");
+		});
+
+		it("should not enable chain mode when every entry is malformed", () => {
+			// A malformed-only config must not leave the chain enabled-but-empty,
+			// which would return the real proxy hop as the client. With no valid
+			// proxy the multi-hop chain is unresolvable, so it fails closed.
+			expect(
+				getIPFromHeader("198.51.100.10, 10.0.0.5", {
+					trustedProxies: ["10.0.0.0/8x"],
+				}),
+			).toBeNull();
+		});
+
+		it("should use the valid entries when some are malformed", () => {
+			expect(
+				getIPFromHeader("198.51.100.10, 10.0.0.5", {
+					trustedProxies: ["10.0.0.0/8x", "10.0.0.0/8"],
+				}),
+			).toBe("198.51.100.10");
+		});
+	});
+
+	describe("findInvalidTrustedProxies", () => {
+		it("should accept valid IPs and CIDR ranges", () => {
+			expect(
+				findInvalidTrustedProxies([
+					"10.0.0.5",
+					"10.0.0.0/8",
+					"::1",
+					"fc00::/7",
+					"0.0.0.0/0",
+				]),
+			).toEqual([]);
+		});
+
+		it("should report malformed entries", () => {
+			const invalid = [
+				"10.0.0./8",
+				"10.0.0.0/8x",
+				"10.0.0.0/33",
+				"10.0.0.0/3.5",
+				"10.0.0.0/",
+				"not-an-ip",
+				"",
+			];
+			expect(findInvalidTrustedProxies(["10.0.0.0/8", ...invalid])).toEqual(
+				invalid,
+			);
 		});
 	});
 

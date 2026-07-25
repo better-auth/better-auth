@@ -64,7 +64,7 @@ describe("Generic OAuth types", () => {
 		>();
 	});
 
-	test("mapper profile allows providers without a standard id", () => {
+	test("account subject resolver supports providers without a standard id", () => {
 		genericOAuth({
 			config: [
 				{
@@ -73,7 +73,7 @@ describe("Generic OAuth types", () => {
 					tokenUrl: "https://example.com/token",
 					userInfoUrl: "https://example.com/userinfo",
 					clientId: "client",
-					mapProfileToUser(profile) {
+					accountSubject({ profile }) {
 						expectTypeOf(profile.id).toEqualTypeOf<
 							string | number | null | undefined
 						>();
@@ -82,10 +82,15 @@ describe("Generic OAuth types", () => {
 						>();
 						expectTypeOf(profile.username).toEqualTypeOf<unknown>();
 
+						return typeof profile.username === "string"
+							? profile.username
+							: "missing-subject";
+					},
+					mapProfileToUser(profile) {
 						return {
-							id:
-								typeof profile.username === "string"
-									? profile.username
+							name:
+								typeof profile.display_name === "string"
+									? profile.display_name
 									: undefined,
 						};
 					},

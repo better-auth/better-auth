@@ -1,11 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -30,14 +29,12 @@ export interface AtlassianOptions extends ProviderOptions<AtlassianProfile> {
 	clientId: string;
 }
 
-const ATLASSIAN_DEFAULT_SCOPES = ["read:jira-user", "offline_access"];
-
 export const atlassian = (options: AtlassianOptions) => {
 	const tokenEndpoint = "https://auth.atlassian.com/oauth/token";
 	return {
 		id: "atlassian",
 		name: "Atlassian",
-		callbackPath: "/callback/atlassian",
+		accountSubject: ({ profile }) => profile.account_id,
 
 		async createAuthorizationURL({
 			state,
@@ -54,17 +51,17 @@ export const atlassian = (options: AtlassianOptions) => {
 				throw new BetterAuthError("codeVerifier is required for Atlassian");
 			}
 
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				ATLASSIAN_DEFAULT_SCOPES,
-				scopes,
-			);
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["read:jira-user", "offline_access"];
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 
 			return createAuthorizationURL({
 				id: "atlassian",
 				options,
 				authorizationEndpoint: "https://auth.atlassian.com/authorize",
-				scopes: requestedScopes,
+				scopes: _scopes,
 				state,
 				codeVerifier,
 				redirectURI,
@@ -124,7 +121,6 @@ export const atlassian = (options: AtlassianOptions) => {
 
 				return {
 					user: {
-						id: profile.account_id,
 						name: profile.name,
 						email: profile.email,
 						image: profile.picture,
@@ -140,5 +136,5 @@ export const atlassian = (options: AtlassianOptions) => {
 		},
 
 		options,
-	} satisfies UpstreamProvider<AtlassianProfile>;
+	} satisfies OAuthProvider<AtlassianProfile>;
 };

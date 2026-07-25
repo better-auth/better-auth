@@ -4,5 +4,6 @@ allowBuilds:
   sharp: true
 
 overrides:
+  esbuild@<0.28.1: '>=0.28.1 <0.29'
   next: 16.2.6
   postcss@<8.5.10: ^8.5.14

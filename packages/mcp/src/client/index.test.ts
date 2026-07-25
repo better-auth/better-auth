@@ -83,6 +83,66 @@ describe("createMcpResourceClient", () => {
 
 		expect(metadata.scopes_supported).toBeUndefined();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10272
+	 */
+	it("exposes the authentication challenge on CORS 401 responses", async () => {
+		const client = createMcpResourceClient({
+			authURL: "https://auth.example.com",
+			resource: "https://mcp.example.com",
+		});
+
+		const response = await client.handler(() => new Response("unreachable"))(
+			new Request("https://mcp.example.com/mcp", {
+				method: "POST",
+				headers: { Origin: "https://auth.example.com" },
+			}),
+		);
+
+		expect(response.status).toBe(401);
+		expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
+			"https://auth.example.com",
+		);
+		expect(response.headers.get("Access-Control-Expose-Headers")).toBe(
+			"WWW-Authenticate",
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10272
+	 */
+	it("preserves existing exposed headers in Node middleware 401 responses", async () => {
+		const client = createMcpResourceClient({
+			authURL: "https://auth.example.com",
+		});
+		const headers: Record<string, string> = {
+			"Access-Control-Expose-Headers": "set-auth-token",
+		};
+		let status = 0;
+		let nextCalled = false;
+		const response = {
+			set: (name: string, value: string) => {
+				headers[name] = value;
+			},
+			get: (name: string) => headers[name],
+			status: (code: number) => {
+				status = code;
+				return { json: () => undefined };
+			},
+		};
+
+		await client.middleware()({ headers: {} }, response, () => {
+			nextCalled = true;
+		});
+
+		expect(nextCalled).toBe(false);
+		expect(status).toBe(401);
+		expect(headers["Access-Control-Expose-Headers"]).toBe(
+			"set-auth-token, WWW-Authenticate",
+		);
+		expect(headers["WWW-Authenticate"]).toContain("Bearer");
+	});
 });
 
 describe("mcpAuthHono", () => {

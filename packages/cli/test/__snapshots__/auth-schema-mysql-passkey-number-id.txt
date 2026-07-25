@@ -7,6 +7,7 @@ import {
   boolean,
   int,
   index,
+  uniqueIndex,
 } from "drizzle-orm/mysql-core";
 
 export const custom_user = mysqlTable("custom_user", {
@@ -45,7 +46,10 @@ export const custom_account = mysqlTable(
   "custom_account",
   {
     id: int("id").autoincrement().primaryKey(),
-    accountId: text("account_id").notNull(),
+    issuer: varchar("issuer", { length: 191 }).notNull(),
+    providerAccountId: varchar("provider_account_id", {
+      length: 191,
+    }).notNull(),
     providerId: text("provider_id").notNull(),
     userId: int("user_id")
       .notNull()
@@ -55,14 +59,20 @@ export const custom_account = mysqlTable(
     idToken: text("id_token"),
     accessTokenExpiresAt: timestamp("access_token_expires_at", { fsp: 3 }),
     refreshTokenExpiresAt: timestamp("refresh_token_expires_at", { fsp: 3 }),
-    grantedScopes: text("granted_scopes", { mode: "json" }),
+    scope: text("scope"),
     password: text("password"),
     createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { fsp: 3 })
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [index("custom_account_userId_idx").on(table.userId)],
+  (table) => [
+    uniqueIndex("custom_account_issuer_providerAccountId_uidx").on(
+      table.issuer,
+      table.providerAccountId,
+    ),
+    index("custom_account_userId_idx").on(table.userId),
+  ],
 );
 
 export const custom_verification = mysqlTable(

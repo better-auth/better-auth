@@ -7,6 +7,7 @@ import {
   boolean,
   mysqlEnum,
   index,
+  uniqueIndex,
 } from "drizzle-orm/mysql-core";
 
 export const user = mysqlTable("user", {
@@ -20,7 +21,7 @@ export const user = mysqlTable("user", {
     .defaultNow()
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
-  status: mysqlEnum(["active", "inactive", "pending"]),
+  status: mysqlEnum("status", ["active", "inactive", "pending"]),
 });
 
 export const session = mysqlTable(
@@ -46,7 +47,10 @@ export const account = mysqlTable(
   "account",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
-    accountId: text("account_id").notNull(),
+    issuer: varchar("issuer", { length: 191 }).notNull(),
+    providerAccountId: varchar("provider_account_id", {
+      length: 191,
+    }).notNull(),
     providerId: text("provider_id").notNull(),
     userId: varchar("user_id", { length: 36 })
       .notNull()
@@ -56,14 +60,20 @@ export const account = mysqlTable(
     idToken: text("id_token"),
     accessTokenExpiresAt: timestamp("access_token_expires_at", { fsp: 3 }),
     refreshTokenExpiresAt: timestamp("refresh_token_expires_at", { fsp: 3 }),
-    grantedScopes: text("granted_scopes", { mode: "json" }),
+    scope: text("scope"),
     password: text("password"),
     createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { fsp: 3 })
       .$onUpdate(() => /* @__PURE__ */ new Date())
       .notNull(),
   },
-  (table) => [index("account_userId_idx").on(table.userId)],
+  (table) => [
+    uniqueIndex("account_issuer_providerAccountId_uidx").on(
+      table.issuer,
+      table.providerAccountId,
+    ),
+    index("account_userId_idx").on(table.userId),
+  ],
 );
 
 export const verification = mysqlTable(

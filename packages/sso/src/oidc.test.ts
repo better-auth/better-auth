@@ -49,6 +49,7 @@ describe("SSO", async () => {
 	});
 
 	server.service.on("beforeTokenSigning", (token, req) => {
+		token.payload.sub = "oauth2";
 		token.payload.email = "sso-user@localhost:8000.com";
 		token.payload.email_verified = true;
 		token.payload.name = "Test User";
@@ -99,7 +100,6 @@ describe("SSO", async () => {
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
-						id: "sub",
 						email: "email",
 						emailVerified: "email_verified",
 						name: "name",
@@ -123,7 +123,6 @@ describe("SSO", async () => {
 				discoveryEndpoint:
 					"http://localhost:8080/.well-known/openid-configuration",
 				mapping: {
-					id: "sub",
 					email: "email",
 					emailVerified: "email_verified",
 					name: "name",
@@ -132,6 +131,140 @@ describe("SSO", async () => {
 			},
 			userId: expect.any(String),
 		});
+	});
+
+	it("rejects OIDC profile mappings that attempt to replace the subject", async () => {
+		const { headers } = await signInWithTestUser();
+		const profileMappingWithSubjectOverride = {
+			id: "employee_id",
+			email: "email",
+			name: "name",
+		};
+
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					issuer: server.issuer.url!,
+					domain: "subject-mapping.example.com",
+					providerId: "subject-mapping",
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+						skipDiscovery: true,
+						authorizationEndpoint: `${server.issuer.url}/authorize`,
+						tokenEndpoint: `${server.issuer.url}/token`,
+						jwksEndpoint: `${server.issuer.url}/jwks`,
+						mapping: profileMappingWithSubjectOverride,
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({ status: 400 });
+	});
+
+	it("reuses one account when two provider aliases authenticate the same issuer subject", async () => {
+		const { headers: adminHeaders } = await signInWithTestUser();
+		const providerAliases = ["workforce-browser", "workforce-desktop"] as const;
+		const issuer = server.issuer.url!;
+		const providerAccountId = "shared-workforce-subject";
+		const originalUserInfoListeners =
+			server.service.listeners("beforeUserinfo");
+		const originalTokenListeners =
+			server.service.listeners("beforeTokenSigning");
+		let profileRevision = 0;
+
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.removeAllListeners("beforeTokenSigning");
+		server.service.on("beforeUserinfo", (userInfoResponse) => {
+			profileRevision += 1;
+			userInfoResponse.body = {
+				sub: providerAccountId,
+				employee_id: `mutable-employee-id-${profileRevision}`,
+				email: "shared-workforce@example.com",
+				name: "Shared Workforce User",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.sub = providerAccountId;
+			token.payload.email = "shared-workforce@example.com";
+			token.payload.email_verified = true;
+			token.payload.name = "Shared Workforce User";
+		});
+
+		try {
+			for (const providerId of providerAliases) {
+				await auth.api.registerSSOProvider({
+					body: {
+						issuer,
+						domain: `${providerId}.example.com`,
+						providerId,
+						oidcConfig: {
+							clientId: "test",
+							clientSecret: "test",
+							discoveryEndpoint: `${issuer}/.well-known/openid-configuration`,
+						},
+					},
+					headers: adminHeaders,
+				});
+			}
+
+			const signInWithAlias = async (
+				providerId: (typeof providerAliases)[number],
+			) => {
+				const authorizationHeaders = new Headers();
+				const authorization = await authClient.signIn.sso({
+					providerId,
+					callbackURL: "/dashboard",
+					fetchOptions: {
+						throw: true,
+						onSuccess: cookieSetter(authorizationHeaders),
+					},
+				});
+				const callback = await simulateOAuthFlow(
+					authorization.url,
+					authorizationHeaders,
+				);
+				expect(callback.callbackURL).toContain("/dashboard");
+				const session = await authClient.getSession({
+					fetchOptions: { headers: callback.headers },
+				});
+				return { session, headers: callback.headers };
+			};
+
+			const firstSignIn = await signInWithAlias(providerAliases[0]);
+			const secondSignIn = await signInWithAlias(providerAliases[1]);
+
+			expect(secondSignIn.session.data?.user.id).toBe(
+				firstSignIn.session.data?.user.id,
+			);
+
+			const accounts = await authClient.listAccounts({
+				fetchOptions: { headers: secondSignIn.headers },
+			});
+			const matchingAccounts = accounts.data?.filter(
+				(account) =>
+					account.issuer === issuer &&
+					account.providerAccountId === providerAccountId,
+			);
+			expect(matchingAccounts).toEqual([
+				expect.objectContaining({
+					issuer,
+					providerAccountId,
+					providerId: providerAliases[1],
+				}),
+			]);
+		} finally {
+			server.service.removeAllListeners("beforeUserinfo");
+			server.service.removeAllListeners("beforeTokenSigning");
+			for (const listener of originalUserInfoListeners) {
+				server.service.on("beforeUserinfo", listener);
+			}
+			for (const listener of originalTokenListeners) {
+				server.service.on("beforeTokenSigning", listener);
+			}
+		}
 	});
 
 	it("should fail to register a new SSO provider with invalid issuer", async () => {
@@ -407,7 +540,6 @@ describe("SSO", async () => {
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
-						id: "sub",
 						email: "email",
 						emailVerified: "email_verified",
 						name: "name",
@@ -671,7 +803,6 @@ describe("SSO disable implicit sign in", async () => {
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
-						id: "sub",
 						email: "email",
 						emailVerified: "email_verified",
 						name: "name",
@@ -695,7 +826,6 @@ describe("SSO disable implicit sign in", async () => {
 				discoveryEndpoint:
 					"http://localhost:8080/.well-known/openid-configuration",
 				mapping: {
-					id: "sub",
 					email: "email",
 					emailVerified: "email_verified",
 					name: "name",
@@ -841,7 +971,6 @@ describe("provisioning", async (ctx) => {
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
-						id: "sub",
 						email: "email",
 						emailVerified: "email_verified",
 						name: "name",
@@ -951,6 +1080,7 @@ describe("provisionUser should only be called for new users", async () => {
 			userInfoResponse.statusCode = 200;
 		});
 		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.sub = "provision-test-sub";
 			token.payload.email = "provision-test@localhost.com";
 			token.payload.email_verified = true;
 			token.payload.name = "Provision Test";
@@ -1004,7 +1134,6 @@ describe("provisionUser should only be called for new users", async () => {
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
-						id: "sub",
 						email: "email",
 						emailVerified: "email_verified",
 						name: "name",
@@ -1109,6 +1238,7 @@ describe("provisionUserOnEveryLogin should call provisionUser on every sign-in",
 			userInfoResponse.statusCode = 200;
 		});
 		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.sub = "provision-every-login-sub";
 			token.payload.email = "provision-every-login@localhost.com";
 			token.payload.email_verified = true;
 			token.payload.name = "Provision Every Login";
@@ -1162,7 +1292,6 @@ describe("provisionUserOnEveryLogin should call provisionUser on every sign-in",
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
-						id: "sub",
 						email: "email",
 						emailVerified: "email_verified",
 						name: "name",
@@ -1241,6 +1370,7 @@ describe("SSO shared redirectURI", async () => {
 	};
 
 	const tokenHandler = (token: any) => {
+		token.payload.sub = "shared-redirect-user";
 		token.payload.email = "shared-redirect@test.com";
 		token.payload.email_verified = true;
 		token.payload.name = "Shared Redirect User";
@@ -1306,7 +1436,6 @@ describe("SSO shared redirectURI", async () => {
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
-						id: "sub",
 						email: "email",
 						emailVerified: "email_verified",
 						name: "name",
@@ -1407,6 +1536,22 @@ describe("OIDC SSO with defaultSSO array", async () => {
 								"http://localhost:8080/.well-known/openid-configuration",
 						},
 					},
+					{
+						domain:
+							"https://default-oidc-normalized.com/path,default-oidc-secondary.com",
+						providerId: "default-oidc-provider-normalized",
+						oidcConfig: {
+							issuer: "http://localhost:8080",
+							clientId: "normalized-client",
+							clientSecret: "normalized-secret",
+							pkce: false,
+							authorizationEndpoint: "http://localhost:8080/authorize",
+							tokenEndpoint: "http://localhost:8080/token",
+							jwksEndpoint: "http://localhost:8080/jwks",
+							discoveryEndpoint:
+								"http://localhost:8080/.well-known/openid-configuration",
+						},
+					},
 				],
 			}),
 			organization(),
@@ -1436,10 +1581,17 @@ describe("OIDC SSO with defaultSSO array", async () => {
 
 	const tokenHandler = (token: any) => {
 		const isExplicit = token.payload.aud === "explicit-client";
-		currentEmail = isExplicit
-			? "default-sso-user@default-oidc-explicit.com"
-			: "default-sso-user@default-oidc.com";
-		currentSub = isExplicit ? "explicit-sso-sub" : "default-sso-sub";
+		const isNormalized = token.payload.aud === "normalized-client";
+		currentEmail = isNormalized
+			? "default-sso-user@default-oidc-secondary.com"
+			: isExplicit
+				? "default-sso-user@default-oidc-explicit.com"
+				: "default-sso-user@default-oidc.com";
+		currentSub = isNormalized
+			? "normalized-sso-sub"
+			: isExplicit
+				? "explicit-sso-sub"
+				: "default-sso-sub";
 		token.payload.email = currentEmail;
 		token.payload.email_verified = true;
 		token.payload.name = "Default SSO User";
@@ -1532,6 +1684,36 @@ describe("OIDC SSO with defaultSSO array", async () => {
 
 		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain("/dashboard");
+	});
+
+	it("should sign in via defaultSSO OIDC using normalized domain matching", async () => {
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "someone@default-oidc-secondary.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(res.url).toContain("http://localhost:8080/authorize");
+		expect(res.url).toContain(
+			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Fdefault-oidc-provider-normalized",
+		);
+
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+			res.url,
+			headers,
+		);
+		expect(callbackURL).toContain("/dashboard");
+
+		const session = await authClient.getSession({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(session.data?.user.email).toBe(
+			"default-sso-user@default-oidc-secondary.com",
+		);
 	});
 
 	it("should sign in via defaultSSO OIDC with all endpoints explicit (no discovery needed)", async () => {
@@ -1649,7 +1831,6 @@ describe("OIDC SSO with private_key_jwt", async () => {
 					privateKeyId: "private-key-jwt-key",
 					privateKeyAlgorithm: "RS256",
 					mapping: {
-						id: "sub",
 						email: "email",
 						emailVerified: "email_verified",
 						name: "name",
@@ -2241,6 +2422,7 @@ describe("SSO OIDC hook rejection redirect", async () => {
 	});
 
 	hookServer.service.on("beforeTokenSigning", (token) => {
+		token.payload.sub = "rejected-sub";
 		token.payload.email = "rejected@test.com";
 		token.payload.email_verified = true;
 	});
@@ -2290,7 +2472,6 @@ describe("SSO OIDC hook rejection redirect", async () => {
 					jwksEndpoint: `${hookServer.issuer.url}/jwks`,
 					discoveryEndpoint: `${hookServer.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
-						id: "sub",
 						email: "email",
 						emailVerified: "email_verified",
 						name: "name",
@@ -2472,7 +2653,7 @@ describe("SSO OIDC IDP-initiated bounce", async () => {
 			stateNonce!,
 		);
 		const parsedState = JSON.parse(verification!.value);
-		expect(parsedState.serverContext?.ssoProviderId).toBe(
+		expect(parsedState.serverContext?.ssoProviderReference?.providerId).toBe(
 			"idp-initiated-shared",
 		);
 		expect(parsedState.ssoProviderId).toBeUndefined();

@@ -17,7 +17,7 @@ import {
 	setSignedOAuthQueryParameterNames,
 	signedQueryIssuedAtParam,
 } from "./signed-query";
-import type { OAuthConsent, Scope } from "./types";
+import type { OAuthConsent, OAuthOptions, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
 import { verifyOAuthQueryParams } from "./utils";
 
@@ -255,7 +255,7 @@ describe("oauth authorize - unauthenticated", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
-		const { url: authUrl } = await createAuthorizationURL({
+		const authUrl = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient.client_id,
@@ -288,7 +288,7 @@ describe("oauth authorize - unauthenticated", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
-		const { url: authUrl } = await createAuthorizationURL({
+		const authUrl = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient.client_id,
@@ -498,6 +498,102 @@ describe("oauth authorize - max_age (OIDC Core 1.0 §3.1.2.1)", async () => {
 	});
 });
 
+describe("oauth authorize - acr_values (OIDC Core 1.0 §3.1.2.1)", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const authenticatedClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	let oauthClient: OAuthClient | null;
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/test`;
+	beforeAll(async () => {
+		oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [redirectUri], skip_consent: true },
+		});
+	});
+
+	function authorizeUrl(acrValues: string) {
+		if (!oauthClient?.client_id) throw new Error("beforeAll not run properly");
+		const url = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		url.searchParams.set("client_id", oauthClient.client_id);
+		url.searchParams.set("redirect_uri", redirectUri);
+		url.searchParams.set("response_type", "code");
+		url.searchParams.set("scope", "openid");
+		url.searchParams.set("state", "acr-state");
+		url.searchParams.set("code_challenge", generateRandomString(43));
+		url.searchParams.set("code_challenge_method", "S256");
+		url.searchParams.set("acr_values", acrValues);
+		return url.toString();
+	}
+
+	async function redirectFor(acrValues: string) {
+		let location = "";
+		await authenticatedClient.$fetch(authorizeUrl(acrValues), {
+			onError(context) {
+				location = context.response.headers.get("Location") || "";
+			},
+		});
+		return location;
+	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10152
+	 */
+	it("rejects unsupported acr_values instead of silently downgrading", async () => {
+		const location = await redirectFor("1");
+		const errorRedirect = new URL(location);
+
+		expect(errorRedirect.origin + errorRedirect.pathname).toBe(redirectUri);
+		expect(errorRedirect.searchParams.get("error")).toBe("invalid_request");
+		expect(errorRedirect.searchParams.get("error_description")).toBe(
+			"unsupported acr_values",
+		);
+		expect(errorRedirect.searchParams.get("state")).toBe("acr-state");
+		expect(errorRedirect.searchParams.get("code")).toBeNull();
+	});
+
+	it("accepts the advertised unspecified acr value", async () => {
+		const location = await redirectFor("0");
+		const callbackRedirect = new URL(location);
+
+		expect(callbackRedirect.origin + callbackRedirect.pathname).toBe(
+			redirectUri,
+		);
+		expect(callbackRedirect.searchParams.get("code")).toBeTruthy();
+		expect(callbackRedirect.searchParams.get("error")).toBeNull();
+	});
+
+	it("accepts multiple requested acr values when one is supported", async () => {
+		const location = await redirectFor("1 0");
+		const callbackRedirect = new URL(location);
+
+		expect(callbackRedirect.origin + callbackRedirect.pathname).toBe(
+			redirectUri,
+		);
+		expect(callbackRedirect.searchParams.get("code")).toBeTruthy();
+		expect(callbackRedirect.searchParams.get("error")).toBeNull();
+	});
+});
+
 describe("oauth authorize - request_uri resolution", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
@@ -507,6 +603,49 @@ describe("oauth authorize - request_uri resolution", async () => {
 	const requestUriWithPostLoginMarker = "urn:better-auth:par:post-login";
 	const requestUriWithInvalidMaxAge = "urn:better-auth:par:invalid-max-age";
 	const requestUriWithReorderedPrompt = "urn:better-auth:par:reordered-prompt";
+	type RequestUriResolver = NonNullable<
+		OAuthOptions<Scope[]>["requestUriResolver"]
+	>;
+	type RequestUriResolverInput = Parameters<RequestUriResolver>[0];
+	const requestUriResolver = vi.fn(
+		async ({ requestUri: receivedRequestUri }: RequestUriResolverInput) => {
+			const resolvedParams = {
+				response_type: "code",
+				redirect_uri: redirectUri,
+				scope: "openid",
+				state: "par-state",
+				code_challenge: "a".repeat(43),
+				code_challenge_method: "S256",
+			};
+
+			if (receivedRequestUri === requestUri) {
+				return resolvedParams;
+			}
+
+			if (receivedRequestUri === requestUriWithPostLoginMarker) {
+				return {
+					...resolvedParams,
+					[postLoginClearedParam]: "attacker-session",
+				};
+			}
+
+			if (receivedRequestUri === requestUriWithInvalidMaxAge) {
+				return {
+					...resolvedParams,
+					max_age: "-1",
+				};
+			}
+
+			if (receivedRequestUri === requestUriWithReorderedPrompt) {
+				return {
+					...resolvedParams,
+					prompt: "consent login",
+				};
+			}
+
+			return null;
+		},
+	);
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
@@ -514,43 +653,7 @@ describe("oauth authorize - request_uri resolution", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				requestUriResolver: async ({ requestUri: receivedRequestUri }) => {
-					const resolvedParams = {
-						response_type: "code",
-						redirect_uri: redirectUri,
-						scope: "openid",
-						state: "par-state",
-						code_challenge: "a".repeat(43),
-						code_challenge_method: "S256",
-					};
-
-					if (receivedRequestUri === requestUri) {
-						return resolvedParams;
-					}
-
-					if (receivedRequestUri === requestUriWithPostLoginMarker) {
-						return {
-							...resolvedParams,
-							[postLoginClearedParam]: "attacker-session",
-						};
-					}
-
-					if (receivedRequestUri === requestUriWithInvalidMaxAge) {
-						return {
-							...resolvedParams,
-							max_age: "-1",
-						};
-					}
-
-					if (receivedRequestUri === requestUriWithReorderedPrompt) {
-						return {
-							...resolvedParams,
-							prompt: "consent login",
-						};
-					}
-
-					return null;
-				},
+				requestUriResolver,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -579,6 +682,26 @@ describe("oauth authorize - request_uri resolution", async () => {
 		});
 		expect(response?.client_id).toBeDefined();
 		oauthClient = response;
+	});
+
+	it("should reject request_uri without client_id before resolver lookup", async () => {
+		requestUriResolver.mockClear();
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("request_uri", requestUri);
+
+		let errorRedirectUrl = "";
+		await unauthenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				errorRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(requestUriResolver).not.toHaveBeenCalled();
+		const errorRedirect = new URL(errorRedirectUrl, authServerBaseUrl);
+		expect(errorRedirect.searchParams.get("error")).toBe("invalid_request");
+		expect(errorRedirect.searchParams.get("error_description")).toMatch(
+			/client_id/,
+		);
 	});
 
 	it("should sign the resolved PAR parameters for the login redirect", async () => {
@@ -775,7 +898,7 @@ describe("oauth authorize - authenticated", async () => {
 			throw Error("beforeAll not run properly");
 		}
 		const codeVerifier = generateRandomString(64);
-		const { url: authUrl } = await createAuthorizationURL({
+		const authUrl = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient.client_id,
@@ -869,7 +992,7 @@ describe("oauth authorize - authenticated", async () => {
 		const metadataIssuer = metadata.issuer;
 
 		const codeVerifier = generateRandomString(64);
-		const { url: authUrl } = await createAuthorizationURL({
+		const authUrl = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient.client_id,
@@ -961,6 +1084,7 @@ describe("oauth authorize - consented resources", async () => {
 								clientId: z.string(),
 								scopes: z.array(z.string()),
 								userId: z.string(),
+								requestedUserInfoClaims: z.array(z.string()).optional(),
 							}),
 							use: [sessionMiddleware],
 							metadata: {
@@ -1042,6 +1166,61 @@ describe("oauth authorize - consented resources", async () => {
 		expect(consentRedirectUrl).not.toContain(`${redirectUri}?code=`);
 	});
 
+	it("should re-prompt for consent when stored consent has no requested UserInfo claim", async () => {
+		const dedicatedClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: false,
+			},
+		});
+		if (!dedicatedClient?.client_id) {
+			throw Error("unable to create dedicated client");
+		}
+
+		await auth.api.testerCreateConsent({
+			headers,
+			body: {
+				clientId: dedicatedClient.client_id,
+				userId: user.id,
+				scopes: ["openid"],
+			},
+		});
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", dedicatedClient.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "userinfo-claim-consent");
+		authUrl.searchParams.set(
+			"claims",
+			JSON.stringify({
+				userinfo: {
+					email: null,
+				},
+			}),
+		);
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let consentRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				consentRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(consentRedirectUrl).toContain("/consent");
+		expect(consentRedirectUrl).not.toContain(`${redirectUri}?code=`);
+		const consentUrl = new URL(consentRedirectUrl, authServerBaseUrl);
+		expect(JSON.parse(consentUrl.searchParams.get("claims") ?? "{}")).toEqual({
+			userinfo: {
+				email: null,
+			},
+		});
+	});
+
 	it("should persist multiple resource values onto OAuthConsent.resources", async ({
 		onTestFinished,
 	}) => {
@@ -1108,6 +1287,90 @@ describe("oauth authorize - consented resources", async () => {
 			validResource,
 			secondValidResource,
 		]);
+	});
+
+	it("should persist only accepted UserInfo claims onto OAuthConsent", async ({
+		onTestFinished,
+	}) => {
+		const dedicatedClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: false,
+			},
+		});
+		if (!dedicatedClient?.client_id) {
+			throw Error("unable to create dedicated client");
+		}
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", dedicatedClient.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "persist-userinfo-claims");
+		authUrl.searchParams.set(
+			"claims",
+			JSON.stringify({
+				userinfo: {
+					name: null,
+					email: null,
+				},
+			}),
+		);
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let consentRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				consentRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(consentRedirectUrl).toContain("/consent");
+
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(consentRedirectUrl, authServerBaseUrl).search,
+			},
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+
+		const consentResult = await client.oauth2.consent(
+			{
+				accept: true,
+				claims: {
+					userinfo: {
+						name: null,
+					},
+				},
+			},
+			{
+				throw: true,
+			},
+		);
+
+		expect(consentResult.url).toContain(`${redirectUri}?code=`);
+
+		const context = await auth.$context;
+		const savedConsent = await context.adapter.findOne<OAuthConsent<Scope[]>>({
+			model: "oauthConsent",
+			where: [
+				{
+					field: "clientId",
+					value: dedicatedClient.client_id,
+				},
+				{
+					field: "userId",
+					value: user.id,
+				},
+			],
+		});
+
+		expect(savedConsent?.requestedUserInfoClaims).toEqual(["name"]);
 	});
 
 	it("should return consent_required for prompt=none when requested resource is not covered by prior consent", async () => {

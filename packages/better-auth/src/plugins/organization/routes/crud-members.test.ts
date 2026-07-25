@@ -288,6 +288,88 @@ describe("listMembers", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9407
+ */
+describe("listMembers with >100 members", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				membershipLimit: 500,
+			}),
+		],
+	});
+	const ctx = await auth.$context;
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	const org = await client.organization.create({
+		name: "large-org",
+		slug: "large-org",
+		fetchOptions: {
+			headers,
+		},
+	});
+
+	// Owner + 110 members = 111 total (>100 default adapter limit)
+	for (let i = 0; i < 110; i++) {
+		const user = await ctx.adapter.create({
+			model: "user",
+			data: {
+				email: `large-org-${i}@test.com`,
+				name: `large-org-${i}`,
+			},
+		});
+		await auth.api.addMember({
+			body: {
+				organizationId: org.data?.id as string,
+				userId: user.id,
+				role: "member",
+			},
+		});
+	}
+
+	// Prisma/Drizzle default findMany to ~100 rows when limit is omitted.
+	// Apply that default after seeding so setup is unaffected, then assert
+	// listMembers still returns every member user.
+	const originalFindMany = ctx.adapter.findMany.bind(ctx.adapter);
+	ctx.adapter.findMany = async (data) => {
+		return originalFindMany({
+			...data,
+			limit: data.limit ?? 100,
+		});
+	};
+
+	it("should list all members when membershipLimit is above the adapter default", async () => {
+		const members = await client.organization.listMembers({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				organizationId: org.data?.id as string,
+			},
+		});
+		expect(members.error).toBeNull();
+		expect(members.data?.members.length).toBe(111);
+		expect(members.data?.total).toBe(111);
+		expect(
+			members.data?.members.every(
+				(member) =>
+					typeof member.user?.id === "string" &&
+					typeof member.user?.email === "string",
+			),
+		).toBe(true);
+	});
+});
+
 describe("updateMemberRole", async () => {
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		plugins: [organization()],

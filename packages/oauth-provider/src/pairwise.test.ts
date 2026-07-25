@@ -115,7 +115,7 @@ describe("pairwise subject identifiers", async () => {
 		},
 	) {
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: "test",
 			options: {
 				clientId: oauthClient.client_id,

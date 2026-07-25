@@ -4,6 +4,7 @@ import * as z from "zod";
 import { createAuthEndpoint } from "../../api";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { emailOTP } from "../email-otp";
+import { username } from "../username";
 import { openAPI } from ".";
 import type { OpenAPISchema, Path } from "./generator";
 
@@ -345,20 +346,6 @@ describe("open-api", async () => {
 		expect(schemas["Session"]!.required).toContain("id");
 	});
 
-	it("emits a valid OpenAPI array schema for string[] fields (grantedScopes)", async () => {
-		const schema = await auth.api.generateOpenAPISchema();
-		const schemas = schema.components.schemas as Record<
-			string,
-			Record<string, any>
-		>;
-		// Must be a JSON Schema array, never the invalid literal type "string[]".
-		expect(schemas["Account"]!.properties.grantedScopes).toEqual({
-			type: "array",
-			items: { type: "string" },
-		});
-		expect(schemas["Account"]!.required ?? []).not.toContain("grantedScopes");
-	});
-
 	it("should include additionalFields in the User schema", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const schemas = schema.components.schemas as Record<
@@ -376,6 +363,175 @@ describe("open-api", async () => {
 		});
 		expect(schemas["User"]!.required).toContain("role");
 		expect(schemas["User"]!.required).not.toContain("preferences");
+	});
+
+	it("should map array additionalFields to OpenAPI array schemas", async () => {
+		const { auth } = await getTestInstance(
+			{
+				plugins: [openAPI()],
+				user: {
+					additionalFields: {
+						tags: {
+							type: "string[]",
+							required: false,
+						},
+						scores: {
+							type: "number[]",
+							required: true,
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const schema = await auth.api.generateOpenAPISchema();
+		const schemas = schema.components.schemas as Record<
+			string,
+			Record<string, any>
+		>;
+
+		expect(schemas["User"]!.properties.tags).toEqual({
+			type: "array",
+			items: { type: "string" },
+		});
+		expect(schemas["User"]!.properties.scores).toEqual({
+			type: "array",
+			items: { type: "number" },
+		});
+		expect(schemas["User"]!.required).not.toContain("tags");
+		expect(schemas["User"]!.required).toContain("scores");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10430
+	 */
+	it("should allow every JSON value in additional field request bodies", async () => {
+		const { auth } = await getTestInstance(
+			{
+				plugins: [openAPI()],
+				user: {
+					additionalFields: {
+						metadata: {
+							type: "json",
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+
+		const signUpSchema = getPostRequestBody(paths, "/sign-up/email").content[
+			"application/json"
+		].schema;
+		expect(getSchemaProperty(signUpSchema, "metadata")).toEqual({});
+
+		const updateUserSchema = getPostRequestBody(paths, "/update-user").content[
+			"application/json"
+		].schema;
+		expect(getSchemaProperty(updateUserSchema, "metadata")).toEqual({});
+	});
+
+	it("should include additionalFields on sign-up and update-user request bodies", async () => {
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+
+		const signUpBody = getPostRequestBody(paths, "/sign-up/email");
+		const signUpSchema = signUpBody.content["application/json"].schema;
+		expect(getSchemaProperty(signUpSchema, "role")).toEqual({
+			type: "string",
+			default: "user",
+		});
+		expect(getSchemaProperty(signUpSchema, "preferences")).toEqual({
+			type: "string",
+		});
+		// role has a defaultValue, so clients are not required to send it
+		expect(signUpSchema.required).not.toContain("role");
+		expect(signUpSchema.required).not.toContain("preferences");
+
+		const updateUserBody = getPostRequestBody(paths, "/update-user");
+		const updateUserSchema = updateUserBody.content["application/json"].schema;
+		expect(getSchemaProperty(updateUserSchema, "role")).toEqual({
+			type: "string",
+			default: "user",
+		});
+		expect(getSchemaProperty(updateUserSchema, "preferences")).toEqual({
+			type: "string",
+		});
+		expect(updateUserSchema.required ?? []).not.toContain("role");
+		expect(updateUserSchema.required ?? []).not.toContain("preferences");
+	});
+
+	it("should mark explicitly required additionalFields as required on sign-up", async () => {
+		const { auth: authWithRequiredField } = await getTestInstance(
+			{
+				plugins: [openAPI()],
+				user: {
+					additionalFields: {
+						nickname: {
+							type: "string",
+							required: true,
+						},
+						optionalNote: {
+							type: "string",
+						},
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const schema = await authWithRequiredField.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+		const signUpSchema = getPostRequestBody(paths, "/sign-up/email").content[
+			"application/json"
+		].schema;
+
+		expect(getSchemaProperty(signUpSchema, "nickname")).toEqual({
+			type: "string",
+		});
+		expect(getSchemaProperty(signUpSchema, "optionalNote")).toEqual({
+			type: "string",
+		});
+		expect(signUpSchema.required).toContain("nickname");
+		// omitted required matches parseUserInput (only truthy required is enforced)
+		expect(signUpSchema.required).not.toContain("optionalNote");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10430
+	 */
+	it("should include username plugin fields on sign-up and update-user request bodies", async () => {
+		const { auth: authWithUsername } = await getTestInstance({
+			plugins: [openAPI(), username()],
+		});
+		const schema = await authWithUsername.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+
+		const signUpBody = getPostRequestBody(paths, "/sign-up/email");
+		const signUpSchema = signUpBody.content["application/json"].schema;
+		expect(getSchemaProperty(signUpSchema, "username")).toEqual({
+			type: "string",
+		});
+		expect(getSchemaProperty(signUpSchema, "displayUsername")).toEqual({
+			type: "string",
+		});
+		expect(signUpSchema.required).toEqual(
+			expect.arrayContaining(["name", "email", "password"]),
+		);
+		expect(signUpSchema.required).not.toContain("username");
+		expect(signUpSchema.required).not.toContain("displayUsername");
+
+		const updateUserBody = getPostRequestBody(paths, "/update-user");
+		const updateUserSchema = updateUserBody.content["application/json"].schema;
+		expect(getSchemaProperty(updateUserSchema, "username")).toEqual({
+			type: "string",
+		});
+		expect(getSchemaProperty(updateUserSchema, "displayUsername")).toEqual({
+			type: "string",
+		});
 	});
 
 	it("should omit runtime-generated defaults from model schemas", async () => {

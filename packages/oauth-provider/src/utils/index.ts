@@ -522,6 +522,27 @@ export function clientAllowsGrant(
 }
 
 /**
+ * Validates requested scopes against a registered client's allowed scopes.
+ *
+ * @internal
+ */
+export function validateClientScopes(
+	client: Pick<SchemaClient<Scope[]>, "scopes">,
+	scopes?: string[],
+) {
+	if (!scopes || !client.scopes) return;
+	const validScopes = new Set(client.scopes);
+	for (const scope of scopes) {
+		if (!validScopes.has(scope)) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: `client does not allow scope ${scope}`,
+				error: "invalid_scope",
+			});
+		}
+	}
+}
+
+/**
  * Resolves the registered client by id and authorizes it: existence, disabled
  * state, registered auth method, requested scopes, and grant type. The record is
  * always resolved here via `getClient`, so a client-auth strategy proves the
@@ -615,18 +636,7 @@ export async function validateClientCredentials(
 		}
 	}
 
-	// If scopes set, check against client allowed scopes
-	if (scopes && client.scopes) {
-		const validScopes = new Set(client.scopes);
-		for (const sc of scopes) {
-			if (!validScopes.has(sc)) {
-				throw new APIError("BAD_REQUEST", {
-					error_description: `client does not allow scope ${sc}`,
-					error: "invalid_scope",
-				});
-			}
-		}
-	}
+	validateClientScopes(client, scopes);
 
 	// Enforce the client is registered for the requested grant type
 	if (grantType && !clientAllowsGrant(client, grantType)) {
@@ -915,17 +925,24 @@ export function removeMaxAgeFromQuery(query: URLSearchParams) {
 
 enum PKCERequirementErrors {
 	PUBLIC_CLIENT = "pkce is required for public clients",
-	OFFLINE_ACCESS_SCOPE = "pkce is required when requesting offline_access scope",
+	OFFLINE_ACCESS_SCOPE = "pkce or OIDC nonce is required when requesting offline_access scope",
 	CLIENT_REQUIRE_PKCE = "pkce is required for this client",
 }
+
+interface AuthorizationPKCEContext {
+	scopes?: string[];
+	nonce?: string;
+}
+
 /**
- * Determines if PKCE is required for a given client and scope.
+ * Determines if PKCE is required for a given client and authorization request.
  *
  * PKCE is always required for:
  * 1. Public clients (cannot securely store client_secret)
- * 2. Requests with offline_access scope (refresh token security)
+ * 2. Requests with offline_access scope unless a confidential OIDC request
+ *    already uses nonce as its authorization-code injection countermeasure.
  *
- * For confidential clients without offline_access:
+ * For confidential clients:
  * - Uses client.requirePKCE if set (defaults to true)
  *
  * Returns false if PKCE is not required, or the reason it is required.
@@ -934,7 +951,7 @@ enum PKCERequirementErrors {
  */
 export function isPKCERequired(
 	client: SchemaClient<Scope[]>,
-	requestedScopes?: string[],
+	request?: AuthorizationPKCEContext,
 ): false | PKCERequirementErrors {
 	// Determine if client is public
 	const isPublicClient =
@@ -948,8 +965,13 @@ export function isPKCERequired(
 		return PKCERequirementErrors.PUBLIC_CLIENT;
 	}
 
-	// PKCE always required for offline_access scope (refresh tokens)
-	if (requestedScopes?.includes("offline_access")) {
+	const requestScopes = request?.scopes ?? [];
+	const isOpenIdRequest = requestScopes.includes("openid");
+	const hasNonce =
+		typeof request?.nonce === "string" && request.nonce.length > 0;
+	const hasOidcNonce = isOpenIdRequest && hasNonce;
+
+	if (requestScopes.includes("offline_access") && !hasOidcNonce) {
 		return PKCERequirementErrors.OFFLINE_ACCESS_SCOPE;
 	}
 

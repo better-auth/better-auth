@@ -3,7 +3,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import type { Account, User } from "@better-auth/core/db";
+import type { User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { createEmailVerificationToken } from "../../api";
@@ -151,28 +151,38 @@ export const username = (options?: UsernameOptions | undefined) => {
 
 	const pathsWithHttpHookValidation = ["/sign-up/email", "/update-user"];
 
+	const getUsernameToValidate = (username: string) =>
+		options?.validationOrder?.username === "post-normalization"
+			? normalizer(username)
+			: username;
+
+	async function validateUsernameValue(username: string) {
+		const usernameToValidate = getUsernameToValidate(username);
+		if (usernameToValidate.length < minUsernameLength) {
+			return ERROR_CODES.USERNAME_TOO_SHORT;
+		}
+
+		if (usernameToValidate.length > maxUsernameLength) {
+			return ERROR_CODES.USERNAME_TOO_LONG;
+		}
+
+		const valid = await validator(usernameToValidate);
+		if (!valid) {
+			return ERROR_CODES.INVALID_USERNAME;
+		}
+
+		return null;
+	}
+
 	async function validateUsername(
 		username: string,
 		displayUsername: string | null,
 		adapter: { findOne: <T>(opts: any) => Promise<T | null> },
 		currentUserId?: string | null,
 	) {
-		const usernameToValidate =
-			options?.validationOrder?.username === "post-normalization"
-				? normalizer(username)
-				: username;
-
-		if (usernameToValidate.length < minUsernameLength) {
-			throw APIError.from("BAD_REQUEST", ERROR_CODES.USERNAME_TOO_SHORT);
-		}
-
-		if (usernameToValidate.length > maxUsernameLength) {
-			throw APIError.from("BAD_REQUEST", ERROR_CODES.USERNAME_TOO_LONG);
-		}
-
-		const valid = await validator(usernameToValidate);
-		if (!valid) {
-			throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_USERNAME);
+		const validationError = await validateUsernameValue(username);
+		if (validationError) {
+			throw APIError.from("BAD_REQUEST", validationError);
 		}
 
 		const normalizedUsername = normalizer(username);
@@ -450,19 +460,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 						);
 					}
 
-					const account = await ctx.context.adapter.findOne<Account>({
-						model: "account",
-						where: [
-							{
-								field: "userId",
-								value: user.id,
-							},
-							{
-								field: "providerId",
-								value: "credential",
-							},
-						],
-					});
+					const account =
+						await ctx.context.internalAdapter.findCredentialAccount(user.id);
 					if (!account) {
 						throw APIError.from(
 							"UNAUTHORIZED",
@@ -621,6 +620,26 @@ export const username = (options?: UsernameOptions | undefined) => {
 		),
 		hooks: {
 			before: [
+				// Apply valid displayUsername fallback before validation so fallback usernames are checked.
+				{
+					matcher(context) {
+						return context.path === "/sign-up/email";
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						if (
+							typeof ctx.body.displayUsername !== "string" ||
+							ctx.body.username !== undefined
+						) {
+							return;
+						}
+						const validationError = await validateUsernameValue(
+							ctx.body.displayUsername,
+						);
+						if (!validationError) {
+							ctx.body.username = ctx.body.displayUsername;
+						}
+					}),
+				},
 				{
 					matcher(context) {
 						return (
@@ -629,40 +648,14 @@ export const username = (options?: UsernameOptions | undefined) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const username =
-							typeof ctx.body.username === "string" &&
-							options?.validationOrder?.username === "post-normalization"
-								? normalizer(ctx.body.username)
-								: ctx.body.username;
+						const username = ctx.body.username;
 
 						if (username !== undefined && typeof username === "string") {
-							const minUsernameLength = options?.minUsernameLength || 3;
-							const maxUsernameLength = options?.maxUsernameLength || 30;
-							if (username.length < minUsernameLength) {
-								throw APIError.from(
-									"BAD_REQUEST",
-									ERROR_CODES.USERNAME_TOO_SHORT,
-								);
+							const validationError = await validateUsernameValue(username);
+							if (validationError) {
+								throw APIError.from("BAD_REQUEST", validationError);
 							}
-
-							if (username.length > maxUsernameLength) {
-								throw APIError.from(
-									"BAD_REQUEST",
-									ERROR_CODES.USERNAME_TOO_LONG,
-								);
-							}
-
-							const validator =
-								options?.usernameValidator || defaultUsernameValidator;
-
-							const valid = await validator(username);
-							if (!valid) {
-								throw APIError.from(
-									"BAD_REQUEST",
-									ERROR_CODES.INVALID_USERNAME,
-								);
-							}
-							const normalizedUsername = normalizer(ctx.body.username);
+							const normalizedUsername = normalizer(username);
 							const session =
 								ctx.path === "/update-user"
 									? await getSessionFromCtx(ctx)
@@ -737,9 +730,6 @@ export const username = (options?: UsernameOptions | undefined) => {
 					handler: createAuthMiddleware(async (ctx) => {
 						if (ctx.body.username && !ctx.body.displayUsername) {
 							ctx.body.displayUsername = ctx.body.username;
-						}
-						if (ctx.body.displayUsername && !ctx.body.username) {
-							ctx.body.username = ctx.body.displayUsername;
 						}
 					}),
 				},

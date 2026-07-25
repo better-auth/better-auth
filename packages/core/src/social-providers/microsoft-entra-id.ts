@@ -5,15 +5,14 @@ import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
 import type {
 	ClientAssertionGetter,
+	OAuthProvider,
 	ProviderOptions,
 	TokenEndpointAuth,
-	UpstreamProvider,
 } from "../oauth2";
 import {
 	createAuthorizationURL,
 	getPrimaryClientId,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -161,14 +160,6 @@ export interface MicrosoftOptions
 	disableProfilePhoto?: boolean;
 }
 
-const MICROSOFT_ENTRA_ID_DEFAULT_SCOPES = [
-	"openid",
-	"profile",
-	"email",
-	"User.Read",
-	"offline_access",
-];
-
 export const microsoft = (options: MicrosoftOptions) => {
 	const tenant = options.tenantId || "common";
 	// Trim any trailing slash so endpoint URLs and the issuer comparison below
@@ -196,7 +187,8 @@ export const microsoft = (options: MicrosoftOptions) => {
 	return {
 		id: "microsoft",
 		name: "Microsoft EntraID",
-		callbackPath: "/callback/microsoft",
+		accountSubject: ({ profile }) => profile.oid,
+		accountIssuer: ({ profile }) => profile.iss,
 		createAuthorizationURL(data) {
 			// Microsoft Entra supports public clients (SPA / native apps with
 			// PKCE only), so clientSecret is intentionally not required here.
@@ -207,18 +199,18 @@ export const microsoft = (options: MicrosoftOptions) => {
 				);
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
 			}
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				MICROSOFT_ENTRA_ID_DEFAULT_SCOPES,
-				data.scopes,
-			);
+			const scopes = options.disableDefaultScope
+				? []
+				: ["openid", "profile", "email", "User.Read", "offline_access"];
+			if (options.scope) scopes.push(...options.scope);
+			if (data.scopes) scopes.push(...data.scopes);
 			return createAuthorizationURL({
 				id: "microsoft",
 				options,
 				authorizationEndpoint,
 				state: data.state,
 				codeVerifier: data.codeVerifier,
-				scopes: requestedScopes,
+				scopes,
 				redirectURI: data.redirectURI,
 				prompt: options.prompt,
 				loginHint: data.loginHint,
@@ -287,33 +279,41 @@ export const microsoft = (options: MicrosoftOptions) => {
 				return null;
 			}
 			const user = decodeJwt(token.idToken) as MicrosoftEntraIDProfile;
+			if (typeof user.oid !== "string" || user.oid.trim().length === 0) {
+				logger.error(
+					"Microsoft Entra ID token did not include a valid oid claim; unable to resolve a stable account identifier.",
+				);
+				return null;
+			}
 			const profilePhotoSize = options.profilePhotoSize || 48;
-			await betterFetch<ArrayBuffer>(
-				`https://graph.microsoft.com/v1.0/me/photos/${profilePhotoSize}x${profilePhotoSize}/$value`,
-				{
-					headers: {
-						Authorization: `Bearer ${token.accessToken}`,
+			if (!options.disableProfilePhoto && token.accessToken) {
+				await betterFetch<ArrayBuffer>(
+					`https://graph.microsoft.com/v1.0/me/photos/${profilePhotoSize}x${profilePhotoSize}/$value`,
+					{
+						headers: {
+							Authorization: `Bearer ${token.accessToken}`,
+						},
+						async onResponse(context) {
+							if (!context.response.ok) {
+								return;
+							}
+							try {
+								const response = context.response.clone();
+								const pictureBuffer = await response.arrayBuffer();
+								const pictureBase64 = base64.encode(pictureBuffer);
+								user.picture = `data:image/jpeg;base64, ${pictureBase64}`;
+							} catch (e) {
+								logger.error(
+									e && typeof e === "object" && "name" in e
+										? (e.name as string)
+										: "",
+									e,
+								);
+							}
+						},
 					},
-					async onResponse(context) {
-						if (options.disableProfilePhoto || !context.response.ok) {
-							return;
-						}
-						try {
-							const response = context.response.clone();
-							const pictureBuffer = await response.arrayBuffer();
-							const pictureBase64 = base64.encode(pictureBuffer);
-							user.picture = `data:image/jpeg;base64, ${pictureBase64}`;
-						} catch (e) {
-							logger.error(
-								e && typeof e === "object" && "name" in e
-									? (e.name as string)
-									: "",
-								e,
-							);
-						}
-					},
-				},
-			);
+				);
+			}
 			const userMap = await options.mapProfileToUser?.(user);
 			// Microsoft Entra ID does NOT include email_verified claim by default.
 			// It must be configured as an optional claim in the app registration.
@@ -329,7 +329,6 @@ export const microsoft = (options: MicrosoftOptions) => {
 						: false;
 			return {
 				user: {
-					id: user.sub,
 					name: user.name,
 					email: user.email,
 					image: user.picture,
@@ -361,7 +360,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 					});
 				},
 		options,
-	} satisfies UpstreamProvider;
+	} satisfies OAuthProvider<MicrosoftEntraIDProfile>;
 };
 
 export const getMicrosoftPublicKey = async (

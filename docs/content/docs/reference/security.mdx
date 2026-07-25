@@ -162,6 +162,21 @@ You can configure the IP address header in your Better Auth configuration:
 
 This ensures that Better Auth only accepts IP addresses from your trusted proxy's header, making it more difficult for attackers to bypass rate limiting or other IP-based security measures by spoofing headers.
 
+Behind a proxy chain, list your proxies in `trustedProxies` so Better Auth
+resolves the real client instead of the spoofable leftmost `X-Forwarded-For`
+token:
+
+```typescript
+{
+  advanced: {
+    ipAddress: {
+      // your proxies' addresses, not a broad private range that also covers clients
+      trustedProxies: ['192.0.2.10', '10.0.0.0/24']
+    }
+  }
+}
+```
+
 <Callout type="info">
   **Important**
 
@@ -282,6 +297,10 @@ You can also dynamically set the list of trusted origins by providing a function
 <Callout>
   **Important**: This function will be invoked per incoming request, so be careful if you decide to dynamically fetch your list of trusted domains.
 </Callout>
+
+## Outbound OAuth Requests
+
+During sign-in, Better Auth makes server-side requests to OAuth and OIDC provider endpoints: the token exchange, token refresh, token introspection, and key-set (JWKS) requests. These requests do not follow HTTP redirects. A conformant provider answers these endpoints with a direct response and never redirects, so standard integrations are unaffected. Refusing redirects keeps a provider endpoint from steering a server-side request to an unintended internal address.
 
 ## Email Enumeration Protection
 

@@ -1,6 +1,9 @@
 import { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
-import { runWithEndpointContext } from "@better-auth/core/context";
+import {
+	runWithEndpointContext,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import type { SecondaryStorage } from "@better-auth/core/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -161,46 +164,91 @@ describe("internal adapter test", async () => {
 	const authContext = await init(opts);
 	const internalAdapter = authContext.internalAdapter;
 
-	it("creates a user and linked account with custom generated ids, firing user-create hooks", async () => {
-		const user = await internalAdapter.createUser(
+	it("should create oauth user with custom generate id", async () => {
+		const user = await internalAdapter.createOAuthUser(
 			{
 				email: "email@email.com",
 				name: "name",
 				emailVerified: false,
 			},
-			{ method: "test" },
+			{
+				providerId: "provider",
+				issuer: "local:provider",
+				providerAccountId: "account",
+				accessTokenExpiresAt: new Date(),
+				refreshTokenExpiresAt: new Date(),
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
 		);
-		const account = await internalAdapter.createAccount({
-			userId: user.id,
-			providerId: "provider",
-			accountId: "account",
-			accessTokenExpiresAt: new Date(),
-			refreshTokenExpiresAt: new Date(),
-		});
 		expect(user).toMatchObject({
-			id: "1",
-			name: "name",
-			email: "email@email.com",
-			emailVerified: false,
-			image: null,
-			createdAt: expect.any(Date),
-			updatedAt: expect.any(Date),
+			user: {
+				id: "1",
+				name: "name",
+				email: "email@email.com",
+				emailVerified: false,
+				image: null,
+				createdAt: expect.any(Date),
+				updatedAt: expect.any(Date),
+			},
+			account: {
+				id: "2",
+				userId: expect.any(String),
+				providerId: "provider",
+				issuer: "local:provider",
+				providerAccountId: "account",
+				accessToken: null,
+				refreshToken: null,
+				refreshTokenExpiresAt: expect.any(Date),
+				accessTokenExpiresAt: expect.any(Date),
+			},
 		});
-		expect(account).toMatchObject({
-			id: "2",
-			userId: "1",
-			providerId: "provider",
-			accountId: "account",
-			accessToken: null,
-			refreshToken: null,
-			refreshTokenExpiresAt: expect.any(Date),
-			accessTokenExpiresAt: expect.any(Date),
-		});
-		expect(account.userId).toBe(user.id);
+		expect(user?.user.id).toBe(user?.account.userId);
 		expect(pluginHookUserCreateAfter).toHaveBeenCalledOnce();
 		expect(pluginHookUserCreateBefore).toHaveBeenCalledOnce();
 		expect(hookUserCreateAfter).toHaveBeenCalledOnce();
 		expect(hookUserCreateBefore).toHaveBeenCalledOnce();
+	});
+
+	it("should abort oauth account creation when user creation is vetoed", async () => {
+		const database = new DatabaseSync(":memory:");
+		const abortingOptions = {
+			...opts,
+			database,
+			databaseHooks: {
+				user: {
+					create: {
+						async before() {
+							return false;
+						},
+					},
+				},
+			},
+			plugins: [],
+		} satisfies BetterAuthOptions;
+		try {
+			(await getMigrations(abortingOptions)).runMigrations();
+			const abortingContext = await init(abortingOptions);
+
+			await expect(
+				abortingContext.internalAdapter.createOAuthUser(
+					{
+						email: "blocked@email.com",
+						name: "Blocked",
+						emailVerified: false,
+					},
+					{
+						providerId: "provider",
+						issuer: "local:provider",
+						providerAccountId: "account",
+						accessTokenExpiresAt: new Date(),
+						refreshTokenExpiresAt: new Date(),
+					},
+				),
+			).rejects.toThrow("Failed to create user");
+		} finally {
+			database.close();
+		}
 	});
 
 	/**
@@ -871,22 +919,148 @@ describe("internal adapter test", async () => {
 		const account = await internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "test-provider",
-			accountId: "test-account-id-1",
+			issuer: "https://issuer.example.com",
+			providerAccountId: "test-account-id-1",
 		});
 
-		let foundAccount = await internalAdapter.findAccountByProviderId(
-			account.accountId,
-			"test-provider",
-		);
+		let foundAccount = await internalAdapter.findAccountByKey({
+			issuer: account.issuer,
+			providerAccountId: account.providerAccountId,
+		});
 		expect(foundAccount).toBeDefined();
 
 		await internalAdapter.deleteAccount(account.id);
 
-		foundAccount = await internalAdapter.findAccountByProviderId(
-			account.accountId,
-			"test-provider",
-		);
+		foundAccount = await internalAdapter.findAccountByKey({
+			issuer: account.issuer,
+			providerAccountId: account.providerAccountId,
+		});
 		expect(foundAccount).toBeNull();
+	});
+
+	it("finds an account owner by the exact account key", async () => {
+		const firstUser = await internalAdapter.createUser(
+			{
+				name: "First Account Key User",
+				email: "first.account.key@example.com",
+			},
+			{ method: "test" },
+		);
+		const secondUser = await internalAdapter.createUser(
+			{
+				name: "Second Account Key User",
+				email: "second.account.key@example.com",
+			},
+			{ method: "test" },
+		);
+		const providerAccountId = "shared-provider-subject";
+		const firstAccount = await internalAdapter.createAccount({
+			userId: firstUser.id,
+			providerId: "first-provider-configuration",
+			issuer: "https://first-issuer.example.com",
+			providerAccountId,
+		});
+		const secondAccount = await internalAdapter.createAccount({
+			userId: secondUser.id,
+			providerId: "second-provider-configuration",
+			issuer: "https://second-issuer.example.com",
+			providerAccountId,
+		});
+		await expect(
+			internalAdapter.createAccount({
+				userId: secondUser.id,
+				providerId: "another-provider-configuration",
+				issuer: firstAccount.issuer,
+				providerAccountId,
+			}),
+		).rejects.toThrow();
+
+		await internalAdapter.updateAccount(firstAccount.id, {
+			providerId: "renamed-provider-configuration",
+		});
+
+		await expect(
+			internalAdapter.findAccountByKey({
+				issuer: firstAccount.issuer,
+				providerAccountId,
+			}),
+		).resolves.toMatchObject({
+			id: firstAccount.id,
+			providerId: "renamed-provider-configuration",
+		});
+		await expect(
+			internalAdapter.findAccountOwnerByKey({
+				issuer: secondAccount.issuer,
+				providerAccountId,
+			}),
+		).resolves.toMatchObject({
+			kind: "owned",
+			user: { id: secondUser.id },
+			account: {
+				id: secondAccount.id,
+				providerId: "second-provider-configuration",
+			},
+		});
+		await expect(
+			internalAdapter.findAccountOwnerByKey({
+				issuer: "https://missing-issuer.example.com",
+				providerAccountId,
+			}),
+		).resolves.toBeNull();
+	});
+
+	it("reports an account whose owner is missing", async () => {
+		const database = opts.database as DatabaseSync;
+		const account = await (async () => {
+			database.exec("PRAGMA foreign_keys = OFF");
+			try {
+				return await internalAdapter.createAccount({
+					userId: "missing-account-owner",
+					providerId: "orphaned-provider",
+					issuer: "https://issuer.example.com",
+					providerAccountId: "orphaned-subject",
+				});
+			} finally {
+				database.exec("PRAGMA foreign_keys = ON");
+			}
+		})();
+
+		await expect(
+			internalAdapter.findAccountOwnerByKey({
+				issuer: account.issuer,
+				providerAccountId: account.providerAccountId,
+			}),
+		).resolves.toMatchObject({
+			kind: "orphaned",
+			account: { id: account.id, userId: "missing-account-owner" },
+		});
+	});
+
+	it("finds the same credential account after the user email changes", async () => {
+		const user = await internalAdapter.createUser(
+			{
+				name: "Stable Credential User",
+				email: "stable.credential@example.com",
+			},
+			{ method: "test" },
+		);
+		const account = await internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "credential",
+			issuer: "local:credential",
+			providerAccountId: user.id,
+			password: "password-hash",
+		});
+
+		await expect(
+			internalAdapter.findCredentialAccount(user.id),
+		).resolves.toMatchObject({ id: account.id, providerAccountId: user.id });
+		await internalAdapter.updateUser(user.id, {
+			email: "changed.stable.credential@example.com",
+		});
+		await expect(
+			internalAdapter.findCredentialAccount(user.id),
+		).resolves.toMatchObject({ id: account.id, providerAccountId: user.id });
 	});
 
 	it("should delete multiple accounts for a user", async () => {
@@ -901,13 +1075,15 @@ describe("internal adapter test", async () => {
 		await internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "test-provider-1",
-			accountId: "test-account-id-2",
+			issuer: "local:test-provider-1",
+			providerAccountId: "test-account-id-2",
 		});
 
 		await internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "test-provider-2",
-			accountId: "test-account-id-3",
+			issuer: "local:test-provider-2",
+			providerAccountId: "test-account-id-3",
 		});
 
 		let accounts = await internalAdapter.findAccounts(user.id);
@@ -958,6 +1134,219 @@ describe("internal adapter test", async () => {
 		expect(sessions.map((s) => s.token).sort()).toEqual(
 			[session1.token, session3.token].sort(),
 		);
+	});
+
+	it("defers secondary session deletion until commit and discards it on rollback", async () => {
+		const testMap = new Map<string, string>();
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(testMap),
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "transactional-session-user",
+				email: "transactional-session@example.com",
+			},
+			{ method: "test" },
+		);
+		const session = await testCtx.internalAdapter.createSession(user.id);
+
+		await expect(
+			runWithTransaction(testCtx.adapter, async () => {
+				await testCtx.internalAdapter.deleteUserSessions(user.id);
+				expect(testMap.has(session.token)).toBe(true);
+				throw new Error("rollback");
+			}),
+		).rejects.toThrow("rollback");
+		expect(testMap.has(session.token)).toBe(true);
+		expect(testMap.has(`active-sessions-${user.id}`)).toBe(true);
+
+		await runWithTransaction(testCtx.adapter, async () => {
+			await testCtx.internalAdapter.deleteUserSessions(user.id);
+			expect(testMap.has(session.token)).toBe(true);
+		});
+		expect(testMap.has(session.token)).toBe(false);
+		expect(testMap.has(`active-sessions-${user.id}`)).toBe(false);
+	});
+
+	it("defers secondary session creation until commit and discards it on rollback", async () => {
+		const testMap = new Map<string, string>();
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(testMap),
+			session: { storeSessionInDatabase: true },
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "deferred-session-user",
+				email: "deferred-session@example.com",
+			},
+			{ method: "test" },
+		);
+
+		const committed = await runWithTransaction(testCtx.adapter, async () => {
+			const session = await testCtx.internalAdapter.createSession(
+				user.id,
+				undefined,
+				undefined,
+				undefined,
+				{ deferSecondaryStorageWrites: true },
+			);
+			expect(testMap.has(session.token)).toBe(false);
+			return session;
+		});
+		expect(testMap.has(committed.token)).toBe(true);
+
+		let rolledBackToken = "";
+		await expect(
+			runWithTransaction(testCtx.adapter, async () => {
+				const session = await testCtx.internalAdapter.createSession(
+					user.id,
+					undefined,
+					undefined,
+					undefined,
+					{ deferSecondaryStorageWrites: true },
+				);
+				rolledBackToken = session.token;
+				expect(testMap.has(session.token)).toBe(false);
+				throw new Error("rollback");
+			}),
+		).rejects.toThrow("rollback");
+		expect(testMap.has(rolledBackToken)).toBe(false);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10473#discussion_r3626724281
+	 */
+	it("rejects deferred secondary-only session creation when persistence fails", async () => {
+		const testMap = new Map<string, string>();
+		const secondaryStorage = createStringSecondaryStorage(testMap);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				...secondaryStorage,
+				set: async () => {
+					throw new Error("secondary storage unavailable");
+				},
+			},
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "failed-deferred-session-user",
+				email: "failed-deferred-session@example.com",
+			},
+			{ method: "test" },
+		);
+
+		await expect(
+			runWithTransaction(testCtx.adapter, () =>
+				testCtx.internalAdapter.createSession(
+					user.id,
+					undefined,
+					undefined,
+					undefined,
+					{ deferSecondaryStorageWrites: true },
+				),
+			),
+		).rejects.toThrow("secondary storage unavailable");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10390#discussion_r3585595438
+	 */
+	it("preserves sessions created after user session deletion is requested", async () => {
+		const testMap = new Map<string, string>();
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(testMap),
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "replacement-session-user",
+				email: "replacement-session@example.com",
+			},
+			{ method: "test" },
+		);
+		const previousSession = await testCtx.internalAdapter.createSession(
+			user.id,
+		);
+
+		const replacementSession = await runWithTransaction(
+			testCtx.adapter,
+			async () => {
+				await testCtx.internalAdapter.deleteUserSessions(user.id);
+				const session = await testCtx.internalAdapter.createSession(user.id);
+
+				expect(testMap.has(previousSession.token)).toBe(true);
+				expect(testMap.has(session.token)).toBe(true);
+				return session;
+			},
+		);
+
+		expect(testMap.has(previousSession.token)).toBe(false);
+		expect(testMap.has(replacementSession.token)).toBe(true);
+		expect(
+			safeJSONParse<{ token: string }[]>(
+				testMap.get(`active-sessions-${user.id}`) ?? "[]",
+			),
+		).toEqual([expect.objectContaining({ token: replacementSession.token })]);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10390
+	 */
+	it("keeps stored sessions when the revocation snapshot cannot be read", async () => {
+		const testMap = new Map<string, string>();
+		const storage = createStringSecondaryStorage(testMap);
+		let shouldFailActiveSessionReads = false;
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				...storage,
+				get(key: string) {
+					if (
+						shouldFailActiveSessionReads &&
+						key.startsWith("active-sessions-")
+					) {
+						throw new Error("secondary storage is unavailable");
+					}
+					return storage.get(key);
+				},
+			},
+			session: {
+				storeSessionInDatabase: true,
+			},
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "snapshot-failure-user",
+				email: "snapshot-failure@example.com",
+			},
+			{ method: "test" },
+		);
+		const session = await testCtx.internalAdapter.createSession(user.id);
+
+		shouldFailActiveSessionReads = true;
+		await expect(
+			testCtx.internalAdapter.deleteUserSessions(user.id),
+		).rejects.toThrow("secondary storage is unavailable");
+
+		shouldFailActiveSessionReads = false;
+		testMap.delete(session.token);
+		const storedSession = await testCtx.internalAdapter.findSession(
+			session.token,
+		);
+		expect(storedSession?.session.token).toBe(session.token);
 	});
 
 	it("listSessions should skip malformed session data (valid JSON but wrong structure)", async () => {

@@ -91,6 +91,8 @@ A redirect URL will be automatically generated using the provider ID. For instan
   When you register an OIDC provider, Better Auth automatically fetches and validates the IdP's [OIDC discovery document](#oidc-discovery). Most endpoint fields are optional — see [OIDC Discovery](#oidc-discovery) for details on auto-discovered fields and possible registration errors.
 </Callout>
 
+Better Auth identifies an OIDC account by the configured `issuer` and the verified `sub` claim. The `mapping` option maps profile fields such as email, name, and image, but it cannot replace the account subject. Provider aliases that return the same issuer and subject resolve to one external identity; this identity deduplication does not create independent grant or provider lifecycle records for each alias.
+
 #### Example
 
 <Tabs items={["client", "server"]}>
@@ -113,7 +115,6 @@ A redirect URL will be automatically generated using the provider ID. For instan
             scopes: ["openid", "email", "profile"],
             pkce: true,
             mapping: {
-                id: "sub",
                 email: "email",
                 emailVerified: "email_verified",
                 name: "name",
@@ -146,7 +147,6 @@ A redirect URL will be automatically generated using the provider ID. For instan
                 scopes: ["openid", "email", "profile"],
                 pkce: true,
                 mapping: {
-                    id: "sub",
                     email: "email",
                     emailVerified: "email_verified",
                     name: "name",
@@ -192,7 +192,7 @@ This allows most endpoint-related fields in `oidcConfig` to be **optional** — 
        */
       issuer: string = "https://your-org.okta.com"
       /**
-       * Email domain for this provider
+       * Bare email domain, or comma-separated bare email domains, for this provider
        */
       domain: string = "yourcompany.com"
       /**
@@ -346,9 +346,67 @@ If the Identity Provider is misconfigured or unreachable, registration will fail
 * Discovery errors are structured and well-defined
 * Public-client IdPs or mock servers may require overriding `tokenEndpointAuthentication`
 
+### Resolve OIDC Users
+
+Use `resolveUser` when an OIDC identity must be mapped to an existing Better Auth user instead of relying on email matching. The resolver runs on every OIDC sign-in. It is not used for SAML callbacks.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+import { findProvisionedUserBySubject } from "@/lib/provisioning";
+
+const auth = betterAuth({
+    plugins: [
+        sso({
+            resolveUser: async (input, context) => {
+                if (input.providerId !== "workforce") {
+                    return { action: "continue" };
+                }
+
+                const provisionedUser = await findProvisionedUserBySubject({
+                    providerId: input.providerId,
+                    issuer: input.accountKey.issuer,
+                    subject: input.accountKey.providerAccountId,
+                    database: context.database,
+                });
+
+                if (!provisionedUser) {
+                    return {
+                        action: "reject",
+                        code: "PROVISIONED_USER_NOT_FOUND",
+                    };
+                }
+
+                return {
+                    action: "link",
+                    userId: provisionedUser.userId,
+                    profile: "preserve",
+                };
+            },
+        }),
+    ],
+});
+```
+
+`accountKey.issuer` and `accountKey.providerAccountId` come from the validated ID Token's exact `iss` and `sub` claims. Subject matching is case-sensitive. `providerUser` contains normalized profile fields, while `providerClaims` contains the protocol-accepted raw claims used for that profile. Do not treat every profile field or raw claim as having the same verification guarantees as the issuer and subject; apply any application-specific validation before using them for authorization.
+
+`findProvisionedUserBySubject` is application-owned in this example. It should resolve the exact provider, issuer, and subject tuple through the transaction-scoped `database` adapter. Do not fall back to matching an email address when the exact provisioned subject is absent.
+
+The resolver returns one of three decisions:
+
+* `{ action: "continue" }` continues the normal SSO sign-in behavior.
+* `{ action: "link", userId, profile }` links the exact OIDC account to that user. Use `profile: "preserve"` to keep the local profile or `profile: "update"` to update it from the provider profile.
+* `{ action: "reject", code, message? }` rejects the sign-in with an application-defined error.
+
+The callback receives the active transaction adapter as `context.database`. Keep resolver work database-local and idempotent because a fresh SSO authentication attempt may invoke it again; an already consumed OIDC callback is not replayed. Better Auth requires native database transactions and transaction async-context support before calling the resolver. If secondary storage is configured, set `session.storeSessionInDatabase: true` and leave `session.preserveSessionInDatabase` unset or `false` so the database remains the session fallback.
+
+Database writes made through the transaction adapter during resolution, account linking, profile updates, and database session creation commit or roll back together. Network calls and other external side effects performed by the resolver or database hooks cannot be rolled back. Account and session cookies are published only after commit. Secondary-storage session mirroring and other deferred hooks run after commit; failures are logged without undoing the committed database session or suppressing its cookies.
+
 ### Register a SAML Provider
 
 To register a SAML provider, use the `registerSSOProvider` endpoint with SAML configuration details. The provider will act as a Service Provider (SP) and integrate with your Identity Provider (IdP).
+
+Better Auth identifies a SAML account by the IdP entity ID and the signed `NameID`. The `issuer` field identifies your service provider, while the IdP entity ID comes from `idpMetadata.metadata` or an explicit `idpMetadata.entityID` in a manual configuration. Attribute mappings can populate profile fields, but they cannot replace the signed `NameID` account subject.
 
 <Tabs items={["client", "server"]}>
   <Tab value="client">
@@ -357,7 +415,7 @@ To register a SAML provider, use the `registerSSOProvider` endpoint with SAML co
 
     await authClient.sso.register({
         providerId: "saml-provider",
-        issuer: "https://idp.example.com",
+        issuer: "https://yourapp.com/saml",
         domain: "example.com",
         samlConfig: {
             entryPoint: "https://idp.example.com/sso",
@@ -384,7 +442,6 @@ To register a SAML provider, use the `registerSSOProvider` endpoint with SAML co
                 encPrivateKeyPass: "your-sp-encryption-key-password"
             },
             mapping: {
-                id: "nameID",
                 email: "email",
                 name: "displayName",
                 firstName: "givenName",
@@ -406,7 +463,7 @@ To register a SAML provider, use the `registerSSOProvider` endpoint with SAML co
     await auth.api.registerSSOProvider({
         body: {
             providerId: "saml-provider",
-            issuer: "https://idp.example.com",
+            issuer: "https://yourapp.com/saml",
             domain: "example.com",
             samlConfig: {
                 entryPoint: "https://idp.example.com/sso",
@@ -433,7 +490,6 @@ To register a SAML provider, use the `registerSSOProvider` endpoint with SAML co
                     encPrivateKeyPass: "your-sp-encryption-key-password"
                 },
                 mapping: {
-                    id: "nameID",
                     email: "email",
                     name: "displayName",
                     firstName: "givenName",
@@ -784,7 +840,7 @@ import { auth } from "@/lib/auth"
 await auth.api.registerSSOProvider({
     body: {
         providerId: "acme-corp-saml",
-        issuer: "https://acme-corp.okta.com",
+        issuer: "https://yourapp.com/saml/acme-corp",
         domain: "acmecorp.com",
         organizationId: "org_acme_corp_id", // Link to organization
         samlConfig: {
@@ -826,7 +882,7 @@ import { auth } from "@/lib/auth"
 await auth.api.registerSSOProvider({
     body: {
         providerId: "acme-corp",
-        issuer: "https://acme.okta.com",
+        issuer: "https://yourapp.com/saml/acme-corp",
         domain: "acmecorp.com",
         organizationId: "org_acme_id",
         samlConfig: { /* ... */ },
@@ -928,6 +984,9 @@ const auth = betterAuth({
                         issuer: "https://your-app.com",
                         entryPoint: "https://idp.example.com/sso",
                         cert: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+                        idpMetadata: {
+                            entityID: "https://idp.example.com",
+                        },
                         spMetadata: {
                             entityID: "http://localhost:3000/api/auth/sso/saml2/sp/metadata",
                             metadata: "<!-- Your SP Metadata XML -->",
@@ -1015,7 +1074,6 @@ Configure how SAML attributes map to user fields:
 
 ```ts
 mapping: {
-    id: "nameID",           // Default: "nameID"
     email: "email",         // Default: "email" or "nameID"
     name: "displayName",    // Default: "displayName"
     firstName: "givenName", // Default: "givenName"
@@ -1375,7 +1433,7 @@ See the [Schema](#if-you-have-enabled-domain-verification) section to add the fi
 ### Verify your domain
 
 When domain verification is enabled, every new SSO provider will be untrusted at first.
-This means that new sign-ups or sign-ins will be allowed until the domain ownership has been verified.
+This means that new sign-ups or sign-ins will not be allowed until domain ownership has been verified.
 
 To verify your ownership over a domain, follow these steps:
 
@@ -1394,6 +1452,8 @@ To verify your ownership over a domain, follow these steps:
 
     * **Host:** `_better-auth-token-{your-provider-id}` (**Note:** An underscore is automatically prepended to follow DNS infrastructure subdomain conventions. The `better-auth-token` part can be customized through the `domainVerification.tokenPrefix` option)
     * **Value:** The verification token you were given.
+
+    If the SSO provider lists multiple comma-separated domains, add this `TXT` record under every listed domain. For example, a provider with `domain: "company.com,subsidiary.com"` must publish the record for both `company.com` and `subsidiary.com`.
 
     **Save the record and wait for it to propagate.** This can take up to 48 hours, but it's usually much faster.
   </Step>
@@ -1457,6 +1517,8 @@ The SAML ACS endpoint (`/api/auth/sso/saml2/sp/acs/{providerId}`) handles both *
 
 Better Auth derives the ACS URL automatically from your `baseURL` and `providerId`, so no SP-side configuration is required.
 
+Your IdP must include an `AudienceRestriction` for this SP. The accepted audience is the SP entity ID, or the explicit `audience` value in `samlConfig` when you need to match an IdP-specific SP identifier. Better Auth also checks bearer `Recipient` and response `Destination` values against this provider's ACS endpoints.
+
 The post-login redirect destination is controlled by the `callbackURL` parameter in the client-side `signIn.sso()` call:
 
 ```ts
@@ -1465,6 +1527,10 @@ await authClient.signIn.sso({
   callbackURL: "/dashboard", // Where the user lands after SSO
 });
 ```
+
+For unsolicited **IdP-initiated** flows where `signIn.sso()` is not used (and therefore no client-side `callbackURL` is set), configure `idpInitiatedCallbackUrl` in the provider's `samlConfig` or in the global `saml` plugin options. The provider setting takes precedence over the global setting, and the same fallback applies to validation error redirects. Better Auth-generated `RelayState` success and error callbacks retain higher priority. If neither fallback is configured, the existing redirect behavior is preserved.
+
+When updating a provider, pass `null` for `samlConfig.idpInitiatedCallbackUrl` to remove its override and fall back to the global setting.
 
 The callback route supports both GET and POST methods automatically, so you don't need to create any additional route handlers in your framework.
 
@@ -1594,10 +1660,10 @@ Better Auth supports **IdP-initiated SSO flows**, where users access your applic
 3. Better Auth processes the assertion, creates a session, and redirects to your application
 4. Browser follows the redirect with a GET request (handled automatically)
 
-**No additional configuration required** - the callback route automatically handles both GET and POST requests.
+No additional route handler is required. The callback route automatically handles both GET and POST requests.
 
 <Callout type="warn">
-  IdP-initiated flows do not carry a RelayState, so the post-login redirect falls back to your application's base URL. To control where users land after SP-initiated SSO, pass the destination via `callbackURL` in the `signIn.sso()` call.
+  IdP-initiated flows do not carry a Better Auth-generated RelayState containing a client-side callback URL, so the redirect falls back to the Better Auth base URL. In split-origin setups (where the app frontend is on a different origin than the Better Auth server), this lands on the auth server origin and can result in a 404. Configure `idpInitiatedCallbackUrl` globally under the `saml` plugin options or per provider under `samlConfig` (e.g., `https://app.example.com/dashboard`) to return successful sign-ins and validation errors to the frontend.
 </Callout>
 
 <Callout type="info">
@@ -1701,7 +1767,7 @@ export const ssoOptionsType = {
 			type: "object",
 			properties: {
 				domain: {
-					description: "The domain to match for this default provider.",
+					description: "The bare email domain, or comma-separated bare email domains, to match for this default provider.",
 					type: "string",
 					required: true,
 				},

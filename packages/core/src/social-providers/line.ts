@@ -1,10 +1,9 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -33,8 +32,6 @@ export interface LineOptions
 	clientId: string;
 }
 
-const LINE_DEFAULT_SCOPES = ["openid", "profile", "email"];
-
 /**
  * LINE Login v2.1
  * - Authorization endpoint: https://access.line.me/oauth2/v2.1/authorize
@@ -53,8 +50,9 @@ export const line = (options: LineOptions) => {
 	return {
 		id: "line",
 		name: "LINE",
-		callbackPath: "/callback/line",
-		createAuthorizationURL({
+		accountSubject: ({ profile }) => profile.sub,
+		accountIssuer: "https://access.line.me",
+		async createAuthorizationURL({
 			state,
 			scopes,
 			codeVerifier,
@@ -62,16 +60,16 @@ export const line = (options: LineOptions) => {
 			loginHint,
 			additionalParams,
 		}) {
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				LINE_DEFAULT_SCOPES,
-				scopes,
-			);
-			return createAuthorizationURL({
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["openid", "profile", "email"];
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
+			return await createAuthorizationURL({
 				id: "line",
 				options,
 				authorizationEndpoint,
-				scopes: requestedScopes,
+				scopes: _scopes,
 				state,
 				codeVerifier,
 				redirectURI,
@@ -146,26 +144,19 @@ export const line = (options: LineOptions) => {
 				profile = data || null;
 			}
 			if (!profile) return null;
-			const userMap = await options.mapProfileToUser?.(profile as any);
-			// ID preference order
-			const id = (profile as any).sub || (profile as any).userId;
-			const name = (profile as any).name || (profile as any).displayName || "";
-			const image =
-				(profile as any).picture || (profile as any).pictureUrl || undefined;
-			const email = (profile as any).email;
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id,
-					name,
-					email,
-					image,
+					name: profile.name || "",
+					email: profile.email,
+					image: profile.picture,
 					// LINE does not expose email verification status in ID token/userinfo
 					emailVerified: false,
 					...userMap,
 				},
-				data: profile as any,
+				data: profile,
 			};
 		},
 		options,
-	} satisfies UpstreamProvider<LineUserInfo | LineIdTokenPayload, LineOptions>;
+	} satisfies OAuthProvider<LineUserInfo | LineIdTokenPayload, LineOptions>;
 };

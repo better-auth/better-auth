@@ -48,10 +48,14 @@ export interface PrismaConfig {
 
 interface PrismaClient {}
 
+// Prisma raises `P2025` for every "record not found" surface area we care
+// about (`update`, `delete`, and `incrementOne`) with the actual cause
+// distinguishable via `meta.cause` (e.g. "Record to update not found." vs
+// "Record to delete does not exist."). Match on the code alone: any other
+// failure (constraint, connection, permission) must propagate so the caller
+// sees a real error rather than a silent `null`/no-op.
 function isPrismaNotFoundError(e: any): boolean {
-	return (
-		e?.code === "P2025" || e?.meta?.cause === "Record to delete does not exist."
-	);
+	return e?.code === "P2025";
 }
 
 type PrismaClientInternal = {
@@ -550,10 +554,25 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						action: "update",
 					});
 
-					return await db[model]!.update({
-						where: whereClause,
-						data: update,
-					});
+					// `prisma.model.update` requires a WhereUniqueInput but still
+					// applies any non-unique predicates as guards before mutating
+					// the row. When those guards exclude the row (e.g. a CAS like
+					// `WHERE id = ? AND revoked IS NULL` losing the race, or the
+					// row simply not existing) Prisma raises P2025 rather than
+					// silently returning the row. Surface that as `null` so every
+					// adapter — Kysely's RETURNING/OUTPUT paths, this one, the
+					// in-memory adapter — agree on the "guarded update matched no
+					// row" signal. `incrementOne` and `delete` already convert
+					// P2025 the same way.
+					try {
+						return await db[model]!.update({
+							where: whereClause,
+							data: update,
+						});
+					} catch (e: any) {
+						if (isPrismaNotFoundError(e)) return null;
+						throw e;
+					}
 				},
 				async updateMany({ model, where, update }) {
 					if (!db[model]) {
