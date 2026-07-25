@@ -160,21 +160,21 @@ async function fetchNpmTotalDownloads(
 	const createdDay =
 		(await fetchNpmPackageCreatedDay(npmPackage)) ?? NPM_DOWNLOADS_EPOCH;
 	const chunks = npmRangeChunks(createdDay);
+	if (chunks.length === 0) return null;
 
 	let total = 0;
-	let sawValue = false;
 	// Sequential on purpose — npm rate-limits bursty parallel range queries.
+	// Any failed chunk aborts: partial sums must not look like complete totals.
 	for (const chunk of chunks) {
 		const value = await fetchNpmDownloadsInRange(
 			npmPackage,
 			chunk.start,
 			chunk.end,
 		);
-		if (value == null) continue;
-		sawValue = true;
+		if (value == null) return null;
 		total += value;
 	}
-	return sawValue ? total : null;
+	return total;
 }
 
 async function fetchRepoFile(
@@ -280,7 +280,7 @@ async function getCachedEnrichment(
 			};
 		},
 		[
-			"marketplace-enrichment-v3",
+			"marketplace-enrichment-v4",
 			plugin.slug,
 			plugin.repo,
 			plugin.npmPackage ?? "",
