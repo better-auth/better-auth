@@ -473,16 +473,24 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										const stripeCustomer = await client.customers.retrieve(
 											user.stripeCustomerId,
 										);
-										if (stripeCustomer.deleted) return;
+										if (stripeCustomer.deleted) {
+											ctx.context.logger.warn(
+												`Stripe customer ${user.stripeCustomerId} was already deleted, cannot unlink from user ${user.id}`,
+											);
+											return;
+										}
 
 										await client.customers.update(user.stripeCustomerId, {
 											metadata: {
 												[customerMetadata.keys.userId]: "",
 											},
 										});
+										ctx.context.logger.info(
+											`Unlinked Stripe customer ${user.stripeCustomerId} from deleted user ${user.id}`,
+										);
 									} catch (error) {
 										ctx.context.logger.error(
-											"Failed to unlink Stripe customer from deleted user",
+											`Failed to unlink Stripe customer ${user.stripeCustomerId} from deleted user ${user.id}`,
 											error,
 										);
 									}
