@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Package, Store } from "lucide-react";
+import { Package } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import Footer from "@/components/landing/footer";
@@ -13,6 +13,7 @@ import type {
 	EnrichedMarketplacePlugin,
 	MarketplaceCategory,
 	MarketplaceSort,
+	MarketplaceSourceFilter,
 } from "@/lib/marketplace/types";
 
 function matchesQuery(
@@ -26,6 +27,7 @@ function matchesQuery(
 		plugin.description,
 		plugin.author.name,
 		plugin.category,
+		plugin.official ? "official" : plugin.featured ? "featured" : "community",
 		...(plugin.tags ?? []),
 	]
 		.join(" ")
@@ -33,18 +35,44 @@ function matchesQuery(
 	return haystack.includes(q);
 }
 
+/** Official → featured → community. */
+function listingTier(plugin: EnrichedMarketplacePlugin): number {
+	if (plugin.official) return 0;
+	if (plugin.featured) return 1;
+	return 2;
+}
+
+function byListingTier(
+	a: EnrichedMarketplacePlugin,
+	b: EnrichedMarketplacePlugin,
+): number {
+	return listingTier(a) - listingTier(b);
+}
+
+function byDownloadsDesc(
+	a: EnrichedMarketplacePlugin,
+	b: EnrichedMarketplacePlugin,
+): number {
+	return (b.enrichment.npmDownloads ?? -1) - (a.enrichment.npmDownloads ?? -1);
+}
+
 function sortPlugins(
 	plugins: EnrichedMarketplacePlugin[],
 	sort: MarketplaceSort,
 ): EnrichedMarketplacePlugin[] {
 	const copy = [...plugins];
+
 	switch (sort) {
 		case "stars":
-			return copy.sort(
-				(a, b) => (b.enrichment.stars ?? -1) - (a.enrichment.stars ?? -1),
-			);
+			return copy.sort((a, b) => {
+				const tier = byListingTier(a, b);
+				if (tier !== 0) return tier;
+				return (b.enrichment.stars ?? -1) - (a.enrichment.stars ?? -1);
+			});
 		case "updated":
 			return copy.sort((a, b) => {
+				const tier = byListingTier(a, b);
+				if (tier !== 0) return tier;
 				const aTime = a.enrichment.lastPush
 					? Date.parse(a.enrichment.lastPush)
 					: 0;
@@ -54,16 +82,23 @@ function sortPlugins(
 				return bTime - aTime;
 			});
 		case "downloads":
-			return copy.sort(
-				(a, b) =>
-					(b.enrichment.npmDownloads ?? -1) - (a.enrichment.npmDownloads ?? -1),
-			);
-		case "name":
-			return copy.sort((a, b) => a.name.localeCompare(b.name));
-		default:
 			return copy.sort((a, b) => {
-				if (a.featured !== b.featured) return a.featured ? -1 : 1;
-				return (b.enrichment.stars ?? -1) - (a.enrichment.stars ?? -1);
+				const tier = byListingTier(a, b);
+				if (tier !== 0) return tier;
+				return byDownloadsDesc(a, b);
+			});
+		case "name":
+			return copy.sort((a, b) => {
+				const tier = byListingTier(a, b);
+				if (tier !== 0) return tier;
+				return a.name.localeCompare(b.name);
+			});
+		default:
+			// Featured (default): Official → Featured → Community, then downloads.
+			return copy.sort((a, b) => {
+				const tier = byListingTier(a, b);
+				if (tier !== 0) return tier;
+				return byDownloadsDesc(a, b);
 			});
 	}
 }
@@ -79,16 +114,12 @@ function MarketplaceHero({
 		<div className={className}>
 			<div className="space-y-4">
 				<div className="space-y-1">
-					<div className="flex items-center gap-1.5">
-						<Store className="size-[0.9em] text-foreground/60" />
-						<span className="text-sm text-foreground/60">Marketplace</span>
-					</div>
 					<h1 className="text-2xl md:text-3xl xl:text-4xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
-						Extend Better Auth with community plugins
+						Plugin Marketplace
 					</h1>
-					<p className="text-sm text-foreground/70 dark:text-foreground/50 leading-relaxed max-w-[240px] pt-1">
-						Curated GitHub packages that add providers, flows, and utilities.
-						Open any listing to read its README.
+					<p className="max-w-[80%] pt-1 text-sm leading-relaxed text-foreground/70 dark:text-foreground/50">
+						Browse official plugins, featured partners, and community packages.
+						Each listing has a quick start. Open one to install and explore.
 					</p>
 				</div>
 
@@ -131,15 +162,22 @@ export function MarketplacePageClient({
 }) {
 	const [query, setQuery] = useState("");
 	const [category, setCategory] = useState<MarketplaceCategory | "All">("All");
+	const [source, setSource] = useState<MarketplaceSourceFilter>("All");
 	const [sort, setSort] = useState<MarketplaceSort>("featured");
 
 	const filtered = useMemo(() => {
 		const matched = plugins.filter((plugin) => {
 			if (category !== "All" && plugin.category !== category) return false;
+			if (source === "official" && !plugin.official) return false;
+			if (source === "featured" && !(plugin.featured && !plugin.official))
+				return false;
+			// Partner docs plugins (e.g. featured payments) are neither Official nor Community.
+			if (source === "community" && (plugin.official || plugin.docsHref))
+				return false;
 			return matchesQuery(plugin, query);
 		});
 		return sortPlugins(matched, sort);
-	}, [plugins, query, category, sort]);
+	}, [plugins, query, category, source, sort]);
 
 	return (
 		<div className="flex flex-col lg:flex-row min-h-dvh pt-14 lg:pt-0">
@@ -172,6 +210,8 @@ export function MarketplacePageClient({
 						onQueryChange={setQuery}
 						category={category}
 						onCategoryChange={setCategory}
+						source={source}
+						onSourceChange={setSource}
 						sort={sort}
 						onSortChange={setSort}
 						resultCount={filtered.length}

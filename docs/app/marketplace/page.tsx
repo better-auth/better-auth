@@ -6,7 +6,7 @@ import { MarketplacePageClient } from "./marketplace-client";
 export const metadata: Metadata = createMetadata({
 	title: "Plugin Marketplace",
 	description:
-		"Browse curated community plugins that extend Better Auth — providers, flows, utilities, and more. Open any listing to read its README.",
+		"Browse official Better Auth plugins and curated community packages. Install quickly, then dive into the full docs when you need depth.",
 });
 
 // Registry edits (featured, categories, etc.) should show immediately.

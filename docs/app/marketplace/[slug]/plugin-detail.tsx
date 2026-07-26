@@ -1,9 +1,16 @@
-import { AlertTriangle, Download, ExternalLink, Star } from "lucide-react";
+import {
+	AlertTriangle,
+	BookOpen,
+	Download,
+	ExternalLink,
+	Star,
+} from "lucide-react";
 import Link from "next/link";
 import { ViewTransition } from "react";
 import Footer from "@/components/landing/footer";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
 import { InstallCommand } from "@/components/marketplace/install-command";
+import { OfficialPluginGuide } from "@/components/marketplace/official-plugin-guide";
 import { MarketplaceReadme } from "@/components/marketplace/readme";
 import { formatCount } from "@/lib/marketplace/format";
 import type { MarketplacePluginDetail } from "@/lib/marketplace/types";
@@ -43,11 +50,11 @@ function PluginMetaPanel({ plugin }: { plugin: MarketplacePluginDetail }) {
 
 	return (
 		<div className="space-y-5">
-			<div className="space-y-4">
+			<div className="space-y-3">
 				<Link
 					href="/marketplace"
 					transitionTypes={["nav-back"]}
-					className="flex items-center gap-1.5 text-foreground/40 hover:text-foreground/70 transition-colors group w-fit"
+					className="-mx-3 -mt-3 flex w-fit items-center gap-1.5 px-3 pb-2 pt-3 text-foreground/40 transition-colors hover:text-foreground/70 group"
 				>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -67,10 +74,7 @@ function PluginMetaPanel({ plugin }: { plugin: MarketplacePluginDetail }) {
 					<span className="text-xs uppercase tracking-wider">All plugins</span>
 				</Link>
 
-				<div className="space-y-1 pt-1 max-w-md">
-					<span className="font-mono text-[10px] uppercase tracking-wider text-foreground/45">
-						{plugin.category}
-					</span>
+				<div className="max-w-md space-y-1">
 					<h1 className="text-2xl lg:text-3xl text-neutral-800 dark:text-neutral-200 tracking-tight leading-tight">
 						{plugin.name}
 					</h1>
@@ -131,7 +135,7 @@ function PluginMetaPanel({ plugin }: { plugin: MarketplacePluginDetail }) {
 				</div>
 			</div>
 
-			{plugin.npmPackage && (
+			{!plugin.docsHref && plugin.npmPackage && (
 				<InstallCommand
 					npmPackage={plugin.npmPackage}
 					className="w-full justify-between"
@@ -139,15 +143,36 @@ function PluginMetaPanel({ plugin }: { plugin: MarketplacePluginDetail }) {
 			)}
 
 			<div className="flex flex-col gap-2">
-				<a
-					href={githubUrl}
-					target="_blank"
-					rel="noopener noreferrer"
-					className="inline-flex items-center justify-center gap-2 border border-foreground/15 bg-foreground px-3 py-2 text-xs font-medium text-background transition-opacity hover:opacity-90"
-				>
-					<GitHubIcon className="size-3.5" />
-					View on GitHub
-				</a>
+				{plugin.docsHref ? (
+					<Link
+						href={plugin.docsHref}
+						className="inline-flex items-center justify-center gap-2 border border-foreground/15 bg-foreground px-3 py-2 text-xs font-medium text-background transition-opacity hover:opacity-90"
+					>
+						<BookOpen className="size-3.5" />
+						Read full docs
+					</Link>
+				) : (
+					<a
+						href={githubUrl}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="inline-flex items-center justify-center gap-2 border border-foreground/15 bg-foreground px-3 py-2 text-xs font-medium text-background transition-opacity hover:opacity-90"
+					>
+						<GitHubIcon className="size-3.5" />
+						View on GitHub
+					</a>
+				)}
+				{plugin.docsHref ? (
+					<a
+						href={githubUrl}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="inline-flex items-center justify-center gap-2 border border-foreground/10 px-3 py-2 text-xs text-foreground/70 transition-colors hover:border-foreground/20 hover:text-foreground"
+					>
+						<GitHubIcon className="size-3.5" />
+						View on GitHub
+					</a>
+				) : null}
 				{npmUrl && (
 					<a
 						href={npmUrl}
@@ -186,7 +211,7 @@ export function PluginDetail({ plugin }: { plugin: MarketplacePluginDetail }) {
 			{/* Left panel — plugin meta */}
 			<div className="relative w-full lg:w-[30%] lg:h-dvh lg:sticky lg:top-0 border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-y-auto overflow-x-hidden px-5 sm:px-6 lg:px-10">
 				<HalftoneBackground />
-				<div className="relative w-full py-16 lg:py-0 flex flex-col justify-center lg:min-h-dvh">
+				<div className="relative flex w-full flex-col justify-center py-16 lg:min-h-dvh lg:py-0">
 					<ViewTransition
 						name={transitionName}
 						share="marketplace-plugin-morph"
@@ -214,47 +239,53 @@ export function PluginDetail({ plugin }: { plugin: MarketplacePluginDetail }) {
 					default="none"
 				>
 					<div className="relative px-5 sm:px-6 lg:px-8 pb-24 pt-8 lg:py-20">
-						<div className="mb-6 border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 max-w-3xl">
-							<div className="flex gap-2.5">
-								<AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-								<div className="space-y-1">
-									<p className="text-sm font-medium text-foreground/85">
-										Community-maintained
-									</p>
-									<p className="text-xs leading-relaxed text-foreground/55">
-										This plugin is built and maintained by the community. It is
-										not officially supported by the Better Auth team. Review the
-										repository before using it in production.
-									</p>
-								</div>
-							</div>
-						</div>
-
-						{plugin.readme ? (
-							<MarketplaceReadme
-								content={plugin.readme}
-								repo={plugin.repo}
-								branch={plugin.enrichment.defaultBranch}
-								readmeFilePath={plugin.readmeFilePath}
-							/>
+						{plugin.docsHref ? (
+							<OfficialPluginGuide plugin={plugin} />
 						) : (
-							<div className="border border-dashed border-foreground/15 px-6 py-12 text-center max-w-3xl">
-								<p className="mb-2 text-sm text-foreground/70">
-									README could not be loaded
-								</p>
-								<p className="mb-4 text-xs text-foreground/45">
-									{plugin.description}
-								</p>
-								<a
-									href={githubUrl}
-									target="_blank"
-									rel="noopener noreferrer"
-									className="inline-flex items-center gap-1.5 text-xs text-foreground/70 underline decoration-foreground/25 underline-offset-2 hover:text-foreground"
-								>
-									View on GitHub
-									<ExternalLink className="size-3" />
-								</a>
-							</div>
+							<>
+								<div className="mb-6 border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 max-w-3xl">
+									<div className="flex gap-2.5">
+										<AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+										<div className="space-y-1">
+											<p className="text-sm font-medium text-foreground/85">
+												Community-maintained
+											</p>
+											<p className="text-xs leading-relaxed text-foreground/55">
+												This plugin is built and maintained by the community. It
+												is not officially supported by the Better Auth team.
+												Review the repository before using it in production.
+											</p>
+										</div>
+									</div>
+								</div>
+
+								{plugin.readme ? (
+									<MarketplaceReadme
+										content={plugin.readme}
+										repo={plugin.repo}
+										branch={plugin.enrichment.defaultBranch}
+										readmeFilePath={plugin.readmeFilePath}
+									/>
+								) : (
+									<div className="border border-dashed border-foreground/15 px-6 py-12 text-center max-w-3xl">
+										<p className="mb-2 text-sm text-foreground/70">
+											README could not be loaded
+										</p>
+										<p className="mb-4 text-xs text-foreground/45">
+											{plugin.description}
+										</p>
+										<a
+											href={githubUrl}
+											target="_blank"
+											rel="noopener noreferrer"
+											className="inline-flex items-center gap-1.5 text-xs text-foreground/70 underline decoration-foreground/25 underline-offset-2 hover:text-foreground"
+										>
+											View on GitHub
+											<ExternalLink className="size-3" />
+										</a>
+									</div>
+								)}
+							</>
 						)}
 					</div>
 				</ViewTransition>

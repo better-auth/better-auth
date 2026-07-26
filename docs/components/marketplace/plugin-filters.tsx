@@ -1,10 +1,11 @@
 "use client";
 
-import { ChevronDown, Search } from "lucide-react";
+import { Check, ChevronDown, Search, Star } from "lucide-react";
 import { marketplaceCategories } from "@/lib/marketplace/registry";
 import type {
 	MarketplaceCategory,
 	MarketplaceSort,
+	MarketplaceSourceFilter,
 } from "@/lib/marketplace/types";
 import { cn } from "@/lib/utils";
 
@@ -13,11 +14,20 @@ interface PluginFiltersProps {
 	onQueryChange: (value: string) => void;
 	category: MarketplaceCategory | "All";
 	onCategoryChange: (value: MarketplaceCategory | "All") => void;
+	source: MarketplaceSourceFilter;
+	onSourceChange: (value: MarketplaceSourceFilter) => void;
 	sort: MarketplaceSort;
 	onSortChange: (value: MarketplaceSort) => void;
 	resultCount: number;
 	totalCount: number;
 }
+
+const sourceFilters: MarketplaceSourceFilter[] = [
+	"All",
+	"official",
+	"featured",
+	"community",
+];
 
 const sortOptions: { value: MarketplaceSort; label: string }[] = [
 	{ value: "featured", label: "Featured" },
@@ -27,11 +37,26 @@ const sortOptions: { value: MarketplaceSort; label: string }[] = [
 	{ value: "name", label: "Name" },
 ];
 
+function sourceLabel(item: MarketplaceSourceFilter): string {
+	switch (item) {
+		case "official":
+			return "Official";
+		case "featured":
+			return "Featured";
+		case "community":
+			return "Community";
+		default:
+			return "All";
+	}
+}
+
 export function PluginFilters({
 	query,
 	onQueryChange,
 	category,
 	onCategoryChange,
+	source,
+	onSourceChange,
 	sort,
 	onSortChange,
 	resultCount,
@@ -66,6 +91,60 @@ export function PluginFilters({
 					</select>
 					<ChevronDown className="pointer-events-none absolute top-1/2 right-3 size-3.5 -translate-y-1/2 text-foreground/45" />
 				</div>
+			</div>
+
+			<div className="flex flex-wrap items-center gap-2">
+				{sourceFilters.map((item) => {
+					const active = source === item;
+					return (
+						<button
+							key={item}
+							type="button"
+							onClick={() => onSourceChange(item)}
+							aria-pressed={active}
+							className={cn(
+								"inline-flex items-center gap-1 border px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors",
+								item === "All" &&
+									(active
+										? "border-foreground/30 bg-foreground/[0.06] text-foreground"
+										: "border-foreground/10 text-foreground/55 hover:border-foreground/20 hover:text-foreground/80"),
+								item === "official" &&
+									(active
+										? "border-foreground/40 bg-foreground/[0.06] text-foreground/85"
+										: "border-foreground/20 text-foreground/70 hover:border-foreground/35 hover:text-foreground/90"),
+								item === "featured" &&
+									(active
+										? "border-foreground/40 bg-foreground/[0.06] text-foreground/85"
+										: "border-foreground/20 text-foreground/60 hover:border-foreground/35 hover:text-foreground/80"),
+								item === "community" &&
+									(active
+										? "border-foreground/20 bg-foreground/[0.04] text-foreground/70"
+										: "border-foreground/10 text-foreground/45 hover:border-foreground/20 hover:text-foreground/65"),
+							)}
+						>
+							{item === "official" ? (
+								<Check
+									className={cn(
+										"size-3 shrink-0",
+										active ? "text-foreground/60" : "text-foreground/40",
+									)}
+									aria-hidden
+									strokeWidth={2.5}
+								/>
+							) : null}
+							{item === "featured" ? (
+								<Star
+									className={cn(
+										"size-3 shrink-0",
+										active ? "text-foreground/60" : "text-foreground/40",
+									)}
+									aria-hidden
+								/>
+							) : null}
+							{sourceLabel(item)}
+						</button>
+					);
+				})}
 			</div>
 
 			<div className="flex flex-wrap items-center gap-2">

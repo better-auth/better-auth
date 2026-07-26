@@ -1,3 +1,4 @@
+import { getOfficialMarketplacePlugins } from "./official";
 import type { MarketplacePlugin } from "./types";
 import { marketplaceCategories } from "./types";
 
@@ -8,7 +9,7 @@ export { marketplaceCategories };
  * Curated community plugin registry for the marketplace.
  * Submit a PR to add your plugin: https://github.com/better-auth/better-auth/edit/main/docs/lib/marketplace/registry.ts
  */
-export const marketplacePlugins: MarketplacePlugin[] = [
+export const communityMarketplacePlugins: MarketplacePlugin[] = [
 	{
 		slug: "dymo-api-better-auth",
 		name: "@dymo-api/better-auth",
@@ -177,7 +178,7 @@ export const marketplacePlugins: MarketplacePlugin[] = [
 		name: "@alexasomba/better-auth-paystack",
 		repo: "alexasomba/better-auth-paystack",
 		description:
-			"Paystack plugin for Better Auth — integrates Paystack transactions, webhooks, and subscription flows.",
+			"Paystack plugin for Better Auth. Integrates Paystack transactions, webhooks, and subscription flows.",
 		category: "Payments",
 		tags: ["paystack", "subscriptions"],
 		npmPackage: "@alexasomba/better-auth-paystack",
@@ -265,7 +266,7 @@ export const marketplacePlugins: MarketplacePlugin[] = [
 		name: "better-auth-razorpay",
 		repo: "iamjasonkendrick/better-auth-razorpay",
 		description:
-			"Razorpay payment plugin for Better Auth — integrates Razorpay payments, webhooks, and subscription flows.",
+			"Razorpay payment plugin for Better Auth. Integrates Razorpay payments, webhooks, and subscription flows.",
 		category: "Payments",
 		tags: ["razorpay", "payments"],
 		npmPackage: "better-auth-razorpay",
@@ -280,7 +281,7 @@ export const marketplacePlugins: MarketplacePlugin[] = [
 		name: "better-auth-payu",
 		repo: "iamjasonkendrick/better-auth-payu",
 		description:
-			"PayU payment plugin for Better Auth — integrates PayU payments, webhooks, and subscription flows.",
+			"PayU payment plugin for Better Auth. Integrates PayU payments, webhooks, and subscription flows.",
 		category: "Payments",
 		tags: ["payu", "payments"],
 		npmPackage: "better-auth-payu",
@@ -384,7 +385,7 @@ export const marketplacePlugins: MarketplacePlugin[] = [
 		name: "@dbsc-toolkit/better-auth",
 		repo: "SulimanAbdulrazzaq/dbsc-toolkit",
 		description:
-			"Device Bound Session Credentials (DBSC) — binds sessions to a device-resident key so a stolen cookie can't be replayed from another machine. Native binding via TPM or Secure Enclave on Chromium 145+, with a Web Crypto polyfill for Firefox, Safari, and older Chromium.",
+			"Device Bound Session Credentials (DBSC). Binds sessions to a device-resident key so a stolen cookie can't be replayed from another machine. Native binding via TPM or Secure Enclave on Chromium 145+, with a Web Crypto polyfill for Firefox, Safari, and older Chromium.",
 		category: "Security",
 		tags: ["dbsc", "sessions", "device-binding"],
 		npmPackage: "@dbsc-toolkit/better-auth",
@@ -455,7 +456,7 @@ export const marketplacePlugins: MarketplacePlugin[] = [
 		name: "better-inbox",
 		repo: "better-inbox/better-inbox",
 		description:
-			"In-app notifications for Better Auth apps. One plugin, one migration, one component — notifications live in your database, addressed to your users.",
+			"In-app notifications for Better Auth apps. One plugin, one migration, one component. Notifications live in your database, addressed to your users.",
 		category: "Utility",
 		tags: ["notifications", "inbox"],
 		npmPackage: "better-inbox",
@@ -470,12 +471,20 @@ export const marketplacePlugins: MarketplacePlugin[] = [
 export const MARKETPLACE_SUBMIT_URL =
 	"https://github.com/better-auth/better-auth/edit/main/docs/lib/marketplace/registry.ts";
 
+/** Official docs plugins + curated community listings. */
+export function getMarketplacePlugins(): MarketplacePlugin[] {
+	return [...getOfficialMarketplacePlugins(), ...communityMarketplacePlugins];
+}
+
+/** @deprecated Prefer `communityMarketplacePlugins` or `getMarketplacePlugins()` */
+export const marketplacePlugins = communityMarketplacePlugins;
+
 export function getMarketplacePlugin(
 	slug: string,
 ): MarketplacePlugin | undefined {
-	return marketplacePlugins.find((plugin) => plugin.slug === slug);
+	return getMarketplacePlugins().find((plugin) => plugin.slug === slug);
 }
 
 export function getMarketplacePluginSlugs(): string[] {
-	return marketplacePlugins.map((plugin) => plugin.slug);
+	return getMarketplacePlugins().map((plugin) => plugin.slug);
 }

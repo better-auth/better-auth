@@ -1,6 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { extractSameRepoMarkdownRedirect } from "./readme";
-import { getMarketplacePlugin, marketplacePlugins } from "./registry";
+import { getMarketplacePlugin, getMarketplacePlugins } from "./registry";
 import type {
 	EnrichedMarketplacePlugin,
 	MarketplacePlugin,
@@ -342,14 +342,15 @@ async function mapPool<T, R>(
 export async function getEnrichedMarketplacePlugins(): Promise<
 	EnrichedMarketplacePlugin[]
 > {
-	const results = await mapPool(marketplacePlugins, 4, async (plugin) => {
+	const plugins = getMarketplacePlugins();
+	const results = await mapPool(plugins, 4, async (plugin) => {
 		const enrichment = await getCachedEnrichment(plugin);
 		// Always merge with live registry so edits (e.g. featured) apply immediately
 		return withEnrichment(plugin, enrichment);
 	});
 
 	return results.map((result, index) => {
-		const plugin = marketplacePlugins[index];
+		const plugin = plugins[index];
 		if (result.status === "fulfilled") return result.value;
 		console.error(`Failed to enrich ${plugin.slug}:`, result.reason);
 		return withEnrichment(plugin, emptyEnrichment());
@@ -363,6 +364,17 @@ export async function getMarketplacePluginDetail(
 	if (!plugin) return null;
 
 	const enrichment = await getCachedEnrichment(plugin);
+
+	// Docs plugins use a short DX guide instead of a GitHub README.
+	if (plugin.docsHref) {
+		return {
+			...plugin,
+			enrichment,
+			readme: null,
+			readmeFilePath: null,
+		};
+	}
+
 	const readme = await getCachedReadme(
 		plugin.repo,
 		enrichment.defaultBranch,

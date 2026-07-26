@@ -24,14 +24,19 @@ export async function generateMetadata({
 	if (!plugin) {
 		return createMetadata({
 			title: "Plugin not found",
-			description: "This community plugin could not be found.",
+			description: "This plugin could not be found.",
 		});
 	}
+	const suffix = plugin.official
+		? "Official Plugin"
+		: plugin.docsHref
+			? "Featured Plugin"
+			: "Plugin Marketplace";
 	return createMetadata({
-		title: `${plugin.name} · Plugin Marketplace`,
+		title: `${plugin.name} · ${suffix}`,
 		description: plugin.description,
 		openGraph: {
-			title: `${plugin.name} · Better Auth Plugin Marketplace`,
+			title: `${plugin.name} · Better Auth ${suffix}`,
 			description: plugin.description,
 		},
 	});

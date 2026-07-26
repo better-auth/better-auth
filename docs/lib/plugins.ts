@@ -1,4 +1,4 @@
-import { marketplacePlugins } from "@/lib/marketplace/registry";
+import { communityMarketplacePlugins } from "@/lib/marketplace/registry";
 import { source } from "@/lib/source";
 
 export interface Plugin {
@@ -234,7 +234,7 @@ export function getOfficialPlugins(): Plugin[] {
 }
 
 export function getCommunityPlugins(): Plugin[] {
-	return marketplacePlugins.map((p) => ({
+	return communityMarketplacePlugins.map((p) => ({
 		name: p.name,
 		slug: p.slug,
 		description: p.description,

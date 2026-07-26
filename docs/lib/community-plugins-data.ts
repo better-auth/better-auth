@@ -1,4 +1,4 @@
-import { marketplacePlugins } from "./marketplace/registry";
+import { communityMarketplacePlugins } from "./marketplace/registry";
 
 /** @deprecated Prefer MarketplacePlugin from `@/lib/marketplace/types` */
 export interface CommunityPlugin {
@@ -12,9 +12,9 @@ export interface CommunityPlugin {
 	};
 }
 
-/** Compatibility export for older consumers — maps from the marketplace registry. */
-export const communityPlugins: CommunityPlugin[] = marketplacePlugins.map(
-	(plugin) => ({
+/** Compatibility export for older consumers — maps from the community registry. */
+export const communityPlugins: CommunityPlugin[] =
+	communityMarketplacePlugins.map((plugin) => ({
 		name: plugin.name,
 		// Preserve the historical npm listing URL for this package.
 		url:
@@ -23,5 +23,4 @@ export const communityPlugins: CommunityPlugin[] = marketplacePlugins.map(
 				: `https://github.com/${plugin.repo}`,
 		description: plugin.description,
 		author: plugin.author,
-	}),
-);
+	}));

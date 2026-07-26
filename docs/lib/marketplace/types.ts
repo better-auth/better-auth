@@ -9,14 +9,33 @@ export const marketplaceCategories = [
 
 export type MarketplaceCategory = (typeof marketplaceCategories)[number];
 
+export type MarketplacePluginSource = "official" | "community";
+
 export interface MarketplacePluginAuthor {
 	name: string;
 	github: string;
 	avatar: string;
 }
 
+export interface MarketplacePluginSetup {
+	/** Named export used in the quick-start snippet */
+	exportName: string;
+	/** Module specifier, e.g. `better-auth/plugins` or `@better-auth/stripe` */
+	from: string;
+	/** Optional client export for the DX page */
+	clientExportName?: string;
+	clientFrom?: string;
+}
+
+export interface MarketplacePluginExample {
+	/** Short label above the snippet */
+	title: string;
+	code: string;
+	lang?: "ts" | "tsx";
+}
+
 export interface MarketplacePlugin {
-	/** URL key, e.g. "better-auth-harmony" */
+	/** URL key, e.g. "better-auth-harmony" or "2fa" */
 	slug: string;
 	/** Display / package name */
 	name: string;
@@ -29,6 +48,14 @@ export interface MarketplacePlugin {
 	npmPackage?: string;
 	author: MarketplacePluginAuthor;
 	featured?: boolean;
+	/** Official Better Auth plugin vs community listing */
+	official?: boolean;
+	/** Full docs path for official plugins */
+	docsHref?: string;
+	/** Minimal setup used on the official marketplace detail page */
+	setup?: MarketplacePluginSetup;
+	/** Short showcase snippets for the marketplace detail page */
+	examples?: MarketplacePluginExample[];
 }
 
 export interface MarketplacePluginEnrichment {
@@ -57,4 +84,9 @@ export type MarketplaceSort =
 	| "updated"
 	| "name"
 	| "downloads"
+	| "featured";
+
+export type MarketplaceSourceFilter =
+	| "All"
+	| MarketplacePluginSource
 	| "featured";
