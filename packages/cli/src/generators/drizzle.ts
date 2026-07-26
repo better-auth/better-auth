@@ -315,14 +315,15 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			/**
 			 * Disambiguates multiple relations between the same two tables.
 			 */
-			relationName?: string;
+			alias?: string;
 			/**
 			 * Foreign key field name and reference details (only for "one" relations).
 			 */
 			reference?: {
-				field: string;
-				references: string;
+				from: string;
+				to: string;
 			};
+			optional?: boolean;
 		};
 
 		const oneRelations: Relation[] = [];
@@ -369,12 +370,13 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				key: relationKey,
 				model: getModelName(referencedModel),
 				type: "one",
-				relationName: hasMultipleRelations
+				alias: hasMultipleRelations
 					? `${getModelName(tableKey)}_${fieldName}`
 					: undefined,
+				optional: field.required !== false ? false : undefined,
 				reference: {
-					field: fieldRef,
-					references: referenceRef,
+					from: fieldRef,
+					to: referenceRef,
 				},
 			});
 		}
@@ -416,9 +418,19 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					key: relationKey,
 					model: getModelName(modelName),
 					type: relationType,
-					relationName: hasMultipleRelations
+					alias: hasMultipleRelations
 						? `${getModelName(modelName)}_${fieldName}`
 						: undefined,
+					reference: {
+						from: `${getModelName(tableKey)}.${getFieldName({
+							model: tableKey,
+							field: field.references!.field || "id",
+						})}`,
+						to: `${getModelName(modelName)}.${getFieldName({
+							model: modelName,
+							field: fieldName,
+						})}`,
+					},
 				});
 			}
 		}
@@ -433,23 +445,20 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		const hasOne = hasForwardOne || hasReverseOne;
 		const hasMany = hasReverseMany;
 
-		const renderOneRelation = (relation: Relation) =>
-			relation.reference
-				? ` ${relation.key}: one(${relation.model}, {
-					fields: [${relation.reference.field}],
-					references: [${relation.reference.references}],
-					${relation.relationName ? `relationName: "${relation.relationName}",` : ""}
-				})`
-				: "";
+		const renderOneRelation = (relation: Relation) => {
+			if (!relation.reference) return "";
 
-		const renderReverseRelation = ({
-			key,
-			model,
-			type,
-			relationName,
-		}: Relation) => {
+			return `${relation.key}: r.one.${relation.model}({
+			from: r.${relation.reference.from},
+			to: r.${relation.reference.to},
+			${relation.optional === false ? "optional: false," : ""}
+			${relation.alias ? `alias: ${JSON.stringify(relation.alias)},` : ""}
+		})`;
+		};
+
+		const renderReverseRelation = ({ key, model, type, alias }: Relation) => {
 			const relationFn = type === "one" ? "one" : "many";
-			return ` ${key}: ${relationFn}(${model}${relationName ? `, { relationName: "${relationName}" }` : ""})`;
+			return ` ${key}: ${relationFn}(${model}${alias ? `, { alias: "${alias}" }` : ""})`;
 		};
 
 		if (hasOne || hasMany) {
@@ -491,7 +500,7 @@ function generateImport({
 	tables: BetterAuthDBSchema;
 	options: BetterAuthOptions;
 }) {
-	const rootImports: string[] = ["relations"];
+	const rootImports: string[] = ["defineRelations"];
 	const coreImports: string[] = [];
 
 	let hasBigint = false;
