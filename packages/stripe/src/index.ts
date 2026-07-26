@@ -331,33 +331,24 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 											}
 										}
 
-										// Reuse a customer matched by email only when the email is
-										// verified and it is not already associated with a
-										// different user. Otherwise create a new one.
+										// A verified email can reclaim a matching customer whose
+										// stored owner is not in the database.
 										if (stripeCustomer) {
-											const ownerId = customerMetadata.get(
-												stripeCustomer.metadata,
-											).userId;
 											if (!user.emailVerified) {
 												stripeCustomer = undefined;
-											} else if (ownerId && ownerId !== user.id) {
-												const originalOwner =
-													await ctx.context.internalAdapter.findUserById(
-														ownerId,
-													);
-												if (originalOwner) {
-													stripeCustomer = undefined;
-												} else {
-													stripeCustomer = await client.customers.update(
-														stripeCustomer.id,
-														{
-															metadata: customerMetadata.set({
+											} else {
+												stripeCustomer = await client.customers.update(
+													stripeCustomer.id,
+													{
+														metadata: customerMetadata.set(
+															{
 																userId: user.id,
 																customerType: "user",
-															}),
-														},
-													);
-												}
+															},
+															stripeCustomer.metadata,
+														),
+													},
+												);
 											}
 										}
 
@@ -482,13 +473,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										const stripeCustomer = await client.customers.retrieve(
 											user.stripeCustomerId,
 										);
-										if (
-											stripeCustomer.deleted ||
-											customerMetadata.get(stripeCustomer.metadata).userId !==
-												user.id
-										) {
-											return;
-										}
+										if (stripeCustomer.deleted) return;
 
 										await client.customers.update(user.stripeCustomerId, {
 											metadata: {
