@@ -98,51 +98,115 @@ The device flow follows these steps:
 3. **Device polls for token**: The device polls the server until the user completes authorization
 4. **Access granted**: Once authorized, the device receives an access token
 
-## Issuing OAuth access tokens (OAuth Provider integration)
+## Choose the token your device needs
 
-By default, `/device/token` issues a **Better Auth session token** — ideal when the device is your own first-party app signing a user into your service.
+Device authorization can finish with two different token types. Choose the token based on what the client needs to call:
 
-If you run Better Auth as an [OAuth Provider](/docs/plugins/oauth-provider) and want **third-party / registered OAuth clients** (external CLIs, smart-TV apps) to use the device flow and receive a real **OAuth access token** (scoped, audience-bound, introspectable, optionally a JWT and ID token) instead of a session token, add the `deviceCodeGrant()` companion plugin from `@better-auth/oauth-provider`:
+| Use case                                                                         | Token                     | Plugins                                                             | Token endpoint  |
+| -------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------- | --------------- |
+| Sign your own device into the same Better Auth application                       | Better Auth session token | `deviceAuthorization()`                                             | `/device/token` |
+| Let a registered CLI, TV app, or other public client call an OAuth-protected API | Scoped OAuth access token | `deviceAuthorization()`, `oauthProvider()`, and `deviceCodeGrant()` | `/oauth2/token` |
+
+A command-line application commonly needs the second path. The CLI cannot safely keep a client secret, and it may not have a reliable redirect listener, but it still needs a user-authorized token for your API. The device grant lets the user approve the request in a browser while the CLI receives an audience-bound OAuth access token.
+
+### Authorize a CLI to call an API
+
+Add the [JWT](/docs/plugins/jwt), Device Authorization, and [OAuth Provider](/docs/plugins/oauth-provider) plugins. `deviceCodeGrant()` connects the device verification flow to the provider's token endpoint:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { deviceAuthorization } from "better-auth/plugins";
-import { oauthProvider, deviceCodeGrant } from "@better-auth/oauth-provider"; // [!code highlight]
+import { deviceAuthorization, jwt } from "better-auth/plugins";
+import {
+  deviceCodeGrant,
+  oauthProvider,
+} from "@better-auth/oauth-provider"; // [!code highlight]
 
 export const auth = betterAuth({
   plugins: [
-    deviceAuthorization(),
-    oauthProvider({ /* ... */ }),
+    jwt(),
+    deviceAuthorization({
+      verificationUri: "/device",
+    }),
+    oauthProvider({
+      loginPage: "/sign-in",
+      consentPage: "/consent",
+      scopes: ["openid", "profile", "offline_access", "api:read"],
+      resources: ["https://api.example.com"],
+    }),
     deviceCodeGrant(), // [!code highlight]
   ],
 });
 ```
 
-This registers the `urn:ietf:params:oauth:grant-type:device_code` grant on the provider's `/oauth2/token` endpoint and advertises `device_authorization_endpoint` (pointing at `/device/code`) in the provider's discovery metadata.
+Register the CLI as a public native client and link it to the API resource. Public clients use `token_endpoint_auth_method: "none"` because an installed CLI cannot keep a shared secret confidential:
 
-The flow for a registered OAuth client:
+```ts title="register-cli.ts"
+import { DEVICE_CODE_GRANT_TYPE } from "@better-auth/oauth-provider";
 
-1. The client requests codes at `/device/code` (the advertised `device_authorization_endpoint`). The provider validates registered clients, scopes, and resource indicators before creating the authorization request.
-2. The user signs in and approves at the verification URL. The `GET /device` response includes `client_id`, `scope`, and `resource` only for the user who owns the request, so the approval page can show exactly what is requesting access without exposing that context to unauthenticated or unrelated users.
-3. The client polls **`/oauth2/token`** (not `/device/token`) with `grant_type=urn:ietf:params:oauth:grant-type:device_code`, `device_code`, and `client_id`. A `resource` parameter may be omitted to use the approved resource set, or may request a subset; it cannot add a resource after approval.
-
-```ts title="register the client with the device-code grant"
 await auth.api.adminCreateOAuthClient({
   headers,
   body: {
-    token_endpoint_auth_method: "none", // public client (CLI, TV, IoT)
+    token_endpoint_auth_method: "none",
     type: "native",
-    grant_types: ["urn:ietf:params:oauth:grant-type:device_code"],
-    scope: "openid profile email",
+    grant_types: [DEVICE_CODE_GRANT_TYPE, "refresh_token"],
+    scope: "openid profile offline_access api:read",
+    resources: ["https://api.example.com"],
   },
 });
 ```
 
-<Callout type="info">
-  Both flows can coexist. First-party device login keeps using `/device/token` (session token). To prevent a registered OAuth client's device code from being redeemed at `/device/token` for a session token, `deviceCodeGrant()` rejects `/device/token` requests whose `client_id` is a registered OAuth client and directs them to `/oauth2/token`. `deviceCodeGrant()` requires both the `deviceAuthorization()` and `oauthProvider()` plugins.
+The CLI then requests a device code for the API it intends to call:
+
+```ts title="cli.ts"
+const authBaseURL = "https://auth.example.com/api/auth";
+const clientId = "YOUR_CLIENT_ID";
+const resource = "https://api.example.com";
+
+const { data } = await authClient.device.code({
+  client_id: clientId,
+  scope: "openid profile offline_access api:read",
+  resource,
+});
+
+if (!data) throw new Error("Could not start device authorization");
+
+console.log(`Open ${data.verification_uri}`);
+console.log(`Enter code ${data.user_code}`);
+```
+
+While the user signs in and approves the request, repeat the following request at the interval returned by the device-code response:
+
+```ts title="cli.ts"
+const response = await fetch(`${authBaseURL}/oauth2/token`, {
+  method: "POST",
+  headers: {
+    "content-type": "application/x-www-form-urlencoded",
+  },
+  body: new URLSearchParams({
+    grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+    device_code: data.device_code,
+    client_id: clientId,
+  }),
+});
+
+const tokens = await response.json();
+```
+
+The access token is a signed JWT whose `aud` identifies `https://api.example.com`. Send it to that API as `Authorization: Bearer <access_token>`, then verify its signature, issuer, audience, expiry, and required scopes at the API. See [API Server verification](/docs/plugins/oauth-provider#api-server). If the CLI requests `offline_access`, store the returned refresh token in the operating system's secure credential store and use it to renew short-lived access tokens.
+
+<Callout type="warn">
+  Do not call `authClient.device.token` for this OAuth flow. That client method polls `/device/token` and returns a Better Auth session token. Registered OAuth clients must poll `/oauth2/token`.
 </Callout>
 
-## Basic Usage
+`deviceCodeGrant()` registers the `urn:ietf:params:oauth:grant-type:device_code` grant and advertises `/device/code` as `device_authorization_endpoint` in provider discovery. The provider validates the registered client, scopes, and [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707) resource before creating the request. The approval page can show the client, scopes, and resource to the signed-in user.
+
+<Callout type="info">
+  Both token paths can coexist. First-party device login keeps using `/device/token`. Registered OAuth clients use `/oauth2/token`; `deviceCodeGrant()` prevents their device codes from being redeemed for a Better Auth session token.
+</Callout>
+
+## First-party session flow
+
+The rest of this page describes the first-party path, where `/device/token` returns a Better Auth session token.
 
 ### Requesting Device Authorization
 

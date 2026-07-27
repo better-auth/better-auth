@@ -1,3 +1,7 @@
+import {
+	DEVICE_CODE_GRANT_TYPE,
+	deviceCodeGrant,
+} from "@better-auth/oauth-provider";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
@@ -7,6 +11,7 @@ import {
 	DPOP_SIGNING_ALGORITHMS,
 	refreshAccessTokenRequest,
 } from "better-auth/oauth2";
+import { deviceAuthorization } from "better-auth/plugins/device-authorization";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
@@ -123,6 +128,38 @@ describe("mcp plugin", async () => {
 			expect(metadata.id_token_signing_alg_values_supported).not.toContain(
 				"none",
 			);
+		});
+
+		it("composes with device authorization and advertises the device-code grant", async () => {
+			const deviceBaseURL = "http://localhost:3011";
+			const { auth: deviceAuth } = await getTestInstance({
+				baseURL: deviceBaseURL,
+				plugins: [
+					jwt(),
+					deviceAuthorization(),
+					mcp({
+						loginPage: "/login",
+						consentPage: "/consent",
+						resource: `${deviceBaseURL}/api/auth`,
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+					deviceCodeGrant(),
+				],
+			});
+
+			const metadata =
+				(await deviceAuth.api.getOAuthServerConfig()) as unknown as {
+					device_authorization_endpoint?: string;
+					grant_types_supported?: string[];
+				};
+
+			expect(metadata.device_authorization_endpoint).toBe(
+				`${deviceBaseURL}/api/auth/device/code`,
+			);
+			expect(metadata.grant_types_supported).toContain(DEVICE_CODE_GRANT_TYPE);
 		});
 	});
 
