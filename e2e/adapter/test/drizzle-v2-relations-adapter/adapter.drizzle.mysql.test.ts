@@ -25,11 +25,9 @@ const { execute } = await testAdapter({
 	adapter: async (options) => {
 		const { schema } = await generateDrizzleSchema(mysqlDB, options, "mysql");
 		const { authRelations: relations, ...schema1 } = schema;
-		const drizzleI2 = drizzle({
+		const drizzleI2 = drizzle<typeof relations>({
 			client: mysqlDB,
-			mode: "default",
-			schema: schema1,
-			relations: relations,
+			relations,
 		});
 		return drizzleAdapter(drizzleI2, {
 			debugLogs: { isRunningAdapterTests: true },

@@ -863,8 +863,8 @@ export const createAdapterFactory =
 			}: {
 				model: string;
 				data: T;
-				select?: string[];
-				forceAllowId?: boolean;
+				select?: string[] | undefined;
+				forceAllowId?: boolean | undefined;
 			}): Promise<R> => {
 				transactionId++;
 				const thisTransactionId = transactionId;
@@ -1098,8 +1098,8 @@ export const createAdapterFactory =
 			}: {
 				model: string;
 				where: Where[];
-				select?: string[];
-				join?: JoinOption;
+				select?: string[] | undefined;
+				join?: JoinOption | undefined;
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
@@ -1181,12 +1181,12 @@ export const createAdapterFactory =
 				join: unsafeJoin,
 			}: {
 				model: string;
-				where?: Where[];
-				limit?: number;
+				where?: Where[] | undefined;
+				limit?: number | undefined;
 				select?: string[] | undefined;
-				sortBy?: { field: string; direction: "asc" | "desc" };
-				offset?: number;
-				join?: JoinOption;
+				sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
+				offset?: number | undefined;
+				join?: JoinOption | undefined;
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
@@ -1509,7 +1509,7 @@ export const createAdapterFactory =
 				where: unsafeWhere,
 			}: {
 				model: string;
-				where?: Where[];
+				where?: Where[] | undefined;
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;

@@ -71,6 +71,12 @@ interface StoredCookie {
 	expires: string | null;
 }
 
+function defineExpoClientPlugin<Plugin extends BetterAuthClientPlugin>(
+	plugin: Plugin,
+): Plugin {
+	return plugin;
+}
+
 export function getSetCookie(header: string, prevCookie?: string | undefined) {
 	const parsed = parseSetCookieHeader(header);
 	const toSetCookie =
@@ -367,10 +373,10 @@ export const expoClient = (opts: ExpoClientOptions) => {
 			"Scheme not found in app.json. Please provide a scheme in the options.",
 		);
 	}
-	return {
+	return defineExpoClientPlugin({
 		id: "expo",
 		version: PACKAGE_VERSION,
-		getActions(_, $store) {
+		getActions(_fetch: unknown, $store) {
 			store = $store;
 			// Restore the last persisted session as the initial value of the session atom
 			const sessionAtom = $store.atoms.session;
@@ -580,7 +586,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 				},
 			},
 		],
-	} satisfies BetterAuthClientPlugin;
+	});
 };
 
 export { parseSetCookieHeader } from "better-auth/cookies";

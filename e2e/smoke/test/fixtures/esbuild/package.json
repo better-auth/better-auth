@@ -1,6 +1,9 @@
 {
   "name": "@better-auth-test/fixtures-esbuild",
   "private": true,
+  "scripts": {
+    "typecheck:consumer": "tsc --noEmit --project tsconfig.json"
+  },
   "dependencies": {
     "@better-auth/kysely-adapter": "workspace:*",
     "better-auth": "workspace:*"
