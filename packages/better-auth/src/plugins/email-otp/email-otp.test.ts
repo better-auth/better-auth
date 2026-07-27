@@ -249,6 +249,36 @@ describe("email-otp", async () => {
 		expect(data?.user).toBeDefined();
 	});
 
+	it.for([
+		{
+			invalidPassword: "short",
+			validationError: "PASSWORD_TOO_SHORT",
+		},
+		{
+			invalidPassword: "a".repeat(129),
+			validationError: "PASSWORD_TOO_LONG",
+		},
+	])("should preserve OTP after $validationError", async (testCase) => {
+		await client.emailOtp.requestPasswordReset({
+			email: testUser.email,
+		});
+		const passwordResetOtp = otp;
+
+		const invalidReset = await client.emailOtp.resetPassword({
+			email: testUser.email,
+			otp: passwordResetOtp,
+			password: testCase.invalidPassword,
+		});
+		expect(invalidReset.error?.code).toBe(testCase.validationError);
+
+		const validReset = await client.emailOtp.resetPassword({
+			email: testUser.email,
+			otp: passwordResetOtp,
+			password: "valid-password",
+		});
+		expect(validReset.data?.success).toBe(true);
+	});
+
 	it("should reset password using deprecated forgetPassword endpoint (backward compatibility)", async () => {
 		await client.forgetPassword.emailOtp({
 			email: testUser.email,
