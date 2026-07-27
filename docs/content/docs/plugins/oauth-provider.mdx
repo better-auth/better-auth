@@ -35,6 +35,7 @@ The plugin has a secured configuration by default providing ease to users unfami
 * **authorization\_code**: Code for user token exchange with PKCE and S256 requirements.
 * **refresh\_token**: Issue refresh tokens and handle access token renewal using `offline_access` scope.
 * **client\_credentials**: Machine to Machine tokens for API communication.
+* **device\_code**: Optional [Device Authorization](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api) companion grant for CLIs and limited-input clients.
 
 ## Installation
 
@@ -1797,162 +1798,11 @@ JWT access tokens always use the real user ID as `sub`, since resource servers m
 
 ### MCP
 
-You can easily make your APIs [MCP-compatible](https://modelcontextprotocol.io/specification/draft/basic/authorization) simply by adding a resource server which directs users to this OAuth 2.1 authorization server.
+Use the [`@better-auth/mcp` plugin](/docs/plugins/mcp) when an MCP server is one of your protected resources. It builds on this OAuth Provider and adds MCP defaults, RFC 9728 protected resource metadata, and route helpers that return the authorization challenge MCP clients expect.
 
-<Callout type="info">
-  If you are using "openid" and confidential MCP clients, you cannot disable the JWT plugin since `id_token` verification may not necessarily be supported via a `client_secret`.
-</Callout>
+`mcp()` is the OAuth Provider for that Better Auth instance, so do not register both `mcp()` and `oauthProvider()`. It accepts the OAuth Provider options directly. Use `requireMcpAuth` when the MCP route shares the auth instance, or `mcpHandler` when the resource server runs separately.
 
-#### Installation
-
-<Steps>
-  <Step>
-    ### Ensure Well Known Paths are correct
-
-    See [well-known endpoints](#well-known).
-  </Step>
-
-  <Step>
-    ### Add Resource Server Client
-
-    (Optional) If you have your auth configuration available locally, add the configuration as a parameter to the client to fill in these values and warn you about configuration errors. You can always override these values in the function call. If this is not supplied, typescript will guide you with the minimal configuration values needed.
-
-    ```ts title="server-client.ts"
-    import { auth } from "@/lib/auth";
-    import { createAuthClient } from "better-auth/client";
-    import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client"
-
-    export const serverClient = createAuthClient({
-      plugins: [oauthProviderResourceClient(auth)], // auth optional
-    });
-    ```
-  </Step>
-
-  <Step>
-    ### Add OAuth Protected Resource Metadata to your API
-
-    ```ts title="/.well-known/oauth-protected-resource/[resource-path]/route.ts"
-    import { serverClient } from "@/lib/server-client";
-
-    export const GET = async () => {
-      const metadata = await serverClient.getProtectedResourceMetadata({
-        resource: "https://api.example.com", // protected resource identifier
-        authorization_servers: ["https://auth.example.com"],
-      })
-
-      return new Response(JSON.stringify(metadata), {
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control":
-            "public, max-age=15, stale-while-revalidate=15, stale-if-error=86400",
-        },
-      });
-    };
-    ```
-  </Step>
-
-  <Step>
-    If you use the [`cimd`](/docs/plugins/cimd) plugin or `allowUnauthenticatedClientRegistration`, you must ensure that your API Server is a confidential client itself:
-
-    ```ts
-    await auth.api.createOAuthClient({
-      headers,
-      body: {
-        redirect_uris: [redirectUri],
-      }
-    });
-    ```
-
-    These values should be used in the verify options `remoteVerify.clientId` and `remoteVerify.clientSecret`. Additionally, `remoteVerify.introspectUrl` would be something like `${BASE_URL}/${AUTH_PATH}/oauth2/introspect`.
-
-    <Callout type="info">
-      If you choose not to support the [`cimd`](/docs/plugins/cimd) plugin or `allowUnauthenticatedClientRegistration` (and only `allowDynamicClientRegistration`), the MCP client (ie. ChatGPT, Anthropic, Gemini) would need to allow you to put in a public client\_id in their UI or at runtime while chatting with the AI.
-    </Callout>
-  </Step>
-
-  <Step>
-    ### Handle MCP Errors for your API
-
-    Set `verifyOptions.audience` to your protected resource identifier. If omitted, the resource client falls back to the authorization server base URL as the expected audience.
-
-    * Using the client `verifyAccessTokenRequest` function
-
-    See [Verification](#verification) for verification examples.
-
-    * With auth available, use the client `verifyAccessTokenRequest` function to automatically determine endpoints
-
-    ```ts title="api/[endpoint].ts"
-    import { auth } from "@/lib/auth";
-    import { serverClient } from "@/lib/server-client";
-
-    export const GET = async (req: Request) => {
-      const payload = await serverClient.verifyAccessTokenRequest(
-        req,
-        {
-          verifyOptions: {
-            audience: "https://api.example.com",
-          }
-        }
-      );
-      // ...continue
-    }
-    ```
-
-    * Using `mcpHandler` helper
-
-    ```ts title="api/[transport]/route.ts"
-    import { createMcpHandler } from "mcp-handler";
-    import { mcpHandler } from "@better-auth/oauth-provider";
-    import { z } from "zod";
-
-    const handler = mcpHandler({
-      jwksUrl: "https://auth.example.com/api/auth/jwks",
-      verifyOptions: {
-        issuer: "https://auth.example.com",
-        audience: "https://api.example.com",
-      },
-    }, (req, jwt) => {
-      return createMcpHandler(
-        (server) => {
-          server.registerTool(
-            "echo", {
-              description: "Echo a message",
-              inputSchema: {
-                message: z.string(),
-              },
-            },
-            async ({ message }) => {
-              return {
-                content: [
-                  {
-                    type: "text",
-                    text: `Echo: ${message}${
-                      jwt?.sub
-                        ? ` for user ${jwt.sub}`
-                        : ""
-                    }`,
-                  },
-                ],
-              };
-            }
-          );
-        }, {
-          serverInfo: {
-            name: "demo-better-auth",
-            version: "1.0.0",
-          }
-        }, {
-          basePath: "/api",
-          maxDuration: 60,
-          verboseLogs: true,
-        }
-      )(req);
-    });
-
-    export { handler as GET, handler as POST, handler as DELETE };
-    ```
-  </Step>
-</Steps>
+The MCP plugin can also support a separate registered CLI through the device grant. MCP clients keep their discovery-driven authorization code flow, while the CLI asks the same provider for a resource-bound token through device authorization. See [Add device authorization for your own CLI](/docs/plugins/mcp#add-device-authorization-for-your-own-cli).
 
 ## Schema
 
