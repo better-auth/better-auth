@@ -381,6 +381,19 @@ export type InferOrganizationRolesFromOption<
 		: "admin" | "member" | "owner"
 	: "admin" | "member" | "owner";
 
+/**
+ * The role stored on a member or invitation. Multiple roles are allowed and persisted
+ * comma-joined by `parseRoles` (e.g. `"owner,analyst"`), and custom role names are
+ * permitted, so the returned value is not necessarily a single default-role literal. The
+ * `(string & {})` keeps autocomplete for the known roles while accepting the comma-joined
+ * or custom string the runtime actually returns.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10533
+ */
+export type InferOrganizationRoleOutput<
+	O extends OrganizationOptions | undefined,
+> = InferOrganizationRolesFromOption<O> | (string & {});
+
 export type InvitationStatus = "pending" | "accepted" | "rejected" | "canceled";
 
 import type { DBFieldAttribute } from "@better-auth/core/db";
@@ -409,7 +422,7 @@ export type InferMember<
 		? {
 				id: string;
 				organizationId: string;
-				role: InferOrganizationRolesFromOption<O>;
+				role: InferOrganizationRoleOutput<O>;
 				createdAt: Date;
 				userId: string;
 				teamId?: string | undefined;
@@ -423,7 +436,7 @@ export type InferMember<
 		: {
 				id: string;
 				organizationId: string;
-				role: InferOrganizationRolesFromOption<O>;
+				role: InferOrganizationRoleOutput<O>;
 				createdAt: Date;
 				userId: string;
 				user: {
@@ -459,7 +472,7 @@ export type InferInvitation<
 				id: string;
 				organizationId: string;
 				email: string;
-				role: InferOrganizationRolesFromOption<O>;
+				role: InferOrganizationRoleOutput<O>;
 				status: InvitationStatus;
 				inviterId: string;
 				expiresAt: Date;
@@ -470,7 +483,7 @@ export type InferInvitation<
 				id: string;
 				organizationId: string;
 				email: string;
-				role: InferOrganizationRolesFromOption<O>;
+				role: InferOrganizationRoleOutput<O>;
 				status: InvitationStatus;
 				inviterId: string;
 				expiresAt: Date;
