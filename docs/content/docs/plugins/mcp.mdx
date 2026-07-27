@@ -81,6 +81,39 @@ Discovery follows OAuth 2.0 Authorization Server Metadata ([RFC 8414](https://da
 
 ## Usage
 
+### Add device authorization for your own CLI
+
+MCP clients normally discover the authorization server from protected resource metadata, then use the authorization code flow with PKCE. Keep that flow for general MCP compatibility.
+
+If your product also ships a command-line application, the same authorization server can let the CLI authorize through a browser without opening a local callback listener. Add the Device Authorization plugin and the OAuth Provider's `deviceCodeGrant()` companion:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { deviceAuthorization, jwt } from "better-auth/plugins";
+import { deviceCodeGrant } from "@better-auth/oauth-provider";
+import { mcp } from "@better-auth/mcp";
+
+export const auth = betterAuth({
+  plugins: [
+    jwt(),
+    deviceAuthorization({
+      verificationUri: "/device",
+    }),
+    mcp({
+      loginPage: "/sign-in",
+      consentPage: "/consent",
+      resource: "https://api.example.com/mcp",
+      scopes: ["openid", "profile", "offline_access", "mcp:read"],
+    }),
+    deviceCodeGrant(),
+  ],
+});
+```
+
+`mcp()` is already the OAuth Provider, so this composition does not add a separate `oauthProvider()` plugin. MCP clients continue to use discovery and authorization code with PKCE. Your registered public CLI can request the same MCP resource through `/device/code` and poll `/oauth2/token` for an audience-bound access token.
+
+Only use the device grant in an MCP client that explicitly implements [RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628). Adding `deviceCodeGrant()` to the server does not change the standard flow chosen by existing MCP clients. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api) for client registration and token polling.
+
 ### Protected Resource Metadata
 
 The [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) `/.well-known/oauth-protected-resource` document is served automatically at the well-known root (and the resource-path-inserted alias). It tells MCP clients which authorization server protects the resource, which scopes it supports, which `resource` identifier their access tokens must be bound to, and which DPoP proof algorithms are supported.
@@ -136,6 +169,8 @@ const handler = requireMcpAuth(auth, (req, claims) => { // [!code highlight]
             maxDuration: 60,
         },
     )(req);
+}, {
+    resource: "https://api.example.com/mcp", // must match mcp({ resource }) // [!code highlight]
 });
 
 export { handler as GET, handler as POST, handler as DELETE };
@@ -143,7 +178,7 @@ export { handler as GET, handler as POST, handler as DELETE };
 
 The second argument is the verified JWT payload, not a database record. `requireMcpAuth` never exposes a refresh token; the access token is checked locally against the JWKS without a database round trip. DPoP-bound tokens must be sent as `Authorization: DPoP <access_token>` with a matching `DPoP` proof header. DPoP proof replay is rejected through your auth instance's database adapter by default, so anti-replay holds across multiple server instances; pass `dpop.replayStore` only to use a different store.
 
-By default `requireMcpAuth` reads the server's resolved base URL from the auth context and uses it as both the expected token issuer and protected resource identifier, with the JWKS at that base URL. This matches what the provider issues, so no configuration is needed for the common case. Override any value when the resource differs or `jwt.issuer` is custom:
+By default, `requireMcpAuth` reads the server's resolved Better Auth URL from the auth context and uses it as the expected issuer, resource, and JWKS base. If `mcp({ resource })` uses a different identifier, pass that same value to `requireMcpAuth`, as shown above. Override the issuer or JWKS URL when `jwt.issuer` is custom or the authorization server runs separately:
 
 ```ts
 requireMcpAuth(auth, handler, {
