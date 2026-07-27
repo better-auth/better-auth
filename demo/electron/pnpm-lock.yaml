@@ -61,7 +61,7 @@ importers:
         version: 2.0.0(@types/node@25.3.3)
       '@tailwindcss/vite':
         specifier: ^4.2.1
-        version: 4.2.1(vite@7.3.2(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1))
+        version: 4.2.1(vite@7.3.6(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1))
       '@types/react':
         specifier: ^19.2.14
         version: 19.2.14
@@ -70,7 +70,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@vitejs/plugin-react':
         specifier: ^5.1.4
-        version: 5.1.4(vite@7.3.2(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1))
+        version: 5.1.4(vite@7.3.6(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1))
       electron:
         specifier: ^43.1.1
         version: 43.1.1
@@ -79,7 +79,7 @@ importers:
         version: 26.8.1(electron-builder-squirrel-windows@26.8.1)
       electron-vite:
         specifier: ^5.0.0
-        version: 5.0.0(vite@7.3.2(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1))
+        version: 5.0.0(vite@7.3.6(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1))
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -93,8 +93,8 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       vite:
-        specifier: ^7.3.2
-        version: 7.3.2(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1)
+        specifier: ^7.3.6
+        version: 7.3.6(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1)
 
 packages:
 
@@ -2161,8 +2161,8 @@ packages:
     resolution: {integrity: sha512-veufcmxri4e3XSrT0xwfUR7kguIkaxBeosDg00yDWhk49wdwkSUrvvsm7nc75e1PUyvIeZj6nS8VQRYz2/S4Xg==}
     engines: {node: '>=0.6.0'}
 
-  vite@7.3.2:
-    resolution: {integrity: sha512-Bby3NOsna2jsjfLVOHKes8sGwgl4TT0E6vvpYgnAYDIF/tie7MRaFthmKuHx1NSXjiTueXH3do80FMQgvEktRg==}
+  vite@7.3.6:
+    resolution: {integrity: sha512-4XP60spRGjSZFf1qYH+dJIkK2znL3zQfl9KkOV9MkkRR/3Dls0dxaBsQPTloEc5BLXWPL9vsOxopxyKoMmDueg==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
@@ -2837,12 +2837,12 @@ snapshots:
       '@tailwindcss/oxide-win32-arm64-msvc': 4.2.1
       '@tailwindcss/oxide-win32-x64-msvc': 4.2.1
 
-  '@tailwindcss/vite@4.2.1(vite@7.3.2(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1))':
+  '@tailwindcss/vite@4.2.1(vite@7.3.6(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1))':
     dependencies:
       '@tailwindcss/node': 4.2.1
       '@tailwindcss/oxide': 4.2.1
       tailwindcss: 4.2.1
-      vite: 7.3.2(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1)
+      vite: 7.3.6(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1)
 
   '@types/babel__core@7.20.5':
     dependencies:
@@ -2919,7 +2919,7 @@ snapshots:
   '@types/verror@1.10.11':
     optional: true
 
-  '@vitejs/plugin-react@5.1.4(vite@7.3.2(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1))':
+  '@vitejs/plugin-react@5.1.4(vite@7.3.6(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1))':
     dependencies:
       '@babel/core': 7.29.0
       '@babel/plugin-transform-react-jsx-self': 7.27.1(@babel/core@7.29.0)
@@ -2927,7 +2927,7 @@ snapshots:
       '@rolldown/pluginutils': 1.0.0-rc.3
       '@types/babel__core': 7.20.5
       react-refresh: 0.18.0
-      vite: 7.3.2(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1)
+      vite: 7.3.6(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -3375,7 +3375,7 @@ snapshots:
 
   electron-to-chromium@1.5.302: {}
 
-  electron-vite@5.0.0(vite@7.3.2(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1)):
+  electron-vite@5.0.0(vite@7.3.6(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1)):
     dependencies:
       '@babel/core': 7.29.0
       '@babel/plugin-transform-arrow-functions': 7.27.1(@babel/core@7.29.0)
@@ -3383,7 +3383,7 @@ snapshots:
       esbuild: 0.28.1
       magic-string: 0.30.21
       picocolors: 1.1.1
-      vite: 7.3.2(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1)
+      vite: 7.3.6(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -4384,7 +4384,7 @@ snapshots:
       extsprintf: 1.4.1
     optional: true
 
-  vite@7.3.2(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1):
+  vite@7.3.6(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1):
     dependencies:
       esbuild: 0.28.1
       fdir: 6.5.0(picomatch@4.0.4)
