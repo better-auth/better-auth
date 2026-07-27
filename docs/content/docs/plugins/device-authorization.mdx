@@ -102,10 +102,10 @@ The device flow follows these steps:
 
 Device authorization can finish with two different token types. Choose the token based on what the client needs to call:
 
-| Use case                                                                         | Token                     | Plugins                                                             | Token endpoint  |
-| -------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------- | --------------- |
-| Sign your own device into the same Better Auth application                       | Better Auth session token | `deviceAuthorization()`                                             | `/device/token` |
-| Let a registered CLI, TV app, or other public client call an OAuth-protected API | Scoped OAuth access token | `deviceAuthorization()`, `oauthProvider()`, and `deviceCodeGrant()` | `/oauth2/token` |
+| Use case                                                                         | Token                     | Plugins                                                                      | Token endpoint  |
+| -------------------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------- | --------------- |
+| Sign your own device into the same Better Auth application                       | Better Auth session token | `deviceAuthorization()`                                                      | `/device/token` |
+| Let a registered CLI, TV app, or other public client call an OAuth-protected API | Scoped OAuth access token | `jwt()`, `deviceAuthorization()`, `oauthProvider()`, and `deviceCodeGrant()` | `/oauth2/token` |
 
 A command-line application commonly needs the second path. The CLI cannot safely keep a client secret, and it may not have a reliable redirect listener, but it still needs a user-authorized token for your API. The device grant lets the user approve the request in a browser while the CLI receives an audience-bound OAuth access token.
 
@@ -158,9 +158,17 @@ await auth.api.adminCreateOAuthClient({
 The CLI then requests a device code for the API it intends to call:
 
 ```ts title="cli.ts"
+import { createAuthClient } from "better-auth/client";
+import { deviceAuthorizationClient } from "better-auth/client/plugins";
+
 const authBaseURL = "https://auth.example.com/api/auth";
 const clientId = "YOUR_CLIENT_ID";
 const resource = "https://api.example.com";
+
+const authClient = createAuthClient({
+  baseURL: authBaseURL,
+  plugins: [deviceAuthorizationClient()],
+});
 
 const { data } = await authClient.device.code({
   client_id: clientId,
