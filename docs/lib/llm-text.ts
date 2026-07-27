@@ -1,5 +1,6 @@
 import type { InferPageType } from "fumadocs-core/source";
 import type { DocsVersion } from "./docs-versions";
+import { FEEDBACK_PAGE_FOOTER } from "./feedback";
 import type { source } from "./source";
 
 type PropertyDefinition = {
@@ -263,6 +264,8 @@ export async function getLLMText(
 ${docPage!.data.description || ""}
 
 ${processedContent}
+
+${FEEDBACK_PAGE_FOOTER}
 `;
 }
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { FEEDBACK_LLMS_SECTION } from "../../lib/feedback";
 import { source } from "../../lib/source";
 
 export const revalidate = false;
@@ -48,6 +49,8 @@ export async function GET() {
 	let content = `# Better Auth
 
 > The most comprehensive authentication framework for TypeScript
+
+${FEEDBACK_LLMS_SECTION}
 
 ## Table of Contents
 
