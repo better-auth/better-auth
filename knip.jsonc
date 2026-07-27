@@ -62,6 +62,10 @@
 		"packages/expo": {
 			// neverBundle externals: referenced in bundled output, not in source
 			"ignoreDependencies": ["@better-fetch/fetch", "better-call"]
+		},
+		"packages/electron": {
+			"entry": ["src/index.ts!", "src/client.typecheck.ts"],
+			"project": ["src/**/*.ts!"]
 		}
 	},
 	"vitest": {

@@ -4,6 +4,7 @@ import type {
 	ClientFetchOption,
 } from "@better-auth/core";
 import { isSafeUrlScheme } from "@better-auth/core/utils/url";
+import type { BetterFetch } from "@better-fetch/fetch";
 import { PACKAGE_VERSION } from "../../version";
 
 declare global {
@@ -212,7 +213,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 				},
 			},
 		],
-		getActions: ($fetch, _) => {
+		getActions: ($fetch: BetterFetch, _) => {
 			return {
 				oneTap: async (
 					opts?: GoogleOneTapActionOptions | undefined,

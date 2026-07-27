@@ -34,11 +34,7 @@ const { execute } = await testAdapter({
 		const { schema } = await generateDrizzleSchema(pgDB, options, "pg");
 		const { authRelations: relations, ...schemas } = schema;
 		return drizzleAdapter(
-			drizzle({
-				client: pgDB,
-				relations,
-				schema: schemas,
-			}),
+			drizzle<typeof relations>({ client: pgDB, relations }),
 			{
 				debugLogs: { isRunningAdapterTests: true },
 				schema: { ...schemas, relations },

@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 import { base64 } from "@better-auth/utils/base64";
+import type { BetterFetch } from "@better-fetch/fetch";
 import type { BetterAuthClientPlugin, ClientStore } from "better-auth";
 import { isDevelopment, isTest } from "better-auth";
 import electron from "electron";
@@ -180,7 +181,7 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 				},
 			},
 		],
-		getActions: ($fetch, $store, clientOptions) => {
+		getActions: ($fetch: BetterFetch, $store, clientOptions) => {
 			store = $store;
 			let getWindow: () => electron.BrowserWindow | null | undefined = () =>
 				null;

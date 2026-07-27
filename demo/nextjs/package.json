@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:secure": "next dev --experimental-https",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "git clean -xdf .next && next typegen && tsc --noEmit --incremental false",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

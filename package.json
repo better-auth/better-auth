@@ -33,8 +33,9 @@
     "coverage:open": "open coverage/lcov-report/index.html",
     "e2e:smoke": "turbo e2e:smoke",
     "e2e:integration": "turbo e2e:integration",
-    "typecheck": "tsc --build",
-    "typecheck:dist": "tsc --project tsconfig.dist-check.json"
+    "typecheck": "tsc --build --force",
+    "typecheck:dist": "tsc --project tsconfig.dist-check.json",
+    "typecheck:consumers": "turbo run typecheck:consumer"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.3",
