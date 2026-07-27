@@ -7,6 +7,8 @@ import {
 	FEEDBACK_DESCRIPTOR,
 	feedbackSchema,
 	notifySlack,
+	sanitizeReferer,
+	sanitizeUserAgent,
 	storeFeedback,
 } from "@/lib/feedback";
 
@@ -36,9 +38,19 @@ function getRatelimit(): Ratelimit {
 /**
  * Self-describing discovery response, so an agent that finds the URL can learn
  * the payload shape without reading the docs.
+ *
+ * `endpoint` is derived from the request rather than taken from the constant,
+ * so preview and self-hosted deployments describe the host that actually
+ * served the response instead of pointing back at production.
  */
-export function GET() {
-	return NextResponse.json(FEEDBACK_DESCRIPTOR, { headers: CORS_HEADERS });
+export function GET(request: Request) {
+	return NextResponse.json(
+		{
+			...FEEDBACK_DESCRIPTOR,
+			endpoint: new URL("/api/feedback", request.url).toString(),
+		},
+		{ headers: CORS_HEADERS },
+	);
 }
 
 export function OPTIONS() {
@@ -86,8 +98,8 @@ export async function POST(request: Request) {
 			...parsed.data,
 			id: crypto.randomUUID(),
 			receivedAt: new Date().toISOString(),
-			userAgent: request.headers.get("user-agent"),
-			referer: request.headers.get("referer"),
+			userAgent: sanitizeUserAgent(request.headers.get("user-agent")),
+			referer: sanitizeReferer(request.headers.get("referer")),
 		};
 
 		const stored = await storeFeedback(record);

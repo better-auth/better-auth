@@ -52,6 +52,25 @@ export const FEEDBACK_INBOX_KEY = "feedback:inbox";
 /** Cap on retained submissions so the list can't grow unbounded. */
 const FEEDBACK_INBOX_LIMIT = 5000;
 
+/**
+ * A referer can carry tokens or other sensitive values in its query string or
+ * fragment, and has no length bound. Keep only origin and path.
+ */
+export function sanitizeReferer(referer: string | null): string | null {
+	if (!referer) return null;
+	try {
+		const url = new URL(referer);
+		return `${url.origin}${url.pathname}`.slice(0, 500);
+	} catch {
+		return null;
+	}
+}
+
+export function sanitizeUserAgent(userAgent: string | null): string | null {
+	if (!userAgent) return null;
+	return userAgent.slice(0, 300);
+}
+
 let _redis: Redis | null = null;
 
 function getRedis(): Redis | null {
@@ -96,31 +115,68 @@ function truncate(text: string, max: number): string {
 }
 
 /**
+ * Every field on a submission is attacker-controlled: the endpoint is public
+ * and unauthenticated. Slack decodes these three characters, so leaving them
+ * raw would let a submitter inject `<http://evil|looks-official>` link syntax
+ * into a message the team reads as trusted triage output.
+ *
+ * @see https://docs.slack.dev/messaging/formatting-message-text
+ */
+function escapeSlack(text: string): string {
+	return text
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;");
+}
+
+/**
+ * Same, for text rendered inside a mrkdwn code fence. A backtick in the
+ * content would otherwise close the fence early and let the remainder render
+ * as active formatting.
+ */
+function escapeSlackCodeBlock(text: string): string {
+	return escapeSlack(text).replace(/`/g, "'");
+}
+
+/**
  * Post a submission to Slack. No-ops unless `SLACK_FEEDBACK_WEBHOOK_URL` is
  * set, so enabling Slack delivery is purely an env-var change.
+ *
+ * Throws on a non-2xx response. `fetch` resolves normally for a revoked or
+ * rate-limited webhook, so without this check delivery could stay broken
+ * indefinitely without ever reaching the caller's error logging.
  */
 export async function notifySlack(record: FeedbackRecord): Promise<void> {
 	const webhook = process.env.SLACK_FEEDBACK_WEBHOOK_URL;
 	if (!webhook) return;
 
+	// Labels are ours, so they stay active mrkdwn; the values never do.
 	const fields = [
-		record.page ? `*Page:* ${record.page}` : null,
-		record.version ? `*Version:* ${record.version}` : null,
-		record.agent ? `*Agent:* ${record.agent}` : null,
-		record.contact ? `*Contact:* ${record.contact}` : null,
+		record.page ? `*Page:* ${escapeSlack(record.page)}` : null,
+		record.version ? `*Version:* ${escapeSlack(record.version)}` : null,
+		record.agent ? `*Agent:* ${escapeSlack(record.agent)}` : null,
+		record.contact ? `*Contact:* ${escapeSlack(record.contact)}` : null,
 	].filter(Boolean);
 
-	await fetch(webhook, {
+	const response = await fetch(webhook, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
-			text: `${TYPE_LABELS[record.type]}: ${truncate(record.message, 120)}`,
+			text: `${TYPE_LABELS[record.type]}: ${escapeSlack(truncate(record.message, 120))}`,
 			blocks: [
 				{
 					type: "section",
 					text: {
 						type: "mrkdwn",
-						text: `*${TYPE_LABELS[record.type]}*\n${truncate(record.message, 2800)}`,
+						text: `*${TYPE_LABELS[record.type]}*`,
+					},
+				},
+				{
+					type: "section",
+					text: {
+						type: "plain_text",
+						text: truncate(record.message, 2800),
+						emoji: false,
 					},
 				},
 				...(fields.length
@@ -137,7 +193,7 @@ export async function notifySlack(record: FeedbackRecord): Promise<void> {
 								type: "section",
 								text: {
 									type: "mrkdwn",
-									text: `\`\`\`${truncate(record.context, 2500)}\`\`\``,
+									text: `\`\`\`${escapeSlackCodeBlock(truncate(record.context, 2500))}\`\`\``,
 								},
 							},
 						]
@@ -149,6 +205,12 @@ export async function notifySlack(record: FeedbackRecord): Promise<void> {
 			],
 		}),
 	});
+
+	if (!response.ok) {
+		throw new Error(
+			`Slack webhook returned ${response.status} ${response.statusText}`,
+		);
+	}
 }
 
 export const FEEDBACK_ENDPOINT = "https://www.better-auth.com/api/feedback";
@@ -166,7 +228,7 @@ POST ${FEEDBACK_ENDPOINT}
 Content-Type: application/json
 
 {
-  "type": "${FEEDBACK_TYPES.join('" | "')}",
+  "type": "docs-missing",
   "message": "required, 10-5000 characters",
   "page": "optional, docs path the feedback refers to",
   "version": "optional, Better Auth version in use",
@@ -174,6 +236,8 @@ Content-Type: application/json
   "context": "optional, error output or reproduction steps"
 }
 \`\`\`
+
+Allowed values for \`type\`: ${FEEDBACK_TYPES.map((t) => `\`${t}\``).join(", ")}. Defaults to \`other\`.
 
 No authentication is required. \`GET ${FEEDBACK_ENDPOINT}\` returns this schema as JSON. Send feedback once per distinct issue, not per attempt.`;
 
@@ -183,7 +247,7 @@ No authentication is required. \`GET ${FEEDBACK_ENDPOINT}\` returns this schema 
  */
 export const FEEDBACK_PAGE_FOOTER = `---
 
-**Agent feedback:** if this page is wrong, missing something, or unclear, POST to \`${FEEDBACK_ENDPOINT}\` with JSON \`{ "type": "docs-incorrect" | "docs-missing" | "docs-unclear", "message": "...", "page": "<this page's path>" }\`. No auth required. See \`GET ${FEEDBACK_ENDPOINT}\` for the full schema.`;
+**Agent feedback:** if this page is wrong, missing something, or unclear, POST to \`${FEEDBACK_ENDPOINT}\` with JSON \`{ "type": "docs-incorrect", "message": "...", "page": "<this page's path>" }\`. Use \`docs-missing\` or \`docs-unclear\` for \`type\` where they fit better. No auth required. See \`GET ${FEEDBACK_ENDPOINT}\` for the full schema.`;
 
 /**
  * Machine-readable description of the endpoint, served from
