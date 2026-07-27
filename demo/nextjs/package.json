@@ -81,7 +81,7 @@
     "sonner": "^2.0.7",
     "stripe": "22.0.1",
     "tailwind-merge": "^3.5.0",
-    "ua-parser-js": "^2.0.9",
+    "ua-parser-js": "^2.0.10",
     "vaul": "^1.1.2",
     "zod": "^4.3.6"
   },
