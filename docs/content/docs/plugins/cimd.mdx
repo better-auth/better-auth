@@ -7,7 +7,7 @@ description: Unauthenticated dynamic client discovery for Better Auth's OAuth pr
 
 [Client ID Metadata Documents](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/) let clients identify themselves to your authorization server without prior registration. Instead of sending a pre-registered `client_id`, the client sends the HTTPS URL of a metadata document it hosts. Your server fetches that document, validates it, and creates (or refreshes) a public client record.
 
-This is the mechanism [MCP](https://modelcontextprotocol.io/specification/draft/basic/authorization#client-id-metadata-documents-flow) uses so authorization servers can discover clients on the fly.
+This is the mechanism [MCP](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#client-id-metadata-documents-flow) uses so authorization servers can discover clients on the fly.
 
 The plugin extends [`@better-auth/oauth-provider`](./oauth-provider) by contributing a `ClientDiscovery` entry through its extension surface, so every OAuth endpoint that authenticates a client (authorize, token, introspect, revoke, userinfo, PAR, logout) works seamlessly with URL-format `client_id` values.
 
@@ -87,7 +87,7 @@ cimd({
 ```
 
 <Callout type="info">
-  For [MCP auth](https://modelcontextprotocol.io/specification/draft/basic/authorization#client-registration-approaches) only deployments, we recommend disabling the `allowUnauthenticatedClientRegistration` option in `oauth-provider`. CIMD handles client identity and prevents duplicate registrations for the same `client_id` URL. Keep `allowUnauthenticatedClientRegistration` only if you need registration fallback — be aware this can create duplicate client records.
+  For [MCP auth](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#client-registration-approaches) only deployments, we recommend disabling the `allowUnauthenticatedClientRegistration` option in `oauth-provider`. CIMD handles client identity and prevents duplicate registrations for the same `client_id` URL. Keep `allowUnauthenticatedClientRegistration` only if you need registration fallback — be aware this can create duplicate client records.
 </Callout>
 
 ### Options
@@ -214,4 +214,4 @@ The `clientDiscovery` extension field accepts a single `ClientDiscovery` or an a
 
 * [OAuth Provider plugin](./oauth-provider) — the host plugin this one extends.
 * [IETF draft: Client ID Metadata Document](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/)
-* [MCP authorization spec — CIMD flow](https://modelcontextprotocol.io/specification/draft/basic/authorization#client-id-metadata-documents-flow)
+* [MCP authorization spec — CIMD flow](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#client-id-metadata-documents-flow)
