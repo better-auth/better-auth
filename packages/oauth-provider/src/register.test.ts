@@ -110,37 +110,12 @@ describe("oauth register", async () => {
 		expect(response.error?.status).toBe(400);
 	});
 
-	it("should fail type check for public client request", async () => {
-		const response = await serverClient.oauth2.register({
-			token_endpoint_auth_method: "none",
-			type: "web",
-			redirect_uris: [redirectUri],
-		});
-		expect(response.error?.status).toBe(400);
-	});
-
-	it.for([
-		"native",
-		"user-agent-based",
-	] as OAuthClient["type"][])("should fail with type '%s' check for confidential client request", async (type) => {
-		const response = await serverClient.oauth2.register({
-			token_endpoint_auth_method: "client_secret_post",
-			type,
-			redirect_uris: [redirectUri],
-		});
-		expect(response.error?.status).toBe(400);
-	});
-
-	it.for([
-		"native",
-		"user-agent-based",
-	] as OAuthClient["type"][])("should register public '%s' client with minimum requirements via server", async (type) => {
+	it("should register public client with minimum requirements via server", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				token_endpoint_auth_method: "none",
 				redirect_uris: [redirectUri],
-				type,
 			},
 		});
 		expect(response?.client_id).toBeDefined();
@@ -182,7 +157,6 @@ describe("oauth register", async () => {
 			response_types: ["code"],
 			//---- RFC6749 Spec ----//
 			public: true, // test never set on this (based off of token_endpoint_auth_method)
-			type: "web",
 			//---- Not Part of RFC7591 Spec ----//
 			disabled: false,
 		};
@@ -234,10 +208,9 @@ describe("oauth register", async () => {
 		expect(response.data?.disabled).toBeFalsy();
 	});
 
-	it("should preserve confidential method and type for authenticated registration", async () => {
+	it("should preserve the confidential auth method for authenticated registration", async () => {
 		const response = await serverClient.oauth2.register({
 			token_endpoint_auth_method: "client_secret_post",
-			type: "web",
 			redirect_uris: [redirectUri],
 		});
 		expect(response.data?.client_id).toBeDefined();
@@ -245,7 +218,6 @@ describe("oauth register", async () => {
 		expect(response.data?.token_endpoint_auth_method).toBe(
 			"client_secret_post",
 		);
-		expect(response.data?.type).toBe("web");
 		expect(response.data?.public).toBeFalsy();
 	});
 
@@ -480,7 +452,6 @@ describe("oauth register", async () => {
 		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
 			token_endpoint_auth_method: "none",
-			type: "native",
 			backchannel_logout_uri: `${rpBaseUrl}/logout/backchannel`,
 		});
 		expect(response.data?.client_id).toBeDefined();
@@ -645,10 +616,9 @@ describe("oauth register - unauthenticated", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8588
 	 */
-	it("should preserve type 'web' for unauthenticated confidential DCR", async () => {
+	it("should keep unauthenticated confidential DCR confidential", async () => {
 		const response = await unauthenticatedClient.oauth2.register({
 			token_endpoint_auth_method: "client_secret_post",
-			type: "web",
 			redirect_uris: [redirectUri],
 		});
 		expect(response.data?.client_id).toBeDefined();
@@ -656,7 +626,7 @@ describe("oauth register - unauthenticated", async () => {
 		expect(response.data?.token_endpoint_auth_method).toBe(
 			"client_secret_post",
 		);
-		expect(response.data?.type).toBe("web");
+		expect(response.data?.public).toBeFalsy();
 	});
 
 	/**
@@ -1427,7 +1397,7 @@ describe("oauth register - protected dynamic registration", async () => {
 
 describe("oauth register - application_type", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
-	const { customFetchImpl } = await getTestInstance({
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
 			jwt(),
@@ -1507,25 +1477,42 @@ describe("oauth register - application_type", async () => {
 		expect(body.application_type).toBe("web");
 	});
 
-	it("rejects an application_type that contradicts type", async () => {
-		const response = await register({
-			type: "web",
-			application_type: "native",
-			redirect_uris: ["https://rp.example.com/callback"],
-		});
-		expect(response.status).toBe(400);
-		const body = (await response.json()) as { error_description?: string };
-		expect(body.error_description).toContain("conflicts with type");
-	});
+	it("forces PKCE on a native client even when the client opts out", async () => {
+		// A native client cannot keep a secret, so it is public whatever auth
+		// method it registered with, and `require_pkce: false` cannot waive PKCE
+		// for it. The same client declared `web` is taken at its word.
+		const { headers } = await signInWithTestUser();
+		const authorizeWithoutPkce = async (
+			applicationType: "web" | "native",
+			redirectUri: string,
+		) => {
+			const created = await auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					application_type: applicationType,
+					token_endpoint_auth_method: "client_secret_post",
+					require_pkce: false,
+					redirect_uris: [redirectUri],
+				},
+			});
+			const response = await customFetchImpl(
+				`${authServerBaseUrl}/api/auth/oauth2/authorize?${new URLSearchParams({
+					client_id: created!.client_id!,
+					response_type: "code",
+					redirect_uri: redirectUri,
+					scope: "openid",
+				})}`,
+				{ method: "GET", redirect: "manual" },
+			);
+			return response.headers.get("location") ?? "";
+		};
 
-	it("accepts a user-agent-based client declaring the web application type", async () => {
-		const response = await register({
-			type: "user-agent-based",
-			application_type: "web",
-			token_endpoint_auth_method: "none",
-			redirect_uris: ["https://spa.example.com/callback"],
-		});
-		expect(response.status).toBe(201);
+		expect(
+			await authorizeWithoutPkce("native", "com.example.pkce:/cb"),
+		).toContain("pkce+is+required");
+		expect(
+			await authorizeWithoutPkce("web", "https://rp.example.com/pkce-cb"),
+		).not.toContain("pkce+is+required");
 	});
 
 	it("keeps prior behavior when application_type is omitted", async () => {

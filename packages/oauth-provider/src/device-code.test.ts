@@ -61,7 +61,6 @@ describe("oauth-provider device-code grant", async () => {
 				token_endpoint_auth_method: "none",
 				grant_types: grantTypes,
 				scope: "openid profile email",
-				type: "native",
 			},
 		});
 		return created!.client_id;
@@ -353,7 +352,6 @@ describe("oauth-provider device-code grant", async () => {
 				token_endpoint_auth_method: "none",
 				grant_types: [DEVICE_CODE_GRANT_TYPE],
 				scope: "openid",
-				type: "native",
 			},
 		});
 
@@ -380,7 +378,6 @@ describe("oauth-provider device-code grant", async () => {
 				token_endpoint_auth_method: "client_secret_basic",
 				grant_types: [DEVICE_CODE_GRANT_TYPE],
 				scope: "openid",
-				type: "web",
 			},
 		});
 
@@ -480,7 +477,6 @@ describe("oauth-provider device-code grant expiry", async () => {
 				token_endpoint_auth_method: "none",
 				grant_types: [DEVICE_CODE_GRANT_TYPE],
 				scope: "openid",
-				type: "native",
 			},
 		});
 		const clientId = created!.client_id;

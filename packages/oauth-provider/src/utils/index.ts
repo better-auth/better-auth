@@ -956,8 +956,7 @@ export function isPKCERequired(
 	// Determine if client is public
 	const isPublicClient =
 		client.tokenEndpointAuthMethod === "none" ||
-		client.type === "native" ||
-		client.type === "user-agent-based" ||
+		client.applicationType === "native" ||
 		client.public === true;
 
 	// PKCE always required for public clients

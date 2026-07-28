@@ -48,7 +48,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				jwks_uri: z.string().optional(),
 				grant_types: grantTypesSchema.optional(),
 				response_types: z.array(z.enum(["code"])).optional(),
-				type: z.enum(["web", "native", "user-agent-based"]).optional(),
+				application_type: z.enum(["web", "native"]).optional(),
 				// SERVER_ONLY applicable fields
 				client_secret_expires_at: z
 					.union([z.string(), z.number()])
@@ -177,13 +177,12 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 											},
 											public: {
 												type: "boolean",
-												description:
-													"Whether the client is public as determined by the type",
+												description: "Whether the client is a public client",
 											},
-											type: {
+											application_type: {
 												type: "string",
-												description: "Type of the client",
-												enum: ["web", "native", "user-agent-based"],
+												description: "OIDC Registration application type",
+												enum: ["web", "native"],
 											},
 											disabled: {
 												type: "boolean",
@@ -250,7 +249,7 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				jwks_uri: z.string().optional(),
 				grant_types: grantTypesSchema.optional(),
 				response_types: z.array(z.enum(["code"])).optional(),
-				type: z.enum(["web", "native", "user-agent-based"]).optional(),
+				application_type: z.enum(["web", "native"]).optional(),
 				// RFC 9449 §5.2: client asks for DPoP-bound access tokens.
 				dpop_bound_access_tokens: z.boolean().optional(),
 			}),
@@ -368,13 +367,12 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 											},
 											public: {
 												type: "boolean",
-												description:
-													"Whether the client is public as determined by the type",
+												description: "Whether the client is a public client",
 											},
-											type: {
+											application_type: {
 												type: "string",
-												description: "Type of the client",
-												enum: ["web", "native", "user-agent-based"],
+												description: "OIDC Registration application type",
+												enum: ["web", "native"],
 											},
 											disabled: {
 												type: "boolean",
@@ -509,7 +507,7 @@ export const adminUpdateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					// NOTE: token_endpoint_auth_method is currently immutable since it changes isPublic definition
 					grant_types: grantTypesSchema.optional(),
 					response_types: z.array(z.enum(["code"])).optional(),
-					type: z.enum(["web", "native", "user-agent-based"]).optional(),
+					application_type: z.enum(["web", "native"]).optional(),
 					// SERVER_ONLY applicable fields
 					client_secret_expires_at: z
 						.union([z.string(), z.number()])
@@ -559,7 +557,7 @@ export const updateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					// NOTE: token_endpoint_auth_method is currently immutable since it changes isPublic definition
 					grant_types: grantTypesSchema.optional(),
 					response_types: z.array(z.enum(["code"])).optional(),
-					type: z.enum(["web", "native", "user-agent-based"]).optional(),
+					application_type: z.enum(["web", "native"]).optional(),
 				}),
 			}),
 			metadata: {

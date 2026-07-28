@@ -133,7 +133,7 @@ export const schema = {
 				type: "boolean",
 				required: false,
 			},
-			type: {
+			applicationType: {
 				type: "string",
 				required: false,
 			},

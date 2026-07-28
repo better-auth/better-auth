@@ -258,27 +258,6 @@ export async function checkOAuthClient(
 		});
 	}
 
-	// Check value of type, if sent, matches isPublic
-	if (clientWithDefaults.type) {
-		if (
-			isPublic &&
-			!(
-				clientWithDefaults.type === "native" ||
-				clientWithDefaults.type === "user-agent-based"
-			)
-		) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description: `Type must be 'native' or 'user-agent-based' for public applications`,
-			});
-		} else if (!isPublic && !(clientWithDefaults.type === "web")) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description: `Type must be 'web' for confidential applications`,
-			});
-		}
-	}
-
 	const grantTypes = clientWithDefaults.grant_types ?? [];
 	const responseTypes = clientWithDefaults.response_types;
 
@@ -293,19 +272,6 @@ export async function checkOAuthClient(
 			error_description:
 				"Redirect URIs are required for authorization_code and implicit grant types",
 		});
-	}
-
-	// `type` and `application_type` both describe the client profile, so a
-	// registration that sends both must not contradict itself.
-	if (clientWithDefaults.type && clientWithDefaults.application_type) {
-		const impliedApplicationType =
-			clientWithDefaults.type === "native" ? "native" : "web";
-		if (impliedApplicationType !== clientWithDefaults.application_type) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description: `application_type '${clientWithDefaults.application_type}' conflicts with type '${clientWithDefaults.type}'`,
-			});
-		}
 	}
 
 	// OIDC Registration §2 `application_type`, required of MCP clients by
@@ -765,7 +731,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		response_types: responseTypes,
 		// RFC6749 Spec
 		public: _public,
-		type,
+		application_type: applicationType,
 		// Not Part of RFC7591 Spec
 		disabled,
 		skip_consent: skipConsent,
@@ -833,7 +799,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		jwksUri: jwksUri,
 		// RFC6749 Spec
 		public: _public,
-		type,
+		applicationType,
 		// All other metadata
 		skipConsent,
 		enableEndSession,
@@ -884,7 +850,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		responseTypes,
 		// RFC6749 Spec
 		public: _public,
-		type,
+		applicationType,
 		// Jwks
 		jwks,
 		jwksUri,
@@ -946,7 +912,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		response_types: responseTypes ?? undefined,
 		// RFC6749 Spec
 		public: _public ?? undefined,
-		type: type ?? undefined,
+		application_type: applicationType ?? undefined,
 		// Not Part of RFC7591 Spec
 		disabled: disabled ?? undefined,
 		skip_consent: skipConsent ?? undefined,

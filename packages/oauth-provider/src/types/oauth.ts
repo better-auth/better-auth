@@ -399,7 +399,6 @@ export interface OAuthClient {
 	application_type?: "web" | "native";
 	//---- RFC6749 Spec ----//
 	public?: boolean;
-	type?: "web" | "native" | "user-agent-based";
 	//---- Not Part of RFC7591 Spec ----//
 	disabled?: boolean;
 	skip_consent?: boolean;

@@ -147,7 +147,7 @@ await auth.api.adminCreateOAuthClient({
   headers,
   body: {
     token_endpoint_auth_method: "none",
-    type: "native",
+    application_type: "native",
     grant_types: [DEVICE_CODE_GRANT_TYPE, "refresh_token"],
     scope: "openid profile offline_access api:read",
     resources: ["https://api.example.com"],

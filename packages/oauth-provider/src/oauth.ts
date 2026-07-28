@@ -1598,12 +1598,12 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 													public: {
 														type: "boolean",
 														description:
-															"Whether the client is public as determined by the type",
+															"Whether the client is a public client",
 													},
-													type: {
+													application_type: {
 														type: "string",
-														description: "Type of the client",
-														enum: ["web", "native", "user-agent-based"],
+														description: "OIDC Registration application type",
+														enum: ["web", "native"],
 													},
 													disabled: {
 														type: "boolean",

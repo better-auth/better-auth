@@ -99,7 +99,6 @@ const ALLOWED_METADATA_FIELDS = new Set([
 	"post_logout_redirect_uris",
 	"subject_type",
 	"application_type",
-	"type",
 	"jwks",
 	"jwks_uri",
 ]);

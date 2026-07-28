@@ -206,9 +206,7 @@ export const clientRegistrationRequestSchema = z.object({
 	jwks_uri: z.string().optional(),
 	grant_types: z.array(z.string().trim().min(1)).min(1).optional(),
 	response_types: z.array(z.enum(["code"])).optional(),
-	type: z.enum(["web", "native", "user-agent-based"]).optional(),
-	// OIDC Registration §2: constrains redirect URI schemes and hosts when
-	// provided, and must agree with `type` when both are sent.
+	// OIDC Registration §2: constrains redirect URI schemes and hosts.
 	application_type: z.enum(["web", "native"]).optional(),
 	subject_type: z.enum(["public", "pairwise"]).optional(),
 	// RFC 9449 §5.2: client asks for DPoP-bound access tokens.

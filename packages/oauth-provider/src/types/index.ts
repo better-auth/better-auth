@@ -1712,15 +1712,14 @@ export interface SchemaClient<
 	 */
 	public?: boolean;
 	/**
-	 * The client type
+	 * OIDC Registration application type.
 	 *
-	 * Described https://www.rfc-editor.org/rfc/rfc6749.html#section-2.1
+	 * Constrains which redirect URIs the client may register, and marks
+	 * `native` clients as public so PKCE is always required for them.
 	 *
-	 * - web - A web application (confidential client)
-	 * - native - A mobile application (public client)
-	 * - user-agent-based - A user-agent-based application (public client)
+	 * @see https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 	 */
-	type?: "web" | "native" | "user-agent-based";
+	applicationType?: "web" | "native";
 	/**
 	 * Whether this client requires PKCE for authorization code flow.
 	 *
