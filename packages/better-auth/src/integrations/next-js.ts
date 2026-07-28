@@ -1,6 +1,5 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { isProduction } from "@better-auth/core/env";
 import { setShouldSkipSessionRefresh } from "../api/state/should-session-refresh";
 import { parseSetCookieHeader, toCookieOptions } from "../cookies";
 import { PACKAGE_VERSION } from "../version";
@@ -25,27 +24,23 @@ export function toNextJsHandler(
 	};
 }
 
-let nextHeadersModulePromise: Promise<typeof import("next/headers.js")> | null =
-	null;
+type NextHeadersModule = typeof import("next/headers.js");
+
+let nextHeadersModulePromise: Promise<NextHeadersModule> | undefined;
 
 /**
- * Node re-runs ESM resolution for every `import()` call, and with loader
- * hooks registered (Sentry, OpenTelemetry) each resolution is a synchronous
- * round trip to the loader hooks thread. These hooks run on nearly every
- * request, so cache the import promise in production. In dev and test the
- * import stays per-call so module reloads and mocks keep working. A failed
- * import is not kept, so later requests retry like the uncached version did.
+ * Cache ESM resolution while leaving the request-scoped `headers()` and
+ * `cookies()` calls uncached.
  *
  * @see https://github.com/better-auth/better-auth/issues/10466
  */
 const loadNextHeadersModule = () => {
-	if (!isProduction) {
-		return import("next/headers.js");
-	}
-	nextHeadersModulePromise ??= import("next/headers.js").catch((error) => {
-		nextHeadersModulePromise = null;
-		throw error;
-	});
+	nextHeadersModulePromise ??= import("next/headers.js").catch(
+		(error: unknown) => {
+			nextHeadersModulePromise = undefined;
+			throw error;
+		},
+	);
 	return nextHeadersModulePromise;
 };
 
@@ -71,9 +66,7 @@ export const nextCookies = () => {
 						if ("_flag" in ctx && ctx._flag === "router") {
 							return;
 						}
-						let headersStore: Awaited<
-							ReturnType<typeof import("next/headers.js").headers>
-						>;
+						let headersStore: Awaited<ReturnType<NextHeadersModule["headers"]>>;
 						try {
 							const { headers } = await loadNextHeadersModule();
 							headersStore = await headers();
@@ -114,7 +107,7 @@ export const nextCookies = () => {
 							if (!setCookies) return;
 							const parsed = parseSetCookieHeader(setCookies);
 							let cookieHelper: Awaited<
-								ReturnType<typeof import("next/headers.js").cookies>
+								ReturnType<NextHeadersModule["cookies"]>
 							>;
 							try {
 								const { cookies } = await loadNextHeadersModule();
