@@ -1,3 +1,4 @@
+import { insufficientScopeError } from "better-auth/oauth2";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -208,7 +209,7 @@ describe("requireMcpAuth", () => {
 
 	it("answers a scope failure with a 403 insufficient_scope challenge", async () => {
 		verifyAccessTokenRequest.mockRejectedValue(
-			new APIError("FORBIDDEN", { message: "invalid scope mcp:write" }),
+			insufficientScopeError(["mcp:write"]),
 		);
 		const response = await requireMcpAuth(
 			authWith("https://app.example.com", "https://app.example.com/api/auth"),
@@ -222,11 +223,11 @@ describe("requireMcpAuth", () => {
 
 		expect(response.status).toBe(403);
 		expect(response.headers.get("WWW-Authenticate")).toBe(
-			`Bearer error="insufficient_scope", scope="mcp:write", resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/api/auth", error_description="invalid scope mcp:write"`,
+			`Bearer error="insufficient_scope", scope="mcp:write", resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/api/auth", error_description="access token is missing required scope: mcp:write"`,
 		);
 	});
 
-	it("answers a handler-thrown FORBIDDEN with a 403 insufficient_scope challenge", async () => {
+	it("lets a handler challenge for the scopes its tool needs", async () => {
 		verifyAccessTokenRequest.mockResolvedValue({
 			sub: "user-4",
 			scope: "mcp:read",
@@ -234,11 +235,9 @@ describe("requireMcpAuth", () => {
 		const response = await requireMcpAuth(
 			authWith("https://app.example.com", "https://app.example.com/api/auth"),
 			async () => {
-				throw new APIError("FORBIDDEN", {
-					message: "tool requires mcp:admin",
-				});
+				throw insufficientScopeError(["mcp:admin"], "tool requires mcp:admin");
 			},
-			{ scope: "mcp:admin" },
+			{ scope: "mcp:read" },
 		)(
 			new Request("https://app.example.com/mcp", {
 				headers: { Authorization: "Bearer access-token" },
@@ -249,6 +248,53 @@ describe("requireMcpAuth", () => {
 		expect(response.headers.get("WWW-Authenticate")).toBe(
 			`Bearer error="insufficient_scope", scope="mcp:admin", resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/api/auth", error_description="tool requires mcp:admin"`,
 		);
+	});
+
+	it("propagates a handler-thrown permission denial unchanged", async () => {
+		// Re-authorizing cannot grant organization membership, so this must not
+		// become a scope challenge that loops the user through consent.
+		verifyAccessTokenRequest.mockResolvedValue({
+			sub: "user-5",
+			scope: "mcp:read",
+		} satisfies JWTPayload);
+		const denial = new APIError("FORBIDDEN", {
+			message: "user is not a member of this organization",
+		});
+
+		await expect(
+			requireMcpAuth(
+				authWith("https://app.example.com", "https://app.example.com/api/auth"),
+				async () => {
+					throw denial;
+				},
+				{ scopes: ["mcp:read"] },
+			)(
+				new Request("https://app.example.com/mcp", {
+					headers: { Authorization: "Bearer access-token" },
+				}),
+			),
+		).rejects.toBe(denial);
+	});
+
+	it("propagates a handler error with its type and stack intact", async () => {
+		class ToolExecutionError extends Error {}
+		const failure = new ToolExecutionError("database connection lost");
+		verifyAccessTokenRequest.mockResolvedValue({
+			sub: "user-6",
+		} satisfies JWTPayload);
+
+		await expect(
+			requireMcpAuth(
+				authWith("https://app.example.com", "https://app.example.com/api/auth"),
+				async () => {
+					throw failure;
+				},
+			)(
+				new Request("https://app.example.com/mcp", {
+					headers: { Authorization: "Bearer access-token" },
+				}),
+			),
+		).rejects.toBe(failure);
 	});
 
 	it("derives the challenge scope hint from enforced scopes when no hint is set", async () => {

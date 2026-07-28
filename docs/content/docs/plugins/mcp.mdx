@@ -128,7 +128,7 @@ mcp({
 })
 ```
 
-### MCP Session Handling
+### Protecting an MCP Route
 
 Use `requireMcpAuth` to protect an MCP route. It reads the `Authorization` header, verifies Bearer access tokens against the authorization server's JWKS (signature, issuer, audience, and expiry), and enforces [RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449) DPoP proofs when the access token is DPoP-bound. Unauthenticated requests receive a JSON-RPC `401` with the RFC 9728 `WWW-Authenticate` header, so MCP clients can start the authorization flow. Tokens missing a required scope receive a `403` with an [RFC 6750](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1) `insufficient_scope` challenge, which MCP clients use to step up their authorization.
 
@@ -189,7 +189,7 @@ requireMcpAuth(auth, handler, {
 })
 ```
 
-To require scopes, pass `scopes`. A token missing any of them is rejected with a `403` and an `insufficient_scope` challenge that advertises the required scopes, so the client can re-authorize with them ([step-up authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#step-up-authorization-flow)). A handler-thrown `FORBIDDEN` `APIError` produces the same challenge, for per-tool scope decisions:
+To require scopes, pass `scopes`. A token missing any of them is rejected with a `403` and an `insufficient_scope` challenge naming every missing scope, so the client can re-authorize for all of them at once ([step-up authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#step-up-authorization-flow)):
 
 ```ts
 requireMcpAuth(auth, handler, {
@@ -197,6 +197,23 @@ requireMcpAuth(auth, handler, {
     scopes: ["mcp:tools"], // enforced against the token's scope claim
 })
 ```
+
+When the required scopes depend on the request — one tool needs more than another — throw `insufficientScopeError` from the handler to challenge for exactly those scopes:
+
+```ts
+import { insufficientScopeError } from "better-auth/oauth2";
+
+requireMcpAuth(auth, async (req, jwt) => {
+    if (isAdminTool(req) && !hasScope(jwt, "mcp:admin")) {
+        throw insufficientScopeError(["mcp:admin"]);
+    }
+    return handle(req, jwt);
+})
+```
+
+<Callout type="warn">
+  Reach for this only when re-authorizing would actually help. A denial the user cannot fix by granting scopes — they are not a member of the organization, the record belongs to someone else — should stay an ordinary `403`: challenging sends them through consent to no effect. Errors your handler throws for any other reason propagate to your framework unchanged.
+</Callout>
 
 ## Configuration
 

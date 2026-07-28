@@ -54,6 +54,22 @@ function buildDpopChallenge(
 	].join(", ");
 }
 
+function extractInsufficientScope(
+	error: APIError,
+): { scope?: string; description: string } | null {
+	const body = error.body as
+		| { error?: unknown; error_description?: unknown; scope?: unknown }
+		| undefined;
+	if (body?.error !== "insufficient_scope") return null;
+	return {
+		scope: typeof body.scope === "string" ? body.scope : undefined,
+		description:
+			typeof body.error_description === "string"
+				? body.error_description
+				: error.message,
+	};
+}
+
 function resolveResourceMetadataUrl(
 	value: string,
 	opts?: { resourceMetadataMappings?: Record<string, string> },
@@ -77,16 +93,37 @@ function resolveResourceMetadataUrl(
 	return resourceMetadata;
 }
 
+function buildBearerChallenge(
+	resource: string | string[],
+	opts: { resourceMetadataMappings?: Record<string, string> } | undefined,
+	authParams: (metadataUrl: string) => (string | false | undefined)[],
+): string {
+	const resources = Array.isArray(resource) ? resource : [resource];
+	return resources
+		.map((value) => {
+			const params = authParams(resolveResourceMetadataUrl(value, opts)).filter(
+				(param) => !!param,
+			);
+			return `Bearer ${params.join(", ")}`;
+		})
+		.join(", ");
+}
+
 /**
  * Raise an OAuth resource-server challenge for a failed access-token request.
  *
  * Missing/invalid bearer credentials are reported with RFC 6750 plus the RFC
- * 9728 `resource_metadata` pointer. Insufficient-scope failures are reported
- * with RFC 6750 §3.1's `insufficient_scope` challenge on a 403 so clients can
- * step up their authorization. DPoP-bound-token failures are reported with
- * RFC 9449's `DPoP` challenge so clients know which proof algorithms to use.
- * Non-URL resources (for example a `urn:` or a client id) resolve their
- * metadata URL through `resourceMetadataMappings`.
+ * 9728 `resource_metadata` pointer. Insufficient-scope failures (built with
+ * `insufficientScopeError`) are reported with RFC 6750 §3.1's
+ * `insufficient_scope` challenge on a 403 naming the scopes the token lacks, so
+ * clients can step up their authorization. DPoP-bound-token failures are
+ * reported with RFC 9449's `DPoP` challenge so clients know which proof
+ * algorithms to use. Non-URL resources (for example a `urn:` or a client id)
+ * resolve their metadata URL through `resourceMetadataMappings`.
+ *
+ * Every other error is rethrown unchanged, including a plain `FORBIDDEN`: a
+ * permission denial that re-authorizing cannot fix must not be answered with a
+ * challenge that sends the user through consent for scopes they already hold.
  *
  * @internal
  */
@@ -98,7 +135,11 @@ export function raiseResourceServerChallenge(
 		resourceMetadataMappings?: Record<string, string>;
 		/** DPoP JWS algorithms to advertise in RFC 9449 challenges. */
 		dpopSigningAlgorithms?: readonly string[];
-		/** Space-delimited scopes to advertise in RFC 6750 bearer challenges. */
+		/**
+		 * Space-delimited scopes to advertise in RFC 6750 bearer challenges,
+		 * hinting what an unauthenticated client should request. An
+		 * insufficient-scope failure advertises the scopes it names instead.
+		 */
 		scope?: string;
 	},
 ): never {
@@ -110,44 +151,46 @@ export function raiseResourceServerChallenge(
 				{ "WWW-Authenticate": buildDpopChallenge(error, opts) },
 			);
 		}
-		const resources = Array.isArray(resource) ? resource : [resource];
-		const wwwAuthenticateValue = resources
-			.map((value) => {
-				const metadataUrl = resolveResourceMetadataUrl(value, opts);
-				let challenge = `Bearer resource_metadata="${metadataUrl}"`;
-				if (opts?.scope) {
-					challenge += `, scope="${quoteAuthParam(opts.scope)}"`;
-				}
-				return challenge;
-			})
-			.join(", ");
 		throw new APIError(
 			"UNAUTHORIZED",
 			{ message: error.message },
-			{ "WWW-Authenticate": wwwAuthenticateValue },
+			{
+				"WWW-Authenticate": buildBearerChallenge(
+					resource,
+					opts,
+					(metadataUrl) => [
+						`resource_metadata="${metadataUrl}"`,
+						opts?.scope && `scope="${quoteAuthParam(opts.scope)}"`,
+					],
+				),
+			},
 		);
 	}
-	if (isAPIError(error) && error.status === "FORBIDDEN") {
+	const insufficientScope = isAPIError(error)
+		? extractInsufficientScope(error)
+		: null;
+	if (insufficientScope) {
 		// RFC 6750 §3.1: a token that is valid but lacks the scopes the
 		// operation needs answers with 403 and an `insufficient_scope`
-		// challenge, so the client can step up via re-authorization.
-		const resources = Array.isArray(resource) ? resource : [resource];
-		const wwwAuthenticateValue = resources
-			.map((value) => {
-				const metadataUrl = resolveResourceMetadataUrl(value, opts);
-				let challenge = `Bearer error="insufficient_scope"`;
-				if (opts?.scope) {
-					challenge += `, scope="${quoteAuthParam(opts.scope)}"`;
-				}
-				challenge += `, resource_metadata="${metadataUrl}"`;
-				challenge += `, error_description="${quoteAuthParam(error.message)}"`;
-				return challenge;
-			})
-			.join(", ");
+		// challenge naming them, so the client can step up via re-authorization.
+		// `opts.scope` is only a fallback: the scopes the token actually lacks
+		// are the ones re-authorizing has to add.
+		const scope = insufficientScope.scope ?? opts?.scope;
 		throw new APIError(
 			"FORBIDDEN",
-			{ message: error.message },
-			{ "WWW-Authenticate": wwwAuthenticateValue },
+			{ message: insufficientScope.description },
+			{
+				"WWW-Authenticate": buildBearerChallenge(
+					resource,
+					opts,
+					(metadataUrl) => [
+						`error="insufficient_scope"`,
+						scope && `scope="${quoteAuthParam(scope)}"`,
+						`resource_metadata="${metadataUrl}"`,
+						`error_description="${quoteAuthParam(insufficientScope.description)}"`,
+					],
+				),
+			},
 		);
 	}
 	if (error instanceof Error) {

@@ -1,3 +1,4 @@
+import { insufficientScopeError } from "better-auth/oauth2";
 import { APIError } from "better-call";
 import { describe, expect, it } from "vitest";
 import { raiseResourceServerChallenge } from "./resource-challenge";
@@ -40,9 +41,8 @@ describe("resource server challenge", () => {
 	it("answers insufficient scope with an RFC 6750 403 challenge", () => {
 		try {
 			raiseResourceServerChallenge(
-				new APIError("FORBIDDEN", { message: "invalid scope files:write" }),
+				insufficientScopeError(["files:write", "files:delete"]),
 				"https://api.example.com/mcp/tools",
-				{ scope: "files:write" },
 			);
 		} catch (error) {
 			const apiError = error as APIError;
@@ -50,38 +50,54 @@ describe("resource server challenge", () => {
 			expect(apiError.status).toBe("FORBIDDEN");
 			expect(apiError.statusCode).toBe(403);
 			expect(headers.get("WWW-Authenticate")).toBe(
-				'Bearer error="insufficient_scope", scope="files:write", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/mcp/tools", error_description="invalid scope files:write"',
+				'Bearer error="insufficient_scope", scope="files:write files:delete", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/mcp/tools", error_description="access token is missing required scope: files:write files:delete"',
 			);
 			return;
 		}
 		throw new Error("expected challenge");
 	});
 
-	it("omits the scope param from a 403 challenge when none is configured", () => {
+	it("challenges for the scopes the token lacks, not the configured hint", () => {
+		// The hint tells an unauthenticated client where to start; re-authorizing
+		// only helps if the challenge names what is actually missing.
 		try {
 			raiseResourceServerChallenge(
-				new APIError("FORBIDDEN", { message: "write access required" }),
+				insufficientScopeError(["files:write"]),
 				"https://api.example.com",
+				{ scope: "files:read" },
 			);
 		} catch (error) {
-			const apiError = error as APIError;
-			const headers = new Headers(apiError.headers);
-			expect(apiError.statusCode).toBe(403);
-			expect(headers.get("WWW-Authenticate")).toBe(
-				'Bearer error="insufficient_scope", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", error_description="write access required"',
-			);
+			const headers = new Headers((error as APIError).headers);
+			expect(headers.get("WWW-Authenticate")).toContain('scope="files:write"');
 			return;
 		}
 		throw new Error("expected challenge");
+	});
+
+	it("propagates a forbidden error that is not a scope failure", () => {
+		// A permission denial re-authorizing cannot fix must stay a plain 403;
+		// challenging would send the user through consent to no effect.
+		const denial = new APIError("FORBIDDEN", {
+			message: "user is not a member of this organization",
+		});
+		expect(() =>
+			raiseResourceServerChallenge(denial, "https://api.example.com"),
+		).toThrow(denial);
+		try {
+			raiseResourceServerChallenge(denial, "https://api.example.com");
+		} catch (error) {
+			expect(
+				new Headers((error as APIError).headers).get("WWW-Authenticate"),
+			).toBeNull();
+		}
 	});
 
 	it("resolves a mapped resource_metadata URL in a 403 challenge", () => {
 		try {
 			raiseResourceServerChallenge(
-				new APIError("FORBIDDEN", { message: "invalid scope mcp:tools" }),
+				insufficientScopeError(["mcp:tools"]),
 				"urn:example:mcp",
 				{
-					scope: "mcp:tools",
 					resourceMetadataMappings: {
 						"urn:example:mcp":
 							"https://api.example.com/.well-known/oauth-protected-resource",
@@ -93,7 +109,7 @@ describe("resource server challenge", () => {
 			const headers = new Headers(apiError.headers);
 			expect(apiError.statusCode).toBe(403);
 			expect(headers.get("WWW-Authenticate")).toBe(
-				'Bearer error="insufficient_scope", scope="mcp:tools", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", error_description="invalid scope mcp:tools"',
+				'Bearer error="insufficient_scope", scope="mcp:tools", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", error_description="access token is missing required scope: mcp:tools"',
 			);
 			return;
 		}
@@ -103,9 +119,10 @@ describe("resource server challenge", () => {
 	it("strips header-injection characters from 403 challenge params", () => {
 		try {
 			raiseResourceServerChallenge(
-				new APIError("FORBIDDEN", {
-					message: 'bad "scope"\r\nSet-Cookie: x=y',
-				}),
+				insufficientScopeError(
+					["files:write"],
+					'bad "scope"\r\nSet-Cookie: x=y',
+				),
 				"https://api.example.com",
 			);
 		} catch (error) {

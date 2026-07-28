@@ -444,19 +444,45 @@ async function verifyAccessTokenPayload(
 
 	// Check scopes if provided
 	if (opts.scopes) {
-		const validScopes = new Set(
+		const grantedScopes = new Set(
 			(payload.scope as string | undefined)?.split(" "),
 		);
-		for (const sc of opts.scopes) {
-			if (!validScopes.has(sc)) {
-				throw new APIError("FORBIDDEN", {
-					message: `invalid scope ${sc}`,
-				});
-			}
+		// RFC 6750 §3.1: report every missing scope at once. Challenging with one
+		// scope at a time costs the user a browser round-trip per scope.
+		const missingScopes = opts.scopes.filter(
+			(scope) => !grantedScopes.has(scope),
+		);
+		if (missingScopes.length > 0) {
+			throw insufficientScopeError(missingScopes);
 		}
 	}
 
 	return payload;
+}
+
+/**
+ * Build the RFC 6750 §3.1 insufficient-scope failure: the access token is valid
+ * but lacks scopes the operation needs.
+ *
+ * Resource-server challenge builders turn this into a `403` carrying a
+ * `WWW-Authenticate: Bearer error="insufficient_scope"` challenge that names
+ * `scopes`, so the client knows what to request when it re-authorizes. Throw it
+ * from a route handler to challenge for scopes only that operation needs; a
+ * plain `FORBIDDEN` stays a plain `403`, since a permission denial the client
+ * cannot fix by re-authorizing must not send the user through consent again.
+ *
+ * @param scopes - Every scope the operation requires but the token lacks.
+ */
+export function insufficientScopeError(
+	scopes: string[],
+	description = `access token is missing required scope: ${scopes.join(" ")}`,
+): APIError {
+	return new APIError("FORBIDDEN", {
+		message: description,
+		error: "insufficient_scope",
+		error_description: description,
+		scope: scopes.join(" "),
+	});
 }
 
 function throwDpopUnauthorized(

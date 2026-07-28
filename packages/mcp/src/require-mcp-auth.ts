@@ -1,8 +1,5 @@
 import type { Awaitable } from "@better-auth/core";
-import {
-	ResourceUriSchema,
-	raiseResourceServerChallenge,
-} from "@better-auth/oauth-provider";
+import { ResourceUriSchema } from "@better-auth/oauth-provider";
 import type {
 	DpopReplayReservations,
 	DpopReplayStore,
@@ -13,8 +10,8 @@ import {
 	verifyAccessTokenRequest,
 } from "better-auth/oauth2";
 import type { BetterAuthOptions } from "better-auth/types";
-import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
+import { toChallengeResponse } from "./challenge-response";
 
 interface RequireMcpAuthOptions {
 	/**
@@ -41,8 +38,8 @@ interface RequireMcpAuthOptions {
 	/**
 	 * Scopes the access token must include, enforced against the token's
 	 * `scope` claim. A token missing any of them is rejected with a 403 and an
-	 * RFC 6750 `insufficient_scope` challenge, so MCP clients can step up
-	 * their authorization.
+	 * RFC 6750 `insufficient_scope` challenge naming every missing scope, so MCP
+	 * clients can step up their authorization in one round-trip.
 	 */
 	scopes?: string[];
 	/**
@@ -63,31 +60,16 @@ interface RequireMcpAuthOptions {
 	};
 }
 
-const errorResponse = (error: APIError): Response => {
-	const headers = new Headers(error.headers as HeadersInit);
-	headers.set("Content-Type", "application/json");
-	return new Response(
-		JSON.stringify({
-			jsonrpc: "2.0",
-			error: { code: -32000, message: error.message },
-			id: null,
-		}),
-		{
-			status: error.statusCode,
-			headers,
-		},
-	);
-};
-
 /**
  * Protects an MCP server route handler. Verifies the bearer access token
  * against the authorization server's JWKS (checking signature, issuer,
  * audience, and expiry) and forwards the verified JWT payload to the handler.
  * Unauthenticated requests receive a JSON-RPC 401 with the RFC 9728
  * `WWW-Authenticate` header so MCP clients can start the authorization flow.
- * Tokens missing a required scope — and handler-thrown `FORBIDDEN` errors —
- * receive a 403 with an RFC 6750 `insufficient_scope` challenge so clients
- * can step up their authorization.
+ * Tokens missing a required scope receive a 403 with an RFC 6750
+ * `insufficient_scope` challenge naming the missing scopes, so clients can step
+ * up their authorization; a handler can raise the same challenge for scopes only
+ * it knows about by throwing `insufficientScopeError`.
  *
  * For a resource server that runs separately from the authorization server, or
  * a server using a dynamic `baseURL`, use {@link mcpHandler} with explicit
@@ -143,24 +125,15 @@ export const requireMcpAuth = <
 						opts?.dpop?.replayStore ?? createDpopReplayStore(internalAdapter),
 				},
 			});
-			// Awaited so a handler-thrown FORBIDDEN rejects inside this try and
-			// gets turned into an insufficient_scope challenge below.
+			// Awaited so a handler-thrown insufficient-scope error rejects inside
+			// this try and becomes a step-up challenge.
 			return await handler(req, jwt);
 		} catch (error) {
-			try {
-				raiseResourceServerChallenge(error, resource, {
-					scope: opts?.scope ?? opts?.scopes?.join(" "),
-					resourceMetadataMappings: opts?.resourceMetadataMappings,
-					dpopSigningAlgorithms: opts?.dpop?.signingAlgorithms,
-				});
-			} catch (challengeError) {
-				if (challengeError instanceof APIError) {
-					return errorResponse(challengeError);
-				}
-				if (challengeError instanceof Error) throw challengeError;
-				throw new Error(String(challengeError));
-			}
-			throw new Error(String(error));
+			return toChallengeResponse(error, resource, {
+				scope: opts?.scope ?? opts?.scopes?.join(" "),
+				resourceMetadataMappings: opts?.resourceMetadataMappings,
+				dpopSigningAlgorithms: opts?.dpop?.signingAlgorithms,
+			});
 		}
 	};
 };

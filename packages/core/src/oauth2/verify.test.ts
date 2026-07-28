@@ -115,6 +115,30 @@ describe("verifyBearerToken", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9654
 	 */
+	it("should report every missing scope in one insufficient_scope failure", async () => {
+		// RFC 6750 §3.1: one scope per challenge would cost the user a browser
+		// round-trip for each missing scope.
+		const { publicJWK, privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid, {
+			scope: "files:read",
+		});
+		mockJWKSResponse(publicJWK);
+
+		await expect(
+			verifyBearerToken(token, {
+				jwksUrl,
+				verifyOptions: { issuer, audience },
+				scopes: ["files:read", "files:write", "files:delete"],
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: {
+				error: "insufficient_scope",
+				scope: "files:write files:delete",
+			},
+		});
+	});
+
 	it("should translate jose claim validation failures to unauthorized API errors", async () => {
 		const { publicJWK, privateKey, kid } = await createTestJWKS();
 		const token = await createSignedToken(privateKey, kid, {
