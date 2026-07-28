@@ -637,3 +637,78 @@ describe("one-tap hosted domain (hd)", async () => {
 		expect(res.data?.token).toBeTruthy();
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10478
+ */
+describe("one-tap disableSignUp", () => {
+	afterEach(() => {
+		Object.assign(verifiedPayload, defaultVerifiedPayload);
+	});
+
+	it("rejects provider-disabled sign-up without creating a user", async () => {
+		verifiedPayload.email = "one-tap-disable-signup@example.com";
+		verifiedPayload.sub = "one-tap-disable-signup-sub";
+
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+					disableSignUp: true,
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		await expect(
+			auth.api.oneTapCallback({
+				body: { idToken: "stub-id-token" },
+			}),
+		).rejects.toMatchObject({
+			statusCode: 401,
+			status: "UNAUTHORIZED",
+			body: { message: "signup disabled" },
+		});
+
+		const ctx = await auth.$context;
+		const users = await ctx.adapter.findMany<{ email: string }>({
+			model: "user",
+			where: [
+				{
+					field: "email",
+					value: verifiedPayload.email,
+				},
+			],
+		});
+		expect(users).toHaveLength(0);
+	});
+
+	it("keeps provider sign-up disabled when One Tap enables it", async () => {
+		verifiedPayload.email = "one-tap-signup-override@example.com";
+		verifiedPayload.sub = "one-tap-signup-override-sub";
+
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+					disableSignUp: true,
+				},
+			},
+			plugins: [oneTap({ disableSignup: false })],
+		});
+
+		await expect(
+			auth.api.oneTapCallback({
+				body: { idToken: "stub-id-token" },
+			}),
+		).rejects.toMatchObject({
+			statusCode: 401,
+			status: "UNAUTHORIZED",
+			body: { message: "signup disabled" },
+		});
+	});
+});

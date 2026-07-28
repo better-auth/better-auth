@@ -933,6 +933,14 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 		async (ctx) => {
 			const email = ctx.body.email.toLowerCase();
+			const minPasswordLength = ctx.context.password.config.minPasswordLength;
+			if (ctx.body.password.length < minPasswordLength) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
+			}
+			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
+			if (ctx.body.password.length > maxPasswordLength) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
+			}
 
 			// Use atomic verification to prevent race conditions
 			await atomicVerifyOTP(
@@ -947,14 +955,6 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			});
 			if (!user) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
-			}
-			const minPasswordLength = ctx.context.password.config.minPasswordLength;
-			if (ctx.body.password.length < minPasswordLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-			}
-			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-			if (ctx.body.password.length > maxPasswordLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 			}
 			const passwordHash = await ctx.context.password.hash(ctx.body.password);
 			const account = user.accounts?.find(

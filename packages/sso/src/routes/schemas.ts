@@ -1,4 +1,17 @@
 import * as z from "zod";
+import { isSafeSAMLRedirectPath } from "../utils";
+
+const absoluteUrlSchema = z.url();
+
+export const samlRedirectUrlSchema = z
+	.string()
+	.refine(
+		(url) =>
+			isSafeSAMLRedirectPath(url) || absoluteUrlSchema.safeParse(url).success,
+		{
+			message: "Expected an absolute URL or a relative path starting with /",
+		},
+	);
 
 const oidcMappingSchema = z
 	.object({
@@ -44,6 +57,7 @@ const samlConfigSchema = z.object({
 	entryPoint: z.string().url().optional(),
 	cert: z.string().optional(),
 	callbackUrl: z.string().url().optional(),
+	idpInitiatedCallbackUrl: samlRedirectUrlSchema.optional(),
 	audience: z.string().optional(),
 	idpMetadata: z
 		.object({
