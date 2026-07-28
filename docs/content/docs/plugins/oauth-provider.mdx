@@ -448,7 +448,9 @@ const client = await authClient.oauth2.register({
 
 For all endpoint parameters, see [RFC 7591 Registration](https://datatracker.ietf.org/doc/html/rfc7591#section-2).
 
-When `application_type` ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)) is provided, redirect URIs are constrained to what the declared type allows: `native` clients may use custom schemes, loopback `http` redirects, or claimed `https` links — plain `http` on a routable host is rejected; `web` clients require `https` redirect URIs on non-loopback hosts. MCP clients are required to send an appropriate `application_type` by the [MCP 2026-07-28 spec](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#application-type-and-redirect-uri-constraints). When omitted, no `application_type` constraints are applied.
+When `application_type` ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)) is provided, redirect URIs are constrained to what the declared type allows. A `native` client may use custom schemes, loopback `http` redirects, or claimed `https` links ([RFC 8252 §7](https://datatracker.ietf.org/doc/html/rfc8252#section-7)); plain `http` on a routable host is rejected. A `web` client requires `https` redirect URIs on non-loopback hosts. Sending both `application_type` and `type` requires them to agree. When `application_type` is omitted, no constraints are applied.
+
+The [MCP 2026-07-28 spec](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#application-type-and-redirect-uri-constraints) requires MCP clients to send an appropriate `application_type`. The same constraints apply to clients identified by a [Client ID Metadata Document](/docs/plugins/cimd).
 
 Note the following parameters are not yet supported:
 

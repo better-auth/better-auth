@@ -274,4 +274,68 @@ describe("Client ID Metadata Document - integration", async () => {
 		});
 		expect(errorStatus).toBeGreaterThanOrEqual(400);
 	});
+
+	it("enforces application_type redirect URI constraints from the metadata document", async ({
+		onTestFinished,
+	}) => {
+		const originalFetch = globalThis.fetch.bind(globalThis);
+		const nativeClientUrl = "https://native.example.com/client-metadata.json";
+		const loopbackRedirect = "http://127.0.0.1:5099/callback";
+		vi.stubGlobal(
+			"fetch",
+			vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+				const url =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				if (url === nativeClientUrl) {
+					return Promise.resolve(
+						new Response(
+							JSON.stringify({
+								client_id: nativeClientUrl,
+								client_name: "Mislabelled Native Client",
+								// A loopback interception redirect belongs to a native
+								// client; declaring `web` contradicts it.
+								application_type: "web",
+								redirect_uris: [loopbackRedirect],
+								token_endpoint_auth_method: "none",
+							}),
+							{ status: 200, headers: { "content-type": "application/json" } },
+						),
+					);
+				}
+				return originalFetch(input, init);
+			}),
+		);
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+
+		const { headers } = await signInWithTestUser();
+		const authedClient = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: { customFetchImpl, headers },
+		});
+
+		const authorizeUrl =
+			`${authServerBaseUrl}/api/auth/oauth2/authorize` +
+			`?client_id=${encodeURIComponent(nativeClientUrl)}` +
+			`&response_type=code` +
+			`&redirect_uri=${encodeURIComponent(loopbackRedirect)}` +
+			`&scope=openid` +
+			`&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM` +
+			`&code_challenge_method=S256`;
+
+		let errorStatus = 0;
+		await authedClient.$fetch(authorizeUrl, {
+			method: "GET",
+			onError(ctx) {
+				errorStatus = ctx.response.status;
+			},
+		});
+		expect(errorStatus).toBeGreaterThanOrEqual(400);
+	});
 });

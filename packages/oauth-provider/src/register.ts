@@ -295,10 +295,24 @@ export async function checkOAuthClient(
 		});
 	}
 
-	// OIDC Registration §2 / MCP SEP-837: when `application_type` is sent,
-	// constrain redirect URIs to what the declared type allows. Only enforced
-	// when the parameter is explicit, so registrations predating this check
-	// keep working.
+	// `type` and `application_type` both describe the client profile, so a
+	// registration that sends both must not contradict itself.
+	if (clientWithDefaults.type && clientWithDefaults.application_type) {
+		const impliedApplicationType =
+			clientWithDefaults.type === "native" ? "native" : "web";
+		if (impliedApplicationType !== clientWithDefaults.application_type) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: `application_type '${clientWithDefaults.application_type}' conflicts with type '${clientWithDefaults.type}'`,
+			});
+		}
+	}
+
+	// OIDC Registration §2 `application_type`, required of MCP clients by
+	// SEP-837. Native redirect URIs follow RFC 8252 §7 (custom scheme, loopback
+	// http, or claimed https link) rather than OIDC's narrower list, which
+	// predates claimed https links. Only enforced when the parameter is
+	// explicit, so registrations that omit it keep working.
 	if (clientWithDefaults.application_type) {
 		for (const uri of clientWithDefaults.redirect_uris ?? []) {
 			const url = new URL(uri);
@@ -307,8 +321,8 @@ export async function checkOAuthClient(
 			const isLoopback = (isHttp || isHttps) && isLoopbackHost(url.hostname);
 			if (clientWithDefaults.application_type === "native") {
 				// Native clients redirect to custom schemes, loopback http
-				// interception servers, or claimed https links — never plain
-				// http on a routable host.
+				// interception servers, or claimed https links; never plain http
+				// on a routable host.
 				if (isHttp && !isLoopback) {
 					throw new APIError("BAD_REQUEST", {
 						error: "invalid_redirect_uri",

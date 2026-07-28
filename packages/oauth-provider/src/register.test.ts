@@ -1507,6 +1507,27 @@ describe("oauth register - application_type", async () => {
 		expect(body.application_type).toBe("web");
 	});
 
+	it("rejects an application_type that contradicts type", async () => {
+		const response = await register({
+			type: "web",
+			application_type: "native",
+			redirect_uris: ["https://rp.example.com/callback"],
+		});
+		expect(response.status).toBe(400);
+		const body = (await response.json()) as { error_description?: string };
+		expect(body.error_description).toContain("conflicts with type");
+	});
+
+	it("accepts a user-agent-based client declaring the web application type", async () => {
+		const response = await register({
+			type: "user-agent-based",
+			application_type: "web",
+			token_endpoint_auth_method: "none",
+			redirect_uris: ["https://spa.example.com/callback"],
+		});
+		expect(response.status).toBe(201);
+	});
+
 	it("keeps prior behavior when application_type is omitted", async () => {
 		// OIDC Registration defaults application_type to "web", but enforcing
 		// that default would break existing localhost integrations; constraints

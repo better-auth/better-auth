@@ -390,9 +390,8 @@ export interface OAuthClient {
 	/**
 	 * OIDC Registration application type, constraining redirect URI schemes and
 	 * hosts when provided: `native` clients use custom schemes, loopback `http`
-	 * redirects, or claimed `https` links; `web` clients require `https` on a
-	 * non-loopback host. Distinct from `type`, which tracks the RFC 6749 client
-	 * profile.
+	 * redirects, or claimed `https` links (RFC 8252 §7); `web` clients require
+	 * `https` on a non-loopback host. Must agree with `type` when both are sent.
 	 *
 	 * @default "web"
 	 * @see https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
