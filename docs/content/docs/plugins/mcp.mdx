@@ -130,7 +130,7 @@ mcp({
 
 ### MCP Session Handling
 
-Use `requireMcpAuth` to protect an MCP route. It reads the `Authorization` header, verifies Bearer access tokens against the authorization server's JWKS (signature, issuer, audience, and expiry), and enforces [RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449) DPoP proofs when the access token is DPoP-bound. Unauthenticated requests receive a JSON-RPC `401` with the RFC 9728 `WWW-Authenticate` header, so MCP clients can start the authorization flow.
+Use `requireMcpAuth` to protect an MCP route. It reads the `Authorization` header, verifies Bearer access tokens against the authorization server's JWKS (signature, issuer, audience, and expiry), and enforces [RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449) DPoP proofs when the access token is DPoP-bound. Unauthenticated requests receive a JSON-RPC `401` with the RFC 9728 `WWW-Authenticate` header, so MCP clients can start the authorization flow. Tokens missing a required scope receive a `403` with an [RFC 6750](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1) `insufficient_scope` challenge, which MCP clients use to step up their authorization.
 
 ```ts title="api/[transport]/route.ts"
 import { auth } from "@/lib/auth";
@@ -186,6 +186,15 @@ requireMcpAuth(auth, handler, {
     issuer: "https://auth.example.com", // override when jwt.issuer is custom
     jwksUrl: "https://auth.example.com/api/auth/jwks",
     scope: "openid profile" // advertised in the 401 challenge
+})
+```
+
+To require scopes, pass `scopes`. A token missing any of them is rejected with a `403` and an `insufficient_scope` challenge that advertises the required scopes, so the client can re-authorize with them ([step-up authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#step-up-authorization-flow)). A handler-thrown `FORBIDDEN` `APIError` produces the same challenge, for per-tool scope decisions:
+
+```ts
+requireMcpAuth(auth, handler, {
+    resource: "https://api.example.com/mcp",
+    scopes: ["mcp:tools"], // enforced against the token's scope claim
 })
 ```
 
@@ -282,4 +291,4 @@ const handler = mcpHandler( // [!code highlight]
 )
 ```
 
-`mcpHandler` returns the same RFC 9728 `WWW-Authenticate` response for unauthenticated requests. For resources whose identifier is not a URL (for example a URN), pass `resourceMetadataMappings` to map each resource to its metadata URL.
+`mcpHandler` returns the same RFC 9728 `WWW-Authenticate` response for unauthenticated requests. For resources whose identifier is not a URL (for example a URN), pass `resourceMetadataMappings` to map each resource to its metadata URL. Set `scopes` in the first argument to require scopes; a token missing any of them receives the same `403` `insufficient_scope` challenge as `requireMcpAuth`.

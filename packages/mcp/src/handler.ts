@@ -10,6 +10,8 @@ import type { JWTPayload } from "jose";
 /**
  * A request middleware handler that verifies an MCP access token and responds
  * with an RFC 9728 `WWW-Authenticate` header for unauthenticated requests.
+ * When `verifyOptions.scopes` is set, tokens missing a required scope receive
+ * a 403 with an RFC 6750 `insufficient_scope` challenge instead.
  *
  * @external
  */
@@ -19,7 +21,12 @@ export const mcpHandler = (
 	handler: (req: Request, jwt: JWTPayload) => Awaitable<Response>,
 	opts?: {
 		/** Maps non-url (ie urn, client) resources to resource_metadata */
-		resourceMetadataMappings: Record<string, string>;
+		resourceMetadataMappings?: Record<string, string>;
+		/**
+		 * Space-delimited scopes to advertise in `WWW-Authenticate` challenges
+		 * (RFC 6750). Defaults to `verifyOptions.scopes` when those are set.
+		 */
+		scope?: string;
 	},
 ) => {
 	return async (req: Request) => {
@@ -28,7 +35,9 @@ export const mcpHandler = (
 				requestToResourceInput(req),
 				verifyOptions,
 			);
-			return handler(req, token);
+			// Awaited so a handler-thrown FORBIDDEN rejects inside this try and
+			// gets turned into an insufficient_scope challenge below.
+			return await handler(req, token);
 		} catch (error) {
 			try {
 				raiseResourceServerChallenge(
@@ -36,6 +45,7 @@ export const mcpHandler = (
 					verifyOptions.verifyOptions.audience,
 					{
 						...opts,
+						scope: opts?.scope ?? verifyOptions.scopes?.join(" "),
 						dpopSigningAlgorithms: verifyOptions.dpop?.signingAlgorithms,
 					},
 				);

@@ -34,9 +34,17 @@ interface RequireMcpAuthOptions {
 	jwksUrl?: string;
 	/**
 	 * Space-delimited scopes to advertise in the `WWW-Authenticate` challenge
-	 * (RFC 6750), hinting which scopes the client should request.
+	 * (RFC 6750), hinting which scopes the client should request. Defaults to
+	 * the enforced `scopes` when those are set.
 	 */
 	scope?: string;
+	/**
+	 * Scopes the access token must include, enforced against the token's
+	 * `scope` claim. A token missing any of them is rejected with a 403 and an
+	 * RFC 6750 `insufficient_scope` challenge, so MCP clients can step up
+	 * their authorization.
+	 */
+	scopes?: string[];
 	/**
 	 * Maps a non-URL `resource` (an RFC 8707 `urn:` identifier or a client id) to
 	 * the URL of its protected resource metadata. Required when `resource` is not
@@ -55,7 +63,7 @@ interface RequireMcpAuthOptions {
 	};
 }
 
-const unauthorized = (error: APIError): Response => {
+const errorResponse = (error: APIError): Response => {
 	const headers = new Headers(error.headers as HeadersInit);
 	headers.set("Content-Type", "application/json");
 	return new Response(
@@ -77,6 +85,9 @@ const unauthorized = (error: APIError): Response => {
  * audience, and expiry) and forwards the verified JWT payload to the handler.
  * Unauthenticated requests receive a JSON-RPC 401 with the RFC 9728
  * `WWW-Authenticate` header so MCP clients can start the authorization flow.
+ * Tokens missing a required scope — and handler-thrown `FORBIDDEN` errors —
+ * receive a 403 with an RFC 6750 `insufficient_scope` challenge so clients
+ * can step up their authorization.
  *
  * For a resource server that runs separately from the authorization server, or
  * a server using a dynamic `baseURL`, use {@link mcpHandler} with explicit
@@ -121,6 +132,7 @@ export const requireMcpAuth = <
 		try {
 			const jwt = await verifyAccessTokenRequest(requestToResourceInput(req), {
 				verifyOptions: { issuer, audience: resource },
+				scopes: opts?.scopes,
 				jwksUrl,
 				dpop: {
 					proofMaxAgeSeconds: opts?.dpop?.proofMaxAgeSeconds,
@@ -131,17 +143,19 @@ export const requireMcpAuth = <
 						opts?.dpop?.replayStore ?? createDpopReplayStore(internalAdapter),
 				},
 			});
-			return handler(req, jwt);
+			// Awaited so a handler-thrown FORBIDDEN rejects inside this try and
+			// gets turned into an insufficient_scope challenge below.
+			return await handler(req, jwt);
 		} catch (error) {
 			try {
 				raiseResourceServerChallenge(error, resource, {
-					scope: opts?.scope,
+					scope: opts?.scope ?? opts?.scopes?.join(" "),
 					resourceMetadataMappings: opts?.resourceMetadataMappings,
 					dpopSigningAlgorithms: opts?.dpop?.signingAlgorithms,
 				});
 			} catch (challengeError) {
 				if (challengeError instanceof APIError) {
-					return unauthorized(challengeError);
+					return errorResponse(challengeError);
 				}
 				if (challengeError instanceof Error) throw challengeError;
 				throw new Error(String(challengeError));

@@ -54,11 +54,36 @@ function buildDpopChallenge(
 	].join(", ");
 }
 
+function resolveResourceMetadataUrl(
+	value: string,
+	opts?: { resourceMetadataMappings?: Record<string, string> },
+): string {
+	// Opaque absolute URIs (for example `urn:`) parse with an `origin` of
+	// "null", so only origin-based URLs derive the well-known metadata URL;
+	// everything else needs an explicit mapping.
+	const url = URL.canParse?.(value) ? new URL(value) : null;
+	if (url && url.origin !== "null") {
+		const resourcePath = url.pathname.endsWith("/")
+			? url.pathname.slice(0, -1)
+			: url.pathname;
+		return `${url.origin}/.well-known/oauth-protected-resource${resourcePath}${url.search}`;
+	}
+	const resourceMetadata = opts?.resourceMetadataMappings?.[value];
+	if (!resourceMetadata) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			message: `missing resource_metadata mapping for ${value}`,
+		});
+	}
+	return resourceMetadata;
+}
+
 /**
  * Raise an OAuth resource-server challenge for a failed access-token request.
  *
  * Missing/invalid bearer credentials are reported with RFC 6750 plus the RFC
- * 9728 `resource_metadata` pointer. DPoP-bound-token failures are reported with
+ * 9728 `resource_metadata` pointer. Insufficient-scope failures are reported
+ * with RFC 6750 §3.1's `insufficient_scope` challenge on a 403 so clients can
+ * step up their authorization. DPoP-bound-token failures are reported with
  * RFC 9449's `DPoP` challenge so clients know which proof algorithms to use.
  * Non-URL resources (for example a `urn:` or a client id) resolve their
  * metadata URL through `resourceMetadataMappings`.
@@ -88,28 +113,8 @@ export function raiseResourceServerChallenge(
 		const resources = Array.isArray(resource) ? resource : [resource];
 		const wwwAuthenticateValue = resources
 			.map((value) => {
-				// Opaque absolute URIs (for example `urn:`) parse with an
-				// `origin` of "null", so only origin-based URLs derive the
-				// well-known metadata URL; everything else needs an explicit
-				// mapping.
-				const url = URL.canParse?.(value) ? new URL(value) : null;
-				if (url && url.origin !== "null") {
-					const resourcePath = url.pathname.endsWith("/")
-						? url.pathname.slice(0, -1)
-						: url.pathname;
-					let challenge = `Bearer resource_metadata="${url.origin}/.well-known/oauth-protected-resource${resourcePath}${url.search}"`;
-					if (opts?.scope) {
-						challenge += `, scope="${quoteAuthParam(opts.scope)}"`;
-					}
-					return challenge;
-				}
-				const resourceMetadata = opts?.resourceMetadataMappings?.[value];
-				if (!resourceMetadata) {
-					throw new APIError("INTERNAL_SERVER_ERROR", {
-						message: `missing resource_metadata mapping for ${value}`,
-					});
-				}
-				let challenge = `Bearer resource_metadata="${resourceMetadata}"`;
+				const metadataUrl = resolveResourceMetadataUrl(value, opts);
+				let challenge = `Bearer resource_metadata="${metadataUrl}"`;
 				if (opts?.scope) {
 					challenge += `, scope="${quoteAuthParam(opts.scope)}"`;
 				}
@@ -118,6 +123,29 @@ export function raiseResourceServerChallenge(
 			.join(", ");
 		throw new APIError(
 			"UNAUTHORIZED",
+			{ message: error.message },
+			{ "WWW-Authenticate": wwwAuthenticateValue },
+		);
+	}
+	if (isAPIError(error) && error.status === "FORBIDDEN") {
+		// RFC 6750 §3.1: a token that is valid but lacks the scopes the
+		// operation needs answers with 403 and an `insufficient_scope`
+		// challenge, so the client can step up via re-authorization.
+		const resources = Array.isArray(resource) ? resource : [resource];
+		const wwwAuthenticateValue = resources
+			.map((value) => {
+				const metadataUrl = resolveResourceMetadataUrl(value, opts);
+				let challenge = `Bearer error="insufficient_scope"`;
+				if (opts?.scope) {
+					challenge += `, scope="${quoteAuthParam(opts.scope)}"`;
+				}
+				challenge += `, resource_metadata="${metadataUrl}"`;
+				challenge += `, error_description="${quoteAuthParam(error.message)}"`;
+				return challenge;
+			})
+			.join(", ");
+		throw new APIError(
+			"FORBIDDEN",
 			{ message: error.message },
 			{ "WWW-Authenticate": wwwAuthenticateValue },
 		);
