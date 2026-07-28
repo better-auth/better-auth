@@ -73,6 +73,39 @@ describe("prisma-adapter", () => {
 		);
 	});
 
+	it("uses Prisma's transaction-scoped client for migration queries", async () => {
+		const rootExecuteRaw = vi.fn();
+		const transactionExecuteRaw = vi.fn().mockResolvedValue(1);
+		const transactionClient = {
+			$executeRawUnsafe: transactionExecuteRaw,
+			$queryRawUnsafe: vi.fn(),
+		};
+		const transaction = vi
+			.fn()
+			.mockImplementation(async (callback) => callback(transactionClient));
+		const adapter = createTestAdapter({
+			$executeRawUnsafe: rootExecuteRaw,
+			$queryRawUnsafe: vi.fn(),
+			$transaction: transaction,
+		});
+		const migrationConnection =
+			adapter.options?.adapterConfig.migrationConnection;
+
+		await migrationConnection?.transaction?.(async (connection) => {
+			await connection.execute({
+				parameters: ["local:credential"],
+				sql: "UPDATE account SET issuer = ?",
+			});
+		});
+
+		expect(transaction).toHaveBeenCalledTimes(1);
+		expect(transactionExecuteRaw).toHaveBeenCalledWith(
+			"UPDATE account SET issuer = ?",
+			"local:credential",
+		);
+		expect(rootExecuteRaw).not.toHaveBeenCalled();
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8365
 	 */

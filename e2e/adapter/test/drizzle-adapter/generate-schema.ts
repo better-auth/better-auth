@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import { join } from "node:path";
 import type { BetterAuthOptions } from "@better-auth/core";
@@ -6,8 +7,9 @@ import type { DrizzleAdapterConfig } from "@better-auth/drizzle-adapter";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 
 let generationCount = 0;
+let generationNamespace = randomUUID();
 
-const schemaCache = new Map<string, { count: number; schema: any }>();
+const schemaCache = new Map<string, { fileName: string; schema: any }>();
 
 /**
  * generates a drizzle schema based on BetterAuthOptions & a given dialect.
@@ -22,14 +24,15 @@ export const generateDrizzleSchema = async (
 ) => {
 	const cacheKey = `${dialect}-${JSON.stringify(options)}-${JSON.stringify(adapterConfig)}`;
 	if (schemaCache.has(cacheKey)) {
-		const { count, schema } = schemaCache.get(cacheKey)!;
+		const { fileName, schema } = schemaCache.get(cacheKey)!;
 		return {
 			schema,
-			fileName: `./.tmp/generated-${dialect}-schema-${count}`,
+			fileName,
 		};
 	}
 	generationCount++;
 	const thisCount = generationCount;
+	const fileName = `./.tmp/generated-${dialect}-schema-${generationNamespace}-${thisCount}`;
 	const i = async (x: string) => {
 		// Clear the Node.js module cache for the generated schema file to ensure fresh import
 		try {
@@ -79,22 +82,19 @@ export const generateDrizzleSchema = async (
 	});
 
 	await fs.writeFile(
-		join(
-			import.meta.dirname,
-			`/.tmp/generated-${dialect}-schema-${thisCount}.ts`,
-		),
+		join(import.meta.dirname, `${fileName}.ts`),
 		code || "",
 		"utf-8",
 	);
 
-	const res = await i(`./.tmp/generated-${dialect}-schema-${thisCount}`);
+	const res = await i(fileName);
 	schemaCache.set(cacheKey, {
-		count: thisCount,
+		fileName,
 		schema: res,
 	});
 	return {
 		schema: res,
-		fileName: `./.tmp/generated-${dialect}-schema-${thisCount}`,
+		fileName,
 	};
 };
 
@@ -104,4 +104,5 @@ export const clearSchemaCache = () => {
 
 export const resetGenerationCount = () => {
 	generationCount = 0;
+	generationNamespace = randomUUID();
 };

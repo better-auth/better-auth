@@ -4,6 +4,7 @@ import type {
 	AdapterFactoryOptions,
 	DBAdapter,
 	DBAdapterDebugLogOption,
+	MigrationDatabaseConnection,
 	MigrationDatabaseDialect,
 	MigrationDatabaseQuery,
 	MigrationDatabaseQueryResult,
@@ -207,6 +208,56 @@ function isDrizzleMigrationRead(query: MigrationDatabaseQuery): boolean {
 	const sql = query.sql.trimStart();
 	if (/^(?:select|with|explain)\b/i.test(sql)) return true;
 	return /^pragma\b/i.test(sql) && !/^pragma\b[^;]*=/i.test(sql);
+}
+
+function createDrizzleMigrationConnection(
+	db: DB,
+	dialect: MigrationDatabaseDialect,
+	inTransaction = false,
+): MigrationDatabaseConnection {
+	const connection: MigrationDatabaseConnection = {
+		dialect,
+		async execute(query) {
+			const statement = buildMigrationStatement(query, dialect);
+			const driverResult =
+				dialect === "sqlite"
+					? isDrizzleMigrationRead(query)
+						? await db.all(statement)
+						: await db.run(statement)
+					: await db.execute(statement);
+			return getMigrationQueryResult(driverResult);
+		},
+	};
+	if (inTransaction) return connection;
+	connection.transaction = async (callback) => {
+		if (dialect === "sqlite") {
+			await connection.execute({
+				parameters: [],
+				sql: "BEGIN IMMEDIATE",
+			});
+			try {
+				const result = await callback(
+					createDrizzleMigrationConnection(db, dialect, true),
+				);
+				await connection.execute({ parameters: [], sql: "COMMIT" });
+				return result;
+			} catch (error) {
+				await connection.execute({ parameters: [], sql: "ROLLBACK" });
+				throw error;
+			}
+		}
+		if (typeof db.transaction !== "function") {
+			throw new BetterAuthError(
+				`Drizzle does not expose transactions for the ${dialect} migration connection.`,
+			);
+		}
+		return db.transaction((transactionDatabase: DB) =>
+			callback(
+				createDrizzleMigrationConnection(transactionDatabase, dialect, true),
+			),
+		);
+	};
+	return connection;
 }
 
 export interface DrizzleAdapterConfig {
@@ -1230,22 +1281,10 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 		config: {
 			adapterId: "drizzle",
 			adapterName: "Drizzle Adapter",
-			migrationConnection: {
-				dialect: config.provider === "pg" ? "postgres" : config.provider,
-				async execute(query) {
-					const statement = buildMigrationStatement(
-						query,
-						config.provider === "pg" ? "postgres" : config.provider,
-					);
-					const driverResult =
-						config.provider === "sqlite"
-							? isDrizzleMigrationRead(query)
-								? await db.all(statement)
-								: await db.run(statement)
-							: await db.execute(statement);
-					return getMigrationQueryResult(driverResult);
-				},
-			},
+			migrationConnection: createDrizzleMigrationConnection(
+				db,
+				config.provider === "pg" ? "postgres" : config.provider,
+			),
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			supportsUUIDs: config.provider === "pg" ? true : false,

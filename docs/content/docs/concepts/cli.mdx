@@ -56,6 +56,8 @@ Use `--dry-run` before an upgrade or when reviewing a generated migration:
 npx auth@latest migrate --dry-run
 ```
 
+The human-readable output identifies the adapter and SQL dialect and lists the blocker codes, if any.
+
 Use `--json` in CI or with a coding agent. The output has a versioned `formatVersion`, the detected adapter and SQL dialect under `target`, a `status`, sorted schema changes, and stable blocker codes. A blocked plan exits with status `1`, and no database changes are applied.
 
 ```package-install title="Terminal"
@@ -70,6 +72,7 @@ The blocker codes describe the kind of reviewed data operation that must happen 
 * `table-data-conversion` - A retained model has data whose physical encoding changed.
 * `retired-table-data` - Rows from a retired model must be removed before its replacement is created.
 * `reprovision-data` - The old and new models have different lifecycle semantics and require a new provisioning cycle.
+* `release-migration-preflight` - A required 1.6 issuer, OAuth, or SCIM decision is missing or conflicts with the stored data.
 
 After resolving every blocker, run the command again. An `up-to-date` plan means the configured schema is already present; a `ready` plan can be applied with `migrate`.
 
@@ -87,6 +90,8 @@ npx auth@latest migrate --from 1.6 \
 ```
 
 The release migration validates every decision before writing. It rejects missing issuer mappings and identity collisions. OAuth client secrets are rehashed, and legacy tokens are retired. Before creating the 1.7 replacements, the command renames the legacy OAuth and SCIM tables with a `__better_auth_1_6` suffix. SCIM account IDs are never inferred from email or provider-name patterns; supply the exact IDs from a reviewed inventory.
+
+Add `--dry-run` or `--json` to the complete command to validate the 1.6 decisions without applying them. PostgreSQL, SQLite, and SQL Server run the relational data and schema cutover on one transaction-scoped connection. MySQL validates every deterministic decision before writing and uses resumable operations because MySQL can commit DDL implicitly. If a MySQL infrastructure or permission error interrupts the cutover, keep authentication writes stopped, correct the error, and rerun the same command with the same decisions.
 
 If Prisma Migrate or Drizzle Kit owns your versioned schema history, record this direct release migration in that history before the next deployment. Do not run an ORM migration that applies the same 1.7 changes a second time.
 

@@ -165,15 +165,8 @@ describe("get-migration: ALTER TABLE ADD COLUMN on SQLite", () => {
 			`INSERT INTO "user" ("id", "name", "email", "emailVerified", "createdAt", "updatedAt")
 			 VALUES ('u1', 'Ada', 'ada@example.com', 1, '2020-01-01', '2020-01-01')`,
 		);
-		const warnings: string[] = [];
 		const config: BetterAuthOptions = {
 			database: db,
-			logger: {
-				level: "warn",
-				log: (level, message) => {
-					if (level === "warn") warnings.push(message);
-				},
-			},
 			user: {
 				additionalFields: {
 					referralCode: {
@@ -187,10 +180,6 @@ describe("get-migration: ALTER TABLE ADD COLUMN on SQLite", () => {
 		};
 
 		const { runMigrations, compileMigrations } = await getMigrations(config);
-
-		// The shared backfill cannot be unique on a multi-row table, so the
-		// generator warns that a manual backfill may be needed.
-		expect(warnings.some((w) => w.includes('"referralCode"'))).toBe(true);
 
 		// A required unique column keeps its static default so the NOT NULL add
 		// succeeds; uniqueness is enforced through a separate index.
@@ -206,6 +195,49 @@ describe("get-migration: ALTER TABLE ADD COLUMN on SQLite", () => {
 			.prepare(`SELECT "referralCode" FROM "user" WHERE "id" = 'u1'`)
 			.get() as { referralCode: string };
 		expect(user.referralCode).toBe("unset");
+	});
+
+	it("blocks a shared default for a required unique column on a multi-row table", async () => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(
+			`CREATE TABLE "user" (
+				"id" text primary key not null,
+				"name" text not null,
+				"email" text not null unique,
+				"emailVerified" integer not null,
+				"image" text,
+				"createdAt" date not null,
+				"updatedAt" date not null
+			);
+			INSERT INTO "user" ("id", "name", "email", "emailVerified", "createdAt", "updatedAt")
+			VALUES
+				('u1', 'Ada', 'ada@example.com', 1, '2020-01-01', '2020-01-01'),
+				('u2', 'Grace', 'grace@example.com', 1, '2020-01-01', '2020-01-01');`,
+		);
+		const migration = await getMigrations({
+			database: db,
+			user: {
+				additionalFields: {
+					referralCode: {
+						type: "string",
+						required: true,
+						unique: true,
+						defaultValue: "unset",
+					},
+				},
+			},
+		});
+
+		expect(migration.migrationBlockers).toEqual([
+			{
+				code: "required-column-backfill",
+				columns: ["referralCode"],
+				table: "user",
+			},
+		]);
+		await expect(migration.runMigrations()).rejects.toThrow(
+			'Migration blocked: existing table "user" contains rows and requires values for "referralCode".',
+		);
 	});
 });
 

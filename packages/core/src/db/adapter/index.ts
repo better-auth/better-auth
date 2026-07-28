@@ -77,6 +77,17 @@ export interface MigrationDatabaseConnection {
 	execute: (
 		query: MigrationDatabaseQuery,
 	) => Promise<MigrationDatabaseQueryResult>;
+	/**
+	 * Run migration work through one transaction-scoped native connection.
+	 *
+	 * Adapters backed by a connection pool must pass a connection bound to the
+	 * active transaction rather than reusing the root client.
+	 */
+	transaction?:
+		| (<Result>(
+				callback: (connection: MigrationDatabaseConnection) => Promise<Result>,
+		  ) => Promise<Result>)
+		| undefined;
 }
 
 export interface DBAdapterFactoryConfig<

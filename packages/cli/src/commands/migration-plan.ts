@@ -12,9 +12,16 @@ interface CreateMigrationPlanInput
 		| "toBeCreated"
 	> {
 	hasChanges: boolean;
+	releaseMigrationBlockers?: ReleaseMigrationPreflightBlocker[] | undefined;
+}
+
+export interface ReleaseMigrationPreflightBlocker {
+	code: "release-migration-preflight";
+	message: string;
 }
 
 export type MigrationPlanBlocker =
+	| ReleaseMigrationPreflightBlocker
 	| {
 			code: "required-column-backfill";
 			columns: string[];
@@ -71,6 +78,7 @@ export interface MigrationPlan {
 }
 
 function getBlockerTable(blocker: MigrationPlanBlocker) {
+	if (blocker.code === "release-migration-preflight") return "";
 	if (
 		blocker.code === "required-column-backfill" ||
 		blocker.code === "required-column-constraint" ||
@@ -91,15 +99,17 @@ export function createMigrationPlan({
 	hasChanges,
 	migrationBlockers,
 	migrationTarget,
+	releaseMigrationBlockers = [],
 	toBeAdded,
 	toBeAddedIndexes,
 	toBeCreated,
 }: CreateMigrationPlanInput): MigrationPlan {
+	const blockers = [...migrationBlockers, ...releaseMigrationBlockers];
 	return {
 		formatVersion: 1,
 		target: migrationTarget,
 		status:
-			migrationBlockers.length > 0
+			blockers.length > 0
 				? ("blocked" as const)
 				: hasChanges
 					? ("ready" as const)
@@ -126,7 +136,7 @@ export function createMigrationPlan({
 				}))
 				.sort((left, right) => left.table.localeCompare(right.table)),
 		},
-		blockers: migrationBlockers
+		blockers: blockers
 			.map((blocker) => {
 				if (
 					blocker.code === "required-column-backfill" ||

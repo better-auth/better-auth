@@ -5,6 +5,7 @@ import type {
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	JoinConfig,
+	MigrationDatabaseConnection,
 	MigrationDatabaseDialect,
 	MigrationDatabaseQueryResult,
 	Where,
@@ -111,10 +112,11 @@ function getPrismaMigrationRows(
 function createPrismaMigrationConnection(
 	prisma: PrismaClientInternal,
 	provider: PrismaConfig["provider"],
-) {
+	inTransaction = false,
+): MigrationDatabaseConnection | undefined {
 	const dialect = getPrismaMigrationDialect(provider);
 	if (!dialect) return undefined;
-	return {
+	const connection: MigrationDatabaseConnection = {
 		dialect,
 		async execute(query): Promise<MigrationDatabaseQueryResult> {
 			if (isReadMigrationQuery(query.sql)) {
@@ -140,9 +142,24 @@ function createPrismaMigrationConnection(
 			);
 			return { numAffectedRows: BigInt(affectedRows), rows: [] };
 		},
-	} satisfies NonNullable<
-		AdapterFactoryOptions["config"]["migrationConnection"]
-	>;
+	};
+	if (!inTransaction) {
+		connection.transaction = async (callback) =>
+			prisma.$transaction(async (transactionClient) => {
+				const transactionConnection = createPrismaMigrationConnection(
+					transactionClient as PrismaClientInternal,
+					provider,
+					true,
+				);
+				if (!transactionConnection) {
+					throw new BetterAuthError(
+						`Prisma does not expose a SQL migration connection for ${provider}.`,
+					);
+				}
+				return callback(transactionConnection);
+			});
+	}
+	return connection;
 }
 
 export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {

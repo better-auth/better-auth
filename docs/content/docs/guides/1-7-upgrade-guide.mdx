@@ -53,9 +53,13 @@ Use the JSON form in CI or when a coding agent is helping with the migration:
 npx auth@rc migrate --json > better-auth-migration-plan.json
 ```
 
-A blocked plan exits with status `1` and does not change the database. Its `target` identifies the detected adapter and SQL dialect, which lets a coding agent verify that it is planning against the intended database. Resolve each blocker using the applicable section below, then run the inspection again.
+A blocked plan exits with status `1` and does not change the database. Its `target` identifies the detected adapter and SQL dialect, which lets a coding agent verify that it is planning against the intended database. The human-readable dry run prints the same target and blocker codes. Resolve each blocker using the applicable section below, then run the inspection again.
 
 Use `migrate --from 1.6` with the explicit decisions described below. The command uses the configured SQL connection for Kysely, Drizzle, or Prisma. When SQLite cannot add the required constraints in place, the migration rebuilds the affected table, preserves its explicit indexes and triggers, and validates foreign keys before committing.
+
+Add `--dry-run` or `--json` to the complete `--from 1.6` command to validate the issuer mappings and OAuth or SCIM decisions without writing. Missing or inconsistent release decisions appear as a `release-migration-preflight` blocker.
+
+PostgreSQL, SQLite, and SQL Server apply the relational data and schema cutover through one transaction-scoped connection. MySQL validates deterministic failures before writing and uses resumable operations because its DDL can commit implicitly. Keep authentication writes stopped for the whole cutover. If an infrastructure or permission error interrupts a MySQL migration, correct the error and rerun the same command with the same reviewed decisions.
 
 <Callout type="warn">
   The release command applies data and schema changes directly. If Prisma Migrate or Drizzle Kit owns your versioned schema history, prepare a matching migration record for the cutover and record it as applied after the CLI succeeds. Do not execute equivalent 1.7 data definition language (DDL) twice.

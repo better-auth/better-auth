@@ -4,6 +4,7 @@ import type {
 	MigrationDatabaseDialect,
 } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
+import type { KyselyDatabaseType } from "@better-auth/kysely-adapter";
 import { createKyselyAdapter } from "@better-auth/kysely-adapter";
 import type {
 	DatabaseConnection,
@@ -30,6 +31,18 @@ import {
 	SqliteQueryCompiler,
 } from "kysely";
 import { getAdapter } from "./adapter-kysely";
+
+export interface MigrationDatabase {
+	adapterId: string;
+	databaseType: KyselyDatabaseType;
+	inTransaction: boolean;
+	kysely: Kysely<unknown>;
+	transaction?:
+		| (<Result>(
+				callback: (database: MigrationDatabase) => Promise<Result>,
+		  ) => Promise<Result>)
+		| undefined;
+}
 
 function createDatabaseConnection(
 	migrationConnection: MigrationDatabaseConnection,
@@ -140,12 +153,23 @@ function createMigrationDialect(
 
 export async function getMigrationDatabase(config: BetterAuthOptions) {
 	const directDatabase = await createKyselyAdapter(config);
-	if (directDatabase.kysely) {
-		return {
+	if (directDatabase.kysely && directDatabase.databaseType) {
+		const database: MigrationDatabase = {
 			adapterId: "kysely",
 			databaseType: directDatabase.databaseType,
+			inTransaction: false,
 			kysely: directDatabase.kysely,
 		};
+		database.transaction = async (callback) =>
+			directDatabase.kysely!.transaction().execute((transaction) =>
+				callback({
+					adapterId: database.adapterId,
+					databaseType: database.databaseType,
+					inTransaction: true,
+					kysely: transaction as unknown as Kysely<unknown>,
+				}),
+			);
+		return database;
 	}
 
 	const adapter = await getAdapter(config);
@@ -156,11 +180,25 @@ export async function getMigrationDatabase(config: BetterAuthOptions) {
 			`The ${adapter.id} adapter does not expose a SQL migration connection. Use \`auth generate\` and your database tooling instead.`,
 		);
 	}
-	return {
-		adapterId: adapter.id,
-		databaseType: migrationConnection.dialect,
-		kysely: new Kysely<unknown>({
-			dialect: createMigrationDialect(migrationConnection),
-		}),
+	const createDatabase = (
+		connection: MigrationDatabaseConnection,
+		inTransaction: boolean,
+	): MigrationDatabase => {
+		const database: MigrationDatabase = {
+			adapterId: adapter.id,
+			databaseType: connection.dialect,
+			inTransaction,
+			kysely: new Kysely<unknown>({
+				dialect: createMigrationDialect(connection),
+			}),
+		};
+		if (!inTransaction && connection.transaction) {
+			database.transaction = async (callback) =>
+				connection.transaction!((transactionConnection) =>
+					callback(createDatabase(transactionConnection, true)),
+				);
+		}
+		return database;
 	};
+	return createDatabase(migrationConnection, false);
 }

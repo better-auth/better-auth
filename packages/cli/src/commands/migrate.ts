@@ -1,10 +1,15 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { getAuthTables } from "@better-auth/core/db";
 import {
 	createTelemetry,
 	getTelemetryAuthConfig,
 } from "@better-auth/telemetry";
-import { getMigrations, migrateFrom16 } from "better-auth/db/migration";
+import {
+	getMigrations,
+	migrateFrom16,
+	validateMigrationFrom16,
+} from "better-auth/db/migration";
 import chalk from "chalk";
 import { Command } from "commander";
 import prompts from "prompts";
@@ -65,6 +70,49 @@ export async function migrateAction(opts: unknown) {
 		oauthConsent: options.legacyOAuthConsentTable,
 		scimProvider: options.legacyScimProviderTable,
 	};
+	const consentStrategy = options.migrateOAuthConsents
+		? ("migrate" as const)
+		: options.reauthorizeOAuthConsents
+			? ("reauthorize" as const)
+			: undefined;
+	const hasOAuthDecision =
+		options.migrateOAuthClients || consentStrategy || options.revokeOAuthTokens;
+	if (
+		hasOAuthDecision &&
+		!(
+			options.migrateOAuthClients &&
+			consentStrategy &&
+			options.revokeOAuthTokens
+		)
+	) {
+		throw new Error(
+			"The OAuth cutover requires a client, consent, and token decision together.",
+		);
+	}
+	const releaseMigrationOptions =
+		options.from === "1.6"
+			? {
+					accountIssuers,
+					legacyTableNames,
+					oauthProvider:
+						options.migrateOAuthClients &&
+						consentStrategy &&
+						options.revokeOAuthTokens
+							? {
+									clients: "migrate" as const,
+									clientSecrets: "rehash-plaintext" as const,
+									consents: consentStrategy,
+									tokens: "revoke" as const,
+								}
+							: undefined,
+					scim: options.reprovisionScim
+						? {
+								accountIdsToRetire: options.retireScimAccount ?? [],
+								providers: "reprovision" as const,
+							}
+						: undefined,
+				}
+			: undefined;
 
 	const cwd = path.resolve(options.cwd);
 	if (!existsSync(cwd)) {
@@ -101,10 +149,43 @@ export async function migrateAction(opts: unknown) {
 		toBeAdded.length > 0 ||
 		toBeAddedIndexes.length > 0 ||
 		toBeCreated.length > 0;
+	const accountTable = getAuthTables(config).account?.modelName || "account";
+	const releaseHandledBlockerCodes = new Set([
+		"reprovision-data",
+		"retired-table-data",
+		"table-data-conversion",
+		"table-data-move",
+	]);
+	const effectiveMigrationBlockers = releaseMigrationOptions
+		? migrationBlockers.filter(
+				(blocker) =>
+					!releaseHandledBlockerCodes.has(blocker.code) &&
+					!(
+						(blocker.code === "required-column-backfill" ||
+							blocker.code === "required-column-constraint") &&
+						blocker.table === accountTable
+					),
+			)
+		: migrationBlockers;
+	const releaseMigrationBlockers: Array<{
+		code: "release-migration-preflight";
+		message: string;
+	}> = [];
+	if (releaseMigrationOptions) {
+		try {
+			await validateMigrationFrom16(config, releaseMigrationOptions);
+		} catch (error) {
+			releaseMigrationBlockers.push({
+				code: "release-migration-preflight",
+				message: error instanceof Error ? error.message : String(error),
+			});
+		}
+	}
 	const migrationPlan = createMigrationPlan({
 		hasChanges,
-		migrationBlockers,
+		migrationBlockers: effectiveMigrationBlockers,
 		migrationTarget,
+		releaseMigrationBlockers,
 		toBeAdded,
 		toBeAddedIndexes,
 		toBeCreated,
@@ -112,16 +193,20 @@ export async function migrateAction(opts: unknown) {
 
 	if (options.json) {
 		console.log(JSON.stringify(migrationPlan, null, 2));
-		if (migrationBlockers.length > 0) {
+		if (migrationPlan.blockers.length > 0) {
 			process.exitCode = 1;
 		}
 		return;
 	}
 
 	spinner?.stop();
-	if (migrationBlockers.length > 0 && options.from !== "1.6") {
+	if (migrationPlan.blockers.length > 0 && !options.dryRun) {
 		console.error("Migration blocked. No database changes were applied.");
-		for (const blocker of migrationBlockers) {
+		for (const blocker of migrationPlan.blockers) {
+			if (blocker.code === "release-migration-preflight") {
+				console.error(`-> [${blocker.code}] ${blocker.message}`);
+				continue;
+			}
 			if (blocker.code === "table-data-move") {
 				console.error(
 					`-> [${blocker.code}] ${blocker.sourceTable}: move rows to ${blocker.targetTable} for ${blocker.migration}.`,
@@ -176,6 +261,7 @@ export async function migrateAction(opts: unknown) {
 			});
 		} catch {}
 		process.exit(0);
+		return;
 	}
 
 	console.log(`🔑 The migration will affect the following:`);
@@ -202,6 +288,12 @@ export async function migrateAction(opts: unknown) {
 	}
 
 	if (options.dryRun) {
+		console.log(
+			`Target: ${migrationPlan.target.adapter}/${migrationPlan.target.dialect}`,
+		);
+		console.log(
+			`Blockers: ${migrationPlan.blockers.map(({ code }) => code).join(", ") || "none"}`,
+		);
 		console.log("Dry run complete. No database changes were applied.");
 		return;
 	}
@@ -235,53 +327,12 @@ export async function migrateAction(opts: unknown) {
 			});
 		} catch {}
 		process.exit(0);
+		return;
 	}
 
 	spinner?.start("migrating...");
-	if (options.from === "1.6") {
-		const consentStrategy = options.migrateOAuthConsents
-			? ("migrate" as const)
-			: options.reauthorizeOAuthConsents
-				? ("reauthorize" as const)
-				: undefined;
-		const hasOAuthDecision =
-			options.migrateOAuthClients ||
-			consentStrategy ||
-			options.revokeOAuthTokens;
-		if (
-			hasOAuthDecision &&
-			!(
-				options.migrateOAuthClients &&
-				consentStrategy &&
-				options.revokeOAuthTokens
-			)
-		) {
-			throw new Error(
-				"The OAuth cutover requires a client, consent, and token decision together.",
-			);
-		}
-		const oauthProvider =
-			options.migrateOAuthClients &&
-			consentStrategy &&
-			options.revokeOAuthTokens
-				? {
-						clients: "migrate" as const,
-						clientSecrets: "rehash-plaintext" as const,
-						consents: consentStrategy,
-						tokens: "revoke" as const,
-					}
-				: undefined;
-		await migrateFrom16(config, {
-			accountIssuers,
-			legacyTableNames,
-			oauthProvider,
-			scim: options.reprovisionScim
-				? {
-						accountIdsToRetire: options.retireScimAccount ?? [],
-						providers: "reprovision",
-					}
-				: undefined,
-		});
+	if (releaseMigrationOptions) {
+		await migrateFrom16(config, releaseMigrationOptions);
 	} else {
 		await runMigrations();
 	}
@@ -298,6 +349,7 @@ export async function migrateAction(opts: unknown) {
 		});
 	} catch {}
 	process.exit(0);
+	return;
 }
 
 export const migrate = new Command("migrate")

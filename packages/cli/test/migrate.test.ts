@@ -230,6 +230,8 @@ describe("inspect a migration without applying it", () => {
 
 		await migrateAction({ cwd: process.cwd(), dryRun: true });
 
+		expect(consoleLog).toHaveBeenCalledWith("Target: kysely/sqlite");
+		expect(consoleLog).toHaveBeenCalledWith("Blockers: none");
 		expect(consoleLog).toHaveBeenCalledWith(
 			"Dry run complete. No database changes were applied.",
 		);
@@ -360,7 +362,7 @@ describe("migrate published 1.6.25 account data", () => {
 		processExit.mockClear();
 		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
 		try {
-			await migrateAction({ cwd: process.cwd(), json: true });
+			await migrateAction({ cwd: process.cwd(), from: "1.6", json: true });
 
 			expect(processExit).not.toHaveBeenCalled();
 			expect(process.exitCode).toBe(1);
@@ -368,8 +370,7 @@ describe("migrate published 1.6.25 account data", () => {
 			const jsonPlan = JSON.parse(String(consoleLog.mock.calls[0]?.[0])) as {
 				blockers: Array<{
 					code: string;
-					columns: string[];
-					table: string;
+					message: string;
 				}>;
 				formatVersion: number;
 				status: string;
@@ -377,9 +378,9 @@ describe("migrate published 1.6.25 account data", () => {
 			expect(jsonPlan).toMatchObject({
 				blockers: [
 					{
-						code: "required-column-backfill",
-						columns: ["issuer", "providerAccountId"],
-						table: "account",
+						code: "release-migration-preflight",
+						message:
+							"The 1.6 account migration requires an issuer for: credential.",
 					},
 				],
 				formatVersion: 1,

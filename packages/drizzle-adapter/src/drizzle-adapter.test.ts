@@ -64,6 +64,48 @@ describe("drizzle-adapter", () => {
 		expect(run).toHaveBeenCalledTimes(1);
 	});
 
+	it("scopes SQLite migration queries to one transaction", async () => {
+		const statements: string[] = [];
+		const run = vi.fn().mockImplementation(async (statement: SQL) => {
+			statements.push(
+				statement.queryChunks
+					.flatMap((chunk) =>
+						typeof chunk === "object" &&
+						chunk !== null &&
+						"value" in chunk &&
+						Array.isArray(chunk.value)
+							? chunk.value
+							: [],
+					)
+					.join(""),
+			);
+			return { changes: 1 };
+		});
+		const adapter = drizzleAdapter(
+			{
+				_: { fullSchema: {} },
+				all: vi.fn(),
+				run,
+			} as never,
+			{ provider: "sqlite" },
+		)({ secret: "test-secret-that-is-at-least-32-chars-long!!" });
+		const migrationConnection =
+			adapter.options?.adapterConfig.migrationConnection;
+
+		await migrationConnection?.transaction?.(async (connection) => {
+			await connection.execute({
+				parameters: [],
+				sql: "UPDATE account SET issuer = 'local:credential'",
+			});
+		});
+
+		expect(statements).toEqual([
+			"BEGIN IMMEDIATE",
+			"UPDATE account SET issuer = 'local:credential'",
+			"COMMIT",
+		]);
+	});
+
 	it("should use unique column fallback for MySQL creates without an id", async () => {
 		const userRow = {
 			id: 42,

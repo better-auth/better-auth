@@ -573,6 +573,138 @@ it("migrates users created by published 1.6.25 and authenticates them through 1.
 	}
 });
 
+it("rejects invalid OAuth data before changing the 1.6 database", async () => {
+	const database = new DatabaseSync(":memory:");
+	try {
+		const auth1625 = betterAuth1625({
+			baseURL: "http://localhost:3000",
+			database,
+			emailAndPassword: { enabled: true },
+			plugins: [
+				oidcProvider1625({
+					allowDynamicClientRegistration: true,
+					loginPage: "/login",
+				}),
+			],
+		});
+		await (await getMigrations1625(auth1625.options)).runMigrations();
+		await auth1625.api.signUpEmail({
+			body: {
+				email: "invalid-oauth@sqlite.example.com",
+				name: "Invalid OAuth",
+				password: "correct-horse-battery-staple",
+			},
+		});
+		const publishedOAuthProviderApi =
+			auth1625.api as unknown as PublishedOAuthProviderApi;
+		await publishedOAuthProviderApi.registerOAuthApplication({
+			body: {
+				client_name: "Invalid migration client",
+				redirect_uris: ["https://sqlite.example.com/callback"],
+			},
+		});
+		database.exec(`UPDATE oauthApplication SET redirectUrls = ''`);
+
+		const auth17 = betterAuth({
+			baseURL: "http://localhost:3000",
+			database,
+			emailAndPassword: { enabled: true },
+			plugins: [
+				jwt(),
+				oauthProvider({
+					consentPage: "/consent",
+					loginPage: "/login",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+				}),
+			],
+		});
+		await expect(
+			migrateFrom16(auth17.options, {
+				accountIssuers: { credential: "local:credential" },
+				oauthProvider: {
+					clients: "migrate",
+					clientSecrets: "rehash-plaintext",
+					consents: "migrate",
+					tokens: "revoke",
+				},
+			}),
+		).rejects.toThrow("has no redirect URI and cannot be migrated");
+
+		const accountColumns = database
+			.prepare(`PRAGMA table_info(account)`)
+			.all()
+			.map((column) => (column as { name: string }).name);
+		expect(accountColumns).not.toContain("issuer");
+		expect(accountColumns).not.toContain("providerAccountId");
+		const legacyTables = database
+			.prepare(
+				`SELECT name FROM sqlite_master
+				 WHERE type = 'table' AND name IN (
+					'oauthApplication',
+					'oauthApplication__better_auth_1_6',
+					'oauthClient'
+				 )`,
+			)
+			.all()
+			.map((table) => (table as { name: string }).name);
+		expect(legacyTables).toEqual(["oauthApplication"]);
+	} finally {
+		database.close();
+	}
+});
+
+it("rolls back the SQLite release migration when schema application is blocked", async () => {
+	const database = new DatabaseSync(":memory:");
+	try {
+		const auth1625 = betterAuth1625({
+			baseURL: "http://localhost:3000",
+			database,
+			emailAndPassword: { enabled: true },
+		});
+		await (await getMigrations1625(auth1625.options)).runMigrations();
+		await auth1625.api.signUpEmail({
+			body: {
+				email: "rollback@sqlite.example.com",
+				name: "Rollback",
+				password: "correct-horse-battery-staple",
+			},
+		});
+		database.exec(`
+			CREATE TRIGGER reject_account_identity_update
+			BEFORE UPDATE ON account
+			BEGIN
+				SELECT RAISE(ABORT, 'forced account migration failure');
+			END;
+		`);
+
+		const auth17 = betterAuth({
+			baseURL: "http://localhost:3000",
+			database,
+			emailAndPassword: { enabled: true },
+		});
+		await expect(
+			migrateFrom16(auth17.options, {
+				accountIssuers: { credential: "local:credential" },
+			}),
+		).rejects.toThrow("forced account migration failure");
+
+		const accountColumns = database
+			.prepare(`PRAGMA table_info(account)`)
+			.all()
+			.map((column) => (column as { name: string }).name);
+		expect(accountColumns).not.toContain("issuer");
+		expect(accountColumns).not.toContain("providerAccountId");
+		expect(
+			database.prepare(`SELECT accountId FROM account`).get(),
+		).toMatchObject({ accountId: expect.any(String) });
+	} finally {
+		database.close();
+	}
+});
+
 it("migrates users created by published 1.6.25 and authenticates them through 1.7 on PostgreSQL", {
 	timeout: 60_000,
 }, async () => {
@@ -948,6 +1080,20 @@ it("retires published 1.6.25 SCIM credentials and reprovisions a retained user t
 			}),
 		).rejects.toThrow(
 			'The 1.6 SCIM migration requires providers: "reprovision" and an explicit accountIdsToRetire inventory.',
+		);
+		await expect(
+			migrateFrom16(auth17.options, {
+				accountIssuers: {
+					credential: "local:credential",
+					workforce: "local:retired-scim:workforce",
+				},
+				scim: {
+					accountIdsToRetire: [],
+					providers: "reprovision",
+				},
+			}),
+		).rejects.toThrow(
+			"The SCIM account retirement inventory must exactly match every account owned by the legacy SCIM providers.",
 		);
 		const migration = await migrateFrom16(auth17.options, {
 			accountIssuers: {

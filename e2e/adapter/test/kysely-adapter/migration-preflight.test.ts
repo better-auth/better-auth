@@ -357,6 +357,57 @@ describe.sequential.each([
 	"mysql",
 	"mssql",
 ] as const)("1.7 migration preflight on %s", (dialect) => {
+	it.runIf(dialect !== "postgres")(
+		"plans a non-id reference to an external model",
+		{ timeout: 60_000 },
+		async () => {
+			const harness = await createMigrationDialectHarness(dialect);
+			try {
+				await harness.kysely.schema
+					.createTable("externalDirectory")
+					.addColumn("email", "varchar(36)", (column) =>
+						column.notNull().unique(),
+					)
+					.execute();
+				const migration = await getMigrations({
+					database: harness.database,
+					plugins: [
+						{
+							id: "external-directory-reference",
+							schema: {
+								directoryLink: {
+									fields: {
+										externalEmail: {
+											references: {
+												field: "email",
+												model: "externalDirectory",
+											},
+											type: "string",
+										},
+									},
+								},
+							},
+						},
+					],
+				});
+
+				await expect(migration.compileMigrations()).resolves.toContain(
+					"externalDirectory",
+				);
+				await expect(migration.runMigrations()).resolves.not.toThrow();
+				expect(
+					await databaseHasColumn(
+						harness.kysely,
+						"directoryLink",
+						"externalEmail",
+					),
+				).toBe(true);
+			} finally {
+				await harness.destroy();
+			}
+		},
+	);
+
 	it("blocks required data work before writes and proceeds after reviewed repair", {
 		timeout: 60_000,
 	}, async () => {

@@ -8,6 +8,7 @@ import type { Kysely } from "kysely";
 import { sql } from "kysely";
 import { getAdapter } from "./adapter-kysely";
 import { getSchema } from "./get-schema";
+import type { MigrationDatabase } from "./migration-database";
 import { getMigrationDatabase } from "./migration-database";
 
 // cspell:ignore conindid indexrelid
@@ -127,6 +128,13 @@ interface AccountProviderCount {
 	providerId: string;
 }
 
+interface LegacyAccountIdentityRow {
+	issuer?: string | null | undefined;
+	legacyAccountId: string;
+	providerAccountId?: string | null | undefined;
+	providerId: string;
+}
+
 interface LegacyOAuthClientRow {
 	clientId: string;
 	clientSecret?: string | null | undefined;
@@ -150,10 +158,58 @@ interface LegacyOAuthConsentRow {
 	userId: string;
 }
 
+interface OAuthClientMigrationData {
+	clientId: string;
+	clientSecret?: string | undefined;
+	createdAt: Date | string;
+	disabled: boolean;
+	grantTypes: string[];
+	icon?: string | undefined;
+	metadata?: unknown;
+	name: string;
+	public: boolean;
+	redirectUris: string[];
+	requirePKCE?: boolean | undefined;
+	responseTypes: string[];
+	tokenEndpointAuthMethod: string;
+	type?: string | undefined;
+	updatedAt: Date | string;
+	userId?: string | undefined;
+}
+
+interface OAuthConsentMigrationData {
+	clientId: string;
+	createdAt: Date | string;
+	scopes: string[];
+	updatedAt: Date | string;
+	userId: string;
+}
+
+export interface OAuthProviderDataFrom16Plan {
+	clients: Array<{
+		alreadyMigrated: boolean;
+		data: OAuthClientMigrationData;
+	}>;
+	consents: Array<
+		| {
+				action: "migrate";
+				alreadyMigrated: boolean;
+				data: OAuthConsentMigrationData;
+		  }
+		| {
+				action: "reauthorize";
+		  }
+	>;
+}
+
 interface LegacyScimAccountRow {
 	providerAccountId: string;
 	providerId: string;
 	userId: string;
+}
+
+interface LegacyScimAccountRecord extends LegacyScimAccountRow {
+	id: string;
 }
 
 interface LegacyScimProviderRow {
@@ -323,8 +379,10 @@ export async function inspectLegacyReleaseDataFrom16(
 export async function renameLegacyTables(
 	config: BetterAuthOptions,
 	state: LegacyReleaseDataState,
+	migrationDatabase?: MigrationDatabase,
 ) {
-	const { databaseType, kysely } = await getMigrationDatabase(config);
+	const { databaseType, kysely } =
+		migrationDatabase ?? (await getMigrationDatabase(config));
 	for (const table of [
 		state.oauthApplication,
 		state.oauthAccessToken,
@@ -402,11 +460,27 @@ async function hashLegacyClientSecret(value: string) {
 	return base64Url.encode(new Uint8Array(digest), { padding: false });
 }
 
-export async function migrateOAuthProviderDataFrom16(
+function targetTableExists({
+	existingTables,
+	legacyTable,
+	targetTable,
+}: {
+	existingTables: ReadonlySet<string>;
+	legacyTable?: LegacyTableState | undefined;
+	targetTable: string;
+}) {
+	if (!existingTables.has(targetTable)) return false;
+	return !(
+		legacyTable?.sourceTableNeedsRename &&
+		legacyTable.sourceTable === targetTable
+	);
+}
+
+export async function prepareOAuthProviderDataFrom16(
 	config: BetterAuthOptions,
 	options: MigrateFrom16Options,
 	state: LegacyReleaseDataState,
-): Promise<MigratedOAuthProviderSummary | undefined> {
+): Promise<OAuthProviderDataFrom16Plan | undefined> {
 	if (
 		!state.oauthApplication &&
 		!state.oauthAccessToken &&
@@ -416,12 +490,25 @@ export async function migrateOAuthProviderDataFrom16(
 	}
 	const { kysely } = await getMigrationDatabase(config);
 	const adapter = await getAdapter(config);
-	let migratedClients = 0;
+	const authTables = getAuthTables(config);
+	const existingTables = new Set(
+		(await kysely.introspection.getTables()).map((table) => table.name),
+	);
+	const clients: OAuthProviderDataFrom16Plan["clients"] = [];
 	if (state.oauthApplication) {
+		const sourceTable = state.oauthApplication.sourceTableNeedsRename
+			? state.oauthApplication.sourceTable
+			: state.oauthApplication.backupTable;
 		const source = await sql<LegacyOAuthClientRow>`
 			SELECT *
-			FROM ${sql.table(state.oauthApplication.backupTable)}
+			FROM ${sql.table(sourceTable)}
 		`.execute(kysely);
+		const oauthClientTable = authTables.oauthClient?.modelName || "oauthClient";
+		const canInspectExistingClients = targetTableExists({
+			existingTables,
+			legacyTable: state.oauthApplication,
+			targetTable: oauthClientTable,
+		});
 		for (const client of source.rows) {
 			const redirectUris = splitLegacyList(client.redirectUrls, ",");
 			if (redirectUris.length === 0) {
@@ -429,13 +516,15 @@ export async function migrateOAuthProviderDataFrom16(
 					`OAuth client "${client.clientId}" has no redirect URI and cannot be migrated.`,
 				);
 			}
-			const existing = await adapter.findOne<{
-				clientId: string;
-				redirectUris: string[];
-			}>({
-				model: "oauthClient",
-				where: [{ field: "clientId", value: client.clientId }],
-			});
+			const existing = canInspectExistingClients
+				? await adapter.findOne<{
+						clientId: string;
+						redirectUris: string[];
+					}>({
+						model: "oauthClient",
+						where: [{ field: "clientId", value: client.clientId }],
+					})
+				: null;
 			if (existing) {
 				if (
 					JSON.stringify(existing.redirectUris) !== JSON.stringify(redirectUris)
@@ -444,12 +533,10 @@ export async function migrateOAuthProviderDataFrom16(
 						`OAuth client "${client.clientId}" already exists with different redirect URIs.`,
 					);
 				}
-				migratedClients += 1;
-				continue;
 			}
 			const isPublic = client.type === "public";
-			await adapter.create({
-				model: "oauthClient",
+			clients.push({
+				alreadyMigrated: Boolean(existing),
 				data: {
 					clientId: client.clientId,
 					clientSecret:
@@ -472,46 +559,55 @@ export async function migrateOAuthProviderDataFrom16(
 					userId: client.userId || undefined,
 				},
 			});
-			migratedClients += 1;
 		}
 	}
 
-	let migratedConsents = 0;
-	let reauthorizationRequired = 0;
+	const consents: OAuthProviderDataFrom16Plan["consents"] = [];
 	if (state.oauthConsent) {
+		const sourceTable = state.oauthConsent.sourceTableNeedsRename
+			? state.oauthConsent.sourceTable
+			: state.oauthConsent.backupTable;
 		const source = await sql<LegacyOAuthConsentRow>`
 			SELECT *
-			FROM ${sql.table(state.oauthConsent.backupTable)}
+			FROM ${sql.table(sourceTable)}
 		`.execute(kysely);
+		const oauthConsentTable =
+			authTables.oauthConsent?.modelName || "oauthConsent";
+		const canInspectExistingConsents = targetTableExists({
+			existingTables,
+			legacyTable: state.oauthConsent,
+			targetTable: oauthConsentTable,
+		});
 		for (const consent of source.rows) {
 			if (
 				options.oauthProvider?.consents === "reauthorize" ||
 				!Boolean(consent.consentGiven)
 			) {
-				reauthorizationRequired += 1;
+				consents.push({ action: "reauthorize" });
 				continue;
 			}
 			const scopes = splitLegacyList(consent.scopes, " ");
-			const existing = await adapter.findOne<{
-				scopes: string[];
-			}>({
-				model: "oauthConsent",
-				where: [
-					{ field: "clientId", value: consent.clientId },
-					{ field: "userId", value: consent.userId },
-				],
-			});
+			const existing = canInspectExistingConsents
+				? await adapter.findOne<{
+						scopes: string[];
+					}>({
+						model: "oauthConsent",
+						where: [
+							{ field: "clientId", value: consent.clientId },
+							{ field: "userId", value: consent.userId },
+						],
+					})
+				: null;
 			if (existing) {
 				if (JSON.stringify(existing.scopes) !== JSON.stringify(scopes)) {
 					throw new BetterAuthError(
 						`OAuth consent for client "${consent.clientId}" and user "${consent.userId}" already exists with different scopes.`,
 					);
 				}
-				migratedConsents += 1;
-				continue;
 			}
-			await adapter.create({
-				model: "oauthConsent",
+			consents.push({
+				action: "migrate",
+				alreadyMigrated: Boolean(existing),
 				data: {
 					clientId: consent.clientId,
 					createdAt: consent.createdAt,
@@ -520,14 +616,49 @@ export async function migrateOAuthProviderDataFrom16(
 					userId: consent.userId,
 				},
 			});
-			migratedConsents += 1;
 		}
 	}
 
+	return { clients, consents };
+}
+
+export async function migrateOAuthProviderDataFrom16(
+	config: BetterAuthOptions,
+	options: MigrateFrom16Options,
+	state: LegacyReleaseDataState,
+	preparedData?: OAuthProviderDataFrom16Plan | undefined,
+): Promise<MigratedOAuthProviderSummary | undefined> {
+	const plan =
+		preparedData ??
+		(await prepareOAuthProviderDataFrom16(config, options, state));
+	if (!plan) return undefined;
+	const adapter = await getAdapter(config);
+	for (const client of plan.clients) {
+		if (client.alreadyMigrated) continue;
+		await adapter.create({
+			model: "oauthClient",
+			data: client.data,
+		});
+	}
+	let migratedConsents = 0;
+	let reauthorizationRequired = 0;
+	for (const consent of plan.consents) {
+		if (consent.action === "reauthorize") {
+			reauthorizationRequired += 1;
+			continue;
+		}
+		if (!consent.alreadyMigrated) {
+			await adapter.create({
+				model: "oauthConsent",
+				data: consent.data,
+			});
+		}
+		migratedConsents += 1;
+	}
 	return {
 		clients: {
 			backupTable: state.oauthApplication?.backupTable,
-			migrated: migratedClients,
+			migrated: plan.clients.length,
 		},
 		consents: {
 			backupTable: state.oauthConsent?.backupTable,
@@ -541,14 +672,12 @@ export async function migrateOAuthProviderDataFrom16(
 	};
 }
 
-export async function retireScimAccountsFrom16(
+export async function inspectScimAccountsFrom16(
 	config: BetterAuthOptions,
 	options: MigrateFrom16Options,
 	state: LegacyReleaseDataState,
-): Promise<LegacyScimAccountRow[]> {
+): Promise<LegacyScimAccountRecord[]> {
 	if (!state.scimProvider || !options.scim) return [];
-	const accountIds = [...new Set(options.scim.accountIdsToRetire)];
-	if (accountIds.length === 0) return [];
 	const { kysely } = await getMigrationDatabase(config);
 	const providerTable = state.scimProvider.sourceTableNeedsRename
 		? state.scimProvider.sourceTable
@@ -561,38 +690,83 @@ export async function retireScimAccountsFrom16(
 	const accountSchema = getAuthTables(config).account;
 	if (!accountSchema) return [];
 	const accountTable = accountSchema.modelName || "account";
+	const idColumn = accountSchema.fields.id?.fieldName || "id";
 	const providerIdColumn =
 		accountSchema.fields.providerId?.fieldName || "providerId";
 	const userIdColumn = accountSchema.fields.userId?.fieldName || "userId";
-	const accounts = await sql<LegacyScimAccountRow>`
-		SELECT
-			${sql.ref("accountId")} AS "providerAccountId",
-			${sql.ref(providerIdColumn)} AS "providerId",
-			${sql.ref(userIdColumn)} AS "userId"
-		FROM ${sql.table(accountTable)}
-		WHERE ${sql.ref("id")} IN (${sql.join(accountIds)})
-	`.execute(kysely);
+	const accounts =
+		providerIds.size === 0
+			? []
+			: (
+					await sql<LegacyScimAccountRecord>`
+						SELECT
+							${sql.ref(idColumn)} AS "id",
+							${sql.ref("accountId")} AS "providerAccountId",
+							${sql.ref(providerIdColumn)} AS "providerId",
+							${sql.ref(userIdColumn)} AS "userId"
+						FROM ${sql.table(accountTable)}
+						WHERE ${sql.ref(providerIdColumn)} IN (${sql.join([...providerIds])})
+					`.execute(kysely)
+				).rows;
+	const requestedAccountIds = new Set(options.scim.accountIdsToRetire);
+	const activeAccountIds = new Set(accounts.map((account) => account.id));
+	const missingAccount = accounts.find(
+		(account) => !requestedAccountIds.has(account.id),
+	);
+	const unknownAccountId = [...requestedAccountIds].find(
+		(accountId) => !activeAccountIds.has(accountId),
+	);
 	if (
-		accounts.rows.length !== accountIds.length &&
-		state.scimProvider.sourceTableNeedsRename
+		missingAccount ||
+		(state.scimProvider.sourceTableNeedsRename && unknownAccountId)
 	) {
 		throw new BetterAuthError(
-			"The SCIM account retirement inventory contains an unknown account id.",
+			"The SCIM account retirement inventory must exactly match every account owned by the legacy SCIM providers.",
 		);
 	}
-	const unrelatedAccount = accounts.rows.find(
-		(account) => !providerIds.has(account.providerId),
-	);
-	if (unrelatedAccount) {
-		throw new BetterAuthError(
-			`Account retirement includes provider "${unrelatedAccount.providerId}", which is not present in the legacy SCIM provider inventory.`,
-		);
-	}
+	return [...accounts];
+}
+
+/**
+ * Validates every explicit 1.6 release-data decision without changing data or
+ * schema. CLI planners use the same validation path as the migration itself.
+ */
+export async function validateMigrationFrom16(
+	config: BetterAuthOptions,
+	options: MigrateFrom16Options,
+): Promise<void> {
+	const state = await inspectLegacyReleaseDataFrom16(config, options);
+	await inspectAccountIdentityFrom16(config, options);
+	await prepareOAuthProviderDataFrom16(config, options, state);
+	await inspectScimAccountsFrom16(config, options, state);
+}
+
+export async function retireScimAccountsFrom16(
+	config: BetterAuthOptions,
+	options: MigrateFrom16Options,
+	state: LegacyReleaseDataState,
+	inspectedAccounts?: readonly LegacyScimAccountRecord[],
+	migrationDatabase?: MigrationDatabase,
+): Promise<LegacyScimAccountRow[]> {
+	if (!state.scimProvider || !options.scim) return [];
+	const accounts =
+		inspectedAccounts ??
+		(await inspectScimAccountsFrom16(config, options, state));
+	if (accounts.length === 0) return [];
+	const { kysely } = migrationDatabase ?? (await getMigrationDatabase(config));
+	const accountSchema = getAuthTables(config).account;
+	if (!accountSchema) return [];
+	const accountTable = accountSchema.modelName || "account";
+	const idColumn = accountSchema.fields.id?.fieldName || "id";
 	await sql`
 		DELETE FROM ${sql.table(accountTable)}
-		WHERE ${sql.ref("id")} IN (${sql.join(accountIds)})
+		WHERE ${sql.ref(idColumn)} IN (${sql.join(accounts.map((account) => account.id))})
 	`.execute(kysely);
-	return [...accounts.rows];
+	return accounts.map(({ providerAccountId, providerId, userId }) => ({
+		providerAccountId,
+		providerId,
+		userId,
+	}));
 }
 
 export function summarizeScimMigration(
@@ -628,12 +802,14 @@ async function requireSqliteAccountIdentityColumns({
 	accountTable,
 	columns,
 	issuerColumn,
+	inTransaction,
 	kysely,
 	providerAccountIdColumn,
 }: {
 	accountTable: string;
 	columns: readonly string[];
 	issuerColumn: string;
+	inTransaction: boolean;
 	kysely: Kysely<unknown>;
 	providerAccountIdColumn: string;
 }) {
@@ -684,6 +860,38 @@ async function requireSqliteAccountIdentityColumns({
 		);
 	}
 
+	const rebuildAccountTable = async () => {
+		await sql.raw(createTemporaryTableSql).execute(kysely);
+		const columnReferences = columns.map((column) => sql.ref(column));
+		await sql`
+			INSERT INTO ${sql.table(temporaryTable)}
+				(${sql.join(columnReferences)})
+			SELECT ${sql.join(columnReferences)}
+			FROM ${sql.table(accountTable)}
+		`.execute(kysely);
+		await kysely.schema.dropTable(accountTable).execute();
+		await kysely.schema
+			.alterTable(temporaryTable)
+			.renameTo(accountTable)
+			.execute();
+		for (const definition of dependentSchemaDefinitions.rows) {
+			if (definition.sql) await sql.raw(definition.sql).execute(kysely);
+		}
+		const foreignKeyViolations = await sql`PRAGMA foreign_key_check`.execute(
+			kysely,
+		);
+		if (foreignKeyViolations.rows.length > 0) {
+			throw new BetterAuthError(
+				`SQLite found foreign key violations while rebuilding account table "${accountTable}".`,
+			);
+		}
+	};
+	if (inTransaction) {
+		await sql`PRAGMA defer_foreign_keys = ON`.execute(kysely);
+		await rebuildAccountTable();
+		return;
+	}
+
 	const foreignKeys = await sql<{ foreign_keys: number }>`
 		PRAGMA foreign_keys
 	`.execute(kysely);
@@ -694,30 +902,7 @@ async function requireSqliteAccountIdentityColumns({
 	try {
 		await sql`BEGIN IMMEDIATE`.execute(kysely);
 		try {
-			await sql.raw(createTemporaryTableSql).execute(kysely);
-			const columnReferences = columns.map((column) => sql.ref(column));
-			await sql`
-				INSERT INTO ${sql.table(temporaryTable)}
-					(${sql.join(columnReferences)})
-				SELECT ${sql.join(columnReferences)}
-				FROM ${sql.table(accountTable)}
-			`.execute(kysely);
-			await kysely.schema.dropTable(accountTable).execute();
-			await kysely.schema
-				.alterTable(temporaryTable)
-				.renameTo(accountTable)
-				.execute();
-			for (const definition of dependentSchemaDefinitions.rows) {
-				if (definition.sql) await sql.raw(definition.sql).execute(kysely);
-			}
-			const foreignKeyViolations = await sql`PRAGMA foreign_key_check`.execute(
-				kysely,
-			);
-			if (foreignKeyViolations.rows.length > 0) {
-				throw new BetterAuthError(
-					`SQLite found foreign key violations while rebuilding account table "${accountTable}".`,
-				);
-			}
+			await rebuildAccountTable();
 			await sql`COMMIT`.execute(kysely);
 		} catch (error) {
 			await sql`ROLLBACK`.execute(kysely);
@@ -730,26 +915,14 @@ async function requireSqliteAccountIdentityColumns({
 	}
 }
 
-export async function migrateAccountIdentityFrom16(
+async function inspectAccountIdentityFrom16(
 	config: BetterAuthOptions,
 	options: MigrateFrom16Options,
-): Promise<MigratedAccountSummary> {
-	const { databaseType, kysely } = await getMigrationDatabase(config);
-	if (
-		databaseType !== "postgres" &&
-		databaseType !== "mysql" &&
-		databaseType !== "mssql" &&
-		databaseType !== "sqlite"
-	) {
-		throw new BetterAuthError(
-			`The 1.6 account data migration is not implemented for ${databaseType}.`,
-		);
-	}
-
+	migrationDatabase?: MigrationDatabase,
+) {
+	const { kysely } = migrationDatabase ?? (await getMigrationDatabase(config));
 	const accountSchema = getAuthTables(config).account;
-	if (!accountSchema) {
-		return { migrated: 0, providers: {} };
-	}
+	if (!accountSchema) return undefined;
 	const accountTable = accountSchema.modelName || "account";
 	const resolvedAccountSchema = getSchema(config)[accountTable];
 	if (!resolvedAccountSchema) {
@@ -763,6 +936,114 @@ export async function migrateAccountIdentityFrom16(
 	const providerIdColumn =
 		accountSchema.fields.providerId?.fieldName || "providerId";
 	const legacyAccountIdColumn = "accountId";
+	const accountTableMetadata = (await kysely.introspection.getTables()).find(
+		(table) => table.name === accountTable,
+	);
+	if (!accountTableMetadata) return undefined;
+	const existingColumns = new Set(
+		accountTableMetadata.columns.map((column) => column.name),
+	);
+	if (!existingColumns.has(legacyAccountIdColumn)) return undefined;
+
+	const providerInventory = await sql<AccountProviderCount>`
+		SELECT
+			${sql.ref(providerIdColumn)} AS "providerId",
+			COUNT(*) AS "count"
+		FROM ${sql.table(accountTable)}
+		GROUP BY ${sql.ref(providerIdColumn)}
+	`.execute(kysely);
+	const populatedProviders: Record<string, number> = {};
+	for (const row of providerInventory.rows) {
+		populatedProviders[row.providerId] = toSafeRowCount(row.count);
+	}
+	const missingIssuerProviders = Object.keys(populatedProviders).filter(
+		(providerId) => !options.accountIssuers[providerId]?.trim(),
+	);
+	if (missingIssuerProviders.length > 0) {
+		throw new BetterAuthError(
+			`The 1.6 account migration requires an issuer for: ${missingIssuerProviders.sort().join(", ")}.`,
+		);
+	}
+
+	const accountIdentities = await sql<LegacyAccountIdentityRow>`
+		SELECT
+			${existingColumns.has(issuerColumn) ? sql.ref(issuerColumn) : sql`NULL`} AS "issuer",
+			${sql.ref(legacyAccountIdColumn)} AS "legacyAccountId",
+			${
+				existingColumns.has(providerAccountIdColumn)
+					? sql.ref(providerAccountIdColumn)
+					: sql`NULL`
+			} AS "providerAccountId",
+			${sql.ref(providerIdColumn)} AS "providerId"
+		FROM ${sql.table(accountTable)}
+	`.execute(kysely);
+	const projectedIdentities = new Set<string>();
+	for (const account of accountIdentities.rows) {
+		const unresolved =
+			account.issuer === null ||
+			account.issuer === undefined ||
+			account.providerAccountId === null ||
+			account.providerAccountId === undefined;
+		const issuer = unresolved
+			? options.accountIssuers[account.providerId]?.trim()
+			: account.issuer;
+		const providerAccountId = unresolved
+			? account.legacyAccountId
+			: account.providerAccountId;
+		const identityKey = JSON.stringify([issuer, providerAccountId]);
+		if (projectedIdentities.has(identityKey)) {
+			throw new BetterAuthError(
+				"The 1.6 account migration found duplicate issuer and provider-account identities.",
+			);
+		}
+		projectedIdentities.add(identityKey);
+	}
+	return {
+		accountTable,
+		accountTableMetadata,
+		existingColumns,
+		issuerColumn,
+		legacyAccountIdColumn,
+		providerAccountIdColumn,
+		providerIdColumn,
+		resolvedAccountSchema,
+	};
+}
+
+export async function migrateAccountIdentityFrom16(
+	config: BetterAuthOptions,
+	options: MigrateFrom16Options,
+	migrationDatabase?: MigrationDatabase,
+): Promise<MigratedAccountSummary> {
+	const { databaseType, inTransaction, kysely } =
+		migrationDatabase ?? (await getMigrationDatabase(config));
+	if (
+		databaseType !== "postgres" &&
+		databaseType !== "mysql" &&
+		databaseType !== "mssql" &&
+		databaseType !== "sqlite"
+	) {
+		throw new BetterAuthError(
+			`The 1.6 account data migration is not implemented for ${databaseType}.`,
+		);
+	}
+
+	const inspection = await inspectAccountIdentityFrom16(
+		config,
+		options,
+		migrationDatabase,
+	);
+	if (!inspection) return { migrated: 0, providers: {} };
+	const {
+		accountTable,
+		accountTableMetadata,
+		existingColumns,
+		issuerColumn,
+		legacyAccountIdColumn,
+		providerAccountIdColumn,
+		providerIdColumn,
+		resolvedAccountSchema,
+	} = inspection;
 	const getIdentityColumnType = (
 		columnName: "issuer" | "providerAccountId",
 	) => {
@@ -777,40 +1058,6 @@ export async function migrateAccountIdentityFrom16(
 		});
 		return sql.raw(`varchar(${indexLength ?? 255})`);
 	};
-
-	const accountTableMetadata = (await kysely.introspection.getTables()).find(
-		(table) => table.name === accountTable,
-	);
-	if (!accountTableMetadata) {
-		return { migrated: 0, providers: {} };
-	}
-	const existingColumns = new Set(
-		accountTableMetadata.columns.map((column) => column.name),
-	);
-	if (!existingColumns.has(legacyAccountIdColumn)) {
-		return { migrated: 0, providers: {} };
-	}
-
-	const providerInventory = await sql<AccountProviderCount>`
-		SELECT
-			${sql.ref(providerIdColumn)} AS "providerId",
-			COUNT(*) AS "count"
-		FROM ${sql.table(accountTable)}
-		GROUP BY ${sql.ref(providerIdColumn)}
-	`.execute(kysely);
-	const populatedProviders: Record<string, number> = {};
-	for (const row of providerInventory.rows) {
-		populatedProviders[row.providerId] = toSafeRowCount(row.count);
-	}
-
-	const missingIssuerProviders = Object.keys(populatedProviders).filter(
-		(providerId) => !options.accountIssuers[providerId]?.trim(),
-	);
-	if (missingIssuerProviders.length > 0) {
-		throw new BetterAuthError(
-			`The 1.6 account migration requires an issuer for: ${missingIssuerProviders.sort().join(", ")}.`,
-		);
-	}
 
 	if (!existingColumns.has(issuerColumn)) {
 		await kysely.schema
@@ -950,6 +1197,7 @@ export async function migrateAccountIdentityFrom16(
 						: [providerAccountIdColumn],
 				),
 			issuerColumn,
+			inTransaction,
 			kysely,
 			providerAccountIdColumn,
 		});
