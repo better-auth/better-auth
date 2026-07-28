@@ -4,7 +4,6 @@ import {
 	createTelemetry,
 	getTelemetryAuthConfig,
 } from "@better-auth/telemetry";
-import { getAdapter } from "better-auth/db/adapter";
 import { getMigrations, migrateFrom16 } from "better-auth/db/migration";
 import chalk from "chalk";
 import { Command } from "commander";
@@ -84,65 +83,6 @@ export async function migrateAction(opts: unknown) {
 		return;
 	}
 
-	const db = await getAdapter(config);
-
-	if (!db) {
-		console.error(
-			"Invalid database configuration. Make sure you're not using adapters. Migrate command only works with built-in Kysely adapter.",
-		);
-		process.exit(1);
-	}
-
-	if (db.id !== "kysely") {
-		if (db.id === "prisma") {
-			console.error(
-				"The migrate command only works with the built-in Kysely adapter. For Prisma, run `npx auth generate` to create the schema, then use Prisma's migrate or push to apply it.",
-			);
-			try {
-				const telemetry = await createTelemetry(config);
-				await telemetry.publish({
-					type: "cli_migrate",
-					payload: {
-						outcome: "unsupported_adapter",
-						adapter: "prisma",
-						config: await getTelemetryAuthConfig(config),
-					},
-				});
-			} catch {}
-			process.exit(0);
-		}
-		if (db.id === "drizzle") {
-			console.error(
-				"The migrate command only works with the built-in Kysely adapter. For Drizzle, run `npx auth generate` to create the schema, then use Drizzle's migrate or push to apply it.",
-			);
-			try {
-				const telemetry = await createTelemetry(config);
-				await telemetry.publish({
-					type: "cli_migrate",
-					payload: {
-						outcome: "unsupported_adapter",
-						adapter: "drizzle",
-						config: await getTelemetryAuthConfig(config),
-					},
-				});
-			} catch {}
-			process.exit(0);
-		}
-		console.error("Migrate command isn't supported for this adapter.");
-		try {
-			const telemetry = await createTelemetry(config);
-			await telemetry.publish({
-				type: "cli_migrate",
-				payload: {
-					outcome: "unsupported_adapter",
-					adapter: db.id,
-					config: await getTelemetryAuthConfig(config),
-				},
-			});
-		} catch {}
-		process.exit(1);
-	}
-
 	const spinner = options.json
 		? undefined
 		: yoctoSpinner({ text: "preparing migration..." }).start();
@@ -152,6 +92,7 @@ export async function migrateAction(opts: unknown) {
 		toBeAddedIndexes,
 		toBeCreated,
 		migrationBlockers,
+		migrationTarget,
 		runMigrations,
 	} = await getMigrations(config, {
 		legacyTableNames,
@@ -163,6 +104,7 @@ export async function migrateAction(opts: unknown) {
 	const migrationPlan = createMigrationPlan({
 		hasChanges,
 		migrationBlockers,
+		migrationTarget,
 		toBeAdded,
 		toBeAddedIndexes,
 		toBeCreated,

@@ -4,6 +4,9 @@ import type {
 	AdapterFactoryOptions,
 	DBAdapter,
 	DBAdapterDebugLogOption,
+	MigrationDatabaseDialect,
+	MigrationDatabaseQuery,
+	MigrationDatabaseQueryResult,
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
@@ -113,6 +116,97 @@ function readDriverRowCount(result: unknown): unknown {
 
 function hasDriverRowCount(result: unknown): boolean {
 	return readDriverRowCount(result) !== undefined;
+}
+
+function getMigrationRows(result: unknown): readonly Record<string, unknown>[] {
+	if (Array.isArray(result)) {
+		if (Array.isArray(result[0])) {
+			return result[0].filter(
+				(row): row is Record<string, unknown> =>
+					typeof row === "object" && row !== null,
+			);
+		}
+		return result.filter(
+			(row): row is Record<string, unknown> =>
+				typeof row === "object" && row !== null,
+		);
+	}
+	if (!result || typeof result !== "object") return [];
+	if ("rows" in result && Array.isArray(result.rows)) {
+		return result.rows.filter(
+			(row): row is Record<string, unknown> =>
+				typeof row === "object" && row !== null,
+		);
+	}
+	if ("results" in result && Array.isArray(result.results)) {
+		return result.results.filter(
+			(row): row is Record<string, unknown> =>
+				typeof row === "object" && row !== null,
+		);
+	}
+	return [];
+}
+
+function buildMigrationStatement(
+	query: MigrationDatabaseQuery,
+	dialect: MigrationDatabaseDialect,
+): SQL {
+	if (query.parameters.length === 0) return sql.raw(query.sql);
+	const marker = dialect === "postgres" ? /\$(\d+)/g : /\?/g;
+	const chunks: SQL[] = [];
+	let sqlOffset = 0;
+	let positionalParameter = 0;
+	for (const match of query.sql.matchAll(marker)) {
+		const matchOffset = match.index;
+		if (matchOffset === undefined) continue;
+		chunks.push(sql.raw(query.sql.slice(sqlOffset, matchOffset)));
+		const parameterIndex =
+			dialect === "postgres"
+				? Number.parseInt(match[1] ?? "", 10) - 1
+				: positionalParameter++;
+		if (
+			!Number.isInteger(parameterIndex) ||
+			parameterIndex < 0 ||
+			parameterIndex >= query.parameters.length
+		) {
+			throw new BetterAuthError(
+				"Drizzle migration query has an invalid parameter marker.",
+			);
+		}
+		chunks.push(sql`${query.parameters[parameterIndex]}`);
+		sqlOffset = matchOffset + match[0].length;
+	}
+	chunks.push(sql.raw(query.sql.slice(sqlOffset)));
+	if (
+		(dialect === "postgres"
+			? new Set(
+					[...query.sql.matchAll(marker)].map((match) => Number(match[1])),
+				).size
+			: positionalParameter) !== query.parameters.length
+	) {
+		throw new BetterAuthError(
+			"Drizzle migration query parameter count does not match its SQL markers.",
+		);
+	}
+	return sql.join(chunks, sql.raw(""));
+}
+
+function getMigrationQueryResult(
+	driverResult: unknown,
+): MigrationDatabaseQueryResult {
+	const affectedRows = readDriverRowCount(driverResult);
+	return {
+		rows: getMigrationRows(driverResult),
+		...(typeof affectedRows === "number" && Number.isFinite(affectedRows)
+			? { numAffectedRows: BigInt(affectedRows) }
+			: {}),
+	};
+}
+
+function isDrizzleMigrationRead(query: MigrationDatabaseQuery): boolean {
+	const sql = query.sql.trimStart();
+	if (/^(?:select|with|explain)\b/i.test(sql)) return true;
+	return /^pragma\b/i.test(sql) && !/^pragma\b[^;]*=/i.test(sql);
 }
 
 export interface DrizzleAdapterConfig {
@@ -1136,6 +1230,22 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 		config: {
 			adapterId: "drizzle",
 			adapterName: "Drizzle Adapter",
+			migrationConnection: {
+				dialect: config.provider === "pg" ? "postgres" : config.provider,
+				async execute(query) {
+					const statement = buildMigrationStatement(
+						query,
+						config.provider === "pg" ? "postgres" : config.provider,
+					);
+					const driverResult =
+						config.provider === "sqlite"
+							? isDrizzleMigrationRead(query)
+								? await db.all(statement)
+								: await db.run(statement)
+							: await db.execute(statement);
+					return getMigrationQueryResult(driverResult);
+				},
+			},
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			supportsUUIDs: config.provider === "pg" ? true : false,

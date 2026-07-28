@@ -559,6 +559,9 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../../../../packages/better-auth
+      better-auth-1-6-25:
+        specifier: npm:better-auth@1.6.25
+        version: better-auth@1.6.25(01fd6b9a7c6be67e333e9a51427e947e)
 
   e2e/adapter/test/drizzle-v2-relations-adapter:
     devDependencies:
@@ -670,6 +673,9 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../../../../packages/better-auth
+      better-auth-1-6-25:
+        specifier: npm:better-auth@1.6.25
+        version: better-auth@1.6.25(01fd6b9a7c6be67e333e9a51427e947e)
       better-sqlite3:
         specifier: ^12.11.1
         version: 12.11.1

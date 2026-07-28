@@ -257,10 +257,15 @@ describe("inspect a migration without applying it", () => {
 			};
 			formatVersion: number;
 			status: string;
+			target: { adapter: string; dialect: string };
 		};
 		expect(migrationPlan).toMatchObject({
 			formatVersion: 1,
 			status: "ready",
+			target: {
+				adapter: "kysely",
+				dialect: "sqlite",
+			},
 		});
 		expect(
 			migrationPlan.changes.createTables.map(({ table }) => table),

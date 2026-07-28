@@ -5,7 +5,11 @@ type MigrationInspection = Awaited<ReturnType<typeof getMigrations>>;
 interface CreateMigrationPlanInput
 	extends Pick<
 		MigrationInspection,
-		"migrationBlockers" | "toBeAdded" | "toBeAddedIndexes" | "toBeCreated"
+		| "migrationBlockers"
+		| "migrationTarget"
+		| "toBeAdded"
+		| "toBeAddedIndexes"
+		| "toBeCreated"
 	> {
 	hasChanges: boolean;
 }
@@ -60,6 +64,10 @@ export interface MigrationPlan {
 	};
 	formatVersion: 1;
 	status: "blocked" | "ready" | "up-to-date";
+	target: {
+		adapter: string;
+		dialect: "mssql" | "mysql" | "postgres" | "sqlite";
+	};
 }
 
 function getBlockerTable(blocker: MigrationPlanBlocker) {
@@ -82,12 +90,14 @@ function getBlockerTable(blocker: MigrationPlanBlocker) {
 export function createMigrationPlan({
 	hasChanges,
 	migrationBlockers,
+	migrationTarget,
 	toBeAdded,
 	toBeAddedIndexes,
 	toBeCreated,
 }: CreateMigrationPlanInput): MigrationPlan {
 	return {
 		formatVersion: 1,
+		target: migrationTarget,
 		status:
 			migrationBlockers.length > 0
 				? ("blocked" as const)

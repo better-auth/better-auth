@@ -1,5 +1,7 @@
+import type { SQLInputValue } from "node:sqlite";
 import { DatabaseSync } from "node:sqlite";
 import type { BetterAuthOptions } from "@better-auth/core";
+import type { MigrationDatabaseQuery } from "@better-auth/core/db/adapter";
 import { describe, expect, it } from "vitest";
 import { organization } from "../plugins/organization";
 import { getMigrations } from "./get-migration";
@@ -467,5 +469,56 @@ describe("get-migration: compound indexes on SQLite", () => {
 		await expect(getMigrations(config)).rejects.toThrow(
 			'Database index "directory_identity_uidx" on table "directory_user" does not match the configured fields and uniqueness.',
 		);
+	});
+});
+
+describe("get-migration: adapter migration connection", () => {
+	it("plans and applies schema changes without a Kysely adapter", async () => {
+		const sqlite = new DatabaseSync(":memory:");
+		const config: BetterAuthOptions = {
+			database: () =>
+				({
+					id: "drizzle",
+					options: {
+						adapterConfig: {
+							adapterId: "drizzle",
+							migrationConnection: {
+								dialect: "sqlite",
+								async execute(query: MigrationDatabaseQuery) {
+									const parameters =
+										query.parameters as readonly SQLInputValue[];
+									if (/^\s*(?:PRAGMA|SELECT|WITH)\b/i.test(query.sql)) {
+										return {
+											rows: sqlite.prepare(query.sql).all(...parameters),
+										};
+									}
+									const write = sqlite.prepare(query.sql).run(...parameters);
+									return {
+										insertId: BigInt(write.lastInsertRowid),
+										numAffectedRows: BigInt(write.changes),
+										rows: [],
+									};
+								},
+							},
+						},
+					},
+				}) as never,
+		};
+
+		const migration = await getMigrations(config);
+
+		expect(migration.migrationTarget).toEqual({
+			adapter: "drizzle",
+			dialect: "sqlite",
+		});
+		expect(migration.toBeCreated.map(({ table }) => table)).toContain("user");
+		await migration.runMigrations();
+		expect(
+			sqlite
+				.prepare(
+					"SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'user'",
+				)
+				.get(),
+		).toEqual({ name: "user" });
 	});
 });

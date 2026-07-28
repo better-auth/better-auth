@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import { join } from "node:path";
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import type { DrizzleAdapterConfig } from "@better-auth/drizzle-adapter";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 
 let generationCount = 0;
@@ -17,8 +18,9 @@ export const generateDrizzleSchema = async (
 	db: any,
 	options: BetterAuthOptions,
 	dialect: "sqlite" | "mysql" | "pg",
+	adapterConfig?: Pick<DrizzleAdapterConfig, "camelCase">,
 ) => {
-	const cacheKey = `${dialect}-${JSON.stringify(options)}`;
+	const cacheKey = `${dialect}-${JSON.stringify(options)}-${JSON.stringify(adapterConfig)}`;
 	if (schemaCache.has(cacheKey)) {
 		const { count, schema } = schemaCache.get(cacheKey)!;
 		return {
@@ -66,7 +68,10 @@ export const generateDrizzleSchema = async (
 		await fs.mkdir(join(import.meta.dirname, `/.tmp`), { recursive: true });
 	}
 
-	const adapter = drizzleAdapter(db, { provider: dialect })(options);
+	const adapter = drizzleAdapter(db, {
+		provider: dialect,
+		...adapterConfig,
+	})(options);
 
 	const { code } = await generateSchema({
 		adapter,

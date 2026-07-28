@@ -10,6 +10,7 @@
     "@better-auth/drizzle-adapter": "workspace:*",
     "@better-auth/scim": "workspace:*",
     "@better-auth/test-utils": "workspace:*",
-    "better-auth": "workspace:*"
+    "better-auth": "workspace:*",
+    "better-auth-1-6-25": "npm:better-auth@1.6.25"
   }
 }

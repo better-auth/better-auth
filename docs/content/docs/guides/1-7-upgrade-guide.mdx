@@ -35,7 +35,13 @@ The upgrade command handles package updates. The database needs more care. A few
   Inspect and complete the data migration before applying the 1.7 schema or deploying 1.7. The CLI blocks schema writes when it finds populated models that need a reviewed backfill, data move, or reprovision.
 </Callout>
 
-With the built-in Kysely adapter, inspect the database without changing it after updating the configuration for 1.7:
+The CLI can inspect the built-in SQL database configuration and SQL-backed Drizzle or Prisma adapters. Prepare the 1.7 configuration without changing the 1.6 database:
+
+* **Drizzle:** run `npx auth@rc generate`, review the generated 1.7 schema, and make the adapter import it. Keep existing `camelCase`, `schemaName`, and custom model or field mappings unchanged. Do not run `drizzle-kit migrate` or `drizzle-kit push` yet.
+* **Prisma:** run `npx auth@rc generate`, review `schema.prisma`, and run `npx prisma generate` so the configured Prisma Client contains the 1.7 models. Keep existing `@map` and `@@map` mappings unchanged. Do not run `prisma migrate`, `prisma db push`, or `prisma migrate deploy` yet.
+* **Built-in SQL database:** update the Better Auth packages, plugins, and configuration; no ORM schema preparation is needed.
+
+After preparing the configuration, inspect the database without changing it:
 
 ```bash title="Terminal"
 npx auth@rc migrate --dry-run
@@ -47,9 +53,13 @@ Use the JSON form in CI or when a coding agent is helping with the migration:
 npx auth@rc migrate --json > better-auth-migration-plan.json
 ```
 
-A blocked plan exits with status `1` and does not change the database. Resolve each blocker using the applicable section below, then run the inspection again.
+A blocked plan exits with status `1` and does not change the database. Its `target` identifies the detected adapter and SQL dialect, which lets a coding agent verify that it is planning against the intended database. Resolve each blocker using the applicable section below, then run the inspection again.
 
-With the built-in Kysely adapter on PostgreSQL, MySQL, or SQL Server, use `migrate --from 1.6` with the explicit decisions described below. With Drizzle or Prisma, inventory the applicable legacy data using your ORM, complete the manual data step first, then run `generate`, review the result, and apply it through your ORM's migration tooling.
+Use `migrate --from 1.6` with the explicit decisions described below. The command uses the configured SQL connection for Kysely, Drizzle, or Prisma. When SQLite cannot add the required constraints in place, the migration rebuilds the affected table, preserves its explicit indexes and triggers, and validates foreign keys before committing.
+
+<Callout type="warn">
+  The release command applies data and schema changes directly. If Prisma Migrate or Drizzle Kit owns your versioned schema history, prepare a matching migration record for the cutover and record it as applied after the CLI succeeds. Do not execute equivalent 1.7 data definition language (DDL) twice.
+</Callout>
 
 Give a coding agent the JSON plan, this guide, the Better Auth configuration, and a schema-only database export. Keep credentials and tokens out of the prompt. Require the agent to preserve blocker codes and row-count checks in its proposed migration. An agent may generate SQL and identify collisions, but it must not infer identity ownership from email or mutable profile data.
 
@@ -97,7 +107,7 @@ Better Auth now recognizes an external account by the unique pair of `issuer` an
   Use a maintenance window and stop authentication writes before changing the account schema. The generated migration cannot choose trusted issuers or resolve identity collisions for you.
 </Callout>
 
-With the built-in Kysely adapter on PostgreSQL, MySQL, or SQL Server, pass the reviewed mapping to the release migration:
+With the built-in SQL database configuration or a SQL-backed Drizzle or Prisma adapter, pass the reviewed mapping to the release migration:
 
 ```bash title="Terminal"
 npx auth@rc migrate --from 1.6 \
@@ -107,7 +117,7 @@ npx auth@rc migrate --from 1.6 \
 
 The command stops before changing data if any populated provider lacks a mapping or if the resulting `(issuer, providerAccountId)` key is not unique.
 
-With another adapter or migration tool, backfill the account identity manually:
+If your adapter does not expose a SQL migration connection, backfill the account identity manually:
 
 1. Back up the `account` and `user` tables, then inventory every distinct `providerId`. Include custom physical field names from `account.fields` in that inventory.
 2. Rename the physical `accountId` column to `providerAccountId`, or add `providerAccountId` as nullable and copy the existing values if your migration tool cannot express a rename. Add `issuer` as nullable during the backfill.
@@ -468,7 +478,7 @@ The new SCIM models do not read or convert the legacy SCIM tables. The prereleas
 2. Decide how each legacy User will be handled. To retain a User, copy a stable connection-and-subject-to-`userId` mapping into application-owned storage, remove the legacy SCIM account row, and configure `identity.resolveUser` before reprovisioning. To recreate a User, remove the legacy SCIM account and delete the User only after proving that no other sign-in method or application data depends on it. Clean up organization state according to your application's ownership rules.
 3. Retire whichever legacy plugin models exist. Stable 1.6 uses `scimProvider`. `auth migrate --from 1.6 --reprovision-scim` renames the stable table with a `__better_auth_1_6` suffix. If you adopted prerelease Group provisioning, first back up and drop `scimGroupRoleGrant`, `scimGroupRole`, `scimGroupMember`, and `scimGroup` in that child-first order. Use their physical table names if you customized model names, and pass a customized stable table with `--legacy-scim-provider-table`.
 4. Configure the new connections and enable native interactive transactions in your database adapter. Cloudflare D1 cannot provide the required transaction behavior.
-5. For the built-in Kysely adapter, run the release migration with `--reprovision-scim` and one `--retire-scim-account` value for every exact account ID in the reviewed inventory. The command retires those account rows, backs up the stable provider table, and creates `scimConnectionBinding`, `scimIdentityTombstone`, `scimSubject`, `scimUser`, `scimGroup`, `scimGroupMember`, and `scimProjectionGrant`. For other adapters, apply the equivalent operations through your ORM.
+5. For the built-in SQL database configuration or a SQL-backed Drizzle or Prisma adapter, run the release migration with `--reprovision-scim` and one `--retire-scim-account` value for every exact account ID in the reviewed inventory. The command retires those account rows, backs up the stable provider table, and creates `scimConnectionBinding`, `scimIdentityTombstone`, `scimSubject`, `scimUser`, `scimGroup`, `scimGroupMember`, and `scimProjectionGrant`. For other adapters, apply the equivalent operations through your database tooling.
 6. Deploy the new configuration, update the directory's bearer credential, and trigger a complete User and Group provisioning cycle.
 7. Verify user linking, lifecycle, and role projection in your application, then resume provisioning.
 
@@ -608,7 +618,7 @@ These do not need action for most setups, but they change what you see.
 
 ## Upgrade checklist
 
-Update the Better Auth packages and configuration. With the built-in Kysely adapter, inspect without writing:
+Update the Better Auth packages and configuration. For Drizzle, update the generated schema used by the adapter without applying it. For Prisma, update `schema.prisma` and regenerate the client without applying the schema. Then inspect without writing:
 
 ```bash title="Terminal"
 npx auth@rc migrate --json > better-auth-migration-plan.json
@@ -631,7 +641,7 @@ npx auth@rc migrate --from 1.6 \
   --revoke-oauth-tokens
 ```
 
-For Drizzle or Prisma, complete the equivalent data inventory in your ORM, use `generate`, and apply the reviewed output through your ORM's migration tooling. Deploy 1.7 only after the post-migration row counts, collision checks, sign-in checks, inactive legacy-token check, and feature-specific verification pass.
+If Prisma Migrate or Drizzle Kit tracks your schema history, record the direct release migration before the next deployment and do not apply duplicate DDL. Deploy 1.7 only after the post-migration row counts, collision checks, sign-in checks, inactive legacy-token check, and feature-specific verification pass.
 
 ***
 

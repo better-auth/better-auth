@@ -1,3 +1,5 @@
+import { DatabaseSync } from "node:sqlite";
+import type { BetterAuthDBSchema } from "@better-auth/core/db";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { scim } from "@better-auth/scim";
 import { betterAuth } from "better-auth";
@@ -44,6 +46,35 @@ interface PublishedOAuthProviderApi {
 		client_id: string;
 		client_secret?: string | undefined;
 	}>;
+}
+
+function clonePluginSchema<
+	T extends {
+		schema: BetterAuthDBSchema;
+	},
+>(plugin: T): T {
+	return {
+		...plugin,
+		schema: Object.fromEntries(
+			Object.entries(plugin.schema).map(([model, table]) => [
+				model,
+				{
+					...table,
+					fields: Object.fromEntries(
+						Object.entries(table.fields).map(([fieldName, field]) => [
+							fieldName,
+							{
+								...field,
+								...(field.references
+									? { references: { ...field.references } }
+									: {}),
+							},
+						]),
+					),
+				},
+			]),
+		),
+	} as T;
 }
 
 function configurePublishedReferenceField(field: {
@@ -108,10 +139,14 @@ function createMssqlDatabase(database: string) {
 }
 
 async function exerciseAccountAndOrganizationMigration({
+	afterMigrate,
+	beforeMigrate,
 	database,
 	emailDomain,
 	nameSuffix,
 }: {
+	afterMigrate?: (() => Promise<void> | void) | undefined;
+	beforeMigrate?: (() => Promise<void> | void) | undefined;
 	database: MigrationDatabase;
 	emailDomain: string;
 	nameSuffix: string;
@@ -166,6 +201,7 @@ async function exerciseAccountAndOrganizationMigration({
 	if (!sourceTeam) {
 		throw new Error("Published 1.6.25 did not create the default team fixture");
 	}
+	await beforeMigrate?.();
 
 	const auth17 = betterAuth({
 		baseURL: "http://localhost:3000",
@@ -194,6 +230,7 @@ async function exerciseAccountAndOrganizationMigration({
 			credential: 2,
 		},
 	});
+	await afterMigrate?.();
 
 	for (const credentials of [
 		{ email: `ada@${emailDomain}`, name: `Ada ${nameSuffix}` },
@@ -270,10 +307,12 @@ async function exerciseOAuthProviderMigration({
 		  }
 		| undefined;
 }) {
-	const publishedPlugin = oidcProvider1625({
-		allowDynamicClientRegistration: true,
-		loginPage: "/login",
-	});
+	const publishedPlugin = clonePluginSchema(
+		oidcProvider1625({
+			allowDynamicClientRegistration: true,
+			loginPage: "/login",
+		}),
+	);
 	configurePublishedPlugin?.(publishedPlugin);
 	const auth1625 = betterAuth1625({
 		baseURL: "http://localhost:3000",
@@ -483,6 +522,56 @@ async function exerciseOAuthProviderMigration({
 		tokens: { revoked: 1 },
 	});
 }
+
+it("migrates users created by published 1.6.25 and authenticates them through 1.7 on SQLite", {
+	timeout: 60_000,
+}, async () => {
+	const database = new DatabaseSync(":memory:");
+	try {
+		await exerciseAccountAndOrganizationMigration({
+			afterMigrate() {
+				const schemaObjects = database
+					.prepare(
+						`SELECT name FROM sqlite_master
+						 WHERE tbl_name = 'account' AND type IN ('index', 'trigger')`,
+					)
+					.all()
+					.map((object) => (object as { name: string }).name);
+				expect(schemaObjects).toEqual(
+					expect.arrayContaining([
+						"account_provider_id_idx",
+						"account_provider_update_audit",
+					]),
+				);
+				database.exec(`UPDATE account SET providerId = providerId`);
+				expect(
+					database
+						.prepare(`SELECT COUNT(*) AS count FROM accountUpdateAudit`)
+						.get(),
+				).toEqual({ count: 2 });
+			},
+			beforeMigrate() {
+				database.exec(`
+					CREATE INDEX account_provider_id_idx ON account(providerId);
+					CREATE TABLE accountUpdateAudit (
+						id INTEGER PRIMARY KEY AUTOINCREMENT,
+						accountId TEXT NOT NULL
+					);
+					CREATE TRIGGER account_provider_update_audit
+					AFTER UPDATE OF providerId ON account
+					BEGIN
+						INSERT INTO accountUpdateAudit (accountId) VALUES (NEW.id);
+					END;
+				`);
+			},
+			database,
+			emailDomain: "sqlite.example.com",
+			nameSuffix: "SQLite",
+		});
+	} finally {
+		database.close();
+	}
+});
 
 it("migrates users created by published 1.6.25 and authenticates them through 1.7 on PostgreSQL", {
 	timeout: 60_000,

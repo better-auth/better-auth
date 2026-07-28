@@ -21,7 +21,7 @@ npx auth@latest generate
 
 ## Migrate
 
-The migrate command applies the Better Auth schema directly to your database. This is available if you're using the built-in Kysely adapter. For other adapters, you'll need to apply the schema using your ORM's migration tool.
+The `migrate` command applies the Better Auth schema directly to your database. It supports the built-in SQL database configuration and SQL-backed Drizzle or Prisma adapters. Use `generate` and your own migration tooling for other adapters.
 
 ```package-install title="Terminal"
 npx auth@latest migrate
@@ -46,13 +46,17 @@ npx auth@latest migrate
 * `--legacy-oauth-consent-table` - The physical name of a customized 1.6 `oauthConsent` table.
 * `--legacy-scim-provider-table` - The physical name of a customized 1.6 `scimProvider` table.
 
+<Callout type="warn">
+  When upgrading a Drizzle or Prisma project from 1.6, update the ORM schema used by your Better Auth configuration before running the release migration, but do not apply that schema to the database. Drizzle users should make the adapter import the generated 1.7 schema. Prisma users should update `schema.prisma` and run `prisma generate`. Keep existing physical table and column mappings unchanged. The database must remain on the 1.6 schema until `migrate --from 1.6` performs the reviewed data and schema changes together.
+</Callout>
+
 Use `--dry-run` before an upgrade or when reviewing a generated migration:
 
 ```package-install title="Terminal"
 npx auth@latest migrate --dry-run
 ```
 
-Use `--json` in CI or with a coding agent. The output has a versioned `formatVersion`, a `status`, sorted schema changes, and stable blocker codes. A blocked plan exits with status `1`, and no database changes are applied.
+Use `--json` in CI or with a coding agent. The output has a versioned `formatVersion`, the detected adapter and SQL dialect under `target`, a `status`, sorted schema changes, and stable blocker codes. A blocked plan exits with status `1`, and no database changes are applied.
 
 ```package-install title="Terminal"
 npx auth@latest migrate --json > better-auth-migration-plan.json
@@ -83,6 +87,8 @@ npx auth@latest migrate --from 1.6 \
 ```
 
 The release migration validates every decision before writing. It rejects missing issuer mappings and identity collisions. OAuth client secrets are rehashed, and legacy tokens are retired. Before creating the 1.7 replacements, the command renames the legacy OAuth and SCIM tables with a `__better_auth_1_6` suffix. SCIM account IDs are never inferred from email or provider-name patterns; supply the exact IDs from a reviewed inventory.
+
+If Prisma Migrate or Drizzle Kit owns your versioned schema history, record this direct release migration in that history before the next deployment. Do not run an ORM migration that applies the same 1.7 changes a second time.
 
 <Callout type="info">
   **Using PostgreSQL with a non-default schema?**

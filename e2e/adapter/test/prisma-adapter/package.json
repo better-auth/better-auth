@@ -16,6 +16,7 @@
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "better-auth": "workspace:*",
+    "better-auth-1-6-25": "npm:better-auth@1.6.25",
     "better-sqlite3": "^12.11.1",
     "prisma": "^7.8.0"
   }

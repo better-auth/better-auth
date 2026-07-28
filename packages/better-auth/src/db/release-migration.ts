@@ -2,12 +2,13 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { getAuthTables } from "@better-auth/core/db";
 import { getDatabaseIndexStringLength } from "@better-auth/core/db/internal";
 import { BetterAuthError } from "@better-auth/core/error";
-import { createKyselyAdapter } from "@better-auth/kysely-adapter";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
+import type { Kysely } from "kysely";
 import { sql } from "kysely";
 import { getAdapter } from "./adapter-kysely";
 import { getSchema } from "./get-schema";
+import { getMigrationDatabase } from "./migration-database";
 
 // cspell:ignore conindid indexrelid
 
@@ -184,12 +185,7 @@ function getLegacyBackupTableName(sourceTable: string) {
 	return backupTable;
 }
 
-async function countTableRows(
-	kysely: NonNullable<
-		Awaited<ReturnType<typeof createKyselyAdapter>>["kysely"]
-	>,
-	table: string,
-) {
+async function countTableRows(kysely: Kysely<unknown>, table: string) {
 	const result = await sql<{ count: bigint | number | string }>`
 		SELECT COUNT(*) AS "count"
 		FROM ${sql.table(table)}
@@ -202,9 +198,7 @@ async function inspectLegacyTable({
 	legacyColumns,
 	sourceTable,
 }: {
-	kysely: NonNullable<
-		Awaited<ReturnType<typeof createKyselyAdapter>>["kysely"]
-	>;
+	kysely: Kysely<unknown>;
 	legacyColumns: readonly string[];
 	sourceTable: string;
 }): Promise<LegacyTableState | undefined> {
@@ -258,12 +252,7 @@ export async function inspectLegacyReleaseDataFrom16(
 	config: BetterAuthOptions,
 	options: MigrateFrom16Options,
 ): Promise<LegacyReleaseDataState> {
-	const { kysely } = await createKyselyAdapter(config);
-	if (!kysely) {
-		throw new BetterAuthError(
-			"The 1.6 data migration requires the built-in Kysely adapter.",
-		);
-	}
+	const { kysely } = await getMigrationDatabase(config);
 	const authTables = getAuthTables(config);
 	const legacyTableNames = options.legacyTableNames;
 	const state: LegacyReleaseDataState = {
@@ -335,12 +324,7 @@ export async function renameLegacyTables(
 	config: BetterAuthOptions,
 	state: LegacyReleaseDataState,
 ) {
-	const { databaseType, kysely } = await createKyselyAdapter(config);
-	if (!kysely || !databaseType) {
-		throw new BetterAuthError(
-			"The 1.6 data migration requires the built-in Kysely adapter.",
-		);
-	}
+	const { databaseType, kysely } = await getMigrationDatabase(config);
 	for (const table of [
 		state.oauthApplication,
 		state.oauthAccessToken,
@@ -430,12 +414,7 @@ export async function migrateOAuthProviderDataFrom16(
 	) {
 		return undefined;
 	}
-	const { kysely } = await createKyselyAdapter(config);
-	if (!kysely) {
-		throw new BetterAuthError(
-			"The 1.6 data migration requires the built-in Kysely adapter.",
-		);
-	}
+	const { kysely } = await getMigrationDatabase(config);
 	const adapter = await getAdapter(config);
 	let migratedClients = 0;
 	if (state.oauthApplication) {
@@ -570,12 +549,7 @@ export async function retireScimAccountsFrom16(
 	if (!state.scimProvider || !options.scim) return [];
 	const accountIds = [...new Set(options.scim.accountIdsToRetire)];
 	if (accountIds.length === 0) return [];
-	const { kysely } = await createKyselyAdapter(config);
-	if (!kysely) {
-		throw new BetterAuthError(
-			"The 1.6 data migration requires the built-in Kysely adapter.",
-		);
-	}
+	const { kysely } = await getMigrationDatabase(config);
 	const providerTable = state.scimProvider.sourceTableNeedsRename
 		? state.scimProvider.sourceTable
 		: state.scimProvider.backupTable;
@@ -634,20 +608,138 @@ export function summarizeScimMigration(
 	};
 }
 
+function requireSqliteColumn(createTableSql: string, columnName: string) {
+	const escapedColumnName = columnName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	const columnDefinition = new RegExp(
+		`((?:"${escapedColumnName}"|\`${escapedColumnName}\`|\\[${escapedColumnName}\\])\\s+[^,]+?)(?=,|\\s*\\)\\s*$)`,
+		"i",
+	);
+	const match = createTableSql.match(columnDefinition);
+	if (!match?.[1]) {
+		throw new BetterAuthError(
+			`SQLite could not find column "${columnName}" while rebuilding the account table.`,
+		);
+	}
+	if (/\bNOT\s+NULL\b/i.test(match[1])) return createTableSql;
+	return createTableSql.replace(columnDefinition, `${match[1]} NOT NULL`);
+}
+
+async function requireSqliteAccountIdentityColumns({
+	accountTable,
+	columns,
+	issuerColumn,
+	kysely,
+	providerAccountIdColumn,
+}: {
+	accountTable: string;
+	columns: readonly string[];
+	issuerColumn: string;
+	kysely: Kysely<unknown>;
+	providerAccountIdColumn: string;
+}) {
+	const tableDefinition = await sql<{ sql: string | null }>`
+		SELECT sql
+		FROM sqlite_master
+		WHERE type = 'table' AND name = ${accountTable}
+	`.execute(kysely);
+	const createTableSql = tableDefinition.rows[0]?.sql;
+	if (!createTableSql) {
+		throw new BetterAuthError(
+			`SQLite could not read the schema for account table "${accountTable}".`,
+		);
+	}
+	const dependentSchemaDefinitions = await sql<{ sql: string | null }>`
+		SELECT sql
+		FROM sqlite_master
+		WHERE
+			type IN ('index', 'trigger') AND
+			tbl_name = ${accountTable} AND
+			sql IS NOT NULL
+		ORDER BY type, name
+	`.execute(kysely);
+	const temporaryTable = `${accountTable}__better_auth_1_7`;
+	const temporaryTableExists = await sql`
+		SELECT 1
+		FROM sqlite_master
+		WHERE type = 'table' AND name = ${temporaryTable}
+		LIMIT 1
+	`.execute(kysely);
+	if (temporaryTableExists.rows.length > 0) {
+		throw new BetterAuthError(
+			`SQLite temporary migration table "${temporaryTable}" already exists.`,
+		);
+	}
+
+	const hardenedCreateTableSql = requireSqliteColumn(
+		requireSqliteColumn(createTableSql, issuerColumn),
+		providerAccountIdColumn,
+	);
+	const createTemporaryTableSql = hardenedCreateTableSql.replace(
+		/^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"(?:[^"]|"")*"|`[^`]*`|\[[^\]]*\]|\S+)/i,
+		`CREATE TABLE "${temporaryTable.replaceAll('"', '""')}"`,
+	);
+	if (createTemporaryTableSql === hardenedCreateTableSql) {
+		throw new BetterAuthError(
+			`SQLite could not rewrite the account table "${accountTable}".`,
+		);
+	}
+
+	const foreignKeys = await sql<{ foreign_keys: number }>`
+		PRAGMA foreign_keys
+	`.execute(kysely);
+	const foreignKeysEnabled = Boolean(foreignKeys.rows[0]?.foreign_keys);
+	if (foreignKeysEnabled) {
+		await sql`PRAGMA foreign_keys = OFF`.execute(kysely);
+	}
+	try {
+		await sql`BEGIN IMMEDIATE`.execute(kysely);
+		try {
+			await sql.raw(createTemporaryTableSql).execute(kysely);
+			const columnReferences = columns.map((column) => sql.ref(column));
+			await sql`
+				INSERT INTO ${sql.table(temporaryTable)}
+					(${sql.join(columnReferences)})
+				SELECT ${sql.join(columnReferences)}
+				FROM ${sql.table(accountTable)}
+			`.execute(kysely);
+			await kysely.schema.dropTable(accountTable).execute();
+			await kysely.schema
+				.alterTable(temporaryTable)
+				.renameTo(accountTable)
+				.execute();
+			for (const definition of dependentSchemaDefinitions.rows) {
+				if (definition.sql) await sql.raw(definition.sql).execute(kysely);
+			}
+			const foreignKeyViolations = await sql`PRAGMA foreign_key_check`.execute(
+				kysely,
+			);
+			if (foreignKeyViolations.rows.length > 0) {
+				throw new BetterAuthError(
+					`SQLite found foreign key violations while rebuilding account table "${accountTable}".`,
+				);
+			}
+			await sql`COMMIT`.execute(kysely);
+		} catch (error) {
+			await sql`ROLLBACK`.execute(kysely);
+			throw error;
+		}
+	} finally {
+		if (foreignKeysEnabled) {
+			await sql`PRAGMA foreign_keys = ON`.execute(kysely);
+		}
+	}
+}
+
 export async function migrateAccountIdentityFrom16(
 	config: BetterAuthOptions,
 	options: MigrateFrom16Options,
 ): Promise<MigratedAccountSummary> {
-	const { databaseType, kysely } = await createKyselyAdapter(config);
-	if (!kysely || !databaseType) {
-		throw new BetterAuthError(
-			"The 1.6 data migration requires the built-in Kysely adapter.",
-		);
-	}
+	const { databaseType, kysely } = await getMigrationDatabase(config);
 	if (
 		databaseType !== "postgres" &&
 		databaseType !== "mysql" &&
-		databaseType !== "mssql"
+		databaseType !== "mssql" &&
+		databaseType !== "sqlite"
 	) {
 		throw new BetterAuthError(
 			`The 1.6 account data migration is not implemented for ${databaseType}.`,
@@ -674,7 +766,9 @@ export async function migrateAccountIdentityFrom16(
 	const getIdentityColumnType = (
 		columnName: "issuer" | "providerAccountId",
 	) => {
-		if (databaseType === "postgres") return sql`text`;
+		if (databaseType === "postgres" || databaseType === "sqlite") {
+			return sql`text`;
+		}
 		const indexLength = getDatabaseIndexStringLength({
 			columnName,
 			dialect: databaseType,
@@ -833,7 +927,7 @@ export async function migrateAccountIdentityFrom16(
 			MODIFY COLUMN ${sql.ref(providerAccountIdColumn)}
 			${getIdentityColumnType("providerAccountId")} NOT NULL
 		`.execute(kysely);
-	} else {
+	} else if (databaseType === "mssql") {
 		await sql`
 			ALTER TABLE ${sql.table(accountTable)}
 			ALTER COLUMN ${sql.ref(issuerColumn)}
@@ -844,6 +938,21 @@ export async function migrateAccountIdentityFrom16(
 			ALTER COLUMN ${sql.ref(providerAccountIdColumn)}
 			${getIdentityColumnType("providerAccountId")} NOT NULL
 		`.execute(kysely);
+	} else {
+		await requireSqliteAccountIdentityColumns({
+			accountTable,
+			columns: accountTableMetadata.columns
+				.map((column) => column.name)
+				.concat(
+					existingColumns.has(issuerColumn) ? [] : [issuerColumn],
+					existingColumns.has(providerAccountIdColumn)
+						? []
+						: [providerAccountIdColumn],
+				),
+			issuerColumn,
+			kysely,
+			providerAccountIdColumn,
+		});
 	}
 
 	return {

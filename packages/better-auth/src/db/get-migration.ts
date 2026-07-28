@@ -14,7 +14,6 @@ import {
 import { createLogger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { KyselyDatabaseType } from "@better-auth/kysely-adapter";
-import { createKyselyAdapter } from "@better-auth/kysely-adapter";
 import type {
 	AlterTableColumnAlteringBuilder,
 	ColumnDataType,
@@ -25,6 +24,7 @@ import type {
 } from "kysely";
 import { sql } from "kysely";
 import { getSchema } from "./get-schema";
+import { getMigrationDatabase } from "./migration-database";
 import type {
 	MigrateFrom16Options,
 	ReleaseMigrationBlocker,
@@ -192,10 +192,14 @@ function databaseIndexMatches(
 	);
 }
 
-function databaseValueIsTrue(value: boolean | number | string | undefined) {
+function databaseValueIsTrue(value: unknown) {
 	if (typeof value === "boolean") return value;
 	if (typeof value === "number") return value !== 0;
-	return value === "1" || value?.toLowerCase() === "true" || value === "t";
+	if (typeof value === "bigint") return value !== 0n;
+	return (
+		typeof value === "string" &&
+		(value === "1" || value.toLowerCase() === "true" || value === "t")
+	);
 }
 
 function hasAutomaticColumnBackfill(
@@ -224,14 +228,13 @@ async function tableContainsRows(
 	db: Kysely<unknown>,
 	table: string,
 ): Promise<boolean> {
-	const query = await sql<{ hasRows: boolean | number | string }>`
+	const query = await sql<{ hasRows: unknown }>`
 		SELECT CASE
 			WHEN EXISTS (SELECT 1 FROM ${sql.table(table)}) THEN 1
 			ELSE 0
 		END AS "hasRows"
 	`.execute(db);
-	const hasRows = query.rows[0]?.hasRows;
-	return hasRows === true || hasRows === 1 || hasRows === "1";
+	return databaseValueIsTrue(query.rows[0]?.hasRows);
 }
 
 async function columnContainsNullValues(
@@ -239,7 +242,7 @@ async function columnContainsNullValues(
 	table: string,
 	column: string,
 ): Promise<boolean> {
-	const query = await sql<{ hasNullValues: boolean | number | string }>`
+	const query = await sql<{ hasNullValues: unknown }>`
 		SELECT CASE
 			WHEN EXISTS (
 				SELECT 1
@@ -249,8 +252,7 @@ async function columnContainsNullValues(
 			ELSE 0
 		END AS "hasNullValues"
 	`.execute(db);
-	const hasNullValues = query.rows[0]?.hasNullValues;
-	return hasNullValues === true || hasNullValues === 1 || hasNullValues === "1";
+	return databaseValueIsTrue(query.rows[0]?.hasNullValues);
 }
 
 async function getDatabaseIndexes(
@@ -630,20 +632,17 @@ export async function getMigrations(
 	const betterAuthSchema = getSchema(config);
 	const logger = createLogger(config.logger);
 
-	let { kysely: db, databaseType: dbType } = await createKyselyAdapter(config);
+	let {
+		adapterId,
+		kysely: db,
+		databaseType: dbType,
+	} = await getMigrationDatabase(config);
 
 	if (!dbType) {
 		logger.warn(
 			"Could not determine database type, defaulting to sqlite. Please provide a type in the database options to avoid this.",
 		);
 		dbType = "sqlite";
-	}
-
-	if (!db) {
-		logger.error(
-			"Only kysely adapter is supported for migrations. You can use `generate` command to generate the schema, if you're using a different adapter.",
-		);
-		process.exit(1);
 	}
 
 	let currentSchema = dbType === "mssql" ? await getMssqlSchema(db) : "public";
@@ -1350,6 +1349,10 @@ export async function getMigrations(
 		return compiled.join(";\n\n") + ";";
 	}
 	return {
+		migrationTarget: {
+			adapter: adapterId,
+			dialect: dbType,
+		},
 		toBeCreated,
 		toBeAdded,
 		toBeAddedIndexes,
