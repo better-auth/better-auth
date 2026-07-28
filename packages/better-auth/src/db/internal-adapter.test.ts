@@ -1962,5 +1962,45 @@ describe("internal adapter test", async () => {
 			expect(first).toBe(true);
 			expect(second).toBe(true);
 		});
+
+		it("always sets a ttl on the secondary-storage reservation", async () => {
+			// A reservation whose remaining lifetime is under one second floors to
+			// a ttl of 0. Secondary storage implementations treat a zero ttl as
+			// "no expiry" (e.g. redis SETEX is skipped in favour of SET), so the
+			// tombstone would be written permanently and leak. Callers can hit
+			// this with an externally supplied expiry: the SAML replay guard
+			// derives `expiresAt` from the assertion's NotOnOrAfter plus the
+			// clock skew, which is exactly the bound the timestamp validator
+			// allows, so an assertion arriving in its final second lands here.
+			const dataMap = new Map<string, string>();
+			const ttlMap = new Map<string, number>();
+			const adapter = await makeAdapter({
+				secondaryStorage: {
+					set(key: string, value: string, ttl?: number) {
+						dataMap.set(key, value);
+						if (ttl) ttlMap.set(key, ttl);
+					},
+					get(key: string) {
+						return dataMap.get(key) || null;
+					},
+					delete(key: string) {
+						dataMap.delete(key);
+						ttlMap.delete(key);
+					},
+				},
+			});
+
+			const reserved = await adapter.reserveVerificationValue({
+				identifier: "reserve:expiring-now",
+				value: "jti-expiring",
+				expiresAt: new Date(Date.now() + 100),
+			});
+
+			expect(reserved).toBe(true);
+			const key = "verification:reserve:expiring-now";
+			expect(dataMap.has(key)).toBe(true);
+			// Without a ttl the key would never expire.
+			expect(ttlMap.get(key)).toBeGreaterThan(0);
+		});
 	});
 });
