@@ -1424,3 +1424,98 @@ describe("oauth register - protected dynamic registration", async () => {
 		expect(tokenBody.user_id).toBeUndefined();
 	});
 });
+
+describe("oauth register - application_type", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const { customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				allowUnauthenticatedClientRegistration: true,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const register = (body: Record<string, unknown>) =>
+		customFetchImpl(`${authServerBaseUrl}/api/auth/oauth2/register`, {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify(body),
+		});
+
+	it("registers a native client with loopback and custom-scheme redirect URIs", async () => {
+		const response = await register({
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			redirect_uris: [
+				"http://localhost:3005/callback",
+				"http://127.0.0.1:3005/callback",
+				"com.example.app:/callback",
+			],
+		});
+		expect(response.status).toBe(201);
+		const body = (await response.json()) as OAuthClient;
+		expect(body.application_type).toBe("native");
+	});
+
+	it("rejects a native client with an http redirect URI on a routable host", async () => {
+		const response = await register({
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			redirect_uris: ["http://example.com/callback"],
+		});
+		expect(response.status).toBe(400);
+		const body = (await response.json()) as { error?: string };
+		expect(body.error).toBe("invalid_redirect_uri");
+	});
+
+	it("rejects a web client with an http redirect URI", async () => {
+		const response = await register({
+			application_type: "web",
+			redirect_uris: ["http://example.com/callback"],
+		});
+		expect(response.status).toBe(400);
+		const body = (await response.json()) as { error?: string };
+		expect(body.error).toBe("invalid_redirect_uri");
+	});
+
+	it("rejects a web client with a loopback redirect URI", async () => {
+		const response = await register({
+			application_type: "web",
+			redirect_uris: ["https://localhost:3005/callback"],
+		});
+		expect(response.status).toBe(400);
+		const body = (await response.json()) as { error?: string };
+		expect(body.error).toBe("invalid_redirect_uri");
+	});
+
+	it("registers a web client with an https redirect URI", async () => {
+		const response = await register({
+			application_type: "web",
+			redirect_uris: ["https://rp.example.com/callback"],
+		});
+		expect(response.status).toBe(201);
+		const body = (await response.json()) as OAuthClient;
+		expect(body.application_type).toBe("web");
+	});
+
+	it("keeps prior behavior when application_type is omitted", async () => {
+		// OIDC Registration defaults application_type to "web", but enforcing
+		// that default would break existing localhost integrations; constraints
+		// only apply when the parameter is sent explicitly.
+		const response = await register({
+			redirect_uris: ["http://localhost:5000/api/auth/callback/test"],
+		});
+		expect(response.status).toBe(201);
+		const body = (await response.json()) as OAuthClient;
+		expect(body.application_type).toBeUndefined();
+	});
+});

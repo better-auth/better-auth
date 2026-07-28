@@ -295,6 +295,35 @@ export async function checkOAuthClient(
 		});
 	}
 
+	// OIDC Registration §2 / MCP SEP-837: when `application_type` is sent,
+	// constrain redirect URIs to what the declared type allows. Only enforced
+	// when the parameter is explicit, so registrations predating this check
+	// keep working.
+	if (clientWithDefaults.application_type) {
+		for (const uri of clientWithDefaults.redirect_uris ?? []) {
+			const url = new URL(uri);
+			const isHttp = url.protocol === "http:";
+			const isHttps = url.protocol === "https:";
+			const isLoopback = (isHttp || isHttps) && isLoopbackHost(url.hostname);
+			if (clientWithDefaults.application_type === "native") {
+				// Native clients redirect to custom schemes, loopback http
+				// interception servers, or claimed https links — never plain
+				// http on a routable host.
+				if (isHttp && !isLoopback) {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_redirect_uri",
+						error_description: `native clients must not use http redirect URIs on non-loopback hosts: ${uri}`,
+					});
+				}
+			} else if (!isHttps || isLoopback) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_redirect_uri",
+					error_description: `web clients require https redirect URIs on non-loopback hosts: ${uri}`,
+				});
+			}
+		}
+	}
+
 	// Validate correlation between grant_types and response_types
 	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
 	for (const grantType of grantTypes) {

@@ -387,6 +387,17 @@ export interface OAuthClient {
 	grant_types?: GrantType[];
 	response_types?: "code"[];
 	// | "token" // NEVER SUPPORT - deprecated in OAuth 2.1
+	/**
+	 * OIDC Registration application type, constraining redirect URI schemes and
+	 * hosts when provided: `native` clients use custom schemes, loopback `http`
+	 * redirects, or claimed `https` links; `web` clients require `https` on a
+	 * non-loopback host. Distinct from `type`, which tracks the RFC 6749 client
+	 * profile.
+	 *
+	 * @default "web"
+	 * @see https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
+	 */
+	application_type?: "web" | "native";
 	//---- RFC6749 Spec ----//
 	public?: boolean;
 	type?: "web" | "native" | "user-agent-based";

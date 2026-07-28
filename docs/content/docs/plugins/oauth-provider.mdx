@@ -422,7 +422,7 @@ oauthProvider({
 To enable open client registration without a Better Auth session, additionally set `allowUnauthenticatedClientRegistration: true` in your auth config. Public clients are registered with `token_endpoint_auth_method: "none"`. Confidential clients receive a one-time `client_secret` in the registration response.
 
 <Callout type="info">
-  For MCP public-client identity, [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991) are [available](/docs/plugins/cimd).
+  For MCP public-client identity, use [Client ID Metadata Documents](/docs/plugins/cimd). The [MCP 2026-07-28 spec](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration) deprecates Dynamic Client Registration in favor of CIMD; DCR remains supported for backwards compatibility.
 </Callout>
 
 ```ts title="auth.ts"
@@ -447,6 +447,8 @@ const client = await authClient.oauth2.register({
 ```
 
 For all endpoint parameters, see [RFC 7591 Registration](https://datatracker.ietf.org/doc/html/rfc7591#section-2).
+
+When `application_type` ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)) is provided, redirect URIs are constrained to what the declared type allows: `native` clients may use custom schemes, loopback `http` redirects, or claimed `https` links — plain `http` on a routable host is rejected; `web` clients require `https` redirect URIs on non-loopback hosts. MCP clients are required to send an appropriate `application_type` by the [MCP 2026-07-28 spec](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#application-type-and-redirect-uri-constraints). When omitted, no `application_type` constraints are applied.
 
 Note the following parameters are not yet supported:
 
