@@ -9,6 +9,8 @@ import { checkOAuthClient, oauthToSchema } from "@better-auth/oauth-provider";
 import { APIError } from "better-call";
 import type { CimdOptions } from "./types";
 import {
+	ALLOWED_GRANT_TYPES,
+	ALLOWED_RESPONSE_TYPES,
 	validateCimdMetadata,
 	validateClientIdUrl,
 } from "./validate-metadata-document";
@@ -113,6 +115,20 @@ function toOAuthClientBody(metadata: Record<string, unknown>): OAuthClient {
 		if (key in metadata) {
 			filtered[key] = metadata[key];
 		}
+	}
+	// The metadata document may declare grant/response types the server does not
+	// support (validation tolerates them per RFC 7591 §2.1). Drop the
+	// unsupported entries so they never reach the DB or the client's stored
+	// capabilities.
+	if (Array.isArray(filtered.grant_types)) {
+		filtered.grant_types = filtered.grant_types.filter(
+			(g) => typeof g === "string" && ALLOWED_GRANT_TYPES.has(g),
+		);
+	}
+	if (Array.isArray(filtered.response_types)) {
+		filtered.response_types = filtered.response_types.filter(
+			(r) => typeof r === "string" && ALLOWED_RESPONSE_TYPES.has(r),
+		);
 	}
 	return {
 		...(filtered as OAuthClient),

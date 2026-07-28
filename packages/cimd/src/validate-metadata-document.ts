@@ -18,9 +18,14 @@ const SYMMETRIC_AUTH_METHODS = new Set([
 	"client_secret_jwt",
 ]);
 
-const ALLOWED_GRANT_TYPES = new Set(["authorization_code", "refresh_token"]);
+/** Grant types the authorization server supports for CIMD clients. */
+export const ALLOWED_GRANT_TYPES = new Set([
+	"authorization_code",
+	"refresh_token",
+]);
 
-const ALLOWED_RESPONSE_TYPES = new Set(["code"]);
+/** Response types the authorization server supports for CIMD clients. */
+export const ALLOWED_RESPONSE_TYPES = new Set(["code"]);
 
 export interface ClientIdMetadataDocumentResult {
 	valid: boolean;
@@ -237,36 +242,49 @@ export function validateCimdMetadata(
 		};
 	}
 
-	// grant_types: must be a subset of allowed types
-	if (
-		doc.grant_types !== undefined &&
-		!(
-			Array.isArray(doc.grant_types) &&
-			doc.grant_types.every(
-				(g: unknown) => typeof g === "string" && ALLOWED_GRANT_TYPES.has(g),
-			)
-		)
-	) {
-		return {
-			valid: false,
-			error: `grant_types must be a subset of [${[...ALLOWED_GRANT_TYPES].map((g) => `"${g}"`).join(", ")}]`,
-		};
+	// grant_types: per RFC 7591 §2.1 and the CIMD draft, the authorization
+	// server ignores grant types it does not support rather than rejecting the
+	// whole client. We therefore tolerate unsupported entries (e.g. VS Code
+	// declares "urn:ietf:params:oauth:grant-type:device_code") and only require
+	// that the authorization_code grant the code flow relies on is present.
+	// Unsupported values are dropped before persistence (see client-store.ts).
+	if (doc.grant_types !== undefined) {
+		if (
+			!Array.isArray(doc.grant_types) ||
+			!doc.grant_types.every((g: unknown) => typeof g === "string")
+		) {
+			return {
+				valid: false,
+				error: "grant_types must be an array of strings",
+			};
+		}
+		if (!doc.grant_types.includes("authorization_code")) {
+			return {
+				valid: false,
+				error: 'grant_types must include "authorization_code"',
+			};
+		}
 	}
 
-	// response_types: must be a subset of allowed types
-	if (
-		doc.response_types !== undefined &&
-		!(
-			Array.isArray(doc.response_types) &&
-			doc.response_types.every(
-				(r: unknown) => typeof r === "string" && ALLOWED_RESPONSE_TYPES.has(r),
-			)
-		)
-	) {
-		return {
-			valid: false,
-			error: 'response_types must be a subset of ["code"]',
-		};
+	// response_types: same liberal-acceptance policy as grant_types. Unsupported
+	// response types are ignored; we only require the "code" response type that
+	// the authorization-code flow uses.
+	if (doc.response_types !== undefined) {
+		if (
+			!Array.isArray(doc.response_types) ||
+			!doc.response_types.every((r: unknown) => typeof r === "string")
+		) {
+			return {
+				valid: false,
+				error: "response_types must be an array of strings",
+			};
+		}
+		if (!doc.response_types.includes("code")) {
+			return {
+				valid: false,
+				error: 'response_types must include "code"',
+			};
+		}
 	}
 
 	// Validate client_uri and logo_uri for SSRF if present
