@@ -339,14 +339,8 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 							return;
 						}
 						try {
-							await ctx.context.internalAdapter.deleteUserSessions(
-								session.user.id,
-							);
 							await ctx.context.internalAdapter.deleteUser(session.user.id);
 						} catch (error) {
-							// TODO: collapse session+user cleanup into `internalAdapter.deleteUser`
-							// to remove the partial-state window where sessions are deleted but
-							// the user row remains.
 							ctx.context.logger.error(
 								"Failed to clean up anonymous user during post-link cleanup",
 								{ anonymousUserId: session.user.id, error },
