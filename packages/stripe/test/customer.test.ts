@@ -1089,54 +1089,31 @@ describe("stripe customer", () => {
 	});
 
 	describe("Customer ownership when linking by email", () => {
-		// A verified email can reclaim a customer when its stored owner is stale.
-		test.for([
-			{
-				when: "a verified email relinks a customer owned by another user",
-				metadata: { userId: "another_user_id", customerType: "user" },
-				verified: true,
-				createCalls: 0,
-				updateCalls: 1,
-				expectedId: "cus_existing",
-			},
-			{
-				when: "an unverified email does not reuse a customer",
-				metadata: undefined,
-				verified: false,
-				createCalls: 1,
-				updateCalls: 0,
-				expectedId: "cus_fresh",
-			},
-			{
-				when: "a verified email claims an unowned customer",
-				metadata: undefined,
-				verified: true,
-				createCalls: 0,
-				updateCalls: 1,
-				expectedId: "cus_existing",
-			},
-		])("signup: $when", async ({
-			metadata,
-			verified,
-			createCalls,
-			updateCalls,
-			expectedId,
-		}, { stripeMock, memory, stripeOptions }) => {
+		test("does not relink a customer owned by an existing user on signup", async ({
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
 			const email = "owner@example.com";
 			stripeMock.customers.search.mockResolvedValueOnce({
-				data: [{ id: "cus_existing", email, ...(metadata && { metadata }) }],
+				data: [
+					{
+						id: "cus_existing",
+						email,
+						metadata: {
+							userId: "another_user_id",
+							customerType: "user",
+						},
+					},
+				],
 			});
 			stripeMock.customers.create.mockResolvedValueOnce({ id: "cus_fresh" });
-			stripeMock.customers.update.mockResolvedValueOnce({
-				id: "cus_existing",
-				email,
-			});
 
 			const { client, auth } = await getTestInstance(
 				{
 					database: memory,
 					plugins: [stripe(stripeOptions)],
-					...(verified && { databaseHooks: autoVerifyUserHooks }),
+					databaseHooks: autoVerifyUserHooks,
 				},
 				{
 					disableTestUser: true,
@@ -1144,41 +1121,27 @@ describe("stripe customer", () => {
 				},
 			);
 			const ctx = await auth.$context;
+			await ctx.internalAdapter.createUser({
+				id: "another_user_id",
+				email: "another-owner@example.com",
+				emailVerified: true,
+				name: "Another Owner",
+			});
 
 			const userRes = await client.signUp.email(
 				{ email, password: "password", name: "Me" },
 				{ throw: true },
 			);
 
-			expect(stripeMock.customers.create).toHaveBeenCalledTimes(createCalls);
-			expect(stripeMock.customers.update).toHaveBeenCalledTimes(updateCalls);
-			if (updateCalls) {
-				expect(stripeMock.customers.update).toHaveBeenCalledWith(
-					"cus_existing",
-					{
-						metadata: {
-							customerType: "user",
-							userId: userRes.user.id,
-						},
-					},
-				);
-			}
+			expect(stripeMock.customers.create).toHaveBeenCalledTimes(1);
+			expect(stripeMock.customers.update).not.toHaveBeenCalled();
 			const user = await ctx.adapter.findOne<
 				User & { stripeCustomerId?: string }
 			>({ model: "user", where: [{ field: "id", value: userRes.user.id }] });
-			expect(user?.stripeCustomerId).toBe(expectedId);
+			expect(user?.stripeCustomerId).toBe("cus_fresh");
 		});
 
-		test.for([
-			{
-				when: "it belongs to another user",
-				metadata: { userId: "another_user_id", customerType: "user" },
-			},
-			{
-				when: "it has no owner",
-				metadata: undefined,
-			},
-		])("relinks a customer on upgrade when $when", async ({ metadata }, {
+		test("does not relink a customer owned by an existing user on upgrade", async ({
 			stripeMock,
 			memory,
 			stripeOptions,
@@ -1189,7 +1152,7 @@ describe("stripe customer", () => {
 				createCustomerOnSignUp: false,
 			} satisfies StripeOptions;
 
-			const { client, sessionSetter } = await getTestInstance(
+			const { client, auth, sessionSetter } = await getTestInstance(
 				{
 					database: memory,
 					plugins: [stripe(options)],
@@ -1200,8 +1163,15 @@ describe("stripe customer", () => {
 					clientOptions: { plugins: [stripeClient({ subscription: true })] },
 				},
 			);
+			const ctx = await auth.$context;
+			await ctx.internalAdapter.createUser({
+				id: "another_user_id",
+				email: "another-owner@example.com",
+				emailVerified: true,
+				name: "Another Owner",
+			});
 
-			const signUpResult = await client.signUp.email(
+			await client.signUp.email(
 				{ email, password: "password", name: "Me" },
 				{ throw: true },
 			);
@@ -1216,13 +1186,12 @@ describe("stripe customer", () => {
 					{
 						id: "cus_other_owner",
 						email,
-						...(metadata && { metadata }),
+						metadata: {
+							userId: "another_user_id",
+							customerType: "user",
+						},
 					},
 				],
-			});
-			stripeMock.customers.update.mockResolvedValueOnce({
-				id: "cus_other_owner",
-				email,
 			});
 			stripeMock.subscriptions.list.mockResolvedValue({ data: [] });
 
@@ -1231,16 +1200,8 @@ describe("stripe customer", () => {
 				fetchOptions: { headers },
 			});
 
-			expect(stripeMock.customers.create).not.toHaveBeenCalled();
-			expect(stripeMock.customers.update).toHaveBeenCalledWith(
-				"cus_other_owner",
-				{
-					metadata: {
-						customerType: "user",
-						userId: signUpResult.user.id,
-					},
-				},
-			);
+			expect(stripeMock.customers.create).toHaveBeenCalledTimes(1);
+			expect(stripeMock.customers.update).not.toHaveBeenCalled();
 		});
 	});
 });

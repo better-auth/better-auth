@@ -490,18 +490,28 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							if (!user.emailVerified) {
 								stripeCustomer = undefined;
 							} else {
-								stripeCustomer = await client.customers.update(
-									stripeCustomer.id,
-									{
-										metadata: customerMetadata.set(
-											{
-												userId: user.id,
-												customerType: "user",
-											},
-											stripeCustomer.metadata,
-										),
-									},
-								);
+								const ownerId =
+									stripeCustomer.metadata?.[customerMetadata.keys.userId];
+								const owner =
+									ownerId && ownerId !== user.id
+										? await ctx.context.internalAdapter.findUserById(ownerId)
+										: null;
+								if (owner) {
+									stripeCustomer = undefined;
+								} else {
+									stripeCustomer = await client.customers.update(
+										stripeCustomer.id,
+										{
+											metadata: customerMetadata.set(
+												{
+													userId: user.id,
+													customerType: "user",
+												},
+												stripeCustomer.metadata,
+											),
+										},
+									);
+								}
 							}
 						}
 
