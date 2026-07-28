@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import * as z from "zod";
 import { createPlaceholderEmail } from "./email";
 
 describe("createPlaceholderEmail", () => {
@@ -10,15 +9,6 @@ describe("createPlaceholderEmail", () => {
 				namespace: "namespace",
 			}),
 		).toBe("account-id@namespace.placeholder.invalid");
-	});
-
-	it("creates an address accepted by the email schema", () => {
-		const email = createPlaceholderEmail({
-			identifier: "account-id",
-			namespace: "namespace",
-		});
-
-		expect(z.email().safeParse(email).success).toBe(true);
 	});
 
 	it("keeps equal identifiers distinct across namespaces", () => {
@@ -32,5 +22,14 @@ describe("createPlaceholderEmail", () => {
 		});
 
 		expect(firstEmail).not.toBe(secondEmail);
+	});
+
+	it("rejects an invalid address", () => {
+		expect(() =>
+			createPlaceholderEmail({
+				identifier: "account-id",
+				namespace: "",
+			}),
+		).toThrow(TypeError);
 	});
 });

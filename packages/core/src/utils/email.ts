@@ -1,3 +1,5 @@
+import * as z from "zod";
+
 /**
  * @see https://www.rfc-editor.org/rfc/rfc6761.html#section-6.4
  */
@@ -16,10 +18,19 @@ export interface PlaceholderEmailOptions {
 
 /**
  * Creates a stable, non-routable email address for an account without an email.
+ *
+ * @throws TypeError if the generated email is invalid.
  */
 export function createPlaceholderEmail({
 	identifier,
 	namespace,
 }: PlaceholderEmailOptions): string {
-	return `${identifier}@${namespace}.${PLACEHOLDER_EMAIL_DOMAIN}`;
+	const result = z
+		.email()
+		.safeParse(`${identifier}@${namespace}.${PLACEHOLDER_EMAIL_DOMAIN}`);
+	if (!result.success) {
+		throw new TypeError("Invalid placeholder email");
+	}
+
+	return result.data;
 }
