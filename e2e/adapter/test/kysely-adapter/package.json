@@ -8,8 +8,11 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/kysely-adapter": "workspace:*",
+    "@better-auth/oauth-provider": "workspace:*",
     "@better-auth/scim": "workspace:*",
     "@better-auth/test-utils": "workspace:*",
-    "better-auth": "workspace:*"
+    "better-auth": "workspace:*",
+    "better-auth-1-6-25": "npm:better-auth@1.6.25",
+    "better-auth-scim-1-6-25": "npm:@better-auth/scim@1.6.25"
   }
 }

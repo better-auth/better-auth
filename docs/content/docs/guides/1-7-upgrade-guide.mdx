@@ -32,44 +32,55 @@ Some areas need more care: OAuth, OpenID Connect, SAML, SCIM, two-factor authent
 The upgrade command handles package updates. The database needs more care. A few 1.7 features add or change tables, and some also need a manual data step.
 
 <Callout type="warn">
-  Run the schema migration before deploying 1.7 if any changed feature applies to your project.
+  Inspect and complete the data migration before applying the 1.7 schema or deploying 1.7. The CLI blocks schema writes when it finds populated models that need a reviewed backfill, data move, or reprovision.
 </Callout>
 
-Use the CLI migration commands:
+With the built-in Kysely adapter, inspect the database without changing it after updating the configuration for 1.7:
 
 ```bash title="Terminal"
-npx auth@rc generate
-npx auth@rc migrate
+npx auth@rc migrate --dry-run
 ```
 
-If you manage your own schema with Drizzle or Prisma, run `generate` and apply the result through your own migration tooling.
+Use the JSON form in CI or when a coding agent is helping with the migration:
+
+```bash title="Terminal"
+npx auth@rc migrate --json > better-auth-migration-plan.json
+```
+
+A blocked plan exits with status `1` and does not change the database. Resolve each blocker using the applicable section below, then run the inspection again.
+
+With the built-in Kysely adapter on PostgreSQL, MySQL, or SQL Server, use `migrate --from 1.6` with the explicit decisions described below. With Drizzle or Prisma, inventory the applicable legacy data using your ORM, complete the manual data step first, then run `generate`, review the result, and apply it through your ORM's migration tooling.
+
+Give a coding agent the JSON plan, this guide, the Better Auth configuration, and a schema-only database export. Keep credentials and tokens out of the prompt. Require the agent to preserve blocker codes and row-count checks in its proposed migration. An agent may generate SQL and identify collisions, but it must not infer identity ownership from email or mutable profile data.
 
 The `auth` CLI now requires Node.js 22.12 or newer to run.
 
 These features change the schema:
 
-| Feature                    | What it adds                                                               | Converts data for you?   |
-| -------------------------- | -------------------------------------------------------------------------- | ------------------------ |
-| Protected resources        | New resource tables and key columns                                        | Not needed (config move) |
-| Resource-bound tokens      | Resource columns on the token tables                                       | Yes                      |
-| DPoP                       | A token-binding column                                                     | Not needed               |
-| Refresh-token reuse window | A cached replay-response column on refresh tokens                          | Not needed               |
-| Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables               | Not needed               |
-| Back-channel logout        | Logout-URL and revoked columns                                             | Not needed               |
-| Requested user-info claims | A requested-claims column on the token and consent tables                  | Not needed               |
-| Account identity           | An issuer column, a renamed provider-account column, and a compound index  | **No, backfill**         |
-| SCIM                       | Seven provisioning models with layouts that replace the legacy SCIM models | **No, reprovision**      |
-| Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                  | Not needed               |
-| Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables            | **No, move client data** |
+| Feature                    | What it adds                                                               | Data migration                                 |
+| -------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------- |
+| Protected resources        | New resource tables and key columns                                        | Not needed (config move)                       |
+| Resource-bound tokens      | Resource columns on the token tables                                       | Automatic                                      |
+| DPoP                       | A token-binding column                                                     | Not needed                                     |
+| Refresh-token reuse window | A cached replay-response column on refresh tokens                          | Not needed                                     |
+| Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables               | Not needed                                     |
+| Back-channel logout        | Logout-URL and revoked columns                                             | Not needed                                     |
+| Requested user-info claims | A requested-claims column on the token and consent tables                  | Not needed                                     |
+| Account identity           | An issuer column, a renamed provider-account column, and a compound index  | Requires explicit issuers                      |
+| SCIM                       | Seven provisioning models with layouts that replace the legacy SCIM models | Retires legacy data; full reprovision required |
+| Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                  | Not needed                                     |
+| Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables            | Requires explicit migration strategies         |
 
-Account identity, SCIM, and the provider client store require manual data steps. Plan each applicable cutover before you deploy.
+Account identity, SCIM, and the provider client store require reviewed data decisions. Plan each applicable cutover before you deploy.
 
 <Callout type="warn">
   Do not run the generated SCIM migration over populated prerelease `scimGroup` or `scimGroupMember` tables. Follow the [SCIM cutover](#scim-requires-full-reprovisioning) before creating the new schema.
 </Callout>
 
 <Callout type="warn">
-  **Migrating from `oidcProvider` or the in-core MCP plugin moves client data.** `@better-auth/oauth-provider` stores registered clients in `oauthClient`, not the old `oauthApplication`, and renames the `oauthAccessToken.accessToken` column to `token`. `auth migrate` only adds tables and columns; it never renames or copies data. Copy clients with an explicit field mapping or re-register them before cutover. The old and new client tables are not column-compatible: `redirectUrls` becomes the `redirectUris` array, `metadata` becomes JSON, and fields such as `grantTypes` and `tokenEndpointAuthMethod` are new. Dynamically registered clients can re-register. Drop or rename the legacy `oauthAccessToken` table before migrating because its rows are ephemeral access tokens and the new required `token` column cannot be added to populated rows automatically.
+  **Migrating from `oidcProvider` or the in-core MCP plugin moves client data.** `@better-auth/oauth-provider` stores registered clients in `oauthClient`, not the old `oauthApplication`, and replaces the combined access/refresh-token layout in `oauthAccessToken` with separate token models. The old and new client tables are not column-compatible: `redirectUrls` becomes the `redirectUris` array, `metadata` becomes JSON, and fields such as `grantTypes` and `tokenEndpointAuthMethod` are new. `auth migrate --from 1.6 --migrate-oauth-clients` performs this mapping and hashes each legacy plaintext client secret. You must also choose `--migrate-oauth-consents` or `--reauthorize-oauth-consents`, and acknowledge token retirement with `--revoke-oauth-tokens`. Dynamically registered clients can re-register instead.
+
+  The old `oauthConsent.scopes` value is a space-delimited string; the new provider stores a string array and ties consent to the new client store. The release migration can convert reviewed consents when client IDs are preserved, or retire them and require users to consent again. The legacy tables are retained with a `__better_auth_1_6` suffix for inspection and manual recovery planning. Pass customized 1.6 physical names with `--legacy-oauth-application-table`, `--legacy-oauth-access-token-table`, and `--legacy-oauth-consent-table`.
 </Callout>
 
 ***
@@ -86,7 +97,17 @@ Better Auth now recognizes an external account by the unique pair of `issuer` an
   Use a maintenance window and stop authentication writes before changing the account schema. The generated migration cannot choose trusted issuers or resolve identity collisions for you.
 </Callout>
 
-**Backfill the account identity:**
+With the built-in Kysely adapter on PostgreSQL, MySQL, or SQL Server, pass the reviewed mapping to the release migration:
+
+```bash title="Terminal"
+npx auth@rc migrate --from 1.6 \
+  --account-issuer credential=local:credential \
+  --account-issuer github=https://github.com
+```
+
+The command stops before changing data if any populated provider lacks a mapping or if the resulting `(issuer, providerAccountId)` key is not unique.
+
+With another adapter or migration tool, backfill the account identity manually:
 
 1. Back up the `account` and `user` tables, then inventory every distinct `providerId`. Include custom physical field names from `account.fields` in that inventory.
 2. Rename the physical `accountId` column to `providerAccountId`, or add `providerAccountId` as nullable and copy the existing values if your migration tool cannot express a rename. Add `issuer` as nullable during the backfill.
@@ -201,6 +222,10 @@ Linking an anonymous account after a social login now works in Expo and other in
 ## As an identity provider
 
 This covers `@better-auth/oauth-provider`. Several changes need a schema migration; run `generate` and `migrate` once after applying them.
+
+<Callout type="warn">
+  **SQL Server needs a provider-schema review.** The published 1.6.25 `oidcProvider` schema declares the referenced `oauthApplication.clientId` and its token and consent foreign keys at different lengths, so an unmodified schema fails during creation. A deployment that corrected those widths can use the release migration. The 1.7 OAuth provider also creates several paths that cascade from the client or user into token and consent data; SQL Server rejects multiple cascade paths. Configure those foreign keys with `NO ACTION` in the reviewed SQL Server schema and let the provider delete dependent data through its application transaction.
+</Callout>
 
 ### Protected resources replace the audience list
 
@@ -441,9 +466,9 @@ The new SCIM models do not read or convert the legacy SCIM tables. The prereleas
 
 1. Back up the legacy SCIM tables. Build a reviewed inventory of SCIM-created `account` rows, their linked `user` rows, and any organization membership or team state created by provisioning. Use the configured SCIM providers and directory subjects to identify them. Do not classify rows by a `providerId` prefix alone: stable 1.6 could store a raw provider ID that another account source also uses, while later prereleases used a `scim:` namespace.
 2. Decide how each legacy User will be handled. To retain a User, copy a stable connection-and-subject-to-`userId` mapping into application-owned storage, remove the legacy SCIM account row, and configure `identity.resolveUser` before reprovisioning. To recreate a User, remove the legacy SCIM account and delete the User only after proving that no other sign-in method or application data depends on it. Clean up organization state according to your application's ownership rules.
-3. Drop whichever legacy plugin models exist. Stable 1.6 uses `scimProvider`. If you adopted prerelease Group provisioning, first drop `scimGroupRoleGrant`, `scimGroupRole`, `scimGroupMember`, and `scimGroup` in that child-first order, then drop `scimProvider`. Use their physical table names if you customized model names.
+3. Retire whichever legacy plugin models exist. Stable 1.6 uses `scimProvider`. `auth migrate --from 1.6 --reprovision-scim` renames the stable table with a `__better_auth_1_6` suffix. If you adopted prerelease Group provisioning, first back up and drop `scimGroupRoleGrant`, `scimGroupRole`, `scimGroupMember`, and `scimGroup` in that child-first order. Use their physical table names if you customized model names, and pass a customized stable table with `--legacy-scim-provider-table`.
 4. Configure the new connections and enable native interactive transactions in your database adapter. Cloudflare D1 cannot provide the required transaction behavior.
-5. Run `auth generate` or `auth migrate` to create `scimConnectionBinding`, `scimIdentityTombstone`, `scimSubject`, `scimUser`, `scimGroup`, `scimGroupMember`, and `scimProjectionGrant`.
+5. For the built-in Kysely adapter, run the release migration with `--reprovision-scim` and one `--retire-scim-account` value for every exact account ID in the reviewed inventory. The command retires those account rows, backs up the stable provider table, and creates `scimConnectionBinding`, `scimIdentityTombstone`, `scimSubject`, `scimUser`, `scimGroup`, `scimGroupMember`, and `scimProjectionGrant`. For other adapters, apply the equivalent operations through your ORM.
 6. Deploy the new configuration, update the directory's bearer credential, and trigger a complete User and Group provisioning cycle.
 7. Verify user linking, lifecycle, and role projection in your application, then resume provisioning.
 
@@ -583,18 +608,30 @@ These do not need action for most setups, but they change what you see.
 
 ## Upgrade checklist
 
-Run once, after applying the changes that affect you:
+Update the Better Auth packages and configuration. With the built-in Kysely adapter, inspect without writing:
 
 ```bash title="Terminal"
-npx auth@rc generate
-npx auth@rc migrate
+npx auth@rc migrate --json > better-auth-migration-plan.json
 ```
 
-Then complete the manual data step if it applies:
+Review every reported data step and prepare the corresponding release-migration decisions:
 
-* **Backfill account identities:** assign every account a reviewed issuer and provider account identifier, resolve collisions, and add the compound unique index before deploying.
-* **Move provider clients:** copy or re-register clients from `oidcProvider` or the in-core MCP plugin before switching to the shared OAuth provider tables.
-* **Reprovision SCIM:** follow the [full cutover](#scim-requires-full-reprovisioning), including reviewed handling of legacy core identities, then run a complete User and Group provisioning cycle.
+* **Backfill account identities:** assign every populated provider a reviewed issuer and resolve collisions before deploying.
+* **Move provider state:** choose whether to convert or retire consents. The release migration copies clients, hashes their plaintext secrets, and retires old tokens.
+* **Reprovision SCIM:** inventory exact legacy SCIM account IDs and follow the [full cutover](#scim-requires-full-reprovisioning), including reviewed handling of legacy core identities.
+
+Apply the data and schema migration together with the decisions that match your plan. This example migrates OAuth consents and does not include SCIM:
+
+```bash title="Terminal"
+npx auth@rc migrate --from 1.6 \
+  --account-issuer credential=local:credential \
+  --account-issuer github=https://github.com \
+  --migrate-oauth-clients \
+  --migrate-oauth-consents \
+  --revoke-oauth-tokens
+```
+
+For Drizzle or Prisma, complete the equivalent data inventory in your ORM, use `generate`, and apply the reviewed output through your ORM's migration tooling. Deploy 1.7 only after the post-migration row counts, collision checks, sign-in checks, inactive legacy-token check, and feature-specific verification pass.
 
 ***
 

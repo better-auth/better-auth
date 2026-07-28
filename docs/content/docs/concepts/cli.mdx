@@ -31,6 +31,58 @@ npx auth@latest migrate
 
 * `--config` - The path to your Better Auth config file. By default, the CLI will search for an auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under the `src` directory.
 * `--yes` - Skip the confirmation prompt and apply the schema directly.
+* `--dry-run` - Inspect the migration without changing the database.
+* `--json` - Print a deterministic, machine-readable migration plan without changing the database.
+* `--from 1.6` - Apply the reviewed Better Auth 1.6 data migration before creating the 1.7 schema.
+* `--account-issuer <providerId=issuer...>` - Supply an explicit issuer for every populated 1.6 account provider.
+* `--migrate-oauth-clients` - Copy 1.6 OAuth provider clients and hash their plaintext secrets for 1.7.
+* `--migrate-oauth-consents` - Convert 1.6 space-delimited OAuth consent scopes into 1.7 arrays.
+* `--reauthorize-oauth-consents` - Retire 1.6 OAuth consents instead of copying them. Use this instead of `--migrate-oauth-consents`.
+* `--revoke-oauth-tokens` - Retire all 1.6 OAuth provider tokens.
+* `--reprovision-scim` - Retire 1.6 SCIM provider credentials and acknowledge that the directory must be fully reprovisioned.
+* `--retire-scim-account <accountId...>` - Remove an explicitly reviewed 1.6 SCIM authentication account during the cutover.
+* `--legacy-oauth-access-token-table` - The physical name of a customized 1.6 `oauthAccessToken` table.
+* `--legacy-oauth-application-table` - The physical name of a customized 1.6 `oauthApplication` table.
+* `--legacy-oauth-consent-table` - The physical name of a customized 1.6 `oauthConsent` table.
+* `--legacy-scim-provider-table` - The physical name of a customized 1.6 `scimProvider` table.
+
+Use `--dry-run` before an upgrade or when reviewing a generated migration:
+
+```package-install title="Terminal"
+npx auth@latest migrate --dry-run
+```
+
+Use `--json` in CI or with a coding agent. The output has a versioned `formatVersion`, a `status`, sorted schema changes, and stable blocker codes. A blocked plan exits with status `1`, and no database changes are applied.
+
+```package-install title="Terminal"
+npx auth@latest migrate --json > better-auth-migration-plan.json
+```
+
+The blocker codes describe the kind of reviewed data operation that must happen before the schema can change:
+
+* `required-column-backfill` - Existing rows need values for new required columns.
+* `required-column-constraint` - Backfilled columns must be made non-nullable.
+* `table-data-move` - Rows must move from a retired model to its replacement.
+* `table-data-conversion` - A retained model has data whose physical encoding changed.
+* `retired-table-data` - Rows from a retired model must be removed before its replacement is created.
+* `reprovision-data` - The old and new models have different lifecycle semantics and require a new provisioning cycle.
+
+After resolving every blocker, run the command again. An `up-to-date` plan means the configured schema is already present; a `ready` plan can be applied with `migrate`.
+
+For a Better Auth 1.6 database, pass every decision required by the populated models to one release migration command. Omit the OAuth or SCIM flags when that feature has no legacy data:
+
+```package-install title="Terminal"
+npx auth@latest migrate --from 1.6 \
+  --account-issuer credential=local:credential \
+  --account-issuer github=https://github.com \
+  --migrate-oauth-clients \
+  --migrate-oauth-consents \
+  --revoke-oauth-tokens \
+  --reprovision-scim \
+  --retire-scim-account <reviewed-account-id>
+```
+
+The release migration validates every decision before writing. It rejects missing issuer mappings and identity collisions. OAuth client secrets are rehashed, and legacy tokens are retired. Before creating the 1.7 replacements, the command renames the legacy OAuth and SCIM tables with a `__better_auth_1_6` suffix. SCIM account IDs are never inferred from email or provider-name patterns; supply the exact IDs from a reviewed inventory.
 
 <Callout type="info">
   **Using PostgreSQL with a non-default schema?**

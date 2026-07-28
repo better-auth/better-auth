@@ -5,24 +5,67 @@ import {
 	getTelemetryAuthConfig,
 } from "@better-auth/telemetry";
 import { getAdapter } from "better-auth/db/adapter";
-import { getMigrations } from "better-auth/db/migration";
+import { getMigrations, migrateFrom16 } from "better-auth/db/migration";
 import chalk from "chalk";
 import { Command } from "commander";
 import prompts from "prompts";
 import yoctoSpinner from "yocto-spinner";
 import * as z from "zod";
 import { getConfig } from "../utils/get-config";
+import { createMigrationPlan } from "./migration-plan";
 
 /** @internal */
-export async function migrateAction(opts: any) {
+export async function migrateAction(opts: unknown) {
 	const options = z
 		.object({
 			cwd: z.string(),
 			config: z.string().optional(),
+			dryRun: z.boolean().optional(),
+			from: z.literal("1.6").optional(),
+			json: z.boolean().optional(),
+			accountIssuer: z.array(z.string()).optional(),
+			legacyOAuthAccessTokenTable: z.string().trim().min(1).optional(),
+			legacyOAuthApplicationTable: z.string().trim().min(1).optional(),
+			legacyOAuthConsentTable: z.string().trim().min(1).optional(),
+			legacyScimProviderTable: z.string().trim().min(1).optional(),
+			migrateOAuthClients: z.boolean().optional(),
+			migrateOAuthConsents: z.boolean().optional(),
+			reauthorizeOAuthConsents: z.boolean().optional(),
+			reprovisionScim: z.boolean().optional(),
+			retireScimAccount: z.array(z.string()).optional(),
+			revokeOAuthTokens: z.boolean().optional(),
 			y: z.boolean().optional(),
 			yes: z.boolean().optional(),
 		})
 		.parse(opts);
+	const accountIssuers: Record<string, string> = {};
+	for (const mapping of options.accountIssuer ?? []) {
+		const separator = mapping.indexOf("=");
+		const providerId = mapping.slice(0, separator).trim();
+		const issuer = mapping.slice(separator + 1).trim();
+		if (separator <= 0 || !providerId || !issuer) {
+			throw new Error(
+				`Invalid account issuer "${mapping}". Use providerId=issuer.`,
+			);
+		}
+		if (accountIssuers[providerId] && accountIssuers[providerId] !== issuer) {
+			throw new Error(
+				`Provider "${providerId}" has more than one issuer mapping.`,
+			);
+		}
+		accountIssuers[providerId] = issuer;
+	}
+	if (options.migrateOAuthConsents && options.reauthorizeOAuthConsents) {
+		throw new Error(
+			"Choose either --migrate-oauth-consents or --reauthorize-oauth-consents.",
+		);
+	}
+	const legacyTableNames = {
+		oauthAccessToken: options.legacyOAuthAccessTokenTable,
+		oauthApplication: options.legacyOAuthApplicationTable,
+		oauthConsent: options.legacyOAuthConsentTable,
+		scimProvider: options.legacyScimProviderTable,
+	};
 
 	const cwd = path.resolve(options.cwd);
 	if (!existsSync(cwd)) {
@@ -100,13 +143,85 @@ export async function migrateAction(opts: any) {
 		process.exit(1);
 	}
 
-	const spinner = yoctoSpinner({ text: "preparing migration..." }).start();
+	const spinner = options.json
+		? undefined
+		: yoctoSpinner({ text: "preparing migration..." }).start();
 
-	const { toBeAdded, toBeAddedIndexes, toBeCreated, runMigrations } =
-		await getMigrations(config);
+	const {
+		toBeAdded,
+		toBeAddedIndexes,
+		toBeCreated,
+		migrationBlockers,
+		runMigrations,
+	} = await getMigrations(config, {
+		legacyTableNames,
+	});
+	const hasChanges =
+		toBeAdded.length > 0 ||
+		toBeAddedIndexes.length > 0 ||
+		toBeCreated.length > 0;
+	const migrationPlan = createMigrationPlan({
+		hasChanges,
+		migrationBlockers,
+		toBeAdded,
+		toBeAddedIndexes,
+		toBeCreated,
+	});
 
-	if (!toBeAdded.length && !toBeAddedIndexes.length && !toBeCreated.length) {
-		spinner.stop();
+	if (options.json) {
+		console.log(JSON.stringify(migrationPlan, null, 2));
+		if (migrationBlockers.length > 0) {
+			process.exitCode = 1;
+		}
+		return;
+	}
+
+	spinner?.stop();
+	if (migrationBlockers.length > 0 && options.from !== "1.6") {
+		console.error("Migration blocked. No database changes were applied.");
+		for (const blocker of migrationBlockers) {
+			if (blocker.code === "table-data-move") {
+				console.error(
+					`-> [${blocker.code}] ${blocker.sourceTable}: move rows to ${blocker.targetTable} for ${blocker.migration}.`,
+				);
+				continue;
+			}
+			if (blocker.code === "reprovision-data") {
+				console.error(
+					`-> [${blocker.code}] ${blocker.sourceTables.join(", ")}: back up and remove retired data, then reprovision into ${blocker.targetTables.join(", ")} for ${blocker.migration}.`,
+				);
+				continue;
+			}
+			if (blocker.code === "retired-table-data") {
+				console.error(
+					`-> [${blocker.code}] ${blocker.table}: remove retired token rows for ${blocker.migration}.`,
+				);
+				continue;
+			}
+			if (blocker.code === "table-data-conversion") {
+				console.error(
+					`-> [${blocker.code}] ${blocker.sourceTable}: convert ${blocker.conversion} into ${blocker.targetTable} for ${blocker.migration}, or require users to consent again.`,
+				);
+				continue;
+			}
+			if (blocker.code === "required-column-constraint") {
+				console.error(
+					`-> [${blocker.code}] ${blocker.table}: make ${blocker.columns.join(", ")} non-nullable.`,
+				);
+				continue;
+			}
+			console.error(
+				`-> [${blocker.code}] ${blocker.table}: existing rows need values for ${blocker.columns.join(", ")}.`,
+			);
+		}
+		console.error(
+			"Resolve every blocker with a reviewed data migration, then run `auth migrate` again. Use `auth migrate --json` for a machine-readable plan.",
+		);
+		process.exit(1);
+		return;
+	}
+
+	if (!hasChanges && options.from !== "1.6") {
 		console.log("🚀 No migrations needed.");
 		try {
 			const telemetry = await createTelemetry(config);
@@ -121,7 +236,6 @@ export async function migrateAction(opts: any) {
 		process.exit(0);
 	}
 
-	spinner.stop();
 	console.log(`🔑 The migration will affect the following:`);
 
 	for (const table of [...toBeCreated, ...toBeAdded]) {
@@ -143,6 +257,11 @@ export async function migrateAction(opts: any) {
 			chalk.yellow(table),
 			chalk.white("table."),
 		);
+	}
+
+	if (options.dryRun) {
+		console.log("Dry run complete. No database changes were applied.");
+		return;
 	}
 
 	if (options.y) {
@@ -177,8 +296,54 @@ export async function migrateAction(opts: any) {
 	}
 
 	spinner?.start("migrating...");
-	await runMigrations();
-	spinner.stop();
+	if (options.from === "1.6") {
+		const consentStrategy = options.migrateOAuthConsents
+			? ("migrate" as const)
+			: options.reauthorizeOAuthConsents
+				? ("reauthorize" as const)
+				: undefined;
+		const hasOAuthDecision =
+			options.migrateOAuthClients ||
+			consentStrategy ||
+			options.revokeOAuthTokens;
+		if (
+			hasOAuthDecision &&
+			!(
+				options.migrateOAuthClients &&
+				consentStrategy &&
+				options.revokeOAuthTokens
+			)
+		) {
+			throw new Error(
+				"The OAuth cutover requires a client, consent, and token decision together.",
+			);
+		}
+		const oauthProvider =
+			options.migrateOAuthClients &&
+			consentStrategy &&
+			options.revokeOAuthTokens
+				? {
+						clients: "migrate" as const,
+						clientSecrets: "rehash-plaintext" as const,
+						consents: consentStrategy,
+						tokens: "revoke" as const,
+					}
+				: undefined;
+		await migrateFrom16(config, {
+			accountIssuers,
+			legacyTableNames,
+			oauthProvider,
+			scim: options.reprovisionScim
+				? {
+						accountIdsToRetire: options.retireScimAccount ?? [],
+						providers: "reprovision",
+					}
+				: undefined,
+		});
+	} else {
+		await runMigrations();
+	}
+	spinner?.stop();
 	console.log("🚀 migration was completed successfully!");
 	try {
 		const telemetry = await createTelemetry(config);
@@ -203,10 +368,54 @@ export const migrate = new Command("migrate")
 		"--config <config>",
 		"the path to the configuration file. defaults to the first configuration file found.",
 	)
+	.option("--from <version>", 'run a release data migration; currently "1.6"')
+	.option(
+		"--account-issuer <providerId=issuer...>",
+		"explicit issuer mapping for populated 1.6 account providers",
+	)
+	.option(
+		"--migrate-oauth-clients",
+		"migrate 1.6 OAuth clients and re-hash plaintext client secrets",
+	)
+	.option("--migrate-oauth-consents", "convert 1.6 OAuth consent scopes")
+	.option(
+		"--reauthorize-oauth-consents",
+		"retire 1.6 OAuth consents and require consent again",
+	)
+	.option("--revoke-oauth-tokens", "retire all 1.6 OAuth provider tokens")
+	.option(
+		"--reprovision-scim",
+		"retire 1.6 SCIM credentials and require full reprovisioning",
+	)
+	.option(
+		"--retire-scim-account <accountId...>",
+		"reviewed 1.6 SCIM authentication account ids to retire",
+	)
 	.option(
 		"-y, --yes",
 		"automatically accept and run migrations without prompting",
 		false,
+	)
+	.option("--dry-run", "show the migration plan without changing the database")
+	.option(
+		"--json",
+		"print a machine-readable migration plan without changing the database",
+	)
+	.option(
+		"--legacy-oauth-access-token-table <table>",
+		"physical name of a customized 1.6 oauthAccessToken table",
+	)
+	.option(
+		"--legacy-oauth-application-table <table>",
+		"physical name of a customized 1.6 oauthApplication table",
+	)
+	.option(
+		"--legacy-oauth-consent-table <table>",
+		"physical name of a customized 1.6 oauthConsent table",
+	)
+	.option(
+		"--legacy-scim-provider-table <table>",
+		"physical name of a customized 1.6 scimProvider table",
 	)
 	.option("--y", "(deprecated) same as --yes", false)
 	.action(migrateAction);

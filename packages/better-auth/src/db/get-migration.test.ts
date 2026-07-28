@@ -37,6 +37,65 @@ function createLegacyOrgDb() {
 }
 
 describe("get-migration: ALTER TABLE ADD COLUMN on SQLite", () => {
+	it("blocks every schema change when a populated table needs a required column without a default", async () => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(
+			`CREATE TABLE "user" (
+				"id" text primary key not null,
+				"name" text not null,
+				"email" text not null unique,
+				"emailVerified" integer not null,
+				"image" text,
+				"createdAt" date not null,
+				"updatedAt" date not null
+			)`,
+		);
+		db.exec(
+			`INSERT INTO "user" ("id", "name", "email", "emailVerified", "createdAt", "updatedAt")
+			 VALUES ('u1', 'Ada', 'ada@example.com', 1, '2020-01-01', '2020-01-01')`,
+		);
+		const config: BetterAuthOptions = {
+			database: db,
+			user: {
+				additionalFields: {
+					tenantId: {
+						type: "string",
+						required: true,
+					},
+				},
+			},
+		};
+
+		const migration = await getMigrations(config);
+
+		expect(migration.migrationBlockers).toEqual([
+			{
+				code: "required-column-backfill",
+				columns: ["tenantId"],
+				table: "user",
+			},
+		]);
+		await expect(migration.runMigrations()).rejects.toThrow(
+			'Migration blocked: existing table "user" contains rows and requires values for "tenantId".',
+		);
+		await expect(migration.compileMigrations()).rejects.toThrow(
+			'Migration blocked: existing table "user" contains rows and requires values for "tenantId".',
+		);
+
+		const userColumns = db
+			.prepare("PRAGMA table_info(user)")
+			.all()
+			.map((column) => (column as { name: string }).name);
+		expect(userColumns).not.toContain("tenantId");
+		expect(
+			db
+				.prepare(
+					"SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'account'",
+				)
+				.get(),
+		).toBeUndefined();
+	});
+
 	it("adds a required column with a static default and a unique column to a populated table", async () => {
 		const db = createLegacyOrgDb();
 		const config: BetterAuthOptions = {
