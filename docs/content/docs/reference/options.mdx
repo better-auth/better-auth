@@ -692,7 +692,7 @@ export const auth = betterAuth({
 
 Configure background task handling for deferred operations. Background tasks allow non-critical operations (like cleanup, analytics, timing-attack mitigation, or rate limit counter updates) to run after the response is sent. This can significantly improve response times on serverless platforms.
 
-Some examples are: `waitUntil` from `@vercel/functions` on Vercel, or `ctx.waitUntil` on Cloudflare Workers. See the examples below for more details.
+Some examples are: `waitUntil` from `@vercel/functions` on Vercel, or `waitUntil` from `cloudflare:workers` on Cloudflare Workers. See the examples below for more details.
 
 <Callout type="warn">
   Enabling this introduces eventual consistency where the response returns optimistic data before the database is updated. Only enable if your application can tolerate this trade-off for improved latency.
@@ -717,19 +717,15 @@ Some examples are: `waitUntil` from `@vercel/functions` on Vercel, or `ctx.waitU
   <Tab value="Cloudflare Workers">
     ```ts
     import { betterAuth } from "better-auth";
-    import { AsyncLocalStorage } from "node:async_hooks";
-
-    const execCtxStorage = new AsyncLocalStorage<ExecutionContext>();
+    import { waitUntil } from "cloudflare:workers";
 
     export const auth = betterAuth({
       advanced: {
         backgroundTasks: {
-          handler: (p) => execCtxStorage.getStore()?.waitUntil(p),
+          handler: waitUntil,
         },
       },
     });
-
-    // In your request handler, wrap with execCtxStorage.run(ctx, ...)
     ```
   </Tab>
 </Tabs>
