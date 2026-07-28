@@ -198,4 +198,15 @@ export const communityAdapters: CommunityAdapter[] = [
 			avatar: "https://github.com/joesome-git.png",
 		},
 	},
+	{
+		name: "@bjorntech/betterauth-dynamodb",
+		url: "https://github.com/bjorntech/betterauth-dynamodb",
+		database: "DynamoDB",
+		databaseUrl: "https://aws.amazon.com/dynamodb/",
+		author: {
+			name: "BjornTech AB",
+			url: "https://github.com/bjorntech",
+			avatar: "https://github.com/bjorntech.png",
+		},
+	},
 ];
