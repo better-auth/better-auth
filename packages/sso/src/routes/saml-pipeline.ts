@@ -431,9 +431,11 @@ export async function processSAMLResponse(
 	}
 
 	// 12. InResponseTo validation
-	const inResponseTo = (extract as SAMLAssertionExtract).inResponseTo as
-		| string
-		| undefined;
+	// samlify nests the Response element's attributes under `response`, so the
+	// value must be read from `response.inResponseTo`. This matches the logout
+	// pipeline in `sso.ts`, which already reads the correct path.
+	const inResponseTo = (extract as SAMLAssertionExtract).response
+		?.inResponseTo as string | undefined;
 	const shouldValidateInResponseTo =
 		options?.saml?.enableInResponseToValidation !== false;
 

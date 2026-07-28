@@ -116,7 +116,24 @@ export interface SAMLSessionRecord {
 export interface SAMLAssertionExtract {
 	nameID?: string;
 	sessionIndex?: string;
+	/**
+	 * @deprecated Never populated. samlify's `loginResponseFields` extractor
+	 * places the Response element's attributes under the `response` key, so this
+	 * top-level field is always `undefined`. Read `response.inResponseTo`
+	 * instead. Retained only to avoid a breaking change to the exported type.
+	 */
 	inResponseTo?: string;
+	/**
+	 * Attributes of the `<samlp:Response>` element, as extracted by samlify
+	 * (`{ key: 'response', localPath: ['Response'], attributes: ['ID',
+	 * 'IssueInstant', 'Destination', 'InResponseTo'] }`).
+	 */
+	response?: {
+		id?: string;
+		issueInstant?: string;
+		destination?: string;
+		inResponseTo?: string;
+	};
 	conditions?: {
 		notBefore?: string;
 		notOnOrAfter?: string;
