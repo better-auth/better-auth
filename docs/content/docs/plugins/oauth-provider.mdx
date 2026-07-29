@@ -3,39 +3,26 @@ title: OAuth 2.1 Provider
 description: A Better Auth plugin that enables your auth server to serve as an OAuth 2.1 provider.
 ---
 
-An **OAuth 2.1 Provider Plugin** that allows you to turn your authentication server into an OAuth provider with OIDC compatibility allowing users and other services to authenticate with your API.
+The **OAuth 2.1 Provider** plugin turns your Better Auth server into an OAuth authorization server. Applications can request user access through the authorization code flow, while services can use client credentials. Add the `openid` scope when clients also need OpenID Connect (OIDC) identity claims.
 
-The plugin has a secured configuration by default providing ease to users unfamiliar with the details of OAuth.
+The default configuration chooses the safer protocol behavior, including PKCE for public clients and exact redirect URI matching. Start with [Installation](#installation), then enable only the grants and registration paths your clients use.
 
-**Key Features**:
+**Key features**
 
-* **OAuth 2.1**: Restricted security practices to [OAuth 2.1](https://oauth.net/2.1/)
-* **Issuer Validation**: Authorization responses include `iss` parameter to prevent [mix-up attacks](https://datatracker.ietf.org/doc/html/rfc9207)
-* **MCP Enabled**: Support with [MCP authentication](#mcp)
-* **OIDC compatibility**: [OIDC](https://openid.net/specs/openid-connect-core-1_0.html)-compliant with the `openid` scope
-  * **UserInfo**: Endpoint providing current user details
-  * **id\_token**: JWT-signed user information
-  * **OIDC Logout**: [RP-initiated](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)-compliant Logout
-* **Dynamic Client Registration**: Allow clients to register clients dynamically.
-  * **Public Clients**: Support clients that cannot keep a secret by using `token_endpoint_auth_method: "none"`
-  * **Confidential Clients**: Support clients that authenticate at the token endpoint with a registered method
-  * **Trusted Clients**: Store first-party clients with optional consent bypass and cache them by `client_id`.
-* **JWT Plugin compatibility**: required by default with an option to disable
-  * **JWT Signing**: sign JWT tokens when requesting a `resource`
-  * **JWKS Verifiable**: verify tokens remotely at the [`/jwks`](/docs/plugins/jwt#verifying-the-token) endpoint
-* **Authorization Prompts**: prompts that initiate specific login flows
-  * **Consent**: Ensure consent is granted for each scope. Forcible with `prompt=consent`.
-  * **Select Account**: Ensure an account is selected prior when specific scopes being granted. Forcible with `prompt=select_account`.
-* **Resource Endpoints**: Read and manage tokens.
-  * **Introspection**: [RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)-compliant Introspection.
-  * **Revocation**: [RFC7009](https://datatracker.ietf.org/doc/html/rfc7009)-compliant Revocation.
+* **OAuth security profile:** follows [OAuth 2.1](https://oauth.net/2.1/) practices and includes the RFC 9207 `iss` parameter to prevent [authorization-server mix-up attacks](https://datatracker.ietf.org/doc/html/rfc9207).
+* **OpenID Connect:** issues ID tokens, serves UserInfo, and supports [RP-initiated logout](https://openid.net/specs/openid-connect-rpinitiated-1_0.html) when clients request `openid`.
+* **Client registration:** supports administrator-managed clients, first-party trusted clients, and optional [Dynamic Client Registration](#dynamic-registration-endpoint).
+* **Public and confidential clients:** derives authentication from `token_endpoint_auth_method`; use `"none"` for clients that cannot keep a secret.
+* **Resource-bound access:** issues tokens for protected resources, supports introspection and revocation, and exposes signing keys through the JWT plugin's [`/jwks`](/docs/plugins/jwt#verifying-the-token) endpoint.
+* **Authorization prompts:** supports consent and account-selection prompts.
+* **MCP composition:** use the [MCP plugin](#mcp) when the protected resource is an MCP server.
 
-**Grants Supported**
+**Supported grants**
 
-* **authorization\_code**: Code for user token exchange with PKCE and S256 requirements.
-* **refresh\_token**: Issue refresh tokens and handle access token renewal using `offline_access` scope.
-* **client\_credentials**: Machine to Machine tokens for API communication.
-* **device\_code**: Optional [Device Authorization](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api) companion grant for CLIs and limited-input clients.
+* **`authorization_code`:** exchanges a user authorization code with S256 PKCE.
+* **`refresh_token`:** renews access through the `offline_access` scope.
+* **`client_credentials`:** issues machine-to-machine access tokens.
+* **`device_code`:** adds the optional [Device Authorization](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api) flow for CLIs and limited-input clients.
 
 ## Installation
 
@@ -99,9 +86,9 @@ The plugin has a secured configuration by default providing ease to users unfami
   </Step>
 
   <Step>
-    ### Create your first oauth client
+    ### Create your first OAuth client
 
-    Create your first confidential oauth client.
+    Create a confidential client:
 
     ```ts
     const client = await auth.api.createOAuthClient({
@@ -114,18 +101,18 @@ The plugin has a secured configuration by default providing ease to users unfami
     ```
 
     <Callout type="info">
-      To create a public client (ie. without a client secret), set `token_endpoint_auth_method: "none"`.
+      To create a public client without a client secret, set `token_endpoint_auth_method: "none"`.
     </Callout>
   </Step>
 </Steps>
 
 ## Client Plugins
 
-There exists two clients. You may wish to add one or both depending on your setup.
+Two client plugins cover different roles. Add the OAuth client when your app starts authorization flows, and add the resource client when your API verifies access tokens.
 
 ### OAuth Client
 
-The OAuth Client is the connecting `oauthClient` such a mobile or web application.
+The OAuth client connects a web or native application to the authorization server.
 
 ```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";
@@ -140,7 +127,7 @@ export const authClient = createAuthClient({
 
 ### Resource Client
 
-The Resource Server is a client that operates on your API server to perform actions like token verification and provide metadata.
+The resource client runs in the API that receives access tokens. It verifies those tokens and serves protected-resource metadata.
 
 ```ts title="server-client.ts"
 import { auth } from "@/lib/auth";
@@ -449,7 +436,7 @@ const client = await authClient.oauth2.register({
 
 For all endpoint parameters, see [RFC 7591 Registration](https://datatracker.ietf.org/doc/html/rfc7591#section-2).
 
-`application_type` ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)) defaults to `web` when omitted. A `web` client requires `https` redirect URIs on non-loopback hosts. A `native` client may use claimed `https` links, loopback `http` redirects on exact `localhost`, `127.0.0.0/8`, or `::1`, or an authority-free private-use URI with a well-formed reverse-domain scheme such as `com.example.app:/callback` ([RFC 8252 §7](https://datatracker.ietf.org/doc/html/rfc8252#section-7)). Credentials, fragments, malformed or reserved schemes such as `file:` and `mailto:`, loopback `https`, trailing-dot localhost names, and routable-host `http` redirects are rejected.
+`application_type` ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)) defaults to `web` when omitted. A `web` client requires `https` redirect URIs on non-loopback hosts. A `native` client may use a claimed `https` URI, an `http` loopback URI on exactly `localhost`, `127.0.0.1`, or `[::1]` with any port, or an authority-free private-use URI with a reverse-domain scheme such as `com.example.app:/callback` ([RFC 8252 §7](https://datatracker.ietf.org/doc/html/rfc8252#section-7)). Better Auth rejects credentials, fragments, malformed or reserved schemes such as `file:` and `mailto:`, loopback `https`, and routable-host `http` redirects.
 
 Application type is independent of client authentication. For example, a native client may use `client_secret_post`, while a web client may use `token_endpoint_auth_method: "none"`. Authentication capability is derived only from `token_endpoint_auth_method`; the removed `type` and `public` metadata fields are not accepted or returned.
 

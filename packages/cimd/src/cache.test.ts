@@ -191,6 +191,99 @@ describe("CIMD HTTP metadata cache", () => {
 		expect(metadataFetch).toHaveBeenCalledTimes(1);
 	});
 
+	it("prefers shared-cache s-maxage over max-age and Expires", async () => {
+		const clientId = "https://shared-cache.example/client.json";
+		let now = 1_800_000_000_000;
+		vi.spyOn(Date, "now").mockImplementation(() => now);
+		responders.set(clientId, async () =>
+			jsonMetadataResponse(clientId, {
+				"cache-control": "s-maxage=2, max-age=60",
+				date: new Date(now).toUTCString(),
+				expires: new Date(now + 120_000).toUTCString(),
+			}),
+		);
+
+		await authorize(clientId);
+		now += 1_000;
+		await authorize(clientId);
+		expect(metadataFetch).toHaveBeenCalledTimes(1);
+
+		now += 2_000;
+		await authorize(clientId);
+		expect(metadataFetch).toHaveBeenCalledTimes(2);
+	});
+
+	it("treats s-maxage=0 as requiring immediate revalidation", async () => {
+		const clientId = "https://shared-cache-revalidation.example/client.json";
+		let requestCount = 0;
+		responders.set(clientId, async (_input, init) => {
+			requestCount += 1;
+			if (requestCount === 1) {
+				return jsonMetadataResponse(clientId, {
+					"cache-control": "s-maxage=0, max-age=60",
+					expires: new Date(Date.now() + 120_000).toUTCString(),
+					etag: '"shared-v1"',
+				});
+			}
+			expect(new Headers(init?.headers).get("if-none-match")).toBe(
+				'"shared-v1"',
+			);
+			return new Response(null, {
+				status: 304,
+				headers: { "cache-control": "s-maxage=60" },
+			});
+		});
+
+		await authorize(clientId);
+		await authorize(clientId);
+		expect(metadataFetch).toHaveBeenCalledTimes(2);
+		await authorize(clientId);
+		expect(metadataFetch).toHaveBeenCalledTimes(2);
+	});
+
+	it.each([
+		{
+			name: "duplicate s-maxage",
+			cacheControl: "s-maxage=0, s-maxage=600",
+			clientId: "https://duplicate-shared-cache.example/client.json",
+		},
+		{
+			name: "invalid s-maxage with valid max-age",
+			cacheControl: "s-maxage=invalid, max-age=600",
+			clientId: "https://invalid-shared-cache.example/client.json",
+		},
+		{
+			name: "invalid max-age",
+			cacheControl: "max-age=invalid",
+			clientId: "https://invalid-private-cache.example/client.json",
+		},
+	])("immediately revalidates an ambiguous freshness policy: $name", async ({
+		cacheControl,
+		clientId,
+	}) => {
+		let requestCount = 0;
+		responders.set(clientId, async (_input, init) => {
+			requestCount += 1;
+			if (requestCount === 1) {
+				return jsonMetadataResponse(clientId, {
+					"cache-control": cacheControl,
+					etag: '"ambiguous-v1"',
+				});
+			}
+			expect(new Headers(init?.headers).get("if-none-match")).toBe(
+				'"ambiguous-v1"',
+			);
+			return new Response(null, {
+				status: 304,
+				headers: { "cache-control": "s-maxage=60" },
+			});
+		});
+
+		await authorize(clientId);
+		await authorize(clientId);
+		expect(metadataFetch).toHaveBeenCalledTimes(2);
+	});
+
 	it("conditionally revalidates no-cache entries with ETag and accepts 304", async () => {
 		const clientId = "https://etag-cache.example/client.json";
 		let requestCount = 0;

@@ -80,7 +80,6 @@
     "@modelcontextprotocol/server": "2.0.0",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
-    "listhen": "1.9.0",
     "tsdown": "catalog:"
   },
   "peerDependencies": {

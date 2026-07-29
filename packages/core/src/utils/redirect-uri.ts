@@ -11,10 +11,13 @@ const REVERSE_DOMAIN_PRIVATE_USE_SCHEME =
  */
 export function isReverseDomainPrivateUseRedirectUri(uri: URL): boolean {
 	const scheme = uri.protocol.slice(0, -1);
+	const schemeSpecificPart = uri.href.slice(uri.protocol.length);
 	return (
 		uri.protocol !== "http:" &&
 		uri.protocol !== "https:" &&
 		uri.host.length === 0 &&
+		schemeSpecificPart.startsWith("/") &&
+		!schemeSpecificPart.startsWith("//") &&
 		REVERSE_DOMAIN_PRIVATE_USE_SCHEME.test(scheme)
 	);
 }

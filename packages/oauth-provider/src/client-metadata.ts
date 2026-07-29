@@ -43,7 +43,7 @@ const OAUTH_CLIENT_RECORD_FIELDS = {
 	metadata: true,
 } as const satisfies Record<keyof SchemaClient, true>;
 
-export const OAUTH_CLIENT_RECORD_FIELD_NAMES = Object.freeze(
+const OAUTH_CLIENT_RECORD_FIELD_NAMES = Object.freeze(
 	Object.keys(OAUTH_CLIENT_RECORD_FIELDS) as (keyof SchemaClient)[],
 );
 const OAUTH_CLIENT_RECORD_FIELD_NAME_SET = new Set<string>(

@@ -182,7 +182,10 @@ export const verificationValueSchema = z
 export const clientRegistrationRequestSchema = z.object({
 	redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 	scope: z.string().optional(),
-	client_name: z.string().trim().min(1).optional(),
+	client_name: z
+		.string()
+		.refine((value) => value.trim().length > 0, "client_name cannot be empty")
+		.optional(),
 	client_uri: z.string().optional(),
 	logo_uri: z.string().optional(),
 	contacts: z.array(z.string().min(1)).min(1).optional(),

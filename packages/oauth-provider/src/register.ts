@@ -191,6 +191,10 @@ function validateClientRedirectUri(
 	}
 	const isRedirectLoopback =
 		isLoopbackIP(url.hostname) || url.hostname === "localhost";
+	const isAllowedNativeHttpLoopback =
+		url.hostname === "localhost" ||
+		url.hostname === "127.0.0.1" ||
+		url.hostname === "[::1]";
 
 	if (applicationType === "web") {
 		if (!isHttps || isRedirectLoopback) {
@@ -210,9 +214,9 @@ function validateClientRedirectUri(
 		return;
 	}
 	if (isHttp) {
-		if (!isRedirectLoopback) {
+		if (!isAllowedNativeHttpLoopback) {
 			invalidRedirectUri(
-				`native clients may use http only on localhost, 127.0.0.0/8, or ::1: ${redirectUri}`,
+				`native clients may use http only on the exact loopback hosts localhost, 127.0.0.1, or [::1]: ${redirectUri}`,
 			);
 		}
 		return;
@@ -909,7 +913,7 @@ function createOAuthClientRegistrationResponse(
 /**
  * Creates and persists one canonical OAuth client registration.
  */
-export async function createOAuthClientRegistration(
+async function createOAuthClientRegistration(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	input: CreateOAuthClientRegistrationInput,
@@ -957,18 +961,18 @@ export async function registerClientMetadataDocument(
 	try {
 		return await persistOAuthClientRegistration(ctx, opts, registrationInput);
 	} catch (error) {
-		if (input.existingClient || !isUniqueConstraintError(error)) throw error;
+		if (!isUniqueConstraintError(error)) throw error;
 		const clientModel = opts.schema?.oauthClient?.modelName ?? "oauthClient";
-		const concurrentlyCreated = await ctx.context.adapter.findOne<
+		const currentClient = await ctx.context.adapter.findOne<
 			SchemaClient<Scope[]>
 		>({
 			model: clientModel,
 			where: [{ field: "clientId", value: input.clientId }],
 		});
-		if (!concurrentlyCreated) throw error;
+		if (!currentClient) throw error;
 		return persistOAuthClientRegistration(ctx, opts, {
 			...registrationInput,
-			existingClient: concurrentlyCreated,
+			existingClient: currentClient,
 		});
 	}
 }

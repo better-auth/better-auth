@@ -1,15 +1,13 @@
 ---
 title: Client ID Metadata Document (CIMD)
-description: Unauthenticated dynamic client discovery for Better Auth's OAuth provider.
+description: Discover OAuth clients from HTTPS metadata documents.
 ---
 
 `OAuth2` `MCP`
 
-The [Client ID Metadata Document draft-00](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-00) lets clients identify themselves to your authorization server without prior registration. Instead of sending a pre-registered `client_id`, the client sends the HTTPS URL of a metadata document it hosts. Your server fetches that document, validates it, and creates or refreshes a client record. The record's authentication behavior is determined by `token_endpoint_auth_method`.
+The [Client ID Metadata Document draft-00](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-00) lets an OAuth client identify itself without registering first. The client's `client_id` is the HTTPS URL of a metadata document it hosts. Better Auth fetches and validates that document, then creates or refreshes the client record.
 
-This is the mechanism [MCP](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#client-id-metadata-documents) uses so authorization servers can discover clients on the fly.
-
-The plugin extends [`@better-auth/oauth-provider`](./oauth-provider) by contributing a `ClientDiscovery` entry through its extension surface, so every OAuth endpoint that authenticates a client (authorize, token, introspect, revoke, userinfo, PAR, logout) works seamlessly with URL-format `client_id` values.
+Use this plugin with [`@better-auth/oauth-provider`](./oauth-provider), or compose it with `mcp()` for the [MCP 2026-07-28 client-registration profile](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#client-id-metadata-documents). The metadata field `token_endpoint_auth_method` determines how the discovered client authenticates.
 
 ## Installation
 
@@ -146,21 +144,28 @@ export const cimdOptionsType = {
 
 ## Metadata document requirements
 
-The fetched document must satisfy both §3 and §4.1 of draft-00. Key rules enforced by the plugin:
+The fetched document must satisfy both §3 and §4.1 of draft-00.
 
-* `client_id` in the body must equal the fetch URL byte-for-byte.
-* HTTPS only. Loopback URLs (`localhost`, `127.0.0.0/8`, `::1`, `*.localhost`), including plain HTTP, are accepted only when `allowLoopback` is enabled for local development.
-* No fragments, credentials, or `./` / `../` dot segments in the URL.
-* A path component is required (`https://example.com/` is rejected; `https://example.com/meta.json` is accepted).
+**Client identity and fetch URL**
+
+* `client_id` in the document must equal the fetch URL byte-for-byte.
+* The URL must use HTTPS and include a path. For example, `https://example.com/` is rejected, while `https://example.com/meta.json` is accepted.
+* The URL cannot contain credentials, a fragment, or `./` and `../` dot segments.
+* Loopback URLs (`localhost`, `127.0.0.0/8`, `::1`, and `*.localhost`) are available only for local development with `allowLoopback`. This option also permits plain HTTP for those URLs.
 * `client_name` is required and cannot be blank.
-* `client_secret`, `client_secret_expires_at`, `client_id_issued_at`, `resources`, and server-owned registration controls are prohibited.
-* `token_endpoint_auth_method` must be `"none"` or `"private_key_jwt"`. Symmetric methods (`client_secret_post`, `client_secret_basic`, `client_secret_jwt`) are rejected.
-* `redirect_uris` is required and must be a non-empty array of absolute HTTP(S) URIs or authority-free private-use URIs with a well-formed reverse-domain scheme, such as `com.example.app:/callback`.
-* `application_type` may be `web` or `native`. When omitted, the database keeps it as `null` and redirect validation accepts the safe union of both application types: non-loopback HTTPS, exact loopback HTTP, or an authority-free private-use URI with a well-formed reverse-domain scheme.
-* `grant_types` (if present) must be a subset of `["authorization_code", "refresh_token"]`.
-* `response_types` (if present) must be a subset of `["code"]`.
-* The complete shared OAuth client metadata schema is parsed before CIMD-specific restrictions are applied. Malformed known fields are rejected instead of being cast or silently discarded.
-* Extension metadata may be retained, but server-owned fields such as `disabled`, `skip_consent`, `enable_end_session`, `require_pkce`, `reference_id`, and `user_id` are rejected before persistence.
+
+**OAuth behavior**
+
+* `token_endpoint_auth_method` must be `"none"` or `"private_key_jwt"`. Better Auth rejects symmetric secret methods.
+* `redirect_uris` must contain at least one absolute HTTP(S) URI or authority-free private-use URI, such as `com.example.app:/callback`.
+* `application_type` may be `web` or `native`. When omitted, Better Auth stores `null` and accepts the safe union of both policies: non-loopback HTTPS, exact HTTP loopback hosts (`localhost`, `127.0.0.1`, or `[::1]`), and authority-free private-use URIs.
+* `grant_types`, when present, must be a subset of `["authorization_code", "refresh_token"]`. `response_types` must be a subset of `["code"]`.
+
+**Server authority**
+
+* Better Auth parses the complete shared OAuth client metadata schema before applying CIMD restrictions, so malformed known fields are rejected.
+* The document cannot set client secrets, server-issued identifiers, resource links, or server-owned controls such as `disabled`, `skip_consent`, `enable_end_session`, `require_pkce`, `reference_id`, and `user_id`.
+* Unknown extension metadata may be retained after validation.
 
 ### Example document
 

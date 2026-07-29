@@ -4,10 +4,7 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProvider } from "./oauth";
-import {
-	createOAuthClientRegistration,
-	registerClientMetadataDocument,
-} from "./register";
+import { registerClientMetadataDocument } from "./register";
 import {
 	invalidateResourceCache,
 	resetSeedStateForTests,
@@ -244,7 +241,7 @@ describe("managed client registration resources", () => {
 	});
 
 	it("rolls back the client when a resource link cannot be inserted", async () => {
-		const clientId = "transaction-rollback-client";
+		const clientName = "transaction-rollback-client";
 		const defaultResource = "https://api.example.com/rollback-default";
 		const instance = await boot(
 			{
@@ -253,6 +250,7 @@ describe("managed client registration resources", () => {
 			},
 			true,
 		);
+		const { headers } = await instance.signInWithTestUser();
 		const originalTransaction = instance.ctx.adapter.transaction.bind(
 			instance.ctx.adapter,
 		);
@@ -274,23 +272,18 @@ describe("managed client registration resources", () => {
 		);
 
 		await expect(
-			createOAuthClientRegistration(
-				{ context: instance.ctx } as unknown as GenericEndpointContext,
-				instance.opts,
-				{
-					registrationSource: "managed",
-					clientId,
-					metadata: {
-						client_id: clientId,
-						redirect_uris: ["https://app.example.com/callback"],
-					},
+			instance.auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					client_name: clientName,
+					redirect_uris: ["https://app.example.com/callback"],
 				},
-			),
+			}),
 		).rejects.toThrow("forced resource-link insertion failure");
 
 		const storedClient = await instance.ctx.adapter.findOne({
 			model: "oauthClient",
-			where: [{ field: "clientId", value: clientId }],
+			where: [{ field: "name", value: clientName }],
 		});
 		expect(storedClient).toBeNull();
 	});
@@ -308,7 +301,7 @@ describe("canonical client metadata document registration", () => {
 				clientId,
 				metadata: {
 					client_id: clientId,
-					redirect_uris: ["http://localhost:5198/callback"],
+					redirect_uris: ["http://127.0.0.1:5198/callback"],
 					token_endpoint_auth_method: "none",
 				},
 			},
@@ -475,6 +468,92 @@ describe("canonical client metadata document registration", () => {
 		);
 		expect(converged.created).toBe(false);
 		expect(converged.client.name).toBe("Concurrent Writer");
+	});
+
+	it("converges a metadata refresh after a concurrent resource-link insert", async () => {
+		const resource = "https://api.example.com/concurrent-link";
+		const instance = await boot({ resources: [resource] }, true);
+		const clientId = "https://client.example.com/concurrent-link.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+		const created = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				metadata: {
+					client_id: clientId,
+					client_name: "Before Link Race",
+					redirect_uris: ["https://client.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			},
+		);
+		instance.opts.clientRegistrationDefaultResources = [resource];
+
+		const originalTransaction = instance.ctx.adapter.transaction.bind(
+			instance.ctx.adapter,
+		);
+		let transactionAttempts = 0;
+		vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
+			async (callback) => {
+				transactionAttempts += 1;
+				if (transactionAttempts > 1) return originalTransaction(callback);
+				try {
+					return await originalTransaction(async (transactionAdapter) => {
+						const originalCreate =
+							transactionAdapter.create.bind(transactionAdapter);
+						vi.spyOn(transactionAdapter, "create").mockImplementation(
+							async (input) => {
+								if (input.model === "oauthClientResource") {
+									throw Object.assign(
+										new Error("unique constraint on client resource"),
+										{ code: "23505" },
+									);
+								}
+								return originalCreate(input);
+							},
+						);
+						return callback(transactionAdapter);
+					});
+				} catch (error) {
+					await instance.ctx.adapter.create({
+						model: "oauthClientResource",
+						data: {
+							clientId,
+							resourceId: resource,
+							createdAt: new Date(),
+						},
+					});
+					throw error;
+				}
+			},
+		);
+
+		const refreshed = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				existingClient: created.client,
+				metadata: {
+					client_id: clientId,
+					client_name: "After Link Race",
+					redirect_uris: ["https://client.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			},
+		);
+
+		expect(transactionAttempts).toBe(2);
+		expect(refreshed.created).toBe(false);
+		expect(refreshed.client.name).toBe("After Link Race");
+		const links = await instance.ctx.adapter.findMany<OAuthClientResource>({
+			model: "oauthClientResource",
+			where: [{ field: "clientId", value: clientId }],
+		});
+		expect(links.map((link) => link.resourceId)).toEqual([resource]);
 	});
 
 	it("does not mask a non-unique persistence failure when the fixed ID already exists", async () => {

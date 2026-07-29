@@ -48,21 +48,24 @@ function refreshRateMilliseconds(
 	return Math.max(0, (toExpJWT(refreshRate, nowSeconds) - nowSeconds) * 1000);
 }
 
-function parseCacheControl(
-	value: string | undefined,
-): Map<string, string | true> {
+function parseCacheControl(value: string | undefined): {
+	directives: Map<string, string | true>;
+	duplicates: Set<string>;
+} {
 	const directives = new Map<string, string | true>();
+	const duplicates = new Set<string>();
 	for (const rawDirective of value?.split(",") ?? []) {
 		const [rawName, ...rawValue] = rawDirective.trim().split("=");
 		const name = rawName?.toLowerCase();
 		if (!name) continue;
+		if (directives.has(name)) duplicates.add(name);
 		const joinedValue = rawValue.join("=").trim();
 		directives.set(
 			name,
 			joinedValue ? joinedValue.replace(/^"|"$/g, "") : true,
 		);
 	}
-	return directives;
+	return { directives, duplicates };
 }
 
 function parseNonNegativeSeconds(
@@ -78,7 +81,9 @@ function computeExpiresAt(
 	refreshRate: number | string,
 	nowMilliseconds: number,
 ): { cacheable: boolean; expiresAt: number } {
-	const directives = parseCacheControl(cacheHeaders.cacheControl);
+	const { directives, duplicates } = parseCacheControl(
+		cacheHeaders.cacheControl,
+	);
 	if (directives.has("no-store")) {
 		return { cacheable: false, expiresAt: nowMilliseconds };
 	}
@@ -101,8 +106,17 @@ function computeExpiresAt(
 	const currentAge = Math.max(apparentAge, ageSeconds * 1000);
 
 	let originLifetime: number | null = null;
-	const maxAge = parseNonNegativeSeconds(directives.get("max-age"));
-	if (maxAge !== null) {
+	const hasSharedMaxAge = directives.has("s-maxage");
+	const sharedMaxAge = parseNonNegativeSeconds(directives.get("s-maxage"));
+	const hasMaxAge = directives.has("max-age");
+	const privateMaxAge = parseNonNegativeSeconds(directives.get("max-age"));
+	const applicableFreshnessIsInvalid = hasSharedMaxAge
+		? sharedMaxAge === null || duplicates.has("s-maxage")
+		: hasMaxAge && (privateMaxAge === null || duplicates.has("max-age"));
+	const maxAge = hasSharedMaxAge ? sharedMaxAge : privateMaxAge;
+	if (applicableFreshnessIsInvalid) {
+		originLifetime = 0;
+	} else if (maxAge !== null) {
 		originLifetime = Math.max(0, maxAge * 1000 - currentAge);
 	} else if (cacheHeaders.expires) {
 		const expires = Date.parse(cacheHeaders.expires);

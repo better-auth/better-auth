@@ -12,7 +12,6 @@ import { organization } from "better-auth/plugins/organization";
 import { getTestInstance } from "better-auth/test";
 import { beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 import { oauthProviderClient } from "./client";
-import { OAUTH_CLIENT_RECORD_FIELD_NAMES } from "./client-metadata";
 import { oauthProvider } from "./oauth";
 import { oauthToSchema, schemaToOAuth } from "./register";
 import { resetSeedStateForTests } from "./resources";
@@ -299,6 +298,25 @@ describe("oauth register", async () => {
 		expect(response.data).not.toHaveProperty("type");
 
 		expect(response.data?.disabled).toBeFalsy();
+	});
+
+	it("preserves surrounding client_name whitespace through registration", async () => {
+		const clientName = "  Deliberately Spaced Client  ";
+		const response = await serverClient.oauth2.register({
+			client_name: clientName,
+			redirect_uris: ["https://example.com/callback"],
+		});
+
+		expect(response.error).toBeNull();
+		expect(response.data?.client_name).toBe(clientName);
+		const clientId = response.data?.client_id;
+		if (!clientId) throw new Error("registered client ID was not returned");
+		const context = await auth.$context;
+		const stored = await context.adapter.findOne<{ name?: string }>({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+		});
+		expect(stored?.name).toBe(clientName);
 	});
 
 	it("should preserve confidential method and application type for authenticated registration", async () => {
@@ -1568,9 +1586,6 @@ describe("oauth register - application_type", async () => {
 			metadata: { nested: "injected" },
 			resources: ["https://api.example.com/stale"],
 		};
-		expect(Object.keys(reservedMetadata)).toEqual(
-			expect.arrayContaining([...OAUTH_CLIENT_RECORD_FIELD_NAMES]),
-		);
 		const stored = oauthToSchema({
 			client_id: "reserved-metadata-client",
 			redirect_uris: ["https://app.example.com/callback"],
@@ -1590,7 +1605,7 @@ describe("oauth register - application_type", async () => {
 		}
 	});
 
-	it("registers a native client with loopback and custom-scheme redirect URIs", async () => {
+	it("registers a native client with exact loopback hosts and custom-scheme redirect URIs", async () => {
 		const response = await register({
 			application_type: "native",
 			token_endpoint_auth_method: "none",
@@ -1670,6 +1685,8 @@ describe("oauth register - application_type", async () => {
 		"ftp://example.com/callback",
 		"mailto:oauth@example.com",
 		"myapp:/callback",
+		"com.example.app:callback",
+		"com.example.app:///callback",
 		"com..example.app:/callback",
 		"com.example..app:/callback",
 		"com.example.-app:/callback",
@@ -1684,6 +1701,7 @@ describe("oauth register - application_type", async () => {
 		"http://example.com/callback",
 		"http://192.168.1.2/callback",
 		"http://tenant.localhost/callback",
+		"http://127.42.7.9:49152/callback",
 		"https://user:password@example.com/callback",
 		"https://example.com/callback#fragment",
 	])("rejects invalid native redirect URI %s", async (redirectUri) => {
@@ -1697,7 +1715,7 @@ describe("oauth register - application_type", async () => {
 
 	it.for([
 		"http://localhost:54921/callback",
-		"http://127.42.7.9:49152/callback",
+		"http://127.0.0.1:54921/callback",
 		"http://[::1]:61234/callback",
 		"com.example.app:/callback",
 		"https://app.example.com/callback",

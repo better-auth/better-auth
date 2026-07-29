@@ -269,6 +269,15 @@ describe("validateCimdMetadata", () => {
 		}
 	});
 
+	it("preserves surrounding client_name whitespace after validation", () => {
+		const result = validateCimdMetadata(
+			fetchUrl,
+			validMetadata(fetchUrl, { client_name: "  Display Name  " }),
+		);
+		expect(result.valid).toBe(true);
+		expect(result.metadata?.client_name).toBe("  Display Name  ");
+	});
+
 	it("rejects malformed shared client metadata before CIMD policy checks", () => {
 		for (const malformed of [
 			{ application_type: "desktop" },
@@ -555,6 +564,19 @@ describe("validateCimdMetadata", () => {
 			client_id: fetchUrl,
 			client_name: "Invalid Private-use Client",
 			redirect_uris: ["com.example.app://host/callback"],
+		});
+		expect(result.valid).toBe(false);
+		expect(result.error).toContain("redirect_uris");
+	});
+
+	it.each([
+		"com.example.app:callback",
+		"com.example.app:///callback",
+	])("rejects a private-use redirect URI without the single-slash form: %s", (redirectUri) => {
+		const result = validateCimdMetadata(fetchUrl, {
+			client_id: fetchUrl,
+			client_name: "Invalid Private-use Client",
+			redirect_uris: [redirectUri],
 		});
 		expect(result.valid).toBe(false);
 		expect(result.error).toContain("redirect_uris");

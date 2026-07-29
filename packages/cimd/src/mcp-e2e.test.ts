@@ -125,7 +125,7 @@ describe("CIMD-first MCP authorization with the official SDK v2", async () => {
 			);
 			return new Response(null, {
 				status: 304,
-				headers: { "cache-control": "max-age=300" },
+				headers: { "cache-control": "no-cache" },
 			});
 		}
 		return Response.json(
@@ -281,13 +281,13 @@ describe("CIMD-first MCP authorization with the official SDK v2", async () => {
 		return new URL(consent.url);
 	}
 
-	function createConnection() {
+	function createConnection(clientStorage = storage) {
 		const client = new Client(
 			{ name: "cimd-acceptance-client", version: "1.0.0" },
 			{ versionNegotiation: { mode: { pin: PROTOCOL_VERSION } } },
 		);
 		const transport = new StreamableHTTPClientTransport(new URL(MCP_RESOURCE), {
-			authProvider: storage.provider,
+			authProvider: clientStorage.provider,
 			fetch: routeFetch,
 		});
 		return { client, transport };
@@ -378,8 +378,28 @@ describe("CIMD-first MCP authorization with the official SDK v2", async () => {
 			MCP_RESOURCE,
 		]);
 
-		await completeAuthorization(storage.authorizationUrl!);
-		expect(metadataFetchCount).toBeGreaterThanOrEqual(2);
+		const reauthorizationStorage = createCimdClientProvider();
+		const reauthorizationConnection = createConnection(reauthorizationStorage);
+		const metadataFetchesBeforeReauthorization = metadataFetchCount;
+		await expect(
+			reauthorizationConnection.client.connect(
+				reauthorizationConnection.transport,
+			),
+		).rejects.toBeInstanceOf(UnauthorizedError);
+		const reauthorizationCallback = await completeAuthorization(
+			reauthorizationStorage.authorizationUrl!,
+		);
+		expect(metadataFetchCount).toBe(metadataFetchesBeforeReauthorization + 2);
+		await reauthorizationConnection.transport.finishAuth(
+			reauthorizationCallback.searchParams,
+		);
+		expect(reauthorizationStorage.tokens).toMatchObject({
+			access_token: expect.any(String),
+			refresh_token: expect.any(String),
+			issuer: AUTHORIZATION_SERVER,
+		});
+		await reauthorizationConnection.client.close();
+
 		const refreshToken = storage.tokens?.refresh_token;
 		if (!refreshToken || !storage.client || !storage.discovery) {
 			throw new Error("CIMD OAuth state was not persisted");

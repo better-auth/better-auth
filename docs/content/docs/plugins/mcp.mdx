@@ -7,10 +7,10 @@ description: Turn your Better Auth server into an OAuth provider for MCP clients
 
 The **MCP** plugin lets your app act as an OAuth authorization server and protected resource for [Model Context Protocol](https://modelcontextprotocol.io) clients. It is built on the [OAuth 2.1 Provider](/docs/plugins/oauth-provider), so MCP clients discover your endpoints and obtain resource-bound access tokens through standard OAuth flows.
 
-`mcp()` configures the OAuth provider with MCP-appropriate resource binding and serves the [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) protected resource metadata. For the MCP 2026-07-28 profile, compose it with [Client ID Metadata Documents](/docs/plugins/cimd). Dynamic Client Registration (DCR) is deprecated by MCP and is never enabled implicitly.
+`mcp()` configures the OAuth provider with MCP resource binding and serves the [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) protected resource metadata. For the MCP 2026-07-28 profile, compose it with [Client ID Metadata Documents](/docs/plugins/cimd). MCP deprecates Dynamic Client Registration (DCR), so Better Auth never enables DCR implicitly.
 
 <Callout>
-  `mcp()` ships in the `@better-auth/mcp` package. Install it with `npm install @better-auth/mcp`.
+  Install `@better-auth/mcp` and the recommended `@better-auth/cimd` companion package.
 </Callout>
 
 ## Installation
