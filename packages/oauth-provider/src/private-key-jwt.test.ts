@@ -420,6 +420,30 @@ describe("private_key_jwt authentication", async () => {
 				],
 			}),
 		},
+		{
+			name: "unsupported-algorithm",
+			jwks: () => ({
+				keys: [
+					{
+						...rsaPublicJwk,
+						kid: "remote-validation-key",
+						alg: "HS256",
+					},
+				],
+			}),
+		},
+		{
+			name: "incompatible-algorithm",
+			jwks: () => ({
+				keys: [
+					{
+						...rsaPublicJwk,
+						kid: "remote-validation-key",
+						alg: "ES256",
+					},
+				],
+			}),
+		},
 	])("does not cache a $name discovery-owned JWKS response", async ({
 		name,
 		jwks,

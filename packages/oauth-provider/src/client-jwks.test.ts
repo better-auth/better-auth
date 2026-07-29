@@ -27,6 +27,39 @@ describe("validatePublicClientJwks", () => {
 	});
 
 	it.each([
+		{
+			kty: "RSA",
+			n: "public-modulus",
+			e: "AQAB",
+			alg: "RS256",
+		},
+		{
+			kty: "RSA",
+			n: "public-modulus",
+			e: "AQAB",
+			alg: "PS512",
+		},
+		{
+			kty: "EC",
+			crv: "P-384",
+			x: "public-x",
+			y: "public-y",
+			alg: "ES384",
+		},
+		{
+			kty: "OKP",
+			crv: "Ed25519",
+			x: "public-x",
+			alg: "EdDSA",
+		},
+	])("accepts $alg for a compatible public $kty key", (key) => {
+		expect(validatePublicClientJwks({ keys: [key] })).toMatchObject({
+			valid: true,
+			jwks: { keys: [key] },
+		});
+	});
+
+	it.each([
 		{ name: "missing set", jwks: undefined },
 		{
 			name: "bare key array",
@@ -61,6 +94,38 @@ describe("validatePublicClientJwks", () => {
 		{
 			name: "unsupported key type",
 			jwks: { keys: [{ kty: "AKP", alg: "ML-DSA-65", pub: "public" }] },
+		},
+		{
+			name: "symmetric RSA algorithm",
+			jwks: {
+				keys: [{ kty: "RSA", n: "public-modulus", e: "AQAB", alg: "HS256" }],
+			},
+		},
+		{
+			name: "RSA key with an EC algorithm",
+			jwks: {
+				keys: [{ kty: "RSA", n: "public-modulus", e: "AQAB", alg: "ES256" }],
+			},
+		},
+		{
+			name: "EC key with an RSA algorithm",
+			jwks: {
+				keys: [
+					{
+						kty: "EC",
+						crv: "P-256",
+						x: "public-x",
+						y: "public-y",
+						alg: "RS256",
+					},
+				],
+			},
+		},
+		{
+			name: "OKP key with an EC algorithm",
+			jwks: {
+				keys: [{ kty: "OKP", crv: "Ed25519", x: "public-x", alg: "ES256" }],
+			},
 		},
 	])("rejects a $name", ({ jwks }) => {
 		expect(validatePublicClientJwks(jwks)).toMatchObject({ valid: false });

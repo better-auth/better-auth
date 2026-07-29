@@ -16,6 +16,8 @@ import {
 const FETCH_TIMEOUT_MS = 5_000;
 const MAX_RESPONSE_BYTES = 5 * 1024;
 const JSON_CONTENT_TYPE_RE = /^application\/(?:[-\w.]+\+)?json\s*(?:;|$)/i;
+const FETCH_FAILURE_DESCRIPTION =
+	"Failed to fetch metadata document (network error or redirect blocked)";
 export const CIMD_CLIENT_DISCOVERY_ID = "cimd";
 
 export interface MetadataDocumentResponseCacheHeaders {
@@ -55,6 +57,7 @@ function tooLargeError(): APIError {
 async function readBodyWithLimit(
 	response: Response,
 	maximumBytes: number,
+	signal: AbortSignal,
 ): Promise<string> {
 	const reader = response.body?.getReader();
 	if (!reader) {
@@ -67,15 +70,34 @@ async function readBodyWithLimit(
 
 	const chunks: Uint8Array[] = [];
 	let byteLength = 0;
-	while (true) {
-		const { done, value } = await reader.read();
-		if (done) break;
-		byteLength += value.byteLength;
-		if (byteLength > maximumBytes) {
-			await reader.cancel();
-			throw tooLargeError();
+	let rejectOnAbort: ((reason: Error) => void) | undefined;
+	const aborted = new Promise<never>((_resolve, reject) => {
+		rejectOnAbort = reject;
+	});
+	const abortRead = () => {
+		rejectOnAbort?.(new Error("Metadata document body read aborted"));
+		void reader.cancel().catch(() => {});
+	};
+	if (signal.aborted) {
+		abortRead();
+	} else {
+		signal.addEventListener("abort", abortRead, { once: true });
+	}
+
+	try {
+		while (true) {
+			const { done, value } = await Promise.race([reader.read(), aborted]);
+			if (done) break;
+			byteLength += value.byteLength;
+			if (byteLength > maximumBytes) {
+				await reader.cancel();
+				throw tooLargeError();
+			}
+			chunks.push(value);
 		}
-		chunks.push(value);
+	} finally {
+		signal.removeEventListener("abort", abortRead);
+		reader.releaseLock();
 	}
 
 	const body = new Uint8Array(byteLength);
@@ -143,81 +165,101 @@ export async function fetchClientMetadataDocument(
 		controller.abort();
 	}, FETCH_TIMEOUT_MS);
 	try {
-		response = await cimdOptions.fetchClientMetadataResource(clientIdUrl, {
-			headers: requestHeaders,
-			redirect: "error",
-			signal: controller.signal,
+		try {
+			response = await cimdOptions.fetchClientMetadataResource(clientIdUrl, {
+				headers: requestHeaders,
+				redirect: "error",
+				signal: controller.signal,
+			});
+		} catch {
+			throw invalidClient(
+				didTimeOut
+					? `Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`
+					: FETCH_FAILURE_DESCRIPTION,
+			);
+		}
+		if (response.redirected) {
+			throw invalidClient("Metadata document fetch must not follow redirects");
+		}
+
+		const cacheHeaders = readResponseCacheHeaders(response.headers);
+		if (response.status === 304) {
+			if (!validators?.etag && !validators?.lastModified) {
+				throw invalidClient(
+					"Metadata document returned 304 without a conditional validator",
+				);
+			}
+			return { status: "not-modified", cacheHeaders };
+		}
+		if (response.status !== 200) {
+			throw invalidClient(
+				`Metadata document fetch returned HTTP ${response.status}`,
+			);
+		}
+
+		const contentType = response.headers.get("content-type") ?? "";
+		if (!JSON_CONTENT_TYPE_RE.test(contentType)) {
+			throw invalidClient(
+				`Metadata document must be JSON (got Content-Type "${contentType || "(none)"}")`,
+			);
+		}
+
+		let bodyText: string;
+		try {
+			const contentLength = response.headers.get("content-length");
+			if (contentLength) {
+				const declaredBytes = Number.parseInt(contentLength, 10);
+				if (
+					Number.isFinite(declaredBytes) &&
+					declaredBytes > MAX_RESPONSE_BYTES
+				) {
+					await response.body?.cancel();
+					throw tooLargeError();
+				}
+			}
+
+			bodyText = await readBodyWithLimit(
+				response,
+				MAX_RESPONSE_BYTES,
+				controller.signal,
+			);
+		} catch (error) {
+			if (didTimeOut) {
+				throw invalidClient(
+					`Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`,
+				);
+			}
+			if (error instanceof APIError) throw error;
+			throw invalidClient(FETCH_FAILURE_DESCRIPTION);
+		}
+		let rawMetadata: unknown;
+		try {
+			rawMetadata = JSON.parse(bodyText);
+		} catch {
+			throw invalidClient("Metadata document is not valid JSON");
+		}
+
+		const validation = validateCimdMetadata(clientIdUrl, rawMetadata, {
+			originBoundFields: cimdOptions.originBoundFields,
+			metadataProfile: cimdOptions.metadataProfile,
 		});
-	} catch {
-		throw invalidClient(
-			didTimeOut
-				? `Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`
-				: "Failed to fetch metadata document (network error or redirect blocked)",
-		);
+		if (!validation.valid || !validation.metadata) {
+			throw invalidClient(
+				validation.error ?? "Invalid Client ID Metadata Document",
+			);
+		}
+		for (const warning of validation.warnings ?? []) {
+			ctx.context.logger.warn(`cimd metadata document warning: ${warning}`);
+		}
+
+		return {
+			status: "modified",
+			metadata: validation.metadata,
+			cacheHeaders,
+		};
 	} finally {
 		clearTimeout(timeout);
 	}
-	if (response.redirected) {
-		throw invalidClient("Metadata document fetch must not follow redirects");
-	}
-
-	const cacheHeaders = readResponseCacheHeaders(response.headers);
-	if (response.status === 304) {
-		if (!validators?.etag && !validators?.lastModified) {
-			throw invalidClient(
-				"Metadata document returned 304 without a conditional validator",
-			);
-		}
-		return { status: "not-modified", cacheHeaders };
-	}
-	if (response.status !== 200) {
-		throw invalidClient(
-			`Metadata document fetch returned HTTP ${response.status}`,
-		);
-	}
-
-	const contentType = response.headers.get("content-type") ?? "";
-	if (!JSON_CONTENT_TYPE_RE.test(contentType)) {
-		throw invalidClient(
-			`Metadata document must be JSON (got Content-Type "${contentType || "(none)"}")`,
-		);
-	}
-
-	const contentLength = response.headers.get("content-length");
-	if (contentLength) {
-		const declaredBytes = Number.parseInt(contentLength, 10);
-		if (Number.isFinite(declaredBytes) && declaredBytes > MAX_RESPONSE_BYTES) {
-			await response.body?.cancel();
-			throw tooLargeError();
-		}
-	}
-
-	const bodyText = await readBodyWithLimit(response, MAX_RESPONSE_BYTES);
-	let rawMetadata: unknown;
-	try {
-		rawMetadata = JSON.parse(bodyText);
-	} catch {
-		throw invalidClient("Metadata document is not valid JSON");
-	}
-
-	const validation = validateCimdMetadata(clientIdUrl, rawMetadata, {
-		originBoundFields: cimdOptions.originBoundFields,
-		metadataProfile: cimdOptions.metadataProfile,
-	});
-	if (!validation.valid || !validation.metadata) {
-		throw invalidClient(
-			validation.error ?? "Invalid Client ID Metadata Document",
-		);
-	}
-	for (const warning of validation.warnings ?? []) {
-		ctx.context.logger.warn(`cimd metadata document warning: ${warning}`);
-	}
-
-	return {
-		status: "modified",
-		metadata: validation.metadata,
-		cacheHeaders,
-	};
 }
 
 export async function persistMetadataDocumentClient(

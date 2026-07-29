@@ -1,3 +1,4 @@
+import { PRIVATE_KEY_JWT_SIGNING_ALGORITHMS } from "@better-auth/core/oauth2";
 import type { JSONWebKeySet } from "jose";
 
 const PRIVATE_JWK_MEMBER_NAMES = [
@@ -20,7 +21,8 @@ export type PublicClientJwksValidationResult =
 			error:
 				| "jwks must be an RFC 7517 JWK Set object with a non-empty keys array"
 				| "jwks must contain only public asymmetric keys"
-				| "jwks keys must be supported public JWKs with required key parameters";
+				| "jwks keys must be supported public JWKs with required key parameters"
+				| "jwks key alg must be supported for private_key_jwt and compatible with its key type";
 	  };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -46,6 +48,31 @@ function isSupportedPublicJwk(key: Record<string, unknown>): boolean {
 			);
 		case "OKP":
 			return hasStringMember(key, "crv") && hasStringMember(key, "x");
+		default:
+			return false;
+	}
+}
+
+function hasSupportedPrivateKeyJwtAlgorithm(
+	key: Record<string, unknown>,
+): boolean {
+	if (key.alg === undefined) return true;
+	if (
+		typeof key.alg !== "string" ||
+		!PRIVATE_KEY_JWT_SIGNING_ALGORITHMS.some(
+			(algorithm) => algorithm === key.alg,
+		)
+	) {
+		return false;
+	}
+
+	switch (key.kty) {
+		case "RSA":
+			return key.alg.startsWith("RS") || key.alg.startsWith("PS");
+		case "EC":
+			return key.alg.startsWith("ES");
+		case "OKP":
+			return key.alg === "EdDSA";
 		default:
 			return false;
 	}
@@ -96,6 +123,13 @@ export function validatePublicClientJwks(
 				valid: false,
 				error:
 					"jwks keys must be supported public JWKs with required key parameters",
+			};
+		}
+		if (!hasSupportedPrivateKeyJwtAlgorithm(key)) {
+			return {
+				valid: false,
+				error:
+					"jwks key alg must be supported for private_key_jwt and compatible with its key type",
 			};
 		}
 	}

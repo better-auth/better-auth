@@ -555,7 +555,7 @@ const response = await auth.api.adminCreateOAuthClient({
 ```
 
 <Callout type="info">
-  `jwks` and `jwks_uri` are general OIDC client key metadata and are mutually exclusive. Inline `jwks` must be an RFC 7517 JWK Set object with a non-empty `keys` array containing only public asymmetric keys; a bare key array is rejected. When using `jwks_uri`, it must be an HTTPS URL pointing to a public (non-private) host and must return the same JWK Set object shape.
+  `jwks` and `jwks_uri` are general OIDC client key metadata and are mutually exclusive. Inline `jwks` must be an RFC 7517 JWK Set object with a non-empty `keys` array containing only public asymmetric keys; a bare key array is rejected. A key may omit `alg`. When present, `alg` must be a supported `private_key_jwt` algorithm that matches the key type. When using `jwks_uri`, it must be an HTTPS URL pointing to a public (non-private) host and must return the same JWK Set object shape.
 </Callout>
 
 When exchanging tokens, the client sends a `client_assertion` JWT instead of a `client_secret`:
