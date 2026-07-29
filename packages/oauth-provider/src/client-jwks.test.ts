@@ -15,6 +15,18 @@ describe("validatePublicClientJwks", () => {
 			y: "public-y",
 		},
 		{
+			kty: "EC",
+			crv: "P-384",
+			x: "public-x",
+			y: "public-y",
+		},
+		{
+			kty: "EC",
+			crv: "P-521",
+			x: "public-x",
+			y: "public-y",
+		},
+		{
 			kty: "OKP",
 			crv: "Ed25519",
 			x: "public-x",
@@ -41,10 +53,24 @@ describe("validatePublicClientJwks", () => {
 		},
 		{
 			kty: "EC",
+			crv: "P-256",
+			x: "public-x",
+			y: "public-y",
+			alg: "ES256",
+		},
+		{
+			kty: "EC",
 			crv: "P-384",
 			x: "public-x",
 			y: "public-y",
 			alg: "ES384",
+		},
+		{
+			kty: "EC",
+			crv: "P-521",
+			x: "public-x",
+			y: "public-y",
+			alg: "ES512",
 		},
 		{
 			kty: "OKP",
@@ -125,6 +151,57 @@ describe("validatePublicClientJwks", () => {
 			name: "OKP key with an EC algorithm",
 			jwks: {
 				keys: [{ kty: "OKP", crv: "Ed25519", x: "public-x", alg: "ES256" }],
+			},
+		},
+		{
+			name: "EC key with a mismatched signing curve",
+			jwks: {
+				keys: [
+					{
+						kty: "EC",
+						crv: "P-256",
+						x: "public-x",
+						y: "public-y",
+						alg: "ES384",
+					},
+				],
+			},
+		},
+		{
+			name: "EC key with an unsupported signing curve",
+			jwks: {
+				keys: [
+					{
+						kty: "EC",
+						crv: "secp256k1",
+						x: "public-x",
+						y: "public-y",
+					},
+				],
+			},
+		},
+		{
+			name: "OKP key with an X25519 encryption curve",
+			jwks: {
+				keys: [{ kty: "OKP", crv: "X25519", x: "public-x" }],
+			},
+		},
+		{
+			name: "OKP key with an X448 encryption curve",
+			jwks: {
+				keys: [{ kty: "OKP", crv: "X448", x: "public-x" }],
+			},
+		},
+		{
+			name: "OKP key with unsupported Ed448 signing curve",
+			jwks: {
+				keys: [{ kty: "OKP", crv: "Ed448", x: "public-x", alg: "EdDSA" }],
+			},
+		},
+		{
+			name: "OKP key with an unknown curve",
+			jwks: {
+				keys: [{ kty: "OKP", crv: "unknown", x: "public-x" }],
 			},
 		},
 	])("rejects a $name", ({ jwks }) => {

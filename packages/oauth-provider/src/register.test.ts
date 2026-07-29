@@ -485,6 +485,8 @@ describe("oauth register", async () => {
 		{ kty: "unsupported", n: "test", e: "test-exponent" },
 		{ kty: "RSA", n: "test", e: "AQAB", alg: "HS256" },
 		{ kty: "EC", crv: "P-256", x: "x", y: "y", alg: "RS256" },
+		{ kty: "EC", crv: "P-256", x: "x", y: "y", alg: "ES384" },
+		{ kty: "OKP", crv: "Ed448", x: "x", alg: "EdDSA" },
 	])("should reject malformed jwks public keys", async (key) => {
 		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],

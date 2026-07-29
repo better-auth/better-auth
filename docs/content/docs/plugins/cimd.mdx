@@ -155,7 +155,7 @@ Generic CIMD validation follows draft-02:
 * Client Identifier URLs must use HTTPS and cannot contain credentials, fragments, dot segments, special-use literal/known hosts, or omit an explicit path. An explicit root `/` is accepted with a NOT RECOMMENDED warning; query strings produce a SHOULD NOT warning.
 * `client_name` and `redirect_uris` are optional for generic clients. Non-redirect grants such as `client_credentials` are valid when enabled by the OAuth Provider.
 * The OAuth Provider remains authoritative for supported grants, response types, redirect policy, and authentication capability.
-* Better Auth supports `none` and `private_key_jwt` for discovered clients. Inline `jwks` must use the RFC 7517 `{ "keys": [...] }` object shape; bare arrays, symmetric secret methods, secret fields, and private JWK material are rejected.
+* Better Auth supports `none` and `private_key_jwt` for discovered clients. Inline `jwks` must use the RFC 7517 `{ "keys": [...] }` object shape. EC keys must use P-256, P-384, or P-521; OKP keys must use Ed25519. Bare arrays, symmetric secret methods, secret fields, private JWK material, other curves, and declared algorithms that do not match the key type and curve are rejected.
 * `client_uri`, `logo_uri`, `tos_uri`, and `policy_uri` must be credential-free public HTTP(S) URLs. Better Auth does not fetch or render remote logos.
 * `backchannel_logout_uri` and `backchannel_logout_session_required` are rejected because they would authorize an OP-side POST outside the injected GET transport.
 * Server-owned fields, including resource links and administrative controls, cannot be supplied by the document.

@@ -543,6 +543,12 @@ describe("validateCimdMetadata", () => {
 			{
 				keys: [{ kty: "EC", crv: "P-256", x: "x", y: "y", alg: "RS256" }],
 			},
+			{
+				keys: [{ kty: "EC", crv: "P-256", x: "x", y: "y", alg: "ES384" }],
+			},
+			{
+				keys: [{ kty: "OKP", crv: "Ed448", x: "x", alg: "EdDSA" }],
+			},
 		]) {
 			const result = validateCimdMetadata(
 				fetchUrl,

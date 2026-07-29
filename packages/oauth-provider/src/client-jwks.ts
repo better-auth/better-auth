@@ -1,6 +1,15 @@
 import { PRIVATE_KEY_JWT_SIGNING_ALGORITHMS } from "@better-auth/core/oauth2";
 import type { JSONWebKeySet } from "jose";
 
+const EC_PRIVATE_KEY_JWT_ALGORITHM_BY_CURVE = {
+	"P-256": "ES256",
+	"P-384": "ES384",
+	"P-521": "ES512",
+} as const satisfies Record<
+	string,
+	(typeof PRIVATE_KEY_JWT_SIGNING_ALGORITHMS)[number]
+>;
+const OKP_PRIVATE_KEY_JWT_SIGNING_CURVES = ["Ed25519"] as const;
 const PRIVATE_JWK_MEMBER_NAMES = [
 	"d",
 	"p",
@@ -22,7 +31,7 @@ export type PublicClientJwksValidationResult =
 				| "jwks must be an RFC 7517 JWK Set object with a non-empty keys array"
 				| "jwks must contain only public asymmetric keys"
 				| "jwks keys must be supported public JWKs with required key parameters"
-				| "jwks key alg must be supported for private_key_jwt and compatible with its key type";
+				| "jwks key alg must be supported for private_key_jwt and compatible with its key type and signing curve";
 	  };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -36,18 +45,38 @@ function hasStringMember(
 	return typeof key[memberName] === "string" && key[memberName].length > 0;
 }
 
+function isSupportedEcSigningCurve(
+	curve: unknown,
+): curve is keyof typeof EC_PRIVATE_KEY_JWT_ALGORITHM_BY_CURVE {
+	return (
+		typeof curve === "string" &&
+		Object.prototype.hasOwnProperty.call(
+			EC_PRIVATE_KEY_JWT_ALGORITHM_BY_CURVE,
+			curve,
+		)
+	);
+}
+
+function isSupportedOkpSigningCurve(
+	curve: unknown,
+): curve is (typeof OKP_PRIVATE_KEY_JWT_SIGNING_CURVES)[number] {
+	return OKP_PRIVATE_KEY_JWT_SIGNING_CURVES.some(
+		(signingCurve) => signingCurve === curve,
+	);
+}
+
 function isSupportedPublicJwk(key: Record<string, unknown>): boolean {
 	switch (key.kty) {
 		case "RSA":
 			return hasStringMember(key, "n") && hasStringMember(key, "e");
 		case "EC":
 			return (
-				hasStringMember(key, "crv") &&
+				isSupportedEcSigningCurve(key.crv) &&
 				hasStringMember(key, "x") &&
 				hasStringMember(key, "y")
 			);
 		case "OKP":
-			return hasStringMember(key, "crv") && hasStringMember(key, "x");
+			return isSupportedOkpSigningCurve(key.crv) && hasStringMember(key, "x");
 		default:
 			return false;
 	}
@@ -70,9 +99,12 @@ function hasSupportedPrivateKeyJwtAlgorithm(
 		case "RSA":
 			return key.alg.startsWith("RS") || key.alg.startsWith("PS");
 		case "EC":
-			return key.alg.startsWith("ES");
+			return (
+				isSupportedEcSigningCurve(key.crv) &&
+				EC_PRIVATE_KEY_JWT_ALGORITHM_BY_CURVE[key.crv] === key.alg
+			);
 		case "OKP":
-			return key.alg === "EdDSA";
+			return isSupportedOkpSigningCurve(key.crv) && key.alg === "EdDSA";
 		default:
 			return false;
 	}
@@ -129,7 +161,7 @@ export function validatePublicClientJwks(
 			return {
 				valid: false,
 				error:
-					"jwks key alg must be supported for private_key_jwt and compatible with its key type",
+					"jwks key alg must be supported for private_key_jwt and compatible with its key type and signing curve",
 			};
 		}
 	}

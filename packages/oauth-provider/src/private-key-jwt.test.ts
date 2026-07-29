@@ -444,6 +444,35 @@ describe("private_key_jwt authentication", async () => {
 				],
 			}),
 		},
+		{
+			name: "ec-curve-algorithm-mismatch",
+			jwks: () => ({
+				keys: [
+					{
+						kty: "EC",
+						crv: "P-256",
+						x: "public-x",
+						y: "public-y",
+						kid: "remote-validation-key",
+						alg: "ES384",
+					},
+				],
+			}),
+		},
+		{
+			name: "unsupported-ed448-curve",
+			jwks: () => ({
+				keys: [
+					{
+						kty: "OKP",
+						crv: "Ed448",
+						x: "public-x",
+						kid: "remote-validation-key",
+						alg: "EdDSA",
+					},
+				],
+			}),
+		},
 	])("does not cache a $name discovery-owned JWKS response", async ({
 		name,
 		jwks,
