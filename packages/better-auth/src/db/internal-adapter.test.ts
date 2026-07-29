@@ -987,6 +987,54 @@ describe("internal adapter test", async () => {
 		);
 	});
 
+	it("findSessions should skip a null-parse token without discarding other sessions", async () => {
+		const testMap = new Map<string, string>();
+
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				set(key: string, value: string, ttl?: number) {
+					testMap.set(key, value);
+				},
+				get(key: string) {
+					return testMap.get(key) || null;
+				},
+				delete(key: string) {
+					testMap.delete(key);
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+
+		const testCtx = await init(testOpts);
+		const testInternalAdapter = testCtx.internalAdapter;
+
+		const user = await testInternalAdapter.createUser({
+			name: "test-user-null-parse",
+			email: "test-null-parse@email.com",
+		});
+
+		// Create 3 sessions
+		const session1 = await testInternalAdapter.createSession(user.id);
+		const session2 = await testInternalAdapter.createSession(user.id);
+		const session3 = await testInternalAdapter.createSession(user.id);
+
+		// session2's stored value parses to null (JSON.parse("null") === null)
+		testMap.set(session2.token, "null");
+
+		// findSessions should still return session1 and session3
+		const sessions = await testInternalAdapter.findSessions([
+			session1.token,
+			session2.token,
+			session3.token,
+		]);
+		expect(sessions.length).toBe(2);
+		expect(sessions.map((s) => s.session.token).sort()).toEqual(
+			[session1.token, session3.token].sort(),
+		);
+	});
+
 	it("should update session and active-sessions list in secondary storage", async () => {
 		const testMap = new Map<string, string>();
 		const testExpirationMap = new Map<string, number>();
