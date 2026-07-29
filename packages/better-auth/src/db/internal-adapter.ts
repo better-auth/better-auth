@@ -560,7 +560,7 @@ export const createInternalAdapter = (
 								session: Session;
 								user: User;
 							};
-							if (!s) return [];
+							if (!s) continue;
 							const expiresAt = new Date(s.session.expiresAt);
 							if (options?.onlyActiveSessions && expiresAt <= new Date()) {
 								continue;
