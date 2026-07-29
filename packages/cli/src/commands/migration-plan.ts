@@ -137,9 +137,9 @@ function summarizeMigrationRemediation(blocker: MigrationBlockerDetail) {
 		case "issuer-conflict":
 			return `Remove "${blocker.providerId}" from the issuers in ${MIGRATION_DECISIONS_FILE} to migrate these accounts as "${blocker.configuredIssuer}", or configure the provider to establish "${blocker.requestedIssuer}".`;
 		case "issuer-required":
-			return `Record the issuer for "${blocker.providerId}" under issuers in ${MIGRATION_DECISIONS_FILE}, or run \`auth migrate\` in a terminal to answer it there.`;
+			return `Record the issuer for "${blocker.providerId}" under issuers in ${MIGRATION_DECISIONS_FILE}, or run \`auth migrate apply\` in a terminal to answer it there.`;
 		case "legacy-table-candidate":
-			return `Record which table holds the 1.6 "${blocker.model}" data under legacyTableNames in ${MIGRATION_DECISIONS_FILE}, or null when none of them does, or run \`auth migrate\` in a terminal to answer it there.`;
+			return `Record which table holds the 1.6 "${blocker.model}" data under legacyTableNames in ${MIGRATION_DECISIONS_FILE}, or null when none of them does, or run \`auth migrate apply\` in a terminal to answer it there.`;
 		case "oauth-client-conflict":
 			return blocker.conflict === "missing-redirect-uri"
 				? `Give client "${blocker.clientId}" a redirect URI in "${blocker.table}" or delete the client, then migrate again.`
@@ -153,24 +153,24 @@ function summarizeMigrationRemediation(blocker: MigrationBlockerDetail) {
 		case "oauth-consent-conflict":
 			return `Set oauth.consents to "reauthorize" in ${MIGRATION_DECISIONS_FILE}, or remove the 1.7 consent for client "${blocker.clientId}" and user "${blocker.userId}", then migrate again.`;
 		case "oauth-consent-decision-required":
-			return `Record oauth.consents as "migrate" or "reauthorize" in ${MIGRATION_DECISIONS_FILE}, or run \`auth migrate\` in a terminal to answer it there.`;
+			return `Record oauth.consents as "migrate" or "reauthorize" in ${MIGRATION_DECISIONS_FILE}, or run \`auth migrate apply\` in a terminal to answer it there.`;
 		case "oauth-token-decision-required":
-			return `Record an oauth decision in ${MIGRATION_DECISIONS_FILE} to revoke these tokens, or run \`auth migrate\` in a terminal to answer it there.`;
+			return `Record an oauth decision in ${MIGRATION_DECISIONS_FILE} to revoke these tokens, or run \`auth migrate apply\` in a terminal to answer it there.`;
 		case "release-migration-error":
-			return "Fix the reported problem, then run `auth migrate` again.";
+			return "Fix the reported problem, then run `auth migrate apply` again.";
 		case "required-column-backfill":
-			return `Backfill ${blocker.columns.join(", ")} for every row in "${blocker.table}", then run \`auth migrate\` again.`;
+			return `Backfill ${blocker.columns.join(", ")} for every row in "${blocker.table}", then run \`auth migrate apply\` again.`;
 		case "required-column-constraint":
-			return `Make ${blocker.columns.join(", ")} non-nullable in "${blocker.table}" with a reviewed migration, then run \`auth migrate\` again.`;
+			return `Make ${blocker.columns.join(", ")} non-nullable in "${blocker.table}" with a reviewed migration, then run \`auth migrate apply\` again.`;
 		case "scim-decision-required":
-			return `Record scim.retireAccountIds in ${MIGRATION_DECISIONS_FILE}, or run \`auth migrate\` in a terminal to confirm the retirement inventory there.`;
+			return `Record scim.retireAccountIds in ${MIGRATION_DECISIONS_FILE}, or run \`auth migrate apply\` in a terminal to confirm the retirement inventory there.`;
 		case "scim-inventory-mismatch":
 			return `Set scim.retireAccountIds in ${MIGRATION_DECISIONS_FILE} to exactly the accounts this blocker reports.`;
 		case "reprovision-data":
 		case "retired-table-data":
 		case "table-data-conversion":
 		case "table-data-move":
-			return "Run `auth migrate` and follow the guided 1.6 migration, which moves this data for you.";
+			return "Run `auth migrate apply` and follow the guided 1.6 migration, which moves this data for you.";
 	}
 }
 

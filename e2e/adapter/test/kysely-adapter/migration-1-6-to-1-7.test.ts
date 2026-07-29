@@ -634,6 +634,83 @@ it("rolls back the SQLite release migration when schema application is blocked",
 	}
 });
 
+it("rolls back the SQLite release migration when an OAuth record cannot be created", async () => {
+	const database = new DatabaseSync(":memory:");
+	try {
+		await seedPublishedOAuthProviderData({
+			database,
+			emailDomain: "oauth-rollback-sqlite.example.com",
+			nameSuffix: "SQLite OAuth rollback",
+			storeClientSecret: "plain",
+		});
+		database.exec(`
+			CREATE TABLE "oauthClient" (
+				"id" text primary key not null,
+				"clientId" text not null unique,
+				"redirectUris" text not null
+			);
+			CREATE TRIGGER reject_oauth_client_insert
+			BEFORE INSERT ON "oauthClient"
+			BEGIN
+				SELECT RAISE(ABORT, 'forced OAuth migration failure');
+			END;
+		`);
+
+		const auth17 = betterAuth({
+			baseURL: "http://localhost:3000",
+			database,
+			emailAndPassword: { enabled: true },
+			plugins: [
+				jwt(),
+				oauthProvider({
+					consentPage: "/consent",
+					loginPage: "/login",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+					storeClientSecret: "hashed",
+				}),
+			],
+		});
+		await expect(
+			migrateFrom16(auth17.options, {
+				oauthProvider: {
+					clients: "migrate",
+					clientSecrets: { source: "plain", target: "hashed" },
+					consents: "migrate",
+					tokens: "revoke",
+				},
+			}),
+		).rejects.toThrow("forced OAuth migration failure");
+
+		const accountColumns = database
+			.prepare(`PRAGMA table_info(account)`)
+			.all()
+			.map((column) => (column as { name: string }).name);
+		expect(accountColumns).not.toContain("issuer");
+		expect(accountColumns).not.toContain("providerAccountId");
+		expect(
+			database
+				.prepare(
+					`SELECT name FROM sqlite_master
+					 WHERE type = 'table' AND name = 'oauthApplication'`,
+				)
+				.get(),
+		).toEqual({ name: "oauthApplication" });
+		expect(
+			database
+				.prepare(
+					`SELECT name FROM sqlite_master
+					 WHERE type = 'table' AND name = 'oauthApplication__better_auth_1_6'`,
+				)
+				.get(),
+		).toBeUndefined();
+	} finally {
+		database.close();
+	}
+});
+
 it("migrates users created by published 1.6.25 and authenticates them through 1.7 on PostgreSQL", {
 	timeout: 60_000,
 }, async () => {
@@ -895,7 +972,7 @@ it("migrates a published 1.6.25 OAuth client and consent while revoking old toke
 	}
 });
 
-it("retires published 1.6.25 SCIM credentials and reprovisions a retained user through 1.7 on PostgreSQL", {
+it("retires published 1.6.25 SCIM credentials with a custom account ID column and reprovisions a retained user through 1.7 on PostgreSQL", {
 	timeout: 60_000,
 }, async () => {
 	const databaseName = createDatabaseName().replace(
@@ -915,6 +992,11 @@ it("retires published 1.6.25 SCIM credentials and reprovisions a retained user t
 
 	try {
 		const auth1625 = betterAuth1625({
+			account: {
+				fields: {
+					accountId: "externalAccountId",
+				},
+			},
 			baseURL: "http://localhost:3000",
 			database: pool,
 			emailAndPassword: {
@@ -967,6 +1049,11 @@ it("retires published 1.6.25 SCIM credentials and reprovisions a retained user t
 		}
 
 		const auth17 = betterAuth({
+			account: {
+				fields: {
+					providerAccountId: "externalAccountId",
+				},
+			},
 			baseURL: "http://localhost:3000",
 			database: {
 				db: currentDatabase,

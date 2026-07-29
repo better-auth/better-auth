@@ -33,7 +33,10 @@ import {
 	interviewMigrationDecisions,
 	isInterviewableBlocker,
 } from "./migration-interview";
-import type { ReleaseMigrationPlanBlocker } from "./migration-plan";
+import type {
+	MigrationPlan,
+	ReleaseMigrationPlanBlocker,
+} from "./migration-plan";
 import {
 	createMigrationPlan,
 	describeMigrationBlocker,
@@ -66,16 +69,16 @@ async function collectReleaseMigrationBlockers(
 /** The single next step after a blocked run, told from the blockers that survived. */
 function describeBlockedMigrationExit(
 	releaseMigrationBlockers: ReleaseMigrationPlanBlocker[],
-	planFile: string | undefined,
+	migrationFile: string | undefined,
 ) {
 	if (releaseMigrationBlockers.length === 0) {
-		return `Resolve every blocker with a reviewed data migration, then run \`auth migrate\` again. Use \`auth migrate --json\` for a machine-readable plan. Upgrade guide: ${UPGRADE_GUIDE_URL}`;
+		return `Resolve every blocker with a reviewed data migration, then run \`auth migrate apply\` again. Use \`auth migrate plan --json\` for a machine-readable plan. Upgrade guide: ${UPGRADE_GUIDE_URL}`;
 	}
 	if (releaseMigrationBlockers.some(isInterviewableBlocker)) {
-		const decisionsFile = planFile || MIGRATION_DECISIONS_FILE;
-		return `This database holds Better Auth 1.6 data. Run \`auth migrate\` in a terminal to answer these decisions, or record them in ${decisionsFile} and run \`auth migrate --plan ${decisionsFile}\`. Upgrade guide: ${UPGRADE_GUIDE_URL}`;
+		const decisionsFile = migrationFile || MIGRATION_DECISIONS_FILE;
+		return `This database holds Better Auth 1.6 data. Run \`auth migrate apply\` in a terminal to answer these decisions, or record them in ${decisionsFile} and run \`auth migrate apply ${decisionsFile}\`. Upgrade guide: ${UPGRADE_GUIDE_URL}`;
 	}
-	return `Resolve every blocker above in your 1.6 data, then run \`auth migrate${planFile ? ` --plan ${planFile}` : ""}\` again. Upgrade guide: ${UPGRADE_GUIDE_URL}`;
+	return `Resolve every blocker above in your 1.6 data, then run \`auth migrate apply${migrationFile ? ` ${migrationFile}` : ""}\` again. Upgrade guide: ${UPGRADE_GUIDE_URL}`;
 }
 
 async function publishMigrateTelemetry(
@@ -94,36 +97,122 @@ async function publishMigrateTelemetry(
 	} catch {}
 }
 
+type MigrationInspection = Awaited<ReturnType<typeof getMigrations>>;
+type MigrationCommandMode = "apply" | "plan";
+type MigrationOutputFormat = "human" | "json";
+
+interface MigrationApplicationResult {
+	formatVersion: 1;
+	mode: "apply";
+	plan?: MigrationPlan;
+	remediation?: string;
+	status: "applied" | "approval-required" | "blocked" | "up-to-date";
+}
+
+function printMigrationChanges(
+	toBeAdded: MigrationInspection["toBeAdded"],
+	toBeAddedIndexes: MigrationInspection["toBeAddedIndexes"],
+	toBeCreated: MigrationInspection["toBeCreated"],
+) {
+	if (
+		toBeAdded.length === 0 &&
+		toBeAddedIndexes.length === 0 &&
+		toBeCreated.length === 0
+	) {
+		return;
+	}
+	console.log("🔑 The migration will affect the following:");
+
+	for (const table of [...toBeCreated, ...toBeAdded]) {
+		console.log(
+			"->",
+			chalk.magenta(Object.keys(table.fields).join(", ")),
+			chalk.white("fields on"),
+			chalk.yellow(`${table.table}`),
+			chalk.white("table."),
+		);
+	}
+	for (const { index, table } of toBeAddedIndexes) {
+		console.log(
+			"->",
+			chalk.magenta(index.columns.join(", ")),
+			chalk.white(
+				index.unique ? "fields in a unique index on" : "fields indexed on",
+			),
+			chalk.yellow(table),
+			chalk.white("table."),
+		);
+	}
+}
+
+function printHumanMigrationPlan(
+	migrationPlan: MigrationPlan,
+	toBeAdded: MigrationInspection["toBeAdded"],
+	toBeAddedIndexes: MigrationInspection["toBeAddedIndexes"],
+	toBeCreated: MigrationInspection["toBeCreated"],
+) {
+	if (migrationPlan.status !== "up-to-date") {
+		printMigrationChanges(toBeAdded, toBeAddedIndexes, toBeCreated);
+	}
+	console.log(
+		`Target: ${migrationPlan.target.adapter}/${migrationPlan.target.dialect}`,
+	);
+	console.log(`Status: ${migrationPlan.status}`);
+	console.log(
+		`Blockers: ${migrationPlan.blockers.map(({ code }) => code).join(", ") || "none"}`,
+	);
+	console.log("Plan complete. No database changes were applied.");
+}
+
+function printJson(value: MigrationApplicationResult | MigrationPlan) {
+	console.log(JSON.stringify(value, null, 2));
+}
+
 /** @internal */
 export async function migrateAction(opts: unknown) {
 	const options = z
-		.object({
+		.strictObject({
+			approved: z.boolean().optional(),
 			cwd: z.string(),
 			config: z.string().optional(),
-			dryRun: z.boolean().optional(),
-			json: z.boolean().optional(),
-			plan: z.string().trim().min(1).optional(),
-			y: z.boolean().optional(),
-			yes: z.boolean().optional(),
+			migrationFile: z.string().trim().min(1).optional(),
+			mode: z.enum(["apply", "plan"]) satisfies z.ZodType<MigrationCommandMode>,
+			outputFormat: z.enum(["human", "json"]).optional() satisfies z.ZodType<
+				MigrationOutputFormat | undefined
+			>,
 		})
 		.parse(opts);
+	const outputFormat = options.outputFormat || "human";
+
+	if (
+		options.mode === "apply" &&
+		outputFormat === "json" &&
+		!options.approved
+	) {
+		printJson({
+			formatVersion: 1,
+			mode: "apply",
+			remediation: "Pass --yes to confirm a non-interactive JSON application.",
+			status: "approval-required",
+		});
+		process.exit(1);
+		return;
+	}
 
 	const cwd = path.resolve(options.cwd);
 	if (!existsSync(cwd)) {
 		console.error(`The directory "${cwd}" does not exist.`);
 		process.exit(1);
-	}
-
-	if (options.y) {
-		console.warn("WARNING: --y is deprecated. Consider -y or --yes");
-		options.yes = true;
+		return;
 	}
 
 	let decisions: MigrationDecisions | undefined;
 	let recordedDecisions = false;
-	if (options.plan) {
+	if (options.migrationFile) {
 		try {
-			decisions = await loadMigrationDecisions(path.resolve(cwd, options.plan));
+			decisions = await loadMigrationDecisions(
+				path.resolve(cwd, options.migrationFile),
+			);
 		} catch (error) {
 			console.error(error instanceof Error ? error.message : String(error));
 			process.exit(1);
@@ -143,9 +232,10 @@ export async function migrateAction(opts: unknown) {
 		return;
 	}
 
-	const spinner = options.json
-		? undefined
-		: yoctoSpinner({ text: "preparing migration..." }).start();
+	const spinner =
+		outputFormat === "json"
+			? undefined
+			: yoctoSpinner({ text: "preparing migration..." }).start();
 
 	const {
 		toBeAdded,
@@ -193,18 +283,27 @@ export async function migrateAction(opts: unknown) {
 		});
 	let migrationPlan = buildMigrationPlan();
 
-	if (options.json) {
-		console.log(JSON.stringify(migrationPlan, null, 2));
+	spinner?.stop();
+
+	if (options.mode === "plan") {
+		if (outputFormat === "json") {
+			printJson(migrationPlan);
+		} else {
+			printHumanMigrationPlan(
+				migrationPlan,
+				toBeAdded,
+				toBeAddedIndexes,
+				toBeCreated,
+			);
+		}
 		if (migrationPlan.blockers.length > 0) {
 			process.exitCode = 1;
 		}
 		return;
 	}
 
-	spinner?.stop();
-
 	let legacyReleaseState =
-		releaseMigration && !options.dryRun
+		releaseMigration && !options.approved
 			? await inspectLegacyReleaseDataFrom16(
 					config,
 					releaseMigrationOptions,
@@ -213,8 +312,8 @@ export async function migrateAction(opts: unknown) {
 			: undefined;
 	if (
 		legacyReleaseState &&
-		!options.plan &&
-		!options.yes &&
+		!options.migrationFile &&
+		!options.approved &&
 		process.stdin.isTTY &&
 		releaseMigrationBlockers.some(isInterviewableBlocker)
 	) {
@@ -255,7 +354,17 @@ export async function migrateAction(opts: unknown) {
 		migrationPlan = buildMigrationPlan();
 	}
 
-	if (migrationPlan.blockers.length > 0 && !options.dryRun) {
+	if (migrationPlan.blockers.length > 0) {
+		if (outputFormat === "json") {
+			printJson({
+				formatVersion: 1,
+				mode: "apply",
+				plan: migrationPlan,
+				status: "blocked",
+			});
+			process.exit(1);
+			return;
+		}
 		console.error("Migration blocked. No database changes were applied.");
 		for (const blocker of migrationPlan.blockers) {
 			console.error(
@@ -265,54 +374,36 @@ export async function migrateAction(opts: unknown) {
 			console.error(`   Docs: ${blocker.remediation.docs}`);
 		}
 		console.error(
-			describeBlockedMigrationExit(releaseMigrationBlockers, options.plan),
+			describeBlockedMigrationExit(
+				releaseMigrationBlockers,
+				options.migrationFile,
+			),
 		);
 		process.exit(1);
 		return;
 	}
 
 	if (!hasChanges && !releaseMigration) {
-		console.log("🚀 No migrations needed.");
+		if (outputFormat === "json") {
+			printJson({
+				formatVersion: 1,
+				mode: "apply",
+				plan: migrationPlan,
+				status: "up-to-date",
+			});
+		} else {
+			console.log("🚀 No migrations needed.");
+		}
 		await publishMigrateTelemetry(config, "no_changes");
 		process.exit(0);
 		return;
 	}
 
-	console.log(`🔑 The migration will affect the following:`);
-
-	for (const table of [...toBeCreated, ...toBeAdded]) {
-		console.log(
-			"->",
-			chalk.magenta(Object.keys(table.fields).join(", ")),
-			chalk.white("fields on"),
-			chalk.yellow(`${table.table}`),
-			chalk.white("table."),
-		);
-	}
-	for (const { index, table } of toBeAddedIndexes) {
-		console.log(
-			"->",
-			chalk.magenta(index.columns.join(", ")),
-			chalk.white(
-				index.unique ? "fields in a unique index on" : "fields indexed on",
-			),
-			chalk.yellow(table),
-			chalk.white("table."),
-		);
+	if (outputFormat === "human") {
+		printMigrationChanges(toBeAdded, toBeAddedIndexes, toBeCreated);
 	}
 
-	if (options.dryRun) {
-		console.log(
-			`Target: ${migrationPlan.target.adapter}/${migrationPlan.target.dialect}`,
-		);
-		console.log(
-			`Blockers: ${migrationPlan.blockers.map(({ code }) => code).join(", ") || "none"}`,
-		);
-		console.log("Dry run complete. No database changes were applied.");
-		return;
-	}
-
-	let migrate = options.yes;
+	let migrate = options.approved;
 	if (!migrate) {
 		if (legacyReleaseState) {
 			console.log("This migration cannot be undone. It will:");
@@ -336,7 +427,7 @@ export async function migrateAction(opts: unknown) {
 		console.log("Migration cancelled.");
 		if (recordedDecisions) {
 			console.log(
-				`Apply the recorded decisions later with \`auth migrate --plan ${MIGRATION_DECISIONS_FILE}\`.`,
+				`Apply the recorded decisions later with \`auth migrate apply ${MIGRATION_DECISIONS_FILE}\`.`,
 			);
 		}
 		await publishMigrateTelemetry(config, "aborted");
@@ -351,7 +442,16 @@ export async function migrateAction(opts: unknown) {
 		await runMigrations();
 	}
 	spinner?.stop();
-	console.log("🚀 migration was completed successfully!");
+	if (outputFormat === "json") {
+		printJson({
+			formatVersion: 1,
+			mode: "apply",
+			plan: migrationPlan,
+			status: "applied",
+		});
+	} else {
+		console.log("🚀 migration was completed successfully!");
+	}
 	try {
 		const telemetry = await createTelemetry(config);
 		await telemetry.publish({
@@ -366,29 +466,207 @@ export async function migrateAction(opts: unknown) {
 	return;
 }
 
-export const migrate = new Command("migrate")
-	.option(
-		"-c, --cwd <cwd>",
-		"the working directory. defaults to the current directory.",
-		process.cwd(),
+interface SharedMigrationCommandOptions {
+	config?: string;
+	cwd: string;
+	json?: boolean;
+}
+
+interface ApplyMigrationCommandOptions extends SharedMigrationCommandOptions {
+	y?: boolean;
+	yes?: boolean;
+}
+
+interface LegacyMigrationCommandOptions extends ApplyMigrationCommandOptions {
+	dryRun?: boolean;
+	plan?: string;
+}
+
+function addSharedMigrationOptions(command: Command) {
+	return command
+		.option(
+			"-c, --cwd <cwd>",
+			"the working directory. defaults to the current directory.",
+			process.cwd(),
+		)
+		.option(
+			"--config <config>",
+			"the path to the configuration file. defaults to the first configuration file found.",
+		)
+		.option("--json", "output one machine-readable JSON document");
+}
+
+function resolveApproval(options: ApplyMigrationCommandOptions) {
+	if (options.y) {
+		console.warn("WARNING: --y is deprecated. Use -y or --yes.");
+	}
+	return Boolean(options.yes || options.y);
+}
+
+function resolveSharedMigrationCommandOptions(command: Command) {
+	const options = command.opts<SharedMigrationCommandOptions>();
+	const parent = command.parent;
+	const parentOptions = parent?.opts<SharedMigrationCommandOptions>();
+	return {
+		config:
+			parent?.getOptionValueSource("config") === "cli"
+				? parentOptions?.config
+				: options.config,
+		cwd:
+			parent?.getOptionValueSource("cwd") === "cli" && parentOptions
+				? parentOptions.cwd
+				: options.cwd,
+		json:
+			parent?.getOptionValueSource("json") === "cli"
+				? parentOptions?.json
+				: options.json,
+	} satisfies SharedMigrationCommandOptions;
+}
+
+function resolveApplyMigrationCommandOptions(command: Command) {
+	const sharedOptions = resolveSharedMigrationCommandOptions(command);
+	const options = command.opts<ApplyMigrationCommandOptions>();
+	const parent = command.parent;
+	const parentOptions = parent?.opts<ApplyMigrationCommandOptions>();
+	return {
+		...sharedOptions,
+		y:
+			parent?.getOptionValueSource("y") === "cli"
+				? parentOptions?.y
+				: options.y,
+		yes:
+			parent?.getOptionValueSource("yes") === "cli"
+				? parentOptions?.yes
+				: options.yes,
+	} satisfies ApplyMigrationCommandOptions;
+}
+
+async function legacyMigrateAction(
+	migrationFile: string | undefined,
+	options: LegacyMigrationCommandOptions,
+) {
+	console.warn(
+		"WARNING: `auth migrate` without an action is deprecated. Use `auth migrate apply`.",
+	);
+	if (
+		migrationFile &&
+		options.plan &&
+		path.resolve(migrationFile) !== path.resolve(options.plan)
+	) {
+		console.error(
+			"Pass the migration file either positionally or with deprecated --plan, not both.",
+		);
+		process.exit(1);
+		return;
+	}
+
+	const reviewedMigrationFile = options.plan || migrationFile;
+	const isLegacyPreview = Boolean(options.dryRun || options.json);
+	if (options.plan) {
+		console.warn(
+			`WARNING: --plan <file> is deprecated. Use \`auth migrate ${isLegacyPreview ? "plan" : "apply"} ${options.plan}\`.`,
+		);
+	}
+	if (options.dryRun) {
+		console.warn("WARNING: --dry-run is deprecated. Use `auth migrate plan`.");
+	}
+	if (options.json) {
+		console.warn(
+			"WARNING: `auth migrate --json` as a preview is deprecated. Use `auth migrate plan --json`.",
+		);
+	}
+
+	return migrateAction({
+		approved: resolveApproval(options),
+		cwd: options.cwd,
+		config: options.config,
+		migrationFile: reviewedMigrationFile,
+		mode: isLegacyPreview ? "plan" : "apply",
+		outputFormat: options.json ? "json" : "human",
+	});
+}
+
+/** @internal */
+export function createMigrateCommand() {
+	const migratePlan = addSharedMigrationOptions(
+		new Command("plan")
+			.description("inspect a migration without changing the database")
+			.argument(
+				"[migration-file]",
+				"a reviewed better-auth-migration.json file",
+			),
+	).action(
+		async (
+			migrationFile: string | undefined,
+			_options: SharedMigrationCommandOptions,
+			command: Command,
+		) => {
+			const options = resolveSharedMigrationCommandOptions(command);
+			return migrateAction({
+				cwd: options.cwd,
+				config: options.config,
+				migrationFile,
+				mode: "plan",
+				outputFormat: options.json ? "json" : "human",
+			});
+		},
+	);
+
+	const migrateApply = addSharedMigrationOptions(
+		new Command("apply")
+			.description("apply a migration to the database")
+			.argument(
+				"[migration-file]",
+				"a reviewed better-auth-migration.json file",
+			),
 	)
-	.option(
-		"--config <config>",
-		"the path to the configuration file. defaults to the first configuration file found.",
+		.option(
+			"-y, --yes",
+			"automatically accept and run migrations without prompting",
+			false,
+		)
+		.option("--y", "(deprecated) same as --yes", false)
+		.action(
+			async (
+				migrationFile: string | undefined,
+				_options: ApplyMigrationCommandOptions,
+				command: Command,
+			) => {
+				const options = resolveApplyMigrationCommandOptions(command);
+				return migrateAction({
+					approved: resolveApproval(options),
+					cwd: options.cwd,
+					config: options.config,
+					migrationFile,
+					mode: "apply",
+					outputFormat: options.json ? "json" : "human",
+				});
+			},
+		);
+
+	return addSharedMigrationOptions(
+		new Command("migrate")
+			.enablePositionalOptions()
+			.description("plan or apply a database migration")
+			.argument(
+				"[migration-file]",
+				"a reviewed better-auth-migration.json file",
+			),
 	)
-	.option(
-		"--plan <file>",
-		`apply the reviewed release decisions recorded in a ${MIGRATION_DECISIONS_FILE} file`,
-	)
-	.option(
-		"-y, --yes",
-		"automatically accept and run migrations without prompting",
-		false,
-	)
-	.option("--dry-run", "show the migration plan without changing the database")
-	.option(
-		"--json",
-		"print a machine-readable migration plan without changing the database",
-	)
-	.option("--y", "(deprecated) same as --yes", false)
-	.action(migrateAction);
+		.option(
+			"--plan <file>",
+			`(deprecated) apply ${MIGRATION_DECISIONS_FILE} with the legacy command`,
+		)
+		.option(
+			"-y, --yes",
+			"automatically accept and run migrations without prompting",
+			false,
+		)
+		.option("--dry-run", "(deprecated) same as migrate plan")
+		.option("--y", "(deprecated) same as --yes", false)
+		.addCommand(migratePlan)
+		.addCommand(migrateApply)
+		.action(legacyMigrateAction);
+}
+
+export const migrate = createMigrateCommand();

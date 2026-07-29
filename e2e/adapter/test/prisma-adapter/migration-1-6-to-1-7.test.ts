@@ -1,17 +1,18 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { oauthProvider } from "@better-auth/oauth-provider";
 import { prismaAdapter } from "@better-auth/prisma-adapter";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { betterAuth } from "better-auth";
 import { getMigrations, migrateFrom16 } from "better-auth/db/migration";
-import { betterAuth as betterAuth1625 } from "better-auth-1-6-25";
-import { getMigrations as getMigrations1625 } from "better-auth-1-6-25/db/migration";
+import { jwt } from "better-auth/plugins";
 import Database from "better-sqlite3";
 import { expect, it } from "vitest";
+import { seedPublishedOAuthProviderData } from "../kysely-adapter/published-1-6-25-fixture";
 import { PrismaClient } from "./.tmp/prisma-client-base/client";
 
-it("migrates a published 1.6.25 SQLite database through the Prisma adapter", async () => {
+it("migrates published 1.6.25 accounts and OAuth records through the Prisma adapter", async () => {
 	const temporaryDirectory = await fs.mkdtemp(
 		path.join(os.tmpdir(), "better-auth-prisma-migration-"),
 	);
@@ -20,18 +21,10 @@ it("migrates a published 1.6.25 SQLite database through the Prisma adapter", asy
 	let prisma: PrismaClient | undefined;
 	try {
 		sqlite = new Database(databasePath);
-		const auth1625 = betterAuth1625({
-			baseURL: "http://localhost:3000",
+		await seedPublishedOAuthProviderData({
 			database: sqlite,
-			emailAndPassword: { enabled: true },
-		});
-		await (await getMigrations1625(auth1625.options)).runMigrations();
-		await auth1625.api.signUpEmail({
-			body: {
-				email: "prisma-migration@example.com",
-				name: "Prisma Migration",
-				password: "correct-horse-battery-staple",
-			},
+			emailDomain: "prisma-migration.example.com",
+			nameSuffix: "Prisma Migration",
 		});
 		const sourceAccountColumns = sqlite
 			.prepare("PRAGMA table_info(account)")
@@ -51,10 +44,28 @@ it("migrates a published 1.6.25 SQLite database through the Prisma adapter", asy
 				provider: "sqlite",
 			}),
 			emailAndPassword: { enabled: true },
+			plugins: [
+				jwt(),
+				oauthProvider({
+					consentPage: "/consent",
+					loginPage: "/login",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+					storeClientSecret: "hashed",
+				}),
+			],
 		});
 		const inspection = await getMigrations(auth17.options);
 
-		expect(inspection.toBeCreated).toEqual([]);
+		expect(inspection.toBeCreated).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					table: "oauthClient",
+				}),
+			]),
+		);
 		expect(
 			Object.keys(
 				inspection.toBeAdded.find(({ table }) => table === "account")?.fields ??
@@ -71,21 +82,35 @@ it("migrates a published 1.6.25 SQLite database through the Prisma adapter", asy
 			table: "account",
 		});
 
-		await expect(migrateFrom16(auth17.options, {})).resolves.toMatchObject({
+		await expect(
+			migrateFrom16(auth17.options, {
+				oauthProvider: {
+					clients: "migrate",
+					clientSecrets: { source: "plain", target: "hashed" },
+					consents: "migrate",
+					tokens: "revoke",
+				},
+			}),
+		).resolves.toMatchObject({
 			accounts: {
 				migrated: 1,
 				providers: { credential: 1 },
+			},
+			oauthProvider: {
+				clients: { migrated: 1 },
+				consents: { migrated: 1 },
+				tokens: { revoked: 1 },
 			},
 		});
 		await expect(
 			auth17.api.signInEmail({
 				body: {
-					email: "prisma-migration@example.com",
+					email: "provider-owner@prisma-migration.example.com",
 					password: "correct-horse-battery-staple",
 				},
 			}),
 		).resolves.toMatchObject({
-			user: { name: "Prisma Migration" },
+			user: { name: "Prisma Migration Provider Owner" },
 		});
 	} finally {
 		sqlite?.close();

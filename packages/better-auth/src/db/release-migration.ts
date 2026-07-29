@@ -531,6 +531,17 @@ interface LegacyAccountIdentityRow {
 	providerId: string;
 }
 
+function resolveLegacyAccountIdColumn(
+	existingColumns: ReadonlySet<string>,
+	providerAccountIdColumn: string,
+) {
+	if (existingColumns.has("accountId")) return "accountId";
+	if (existingColumns.has(providerAccountIdColumn)) {
+		return providerAccountIdColumn;
+	}
+	return undefined;
+}
+
 function resolveDynamicAccountIssuers({
 	accounts,
 	blockers,
@@ -1299,15 +1310,17 @@ export async function migrateOAuthProviderDataFrom16(
 	options: MigrateFrom16Options,
 	state: LegacyReleaseDataState,
 	preparedData?: OAuthProviderDataFrom16Plan | undefined,
+	migrationDatabase?: MigrationDatabase | undefined,
 ): Promise<MigratedOAuthProviderSummary | undefined> {
 	const plan =
 		preparedData ??
 		(await prepareOAuthProviderDataFrom16(config, options, state));
 	if (!plan) return undefined;
-	const adapter = await getAdapter(config);
+	const recordWriter =
+		migrationDatabase?.recordWriter ?? (await getAdapter(config));
 	for (const client of plan.clients) {
 		if (client.alreadyMigrated) continue;
-		await adapter.create({
+		await recordWriter.create({
 			model: "oauthClient",
 			data: client.data,
 		});
@@ -1320,7 +1333,7 @@ export async function migrateOAuthProviderDataFrom16(
 			continue;
 		}
 		if (!consent.alreadyMigrated) {
-			await adapter.create({
+			await recordWriter.create({
 				model: "oauthConsent",
 				data: consent.data,
 			});
@@ -1364,9 +1377,24 @@ export async function inspectScimAccountsFrom16(
 	if (!accountSchema) return [];
 	const accountTable = accountSchema.modelName || "account";
 	const idColumn = accountSchema.fields.id?.fieldName || "id";
+	const providerAccountIdColumn =
+		accountSchema.fields.providerAccountId?.fieldName || "providerAccountId";
 	const providerIdColumn =
 		accountSchema.fields.providerId?.fieldName || "providerId";
 	const userIdColumn = accountSchema.fields.userId?.fieldName || "userId";
+	const accountTableMetadata = (await kysely.introspection.getTables()).find(
+		(table) => table.name === accountTable,
+	);
+	if (!accountTableMetadata) return [];
+	const legacyAccountIdColumn = resolveLegacyAccountIdColumn(
+		new Set(accountTableMetadata.columns.map((column) => column.name)),
+		providerAccountIdColumn,
+	);
+	if (!legacyAccountIdColumn) {
+		throw new BetterAuthError(
+			`The configured account table "${accountTable}" contains neither the 1.6 "accountId" column nor the configured 1.7 provider account ID column "${providerAccountIdColumn}".`,
+		);
+	}
 	const accounts =
 		providerIds.size === 0
 			? []
@@ -1374,7 +1402,7 @@ export async function inspectScimAccountsFrom16(
 					await sql<LegacyScimAccountRecord>`
 						SELECT
 							${sql.ref(idColumn)} AS "id",
-							${sql.ref("accountId")} AS "providerAccountId",
+							${sql.ref(legacyAccountIdColumn)} AS "providerAccountId",
 							${sql.ref(providerIdColumn)} AS "providerId",
 							${sql.ref(userIdColumn)} AS "userId"
 						FROM ${sql.table(accountTable)}
@@ -1624,7 +1652,6 @@ async function inspectAccountIdentityFrom16(
 		accountSchema.fields.providerAccountId?.fieldName || "providerAccountId";
 	const providerIdColumn =
 		accountSchema.fields.providerId?.fieldName || "providerId";
-	const legacyAccountIdColumn = "accountId";
 	const accountTableMetadata = (await kysely.introspection.getTables()).find(
 		(table) => table.name === accountTable,
 	);
@@ -1632,7 +1659,11 @@ async function inspectAccountIdentityFrom16(
 	const existingColumns = new Set(
 		accountTableMetadata.columns.map((column) => column.name),
 	);
-	if (!existingColumns.has(legacyAccountIdColumn)) return undefined;
+	const legacyAccountIdColumn = resolveLegacyAccountIdColumn(
+		existingColumns,
+		providerAccountIdColumn,
+	);
+	if (!legacyAccountIdColumn) return undefined;
 
 	const { accountIssuers, unresolvedProviders } =
 		await resolveMigrationAccountIssuers(

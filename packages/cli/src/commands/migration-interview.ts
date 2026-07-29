@@ -186,8 +186,8 @@ export function describeIrreversibleReleaseActions(
 
 /**
  * Asks for the release decisions this configuration cannot resolve on its own
- * and records them as the artifact a later `--plan` run replays. Returns
- * nothing when a question is cancelled.
+ * and records them as the artifact a later `migrate apply` run replays.
+ * Returns nothing when a question is cancelled.
  */
 export async function interviewMigrationDecisions({
 	blockers,

@@ -20,7 +20,7 @@ import { scim as scim1625 } from "better-auth-scim-1-6-25";
 import Database from "better-sqlite3";
 import prompts from "prompts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { migrateAction } from "../src/commands/migrate";
+import { createMigrateCommand, migrateAction } from "../src/commands/migrate";
 import * as config from "../src/utils/get-config";
 
 vi.mock("prompts", () => ({
@@ -117,9 +117,10 @@ describe("migrate base auth instance", () => {
 
 	it("should migrate the database and sign-up a user", async () => {
 		await migrateAction({
+			approved: true,
 			cwd: process.cwd(),
 			config: "test/auth.ts",
-			yes: true,
+			mode: "apply",
 		});
 		const signUpRes = await auth.api.signUpEmail({
 			body: {
@@ -166,9 +167,10 @@ describe("migrate auth instance with plugins", () => {
 
 	it("should migrate the database and sign-up a user", async () => {
 		await migrateAction({
+			approved: true,
 			cwd: process.cwd(),
 			config: "test/auth.ts",
-			yes: true,
+			mode: "apply",
 		});
 		const res = db
 			.prepare("INSERT INTO plugin (id, test) VALUES (?, ?)")
@@ -212,11 +214,19 @@ describe("migrate an index-only schema change", () => {
 	});
 
 	it("runs when only a compound index is missing", async () => {
-		await migrateAction({ cwd: process.cwd(), yes: true });
+		await migrateAction({
+			approved: true,
+			cwd: process.cwd(),
+			mode: "apply",
+		});
 		options = betterAuth({ database: db, plugins: [indexedPlugin] }).options;
 		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
 
-		await migrateAction({ cwd: process.cwd(), yes: true });
+		await migrateAction({
+			approved: true,
+			cwd: process.cwd(),
+			mode: "apply",
+		});
 
 		expect(consoleLog).not.toHaveBeenCalledWith("🚀 No migrations needed.");
 		db.prepare(
@@ -239,12 +249,12 @@ describe("inspect a migration without applying it", () => {
 		vi.spyOn(config, "getConfig").mockImplementation(async () => auth.options);
 		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
 
-		await migrateAction({ cwd: process.cwd(), dryRun: true });
+		await migrateAction({ cwd: process.cwd(), mode: "plan" });
 
 		expect(consoleLog).toHaveBeenCalledWith("Target: kysely/sqlite");
 		expect(consoleLog).toHaveBeenCalledWith("Blockers: none");
 		expect(consoleLog).toHaveBeenCalledWith(
-			"Dry run complete. No database changes were applied.",
+			"Plan complete. No database changes were applied.",
 		);
 		expect(
 			db
@@ -261,7 +271,11 @@ describe("inspect a migration without applying it", () => {
 		vi.spyOn(config, "getConfig").mockImplementation(async () => auth.options);
 		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
 
-		await migrateAction({ cwd: process.cwd(), json: true });
+		await migrateAction({
+			cwd: process.cwd(),
+			mode: "plan",
+			outputFormat: "json",
+		});
 
 		expect(consoleLog).toHaveBeenCalledTimes(1);
 		const migrationPlan = JSON.parse(String(consoleLog.mock.calls[0]?.[0])) as {
@@ -358,12 +372,12 @@ describe("migrate published 1.6.25 account data", () => {
 			.mockImplementation((code) => code as never);
 		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
 
-		await migrateAction({ cwd: process.cwd(), dryRun: true });
+		await migrateAction({ cwd: process.cwd(), mode: "plan" });
 
 		expect(processExit).not.toHaveBeenCalled();
 		expect(consoleLog).toHaveBeenCalledWith("Blockers: none");
 		expect(consoleLog).toHaveBeenCalledWith(
-			"Dry run complete. No database changes were applied.",
+			"Plan complete. No database changes were applied.",
 		);
 		expect(
 			db
@@ -373,7 +387,11 @@ describe("migrate published 1.6.25 account data", () => {
 		).not.toContain("issuer");
 
 		consoleLog.mockClear();
-		await migrateAction({ cwd: process.cwd(), json: true });
+		await migrateAction({
+			cwd: process.cwd(),
+			mode: "plan",
+			outputFormat: "json",
+		});
 
 		expect(processExit).not.toHaveBeenCalled();
 		expect(process.exitCode).toBeUndefined();
@@ -455,7 +473,11 @@ describe("migrate published 1.6.25 account data", () => {
 			.mockImplementation(() => {});
 		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
 
-		await migrateAction({ cwd: process.cwd(), yes: true });
+		await migrateAction({
+			approved: true,
+			cwd: process.cwd(),
+			mode: "apply",
+		});
 
 		expect(consoleError).not.toHaveBeenCalledWith(
 			"Migration blocked. No database changes were applied.",
@@ -481,7 +503,11 @@ describe("migrate published 1.6.25 account data", () => {
 		expect(signIn.user.name).toBe("Ada");
 
 		consoleLog.mockClear();
-		await migrateAction({ cwd: process.cwd(), yes: true });
+		await migrateAction({
+			approved: true,
+			cwd: process.cwd(),
+			mode: "apply",
+		});
 
 		expect(consoleLog).toHaveBeenCalledWith("🚀 No migrations needed.");
 	});
@@ -622,6 +648,196 @@ async function writeMigrationDecisions(decisions: unknown) {
 	return filePath;
 }
 
+function readTableNames(db: Database.Database) {
+	return db
+		.prepare(
+			"SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
+		)
+		.all()
+		.map((table) => (table as { name: string }).name);
+}
+
+describe("migrate command modes", () => {
+	beforeEach(() => {
+		vi.spyOn(process, "exit").mockImplementation((code) => code as never);
+	});
+
+	it("applies a migration in JSON mode and prints one structured result", async () => {
+		const db = new Database(":memory:");
+		const auth = betterAuth({ database: db });
+		vi.spyOn(config, "getConfig").mockImplementation(async () => auth.options);
+		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+
+		await createMigrateCommand().parseAsync([
+			"node",
+			"auth",
+			"apply",
+			"--json",
+			"--yes",
+		]);
+
+		expect(consoleLog).toHaveBeenCalledTimes(1);
+		expect(JSON.parse(String(consoleLog.mock.calls[0]?.[0]))).toMatchObject({
+			formatVersion: 1,
+			mode: "apply",
+			plan: {
+				status: "ready",
+				target: { adapter: "kysely", dialect: "sqlite" },
+			},
+			status: "applied",
+		});
+		expect(readTableNames(db)).toEqual([
+			"account",
+			"session",
+			"user",
+			"verification",
+		]);
+	});
+
+	it("returns a blocked JSON result without changing release data", async () => {
+		const db = new Database(":memory:");
+		await createReleaseDecisionFixture(db);
+		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+
+		await migrateAction({
+			approved: true,
+			cwd: process.cwd(),
+			mode: "apply",
+			outputFormat: "json",
+		});
+
+		expect(process.exit).toHaveBeenCalledWith(1);
+		expect(consoleLog).toHaveBeenCalledTimes(1);
+		expect(JSON.parse(String(consoleLog.mock.calls[0]?.[0]))).toMatchObject({
+			formatVersion: 1,
+			mode: "apply",
+			plan: { status: "blocked" },
+			status: "blocked",
+		});
+		expect(
+			db
+				.prepare(
+					"SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'oauthClient'",
+				)
+				.get(),
+		).toBeUndefined();
+	});
+
+	it("rejects interactive JSON application before inspecting the database", async () => {
+		const getConfig = vi.spyOn(config, "getConfig");
+		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+
+		await createMigrateCommand().parseAsync([
+			"node",
+			"auth",
+			"apply",
+			"--json",
+		]);
+
+		expect(getConfig).not.toHaveBeenCalled();
+		expect(process.exit).toHaveBeenCalledWith(1);
+		expect(consoleLog).toHaveBeenCalledTimes(1);
+		expect(JSON.parse(String(consoleLog.mock.calls[0]?.[0]))).toEqual({
+			formatVersion: 1,
+			mode: "apply",
+			remediation: "Pass --yes to confirm a non-interactive JSON application.",
+			status: "approval-required",
+		});
+	});
+
+	it("keeps approval outside the read-only plan command", async () => {
+		const command = createMigrateCommand();
+		const planCommand = command.commands.find(
+			(childCommand) => childCommand.name() === "plan",
+		);
+		planCommand?.exitOverride().configureOutput({ writeErr: () => {} });
+
+		await expect(
+			command.parseAsync(["node", "auth", "plan", "--yes"]),
+		).rejects.toMatchObject({
+			code: "commander.unknownOption",
+		});
+	});
+
+	it.each([
+		"plan",
+		"apply",
+	] as const)("passes the positional migration file to migrate %s", async (mode) => {
+		const migrationFile = await writeMigrationDecisions({
+			formatVersion: 2,
+		});
+		const getConfig = vi.spyOn(config, "getConfig");
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+
+		await createMigrateCommand().parseAsync([
+			"node",
+			"auth",
+			mode,
+			migrationFile,
+			...(mode === "apply" ? ["--yes"] : []),
+		]);
+
+		expect(getConfig).not.toHaveBeenCalled();
+		expect(consoleError).toHaveBeenCalledWith(
+			expect.stringContaining(
+				`The migration decisions file "${migrationFile}" is invalid`,
+			),
+		);
+	});
+
+	it("keeps --dry-run as a warned, read-only alias for migrate plan", async () => {
+		const db = new Database(":memory:");
+		const auth = betterAuth({ database: db });
+		vi.spyOn(config, "getConfig").mockImplementation(async () => auth.options);
+		const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		vi.spyOn(console, "log").mockImplementation(() => {});
+
+		await createMigrateCommand().parseAsync(["node", "auth", "--dry-run"]);
+
+		expect(consoleWarn).toHaveBeenCalledWith(
+			"WARNING: `auth migrate` without an action is deprecated. Use `auth migrate apply`.",
+		);
+		expect(consoleWarn).toHaveBeenCalledWith(
+			"WARNING: --dry-run is deprecated. Use `auth migrate plan`.",
+		);
+		expect(readTableNames(db)).toEqual([]);
+	});
+
+	it("keeps --plan as a warned, mutating alias for migrate apply", async () => {
+		const db = new Database(":memory:");
+		const auth = betterAuth({ database: db });
+		const migrationFile = await writeMigrationDecisions({
+			formatVersion: 1,
+		});
+		vi.spyOn(config, "getConfig").mockImplementation(async () => auth.options);
+		const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		vi.spyOn(console, "log").mockImplementation(() => {});
+
+		await createMigrateCommand().parseAsync([
+			"node",
+			"auth",
+			"--plan",
+			migrationFile,
+			"--yes",
+		]);
+
+		expect(consoleWarn).toHaveBeenCalledWith(
+			"WARNING: `auth migrate` without an action is deprecated. Use `auth migrate apply`.",
+		);
+		expect(consoleWarn).toHaveBeenCalledWith(
+			`WARNING: --plan <file> is deprecated. Use \`auth migrate apply ${migrationFile}\`.`,
+		);
+		expect(readTableNames(db)).toEqual([
+			"account",
+			"session",
+			"user",
+			"verification",
+		]);
+	});
+});
+
 describe("plan every unresolved 1.6.25 release decision", () => {
 	it("reports the missing issuer, consent strategy, and SCIM inventory in one run", async () => {
 		const db = new Database(":memory:");
@@ -636,7 +852,12 @@ describe("plan every unresolved 1.6.25 release decision", () => {
 		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
 
 		try {
-			await migrateAction({ cwd: process.cwd(), json: true, plan });
+			await migrateAction({
+				cwd: process.cwd(),
+				migrationFile: plan,
+				mode: "plan",
+				outputFormat: "json",
+			});
 
 			expect(processExit).not.toHaveBeenCalled();
 			expect(process.exitCode).toBe(1);
@@ -654,7 +875,7 @@ describe("plan every unresolved 1.6.25 release decision", () => {
 					remediation: {
 						docs: "https://better-auth.com/docs/guides/1-7-upgrade-guide#account-identity-is-scoped-by-issuer",
 						summary:
-							'Record the issuer for "workforce-fixture" under issuers in better-auth-migration.json, or run `auth migrate` in a terminal to answer it there.',
+							'Record the issuer for "workforce-fixture" under issuers in better-auth-migration.json, or run `auth migrate apply` in a terminal to answer it there.',
 					},
 					table: "account",
 				},
@@ -685,7 +906,7 @@ describe("plan every unresolved 1.6.25 release decision", () => {
 					remediation: {
 						docs: "https://better-auth.com/docs/guides/1-7-upgrade-guide#migrate-from-16-to-17",
 						summary:
-							'Record oauth.consents as "migrate" or "reauthorize" in better-auth-migration.json, or run `auth migrate` in a terminal to answer it there.',
+							'Record oauth.consents as "migrate" or "reauthorize" in better-auth-migration.json, or run `auth migrate apply` in a terminal to answer it there.',
 					},
 					rowCount: 1,
 					table: "oauthConsent",
@@ -707,7 +928,11 @@ describe("plan every unresolved 1.6.25 release decision", () => {
 			.mockImplementation(() => {});
 		vi.spyOn(console, "log").mockImplementation(() => {});
 
-		await migrateAction({ cwd: process.cwd(), yes: true });
+		await migrateAction({
+			approved: true,
+			cwd: process.cwd(),
+			mode: "apply",
+		});
 
 		expect(processExit).toHaveBeenCalledWith(1);
 		expect(consoleError).toHaveBeenCalledWith(
@@ -717,13 +942,13 @@ describe("plan every unresolved 1.6.25 release decision", () => {
 			'-> [scim-decision-required] The 1.6 SCIM migration requires providers: "reprovision" and an explicit accountIdsToRetire inventory.',
 		);
 		expect(consoleError).toHaveBeenCalledWith(
-			"   Fix: Record scim.retireAccountIds in better-auth-migration.json, or run `auth migrate` in a terminal to confirm the retirement inventory there.",
+			"   Fix: Record scim.retireAccountIds in better-auth-migration.json, or run `auth migrate apply` in a terminal to confirm the retirement inventory there.",
 		);
 		expect(consoleError).toHaveBeenCalledWith(
 			"   Docs: https://better-auth.com/docs/guides/1-7-upgrade-guide#scim-requires-full-reprovisioning",
 		);
 		expect(consoleError).toHaveBeenCalledWith(
-			"This database holds Better Auth 1.6 data. Run `auth migrate` in a terminal to answer these decisions, or record them in better-auth-migration.json and run `auth migrate --plan better-auth-migration.json`. Upgrade guide: https://better-auth.com/docs/guides/1-7-upgrade-guide",
+			"This database holds Better Auth 1.6 data. Run `auth migrate apply` in a terminal to answer these decisions, or record them in better-auth-migration.json and run `auth migrate apply better-auth-migration.json`. Upgrade guide: https://better-auth.com/docs/guides/1-7-upgrade-guide",
 		);
 		expect(
 			db
@@ -753,7 +978,12 @@ describe("plan every unresolved 1.6.25 release decision", () => {
 			.mockImplementation(() => {});
 		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
 
-		await migrateAction({ cwd: process.cwd(), plan, yes: true });
+		await migrateAction({
+			approved: true,
+			cwd: process.cwd(),
+			migrationFile: plan,
+			mode: "apply",
+		});
 
 		expect(consoleError).not.toHaveBeenCalledWith(
 			"Migration blocked. No database changes were applied.",
@@ -823,7 +1053,12 @@ describe("plan every unresolved 1.6.25 release decision", () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		vi.spyOn(console, "log").mockImplementation(() => {});
 
-		await migrateAction({ cwd: process.cwd(), plan, yes: true });
+		await migrateAction({
+			approved: true,
+			cwd: process.cwd(),
+			migrationFile: plan,
+			mode: "apply",
+		});
 
 		expect(
 			db
@@ -855,7 +1090,12 @@ describe("plan every unresolved 1.6.25 release decision", () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
 		vi.spyOn(console, "log").mockImplementation(() => {});
 
-		await migrateAction({ cwd: process.cwd(), plan, yes: true });
+		await migrateAction({
+			approved: true,
+			cwd: process.cwd(),
+			migrationFile: plan,
+			mode: "apply",
+		});
 
 		expect(
 			db
@@ -879,7 +1119,12 @@ describe("plan every unresolved 1.6.25 release decision", () => {
 			.mockImplementation(() => {});
 		vi.spyOn(console, "log").mockImplementation(() => {});
 
-		await migrateAction({ cwd: process.cwd(), plan, yes: true });
+		await migrateAction({
+			approved: true,
+			cwd: process.cwd(),
+			migrationFile: plan,
+			mode: "apply",
+		});
 
 		expect(processExit).toHaveBeenCalledWith(1);
 		expect(consoleError).toHaveBeenCalledWith(
@@ -892,7 +1137,7 @@ describe("plan every unresolved 1.6.25 release decision", () => {
 			"   Docs: https://better-auth.com/docs/guides/1-7-upgrade-guide#account-identity-is-scoped-by-issuer",
 		);
 		expect(consoleError).toHaveBeenCalledWith(
-			`Resolve every blocker above in your 1.6 data, then run \`auth migrate --plan ${plan}\` again. Upgrade guide: https://better-auth.com/docs/guides/1-7-upgrade-guide`,
+			`Resolve every blocker above in your 1.6 data, then run \`auth migrate apply ${plan}\` again. Upgrade guide: https://better-auth.com/docs/guides/1-7-upgrade-guide`,
 		);
 		expect(
 			db
@@ -916,7 +1161,12 @@ describe("plan every unresolved 1.6.25 release decision", () => {
 			.spyOn(console, "error")
 			.mockImplementation(() => {});
 
-		await migrateAction({ cwd: process.cwd(), plan, yes: true });
+		await migrateAction({
+			approved: true,
+			cwd: process.cwd(),
+			migrationFile: plan,
+			mode: "apply",
+		});
 
 		expect(processExit).toHaveBeenCalledWith(1);
 		const message = String(consoleError.mock.calls[0]?.[0]);
@@ -1000,7 +1250,7 @@ describe("interview the unresolved 1.6.25 release decisions", () => {
 			.mockResolvedValueOnce({ migrate: true });
 
 		try {
-			await migrateAction({ cwd });
+			await migrateAction({ cwd, mode: "apply" });
 		} finally {
 			restoreStdin();
 		}
@@ -1097,14 +1347,14 @@ describe("interview the unresolved 1.6.25 release decisions", () => {
 			.mockResolvedValueOnce({ migrate: false });
 
 		try {
-			await migrateAction({ cwd });
+			await migrateAction({ cwd, mode: "apply" });
 		} finally {
 			restoreStdin();
 		}
 
 		expect(consoleLog).toHaveBeenCalledWith("Migration cancelled.");
 		expect(consoleLog).toHaveBeenCalledWith(
-			"Apply the recorded decisions later with `auth migrate --plan better-auth-migration.json`.",
+			"Apply the recorded decisions later with `auth migrate apply better-auth-migration.json`.",
 		);
 		expect(await readRecordedDecisions(cwd)).toEqual({
 			formatVersion: 1,
@@ -1157,7 +1407,7 @@ describe("interview the unresolved 1.6.25 release decisions", () => {
 			.mockResolvedValueOnce({ retire: true });
 
 		try {
-			await migrateAction({ cwd });
+			await migrateAction({ cwd, mode: "apply" });
 		} finally {
 			restoreStdin();
 		}
@@ -1182,7 +1432,7 @@ describe("interview the unresolved 1.6.25 release decisions", () => {
 		vi.mocked(prompts).mockResolvedValueOnce({});
 
 		try {
-			await migrateAction({ cwd });
+			await migrateAction({ cwd, mode: "apply" });
 		} finally {
 			restoreStdin();
 		}
@@ -1209,7 +1459,7 @@ describe("interview the unresolved 1.6.25 release decisions", () => {
 		vi.mocked(prompts).mockResolvedValueOnce({ migrate: true });
 
 		try {
-			await migrateAction({ cwd });
+			await migrateAction({ cwd, mode: "apply" });
 		} finally {
 			restoreStdin();
 		}
@@ -1261,7 +1511,7 @@ describe("interview the unresolved 1.6.25 release decisions", () => {
 		vi.spyOn(console, "log").mockImplementation(() => {});
 
 		try {
-			await migrateAction({ cwd });
+			await migrateAction({ cwd, mode: "apply" });
 		} finally {
 			restoreStdin();
 		}
@@ -1542,7 +1792,11 @@ describe("migrate a customized 1.6.25 table name", () => {
 		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
 
 		try {
-			await migrateAction({ cwd: process.cwd(), json: true });
+			await migrateAction({
+				cwd: process.cwd(),
+				mode: "plan",
+				outputFormat: "json",
+			});
 
 			expect(processExit).not.toHaveBeenCalled();
 			expect(process.exitCode).toBe(1);
@@ -1557,7 +1811,7 @@ describe("migrate a customized 1.6.25 table name", () => {
 					remediation: {
 						docs: "https://better-auth.com/docs/guides/1-7-upgrade-guide#migrate-from-16-to-17",
 						summary:
-							'Record which table holds the 1.6 "oauthApplication" data under legacyTableNames in better-auth-migration.json, or null when none of them does, or run `auth migrate` in a terminal to answer it there.',
+							'Record which table holds the 1.6 "oauthApplication" data under legacyTableNames in better-auth-migration.json, or null when none of them does, or run `auth migrate apply` in a terminal to answer it there.',
 					},
 					table: "oauthApplication",
 				},
@@ -1584,7 +1838,12 @@ describe("migrate a customized 1.6.25 table name", () => {
 			.mockImplementation(() => {});
 		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
 
-		await migrateAction({ cwd: process.cwd(), plan, yes: true });
+		await migrateAction({
+			approved: true,
+			cwd: process.cwd(),
+			migrationFile: plan,
+			mode: "apply",
+		});
 
 		expect(consoleError).not.toHaveBeenCalledWith(
 			"Migration blocked. No database changes were applied.",
@@ -1613,7 +1872,7 @@ describe("migrate a customized 1.6.25 table name", () => {
 			.mockResolvedValueOnce({ migrate: true });
 
 		try {
-			await migrateAction({ cwd });
+			await migrateAction({ cwd, mode: "apply" });
 		} finally {
 			restoreStdin();
 		}
@@ -1662,7 +1921,7 @@ describe("migrate a customized 1.6.25 table name", () => {
 			.mockResolvedValueOnce({ migrate: true });
 
 		try {
-			await migrateAction({ cwd });
+			await migrateAction({ cwd, mode: "apply" });
 		} finally {
 			restoreStdin();
 		}

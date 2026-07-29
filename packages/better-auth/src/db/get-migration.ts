@@ -1461,7 +1461,7 @@ export async function migrateFrom16(
 			),
 	);
 	if (unhandledBlocker) throw createMigrationBlockerError(unhandledBlocker);
-	const applyRelationalMigration = async (database: MigrationDatabase) => {
+	const applyReleaseMigration = async (database: MigrationDatabase) => {
 		const migratedAccounts = await migrateAccountIdentityFrom16(
 			config,
 			options,
@@ -1481,22 +1481,30 @@ export async function migrateFrom16(
 			database,
 		);
 		await migration.runMigrations();
-		return { migratedAccounts, retiredScimIdentities };
+		const oauthProvider = await migrateOAuthProviderDataFrom16(
+			config,
+			options,
+			releaseData,
+			oauthProviderPlan,
+			database,
+		);
+		return { migratedAccounts, oauthProvider, retiredScimIdentities };
 	};
-	let relationalMigration: Awaited<ReturnType<typeof applyRelationalMigration>>;
+	let releaseMigration: Awaited<ReturnType<typeof applyReleaseMigration>>;
 	if (migrationDatabase.databaseType === "mysql") {
-		relationalMigration = await applyRelationalMigration(migrationDatabase);
+		releaseMigration = await applyReleaseMigration(migrationDatabase);
 	} else {
 		if (!migrationDatabase.transaction) {
 			throw new BetterAuthError(
 				`The ${migrationDatabase.adapterId} adapter must expose a transaction-scoped migration connection before Better Auth can safely migrate a populated 1.6 ${migrationDatabase.databaseType} database.`,
 			);
 		}
-		relationalMigration = await migrationDatabase.transaction(
-			applyRelationalMigration,
+		releaseMigration = await migrationDatabase.transaction(
+			applyReleaseMigration,
 		);
 	}
-	const { migratedAccounts, retiredScimIdentities } = relationalMigration;
+	const { migratedAccounts, oauthProvider, retiredScimIdentities } =
+		releaseMigration;
 	const retiredAccountsByProvider = retiredScimIdentities.reduce<
 		Record<string, number>
 	>((counts, identity) => {
@@ -1514,12 +1522,6 @@ export async function migrateFrom16(
 		migrated: migratedAccounts.migrated - retiredScimIdentities.length,
 		providers: accountProviders,
 	};
-	const oauthProvider = await migrateOAuthProviderDataFrom16(
-		config,
-		options,
-		releaseData,
-		oauthProviderPlan,
-	);
 	const scim = summarizeScimMigration(releaseData, retiredScimIdentities);
 	return { accounts, oauthProvider, scim };
 }

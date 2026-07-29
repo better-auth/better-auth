@@ -21,51 +21,50 @@ npx auth@latest generate
 
 ## Migrate
 
-The `migrate` command applies the Better Auth schema directly to your database. It supports the built-in SQL database configuration and SQL-backed Drizzle or Prisma adapters. Use `generate` and your own migration tooling for other adapters.
+The `migrate` command can inspect or apply the Better Auth schema directly to your database. It supports the built-in SQL database configuration and SQL-backed Drizzle or Prisma adapters. Use `generate` and your own migration tooling for other adapters.
 
 ```package-install title="Terminal"
-npx auth@latest migrate
+npx auth@latest migrate plan
+npx auth@latest migrate apply
 ```
 
 ### Options
 
 * `--config` - The path to your Better Auth config file. By default, the CLI will search for an auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under the `src` directory.
-* `--yes` - Skip the confirmation prompt and apply the schema directly.
-* `--dry-run` - Inspect the migration without changing the database.
-* `--json` - Print a deterministic, machine-readable migration plan without changing the database.
-* `--plan <file>` - Apply the reviewed release decisions recorded in a `better-auth-migration.json` file.
+* `--json` - Print one deterministic JSON document instead of human-readable output.
+* `--yes` - Skip the confirmation prompt for `migrate apply`.
 
 ### Inspect before applying
 
-Use `--dry-run` to preview a migration:
+`migrate plan` only reads the database. Add `--json` in CI or when sharing the plan with a coding agent:
 
 ```package-install title="Terminal"
-npx auth@latest migrate --dry-run
+npx auth@latest migrate plan
+npx auth@latest migrate plan --json > better-auth-migration-plan.json
 ```
 
-Use `--json` in CI or with a coding agent:
-
-```package-install title="Terminal"
-npx auth@latest migrate --json > better-auth-migration-plan.json
-```
-
-Both commands leave the database unchanged. The JSON output includes the detected adapter and dialect, sorted schema changes, and any problems that need attention. A blocked plan exits with status `1`.
+The JSON plan includes the adapter, dialect, sorted schema changes, and blockers. A blocked plan exits with status `1`.
 
 ### Migrating a Better Auth 1.6 database
 
-`migrate` detects a 1.6 database and guides you through the decisions it cannot derive from your configuration. Dynamic issuers are reviewed per account, and legacy OAuth clients require confirming how 1.6 stored their secrets; unsupported storage transitions stop for client rotation or re-registration. The command saves the answers to `better-auth-migration.json` and shows every irreversible action before changing the database.
+`migrate apply` detects a 1.6 database and asks about decisions it cannot derive from your configuration. It saves the reviewed answers to `better-auth-migration.json` and shows irreversible actions before changing the database.
 
 <Callout type="warn">
-  When upgrading a Drizzle or Prisma project from 1.6, update the ORM schema used by your Better Auth configuration before running the migration, but do not apply that schema to the database. Drizzle users should make the adapter import the generated 1.7 schema. Prisma users should update `schema.prisma` and run `prisma generate`. Keep existing physical table and column mappings unchanged. The database must remain on the 1.6 schema until `migrate` performs the reviewed data and schema changes together.
+  When upgrading a Drizzle or Prisma project from 1.6, update the ORM schema used by your Better Auth configuration before running the migration, but do not apply that schema to the database. Drizzle users should make the adapter import the generated 1.7 schema. Prisma users should update `schema.prisma` and run `prisma generate`. Keep existing physical table and column mappings unchanged. The database must remain on the 1.6 schema until `migrate apply` performs the reviewed data and schema changes together.
 </Callout>
 
-Replay the same decisions on another environment, in CI, or after an interrupted run:
+Pass that file positionally to inspect or apply the same decisions:
 
 ```package-install title="Terminal"
-npx auth@latest migrate --plan better-auth-migration.json
+npx auth@latest migrate plan better-auth-migration.json
+npx auth@latest migrate apply better-auth-migration.json
 ```
 
-In a non-interactive environment, a migration that still needs decisions exits with status `1` instead of guessing. For the complete upgrade order and feature-specific actions, see the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide).
+For non-interactive JSON application, also pass `--yes`; otherwise the command exits without changing the database. For the upgrade order and feature-specific actions, see the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide).
+
+<Callout type="info">
+  Plain `migrate`, `--dry-run`, and `--plan &lt;file&gt;` remain available temporarily and print their replacement command.
+</Callout>
 
 <Callout type="info">
   **Using PostgreSQL with a non-default schema?**

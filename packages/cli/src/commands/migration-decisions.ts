@@ -97,7 +97,7 @@ async function readExistingDecisions(filePath: string) {
 
 function decisionsConflict(filePath: string) {
 	return new Error(
-		`The migration decisions file "${filePath}" already exists with different decisions and was not changed. Move it or pass it back with \`auth migrate --plan\`.`,
+		`The migration decisions file "${filePath}" already exists with different decisions and was not changed. Move it or pass it back with \`auth migrate apply "${filePath}"\`.`,
 	);
 }
 

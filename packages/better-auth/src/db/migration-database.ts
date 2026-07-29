@@ -1,11 +1,15 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
+	DBTransactionAdapter,
 	MigrationDatabaseConnection,
 	MigrationDatabaseDialect,
 } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { KyselyDatabaseType } from "@better-auth/kysely-adapter";
-import { createKyselyAdapter } from "@better-auth/kysely-adapter";
+import {
+	createKyselyAdapter,
+	kyselyAdapter,
+} from "@better-auth/kysely-adapter";
 import type {
 	DatabaseConnection,
 	DatabaseIntrospector,
@@ -37,11 +41,25 @@ export interface MigrationDatabase {
 	databaseType: KyselyDatabaseType;
 	inTransaction: boolean;
 	kysely: Kysely<unknown>;
+	recordWriter: Pick<DBTransactionAdapter<BetterAuthOptions>, "create">;
 	transaction?:
 		| (<Result>(
 				callback: (database: MigrationDatabase) => Promise<Result>,
 		  ) => Promise<Result>)
 		| undefined;
+}
+
+function createMigrationRecordWriter(
+	config: BetterAuthOptions,
+	kysely: Kysely<unknown>,
+	databaseType: KyselyDatabaseType,
+	usePlural?: boolean | undefined,
+) {
+	return kyselyAdapter(kysely, {
+		transaction: false,
+		type: databaseType,
+		usePlural,
+	})(config);
 }
 
 function createDatabaseConnection(
@@ -159,6 +177,11 @@ export async function getMigrationDatabase(config: BetterAuthOptions) {
 			databaseType: directDatabase.databaseType,
 			inTransaction: false,
 			kysely: directDatabase.kysely,
+			recordWriter: createMigrationRecordWriter(
+				config,
+				directDatabase.kysely,
+				directDatabase.databaseType,
+			),
 		};
 		database.transaction = async (callback) =>
 			directDatabase.kysely!.transaction().execute((transaction) =>
@@ -167,6 +190,11 @@ export async function getMigrationDatabase(config: BetterAuthOptions) {
 					databaseType: database.databaseType,
 					inTransaction: true,
 					kysely: transaction as unknown as Kysely<unknown>,
+					recordWriter: createMigrationRecordWriter(
+						config,
+						transaction as unknown as Kysely<unknown>,
+						database.databaseType,
+					),
 				}),
 			);
 		return database;
@@ -190,13 +218,20 @@ export async function getMigrationDatabase(config: BetterAuthOptions) {
 		connection: MigrationDatabaseConnection,
 		inTransaction: boolean,
 	): MigrationDatabase => {
+		const kysely = new Kysely<unknown>({
+			dialect: createMigrationDialect(connection),
+		});
 		const database: MigrationDatabase = {
 			adapterId: adapter.id,
 			databaseType: connection.dialect,
 			inTransaction,
-			kysely: new Kysely<unknown>({
-				dialect: createMigrationDialect(connection),
-			}),
+			kysely,
+			recordWriter: createMigrationRecordWriter(
+				config,
+				kysely,
+				connection.dialect,
+				adapter.options?.adapterConfig.usePlural,
+			),
 		};
 		if (!inTransaction && connection.transaction) {
 			database.transaction = async (callback) =>

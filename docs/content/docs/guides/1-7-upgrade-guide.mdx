@@ -36,17 +36,19 @@ The upgrade command handles package updates. The database needs more care becaus
 The CLI can migrate built-in PostgreSQL, MySQL, SQLite, and SQL Server configurations, plus SQL-backed Drizzle or Prisma adapters. Back up the database, stop authentication writes, and run:
 
 ```bash title="Terminal"
-npx auth@rc migrate
+npx auth@rc migrate plan
+npx auth@rc migrate apply
 ```
 
-The command detects a 1.6 database, derives what it can from your configuration, and asks only about unresolved issuers, legacy OAuth client-secret storage and consent handling, customized legacy table names, and SCIM account retirement. Providers that determine their issuer during sign-in are reviewed per account. Unsupported client-secret storage transitions require rotating or re-registering those clients. The command validates every answer before writing, saves the answers to `better-auth-migration.json`, and shows the irreversible actions before the final confirmation. If the migration is blocked, it leaves the database unchanged and explains what to fix.
+`migrate plan` is read-only. `migrate apply` derives what it can from your configuration, asks about unresolved migration decisions, saves the reviewed answers to `better-auth-migration.json`, and confirms irreversible actions before writing. If blocked, it leaves the database unchanged and explains what to fix.
 
 For Drizzle or Prisma, run `npx auth@rc generate` first and update the schema used by your Better Auth adapter, but do not apply it to the database. The CLI must migrate the 1.6 data and schema together. After it succeeds, record the cutover in your ORM migration history so a later deployment does not apply the same schema changes again.
 
-Use `--dry-run` for a readable preview or `--json` for a machine-readable plan. Run the migration interactively once to create the decisions file, then replay it in a non-interactive environment:
+Pass the saved decisions file positionally to review or apply the same migration in another environment:
 
 ```bash title="Terminal"
-npx auth@rc migrate --plan better-auth-migration.json
+npx auth@rc migrate plan better-auth-migration.json
+npx auth@rc migrate apply better-auth-migration.json --yes
 ```
 
 <Callout type="warn">
@@ -74,7 +76,7 @@ The `auth` CLI now requires Node.js 22.12 or newer. These features change the sc
 | Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables            | Guided by `auth migrate`             |
 
 <Callout type="warn">
-  Do not run a generated schema migration over populated 1.6 account, OAuth provider, or SCIM tables before running `auth migrate`. If you adopted prerelease SCIM Group tables, follow the [SCIM cutover](#scim-requires-full-reprovisioning) before creating the final schema.
+  Do not run a generated schema migration over populated 1.6 account, OAuth provider, or SCIM tables before running `auth migrate apply`. If you adopted prerelease SCIM Group tables, follow the [SCIM cutover](#scim-requires-full-reprovisioning) before creating the final schema.
 </Callout>
 
 ***
@@ -87,7 +89,7 @@ This covers email and password, social login, the generic OAuth plugin, One Tap,
 
 Better Auth now recognizes an external account by the unique pair of `issuer` and `providerAccountId`. The `providerId` remains the local provider configuration, while `account.id` identifies the Better Auth account row. The account schema replaces `accountId` with `providerAccountId`, adds the required `issuer` field, and creates a unique compound index across both identity fields.
 
-`auth migrate` handles this backfill for supported SQL adapters. If you use another adapter or the CLI reports an identity conflict, apply the following steps with your migration tooling.
+`auth migrate apply` handles this backfill for supported SQL adapters. If you use another adapter or the CLI reports an identity conflict, apply the following steps with your migration tooling.
 
 <Callout type="warn">
   Use a maintenance window and stop authentication writes before changing the account schema. Never infer account ownership from email or another mutable profile field.
@@ -594,7 +596,7 @@ These do not need action for most setups, but they change what you see.
 
 After applying the changes that affect your project:
 
-* Run `npx auth@rc migrate`. Use `--dry-run` first if you want to review the plan.
+* Run `npx auth@rc migrate plan`, then `npx auth@rc migrate apply`.
 * Verify sign-in and account linking against the migrated account identities.
 * Verify migrated OAuth or MCP clients if you previously used `oidcProvider` or the in-core MCP plugin.
 * Complete a full User and Group provisioning cycle if you use SCIM.
