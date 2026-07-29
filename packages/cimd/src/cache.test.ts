@@ -46,7 +46,7 @@ const instance = await getTestInstance({
 		cimd({
 			refreshRate: 10,
 			maxCacheEntries: 2,
-			fetchMetadataDocument: metadataFetch,
+			fetchClientMetadataResource: metadataFetch,
 		}),
 	],
 });
@@ -144,6 +144,15 @@ describe("CIMD HTTP metadata cache", () => {
 				new Response(null, {
 					status: 302,
 					headers: { location: "https://other.example/client.json" },
+				}),
+		},
+		{
+			name: "201 response",
+			clientId: "https://created-response.example/client.json",
+			response: () =>
+				new Response("{}", {
+					status: 201,
+					headers: { "content-type": "application/json" },
 				}),
 		},
 	])("rejects a $name before persistence", async ({ clientId, response }) => {
@@ -349,6 +358,38 @@ describe("CIMD HTTP metadata cache", () => {
 		expect(metadataFetch).toHaveBeenCalledTimes(2);
 	});
 
+	it.each([
+		{
+			name: "Cache-Control private",
+			clientId: "https://private-cache.example/client.json",
+			headers: { "cache-control": "private, max-age=600" },
+		},
+		{
+			name: "Vary wildcard",
+			clientId: "https://vary-wildcard.example/client.json",
+			headers: { "cache-control": "max-age=600", vary: "*" },
+		},
+	] satisfies {
+		name: string;
+		clientId: string;
+		headers: Record<string, string>;
+	}[])("does not cache a response with $name", async ({
+		clientId,
+		headers,
+	}) => {
+		const responseHeaders: Record<string, string> = {
+			"cache-control": headers["cache-control"],
+		};
+		if (headers.vary) responseHeaders.vary = headers.vary;
+		responders.set(clientId, async () =>
+			jsonMetadataResponse(clientId, responseHeaders),
+		);
+
+		await authorize(clientId);
+		await authorize(clientId);
+		expect(metadataFetch).toHaveBeenCalledTimes(2);
+	});
+
 	it("evicts the least-recently-used entry at the configured bound", async () => {
 		const clientIds = [
 			"https://bounded-cache-a.example/client.json",
@@ -378,6 +419,27 @@ describe("CIMD HTTP metadata cache", () => {
 				where: [{ field: "clientId", value: clientId }],
 			}),
 		).toBeNull();
+	});
+
+	it("rejects an unconditional 304 when a cached document has no validator", async () => {
+		const clientId = "https://unconditional-304.example/client.json";
+		let requestCount = 0;
+		responders.set(clientId, async (_input, init) => {
+			requestCount += 1;
+			if (requestCount === 1) {
+				return jsonMetadataResponse(clientId, {
+					"cache-control": "no-cache",
+				});
+			}
+			const headers = new Headers(init?.headers);
+			expect(headers.has("if-none-match")).toBe(false);
+			expect(headers.has("if-modified-since")).toBe(false);
+			return new Response(null, { status: 304 });
+		});
+
+		await authorize(clientId);
+		expect((await authorize(clientId)).status).toBeGreaterThanOrEqual(400);
+		expect(metadataFetch).toHaveBeenCalledTimes(2);
 	});
 
 	it("fails closed on an invalid refresh while preserving DB and cache state", async () => {

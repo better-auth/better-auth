@@ -1,3 +1,5 @@
+import type { GenericEndpointContext } from "@better-auth/core";
+import { CLIENT_ASSERTION_TYPE } from "@better-auth/core/oauth2";
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import { createAuthorizationURL } from "better-auth/oauth2";
@@ -7,8 +9,17 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
+import type {
+	ClientMetadataResourceFetch,
+	OAuthOptions,
+	SchemaClient,
+	Scope,
+} from "./types";
 import type { OAuthClient } from "./types/oauth";
-import { isPrivateHostname } from "./utils/client-assertion";
+import {
+	isPrivateHostname,
+	verifyClientAssertion,
+} from "./utils/client-assertion";
 
 describe("private_key_jwt authentication", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
@@ -17,6 +28,9 @@ describe("private_key_jwt authentication", async () => {
 	const introspectEndpoint = `${authServerBaseUrl}/api/auth/oauth2/introspect`;
 	const revokeEndpoint = `${authServerBaseUrl}/api/auth/oauth2/revoke`;
 	const redirectUri = `${rpBaseUrl}/callback`;
+	const discoveryMetadataFetch = vi.fn(async () => {
+		throw new Error("managed client must not use a discovery transport");
+	});
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
@@ -27,6 +41,16 @@ describe("private_key_jwt authentication", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				assertionMaxLifetime: 300,
+				extensions: [
+					{
+						clientDiscovery: {
+							id: "test-discovery",
+							matches: () => false,
+							resolve: () => null,
+							fetchClientMetadataResource: discoveryMetadataFetch,
+						},
+					},
+				],
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -46,6 +70,7 @@ describe("private_key_jwt authentication", async () => {
 	let jwksUriClient: OAuthClient;
 	let secretClient: OAuthClient;
 	let rsaPrivateKey: CryptoKey;
+	let rsaPrivateJwk: JsonWebKey;
 	let rsaPublicJwk: JsonWebKey;
 
 	afterEach(() => {
@@ -57,6 +82,7 @@ describe("private_key_jwt authentication", async () => {
 		// Generate RSA key pair for testing
 		const keyPair = await generateKeyPair("RS256", { extractable: true });
 		rsaPrivateKey = keyPair.privateKey as CryptoKey;
+		rsaPrivateJwk = await exportJWK(keyPair.privateKey);
 		rsaPublicJwk = await exportJWK(keyPair.publicKey);
 
 		// Register a private_key_jwt client
@@ -67,9 +93,16 @@ describe("private_key_jwt authentication", async () => {
 				application_type: "native",
 				skip_consent: true,
 				token_endpoint_auth_method: "private_key_jwt",
-				jwks: [
-					{ ...rsaPublicJwk, kid: "test-key-1", alg: "RS256", use: "sig" },
-				],
+				jwks: {
+					keys: [
+						{
+							...rsaPublicJwk,
+							kid: "test-key-1",
+							alg: "RS256",
+							use: "sig",
+						},
+					],
+				},
 			},
 		}))!;
 		expect(assertionClient.client_id).toBeDefined();
@@ -188,6 +221,274 @@ describe("private_key_jwt authentication", async () => {
 		});
 	}
 
+	async function createDiscoveredClientVerifier(input: {
+		baseURL: string;
+		clientId: string;
+		clientDiscoveryId: string;
+		fetchClientMetadataResource: ClientMetadataResourceFetch;
+		jwksUri: string;
+	}) {
+		const opts = {
+			loginPage: "/login",
+			consentPage: "/consent",
+			extensions: [
+				{
+					clientDiscovery: {
+						id: input.clientDiscoveryId,
+						matches: (candidateClientId: string) =>
+							candidateClientId === input.clientId,
+						resolve: (
+							_ctx: GenericEndpointContext,
+							_clientId: string,
+							existingClient: SchemaClient<Scope[]> | null,
+						) => existingClient,
+						fetchClientMetadataResource: input.fetchClientMetadataResource,
+					},
+				},
+			],
+			silenceWarnings: {
+				oauthAuthServerConfig: true,
+				openidConfig: true,
+			},
+		} satisfies OAuthOptions<Scope[]>;
+		const instance = await getTestInstance({
+			baseURL: input.baseURL,
+			plugins: [jwt(), oauthProvider(opts)],
+		});
+		const context = await instance.auth.$context;
+		await context.adapter.create<SchemaClient<Scope[]>>({
+			model: "oauthClient",
+			data: {
+				clientId: input.clientId,
+				clientDiscoveryId: input.clientDiscoveryId,
+				name: "Discovered private_key_jwt client",
+				redirectUris: ["https://client.example.com/callback"],
+				tokenEndpointAuthMethod: "private_key_jwt",
+				applicationType: "web",
+				grantTypes: ["authorization_code"],
+				responseTypes: ["code"],
+				jwksUri: input.jwksUri,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		return {
+			ctx: { context } as unknown as GenericEndpointContext,
+			opts,
+		};
+	}
+
+	async function signDiscoveredClientAssertion(input: {
+		audience: string;
+		clientId: string;
+		key: CryptoKey;
+		keyId: string;
+	}) {
+		const now = Math.floor(Date.now() / 1000);
+		return new SignJWT({})
+			.setProtectedHeader({ alg: "RS256", kid: input.keyId })
+			.setIssuer(input.clientId)
+			.setSubject(input.clientId)
+			.setAudience(input.audience)
+			.setIssuedAt(now)
+			.setExpirationTime(now + 120)
+			.setJti(crypto.randomUUID())
+			.sign(input.key);
+	}
+
+	it("isolates discovery-owned JWKS caches between provider instances", async () => {
+		const clientId = "https://cache-isolation.example.com/client.json";
+		const jwksUri = "https://cache-isolation.example.com/jwks.json";
+		const clientDiscoveryId = "shared-cache-isolation-discovery";
+		const keyId = "shared-key-id";
+		const [keyPairA, keyPairB] = await Promise.all([
+			generateKeyPair("RS256", { extractable: true }),
+			generateKeyPair("RS256", { extractable: true }),
+		]);
+		const [publicJwkA, publicJwkB] = await Promise.all([
+			exportJWK(keyPairA.publicKey),
+			exportJWK(keyPairB.publicKey),
+		]);
+		const transportA = vi.fn().mockResolvedValue(
+			Response.json({
+				keys: [{ ...publicJwkA, kid: keyId, alg: "RS256", use: "sig" }],
+			}),
+		);
+		const transportB = vi.fn().mockResolvedValue(
+			Response.json({
+				keys: [{ ...publicJwkB, kid: keyId, alg: "RS256", use: "sig" }],
+			}),
+		);
+		const providerA = await createDiscoveredClientVerifier({
+			baseURL: "https://provider-a.example.com",
+			clientId,
+			clientDiscoveryId,
+			fetchClientMetadataResource: transportA,
+			jwksUri,
+		});
+		const providerB = await createDiscoveredClientVerifier({
+			baseURL: "https://provider-b.example.com",
+			clientId,
+			clientDiscoveryId,
+			fetchClientMetadataResource: transportB,
+			jwksUri,
+		});
+		const audienceA = "https://provider-a.example.com/oauth2/token";
+		const audienceB = "https://provider-b.example.com/oauth2/token";
+
+		await expect(
+			verifyClientAssertion(
+				providerA.ctx,
+				providerA.opts,
+				await signDiscoveredClientAssertion({
+					audience: audienceA,
+					clientId,
+					key: keyPairA.privateKey as CryptoKey,
+					keyId,
+				}),
+				CLIENT_ASSERTION_TYPE,
+				clientId,
+				audienceA,
+			),
+		).resolves.toEqual({ clientId });
+		await expect(
+			verifyClientAssertion(
+				providerB.ctx,
+				providerB.opts,
+				await signDiscoveredClientAssertion({
+					audience: audienceB,
+					clientId,
+					key: keyPairB.privateKey as CryptoKey,
+					keyId,
+				}),
+				CLIENT_ASSERTION_TYPE,
+				clientId,
+				audienceB,
+			),
+		).resolves.toEqual({ clientId });
+
+		expect(transportA).toHaveBeenCalledTimes(1);
+		expect(transportB).toHaveBeenCalledTimes(1);
+	});
+
+	it.each([
+		{
+			name: "bare-array",
+			jwks: () => [
+				{
+					...rsaPublicJwk,
+					kid: "remote-validation-key",
+					alg: "RS256",
+				},
+			],
+		},
+		{
+			name: "symmetric",
+			jwks: () => ({
+				keys: [
+					{
+						kty: "oct",
+						k: "c3ltbWV0cmljLXNlY3JldA",
+						kid: "remote-validation-key",
+						alg: "RS256",
+					},
+				],
+			}),
+		},
+		{
+			name: "private",
+			jwks: () => ({
+				keys: [
+					{
+						...rsaPrivateJwk,
+						kid: "remote-validation-key",
+						alg: "RS256",
+					},
+				],
+			}),
+		},
+		{
+			name: "malformed",
+			jwks: () => ({
+				keys: [
+					{
+						kty: "RSA",
+						n: rsaPublicJwk.n,
+						kid: "remote-validation-key",
+						alg: "RS256",
+					},
+				],
+			}),
+		},
+	])("does not cache a $name discovery-owned JWKS response", async ({
+		name,
+		jwks,
+	}) => {
+		const clientId = `https://${name}-remote-jwks.example.com/client.json`;
+		const jwksUri = `https://${name}-remote-jwks.example.com/jwks.json`;
+		const audience = `https://${name}-provider.example.com/oauth2/token`;
+		let serveValidJwks = false;
+		const transport = vi.fn().mockImplementation(() =>
+			Promise.resolve(
+				Response.json(
+					serveValidJwks
+						? {
+								keys: [
+									{
+										...rsaPublicJwk,
+										kid: "remote-validation-key",
+										alg: "RS256",
+									},
+								],
+							}
+						: jwks(),
+				),
+			),
+		);
+		const provider = await createDiscoveredClientVerifier({
+			baseURL: new URL(audience).origin,
+			clientId,
+			clientDiscoveryId: `${name}-remote-jwks-discovery`,
+			fetchClientMetadataResource: transport,
+			jwksUri,
+		});
+
+		await expect(
+			verifyClientAssertion(
+				provider.ctx,
+				provider.opts,
+				await signDiscoveredClientAssertion({
+					audience,
+					clientId,
+					key: rsaPrivateKey,
+					keyId: "remote-validation-key",
+				}),
+				CLIENT_ASSERTION_TYPE,
+				clientId,
+				audience,
+			),
+		).rejects.toBeDefined();
+		expect(transport).toHaveBeenCalledTimes(1);
+
+		serveValidJwks = true;
+		await expect(
+			verifyClientAssertion(
+				provider.ctx,
+				provider.opts,
+				await signDiscoveredClientAssertion({
+					audience,
+					clientId,
+					key: rsaPrivateKey,
+					keyId: "remote-validation-key",
+				}),
+				CLIENT_ASSERTION_TYPE,
+				clientId,
+				audience,
+			),
+		).resolves.toEqual({ clientId });
+		expect(transport).toHaveBeenCalledTimes(2);
+	});
+
 	it("should exchange code with valid private_key_jwt assertion", async () => {
 		const codeVerifier = generateRandomString(32);
 		const code = await getAuthCode(assertionClient.client_id, codeVerifier);
@@ -248,6 +549,7 @@ describe("private_key_jwt authentication", async () => {
 				redirect: "error",
 			}),
 		);
+		expect(discoveryMetadataFetch).not.toHaveBeenCalled();
 	});
 
 	it("should reject assertion signed with wrong key", async () => {
@@ -716,7 +1018,9 @@ describe("private_key_jwt registration validation", async () => {
 			body: {
 				redirect_uris: ["https://example.com/callback"],
 				token_endpoint_auth_method: "private_key_jwt",
-				jwks: [{ kty: "RSA", n: "test", e: "test-exponent" }],
+				jwks: {
+					keys: [{ kty: "RSA", n: "test", e: "test-exponent" }],
+				},
 				jwks_uri: "https://example.com/.well-known/jwks.json",
 			},
 			asResponse: true,
@@ -768,7 +1072,9 @@ describe("private_key_jwt registration validation", async () => {
 			body: {
 				redirect_uris: ["https://example.com/callback"],
 				token_endpoint_auth_method: "client_secret_post",
-				jwks: [{ kty: "RSA", n: "test", e: "test-exponent" }],
+				jwks: {
+					keys: [{ kty: "RSA", n: "test", e: "test-exponent" }],
+				},
 			},
 			asResponse: true,
 		});

@@ -14,6 +14,10 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			clientDiscoveryId: {
+				type: "string",
+				required: false,
+			},
 			disabled: {
 				type: "boolean",
 				defaultValue: false,

@@ -13,7 +13,7 @@ import { getTestInstance } from "better-auth/test";
 import { beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
-import { oauthToSchema, schemaToOAuth } from "./register";
+import { checkOAuthClient, oauthToSchema, schemaToOAuth } from "./register";
 import { resetSeedStateForTests } from "./resources";
 import type { OAuthOptions } from "./types";
 import type { OAuthClient } from "./types/oauth";
@@ -225,7 +225,7 @@ describe("oauth register", async () => {
 			tos_uri: "https://example.com/terms",
 			policy_uri: "https://example.com/policy",
 			//---- Client key metadata (only one can be used) ----//
-			// jwks: [],
+			// jwks: { keys: [] },
 			// jwks_uri: "https://example.com/.well-known/jwks.json",
 			//---- User Software Identifiers ----//
 			software_id: "custom-software-id",
@@ -446,11 +446,12 @@ describe("oauth register", async () => {
 		expect(response?.nested).toEqual({ key: "value" });
 	});
 
-	it("should reject registration with an empty jwks array", async () => {
+	it("rejects a bare JWK array through dynamic registration", async () => {
 		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
 			token_endpoint_auth_method: "private_key_jwt",
-			jwks: [] as Record<string, unknown>[],
+			// @ts-expect-error RFC 7517 requires a JWK Set object.
+			jwks: [{ kty: "RSA", n: "modulus", e: "AQAB" }],
 		});
 		expect(response.error?.status).toBe(400);
 	});
@@ -459,7 +460,7 @@ describe("oauth register", async () => {
 		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
 			token_endpoint_auth_method: "private_key_jwt",
-			jwks: { keys: [] } as { keys: Record<string, unknown>[] },
+			jwks: { keys: [] },
 		});
 		expect(response.error?.status).toBe(400);
 	});
@@ -490,14 +491,44 @@ describe("oauth register", async () => {
 		expect(response.error?.status).toBe(400);
 	});
 
-	it("should reject admin registration with an empty jwks array", async () => {
+	it.each([
+		{
+			jwksUri: "https://user:password@example.com/.well-known/jwks.json",
+			error: "credentials",
+		},
+		{
+			jwksUri: "https://example.com/.well-known/jwks.json#keys",
+			error: "fragment",
+		},
+	])("rejects jwks_uri containing $error", async ({ jwksUri, error }) => {
+		await expect(
+			checkOAuthClient(
+				{
+					client_id: "jwks-uri-client",
+					redirect_uris: [redirectUri],
+					jwks_uri: jwksUri,
+				},
+				{
+					loginPage: "/login",
+					consentPage: "/consent",
+				},
+			),
+		).rejects.toMatchObject({
+			body: {
+				error_description: expect.stringContaining(error),
+			},
+		});
+	});
+
+	it("rejects a bare JWK array through managed registration", async () => {
 		await expect(
 			auth.api.adminCreateOAuthClient({
 				headers,
 				body: {
 					redirect_uris: [redirectUri],
 					token_endpoint_auth_method: "private_key_jwt",
-					jwks: [] as Record<string, unknown>[],
+					// @ts-expect-error RFC 7517 requires a JWK Set object.
+					jwks: [{ kty: "RSA", n: "modulus", e: "AQAB" }],
 				},
 			}),
 		).rejects.toThrow();
@@ -521,7 +552,7 @@ describe("oauth register", async () => {
 	});
 
 	it("round-trips backchannel_logout_uri and backchannel_logout_session_required", async () => {
-		const backchannelUri = `${rpBaseUrl}/logout/backchannel`;
+		const backchannelUri = "https://rp.example.com/logout/backchannel";
 		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
 			backchannel_logout_uri: backchannelUri,
@@ -535,7 +566,8 @@ describe("oauth register", async () => {
 	it("rejects backchannel_logout_uri with a fragment", async () => {
 		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
-			backchannel_logout_uri: `${rpBaseUrl}/logout/backchannel#section`,
+			backchannel_logout_uri:
+				"https://rp.example.com/logout/backchannel#section",
 		});
 		expect(response.error?.status).toBe(400);
 	});
@@ -545,7 +577,7 @@ describe("oauth register", async () => {
 		// be checked to honor spec §2.2 (no fragment component).
 		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
-			backchannel_logout_uri: `${rpBaseUrl}/logout/backchannel#`,
+			backchannel_logout_uri: "https://rp.example.com/logout/backchannel#",
 		});
 		expect(response.error?.status).toBe(400);
 	});
@@ -558,16 +590,22 @@ describe("oauth register", async () => {
 		expect(response.error?.status).toBe(400);
 	});
 
-	it("allows http backchannel_logout_uri on public clients", async () => {
+	it("rejects http backchannel_logout_uri on public clients", async () => {
 		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
 			token_endpoint_auth_method: "none",
 			backchannel_logout_uri: `${rpBaseUrl}/logout/backchannel`,
 		});
-		expect(response.data?.client_id).toBeDefined();
-		expect(response.data?.backchannel_logout_uri).toBe(
-			`${rpBaseUrl}/logout/backchannel`,
-		);
+		expect(response.error?.status).toBe(400);
+	});
+
+	it("rejects credentials in backchannel_logout_uri", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			backchannel_logout_uri:
+				"https://user:password@rp.example.com/logout/backchannel",
+		});
+		expect(response.error?.status).toBe(400);
 	});
 
 	it("rejects backchannel_logout_uri pointing at private, tunneled, or metadata targets", async () => {
@@ -1629,6 +1667,33 @@ describe("oauth register - application_type", async () => {
 		expect(response.status).toBe(400);
 		const body = (await response.json()) as { error?: string };
 		expect(body.error).toBe("invalid_redirect_uri");
+	});
+
+	it("rejects alternate numeric spellings of the IPv4 loopback host", async () => {
+		const response = await register({
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			redirect_uris: ["http://127.1/callback"],
+		});
+		expect(response.status).toBe(400);
+		const body = (await response.json()) as { error?: string };
+		expect(body.error).toBe("invalid_redirect_uri");
+	});
+
+	it("rejects loopback back-channel logout targets", async () => {
+		const response = await register({
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			redirect_uris: ["http://127.0.0.1/callback"],
+			backchannel_logout_uri: "https://127.0.0.1/backchannel",
+		});
+		expect(response.status).toBe(400);
+		const body = (await response.json()) as {
+			error?: string;
+			error_description?: string;
+		};
+		expect(body.error).toBe("invalid_client_metadata");
+		expect(body.error_description).toContain("private or reserved");
 	});
 
 	it("rejects a web client with an http redirect URI", async () => {

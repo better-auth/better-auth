@@ -10,7 +10,7 @@ import { toExpJWT } from "better-auth/plugins";
 import { APIError } from "better-call";
 import type { MetadataDocumentResponseCacheHeaders } from "./client-store";
 import {
-	fetchMetadataDocument,
+	fetchClientMetadataDocument,
 	persistMetadataDocumentClient,
 } from "./client-store";
 import type { CimdOptions } from "./types";
@@ -84,7 +84,14 @@ function computeExpiresAt(
 	const { directives, duplicates } = parseCacheControl(
 		cacheHeaders.cacheControl,
 	);
-	if (directives.has("no-store")) {
+	const variesByEverything = cacheHeaders.vary
+		?.split(",")
+		.some((field) => field.trim() === "*");
+	if (
+		directives.has("no-store") ||
+		directives.has("private") ||
+		variesByEverything
+	) {
 		return { cacheable: false, expiresAt: nowMilliseconds };
 	}
 
@@ -142,6 +149,7 @@ function mergeCacheHeaders(
 ): MetadataDocumentResponseCacheHeaders {
 	return {
 		cacheControl: revalidated.cacheControl ?? previous.cacheControl,
+		vary: revalidated.vary ?? previous.vary,
 		expires: revalidated.expires ?? previous.expires,
 		date: revalidated.date ?? previous.date,
 		age: revalidated.age ?? previous.age,
@@ -177,9 +185,7 @@ function createCacheEntry(
  * The cache lives in this closure, so separate `cimd()` plugin instances never
  * share trust state or conditional validators.
  */
-export function createCimdResolver(
-	cimdOptions: CimdOptions = {},
-): CimdResolver {
+export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 	const refreshRate = cimdOptions.refreshRate ?? "60m";
 	const maxCacheEntries = cimdOptions.maxCacheEntries ?? 1_000;
 	if (!Number.isInteger(maxCacheEntries) || maxCacheEntries < 1) {
@@ -208,9 +214,7 @@ export function createCimdResolver(
 	};
 
 	return async (ctx, clientId, existingClient) => {
-		if (
-			!isUrlClientId(clientId, { allowLoopback: cimdOptions.allowLoopback })
-		) {
+		if (!isUrlClientId(clientId)) {
 			return null;
 		}
 
@@ -235,7 +239,7 @@ export function createCimdResolver(
 			);
 		}
 
-		const fetched = await fetchMetadataDocument(
+		const fetched = await fetchClientMetadataDocument(
 			ctx,
 			clientId,
 			cimdOptions,

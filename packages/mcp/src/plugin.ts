@@ -133,6 +133,9 @@ const buildResourceServerMetadata = (
  * clients, allowing a retried refresh to recover a rotated response. OAuth
  * Provider remains strict by default; set the MCP option to `0` to disable the
  * overlap window.
+ * MCP 2026-07-28 pins Client ID Metadata Documents draft-00. Configure the
+ * CIMD plugin with `metadataProfile: "mcp-2026-07-28"` and an application-owned
+ * metadata-resource transport.
  * Because it is the OAuth provider, it cannot be combined with a separate
  * {@link oauthProvider}.
  *
@@ -142,6 +145,7 @@ const buildResourceServerMetadata = (
  * import { jwt } from "better-auth/plugins";
  * import { cimd } from "@better-auth/cimd";
  * import { mcp } from "@better-auth/mcp";
+ * import { fetchClientMetadataResource } from "./oauth-network";
  *
  * export const auth = betterAuth({
  *   plugins: [
@@ -151,7 +155,10 @@ const buildResourceServerMetadata = (
  *       consentPage: "/consent",
  *       resource: "https://api.example.com/mcp",
  *     }),
- *     cimd(),
+ *     cimd({
+ *       fetchClientMetadataResource,
+ *       metadataProfile: "mcp-2026-07-28",
+ *     }),
  *   ],
  * });
  * ```

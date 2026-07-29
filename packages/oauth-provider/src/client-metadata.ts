@@ -9,6 +9,7 @@ import type { SchemaClient } from "./types";
 const OAUTH_CLIENT_RECORD_FIELDS = {
 	clientId: true,
 	clientSecret: true,
+	clientDiscoveryId: true,
 	disabled: true,
 	scopes: true,
 	userId: true,

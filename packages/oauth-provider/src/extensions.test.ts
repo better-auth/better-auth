@@ -359,7 +359,9 @@ describe("oauth-provider extensions", async () => {
 				body: {
 					token_endpoint_auth_method: extensionAuthMethod,
 					grant_types: [extensionGrant],
-					jwks: [{ kty: "RSA", n: "test", e: "test-exponent" }],
+					jwks: {
+						keys: [{ kty: "RSA", n: "test", e: "test-exponent" }],
+					},
 					jwks_uri: "https://client.example.com/jwks",
 					scope: "openid email vc",
 					application_type: "web",
@@ -932,6 +934,41 @@ describe("oauth-provider extensions", async () => {
 				],
 			}),
 		).rejects.toThrow("register client_assertion_type");
+	});
+
+	it("rejects duplicate client discovery identifiers", async () => {
+		const makeDiscoveryExtensionPlugin = (pluginId: string) =>
+			({
+				id: pluginId,
+				init(ctx) {
+					extendOAuthProvider(ctx, {
+						clientDiscovery: {
+							id: "shared-client-discovery",
+							matches: () => false,
+							resolve: () => null,
+						},
+					});
+				},
+			}) satisfies BetterAuthPlugin;
+
+		await expect(
+			getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt({ jwt: { issuer: authServerBaseUrl } }),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+					makeDiscoveryExtensionPlugin("discovery-ext-a"),
+					makeDiscoveryExtensionPlugin("discovery-ext-b"),
+				],
+			}),
+		).rejects.toThrow("register client discovery id");
 	});
 
 	it("resolves a metadata key collision to the first-registered extension", async () => {

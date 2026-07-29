@@ -3,11 +3,12 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
-import { isLoopbackHost, isLoopbackIP } from "@better-auth/core/utils/host";
+import { isLoopbackIP } from "@better-auth/core/utils/host";
 import { isReverseDomainPrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
 import { APIError, getSessionFromCtx, NO_STORE_HEADERS } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
+import { validatePublicClientJwks } from "./client-jwks";
 import { stripReservedOAuthClientMetadataExtensions } from "./client-metadata";
 import {
 	getSupportedAuthMethods,
@@ -39,37 +40,6 @@ function resolveClientRegistrationScopes(opts: OAuthOptions<Scope[]>): Scope[] {
 			...(opts.clientRegistrationAllowedScopes ?? []),
 		]),
 	];
-}
-
-const PRIVATE_JWK_MEMBER_NAMES = [
-	"d",
-	"p",
-	"q",
-	"dp",
-	"dq",
-	"qi",
-	"oth",
-] as const;
-
-function hasStringJwkMember(key: Record<string, unknown>, memberName: string) {
-	return typeof key[memberName] === "string" && key[memberName].length > 0;
-}
-
-function isSupportedPublicJwk(key: Record<string, unknown>) {
-	switch (key.kty) {
-		case "RSA":
-			return hasStringJwkMember(key, "n") && hasStringJwkMember(key, "e");
-		case "EC":
-			return (
-				hasStringJwkMember(key, "crv") &&
-				hasStringJwkMember(key, "x") &&
-				hasStringJwkMember(key, "y")
-			);
-		case "OKP":
-			return hasStringJwkMember(key, "crv") && hasStringJwkMember(key, "x");
-		default:
-			return false;
-	}
 }
 
 function resolveRegistrationGrantTypes(client: OAuthClient): GrantType[] {
@@ -122,6 +92,19 @@ function invalidRedirectUri(description: string): never {
 		error: "invalid_redirect_uri",
 		error_description: description,
 	});
+}
+
+function getRawHttpHostname(redirectUri: string): string | null {
+	const authority = /^http:\/\/([^/?#]*)/i.exec(redirectUri)?.[1];
+	if (!authority) return null;
+	const hostAndPort = authority.slice(authority.lastIndexOf("@") + 1);
+	if (hostAndPort.startsWith("[")) {
+		const bracketEnd = hostAndPort.indexOf("]");
+		return bracketEnd < 0
+			? null
+			: hostAndPort.slice(0, bracketEnd + 1).toLowerCase();
+	}
+	return (hostAndPort.split(":")[0] ?? "").toLowerCase();
 }
 
 async function resolveClientRegistrationResources(
@@ -191,10 +174,11 @@ function validateClientRedirectUri(
 	}
 	const isRedirectLoopback =
 		isLoopbackIP(url.hostname) || url.hostname === "localhost";
+	const rawHttpHostname = getRawHttpHostname(redirectUri);
 	const isAllowedNativeHttpLoopback =
-		url.hostname === "localhost" ||
-		url.hostname === "127.0.0.1" ||
-		url.hostname === "[::1]";
+		rawHttpHostname === "localhost" ||
+		rawHttpHostname === "127.0.0.1" ||
+		rawHttpHostname === "[::1]";
 
 	if (applicationType === "web") {
 		if (!isHttps || isRedirectLoopback) {
@@ -232,33 +216,13 @@ function validateClientRedirectUri(
 	}
 }
 
-function validatePublicJwks(jwks: NonNullable<OAuthClient["jwks"]>) {
-	const keys = Array.isArray(jwks) ? jwks : jwks.keys;
-	if (!Array.isArray(keys) || keys.length === 0) {
+function assertValidRegistrationJwks(jwks: NonNullable<OAuthClient["jwks"]>) {
+	const result = validatePublicClientJwks(jwks);
+	if (!result.valid) {
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_client_metadata",
-			error_description:
-				"jwks must be a non-empty array of JWK objects or a JWKS document {keys:[...]}",
+			error_description: result.error,
 		});
-	}
-	for (const key of keys) {
-		if (
-			key.kty === "oct" ||
-			"k" in key ||
-			PRIVATE_JWK_MEMBER_NAMES.some((name) => name in key)
-		) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description: "jwks must contain only public asymmetric keys",
-			});
-		}
-		if (!isSupportedPublicJwk(key)) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description:
-					"jwks keys must be supported public JWKs with required key parameters",
-			});
-		}
 	}
 }
 
@@ -364,9 +328,6 @@ export async function checkOAuthClient(
 		client,
 		isClientMetadataDocument ? null : "web",
 	);
-	// Determine whether registration request for public client
-	// https://datatracker.ietf.org/doc/html/rfc7591#section-2
-	const isPublic = clientWithDefaults.token_endpoint_auth_method === "none";
 	const tokenEndpointAuthMethod =
 		clientWithDefaults.token_endpoint_auth_method ?? "client_secret_basic";
 	const supportedTokenEndpointAuthMethods = new Set(
@@ -554,6 +515,19 @@ export async function checkOAuthClient(
 						error_description: "jwks_uri must use HTTPS",
 					});
 				}
+				if (uri.username || uri.password) {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_client_metadata",
+						error_description: "jwks_uri must not contain credentials",
+					});
+				}
+				// URL.hash is empty for a bare trailing `#`, so inspect the source value.
+				if (clientWithDefaults.jwks_uri.includes("#")) {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_client_metadata",
+						error_description: "jwks_uri must not include a fragment component",
+					});
+				}
 				if (isPrivateHostname(uri.hostname)) {
 					throw new APIError("BAD_REQUEST", {
 						error: "invalid_client_metadata",
@@ -588,7 +562,7 @@ export async function checkOAuthClient(
 			}
 		}
 		if (clientWithDefaults.jwks) {
-			validatePublicJwks(clientWithDefaults.jwks);
+			assertValidRegistrationJwks(clientWithDefaults.jwks);
 		}
 	}
 	// private_key_jwt requires key material; other methods may still register
@@ -621,15 +595,6 @@ export async function checkOAuthClient(
 				error_description: "backchannel_logout_uri must be an absolute URL",
 			});
 		}
-		// Only http/https make sense for a POST target and the server will
-		// refuse anything else at fetch time; reject up front to avoid storing
-		// unreachable URIs.
-		if (url.protocol !== "https:" && url.protocol !== "http:") {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description: "backchannel_logout_uri must use http or https",
-			});
-		}
 		// Spec §2.2: "The backchannel_logout_uri MUST NOT include a fragment
 		// component." Check the raw value rather than `url.hash`, which is empty
 		// for a bare trailing `#` and would let that fragment delimiter through.
@@ -640,23 +605,22 @@ export async function checkOAuthClient(
 					"backchannel_logout_uri must not include a fragment component",
 			});
 		}
-		const loopback = isLoopbackHost(url.hostname);
-		// Spec §2.2: SHOULD be https for confidential clients. Enforce on
-		// confidential clients, with a loopback carve-out (RFC 8252 §7.3) so
-		// local development against http://127.0.0.1:<port> works.
-		if (!isPublic && url.protocol !== "https:" && !loopback) {
+		if (url.protocol !== "https:") {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: "backchannel_logout_uri must use https",
+			});
+		}
+		if (url.username || url.password) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description:
-					"backchannel_logout_uri must use https for confidential clients",
+					"backchannel_logout_uri must not contain credentials",
 			});
 		}
 		// SSRF guard: the OP issues an outbound POST to this URI on every
-		// session end, so reject any host that is not publicly routable.
-		// Loopback is exempt for local development (e.g.
-		// http://127.0.0.1:<port> or https://localhost); non-loopback private,
-		// link-local, tunneled, and cloud-metadata targets are always rejected.
-		if (isPrivateHostname(url.hostname) && !loopback) {
+		// session end, so every target must be publicly routable.
+		if (isPrivateHostname(url.hostname)) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description:
@@ -697,6 +661,7 @@ export interface OAuthClientRegistrationResult {
 export interface RegisterClientMetadataDocumentInput {
 	metadata: OAuthClient;
 	clientId: string;
+	clientDiscoveryId: string;
 	existingClient?: SchemaClient<Scope[]>;
 }
 
@@ -804,6 +769,10 @@ async function persistOAuthClientRegistration(
 		user_id: owner?.referenceId ? undefined : owner?.userId,
 		reference_id: owner?.referenceId,
 	});
+	schema.clientDiscoveryId =
+		input.registrationSource === "clientMetadataDocument"
+			? input.clientDiscoveryId
+			: null;
 	if (
 		input.registrationSource === "clientMetadataDocument" &&
 		body.application_type === undefined
@@ -824,6 +793,10 @@ async function persistOAuthClientRegistration(
 		input.registrationSource === "clientMetadataDocument"
 			? input.existingClient
 			: undefined;
+	const clientDiscoveryId =
+		input.registrationSource === "clientMetadataDocument"
+			? input.clientDiscoveryId
+			: null;
 	const persistenceResult = await runWithTransaction(
 		ctx.context.adapter,
 		async () => {
@@ -833,7 +806,13 @@ async function persistOAuthClientRegistration(
 			if (existingClient) {
 				const updatedClient = await adapter.update<SchemaClient<Scope[]>>({
 					model: clientModel,
-					where: [{ field: "clientId", value: clientId }],
+					where: [
+						{ field: "clientId", value: clientId },
+						{
+							field: "clientDiscoveryId",
+							value: clientDiscoveryId,
+						},
+					],
 					update: {
 						...schema,
 						disabled: existingClient.disabled,
@@ -922,6 +901,18 @@ async function createOAuthClientRegistration(
 	return createOAuthClientRegistrationResponse(result, opts);
 }
 
+function assertClientDiscoveryOwnership(
+	client: SchemaClient<Scope[]> | undefined,
+	clientDiscoveryId: string,
+): void {
+	if (!client || client.clientDiscoveryId === clientDiscoveryId) return;
+	throw new APIError("BAD_REQUEST", {
+		error: "invalid_client",
+		error_description:
+			"client_id is already owned by a different registration source",
+	});
+}
+
 /**
  * First-party persistence seam for a validated Client ID Metadata Document.
  *
@@ -937,6 +928,17 @@ export async function registerClientMetadataDocument(
 	opts: OAuthOptions<Scope[]>,
 	input: RegisterClientMetadataDocumentInput,
 ): Promise<OAuthClientRegistrationResult> {
+	assertClientDiscoveryOwnership(input.existingClient, input.clientDiscoveryId);
+	if (
+		input.metadata.backchannel_logout_uri !== undefined ||
+		input.metadata.backchannel_logout_session_required !== undefined
+	) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description:
+				"Client ID Metadata Documents cannot register a back-channel logout target",
+		});
+	}
 	if (
 		(input.metadata.token_endpoint_auth_method ?? "none") !== "none" &&
 		input.metadata.token_endpoint_auth_method !== "private_key_jwt"
@@ -970,6 +972,7 @@ export async function registerClientMetadataDocument(
 			where: [{ field: "clientId", value: input.clientId }],
 		});
 		if (!currentClient) throw error;
+		assertClientDiscoveryOwnership(currentClient, input.clientDiscoveryId);
 		return persistOAuthClientRegistration(ctx, opts, {
 			...registrationInput,
 			existingClient: currentClient,
@@ -1127,13 +1130,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		grantTypes,
 		responseTypes,
 		// Client key metadata
-		jwks: inputJwks
-			? JSON.stringify({
-					keys: Array.isArray(inputJwks)
-						? inputJwks
-						: (inputJwks as { keys: unknown[] }).keys,
-				})
-			: undefined,
+		jwks: inputJwks ? JSON.stringify(inputJwks) : undefined,
 		jwksUri: jwksUri,
 		applicationType,
 		// All other metadata

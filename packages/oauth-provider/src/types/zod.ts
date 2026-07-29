@@ -81,6 +81,11 @@ const authorizationPromptSchema = z.string().superRefine((value, ctx) => {
 	}
 });
 
+/** Canonical RFC 7517 JWK Set metadata for an OAuth client. */
+export const clientJwksSchema = z.object({
+	keys: z.array(z.record(z.string(), z.unknown())).min(1),
+});
+
 const maxAgeSchema = z
 	.union([z.number(), z.string().trim().min(1)])
 	.transform((value, ctx) => {
@@ -198,14 +203,7 @@ export const clientRegistrationRequestSchema = z.object({
 	backchannel_logout_uri: SafeUrlSchema.optional(),
 	backchannel_logout_session_required: z.boolean().optional(),
 	token_endpoint_auth_method: z.string().trim().min(1).optional(),
-	jwks: z
-		.union([
-			z.array(z.record(z.string(), z.unknown())).min(1),
-			z.object({
-				keys: z.array(z.record(z.string(), z.unknown())).min(1),
-			}),
-		])
-		.optional(),
+	jwks: clientJwksSchema.optional(),
 	jwks_uri: z.string().optional(),
 	grant_types: z.array(z.string().trim().min(1)).min(1).optional(),
 	response_types: z.array(z.enum(["code"])).optional(),

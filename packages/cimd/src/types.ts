@@ -1,21 +1,38 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type {
+	ClientMetadataResourceFetch,
 	OAuthClientMetadata,
 	SchemaClient,
 	Scope,
 } from "@better-auth/oauth-provider";
 
-export type MetadataDocumentFetch = (
-	input: RequestInfo | URL,
-	init?: RequestInit,
-) => Promise<Response>;
+export type CimdMetadataProfile = "mcp-2026-07-28";
 
 /**
  * Options for the Client ID Metadata Document plugin.
  *
- * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-00
+ * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02
  */
 export interface CimdOptions {
+	/**
+	 * Fetch transport for metadata documents and discovery-owned metadata
+	 * resources such as `jwks_uri`.
+	 *
+	 * The transport MUST resolve the hostname exactly once, reject RFC 6890
+	 * special-use addresses, pin the approved address for the connection, and
+	 * refuse redirects. Those guarantees cannot be implemented by wrapping the
+	 * standard Fetch API after DNS resolution, so the application must provide
+	 * them at its runtime-specific network boundary.
+	 */
+	fetchClientMetadataResource: ClientMetadataResourceFetch;
+	/**
+	 * Apply an additional protocol profile to otherwise generic draft-02
+	 * metadata validation.
+	 *
+	 * The MCP 2026-07-28 profile requires `client_name` and `redirect_uris`
+	 * because that MCP revision normatively pins CIMD draft-00.
+	 */
+	metadataProfile?: CimdMetadataProfile;
 	/**
 	 * How frequently to re-fetch a client's metadata document to pick up
 	 * changes from the client.
@@ -51,42 +68,25 @@ export interface CimdOptions {
 	 */
 	originBoundFields?: readonly string[];
 	/**
-	 * Permit loopback `client_id` URLs (`localhost`, `127.0.0.0/8`, `::1`,
-	 * `*.localhost`), including plain HTTP, so an auth server can fetch a
-	 * metadata document hosted on the same machine. Off by default; enable
-	 * only for local development.
-	 *
-	 * @default false
-	 */
-	allowLoopback?: boolean;
-	/**
 	 * Pre-fetch gate called before a metadata document is requested. Return
 	 * `false` to reject the `client_id` URL.
 	 *
 	 * Use this for origin allowlists, per-host rate limiting, or integrating
-	 * with an external trust service. Hostname-based DNS defenses (beyond
-	 * the built-in IP-literal check) belong here, since the plugin is
-	 * runtime-agnostic and does not perform DNS resolution.
+	 * with an external trust service. It is application policy, not a
+	 * substitute for the required transport's resolve-once and connection-
+	 * pinning guarantees; resolving here would introduce a TOCTOU boundary.
 	 *
 	 * @default always allow
 	 */
-	allowFetch?: (
+	isMetadataDocumentUrlAllowed?: (
 		url: string,
 		ctx: GenericEndpointContext,
 	) => boolean | Promise<boolean>;
 	/**
-	 * Fetch implementation used for metadata-document requests.
-	 *
-	 * Supply this when HTTPS metadata origins are routed through an in-process
-	 * test harness or a runtime-specific network boundary.
-	 *
-	 * @default globalThis.fetch
-	 */
-	fetchMetadataDocument?: MetadataDocumentFetch;
-	/**
 	 * Called after a client is created from a metadata document for the
-	 * first time. Use this to assign trust levels, prefetch logos, or
-	 * perform other post-creation processing.
+	 * first time. Use this to assign local trust, emit an audit event, or
+	 * perform other post-creation processing. Better Auth does not fetch or
+	 * render metadata-owned remote assets such as `logo_uri`.
 	 *
 	 * This is a best-effort notification. A rejected callback is logged and
 	 * does not roll back an otherwise valid registration.
@@ -106,6 +106,7 @@ export interface CimdOptions {
 	 */
 	onClientRefreshed?: (data: {
 		client: SchemaClient<Scope[]>;
+		previousClient: SchemaClient<Scope[]>;
 		metadata: OAuthClientMetadata;
 		ctx: GenericEndpointContext;
 	}) => void | Promise<void>;

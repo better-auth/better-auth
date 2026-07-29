@@ -133,6 +133,10 @@ describe("CIMD - token exchange flow", async () => {
 		grant_types: ["authorization_code"],
 		response_types: ["code"],
 	};
+	const fetchClientMetadataResource = vi.fn(
+		(input: RequestInfo | URL, init?: RequestInit) =>
+			globalThis.fetch(input, init),
+	);
 
 	const {
 		auth: authorizationServer,
@@ -148,7 +152,9 @@ describe("CIMD - token exchange flow", async () => {
 				scopes: ["openid", "profile", "email", "offline_access"],
 				silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 			}),
-			cimd(),
+			cimd({
+				fetchClientMetadataResource,
+			}),
 		],
 	});
 
@@ -164,7 +170,127 @@ describe("CIMD - token exchange flow", async () => {
 	});
 	afterEach(() => {
 		vi.unstubAllGlobals();
+		fetchClientMetadataResource.mockClear();
 	});
+
+	async function exchangeWithUnsafeJwksResponse(
+		responseKind: "redirected" | "wrong-mime" | "oversized",
+	): Promise<{
+		body: Record<string, unknown>;
+		status: number;
+		jwksUri: string;
+	}> {
+		const clientMetadataUrl = `https://${responseKind}-key-client.example.com/client-metadata.json`;
+		const jwksUri = `https://${responseKind}-key-client.example.com/.well-known/jwks.json`;
+		const redirectUri = `http://localhost:${5200 + responseKind.length}/callback`;
+		const keyId = `${responseKind}-key`;
+		const { privateKey, publicKey } = (await crypto.subtle.generateKey(
+			{
+				name: "RSASSA-PKCS1-v1_5",
+				modulusLength: 2048,
+				publicExponent: new Uint8Array([1, 0, 1]),
+				hash: "SHA-256",
+			},
+			true,
+			["sign", "verify"],
+		)) as CryptoKeyPair;
+		const privateKeyJwk = await crypto.subtle.exportKey("jwk", privateKey);
+		const publicKeyJwk = await crypto.subtle.exportKey("jwk", publicKey);
+		const jwks = {
+			keys: [
+				{
+					...publicKeyJwk,
+					kid: keyId,
+					alg: "RS256",
+					use: "sig",
+				},
+			],
+		};
+		const originalFetch = globalThis.fetch.bind(globalThis);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+				const requestedUrl =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				if (requestedUrl === clientMetadataUrl) {
+					return Promise.resolve(
+						Response.json({
+							client_id: clientMetadataUrl,
+							client_name: `${responseKind} JWKS Client`,
+							redirect_uris: [redirectUri],
+							token_endpoint_auth_method: "private_key_jwt",
+							application_type: "native",
+							grant_types: ["authorization_code"],
+							response_types: ["code"],
+							jwks_uri: jwksUri,
+						}),
+					);
+				}
+				if (requestedUrl === jwksUri) {
+					if (responseKind === "redirected") {
+						const response = Response.json(jwks);
+						Object.defineProperty(response, "redirected", { value: true });
+						return Promise.resolve(response);
+					}
+					if (responseKind === "wrong-mime") {
+						return Promise.resolve(
+							new Response(JSON.stringify(jwks), {
+								headers: { "content-type": "text/plain" },
+							}),
+						);
+					}
+					return Promise.resolve(
+						Response.json({
+							...jwks,
+							padding: "x".repeat(70 * 1024),
+						}),
+					);
+				}
+				return originalFetch(input, init);
+			}),
+		);
+
+		const { headers } = await signInWithTestUser();
+		const authedClient = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: { customFetchImpl, headers },
+		});
+		const code = await extractAuthorizationCode(
+			authedClient,
+			buildAuthorizeUrl(authServerBaseUrl, clientMetadataUrl, redirectUri),
+		);
+		const tokenEndpoint = `${authServerBaseUrl}/api/auth/oauth2/token`;
+		const assertion = await signPrivateKeyJwtClientAssertion({
+			clientId: clientMetadataUrl,
+			tokenEndpoint,
+			privateKeyJwk,
+			kid: keyId,
+			algorithm: "RS256",
+		});
+		const tokenResponse = await fetch(tokenEndpoint, {
+			method: "POST",
+			headers: { "Content-Type": "application/x-www-form-urlencoded" },
+			body: new URLSearchParams({
+				grant_type: "authorization_code",
+				code,
+				redirect_uri: redirectUri,
+				client_id: clientMetadataUrl,
+				client_assertion_type: CLIENT_ASSERTION_TYPE,
+				client_assertion: assertion,
+				code_verifier: PKCE_VERIFIER,
+			}).toString(),
+		});
+		return {
+			body: (await tokenResponse.json()) as Record<string, unknown>,
+			status: tokenResponse.status,
+			jwksUri,
+		};
+	}
 
 	it("exchanges an authorization code for an access token", async () => {
 		stubMetadataFetch(clientMetadataUrl, metadataDocument);
@@ -315,6 +441,38 @@ describe("CIMD - token exchange flow", async () => {
 		expect(tokenResponse.status).toBe(200);
 		const body = (await tokenResponse.json()) as Record<string, unknown>;
 		expect(typeof body.access_token).toBe("string");
+		const discoveryFetchUrls = fetchClientMetadataResource.mock.calls.map(
+			([input]) =>
+				typeof input === "string"
+					? input
+					: input instanceof URL
+						? input.href
+						: input.url,
+		);
+		expect(discoveryFetchUrls).toContain(uppercaseClientMetadataUrl);
+		expect(discoveryFetchUrls).toContain(jwksUri);
+	});
+
+	it.each([
+		"redirected",
+		"wrong-mime",
+		"oversized",
+	] as const)("rejects a %s discovery-owned JWKS response", async (responseKind) => {
+		const result = await exchangeWithUnsafeJwksResponse(responseKind);
+		expect(
+			fetchClientMetadataResource.mock.calls.some(([input]) => {
+				const requestedUrl =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				return requestedUrl === result.jwksUri;
+			}),
+		).toBe(true);
+		expect(result).toMatchObject({
+			status: expect.toSatisfy((status: number) => status >= 400),
+		});
 	});
 
 	it("returns user claims from /oauth2/userinfo with a CIMD-issued access token", async () => {
@@ -466,7 +624,12 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 				scopes: ["openid", "profile", "email", "offline_access"],
 				silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 			}),
-			cimd({ refreshRate: 0, onClientRefreshed }),
+			cimd({
+				refreshRate: 0,
+				fetchClientMetadataResource: (input, init) =>
+					globalThis.fetch(input, init),
+				onClientRefreshed,
+			}),
 		],
 	});
 
@@ -546,11 +709,19 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 			skipConsent: true,
 			enableEndSession: true,
 		});
-		expect(onClientRefreshed).toHaveBeenCalled();
+		expect(onClientRefreshed).toHaveBeenCalledWith(
+			expect.objectContaining({
+				previousClient: expect.objectContaining({
+					disabled: true,
+					skipConsent: true,
+					enableEndSession: true,
+				}),
+			}),
+		);
 	});
 });
 
-describe("CIMD - allowFetch gate", async () => {
+describe("CIMD - metadata document URL policy", async () => {
 	const port = 3104;
 	const authServerBaseUrl = `http://localhost:${port}`;
 	const blockedClientUrl = "https://blocked.example.com/client-metadata.json";
@@ -581,7 +752,10 @@ describe("CIMD - allowFetch gate", async () => {
 				silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 			}),
 			cimd({
-				allowFetch: (url) => new URL(url).hostname === "allowed.example.com",
+				fetchClientMetadataResource: (input, init) =>
+					globalThis.fetch(input, init),
+				isMetadataDocumentUrlAllowed: (url) =>
+					new URL(url).hostname === "allowed.example.com",
 			}),
 		],
 	});
@@ -600,7 +774,7 @@ describe("CIMD - allowFetch gate", async () => {
 		vi.unstubAllGlobals();
 	});
 
-	it("rejects a URL blocked by allowFetch before the fetch runs", async () => {
+	it("rejects a URL blocked by isMetadataDocumentUrlAllowed before the fetch runs", async () => {
 		const fetchSpy = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
 			globalThis.fetch.call(globalThis, input, init),
 		);
@@ -642,7 +816,7 @@ describe("CIMD - allowFetch gate", async () => {
 		expect(metadataFetches).toHaveLength(0);
 	});
 
-	it("allows a URL permitted by allowFetch", async () => {
+	it("allows a URL permitted by isMetadataDocumentUrlAllowed", async () => {
 		stubMetadataFetch(allowedClientUrl, allowedDocument);
 
 		const { headers } = await signInWithTestUser();

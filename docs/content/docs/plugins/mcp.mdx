@@ -7,7 +7,7 @@ description: Turn your Better Auth server into an OAuth provider for MCP clients
 
 The **MCP** plugin lets your app act as an OAuth authorization server and protected resource for [Model Context Protocol](https://modelcontextprotocol.io) clients. It is built on the [OAuth 2.1 Provider](/docs/plugins/oauth-provider), so MCP clients discover your endpoints and obtain resource-bound access tokens through standard OAuth flows.
 
-`mcp()` configures the OAuth provider with MCP resource binding and serves the [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) protected resource metadata. For the MCP 2026-07-28 profile, compose it with [Client ID Metadata Documents](/docs/plugins/cimd). MCP deprecates Dynamic Client Registration (DCR), so Better Auth never enables DCR implicitly.
+`mcp()` configures the OAuth provider with MCP resource binding and serves the [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) protected resource metadata. For the MCP 2026-07-28 profile, compose it with [Client ID Metadata Documents](/docs/plugins/cimd) and select the profile that pins CIMD draft-00. MCP deprecates Dynamic Client Registration (DCR), so Better Auth never enables DCR implicitly.
 
 <Callout>
   Install `@better-auth/mcp` and the recommended `@better-auth/cimd` companion package.
@@ -26,6 +26,7 @@ The **MCP** plugin lets your app act as an OAuth authorization server and protec
     import { jwt } from "better-auth/plugins"; // [!code highlight]
     import { cimd } from "@better-auth/cimd"; // [!code highlight]
     import { mcp } from "@better-auth/mcp"; // [!code highlight]
+    import { fetchClientMetadataResource } from "./oauth-network"; // [!code highlight]
 
     export const auth = betterAuth({
         plugins: [
@@ -35,10 +36,15 @@ The **MCP** plugin lets your app act as an OAuth authorization server and protec
                 consentPage: "/consent", // path to your consent page // [!code highlight]
                 resource: "https://api.example.com/mcp" // protected resource identifier // [!code highlight]
             }), // [!code highlight]
-            cimd(), // [!code highlight]
+            cimd({ // [!code highlight]
+                fetchClientMetadataResource, // [!code highlight]
+                metadataProfile: "mcp-2026-07-28", // [!code highlight]
+            }), // [!code highlight]
         ]
     });
     ```
+
+    The injected metadata-resource transport must resolve each hostname once, reject RFC 6890 special-use addresses, pin the approved address for the connection, and refuse redirects. It is used for both the Client ID Metadata Document and discovery-owned resources such as `jwks_uri`. See the [CIMD security boundary](/docs/plugins/cimd#security-boundary) for the complete contract.
 
     <Callout>
       `mcp()` is the OAuth provider. Do not also register a separate `oauthProvider()` plugin in the same app.

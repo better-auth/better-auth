@@ -162,7 +162,10 @@ describe("CIMD-first MCP authorization with the official SDK v2", async () => {
 					openidConfig: true,
 				},
 			}),
-			cimd({ fetchMetadataDocument: metadataFetch }),
+			cimd({
+				fetchClientMetadataResource: metadataFetch,
+				metadataProfile: "mcp-2026-07-28",
+			}),
 		],
 	});
 	const { headers } = await instance.signInWithTestUser();

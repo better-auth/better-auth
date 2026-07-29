@@ -5,9 +5,9 @@ description: Discover OAuth clients from HTTPS metadata documents.
 
 `OAuth2` `MCP`
 
-The [Client ID Metadata Document draft-00](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-00) lets an OAuth client identify itself without registering first. The client's `client_id` is the HTTPS URL of a metadata document it hosts. Better Auth fetches and validates that document, then creates or refreshes the client record.
+The [Client ID Metadata Document draft-02](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02) lets an OAuth client identify itself without registering first. The client's `client_id` is the exact HTTPS URL of a metadata document it hosts. Better Auth validates the document and persists the client through the OAuth Provider's canonical registration path.
 
-Use this plugin with [`@better-auth/oauth-provider`](./oauth-provider), or compose it with `mcp()` for the [MCP 2026-07-28 client-registration profile](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#client-id-metadata-documents). The metadata field `token_endpoint_auth_method` determines how the discovered client authenticates.
+MCP 2026-07-28 normatively references CIMD draft-00. Use `metadataProfile: "mcp-2026-07-28"` when composing `cimd()` with `mcp()`. This explicit profile adds MCP's required `client_name` and `redirect_uris` fields without imposing those draft-00 restrictions on generic draft-02 clients.
 
 ## Installation
 
@@ -23,13 +23,12 @@ Use this plugin with [`@better-auth/oauth-provider`](./oauth-provider), or compo
   <Step>
     ### Add the plugin to the server
 
-    Install `cimd()` alongside `oauthProvider()`. The plugin requires `oauth-provider` to be present and will throw at startup if it is missing.
-
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
     import { jwt } from "better-auth/plugins";
     import { oauthProvider } from "@better-auth/oauth-provider";
-    import { cimd } from "@better-auth/cimd"; // [!code highlight]
+    import { cimd } from "@better-auth/cimd";
+    import { fetchClientMetadataResource } from "./oauth-network";
 
     export const auth = betterAuth({
       plugins: [
@@ -39,200 +38,170 @@ Use this plugin with [`@better-auth/oauth-provider`](./oauth-provider), or compo
           consentPage: "/consent",
           scopes: ["openid", "profile", "email", "offline_access"],
         }),
-        cimd(), // [!code highlight]
+        cimd({
+          fetchClientMetadataResource,
+        }),
       ],
     });
     ```
   </Step>
 </Steps>
 
-## Usage
+`fetchClientMetadataResource` is required. Implement it at the network boundary for your Node.js, Bun, Deno, or Workers deployment. The same transport is used for the metadata document and discovery-owned resources such as `jwks_uri`.
 
-Once installed, your authorization server accepts an HTTPS URL as a `client_id` on any OAuth endpoint. The first time a URL `client_id` is seen, the server fetches the metadata document and creates a client record using the document's `token_endpoint_auth_method`. Valid documents are cached according to their HTTP cache headers, with `refreshRate` as the maximum and fallback lifetime. A stale document is revalidated before the OAuth request continues.
+The transport must:
 
-```http
-GET /api/auth/oauth2/authorize?
-    response_type=code
-    &client_id=https%3A%2F%2Fmcp-client.example.com%2Fclient-metadata.json
-    &redirect_uri=https%3A%2F%2Fmcp-client.example.com%2Fcallback
-    &scope=openid
-    &code_challenge=...
-    &code_challenge_method=S256
+* Parse the target as an HTTPS URL before resolving it.
+* Resolve the hostname once and reject every RFC 6890 special-use result.
+* Connect to that approved address while preserving TLS hostname and certificate verification for the original host.
+* Refuse redirects and honor the supplied method, headers, and abort signal.
+
+Do not perform a DNS check and then call `globalThis.fetch`. Standard Fetch exposes neither the connected peer address nor a portable way to pin it, so that pattern re-resolves the hostname and remains vulnerable to DNS rebinding.
+
+## MCP configuration
+
+```ts title="auth.ts"
+import { cimd } from "@better-auth/cimd";
+import { mcp } from "@better-auth/mcp";
+import { fetchClientMetadataResource } from "./oauth-network";
+
+plugins: [
+  mcp({
+    resource: "https://mcp.example.com/mcp",
+    scopes: ["mcp:tools"],
+  }),
+  cimd({
+    fetchClientMetadataResource,
+    metadataProfile: "mcp-2026-07-28",
+  }),
+];
 ```
 
-The CIMD client is stored in the standard `oauthClient` table with its URL as the `clientId`, so it shows up in the same queries and admin UIs as any other registered client.
-
-### Discovery metadata
-
-The plugin advertises `client_id_metadata_document_supported: true` on the `/.well-known/oauth-authorization-server` and `/.well-known/openid-configuration` responses. MCP clients and other spec-aware consumers use that flag to decide whether to attempt a URL `client_id`.
+The MCP profile requires `client_id`, `client_name`, and a non-empty `redirect_uris` array. DCR remains disabled unless the OAuth Provider explicitly enables it.
 
 ## Configuration
 
 ```ts title="auth.ts"
 cimd({
+  fetchClientMetadataResource,
   refreshRate: "10m",
   maxCacheEntries: 1000,
   originBoundFields: ["post_logout_redirect_uris", "client_uri"],
-  allowFetch(url) {
+  isMetadataDocumentUrlAllowed(url) {
     return new URL(url).hostname.endsWith(".trusted.example");
   },
   onClientCreated({ client, metadata, ctx }) {
-    // assign trust levels, prefetch logos, populate audit log, etc.
+    // Assign local trust or audit state.
   },
-  onClientRefreshed({ client, metadata, ctx }) {
-    // detect field changes, update derived data, etc.
+  onClientRefreshed({ client, previousClient, metadata, ctx }) {
+    // Compare the previous and current records and apply operator policy.
   },
 });
 ```
 
-<Callout type="info">
-  For [MCP auth](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#client-registration-approaches), compose `mcp()` with `cimd()`. DCR is disabled by default; enable both `allowDynamicClientRegistration` and `allowUnauthenticatedClientRegistration` only when you deliberately provide a legacy fallback.
-</Callout>
-
-### Options
-
 export const cimdOptionsType = {
+	fetchClientMetadataResource: {
+		type: "(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>",
+		description:
+			"Required runtime-owned transport for metadata documents and discovery-owned resources. It must resolve once, reject RFC 6890 special-use addresses, pin the approved address, and refuse redirects.",
+	},
+	metadataProfile: {
+		type: '"mcp-2026-07-28"',
+		description:
+			"Adds the metadata requirements of MCP 2026-07-28, which normatively pins CIMD draft-00.",
+	},
 	refreshRate: {
 		type: "number | string",
 		default: '"60m"',
 		description:
-			"How frequently to re-fetch a client's metadata document. Number values are seconds; strings are duration expressions (e.g. `\"60m\"`, `\"1d\"`). A value of `0` makes every request stale (useful for tests).",
+			"Maximum and fallback metadata lifetime. Number values are seconds; strings are duration expressions.",
 	},
 	maxCacheEntries: {
 		type: "number",
 		default: "1000",
 		description:
-			"Maximum validated metadata documents retained by this plugin instance. The least-recently-used entry is evicted when the bound is reached.",
+			"Maximum validated metadata documents retained by this plugin instance.",
 	},
 	originBoundFields: {
 		type: "string[]",
 		default: '["post_logout_redirect_uris", "client_uri"]',
 		description:
-			"Metadata fields whose URL values must share the same origin as the `client_id` URL. `redirect_uris` is excluded by default because exact redirect matching is enforced during authorization and native clients commonly redirect to loopback or private-use URIs. Pass an empty array to disable origin binding.",
+			"Metadata URL fields that must share the client_id origin. Redirect URIs are excluded by default because authorization still requires exact matching.",
 	},
-	allowLoopback: {
-		type: "boolean",
-		default: "false",
-		description:
-			"Permit loopback `client_id` URLs (`localhost`, `127.0.0.0/8`, `::1`, `*.localhost`), including plain HTTP, so an auth server can fetch a metadata document hosted on the same machine. Off by default; enable only for local development.",
-	},
-	allowFetch: {
+	isMetadataDocumentUrlAllowed: {
 		type: "(url, ctx) => boolean | Promise<boolean>",
 		default: "always allow",
 		description:
-			"Pre-fetch gate: return `false` to reject a `client_id` URL before the metadata document is requested. Use this for origin allowlists, per-host rate limiting, or DNS-level defenses beyond the built-in IP-literal SSRF check.",
-	},
-	fetchMetadataDocument: {
-		type: "typeof globalThis.fetch",
-		default: "globalThis.fetch",
-		description:
-			"Fetch implementation for metadata requests. This is useful for routing HTTPS `.test` origins through an in-process test or runtime network boundary.",
+			"Optional application policy evaluated before the required transport runs.",
 	},
 	onClientCreated: {
 		type: "(data: { client, metadata, ctx }) => void | Promise<void>",
-		description:
-			"Best-effort notification after a new client has been persisted. Rejections are logged and do not roll back a valid registration.",
+		description: "Best-effort notification after initial persistence.",
 	},
 	onClientRefreshed: {
-		type: "(data: { client, metadata, ctx }) => void | Promise<void>",
+		type: "(data: { client, previousClient, metadata, ctx }) => void | Promise<void>",
 		description:
-			"Best-effort notification after an existing client is refreshed. Rejections are logged. Admin-controlled fields (`disabled`, `skipConsent`, `enableEndSession`) are preserved.",
+			"Best-effort refresh notification. previousClient lets operators detect security-relevant draft-02 metadata changes.",
 	},
 };
 
 <TypeTable type={cimdOptionsType} />
 
-## Metadata document requirements
+## Draft-02 validation
 
-The fetched document must satisfy both §3 and §4.1 of draft-00.
+Generic CIMD validation follows draft-02:
 
-**Client identity and fetch URL**
+* `client_id` must equal the requested metadata URL using simple string comparison. Explicit default ports are therefore significant.
+* Client Identifier URLs must use HTTPS and cannot contain credentials, fragments, dot segments, special-use literal/known hosts, or omit an explicit path. An explicit root `/` is accepted with a NOT RECOMMENDED warning; query strings produce a SHOULD NOT warning.
+* `client_name` and `redirect_uris` are optional for generic clients. Non-redirect grants such as `client_credentials` are valid when enabled by the OAuth Provider.
+* The OAuth Provider remains authoritative for supported grants, response types, redirect policy, and authentication capability.
+* Better Auth supports `none` and `private_key_jwt` for discovered clients. Inline `jwks` must use the RFC 7517 `{ "keys": [...] }` object shape; bare arrays, symmetric secret methods, secret fields, and private JWK material are rejected.
+* `client_uri`, `logo_uri`, `tos_uri`, and `policy_uri` must be credential-free public HTTP(S) URLs. Better Auth does not fetch or render remote logos.
+* `backchannel_logout_uri` and `backchannel_logout_session_required` are rejected because they would authorize an OP-side POST outside the injected GET transport.
+* Server-owned fields, including resource links and administrative controls, cannot be supplied by the document.
 
-* `client_id` in the document must equal the fetch URL byte-for-byte.
-* The URL must use HTTPS and include a path. For example, `https://example.com/` is rejected, while `https://example.com/meta.json` is accepted.
-* The URL cannot contain credentials, a fragment, or `./` and `../` dot segments.
-* Loopback URLs (`localhost`, `127.0.0.0/8`, `::1`, and `*.localhost`) are available only for local development with `allowLoopback`. This option also permits plain HTTP for those URLs.
-* `client_name` is required and cannot be blank.
-
-**OAuth behavior**
-
-* `token_endpoint_auth_method` must be `"none"` or `"private_key_jwt"`. Better Auth rejects symmetric secret methods.
-* `redirect_uris` must contain at least one absolute HTTP(S) URI or authority-free private-use URI, such as `com.example.app:/callback`.
-* `application_type` may be `web` or `native`. When omitted, Better Auth stores `null` and accepts the safe union of both policies: non-loopback HTTPS, exact HTTP loopback hosts (`localhost`, `127.0.0.1`, or `[::1]`), and authority-free private-use URIs.
-* `grant_types`, when present, must be a subset of `["authorization_code", "refresh_token"]`. `response_types` must be a subset of `["code"]`.
-
-**Server authority**
-
-* Better Auth parses the complete shared OAuth client metadata schema before applying CIMD restrictions, so malformed known fields are rejected.
-* The document cannot set client secrets, server-issued identifiers, resource links, or server-owned controls such as `disabled`, `skip_consent`, `enable_end_session`, `require_pkce`, `reference_id`, and `user_id`.
-* Unknown extension metadata may be retained after validation.
-
-### Example document
-
-```json title="https://mcp-client.example.com/client-metadata.json"
+```json title="https://client.example.com/client-metadata.json"
 {
-  "client_id": "https://mcp-client.example.com/client-metadata.json",
-  "client_name": "Example MCP Client",
-  "client_uri": "https://mcp-client.example.com",
-  "redirect_uris": [
-    "https://mcp-client.example.com/callback",
-    "http://127.0.0.1:3000/callback"
-  ],
-  "token_endpoint_auth_method": "none",
-  "grant_types": ["authorization_code", "refresh_token"],
-  "response_types": ["code"],
-  "scope": "openid profile email offline_access"
+  "client_id": "https://client.example.com/client-metadata.json",
+  "grant_types": ["client_credentials"],
+  "token_endpoint_auth_method": "private_key_jwt",
+  "jwks_uri": "https://client.example.com/jwks.json"
 }
 ```
 
-## Security
+## Persistence and refresh
 
-The plugin ships defense in depth against common abuses of unauthenticated client discovery:
+Discovered clients are stored in `oauthClient` with `clientDiscoveryId: "cimd"`. This nullable provenance field prevents an existing managed or DCR client from being taken over merely because its identifier begins with `https://`, including during a fixed-ID registration race. After a process restart, a CIMD-owned record is fetched and refreshed only by the matching discovery. Managed records are returned without invoking CIMD, while a discovery-owned record fails closed if its owner is unavailable or cannot resolve it.
 
-* **SSRF protection (server-side request forgery).** Private, reserved, link-local, unspecified, cloud-metadata, and tunneled IP literals are rejected syntactically; known special-use hostnames are rejected too, and loopback is opt-in. The runtime-neutral plugin does not resolve DNS. Use `allowFetch` and your runtime network policy to reject public hostnames that resolve or rebind to private addresses.
-* **Fetch hardening.** 5s timeout, 5 KB response size limit (UTF-8 byte-counted), no redirect following, `Accept: application/json` only.
-* **Origin binding.** Fields in `originBoundFields` must share the `client_id` origin. Redirect URIs are not origin-bound by default; the authorization endpoint still requires the requested `redirect_uri` to match a registered value exactly.
-* **No secrets from documents.** Symmetric authentication methods and `client_secret` fields are rejected before anything is written to the database.
-* **Server-owned field rejection.** `disabled`, `skip_consent`, `enable_end_session`, `require_pkce`, resource links, and server-issued identifiers cannot be set, escalated, or weakened from an external document.
-* **Admin overrides survive refreshes.** `disabled`, `skipConsent`, and `enableEndSession` set by an admin on a persisted CIMD client are preserved across stale refreshes: the document can't silently undo a revoke or consent override.
-* **Public key validation.** `private_key_jwt` requires a structurally valid public JWKS or a public HTTPS `jwks_uri`. A same-origin `jwks_uri` is trusted by the CIMD binding without adding unrelated `trustedOrigins`.
+Valid documents follow shared-cache semantics. `s-maxage` takes precedence over `max-age` and `Expires`; validators support conditional revalidation. `Cache-Control: no-store`, `private`, and `Vary: *` prevent cache insertion. A `304` is accepted only when the request sent `If-None-Match` or `If-Modified-Since` for an existing validated entry. Modified responses must be exactly `200`.
 
-## Operational notes
+Refresh remains fail closed. A network, validation, or persistence failure preserves the previous database/cache state but rejects the current OAuth request. `onClientRefreshed` receives `previousClient`; operators can compare security-sensitive metadata and choose whether to revoke grants, tokens, or consent.
 
-* **Refresh runs on the OAuth hot path.** When the cached document is stale, the next OAuth request awaits revalidation before completing. `Cache-Control`, `Expires`, `ETag`, and `Last-Modified` are honored; `refreshRate` caps origin freshness and supplies the fallback lifetime. `no-cache` forces revalidation and `no-store` prevents cache insertion.
-* **Refresh fails closed.** A failed network request, invalid replacement, or persistence failure leaves the previous database and cache state intact but rejects the current OAuth request. Stale metadata is never served after a failed refresh; a later request retries.
-* **Consent display.** A consent UI must display both the Client ID hostname and the redirect hostname, or the full private-use redirect URI. The signed consent handoff includes the exact `client_id` and `redirect_uri` for this purpose.
-* **Loopback is opt-in.** Loopback `client_id` URLs (`localhost`, `127.0.0.0/8`, `::1`, `*.localhost`), including plain HTTP, are fetched only when `allowLoopback` is set. Leave it off in production so the server never fetches its own loopback interface. Loopback `redirect_uris` remain allowed for native/desktop flows regardless.
+## Security boundary
 
-## Composition with `clientDiscovery`
+The plugin enforces a five-second timeout with portable `AbortController`/`setTimeout`, a streaming 5 KB metadata-document limit, a streaming 64 KiB discovery-owned JWKS limit, JSON and `application/*+json` media types, and redirect rejection. These application-layer checks complement rather than replace the required network transport's DNS resolution and connection-pinning guarantees.
 
-Under the hood, `cimd()` contributes a `ClientDiscovery` entry through `oauthProvider`'s extension surface. If you prefer to wire it explicitly, or want to compose CIMD with other discovery implementations, use the `cimdClientDiscovery` factory:
+Loopback Client Identifier URLs are not supported. Tests can route HTTPS `.test` origins to in-process handlers through the injected transport without disabling URL or certificate policy. Native client loopback `redirect_uris` remain governed separately by OAuth redirect validation.
+
+## Explicit discovery composition
 
 ```ts title="auth.ts"
-import { oauthProvider } from "@better-auth/oauth-provider";
-import { cimdClientDiscovery } from "@better-auth/cimd";
-
-export const auth = betterAuth({
-  plugins: [
-    jwt(),
-    oauthProvider({
-      extensions: [
-        {
-          clientDiscovery: [
-            cimdClientDiscovery({ refreshRate: "60m" }),
-            // other discovery implementations can go here
-          ],
-        },
-      ],
-    }),
+oauthProvider({
+  extensions: [
+    {
+      clientDiscovery: cimdClientDiscovery({
+        fetchClientMetadataResource,
+        refreshRate: "60m",
+      }),
+    },
   ],
 });
 ```
 
-The `clientDiscovery` extension field accepts a single `ClientDiscovery` or an array. Entries are consulted in order after the database lookup in `getClient()`; the first entry whose `matches()` returns `true` and whose `resolve()` returns a non-null client wins. Each entry can also contribute `discoveryMetadata` that the server merges into `/.well-known/oauth-authorization-server` and `/.well-known/openid-configuration` responses.
+`ClientDiscovery.id` is persisted as client provenance. A discovery can also provide the focused `fetchClientMetadataResource` seam used for metadata-owned resources.
 
 ## Related
 
-* [OAuth Provider plugin](./oauth-provider) — the host plugin this one extends.
-* [IETF Client ID Metadata Document draft-00](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-00)
-* [MCP authorization spec — CIMD flow](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#client-id-metadata-documents)
+* [OAuth Provider plugin](./oauth-provider)
+* [IETF Client ID Metadata Document draft-02](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02)
+* [MCP authorization spec: draft-00 CIMD profile](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#client-id-metadata-documents)

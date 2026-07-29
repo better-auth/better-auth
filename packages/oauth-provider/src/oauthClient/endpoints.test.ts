@@ -337,6 +337,17 @@ describe("oauthClient private_key_jwt clients", async () => {
 		publicJwk = await exportJWK(publicKey);
 	});
 
+	it("rejects a bare JWK array when a user creates a client", async () => {
+		const result = await authClient.oauth2.createClient({
+			redirect_uris: [redirectUri],
+			token_endpoint_auth_method: "private_key_jwt",
+			// @ts-expect-error RFC 7517 requires a JWK Set object.
+			jwks: [{ ...publicJwk, kid: "bare-user-key", alg: "RS256", use: "sig" }],
+		});
+
+		expect(result.error?.status).toBe(400);
+	});
+
 	it("should create private_key_jwt clients with jwks and jwks_uri", async () => {
 		const inlineJwks = {
 			keys: [

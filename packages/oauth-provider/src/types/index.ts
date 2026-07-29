@@ -47,6 +47,19 @@ export type AuthorizePrompt =
 	| "select_account consent";
 
 /**
+ * Runtime-owned HTTP transport for resources referenced by externally
+ * discovered client metadata.
+ *
+ * A discovery that accepts URL-owned metadata must document and enforce its
+ * network trust boundary. CIMD requires resolve-once DNS handling, rejection of
+ * RFC 6890 special-use addresses, connection pinning, and redirect refusal.
+ */
+export type ClientMetadataResourceFetch = (
+	input: RequestInfo | URL,
+	init?: RequestInit,
+) => Awaitable<Response>;
+
+/**
  * Describes how to resolve a `client_id` from an external source (a URL-based
  * metadata document, a federated registry, an attestation header, etc.) and
  * what fields that source contributes to discovery metadata.
@@ -57,8 +70,9 @@ export type AuthorizePrompt =
  */
 export interface ClientDiscovery {
 	/**
-	 * Stable identifier used in error messages and diagnostics. Convention
-	 * is to match the plugin id (for example `"cimd"`).
+	 * Stable, globally unique identifier persisted as client provenance.
+	 * Convention is to match the plugin id (for example `"cimd"`). Changing it
+	 * requires migrating every client owned by this discovery.
 	 */
 	readonly id: string;
 	/**
@@ -73,15 +87,22 @@ export interface ClientDiscovery {
 	 * refreshing, or passing through to the database result.
 	 *
 	 * Return:
-	 * - a client record: `getClient()` returns it (creation / refresh / takeover).
-	 * - `null`: `getClient()` falls through to the next matching discovery
-	 *   or to the database record (if any).
+	 * - a client record: `getClient()` returns it after creation or refresh.
+	 * - `null` for a new client: `getClient()` tries the next matching discovery.
+	 * - `null` for a client owned by this discovery: resolution fails closed;
+	 *   the stored record is not treated as a managed client.
 	 */
 	resolve: (
 		ctx: GenericEndpointContext,
 		clientId: string,
 		existing: SchemaClient<Scope[]> | null,
 	) => Awaitable<SchemaClient<Scope[]> | null>;
+	/**
+	 * Fetch transport for resources owned by this discovery, such as a CIMD
+	 * client's `jwks_uri`. The discovery defines the transport's network-safety
+	 * contract.
+	 */
+	fetchClientMetadataResource?: ClientMetadataResourceFetch;
 	/**
 	 * Fields merged into `/.well-known/oauth-authorization-server` and
 	 * `/.well-known/openid-configuration` responses. Useful for advertising
@@ -1645,6 +1666,13 @@ export interface SchemaClient<
 	 * size 32
 	 */
 	clientSecret?: string;
+	/**
+	 * Stable identifier of the discovery that owns this client record.
+	 *
+	 * Null or absent records are managed or dynamically registered clients and
+	 * must never be refreshed by a discovery solely because of their ID shape.
+	 */
+	clientDiscoveryId?: string | null;
 	/** Whether the client is disabled or not. */
 	disabled?: boolean;
 	/**

@@ -7,14 +7,15 @@ protected resource for MCP clients, built on
 [`@better-auth/oauth-provider`](https://www.better-auth.com/docs/plugins/oauth-provider).
 It serves RFC 9728 protected resource metadata and binds issued tokens to the
 configured resource. Compose it with `cimd()` for the MCP 2026-07-28 Client ID
-Metadata Document flow. Dynamic Client Registration is disabled unless
-explicitly enabled.
+Metadata Document flow, which pins CIMD draft-00 through an explicit metadata
+profile. Dynamic Client Registration is disabled unless explicitly enabled.
 
 ```ts
 import { betterAuth } from "better-auth";
 import { jwt } from "better-auth/plugins";
 import { cimd } from "@better-auth/cimd";
 import { mcp } from "@better-auth/mcp";
+import { fetchClientMetadataResource } from "./oauth-network";
 
 export const auth = betterAuth({
   plugins: [
@@ -24,7 +25,10 @@ export const auth = betterAuth({
       consentPage: "/consent",
       resource: "https://api.example.com/mcp",
     }),
-    cimd(),
+    cimd({
+      fetchClientMetadataResource,
+      metadataProfile: "mcp-2026-07-28",
+    }),
   ],
 });
 ```

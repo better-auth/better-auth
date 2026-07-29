@@ -10,7 +10,13 @@ import {
 	resetSeedStateForTests,
 	seedResourcesOnce,
 } from "./resources";
-import type { OAuthClientResource, OAuthOptions, Scope } from "./types";
+import type {
+	OAuthClientResource,
+	OAuthOptions,
+	SchemaClient,
+	Scope,
+} from "./types";
+import { getClient } from "./utils";
 
 const silenceWarnings = {
 	oauthAuthServerConfig: true,
@@ -289,7 +295,132 @@ describe("managed client registration resources", () => {
 	});
 });
 
+describe("trusted client cache provenance", () => {
+	it("does not cache a discovery-owned client when its ID is trusted", async () => {
+		const clientId = "https://client.example.com/trusted-discovery.json";
+		const discovery = {
+			id: "trusted-test-discovery",
+			matches: (candidateClientId: string) => candidateClientId === clientId,
+			resolve: (
+				_ctx: GenericEndpointContext,
+				_candidateClientId: string,
+				existingClient: SchemaClient<Scope[]> | null,
+			) => existingClient,
+		};
+		const instance = await boot({
+			cachedTrustedClients: new Set([clientId]),
+			extensions: [{ clientDiscovery: discovery }],
+		});
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+		await registerClientMetadataDocument(endpointContext, instance.opts, {
+			clientId,
+			clientDiscoveryId: discovery.id,
+			metadata: {
+				client_id: clientId,
+				client_name: "Trusted Discovery Client",
+				redirect_uris: ["https://client.example.com/callback"],
+				token_endpoint_auth_method: "none",
+			},
+		});
+
+		await expect(
+			getClient(endpointContext, instance.opts, clientId),
+		).resolves.toMatchObject({ clientDiscoveryId: discovery.id });
+		instance.opts.extensions = [];
+
+		await expect(
+			getClient(endpointContext, instance.opts, clientId),
+		).resolves.toBeNull();
+	});
+
+	it("isolates trusted client cache entries between provider options", async () => {
+		const clientId = "https://client.example.com/provider-isolation.json";
+		const discovery = {
+			id: "provider-one-discovery",
+			matches: (candidateClientId: string) => candidateClientId === clientId,
+			resolve: (
+				_ctx: GenericEndpointContext,
+				_candidateClientId: string,
+				existingClient: SchemaClient<Scope[]> | null,
+			) => existingClient,
+		};
+		const providerOne = await boot({
+			cachedTrustedClients: new Set([clientId]),
+			extensions: [{ clientDiscovery: discovery }],
+		});
+		const providerOneContext = {
+			context: providerOne.ctx,
+		} as unknown as GenericEndpointContext;
+		await registerClientMetadataDocument(providerOneContext, providerOne.opts, {
+			clientId,
+			clientDiscoveryId: discovery.id,
+			metadata: {
+				client_id: clientId,
+				client_name: "Provider One Client",
+				redirect_uris: ["https://one.example.com/callback"],
+				token_endpoint_auth_method: "none",
+			},
+		});
+		await expect(
+			getClient(providerOneContext, providerOne.opts, clientId),
+		).resolves.toMatchObject({ name: "Provider One Client" });
+
+		const providerTwo = await boot({
+			cachedTrustedClients: new Set([clientId]),
+		});
+		await providerTwo.ctx.adapter.create<SchemaClient<Scope[]>>({
+			model: "oauthClient",
+			data: {
+				clientId,
+				clientDiscoveryId: null,
+				name: "Provider Two Client",
+				redirectUris: ["https://two.example.com/callback"],
+				tokenEndpointAuthMethod: "none",
+				applicationType: "web",
+				grantTypes: ["authorization_code"],
+				responseTypes: ["code"],
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		await expect(
+			getClient(
+				{
+					context: providerTwo.ctx,
+				} as unknown as GenericEndpointContext,
+				providerTwo.opts,
+				clientId,
+			),
+		).resolves.toMatchObject({ name: "Provider Two Client" });
+	});
+});
+
 describe("canonical client metadata document registration", () => {
+	it("fails closed when the persisted client discovery is not installed", async () => {
+		const instance = await boot();
+		const clientId = "https://client.example.com/orphaned-discovery.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+
+		await registerClientMetadataDocument(endpointContext, instance.opts, {
+			clientId,
+			clientDiscoveryId: "removed-client-discovery",
+			metadata: {
+				client_id: clientId,
+				redirect_uris: ["https://client.example.com/callback"],
+				token_endpoint_auth_method: "none",
+			},
+		});
+
+		await expect(
+			getClient(endpointContext, instance.opts, clientId),
+		).resolves.toBeNull();
+	});
+
 	it("preserves omitted application type as null while validating a loopback redirect", async () => {
 		const instance = await boot();
 		const clientId = "https://client.example.com/metadata.json";
@@ -299,6 +430,7 @@ describe("canonical client metadata document registration", () => {
 			instance.opts,
 			{
 				clientId,
+				clientDiscoveryId: "test-client-discovery",
 				metadata: {
 					client_id: clientId,
 					redirect_uris: ["http://127.0.0.1:5198/callback"],
@@ -308,11 +440,15 @@ describe("canonical client metadata document registration", () => {
 		);
 
 		expect(result.client.applicationType).toBeNull();
+		expect(result.client.clientDiscoveryId).toBe("test-client-discovery");
 		const storedClient = await instance.ctx.adapter.findOne({
 			model: "oauthClient",
 			where: [{ field: "clientId", value: clientId }],
 		});
-		expect(storedClient).toMatchObject({ applicationType: null });
+		expect(storedClient).toMatchObject({
+			applicationType: null,
+			clientDiscoveryId: "test-client-discovery",
+		});
 	});
 
 	it("persists through the configured oauthClient model", async () => {
@@ -345,6 +481,7 @@ describe("canonical client metadata document registration", () => {
 			instance.opts,
 			{
 				clientId,
+				clientDiscoveryId: "test-client-discovery",
 				metadata: {
 					client_id: clientId,
 					redirect_uris: ["https://app.example.com/callback"],
@@ -382,6 +519,7 @@ describe("canonical client metadata document registration", () => {
 			instance.opts,
 			{
 				clientId,
+				clientDiscoveryId: "test-client-discovery",
 				metadata: {
 					client_id: clientId,
 					client_name: "Before Refresh",
@@ -410,6 +548,7 @@ describe("canonical client metadata document registration", () => {
 			instance.opts,
 			{
 				clientId,
+				clientDiscoveryId: "test-client-discovery",
 				existingClient: {
 					...created.client,
 					...operatorClient,
@@ -445,6 +584,7 @@ describe("canonical client metadata document registration", () => {
 		} as unknown as GenericEndpointContext;
 		await registerClientMetadataDocument(endpointContext, instance.opts, {
 			clientId,
+			clientDiscoveryId: "test-client-discovery",
 			metadata: {
 				client_id: clientId,
 				client_name: "First Writer",
@@ -458,6 +598,7 @@ describe("canonical client metadata document registration", () => {
 			instance.opts,
 			{
 				clientId,
+				clientDiscoveryId: "test-client-discovery",
 				metadata: {
 					client_id: clientId,
 					client_name: "Concurrent Writer",
@@ -468,6 +609,168 @@ describe("canonical client metadata document registration", () => {
 		);
 		expect(converged.created).toBe(false);
 		expect(converged.client.name).toBe("Concurrent Writer");
+	});
+
+	it("does not take over a managed client after a fixed-ID registration race", async () => {
+		const instance = await boot();
+		const clientId = "https://client.example.com/managed-race.json";
+		await instance.ctx.adapter.create({
+			model: "oauthClient",
+			data: {
+				clientId,
+				clientDiscoveryId: null,
+				name: "Managed Client",
+				redirectUris: ["https://managed.example.com/callback"],
+				tokenEndpointAuthMethod: "none",
+				applicationType: "web",
+				grantTypes: ["authorization_code"],
+				responseTypes: ["code"],
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		await expect(
+			registerClientMetadataDocument(
+				{
+					context: instance.ctx,
+				} as unknown as GenericEndpointContext,
+				instance.opts,
+				{
+					clientId,
+					clientDiscoveryId: "test-client-discovery",
+					metadata: {
+						client_id: clientId,
+						client_name: "Discovered Client",
+						redirect_uris: ["https://discovered.example.com/callback"],
+						token_endpoint_auth_method: "none",
+					},
+				},
+			),
+		).rejects.toThrow();
+
+		expect(
+			await instance.ctx.adapter.findOne({
+				model: "oauthClient",
+				where: [{ field: "clientId", value: clientId }],
+			}),
+		).toMatchObject({
+			clientDiscoveryId: null,
+			name: "Managed Client",
+			redirectUris: ["https://managed.example.com/callback"],
+		});
+	});
+
+	it("rejects a managed client supplied to the discovery refresh seam", async () => {
+		const instance = await boot();
+		const clientId = "https://client.example.com/managed-refresh.json";
+		const managedClient = await instance.ctx.adapter.create<
+			SchemaClient<Scope[]>
+		>({
+			model: "oauthClient",
+			data: {
+				clientId,
+				clientDiscoveryId: null,
+				name: "Managed Client",
+				redirectUris: ["https://managed.example.com/callback"],
+				tokenEndpointAuthMethod: "none",
+				applicationType: "web",
+				grantTypes: ["authorization_code"],
+				responseTypes: ["code"],
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		await expect(
+			registerClientMetadataDocument(
+				{
+					context: instance.ctx,
+				} as unknown as GenericEndpointContext,
+				instance.opts,
+				{
+					clientId,
+					clientDiscoveryId: "test-client-discovery",
+					existingClient: managedClient,
+					metadata: {
+						client_id: clientId,
+						client_name: "Discovered Client",
+						redirect_uris: ["https://discovered.example.com/callback"],
+						token_endpoint_auth_method: "none",
+					},
+				},
+			),
+		).rejects.toThrow();
+	});
+
+	it("does not overwrite a managed replacement from a stale discovery refresh", async () => {
+		const instance = await boot();
+		const clientId = "https://client.example.com/stale-refresh.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+		const discoveredClient = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				metadata: {
+					client_id: clientId,
+					client_name: "Discovered Client",
+					redirect_uris: ["https://discovered.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			},
+		);
+		await instance.ctx.adapter.delete({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+		});
+		await instance.ctx.adapter.create<SchemaClient<Scope[]>>({
+			model: "oauthClient",
+			data: {
+				clientId,
+				clientDiscoveryId: null,
+				name: "Managed Replacement",
+				redirectUris: ["https://managed.example.com/callback"],
+				tokenEndpointAuthMethod: "none",
+				applicationType: "web",
+				grantTypes: ["authorization_code"],
+				responseTypes: ["code"],
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		await expect(
+			registerClientMetadataDocument(endpointContext, instance.opts, {
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				existingClient: discoveredClient.client,
+				metadata: {
+					client_id: clientId,
+					client_name: "Stale Refresh",
+					redirect_uris: ["https://stale.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error_description: "client no longer exists",
+			},
+		});
+
+		expect(
+			await instance.ctx.adapter.findOne({
+				model: "oauthClient",
+				where: [{ field: "clientId", value: clientId }],
+			}),
+		).toMatchObject({
+			clientDiscoveryId: null,
+			name: "Managed Replacement",
+			redirectUris: ["https://managed.example.com/callback"],
+		});
 	});
 
 	it("converges a metadata refresh after a concurrent resource-link insert", async () => {
@@ -482,6 +785,7 @@ describe("canonical client metadata document registration", () => {
 			instance.opts,
 			{
 				clientId,
+				clientDiscoveryId: "test-client-discovery",
 				metadata: {
 					client_id: clientId,
 					client_name: "Before Link Race",
@@ -536,6 +840,7 @@ describe("canonical client metadata document registration", () => {
 			instance.opts,
 			{
 				clientId,
+				clientDiscoveryId: "test-client-discovery",
 				existingClient: created.client,
 				metadata: {
 					client_id: clientId,
@@ -570,6 +875,7 @@ describe("canonical client metadata document registration", () => {
 		};
 		await registerClientMetadataDocument(endpointContext, instance.opts, {
 			clientId,
+			clientDiscoveryId: "test-client-discovery",
 			metadata,
 		});
 		const originalTransaction = instance.ctx.adapter.transaction.bind(
@@ -588,6 +894,7 @@ describe("canonical client metadata document registration", () => {
 		await expect(
 			registerClientMetadataDocument(endpointContext, instance.opts, {
 				clientId,
+				clientDiscoveryId: "test-client-discovery",
 				metadata,
 			}),
 		).rejects.toThrow("storage unavailable");
@@ -612,6 +919,7 @@ describe("canonical client metadata document registration", () => {
 			instance.opts,
 			{
 				clientId,
+				clientDiscoveryId: "test-client-discovery",
 				metadata: {
 					client_id: clientId,
 					client_name: "Before Atomic Refresh",
@@ -650,6 +958,7 @@ describe("canonical client metadata document registration", () => {
 		await expect(
 			registerClientMetadataDocument(endpointContext, instance.opts, {
 				clientId,
+				clientDiscoveryId: "test-client-discovery",
 				existingClient: created.client,
 				metadata: {
 					client_id: clientId,

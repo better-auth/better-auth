@@ -1,3 +1,5 @@
+import type { GenericEndpointContext } from "@better-auth/core";
+import type { SchemaClient, Scope } from "@better-auth/oauth-provider";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { createAuthClient } from "better-auth/client";
@@ -7,7 +9,9 @@ import { getTestInstance } from "better-auth/test";
 import type { Listener } from "listhen";
 import { listen } from "listhen";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { cimd } from "./index";
+import { cimd, cimdClientDiscovery } from "./index";
+
+const PKCE_CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 
 describe("Client ID Metadata Document - integration", async () => {
 	const port = 3002;
@@ -47,7 +51,10 @@ describe("Client ID Metadata Document - integration", async () => {
 					openidConfig: true,
 				},
 			}),
-			cimd(),
+			cimd({
+				fetchClientMetadataResource: (input, init) =>
+					globalThis.fetch(input, init),
+			}),
 		],
 	});
 
@@ -138,7 +145,113 @@ describe("Client ID Metadata Document - integration", async () => {
 			model: "oauthClient",
 			where: [{ field: "clientId", value: clientMetadataUrl }],
 		});
-		expect(storedClient).toMatchObject({ applicationType: "native" });
+		expect(storedClient).toMatchObject({
+			applicationType: "native",
+			clientDiscoveryId: "cimd",
+		});
+	});
+
+	it("does not fetch or take over an existing managed HTTPS client", async ({
+		onTestFinished,
+	}) => {
+		const managedClientId =
+			"https://managed-client.example.com/client-metadata.json";
+		const context = await authorizationServer.$context;
+		await context.adapter.create({
+			model: "oauthClient",
+			data: {
+				clientId: managedClientId,
+				clientDiscoveryId: null,
+				clientSecret: undefined,
+				name: "Managed HTTPS Client",
+				redirectUris: [redirectUri],
+				tokenEndpointAuthMethod: "none",
+				applicationType: "native",
+				grantTypes: ["authorization_code"],
+				responseTypes: ["code"],
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		const metadataTransport = vi.fn(async () => {
+			throw new Error("managed client must not use CIMD transport");
+		});
+		vi.stubGlobal("fetch", metadataTransport);
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+
+		const { headers } = await signInWithTestUser();
+		const authedClient = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: { customFetchImpl, headers },
+		});
+		let redirect = "";
+		await authedClient.$fetch(
+			`${authServerBaseUrl}/api/auth/oauth2/authorize` +
+				`?client_id=${encodeURIComponent(managedClientId)}` +
+				"&response_type=code" +
+				`&redirect_uri=${encodeURIComponent(redirectUri)}` +
+				"&scope=openid" +
+				`&code_challenge=${PKCE_CHALLENGE}` +
+				"&code_challenge_method=S256",
+			{
+				onError(ctx) {
+					redirect = ctx.response.headers.get("location") ?? "";
+				},
+			},
+		);
+
+		expect(redirect).toContain("/consent");
+		expect(metadataTransport).not.toHaveBeenCalled();
+	});
+
+	it("refreshes a discovered client with a fresh resolver after cache restart", async () => {
+		const restartedClientId =
+			"https://restarted-client.example.com/client-metadata.json";
+		const context = await authorizationServer.$context;
+		const existing = await context.adapter.create<SchemaClient<Scope[]>>({
+			model: "oauthClient",
+			data: {
+				clientId: restartedClientId,
+				clientDiscoveryId: "cimd",
+				name: "Before Restart",
+				redirectUris: [redirectUri],
+				tokenEndpointAuthMethod: "none",
+				applicationType: "native",
+				grantTypes: ["authorization_code"],
+				responseTypes: ["code"],
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		const metadataTransport = vi.fn(async () =>
+			Response.json({
+				client_id: restartedClientId,
+				client_name: "After Restart",
+				redirect_uris: [redirectUri],
+				token_endpoint_auth_method: "none",
+				application_type: "native",
+				grant_types: ["authorization_code"],
+				response_types: ["code"],
+			}),
+		);
+		const restartedDiscovery = cimdClientDiscovery({
+			fetchClientMetadataResource: metadataTransport,
+		});
+
+		const refreshed = await restartedDiscovery.resolve(
+			{ context } as unknown as GenericEndpointContext,
+			restartedClientId,
+			existing,
+		);
+
+		expect(metadataTransport).toHaveBeenCalledTimes(1);
+		expect(refreshed).toMatchObject({
+			name: "After Restart",
+			clientDiscoveryId: "cimd",
+		});
 	});
 
 	it("persists an omitted application_type as null", async ({

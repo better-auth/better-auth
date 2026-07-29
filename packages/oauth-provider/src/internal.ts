@@ -5,6 +5,11 @@
  * verified registration lifecycle. Application integrations should use the
  * public endpoints and plugin APIs instead.
  */
+
+export {
+	type PublicClientJwksValidationResult,
+	validatePublicClientJwks,
+} from "./client-jwks";
 export { isForbiddenCimdClientMetadataField } from "./client-metadata";
 export {
 	type OAuthClientRegistrationResult,

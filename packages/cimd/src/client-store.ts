@@ -16,9 +16,11 @@ import {
 const FETCH_TIMEOUT_MS = 5_000;
 const MAX_RESPONSE_BYTES = 5 * 1024;
 const JSON_CONTENT_TYPE_RE = /^application\/(?:[-\w.]+\+)?json\s*(?:;|$)/i;
+export const CIMD_CLIENT_DISCOVERY_ID = "cimd";
 
 export interface MetadataDocumentResponseCacheHeaders {
 	cacheControl?: string;
+	vary?: string;
 	expires?: string;
 	date?: string;
 	age?: string;
@@ -26,7 +28,7 @@ export interface MetadataDocumentResponseCacheHeaders {
 	lastModified?: string;
 }
 
-export type MetadataDocumentFetchResult =
+export type ClientMetadataDocumentResult =
 	| {
 			status: "modified";
 			metadata: OAuthClientMetadata;
@@ -90,6 +92,7 @@ function readResponseCacheHeaders(
 ): MetadataDocumentResponseCacheHeaders {
 	return {
 		cacheControl: headers.get("cache-control") ?? undefined,
+		vary: headers.get("vary") ?? undefined,
 		expires: headers.get("expires") ?? undefined,
 		date: headers.get("date") ?? undefined,
 		age: headers.get("age") ?? undefined,
@@ -105,19 +108,20 @@ function readResponseCacheHeaders(
  * validated cache entry. A 304 response therefore carries no metadata and must
  * be joined with that entry by the caller.
  */
-export async function fetchMetadataDocument(
+export async function fetchClientMetadataDocument(
 	ctx: GenericEndpointContext,
 	clientIdUrl: string,
 	cimdOptions: CimdOptions,
 	validators?: { etag?: string; lastModified?: string },
-): Promise<MetadataDocumentFetchResult> {
-	const urlError = validateClientIdUrl(clientIdUrl, {
-		allowLoopback: cimdOptions.allowLoopback,
-	});
+): Promise<ClientMetadataDocumentResult> {
+	const urlError = validateClientIdUrl(clientIdUrl);
 	if (urlError) throw invalidClient(urlError);
 
-	if (cimdOptions.allowFetch) {
-		const allowed = await cimdOptions.allowFetch(clientIdUrl, ctx);
+	if (cimdOptions.isMetadataDocumentUrlAllowed) {
+		const allowed = await cimdOptions.isMetadataDocumentUrlAllowed(
+			clientIdUrl,
+			ctx,
+		);
 		if (!allowed) {
 			throw invalidClient(
 				"client_id URL is not permitted by the server's fetch policy",
@@ -132,29 +136,41 @@ export async function fetchMetadataDocument(
 	}
 
 	let response: Response;
+	const controller = new AbortController();
+	let didTimeOut = false;
+	const timeout = setTimeout(() => {
+		didTimeOut = true;
+		controller.abort();
+	}, FETCH_TIMEOUT_MS);
 	try {
-		const fetchImplementation =
-			cimdOptions.fetchMetadataDocument ?? globalThis.fetch;
-		response = await fetchImplementation(clientIdUrl, {
+		response = await cimdOptions.fetchClientMetadataResource(clientIdUrl, {
 			headers: requestHeaders,
 			redirect: "error",
-			signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+			signal: controller.signal,
 		});
-	} catch (error) {
-		const isTimeout =
-			error instanceof DOMException && error.name === "TimeoutError";
+	} catch {
 		throw invalidClient(
-			isTimeout
+			didTimeOut
 				? `Metadata document fetch timed out after ${FETCH_TIMEOUT_MS}ms`
 				: "Failed to fetch metadata document (network error or redirect blocked)",
 		);
+	} finally {
+		clearTimeout(timeout);
+	}
+	if (response.redirected) {
+		throw invalidClient("Metadata document fetch must not follow redirects");
 	}
 
 	const cacheHeaders = readResponseCacheHeaders(response.headers);
 	if (response.status === 304) {
+		if (!validators?.etag && !validators?.lastModified) {
+			throw invalidClient(
+				"Metadata document returned 304 without a conditional validator",
+			);
+		}
 		return { status: "not-modified", cacheHeaders };
 	}
-	if (!response.ok) {
+	if (response.status !== 200) {
 		throw invalidClient(
 			`Metadata document fetch returned HTTP ${response.status}`,
 		);
@@ -184,15 +200,17 @@ export async function fetchMetadataDocument(
 		throw invalidClient("Metadata document is not valid JSON");
 	}
 
-	const validation = validateCimdMetadata(
-		clientIdUrl,
-		rawMetadata,
-		cimdOptions.originBoundFields,
-	);
+	const validation = validateCimdMetadata(clientIdUrl, rawMetadata, {
+		originBoundFields: cimdOptions.originBoundFields,
+		metadataProfile: cimdOptions.metadataProfile,
+	});
 	if (!validation.valid || !validation.metadata) {
 		throw invalidClient(
 			validation.error ?? "Invalid Client ID Metadata Document",
 		);
+	}
+	for (const warning of validation.warnings ?? []) {
+		ctx.context.logger.warn(`cimd metadata document warning: ${warning}`);
 	}
 
 	return {
@@ -210,8 +228,10 @@ export async function persistMetadataDocumentClient(
 	oauthOptions: OAuthOptions<Scope[]>,
 	existingClient?: SchemaClient<Scope[]>,
 ): Promise<SchemaClient<Scope[]>> {
+	const previousClient = existingClient ? { ...existingClient } : undefined;
 	const result = await registerClientMetadataDocument(ctx, oauthOptions, {
 		clientId: clientIdUrl,
+		clientDiscoveryId: CIMD_CLIENT_DISCOVERY_ID,
 		metadata: {
 			...metadata,
 			client_id: metadata.client_id,
@@ -235,11 +255,14 @@ export async function persistMetadataDocumentClient(
 		}
 	} else {
 		try {
-			await cimdOptions.onClientRefreshed?.({
-				client: result.client,
-				metadata,
-				ctx,
-			});
+			if (previousClient) {
+				await cimdOptions.onClientRefreshed?.({
+					client: result.client,
+					previousClient,
+					metadata,
+					ctx,
+				});
+			}
 		} catch (error) {
 			ctx.context.logger.error(
 				"cimd onClientRefreshed notification failed",

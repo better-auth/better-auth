@@ -26,39 +26,22 @@ describe("isUrlClientId", () => {
 	it("matches mixed-case URL schemes (schemes are case-insensitive)", () => {
 		expect(isUrlClientId("HTTPS://example.com/meta")).toBe(true);
 		expect(isUrlClientId("HtTpS://example.com/meta")).toBe(true);
-		expect(
-			isUrlClientId("HTTP://localhost/meta", { allowLoopback: true }),
-		).toBe(true);
 	});
 
-	it("matches https:// loopback URLs regardless of allowLoopback", () => {
+	it("routes https:// loopback-shaped IDs to validation", () => {
 		expect(isUrlClientId("https://127.0.0.1/meta")).toBe(true);
 		expect(isUrlClientId("https://localhost/meta")).toBe(true);
 	});
 
-	it("does not match http:// loopback without allowLoopback", () => {
+	it("does not match http:// loopback", () => {
 		expect(isUrlClientId("http://localhost/meta")).toBe(false);
 		expect(isUrlClientId("http://127.0.0.1:8080/meta")).toBe(false);
 		expect(isUrlClientId("http://[::1]/meta")).toBe(false);
 		expect(isUrlClientId("http://app.localhost/meta")).toBe(false);
 	});
 
-	it("matches http:// loopback when allowLoopback is set (dev mode)", () => {
-		const dev = { allowLoopback: true };
-		expect(isUrlClientId("http://localhost/meta", dev)).toBe(true);
-		expect(isUrlClientId("http://localhost:3000/meta", dev)).toBe(true);
-		expect(isUrlClientId("http://127.0.0.1/meta", dev)).toBe(true);
-		expect(isUrlClientId("http://127.0.0.1:8080/meta", dev)).toBe(true);
-		expect(isUrlClientId("http://[::1]/meta", dev)).toBe(true);
-		expect(isUrlClientId("http://app.localhost/meta", dev)).toBe(true);
-		expect(isUrlClientId("http://app.localhost:3000/meta", dev)).toBe(true);
-	});
-
-	it("rejects http:// non-loopback even with allowLoopback", () => {
+	it("rejects http:// non-loopback", () => {
 		expect(isUrlClientId("http://example.com/meta")).toBe(false);
-		expect(
-			isUrlClientId("http://example.com/meta", { allowLoopback: true }),
-		).toBe(false);
 	});
 
 	it("rejects non-URL strings", () => {
@@ -78,9 +61,28 @@ describe("validateClientIdUrl", () => {
 		).toBeNull();
 	});
 
-	it("rejects URL without path", () => {
-		expect(validateClientIdUrl("https://example.com")).not.toBeNull();
-		expect(validateClientIdUrl("https://example.com/")).not.toBeNull();
+	it("requires an explicit root path for draft-02 validation", () => {
+		expect(validateClientIdUrl("https://example.com")).toContain(
+			"explicit path",
+		);
+		expect(validateClientIdUrl("https://example.com/")).toBeNull();
+	});
+
+	it.each([
+		"https:example.com/client.json",
+		"https:/example.com/client.json",
+		"https:///example.com/client.json",
+		"https:////example.com/client.json",
+		"https:\\\\example.com\\client.json",
+		"https://example.com\\client.json",
+	])("rejects malformed raw HTTPS authority form: %s", (clientId) => {
+		expect(validateClientIdUrl(clientId)).toContain(
+			"explicit HTTPS authority form",
+		);
+	});
+
+	it("accepts case-insensitive HTTPS scheme syntax", () => {
+		expect(validateClientIdUrl("HTTPS://example.com/client.json")).toBeNull();
 	});
 
 	it("rejects URL with fragment", () => {
@@ -108,15 +110,9 @@ describe("validateClientIdUrl", () => {
 		expect(result).toContain("HTTPS");
 	});
 
-	it("rejects http://localhost without allowLoopback", () => {
+	it("rejects http://localhost", () => {
 		expect(validateClientIdUrl("http://localhost/meta")).not.toBeNull();
 		expect(validateClientIdUrl("http://localhost:8080/meta")).not.toBeNull();
-	});
-
-	it("accepts http://localhost with allowLoopback (dev)", () => {
-		const dev = { allowLoopback: true };
-		expect(validateClientIdUrl("http://localhost/meta", dev)).toBeNull();
-		expect(validateClientIdUrl("http://localhost:8080/meta", dev)).toBeNull();
 	});
 
 	it("rejects private IP 10.0.0.1", () => {
@@ -139,16 +135,9 @@ describe("validateClientIdUrl", () => {
 		);
 	});
 
-	it("rejects loopback IP 127.0.0.1 via https without allowLoopback", () => {
+	it("rejects loopback IP 127.0.0.1 via https", () => {
 		expect(validateClientIdUrl("https://127.0.0.1/meta")).not.toBeNull();
 		expect(validateClientIdUrl("https://127.0.0.1:8080/meta")).not.toBeNull();
-	});
-
-	it("accepts loopback over https/http with allowLoopback (dev)", () => {
-		const dev = { allowLoopback: true };
-		expect(validateClientIdUrl("https://127.0.0.1:8080/meta", dev)).toBeNull();
-		expect(validateClientIdUrl("http://127.0.0.1:8080/meta", dev)).toBeNull();
-		expect(validateClientIdUrl("https://localhost/meta", dev)).toBeNull();
 	});
 
 	it("accepts public IP like 8.8.8.8", () => {
@@ -194,14 +183,9 @@ describe("validateClientIdUrl", () => {
 		).toContain("private");
 	});
 
-	it("rejects subdomain of localhost without allowLoopback", () => {
+	it("rejects subdomain of localhost", () => {
 		expect(validateClientIdUrl("http://app.localhost/meta")).not.toBeNull();
-	});
-
-	it("accepts subdomain of localhost with allowLoopback (dev)", () => {
-		expect(
-			validateClientIdUrl("http://app.localhost/meta", { allowLoopback: true }),
-		).toBeNull();
+		expect(validateClientIdUrl("https://app.localhost/meta")).not.toBeNull();
 	});
 
 	it("rejects IPv6 unspecified [::] (0.0.0.0-day class)", () => {
@@ -263,7 +247,9 @@ describe("validateCimdMetadata", () => {
 			} else {
 				metadata.client_name = clientName;
 			}
-			const result = validateCimdMetadata(fetchUrl, metadata);
+			const result = validateCimdMetadata(fetchUrl, metadata, {
+				metadataProfile: "mcp-2026-07-28",
+			});
 			expect(result.valid).toBe(false);
 			expect(result.error).toContain("client_name");
 		}
@@ -299,6 +285,55 @@ describe("validateCimdMetadata", () => {
 		expect(result.error).toBeUndefined();
 	});
 
+	it("accepts generic metadata without display or redirect fields for a supported non-redirect grant", () => {
+		const result = validateCimdMetadata(fetchUrl, {
+			client_id: fetchUrl,
+			grant_types: ["client_credentials"],
+			token_endpoint_auth_method: "private_key_jwt",
+			jwks: {
+				keys: [
+					{
+						kty: "EC",
+						crv: "P-256",
+						x: "f83OJ3D2xF4BM-Y5uP1oahSjXdY9tAe3hoTb3QuA7qM",
+						y: "x_FEzRu9wNL7LMBTlSTd4vP7qB27FjGCFZB-RcIEpV0",
+					},
+				],
+			},
+		});
+
+		expect(result.valid).toBe(true);
+		expect(result.metadata?.client_name).toBeUndefined();
+		expect(result.metadata?.redirect_uris).toBeUndefined();
+	});
+
+	it.each([
+		{
+			name: "client_name",
+			metadata: {
+				client_id: fetchUrl,
+				redirect_uris: ["https://example.com/callback"],
+			},
+		},
+		{
+			name: "redirect_uris",
+			metadata: {
+				client_id: fetchUrl,
+				client_name: "MCP Client",
+			},
+		},
+	])("requires $name for the MCP 2026-07-28 metadata profile", ({
+		metadata,
+		name,
+	}) => {
+		const result = validateCimdMetadata(fetchUrl, metadata, {
+			metadataProfile: "mcp-2026-07-28",
+		});
+
+		expect(result.valid).toBe(false);
+		expect(result.error).toContain(name);
+	});
+
 	it("rejects when client_id != fetchUrl", () => {
 		const result = validateCimdMetadata(fetchUrl, {
 			...validMetadata(fetchUrl),
@@ -317,6 +352,19 @@ describe("validateCimdMetadata", () => {
 			expect(result.valid).toBe(false);
 			expect(result.error).toContain("does not match");
 		}
+	});
+
+	it("uses simple-string comparison when one client_id has an explicit default port", () => {
+		const explicitPortUrl = "https://example.com:443/client-metadata.json";
+		const result = validateCimdMetadata(
+			explicitPortUrl,
+			validMetadata(explicitPortUrl, {
+				client_id: "https://example.com/client-metadata.json",
+			}),
+		);
+
+		expect(result.valid).toBe(false);
+		expect(result.error).toContain("does not match");
 	});
 
 	it("rejects when client_secret is present", () => {
@@ -471,10 +519,25 @@ describe("validateCimdMetadata", () => {
 		expect(result.valid).toBe(true);
 	});
 
+	it("rejects a bare JWK array in generic CIMD metadata", () => {
+		const result = validateCimdMetadata(
+			fetchUrl,
+			validMetadata(fetchUrl, {
+				token_endpoint_auth_method: "private_key_jwt",
+				jwks: [{ kty: "RSA", n: "modulus", e: "AQAB" }],
+			}),
+		);
+
+		expect(result.valid).toBe(false);
+		expect(result.error).toContain("jwks");
+	});
+
 	it("rejects private or malformed public key metadata", () => {
 		for (const jwks of [
+			{ keys: [] },
 			{ keys: [{ kty: "oct", k: "secret" }] },
 			{ keys: [{ kty: "EC", crv: "P-256", x: "x", y: "y", d: "private" }] },
+			{ keys: [{ kty: "OKP", crv: "Ed25519", x: "x", d: "private" }] },
 			{ keys: [{ kty: "EC" }] },
 		]) {
 			const result = validateCimdMetadata(
@@ -500,6 +563,21 @@ describe("validateCimdMetadata", () => {
 		expect(result.valid).toBe(true);
 	});
 
+	it.each([
+		"https://user:password@example.com/.well-known/jwks.json",
+		"https://example.com/.well-known/jwks.json#keys",
+	])("rejects an unsafe jwks_uri before persistence: %s", (jwksUri) => {
+		const result = validateCimdMetadata(
+			fetchUrl,
+			validMetadata(fetchUrl, {
+				token_endpoint_auth_method: "private_key_jwt",
+				jwks_uri: jwksUri,
+			}),
+		);
+		expect(result.valid).toBe(false);
+		expect(result.error).toContain("jwks_uri");
+	});
+
 	it("rejects private_key_jwt without jwks or jwks_uri", () => {
 		const result = validateCimdMetadata(
 			fetchUrl,
@@ -523,10 +601,14 @@ describe("validateCimdMetadata", () => {
 	});
 
 	it("rejects missing redirect_uris", () => {
-		const result = validateCimdMetadata(fetchUrl, {
-			client_id: fetchUrl,
-			client_name: "Missing Redirect Client",
-		});
+		const result = validateCimdMetadata(
+			fetchUrl,
+			{
+				client_id: fetchUrl,
+				client_name: "Missing Redirect Client",
+			},
+			{ metadataProfile: "mcp-2026-07-28" },
+		);
 		expect(result.valid).toBe(false);
 		expect(result.error).toContain("redirect_uris");
 	});
@@ -598,15 +680,25 @@ describe("validateCimdMetadata", () => {
 		}
 	});
 
-	it("rejects disallowed grant_types", () => {
+	it("accepts client_credentials as a generic CIMD grant", () => {
 		const result = validateCimdMetadata(
 			fetchUrl,
 			validMetadata(fetchUrl, {
 				grant_types: ["client_credentials"],
+				token_endpoint_auth_method: "private_key_jwt",
+				jwks: {
+					keys: [
+						{
+							kty: "EC",
+							crv: "P-256",
+							x: "x",
+							y: "y",
+						},
+					],
+				},
 			}),
 		);
-		expect(result.valid).toBe(false);
-		expect(result.error).toContain("grant_types");
+		expect(result.valid).toBe(true);
 	});
 
 	it("accepts allowed grant_types", () => {
@@ -680,7 +772,7 @@ describe("validateCimdMetadata", () => {
 				redirect_uris: ["https://example.com/callback"],
 				custom_field: "https://evil.com/hook",
 			},
-			["custom_field"],
+			{ originBoundFields: ["custom_field"] },
 		);
 		expect(result.valid).toBe(false);
 		expect(result.error).toContain("same origin");
@@ -695,7 +787,7 @@ describe("validateCimdMetadata", () => {
 				redirect_uris: ["https://example.com/callback"],
 				client_uri: "https://other.com/about",
 			},
-			["redirect_uris"],
+			{ originBoundFields: ["redirect_uris"] },
 		);
 		// client_uri is NOT in the custom originBoundFields, so origin mismatch is not checked.
 		// However, client_uri still gets SSRF validation.
@@ -770,6 +862,52 @@ describe("validateCimdMetadata", () => {
 		expect(result.valid).toBe(true);
 	});
 
+	it.each([
+		"client_uri",
+		"logo_uri",
+		"tos_uri",
+		"policy_uri",
+	])("rejects credentials in %s", (field) => {
+		const result = validateCimdMetadata(
+			fetchUrl,
+			validMetadata(fetchUrl, {
+				[field]: "https://user:password@example.com/resource",
+			}),
+		);
+		expect(result.valid).toBe(false);
+		expect(result.error).toContain(field);
+	});
+
+	it.each([
+		"tos_uri",
+		"policy_uri",
+	])("rejects javascript and private targets in %s", (field) => {
+		for (const value of ["javascript:alert(1)", "https://127.0.0.1/resource"]) {
+			const result = validateCimdMetadata(
+				fetchUrl,
+				validMetadata(fetchUrl, { [field]: value }),
+			);
+			expect(result.valid).toBe(false);
+			expect(result.error).toContain(field);
+		}
+	});
+
+	it.each([
+		"backchannel_logout_uri",
+		"backchannel_logout_session_required",
+	])("rejects CIMD back-channel metadata: %s", (field) => {
+		const value =
+			field === "backchannel_logout_uri"
+				? "https://client.example.com/backchannel"
+				: true;
+		const result = validateCimdMetadata(
+			fetchUrl,
+			validMetadata(fetchUrl, { [field]: value }),
+		);
+		expect(result.valid).toBe(false);
+		expect(result.error).toContain(field);
+	});
+
 	it("returns warning for query string in fetchUrl", () => {
 		const urlWithQuery = "https://example.com/client-metadata.json?v=1";
 		const result = validateCimdMetadata(
@@ -779,6 +917,23 @@ describe("validateCimdMetadata", () => {
 		expect(result.valid).toBe(true);
 		expect(result.warnings).toBeDefined();
 		expect(result.warnings![0]).toContain("query string");
+	});
+
+	it("accepts a root Client Identifier URL with a NOT RECOMMENDED warning", () => {
+		const rootUrl = "https://example.com/";
+		expect(validateClientIdUrl(rootUrl)).toBeNull();
+		const result = validateCimdMetadata(rootUrl, validMetadata(rootUrl));
+		expect(result.valid).toBe(true);
+		expect(result.warnings).toContain(
+			"client_id URL path / is NOT RECOMMENDED (§3)",
+		);
+	});
+
+	it.each([
+		"https://example.com",
+		"https://example.com?version=1",
+	])("rejects an authority-only Client Identifier URL: %s", (clientId) => {
+		expect(validateClientIdUrl(clientId)).toContain("path");
 	});
 
 	it("rejects non-object metadata", () => {

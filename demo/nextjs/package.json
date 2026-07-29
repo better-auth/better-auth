@@ -13,7 +13,6 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@better-auth/cimd": "link:../../packages/cimd",
     "@better-auth/core": "link:../../packages/core",
     "@better-auth/electron": "link:../../packages/electron",
     "@better-auth/infra": "^0.3.5",

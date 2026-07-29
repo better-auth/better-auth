@@ -3,7 +3,7 @@ import * as z from "zod";
 import { publicSessionMiddleware } from "../middleware";
 import { createOAuthClientEndpoint } from "../register";
 import type { OAuthOptions, Scope } from "../types";
-import { SafeUrlSchema } from "../types/zod";
+import { clientJwksSchema, SafeUrlSchema } from "../types/zod";
 import {
 	deleteClientEndpoint,
 	getClientEndpoint,
@@ -38,14 +38,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				backchannel_logout_session_required: z.boolean().optional(),
 				token_endpoint_auth_method: tokenEndpointAuthMethodSchema.optional(),
 				application_type: z.enum(["web", "native"]).optional(),
-				jwks: z
-					.union([
-						z.array(z.record(z.string(), z.unknown())).min(1),
-						z.object({
-							keys: z.array(z.record(z.string(), z.unknown())).min(1),
-						}),
-					])
-					.optional(),
+				jwks: clientJwksSchema.optional(),
 				jwks_uri: z.string().optional(),
 				grant_types: grantTypesSchema.optional(),
 				response_types: z.array(z.enum(["code"])).optional(),
@@ -243,14 +236,7 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				backchannel_logout_session_required: z.boolean().optional(),
 				token_endpoint_auth_method: tokenEndpointAuthMethodSchema.optional(),
 				application_type: z.enum(["web", "native"]).optional(),
-				jwks: z
-					.union([
-						z.array(z.record(z.string(), z.unknown())).min(1),
-						z.object({
-							keys: z.array(z.record(z.string(), z.unknown())).min(1),
-						}),
-					])
-					.optional(),
+				jwks: clientJwksSchema.optional(),
 				jwks_uri: z.string().optional(),
 				grant_types: grantTypesSchema.optional(),
 				response_types: z.array(z.enum(["code"])).optional(),
