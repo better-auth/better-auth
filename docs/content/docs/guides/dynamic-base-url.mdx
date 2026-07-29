@@ -1,6 +1,6 @@
 ---
 title: Dynamic Base URL
-description: Configure Better Auth for preview deployments, multiple domains, and per-request URL resolution.
+description: Configure Better Auth for preview deployments, multiple domains, white-label apps, and per-request URL resolution.
 ---
 
 Use dynamic base URL when your app is served from more than one hostname, such as:
@@ -8,12 +8,18 @@ Use dynamic base URL when your app is served from more than one hostname, such a
 * custom domains like `myapp.com` and `www.myapp.com`
 * preview deployments like `my-app-abc123.vercel.app`
 * branch environments like `feature-branch.myapp.com`
+* white-label or multi-tenant domains stored outside your deploy config
 
-The configuration itself lives on the [`baseURL` option](/docs/reference/options#baseurl). This guide focuses on when to use it and how to structure it safely.
+The configuration itself lives on the [`baseURL` option](/docs/reference/options#baseurl). This guide focuses on when to use each form and how to structure it safely.
 
-## Basic Setup
+Better Auth supports two dynamic forms:
 
-Configure `baseURL` as an object with an `allowedHosts` allowlist:
+* an `allowedHosts` object for domains known at deploy time
+* a resolver function for domains that must be looked up per request
+
+## Allowed Hosts
+
+Use the object form when all valid hosts are known ahead of time:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -29,7 +35,22 @@ export const auth = betterAuth({
 })
 ```
 
-When a request comes in, Better Auth extracts the host from `x-forwarded-host`, `host` header, or the request URL (in that order), validates it against `allowedHosts`, and uses the matched value to build the request-specific base URL.
+When a request comes in, Better Auth derives the host from the `host` header or the request URL, validates it against `allowedHosts`, and uses the matched value to build the request-specific base URL.
+
+If your deployment only exposes the public host through forwarded headers, opt in explicitly:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+	baseURL: {
+		allowedHosts: ["myapp.com", "*.vercel.app"],
+	},
+	advanced: {
+		trustedProxyHeaders: true,
+	},
+})
+```
+
+Only enable `trustedProxyHeaders` when your reverse proxy strips client-provided `x-forwarded-host` and `x-forwarded-proto` headers before forwarding requests to your app.
 
 ## Common Deployment Patterns
 
@@ -95,6 +116,52 @@ export const auth = betterAuth({
 
 Use this only when falling back to a canonical domain is clearly preferable to failing the request.
 
+## Function Resolver
+
+Use a function when valid domains are not known at deploy time, such as white-label domains stored in your database:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { getTenantByHost } from "./tenants"
+
+export const auth = betterAuth({
+	baseURL: async (request) => {
+		const host = request.headers.get("host")
+		if (!host) {
+			throw new Error("Missing host")
+		}
+
+		const tenant = await getTenantByHost(host)
+		if (!tenant) {
+			throw new Error("Unknown host")
+		}
+
+		return tenant.authOrigin
+	},
+})
+```
+
+The function receives the incoming `Request` and can return a string or `URL`, synchronously or asynchronously. Better Auth appends `basePath` when the returned URL has no path.
+
+With a function resolver:
+
+* the resolved origin is trusted for that request
+* cookies are derived from the resolved URL for that request
+* concurrent requests get isolated auth contexts
+* your function owns host validation
+
+<Callout type="warn">
+  Do not reflect arbitrary request headers into the returned URL. Validate the host against an authoritative source, such as your tenant database or deployment config. If you read `x-forwarded-host`, make sure your proxy strips client-provided forwarded headers.
+</Callout>
+
+When calling `auth.api.*` directly with a dynamic `baseURL`, pass `request` or `headers` so Better Auth can resolve the request-specific base URL:
+
+```ts
+await auth.api.getSession({
+	headers: request.headers,
+})
+```
+
 ## Cookies Across Subdomains
 
 If you need to share cookies across subdomains, you can enable `crossSubDomainCookies` while still using dynamic base URL. Better Auth will derive the cookie domain from the resolved host unless you set `domain` explicitly.
@@ -141,14 +208,32 @@ See [Cookies](/docs/concepts/cookies#cross-subdomain-cookies) for the full cooki
 
 ## Security Model
 
-Dynamic base URL uses an allowlist model:
+The object form uses an allowlist model:
 
 1. Only hosts listed in `allowedHosts` are accepted
-2. `x-forwarded-host` and `host` headers are sanitized and validated before use
+2. `host` and request URL-derived values are sanitized and validated before use
 3. Unknown hosts throw unless you provide `fallback`
-4. `allowedHosts` are automatically added to [`trustedOrigins`](/docs/reference/options#trustedorigins) (localhost entries get both `http` and `https`)
+4. `allowedHosts` are automatically added to [`trustedOrigins`](/docs/reference/options#trustedorigins)
+5. `x-forwarded-host` and `x-forwarded-proto` are ignored unless `trustedProxyHeaders` is enabled
+
+The function form uses your resolver as the security boundary:
+
+1. Return only origins your app controls
+2. Throw for unknown hosts
+3. Prefer `https` in production
+4. Validate forwarded headers through your proxy and application data
 
 This keeps multi-domain support explicit instead of trusting arbitrary headers or platform-specific behavior.
+
+## Choosing a Form
+
+| Use case | Recommended form |
+| --- | --- |
+| Preview deployments with predictable host patterns | `allowedHosts` |
+| Multiple known production domains | `allowedHosts` |
+| Tenant domains stored in a database | Function resolver |
+| White-label custom domains | Function resolver |
+| Unknown hosts should fail closed | Either form, without `fallback` |
 
 ## Reference
 

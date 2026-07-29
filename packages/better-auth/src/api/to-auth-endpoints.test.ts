@@ -968,6 +968,63 @@ describe("dynamic baseURL resolution", () => {
 		expect(res.baseURL).toBe("https://example.com/api/auth");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/4151
+	 */
+	it("should resolve function baseURL from headers for direct auth.api calls", async () => {
+		const authContext = init({
+			baseURL: (request) => new URL(request.url).origin,
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const res = await authEndpoints.readBaseURL({
+			headers: new Headers({ host: "tenant.example.com" }),
+		});
+		expect(res.baseURL).toBe("https://tenant.example.com/api/auth");
+	});
+
+	it("should ignore x-forwarded headers for function baseURL when trustedProxyHeaders is not configured", async () => {
+		const authContext = init({
+			baseURL: (request) => new URL(request.url).origin,
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const res = await authEndpoints.readBaseURL({
+			headers: new Headers({
+				host: "example.com",
+				"x-forwarded-host": "proxy.example.com",
+				"x-forwarded-proto": "http",
+			}),
+		});
+		expect(res.baseURL).toBe("https://example.com/api/auth");
+	});
+
+	it("should honor x-forwarded headers for function baseURL when trustedProxyHeaders is enabled", async () => {
+		const authContext = init({
+			baseURL: (request) => new URL(request.url).origin,
+			advanced: { trustedProxyHeaders: true },
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		const res = await authEndpoints.readBaseURL({
+			headers: new Headers({
+				host: "example.com",
+				"x-forwarded-host": "proxy.example.com",
+				"x-forwarded-proto": "http",
+			}),
+		});
+		expect(res.baseURL).toBe("http://proxy.example.com/api/auth");
+	});
+
+	it("should throw APIError when function baseURL is called with no source", async () => {
+		const authContext = init({
+			baseURL: (request) => new URL(request.url).origin,
+		});
+		const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+		await expect(authEndpoints.readBaseURL()).rejects.toSatisfy(isAPIError);
+	});
+
 	it("should leave baseURL untouched for static string config", async () => {
 		const authContext = init({
 			baseURL: "https://static.example.com",

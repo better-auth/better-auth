@@ -15,7 +15,12 @@ import { getAdapter } from "../db/adapter-kysely";
 import { getMigrations } from "../db/get-migration";
 import { bearer } from "../plugins";
 import type { Session, User } from "../types";
-import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url";
+import {
+	getBaseURL,
+	isDynamicBaseURLConfig,
+	isFunctionBaseURLConfig,
+	isPerRequestBaseURL,
+} from "../utils/url";
 
 const cleanupSet = new Set<Function>();
 
@@ -167,8 +172,9 @@ export async function getTestInstance<
 		// Synthesize a host header from allowedHosts so setup resolves under
 		// dynamic baseURL. `?` is a wildcard, not a query-string delimiter,
 		// so it's replaced, not split on.
-		const dynamicBaseURL = isDynamicBaseURLConfig(auth.options.baseURL)
-			? auth.options.baseURL
+		const baseURLConfig = auth.options.baseURL;
+		const dynamicBaseURL = isDynamicBaseURLConfig(baseURLConfig)
+			? baseURLConfig
 			: undefined;
 		const pattern =
 			dynamicBaseURL?.allowedHosts.find(
@@ -179,7 +185,11 @@ export async function getTestInstance<
 			.split(/[/#]/)[0]
 			?.replace(/\*/g, "test")
 			.replace(/\?/g, "x");
-		const headers = host ? new Headers({ host }) : undefined;
+		const headers = host
+			? new Headers({ host })
+			: isFunctionBaseURLConfig(baseURLConfig)
+				? new Headers({ host: "localhost:3000" })
+				: undefined;
 		//@ts-expect-error
 		await auth.api.signUpEmail({
 			body: testUser,
@@ -271,7 +281,7 @@ export async function getTestInstance<
 		);
 	};
 
-	const clientBaseURL = isDynamicBaseURLConfig(options?.baseURL)
+	const clientBaseURL = isPerRequestBaseURL(options?.baseURL)
 		? getBaseURL(
 				"http://localhost:" + (config?.port || 3000),
 				options?.basePath || "/api/auth",

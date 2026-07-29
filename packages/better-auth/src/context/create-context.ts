@@ -26,7 +26,11 @@ import type { JwtOptions } from "../plugins/jwt/types";
 import { DEFAULT_SECRET } from "../utils/constants";
 import { isPromise } from "../utils/is-promise";
 import { checkPassword } from "../utils/password";
-import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url";
+import {
+	getBaseURL,
+	isDynamicBaseURLConfig,
+	isPerRequestBaseURL,
+} from "../utils/url";
 import {
 	getInternalPlugins,
 	getTrustedOrigins,
@@ -131,7 +135,7 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 	const internalPlugins = getInternalPlugins(options);
 	const logger = createLogger(options.logger);
 
-	const isDynamicConfig = isDynamicBaseURLConfig(options.baseURL);
+	const isDynamicConfig = isPerRequestBaseURL(options.baseURL);
 
 	if (isDynamicBaseURLConfig(options.baseURL)) {
 		const { allowedHosts } = options.baseURL;

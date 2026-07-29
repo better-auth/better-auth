@@ -9,7 +9,7 @@ import {
 	resolveRequestContext,
 } from "../context/helpers";
 import type { Auth } from "../types";
-import { getBaseURL, getOrigin, isDynamicBaseURLConfig } from "../utils/url";
+import { getBaseURL, getOrigin, isPerRequestBaseURL } from "../utils/url";
 
 export const createBetterAuth = <Options extends BetterAuthOptions>(
 	options: Options,
@@ -32,7 +32,7 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 
 		let handlerCtx: AuthContext;
 
-		if (isDynamicBaseURLConfig(options.baseURL)) {
+		if (isPerRequestBaseURL(options.baseURL)) {
 			// Per-request clone avoids mutating shared ctx under concurrent
 			// requests that may resolve to different hosts.
 			handlerCtx = await resolveRequestContext(
