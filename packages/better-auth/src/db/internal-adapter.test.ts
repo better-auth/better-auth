@@ -939,100 +939,57 @@ describe("internal adapter test", async () => {
 		expect(sessions.length).toBe(0);
 	});
 
-	it("findSessions should skip corrupt sessions without blanking the list", async () => {
-		const testMap = new Map<string, string>();
-
-		const testOpts = {
+	it.each([
+		{
+			caseName: "malformed JSON sessions",
+			storedValue: "invalid-json{{{",
+		},
+		{
+			caseName: "JSON null sessions",
+			storedValue: "null",
+		},
+	])("findSessions skips $caseName without discarding valid sessions", async ({
+		storedValue,
+	}) => {
+		const secondaryStorageValues = new Map<string, string>();
+		const options = {
 			database: new DatabaseSync(":memory:"),
 			secondaryStorage: {
 				set(key: string, value: string, ttl?: number) {
-					testMap.set(key, value);
+					secondaryStorageValues.set(key, value);
 				},
 				get(key: string) {
-					return testMap.get(key) || null;
+					return secondaryStorageValues.get(key) || null;
 				},
 				delete(key: string) {
-					testMap.delete(key);
+					secondaryStorageValues.delete(key);
 				},
 			},
 		} satisfies BetterAuthOptions;
 
-		(await getMigrations(testOpts)).runMigrations();
+		(await getMigrations(options)).runMigrations();
 
-		const testCtx = await init(testOpts);
-		const testInternalAdapter = testCtx.internalAdapter;
-
-		const user = await testInternalAdapter.createUser({
+		const { internalAdapter } = await init(options);
+		const user = await internalAdapter.createUser({
 			name: "test-user-find",
 			email: "test-find@email.com",
 		});
+		const session1 = await internalAdapter.createSession(user.id);
+		const session2 = await internalAdapter.createSession(user.id);
+		const session3 = await internalAdapter.createSession(user.id);
 
-		// Create 3 sessions
-		const session1 = await testInternalAdapter.createSession(user.id);
-		const session2 = await testInternalAdapter.createSession(user.id);
-		const session3 = await testInternalAdapter.createSession(user.id);
+		secondaryStorageValues.set(session2.token, storedValue);
 
-		// Corrupt session2 data
-		testMap.set(session2.token, "invalid-json{{{");
-
-		// findSessions should still return session1 and session3
-		const sessions = await testInternalAdapter.findSessions([
+		const sessions = await internalAdapter.findSessions([
 			session1.token,
 			session2.token,
 			session3.token,
 		]);
-		expect(sessions.length).toBe(2);
-		expect(sessions.map((s) => s.session.token).sort()).toEqual(
-			[session1.token, session3.token].sort(),
-		);
-	});
 
-	it("findSessions should skip a null-parse token without discarding other sessions", async () => {
-		const testMap = new Map<string, string>();
-
-		const testOpts = {
-			database: new DatabaseSync(":memory:"),
-			secondaryStorage: {
-				set(key: string, value: string, ttl?: number) {
-					testMap.set(key, value);
-				},
-				get(key: string) {
-					return testMap.get(key) || null;
-				},
-				delete(key: string) {
-					testMap.delete(key);
-				},
-			},
-		} satisfies BetterAuthOptions;
-
-		(await getMigrations(testOpts)).runMigrations();
-
-		const testCtx = await init(testOpts);
-		const testInternalAdapter = testCtx.internalAdapter;
-
-		const user = await testInternalAdapter.createUser({
-			name: "test-user-null-parse",
-			email: "test-null-parse@email.com",
-		});
-
-		// Create 3 sessions
-		const session1 = await testInternalAdapter.createSession(user.id);
-		const session2 = await testInternalAdapter.createSession(user.id);
-		const session3 = await testInternalAdapter.createSession(user.id);
-
-		// session2's stored value parses to null (JSON.parse("null") === null)
-		testMap.set(session2.token, "null");
-
-		// findSessions should still return session1 and session3
-		const sessions = await testInternalAdapter.findSessions([
+		expect(sessions.map(({ session }) => session.token)).toEqual([
 			session1.token,
-			session2.token,
 			session3.token,
 		]);
-		expect(sessions.length).toBe(2);
-		expect(sessions.map((s) => s.session.token).sort()).toEqual(
-			[session1.token, session3.token].sort(),
-		);
 	});
 
 	it("should update session and active-sessions list in secondary storage", async () => {
