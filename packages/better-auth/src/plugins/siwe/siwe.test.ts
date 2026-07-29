@@ -573,7 +573,7 @@ describe("siwe", async () => {
 			const session = await client.getSession({ fetchOptions: { headers } });
 			expect(session.data?.user.email).not.toBe("user@example.com");
 			expect(session.data?.user.email).toBe(
-				`${walletAddress.toLowerCase()}@http://localhost:3000`,
+				`${walletAddress.toLowerCase()}@siwe.placeholder.invalid`,
 			);
 		} finally {
 			context.internalAdapter.reserveVerificationValue =
