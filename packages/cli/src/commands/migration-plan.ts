@@ -1,6 +1,14 @@
-import type { getMigrations } from "better-auth/db/migration";
+import type {
+	getMigrations,
+	MigrationDecisionBlocker,
+} from "better-auth/db/migration";
+import { describeMigrationDecisionBlocker } from "better-auth/db/migration";
+import { MIGRATION_DECISIONS_FILE } from "./migration-decisions";
 
 type MigrationInspection = Awaited<ReturnType<typeof getMigrations>>;
+
+export const UPGRADE_GUIDE_URL =
+	"https://better-auth.com/docs/guides/1-7-upgrade-guide";
 
 interface CreateMigrationPlanInput
 	extends Pick<
@@ -12,16 +20,27 @@ interface CreateMigrationPlanInput
 		| "toBeCreated"
 	> {
 	hasChanges: boolean;
-	releaseMigrationBlockers?: ReleaseMigrationPreflightBlocker[] | undefined;
+	releaseMigrationBlockers?: ReleaseMigrationPlanBlocker[] | undefined;
 }
 
-export interface ReleaseMigrationPreflightBlocker {
-	code: "release-migration-preflight";
+export interface ReleaseMigrationErrorBlocker {
+	code: "release-migration-error";
 	message: string;
 }
 
-export type MigrationPlanBlocker =
-	| ReleaseMigrationPreflightBlocker
+export type ReleaseMigrationPlanBlocker =
+	| MigrationDecisionBlocker
+	| ReleaseMigrationErrorBlocker;
+
+export interface MigrationBlockerRemediation {
+	/** Upgrade guide anchor documenting this blocker code. */
+	docs: string;
+	/** One actionable sentence naming the next step. */
+	summary: string;
+}
+
+type MigrationBlockerDetail =
+	| ReleaseMigrationPlanBlocker
 	| {
 			code: "required-column-backfill";
 			columns: string[];
@@ -57,6 +76,10 @@ export type MigrationPlanBlocker =
 			targetTable: string;
 	  };
 
+export type MigrationPlanBlocker = MigrationBlockerDetail & {
+	remediation: MigrationBlockerRemediation;
+};
+
 export interface MigrationPlan {
 	blockers: MigrationPlanBlocker[];
 	changes: {
@@ -77,22 +100,93 @@ export interface MigrationPlan {
 	};
 }
 
-function getBlockerTable(blocker: MigrationPlanBlocker) {
-	if (blocker.code === "release-migration-preflight") return "";
-	if (
-		blocker.code === "required-column-backfill" ||
-		blocker.code === "required-column-constraint" ||
-		blocker.code === "retired-table-data"
-	) {
-		return blocker.table;
+/** One actionable sentence naming the blocked table and the work it needs. */
+export function describeMigrationBlocker(blocker: MigrationBlockerDetail) {
+	switch (blocker.code) {
+		case "release-migration-error":
+			return blocker.message;
+		case "required-column-backfill":
+			return `${blocker.table}: existing rows need values for ${blocker.columns.join(", ")}.`;
+		case "required-column-constraint":
+			return `${blocker.table}: make ${blocker.columns.join(", ")} non-nullable.`;
+		case "reprovision-data":
+			return `${blocker.sourceTables.join(", ")}: back up and remove retired data, then reprovision into ${blocker.targetTables.join(", ")} for ${blocker.migration}.`;
+		case "retired-table-data":
+			return `${blocker.table}: remove retired token rows for ${blocker.migration}.`;
+		case "table-data-conversion":
+			return `${blocker.sourceTable}: convert ${blocker.conversion} into ${blocker.targetTable} for ${blocker.migration}, or require users to consent again.`;
+		case "table-data-move":
+			return `${blocker.sourceTable}: move rows to ${blocker.targetTable} for ${blocker.migration}.`;
+		default:
+			return describeMigrationDecisionBlocker(blocker);
 	}
-	if (
-		blocker.code === "table-data-move" ||
-		blocker.code === "table-data-conversion"
-	) {
-		return blocker.sourceTable;
+}
+
+function summarizeMigrationRemediation(blocker: MigrationBlockerDetail) {
+	switch (blocker.code) {
+		case "account-identity-collision":
+			return `Merge or remove the duplicate rows in "${blocker.table}" so issuer "${blocker.issuer}" holds provider account id "${blocker.providerAccountId}" once, then migrate again.`;
+		case "backup-table-conflict":
+			return `Drop or rename "${blocker.backupTable}" so the migration can move "${blocker.table}" aside, then migrate again.`;
+		case "identifier-length-limit":
+			return `Rename "${blocker.table}" to a shorter name and record it under legacyTableNames in ${MIGRATION_DECISIONS_FILE}.`;
+		case "issuer-conflict":
+			return `Remove "${blocker.providerId}" from the issuers in ${MIGRATION_DECISIONS_FILE} to migrate these accounts as "${blocker.configuredIssuer}", or configure the provider to establish "${blocker.requestedIssuer}".`;
+		case "issuer-required":
+			return `Record the issuer for "${blocker.providerId}" under issuers in ${MIGRATION_DECISIONS_FILE}, or run \`auth migrate\` in a terminal to answer it there.`;
+		case "legacy-table-candidate":
+			return `Record which table holds the 1.6 "${blocker.model}" data under legacyTableNames in ${MIGRATION_DECISIONS_FILE}, or null when none of them does, or run \`auth migrate\` in a terminal to answer it there.`;
+		case "oauth-client-conflict":
+			return blocker.conflict === "missing-redirect-uri"
+				? `Give client "${blocker.clientId}" a redirect URI in "${blocker.table}" or delete the client, then migrate again.`
+				: `Align the redirect URIs of client "${blocker.clientId}" with the existing 1.7 client or delete one of them, then migrate again.`;
+		case "oauth-client-decision-required":
+			return `Record an oauth decision in ${MIGRATION_DECISIONS_FILE} to move these clients into the 1.7 client store, or run \`auth migrate\` in a terminal to answer it there.`;
+		case "oauth-consent-conflict":
+			return `Set oauth.consents to "reauthorize" in ${MIGRATION_DECISIONS_FILE}, or remove the 1.7 consent for client "${blocker.clientId}" and user "${blocker.userId}", then migrate again.`;
+		case "oauth-consent-decision-required":
+			return `Record oauth.consents as "migrate" or "reauthorize" in ${MIGRATION_DECISIONS_FILE}, or run \`auth migrate\` in a terminal to answer it there.`;
+		case "oauth-token-decision-required":
+			return `Record an oauth decision in ${MIGRATION_DECISIONS_FILE} to revoke these tokens, or run \`auth migrate\` in a terminal to answer it there.`;
+		case "release-migration-error":
+			return "Fix the reported problem, then run `auth migrate` again.";
+		case "required-column-backfill":
+			return `Backfill ${blocker.columns.join(", ")} for every row in "${blocker.table}", then run \`auth migrate\` again.`;
+		case "required-column-constraint":
+			return `Make ${blocker.columns.join(", ")} non-nullable in "${blocker.table}" with a reviewed migration, then run \`auth migrate\` again.`;
+		case "scim-decision-required":
+			return `Record scim.retireAccountIds in ${MIGRATION_DECISIONS_FILE}, or run \`auth migrate\` in a terminal to confirm the retirement inventory there.`;
+		case "scim-inventory-mismatch":
+			return `Set scim.retireAccountIds in ${MIGRATION_DECISIONS_FILE} to exactly the accounts this blocker reports.`;
+		case "reprovision-data":
+		case "retired-table-data":
+		case "table-data-conversion":
+		case "table-data-move":
+			return "Run `auth migrate` and follow the guided 1.6 migration, which moves this data for you.";
 	}
-	return blocker.sourceTables[0] || "";
+}
+
+function resolveMigrationRemediation(
+	blocker: MigrationBlockerDetail,
+): MigrationBlockerRemediation {
+	return {
+		docs: `${UPGRADE_GUIDE_URL}#${blocker.code}`,
+		summary: summarizeMigrationRemediation(blocker),
+	};
+}
+
+function getBlockerTable(blocker: MigrationBlockerDetail) {
+	if ("table" in blocker) return blocker.table;
+	if ("sourceTable" in blocker) return blocker.sourceTable;
+	if ("sourceTables" in blocker) return blocker.sourceTables[0] || "";
+	return "";
+}
+
+function getBlockerKey(blocker: MigrationBlockerDetail) {
+	return Object.entries(blocker)
+		.sort(([left], [right]) => left.localeCompare(right))
+		.map(([field, value]) => `${field}=${JSON.stringify(value)}`)
+		.join("\u001f");
 }
 
 export function createMigrationPlan({
@@ -104,7 +198,10 @@ export function createMigrationPlan({
 	toBeAddedIndexes,
 	toBeCreated,
 }: CreateMigrationPlanInput): MigrationPlan {
-	const blockers = [...migrationBlockers, ...releaseMigrationBlockers];
+	const blockers: MigrationBlockerDetail[] = [
+		...migrationBlockers,
+		...releaseMigrationBlockers,
+	];
 	return {
 		formatVersion: 1,
 		target: migrationTarget,
@@ -155,8 +252,15 @@ export function createMigrationPlan({
 				}
 				return blocker;
 			})
-			.sort((left, right) =>
-				getBlockerTable(left).localeCompare(getBlockerTable(right)),
-			),
+			.sort(
+				(left, right) =>
+					getBlockerTable(left).localeCompare(getBlockerTable(right)) ||
+					left.code.localeCompare(right.code) ||
+					getBlockerKey(left).localeCompare(getBlockerKey(right)),
+			)
+			.map((blocker) => ({
+				...blocker,
+				remediation: resolveMigrationRemediation(blocker),
+			})),
 	};
 }

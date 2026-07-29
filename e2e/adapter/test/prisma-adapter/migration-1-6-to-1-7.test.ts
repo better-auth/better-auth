@@ -71,11 +71,7 @@ it("migrates a published 1.6.25 SQLite database through the Prisma adapter", asy
 			table: "account",
 		});
 
-		await expect(
-			migrateFrom16(auth17.options, {
-				accountIssuers: { credential: "local:credential" },
-			}),
-		).resolves.toMatchObject({
+		await expect(migrateFrom16(auth17.options, {})).resolves.toMatchObject({
 			accounts: {
 				migrated: 1,
 				providers: { credential: 1 },

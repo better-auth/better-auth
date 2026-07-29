@@ -31,6 +31,7 @@ import type {
 	ReleaseMigrationBlocker,
 } from "./release-migration";
 import {
+	describeMigrationDecisionBlocker,
 	findReleaseMigrationBlockers,
 	inspectLegacyReleaseDataFrom16,
 	inspectScimAccountsFrom16,
@@ -38,12 +39,25 @@ import {
 	migrateOAuthProviderDataFrom16,
 	prepareOAuthProviderDataFrom16,
 	renameLegacyTables,
+	resolveConfiguredIssuers,
 	retireScimAccountsFrom16,
 	summarizeScimMigration,
 	validateMigrationFrom16,
 } from "./release-migration";
 
-export { validateMigrationFrom16 };
+export type {
+	ConfiguredAccountIssuers,
+	LegacyReleaseDataState,
+	LegacyReleaseModel,
+	MigrationDecisionBlocker,
+	UnresolvedIssuerReason,
+} from "./release-migration";
+export {
+	describeMigrationDecisionBlocker,
+	inspectLegacyReleaseDataFrom16,
+	resolveConfiguredIssuers,
+	validateMigrationFrom16,
+};
 
 // cspell:ignore attnum attrelid indisunique indisvalid indexrelid indnkeyatts ordinality seqno
 
@@ -669,10 +683,10 @@ async function getMssqlSchema(db: Kysely<unknown>): Promise<string> {
  */
 export interface MigrationInspectionOptions {
 	legacyTableNames?: {
-		oauthAccessToken?: string | undefined;
-		oauthApplication?: string | undefined;
-		oauthConsent?: string | undefined;
-		scimProvider?: string | undefined;
+		oauthAccessToken?: string | null | undefined;
+		oauthApplication?: string | null | undefined;
+		oauthConsent?: string | null | undefined;
+		scimProvider?: string | null | undefined;
 	};
 }
 

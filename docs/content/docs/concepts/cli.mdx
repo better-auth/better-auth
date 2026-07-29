@@ -33,22 +33,9 @@ npx auth@latest migrate
 * `--yes` - Skip the confirmation prompt and apply the schema directly.
 * `--dry-run` - Inspect the migration without changing the database.
 * `--json` - Print a deterministic, machine-readable migration plan without changing the database.
-* `--from 1.6` - Apply the reviewed Better Auth 1.6 data migration before creating the 1.7 schema.
-* `--account-issuer <providerId=issuer...>` - Supply an explicit issuer for every populated 1.6 account provider.
-* `--migrate-oauth-clients` - Copy 1.6 OAuth provider clients and hash their plaintext secrets for 1.7.
-* `--migrate-oauth-consents` - Convert 1.6 space-delimited OAuth consent scopes into 1.7 arrays.
-* `--reauthorize-oauth-consents` - Retire 1.6 OAuth consents instead of copying them. Use this instead of `--migrate-oauth-consents`.
-* `--revoke-oauth-tokens` - Retire all 1.6 OAuth provider tokens.
-* `--reprovision-scim` - Retire 1.6 SCIM provider credentials and acknowledge that the directory must be fully reprovisioned.
-* `--retire-scim-account <accountId...>` - Remove an explicitly reviewed 1.6 SCIM authentication account during the cutover.
-* `--legacy-oauth-access-token-table` - The physical name of a customized 1.6 `oauthAccessToken` table.
-* `--legacy-oauth-application-table` - The physical name of a customized 1.6 `oauthApplication` table.
-* `--legacy-oauth-consent-table` - The physical name of a customized 1.6 `oauthConsent` table.
-* `--legacy-scim-provider-table` - The physical name of a customized 1.6 `scimProvider` table.
+* `--plan <file>` - Apply the reviewed release decisions recorded in a `better-auth-migration.json` file.
 
-<Callout type="warn">
-  When upgrading a Drizzle or Prisma project from 1.6, update the ORM schema used by your Better Auth configuration before running the release migration, but do not apply that schema to the database. Drizzle users should make the adapter import the generated 1.7 schema. Prisma users should update `schema.prisma` and run `prisma generate`. Keep existing physical table and column mappings unchanged. The database must remain on the 1.6 schema until `migrate --from 1.6` performs the reviewed data and schema changes together.
-</Callout>
+### Inspect before applying
 
 Use `--dry-run` before an upgrade or when reviewing a generated migration:
 
@@ -58,42 +45,78 @@ npx auth@latest migrate --dry-run
 
 The human-readable output identifies the adapter and SQL dialect and lists the blocker codes, if any.
 
-Use `--json` in CI or with a coding agent. The output has a versioned `formatVersion`, the detected adapter and SQL dialect under `target`, a `status`, sorted schema changes, and stable blocker codes. A blocked plan exits with status `1`, and no database changes are applied.
+Use `--json` in CI or with a coding agent. The output has a versioned `formatVersion`, the detected adapter and SQL dialect under `target`, a `status`, sorted schema changes, and one entry per blocker. Each blocker carries a stable `code`, a one-sentence fix under `remediation.summary`, and the documentation anchor for that code under `remediation.docs`. A blocked plan exits with status `1`, and no database changes are applied.
 
 ```package-install title="Terminal"
 npx auth@latest migrate --json > better-auth-migration-plan.json
 ```
 
-The blocker codes describe the kind of reviewed data operation that must happen before the schema can change:
-
-* `required-column-backfill` - Existing rows need values for new required columns.
-* `required-column-constraint` - Backfilled columns must be made non-nullable.
-* `table-data-move` - Rows must move from a retired model to its replacement.
-* `table-data-conversion` - A retained model has data whose physical encoding changed.
-* `retired-table-data` - Rows from a retired model must be removed before its replacement is created.
-* `reprovision-data` - The old and new models have different lifecycle semantics and require a new provisioning cycle.
-* `release-migration-preflight` - A required 1.6 issuer, OAuth, or SCIM decision is missing or conflicts with the stored data.
-
 After resolving every blocker, run the command again. An `up-to-date` plan means the configured schema is already present; a `ready` plan can be applied with `migrate`.
 
-For a Better Auth 1.6 database, pass every decision required by the populated models to one release migration command. Omit the OAuth or SCIM flags when that feature has no legacy data:
+### Migrating a Better Auth 1.6 database
+
+`migrate` recognizes 1.6 data by the shape of the blockers it finds and switches to the guided migration on its own. In a terminal, it prints the detected adapter and dialect, the populated 1.6 tables with row counts, and the account issuers resolved from your configuration. It then asks only for the decisions the configuration cannot answer: whether a table found under an undeclared name holds a retired model's 1.6 data, an issuer for each unresolvable provider, whether stored OAuth consents move or users grant them again, and confirmation of the SCIM accounts it retires. The answers are written to `better-auth-migration.json`, the full plan is shown, and one final confirmation lists every irreversible action before anything is written.
+
+<Callout type="warn">
+  When upgrading a Drizzle or Prisma project from 1.6, update the ORM schema used by your Better Auth configuration before running the migration, but do not apply that schema to the database. Drizzle users should make the adapter import the generated 1.7 schema. Prisma users should update `schema.prisma` and run `prisma generate`. Keep existing physical table and column mappings unchanged. The database must remain on the 1.6 schema until `migrate` performs the reviewed data and schema changes together.
+</Callout>
+
+Replay the same decisions on another environment, in CI, or after an interrupted run:
 
 ```package-install title="Terminal"
-npx auth@latest migrate --from 1.6 \
-  --account-issuer credential=local:credential \
-  --account-issuer github=https://github.com \
-  --migrate-oauth-clients \
-  --migrate-oauth-consents \
-  --revoke-oauth-tokens \
-  --reprovision-scim \
-  --retire-scim-account <reviewed-account-id>
+npx auth@latest migrate --plan better-auth-migration.json
 ```
 
-The release migration validates every decision before writing. It rejects missing issuer mappings and identity collisions. OAuth client secrets are rehashed, and legacy tokens are retired. Before creating the 1.7 replacements, the command renames the legacy OAuth and SCIM tables with a `__better_auth_1_6` suffix. SCIM account IDs are never inferred from email or provider-name patterns; supply the exact IDs from a reviewed inventory.
+```json title="better-auth-migration.json"
+{
+  "formatVersion": 1,
+  "issuers": {
+    "legacy-portal": "https://sso.example.com"
+  },
+  "oauth": {
+    "consents": "reauthorize"
+  },
+  "scim": {
+    "retireAccountIds": ["acc_2f9c81", "acc_71ab04"]
+  },
+  "legacyTableNames": {
+    "oauthApplication": "oauth_app_1_6"
+  }
+}
+```
 
-Add `--dry-run` or `--json` to the complete command to validate the 1.6 decisions without applying them. PostgreSQL, SQLite, and SQL Server run the relational data and schema cutover on one transaction-scoped connection. MySQL validates every deterministic decision before writing and uses resumable operations because MySQL can commit DDL implicitly. If a MySQL infrastructure or permission error interrupts the cutover, keep authentication writes stopped, correct the error, and rerun the same command with the same decisions.
+Every key except `formatVersion` is optional; record only what your data needs. `issuers` maps a provider ID to the issuer 1.7 establishes for its existing accounts, and only for providers the tool cannot resolve from your configuration. `oauth.consents` is `"migrate"` or `"reauthorize"`, and it also acknowledges the client move and the retirement of 1.6 provider tokens. `scim.retireAccountIds` must match the accounts owned by the legacy SCIM providers exactly; those IDs are never inferred from email or provider-name patterns. `legacyTableNames` names customized physical 1.6 tables for `oauthApplication`, `oauthAccessToken`, `oauthConsent`, and `scimProvider`, and a model set to `null` records that no such table holds its data. Unknown keys and any unsupported `formatVersion` are rejected.
 
-If Prisma Migrate or Drizzle Kit owns your versioned schema history, record this direct release migration in that history before the next deployment. Do not run an ORM migration that applies the same 1.7 changes a second time.
+Without a terminal and without `--plan`, a run that still needs release decisions exits `1` with the blocker list rather than guessing.
+
+The migration validates every decision before writing, rejecting issuers that contradict your configuration as well as identity collisions. It renames the legacy OAuth and SCIM tables with a `__better_auth_1_6` suffix before creating the 1.7 replacements. PostgreSQL, SQLite, and SQL Server run the relational data and schema cutover on one transaction-scoped connection. MySQL validates every deterministic decision before writing and uses resumable operations because MySQL can commit DDL implicitly. If a MySQL infrastructure or permission error interrupts the cutover, keep authentication writes stopped, correct the error, and rerun the same command with the same decisions file.
+
+If Prisma Migrate or Drizzle Kit owns your versioned schema history, record this direct migration in that history before the next deployment. Do not run an ORM migration that applies the same 1.7 changes a second time. For an adapter that cannot expose a SQL migration connection, follow the [manual 1.6 to 1.7 migration](/docs/guides/1-7-manual-migration).
+
+### Blocker codes
+
+A blocked run changes nothing. Each code links to its remediation in the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide#migration-blockers):
+
+* [`account-identity-collision`](/docs/guides/1-7-upgrade-guide#account-identity-collision) - Two account rows would share one issuer and provider-account identity.
+* [`backup-table-conflict`](/docs/guides/1-7-upgrade-guide#backup-table-conflict) - The `__better_auth_1_6` backup name is taken or holds an unexpected layout.
+* [`identifier-length-limit`](/docs/guides/1-7-upgrade-guide#identifier-length-limit) - A generated backup table name exceeds the portable identifier limit.
+* [`issuer-conflict`](/docs/guides/1-7-upgrade-guide#issuer-conflict) - A recorded issuer contradicts the one the configuration derives.
+* [`issuer-required`](/docs/guides/1-7-upgrade-guide#issuer-required) - A provider in the account data has no issuer the configuration can derive.
+* [`legacy-table-candidate`](/docs/guides/1-7-upgrade-guide#legacy-table-candidate) - A table holds a retired model's 1.6 columns under a name no configuration declares.
+* [`oauth-client-conflict`](/docs/guides/1-7-upgrade-guide#oauth-client-conflict) - A 1.6 client has no redirect URI or collides with an existing 1.7 client.
+* [`oauth-client-decision-required`](/docs/guides/1-7-upgrade-guide#oauth-client-decision-required) - Registered 1.6 clients exist and no OAuth decision was recorded.
+* [`oauth-consent-conflict`](/docs/guides/1-7-upgrade-guide#oauth-consent-conflict) - A 1.7 consent already exists with different scopes.
+* [`oauth-consent-decision-required`](/docs/guides/1-7-upgrade-guide#oauth-consent-decision-required) - Stored consents need a `migrate` or `reauthorize` decision.
+* [`oauth-token-decision-required`](/docs/guides/1-7-upgrade-guide#oauth-token-decision-required) - Retiring the 1.6 provider tokens has not been acknowledged.
+* [`release-migration-error`](/docs/guides/1-7-upgrade-guide#release-migration-error) - The 1.6 preflight could not finish; the message comes from the migration engine.
+* [`reprovision-data`](/docs/guides/1-7-upgrade-guide#reprovision-data) - The old and new models have different lifecycle semantics and require a new provisioning cycle.
+* [`required-column-backfill`](/docs/guides/1-7-upgrade-guide#required-column-backfill) - Existing rows need values for new required columns.
+* [`required-column-constraint`](/docs/guides/1-7-upgrade-guide#required-column-constraint) - Backfilled columns must be made non-nullable.
+* [`retired-table-data`](/docs/guides/1-7-upgrade-guide#retired-table-data) - Rows from a retired model must be removed before its replacement is created.
+* [`scim-decision-required`](/docs/guides/1-7-upgrade-guide#scim-decision-required) - Legacy SCIM data exists and no retirement inventory was confirmed.
+* [`scim-inventory-mismatch`](/docs/guides/1-7-upgrade-guide#scim-inventory-mismatch) - The retirement inventory does not match the accounts the legacy providers own.
+* [`table-data-conversion`](/docs/guides/1-7-upgrade-guide#table-data-conversion) - A retained model has data whose physical encoding changed.
+* [`table-data-move`](/docs/guides/1-7-upgrade-guide#table-data-move) - Rows must move from a retired model to its replacement.
 
 <Callout type="info">
   **Using PostgreSQL with a non-default schema?**

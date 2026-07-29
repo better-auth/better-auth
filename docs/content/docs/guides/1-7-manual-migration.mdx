@@ -1,0 +1,75 @@
+---
+title: Manual 1.6 to 1.7 migration
+description: Apply the Better Auth 1.6 to 1.7 data migration by hand when your adapter cannot expose a SQL migration connection.
+---
+
+`auth migrate` performs the 1.6 to 1.7 data and schema cutover for the built-in SQL database configuration and for SQL-backed Drizzle or Prisma adapters. Every other adapter, such as MongoDB or a custom adapter, needs the same operations applied through its own tooling. This page describes those operations. Follow the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide) for everything else.
+
+<Callout type="warn">
+  Use a maintenance window. Back up every affected collection or table, stop authentication writes, and stop every application instance before you begin. These operations rewrite identity data and cannot be undone.
+</Callout>
+
+Apply only the sections that match your data. Account identity applies to every project. The OAuth provider section applies if you ran `oidcProvider` or the in-core MCP plugin. The SCIM section applies if you ran the 1.6 SCIM plugin.
+
+## Back fill account identity
+
+Better Auth 1.7 recognizes an external account by the unique pair of `issuer` and `providerAccountId`. Both fields are required, and a unique compound index covers them.
+
+1. Back up the `account` and `user` tables, then inventory every distinct `providerId`. Include custom physical field names from `account.fields` in that inventory.
+2. Rename the physical `accountId` column to `providerAccountId`, or add `providerAccountId` as nullable and copy the existing values if your migration tool cannot express a rename. Add `issuer` as nullable during the backfill.
+3. Populate both fields according to the account type:
+
+   | Account type                                    | `issuer`                           | `providerAccountId`                    |
+   | ----------------------------------------------- | ---------------------------------- | -------------------------------------- |
+   | Credential                                      | `local:credential`                 | Stable `id` from the linked `user` row |
+   | Provider that declares a static `accountIssuer` | That exact declared value          | Existing provider account identifier   |
+   | Any other OAuth provider                        | `local:oauth:<encoded providerId>` | Existing provider account identifier   |
+
+   Take each issuer from the same rule the 1.7 runtime uses, or a migrated account never matches a later sign-in. Google is `https://accounts.google.com`, Apple is `https://appleid.apple.com`, Facebook is `https://www.facebook.com`, and LINE is `https://access.line.me`. Cognito and Paybin derive theirs from their configured region, user pool, or environment. Every other provider uses the synthetic form, which percent-encodes its provider ID segment exactly as `encodeURIComponent(providerId)`: `github` becomes `local:oauth:github`, and `team/github` becomes `local:oauth:team%2Fgithub`. GitHub declares no issuer of its own, so `https://github.com` is never the right value for it.
+
+   Microsoft Entra ID reads its issuer from each token, so it has no static value. Use the issuer your tenant actually returns in the `iss` claim. Multiple provider configurations that represent the same OpenID Connect authority must use the same issuer. Do not derive an issuer from email, display name, an unverified request value, or a mutable authorization endpoint.
+4. Find collisions before creating the unique index. Adapt this query to your physical table and field names:
+
+   ```sql title="Identity collision check"
+   SELECT issuer, providerAccountId, COUNT(*) AS accountCount,
+          COUNT(DISTINCT userId) AS userCount
+   FROM account
+   GROUP BY issuer, providerAccountId
+   HAVING COUNT(*) > 1;
+   ```
+
+   If duplicate rows belong to one user, choose the account record to keep and reconcile its provider configuration, tokens, scopes, and timestamps before deleting the others. If a key belongs to multiple users, stop the migration and establish the owner from trusted provider data. Never merge users by matching email alone.
+5. Confirm that every row has both identity fields, make them non-nullable, and add the unique compound index on `issuer` and `providerAccountId`. Remove the old column only after verifying a copy-based migration.
+6. Update custom adapters, database hooks, generated schemas, and field mappings to use `issuer` and `providerAccountId`. Credential accounts keep the linked user's stable `id` as `providerAccountId`; email remains a mutable sign-in identifier and does not change the account key.
+
+If a previous SSO mapping used `oidcConfig.mapping.id` or `samlConfig.mapping.id`, build a trusted mapping from every old account subject to the protocol-defined identity first, then rewrite those account rows before adding the index. OIDC needs the exact issuer and verified `sub`; SAML needs the actual IdP metadata entity ID and signed `NameID`. Obtain this mapping from the identity provider, not from email or a mutable profile attribute.
+
+## Move OAuth provider clients, consents, and tokens
+
+`@better-auth/oauth-provider` stores registered clients in `oauthClient`, not the old `oauthApplication`, and replaces the combined access and refresh token layout in `oauthAccessToken` with separate token models.
+
+1. Back up `oauthApplication`, `oauthAccessToken`, and `oauthConsent`, then keep the originals under a distinct name until verification finishes.
+2. Create the 1.7 provider models from `npx auth@rc generate`.
+3. Copy each client into `oauthClient`. The two tables are not column-compatible: `redirectUrls` becomes the `redirectUris` array, `metadata` becomes JSON, and fields such as `grantTypes` and `tokenEndpointAuthMethod` are new. A client with no redirect URI cannot be migrated.
+4. Give every confidential client a fresh secret. The 1.7 client store keeps secrets hashed, so reset each secret through the provider and hand it to the client owner rather than copying the 1.6 plaintext value. Dynamically registered clients can register again instead.
+5. Choose one strategy for stored consents. Convert each 1.6 space-delimited `scopes` string into the 1.7 string array and tie the consent to the moved client, or drop the consents so users grant access again. Dropping them is the safer choice when client IDs changed.
+6. Delete the 1.6 access and refresh token rows. The 1.7 provider never reads them, and clients receive new tokens at their next login.
+
+## Reprovision SCIM
+
+The 1.7 SCIM models do not read or convert the legacy SCIM tables, so this cutover always ends in a full provisioning cycle.
+
+1. Pause provisioning and stop every application instance that runs the old SCIM plugin.
+2. Back up the legacy SCIM tables. Build a reviewed inventory of SCIM-created `account` rows, their linked `user` rows, and any organization membership or team state created by provisioning. Use the configured SCIM providers and directory subjects to identify them. Do not classify rows by a `providerId` prefix alone: stable 1.6 could store a raw provider ID that another account source also uses, while later prereleases used a `scim:` namespace.
+3. Decide how each legacy User will be handled. To retain a User, copy a stable connection-and-subject-to-`userId` mapping into application-owned storage, remove the legacy SCIM account row, and configure `identity.resolveUser` before reprovisioning. To recreate a User, remove the legacy SCIM account and delete the User only after proving that no other sign-in method or application data depends on it. Clean up organization state according to your application's ownership rules.
+4. Retire whichever legacy plugin models exist. Stable 1.6 uses `scimProvider`. If you adopted prerelease Group provisioning, back up and drop `scimGroupRoleGrant`, `scimGroupRole`, `scimGroupMember`, and `scimGroup` in that child-first order.
+5. Create `scimConnectionBinding`, `scimIdentityTombstone`, `scimSubject`, `scimUser`, `scimGroup`, `scimGroupMember`, and `scimProjectionGrant`, then enable native interactive transactions in your adapter. Cloudflare D1 cannot provide the required transaction behavior.
+6. Deploy the new configuration, update the directory's bearer credential, and trigger a complete User and Group provisioning cycle.
+
+<Callout type="warn">
+  The new plugin never links by email. Retained legacy Users will cause `409 Conflict` during reprovisioning unless `identity.resolveUser` returns an explicit link decision for them.
+</Callout>
+
+## Verify before deploying
+
+Deploy 1.7 only after the collision query returns no rows, the required unique index exists, and every row count matches what you expected. Verify email-and-password sign-in, returning OAuth and SSO sign-in, explicit account linking, unlinking, provider profile retrieval, and token refresh against the migrated data. If you migrated the OAuth provider, confirm that a client can complete an authorization request and that retired 1.6 tokens read as inactive at introspection. If you reprovisioned SCIM, verify user linking, lifecycle, and role projection, then resume provisioning.

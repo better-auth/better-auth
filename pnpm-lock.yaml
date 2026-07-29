@@ -601,6 +601,9 @@ importers:
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
+      auth:
+        specifier: workspace:*
+        version: link:../../../../packages/cli
       better-auth:
         specifier: workspace:*
         version: link:../../../../packages/better-auth
@@ -1104,7 +1107,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@opentelemetry/api@1.9.1)(@types/node@25.9.4)(@vitest/ui@4.1.9)(happy-dom@20.8.9)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@25.9.4)(typescript@6.0.3))(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0)
+        version: 4.0.18(@opentelemetry/api@1.9.1)(@types/node@25.9.4)(@vitest/ui@4.1.9(vitest@4.1.9))(happy-dom@20.8.9)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@25.9.4)(typescript@6.0.3))(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0)
       vue:
         specifier: ^3.5.29
         version: 3.5.29(typescript@6.0.3)
@@ -28336,7 +28339,7 @@ snapshots:
       vite: 7.3.2(@types/node@25.9.4)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0)
     optional: true
 
-  vitest@4.0.18(@opentelemetry/api@1.9.1)(@types/node@25.9.4)(@vitest/ui@4.1.9)(happy-dom@20.8.9)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@25.9.4)(typescript@6.0.3))(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0):
+  vitest@4.0.18(@opentelemetry/api@1.9.1)(@types/node@25.9.4)(@vitest/ui@4.1.9(vitest@4.1.9))(happy-dom@20.8.9)(jiti@2.7.0)(lightningcss@1.32.0)(msw@2.14.6(@types/node@25.9.4)(typescript@6.0.3))(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0):
     dependencies:
       '@vitest/expect': 4.0.18
       '@vitest/mocker': 4.0.18(msw@2.14.6(@types/node@25.9.4)(typescript@6.0.3))(vite@6.4.2(@types/node@25.9.4)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.21.0)(yaml@2.9.0))

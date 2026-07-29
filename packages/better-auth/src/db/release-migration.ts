@@ -1,17 +1,60 @@
 import type { BetterAuthOptions } from "@better-auth/core";
-import { getAuthTables } from "@better-auth/core/db";
+import { createLocalAccountIssuer, getAuthTables } from "@better-auth/core/db";
 import { getDatabaseIndexStringLength } from "@better-auth/core/db/internal";
 import { BetterAuthError } from "@better-auth/core/error";
+import type { OAuthProvider } from "@better-auth/core/oauth2";
+import type { SocialProviders } from "@better-auth/core/social-providers";
+import { socialProviders } from "@better-auth/core/social-providers";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import type { Kysely } from "kysely";
+import type { Kysely, TableMetadata } from "kysely";
 import { sql } from "kysely";
+import type { Entries } from "type-fest";
+import { resolveStaticOAuthAccountIssuer } from "../oauth2/account-key";
+import type { GenericOAuthConfig } from "../plugins/generic-oauth/types";
 import { getAdapter } from "./adapter-kysely";
 import { getSchema } from "./get-schema";
 import type { MigrationDatabase } from "./migration-database";
 import { getMigrationDatabase } from "./migration-database";
 
 // cspell:ignore conindid indexrelid
+
+const PORTABLE_IDENTIFIER_BYTE_LIMIT = 63;
+
+const LEGACY_BACKUP_SUFFIX = "__better_auth_1_6";
+
+/** A 1.6 model whose physical table name no 1.7 configuration can supply. */
+export type LegacyReleaseModel =
+	| "oauthAccessToken"
+	| "oauthApplication"
+	| "oauthConsent"
+	| "scimProvider";
+
+interface LegacyTableShape {
+	/** Columns every 1.6 table of this model carries. */
+	columns: readonly string[];
+	/** Columns only the 1.7 replacement carries. */
+	replacementColumns: readonly string[];
+}
+
+const legacyTableShapes: Record<LegacyReleaseModel, LegacyTableShape> = {
+	oauthAccessToken: {
+		columns: ["accessToken", "clientId", "refreshToken", "scopes"],
+		replacementColumns: ["token"],
+	},
+	oauthApplication: {
+		columns: ["clientId", "redirectUrls"],
+		replacementColumns: ["redirectUris"],
+	},
+	oauthConsent: {
+		columns: ["clientId", "consentGiven", "scopes"],
+		replacementColumns: ["requestedUserInfoClaims"],
+	},
+	scimProvider: {
+		columns: ["providerId", "scimToken"],
+		replacementColumns: [],
+	},
+};
 
 export interface TableDataMoveBlocker {
 	code: "table-data-move";
@@ -47,20 +90,314 @@ export type ReleaseMigrationBlocker =
 	| RetiredTableDataBlocker
 	| TableDataConversionBlocker;
 
+/**
+ * A 1.6 release decision that is missing, ambiguous, or contradicted by the
+ * stored data, reported with the values needed to resolve it.
+ */
+export type MigrationDecisionBlocker =
+	| {
+			code: "account-identity-collision";
+			issuer: string;
+			providerAccountId: string;
+			table: string;
+	  }
+	| {
+			backupTable: string;
+			code: "backup-table-conflict";
+			conflict: "backup-table-exists" | "unexpected-backup-schema";
+			table: string;
+	  }
+	| {
+			code: "identifier-length-limit";
+			identifier: string;
+			limit: number;
+			table: string;
+	  }
+	| {
+			code: "issuer-conflict";
+			configuredIssuer: string;
+			providerId: string;
+			requestedIssuer: string;
+			table: string;
+	  }
+	| {
+			accountCount: number;
+			code: "issuer-required";
+			providerId: string;
+			reason: UnresolvedIssuerReason | "unconfigured-provider";
+			table: string;
+	  }
+	| {
+			candidateTables: string[];
+			code: "legacy-table-candidate";
+			model: LegacyReleaseModel;
+			table: string;
+	  }
+	| {
+			clientId: string;
+			code: "oauth-client-conflict";
+			conflict: "missing-redirect-uri" | "redirect-uri-mismatch";
+			table: string;
+	  }
+	| {
+			code: "oauth-client-decision-required";
+			rowCount: number;
+			table: string;
+	  }
+	| {
+			clientId: string;
+			code: "oauth-consent-conflict";
+			table: string;
+			userId: string;
+	  }
+	| {
+			code: "oauth-consent-decision-required";
+			rowCount: number;
+			table: string;
+	  }
+	| {
+			code: "oauth-token-decision-required";
+			rowCount: number;
+			table: string;
+	  }
+	| {
+			code: "scim-decision-required";
+			rowCount: number;
+			table: string;
+	  }
+	| {
+			code: "scim-inventory-mismatch";
+			missingAccountIds: string[];
+			table: string;
+			unknownAccountIds: string[];
+	  };
+
+/**
+ * Renders a 1.6 release decision blocker as a single sentence naming both the
+ * problem and the values that resolve it.
+ */
+export function describeMigrationDecisionBlocker(
+	blocker: MigrationDecisionBlocker,
+): string {
+	switch (blocker.code) {
+		case "account-identity-collision":
+			return `The 1.6 account migration found duplicate issuer and provider-account identities: issuer "${blocker.issuer}" with provider account id "${blocker.providerAccountId}".`;
+		case "backup-table-conflict":
+			return blocker.conflict === "backup-table-exists"
+				? `Cannot retire legacy table "${blocker.table}" because backup table "${blocker.backupTable}" already exists.`
+				: `Backup table "${blocker.backupTable}" does not have the expected 1.6 schema.`;
+		case "identifier-length-limit":
+			return `The automatic backup table name "${blocker.identifier}" for "${blocker.table}" exceeds the portable ${blocker.limit}-byte identifier limit. Configure a shorter legacy table name before migrating.`;
+		case "issuer-conflict":
+			return `Provider "${blocker.providerId}" derives issuer "${blocker.configuredIssuer}" from this Better Auth configuration, so accounts migrated with "${blocker.requestedIssuer}" would never match a 1.7 sign-in.`;
+		case "issuer-required":
+			switch (blocker.reason) {
+				case "discovery-issuer":
+					return `The 1.6 account migration requires an issuer for provider "${blocker.providerId}", which takes its issuer from a discovery document this migration does not fetch.`;
+				case "dynamic-issuer":
+					return `The 1.6 account migration requires an issuer for provider "${blocker.providerId}", which resolves its issuer from each provider response.`;
+				case "unconfigured-provider":
+					return `The 1.6 account migration requires an issuer for provider "${blocker.providerId}", which this Better Auth configuration does not declare.`;
+			}
+		case "legacy-table-candidate":
+			return `The 1.6 migration found no "${blocker.model}" data in "${blocker.table}", and these tables hold the 1.6 "${blocker.model}" columns: ${blocker.candidateTables.map((table) => `"${table}"`).join(", ")}.`;
+		case "oauth-client-conflict":
+			return blocker.conflict === "missing-redirect-uri"
+				? `OAuth client "${blocker.clientId}" has no redirect URI and cannot be migrated.`
+				: `OAuth client "${blocker.clientId}" already exists with different redirect URIs.`;
+		case "oauth-client-decision-required":
+			return 'The 1.6 OAuth client migration requires clients: "migrate" and clientSecrets: "rehash-plaintext".';
+		case "oauth-consent-conflict":
+			return `OAuth consent for client "${blocker.clientId}" and user "${blocker.userId}" already exists with different scopes.`;
+		case "oauth-consent-decision-required":
+			return 'The 1.6 OAuth consent migration requires consents: "migrate" or "reauthorize".';
+		case "oauth-token-decision-required":
+			return 'The 1.6 OAuth token migration requires tokens: "revoke".';
+		case "scim-decision-required":
+			return 'The 1.6 SCIM migration requires providers: "reprovision" and an explicit accountIdsToRetire inventory.';
+		case "scim-inventory-mismatch":
+			return `The SCIM account retirement inventory must exactly match every account owned by the legacy SCIM providers. Missing: ${blocker.missingAccountIds.join(", ") || "none"}. Unknown: ${blocker.unknownAccountIds.join(", ") || "none"}.`;
+	}
+}
+
+function reportMigrationDecisionBlocker(
+	blockers: MigrationDecisionBlocker[] | undefined,
+	blocker: MigrationDecisionBlocker,
+) {
+	if (!blockers) {
+		throw new BetterAuthError(describeMigrationDecisionBlocker(blocker));
+	}
+	blockers.push(blocker);
+}
+
+function getMigrationDecisionBlockerKey(blocker: MigrationDecisionBlocker) {
+	return Object.entries(blocker)
+		.sort(([left], [right]) => left.localeCompare(right))
+		.map(([field, value]) => `${field}=${JSON.stringify(value)}`)
+		.join("\u001f");
+}
+
+/** Why a provider's issuer cannot be derived from configuration alone. */
+export type UnresolvedIssuerReason = "discovery-issuer" | "dynamic-issuer";
+
+type ProviderIssuerResolution =
+	| { issuer: string }
+	| { unresolved: UnresolvedIssuerReason };
+
+type ProviderIssuerEntry = readonly [string, ProviderIssuerResolution];
+
+export interface ConfiguredAccountIssuers {
+	/** Issuer the 1.7 runtime establishes for each configured provider. */
+	issuers: Record<string, string>;
+	/** Providers whose issuer only exists once discovery or a sign-in runs. */
+	unresolvedProviders: Record<string, UnresolvedIssuerReason>;
+}
+
+function resolveSocialProviderIssuer(
+	provider: OAuthProvider,
+): ProviderIssuerResolution {
+	const issuer = resolveStaticOAuthAccountIssuer(provider);
+	return issuer ? { issuer } : { unresolved: "dynamic-issuer" };
+}
+
+function resolveGenericOAuthIssuers(
+	pluginOptions: Record<string, unknown> | undefined,
+): ProviderIssuerEntry[] {
+	const declared: unknown = pluginOptions?.config;
+	if (!Array.isArray(declared)) return [];
+	const providerConfigs: readonly unknown[] = declared;
+	return providerConfigs.flatMap((entry): ProviderIssuerEntry[] => {
+		if (typeof entry !== "object" || entry === null) return [];
+		const { accountIssuer, discoveryUrl, providerId } =
+			entry as Partial<GenericOAuthConfig>;
+		if (!providerId) return [];
+		if (typeof accountIssuer === "function") {
+			return [[providerId, { unresolved: "dynamic-issuer" }]];
+		}
+		if (accountIssuer === undefined && discoveryUrl) {
+			return [[providerId, { unresolved: "discovery-issuer" }]];
+		}
+		const issuer = resolveStaticOAuthAccountIssuer({
+			accountIssuer,
+			id: providerId,
+		});
+		return issuer ? [[providerId, { issuer }]] : [];
+	});
+}
+
+function resolvePluginIssuers(
+	plugins: BetterAuthOptions["plugins"],
+): ProviderIssuerEntry[] {
+	return (plugins ?? []).flatMap((plugin): ProviderIssuerEntry[] => {
+		const pluginOptions: Record<string, unknown> | undefined = plugin.options;
+		switch (plugin.id) {
+			case "generic-oauth":
+				return resolveGenericOAuthIssuers(pluginOptions);
+			case "siwe":
+				return [["siwe", { issuer: createLocalAccountIssuer("siwe") }]];
+			default:
+				return [];
+		}
+	});
+}
+
+/**
+ * Resolves the issuer every configured provider establishes at runtime, so a
+ * 1.6 migration only asks for the issuers the configuration cannot produce.
+ *
+ * Resolution reads configuration only: no plugin is initialized and no
+ * discovery document is fetched, so a provider whose issuer arrives with a
+ * discovery response or a provider response stays unresolved.
+ */
+export async function resolveConfiguredIssuers(
+	config: BetterAuthOptions,
+): Promise<ConfiguredAccountIssuers> {
+	const resolutions = new Map<string, ProviderIssuerResolution>();
+	for (const [providerId, providerConfig] of Object.entries(
+		config.socialProviders || {},
+	) as unknown as Entries<SocialProviders>) {
+		const resolvedConfig =
+			typeof providerConfig === "function"
+				? await providerConfig()
+				: providerConfig;
+		if (resolvedConfig == null || resolvedConfig.enabled === false) continue;
+		const provider = socialProviders[providerId](
+			resolvedConfig as never,
+		) as OAuthProvider;
+		resolutions.set(provider.id, resolveSocialProviderIssuer(provider));
+	}
+	// Plugin providers are registered ahead of social providers, so a shared
+	// provider id resolves to the plugin's issuer.
+	for (const [providerId, resolution] of resolvePluginIssuers(config.plugins)) {
+		resolutions.set(providerId, resolution);
+	}
+
+	const issuers: Record<string, string> = {
+		credential: createLocalAccountIssuer("credential"),
+	};
+	const unresolvedProviders: Record<string, UnresolvedIssuerReason> = {};
+	for (const [providerId, resolution] of resolutions) {
+		if ("issuer" in resolution) {
+			issuers[providerId] = resolution.issuer;
+			continue;
+		}
+		unresolvedProviders[providerId] = resolution.unresolved;
+	}
+	return { issuers, unresolvedProviders };
+}
+
+async function resolveMigrationAccountIssuers(
+	config: BetterAuthOptions,
+	options: MigrateFrom16Options,
+	accountTable: string,
+	blockers: MigrationDecisionBlocker[] | undefined,
+) {
+	const configured = await resolveConfiguredIssuers(config);
+	const accountIssuers = { ...configured.issuers };
+	for (const [providerId, requested] of Object.entries(
+		options.accountIssuers || {},
+	)) {
+		const requestedIssuer = requested.trim();
+		if (!requestedIssuer) continue;
+		const configuredIssuer = configured.issuers[providerId];
+		if (configuredIssuer && configuredIssuer !== requestedIssuer) {
+			reportMigrationDecisionBlocker(blockers, {
+				code: "issuer-conflict",
+				configuredIssuer,
+				providerId,
+				requestedIssuer,
+				table: accountTable,
+			});
+			continue;
+		}
+		accountIssuers[providerId] = requestedIssuer;
+	}
+	return {
+		accountIssuers,
+		unresolvedProviders: configured.unresolvedProviders,
+	};
+}
+
 export interface MigrateFrom16Options {
 	/**
-	 * Stable 1.7 issuer for every populated 1.6 account provider.
+	 * Stable 1.7 issuer for each populated 1.6 account provider the
+	 * configuration cannot resolve on its own.
 	 *
-	 * Credential accounts use `local:credential`. OAuth providers without a
-	 * provider-declared issuer use `local:oauth:<encoded-provider-id>`.
+	 * Configured providers derive their issuer the same way the 1.7 runtime
+	 * does, so an entry is only needed for a provider missing from the
+	 * configuration or one that resolves its issuer per authentication.
 	 */
-	accountIssuers: Record<string, string>;
-	/** Physical names used by customized 1.6 plugin schemas. */
+	accountIssuers?: Record<string, string> | undefined;
+	/**
+	 * Physical names used by customized 1.6 plugin schemas. `null` records that
+	 * no customized table holds that model's 1.6 data, which settles the
+	 * candidates the shape scan proposes.
+	 */
 	legacyTableNames?: {
-		oauthAccessToken?: string | undefined;
-		oauthApplication?: string | undefined;
-		oauthConsent?: string | undefined;
-		scimProvider?: string | undefined;
+		oauthAccessToken?: string | null | undefined;
+		oauthApplication?: string | null | undefined;
+		oauthConsent?: string | null | undefined;
+		scimProvider?: string | null | undefined;
 	};
 	/** Explicit policy for data owned by the retired 1.6 OIDC provider. */
 	oauthProvider?: {
@@ -115,10 +452,10 @@ interface ReleaseMigrationInspection {
 		name: string;
 	}[];
 	legacyTableNames?: {
-		oauthAccessToken?: string | undefined;
-		oauthApplication?: string | undefined;
-		oauthConsent?: string | undefined;
-		scimProvider?: string | undefined;
+		oauthAccessToken?: string | null | undefined;
+		oauthApplication?: string | null | undefined;
+		oauthConsent?: string | null | undefined;
+		scimProvider?: string | null | undefined;
 	};
 	tableContainsRows: (table: string) => Promise<boolean>;
 }
@@ -231,12 +568,22 @@ function toSafeRowCount(value: bigint | number | string) {
 	return count;
 }
 
-function getLegacyBackupTableName(sourceTable: string) {
-	const backupTable = `${sourceTable}__better_auth_1_6`;
-	if (new TextEncoder().encode(backupTable).length > 63) {
-		throw new BetterAuthError(
-			`The automatic backup table name for "${sourceTable}" exceeds the portable 63-byte identifier limit. Configure a shorter legacy table name before migrating.`,
-		);
+function getLegacyBackupTableName(
+	sourceTable: string,
+	blockers: MigrationDecisionBlocker[] | undefined,
+) {
+	const backupTable = `${sourceTable}${LEGACY_BACKUP_SUFFIX}`;
+	if (
+		new TextEncoder().encode(backupTable).length >
+		PORTABLE_IDENTIFIER_BYTE_LIMIT
+	) {
+		reportMigrationDecisionBlocker(blockers, {
+			code: "identifier-length-limit",
+			identifier: backupTable,
+			limit: PORTABLE_IDENTIFIER_BYTE_LIMIT,
+			table: sourceTable,
+		});
+		return undefined;
 	}
 	return backupTable;
 }
@@ -249,38 +596,56 @@ async function countTableRows(kysely: Kysely<unknown>, table: string) {
 	return toSafeRowCount(result.rows[0]?.count ?? 0);
 }
 
+function hasLegacyTableShape(
+	table: TableMetadata | undefined,
+	shape: LegacyTableShape,
+) {
+	if (!table) return false;
+	const columns = new Set(table.columns.map((column) => column.name));
+	return (
+		shape.columns.every((column) => columns.has(column)) &&
+		!shape.replacementColumns.some((column) => columns.has(column))
+	);
+}
+
 async function inspectLegacyTable({
+	blockers,
 	kysely,
-	legacyColumns,
+	model,
 	sourceTable,
+	tables,
 }: {
+	blockers: MigrationDecisionBlocker[] | undefined;
 	kysely: Kysely<unknown>;
-	legacyColumns: readonly string[];
+	model: LegacyReleaseModel;
 	sourceTable: string;
+	tables: readonly TableMetadata[];
 }): Promise<LegacyTableState | undefined> {
-	const tables = await kysely.introspection.getTables();
+	const shape = legacyTableShapes[model];
 	const source = tables.find((table) => table.name === sourceTable);
-	const backupTable = getLegacyBackupTableName(sourceTable);
+	const backupTable = getLegacyBackupTableName(sourceTable, blockers);
+	if (!backupTable) return undefined;
 	const backup = tables.find((table) => table.name === backupTable);
-	const hasLegacyShape = (table: (typeof tables)[number] | undefined) =>
-		Boolean(
-			table &&
-				legacyColumns.every((column) =>
-					table.columns.some((candidate) => candidate.name === column),
-				),
-		);
-	const sourceHasLegacyShape = hasLegacyShape(source);
-	const backupHasLegacyShape = hasLegacyShape(backup);
+	const sourceHasLegacyShape = hasLegacyTableShape(source, shape);
+	const backupHasLegacyShape = hasLegacyTableShape(backup, shape);
 
 	if (sourceHasLegacyShape && backup) {
-		throw new BetterAuthError(
-			`Cannot retire legacy table "${sourceTable}" because backup table "${backupTable}" already exists.`,
-		);
+		reportMigrationDecisionBlocker(blockers, {
+			backupTable,
+			code: "backup-table-conflict",
+			conflict: "backup-table-exists",
+			table: sourceTable,
+		});
+		return undefined;
 	}
 	if (backup && !backupHasLegacyShape) {
-		throw new BetterAuthError(
-			`Backup table "${backupTable}" does not have the expected 1.6 schema.`,
-		);
+		reportMigrationDecisionBlocker(blockers, {
+			backupTable,
+			code: "backup-table-conflict",
+			conflict: "unexpected-backup-schema",
+			table: sourceTable,
+		});
+		return undefined;
 	}
 	const activeLegacyTable = sourceHasLegacyShape
 		? sourceTable
@@ -297,6 +662,74 @@ async function inspectLegacyTable({
 	};
 }
 
+/**
+ * Tables that carry a model's 1.6 columns under a name the migration was not
+ * told about. A customized 1.6 schema is the only source of such a name, so a
+ * candidate is reported for review and never migrated on its own.
+ */
+async function findLegacyTableCandidates({
+	candidateTables,
+	kysely,
+	model,
+	sourceTable,
+}: {
+	candidateTables: readonly TableMetadata[];
+	kysely: Kysely<unknown>;
+	model: LegacyReleaseModel;
+	sourceTable: string;
+}) {
+	const shape = legacyTableShapes[model];
+	const candidates: string[] = [];
+	for (const table of candidateTables) {
+		if (table.name === sourceTable) continue;
+		if (!hasLegacyTableShape(table, shape)) continue;
+		if ((await countTableRows(kysely, table.name)) === 0) continue;
+		candidates.push(table.name);
+	}
+	return candidates.sort();
+}
+
+async function inspectLegacyModel({
+	blockers,
+	candidateTables,
+	configuredTable,
+	kysely,
+	model,
+	tables,
+}: {
+	blockers: MigrationDecisionBlocker[] | undefined;
+	candidateTables: readonly TableMetadata[];
+	configuredTable: string | null | undefined;
+	kysely: Kysely<unknown>;
+	model: LegacyReleaseModel;
+	tables: readonly TableMetadata[];
+}): Promise<LegacyTableState | undefined> {
+	const sourceTable = configuredTable || model;
+	const state = await inspectLegacyTable({
+		blockers,
+		kysely,
+		model,
+		sourceTable,
+		tables,
+	});
+	if (state || configuredTable !== undefined) return state;
+	const candidates = await findLegacyTableCandidates({
+		candidateTables,
+		kysely,
+		model,
+		sourceTable,
+	});
+	if (candidates.length > 0) {
+		reportMigrationDecisionBlocker(blockers, {
+			candidateTables: candidates,
+			code: "legacy-table-candidate",
+			model,
+			table: sourceTable,
+		});
+	}
+	return undefined;
+}
+
 export interface LegacyReleaseDataState {
 	oauthAccessToken?: LegacyTableState | undefined;
 	oauthApplication?: LegacyTableState | undefined;
@@ -307,39 +740,51 @@ export interface LegacyReleaseDataState {
 export async function inspectLegacyReleaseDataFrom16(
 	config: BetterAuthOptions,
 	options: MigrateFrom16Options,
+	blockers?: MigrationDecisionBlocker[],
 ): Promise<LegacyReleaseDataState> {
 	const { kysely } = await getMigrationDatabase(config);
 	const authTables = getAuthTables(config);
-	const legacyTableNames = options.legacyTableNames;
+	const tables = await kysely.introspection.getTables();
+	const configuredTables = new Set(Object.keys(getSchema(config)));
+	const configuredSchemas = new Set(
+		tables
+			.filter((table) => configuredTables.has(table.name))
+			.map((table) => table.schema),
+	);
+	const candidateTables = tables.filter(
+		(table) =>
+			!configuredTables.has(table.name) &&
+			!table.name.endsWith(LEGACY_BACKUP_SUFFIX) &&
+			configuredSchemas.has(table.schema),
+	);
+	const inspect = async (model: LegacyReleaseModel, hasReplacement: boolean) =>
+		hasReplacement
+			? await inspectLegacyModel({
+					blockers,
+					candidateTables,
+					configuredTable: options.legacyTableNames?.[model],
+					kysely,
+					model,
+					tables,
+				})
+			: undefined;
 	const state: LegacyReleaseDataState = {
-		oauthApplication: authTables.oauthClient
-			? await inspectLegacyTable({
-					kysely,
-					legacyColumns: ["clientId", "redirectUrls"],
-					sourceTable: legacyTableNames?.oauthApplication || "oauthApplication",
-				})
-			: undefined,
-		oauthAccessToken: authTables.oauthAccessToken
-			? await inspectLegacyTable({
-					kysely,
-					legacyColumns: ["accessToken", "refreshToken"],
-					sourceTable: legacyTableNames?.oauthAccessToken || "oauthAccessToken",
-				})
-			: undefined,
-		oauthConsent: authTables.oauthConsent
-			? await inspectLegacyTable({
-					kysely,
-					legacyColumns: ["consentGiven", "scopes"],
-					sourceTable: legacyTableNames?.oauthConsent || "oauthConsent",
-				})
-			: undefined,
-		scimProvider: authTables.scimConnectionBinding
-			? await inspectLegacyTable({
-					kysely,
-					legacyColumns: ["providerId"],
-					sourceTable: legacyTableNames?.scimProvider || "scimProvider",
-				})
-			: undefined,
+		oauthApplication: await inspect(
+			"oauthApplication",
+			Boolean(authTables.oauthClient),
+		),
+		oauthAccessToken: await inspect(
+			"oauthAccessToken",
+			Boolean(authTables.oauthAccessToken),
+		),
+		oauthConsent: await inspect(
+			"oauthConsent",
+			Boolean(authTables.oauthConsent),
+		),
+		scimProvider: await inspect(
+			"scimProvider",
+			Boolean(authTables.scimConnectionBinding),
+		),
 	};
 
 	if (
@@ -347,31 +792,39 @@ export async function inspectLegacyReleaseDataFrom16(
 		(options.oauthProvider?.clients !== "migrate" ||
 			options.oauthProvider.clientSecrets !== "rehash-plaintext")
 	) {
-		throw new BetterAuthError(
-			'The 1.6 OAuth client migration requires clients: "migrate" and clientSecrets: "rehash-plaintext".',
-		);
+		reportMigrationDecisionBlocker(blockers, {
+			code: "oauth-client-decision-required",
+			rowCount: state.oauthApplication.rowCount,
+			table: state.oauthApplication.sourceTable,
+		});
 	}
 	if (
 		state.oauthAccessToken?.rowCount &&
 		options.oauthProvider?.tokens !== "revoke"
 	) {
-		throw new BetterAuthError(
-			'The 1.6 OAuth token migration requires tokens: "revoke".',
-		);
+		reportMigrationDecisionBlocker(blockers, {
+			code: "oauth-token-decision-required",
+			rowCount: state.oauthAccessToken.rowCount,
+			table: state.oauthAccessToken.sourceTable,
+		});
 	}
 	if (state.oauthConsent?.rowCount && !options.oauthProvider?.consents) {
-		throw new BetterAuthError(
-			'The 1.6 OAuth consent migration requires consents: "migrate" or "reauthorize".',
-		);
+		reportMigrationDecisionBlocker(blockers, {
+			code: "oauth-consent-decision-required",
+			rowCount: state.oauthConsent.rowCount,
+			table: state.oauthConsent.sourceTable,
+		});
 	}
 	if (
 		state.scimProvider?.rowCount &&
 		(options.scim?.providers !== "reprovision" ||
 			!Array.isArray(options.scim.accountIdsToRetire))
 	) {
-		throw new BetterAuthError(
-			'The 1.6 SCIM migration requires providers: "reprovision" and an explicit accountIdsToRetire inventory.',
-		);
+		reportMigrationDecisionBlocker(blockers, {
+			code: "scim-decision-required",
+			rowCount: state.scimProvider.rowCount,
+			table: state.scimProvider.sourceTable,
+		});
 	}
 	return state;
 }
@@ -480,6 +933,7 @@ export async function prepareOAuthProviderDataFrom16(
 	config: BetterAuthOptions,
 	options: MigrateFrom16Options,
 	state: LegacyReleaseDataState,
+	blockers?: MigrationDecisionBlocker[],
 ): Promise<OAuthProviderDataFrom16Plan | undefined> {
 	if (
 		!state.oauthApplication &&
@@ -512,9 +966,13 @@ export async function prepareOAuthProviderDataFrom16(
 		for (const client of source.rows) {
 			const redirectUris = splitLegacyList(client.redirectUrls, ",");
 			if (redirectUris.length === 0) {
-				throw new BetterAuthError(
-					`OAuth client "${client.clientId}" has no redirect URI and cannot be migrated.`,
-				);
+				reportMigrationDecisionBlocker(blockers, {
+					clientId: client.clientId,
+					code: "oauth-client-conflict",
+					conflict: "missing-redirect-uri",
+					table: sourceTable,
+				});
+				continue;
 			}
 			const existing = canInspectExistingClients
 				? await adapter.findOne<{
@@ -525,14 +983,17 @@ export async function prepareOAuthProviderDataFrom16(
 						where: [{ field: "clientId", value: client.clientId }],
 					})
 				: null;
-			if (existing) {
-				if (
-					JSON.stringify(existing.redirectUris) !== JSON.stringify(redirectUris)
-				) {
-					throw new BetterAuthError(
-						`OAuth client "${client.clientId}" already exists with different redirect URIs.`,
-					);
-				}
+			if (
+				existing &&
+				JSON.stringify(existing.redirectUris) !== JSON.stringify(redirectUris)
+			) {
+				reportMigrationDecisionBlocker(blockers, {
+					clientId: client.clientId,
+					code: "oauth-client-conflict",
+					conflict: "redirect-uri-mismatch",
+					table: sourceTable,
+				});
+				continue;
 			}
 			const isPublic = client.type === "public";
 			clients.push({
@@ -598,12 +1059,17 @@ export async function prepareOAuthProviderDataFrom16(
 						],
 					})
 				: null;
-			if (existing) {
-				if (JSON.stringify(existing.scopes) !== JSON.stringify(scopes)) {
-					throw new BetterAuthError(
-						`OAuth consent for client "${consent.clientId}" and user "${consent.userId}" already exists with different scopes.`,
-					);
-				}
+			if (
+				existing &&
+				JSON.stringify(existing.scopes) !== JSON.stringify(scopes)
+			) {
+				reportMigrationDecisionBlocker(blockers, {
+					clientId: consent.clientId,
+					code: "oauth-consent-conflict",
+					table: sourceTable,
+					userId: consent.userId,
+				});
+				continue;
 			}
 			consents.push({
 				action: "migrate",
@@ -676,6 +1142,7 @@ export async function inspectScimAccountsFrom16(
 	config: BetterAuthOptions,
 	options: MigrateFrom16Options,
 	state: LegacyReleaseDataState,
+	blockers?: MigrationDecisionBlocker[],
 ): Promise<LegacyScimAccountRecord[]> {
 	if (!state.scimProvider || !options.scim) return [];
 	const { kysely } = await getMigrationDatabase(config);
@@ -710,35 +1177,49 @@ export async function inspectScimAccountsFrom16(
 				).rows;
 	const requestedAccountIds = new Set(options.scim.accountIdsToRetire);
 	const activeAccountIds = new Set(accounts.map((account) => account.id));
-	const missingAccount = accounts.find(
-		(account) => !requestedAccountIds.has(account.id),
-	);
-	const unknownAccountId = [...requestedAccountIds].find(
-		(accountId) => !activeAccountIds.has(accountId),
-	);
-	if (
-		missingAccount ||
-		(state.scimProvider.sourceTableNeedsRename && unknownAccountId)
-	) {
-		throw new BetterAuthError(
-			"The SCIM account retirement inventory must exactly match every account owned by the legacy SCIM providers.",
-		);
+	const missingAccountIds = accounts
+		.filter((account) => !requestedAccountIds.has(account.id))
+		.map((account) => account.id)
+		.sort();
+	const unknownAccountIds = state.scimProvider.sourceTableNeedsRename
+		? [...requestedAccountIds]
+				.filter((accountId) => !activeAccountIds.has(accountId))
+				.sort()
+		: [];
+	if (missingAccountIds.length > 0 || unknownAccountIds.length > 0) {
+		reportMigrationDecisionBlocker(blockers, {
+			code: "scim-inventory-mismatch",
+			missingAccountIds,
+			table: accountTable,
+			unknownAccountIds,
+		});
+		return [];
 	}
 	return [...accounts];
 }
 
 /**
- * Validates every explicit 1.6 release-data decision without changing data or
- * schema. CLI planners use the same validation path as the migration itself.
+ * Inspects a 1.6 database without changing data or schema, and returns every
+ * unresolved release-data decision, sorted by blocker code.
+ *
+ * Throws when the 1.6 data cannot be read at all.
  */
 export async function validateMigrationFrom16(
 	config: BetterAuthOptions,
 	options: MigrateFrom16Options,
-): Promise<void> {
-	const state = await inspectLegacyReleaseDataFrom16(config, options);
-	await inspectAccountIdentityFrom16(config, options);
-	await prepareOAuthProviderDataFrom16(config, options, state);
-	await inspectScimAccountsFrom16(config, options, state);
+): Promise<MigrationDecisionBlocker[]> {
+	const blockers: MigrationDecisionBlocker[] = [];
+	const state = await inspectLegacyReleaseDataFrom16(config, options, blockers);
+	await inspectAccountIdentityFrom16(config, options, undefined, blockers);
+	await prepareOAuthProviderDataFrom16(config, options, state, blockers);
+	await inspectScimAccountsFrom16(config, options, state, blockers);
+	return blockers.sort(
+		(left, right) =>
+			left.code.localeCompare(right.code) ||
+			getMigrationDecisionBlockerKey(left).localeCompare(
+				getMigrationDecisionBlockerKey(right),
+			),
+	);
 }
 
 export async function retireScimAccountsFrom16(
@@ -919,6 +1400,7 @@ async function inspectAccountIdentityFrom16(
 	config: BetterAuthOptions,
 	options: MigrateFrom16Options,
 	migrationDatabase?: MigrationDatabase,
+	blockers?: MigrationDecisionBlocker[],
 ) {
 	const { kysely } = migrationDatabase ?? (await getMigrationDatabase(config));
 	const accountSchema = getAuthTables(config).account;
@@ -945,6 +1427,14 @@ async function inspectAccountIdentityFrom16(
 	);
 	if (!existingColumns.has(legacyAccountIdColumn)) return undefined;
 
+	const { accountIssuers, unresolvedProviders } =
+		await resolveMigrationAccountIssuers(
+			config,
+			options,
+			accountTable,
+			blockers,
+		);
+
 	const providerInventory = await sql<AccountProviderCount>`
 		SELECT
 			${sql.ref(providerIdColumn)} AS "providerId",
@@ -956,13 +1446,17 @@ async function inspectAccountIdentityFrom16(
 	for (const row of providerInventory.rows) {
 		populatedProviders[row.providerId] = toSafeRowCount(row.count);
 	}
-	const missingIssuerProviders = Object.keys(populatedProviders).filter(
-		(providerId) => !options.accountIssuers[providerId]?.trim(),
-	);
-	if (missingIssuerProviders.length > 0) {
-		throw new BetterAuthError(
-			`The 1.6 account migration requires an issuer for: ${missingIssuerProviders.sort().join(", ")}.`,
-		);
+	const missingIssuerProviders = Object.keys(populatedProviders)
+		.filter((providerId) => !accountIssuers[providerId])
+		.sort();
+	for (const providerId of missingIssuerProviders) {
+		reportMigrationDecisionBlocker(blockers, {
+			accountCount: populatedProviders[providerId] ?? 0,
+			code: "issuer-required",
+			providerId,
+			reason: unresolvedProviders[providerId] ?? "unconfigured-provider",
+			table: accountTable,
+		});
 	}
 
 	const accountIdentities = await sql<LegacyAccountIdentityRow>`
@@ -978,6 +1472,7 @@ async function inspectAccountIdentityFrom16(
 		FROM ${sql.table(accountTable)}
 	`.execute(kysely);
 	const projectedIdentities = new Set<string>();
+	const reportedCollisions = new Set<string>();
 	for (const account of accountIdentities.rows) {
 		const unresolved =
 			account.issuer === null ||
@@ -985,20 +1480,29 @@ async function inspectAccountIdentityFrom16(
 			account.providerAccountId === null ||
 			account.providerAccountId === undefined;
 		const issuer = unresolved
-			? options.accountIssuers[account.providerId]?.trim()
+			? accountIssuers[account.providerId]
 			: account.issuer;
 		const providerAccountId = unresolved
 			? account.legacyAccountId
 			: account.providerAccountId;
+		if (issuer === null || issuer === undefined) continue;
 		const identityKey = JSON.stringify([issuer, providerAccountId]);
 		if (projectedIdentities.has(identityKey)) {
-			throw new BetterAuthError(
-				"The 1.6 account migration found duplicate issuer and provider-account identities.",
-			);
+			if (!reportedCollisions.has(identityKey)) {
+				reportedCollisions.add(identityKey);
+				reportMigrationDecisionBlocker(blockers, {
+					code: "account-identity-collision",
+					issuer,
+					providerAccountId: String(providerAccountId),
+					table: accountTable,
+				});
+			}
+			continue;
 		}
 		projectedIdentities.add(identityKey);
 	}
 	return {
+		accountIssuers,
 		accountTable,
 		accountTableMetadata,
 		existingColumns,
@@ -1035,6 +1539,7 @@ export async function migrateAccountIdentityFrom16(
 	);
 	if (!inspection) return { migrated: 0, providers: {} };
 	const {
+		accountIssuers,
 		accountTable,
 		accountTableMetadata,
 		existingColumns,
@@ -1090,7 +1595,7 @@ export async function migrateAccountIdentityFrom16(
 		providers[row.providerId] = toSafeRowCount(row.count);
 	}
 
-	for (const [providerId, issuer] of Object.entries(options.accountIssuers)) {
+	for (const [providerId, issuer] of Object.entries(accountIssuers)) {
 		if (!providers[providerId]) continue;
 		await sql`
 			UPDATE ${sql.table(accountTable)}

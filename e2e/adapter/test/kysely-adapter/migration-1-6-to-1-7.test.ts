@@ -1,5 +1,4 @@
 import { DatabaseSync } from "node:sqlite";
-import type { BetterAuthDBSchema } from "@better-auth/core/db";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { scim } from "@better-auth/scim";
 import { betterAuth } from "better-auth";
@@ -18,13 +17,13 @@ import { Pool } from "pg";
 import * as Tarn from "tarn";
 import * as Tedious from "tedious";
 import { expect, it } from "vitest";
+import type {
+	MigrationDatabase,
+	PublishedOAuthProviderApi,
+} from "./published-1-6-25-fixture";
+import { seedPublishedOAuthProviderData } from "./published-1-6-25-fixture";
 
 let databaseSequence = 0;
-
-type MigrationDatabase = NonNullable<
-	Parameters<typeof betterAuth>[0]["database"]
-> &
-	NonNullable<Parameters<typeof betterAuth1625>[0]["database"]>;
 
 interface PublishedOrganizationApi {
 	createOrganization(input: {
@@ -34,47 +33,6 @@ interface PublishedOrganizationApi {
 			userId: string;
 		};
 	}): Promise<{ id: string } | null>;
-}
-
-interface PublishedOAuthProviderApi {
-	registerOAuthApplication(input: {
-		body: {
-			client_name: string;
-			redirect_uris: string[];
-		};
-	}): Promise<{
-		client_id: string;
-		client_secret?: string | undefined;
-	}>;
-}
-
-function clonePluginSchema<
-	T extends {
-		schema: BetterAuthDBSchema;
-	},
->(plugin: T): T {
-	return {
-		...plugin,
-		schema: Object.fromEntries(
-			Object.entries(plugin.schema).map(([model, table]) => [
-				model,
-				{
-					...table,
-					fields: Object.fromEntries(
-						Object.entries(table.fields).map(([fieldName, field]) => [
-							fieldName,
-							{
-								...field,
-								...(field.references
-									? { references: { ...field.references } }
-									: {}),
-							},
-						]),
-					),
-				},
-			]),
-		),
-	} as T;
 }
 
 function configurePublishedReferenceField(field: {
@@ -218,11 +176,7 @@ async function exerciseAccountAndOrganizationMigration({
 			}),
 		],
 	});
-	const result = await migrateFrom16(auth17.options, {
-		accountIssuers: {
-			credential: "local:credential",
-		},
-	});
+	const result = await migrateFrom16(auth17.options, {});
 
 	expect(result.accounts).toEqual({
 		migrated: 2,
@@ -269,11 +223,7 @@ async function exerciseAccountAndOrganizationMigration({
 		}),
 	).toMatchObject({ memberCount: 2 });
 
-	const rerun = await migrateFrom16(auth17.options, {
-		accountIssuers: {
-			credential: "local:credential",
-		},
-	});
+	const rerun = await migrateFrom16(auth17.options, {});
 	expect(rerun.accounts).toEqual({
 		migrated: 0,
 		providers: {},
@@ -307,66 +257,13 @@ async function exerciseOAuthProviderMigration({
 		  }
 		| undefined;
 }) {
-	const publishedPlugin = clonePluginSchema(
-		oidcProvider1625({
-			allowDynamicClientRegistration: true,
-			loginPage: "/login",
-		}),
-	);
-	configurePublishedPlugin?.(publishedPlugin);
-	const auth1625 = betterAuth1625({
-		baseURL: "http://localhost:3000",
-		database,
-		emailAndPassword: {
-			enabled: true,
-		},
-		plugins: [publishedPlugin],
-	});
-	await (await getMigrations1625(auth1625.options)).runMigrations();
-	const owner = await auth1625.api.signUpEmail({
-		body: {
-			email: `provider-owner@${emailDomain}`,
-			name: `${nameSuffix} Provider Owner`,
-			password: "correct-horse-battery-staple",
-		},
-	});
-	const publishedOAuthProviderApi =
-		auth1625.api as unknown as PublishedOAuthProviderApi;
-	const registeredClient =
-		await publishedOAuthProviderApi.registerOAuthApplication({
-			body: {
-				client_name: `${nameSuffix} published migration client`,
-				redirect_uris: [`https://${emailDomain}/callback`],
-			},
+	const { legacyAccessToken, owner, registeredClient } =
+		await seedPublishedOAuthProviderData({
+			configurePublishedPlugin,
+			database,
+			emailDomain,
+			nameSuffix,
 		});
-	const sourceContext = await auth1625.$context;
-	const now = new Date();
-	const legacyAccessToken = crypto.randomUUID();
-	await sourceContext.adapter.create({
-		model: "oauthAccessToken",
-		data: {
-			accessToken: legacyAccessToken,
-			accessTokenExpiresAt: new Date(now.getTime() + 60_000),
-			clientId: registeredClient.client_id,
-			createdAt: now,
-			refreshToken: crypto.randomUUID(),
-			refreshTokenExpiresAt: new Date(now.getTime() + 120_000),
-			scopes: "openid profile",
-			updatedAt: now,
-			userId: owner.user.id,
-		},
-	});
-	await sourceContext.adapter.create({
-		model: "oauthConsent",
-		data: {
-			clientId: registeredClient.client_id,
-			consentGiven: true,
-			createdAt: now,
-			scopes: "openid profile",
-			updatedAt: now,
-			userId: owner.user.id,
-		},
-	});
 
 	const currentPlugin = oauthProvider({
 		consentPage: "/consent",
@@ -387,19 +284,11 @@ async function exerciseOAuthProviderMigration({
 	});
 	await beforeMigrate?.();
 	await expect(
-		migrateFrom16(auth17.options, {
-			accountIssuers: {
-				credential: "local:credential",
-			},
-			legacyTableNames,
-		}),
+		migrateFrom16(auth17.options, { legacyTableNames }),
 	).rejects.toThrow(
 		'The 1.6 OAuth client migration requires clients: "migrate" and clientSecrets: "rehash-plaintext".',
 	);
 	const migration = await migrateFrom16(auth17.options, {
-		accountIssuers: {
-			credential: "local:credential",
-		},
 		legacyTableNames,
 		oauthProvider: {
 			clients: "migrate",
@@ -498,9 +387,6 @@ async function exerciseOAuthProviderMigration({
 	).toBeNull();
 
 	const rerun = await migrateFrom16(auth17.options, {
-		accountIssuers: {
-			credential: "local:credential",
-		},
 		legacyTableNames,
 		oauthProvider: {
 			clients: "migrate",
@@ -623,7 +509,6 @@ it("rejects invalid OAuth data before changing the 1.6 database", async () => {
 		});
 		await expect(
 			migrateFrom16(auth17.options, {
-				accountIssuers: { credential: "local:credential" },
 				oauthProvider: {
 					clients: "migrate",
 					clientSecrets: "rehash-plaintext",
@@ -685,11 +570,9 @@ it("rolls back the SQLite release migration when schema application is blocked",
 			database,
 			emailAndPassword: { enabled: true },
 		});
-		await expect(
-			migrateFrom16(auth17.options, {
-				accountIssuers: { credential: "local:credential" },
-			}),
-		).rejects.toThrow("forced account migration failure");
+		await expect(migrateFrom16(auth17.options, {})).rejects.toThrow(
+			"forced account migration failure",
+		);
 
 		const accountColumns = database
 			.prepare(`PRAGMA table_info(account)`)
@@ -1074,7 +957,6 @@ it("retires published 1.6.25 SCIM credentials and reprovisions a retained user t
 		await expect(
 			migrateFrom16(auth17.options, {
 				accountIssuers: {
-					credential: "local:credential",
 					workforce: "local:retired-scim:workforce",
 				},
 			}),
@@ -1084,7 +966,6 @@ it("retires published 1.6.25 SCIM credentials and reprovisions a retained user t
 		await expect(
 			migrateFrom16(auth17.options, {
 				accountIssuers: {
-					credential: "local:credential",
 					workforce: "local:retired-scim:workforce",
 				},
 				scim: {
@@ -1097,7 +978,6 @@ it("retires published 1.6.25 SCIM credentials and reprovisions a retained user t
 		);
 		const migration = await migrateFrom16(auth17.options, {
 			accountIssuers: {
-				credential: "local:credential",
 				workforce: "local:retired-scim:workforce",
 			},
 			scim: {
@@ -1122,7 +1002,6 @@ it("retires published 1.6.25 SCIM credentials and reprovisions a retained user t
 		});
 		const rerun = await migrateFrom16(auth17.options, {
 			accountIssuers: {
-				credential: "local:credential",
 				workforce: "local:retired-scim:workforce",
 			},
 			scim: {

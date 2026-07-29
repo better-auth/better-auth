@@ -1,8 +1,14 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { scim } from "@better-auth/scim";
 import { betterAuth } from "better-auth";
-import { getMigrations } from "better-auth/db/migration";
+import {
+	getMigrations,
+	validateMigrationFrom16,
+} from "better-auth/db/migration";
 import { jwt, organization } from "better-auth/plugins";
 import { betterAuth as betterAuth1625 } from "better-auth-1-6-25";
 import { getMigrations as getMigrations1625 } from "better-auth-1-6-25/db/migration";
@@ -12,9 +18,14 @@ import {
 } from "better-auth-1-6-25/plugins";
 import { scim as scim1625 } from "better-auth-scim-1-6-25";
 import Database from "better-sqlite3";
+import prompts from "prompts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { migrateAction } from "../src/commands/migrate";
 import * as config from "../src/utils/get-config";
+
+vi.mock("prompts", () => ({
+	default: vi.fn(),
+}));
 
 function backfill1625CredentialAccountIdentity(db: Database.Database) {
 	db.exec(`
@@ -345,50 +356,38 @@ describe("migrate published 1.6.25 account data", () => {
 		const processExit = vi
 			.spyOn(process, "exit")
 			.mockImplementation((code) => code as never);
-		const consoleError = vi
-			.spyOn(console, "error")
-			.mockImplementation(() => {});
-
-		await migrateAction({ cwd: process.cwd(), yes: true });
-
-		expect(processExit).toHaveBeenCalledWith(1);
-		expect(consoleError).toHaveBeenCalledWith(
-			"Migration blocked. No database changes were applied.",
-		);
-		expect(consoleError).toHaveBeenCalledWith(
-			"-> [required-column-backfill] account: existing rows need values for issuer, providerAccountId.",
-		);
-
-		processExit.mockClear();
 		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
-		try {
-			await migrateAction({ cwd: process.cwd(), from: "1.6", json: true });
 
-			expect(processExit).not.toHaveBeenCalled();
-			expect(process.exitCode).toBe(1);
-			expect(consoleLog).toHaveBeenCalledTimes(1);
-			const jsonPlan = JSON.parse(String(consoleLog.mock.calls[0]?.[0])) as {
-				blockers: Array<{
-					code: string;
-					message: string;
-				}>;
-				formatVersion: number;
-				status: string;
-			};
-			expect(jsonPlan).toMatchObject({
-				blockers: [
-					{
-						code: "release-migration-preflight",
-						message:
-							"The 1.6 account migration requires an issuer for: credential.",
-					},
-				],
-				formatVersion: 1,
-				status: "blocked",
-			});
-		} finally {
-			process.exitCode = undefined;
-		}
+		await migrateAction({ cwd: process.cwd(), dryRun: true });
+
+		expect(processExit).not.toHaveBeenCalled();
+		expect(consoleLog).toHaveBeenCalledWith("Blockers: none");
+		expect(consoleLog).toHaveBeenCalledWith(
+			"Dry run complete. No database changes were applied.",
+		);
+		expect(
+			db
+				.prepare("PRAGMA table_info(account)")
+				.all()
+				.map((column) => (column as { name: string }).name),
+		).not.toContain("issuer");
+
+		consoleLog.mockClear();
+		await migrateAction({ cwd: process.cwd(), json: true });
+
+		expect(processExit).not.toHaveBeenCalled();
+		expect(process.exitCode).toBeUndefined();
+		expect(consoleLog).toHaveBeenCalledTimes(1);
+		const jsonPlan = JSON.parse(String(consoleLog.mock.calls[0]?.[0])) as {
+			blockers: Array<Record<string, unknown>>;
+			formatVersion: number;
+			status: string;
+		};
+		expect(jsonPlan).toMatchObject({
+			blockers: [],
+			formatVersion: 1,
+			status: "ready",
+		});
 
 		backfill1625CredentialAccountIdentity(db);
 		const backfilledMigration = await getMigrations(auth17.options);
@@ -421,6 +420,725 @@ describe("migrate published 1.6.25 account data", () => {
 			});
 			expect(signIn.user.name).toBe(credentials.name);
 		}
+	});
+
+	it("migrates account identities the configuration can resolve on its own", async () => {
+		const db = new Database(":memory:");
+		const auth1625 = betterAuth1625({
+			baseURL: "http://localhost:3000",
+			database: db,
+			emailAndPassword: {
+				enabled: true,
+			},
+		});
+		await (await getMigrations1625(auth1625.options)).runMigrations();
+		await auth1625.api.signUpEmail({
+			body: {
+				email: "ada@example.com",
+				name: "Ada",
+				password: "correct-horse-battery-staple",
+			},
+		});
+		const auth17 = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: db,
+			emailAndPassword: {
+				enabled: true,
+			},
+		});
+		vi.spyOn(config, "getConfig").mockImplementation(
+			async () => auth17.options,
+		);
+		vi.spyOn(process, "exit").mockImplementation((code) => code as never);
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+
+		await migrateAction({ cwd: process.cwd(), yes: true });
+
+		expect(consoleError).not.toHaveBeenCalledWith(
+			"Migration blocked. No database changes were applied.",
+		);
+		expect(consoleLog).toHaveBeenCalledWith(
+			"🚀 migration was completed successfully!",
+		);
+		const migratedAccount = db
+			.prepare("SELECT accountId, issuer, providerAccountId FROM account")
+			.get() as {
+			accountId: string;
+			issuer: string;
+			providerAccountId: string;
+		};
+		expect(migratedAccount.issuer).toBe("local:credential");
+		expect(migratedAccount.providerAccountId).toBe(migratedAccount.accountId);
+		const signIn = await auth17.api.signInEmail({
+			body: {
+				email: "ada@example.com",
+				password: "correct-horse-battery-staple",
+			},
+		});
+		expect(signIn.user.name).toBe("Ada");
+
+		consoleLog.mockClear();
+		await migrateAction({ cwd: process.cwd(), yes: true });
+
+		expect(consoleLog).toHaveBeenCalledWith("🚀 No migrations needed.");
+	});
+});
+
+async function createReleaseDecisionFixture(db: Database.Database) {
+	const auth1625 = betterAuth1625({
+		baseURL: "http://localhost:3000",
+		database: db,
+		emailAndPassword: {
+			enabled: true,
+		},
+		plugins: [
+			oidcProvider1625({
+				allowDynamicClientRegistration: true,
+				loginPage: "/login",
+			}),
+			scim1625(),
+		],
+	});
+	await (await getMigrations1625(auth1625.options)).runMigrations();
+	const credentials = {
+		email: "release-admin@example.com",
+		name: "Release Admin",
+		password: "correct-horse-battery-staple",
+	};
+	const admin = await auth1625.api.signUpEmail({ body: credentials });
+	const signIn = await auth1625.api.signInEmail({
+		body: {
+			email: credentials.email,
+			password: credentials.password,
+		},
+		returnHeaders: true,
+	});
+	const cookie = signIn.headers.getSetCookie()[0];
+	if (!cookie) {
+		throw new Error("Expected the 1.6.25 sign-in to set a session cookie");
+	}
+	const generated = await auth1625.api.generateSCIMToken({
+		body: { providerId: "workforce-fixture" },
+		headers: { cookie },
+	});
+	await auth1625.api.createSCIMUser({
+		body: {
+			name: { formatted: "Ada Provisioned" },
+			userName: "ada-provisioned@example.com",
+		},
+		headers: {
+			authorization: `Bearer ${generated.scimToken}`,
+		},
+	});
+	const sourceContext = await auth1625.$context;
+	const scimAccount = await sourceContext.adapter.findOne<{ id: string }>({
+		model: "account",
+		where: [{ field: "providerId", value: "workforce-fixture" }],
+	});
+	if (!scimAccount) {
+		throw new Error("Expected the 1.6.25 SCIM authentication account");
+	}
+	const registeredClient = await auth1625.api.registerOAuthApplication({
+		body: {
+			client_name: "Release decision fixture",
+			redirect_uris: ["https://client.example/callback"],
+		},
+	});
+	const now = new Date();
+	await sourceContext.adapter.create({
+		model: "oauthConsent",
+		data: {
+			clientId: registeredClient.client_id,
+			consentGiven: true,
+			createdAt: now,
+			scopes: "openid profile",
+			updatedAt: now,
+			userId: admin.user.id,
+		},
+	});
+
+	const options17: BetterAuthOptions = {
+		baseURL: "http://localhost:3000",
+		database: db,
+		emailAndPassword: {
+			enabled: true,
+		},
+		plugins: [
+			jwt(),
+			oauthProvider({
+				consentPage: "/consent",
+				loginPage: "/login",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+			scim({
+				connections: [
+					{
+						credentials: [
+							{
+								id: "fixture-token",
+								token: "fixture-token",
+								type: "bearer",
+							},
+						],
+						id: "workforce-fixture",
+					},
+				],
+			}),
+		],
+	};
+	vi.spyOn(config, "getConfig").mockImplementation(async () => options17);
+	return {
+		credentials,
+		options17,
+		scimAccountId: scimAccount.id,
+	};
+}
+
+async function writeMigrationDecisions(decisions: unknown) {
+	const directory = await fs.mkdtemp(
+		path.join(os.tmpdir(), "better-auth-migration-decisions-"),
+	);
+	const filePath = path.join(directory, "better-auth-migration.json");
+	await fs.writeFile(filePath, JSON.stringify(decisions, null, 2));
+	return filePath;
+}
+
+describe("plan every unresolved 1.6.25 release decision", () => {
+	it("reports the missing issuer, consent strategy, and SCIM inventory in one run", async () => {
+		const db = new Database(":memory:");
+		const { scimAccountId } = await createReleaseDecisionFixture(db);
+		const plan = await writeMigrationDecisions({
+			formatVersion: 1,
+			scim: { retireAccountIds: [] },
+		});
+		const processExit = vi
+			.spyOn(process, "exit")
+			.mockImplementation((code) => code as never);
+		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+
+		try {
+			await migrateAction({ cwd: process.cwd(), json: true, plan });
+
+			expect(processExit).not.toHaveBeenCalled();
+			expect(process.exitCode).toBe(1);
+			const jsonPlan = JSON.parse(String(consoleLog.mock.calls[0]?.[0])) as {
+				blockers: Array<Record<string, unknown>>;
+				status: string;
+			};
+			expect(jsonPlan.status).toBe("blocked");
+			expect(jsonPlan.blockers).toEqual([
+				{
+					accountCount: 1,
+					code: "issuer-required",
+					providerId: "workforce-fixture",
+					reason: "unconfigured-provider",
+					remediation: {
+						docs: "https://better-auth.com/docs/guides/1-7-upgrade-guide#issuer-required",
+						summary:
+							'Record the issuer for "workforce-fixture" under issuers in better-auth-migration.json, or run `auth migrate` in a terminal to answer it there.',
+					},
+					table: "account",
+				},
+				{
+					code: "scim-inventory-mismatch",
+					missingAccountIds: [scimAccountId],
+					remediation: {
+						docs: "https://better-auth.com/docs/guides/1-7-upgrade-guide#scim-inventory-mismatch",
+						summary:
+							"Set scim.retireAccountIds in better-auth-migration.json to exactly the accounts this blocker reports.",
+					},
+					table: "account",
+					unknownAccountIds: [],
+				},
+				{
+					code: "oauth-client-decision-required",
+					remediation: {
+						docs: "https://better-auth.com/docs/guides/1-7-upgrade-guide#oauth-client-decision-required",
+						summary:
+							"Record an oauth decision in better-auth-migration.json to move these clients into the 1.7 client store, or run `auth migrate` in a terminal to answer it there.",
+					},
+					rowCount: 1,
+					table: "oauthApplication",
+				},
+				{
+					code: "oauth-consent-decision-required",
+					remediation: {
+						docs: "https://better-auth.com/docs/guides/1-7-upgrade-guide#oauth-consent-decision-required",
+						summary:
+							'Record oauth.consents as "migrate" or "reauthorize" in better-auth-migration.json, or run `auth migrate` in a terminal to answer it there.',
+					},
+					rowCount: 1,
+					table: "oauthConsent",
+				},
+			]);
+		} finally {
+			process.exitCode = undefined;
+		}
+	});
+
+	it("refuses to guess the decisions when none are recorded", async () => {
+		const db = new Database(":memory:");
+		await createReleaseDecisionFixture(db);
+		const processExit = vi
+			.spyOn(process, "exit")
+			.mockImplementation((code) => code as never);
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		vi.spyOn(console, "log").mockImplementation(() => {});
+
+		await migrateAction({ cwd: process.cwd(), yes: true });
+
+		expect(processExit).toHaveBeenCalledWith(1);
+		expect(consoleError).toHaveBeenCalledWith(
+			"Migration blocked. No database changes were applied.",
+		);
+		expect(consoleError).toHaveBeenCalledWith(
+			'-> [scim-decision-required] The 1.6 SCIM migration requires providers: "reprovision" and an explicit accountIdsToRetire inventory.',
+		);
+		expect(consoleError).toHaveBeenCalledWith(
+			"   Fix: Record scim.retireAccountIds in better-auth-migration.json, or run `auth migrate` in a terminal to confirm the retirement inventory there.",
+		);
+		expect(consoleError).toHaveBeenCalledWith(
+			"   Docs: https://better-auth.com/docs/guides/1-7-upgrade-guide#scim-decision-required",
+		);
+		expect(consoleError).toHaveBeenCalledWith(
+			"This database holds Better Auth 1.6 data. Run `auth migrate` in a terminal to answer these decisions, or record them in better-auth-migration.json and run `auth migrate --plan better-auth-migration.json`. Upgrade guide: https://better-auth.com/docs/guides/1-7-upgrade-guide",
+		);
+		expect(
+			db
+				.prepare(
+					"SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'oauthClient'",
+				)
+				.get(),
+		).toBeUndefined();
+	});
+
+	it("applies the recorded decisions", async () => {
+		const db = new Database(":memory:");
+		const { credentials, scimAccountId } =
+			await createReleaseDecisionFixture(db);
+		const plan = await writeMigrationDecisions({
+			formatVersion: 1,
+			issuers: { "workforce-fixture": "local:retired-scim:workforce-fixture" },
+			oauth: { consents: "reauthorize" },
+			scim: { retireAccountIds: [scimAccountId] },
+		});
+		vi.spyOn(process, "exit").mockImplementation((code) => code as never);
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+
+		await migrateAction({ cwd: process.cwd(), plan, yes: true });
+
+		expect(consoleError).not.toHaveBeenCalledWith(
+			"Migration blocked. No database changes were applied.",
+		);
+		expect(consoleLog).toHaveBeenCalledWith(
+			"🚀 migration was completed successfully!",
+		);
+		expect(
+			db.prepare("SELECT COUNT(*) AS count FROM oauthClient").get(),
+		).toEqual({ count: 1 });
+		expect(
+			db.prepare("SELECT COUNT(*) AS count FROM oauthConsent").get(),
+		).toEqual({ count: 0 });
+		expect(
+			db
+				.prepare("SELECT COUNT(*) AS count FROM account WHERE id = ?")
+				.get(scimAccountId),
+		).toEqual({ count: 0 });
+		expect(
+			db
+				.prepare(
+					`SELECT name FROM sqlite_master
+					 WHERE type = 'table' AND name LIKE '%__better_auth_1_6'
+					 ORDER BY name`,
+				)
+				.all()
+				.map((table) => (table as { name: string }).name),
+		).toEqual([
+			"oauthAccessToken__better_auth_1_6",
+			"oauthApplication__better_auth_1_6",
+			"oauthConsent__better_auth_1_6",
+			"scimProvider__better_auth_1_6",
+		]);
+		const auth17 = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: db,
+			emailAndPassword: { enabled: true },
+		});
+		const signIn = await auth17.api.signInEmail({
+			body: {
+				email: credentials.email,
+				password: credentials.password,
+			},
+		});
+		expect(signIn.user.name).toBe(credentials.name);
+	});
+
+	it("sends a contradicted decision back to the data instead of the interview", async () => {
+		const db = new Database(":memory:");
+		await createResolvableAccountFixture(db);
+		const plan = await writeMigrationDecisions({
+			formatVersion: 1,
+			issuers: { credential: "https://credential.example" },
+		});
+		const processExit = vi
+			.spyOn(process, "exit")
+			.mockImplementation((code) => code as never);
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		vi.spyOn(console, "log").mockImplementation(() => {});
+
+		await migrateAction({ cwd: process.cwd(), plan, yes: true });
+
+		expect(processExit).toHaveBeenCalledWith(1);
+		expect(consoleError).toHaveBeenCalledWith(
+			'-> [issuer-conflict] Provider "credential" derives issuer "local:credential" from this Better Auth configuration, so accounts migrated with "https://credential.example" would never match a 1.7 sign-in.',
+		);
+		expect(consoleError).toHaveBeenCalledWith(
+			'   Fix: Remove "credential" from the issuers in better-auth-migration.json to migrate these accounts as "local:credential", or configure the provider to establish "https://credential.example".',
+		);
+		expect(consoleError).toHaveBeenCalledWith(
+			"   Docs: https://better-auth.com/docs/guides/1-7-upgrade-guide#issuer-conflict",
+		);
+		expect(consoleError).toHaveBeenCalledWith(
+			`Resolve every blocker above in your 1.6 data, then run \`auth migrate --plan ${plan}\` again. Upgrade guide: https://better-auth.com/docs/guides/1-7-upgrade-guide`,
+		);
+		expect(
+			db
+				.prepare("PRAGMA table_info(account)")
+				.all()
+				.map((column) => (column as { name: string }).name),
+		).not.toContain("issuer");
+	});
+
+	it("rejects a decisions file it does not understand", async () => {
+		const db = new Database(":memory:");
+		await createReleaseDecisionFixture(db);
+		const plan = await writeMigrationDecisions({
+			formatVersion: 2,
+			retireScim: true,
+		});
+		const processExit = vi
+			.spyOn(process, "exit")
+			.mockImplementation((code) => code as never);
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+
+		await migrateAction({ cwd: process.cwd(), plan, yes: true });
+
+		expect(processExit).toHaveBeenCalledWith(1);
+		const message = String(consoleError.mock.calls[0]?.[0]);
+		expect(message).toContain(
+			`The migration decisions file "${plan}" is invalid`,
+		);
+		expect(message).toContain("formatVersion");
+		expect(message).toContain("retireScim");
+	});
+});
+
+async function createResolvableAccountFixture(db: Database.Database) {
+	const auth1625 = betterAuth1625({
+		baseURL: "http://localhost:3000",
+		database: db,
+		emailAndPassword: {
+			enabled: true,
+		},
+	});
+	await (await getMigrations1625(auth1625.options)).runMigrations();
+	const credentials = {
+		email: "ada@example.com",
+		name: "Ada",
+		password: "correct-horse-battery-staple",
+	};
+	await auth1625.api.signUpEmail({ body: credentials });
+	const options17: BetterAuthOptions = {
+		baseURL: "http://localhost:3000",
+		database: db,
+		emailAndPassword: {
+			enabled: true,
+		},
+	};
+	vi.spyOn(config, "getConfig").mockImplementation(async () => options17);
+	return { credentials };
+}
+
+function stubStdinIsTTY(isTTY: boolean) {
+	const original = Object.getOwnPropertyDescriptor(process.stdin, "isTTY");
+	Object.defineProperty(process.stdin, "isTTY", {
+		configurable: true,
+		value: isTTY,
+	});
+	return () => {
+		if (original) {
+			Object.defineProperty(process.stdin, "isTTY", original);
+			return;
+		}
+		Reflect.deleteProperty(process.stdin, "isTTY");
+	};
+}
+
+async function createInterviewDirectory() {
+	return await fs.mkdtemp(
+		path.join(os.tmpdir(), "better-auth-migration-interview-"),
+	);
+}
+
+async function readRecordedDecisions(cwd: string) {
+	return JSON.parse(
+		await fs.readFile(path.join(cwd, "better-auth-migration.json"), "utf8"),
+	);
+}
+
+describe("interview the unresolved 1.6.25 release decisions", () => {
+	it("records every answer and applies the migration", async () => {
+		const db = new Database(":memory:");
+		const { scimAccountId } = await createReleaseDecisionFixture(db);
+		const cwd = await createInterviewDirectory();
+		const restoreStdin = stubStdinIsTTY(true);
+		vi.spyOn(process, "exit").mockImplementation((code) => code as never);
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.mocked(prompts)
+			.mockResolvedValueOnce({ issuer: "local:retired-scim:workforce-fixture" })
+			.mockResolvedValueOnce({ consents: "reauthorize" })
+			.mockResolvedValueOnce({ retire: true })
+			.mockResolvedValueOnce({ migrate: true });
+
+		try {
+			await migrateAction({ cwd });
+		} finally {
+			restoreStdin();
+		}
+
+		expect(prompts).toHaveBeenCalledTimes(4);
+		expect(prompts).toHaveBeenNthCalledWith(
+			1,
+			expect.objectContaining({
+				message:
+					'Issuer for "workforce-fixture" (1 account, missing from your configuration)',
+				name: "issuer",
+				type: "text",
+			}),
+		);
+		expect(prompts).toHaveBeenNthCalledWith(
+			2,
+			expect.objectContaining({
+				message: "Stored OAuth consents",
+				name: "consents",
+				type: "select",
+			}),
+		);
+		expect(prompts).toHaveBeenNthCalledWith(
+			3,
+			expect.objectContaining({
+				message: "Retire these SCIM accounts?",
+				name: "retire",
+				type: "confirm",
+			}),
+		);
+		expect(prompts).toHaveBeenNthCalledWith(
+			4,
+			expect.objectContaining({
+				message: "Are you sure you want to run these migrations?",
+				name: "migrate",
+				type: "confirm",
+			}),
+		);
+		expect(consoleLog).toHaveBeenCalledWith(
+			"->",
+			"credential: local:credential",
+		);
+		expect(consoleLog).toHaveBeenCalledWith("->", scimAccountId);
+		expect(consoleLog).toHaveBeenCalledWith(
+			"->",
+			"drop 1 stored consent so users grant them again",
+		);
+		expect(await readRecordedDecisions(cwd)).toEqual({
+			formatVersion: 1,
+			issuers: { "workforce-fixture": "local:retired-scim:workforce-fixture" },
+			oauth: { consents: "reauthorize" },
+			scim: { retireAccountIds: [scimAccountId] },
+		});
+		expect(consoleError).not.toHaveBeenCalledWith(
+			"Migration blocked. No database changes were applied.",
+		);
+		expect(consoleLog).toHaveBeenCalledWith(
+			"🚀 migration was completed successfully!",
+		);
+		expect(
+			db.prepare("SELECT COUNT(*) AS count FROM oauthClient").get(),
+		).toEqual({ count: 1 });
+		expect(
+			db
+				.prepare("SELECT COUNT(*) AS count FROM account WHERE id = ?")
+				.get(scimAccountId),
+		).toEqual({ count: 0 });
+	});
+
+	it("keeps the recorded answers when the final confirmation is declined", async () => {
+		const db = new Database(":memory:");
+		const { scimAccountId } = await createReleaseDecisionFixture(db);
+		const cwd = await createInterviewDirectory();
+		const restoreStdin = stubStdinIsTTY(true);
+		vi.spyOn(process, "exit").mockImplementation((code) => code as never);
+		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.mocked(prompts)
+			.mockResolvedValueOnce({ issuer: "local:retired-scim:workforce-fixture" })
+			.mockResolvedValueOnce({ consents: "migrate" })
+			.mockResolvedValueOnce({ retire: true })
+			.mockResolvedValueOnce({ migrate: false });
+
+		try {
+			await migrateAction({ cwd });
+		} finally {
+			restoreStdin();
+		}
+
+		expect(consoleLog).toHaveBeenCalledWith("Migration cancelled.");
+		expect(consoleLog).toHaveBeenCalledWith(
+			"Apply the recorded decisions later with `auth migrate --plan better-auth-migration.json`.",
+		);
+		expect(await readRecordedDecisions(cwd)).toEqual({
+			formatVersion: 1,
+			issuers: { "workforce-fixture": "local:retired-scim:workforce-fixture" },
+			oauth: { consents: "migrate" },
+			scim: { retireAccountIds: [scimAccountId] },
+		});
+		expect(
+			db
+				.prepare(
+					"SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'oauthClient'",
+				)
+				.get(),
+		).toBeUndefined();
+		expect(
+			db
+				.prepare("SELECT COUNT(*) AS count FROM account WHERE id = ?")
+				.get(scimAccountId),
+		).toEqual({ count: 1 });
+	});
+
+	it("records nothing when a question is cancelled", async () => {
+		const db = new Database(":memory:");
+		await createReleaseDecisionFixture(db);
+		const cwd = await createInterviewDirectory();
+		const restoreStdin = stubStdinIsTTY(true);
+		vi.spyOn(process, "exit").mockImplementation((code) => code as never);
+		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.mocked(prompts).mockResolvedValueOnce({});
+
+		try {
+			await migrateAction({ cwd });
+		} finally {
+			restoreStdin();
+		}
+
+		expect(prompts).toHaveBeenCalledTimes(1);
+		expect(consoleLog).toHaveBeenCalledWith("Migration cancelled.");
+		expect(await fs.readdir(cwd)).toEqual([]);
+		expect(
+			db
+				.prepare(
+					"SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'oauthClient'",
+				)
+				.get(),
+		).toBeUndefined();
+	});
+
+	it("asks nothing but the final confirmation when the configuration resolves every decision", async () => {
+		const db = new Database(":memory:");
+		const { credentials } = await createResolvableAccountFixture(db);
+		const cwd = await createInterviewDirectory();
+		const restoreStdin = stubStdinIsTTY(true);
+		vi.spyOn(process, "exit").mockImplementation((code) => code as never);
+		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.mocked(prompts).mockResolvedValueOnce({ migrate: true });
+
+		try {
+			await migrateAction({ cwd });
+		} finally {
+			restoreStdin();
+		}
+
+		expect(prompts).toHaveBeenCalledTimes(1);
+		expect(prompts).toHaveBeenCalledWith(
+			expect.objectContaining({
+				message: "Are you sure you want to run these migrations?",
+				name: "migrate",
+				type: "confirm",
+			}),
+		);
+		expect(consoleLog).toHaveBeenCalledWith(
+			"->",
+			"write the 1.7 account identity onto every existing account row",
+		);
+		expect(await fs.readdir(cwd)).toEqual([]);
+		expect(consoleLog).toHaveBeenCalledWith(
+			"🚀 migration was completed successfully!",
+		);
+		expect(db.prepare("SELECT issuer FROM account").get()).toEqual({
+			issuer: "local:credential",
+		});
+		const auth17 = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: db,
+			emailAndPassword: { enabled: true },
+		});
+		const signIn = await auth17.api.signInEmail({
+			body: {
+				email: credentials.email,
+				password: credentials.password,
+			},
+		});
+		expect(signIn.user.name).toBe(credentials.name);
+	});
+
+	it("asks nothing outside a terminal", async () => {
+		const db = new Database(":memory:");
+		await createReleaseDecisionFixture(db);
+		const cwd = await createInterviewDirectory();
+		const restoreStdin = stubStdinIsTTY(false);
+		const processExit = vi
+			.spyOn(process, "exit")
+			.mockImplementation((code) => code as never);
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		vi.spyOn(console, "log").mockImplementation(() => {});
+
+		try {
+			await migrateAction({ cwd });
+		} finally {
+			restoreStdin();
+		}
+
+		expect(prompts).not.toHaveBeenCalled();
+		expect(processExit).toHaveBeenCalledWith(1);
+		expect(consoleError).toHaveBeenCalledWith(
+			"Migration blocked. No database changes were applied.",
+		);
+		expect(await fs.readdir(cwd)).toEqual([]);
+		expect(
+			db
+				.prepare(
+					"SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'oauthClient'",
+				)
+				.get(),
+		).toBeUndefined();
 	});
 });
 
@@ -603,6 +1321,222 @@ describe("migrate published 1.6.25 provider client data", () => {
 		const migration = await getMigrations(auth17.options);
 
 		expect(migration.migrationBlockers).toEqual([]);
+		await expect(validateMigrationFrom16(auth17.options, {})).resolves.toEqual(
+			[],
+		);
+	});
+});
+
+async function createRenamedLegacyClientFixture(db: Database.Database) {
+	const auth1625 = betterAuth1625({
+		baseURL: "http://localhost:3000",
+		database: db,
+		emailAndPassword: {
+			enabled: true,
+		},
+		plugins: [
+			oidcProvider1625({
+				allowDynamicClientRegistration: true,
+				loginPage: "/login",
+				schema: {
+					oauthApplication: {
+						modelName: "legacyOAuthApplication",
+					},
+				},
+			}),
+		],
+	});
+	await (await getMigrations1625(auth1625.options)).runMigrations();
+	const credentials = {
+		email: "renamed-table-admin@example.com",
+		name: "Renamed Table Admin",
+		password: "correct-horse-battery-staple",
+	};
+	await auth1625.api.signUpEmail({ body: credentials });
+	await auth1625.api.registerOAuthApplication({
+		body: {
+			client_name: "Renamed table fixture",
+			redirect_uris: ["https://client.example/callback"],
+		},
+	});
+	const options17: BetterAuthOptions = {
+		baseURL: "http://localhost:3000",
+		database: db,
+		emailAndPassword: {
+			enabled: true,
+		},
+		plugins: [
+			jwt(),
+			oauthProvider({
+				consentPage: "/consent",
+				loginPage: "/login",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	};
+	vi.spyOn(config, "getConfig").mockImplementation(async () => options17);
+	return { credentials };
+}
+
+function readBackupTableNames(db: Database.Database) {
+	return db
+		.prepare(
+			`SELECT name FROM sqlite_master
+			 WHERE type = 'table' AND name LIKE '%__better_auth_1_6'
+			 ORDER BY name`,
+		)
+		.all()
+		.map((table) => (table as { name: string }).name);
+}
+
+describe("migrate a customized 1.6.25 table name", () => {
+	it("proposes the renamed table instead of leaving its clients behind", async () => {
+		const db = new Database(":memory:");
+		await createRenamedLegacyClientFixture(db);
+		const processExit = vi
+			.spyOn(process, "exit")
+			.mockImplementation((code) => code as never);
+		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+
+		try {
+			await migrateAction({ cwd: process.cwd(), json: true });
+
+			expect(processExit).not.toHaveBeenCalled();
+			expect(process.exitCode).toBe(1);
+			const jsonPlan = JSON.parse(String(consoleLog.mock.calls[0]?.[0])) as {
+				blockers: Array<Record<string, unknown>>;
+			};
+			expect(jsonPlan.blockers).toEqual([
+				{
+					candidateTables: ["legacyOAuthApplication"],
+					code: "legacy-table-candidate",
+					model: "oauthApplication",
+					remediation: {
+						docs: "https://better-auth.com/docs/guides/1-7-upgrade-guide#legacy-table-candidate",
+						summary:
+							'Record which table holds the 1.6 "oauthApplication" data under legacyTableNames in better-auth-migration.json, or null when none of them does, or run `auth migrate` in a terminal to answer it there.',
+					},
+					table: "oauthApplication",
+				},
+			]);
+		} finally {
+			process.exitCode = undefined;
+		}
+	});
+
+	it("migrates the renamed table recorded in the decisions file", async () => {
+		const db = new Database(":memory:");
+		await createRenamedLegacyClientFixture(db);
+		const plan = await writeMigrationDecisions({
+			formatVersion: 1,
+			legacyTableNames: { oauthApplication: "legacyOAuthApplication" },
+			oauth: { consents: "reauthorize" },
+		});
+		vi.spyOn(process, "exit").mockImplementation((code) => code as never);
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+
+		await migrateAction({ cwd: process.cwd(), plan, yes: true });
+
+		expect(consoleError).not.toHaveBeenCalledWith(
+			"Migration blocked. No database changes were applied.",
+		);
+		expect(consoleLog).toHaveBeenCalledWith(
+			"🚀 migration was completed successfully!",
+		);
+		expect(
+			db.prepare("SELECT COUNT(*) AS count FROM oauthClient").get(),
+		).toEqual({ count: 1 });
+		expect(readBackupTableNames(db)).toContain(
+			"legacyOAuthApplication__better_auth_1_6",
+		);
+	});
+
+	it("migrates the renamed table confirmed in the interview", async () => {
+		const db = new Database(":memory:");
+		await createRenamedLegacyClientFixture(db);
+		const cwd = await createInterviewDirectory();
+		const restoreStdin = stubStdinIsTTY(true);
+		vi.spyOn(process, "exit").mockImplementation((code) => code as never);
+		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.mocked(prompts)
+			.mockResolvedValueOnce({ isLegacyTable: true })
+			.mockResolvedValueOnce({ migrate: true });
+
+		try {
+			await migrateAction({ cwd });
+		} finally {
+			restoreStdin();
+		}
+
+		expect(prompts).toHaveBeenNthCalledWith(
+			1,
+			expect.objectContaining({
+				message:
+					'Does "legacyOAuthApplication" hold your 1.6 oauthApplication data?',
+				name: "isLegacyTable",
+				type: "confirm",
+			}),
+		);
+		expect(await readRecordedDecisions(cwd)).toEqual({
+			formatVersion: 1,
+			legacyTableNames: { oauthApplication: "legacyOAuthApplication" },
+			oauth: { consents: "reauthorize" },
+		});
+		expect(consoleLog).toHaveBeenCalledWith(
+			"->",
+			"move 1 OAuth client into oauthClient and re-hash every plaintext client secret",
+		);
+		expect(consoleLog).toHaveBeenCalledWith(
+			"🚀 migration was completed successfully!",
+		);
+		expect(
+			db.prepare("SELECT COUNT(*) AS count FROM oauthClient").get(),
+		).toEqual({ count: 1 });
+		expect(readBackupTableNames(db)).toContain(
+			"legacyOAuthApplication__better_auth_1_6",
+		);
+	});
+
+	it("leaves a table the interview rejects untouched", async () => {
+		const db = new Database(":memory:");
+		await createRenamedLegacyClientFixture(db);
+		const cwd = await createInterviewDirectory();
+		const restoreStdin = stubStdinIsTTY(true);
+		vi.spyOn(process, "exit").mockImplementation((code) => code as never);
+		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.mocked(prompts)
+			.mockResolvedValueOnce({ isLegacyTable: false })
+			.mockResolvedValueOnce({ migrate: true });
+
+		try {
+			await migrateAction({ cwd });
+		} finally {
+			restoreStdin();
+		}
+
+		expect(prompts).toHaveBeenCalledTimes(2);
+		expect(await readRecordedDecisions(cwd)).toEqual({
+			formatVersion: 1,
+			legacyTableNames: { oauthApplication: null },
+		});
+		expect(consoleLog).toHaveBeenCalledWith(
+			"🚀 migration was completed successfully!",
+		);
+		expect(
+			db.prepare("SELECT COUNT(*) AS count FROM legacyOAuthApplication").get(),
+		).toEqual({ count: 1 });
+		expect(readBackupTableNames(db)).not.toContain(
+			"legacyOAuthApplication__better_auth_1_6",
+		);
+		expect(
+			db.prepare("SELECT COUNT(*) AS count FROM oauthClient").get(),
+		).toEqual({ count: 0 });
 	});
 });
 
