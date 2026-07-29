@@ -83,7 +83,7 @@ const bootCodeFlowHarness = async (
 	invalidateResourceCache();
 
 	const authServerBaseUrl = "http://localhost:3000";
-	const rpBaseUrl = "http://localhost:5000";
+	const rpBaseUrl = "https://rp.example.com";
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 	const state = "state-123";

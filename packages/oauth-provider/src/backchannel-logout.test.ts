@@ -252,6 +252,7 @@ describe("oauth back-channel logout", async () => {
 			headers,
 			body: {
 				redirect_uris: [`${rp.url}/callback`],
+				application_type: "native",
 				skip_consent: true,
 				enable_end_session: true,
 				backchannel_logout_uri: `${rp.url}/logout/backchannel`,
@@ -700,6 +701,7 @@ describe("oauth back-channel logout (jwt plugin disabled)", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 				enable_end_session: true,
 			},
@@ -833,6 +835,7 @@ describe("oauth back-channel logout - secondaryStorage + preserveSessionInDataba
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 				enable_end_session: true,
 			},

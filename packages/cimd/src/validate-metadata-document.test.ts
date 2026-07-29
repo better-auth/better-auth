@@ -12,6 +12,7 @@ function validMetadata(
 	const origin = new URL(fetchUrl).origin;
 	return {
 		client_id: fetchUrl,
+		client_name: "Example Client",
 		redirect_uris: [`${origin}/callback`],
 		...overrides,
 	};
@@ -254,6 +255,35 @@ describe("validateClientIdUrl", () => {
 describe("validateCimdMetadata", () => {
 	const fetchUrl = "https://example.com/client-metadata.json";
 
+	it("requires a non-empty client_name", () => {
+		for (const clientName of [undefined, "", "   "]) {
+			const metadata: Record<string, unknown> = validMetadata(fetchUrl);
+			if (clientName === undefined) {
+				metadata.client_name = undefined;
+			} else {
+				metadata.client_name = clientName;
+			}
+			const result = validateCimdMetadata(fetchUrl, metadata);
+			expect(result.valid).toBe(false);
+			expect(result.error).toContain("client_name");
+		}
+	});
+
+	it("rejects malformed shared client metadata before CIMD policy checks", () => {
+		for (const malformed of [
+			{ application_type: "desktop" },
+			{ contacts: "security@example.com" },
+			{ scope: ["openid"] },
+			{ dpop_bound_access_tokens: "true" },
+		]) {
+			const result = validateCimdMetadata(
+				fetchUrl,
+				validMetadata(fetchUrl, malformed),
+			);
+			expect(result.valid).toBe(false);
+		}
+	});
+
 	it("accepts valid metadata where client_id == fetchUrl", () => {
 		const result = validateCimdMetadata(fetchUrl, validMetadata(fetchUrl));
 		expect(result.valid).toBe(true);
@@ -267,6 +297,17 @@ describe("validateCimdMetadata", () => {
 		});
 		expect(result.valid).toBe(false);
 		expect(result.error).toContain("does not match");
+	});
+
+	it("compares client_id to the fetched URL without trimming", () => {
+		for (const clientId of [` ${fetchUrl}`, `${fetchUrl} `]) {
+			const result = validateCimdMetadata(
+				fetchUrl,
+				validMetadata(fetchUrl, { client_id: clientId }),
+			);
+			expect(result.valid).toBe(false);
+			expect(result.error).toContain("does not match");
+		}
 	});
 
 	it("rejects when client_secret is present", () => {
@@ -285,6 +326,79 @@ describe("validateCimdMetadata", () => {
 		);
 		expect(result.valid).toBe(false);
 		expect(result.error).toContain("client_secret_expires_at");
+	});
+
+	it("rejects server-owned registration controls", () => {
+		for (const field of [
+			"disabled",
+			"skip_consent",
+			"enable_end_session",
+			"require_pkce",
+			"reference_id",
+			"user_id",
+			"client_id_issued_at",
+			"resources",
+			"skipConsent",
+			"enableEndSession",
+			"requirePKCE",
+			"clientSecret",
+			"referenceId",
+			"userId",
+			"clientId",
+			"applicationType",
+			"tokenEndpointAuthMethod",
+			"redirectUris",
+			"postLogoutRedirectUris",
+			"grantTypes",
+			"responseTypes",
+			"scopes",
+			"expiresAt",
+			"createdAt",
+			"updatedAt",
+			"name",
+			"uri",
+			"icon",
+			"tos",
+			"policy",
+			"softwareId",
+			"softwareVersion",
+			"softwareStatement",
+			"backchannelLogoutUri",
+			"backchannelLogoutSessionRequired",
+			"jwksUri",
+			"dpopBoundAccessTokens",
+			"subjectType",
+			"public",
+			"type",
+			"metadata",
+		]) {
+			const result = validateCimdMetadata(
+				fetchUrl,
+				validMetadata(fetchUrl, { [field]: true }),
+			);
+			expect(result.valid).toBe(false);
+			expect(result.error).toContain(field);
+		}
+	});
+
+	it("preserves non-conflicting OAuth metadata extensions", () => {
+		const result = validateCimdMetadata(
+			fetchUrl,
+			validMetadata(fetchUrl, {
+				contacts: ["security@example.com"],
+				"https://example.com/oauth/custom": {
+					display_mode: "compact",
+				},
+			}),
+		);
+
+		expect(result.valid).toBe(true);
+		expect(result.metadata).toMatchObject({
+			contacts: ["security@example.com"],
+			"https://example.com/oauth/custom": {
+				display_mode: "compact",
+			},
+		});
 	});
 
 	it("rejects symmetric auth method client_secret_post", () => {
@@ -333,10 +447,37 @@ describe("validateCimdMetadata", () => {
 			fetchUrl,
 			validMetadata(fetchUrl, {
 				token_endpoint_auth_method: "private_key_jwt",
-				jwks: { keys: [{ kty: "EC" }] },
+				jwks: {
+					keys: [
+						{
+							kty: "EC",
+							crv: "P-256",
+							x: "f83OJ3D2xF4BM-Y5uP1oahSjXdY9tAe3hoTb3QuA7qM",
+							y: "x_FEzRu9wNL7LMBTlSTd4vP7qB27FjGCFZB-RcIEpV0",
+						},
+					],
+				},
 			}),
 		);
 		expect(result.valid).toBe(true);
+	});
+
+	it("rejects private or malformed public key metadata", () => {
+		for (const jwks of [
+			{ keys: [{ kty: "oct", k: "secret" }] },
+			{ keys: [{ kty: "EC", crv: "P-256", x: "x", y: "y", d: "private" }] },
+			{ keys: [{ kty: "EC" }] },
+		]) {
+			const result = validateCimdMetadata(
+				fetchUrl,
+				validMetadata(fetchUrl, {
+					token_endpoint_auth_method: "private_key_jwt",
+					jwks,
+				}),
+			);
+			expect(result.valid).toBe(false);
+			expect(result.error).toContain("jwks");
+		}
 	});
 
 	it('accepts token_endpoint_auth_method: "private_key_jwt" with jwks_uri', () => {
@@ -375,6 +516,7 @@ describe("validateCimdMetadata", () => {
 	it("rejects missing redirect_uris", () => {
 		const result = validateCimdMetadata(fetchUrl, {
 			client_id: fetchUrl,
+			client_name: "Missing Redirect Client",
 		});
 		expect(result.valid).toBe(false);
 		expect(result.error).toContain("redirect_uris");
@@ -389,13 +531,49 @@ describe("validateCimdMetadata", () => {
 		expect(result.error).toContain("redirect_uris");
 	});
 
-	it("rejects non-HTTP redirect_uris", () => {
+	it("rejects redirect_uris outside HTTP(S) and private-use forms", () => {
 		const result = validateCimdMetadata(fetchUrl, {
 			client_id: fetchUrl,
+			client_name: "Invalid Redirect Client",
 			redirect_uris: ["ftp://example.com/callback"],
 		});
 		expect(result.valid).toBe(false);
 		expect(result.error).toContain("redirect_uris");
+	});
+
+	it("accepts an authority-free private-use redirect URI", () => {
+		const result = validateCimdMetadata(fetchUrl, {
+			client_id: fetchUrl,
+			client_name: "Private-use Client",
+			redirect_uris: ["com.example.app:/callback"],
+		});
+		expect(result.valid).toBe(true);
+	});
+
+	it("rejects a private-use redirect URI with a naming authority", () => {
+		const result = validateCimdMetadata(fetchUrl, {
+			client_id: fetchUrl,
+			client_name: "Invalid Private-use Client",
+			redirect_uris: ["com.example.app://host/callback"],
+		});
+		expect(result.valid).toBe(false);
+		expect(result.error).toContain("redirect_uris");
+	});
+
+	it("rejects malformed reverse-domain private-use redirect schemes", () => {
+		for (const redirectUri of [
+			"com..example:/callback",
+			"com.-example:/callback",
+			"com.example-:/callback",
+		]) {
+			const result = validateCimdMetadata(fetchUrl, {
+				client_id: fetchUrl,
+				client_name: "Invalid Private-use Client",
+				redirect_uris: [redirectUri],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.error).toContain("redirect_uris");
+		}
 	});
 
 	it("rejects disallowed grant_types", () => {
@@ -453,6 +631,7 @@ describe("validateCimdMetadata", () => {
 	it("allows localhost redirect_uris for local/native app flows", () => {
 		const result = validateCimdMetadata(fetchUrl, {
 			client_id: fetchUrl,
+			client_name: "Loopback Client",
 			redirect_uris: [
 				"http://localhost:3000/callback",
 				"http://127.0.0.1:3000/callback",
@@ -461,13 +640,13 @@ describe("validateCimdMetadata", () => {
 		expect(result.valid).toBe(true);
 	});
 
-	it("validates origin-bound fields (redirect_uris origin must match client_id)", () => {
+	it("does not origin-bind redirect_uris by default", () => {
 		const result = validateCimdMetadata(fetchUrl, {
 			client_id: fetchUrl,
+			client_name: "Cross-origin Redirect Client",
 			redirect_uris: ["https://other-domain.com/callback"],
 		});
-		expect(result.valid).toBe(false);
-		expect(result.error).toContain("same origin");
+		expect(result.valid).toBe(true);
 	});
 
 	it("respects custom originBoundFields parameter", () => {
@@ -475,6 +654,7 @@ describe("validateCimdMetadata", () => {
 			fetchUrl,
 			{
 				client_id: fetchUrl,
+				client_name: "Custom Origin Client",
 				redirect_uris: ["https://example.com/callback"],
 				custom_field: "https://evil.com/hook",
 			},
@@ -489,6 +669,7 @@ describe("validateCimdMetadata", () => {
 			fetchUrl,
 			{
 				client_id: fetchUrl,
+				client_name: "External Home Page Client",
 				redirect_uris: ["https://example.com/callback"],
 				client_uri: "https://other.com/about",
 			},
@@ -504,6 +685,7 @@ describe("validateCimdMetadata", () => {
 		// client_uri is rejected by the SSRF check.
 		const result = validateCimdMetadata(fetchUrl, {
 			client_id: fetchUrl,
+			client_name: "Unsafe Home Page Client",
 			redirect_uris: ["https://example.com/callback"],
 			client_uri: "http://localhost:3000/about",
 		});
@@ -515,6 +697,7 @@ describe("validateCimdMetadata", () => {
 		// post_logout_redirect_uris also qualifies as a redirect URI field.
 		const result = validateCimdMetadata(fetchUrl, {
 			client_id: fetchUrl,
+			client_name: "Loopback Logout Client",
 			redirect_uris: ["https://example.com/callback"],
 			post_logout_redirect_uris: ["http://localhost:3000/logout"],
 		});

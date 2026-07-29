@@ -31,6 +31,13 @@ describe("oauth provider schema", () => {
 		}
 	});
 
+	it("enforces one client-resource link per pair with a compound unique index", () => {
+		expect(schema.oauthClientResource.indexes).toContainEqual({
+			fields: ["clientId", "resourceId"],
+			unique: true,
+		});
+	});
+
 	it("declares the oauthResource entity with the expected policy seams", () => {
 		type FieldShape = {
 			type?: string;

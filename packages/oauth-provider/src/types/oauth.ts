@@ -202,7 +202,7 @@ export interface AuthServerMetadata {
 	authorization_response_iss_parameter_supported?: boolean;
 	/**
 	 * Whether the authorization server supports discovering clients via
-	 * [Client ID Metadata Documents](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/)
+	 * [Client ID Metadata Document draft-00](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-00)
 	 * (an HTTPS URL as `client_id`).
 	 *
 	 * Set at runtime by the `@better-auth/cimd` plugin (or any other
@@ -388,18 +388,14 @@ export interface OAuthClient {
 	response_types?: "code"[];
 	// | "token" // NEVER SUPPORT - deprecated in OAuth 2.1
 	/**
-	 * OIDC Registration application type, constraining redirect URI schemes and
-	 * hosts when provided: `native` clients use custom schemes, loopback `http`
-	 * redirects, or claimed `https` links (RFC 8252 §7); `web` clients require
-	 * `https` on a non-loopback host. Must agree with `type` when both are sent.
+	 * OIDC Registration application type. This classifies redirect URI policy
+	 * only; client authentication is determined by
+	 * `token_endpoint_auth_method`.
 	 *
 	 * @default "web"
 	 * @see https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 	 */
 	application_type?: "web" | "native";
-	//---- RFC6749 Spec ----//
-	public?: boolean;
-	type?: "web" | "native" | "user-agent-based";
 	//---- Not Part of RFC7591 Spec ----//
 	disabled?: boolean;
 	skip_consent?: boolean;

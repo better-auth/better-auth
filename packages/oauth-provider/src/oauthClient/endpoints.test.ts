@@ -11,7 +11,7 @@ import type { OAuthClient } from "../types/oauth";
 describe("oauthClient", async () => {
 	const providerId = "test";
 	const baseUrl = "http://localhost:3000";
-	const rpBaseUrl = "http://localhost:5000";
+	const rpBaseUrl = "https://rp.example.com";
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,
@@ -50,6 +50,81 @@ describe("oauthClient", async () => {
 	let oauthClient: OAuthClient;
 	let oauthPublicClient: OAuthClient;
 	let oauthUiClient: OAuthClient;
+
+	it("round-trips application_type through user create and update with redirect revalidation", async () => {
+		const created = await authClient.oauth2.createClient({
+			application_type: "native",
+			redirect_uris: ["com.example.desktop:/callback"],
+			token_endpoint_auth_method: "client_secret_post",
+		});
+		expect(created.error).toBeNull();
+		expect(created.data).toMatchObject({
+			application_type: "native",
+			token_endpoint_auth_method: "client_secret_post",
+		});
+		expect(created.data?.client_secret).toBeDefined();
+		expect(created.data).not.toHaveProperty("public");
+		expect(created.data).not.toHaveProperty("type");
+
+		const invalidUpdate = await authClient.oauth2.updateClient({
+			client_id: created.data!.client_id,
+			update: { application_type: "web" },
+		});
+		expect(invalidUpdate.error?.status).toBe(400);
+
+		const updated = await authClient.oauth2.updateClient({
+			client_id: created.data!.client_id,
+			update: {
+				application_type: "web",
+				redirect_uris: ["https://client.example.com/callback"],
+			},
+		});
+		expect(updated.error).toBeNull();
+		expect(updated.data?.application_type).toBe("web");
+		await authClient.oauth2.deleteClient({
+			client_id: created.data!.client_id,
+		});
+	});
+
+	it("round-trips application_type through admin create and update", async () => {
+		const created = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				application_type: "native",
+				redirect_uris: ["com.example.admin:/callback"],
+				token_endpoint_auth_method: "client_secret_basic",
+			},
+		});
+		expect(created.application_type).toBe("native");
+		expect(created.client_secret).toBeDefined();
+
+		await expect(
+			auth.api.adminUpdateOAuthClient({
+				headers,
+				body: {
+					client_id: created.client_id,
+					update: { application_type: "web" },
+				},
+			}),
+		).rejects.toMatchObject({
+			body: expect.objectContaining({ error: "invalid_redirect_uri" }),
+		});
+
+		const updated = await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: created.client_id,
+				update: {
+					application_type: "web",
+					redirect_uris: ["https://admin.example.com/callback"],
+				},
+			},
+		});
+		expect(updated.application_type).toBe("web");
+		expect(updated).not.toHaveProperty("public");
+		expect(updated).not.toHaveProperty("type");
+		await authClient.oauth2.deleteClient({ client_id: created.client_id });
+	});
 
 	it("should create clients with minimum requirements", async () => {
 		const client = await authClient.oauth2.createClient({
@@ -143,12 +218,11 @@ describe("oauthClient", async () => {
 		expect(checkPublic).toMatchObject(expectedPublic);
 	});
 
-	it("should not allow client to become public", async () => {
+	it("should not allow token endpoint authentication method updates", async () => {
 		const client = await authClient.oauth2.updateClient({
 			client_id: oauthClient.client_id,
 			update: {
 				// @ts-expect-error
-				public: true,
 				token_endpoint_auth_method: "none",
 				client_secret: undefined,
 			},
@@ -222,7 +296,7 @@ describe("oauthClient", async () => {
 
 describe("oauthClient private_key_jwt clients", async () => {
 	const baseUrl = "http://localhost:3002";
-	const redirectUri = "http://localhost:5002/callback";
+	const redirectUri = "https://rp.example.com/callback";
 	const trustedJwksUri = "https://trusted.example.com/.well-known/jwks.json";
 	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,

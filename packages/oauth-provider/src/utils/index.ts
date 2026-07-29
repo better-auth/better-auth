@@ -602,8 +602,8 @@ export async function validateClientCredentials(
 
 	// Skip secret checks for pre-verified clients (already authenticated via assertion)
 	if (!preVerified) {
-		// Require secret for confidential clients
-		if (!client.public && !clientSecret) {
+		// Only token_endpoint_auth_method=none identifies a public client.
+		if (client.tokenEndpointAuthMethod !== "none" && !clientSecret) {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "client secret must be provided",
 				error: "invalid_client",
@@ -954,11 +954,7 @@ export function isPKCERequired(
 	request?: AuthorizationPKCEContext,
 ): false | PKCERequirementErrors {
 	// Determine if client is public
-	const isPublicClient =
-		client.tokenEndpointAuthMethod === "none" ||
-		client.type === "native" ||
-		client.type === "user-agent-based" ||
-		client.public === true;
+	const isPublicClient = client.tokenEndpointAuthMethod === "none";
 
 	// PKCE always required for public clients
 	if (isPublicClient) {

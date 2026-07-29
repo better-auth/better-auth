@@ -5,9 +5,9 @@ description: Turn your Better Auth server into an OAuth provider for MCP clients
 
 `OAuth` `MCP`
 
-The **MCP** plugin lets your app act as an OAuth authorization server for [Model Context Protocol](https://modelcontextprotocol.io) clients. It is built on the [OAuth 2.1 Provider](/docs/plugins/oauth-provider), so MCP clients discover your endpoints, register dynamically, and obtain access tokens through standard OAuth discovery.
+The **MCP** plugin lets your app act as an OAuth authorization server and protected resource for [Model Context Protocol](https://modelcontextprotocol.io) clients. It is built on the [OAuth 2.1 Provider](/docs/plugins/oauth-provider), so MCP clients discover your endpoints and obtain resource-bound access tokens through standard OAuth flows.
 
-`mcp()` configures the OAuth provider with MCP-appropriate defaults (dynamic registration for self-registering clients, PKCE for public clients) and serves the [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) protected resource metadata.
+`mcp()` configures the OAuth provider with MCP-appropriate resource binding and serves the [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) protected resource metadata. For the MCP 2026-07-28 profile, compose it with [Client ID Metadata Documents](/docs/plugins/cimd). Dynamic Client Registration (DCR) is deprecated by MCP and is never enabled implicitly.
 
 <Callout>
   `mcp()` ships in the `@better-auth/mcp` package. Install it with `npm install @better-auth/mcp`.
@@ -24,6 +24,7 @@ The **MCP** plugin lets your app act as an OAuth authorization server for [Model
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
     import { jwt } from "better-auth/plugins"; // [!code highlight]
+    import { cimd } from "@better-auth/cimd"; // [!code highlight]
     import { mcp } from "@better-auth/mcp"; // [!code highlight]
 
     export const auth = betterAuth({
@@ -33,7 +34,8 @@ The **MCP** plugin lets your app act as an OAuth authorization server for [Model
                 loginPage: "/sign-in", // path to your login page // [!code highlight]
                 consentPage: "/consent", // path to your consent page // [!code highlight]
                 resource: "https://api.example.com/mcp" // protected resource identifier // [!code highlight]
-            }) // [!code highlight]
+            }), // [!code highlight]
+            cimd(), // [!code highlight]
         ]
     });
     ```
@@ -70,14 +72,18 @@ The **MCP** plugin lets your app act as an OAuth authorization server for [Model
 
 `mcp()` serves the standard OAuth 2.1 endpoints under `/oauth2/*`:
 
-| Endpoint             | Path                |
-| -------------------- | ------------------- |
-| Authorization        | `/oauth2/authorize` |
-| Token                | `/oauth2/token`     |
-| Dynamic registration | `/oauth2/register`  |
-| UserInfo             | `/oauth2/userinfo`  |
+| Endpoint                                       | Path                |
+| ---------------------------------------------- | ------------------- |
+| Authorization                                  | `/oauth2/authorize` |
+| Token                                          | `/oauth2/token`     |
+| Dynamic registration (when explicitly enabled) | `/oauth2/register`  |
+| UserInfo                                       | `/oauth2/userinfo`  |
 
-Discovery follows OAuth 2.0 Authorization Server Metadata ([RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414)) and Protected Resource Metadata ([RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728)). The well-known URLs are derived from the issuer, so a server with a base path serves them at the issuer-inserted location rather than the bare root. Spec-compliant MCP clients locate the authorization, token, and registration endpoints through discovery, so they need no hardcoded paths.
+Discovery follows OAuth 2.0 Authorization Server Metadata ([RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414)) and Protected Resource Metadata ([RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728)). The well-known URLs are derived from the issuer, so a server with a base path serves them at the issuer-inserted location rather than the bare root. Discovery advertises `client_id_metadata_document_supported` only when `cimd()` is installed, and `registration_endpoint` only when DCR is enabled.
+
+<Callout type="info">
+  Better Auth owns OAuth discovery, client registration and discovery, PKCE authorization, resource binding, token issuance and refresh, and protected-resource challenges. Use the official MCP TypeScript SDK v2 for MCP protocol negotiation and transport behavior. Pin its version negotiation to `2026-07-28` when adopting this profile.
+</Callout>
 
 ## Usage
 
@@ -127,6 +133,24 @@ mcp({
     resource: "https://api.example.com/mcp"
 })
 ```
+
+`mcp()` also registers this identifier as a default client-registration resource. A dynamically registered client is linked to the MCP resource even when its registration request omits the non-standard `resources` field. Any `clientRegistrationDefaultResources` you provide are preserved, and the MCP resource is appended once.
+
+### Optional DCR fallback
+
+CIMD is the recommended client identity mechanism. If you deliberately support older clients that still require DCR, enable both provider controls explicitly:
+
+```ts
+mcp({
+  loginPage: "/sign-in",
+  consentPage: "/consent",
+  resource: "https://api.example.com/mcp",
+  allowDynamicClientRegistration: true,
+  allowUnauthenticatedClientRegistration: true,
+})
+```
+
+The registration endpoint is absent from discovery unless DCR is enabled. A DCR request does not need Better Auth's `resources` extension: `mcp()` adds its canonical resource as a server-owned default.
 
 ### Protecting an MCP Route
 
@@ -185,27 +209,27 @@ requireMcpAuth(auth, handler, {
     resource: "https://api.example.com/mcp", // protected resource identifier
     issuer: "https://auth.example.com", // override when jwt.issuer is custom
     jwksUrl: "https://auth.example.com/api/auth/jwks",
-    scope: "openid profile" // advertised in the 401 challenge
+    challengeScopes: ["openid", "profile"] // advertised in the 401 challenge
 })
 ```
 
-To require scopes, pass `scopes`. A token missing any of them is rejected with a `403` and an `insufficient_scope` challenge naming every missing scope, so the client can re-authorize for all of them at once ([step-up authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#step-up-authorization-flow)):
+To require scopes, pass `requiredScopes`. A token missing any of them is rejected with a `403` and an `insufficient_scope` challenge naming every missing scope, so the client can re-authorize for all of them at once ([step-up authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization#step-up-authorization-flow)):
 
 ```ts
 requireMcpAuth(auth, handler, {
     resource: "https://api.example.com/mcp",
-    scopes: ["mcp:tools"], // enforced against the token's scope claim
+    requiredScopes: ["mcp:tools"], // enforced against the token's scope claim
 })
 ```
 
-When the required scopes depend on the request — one tool needs more than another — throw `insufficientScopeError` from the handler to challenge for exactly those scopes:
+When the required scopes depend on the request — one tool needs more than another — throw `createInsufficientScopeError` from the handler to challenge for exactly those scopes:
 
 ```ts
-import { insufficientScopeError } from "better-auth/oauth2";
+import { createInsufficientScopeError } from "better-auth/oauth2";
 
 requireMcpAuth(auth, async (req, jwt) => {
     if (isAdminTool(req) && !hasScope(jwt, "mcp:admin")) {
-        throw insufficientScopeError(["mcp:admin"]);
+        throw createInsufficientScopeError(["mcp:admin"]);
     }
     return handle(req, jwt);
 })
@@ -219,7 +243,7 @@ requireMcpAuth(auth, async (req, jwt) => {
 
 `mcp()` extends the [OAuth Provider](/docs/plugins/oauth-provider#configuration) options. All OAuth provider options are passed flat (there is no nested `oidcConfig`). The required MCP-specific option is `resource`.
 
-For native/public MCP clients, `mcp()` defaults `refreshTokenReuseInterval` to 30 seconds. This lets a client retry a refresh with the old token and receive the same rotated token response when another local session already consumed that refresh token. Set `refreshTokenReuseInterval: 0` to keep strict OAuth Provider replay handling.
+For every client configured through `mcp()`, the plugin defaults `refreshTokenReuseInterval` to 30 seconds. This lets a client retry a refresh with the old token and receive the same rotated token response when another request already consumed that refresh token. OAuth Provider itself remains strict by default; set `refreshTokenReuseInterval: 0` on `mcp()` to disable the overlap window.
 
 export const mcpPluginOptionsType = {
   loginPage: {
@@ -269,7 +293,7 @@ export const mcpOauthOptionsType = {
     default: 2592000,
   },
   refreshTokenReuseInterval: {
-    description: "Seconds that a rotated refresh token can be reused to receive the same token response. MCP defaults this to 30 for native/public clients; set 0 for strict replay handling.",
+    description: "Seconds that a rotated refresh token can be reused to receive the same token response. OAuth Provider defaults to strict handling at 0; MCP defaults to 30 for every client configured through the plugin. Set 0 on MCP to disable the overlap window.",
     type: "number",
     default: 30,
   },
@@ -308,4 +332,4 @@ const handler = mcpHandler( // [!code highlight]
 )
 ```
 
-`mcpHandler` returns the same RFC 9728 `WWW-Authenticate` response for unauthenticated requests. For resources whose identifier is not a URL (for example a URN), pass `resourceMetadataMappings` to map each resource to its metadata URL. Set `scopes` in the first argument to require scopes; a token missing any of them receives the same `403` `insufficient_scope` challenge as `requireMcpAuth`.
+`mcpHandler` returns the same RFC 9728 `WWW-Authenticate` response for unauthenticated requests. Set `requiredScopes` in the first argument to require scopes; a token missing any of them receives the same `403` `insufficient_scope` challenge as `requireMcpAuth`. Use `challengeScopes` in the third argument to advertise a scope hint on unauthenticated challenges.

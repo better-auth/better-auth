@@ -84,11 +84,12 @@ function validateJwksUri(
 }
 
 function urlClientIdOrigin(clientId: string): string | undefined {
-	if (!clientId.startsWith("https://") && !clientId.startsWith("http://")) {
-		return undefined;
-	}
 	try {
-		return new URL(clientId).origin;
+		const parsed = new URL(clientId);
+		if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+			return undefined;
+		}
+		return parsed.origin;
 	} catch {
 		return undefined;
 	}

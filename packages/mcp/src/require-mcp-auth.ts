@@ -1,19 +1,14 @@
 import type { Awaitable } from "@better-auth/core";
-import { ResourceUriSchema } from "@better-auth/oauth-provider";
 import type {
 	DpopReplayReservations,
 	DpopReplayStore,
 } from "better-auth/oauth2";
-import {
-	createDpopReplayStore,
-	requestToResourceInput,
-	verifyAccessTokenRequest,
-} from "better-auth/oauth2";
+import { createDpopReplayStore } from "better-auth/oauth2";
 import type { BetterAuthOptions } from "better-auth/types";
 import type { JWTPayload } from "jose";
-import { toChallengeResponse } from "./challenge-response";
+import { mcpHandler, validateMcpResource } from "./handler";
 
-interface RequireMcpAuthOptions {
+export interface RequireMcpAuthOptions {
 	/**
 	 * The protected resource identifier the access token must be bound to.
 	 * Defaults to the server's resolved base URL.
@@ -30,24 +25,23 @@ interface RequireMcpAuthOptions {
 	 */
 	jwksUrl?: string;
 	/**
-	 * Space-delimited scopes to advertise in the `WWW-Authenticate` challenge
-	 * (RFC 6750), hinting which scopes the client should request. Defaults to
-	 * the enforced `scopes` when those are set.
+	 * Scopes to advertise in the `WWW-Authenticate` challenge (RFC 6750),
+	 * hinting which scopes the client should request. Defaults to the enforced
+	 * `requiredScopes` when those are set.
 	 */
-	scope?: string;
+	challengeScopes?: readonly string[];
 	/**
 	 * Scopes the access token must include, enforced against the token's
 	 * `scope` claim. A token missing any of them is rejected with a 403 and an
 	 * RFC 6750 `insufficient_scope` challenge naming every missing scope, so MCP
 	 * clients can step up their authorization in one round-trip.
 	 */
-	scopes?: string[];
-	/**
-	 * Maps a non-URL `resource` (an RFC 8707 `urn:` identifier or a client id) to
-	 * the URL of its protected resource metadata. Required when `resource` is not
-	 * an origin-based URL, so the `WWW-Authenticate` challenge can point at it.
-	 */
-	resourceMetadataMappings?: Record<string, string>;
+	requiredScopes?: readonly string[];
+	/** Custom required-scope matcher. Defaults to exact membership. */
+	isScopeSatisfied?: (
+		requiredScope: string,
+		grantedScopes: ReadonlySet<string>,
+	) => boolean;
 	/**
 	 * DPoP proof validation settings. By default the replay store is backed by
 	 * the auth instance's database adapter, so anti-replay holds across multiple
@@ -69,7 +63,7 @@ interface RequireMcpAuthOptions {
  * Tokens missing a required scope receive a 403 with an RFC 6750
  * `insufficient_scope` challenge naming the missing scopes, so clients can step
  * up their authorization; a handler can raise the same challenge for scopes only
- * it knows about by throwing `insufficientScopeError`.
+ * it knows about by throwing `createInsufficientScopeError`.
  *
  * For a resource server that runs separately from the authorization server, or
  * a server using a dynamic `baseURL`, use {@link mcpHandler} with explicit
@@ -91,10 +85,7 @@ export const requireMcpAuth = <
 	opts?: RequireMcpAuthOptions,
 ) => {
 	if (opts?.resource !== undefined) {
-		// RFC 8707 / RFC 9728: reject a non-absolute or fragment-containing
-		// resource up front, so it never reaches the metadata URL or audience
-		// verifier.
-		ResourceUriSchema.parse(opts.resource);
+		validateMcpResource(opts.resource);
 	}
 	return async (req: Request): Promise<Response> => {
 		// The provider stamps tokens with its resolved base URL (which includes
@@ -111,10 +102,11 @@ export const requireMcpAuth = <
 		const issuer = opts?.issuer ?? baseURL;
 		const resource = opts?.resource ?? baseURL;
 		const jwksUrl = opts?.jwksUrl ?? `${baseURL}/jwks`;
-		try {
-			const jwt = await verifyAccessTokenRequest(requestToResourceInput(req), {
+		return mcpHandler(
+			{
 				verifyOptions: { issuer, audience: resource },
-				scopes: opts?.scopes,
+				requiredScopes: opts?.requiredScopes,
+				isScopeSatisfied: opts?.isScopeSatisfied,
 				jwksUrl,
 				dpop: {
 					proofMaxAgeSeconds: opts?.dpop?.proofMaxAgeSeconds,
@@ -124,16 +116,11 @@ export const requireMcpAuth = <
 					replayStore:
 						opts?.dpop?.replayStore ?? createDpopReplayStore(internalAdapter),
 				},
-			});
-			// Awaited so a handler-thrown insufficient-scope error rejects inside
-			// this try and becomes a step-up challenge.
-			return await handler(req, jwt);
-		} catch (error) {
-			return toChallengeResponse(error, resource, {
-				scope: opts?.scope ?? opts?.scopes?.join(" "),
-				resourceMetadataMappings: opts?.resourceMetadataMappings,
-				dpopSigningAlgorithms: opts?.dpop?.signingAlgorithms,
-			});
-		}
+			},
+			handler,
+			{
+				challengeScopes: opts?.challengeScopes,
+			},
+		)(req);
 	};
 };

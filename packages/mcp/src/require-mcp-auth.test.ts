@@ -1,4 +1,4 @@
-import { insufficientScopeError } from "better-auth/oauth2";
+import { createInsufficientScopeError } from "better-auth/oauth2";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -172,7 +172,7 @@ describe("requireMcpAuth", () => {
 		const response = await requireMcpAuth(
 			authWith("https://app.example.com", "https://app.example.com/api/auth"),
 			async () => new Response("unreachable"),
-			{ scope: "openid profile" },
+			{ challengeScopes: ["openid", "profile"] },
 		)(new Request("https://app.example.com/mcp"));
 
 		expect(response.status).toBe(401);
@@ -189,7 +189,7 @@ describe("requireMcpAuth", () => {
 		const response = await requireMcpAuth(
 			authWith("https://app.example.com", "https://app.example.com/api/auth"),
 			async () => Response.json({ ok: true }),
-			{ scopes: ["mcp:read"] },
+			{ requiredScopes: ["mcp:read"] },
 		)(
 			new Request("https://app.example.com/mcp", {
 				headers: { Authorization: "Bearer access-token" },
@@ -202,19 +202,19 @@ describe("requireMcpAuth", () => {
 				authorizationHeader: "Bearer access-token",
 			}),
 			expect.objectContaining({
-				scopes: ["mcp:read"],
+				requiredScopes: ["mcp:read"],
 			}),
 		);
 	});
 
 	it("answers a scope failure with a 403 insufficient_scope challenge", async () => {
 		verifyAccessTokenRequest.mockRejectedValue(
-			insufficientScopeError(["mcp:write"]),
+			createInsufficientScopeError(["mcp:write"]),
 		);
 		const response = await requireMcpAuth(
 			authWith("https://app.example.com", "https://app.example.com/api/auth"),
 			async () => new Response("unreachable"),
-			{ scopes: ["mcp:write"] },
+			{ requiredScopes: ["mcp:write"] },
 		)(
 			new Request("https://app.example.com/mcp", {
 				headers: { Authorization: "Bearer access-token" },
@@ -235,9 +235,12 @@ describe("requireMcpAuth", () => {
 		const response = await requireMcpAuth(
 			authWith("https://app.example.com", "https://app.example.com/api/auth"),
 			async () => {
-				throw insufficientScopeError(["mcp:admin"], "tool requires mcp:admin");
+				throw createInsufficientScopeError(
+					["mcp:admin"],
+					"tool requires mcp:admin",
+				);
 			},
-			{ scope: "mcp:read" },
+			{ challengeScopes: ["mcp:read"] },
 		)(
 			new Request("https://app.example.com/mcp", {
 				headers: { Authorization: "Bearer access-token" },
@@ -267,7 +270,7 @@ describe("requireMcpAuth", () => {
 				async () => {
 					throw denial;
 				},
-				{ scopes: ["mcp:read"] },
+				{ requiredScopes: ["mcp:read"] },
 			)(
 				new Request("https://app.example.com/mcp", {
 					headers: { Authorization: "Bearer access-token" },
@@ -277,8 +280,8 @@ describe("requireMcpAuth", () => {
 	});
 
 	it("propagates a handler error with its type and stack intact", async () => {
-		class ToolExecutionError extends Error {}
-		const failure = new ToolExecutionError("database connection lost");
+		const failure = new Error("database connection lost");
+		failure.name = "ToolExecutionError";
 		verifyAccessTokenRequest.mockResolvedValue({
 			sub: "user-6",
 		} satisfies JWTPayload);
@@ -297,6 +300,49 @@ describe("requireMcpAuth", () => {
 		).rejects.toBe(failure);
 	});
 
+	it("propagates a primitive handler failure unchanged", async () => {
+		verifyAccessTokenRequest.mockResolvedValue({ sub: "user-7" });
+
+		await expect(
+			requireMcpAuth(
+				authWith("https://app.example.com", "https://app.example.com/api/auth"),
+				async () => {
+					throw "primitive failure";
+				},
+			)(
+				new Request("https://app.example.com/mcp", {
+					headers: { Authorization: "Bearer access-token" },
+				}),
+			),
+		).rejects.toBe("primitive failure");
+	});
+
+	it("rejects an opaque resource at wrapper construction", () => {
+		expect(() =>
+			requireMcpAuth(
+				authWith("https://app.example.com", "https://app.example.com/api/auth"),
+				async () => new Response("unreachable"),
+				{ resource: "urn:example:mcp" },
+			),
+		).toThrow("MCP resource");
+	});
+
+	it("rejects unsafe configured challenge scopes instead of serializing them", async () => {
+		verifyAccessTokenRequest.mockRejectedValue(
+			new APIError("UNAUTHORIZED", {
+				message: "missing authorization header",
+			}),
+		);
+
+		await expect(
+			requireMcpAuth(
+				authWith("https://app.example.com", "https://app.example.com/api/auth"),
+				async () => new Response("unreachable"),
+				{ challengeScopes: ["mcp:read\r\nX-Test: injected"] },
+			)(new Request("https://app.example.com/mcp")),
+		).rejects.toThrow("invalid challenge scope");
+	});
+
 	it("derives the challenge scope hint from enforced scopes when no hint is set", async () => {
 		verifyAccessTokenRequest.mockRejectedValue(
 			new APIError("UNAUTHORIZED", {
@@ -306,7 +352,7 @@ describe("requireMcpAuth", () => {
 		const response = await requireMcpAuth(
 			authWith("https://app.example.com", "https://app.example.com/api/auth"),
 			async () => new Response("unreachable"),
-			{ scopes: ["mcp:read", "mcp:write"] },
+			{ requiredScopes: ["mcp:read", "mcp:write"] },
 		)(new Request("https://app.example.com/mcp"));
 
 		expect(response.status).toBe(401);
@@ -315,24 +361,13 @@ describe("requireMcpAuth", () => {
 		);
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/pull/9992
-	 */
-	it("preserves a resource query in the metadata URL", async () => {
-		verifyAccessTokenRequest.mockRejectedValue(
-			new APIError("UNAUTHORIZED", {
-				message: "missing authorization header",
-			}),
-		);
-		const response = await requireMcpAuth(
-			authWith("https://app.example.com", "https://app.example.com/api/auth"),
-			async () => new Response("unreachable"),
-			{ resource: "https://mcp.example.com/mcp?tenant=a" },
-		)(new Request("https://mcp.example.com/mcp"));
-
-		expect(response.status).toBe(401);
-		expect(response.headers.get("WWW-Authenticate")).toBe(
-			`Bearer resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource/mcp?tenant=a"`,
-		);
+	it("rejects a resource query at wrapper construction", () => {
+		expect(() =>
+			requireMcpAuth(
+				authWith("https://app.example.com", "https://app.example.com/api/auth"),
+				async () => new Response("unreachable"),
+				{ resource: "https://mcp.example.com/mcp?tenant=a" },
+			),
+		).toThrow("MCP resource");
 	});
 });

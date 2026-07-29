@@ -81,6 +81,7 @@ describe("private_key_jwt e2e", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 				token_endpoint_auth_method: "private_key_jwt",
 				jwks: [
@@ -100,6 +101,7 @@ describe("private_key_jwt e2e", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 				token_endpoint_auth_method: "private_key_jwt",
 				jwks_uri: "https://trusted.example.com/.well-known/jwks.json",

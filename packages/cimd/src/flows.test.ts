@@ -1,3 +1,8 @@
+import {
+	CLIENT_ASSERTION_TYPE,
+	signPrivateKeyJwtClientAssertion,
+} from "@better-auth/core/oauth2";
+import type { SchemaClient, Scope } from "@better-auth/oauth-provider";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { createAuthClient } from "better-auth/client";
@@ -64,7 +69,11 @@ function stubMetadataFetch(
 }
 
 async function extractAuthorizationCode(
-	authedClient: ReturnType<typeof createAuthClient>,
+	authedClient: ReturnType<
+		typeof createAuthClient<{
+			plugins: [ReturnType<typeof oauthProviderClient>];
+		}>
+	>,
 	authorizeUrl: string,
 ): Promise<string> {
 	let redirect = "";
@@ -89,7 +98,7 @@ async function extractAuthorizationCode(
 		location: { search: new URL(redirect, baseURL).search },
 	});
 
-	const consent = await (authedClient as any).oauth2.consent(
+	const consent = await authedClient.oauth2.consent(
 		{ accept: true },
 		{ throw: true },
 	);
@@ -120,6 +129,7 @@ describe("CIMD - token exchange flow", async () => {
 		client_name: "Token Exchange Test Client",
 		redirect_uris: [redirectUri],
 		token_endpoint_auth_method: "none",
+		application_type: "native",
 		grant_types: ["authorization_code"],
 		response_types: ["code"],
 	};
@@ -191,6 +201,120 @@ describe("CIMD - token exchange flow", async () => {
 		expect(typeof body.access_token).toBe("string");
 		expect(body.token_type).toBe("Bearer");
 		expect(typeof body.expires_in).toBe("number");
+	});
+
+	it("authenticates an uppercase URL client_id with a same-origin jwks_uri", async () => {
+		const uppercaseClientMetadataUrl =
+			"HTTPS://key-client.example.com/client-metadata.json";
+		const jwksUri = "https://key-client.example.com/.well-known/jwks.json";
+		const keyId = "uppercase-url-client-key";
+		const { privateKey, publicKey } = (await crypto.subtle.generateKey(
+			{
+				name: "RSASSA-PKCS1-v1_5",
+				modulusLength: 2048,
+				publicExponent: new Uint8Array([1, 0, 1]),
+				hash: "SHA-256",
+			},
+			true,
+			["sign", "verify"],
+		)) as CryptoKeyPair;
+		const privateKeyJwk = await crypto.subtle.exportKey("jwk", privateKey);
+		const publicKeyJwk = await crypto.subtle.exportKey("jwk", publicKey);
+		const privateKeyRedirectUri = "http://localhost:5106/callback";
+		const originalFetch = globalThis.fetch.bind(globalThis);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+				const requested =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				if (requested === uppercaseClientMetadataUrl) {
+					return Promise.resolve(
+						new Response(
+							JSON.stringify({
+								client_id: uppercaseClientMetadataUrl,
+								client_name: "Uppercase URL Client",
+								redirect_uris: [privateKeyRedirectUri],
+								token_endpoint_auth_method: "private_key_jwt",
+								application_type: "native",
+								grant_types: ["authorization_code"],
+								response_types: ["code"],
+								jwks_uri: jwksUri,
+							}),
+							{
+								status: 200,
+								headers: { "content-type": "application/json" },
+							},
+						),
+					);
+				}
+				if (requested === jwksUri) {
+					return Promise.resolve(
+						new Response(
+							JSON.stringify({
+								keys: [
+									{
+										...publicKeyJwk,
+										kid: keyId,
+										alg: "RS256",
+										use: "sig",
+									},
+								],
+							}),
+							{
+								status: 200,
+								headers: { "content-type": "application/json" },
+							},
+						),
+					);
+				}
+				return originalFetch(input, init);
+			}),
+		);
+
+		const { headers } = await signInWithTestUser();
+		const authedClient = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: { customFetchImpl, headers },
+		});
+		const code = await extractAuthorizationCode(
+			authedClient,
+			buildAuthorizeUrl(
+				authServerBaseUrl,
+				uppercaseClientMetadataUrl,
+				privateKeyRedirectUri,
+			),
+		);
+		const tokenEndpoint = `${authServerBaseUrl}/api/auth/oauth2/token`;
+		const assertion = await signPrivateKeyJwtClientAssertion({
+			clientId: uppercaseClientMetadataUrl,
+			tokenEndpoint,
+			privateKeyJwk,
+			kid: keyId,
+			algorithm: "RS256",
+		});
+
+		const tokenResponse = await fetch(tokenEndpoint, {
+			method: "POST",
+			headers: { "Content-Type": "application/x-www-form-urlencoded" },
+			body: new URLSearchParams({
+				grant_type: "authorization_code",
+				code,
+				redirect_uri: privateKeyRedirectUri,
+				client_id: uppercaseClientMetadataUrl,
+				client_assertion_type: CLIENT_ASSERTION_TYPE,
+				client_assertion: assertion,
+				code_verifier: PKCE_VERIFIER,
+			}).toString(),
+		});
+
+		expect(tokenResponse.status).toBe(200);
+		const body = (await tokenResponse.json()) as Record<string, unknown>;
+		expect(typeof body.access_token).toBe("string");
 	});
 
 	it("returns user claims from /oauth2/userinfo with a CIMD-issued access token", async () => {
@@ -317,9 +441,13 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 		client_name: "Refresh Preserve Test Client",
 		redirect_uris: [redirectUri],
 		token_endpoint_auth_method: "none",
+		application_type: "native",
 		grant_types: ["authorization_code"],
 		response_types: ["code"],
 	};
+	const onClientRefreshed = vi.fn(() => {
+		throw new Error("notification sink unavailable");
+	});
 
 	// refreshRate: 0 makes every request stale, so the refresh path fires
 	// on the second authorize hit — giving us a deterministic way to test
@@ -338,7 +466,7 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 				scopes: ["openid", "profile", "email", "offline_access"],
 				silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 			}),
-			cimd({ refreshRate: 0 }),
+			cimd({ refreshRate: 0, onClientRefreshed }),
 		],
 	});
 
@@ -380,7 +508,7 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 		expect(redirect).toContain("/consent");
 
 		// Admin flips all three protected flags directly via the adapter.
-		const ctx = await (authorizationServer as any).$context;
+		const ctx = await authorizationServer.$context;
 		await ctx.adapter.update({
 			model: "oauthClient",
 			where: [{ field: "clientId", value: clientMetadataUrl }],
@@ -391,13 +519,15 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 			},
 		});
 
-		const afterAdmin = await ctx.adapter.findOne({
+		const afterAdmin = await ctx.adapter.findOne<SchemaClient<Scope[]>>({
 			model: "oauthClient",
 			where: [{ field: "clientId", value: clientMetadataUrl }],
 		});
-		expect(afterAdmin.disabled).toBe(true);
-		expect(afterAdmin.skipConsent).toBe(true);
-		expect(afterAdmin.enableEndSession).toBe(true);
+		expect(afterAdmin).toMatchObject({
+			disabled: true,
+			skipConsent: true,
+			enableEndSession: true,
+		});
 
 		// Second authorize must trigger a stale refresh (refreshRate: 0).
 		// The document does NOT carry any of these flags, so preservation is
@@ -407,13 +537,16 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 			{ method: "GET", onError() {} },
 		);
 
-		const afterRefresh = await ctx.adapter.findOne({
+		const afterRefresh = await ctx.adapter.findOne<SchemaClient<Scope[]>>({
 			model: "oauthClient",
 			where: [{ field: "clientId", value: clientMetadataUrl }],
 		});
-		expect(afterRefresh.disabled).toBe(true);
-		expect(afterRefresh.skipConsent).toBe(true);
-		expect(afterRefresh.enableEndSession).toBe(true);
+		expect(afterRefresh).toMatchObject({
+			disabled: true,
+			skipConsent: true,
+			enableEndSession: true,
+		});
+		expect(onClientRefreshed).toHaveBeenCalled();
 	});
 });
 
@@ -427,8 +560,10 @@ describe("CIMD - allowFetch gate", async () => {
 
 	const allowedDocument = {
 		client_id: allowedClientUrl,
+		client_name: "Allowed Fetch Client",
 		redirect_uris: [redirectUriAllowed],
 		token_endpoint_auth_method: "none",
+		application_type: "native",
 	};
 
 	const {

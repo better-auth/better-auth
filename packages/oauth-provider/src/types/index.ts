@@ -534,6 +534,21 @@ export interface OAuthOptions<
 	 */
 	enforcePerClientResources?: boolean;
 	/**
+	 * Resource identifiers linked to every newly registered OAuth client.
+	 *
+	 * Each value must also be present in {@link OAuthOptions.resources}.
+	 */
+	clientRegistrationDefaultResources?: readonly string[];
+	/**
+	 * Resource identifiers an explicit DCR `resources` extension may request.
+	 *
+	 * The effective allowlist is the union of this list and
+	 * {@link OAuthOptions.clientRegistrationDefaultResources}. Each value must
+	 * also be present in {@link OAuthOptions.resources}. When both registration
+	 * resource options are omitted, explicit resource requests are rejected.
+	 */
+	clientRegistrationAllowedResources?: readonly string[];
+	/**
 	 * Customize how a resource `identifier` is validated when resources are
 	 * created via CRUD or DCR. The default rejects non-URI identifiers per
 	 * RFC 8707 §2 (absolute URI, no fragment). Override only for trusted
@@ -714,26 +729,30 @@ export interface OAuthOptions<
 	 */
 	extensions?: OAuthProviderExtension[];
 	/**
-	 * List of scopes for newly registered clients
-	 * if not requested.
+	 * Baseline scope capabilities persisted for dynamically discovered and
+	 * dynamically registered clients.
 	 *
-	 * For scopes that shall automatically adapt to your scopes
-	 * list in the future (ie scopes: undefined), create that client
-	 * using the server's `createOAuthClient` function.
+	 * A client's registration request may ask for a subset, but that request is
+	 * not an authorization grant. Better Auth validates the requested subset,
+	 * then persists the deduplicated union of this list and
+	 * {@link OAuthOptions.clientRegistrationAllowedScopes} so a later user
+	 * authorization can step up within the operator-approved capability set.
 	 *
 	 * @default scopes
 	 */
 	clientRegistrationDefaultScopes?: Scopes;
 	/**
-	 * List of scopes for allowed clients in addition to
-	 * those listed in the default scope. Finalized allowed list is
-	 * the union of the default scopes and this list.
+	 * Additional scope capabilities for dynamically discovered and dynamically
+	 * registered clients. The effective client capability set is the
+	 * deterministic, deduplicated union with
+	 * {@link OAuthOptions.clientRegistrationDefaultScopes}.
 	 *
-	 * If both clientRegistrationDefaultScopes and this
-	 * are undefined, only scopes listed in the scopes option
-	 * are allowed.
+	 * Any registration metadata `scope` must be a subset of that effective set.
+	 * It does not narrow the persisted capability set or grant those scopes to a
+	 * user. If both registration scope options are omitted, {@link OAuthOptions.scopes}
+	 * is the effective set.
 	 *
-	 * @default - clientRegistrationDefaultScopes
+	 * @default []
 	 */
 	clientRegistrationAllowedScopes?: Scopes;
 	/**
@@ -1694,33 +1713,15 @@ export interface SchemaClient<
 	tokenEndpointAuthMethod?: TokenEndpointAuthMethod;
 	grantTypes?: GrantType[];
 	responseTypes?: "code"[];
+	/**
+	 * OIDC application type used only to classify redirect URI policy.
+	 * Authentication capability is determined by `tokenEndpointAuthMethod`.
+	 */
+	applicationType?: "web" | "native" | null;
 	/** Client's JSON Web Key Set metadata. Mutually exclusive with `jwksUri`. */
 	jwks?: string;
 	/** URI for the client's JSON Web Key Set. Mutually exclusive with `jwks`. Must be HTTPS. */
 	jwksUri?: string;
-	//---- RFC6749 Spec ----//
-	/**
-	 * Indicates whether the client is public or confidential.
-	 * If public, refreshing tokens doesn't require
-	 * a client_secret. Clients are considered confidential by default.
-	 *
-	 * Uses `token_endpoint_auth_method` field or `type` field to determine
-	 *
-	 * Described https://www.rfc-editor.org/rfc/rfc6749.html#section-2.1
-	 *
-	 * @default undefined
-	 */
-	public?: boolean;
-	/**
-	 * The client type
-	 *
-	 * Described https://www.rfc-editor.org/rfc/rfc6749.html#section-2.1
-	 *
-	 * - web - A web application (confidential client)
-	 * - native - A mobile application (public client)
-	 * - user-agent-based - A user-agent-based application (public client)
-	 */
-	type?: "web" | "native" | "user-agent-based";
 	/**
 	 * Whether this client requires PKCE for authorization code flow.
 	 *

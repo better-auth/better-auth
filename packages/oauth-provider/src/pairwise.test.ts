@@ -67,6 +67,7 @@ describe("pairwise subject identifiers", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUriA],
+				application_type: "native",
 				scope: "openid profile email offline_access",
 				skip_consent: true,
 				subject_type: "pairwise",
@@ -78,6 +79,7 @@ describe("pairwise subject identifiers", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUriB],
+				application_type: "native",
 				scope: "openid profile email offline_access",
 				skip_consent: true,
 				subject_type: "pairwise",
@@ -89,6 +91,7 @@ describe("pairwise subject identifiers", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUriPublic],
+				application_type: "native",
 				scope: "openid profile email offline_access",
 				skip_consent: true,
 			},
@@ -99,6 +102,7 @@ describe("pairwise subject identifiers", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUriSameHost],
+				application_type: "native",
 				scope: "openid profile email offline_access",
 				skip_consent: true,
 				subject_type: "pairwise",
@@ -328,6 +332,7 @@ describe("pairwise DCR validation", async () => {
 				headers,
 				body: {
 					redirect_uris: [redirectUri],
+					application_type: "native",
 					subject_type: "pairwise",
 				},
 			}),
@@ -356,6 +361,7 @@ describe("pairwise DCR validation", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				subject_type: "pairwise",
 				skip_consent: true,
 			},
@@ -387,6 +393,7 @@ describe("pairwise DCR validation", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -493,6 +500,7 @@ describe("pairwise DCR validation", async () => {
 			method: "POST",
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				subject_type: "pairwise",
 				token_endpoint_auth_method: "none",
 			},

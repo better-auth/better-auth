@@ -9,9 +9,9 @@ import {
 	getIssuer,
 	metadataResponse,
 	oauthProvider,
-	ResourceUriSchema,
 } from "@better-auth/oauth-provider";
 import { DPOP_SIGNING_ALGORITHMS } from "better-auth/oauth2";
+import { validateMcpResource } from "./handler";
 
 const PROTECTED_RESOURCE_METADATA_PATH =
 	"/.well-known/oauth-protected-resource";
@@ -34,9 +34,10 @@ export interface McpOptions extends OAuthOptions<Scope[]> {
 	 * token response for the same effective scopes, requested resources, and
 	 * sender constraint.
 	 *
-	 * MCP overrides the OAuth Provider default because native/public MCP clients
-	 * can have multiple local sessions racing the same refresh token. Set to `0`
-	 * to keep strict replay handling.
+	 * OAuth Provider remains strict by default. MCP overrides that default for
+	 * every client configured through this plugin so a retried refresh can
+	 * recover the response produced by an earlier request. Set to `0` to disable
+	 * the overlap window and keep strict replay handling.
 	 *
 	 * @default 30
 	 */
@@ -69,6 +70,12 @@ const appendProtectedResource = (
 	}
 	return [...configuredResources, resource];
 };
+
+const appendResourceIdentifier = (
+	resources: readonly string[] | undefined,
+	resource: string,
+): readonly string[] =>
+	resources?.includes(resource) ? resources : [...(resources ?? []), resource];
 
 /**
  * Build the RFC 9728 Protected Resource Metadata document. The MCP server is the
@@ -116,12 +123,16 @@ const buildResourceServerMetadata = (
  * Model Context Protocol authorization server.
  *
  * `mcp()` is the OAuth 2.1 / OIDC provider ({@link oauthProvider}) configured for
- * MCP: it enables dynamic client registration, binds issued tokens to the MCP
- * `resource`, and, as the resource server, serves the RFC 9728 protected resource
- * metadata so MCP clients discover and use it through standard OAuth discovery.
- * It also defaults `refreshTokenReuseInterval` to 30 seconds for native/public
- * MCP clients that may retry a refresh after a local process loses the rotated
- * response.
+ * MCP: it binds issued tokens to the MCP `resource`, links that resource to
+ * newly registered clients, and, as the resource server, serves the RFC 9728
+ * protected resource metadata so MCP clients discover and use it through
+ * standard OAuth discovery. Client registration is opt-in: compose with
+ * `cimd()` for Client ID Metadata Documents, or explicitly enable the OAuth
+ * Provider dynamic-registration options.
+ * It also defaults `refreshTokenReuseInterval` to 30 seconds for all MCP
+ * clients, allowing a retried refresh to recover a rotated response. OAuth
+ * Provider remains strict by default; set the MCP option to `0` to disable the
+ * overlap window.
  * Because it is the OAuth provider, it cannot be combined with a separate
  * {@link oauthProvider}.
  *
@@ -129,6 +140,7 @@ const buildResourceServerMetadata = (
  * ```ts
  * import { betterAuth } from "better-auth";
  * import { jwt } from "better-auth/plugins";
+ * import { cimd } from "@better-auth/cimd";
  * import { mcp } from "@better-auth/mcp";
  *
  * export const auth = betterAuth({
@@ -139,24 +151,28 @@ const buildResourceServerMetadata = (
  *       consentPage: "/consent",
  *       resource: "https://api.example.com/mcp",
  *     }),
+ *     cimd(),
  *   ],
  * });
  * ```
  */
 export const mcp = (options: McpOptions): ReturnType<typeof oauthProvider> => {
-	const { resource, refreshTokenReuseInterval = 30, ...oauthOptions } = options;
-	// RFC 8707: reject an invalid or fragment-containing resource before it is
-	// published in the protected resource metadata.
-	ResourceUriSchema.parse(resource);
+	const {
+		resource: configuredResource,
+		refreshTokenReuseInterval = 30,
+		...oauthOptions
+	} = options;
+	const resource = validateMcpResource(configuredResource);
 	const provider = oauthProvider({
-		// MCP clients self-register; public clients use PKCE without a secret.
-		allowDynamicClientRegistration: true,
-		allowUnauthenticatedClientRegistration: true,
 		refreshTokenReuseInterval,
 		...oauthOptions,
 		// RFC 8707: bind issued tokens to the MCP resource so the resource server
 		// can verify the token audience against its protected resource identifier.
 		resources: appendProtectedResource(oauthOptions.resources, resource),
+		clientRegistrationDefaultResources: appendResourceIdentifier(
+			oauthOptions.clientRegistrationDefaultResources,
+			resource,
+		),
 	});
 
 	// The MCP server is the OAuth resource server, so it serves the RFC 9728

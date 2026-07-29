@@ -1,16 +1,15 @@
 // Validation for Client ID Metadata Documents.
-// Implements draft-ietf-oauth-client-id-metadata-document §3 and §4.1.
+// Implements draft-ietf-oauth-client-id-metadata-document-00 §3 and §4.1.
 import {
 	isLoopbackHost,
 	isPublicRoutableHost,
 } from "@better-auth/core/utils/host";
+import { isReverseDomainPrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
+import type { OAuthClientMetadata } from "@better-auth/oauth-provider";
+import { oauthClientMetadataSchema } from "@better-auth/oauth-provider";
+import { isForbiddenCimdClientMetadataField } from "@better-auth/oauth-provider/internal";
 
 const DOT_SEGMENT_RE = /\/(?:\.|%2e)(?:\.|%2e)?(?:\/|$|#|\?)/i;
-
-const PROHIBITED_FIELDS = new Set([
-	"client_secret",
-	"client_secret_expires_at",
-]);
 
 const SYMMETRIC_AUTH_METHODS = new Set([
 	"client_secret_post",
@@ -26,6 +25,7 @@ export interface ClientIdMetadataDocumentResult {
 	valid: boolean;
 	error?: string;
 	warnings?: string[];
+	metadata?: OAuthClientMetadata;
 }
 
 export interface ClientIdUrlOptions {
@@ -67,7 +67,7 @@ export function isUrlClientId(
 }
 
 /**
- * Validate a client_id URL per IETF draft §3.
+ * Validate a client_id URL per Client ID Metadata Document draft-00 §3.
  * Returns null on success, an error string on failure.
  *
  * Loopback hosts are rejected unless `allowLoopback` is set; every other
@@ -139,10 +139,14 @@ function checkUrlQueryWarning(url: string): string | null {
 	return null;
 }
 
-function isAbsoluteHttpUri(uri: string): boolean {
+function isAbsoluteRedirectUri(uri: string): boolean {
 	try {
 		const parsed = new URL(uri);
-		return parsed.protocol === "http:" || parsed.protocol === "https:";
+		return (
+			parsed.protocol === "http:" ||
+			parsed.protocol === "https:" ||
+			isReverseDomainPrivateUseRedirectUri(parsed)
+		);
 	} catch {
 		return false;
 	}
@@ -158,13 +162,23 @@ function isAbsoluteHttpUri(uri: string): boolean {
 export function validateCimdMetadata(
 	fetchUrl: string,
 	raw: unknown,
-	originBoundFields?: string[],
+	originBoundFields?: readonly string[],
 ): ClientIdMetadataDocumentResult {
 	if (!raw || typeof raw !== "object") {
 		return { valid: false, error: "metadata document is not a JSON object" };
 	}
 
-	const doc = raw as Record<string, unknown>;
+	const parsedMetadata = oauthClientMetadataSchema.safeParse(raw);
+	if (!parsedMetadata.success) {
+		const issue = parsedMetadata.error.issues[0];
+		const path = issue?.path.join(".") || "metadata document";
+		return {
+			valid: false,
+			error: `${path}: ${issue?.message ?? "invalid client metadata"}`,
+		};
+	}
+
+	const doc = parsedMetadata.data;
 	const warnings: string[] = [];
 
 	// §4.1: client_id MUST equal the fetch URL (simple string comparison)
@@ -175,9 +189,16 @@ export function validateCimdMetadata(
 		};
 	}
 
+	if (!doc.client_name?.trim()) {
+		return {
+			valid: false,
+			error: "client_name must be a non-empty string",
+		};
+	}
+
 	// §4.1: prohibited fields MUST NOT be present
-	for (const field of PROHIBITED_FIELDS) {
-		if (field in doc) {
+	for (const field of Object.keys(doc)) {
+		if (isForbiddenCimdClientMetadataField(field)) {
 			return {
 				valid: false,
 				error: `metadata document MUST NOT contain "${field}"`,
@@ -187,15 +208,6 @@ export function validateCimdMetadata(
 
 	// §4.1: only non-secret auth methods are allowed
 	const ALLOWED_AUTH_METHODS = new Set(["none", "private_key_jwt"]);
-	if (
-		doc.token_endpoint_auth_method !== undefined &&
-		typeof doc.token_endpoint_auth_method !== "string"
-	) {
-		return {
-			valid: false,
-			error: "token_endpoint_auth_method must be a string",
-		};
-	}
 	if (typeof doc.token_endpoint_auth_method === "string") {
 		if (SYMMETRIC_AUTH_METHODS.has(doc.token_endpoint_auth_method)) {
 			return {
@@ -223,17 +235,46 @@ export function validateCimdMetadata(
 		}
 	}
 
-	// redirect_uris: required, non-empty array of absolute HTTP(S) URIs
+	if (doc.jwks) {
+		const keys = Array.isArray(doc.jwks) ? doc.jwks : doc.jwks.keys;
+		for (const key of keys) {
+			const hasPrivateMaterial = ["d", "p", "q", "dp", "dq", "qi", "oth"].some(
+				(member) => member in key,
+			);
+			const isPublicKey =
+				(key.kty === "RSA" &&
+					typeof key.n === "string" &&
+					typeof key.e === "string") ||
+				(key.kty === "EC" &&
+					typeof key.crv === "string" &&
+					typeof key.x === "string" &&
+					typeof key.y === "string") ||
+				(key.kty === "OKP" &&
+					typeof key.crv === "string" &&
+					typeof key.x === "string");
+			if (hasPrivateMaterial || !isPublicKey) {
+				return {
+					valid: false,
+					error: "jwks must contain only structurally valid public keys",
+				};
+			}
+		}
+	}
+
+	// redirect_uris: required, non-empty array of absolute HTTP(S) or
+	// authority-free private-use URIs. Canonical redirect policy validation runs
+	// after metadata filtering.
 	if (
 		!Array.isArray(doc.redirect_uris) ||
 		doc.redirect_uris.length === 0 ||
 		!doc.redirect_uris.every(
-			(uri: unknown) => typeof uri === "string" && isAbsoluteHttpUri(uri),
+			(uri: unknown) => typeof uri === "string" && isAbsoluteRedirectUri(uri),
 		)
 	) {
 		return {
 			valid: false,
-			error: "redirect_uris must be a non-empty array of absolute HTTP(S) URIs",
+			error:
+				"redirect_uris must be a non-empty array of absolute HTTP(S) or private-use URIs",
 		};
 	}
 
@@ -294,7 +335,6 @@ export function validateCimdMetadata(
 
 	// Origin-bound fields: values must share the same origin as the client_id URL
 	const fieldsToCheck = originBoundFields ?? [
-		"redirect_uris",
 		"post_logout_redirect_uris",
 		"client_uri",
 	];
@@ -340,17 +380,26 @@ export function validateCimdMetadata(
 				};
 			}
 
-			if (uri.protocol !== "https:" && uri.protocol !== "http:") {
+			const isRedirectField =
+				key === "redirect_uris" || key === "post_logout_redirect_uris";
+			const isPrivateUseRedirect =
+				isRedirectField && isReverseDomainPrivateUseRedirectUri(uri);
+			if (
+				uri.protocol !== "https:" &&
+				uri.protocol !== "http:" &&
+				!isPrivateUseRedirect
+			) {
 				return {
 					valid: false,
-					error: `all values for ${key} must use HTTP(S)`,
+					error: `all values for ${key} must use HTTP(S) or an authority-free private-use scheme`,
 				};
+			}
+			if (isPrivateUseRedirect) {
+				continue;
 			}
 
 			// Loopback redirect URIs are allowed for local/native app flows
 			// (RFC 8252); this exception applies only to redirect URI fields.
-			const isRedirectField =
-				key === "redirect_uris" || key === "post_logout_redirect_uris";
 			const localhostAllowed = isRedirectField && isLoopbackHost(uri.hostname);
 			if (uri.origin !== clientIdOrigin && !localhostAllowed) {
 				return {
@@ -369,6 +418,10 @@ export function validateCimdMetadata(
 
 	return {
 		valid: true,
+		metadata: {
+			...doc,
+			token_endpoint_auth_method: doc.token_endpoint_auth_method ?? "none",
+		},
 		...(warnings.length > 0 ? { warnings } : {}),
 	};
 }

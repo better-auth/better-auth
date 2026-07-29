@@ -273,7 +273,7 @@ describe("oauth-provider extensions", async () => {
 				token_endpoint_auth_method: extensionAuthMethod,
 				grant_types: [extensionGrant],
 				scope: "openid email vc",
-				type: "web",
+				application_type: "web",
 			},
 		});
 		expect(adminClient?.client_id).toBeDefined();
@@ -289,7 +289,7 @@ describe("oauth-provider extensions", async () => {
 				token_endpoint_auth_method: extensionAuthMethod,
 				grant_types: [extensionGrant],
 				scope: "openid email vc",
-				type: "web",
+				application_type: "web",
 			},
 		});
 		expect(registeredClient?.client_id).toBeDefined();
@@ -311,7 +311,7 @@ describe("oauth-provider extensions", async () => {
 					grant_types: [extensionGrant],
 					response_types: ["code"],
 					scope: "openid email vc",
-					type: "web",
+					application_type: "web",
 				},
 			});
 		} catch (e) {
@@ -336,7 +336,7 @@ describe("oauth-provider extensions", async () => {
 					grant_types: [extensionGrant],
 					jwks_uri: "https://127.0.0.1/jwks",
 					scope: "openid email vc",
-					type: "web",
+					application_type: "web",
 				},
 			});
 		} catch (e) {
@@ -362,7 +362,7 @@ describe("oauth-provider extensions", async () => {
 					jwks: [{ kty: "RSA", n: "test", e: "test-exponent" }],
 					jwks_uri: "https://client.example.com/jwks",
 					scope: "openid email vc",
-					type: "web",
+					application_type: "web",
 				},
 			});
 		} catch (e) {
@@ -397,7 +397,7 @@ describe("oauth-provider extensions", async () => {
 			body: {
 				grant_types: [extensionGrant],
 				scope: "openid email vc",
-				type: "web",
+				application_type: "web",
 			},
 		});
 		const response = await client.$fetch("/oauth2/token", {
@@ -496,7 +496,7 @@ describe("oauth-provider extensions", async () => {
 				token_endpoint_auth_method: extensionAuthMethod,
 				grant_types: [extensionGrant],
 				scope: "openid email vc",
-				type: "web",
+				application_type: "web",
 			},
 		});
 		expect(oauthClient?.client_id).toBeDefined();
@@ -608,7 +608,7 @@ describe("oauth-provider extensions", async () => {
 				token_endpoint_auth_method: extensionAuthMethod,
 				grant_types: [extensionOpaqueGrant],
 				scope: "openid email vc",
-				type: "web",
+				application_type: "web",
 			},
 		});
 		const response = await client.$fetch("/oauth2/token", {
@@ -975,7 +975,7 @@ describe("oauth-provider extensions", async () => {
 				token_endpoint_auth_method: extensionAuthMethod,
 				grant_types: [extensionOpaqueGrant],
 				scope: "openid email vc",
-				type: "web",
+				application_type: "web",
 			},
 		});
 		const tokenResponse = await client.$fetch<{ access_token: string }>(
@@ -1025,7 +1025,7 @@ describe("oauth-provider extensions", async () => {
 				token_endpoint_auth_method: extensionAuthMethod,
 				grant_types: [extensionGrant],
 				scope: "openid email vc",
-				type: "web",
+				application_type: "web",
 			},
 		});
 		const response = await client.$fetch("/oauth2/token", {
@@ -1052,7 +1052,7 @@ describe("oauth-provider extensions", async () => {
 				token_endpoint_auth_method: extensionAuthMethod,
 				grant_types: [extensionOpaqueGrant],
 				scope: "openid email vc",
-				type: "web",
+				application_type: "web",
 			},
 		});
 		const tokenResponse = await client.$fetch<{ access_token: string }>(
@@ -1134,7 +1134,7 @@ describe("oauth-provider extensions", async () => {
 				token_endpoint_auth_method: extensionAuthMethod,
 				grant_types: [extensionOpaqueBoundGrant],
 				scope: "openid email vc",
-				type: "web",
+				application_type: "web",
 			},
 		});
 		const clientAuth = {

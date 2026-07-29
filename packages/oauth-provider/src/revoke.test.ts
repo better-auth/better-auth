@@ -145,6 +145,7 @@ describe("oauth revoke", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -398,6 +399,7 @@ describe("oauth revoke - config", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});

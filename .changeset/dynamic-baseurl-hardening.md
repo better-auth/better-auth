@@ -17,5 +17,5 @@ harden dynamic `baseURL` handling for direct `auth.api.*` calls and plugin metad
 **Plugin metadata helpers**
 
 - `oauthProviderAuthServerMetadata`, `oauthProviderOpenIdConfigMetadata`, `oAuthDiscoveryMetadata`, and `oAuthProtectedResourceMetadata` forward the incoming request to their chained `auth.api` calls, so `issuer` and discovery URLs reflect the request host on dynamic configs.
-- `withMcpAuth` forwards the incoming request to `getMcpSession`, threads `trustedProxyHeaders`, and emits a bare `Bearer` challenge when `baseURL` can't be resolved (instead of `Bearer resource_metadata="undefined/..."`).
+- `requireMcpAuth` reads the resolved Better Auth base URL from the auth context for its default issuer, resource, and JWKS URL. It throws a clear configuration error when the base URL cannot be resolved; resource servers with dynamic base URLs use `mcpHandler` with explicit verification options.
 - `metadataResponse` in `@better-auth/oauth-provider` normalizes headers via `new Headers()` so callers can pass `Headers`, tuple arrays, or records without silently dropping entries.

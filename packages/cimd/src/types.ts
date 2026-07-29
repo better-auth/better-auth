@@ -1,10 +1,19 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import type { SchemaClient, Scope } from "@better-auth/oauth-provider";
+import type {
+	OAuthClientMetadata,
+	SchemaClient,
+	Scope,
+} from "@better-auth/oauth-provider";
+
+export type MetadataDocumentFetch = (
+	input: RequestInfo | URL,
+	init?: RequestInit,
+) => Promise<Response>;
 
 /**
  * Options for the Client ID Metadata Document plugin.
  *
- * @see https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/
+ * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-00
  */
 export interface CimdOptions {
 	/**
@@ -18,6 +27,14 @@ export interface CimdOptions {
 	 */
 	refreshRate?: number | string;
 	/**
+	 * Maximum number of validated metadata documents retained by this plugin
+	 * instance. The least-recently-used entry is evicted when the bound is
+	 * reached.
+	 *
+	 * @default 1000
+	 */
+	maxCacheEntries?: number;
+	/**
 	 * Metadata fields whose URL values must share the same origin as the
 	 * `client_id` URL. Prevents a client from claiming URIs on a different
 	 * domain.
@@ -25,9 +42,14 @@ export interface CimdOptions {
 	 * Pass an empty array to disable origin binding (not recommended for
 	 * production).
 	 *
-	 * @default ["redirect_uris", "post_logout_redirect_uris", "client_uri"]
+	 * Redirect URIs are deliberately excluded by default: exact redirect URI
+	 * matching remains mandatory at authorization time, while native and
+	 * distributed clients commonly use a redirect origin different from their
+	 * metadata-document origin.
+	 *
+	 * @default ["post_logout_redirect_uris", "client_uri"]
 	 */
-	originBoundFields?: string[];
+	originBoundFields?: readonly string[];
 	/**
 	 * Permit loopback `client_id` URLs (`localhost`, `127.0.0.0/8`, `::1`,
 	 * `*.localhost`), including plain HTTP, so an auth server can fetch a
@@ -53,23 +75,38 @@ export interface CimdOptions {
 		ctx: GenericEndpointContext,
 	) => boolean | Promise<boolean>;
 	/**
+	 * Fetch implementation used for metadata-document requests.
+	 *
+	 * Supply this when HTTPS metadata origins are routed through an in-process
+	 * test harness or a runtime-specific network boundary.
+	 *
+	 * @default globalThis.fetch
+	 */
+	fetchMetadataDocument?: MetadataDocumentFetch;
+	/**
 	 * Called after a client is created from a metadata document for the
 	 * first time. Use this to assign trust levels, prefetch logos, or
 	 * perform other post-creation processing.
+	 *
+	 * This is a best-effort notification. A rejected callback is logged and
+	 * does not roll back an otherwise valid registration.
 	 */
 	onClientCreated?: (data: {
 		client: SchemaClient<Scope[]>;
-		metadata: Record<string, unknown>;
+		metadata: OAuthClientMetadata;
 		ctx: GenericEndpointContext;
 	}) => void | Promise<void>;
 	/**
 	 * Called after a client is refreshed from a re-fetched metadata
 	 * document. Use this for change-detection logging or updating derived
 	 * fields.
+	 *
+	 * This is a best-effort notification. A rejected callback is logged and
+	 * does not roll back an otherwise valid refresh.
 	 */
 	onClientRefreshed?: (data: {
 		client: SchemaClient<Scope[]>;
-		metadata: Record<string, unknown>;
+		metadata: OAuthClientMetadata;
 		ctx: GenericEndpointContext;
 	}) => void | Promise<void>;
 }

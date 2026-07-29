@@ -147,6 +147,7 @@ describe("oauth introspect", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				scope: "openid profile email offline_access",
 				skip_consent: true,
 			},
@@ -676,6 +677,7 @@ describe("oauth introspect - config", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -1077,6 +1079,7 @@ describe("oauth introspect - rejects non-OAuth same-issuer JWTs", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				scope: "openid profile email offline_access",
 				skip_consent: true,
 			},

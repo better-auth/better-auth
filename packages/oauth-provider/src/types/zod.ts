@@ -182,7 +182,7 @@ export const verificationValueSchema = z
 export const clientRegistrationRequestSchema = z.object({
 	redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 	scope: z.string().optional(),
-	client_name: z.string().optional(),
+	client_name: z.string().trim().min(1).optional(),
 	client_uri: z.string().optional(),
 	logo_uri: z.string().optional(),
 	contacts: z.array(z.string().min(1)).min(1).optional(),
@@ -206,9 +206,8 @@ export const clientRegistrationRequestSchema = z.object({
 	jwks_uri: z.string().optional(),
 	grant_types: z.array(z.string().trim().min(1)).min(1).optional(),
 	response_types: z.array(z.enum(["code"])).optional(),
-	type: z.enum(["web", "native", "user-agent-based"]).optional(),
-	// OIDC Registration §2: constrains redirect URI schemes and hosts when
-	// provided, and must agree with `type` when both are sent.
+	// OIDC Registration §2: classifies redirect URI policy independently of
+	// client authentication.
 	application_type: z.enum(["web", "native"]).optional(),
 	subject_type: z.enum(["public", "pairwise"]).optional(),
 	// RFC 9449 §5.2: client asks for DPoP-bound access tokens.
@@ -223,6 +222,30 @@ export const clientRegistrationRequestSchema = z.object({
 		})
 		.optional(),
 });
+
+/**
+ * Complete OAuth client metadata document schema shared by registration and
+ * verified client-discovery integrations.
+ *
+ * Unlike {@link clientRegistrationRequestSchema}, a metadata document carries
+ * its own identifier and may contain the server-assigned secret fields that a
+ * discovery profile must explicitly prohibit. Keeping those fields in the
+ * parsed shape lets profile validation distinguish a forbidden value from an
+ * unknown extension without unsafe casts or ad-hoc allowlists.
+ */
+export const oauthClientMetadataSchema = clientRegistrationRequestSchema
+	.omit({ skip_consent: true })
+	.extend({
+		client_id: z
+			.string()
+			.refine((value) => value.trim().length > 0, "client_id cannot be empty"),
+		client_secret: z.string().optional(),
+		client_secret_expires_at: z.number().int().nonnegative().optional(),
+		client_id_issued_at: z.number().int().nonnegative().optional(),
+	})
+	.loose();
+
+export type OAuthClientMetadata = z.infer<typeof oauthClientMetadataSchema>;
 
 /**
  * Client metadata as submitted in an RFC 7591 §2 registration request, inferred

@@ -1,6 +1,6 @@
-import { createResourceServerChallenge } from "@better-auth/oauth-provider";
+import { mcp, mcpHandler } from "@better-auth/mcp";
+import type { OAuthClientResource } from "@better-auth/oauth-provider";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
-import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";
 import type {
 	OAuthClientInformationContext,
 	OAuthClientProvider,
@@ -9,7 +9,6 @@ import type {
 	StoredOAuthTokens,
 } from "@modelcontextprotocol/client";
 import {
-	auth as authorizeMcpClient,
 	Client,
 	refreshAuthorization,
 	StreamableHTTPClientTransport,
@@ -20,13 +19,13 @@ import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { createAuthClient } from "better-auth/client";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { decodeJwt } from "jose";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mcp, mcpHandler } from "./index";
+import { cimd } from "./index";
 
-const AUTHORIZATION_SERVER = "https://auth.example.test";
-const MCP_RESOURCE = "https://resource.example.test/mcp";
-const REDIRECT_URI = "https://client.example.test/oauth/callback";
+const AUTHORIZATION_SERVER = "https://auth.cimd.example.test";
+const CLIENT_ID = "https://client.example.test/oauth/client.json";
+const REDIRECT_URI = "https://callback.example.test/oauth/callback";
+const MCP_RESOURCE = "https://resource.cimd.example.test/mcp";
 const PROTOCOL_VERSION = "2026-07-28";
 
 type FetchImplementation = (
@@ -39,60 +38,54 @@ function requestUrl(input: RequestInfo | URL): URL {
 	return new URL(input.toString());
 }
 
-function createOAuthClientProvider(options?: { clientMetadataUrl?: string }) {
+function createCimdClientProvider() {
 	let authorizationUrl: URL | undefined;
-	let codeVerifier: string | undefined;
+	let verifier: string | undefined;
 	let discoveryState: OAuthDiscoveryState | undefined;
-	let latestClientInformation: StoredOAuthClientInformation | undefined;
-	let latestTokens: StoredOAuthTokens | undefined;
-	const clientInformationByIssuer = new Map<
-		string,
-		StoredOAuthClientInformation
-	>();
-	const tokensByIssuer = new Map<string, StoredOAuthTokens>();
+	let currentClient: StoredOAuthClientInformation | undefined;
+	let currentTokens: StoredOAuthTokens | undefined;
+	const clients = new Map<string, StoredOAuthClientInformation>();
+	const tokens = new Map<string, StoredOAuthTokens>();
 
 	const provider: OAuthClientProvider = {
 		redirectUrl: REDIRECT_URI,
-		clientMetadataUrl: options?.clientMetadataUrl,
+		clientMetadataUrl: CLIENT_ID,
 		clientMetadata: {
-			client_name: "Better Auth MCP SDK v2 client",
+			client_name: "CIMD SDK v2 client",
 			redirect_uris: [REDIRECT_URI],
 			application_type: "native",
 			token_endpoint_auth_method: "none",
 			grant_types: ["authorization_code", "refresh_token"],
 			response_types: ["code"],
 		},
-		state: () => "mcp-sdk-v2-state",
+		state: () => "cimd-sdk-v2-state",
 		clientInformation(context?: OAuthClientInformationContext) {
-			return context
-				? clientInformationByIssuer.get(context.issuer)
-				: latestClientInformation;
+			return context ? clients.get(context.issuer) : currentClient;
 		},
-		saveClientInformation(clientInformation, context) {
-			if (!context)
-				throw new Error("client information issuer was not supplied");
-			expect(clientInformation.issuer).toBe(context.issuer);
-			clientInformationByIssuer.set(context.issuer, clientInformation);
-			latestClientInformation = clientInformation;
+		saveClientInformation(client, context) {
+			if (!context) throw new Error("client issuer was not supplied");
+			expect(client.issuer).toBe(context.issuer);
+			clients.set(context.issuer, client);
+			currentClient = client;
 		},
 		tokens(context?: OAuthClientInformationContext) {
-			return context ? tokensByIssuer.get(context.issuer) : latestTokens;
+			return context ? tokens.get(context.issuer) : currentTokens;
 		},
-		saveTokens(tokens, context) {
+		saveTokens(value, context) {
 			if (!context) throw new Error("token issuer was not supplied");
-			expect(tokens.issuer).toBe(context.issuer);
-			tokensByIssuer.set(context.issuer, tokens);
-			latestTokens = tokens;
+			expect(value.issuer).toBe(context.issuer);
+			tokens.set(context.issuer, value);
+			currentTokens = value;
 		},
 		redirectToAuthorization(url) {
 			authorizationUrl = url;
 		},
 		saveCodeVerifier(value) {
-			codeVerifier = value;
+			verifier = value;
 		},
 		codeVerifier() {
-			if (!codeVerifier) throw new Error("PKCE verifier was not persisted");
-			return codeVerifier;
+			if (!verifier) throw new Error("PKCE verifier was not persisted");
+			return verifier;
 		},
 		saveDiscoveryState(value) {
 			discoveryState = value;
@@ -107,80 +100,52 @@ function createOAuthClientProvider(options?: { clientMetadataUrl?: string }) {
 		get authorizationUrl() {
 			return authorizationUrl;
 		},
-		get clientInformation() {
-			return latestClientInformation;
+		get client() {
+			return currentClient;
 		},
-		get discoveryState() {
+		get discovery() {
 			return discoveryState;
 		},
 		get tokens() {
-			return latestTokens;
+			return currentTokens;
 		},
 	};
 }
 
-describe("mcp", () => {
-	const apiServerBaseUrl = "http://localhost:5000";
-	const apiClient = createAuthClient({
-		plugins: [oauthProviderClient(), oauthProviderResourceClient()],
-		baseURL: apiServerBaseUrl,
-	});
-
-	/**
-	 * @see https://github.com/better-auth/better-auth/pull/9992
-	 */
-	it.for([
-		{
-			resource: apiServerBaseUrl,
-			expected: `Bearer resource_metadata="${apiServerBaseUrl}/.well-known/oauth-protected-resource"`,
-		},
-		{
-			resource: `${apiServerBaseUrl}/resource1`,
-			expected: `Bearer resource_metadata="${apiServerBaseUrl}/.well-known/oauth-protected-resource/resource1"`,
-		},
-	])("provides the OAuth resource challenge for $resource", async ({
-		resource,
-		expected,
-	}) => {
-		try {
-			await apiClient.verifyBearerToken("bad_access_token", {
-				verifyOptions: {
-					issuer: AUTHORIZATION_SERVER,
-					audience: resource,
-				},
-				jwksUrl: `${AUTHORIZATION_SERVER}/api/auth/jwks`,
+describe("CIMD-first MCP authorization with the official SDK v2", async () => {
+	let metadataFetchCount = 0;
+	const metadataFetch = async (
+		_input: RequestInfo | URL,
+		init?: RequestInit,
+	) => {
+		metadataFetchCount += 1;
+		if (metadataFetchCount > 1) {
+			expect(new Headers(init?.headers).get("if-none-match")).toBe(
+				'"client-metadata-v1"',
+			);
+			return new Response(null, {
+				status: 304,
+				headers: { "cache-control": "max-age=300" },
 			});
-			expect.unreachable();
-		} catch (error) {
-			const challenge = createResourceServerChallenge(error, resource);
-			expect(challenge?.statusCode).toBe(401);
-			expect(
-				new Headers(challenge?.headers as HeadersInit).get("www-authenticate"),
-			).toBe(expected);
 		}
-	});
-
-	it("preserves the MCP challenge boundary", async () => {
-		const response = await mcpHandler(
+		return Response.json(
 			{
-				verifyOptions: {
-					issuer: AUTHORIZATION_SERVER,
-					audience: MCP_RESOURCE,
+				client_id: CLIENT_ID,
+				client_name: "CIMD SDK v2 client",
+				redirect_uris: [REDIRECT_URI],
+				application_type: "native",
+				token_endpoint_auth_method: "none",
+				grant_types: ["authorization_code", "refresh_token"],
+				response_types: ["code"],
+			},
+			{
+				headers: {
+					"cache-control": "no-cache",
+					etag: '"client-metadata-v1"',
 				},
 			},
-			async () => new Response("unused"),
-		)(new Request(MCP_RESOURCE));
-		expect(response.status).toBe(401);
-		expect(response.headers.get("www-authenticate")).toBe(
-			'Bearer resource_metadata="https://resource.example.test/.well-known/oauth-protected-resource/mcp"',
 		);
-	});
-});
-
-describe("MCP SDK v2 explicit DCR flow", async () => {
-	const requestedRegistrationDocuments: unknown[] = [];
-	const tokenRequests: URLSearchParams[] = [];
-	const insufficientScopeChallenges: string[] = [];
+	};
 	const instance = await getTestInstance({
 		baseURL: AUTHORIZATION_SERVER,
 		advanced: { useSecureCookies: false },
@@ -191,14 +156,13 @@ describe("MCP SDK v2 explicit DCR flow", async () => {
 				consentPage: "/consent",
 				resource: MCP_RESOURCE,
 				enforcePerClientResources: true,
-				allowDynamicClientRegistration: true,
-				allowUnauthenticatedClientRegistration: true,
 				scopes: ["openid", "offline_access", "mcp:base", "greeting"],
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
 				},
 			}),
+			cimd({ fetchMetadataDocument: metadataFetch }),
 		],
 	});
 	const { headers } = await instance.signInWithTestUser();
@@ -210,30 +174,27 @@ describe("MCP SDK v2 explicit DCR flow", async () => {
 			headers,
 		},
 	});
-	const serverHandler = createMcpHandler(
+	const sdkHandler = createMcpHandler(
 		() => {
 			const server = new McpServer({
-				name: "better-auth-mcp-acceptance",
+				name: "better-auth-cimd-acceptance",
 				version: "1.0.0",
 			});
 			server.registerTool("greet", {}, async () => ({
-				content: [{ type: "text", text: "hello from protected MCP" }],
+				content: [{ type: "text", text: "hello from CIMD" }],
 			}));
 			return server;
 		},
 		{ legacy: "reject", responseMode: "json" },
 	);
-	const storage = createOAuthClientProvider();
+	const storage = createCimdClientProvider();
+	let dcrRequestCount = 0;
+	const tokenRequests: URLSearchParams[] = [];
 
 	const routeFetch: FetchImplementation = async (input, init) => {
 		const url = requestUrl(input);
 		const request = new Request(input, init);
-		if (
-			url.origin === AUTHORIZATION_SERVER &&
-			url.pathname === "/api/auth/oauth2/register"
-		) {
-			requestedRegistrationDocuments.push(await request.clone().json());
-		}
+		if (url.pathname === "/api/auth/oauth2/register") dcrRequestCount += 1;
 		if (
 			url.origin === AUTHORIZATION_SERVER &&
 			url.pathname === "/api/auth/oauth2/token"
@@ -265,7 +226,7 @@ describe("MCP SDK v2 explicit DCR flow", async () => {
 			request.headers.get("mcp-method") === "tools/call"
 				? ["greeting"]
 				: ["mcp:base"];
-		const response = await mcpHandler(
+		return mcpHandler(
 			{
 				verifyOptions: {
 					issuer: AUTHORIZATION_SERVER,
@@ -287,26 +248,18 @@ describe("MCP SDK v2 explicit DCR flow", async () => {
 					resource: new URL(MCP_RESOURCE),
 					extra: { jwt: claims },
 				};
-				return serverHandler.fetch(verifiedRequest, { authInfo });
+				return sdkHandler.fetch(verifiedRequest, { authInfo });
 			},
 		)(request);
-		if (response.status === 403) {
-			const challenge = response.headers.get("www-authenticate");
-			if (challenge) insufficientScopeChallenges.push(challenge);
-		}
-		return response;
 	};
 
-	afterEach(async () => {
+	afterEach(() => {
 		vi.unstubAllGlobals();
-		requestedRegistrationDocuments.length = 0;
-		tokenRequests.length = 0;
-		insufficientScopeChallenges.length = 0;
 	});
 
-	async function completeAuthorization(authorizationUrl: URL): Promise<URL> {
+	async function completeAuthorization(url: URL): Promise<URL> {
 		let location = "";
-		await userClient.$fetch(authorizationUrl.toString(), {
+		await userClient.$fetch(url.toString(), {
 			method: "GET",
 			headers,
 			onError(context) {
@@ -318,6 +271,8 @@ describe("MCP SDK v2 explicit DCR flow", async () => {
 			throw new Error(`authorization did not reach consent: ${location}`);
 		}
 		const consentUrl = new URL(location, AUTHORIZATION_SERVER);
+		expect(consentUrl.searchParams.get("client_id")).toBe(CLIENT_ID);
+		expect(consentUrl.searchParams.get("redirect_uri")).toBe(REDIRECT_URI);
 		vi.stubGlobal("window", { location: { search: consentUrl.search } });
 		const consent = await userClient.oauth2.consent(
 			{ accept: true },
@@ -326,14 +281,10 @@ describe("MCP SDK v2 explicit DCR flow", async () => {
 		return new URL(consent.url);
 	}
 
-	function createSdkClientAndTransport() {
+	function createConnection() {
 		const client = new Client(
-			{ name: "better-auth-acceptance-client", version: "1.0.0" },
-			{
-				versionNegotiation: {
-					mode: { pin: PROTOCOL_VERSION },
-				},
-			},
+			{ name: "cimd-acceptance-client", version: "1.0.0" },
+			{ versionNegotiation: { mode: { pin: PROTOCOL_VERSION } } },
 		);
 		const transport = new StreamableHTTPClientTransport(new URL(MCP_RESOURCE), {
 			authProvider: storage.provider,
@@ -342,33 +293,44 @@ describe("MCP SDK v2 explicit DCR flow", async () => {
 		return { client, transport };
 	}
 
-	it("registers, binds, negotiates 2026-07-28, steps up, invokes a tool, and refreshes", async () => {
+	it("discovers, caches, binds, steps up, invokes, and refreshes without DCR", async () => {
 		vi.stubGlobal("fetch", routeFetch);
-		let connection = createSdkClientAndTransport();
+		const discovery = await instance.auth.api.getOAuthServerConfig();
+		expect(discovery.registration_endpoint).toBeUndefined();
+		expect(discovery.client_id_metadata_document_supported).toBe(true);
+		const protectedMetadataResponse = await routeFetch(
+			`${new URL(MCP_RESOURCE).origin}/.well-known/oauth-protected-resource/mcp`,
+		);
+		const protectedMetadata = (await protectedMetadataResponse.json()) as {
+			scopes_supported?: string[];
+		};
+		expect(protectedMetadata.scopes_supported).toEqual([
+			"mcp:base",
+			"greeting",
+		]);
+		expect(protectedMetadata.scopes_supported).not.toContain("offline_access");
+
+		let connection = createConnection();
 		await expect(
 			connection.client.connect(connection.transport),
 		).rejects.toBeInstanceOf(UnauthorizedError);
-
-		expect(storage.authorizationUrl).toBeDefined();
+		expect(dcrRequestCount).toBe(0);
 		expect(storage.authorizationUrl?.searchParams.get("resource")).toBe(
 			MCP_RESOURCE,
 		);
-		expect(requestedRegistrationDocuments).toHaveLength(1);
-		expect(requestedRegistrationDocuments[0]).not.toHaveProperty("resources");
-		expect(storage.clientInformation).toMatchObject({
-			client_id: expect.any(String),
+		expect(storage.client).toEqual({
+			client_id: CLIENT_ID,
 			issuer: AUTHORIZATION_SERVER,
-			scope: "openid offline_access mcp:base greeting",
 		});
-		expect(storage.discoveryState).toMatchObject({
+		expect(storage.discovery).toMatchObject({
 			authorizationServerUrl: AUTHORIZATION_SERVER,
 			resourceMetadata: {
 				resource: MCP_RESOURCE,
 				authorization_servers: [AUTHORIZATION_SERVER],
-				scopes_supported: ["mcp:base", "greeting"],
 			},
 			authorizationServerMetadata: {
 				issuer: AUTHORIZATION_SERVER,
+				client_id_metadata_document_supported: true,
 				authorization_response_iss_parameter_supported: true,
 			},
 		});
@@ -378,27 +340,18 @@ describe("MCP SDK v2 explicit DCR flow", async () => {
 		await connection.transport.finishAuth(callback.searchParams);
 		expect(tokenRequests.at(-1)?.get("resource")).toBe(MCP_RESOURCE);
 		expect(storage.tokens).toMatchObject({
-			access_token: expect.any(String),
 			refresh_token: expect.any(String),
 			scope: "mcp:base offline_access",
 			issuer: AUTHORIZATION_SERVER,
 		});
 		await connection.client.close();
 
-		connection = createSdkClientAndTransport();
+		connection = createConnection();
 		await connection.client.connect(connection.transport);
 		expect(connection.transport.protocolVersion).toBe(PROTOCOL_VERSION);
-
 		await expect(
 			connection.client.callTool({ name: "greet", arguments: {} }),
 		).rejects.toBeInstanceOf(UnauthorizedError);
-		expect(insufficientScopeChallenges).toHaveLength(1);
-		expect(insufficientScopeChallenges[0]).toContain(
-			'error="insufficient_scope"',
-		);
-		expect(insufficientScopeChallenges[0]).toContain('scope="greeting"');
-		expect(insufficientScopeChallenges[0]).not.toContain("mcp:base");
-		expect(insufficientScopeChallenges[0]).not.toContain("offline_access");
 		expect(storage.authorizationUrl?.searchParams.get("scope")).toBe(
 			"mcp:base offline_access greeting",
 		);
@@ -408,66 +361,50 @@ describe("MCP SDK v2 explicit DCR flow", async () => {
 		const stepUpCallback = await completeAuthorization(
 			storage.authorizationUrl!,
 		);
-		expect(stepUpCallback.searchParams.get("iss")).toBe(AUTHORIZATION_SERVER);
 		await connection.transport.finishAuth(stepUpCallback.searchParams);
 		expect(tokenRequests.at(-1)?.get("resource")).toBe(MCP_RESOURCE);
-
 		const result = await connection.client.callTool({
 			name: "greet",
 			arguments: {},
 		});
-		expect(result.content).toEqual([
-			{ type: "text", text: "hello from protected MCP" },
+		expect(result.content).toEqual([{ type: "text", text: "hello from CIMD" }]);
+
+		const context = await instance.auth.$context;
+		const resourceLinks = await context.adapter.findMany<OAuthClientResource>({
+			model: "oauthClientResource",
+			where: [{ field: "clientId", value: CLIENT_ID }],
+		});
+		expect(resourceLinks.map((link) => link.resourceId)).toEqual([
+			MCP_RESOURCE,
 		]);
-		const accessTokenBeforeRefresh = storage.tokens?.access_token;
+
+		await completeAuthorization(storage.authorizationUrl!);
+		expect(metadataFetchCount).toBeGreaterThanOrEqual(2);
 		const refreshToken = storage.tokens?.refresh_token;
-		if (
-			!refreshToken ||
-			!storage.clientInformation ||
-			!storage.discoveryState
-		) {
-			throw new Error("OAuth state was not persisted");
+		if (!refreshToken || !storage.client || !storage.discovery) {
+			throw new Error("CIMD OAuth state was not persisted");
 		}
 		const refreshed = await refreshAuthorization(AUTHORIZATION_SERVER, {
-			metadata: storage.discoveryState.authorizationServerMetadata,
-			clientInformation: storage.clientInformation,
+			metadata: storage.discovery.authorizationServerMetadata,
+			clientInformation: storage.client,
 			refreshToken,
 			resource: new URL(MCP_RESOURCE),
 			fetchFn: routeFetch,
 		});
-		expect(refreshed.access_token).not.toBe(accessTokenBeforeRefresh);
+		expect(refreshed.access_token).not.toBe(storage.tokens?.access_token);
 		expect(refreshed.refresh_token).toBeTruthy();
 		expect(tokenRequests.at(-1)?.get("resource")).toBe(MCP_RESOURCE);
-		expect(decodeJwt(refreshed.access_token).aud).toBe(MCP_RESOURCE);
-		await connection.client.close();
-		await serverHandler.close();
-	});
-
-	it("discards client credentials stamped for another issuer", async () => {
-		const freshStorage = createOAuthClientProvider();
-		const wrongIssuerClient = {
-			client_id: "wrong-issuer-client",
-			client_secret: "must-never-be-used",
-			issuer: "https://other-issuer.example.test",
-		};
-		const provider: OAuthClientProvider = {
-			...freshStorage.provider,
-			clientInformation: (context) =>
-				freshStorage.clientInformation ??
-				(context ? wrongIssuerClient : undefined),
-		};
-		expect(
-			await authorizeMcpClient(provider, {
-				serverUrl: MCP_RESOURCE,
-				fetchFn: routeFetch,
-			}),
-		).toBe("REDIRECT");
-		expect(freshStorage.clientInformation).toMatchObject({
-			client_id: expect.not.stringMatching(/^wrong-issuer-client$/),
-			issuer: AUTHORIZATION_SERVER,
-		});
-		expect(JSON.stringify(requestedRegistrationDocuments)).not.toContain(
-			wrongIssuerClient.client_secret,
+		await storage.provider.saveTokens(
+			{ ...refreshed, issuer: AUTHORIZATION_SERVER },
+			{ issuer: AUTHORIZATION_SERVER },
 		);
+		expect(
+			await connection.client.callTool({ name: "greet", arguments: {} }),
+		).toMatchObject({
+			content: [{ type: "text", text: "hello from CIMD" }],
+		});
+		expect(dcrRequestCount).toBe(0);
+		await connection.client.close();
+		await sdkHandler.close();
 	});
 });

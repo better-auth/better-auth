@@ -10,7 +10,12 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { verifyBearerToken } from "./verify";
+import {
+	createInsufficientScopeError,
+	isInsufficientScopeError,
+	verifyAccessTokenRequest,
+	verifyBearerToken,
+} from "./verify";
 
 const issuer = "https://auth.example.com";
 const audience = "https://api.example.com/v1";
@@ -112,9 +117,6 @@ describe("verifyBearerToken", () => {
 		}
 	}
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/9654
-	 */
 	it("should report every missing scope in one insufficient_scope failure", async () => {
 		// RFC 6750 §3.1: one scope per challenge would cost the user a browser
 		// round-trip for each missing scope.
@@ -128,7 +130,7 @@ describe("verifyBearerToken", () => {
 			verifyBearerToken(token, {
 				jwksUrl,
 				verifyOptions: { issuer, audience },
-				scopes: ["files:read", "files:write", "files:delete"],
+				requiredScopes: ["files:read", "files:write", "files:delete"],
 			}),
 		).rejects.toMatchObject({
 			status: "FORBIDDEN",
@@ -137,6 +139,162 @@ describe("verifyBearerToken", () => {
 				scope: "files:write files:delete",
 			},
 		});
+	});
+
+	it("should recognize only typed insufficient-scope API errors", () => {
+		const error = createInsufficientScopeError(["files:write"]);
+
+		expect(isInsufficientScopeError(error)).toBe(true);
+		expect(
+			isInsufficientScopeError(
+				new APIError("FORBIDDEN", {
+					error: "insufficient_scope",
+					scope: "files:write",
+				}),
+			),
+		).toBe(false);
+		expect(
+			isInsufficientScopeError(
+				new APIError("FORBIDDEN", {
+					error: "insufficient_scope",
+					scope: 'files:write"',
+				}),
+			),
+		).toBe(false);
+		expect(isInsufficientScopeError(new Error("insufficient_scope"))).toBe(
+			false,
+		);
+	});
+
+	it("should reject invalid required scopes before bearer token verification", async () => {
+		await expect(
+			verifyBearerToken("not-a-jwt", {
+				jwksUrl,
+				verifyOptions: { issuer, audience },
+				requiredScopes: ["files:read invalid"],
+				remoteVerify: {
+					introspectUrl: `${issuer}/introspect`,
+					clientId: "resource-server",
+					clientSecret: "secret",
+				},
+			}),
+		).rejects.toThrow("invalid required scope");
+		expect(mockedFetch).not.toHaveBeenCalled();
+	});
+
+	it("should reject invalid required scopes before request credentials", async () => {
+		await expect(
+			verifyAccessTokenRequest(
+				{
+					authorizationHeader: undefined,
+					method: "GET",
+					url: audience,
+				},
+				{
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+					requiredScopes: ["files:read invalid"],
+				},
+			),
+		).rejects.toThrow("invalid required scope");
+		expect(mockedFetch).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		null,
+		[],
+		{ read: true },
+		42,
+	])("should reject a malformed scope claim as an invalid token: %j", async (scope) => {
+		const { publicJWK, privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid, { scope });
+		mockJWKSResponse(publicJWK);
+
+		await expect(
+			verifyBearerToken(token, {
+				jwksUrl,
+				verifyOptions: { issuer, audience },
+			}),
+		).rejects.toMatchObject({
+			status: "UNAUTHORIZED",
+			body: { error: "invalid_token" },
+		});
+	});
+
+	it("should treat an absent scope claim as an empty granted-scope set", async () => {
+		const { publicJWK, privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid);
+		mockJWKSResponse(publicJWK);
+
+		await expect(
+			verifyBearerToken(token, {
+				jwksUrl,
+				verifyOptions: { issuer, audience },
+				requiredScopes: ["files:read"],
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: { scope: "files:read" },
+		});
+	});
+
+	it("should deduplicate granted scopes before invoking a custom matcher", async () => {
+		const { publicJWK, privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid, {
+			scope: "files:read files:read files:write",
+		});
+		mockJWKSResponse(publicJWK);
+
+		await expect(
+			verifyBearerToken(token, {
+				jwksUrl,
+				verifyOptions: { issuer, audience },
+				requiredScopes: ["files"],
+				isScopeSatisfied(requiredScope, grantedScopes) {
+					return (
+						grantedScopes.size === 2 &&
+						[...grantedScopes].some((scope) =>
+							scope.startsWith(`${requiredScope}:`),
+						)
+					);
+				},
+			}),
+		).resolves.toMatchObject({ sub: "user-123" });
+	});
+
+	it("should use exact scope membership by default", async () => {
+		const { publicJWK, privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid, {
+			scope: "files:read",
+		});
+		mockJWKSResponse(publicJWK);
+
+		await expect(
+			verifyBearerToken(token, {
+				jwksUrl,
+				verifyOptions: { issuer, audience },
+				requiredScopes: ["files"],
+			}),
+		).rejects.toMatchObject({
+			status: "FORBIDDEN",
+			body: { scope: "files" },
+		});
+	});
+
+	it("should reject invalid configured scope tokens", async () => {
+		const { publicJWK, privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid, {
+			scope: "files:read",
+		});
+		mockJWKSResponse(publicJWK);
+
+		await expect(
+			verifyBearerToken(token, {
+				jwksUrl,
+				verifyOptions: { issuer, audience },
+				requiredScopes: ["files:read\r\nX-Test: injected"],
+			}),
+		).rejects.toThrow("invalid required scope");
 	});
 
 	it("should translate jose claim validation failures to unauthorized API errors", async () => {

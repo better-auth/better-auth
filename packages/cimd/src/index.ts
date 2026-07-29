@@ -41,10 +41,11 @@ export function cimdClientDiscovery(
  * Adds unauthenticated dynamic client discovery over HTTPS to an
  * `oauth-provider` instance. Clients identify themselves by providing
  * an HTTPS URL as their `client_id`; the plugin fetches and validates
- * the document at that URL, then creates a public client record.
+ * the document at that URL, then creates a client record whose authentication
+ * behavior is determined by `token_endpoint_auth_method`.
  *
- * See {@link https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/ | the IETF draft}
- * and {@link https://modelcontextprotocol.io/specification/draft/basic/authorization#client-id-metadata-documents-flow | the MCP authorization spec}.
+ * See {@link https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-00 | Client ID Metadata Document draft-00}
+ * and {@link https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#client-id-metadata-documents | the MCP authorization spec}.
  */
 export const cimd = (options: CimdOptions = {}) => {
 	const discovery = cimdClientDiscovery(options);
@@ -59,7 +60,7 @@ export const cimd = (options: CimdOptions = {}) => {
 };
 
 export { createCimdResolver } from "./resolver";
-export type { CimdOptions } from "./types";
+export type { CimdOptions, MetadataDocumentFetch } from "./types";
 export type {
 	ClientIdMetadataDocumentResult,
 	ClientIdUrlOptions,

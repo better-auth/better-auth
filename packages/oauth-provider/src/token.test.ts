@@ -102,6 +102,7 @@ describe("oauth token - authorization_code", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -781,6 +782,7 @@ describe("oauth token - refresh_token", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -964,6 +966,7 @@ describe("oauth token - refresh_token", async () => {
 			body: {
 				grant_types: ["authorization_code", "refresh_token"],
 				redirect_uris: [otherRedirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -1690,6 +1693,7 @@ describe("oauth token - refresh_token reuse interval", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -2026,6 +2030,7 @@ describe("oauth token - client_credentials", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 				scope: clientScopes.join(" "),
 			},
@@ -2218,6 +2223,7 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -2379,6 +2385,7 @@ describe("oauth token - config", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -2765,6 +2772,7 @@ describe("oauth token - client secret validation", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -2920,6 +2928,7 @@ describe("id token claim override security", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -3054,7 +3063,11 @@ describe("loopback redirect URI matching", async () => {
 
 		const oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
-			body: { redirect_uris: [registeredUri], skip_consent: true },
+			body: {
+				redirect_uris: [registeredUri],
+				application_type: "native",
+				skip_consent: true,
+			},
 		});
 
 		const codeVerifier = generateRandomString(32);
@@ -3105,7 +3118,11 @@ describe("loopback redirect URI matching", async () => {
 
 		const oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
-			body: { redirect_uris: [registeredUri], skip_consent: true },
+			body: {
+				redirect_uris: [registeredUri],
+				application_type: "native",
+				skip_consent: true,
+			},
 		});
 
 		const codeVerifier = generateRandomString(32);
@@ -3158,7 +3175,11 @@ describe("loopback redirect URI matching", async () => {
 
 		const oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
-			body: { redirect_uris: [registeredUri], skip_consent: true },
+			body: {
+				redirect_uris: [registeredUri],
+				application_type: "native",
+				skip_consent: true,
+			},
 		});
 
 		const codeVerifier = generateRandomString(32);
@@ -3192,7 +3213,11 @@ describe("loopback redirect URI matching", async () => {
 
 		const oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
-			body: { redirect_uris: [registeredUri], skip_consent: true },
+			body: {
+				redirect_uris: [registeredUri],
+				application_type: "native",
+				skip_consent: true,
+			},
 		});
 
 		const codeVerifier = generateRandomString(32);
@@ -3255,7 +3280,11 @@ describe("scope preservation through authorization code flow", async () => {
 	}) => {
 		const oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
-			body: { redirect_uris: [redirectUri], skip_consent: true },
+			body: {
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: true,
+			},
 		});
 
 		const requestedScopes = ["openid", "profile", "email"];
@@ -3348,6 +3377,7 @@ describe("at_hash in id tokens", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -3491,7 +3521,11 @@ describe("at_hash in id tokens", async () => {
 
 		const testOauthClient = await testAuth.api.adminCreateOAuthClient({
 			headers: testHeaders,
-			body: { redirect_uris: [redirectUri], skip_consent: true },
+			body: {
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: true,
+			},
 		});
 
 		const codeVerifier = generateRandomString(32);
@@ -3595,6 +3629,7 @@ describe("customTokenResponseFields", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -3698,6 +3733,7 @@ describe("customTokenResponseFields", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -4038,6 +4074,7 @@ describe("oauth token - per-client grant_type enforcement", async () => {
 			body: {
 				grant_types: ["authorization_code"],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -4120,6 +4157,7 @@ describe("oauth token - per-client grant_type enforcement", async () => {
 			body: {
 				grant_types: ["client_credentials"],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -4146,6 +4184,7 @@ describe("oauth token - per-client grant_type enforcement", async () => {
 			body: {
 				grant_types: ["client_credentials"],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -4325,6 +4364,7 @@ describe("oauth token - DPoP", async () => {
 			body: {
 				grant_types: ["authorization_code", "refresh_token"],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -4548,6 +4588,7 @@ describe("oauth token - DPoP", async () => {
 			method: "POST",
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				grant_types: ["authorization_code"],
 				token_endpoint_auth_method: "client_secret_basic",
 				dpop_bound_access_tokens: true,
@@ -4565,6 +4606,7 @@ describe("oauth token - DPoP", async () => {
 			body: {
 				grant_types: ["authorization_code"],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 				dpop_bound_access_tokens: true,
 			},

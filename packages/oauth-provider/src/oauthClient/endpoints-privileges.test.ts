@@ -10,7 +10,7 @@ import type { OAuthClient } from "../types/oauth";
 describe("oauthClient", async () => {
 	const providerId = "test";
 	const baseUrl = "http://localhost:3000";
-	const rpBaseUrl = "http://localhost:5000";
+	const rpBaseUrl = "https://rp.example.com";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 	const allowedUser = {
 		email: "allowed@test.com",
@@ -383,7 +383,7 @@ describe("oauthClient", async () => {
  */
 describe("oauthClient dynamic registration privileges", async () => {
 	const baseUrl = "http://localhost:3000";
-	const redirectUri = "http://localhost:5000/callback";
+	const redirectUri = "https://rp.example.com/callback";
 	const allowedUser = {
 		email: "dcr-allowed@test.com",
 		password: "test123456",
@@ -480,7 +480,8 @@ describe("oauthClient dynamic registration privileges", async () => {
 		});
 		expect(client.data?.client_id).toBeDefined();
 		expect(client.data?.client_secret).toBeUndefined();
-		expect(client.data?.public).toBe(true);
+		expect(client.data?.token_endpoint_auth_method).toBe("none");
+		expect(client.data).not.toHaveProperty("public");
 		expect(clientPrivileges).not.toHaveBeenCalled();
 	});
 
@@ -491,7 +492,7 @@ describe("oauthClient dynamic registration privileges", async () => {
 		expect(client.data?.client_id).toBeDefined();
 		expect(client.data?.client_secret).toBeDefined();
 		expect(client.data?.token_endpoint_auth_method).toBe("client_secret_basic");
-		expect(client.data?.public).toBe(false);
+		expect(client.data).not.toHaveProperty("public");
 		expect(clientPrivileges).not.toHaveBeenCalled();
 	});
 });

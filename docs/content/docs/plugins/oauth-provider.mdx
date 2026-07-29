@@ -17,8 +17,8 @@ The plugin has a secured configuration by default providing ease to users unfami
   * **id\_token**: JWT-signed user information
   * **OIDC Logout**: [RP-initiated](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)-compliant Logout
 * **Dynamic Client Registration**: Allow clients to register clients dynamically.
-  * **Public Clients**: Support public clients for native mobile clients and user-agent clients (like AI)
-  * **Confidential Clients**: Supports confidential clients for web clients
+  * **Public Clients**: Support clients that cannot keep a secret by using `token_endpoint_auth_method: "none"`
+  * **Confidential Clients**: Support clients that authenticate at the token endpoint with a registered method
   * **Trusted Clients**: Store first-party clients with optional consent bypass and cache them by `client_id`.
 * **JWT Plugin compatibility**: required by default with an option to disable
   * **JWT Signing**: sign JWT tokens when requesting a `resource`
@@ -160,10 +160,11 @@ The plugin operates as an OAuth 2.1 server with OIDC compatible endpoints and JW
 
 ### OAuth Clients
 
-In OAuth there are two types of clients:
+OAuth client authentication capability and application topology are separate:
 
-* **Public Clients**: Cannot store a client secret such as native mobile clients and user-agent clients (like AI)
-* **Confidential Clients**: Can store a client secret such as web clients
+* **Public Clients**: Cannot keep a client secret and use `token_endpoint_auth_method: "none"`.
+* **Confidential Clients**: Authenticate at the token endpoint with a registered method such as `client_secret_basic`, `client_secret_post`, or `private_key_jwt`.
+* **Application Type**: `application_type` is either `web` or `native` and controls redirect URI validation only. It does not determine whether the client is public or confidential.
 
 #### Get Client
 
@@ -281,7 +282,7 @@ To update an oauth client tied to a specific user or organization, use the `/oau
 
 Restrictions on this endpoint:
 
-* You are unable to switch between confidential and public clients. The client type must be determined at creation.
+* You cannot change `token_endpoint_auth_method` after creation. The method selected at creation determines whether the client has credential capability.
 * You cannot update the client secret. To rotate the `client_secret` use the rotate client secret endpoint.
 
 In some cases, you may wish to create logic to update oauth clients with restricted fields through custom APIs, company admin portals, or server initialization, you may use the following server-only endpoint. The fields are described in the create section.:
@@ -448,9 +449,11 @@ const client = await authClient.oauth2.register({
 
 For all endpoint parameters, see [RFC 7591 Registration](https://datatracker.ietf.org/doc/html/rfc7591#section-2).
 
-When `application_type` ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)) is provided, redirect URIs are constrained to what the declared type allows. A `native` client may use custom schemes, loopback `http` redirects, or claimed `https` links ([RFC 8252 §7](https://datatracker.ietf.org/doc/html/rfc8252#section-7)); plain `http` on a routable host is rejected. A `web` client requires `https` redirect URIs on non-loopback hosts. Sending both `application_type` and `type` requires them to agree. When `application_type` is omitted, no constraints are applied.
+`application_type` ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)) defaults to `web` when omitted. A `web` client requires `https` redirect URIs on non-loopback hosts. A `native` client may use claimed `https` links, loopback `http` redirects on exact `localhost`, `127.0.0.0/8`, or `::1`, or an authority-free private-use URI with a well-formed reverse-domain scheme such as `com.example.app:/callback` ([RFC 8252 §7](https://datatracker.ietf.org/doc/html/rfc8252#section-7)). Credentials, fragments, malformed or reserved schemes such as `file:` and `mailto:`, loopback `https`, trailing-dot localhost names, and routable-host `http` redirects are rejected.
 
-The [MCP 2026-07-28 spec](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#application-type-and-redirect-uri-constraints) requires MCP clients to send an appropriate `application_type`. The same constraints apply to clients identified by a [Client ID Metadata Document](/docs/plugins/cimd).
+Application type is independent of client authentication. For example, a native client may use `client_secret_post`, while a web client may use `token_endpoint_auth_method: "none"`. Authentication capability is derived only from `token_endpoint_auth_method`; the removed `type` and `public` metadata fields are not accepted or returned.
+
+The [MCP 2026-07-28 spec](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#application-type-and-redirect-uri-constraints) requires MCP clients to send an appropriate `application_type`. A [Client ID Metadata Document](/docs/plugins/cimd) may omit it; Better Auth stores that omission as `null` and validates redirects against the safe union of web and native forms.
 
 Note the following parameters are not yet supported:
 
@@ -609,7 +612,7 @@ The refresh token grant enables clients to update their access token without nee
 
 This implementation currently issues a new refresh token for every refresh request.
 
-Set `refreshTokenReuseInterval` to allow a rotated refresh token to be reused for a short interval and receive the same token response. This helps native and public clients recover from duplicate refresh requests, lost responses, or retrying requests without minting another token pair.
+Set `refreshTokenReuseInterval` to allow a rotated refresh token to be reused for a short interval and receive the same token response. This lets clients recover from duplicate refresh requests, lost responses, or retries without minting another token pair.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -878,7 +881,7 @@ export const GET = async (req: Request) => {
       issuer: "https://auth.example.com",
       audience: "https://api.example.com",
     },
-    scopes: ["read:post"], // optional
+    requiredScopes: ["read:post"], // optional
   });
   // ...continue
 }
@@ -899,7 +902,7 @@ export const POST = async (req: Request) => {
         issuer: "https://auth.example.com",
         audience: "https://api.example.com",
       },
-      scopes: ["write:post"], // optional
+      requiredScopes: ["write:post"], // optional
     }
   );
   // ...continue
@@ -1194,6 +1197,25 @@ oauthProvider({
 
 Use the admin resource endpoints when resource policy needs to change at runtime.
 
+Dynamic registration can attach protected resources to the new client in the same transaction as the client row. `clientRegistrationDefaultResources` adds server-owned defaults to every registration. `clientRegistrationAllowedResources` lists additional resources a client may request; the effective allowlist is the union of the default and allowed lists. Defaults appear first, duplicates are removed, and every configured value must also be present in `resources`.
+
+```ts title="auth.ts"
+oauthProvider({
+  resources: [
+    "https://api.example.com/default",
+    "https://api.example.com/optional",
+  ],
+  clientRegistrationDefaultResources: [
+    "https://api.example.com/default",
+  ],
+  clientRegistrationAllowedResources: [
+    "https://api.example.com/optional",
+  ],
+})
+```
+
+Explicit resource requests are closed by default: when both registration-resource options are omitted, no resource may be requested. A requested resource outside the effective allowlist is rejected with `invalid_target`; missing and disabled resources are rejected too. Registrations with resolved resources return the final `resources` list and create the corresponding `oauthClientResource` links atomically.
+
 ### Scopes
 
 Scopes allow clients specific access to specific resources.
@@ -1362,7 +1384,9 @@ oauthProvider({
 
 #### Dynamic Client Registration Scopes
 
-To set a list of default scopes for newly registered clients when scopes parameter is not sent, set the `clientRegistrationDefaultScopes` field. All scopes must be defined in `scopes`.
+Registration scope metadata describes the scopes a client is capable of requesting; it is not a user authorization grant. Better Auth validates a requested `scope` as a subset of the operator policy, then persists the complete operator-approved capability set so later authorization can step up without re-registering the client.
+
+Set the baseline capability list with `clientRegistrationDefaultScopes`. All values must be defined in `scopes`.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -1371,7 +1395,7 @@ oauthProvider({
 })
 ```
 
-To also set a list of allowed scopes for newly registered clients when scopes parameter is not sent, set the `clientRegistrationAllowedScopes` field. These are **in addition** to the `clientRegistrationDefaultScopes`. All scopes must be defined in `scopes`.
+Add capabilities with `clientRegistrationAllowedScopes`. The effective set is the deterministic, deduplicated union of both lists. When both options are omitted, `scopes` is the effective set. A DCR or CIMD document may request a subset, but that subset does not permanently prevent a later operation-specific step-up.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -1391,7 +1415,7 @@ By default, PKCE is required for all clients. This provides maximum security and
 
 **PKCE is always required for:**
 
-* Public clients (native/user-agent-based applications)
+* Clients using `token_endpoint_auth_method: "none"`
 * Authorization requests with the `offline_access` scope, unless a confidential client has opted out of PKCE and the OIDC request includes both `openid` and `nonce`
 
 #### Per-Client PKCE Configuration
@@ -1455,7 +1479,7 @@ Only disable PKCE for confidential clients when absolutely necessary for legacy 
 Some clients (notably MCP clients) need to connect to your authorization server without being registered in advance. The OAuth Provider plugin supports this through two mechanisms:
 
 * **`allowUnauthenticatedClientRegistration`**: lets anonymous callers hit `/oauth2/register` to create a client at request time. Confidential registrations receive a one-time `client_secret`; public registrations use `token_endpoint_auth_method: "none"`.
-* **[`@better-auth/cimd`](/docs/plugins/cimd)**: an optional plugin that lets clients identify themselves by hosting a metadata document at an HTTPS URL. The URL itself becomes the `client_id`; the server fetches and validates the document. This is the pattern MCP calls [Client ID Metadata Documents](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/).
+* **[`@better-auth/cimd`](/docs/plugins/cimd)**: an optional plugin that lets clients identify themselves by hosting a metadata document at an HTTPS URL. The URL itself becomes the `client_id`; the server fetches and validates the document. This is the pattern MCP adopts from [Client ID Metadata Document draft-00](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-00).
 
 ### Provider extensions
 
@@ -1999,16 +2023,10 @@ export const oauthClientTableFields = [
     isOptional: true,
   },
   {
-    name: "public",
-    type: "boolean",
-    description: "Indication if the client is confidential or public",
-    isOptional: true,
-  },
-  {
-    name: "type",
+    name: "applicationType",
     type: "string",
     description:
-      "Type of OAuth client. Supports: ['web', 'native', 'user-agent-based']",
+      "OIDC application type used to classify redirect URI policy. Supports: ['web', 'native']",
     isOptional: true,
   },
   {

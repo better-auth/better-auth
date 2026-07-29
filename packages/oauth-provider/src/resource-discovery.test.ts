@@ -1,9 +1,13 @@
-import type { AuthContext } from "@better-auth/core";
+import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProvider } from "./oauth";
+import {
+	createOAuthClientRegistration,
+	registerClientMetadataDocument,
+} from "./register";
 import {
 	invalidateResourceCache,
 	resetSeedStateForTests,
@@ -25,7 +29,10 @@ afterEach(() => {
 	invalidateResourceCache();
 });
 
-const boot = async (options: Partial<OAuthOptions<Scope[]>> = {}) => {
+const boot = async (
+	options: Partial<OAuthOptions<Scope[]>> = {},
+	useTransactionalMemory = false,
+) => {
 	const opts = {
 		loginPage: "/login",
 		consentPage: "/consent",
@@ -33,6 +40,7 @@ const boot = async (options: Partial<OAuthOptions<Scope[]>> = {}) => {
 		...options,
 	} as OAuthOptions<Scope[]>;
 	const instance = await getTestInstance({
+		...(useTransactionalMemory ? { database: undefined } : {}),
 		plugins: [jwt(), oauthProvider(opts)],
 	});
 	resetSeedStateForTests();
@@ -42,32 +50,110 @@ const boot = async (options: Partial<OAuthOptions<Scope[]>> = {}) => {
 };
 
 describe("DCR — resources field (RFC 7591 §2 extension)", () => {
-	it("registers a client with valid resources and creates link rows", async () => {
+	it("unions registration defaults with explicit resources and dedupes the final links", async () => {
+		const defaultResource = "https://api.example.com/default";
+		const requestedResource = "https://api.example.com/requested";
 		const instance = await boot({
 			allowDynamicClientRegistration: true,
 			allowUnauthenticatedClientRegistration: true,
-			resources: ["https://api.example.com/dcr-link"],
+			resources: [defaultResource, requestedResource],
+			clientRegistrationDefaultResources: [defaultResource, defaultResource],
+			clientRegistrationAllowedResources: [requestedResource],
 		});
 
 		const result = (await instance.auth.api.registerOAuthClient({
 			body: {
 				redirect_uris: ["https://app.example.com/callback"],
-				resources: ["https://api.example.com/dcr-link"],
+				resources: [requestedResource, defaultResource, requestedResource],
+			},
+		})) as { client_id: string; resources?: string[] };
+
+		expect(result.resources).toEqual([defaultResource, requestedResource]);
+		const links = await instance.ctx.adapter.findMany<OAuthClientResource>({
+			model: "oauthClientResource",
+			where: [{ field: "clientId", value: result.client_id }],
+		});
+		expect(links.map((link) => link.resourceId).sort()).toEqual(
+			[defaultResource, requestedResource].sort(),
+		);
+	});
+
+	it("rejects explicit resources outside the effective registration allowlist", async () => {
+		const defaultResource = "https://api.example.com/default-only";
+		const disallowedResource =
+			"https://api.example.com/configured-but-disallowed";
+		const instance = await boot({
+			allowDynamicClientRegistration: true,
+			allowUnauthenticatedClientRegistration: true,
+			resources: [defaultResource, disallowedResource],
+			clientRegistrationDefaultResources: [defaultResource],
+		});
+
+		await expect(
+			instance.auth.api.registerOAuthClient({
+				body: {
+					redirect_uris: ["https://app.example.com/callback"],
+					resources: [disallowedResource],
+				},
+			}),
+		).rejects.toMatchObject({
+			body: expect.objectContaining({ error: "invalid_target" }),
+		});
+	});
+
+	it("rejects registration resource policies that name unconfigured resources", () => {
+		expect(() =>
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: ["https://api.example.com/configured"],
+				clientRegistrationAllowedResources: [
+					"https://api.example.com/not-configured",
+				],
+			}),
+		).toThrow(/not-configured.*not found in resources/);
+	});
+
+	it("registers a client with valid resources and creates link rows", async () => {
+		const resource = "https://api.example.com/dcr-link";
+		const instance = await boot({
+			allowDynamicClientRegistration: true,
+			allowUnauthenticatedClientRegistration: true,
+			resources: [resource],
+			clientRegistrationAllowedResources: [resource],
+		});
+
+		const result = (await instance.auth.api.registerOAuthClient({
+			body: {
+				redirect_uris: ["https://app.example.com/callback"],
+				resources: [resource],
 			},
 		})) as { client_id: string; resources?: string[] };
 
 		expect(result.client_id).toBeDefined();
-		expect(result.resources).toEqual(["https://api.example.com/dcr-link"]);
+		expect(result.resources).toEqual([resource]);
 
 		const links = await instance.ctx.adapter.findMany<OAuthClientResource>({
 			model: "oauthClientResource",
 			where: [{ field: "clientId", value: result.client_id }],
 		});
 		expect(links?.length).toBe(1);
-		expect(links?.[0]?.resourceId).toBe("https://api.example.com/dcr-link");
+		expect(links?.[0]?.resourceId).toBe(resource);
+
+		const storedClient = await instance.ctx.adapter.findOne<{
+			metadata?: string | Record<string, unknown> | null;
+		}>({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: result.client_id }],
+		});
+		const metadata =
+			typeof storedClient?.metadata === "string"
+				? JSON.parse(storedClient.metadata)
+				: storedClient?.metadata;
+		expect(metadata ?? {}).not.toHaveProperty("resources");
 	});
 
-	it("rejects registration with an unknown resource", async () => {
+	it("rejects an explicit resource when no registration resources are allowed", async () => {
 		const instance = await boot({
 			allowDynamicClientRegistration: true,
 			allowUnauthenticatedClientRegistration: true,
@@ -77,7 +163,7 @@ describe("DCR — resources field (RFC 7591 §2 extension)", () => {
 			instance.auth.api.registerOAuthClient({
 				body: {
 					redirect_uris: ["https://app.example.com/callback"],
-					resources: ["https://api.example.com/never-seeded"],
+					resources: ["https://api.example.com/exists"],
 				},
 			}),
 		).rejects.toMatchObject({
@@ -86,23 +172,23 @@ describe("DCR — resources field (RFC 7591 §2 extension)", () => {
 	});
 
 	it("rejects registration when one requested resource is disabled", async () => {
+		const resource = "https://api.example.com/disabled-test";
 		const instance = await boot({
 			allowDynamicClientRegistration: true,
 			allowUnauthenticatedClientRegistration: true,
-			resources: ["https://api.example.com/disabled-test"],
+			resources: [resource],
+			clientRegistrationAllowedResources: [resource],
 		});
 		await instance.ctx.adapter.update({
 			model: "oauthResource",
-			where: [
-				{ field: "identifier", value: "https://api.example.com/disabled-test" },
-			],
+			where: [{ field: "identifier", value: resource }],
 			update: { disabled: true },
 		});
 		await expect(
 			instance.auth.api.registerOAuthClient({
 				body: {
 					redirect_uris: ["https://app.example.com/callback"],
-					resources: ["https://api.example.com/disabled-test"],
+					resources: [resource],
 				},
 			}),
 		).rejects.toMatchObject({
@@ -122,5 +208,431 @@ describe("DCR — resources field (RFC 7591 §2 extension)", () => {
 		})) as { client_id: string; resources?: string[] };
 		expect(result.client_id).toBeDefined();
 		expect(result.resources).toBeUndefined();
+	});
+});
+
+describe("managed client registration resources", () => {
+	it("links server-owned defaults during managed client creation", async () => {
+		const defaultResource = "https://api.example.com/managed-default";
+		const instance = await boot(
+			{
+				resources: [defaultResource],
+				clientRegistrationDefaultResources: [defaultResource],
+			},
+			true,
+		);
+		const { headers } = await instance.signInWithTestUser();
+
+		const result = (await instance.auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: ["https://app.example.com/callback"],
+			},
+		})) as { client_id: string; resources?: string[] };
+
+		expect(result.resources).toEqual([defaultResource]);
+		const links = await instance.ctx.adapter.findMany<OAuthClientResource>({
+			model: "oauthClientResource",
+			where: [{ field: "clientId", value: result.client_id }],
+		});
+		expect(links).toEqual([
+			expect.objectContaining({
+				clientId: result.client_id,
+				resourceId: defaultResource,
+			}),
+		]);
+	});
+
+	it("rolls back the client when a resource link cannot be inserted", async () => {
+		const clientId = "transaction-rollback-client";
+		const defaultResource = "https://api.example.com/rollback-default";
+		const instance = await boot(
+			{
+				resources: [defaultResource],
+				clientRegistrationDefaultResources: [defaultResource],
+			},
+			true,
+		);
+		const originalTransaction = instance.ctx.adapter.transaction.bind(
+			instance.ctx.adapter,
+		);
+		vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
+			async (callback) =>
+				originalTransaction(async (transactionAdapter) => {
+					const originalCreate =
+						transactionAdapter.create.bind(transactionAdapter);
+					vi.spyOn(transactionAdapter, "create").mockImplementation(
+						async (data) => {
+							if (data.model === "oauthClientResource") {
+								throw new Error("forced resource-link insertion failure");
+							}
+							return originalCreate(data);
+						},
+					);
+					return callback(transactionAdapter);
+				}),
+		);
+
+		await expect(
+			createOAuthClientRegistration(
+				{ context: instance.ctx } as unknown as GenericEndpointContext,
+				instance.opts,
+				{
+					registrationSource: "managed",
+					clientId,
+					metadata: {
+						client_id: clientId,
+						redirect_uris: ["https://app.example.com/callback"],
+					},
+				},
+			),
+		).rejects.toThrow("forced resource-link insertion failure");
+
+		const storedClient = await instance.ctx.adapter.findOne({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+		});
+		expect(storedClient).toBeNull();
+	});
+});
+
+describe("canonical client metadata document registration", () => {
+	it("preserves omitted application type as null while validating a loopback redirect", async () => {
+		const instance = await boot();
+		const clientId = "https://client.example.com/metadata.json";
+
+		const result = await registerClientMetadataDocument(
+			{ context: instance.ctx } as unknown as GenericEndpointContext,
+			instance.opts,
+			{
+				clientId,
+				metadata: {
+					client_id: clientId,
+					redirect_uris: ["http://localhost:5198/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			},
+		);
+
+		expect(result.client.applicationType).toBeNull();
+		const storedClient = await instance.ctx.adapter.findOne({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+		});
+		expect(storedClient).toMatchObject({ applicationType: null });
+	});
+
+	it("persists through the configured oauthClient model", async () => {
+		const model = "customCimdOAuthClient";
+		const instance = await boot({
+			schema: { oauthClient: { modelName: model } },
+		});
+		const createdModels: string[] = [];
+		const originalTransaction = instance.ctx.adapter.transaction.bind(
+			instance.ctx.adapter,
+		);
+		vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
+			async (callback) =>
+				originalTransaction(async (transactionAdapter) => {
+					const originalCreate =
+						transactionAdapter.create.bind(transactionAdapter);
+					vi.spyOn(transactionAdapter, "create").mockImplementation(
+						async (data) => {
+							createdModels.push(data.model);
+							return originalCreate(data);
+						},
+					);
+					return callback(transactionAdapter);
+				}),
+		);
+		const clientId = "https://client.example.com/custom-metadata.json";
+
+		await registerClientMetadataDocument(
+			{ context: instance.ctx } as unknown as GenericEndpointContext,
+			instance.opts,
+			{
+				clientId,
+				metadata: {
+					client_id: clientId,
+					redirect_uris: ["https://app.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			},
+		);
+
+		const storedClient = await instance.ctx.adapter.findOne({
+			model,
+			where: [{ field: "clientId", value: clientId }],
+		});
+		expect(storedClient).toMatchObject({ clientId });
+		expect(createdModels).toContain(model);
+	});
+
+	it("atomically refreshes custom client and resource models without duplicating links", async () => {
+		const clientModel = "customCimdOAuthClient";
+		const clientResourceModel = "customCimdOAuthClientResource";
+		const resource = "https://api.example.com/cimd";
+		const instance = await boot({
+			resources: [resource],
+			clientRegistrationDefaultResources: [resource],
+			schema: {
+				oauthClient: { modelName: clientModel },
+				oauthClientResource: { modelName: clientResourceModel },
+			},
+		});
+		const clientId = "https://client.example.com/refresh.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+		const created = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				metadata: {
+					client_id: clientId,
+					client_name: "Before Refresh",
+					redirect_uris: ["https://client.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			},
+		);
+		await instance.ctx.adapter.update({
+			model: clientModel,
+			where: [{ field: "clientId", value: clientId }],
+			update: {
+				disabled: true,
+				skipConsent: true,
+				enableEndSession: true,
+			},
+		});
+		const operatorClient = await instance.ctx.adapter.findOne({
+			model: clientModel,
+			where: [{ field: "clientId", value: clientId }],
+		});
+		if (!operatorClient) throw new Error("created client was not persisted");
+
+		const refreshed = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				existingClient: {
+					...created.client,
+					...operatorClient,
+				},
+				metadata: {
+					client_id: clientId,
+					client_name: "After Refresh",
+					redirect_uris: ["https://client.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			},
+		);
+
+		expect(refreshed.created).toBe(false);
+		expect(refreshed.client).toMatchObject({
+			name: "After Refresh",
+			disabled: true,
+			skipConsent: true,
+			enableEndSession: true,
+		});
+		const links = await instance.ctx.adapter.findMany<OAuthClientResource>({
+			model: clientResourceModel,
+			where: [{ field: "clientId", value: clientId }],
+		});
+		expect(links.map((link) => link.resourceId)).toEqual([resource]);
+	});
+
+	it("converges a stale fixed-ID creator after a unique-constraint race", async () => {
+		const instance = await boot();
+		const clientId = "https://client.example.com/concurrent.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+		await registerClientMetadataDocument(endpointContext, instance.opts, {
+			clientId,
+			metadata: {
+				client_id: clientId,
+				client_name: "First Writer",
+				redirect_uris: ["https://client.example.com/callback"],
+				token_endpoint_auth_method: "none",
+			},
+		});
+
+		const converged = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				metadata: {
+					client_id: clientId,
+					client_name: "Concurrent Writer",
+					redirect_uris: ["https://client.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			},
+		);
+		expect(converged.created).toBe(false);
+		expect(converged.client.name).toBe("Concurrent Writer");
+	});
+
+	it("does not mask a non-unique persistence failure when the fixed ID already exists", async () => {
+		const instance = await boot();
+		const clientId = "https://client.example.com/non-unique-failure.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+		const metadata = {
+			client_id: clientId,
+			client_name: "Existing Client",
+			redirect_uris: ["https://client.example.com/callback"],
+			token_endpoint_auth_method: "none" as const,
+		};
+		await registerClientMetadataDocument(endpointContext, instance.opts, {
+			clientId,
+			metadata,
+		});
+		const originalTransaction = instance.ctx.adapter.transaction.bind(
+			instance.ctx.adapter,
+		);
+		vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
+			async (callback) =>
+				originalTransaction(async (transactionAdapter) => {
+					vi.spyOn(transactionAdapter, "create").mockRejectedValueOnce(
+						new Error("storage unavailable"),
+					);
+					return callback(transactionAdapter);
+				}),
+		);
+
+		await expect(
+			registerClientMetadataDocument(endpointContext, instance.opts, {
+				clientId,
+				metadata,
+			}),
+		).rejects.toThrow("storage unavailable");
+	});
+
+	it("rolls back a metadata replacement when a new default resource link fails", async () => {
+		const originalResource = "https://api.example.com/original";
+		const addedResource = "https://api.example.com/added";
+		const instance = await boot(
+			{
+				resources: [originalResource, addedResource],
+				clientRegistrationDefaultResources: [originalResource],
+			},
+			true,
+		);
+		const clientId = "https://client.example.com/atomic-refresh.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+		const created = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				metadata: {
+					client_id: clientId,
+					client_name: "Before Atomic Refresh",
+					redirect_uris: ["https://client.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			},
+		);
+		instance.opts.clientRegistrationDefaultResources = [
+			originalResource,
+			addedResource,
+		];
+		const originalTransaction = instance.ctx.adapter.transaction.bind(
+			instance.ctx.adapter,
+		);
+		vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
+			async (callback) =>
+				originalTransaction(async (transactionAdapter) => {
+					const originalCreate =
+						transactionAdapter.create.bind(transactionAdapter);
+					vi.spyOn(transactionAdapter, "create").mockImplementation(
+						async (input) => {
+							if (
+								input.model === "oauthClientResource" &&
+								input.data.resourceId === addedResource
+							) {
+								throw new Error("forced refresh-link failure");
+							}
+							return originalCreate(input);
+						},
+					);
+					return callback(transactionAdapter);
+				}),
+		);
+
+		await expect(
+			registerClientMetadataDocument(endpointContext, instance.opts, {
+				clientId,
+				existingClient: created.client,
+				metadata: {
+					client_id: clientId,
+					client_name: "After Atomic Refresh",
+					redirect_uris: ["https://client.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			}),
+		).rejects.toThrow("forced refresh-link failure");
+
+		expect(
+			await instance.ctx.adapter.findOne({
+				model: "oauthClient",
+				where: [{ field: "clientId", value: clientId }],
+			}),
+		).toMatchObject({ name: "Before Atomic Refresh" });
+		const links = await instance.ctx.adapter.findMany<OAuthClientResource>({
+			model: "oauthClientResource",
+			where: [{ field: "clientId", value: clientId }],
+		});
+		expect(links.map((link) => link.resourceId)).toEqual([originalResource]);
+	});
+});
+
+describe("canonical dynamic client registration", () => {
+	it("persists through the configured oauthClient model", async () => {
+		const model = "customDcrOAuthClient";
+		const instance = await boot({
+			allowDynamicClientRegistration: true,
+			allowUnauthenticatedClientRegistration: true,
+			schema: { oauthClient: { modelName: model } },
+		});
+		const createdModels: string[] = [];
+		const originalTransaction = instance.ctx.adapter.transaction.bind(
+			instance.ctx.adapter,
+		);
+		vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
+			async (callback) =>
+				originalTransaction(async (transactionAdapter) => {
+					const originalCreate =
+						transactionAdapter.create.bind(transactionAdapter);
+					vi.spyOn(transactionAdapter, "create").mockImplementation(
+						async (data) => {
+							createdModels.push(data.model);
+							return originalCreate(data);
+						},
+					);
+					return callback(transactionAdapter);
+				}),
+		);
+
+		const result = await instance.auth.api.registerOAuthClient({
+			body: {
+				redirect_uris: ["https://app.example.com/callback"],
+			},
+		});
+
+		const storedClient = await instance.ctx.adapter.findOne({
+			model,
+			where: [{ field: "clientId", value: result.client_id }],
+		});
+		expect(storedClient).toMatchObject({ clientId: result.client_id });
+		expect(createdModels).toContain(model);
 	});
 });
