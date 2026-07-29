@@ -32,6 +32,80 @@ describe("prisma-adapter", () => {
 		expect(adapter).toBeDefined();
 	});
 
+	it("exposes a parameterized migration connection", async () => {
+		const queryRaw = vi
+			.fn()
+			.mockResolvedValue([{ providerId: "credential", count: 2 }]);
+		const executeRaw = vi.fn().mockResolvedValue(2);
+		const adapter = createTestAdapter({
+			$executeRawUnsafe: executeRaw,
+			$queryRawUnsafe: queryRaw,
+			$transaction: vi.fn(),
+		});
+		const migrationConnection =
+			adapter.options?.adapterConfig.migrationConnection;
+
+		expect(migrationConnection?.dialect).toBe("sqlite");
+		await expect(
+			migrationConnection?.execute({
+				parameters: ["credential"],
+				sql: "SELECT providerId, COUNT(*) AS count FROM account WHERE providerId = ?",
+			}),
+		).resolves.toEqual({
+			rows: [{ providerId: "credential", count: 2 }],
+		});
+		await expect(
+			migrationConnection?.execute({
+				parameters: ["issuer"],
+				sql: "UPDATE account SET issuer = ?",
+			}),
+		).resolves.toEqual({
+			numAffectedRows: 2n,
+			rows: [],
+		});
+		expect(queryRaw).toHaveBeenCalledWith(
+			"SELECT providerId, COUNT(*) AS count FROM account WHERE providerId = ?",
+			"credential",
+		);
+		expect(executeRaw).toHaveBeenCalledWith(
+			"UPDATE account SET issuer = ?",
+			"issuer",
+		);
+	});
+
+	it("uses Prisma's transaction-scoped client for migration queries", async () => {
+		const rootExecuteRaw = vi.fn();
+		const transactionExecuteRaw = vi.fn().mockResolvedValue(1);
+		const transactionClient = {
+			$executeRawUnsafe: transactionExecuteRaw,
+			$queryRawUnsafe: vi.fn(),
+		};
+		const transaction = vi
+			.fn()
+			.mockImplementation(async (callback) => callback(transactionClient));
+		const adapter = createTestAdapter({
+			$executeRawUnsafe: rootExecuteRaw,
+			$queryRawUnsafe: vi.fn(),
+			$transaction: transaction,
+		});
+		const migrationConnection =
+			adapter.options?.adapterConfig.migrationConnection;
+
+		await migrationConnection?.transaction?.(async (connection) => {
+			await connection.execute({
+				parameters: ["local:credential"],
+				sql: "UPDATE account SET issuer = ?",
+			});
+		});
+
+		expect(transaction).toHaveBeenCalledTimes(1);
+		expect(transactionExecuteRaw).toHaveBeenCalledWith(
+			"UPDATE account SET issuer = ?",
+			"local:credential",
+		);
+		expect(rootExecuteRaw).not.toHaveBeenCalled();
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8365
 	 */

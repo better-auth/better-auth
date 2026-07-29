@@ -49,6 +49,47 @@ export type DBAdapterSchemaCreation = {
 	overwrite?: boolean | undefined;
 };
 
+export type MigrationDatabaseDialect =
+	| "postgres"
+	| "mysql"
+	| "sqlite"
+	| "mssql";
+
+export interface MigrationDatabaseQuery {
+	parameters: readonly unknown[];
+	sql: string;
+}
+
+export interface MigrationDatabaseQueryResult {
+	insertId?: bigint | undefined;
+	numAffectedRows?: bigint | undefined;
+	rows: readonly Record<string, unknown>[];
+}
+
+/**
+ * Parameterized SQL connection used only by Better Auth's migration tooling.
+ *
+ * Adapters keep their native database client private and expose this narrow
+ * capability so migration planning and execution can stay adapter-independent.
+ */
+export interface MigrationDatabaseConnection {
+	dialect: MigrationDatabaseDialect;
+	execute: (
+		query: MigrationDatabaseQuery,
+	) => Promise<MigrationDatabaseQueryResult>;
+	/**
+	 * Run migration work through one transaction-scoped native connection.
+	 *
+	 * Adapters backed by a connection pool must pass a connection bound to the
+	 * active transaction rather than reusing the root client.
+	 */
+	transaction?:
+		| (<Result>(
+				callback: (connection: MigrationDatabaseConnection) => Promise<Result>,
+		  ) => Promise<Result>)
+		| undefined;
+}
+
 export interface DBAdapterFactoryConfig<
 	Options extends BetterAuthOptions = BetterAuthOptions,
 > {
@@ -78,6 +119,11 @@ export interface DBAdapterFactoryConfig<
 	 * Adapter id
 	 */
 	adapterId: string;
+	/**
+	 * Optional SQL connection for deterministic migration inspection and
+	 * execution. Non-SQL adapters should leave this undefined.
+	 */
+	migrationConnection?: MigrationDatabaseConnection | undefined;
 	/**
 	 * If the database supports numeric ids, set this to `true`.
 	 *

@@ -1,8 +1,17 @@
+import type { SQLInputValue } from "node:sqlite";
 import { DatabaseSync } from "node:sqlite";
-import type { BetterAuthOptions } from "@better-auth/core";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
+import type { MigrationDatabaseQuery } from "@better-auth/core/db/adapter";
 import { describe, expect, it } from "vitest";
+import { genericOAuth } from "../plugins/generic-oauth";
 import { organization } from "../plugins/organization";
-import { getMigrations } from "./get-migration";
+import { siwe } from "../plugins/siwe";
+import {
+	getMigrations,
+	migrateFrom16,
+	resolveConfiguredIssuers,
+	validateMigrationFrom16,
+} from "./get-migration";
 
 // A 1.6-shape team/teamMember schema: the 1.7 `memberCount` and `membershipKey`
 // columns are missing, so getMigrations must ADD them to a populated table.
@@ -37,6 +46,65 @@ function createLegacyOrgDb() {
 }
 
 describe("get-migration: ALTER TABLE ADD COLUMN on SQLite", () => {
+	it("blocks every schema change when a populated table needs a required column without a default", async () => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(
+			`CREATE TABLE "user" (
+				"id" text primary key not null,
+				"name" text not null,
+				"email" text not null unique,
+				"emailVerified" integer not null,
+				"image" text,
+				"createdAt" date not null,
+				"updatedAt" date not null
+			)`,
+		);
+		db.exec(
+			`INSERT INTO "user" ("id", "name", "email", "emailVerified", "createdAt", "updatedAt")
+			 VALUES ('u1', 'Ada', 'ada@example.com', 1, '2020-01-01', '2020-01-01')`,
+		);
+		const config: BetterAuthOptions = {
+			database: db,
+			user: {
+				additionalFields: {
+					tenantId: {
+						type: "string",
+						required: true,
+					},
+				},
+			},
+		};
+
+		const migration = await getMigrations(config);
+
+		expect(migration.migrationBlockers).toEqual([
+			{
+				code: "required-column-backfill",
+				columns: ["tenantId"],
+				table: "user",
+			},
+		]);
+		await expect(migration.runMigrations()).rejects.toThrow(
+			'Migration blocked: existing table "user" contains rows and requires values for "tenantId".',
+		);
+		await expect(migration.compileMigrations()).rejects.toThrow(
+			'Migration blocked: existing table "user" contains rows and requires values for "tenantId".',
+		);
+
+		const userColumns = db
+			.prepare("PRAGMA table_info(user)")
+			.all()
+			.map((column) => (column as { name: string }).name);
+		expect(userColumns).not.toContain("tenantId");
+		expect(
+			db
+				.prepare(
+					"SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'account'",
+				)
+				.get(),
+		).toBeUndefined();
+	});
+
 	it("adds a required column with a static default and a unique column to a populated table", async () => {
 		const db = createLegacyOrgDb();
 		const config: BetterAuthOptions = {
@@ -104,15 +172,8 @@ describe("get-migration: ALTER TABLE ADD COLUMN on SQLite", () => {
 			`INSERT INTO "user" ("id", "name", "email", "emailVerified", "createdAt", "updatedAt")
 			 VALUES ('u1', 'Ada', 'ada@example.com', 1, '2020-01-01', '2020-01-01')`,
 		);
-		const warnings: string[] = [];
 		const config: BetterAuthOptions = {
 			database: db,
-			logger: {
-				level: "warn",
-				log: (level, message) => {
-					if (level === "warn") warnings.push(message);
-				},
-			},
 			user: {
 				additionalFields: {
 					referralCode: {
@@ -126,10 +187,6 @@ describe("get-migration: ALTER TABLE ADD COLUMN on SQLite", () => {
 		};
 
 		const { runMigrations, compileMigrations } = await getMigrations(config);
-
-		// The shared backfill cannot be unique on a multi-row table, so the
-		// generator warns that a manual backfill may be needed.
-		expect(warnings.some((w) => w.includes('"referralCode"'))).toBe(true);
 
 		// A required unique column keeps its static default so the NOT NULL add
 		// succeeds; uniqueness is enforced through a separate index.
@@ -145,6 +202,49 @@ describe("get-migration: ALTER TABLE ADD COLUMN on SQLite", () => {
 			.prepare(`SELECT "referralCode" FROM "user" WHERE "id" = 'u1'`)
 			.get() as { referralCode: string };
 		expect(user.referralCode).toBe("unset");
+	});
+
+	it("blocks a shared default for a required unique column on a multi-row table", async () => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(
+			`CREATE TABLE "user" (
+				"id" text primary key not null,
+				"name" text not null,
+				"email" text not null unique,
+				"emailVerified" integer not null,
+				"image" text,
+				"createdAt" date not null,
+				"updatedAt" date not null
+			);
+			INSERT INTO "user" ("id", "name", "email", "emailVerified", "createdAt", "updatedAt")
+			VALUES
+				('u1', 'Ada', 'ada@example.com', 1, '2020-01-01', '2020-01-01'),
+				('u2', 'Grace', 'grace@example.com', 1, '2020-01-01', '2020-01-01');`,
+		);
+		const migration = await getMigrations({
+			database: db,
+			user: {
+				additionalFields: {
+					referralCode: {
+						type: "string",
+						required: true,
+						unique: true,
+						defaultValue: "unset",
+					},
+				},
+			},
+		});
+
+		expect(migration.migrationBlockers).toEqual([
+			{
+				code: "required-column-backfill",
+				columns: ["referralCode"],
+				table: "user",
+			},
+		]);
+		await expect(migration.runMigrations()).rejects.toThrow(
+			'Migration blocked: existing table "user" contains rows and requires values for "referralCode".',
+		);
 	});
 });
 
@@ -408,5 +508,946 @@ describe("get-migration: compound indexes on SQLite", () => {
 		await expect(getMigrations(config)).rejects.toThrow(
 			'Database index "directory_identity_uidx" on table "directory_user" does not match the configured fields and uniqueness.',
 		);
+	});
+});
+
+describe("get-migration: 1.6 release preflight", () => {
+	const consentPlugin = {
+		id: "release-preflight-fixture",
+		schema: {
+			oauthConsent: {
+				fields: {
+					clientId: { type: "string" },
+					createdAt: { type: "date" },
+					scopes: { type: "string[]" },
+					updatedAt: { type: "date" },
+					userId: { type: "string" },
+				},
+			},
+		},
+	} satisfies BetterAuthPlugin;
+
+	function createLegacyOAuthClientTable(
+		db: DatabaseSync,
+		clientSecret: string,
+	) {
+		db.exec(
+			`CREATE TABLE "oauthApplication" (
+				"id" text primary key not null,
+				"name" text not null,
+				"icon" text,
+				"metadata" text,
+				"clientId" text not null,
+				"clientSecret" text,
+				"redirectUrls" text not null,
+				"type" text not null,
+				"disabled" integer,
+				"userId" text,
+				"createdAt" date not null,
+				"updatedAt" date not null
+			);
+			INSERT INTO "oauthApplication" (
+				"id", "name", "clientId", "clientSecret", "redirectUrls", "type",
+				"createdAt", "updatedAt"
+			) VALUES (
+				'client-row', 'Confidential client', 'client-1', '${clientSecret}',
+				'https://client.example/callback', 'web', '2020-01-01', '2020-01-01'
+			)`,
+		);
+	}
+
+	function createOAuthClientConfig(
+		db: DatabaseSync,
+		storeClientSecret: "encrypted" | "hashed",
+	): BetterAuthOptions {
+		return {
+			database: db,
+			plugins: [
+				{
+					id: "oauth-provider",
+					options: { storeClientSecret },
+					schema: {
+						oauthClient: {
+							fields: {
+								clientId: { type: "string" },
+								clientSecret: { type: "string", required: false },
+								createdAt: { type: "date" },
+								name: { type: "string" },
+								redirectUris: { type: "string[]" },
+								updatedAt: { type: "date" },
+							},
+						},
+					},
+				},
+			],
+		};
+	}
+
+	function createLegacyConsentTable(db: DatabaseSync, table: string) {
+		db.exec(
+			`CREATE TABLE "${table}" (
+				"id" text primary key not null,
+				"clientId" text not null,
+				"userId" text not null,
+				"scopes" text not null,
+				"consentGiven" integer not null,
+				"createdAt" date not null,
+				"updatedAt" date not null
+			)`,
+		);
+		db.exec(
+			`INSERT INTO "${table}" ("id", "clientId", "userId", "scopes", "consentGiven", "createdAt", "updatedAt")
+			 VALUES ('c1', 'client-1', 'u1', 'openid profile', 1, '2020-01-01', '2020-01-01')`,
+		);
+	}
+
+	it("blocks an unsupported OAuth client secret storage transition", async () => {
+		const db = new DatabaseSync(":memory:");
+		createLegacyOAuthClientTable(db, "ciphertext");
+		const config = createOAuthClientConfig(db, "hashed");
+
+		await expect(
+			validateMigrationFrom16(config, {
+				oauthProvider: {
+					clients: "migrate",
+					clientSecrets: {
+						source: "encrypted",
+						target: "hashed",
+					},
+					consents: "reauthorize",
+					tokens: "revoke",
+				},
+			}),
+		).resolves.toEqual([
+			{
+				code: "oauth-client-secret-transition-unsupported",
+				rowCount: 1,
+				source: "encrypted",
+				table: "oauthApplication",
+				target: "hashed",
+			},
+		]);
+	});
+
+	it("blocks an OAuth client secret target that no longer matches the configuration", async () => {
+		const db = new DatabaseSync(":memory:");
+		createLegacyOAuthClientTable(db, "plaintext");
+		const config = createOAuthClientConfig(db, "hashed");
+
+		await expect(
+			validateMigrationFrom16(config, {
+				oauthProvider: {
+					clients: "migrate",
+					clientSecrets: {
+						source: "plain",
+						target: "encrypted",
+					},
+					consents: "reauthorize",
+					tokens: "revoke",
+				},
+			}),
+		).resolves.toEqual([
+			{
+				code: "oauth-client-secret-target-conflict",
+				configuredTarget: "hashed",
+				requestedTarget: "encrypted",
+				table: "oauthApplication",
+			},
+		]);
+	});
+
+	it("reports every unresolved decision in one pass and still refuses to migrate", async () => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(
+			`CREATE TABLE "account" (
+				"id" text primary key not null,
+				"accountId" text not null,
+				"providerId" text not null,
+				"userId" text not null,
+				"createdAt" date not null,
+				"updatedAt" date not null
+			)`,
+		);
+		db.exec(
+			`INSERT INTO "account" ("id", "accountId", "providerId", "userId", "createdAt", "updatedAt")
+			 VALUES
+				('a1', 'ada@example.com', 'credential', 'u1', '2020-01-01', '2020-01-01'),
+				('a2', '4711', 'github', 'u2', '2020-01-01', '2020-01-01')`,
+		);
+		createLegacyConsentTable(db, "oauthConsent");
+		const config: BetterAuthOptions = {
+			database: db,
+			plugins: [consentPlugin],
+		};
+
+		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
+			{
+				accountCount: 1,
+				code: "issuer-required",
+				providerId: "github",
+				reason: "unconfigured-provider",
+				table: "account",
+			},
+			{
+				code: "oauth-consent-decision-required",
+				rowCount: 1,
+				table: "oauthConsent",
+			},
+		]);
+		await expect(migrateFrom16(config, {})).rejects.toThrow(
+			'The 1.6 OAuth consent migration requires consents: "migrate" or "reauthorize".',
+		);
+	});
+
+	it("reports a backup table that already holds the retired name", async () => {
+		const db = new DatabaseSync(":memory:");
+		createLegacyConsentTable(db, "oauthConsent");
+		createLegacyConsentTable(db, "oauthConsent__better_auth_1_6");
+
+		await expect(
+			validateMigrationFrom16({ database: db, plugins: [consentPlugin] }, {}),
+		).resolves.toEqual([
+			{
+				backupTable: "oauthConsent__better_auth_1_6",
+				code: "backup-table-conflict",
+				conflict: "backup-table-exists",
+				table: "oauthConsent",
+			},
+		]);
+	});
+
+	describe("customized 1.6 table names", () => {
+		function createUserTable(db: DatabaseSync) {
+			db.exec(
+				`CREATE TABLE "user" (
+					"id" text primary key not null,
+					"name" text not null,
+					"email" text not null,
+					"emailVerified" integer not null,
+					"createdAt" date not null,
+					"updatedAt" date not null
+				)`,
+			);
+		}
+
+		function createConfig(db: DatabaseSync): BetterAuthOptions {
+			return { database: db, plugins: [consentPlugin] };
+		}
+
+		it("proposes the tables that hold a model's 1.6 columns", async () => {
+			const db = new DatabaseSync(":memory:");
+			createUserTable(db);
+			createLegacyConsentTable(db, "legacyConsent");
+			const config = createConfig(db);
+
+			await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
+				{
+					candidateTables: ["legacyConsent"],
+					code: "legacy-table-candidate",
+					model: "oauthConsent",
+					table: "oauthConsent",
+				},
+			]);
+			await expect(migrateFrom16(config, {})).rejects.toThrow(
+				'The 1.6 migration found no "oauthConsent" data in "oauthConsent", and these tables hold the 1.6 "oauthConsent" columns: "legacyConsent".',
+			);
+		});
+
+		it("migrates the proposed table once it is recorded", async () => {
+			const db = new DatabaseSync(":memory:");
+			createUserTable(db);
+			createLegacyConsentTable(db, "legacyConsent");
+			const config = createConfig(db);
+
+			await expect(
+				validateMigrationFrom16(config, {
+					legacyTableNames: { oauthConsent: "legacyConsent" },
+				}),
+			).resolves.toEqual([
+				{
+					code: "oauth-consent-decision-required",
+					rowCount: 1,
+					table: "legacyConsent",
+				},
+			]);
+
+			await migrateFrom16(config, {
+				legacyTableNames: { oauthConsent: "legacyConsent" },
+				oauthProvider: {
+					clients: "migrate",
+					clientSecrets: { source: "plain", target: "hashed" },
+					consents: "migrate",
+					tokens: "revoke",
+				},
+			});
+
+			expect(
+				db
+					.prepare(
+						`SELECT name FROM sqlite_master
+						 WHERE type = 'table' AND name LIKE 'legacyConsent%'`,
+					)
+					.all()
+					.map((table) => (table as { name: string }).name),
+			).toEqual(["legacyConsent__better_auth_1_6"]);
+			expect(
+				db.prepare(`SELECT "clientId", "scopes" FROM "oauthConsent"`).all(),
+			).toEqual([{ clientId: "client-1", scopes: '["openid","profile"]' }]);
+		});
+
+		it("leaves a rejected table alone once that is recorded", async () => {
+			const db = new DatabaseSync(":memory:");
+			createUserTable(db);
+			createLegacyConsentTable(db, "legacyConsent");
+			const config = createConfig(db);
+
+			await expect(
+				validateMigrationFrom16(config, {
+					legacyTableNames: { oauthConsent: null },
+				}),
+			).resolves.toEqual([]);
+
+			await migrateFrom16(config, {
+				legacyTableNames: { oauthConsent: null },
+			});
+
+			expect(
+				db.prepare(`SELECT COUNT(*) AS "count" FROM "legacyConsent"`).get(),
+			).toEqual({ count: 1 });
+		});
+
+		it("proposes no table that already holds the 1.7 columns", async () => {
+			const db = new DatabaseSync(":memory:");
+			createUserTable(db);
+			db.exec(
+				`CREATE TABLE "oauthConsentArchive" (
+					"id" text primary key not null,
+					"clientId" text not null,
+					"userId" text not null,
+					"scopes" text not null,
+					"consentGiven" integer not null,
+					"requestedUserInfoClaims" text,
+					"createdAt" date not null,
+					"updatedAt" date not null
+				)`,
+			);
+			db.exec(
+				`INSERT INTO "oauthConsentArchive" ("id", "clientId", "userId", "scopes", "consentGiven", "createdAt", "updatedAt")
+				 VALUES ('c1', 'client-1', 'u1', '["openid"]', 1, '2020-01-01', '2020-01-01')`,
+			);
+
+			await expect(
+				validateMigrationFrom16(createConfig(db), {}),
+			).resolves.toEqual([]);
+		});
+	});
+});
+
+describe("get-migration: 1.6 account issuer resolution", () => {
+	function createLegacyAccountTable(db: DatabaseSync) {
+		db.exec(
+			`CREATE TABLE "account" (
+				"id" text primary key not null,
+				"accountId" text not null,
+				"providerId" text not null,
+				"userId" text not null,
+				"createdAt" date not null,
+				"updatedAt" date not null
+			)`,
+		);
+		db.exec(
+			`INSERT INTO "account" ("id", "accountId", "providerId", "userId", "createdAt", "updatedAt")
+			 VALUES
+				('a1', 'ada@example.com', 'credential', 'u1', '2020-01-01', '2020-01-01'),
+				('a2', '4711', 'github', 'u2', '2020-01-01', '2020-01-01'),
+				('a3', '108451', 'google', 'u3', '2020-01-01', '2020-01-01')`,
+		);
+	}
+
+	const socialConfig = {
+		github: { clientId: "github-client", clientSecret: "github-secret" },
+		google: { clientId: "google-client", clientSecret: "google-secret" },
+	};
+
+	it("derives every configured provider issuer without asking", async () => {
+		const db = new DatabaseSync(":memory:");
+		createLegacyAccountTable(db);
+		const config: BetterAuthOptions = {
+			database: db,
+			socialProviders: socialConfig,
+		};
+
+		await expect(resolveConfiguredIssuers(config)).resolves.toEqual({
+			issuers: {
+				credential: "local:credential",
+				github: "local:oauth:github",
+				google: "https://accounts.google.com",
+			},
+			unresolvedProviders: {},
+		});
+		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([]);
+
+		const migration = await migrateFrom16(config, {});
+		expect(migration.accounts).toEqual({
+			migrated: 3,
+			providers: { credential: 1, github: 1, google: 1 },
+		});
+		expect(
+			db
+				.prepare(
+					`SELECT "providerId", "issuer", "providerAccountId" FROM "account" ORDER BY "providerId"`,
+				)
+				.all(),
+		).toEqual([
+			{
+				issuer: "local:credential",
+				providerAccountId: "ada@example.com",
+				providerId: "credential",
+			},
+			{
+				issuer: "local:oauth:github",
+				providerAccountId: "4711",
+				providerId: "github",
+			},
+			{
+				issuer: "https://accounts.google.com",
+				providerAccountId: "108451",
+				providerId: "google",
+			},
+		]);
+	});
+
+	it("refuses an issuer that contradicts the configured provider", async () => {
+		const db = new DatabaseSync(":memory:");
+		createLegacyAccountTable(db);
+		const config: BetterAuthOptions = {
+			database: db,
+			socialProviders: socialConfig,
+		};
+		const options = { accountIssuers: { github: "https://github.com" } };
+
+		await expect(validateMigrationFrom16(config, options)).resolves.toEqual([
+			{
+				code: "issuer-conflict",
+				configuredIssuer: "local:oauth:github",
+				providerId: "github",
+				requestedIssuer: "https://github.com",
+				table: "account",
+			},
+		]);
+		await expect(migrateFrom16(config, options)).rejects.toThrow(
+			'Provider "github" derives issuer "local:oauth:github" from this Better Auth configuration, so accounts migrated with "https://github.com" would never match a 1.7 sign-in.',
+		);
+	});
+
+	it("asks for the issuer of a provider that resolves it per authentication", async () => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(
+			`CREATE TABLE "account" (
+				"id" text primary key not null,
+				"accountId" text not null,
+				"providerId" text not null,
+				"userId" text not null,
+				"createdAt" date not null,
+				"updatedAt" date not null
+			)`,
+		);
+		db.exec(
+			`INSERT INTO "account" ("id", "accountId", "providerId", "userId", "createdAt", "updatedAt")
+			 VALUES ('a1', '8f3c', 'microsoft', 'u1', '2020-01-01', '2020-01-01')`,
+		);
+		const config: BetterAuthOptions = {
+			database: db,
+			socialProviders: {
+				microsoft: {
+					clientId: "entra-client",
+					clientSecret: "entra-secret",
+				},
+			},
+		};
+
+		await expect(resolveConfiguredIssuers(config)).resolves.toMatchObject({
+			unresolvedProviders: { microsoft: "dynamic-issuer" },
+		});
+		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
+			{
+				accounts: [
+					{
+						accountId: "a1",
+						providerAccountId: "8f3c",
+						providerId: "microsoft",
+					},
+				],
+				code: "account-issuer-decision-required",
+				table: "account",
+				unknownAccountIds: [],
+			},
+		]);
+		await expect(
+			validateMigrationFrom16(config, {
+				accountIssuerByAccountId: {
+					a1: "https://login.microsoftonline.com/tenant/v2.0",
+				},
+			}),
+		).resolves.toEqual([]);
+	});
+
+	it("requires a reviewed issuer for each account of a dynamic provider", async () => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(
+			`CREATE TABLE "account" (
+				"id" text primary key not null,
+				"accountId" text not null,
+				"providerId" text not null,
+				"userId" text not null,
+				"createdAt" date not null,
+				"updatedAt" date not null
+			)`,
+		);
+		db.exec(
+			`INSERT INTO "account" ("id", "accountId", "providerId", "userId", "createdAt", "updatedAt")
+			 VALUES
+				('a1', 'subject-1', 'microsoft', 'u1', '2020-01-01', '2020-01-01'),
+				('a2', 'subject-2', 'microsoft', 'u2', '2020-01-01', '2020-01-01')`,
+		);
+		const config: BetterAuthOptions = {
+			database: db,
+			socialProviders: {
+				microsoft: {
+					clientId: "entra-client",
+					clientSecret: "entra-secret",
+				},
+			},
+		};
+
+		await expect(
+			validateMigrationFrom16(config, {
+				accountIssuers: {
+					microsoft: "https://login.microsoftonline.com/wrong/v2.0",
+				},
+			}),
+		).resolves.toEqual([
+			{
+				accounts: [
+					{
+						accountId: "a1",
+						providerAccountId: "subject-1",
+						providerId: "microsoft",
+					},
+					{
+						accountId: "a2",
+						providerAccountId: "subject-2",
+						providerId: "microsoft",
+					},
+				],
+				code: "account-issuer-decision-required",
+				table: "account",
+				unknownAccountIds: [],
+			},
+		]);
+
+		const options = {
+			accountIssuerByAccountId: {
+				a1: "https://login.microsoftonline.com/tenant-a/v2.0",
+				a2: "https://login.microsoftonline.com/tenant-b/v2.0",
+			},
+		};
+		await expect(validateMigrationFrom16(config, options)).resolves.toEqual([]);
+		await migrateFrom16(config, options);
+
+		expect(
+			db
+				.prepare(
+					`SELECT "id", "issuer", "providerAccountId"
+					 FROM "account"
+					 ORDER BY "id"`,
+				)
+				.all(),
+		).toEqual([
+			{
+				id: "a1",
+				issuer: "https://login.microsoftonline.com/tenant-a/v2.0",
+				providerAccountId: "subject-1",
+			},
+			{
+				id: "a2",
+				issuer: "https://login.microsoftonline.com/tenant-b/v2.0",
+				providerAccountId: "subject-2",
+			},
+		]);
+	});
+
+	it("preserves an existing per-account issuer while completing a partial migration", async () => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(
+			`CREATE TABLE "account" (
+				"id" text primary key not null,
+				"accountId" text not null,
+				"issuer" text,
+				"providerAccountId" text,
+				"providerId" text not null,
+				"userId" text not null,
+				"createdAt" date not null,
+				"updatedAt" date not null
+			)`,
+		);
+		db.exec(
+			`INSERT INTO "account" ("id", "accountId", "issuer", "providerId", "userId", "createdAt", "updatedAt")
+			 VALUES (
+				'a1',
+				'subject-1',
+				'https://login.microsoftonline.com/tenant-a/v2.0',
+				'microsoft',
+				'u1',
+				'2020-01-01',
+				'2020-01-01'
+			)`,
+		);
+		const config: BetterAuthOptions = {
+			database: db,
+			socialProviders: {
+				microsoft: {
+					clientId: "entra-client",
+					clientSecret: "entra-secret",
+				},
+			},
+		};
+
+		await expect(
+			validateMigrationFrom16(config, {
+				accountIssuerByAccountId: {
+					a1: "https://login.microsoftonline.com/other-tenant/v2.0",
+				},
+			}),
+		).resolves.toEqual([
+			{
+				accountId: "a1",
+				code: "account-issuer-conflict",
+				requestedIssuer: "https://login.microsoftonline.com/other-tenant/v2.0",
+				storedIssuer: "https://login.microsoftonline.com/tenant-a/v2.0",
+				table: "account",
+			},
+		]);
+
+		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([]);
+		await migrateFrom16(config, {});
+
+		expect(
+			db
+				.prepare(
+					`SELECT "issuer", "providerAccountId"
+					 FROM "account"
+					 WHERE "id" = 'a1'`,
+				)
+				.get(),
+		).toEqual({
+			issuer: "https://login.microsoftonline.com/tenant-a/v2.0",
+			providerAccountId: "subject-1",
+		});
+	});
+
+	it("ignores a disabled provider", async () => {
+		const db = new DatabaseSync(":memory:");
+		createLegacyAccountTable(db);
+		const config: BetterAuthOptions = {
+			database: db,
+			socialProviders: {
+				github: { ...socialConfig.github, enabled: false },
+				google: socialConfig.google,
+			},
+		};
+
+		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
+			{
+				accountCount: 1,
+				code: "issuer-required",
+				providerId: "github",
+				reason: "unconfigured-provider",
+				table: "account",
+			},
+		]);
+	});
+});
+
+describe("get-migration: 1.6 plugin provider issuer resolution", () => {
+	function createPluginAccountTable(
+		db: DatabaseSync,
+		accounts: Array<{ accountId: string; id: string; providerId: string }>,
+	) {
+		db.exec(
+			`CREATE TABLE "account" (
+				"id" text primary key not null,
+				"accountId" text not null,
+				"providerId" text not null,
+				"userId" text not null,
+				"createdAt" date not null,
+				"updatedAt" date not null
+			)`,
+		);
+		for (const account of accounts) {
+			db.prepare(
+				`INSERT INTO "account" ("id", "accountId", "providerId", "userId", "createdAt", "updatedAt")
+				 VALUES (?, ?, ?, ?, '2020-01-01', '2020-01-01')`,
+			).run(account.id, account.accountId, account.providerId, account.id);
+		}
+	}
+
+	it("derives a generic OAuth issuer without asking", async () => {
+		const db = new DatabaseSync(":memory:");
+		createPluginAccountTable(db, [
+			{ accountId: "auth0|4711", id: "a1", providerId: "workforce" },
+			{ accountId: "9c11", id: "a2", providerId: "intranet" },
+		]);
+		const config: BetterAuthOptions = {
+			database: db,
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							accountIssuer: "https://tenant.example.com/",
+							clientId: "workforce-client",
+							clientSecret: "workforce-secret",
+							providerId: "workforce",
+						},
+						{
+							authorizationUrl: "https://intranet.example.com/authorize",
+							clientId: "intranet-client",
+							clientSecret: "intranet-secret",
+							providerId: "intranet",
+							tokenUrl: "https://intranet.example.com/token",
+						},
+					],
+				}),
+			],
+		};
+
+		await expect(resolveConfiguredIssuers(config)).resolves.toEqual({
+			issuers: {
+				credential: "local:credential",
+				intranet: "local:oauth:intranet",
+				workforce: "https://tenant.example.com/",
+			},
+			unresolvedProviders: {},
+		});
+		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([]);
+
+		const migration = await migrateFrom16(config, {});
+		expect(migration.accounts).toEqual({
+			migrated: 2,
+			providers: { intranet: 1, workforce: 1 },
+		});
+		expect(
+			db
+				.prepare(
+					`SELECT "providerId", "issuer", "providerAccountId" FROM "account" ORDER BY "providerId"`,
+				)
+				.all(),
+		).toEqual([
+			{
+				issuer: "local:oauth:intranet",
+				providerAccountId: "9c11",
+				providerId: "intranet",
+			},
+			{
+				issuer: "https://tenant.example.com/",
+				providerAccountId: "auth0|4711",
+				providerId: "workforce",
+			},
+		]);
+	});
+
+	it("refuses an issuer that contradicts a generic OAuth provider", async () => {
+		const db = new DatabaseSync(":memory:");
+		createPluginAccountTable(db, [
+			{ accountId: "9c11", id: "a1", providerId: "intranet" },
+		]);
+		const config: BetterAuthOptions = {
+			database: db,
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							authorizationUrl: "https://intranet.example.com/authorize",
+							clientId: "intranet-client",
+							clientSecret: "intranet-secret",
+							providerId: "intranet",
+							tokenUrl: "https://intranet.example.com/token",
+						},
+					],
+				}),
+			],
+		};
+		const options = {
+			accountIssuers: { intranet: "https://intranet.example.com" },
+		};
+
+		await expect(validateMigrationFrom16(config, options)).resolves.toEqual([
+			{
+				code: "issuer-conflict",
+				configuredIssuer: "local:oauth:intranet",
+				providerId: "intranet",
+				requestedIssuer: "https://intranet.example.com",
+				table: "account",
+			},
+		]);
+	});
+
+	it("asks for the issuer of a discovery-only generic OAuth provider", async () => {
+		const db = new DatabaseSync(":memory:");
+		createPluginAccountTable(db, [
+			{ accountId: "9c11", id: "a1", providerId: "workforce" },
+		]);
+		const config: BetterAuthOptions = {
+			database: db,
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							clientId: "workforce-client",
+							clientSecret: "workforce-secret",
+							discoveryUrl:
+								"https://tenant.example.com/.well-known/openid-configuration",
+							providerId: "workforce",
+						},
+					],
+				}),
+			],
+		};
+
+		await expect(resolveConfiguredIssuers(config)).resolves.toMatchObject({
+			unresolvedProviders: { workforce: "discovery-issuer" },
+		});
+		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
+			{
+				accountCount: 1,
+				code: "issuer-required",
+				providerId: "workforce",
+				reason: "discovery-issuer",
+				table: "account",
+			},
+		]);
+		await expect(
+			validateMigrationFrom16(config, {
+				accountIssuers: { workforce: "https://tenant.example.com" },
+			}),
+		).resolves.toEqual([]);
+	});
+
+	it("asks for the issuer of a generic OAuth provider that resolves it per sign-in", async () => {
+		const db = new DatabaseSync(":memory:");
+		createPluginAccountTable(db, [
+			{ accountId: "9c11", id: "a1", providerId: "workforce" },
+		]);
+		const config: BetterAuthOptions = {
+			database: db,
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							accountIssuer: ({ profile }) => String(profile.iss),
+							clientId: "workforce-client",
+							clientSecret: "workforce-secret",
+							discoveryUrl:
+								"https://tenant.example.com/.well-known/openid-configuration",
+							providerId: "workforce",
+						},
+					],
+				}),
+			],
+		};
+
+		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
+			{
+				accounts: [
+					{
+						accountId: "a1",
+						providerAccountId: "9c11",
+						providerId: "workforce",
+					},
+				],
+				code: "account-issuer-decision-required",
+				table: "account",
+				unknownAccountIds: [],
+			},
+		]);
+	});
+
+	it("derives the SIWE issuer without asking", async () => {
+		const db = new DatabaseSync(":memory:");
+		createPluginAccountTable(db, [
+			{ accountId: "0xabc:1", id: "a1", providerId: "siwe" },
+		]);
+		const config: BetterAuthOptions = {
+			database: db,
+			plugins: [
+				siwe({
+					domain: "example.com",
+					getNonce: async () => "nonce",
+					verifyMessage: async () => true,
+				}),
+			],
+		};
+
+		await expect(resolveConfiguredIssuers(config)).resolves.toEqual({
+			issuers: { credential: "local:credential", siwe: "local:siwe" },
+			unresolvedProviders: {},
+		});
+		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([]);
+
+		await migrateFrom16(config, {});
+		expect(
+			db.prepare(`SELECT "issuer", "providerAccountId" FROM "account"`).all(),
+		).toEqual([{ issuer: "local:siwe", providerAccountId: "0xabc:1" }]);
+	});
+});
+
+describe("get-migration: adapter migration connection", () => {
+	it("plans and applies schema changes without a Kysely adapter", async () => {
+		const sqlite = new DatabaseSync(":memory:");
+		const config: BetterAuthOptions = {
+			database: () =>
+				({
+					id: "drizzle",
+					options: {
+						adapterConfig: {
+							adapterId: "drizzle",
+							migrationConnection: {
+								dialect: "sqlite",
+								async execute(query: MigrationDatabaseQuery) {
+									const parameters =
+										query.parameters as readonly SQLInputValue[];
+									if (/^\s*(?:PRAGMA|SELECT|WITH)\b/i.test(query.sql)) {
+										return {
+											rows: sqlite.prepare(query.sql).all(...parameters),
+										};
+									}
+									const write = sqlite.prepare(query.sql).run(...parameters);
+									return {
+										insertId: BigInt(write.lastInsertRowid),
+										numAffectedRows: BigInt(write.changes),
+										rows: [],
+									};
+								},
+							},
+						},
+					},
+				}) as never,
+		};
+
+		const migration = await getMigrations(config);
+
+		expect(migration.migrationTarget).toEqual({
+			adapter: "drizzle",
+			dialect: "sqlite",
+		});
+		expect(migration.toBeCreated.map(({ table }) => table)).toContain("user");
+		await migration.runMigrations();
+		expect(
+			sqlite
+				.prepare(
+					"SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'user'",
+				)
+				.get(),
+		).toEqual({ name: "user" });
 	});
 });
