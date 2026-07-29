@@ -149,7 +149,7 @@ export const auth = betterAuth({
 
 The provider reads the user's profile from the Cloudflare API `/user` endpoint. This returns the user's `id`, `email`, `first_name`, and `last_name`. The display name is composed from the first and last name, and Cloudflare does not provide a profile picture, so `image` is left empty.
 
-Cloudflare's `/user` endpoint does not expose an email-verification status. Because completing the OAuth flow proves the user controls the Cloudflare account, the account email is treated as verified (`emailVerified: true`). To change this, map it yourself with `mapProfileToUser`:
+Cloudflare's `/user` endpoint does not expose an email-verification status, so the account email is treated as unverified (`emailVerified: false`) by default. If you verify the email through another trusted mechanism, map it yourself with `mapProfileToUser`:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -160,7 +160,7 @@ export const auth = betterAuth({
             clientId: process.env.CLOUDFLARE_CLIENT_ID as string,
             clientSecret: process.env.CLOUDFLARE_CLIENT_SECRET as string,
             mapProfileToUser: (profile) => ({
-                emailVerified: false, // [!code highlight]
+                emailVerified: true, // [!code highlight]
             }),
         },
     },

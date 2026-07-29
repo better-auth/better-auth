@@ -151,14 +151,8 @@ export const cloudflare = (options: CloudflareOptions) => {
 					id: profile.id,
 					name,
 					email: profile.email,
-					/**
-					 * The Cloudflare `/user` endpoint does not expose an email
-					 * verification status. Completing the OAuth flow proves the user
-					 * controls the Cloudflare account, so the account email is treated
-					 * as verified. Override via `mapProfileToUser` if you need different
-					 * behavior.
-					 */
-					emailVerified: true,
+					// Cloudflare does not expose email verification status
+					emailVerified: false,
 					...userMap,
 				},
 				data: profile,

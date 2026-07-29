@@ -2487,7 +2487,7 @@ describe("Cloudflare Provider", async () => {
 		expect(session.data?.user.name).toBe("Cloudflare User");
 		// Cloudflare's /user endpoint does not expose an avatar.
 		expect(session.data?.user.image).toBeNull();
-		expect(session.data?.user.emailVerified).toBe(true);
+		expect(session.data?.user.emailVerified).toBe(false);
 
 		const ctx = await auth.$context;
 		const accounts = await ctx.internalAdapter.findAccounts(
