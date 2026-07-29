@@ -21,9 +21,6 @@ importers:
 
   .:
     dependencies:
-      '@better-auth/cimd':
-        specifier: link:../../packages/cimd
-        version: link:../../packages/cimd
       '@better-auth/core':
         specifier: link:../../packages/core
         version: link:../../packages/core
