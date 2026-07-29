@@ -239,6 +239,8 @@ async function exerciseOAuthProviderMigration({
 	configurePublishedPlugin,
 	consentStrategy = "migrate",
 	legacyTableNames,
+	sourceClientSecretStorage = "plain",
+	targetClientSecretStorage = "hashed",
 }: {
 	database: MigrationDatabase;
 	emailDomain: string;
@@ -256,6 +258,8 @@ async function exerciseOAuthProviderMigration({
 				oauthApplication?: string | undefined;
 		  }
 		| undefined;
+	sourceClientSecretStorage?: "encrypted" | "hashed" | "plain" | undefined;
+	targetClientSecretStorage?: "encrypted" | "hashed" | undefined;
 }) {
 	const { legacyAccessToken, owner, registeredClient } =
 		await seedPublishedOAuthProviderData({
@@ -263,15 +267,18 @@ async function exerciseOAuthProviderMigration({
 			database,
 			emailDomain,
 			nameSuffix,
+			storeClientSecret: sourceClientSecretStorage,
 		});
 
 	const currentPlugin = oauthProvider({
 		consentPage: "/consent",
+		disableJwtPlugin: targetClientSecretStorage === "encrypted",
 		loginPage: "/login",
 		silenceWarnings: {
 			oauthAuthServerConfig: true,
 			openidConfig: true,
 		},
+		storeClientSecret: targetClientSecretStorage,
 	});
 	configureCurrentPlugin?.(currentPlugin);
 	const auth17 = betterAuth({
@@ -286,13 +293,16 @@ async function exerciseOAuthProviderMigration({
 	await expect(
 		migrateFrom16(auth17.options, { legacyTableNames }),
 	).rejects.toThrow(
-		'The 1.6 OAuth client migration requires clients: "migrate" and clientSecrets: "rehash-plaintext".',
+		"The 1.6 OAuth client migration requires the 1.6 client secret storage policy",
 	);
 	const migration = await migrateFrom16(auth17.options, {
 		legacyTableNames,
 		oauthProvider: {
 			clients: "migrate",
-			clientSecrets: "rehash-plaintext",
+			clientSecrets: {
+				source: sourceClientSecretStorage,
+				target: targetClientSecretStorage,
+			},
 			consents: consentStrategy,
 			tokens: "revoke",
 		},
@@ -390,7 +400,10 @@ async function exerciseOAuthProviderMigration({
 		legacyTableNames,
 		oauthProvider: {
 			clients: "migrate",
-			clientSecrets: "rehash-plaintext",
+			clientSecrets: {
+				source: sourceClientSecretStorage,
+				target: targetClientSecretStorage,
+			},
 			consents: consentStrategy,
 			tokens: "revoke",
 		},
@@ -511,7 +524,7 @@ it("rejects invalid OAuth data before changing the 1.6 database", async () => {
 			migrateFrom16(auth17.options, {
 				oauthProvider: {
 					clients: "migrate",
-					clientSecrets: "rehash-plaintext",
+					clientSecrets: { source: "plain", target: "hashed" },
 					consents: "migrate",
 					tokens: "revoke",
 				},
@@ -536,6 +549,39 @@ it("rejects invalid OAuth data before changing the 1.6 database", async () => {
 			.all()
 			.map((table) => (table as { name: string }).name);
 		expect(legacyTables).toEqual(["oauthApplication"]);
+	} finally {
+		database.close();
+	}
+});
+
+it("preserves published 1.6.25 hashed OAuth client authentication on SQLite", {
+	timeout: 60_000,
+}, async () => {
+	const database = new DatabaseSync(":memory:");
+	try {
+		await exerciseOAuthProviderMigration({
+			database,
+			emailDomain: "oauth-hashed-sqlite.example.com",
+			nameSuffix: "SQLite hashed secret",
+			sourceClientSecretStorage: "hashed",
+		});
+	} finally {
+		database.close();
+	}
+});
+
+it("preserves published 1.6.25 encrypted OAuth client authentication on SQLite", {
+	timeout: 60_000,
+}, async () => {
+	const database = new DatabaseSync(":memory:");
+	try {
+		await exerciseOAuthProviderMigration({
+			database,
+			emailDomain: "oauth-encrypted-sqlite.example.com",
+			nameSuffix: "SQLite encrypted secret",
+			sourceClientSecretStorage: "encrypted",
+			targetClientSecretStorage: "encrypted",
+		});
 	} finally {
 		database.close();
 	}

@@ -33,7 +33,7 @@ export type ReleaseMigrationPlanBlocker =
 	| ReleaseMigrationErrorBlocker;
 
 export interface MigrationBlockerRemediation {
-	/** Upgrade guide anchor documenting this blocker code. */
+	/** Upgrade guide section that explains the relevant migration step. */
 	docs: string;
 	/** One actionable sentence naming the next step. */
 	summary: string;
@@ -126,6 +126,10 @@ function summarizeMigrationRemediation(blocker: MigrationBlockerDetail) {
 	switch (blocker.code) {
 		case "account-identity-collision":
 			return `Merge or remove the duplicate rows in "${blocker.table}" so issuer "${blocker.issuer}" holds provider account id "${blocker.providerAccountId}" once, then migrate again.`;
+		case "account-issuer-conflict":
+			return `Remove account "${blocker.accountId}" from accountIssuers in ${MIGRATION_DECISIONS_FILE} to keep "${blocker.storedIssuer}", or correct the stored issuer before migrating.`;
+		case "account-issuer-decision-required":
+			return `Record each missing account under accountIssuers in ${MIGRATION_DECISIONS_FILE} and remove the unknown account IDs, then migrate again.`;
 		case "backup-table-conflict":
 			return `Drop or rename "${blocker.backupTable}" so the migration can move "${blocker.table}" aside, then migrate again.`;
 		case "identifier-length-limit":
@@ -141,7 +145,11 @@ function summarizeMigrationRemediation(blocker: MigrationBlockerDetail) {
 				? `Give client "${blocker.clientId}" a redirect URI in "${blocker.table}" or delete the client, then migrate again.`
 				: `Align the redirect URIs of client "${blocker.clientId}" with the existing 1.7 client or delete one of them, then migrate again.`;
 		case "oauth-client-decision-required":
-			return `Record an oauth decision in ${MIGRATION_DECISIONS_FILE} to move these clients into the 1.7 client store, or run \`auth migrate\` in a terminal to answer it there.`;
+			return `Record how the 1.6 client secrets are stored under oauth.clientSecrets in ${MIGRATION_DECISIONS_FILE}; the configured 1.7 target is "${blocker.target}".`;
+		case "oauth-client-secret-target-conflict":
+			return `Change oauth.clientSecrets.target in ${MIGRATION_DECISIONS_FILE} to "${blocker.configuredTarget}", or restore the reviewed OAuth provider configuration.`;
+		case "oauth-client-secret-transition-unsupported":
+			return `Rotate or re-register the confidential clients instead of migrating their "${blocker.source}" secrets into "${blocker.target}" storage.`;
 		case "oauth-consent-conflict":
 			return `Set oauth.consents to "reauthorize" in ${MIGRATION_DECISIONS_FILE}, or remove the 1.7 consent for client "${blocker.clientId}" and user "${blocker.userId}", then migrate again.`;
 		case "oauth-consent-decision-required":
@@ -166,11 +174,28 @@ function summarizeMigrationRemediation(blocker: MigrationBlockerDetail) {
 	}
 }
 
+function resolveMigrationGuideAnchor(blocker: MigrationBlockerDetail) {
+	switch (blocker.code) {
+		case "account-identity-collision":
+		case "account-issuer-conflict":
+		case "account-issuer-decision-required":
+		case "issuer-conflict":
+		case "issuer-required":
+			return "account-identity-is-scoped-by-issuer";
+		case "reprovision-data":
+		case "scim-decision-required":
+		case "scim-inventory-mismatch":
+			return "scim-requires-full-reprovisioning";
+		default:
+			return "migrate-from-16-to-17";
+	}
+}
+
 function resolveMigrationRemediation(
 	blocker: MigrationBlockerDetail,
 ): MigrationBlockerRemediation {
 	return {
-		docs: `${UPGRADE_GUIDE_URL}#${blocker.code}`,
+		docs: `${UPGRADE_GUIDE_URL}#${resolveMigrationGuideAnchor(blocker)}`,
 		summary: summarizeMigrationRemediation(blocker),
 	};
 }

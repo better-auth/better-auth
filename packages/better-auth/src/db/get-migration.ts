@@ -49,7 +49,10 @@ export type {
 	ConfiguredAccountIssuers,
 	LegacyReleaseDataState,
 	LegacyReleaseModel,
+	MigrateFrom16Options,
 	MigrationDecisionBlocker,
+	OAuthClientSecretStorage,
+	OAuthClientSecretStorageTransition,
 	UnresolvedIssuerReason,
 } from "./release-migration";
 export {

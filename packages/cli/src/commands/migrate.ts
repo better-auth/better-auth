@@ -218,14 +218,22 @@ export async function migrateAction(opts: unknown) {
 		process.stdin.isTTY &&
 		releaseMigrationBlockers.some(isInterviewableBlocker)
 	) {
-		const interviewed = await interviewMigrationDecisions({
-			blockers: releaseMigrationBlockers,
-			config,
-			cwd,
-			legacyState: legacyReleaseState,
-			options: releaseMigrationOptions,
-			target: migrationTarget,
-		});
+		let interviewed: MigrationDecisions | undefined;
+		try {
+			interviewed = await interviewMigrationDecisions({
+				blockers: releaseMigrationBlockers,
+				config,
+				cwd,
+				legacyState: legacyReleaseState,
+				options: releaseMigrationOptions,
+				target: migrationTarget,
+			});
+		} catch (error) {
+			console.error(error instanceof Error ? error.message : String(error));
+			await publishMigrateTelemetry(config, "aborted");
+			process.exit(1);
+			return;
+		}
 		if (!interviewed) {
 			console.log("Migration cancelled.");
 			await publishMigrateTelemetry(config, "aborted");

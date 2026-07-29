@@ -61,6 +61,7 @@ export async function seedPublishedOAuthProviderData({
 	database,
 	emailDomain,
 	nameSuffix,
+	storeClientSecret = "plain",
 }: {
 	configurePublishedPlugin?:
 		| ((plugin: ReturnType<typeof oidcProvider1625>) => void)
@@ -68,11 +69,13 @@ export async function seedPublishedOAuthProviderData({
 	database: MigrationDatabase;
 	emailDomain: string;
 	nameSuffix: string;
+	storeClientSecret?: "encrypted" | "hashed" | "plain" | undefined;
 }) {
 	const publishedPlugin = clonePluginSchema(
 		oidcProvider1625({
 			allowDynamicClientRegistration: true,
 			loginPage: "/login",
+			storeClientSecret,
 		}),
 	);
 	configurePublishedPlugin?.(publishedPlugin);

@@ -84,6 +84,17 @@ export interface TableDataConversionBlocker {
 	targetTable: string;
 }
 
+export type OAuthClientSecretStorage =
+	| "custom"
+	| "encrypted"
+	| "hashed"
+	| "plain";
+
+export interface OAuthClientSecretStorageTransition {
+	source: OAuthClientSecretStorage;
+	target: Exclude<OAuthClientSecretStorage, "plain">;
+}
+
 export type ReleaseMigrationBlocker =
 	| TableDataMoveBlocker
 	| ReprovisionDataBlocker
@@ -100,6 +111,23 @@ export type MigrationDecisionBlocker =
 			issuer: string;
 			providerAccountId: string;
 			table: string;
+	  }
+	| {
+			accountId: string;
+			code: "account-issuer-conflict";
+			requestedIssuer: string;
+			storedIssuer: string;
+			table: string;
+	  }
+	| {
+			accounts: Array<{
+				accountId: string;
+				providerAccountId: string;
+				providerId: string;
+			}>;
+			code: "account-issuer-decision-required";
+			table: string;
+			unknownAccountIds: string[];
 	  }
 	| {
 			backupTable: string;
@@ -143,6 +171,20 @@ export type MigrationDecisionBlocker =
 			code: "oauth-client-decision-required";
 			rowCount: number;
 			table: string;
+			target: OAuthClientSecretStorageTransition["target"];
+	  }
+	| {
+			code: "oauth-client-secret-target-conflict";
+			configuredTarget: OAuthClientSecretStorageTransition["target"];
+			requestedTarget: OAuthClientSecretStorageTransition["target"];
+			table: string;
+	  }
+	| {
+			code: "oauth-client-secret-transition-unsupported";
+			rowCount: number;
+			source: OAuthClientSecretStorageTransition["source"];
+			table: string;
+			target: OAuthClientSecretStorageTransition["target"];
 	  }
 	| {
 			clientId: string;
@@ -182,6 +224,10 @@ export function describeMigrationDecisionBlocker(
 	switch (blocker.code) {
 		case "account-identity-collision":
 			return `The 1.6 account migration found duplicate issuer and provider-account identities: issuer "${blocker.issuer}" with provider account id "${blocker.providerAccountId}".`;
+		case "account-issuer-conflict":
+			return `Account "${blocker.accountId}" already stores issuer "${blocker.storedIssuer}", which conflicts with the reviewed issuer "${blocker.requestedIssuer}".`;
+		case "account-issuer-decision-required":
+			return `The 1.6 account migration requires a reviewed issuer for each account whose provider resolves its issuer per sign-in. Missing: ${blocker.accounts.map(({ accountId }) => accountId).join(", ") || "none"}. Unknown: ${blocker.unknownAccountIds.join(", ") || "none"}.`;
 		case "backup-table-conflict":
 			return blocker.conflict === "backup-table-exists"
 				? `Cannot retire legacy table "${blocker.table}" because backup table "${blocker.backupTable}" already exists.`
@@ -206,7 +252,11 @@ export function describeMigrationDecisionBlocker(
 				? `OAuth client "${blocker.clientId}" has no redirect URI and cannot be migrated.`
 				: `OAuth client "${blocker.clientId}" already exists with different redirect URIs.`;
 		case "oauth-client-decision-required":
-			return 'The 1.6 OAuth client migration requires clients: "migrate" and clientSecrets: "rehash-plaintext".';
+			return `The 1.6 OAuth client migration requires the 1.6 client secret storage policy and records the configured 1.7 target policy "${blocker.target}".`;
+		case "oauth-client-secret-target-conflict":
+			return `The decisions file records 1.7 OAuth client secret storage "${blocker.requestedTarget}", but the configured OAuth provider uses "${blocker.configuredTarget}".`;
+		case "oauth-client-secret-transition-unsupported":
+			return `The 1.6 OAuth client migration cannot safely move client secrets from "${blocker.source}" storage to "${blocker.target}" storage. Rotate or re-register the confidential clients.`;
 		case "oauth-consent-conflict":
 			return `OAuth consent for client "${blocker.clientId}" and user "${blocker.userId}" already exists with different scopes.`;
 		case "oauth-consent-decision-required":
@@ -357,6 +407,9 @@ async function resolveMigrationAccountIssuers(
 	for (const [providerId, requested] of Object.entries(
 		options.accountIssuers || {},
 	)) {
+		if (configured.unresolvedProviders[providerId] === "dynamic-issuer") {
+			continue;
+		}
 		const requestedIssuer = requested.trim();
 		if (!requestedIssuer) continue;
 		const configuredIssuer = configured.issuers[providerId];
@@ -385,9 +438,14 @@ export interface MigrateFrom16Options {
 	 *
 	 * Configured providers derive their issuer the same way the 1.7 runtime
 	 * does, so an entry is only needed for a provider missing from the
-	 * configuration or one that resolves its issuer per authentication.
+	 * configuration or one whose discovery document is not read by preflight.
 	 */
 	accountIssuers?: Record<string, string> | undefined;
+	/**
+	 * Stable 1.7 issuer for each account whose configured provider resolves its
+	 * issuer per authentication. Keys are Better Auth account row IDs.
+	 */
+	accountIssuerByAccountId?: Record<string, string> | undefined;
 	/**
 	 * Physical names used by customized 1.6 plugin schemas. `null` records that
 	 * no customized table holds that model's 1.6 data, which settles the
@@ -402,7 +460,7 @@ export interface MigrateFrom16Options {
 	/** Explicit policy for data owned by the retired 1.6 OIDC provider. */
 	oauthProvider?: {
 		clients: "migrate";
-		clientSecrets: "rehash-plaintext";
+		clientSecrets?: OAuthClientSecretStorageTransition | undefined;
 		consents: "migrate" | "reauthorize";
 		tokens: "revoke";
 	};
@@ -466,10 +524,82 @@ interface AccountProviderCount {
 }
 
 interface LegacyAccountIdentityRow {
+	accountId: string;
 	issuer?: string | null | undefined;
 	legacyAccountId: string;
 	providerAccountId?: string | null | undefined;
 	providerId: string;
+}
+
+function resolveDynamicAccountIssuers({
+	accounts,
+	blockers,
+	requestedIssuers,
+	table,
+	unresolvedProviders,
+}: {
+	accounts: readonly LegacyAccountIdentityRow[];
+	blockers: MigrationDecisionBlocker[] | undefined;
+	requestedIssuers: MigrateFrom16Options["accountIssuerByAccountId"];
+	table: string;
+	unresolvedProviders: Readonly<Record<string, UnresolvedIssuerReason>>;
+}) {
+	const reviewedIssuers = Object.fromEntries(
+		Object.entries(requestedIssuers ?? {})
+			.map(([accountId, issuer]) => [accountId, issuer.trim()] as const)
+			.filter(([, issuer]) => issuer.length > 0),
+	);
+	const dynamicAccounts = accounts
+		.filter(
+			(account) => unresolvedProviders[account.providerId] === "dynamic-issuer",
+		)
+		.sort((left, right) => left.accountId.localeCompare(right.accountId));
+	const dynamicAccountIds = new Set(
+		dynamicAccounts.map(({ accountId }) => accountId),
+	);
+	const resolvedIssuers: Record<string, string> = {};
+	const accountsMissingIssuer: Array<{
+		accountId: string;
+		providerAccountId: string;
+		providerId: string;
+	}> = [];
+
+	for (const account of dynamicAccounts) {
+		const storedIssuer = account.issuer?.trim() || undefined;
+		const requestedIssuer = reviewedIssuers[account.accountId];
+		if (storedIssuer && requestedIssuer && storedIssuer !== requestedIssuer) {
+			reportMigrationDecisionBlocker(blockers, {
+				accountId: account.accountId,
+				code: "account-issuer-conflict",
+				requestedIssuer,
+				storedIssuer,
+				table,
+			});
+		}
+		const resolvedIssuer = storedIssuer ?? requestedIssuer;
+		if (resolvedIssuer) {
+			resolvedIssuers[account.accountId] = resolvedIssuer;
+			continue;
+		}
+		accountsMissingIssuer.push({
+			accountId: account.accountId,
+			providerAccountId: account.legacyAccountId,
+			providerId: account.providerId,
+		});
+	}
+
+	const unknownAccountIds = Object.keys(reviewedIssuers)
+		.filter((accountId) => !dynamicAccountIds.has(accountId))
+		.sort();
+	if (accountsMissingIssuer.length > 0 || unknownAccountIds.length > 0) {
+		reportMigrationDecisionBlocker(blockers, {
+			accounts: accountsMissingIssuer,
+			code: "account-issuer-decision-required",
+			table,
+			unknownAccountIds,
+		});
+	}
+	return resolvedIssuers;
 }
 
 interface LegacyOAuthClientRow {
@@ -787,16 +917,32 @@ export async function inspectLegacyReleaseDataFrom16(
 		),
 	};
 
-	if (
-		state.oauthApplication?.rowCount &&
-		(options.oauthProvider?.clients !== "migrate" ||
-			options.oauthProvider.clientSecrets !== "rehash-plaintext")
-	) {
-		reportMigrationDecisionBlocker(blockers, {
-			code: "oauth-client-decision-required",
-			rowCount: state.oauthApplication.rowCount,
-			table: state.oauthApplication.sourceTable,
-		});
+	if (state.oauthApplication?.rowCount) {
+		const configuredTarget = resolveOAuthClientSecretStorageTarget(config);
+		const transition = options.oauthProvider?.clientSecrets;
+		if (options.oauthProvider?.clients !== "migrate" || !transition) {
+			reportMigrationDecisionBlocker(blockers, {
+				code: "oauth-client-decision-required",
+				rowCount: state.oauthApplication.rowCount,
+				table: state.oauthApplication.sourceTable,
+				target: configuredTarget,
+			});
+		} else if (transition.target !== configuredTarget) {
+			reportMigrationDecisionBlocker(blockers, {
+				code: "oauth-client-secret-target-conflict",
+				configuredTarget,
+				requestedTarget: transition.target,
+				table: state.oauthApplication.sourceTable,
+			});
+		} else if (!supportsOAuthClientSecretStorageTransition(transition)) {
+			reportMigrationDecisionBlocker(blockers, {
+				code: "oauth-client-secret-transition-unsupported",
+				rowCount: state.oauthApplication.rowCount,
+				source: transition.source,
+				table: state.oauthApplication.sourceTable,
+				target: transition.target,
+			});
+		}
 	}
 	if (
 		state.oauthAccessToken?.rowCount &&
@@ -913,6 +1059,48 @@ async function hashLegacyClientSecret(value: string) {
 	return base64Url.encode(new Uint8Array(digest), { padding: false });
 }
 
+function resolveOAuthClientSecretStorageTarget(
+	config: BetterAuthOptions,
+): OAuthClientSecretStorageTransition["target"] {
+	const oauthProvider = config.plugins?.find(
+		(plugin) => plugin.id === "oauth-provider",
+	);
+	const storage = (
+		oauthProvider?.options as Record<string, unknown> | undefined
+	)?.storeClientSecret;
+	if (storage === "encrypted" || storage === "hashed") return storage;
+	return "custom";
+}
+
+function supportsOAuthClientSecretStorageTransition({
+	source,
+	target,
+}: OAuthClientSecretStorageTransition) {
+	return (
+		(source === "plain" && target === "hashed") ||
+		(source === "hashed" && target === "hashed") ||
+		(source === "encrypted" && target === "encrypted")
+	);
+}
+
+async function migrateLegacyClientSecret(
+	value: string,
+	transition: OAuthClientSecretStorageTransition,
+) {
+	if (transition.source === "plain" && transition.target === "hashed") {
+		return await hashLegacyClientSecret(value);
+	}
+	if (
+		(transition.source === "hashed" && transition.target === "hashed") ||
+		(transition.source === "encrypted" && transition.target === "encrypted")
+	) {
+		return value;
+	}
+	throw new BetterAuthError(
+		`Unsupported OAuth client secret storage transition from "${transition.source}" to "${transition.target}".`,
+	);
+}
+
 function targetTableExists({
 	existingTables,
 	legacyTable,
@@ -949,7 +1137,22 @@ export async function prepareOAuthProviderDataFrom16(
 		(await kysely.introspection.getTables()).map((table) => table.name),
 	);
 	const clients: OAuthProviderDataFrom16Plan["clients"] = [];
-	if (state.oauthApplication) {
+	const clientSecretStorage = options.oauthProvider?.clientSecrets;
+	const canMigrateClientSecrets =
+		clientSecretStorage &&
+		clientSecretStorage.target ===
+			resolveOAuthClientSecretStorageTarget(config) &&
+		supportsOAuthClientSecretStorageTransition(clientSecretStorage);
+	if (state.oauthApplication && !canMigrateClientSecrets && !blockers) {
+		throw new BetterAuthError(
+			"The 1.6 OAuth client migration requires a supported, reviewed client secret storage transition.",
+		);
+	}
+	if (
+		state.oauthApplication &&
+		canMigrateClientSecrets &&
+		clientSecretStorage
+	) {
 		const sourceTable = state.oauthApplication.sourceTableNeedsRename
 			? state.oauthApplication.sourceTable
 			: state.oauthApplication.backupTable;
@@ -1002,7 +1205,10 @@ export async function prepareOAuthProviderDataFrom16(
 					clientId: client.clientId,
 					clientSecret:
 						!isPublic && client.clientSecret
-							? await hashLegacyClientSecret(client.clientSecret)
+							? await migrateLegacyClientSecret(
+									client.clientSecret,
+									clientSecretStorage,
+								)
 							: undefined,
 					createdAt: client.createdAt,
 					disabled: Boolean(client.disabled),
@@ -1413,6 +1619,7 @@ async function inspectAccountIdentityFrom16(
 		);
 	}
 	const issuerColumn = accountSchema.fields.issuer?.fieldName || "issuer";
+	const accountIdColumn = accountSchema.fields.id?.fieldName || "id";
 	const providerAccountIdColumn =
 		accountSchema.fields.providerAccountId?.fieldName || "providerAccountId";
 	const providerIdColumn =
@@ -1447,7 +1654,11 @@ async function inspectAccountIdentityFrom16(
 		populatedProviders[row.providerId] = toSafeRowCount(row.count);
 	}
 	const missingIssuerProviders = Object.keys(populatedProviders)
-		.filter((providerId) => !accountIssuers[providerId])
+		.filter(
+			(providerId) =>
+				!accountIssuers[providerId] &&
+				unresolvedProviders[providerId] !== "dynamic-issuer",
+		)
 		.sort();
 	for (const providerId of missingIssuerProviders) {
 		reportMigrationDecisionBlocker(blockers, {
@@ -1461,6 +1672,7 @@ async function inspectAccountIdentityFrom16(
 
 	const accountIdentities = await sql<LegacyAccountIdentityRow>`
 		SELECT
+			${sql.ref(accountIdColumn)} AS "accountId",
 			${existingColumns.has(issuerColumn) ? sql.ref(issuerColumn) : sql`NULL`} AS "issuer",
 			${sql.ref(legacyAccountIdColumn)} AS "legacyAccountId",
 			${
@@ -1471,6 +1683,13 @@ async function inspectAccountIdentityFrom16(
 			${sql.ref(providerIdColumn)} AS "providerId"
 		FROM ${sql.table(accountTable)}
 	`.execute(kysely);
+	const accountIssuerByAccountId = resolveDynamicAccountIssuers({
+		accounts: accountIdentities.rows,
+		blockers,
+		requestedIssuers: options.accountIssuerByAccountId,
+		table: accountTable,
+		unresolvedProviders,
+	});
 	const projectedIdentities = new Set<string>();
 	const reportedCollisions = new Set<string>();
 	for (const account of accountIdentities.rows) {
@@ -1480,7 +1699,9 @@ async function inspectAccountIdentityFrom16(
 			account.providerAccountId === null ||
 			account.providerAccountId === undefined;
 		const issuer = unresolved
-			? accountIssuers[account.providerId]
+			? unresolvedProviders[account.providerId] === "dynamic-issuer"
+				? accountIssuerByAccountId[account.accountId]
+				: accountIssuers[account.providerId]
 			: account.issuer;
 		const providerAccountId = unresolved
 			? account.legacyAccountId
@@ -1502,6 +1723,8 @@ async function inspectAccountIdentityFrom16(
 		projectedIdentities.add(identityKey);
 	}
 	return {
+		accountIdColumn,
+		accountIssuerByAccountId,
 		accountIssuers,
 		accountTable,
 		accountTableMetadata,
@@ -1539,6 +1762,8 @@ export async function migrateAccountIdentityFrom16(
 	);
 	if (!inspection) return { migrated: 0, providers: {} };
 	const {
+		accountIdColumn,
+		accountIssuerByAccountId,
 		accountIssuers,
 		accountTable,
 		accountTableMetadata,
@@ -1604,6 +1829,20 @@ export async function migrateAccountIdentityFrom16(
 				${sql.ref(providerAccountIdColumn)} = ${sql.ref(legacyAccountIdColumn)}
 			WHERE
 				${sql.ref(providerIdColumn)} = ${providerId} AND
+				(
+					${sql.ref(issuerColumn)} IS NULL OR
+					${sql.ref(providerAccountIdColumn)} IS NULL
+				)
+		`.execute(kysely);
+	}
+	for (const [accountId, issuer] of Object.entries(accountIssuerByAccountId)) {
+		await sql`
+			UPDATE ${sql.table(accountTable)}
+			SET
+				${sql.ref(issuerColumn)} = ${issuer},
+				${sql.ref(providerAccountIdColumn)} = ${sql.ref(legacyAccountIdColumn)}
+			WHERE
+				${sql.ref(accountIdColumn)} = ${accountId} AND
 				(
 					${sql.ref(issuerColumn)} IS NULL OR
 					${sql.ref(providerAccountIdColumn)} IS NULL

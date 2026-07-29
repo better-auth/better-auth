@@ -36,6 +36,7 @@ const oauthDecisionBlockerCodes = new Set([
 
 const interviewableBlockerCodes = new Set([
 	...oauthDecisionBlockerCodes,
+	"account-issuer-decision-required",
 	"issuer-required",
 	"legacy-table-candidate",
 	"scim-decision-required",
@@ -67,6 +68,9 @@ function describeIssuerReason(
 }
 
 type LegacyTableNames = NonNullable<MigrationDecisions["legacyTableNames"]>;
+type OAuthClientSecrets = NonNullable<
+	NonNullable<MigrationDecisions["oauth"]>["clientSecrets"]
+>;
 
 /**
  * Settles every proposed legacy table: an accepted candidate becomes the
@@ -140,8 +144,15 @@ export function describeIrreversibleReleaseActions(
 ): string[] {
 	const actions: string[] = [];
 	if (state.oauthApplication?.rowCount) {
+		const clientSecrets = decisions?.oauth?.clientSecrets;
+		const secretAction =
+			clientSecrets?.source === "plain"
+				? "hash the stored plaintext client secrets for the 1.7 provider"
+				: clientSecrets
+					? `preserve the stored ${clientSecrets.source} client secrets`
+					: "apply the reviewed client secret storage transition";
 		actions.push(
-			`move ${countOf(state.oauthApplication.rowCount, "OAuth client")} into oauthClient and re-hash every plaintext client secret`,
+			`move ${countOf(state.oauthApplication.rowCount, "OAuth client")} into oauthClient and ${secretAction}`,
 		);
 	}
 	if (state.oauthAccessToken?.rowCount) {
@@ -239,6 +250,54 @@ export async function interviewMigrationDecisions({
 		issuers[blocker.providerId] = issuer;
 	}
 
+	const accountIssuers: Record<string, string> = {};
+	const dynamicIssuerAccounts = releaseBlockers.flatMap((blocker) =>
+		blocker.code === "account-issuer-decision-required" ? blocker.accounts : [],
+	);
+	for (const account of dynamicIssuerAccounts) {
+		const answers: Record<string, unknown> = await prompts({
+			type: "text",
+			name: "issuer",
+			message: `Issuer for account "${account.accountId}" (provider "${account.providerId}", provider account "${account.providerAccountId}")`,
+			validate: (value: string) =>
+				value.trim().length > 0 || "Enter the issuer 1.7 establishes.",
+		});
+		const issuer =
+			typeof answers.issuer === "string" ? answers.issuer.trim() : "";
+		if (!issuer) return undefined;
+		accountIssuers[account.accountId] = issuer;
+	}
+
+	let clientSecrets: OAuthClientSecrets | undefined;
+	const oauthClientBlocker = releaseBlockers.find(
+		(blocker) => blocker.code === "oauth-client-decision-required",
+	);
+	if (oauthClientBlocker?.code === "oauth-client-decision-required") {
+		const answers: Record<string, unknown> = await prompts({
+			type: "select",
+			name: "source",
+			message: `How did Better Auth 1.6 store OAuth client secrets? The configured 1.7 target is "${oauthClientBlocker.target}".`,
+			choices: [
+				{ title: "Plaintext (1.6 default)", value: "plain" },
+				{ title: "Default SHA-256 hashes", value: "hashed" },
+				{ title: "Better Auth encryption", value: "encrypted" },
+				{ title: "Custom hashing or encryption", value: "custom" },
+			],
+		});
+		if (
+			answers.source !== "plain" &&
+			answers.source !== "hashed" &&
+			answers.source !== "encrypted" &&
+			answers.source !== "custom"
+		) {
+			return undefined;
+		}
+		clientSecrets = {
+			source: answers.source,
+			target: oauthClientBlocker.target,
+		};
+	}
+
 	let consents: "migrate" | "reauthorize" = "reauthorize";
 	if (
 		releaseBlockers.some(
@@ -284,17 +343,24 @@ export async function interviewMigrationDecisions({
 	}
 
 	const decisions: MigrationDecisions = { formatVersion: 1 };
+	if (Object.keys(accountIssuers).length > 0) {
+		decisions.accountIssuers = accountIssuers;
+	}
 	if (Object.keys(issuers).length > 0) decisions.issuers = issuers;
 	if (Object.keys(legacyTableNames).length > 0) {
 		decisions.legacyTableNames = legacyTableNames;
 	}
 	if (releaseBlockers.some(({ code }) => oauthDecisionBlockerCodes.has(code))) {
-		decisions.oauth = { consents };
+		decisions.oauth = { clientSecrets, consents };
 	}
 	if (scim) decisions.scim = scim;
 
 	const filePath = path.resolve(cwd, MIGRATION_DECISIONS_FILE);
-	await writeMigrationDecisions(filePath, decisions);
-	console.log(`Recorded these decisions in ${filePath}`);
+	const writeResult = await writeMigrationDecisions(filePath, decisions);
+	console.log(
+		writeResult === "created"
+			? `Recorded these decisions in ${filePath}`
+			: `Reused the identical decisions in ${filePath}`,
+	);
 	return decisions;
 }

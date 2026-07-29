@@ -527,6 +527,62 @@ describe("get-migration: 1.6 release preflight", () => {
 		},
 	} satisfies BetterAuthPlugin;
 
+	function createLegacyOAuthClientTable(
+		db: DatabaseSync,
+		clientSecret: string,
+	) {
+		db.exec(
+			`CREATE TABLE "oauthApplication" (
+				"id" text primary key not null,
+				"name" text not null,
+				"icon" text,
+				"metadata" text,
+				"clientId" text not null,
+				"clientSecret" text,
+				"redirectUrls" text not null,
+				"type" text not null,
+				"disabled" integer,
+				"userId" text,
+				"createdAt" date not null,
+				"updatedAt" date not null
+			);
+			INSERT INTO "oauthApplication" (
+				"id", "name", "clientId", "clientSecret", "redirectUrls", "type",
+				"createdAt", "updatedAt"
+			) VALUES (
+				'client-row', 'Confidential client', 'client-1', '${clientSecret}',
+				'https://client.example/callback', 'web', '2020-01-01', '2020-01-01'
+			)`,
+		);
+	}
+
+	function createOAuthClientConfig(
+		db: DatabaseSync,
+		storeClientSecret: "encrypted" | "hashed",
+	): BetterAuthOptions {
+		return {
+			database: db,
+			plugins: [
+				{
+					id: "oauth-provider",
+					options: { storeClientSecret },
+					schema: {
+						oauthClient: {
+							fields: {
+								clientId: { type: "string" },
+								clientSecret: { type: "string", required: false },
+								createdAt: { type: "date" },
+								name: { type: "string" },
+								redirectUris: { type: "string[]" },
+								updatedAt: { type: "date" },
+							},
+						},
+					},
+				},
+			],
+		};
+	}
+
 	function createLegacyConsentTable(db: DatabaseSync, table: string) {
 		db.exec(
 			`CREATE TABLE "${table}" (
@@ -544,6 +600,61 @@ describe("get-migration: 1.6 release preflight", () => {
 			 VALUES ('c1', 'client-1', 'u1', 'openid profile', 1, '2020-01-01', '2020-01-01')`,
 		);
 	}
+
+	it("blocks an unsupported OAuth client secret storage transition", async () => {
+		const db = new DatabaseSync(":memory:");
+		createLegacyOAuthClientTable(db, "ciphertext");
+		const config = createOAuthClientConfig(db, "hashed");
+
+		await expect(
+			validateMigrationFrom16(config, {
+				oauthProvider: {
+					clients: "migrate",
+					clientSecrets: {
+						source: "encrypted",
+						target: "hashed",
+					},
+					consents: "reauthorize",
+					tokens: "revoke",
+				},
+			}),
+		).resolves.toEqual([
+			{
+				code: "oauth-client-secret-transition-unsupported",
+				rowCount: 1,
+				source: "encrypted",
+				table: "oauthApplication",
+				target: "hashed",
+			},
+		]);
+	});
+
+	it("blocks an OAuth client secret target that no longer matches the configuration", async () => {
+		const db = new DatabaseSync(":memory:");
+		createLegacyOAuthClientTable(db, "plaintext");
+		const config = createOAuthClientConfig(db, "hashed");
+
+		await expect(
+			validateMigrationFrom16(config, {
+				oauthProvider: {
+					clients: "migrate",
+					clientSecrets: {
+						source: "plain",
+						target: "encrypted",
+					},
+					consents: "reauthorize",
+					tokens: "revoke",
+				},
+			}),
+		).resolves.toEqual([
+			{
+				code: "oauth-client-secret-target-conflict",
+				configuredTarget: "hashed",
+				requestedTarget: "encrypted",
+				table: "oauthApplication",
+			},
+		]);
+	});
 
 	it("reports every unresolved decision in one pass and still refuses to migrate", async () => {
 		const db = new DatabaseSync(":memory:");
@@ -664,7 +775,7 @@ describe("get-migration: 1.6 release preflight", () => {
 				legacyTableNames: { oauthConsent: "legacyConsent" },
 				oauthProvider: {
 					clients: "migrate",
-					clientSecrets: "rehash-plaintext",
+					clientSecrets: { source: "plain", target: "hashed" },
 					consents: "migrate",
 					tokens: "revoke",
 				},
@@ -860,20 +971,179 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		});
 		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
 			{
-				accountCount: 1,
-				code: "issuer-required",
-				providerId: "microsoft",
-				reason: "dynamic-issuer",
+				accounts: [
+					{
+						accountId: "a1",
+						providerAccountId: "8f3c",
+						providerId: "microsoft",
+					},
+				],
+				code: "account-issuer-decision-required",
 				table: "account",
+				unknownAccountIds: [],
 			},
 		]);
 		await expect(
 			validateMigrationFrom16(config, {
-				accountIssuers: {
-					microsoft: "https://login.microsoftonline.com/tenant/v2.0",
+				accountIssuerByAccountId: {
+					a1: "https://login.microsoftonline.com/tenant/v2.0",
 				},
 			}),
 		).resolves.toEqual([]);
+	});
+
+	it("requires a reviewed issuer for each account of a dynamic provider", async () => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(
+			`CREATE TABLE "account" (
+				"id" text primary key not null,
+				"accountId" text not null,
+				"providerId" text not null,
+				"userId" text not null,
+				"createdAt" date not null,
+				"updatedAt" date not null
+			)`,
+		);
+		db.exec(
+			`INSERT INTO "account" ("id", "accountId", "providerId", "userId", "createdAt", "updatedAt")
+			 VALUES
+				('a1', 'subject-1', 'microsoft', 'u1', '2020-01-01', '2020-01-01'),
+				('a2', 'subject-2', 'microsoft', 'u2', '2020-01-01', '2020-01-01')`,
+		);
+		const config: BetterAuthOptions = {
+			database: db,
+			socialProviders: {
+				microsoft: {
+					clientId: "entra-client",
+					clientSecret: "entra-secret",
+				},
+			},
+		};
+
+		await expect(
+			validateMigrationFrom16(config, {
+				accountIssuers: {
+					microsoft: "https://login.microsoftonline.com/wrong/v2.0",
+				},
+			}),
+		).resolves.toEqual([
+			{
+				accounts: [
+					{
+						accountId: "a1",
+						providerAccountId: "subject-1",
+						providerId: "microsoft",
+					},
+					{
+						accountId: "a2",
+						providerAccountId: "subject-2",
+						providerId: "microsoft",
+					},
+				],
+				code: "account-issuer-decision-required",
+				table: "account",
+				unknownAccountIds: [],
+			},
+		]);
+
+		const options = {
+			accountIssuerByAccountId: {
+				a1: "https://login.microsoftonline.com/tenant-a/v2.0",
+				a2: "https://login.microsoftonline.com/tenant-b/v2.0",
+			},
+		};
+		await expect(validateMigrationFrom16(config, options)).resolves.toEqual([]);
+		await migrateFrom16(config, options);
+
+		expect(
+			db
+				.prepare(
+					`SELECT "id", "issuer", "providerAccountId"
+					 FROM "account"
+					 ORDER BY "id"`,
+				)
+				.all(),
+		).toEqual([
+			{
+				id: "a1",
+				issuer: "https://login.microsoftonline.com/tenant-a/v2.0",
+				providerAccountId: "subject-1",
+			},
+			{
+				id: "a2",
+				issuer: "https://login.microsoftonline.com/tenant-b/v2.0",
+				providerAccountId: "subject-2",
+			},
+		]);
+	});
+
+	it("preserves an existing per-account issuer while completing a partial migration", async () => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(
+			`CREATE TABLE "account" (
+				"id" text primary key not null,
+				"accountId" text not null,
+				"issuer" text,
+				"providerAccountId" text,
+				"providerId" text not null,
+				"userId" text not null,
+				"createdAt" date not null,
+				"updatedAt" date not null
+			)`,
+		);
+		db.exec(
+			`INSERT INTO "account" ("id", "accountId", "issuer", "providerId", "userId", "createdAt", "updatedAt")
+			 VALUES (
+				'a1',
+				'subject-1',
+				'https://login.microsoftonline.com/tenant-a/v2.0',
+				'microsoft',
+				'u1',
+				'2020-01-01',
+				'2020-01-01'
+			)`,
+		);
+		const config: BetterAuthOptions = {
+			database: db,
+			socialProviders: {
+				microsoft: {
+					clientId: "entra-client",
+					clientSecret: "entra-secret",
+				},
+			},
+		};
+
+		await expect(
+			validateMigrationFrom16(config, {
+				accountIssuerByAccountId: {
+					a1: "https://login.microsoftonline.com/other-tenant/v2.0",
+				},
+			}),
+		).resolves.toEqual([
+			{
+				accountId: "a1",
+				code: "account-issuer-conflict",
+				requestedIssuer: "https://login.microsoftonline.com/other-tenant/v2.0",
+				storedIssuer: "https://login.microsoftonline.com/tenant-a/v2.0",
+				table: "account",
+			},
+		]);
+
+		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([]);
+		await migrateFrom16(config, {});
+
+		expect(
+			db
+				.prepare(
+					`SELECT "issuer", "providerAccountId"
+					 FROM "account"
+					 WHERE "id" = 'a1'`,
+				)
+				.get(),
+		).toEqual({
+			issuer: "https://login.microsoftonline.com/tenant-a/v2.0",
+			providerAccountId: "subject-1",
+		});
 	});
 
 	it("ignores a disabled provider", async () => {
@@ -1088,11 +1358,16 @@ describe("get-migration: 1.6 plugin provider issuer resolution", () => {
 
 		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
 			{
-				accountCount: 1,
-				code: "issuer-required",
-				providerId: "workforce",
-				reason: "dynamic-issuer",
+				accounts: [
+					{
+						accountId: "a1",
+						providerAccountId: "9c11",
+						providerId: "workforce",
+					},
+				],
+				code: "account-issuer-decision-required",
 				table: "account",
+				unknownAccountIds: [],
 			},
 		]);
 	});

@@ -1,4 +1,5 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { link, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import type { migrateFrom16 } from "better-auth/db/migration";
 import * as z from "zod";
 
@@ -9,6 +10,7 @@ export type ReleaseMigrationOptions = Parameters<typeof migrateFrom16>[1];
 
 const migrationDecisionsSchema = z.strictObject({
 	formatVersion: z.literal(1),
+	accountIssuers: z.record(z.string().min(1), z.string().min(1)).optional(),
 	issuers: z.record(z.string().min(1), z.string().min(1)).optional(),
 	legacyTableNames: z
 		.strictObject({
@@ -20,6 +22,12 @@ const migrationDecisionsSchema = z.strictObject({
 		.optional(),
 	oauth: z
 		.strictObject({
+			clientSecrets: z
+				.strictObject({
+					source: z.enum(["custom", "encrypted", "hashed", "plain"]),
+					target: z.enum(["custom", "encrypted", "hashed"]),
+				})
+				.optional(),
 			consents: z.enum(["migrate", "reauthorize"]),
 		})
 		.optional(),
@@ -70,28 +78,80 @@ export async function loadMigrationDecisions(
 	return decisions.data;
 }
 
-/** Writes reviewed decisions as the artifact a later `--plan` run replays. */
+function isFileSystemError(error: unknown, code: string) {
+	return (
+		error instanceof Error &&
+		"code" in error &&
+		(error as NodeJS.ErrnoException).code === code
+	);
+}
+
+async function readExistingDecisions(filePath: string) {
+	try {
+		return await readFile(filePath, "utf8");
+	} catch (error) {
+		if (isFileSystemError(error, "ENOENT")) return undefined;
+		throw error;
+	}
+}
+
+function decisionsConflict(filePath: string) {
+	return new Error(
+		`The migration decisions file "${filePath}" already exists with different decisions and was not changed. Move it or pass it back with \`auth migrate --plan\`.`,
+	);
+}
+
+/**
+ * Creates a reviewed decisions artifact without replacing a different file.
+ * The hard link publishes only a fully written file and fails if another
+ * process wins the same path.
+ */
 export async function writeMigrationDecisions(
 	filePath: string,
 	decisions: MigrationDecisions,
-): Promise<void> {
-	await writeFile(filePath, `${JSON.stringify(decisions, null, 2)}\n`, "utf8");
+): Promise<"created" | "reused"> {
+	const contents = `${JSON.stringify(decisions, null, 2)}\n`;
+	const existing = await readExistingDecisions(filePath);
+	if (existing !== undefined) {
+		if (existing === contents) return "reused";
+		throw decisionsConflict(filePath);
+	}
+
+	const temporaryDirectory = await mkdtemp(
+		path.join(path.dirname(filePath), `.${path.basename(filePath)}-`),
+	);
+	const temporaryFile = path.join(temporaryDirectory, "decisions.json");
+	try {
+		await writeFile(temporaryFile, contents, { encoding: "utf8", flag: "wx" });
+		try {
+			await link(temporaryFile, filePath);
+			return "created";
+		} catch (error) {
+			if (!isFileSystemError(error, "EEXIST")) throw error;
+			const concurrent = await readExistingDecisions(filePath);
+			if (concurrent === contents) return "reused";
+			throw decisionsConflict(filePath);
+		}
+	} finally {
+		await rm(temporaryDirectory, { force: true, recursive: true });
+	}
 }
 
 /**
  * Expands reviewed decisions into release migration options. Token revocation,
- * client secret re-hashing, and SCIM reprovisioning have no alternative, so the
- * file records the decision that reaches them rather than the value itself.
+ * client migration, and SCIM reprovisioning have no alternative, so the file
+ * records the decision that reaches them rather than the value itself.
  */
 export function toReleaseMigrationOptions(
 	decisions: MigrationDecisions | undefined,
 ): ReleaseMigrationOptions {
 	return {
+		accountIssuerByAccountId: decisions?.accountIssuers,
 		accountIssuers: decisions?.issuers,
 		legacyTableNames: decisions?.legacyTableNames,
 		oauthProvider: decisions?.oauth && {
 			clients: "migrate",
-			clientSecrets: "rehash-plaintext",
+			clientSecrets: decisions.oauth.clientSecrets,
 			consents: decisions.oauth.consents,
 			tokens: "revoke",
 		},
