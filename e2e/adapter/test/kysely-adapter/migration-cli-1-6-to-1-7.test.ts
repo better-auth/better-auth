@@ -139,7 +139,7 @@ it("guides a populated 1.6.25 PostgreSQL database through the CLI decisions file
 		]);
 		for (const blocker of plan.blockers) {
 			expect(blocker.remediation.docs).toBe(
-				`https://better-auth.com/docs/guides/1-7-upgrade-guide#${blocker.code}`,
+				"https://better-auth.com/docs/guides/1-7-upgrade-guide#migrate-from-16-to-17",
 			);
 			expect(blocker.remediation.summary).toContain(
 				"better-auth-migration.json",
@@ -149,7 +149,13 @@ it("guides a populated 1.6.25 PostgreSQL database through the CLI decisions file
 		await writeFile(
 			path.join(projectDirectory, "better-auth-migration.json"),
 			`${JSON.stringify(
-				{ formatVersion: 1, oauth: { consents: "migrate" } },
+				{
+					formatVersion: 1,
+					oauth: {
+						clientSecrets: { source: "plain", target: "hashed" },
+						consents: "migrate",
+					},
+				},
 				null,
 				2,
 			)}\n`,
