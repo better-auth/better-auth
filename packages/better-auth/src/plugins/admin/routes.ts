@@ -850,11 +850,12 @@ export const listUsers = (opts: AdminOptions) =>
 					limit: Number(ctx.query?.limit) || undefined,
 					offset: Number(ctx.query?.offset) || undefined,
 				});
-			} catch {
-				return ctx.json({
-					users: [] as UserWithRole[],
-					total: 0,
-				});
+			} catch (error) {
+				ctx.context.logger.error("Failed to list users", error);
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					ADMIN_ERROR_CODES.FAILED_TO_LIST_USERS,
+				);
 			}
 		},
 	);
