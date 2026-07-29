@@ -11,3 +11,5 @@
 Answers are recorded in `better-auth-migration.json`, a versioned file you can review, commit, and replay with `auth migrate --plan better-auth-migration.json`. It is also how the migration runs without a terminal: a run that still needs decisions and has no file exits with the full blocker list instead of guessing.
 
 `auth migrate --dry-run` previews the plan and `auth migrate --json` returns a machine-readable one, and neither changes the database. Every blocker they report carries a stable code, a one-sentence fix, and a link to the matching section of the upgrade guide. The relational cutover uses one transaction-scoped connection where the dialect supports transactional DDL and stays resumable on MySQL, and retired 1.6 tables are kept as backups.
+
+A database configured as a raw Kysely dialect without a declared type now stops migration with an error asking for the `database: { dialect, type }` form. It previously generated SQLite SQL against whatever database the dialect connected to.
