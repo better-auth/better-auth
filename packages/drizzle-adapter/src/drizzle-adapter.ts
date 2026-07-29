@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import type { BetterAuthDBSchema } from "@better-auth/core/db";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
@@ -137,6 +138,7 @@ export interface DrizzleAdapterConfig {
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
+	let lazyTables: BetterAuthDBSchema | undefined;
 	let mysqlNoIdWarned = false;
 	const createCustomAdapter =
 		(db: DB, inTransaction = false): AdapterFactoryCustomizeAdapterCreator =>
@@ -1134,7 +1136,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 										transaction: false,
 									},
 									adapter: createCustomAdapter(tx, true),
-								})(lazyOptions!);
+								})(lazyOptions!, lazyTables);
 								return cb(adapter);
 							})
 					: false,
@@ -1142,8 +1144,12 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 		adapter: createCustomAdapter(db),
 	};
 	const adapter = createAdapterFactory(adapterOptions);
-	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
+	return (
+		options: BetterAuthOptions,
+		tables?: BetterAuthDBSchema,
+	): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
-		return adapter(options);
+		lazyTables = tables;
+		return adapter(options, tables);
 	};
 };

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { BetterAuthOptions } from "../../types";
+import { getAuthTables } from "../get-tables";
+import type { BetterAuthDBSchema } from "../type";
 import { createAdapterFactory } from "./factory";
 import type { CustomAdapter, Where } from "./index";
 
@@ -254,5 +256,240 @@ describe("createAdapterFactory atomic primitives", () => {
 				update: { value: "next" },
 			}),
 		).rejects.toThrow(/updateMany must return a finite number/);
+	});
+});
+
+describe("createAdapterFactory auth-owned schema injection", () => {
+	it("uses the injected tables instance for field resolution and authTables", async () => {
+		const options: BetterAuthOptions = {
+			account: {
+				fields: {
+					accountId: "provider_account_id",
+				},
+			},
+		};
+		const tables = getAuthTables(options);
+		let observedSchema: BetterAuthDBSchema | undefined;
+
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "schema-injection",
+				adapterName: "Schema Injection Adapter",
+			},
+			adapter: ({ schema }) => {
+				observedSchema = schema;
+				return createCustomAdapter({
+					findOne: (async ({ model, where }) => {
+						expect(model).toBe("account");
+						expect(where[0]?.field).toBe("provider_account_id");
+						return {
+							id: "acc-1",
+							provider_account_id: "oauth-sub",
+						};
+					}) as CustomAdapter["findOne"],
+				});
+			},
+		})(options, tables);
+
+		expect(observedSchema).toBe(tables);
+		expect(adapter.options?.authTables).toBe(tables);
+
+		const result = await adapter.findOne<{
+			id: string;
+			accountId: string;
+		}>({
+			model: "account",
+			where: [{ field: "accountId", value: "oauth-sub" }],
+		});
+		expect(result).toEqual({
+			id: "acc-1",
+			accountId: "oauth-sub",
+		});
+	});
+
+	it("resolves plugin-contributed fields from the injected schema", async () => {
+		const options: BetterAuthOptions = {
+			plugins: [
+				{
+					id: "custom-plugin",
+					schema: {
+						user: {
+							fields: {
+								role: {
+									type: "string",
+									required: false,
+									fieldName: "user_role",
+								},
+							},
+						},
+					},
+				},
+			],
+		};
+		const tables = getAuthTables(options);
+
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "plugin-schema",
+				adapterName: "Plugin Schema Adapter",
+			},
+			adapter: ({ getFieldName }) =>
+				createCustomAdapter({
+					create: async ({ data, model }) => {
+						expect(model).toBe("user");
+						expect(getFieldName({ model: "user", field: "role" })).toBe(
+							"user_role",
+						);
+						expect(data).toMatchObject({
+							user_role: "admin",
+						});
+						return { id: "u-1", ...data };
+					},
+				}),
+		})(options, tables);
+
+		const created = await adapter.create({
+			model: "user",
+			data: {
+				name: "Ada",
+				email: "ada@example.com",
+				emailVerified: false,
+				role: "admin",
+			},
+			forceAllowId: true,
+		});
+		expect(created).toMatchObject({
+			role: "admin",
+		});
+		expect(created).toHaveProperty("id");
+	});
+
+	it("resolves custom user.fields mappings from the injected schema", async () => {
+		const options: BetterAuthOptions = {
+			user: {
+				fields: {
+					email: "email_address",
+					name: "full_name",
+				},
+			},
+		};
+		const tables = getAuthTables(options);
+
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "custom-fields",
+				adapterName: "Custom Fields Adapter",
+			},
+			adapter: () =>
+				createCustomAdapter({
+					findMany: (async ({ model, where }) => {
+						expect(model).toBe("user");
+						expect(where?.[0]?.field).toBe("email_address");
+						return [
+							{
+								id: "u-1",
+								email_address: "ada@example.com",
+								full_name: "Ada Lovelace",
+							},
+						];
+					}) as CustomAdapter["findMany"],
+				}),
+		})(options, tables);
+
+		const users = await adapter.findMany<{
+			id: string;
+			email: string;
+			name: string;
+		}>({
+			model: "user",
+			where: [{ field: "email", value: "ada@example.com" }],
+		});
+		expect(users).toEqual([
+			{
+				id: "u-1",
+				email: "ada@example.com",
+				name: "Ada Lovelace",
+			},
+		]);
+	});
+
+	/**
+	 * Simulates an adapter package that rebuilt schema with a divergent core
+	 * (providerAccountId/issuer) while the host still uses accountId.
+	 * Injected host tables must win so OAuth account lookups keep working.
+	 */
+	it("keeps accountId resolution when injected schema differs from a divergent local rebuild", async () => {
+		const options: BetterAuthOptions = {};
+		const hostTables = getAuthTables(options);
+
+		// Divergent "adapter-local" schema shape (historical providerAccountId era).
+		// createAdapterFactory must NOT use this when host tables are injected.
+		const divergentLocal: BetterAuthDBSchema = {
+			...hostTables,
+			account: {
+				...hostTables.account!,
+				fields: {
+					providerAccountId: {
+						type: "string",
+						required: true,
+						fieldName: "providerAccountId",
+					},
+					providerId: hostTables.account!.fields.providerId!,
+					userId: hostTables.account!.fields.userId!,
+					createdAt: hostTables.account!.fields.createdAt!,
+					updatedAt: hostTables.account!.fields.updatedAt!,
+				},
+			},
+		};
+		expect(divergentLocal.account!.fields.accountId).toBeUndefined();
+		expect(hostTables.account!.fields.accountId).toBeDefined();
+
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "oauth-account-id",
+				adapterName: "OAuth AccountId Adapter",
+			},
+			adapter: ({ schema, getFieldName }) => {
+				expect(schema).toBe(hostTables);
+				expect(schema).not.toBe(divergentLocal);
+				expect(getFieldName({ model: "account", field: "accountId" })).toBe(
+					"accountId",
+				);
+				return createCustomAdapter({
+					findOne: (async ({ where }) => {
+						expect(where[0]?.field).toBe("accountId");
+						return {
+							id: "acc-1",
+							accountId: "provider-sub",
+							providerId: "google",
+							userId: "u-1",
+						};
+					}) as CustomAdapter["findOne"],
+				});
+			},
+		})(options, hostTables);
+
+		const account = await adapter.findOne({
+			model: "account",
+			where: [{ field: "accountId", value: "provider-sub" }],
+		});
+		expect(account).toMatchObject({
+			accountId: "provider-sub",
+			providerId: "google",
+		});
+	});
+
+	it("falls back to getAuthTables when tables are omitted (compat)", () => {
+		const adapter = createAdapterFactory<BetterAuthOptions>({
+			config: {
+				adapterId: "compat",
+				adapterName: "Compat Adapter",
+			},
+			adapter: () => createCustomAdapter(),
+		})({});
+
+		expect(
+			adapter.options?.authTables?.account?.fields.accountId,
+		).toBeDefined();
 	});
 });

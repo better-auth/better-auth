@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import type { BetterAuthDBSchema } from "@better-auth/core/db";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
@@ -58,6 +59,7 @@ export const kyselyAdapter = (
 	config?: KyselyAdapterConfig | undefined,
 ) => {
 	let lazyOptions: BetterAuthOptions | null = null;
+	let lazyTables: BetterAuthDBSchema | undefined;
 	let mysqlNoIdWarned = false;
 	const createCustomAdapter = (
 		db: Kysely<any>,
@@ -938,7 +940,7 @@ export const kyselyAdapter = (
 									transaction: false,
 								},
 								adapter: createCustomAdapter(trx, true),
-							})(lazyOptions!);
+							})(lazyOptions!, lazyTables);
 							return cb(adapter);
 						})
 				: false,
@@ -948,8 +950,12 @@ export const kyselyAdapter = (
 
 	const adapter = createAdapterFactory(adapterOptions);
 
-	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
+	return (
+		options: BetterAuthOptions,
+		tables?: BetterAuthDBSchema,
+	): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
-		return adapter(options);
+		lazyTables = tables;
+		return adapter(options, tables);
 	};
 };

@@ -272,7 +272,8 @@ export const createTestSuite = <
 					disableTransformJoin: true,
 				};
 				const adapterCreator = (
-					options: BetterAuthOptions,
+					factoryOptions: BetterAuthOptions,
+					tables?: ReturnType<typeof getAuthTables>,
 				): DBAdapter<BetterAuthOptions> =>
 					createAdapterFactory({
 						config: {
@@ -349,9 +350,9 @@ export const createTestSuite = <
 								options: adapter.options,
 							};
 						},
-					})(options);
+					})(factoryOptions, tables);
 
-				return adapterCreator(options);
+				return adapterCreator(options, adapter.options?.authTables);
 			};
 
 			const resetDebugLogs = () => {

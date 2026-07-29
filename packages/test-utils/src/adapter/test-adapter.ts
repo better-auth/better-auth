@@ -38,7 +38,12 @@ export const testAdapter = async ({
 	 */
 	adapter: (
 		options: BetterAuthOptions,
-	) => Awaitable<(options: BetterAuthOptions) => DBAdapter<BetterAuthOptions>>;
+	) => Awaitable<
+		(
+			options: BetterAuthOptions,
+			tables?: ReturnType<typeof getAuthTables>,
+		) => DBAdapter<BetterAuthOptions>
+	>;
 	/**
 	 * A function that will run the database migrations.
 	 */
@@ -85,16 +90,18 @@ export const testAdapter = async ({
 		} satisfies BetterAuthOptions;
 	})();
 
+	const authTables = getAuthTables(betterAuthOptions);
 	let adapter: DBAdapter<BetterAuthOptions> = (
 		await getAdapter(betterAuthOptions)
-	)(betterAuthOptions);
+	)(betterAuthOptions, authTables);
 
 	const adapterName = adapter.options?.adapterConfig.adapterName;
 	const adapterId = adapter.options?.adapterConfig.adapterId || adapter.id;
 	const adapterDisplayName = adapterName || adapterId;
 
 	const refreshAdapter = async (betterAuthOptions: BetterAuthOptions) => {
-		adapter = (await getAdapter(betterAuthOptions))(betterAuthOptions);
+		const tables = getAuthTables(betterAuthOptions);
+		adapter = (await getAdapter(betterAuthOptions))(betterAuthOptions, tables);
 	};
 
 	/**

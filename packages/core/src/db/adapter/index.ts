@@ -512,6 +512,15 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	options?:
 		| ({
 				adapterConfig: DBAdapterFactoryConfig<Options>;
+				/**
+				 * Logical Better Auth schema used for field/model name resolution.
+				 * Set by `createAdapterFactory` from the auth-owned `tables` argument
+				 * when provided by the host, otherwise from a compat `getAuthTables` call.
+				 *
+				 * Named `authTables` (not `schema`) so it never collides with adapter-local
+				 * physical ORM schemas (e.g. Drizzle `config.schema`).
+				 */
+				authTables?: BetterAuthDBSchema | undefined;
 		  } & CustomAdapter["options"])
 		| undefined;
 };
@@ -636,7 +645,21 @@ export interface CustomAdapter {
 export interface DBAdapterInstance<
 	Options extends BetterAuthOptions = BetterAuthOptions,
 > {
-	(options: BetterAuthOptions): DBAdapter<Options>;
+	/**
+	 * Create a DB adapter for the given Better Auth options.
+	 *
+	 * @param options - Better Auth options for this auth instance.
+	 * @param tables - Auth-owned logical schema from the host `better-auth`
+	 *   init path (`getAuthTables` in the same `@better-auth/core` as the host).
+	 *   When provided, adapters built with `createAdapterFactory` must use this
+	 *   schema for field/model resolution instead of calling `getAuthTables`
+	 *   themselves. Physical ORM mapping (Drizzle/Prisma schemas) remains
+	 *   adapter-local and separate.
+	 */
+	(
+		options: BetterAuthOptions,
+		tables?: BetterAuthDBSchema | undefined,
+	): DBAdapter<Options>;
 }
 
 export * from "./factory";

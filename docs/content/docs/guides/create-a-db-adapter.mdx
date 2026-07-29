@@ -11,6 +11,32 @@ Our hope is to allow you to focus on writing database logic, and not have to wor
 Anything from custom schema configurations, custom ID generation, safe JSON parsing, key mapping, joins, and more is handled by the `createAdapterFactory` function.
 All you need to do is provide the database logic, and the `createAdapterFactory` function will handle the rest.
 
+## Logical schema ownership
+
+Better Auth distinguishes two schema layers:
+
+1. **Logical auth schema** — field and model names Better Auth uses at runtime (`accountId`, plugin fields, `user.fields` remaps, etc.). This is owned by the host `betterAuth({ ... })` init path via `getAuthTables(options)` in the same `@better-auth/core` as `better-auth`.
+2. **Physical ORM schema** — your Drizzle/Prisma/Kysely table definitions. That mapping stays adapter-local (for example Drizzle's `schema` option) and is separate from the logical auth schema.
+
+At init, Better Auth computes the logical schema once and passes it into your adapter factory as the second argument:
+
+```ts
+type DBAdapterInstance = (
+  options: BetterAuthOptions,
+  tables?: BetterAuthDBSchema,
+) => DBAdapter;
+```
+
+If you wrap `createAdapterFactory`, **forward `tables`** into the factory (including transaction clones). Do not call `getAuthTables(options)` yourself for runtime field resolution when `tables` is provided — a separately versioned adapter package can resolve a different `@better-auth/core` and rebuild a divergent field set (for example `providerAccountId` vs `accountId`).
+
+`createAdapterFactory` exposes the schema it used as `adapter.options.authTables` (the injected host schema when provided).
+
+### Versioning
+
+Keep `@better-auth/core` (and separately published adapter packages such as `@better-auth/drizzle-adapter`) on the same major/minor line as `better-auth`. Aligning versions still avoids other API mismatches beyond schema field names.
+
+CLI `generate` / `migrate` / `createSchema` flows should use `getAuthTables` from the installed `better-auth` / host core path — the same source as runtime — not an adapter-private rebuild.
+
 ## Quick Start
 
 <Steps>
@@ -36,10 +62,13 @@ All you need to do is provide the database logic, and the `createAdapterFactory`
       usePlural?: boolean;
     }
 
-    export const myAdapter = (config: CustomAdapterConfig = {}) =>
-      createAdapterFactory({
+    export const myAdapter = (config: CustomAdapterConfig = {}) => {
+      const adapterCreator = createAdapterFactory({
         // ...
       });
+      // Forward auth-owned `tables` so runtime field resolution matches better-auth.
+      return (options, tables) => adapterCreator(options, tables);
+    };
     ```
   </Step>
 

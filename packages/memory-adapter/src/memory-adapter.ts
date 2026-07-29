@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import type { BetterAuthDBSchema } from "@better-auth/core/db";
 import type {
 	CleanedWhere,
 	DBAdapterDebugLogOption,
@@ -124,6 +125,7 @@ export const memoryAdapter = (
 	config?: MemoryAdapterConfig | undefined,
 ) => {
 	let lazyOptions: BetterAuthOptions | null = null;
+	let lazyTables: BetterAuthDBSchema | undefined;
 
 	/**
 	 * Build an adapter factory whose operations read and write `activeDb`.
@@ -166,7 +168,10 @@ export const memoryAdapter = (
 					// `await` point.
 					const base = structuredClone(activeDb);
 					const clone = structuredClone(activeDb);
-					const trxAdapter = buildAdapterFactory(clone)(lazyOptions!);
+					const trxAdapter = buildAdapterFactory(clone)(
+						lazyOptions!,
+						lazyTables,
+					);
 					const result = await cb(trxAdapter);
 					mergeTransactionInto(activeDb, base, clone);
 					return result;
@@ -565,8 +570,9 @@ export const memoryAdapter = (
 		});
 
 	const adapterCreator = buildAdapterFactory(db);
-	return (options: BetterAuthOptions) => {
+	return (options: BetterAuthOptions, tables?: BetterAuthDBSchema) => {
 		lazyOptions = options;
-		return adapterCreator(options);
+		lazyTables = tables;
+		return adapterCreator(options, tables);
 	};
 };

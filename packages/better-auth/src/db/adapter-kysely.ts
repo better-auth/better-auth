@@ -6,7 +6,7 @@ import { getBaseAdapter } from "./adapter-base";
 export async function getAdapter(
 	options: BetterAuthOptions,
 ): Promise<DBAdapter<BetterAuthOptions>> {
-	return getBaseAdapter(options, async (opts) => {
+	return getBaseAdapter(options, async (opts, tables) => {
 		const { createKyselyAdapter } = await import("../adapters/kysely-adapter");
 		const { kysely, databaseType, transaction } =
 			await createKyselyAdapter(opts);
@@ -21,6 +21,6 @@ export async function getAdapter(
 					? opts.database.debugLogs
 					: false,
 			transaction: transaction,
-		})(opts);
+		})(opts, tables);
 	});
 }

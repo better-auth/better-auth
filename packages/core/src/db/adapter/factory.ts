@@ -8,6 +8,7 @@ import { BetterAuthError } from "../../error";
 import type { BetterAuthOptions } from "../../types";
 import { safeJSONParse } from "../../utils/json";
 import { getAuthTables } from "../get-tables";
+import type { BetterAuthDBSchema } from "../type";
 import { initGetDefaultFieldName } from "./get-default-field-name";
 import { initGetDefaultModelName } from "./get-default-model-name";
 import { initGetFieldAttributes } from "./get-field-attributes";
@@ -49,6 +50,13 @@ const createAsIsTransaction =
 
 export type AdapterFactory<Options extends BetterAuthOptions> = (
 	options: Options,
+	/**
+	 * Auth-owned logical schema from the host Better Auth init path.
+	 * Prefer this over rebuilding via `getAuthTables` so adapters cannot
+	 * diverge when a separately versioned adapter package resolves a
+	 * different `@better-auth/core`.
+	 */
+	tables?: BetterAuthDBSchema | undefined,
 ) => DBAdapter<Options>;
 
 export const createAdapterFactory =
@@ -56,7 +64,7 @@ export const createAdapterFactory =
 		adapter: customAdapter,
 		config: cfg,
 	}: AdapterFactoryOptions): AdapterFactory<Options> =>
-	(options: Options): DBAdapter<Options> => {
+	(options: Options, tables): DBAdapter<Options> => {
 		const uniqueAdapterFactoryInstanceId = Math.random()
 			.toString(36)
 			.substring(2, 15);
@@ -83,8 +91,9 @@ export const createAdapterFactory =
 			);
 		}
 
-		// End-user's Better-Auth instance's schema
-		const schema = getAuthTables(options);
+		// Prefer the auth-owned schema injected by better-auth init. Fallback to
+		// getAuthTables only for direct/legacy factory callers that omit tables.
+		const schema = tables ?? getAuthTables(options);
 
 		const debugLog = (...args: any[]) => {
 			if (config.debugLogs === true || typeof config.debugLogs === "object") {
@@ -1539,22 +1548,33 @@ export const createAdapterFactory =
 			},
 			createSchema: adapterInstance.createSchema
 				? async (_, file) => {
-						const tables = getAuthTables(options);
+						// Use the same logical schema instance as runtime field resolution.
+						const tablesForSchema = { ...schema };
 
 						if (
 							options.secondaryStorage &&
 							!options.session?.storeSessionInDatabase
 						) {
 							// biome-ignore lint/performance/noDelete: If the user has enabled secondaryStorage, as well as not specifying to store session table in DB, then createSchema shouldn't generate schema table.
-							delete tables.session;
+							delete tablesForSchema.session;
 						}
 
-						return adapterInstance.createSchema!({ file, tables });
+						return adapterInstance.createSchema!({
+							file,
+							tables: tablesForSchema,
+						});
 					}
 				: undefined,
 			options: {
 				adapterConfig: config,
 				...(adapterInstance.options ?? {}),
+				/**
+				 * Logical schema this adapter instance uses for field/model resolution.
+				 * Same object as the auth-owned `tables` when the host injected it.
+				 * Assigned last so adapter-local `schema` (physical ORM mapping) cannot
+				 * overwrite it.
+				 */
+				authTables: schema,
 			},
 			id: config.adapterId,
 

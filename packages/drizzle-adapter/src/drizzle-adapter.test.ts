@@ -1,3 +1,4 @@
+import { getAuthTables } from "@better-auth/core/db";
 import { is, Param, SQL } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import { drizzleAdapter } from "./drizzle-adapter";
@@ -14,6 +15,29 @@ describe("drizzle-adapter", () => {
 		};
 		const adapter = drizzleAdapter(db, config);
 		expect(adapter).toBeDefined();
+	});
+
+	it("uses the auth-owned tables instance when provided by better-auth init", () => {
+		const db = {
+			_: {
+				fullSchema: {},
+			},
+		} as any;
+		const factory = drizzleAdapter(db, { provider: "sqlite" });
+		const options = {
+			secret: "test-secret-that-is-at-least-32-chars-long!!",
+			account: {
+				fields: {
+					accountId: "provider_account_id",
+				},
+			},
+		};
+		const tables = getAuthTables(options);
+		const adapter = factory(options, tables);
+		expect(adapter.options?.authTables).toBe(tables);
+		expect(
+			adapter.options?.authTables?.account?.fields.accountId?.fieldName,
+		).toBe("provider_account_id");
 	});
 
 	it("should use unique column fallback for MySQL creates without an id", async () => {

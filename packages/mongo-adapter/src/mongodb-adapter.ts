@@ -1,4 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import type { BetterAuthDBSchema } from "@better-auth/core/db";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
@@ -65,6 +66,7 @@ export const mongodbAdapter = (
 	config?: MongoDBAdapterConfig | undefined,
 ) => {
 	let lazyOptions: BetterAuthOptions | null;
+	let lazyTables: BetterAuthDBSchema | undefined;
 
 	const getCustomIdGenerator = (options: BetterAuthOptions) => {
 		const generator = options.advanced?.database?.generateId;
@@ -669,7 +671,10 @@ export const mongodbAdapter = (
 		};
 
 	let lazyAdapter:
-		| ((options: BetterAuthOptions) => DBAdapter<BetterAuthOptions>)
+		| ((
+				options: BetterAuthOptions,
+				tables?: BetterAuthDBSchema,
+		  ) => DBAdapter<BetterAuthOptions>)
 		| null = null;
 	let adapterOptions: AdapterFactoryOptions | null = null;
 	adapterOptions = {
@@ -690,7 +695,7 @@ export const mongodbAdapter = (
 				config?.client && (config?.transaction ?? true)
 					? async (cb) => {
 							if (!config.client) {
-								return cb(lazyAdapter!(lazyOptions!));
+								return cb(lazyAdapter!(lazyOptions!, lazyTables));
 							}
 
 							const session = config.client.startSession();
@@ -704,7 +709,7 @@ export const mongodbAdapter = (
 										transaction: false,
 									},
 									adapter: createCustomAdapter(db, session),
-								})(lazyOptions!);
+								})(lazyOptions!, lazyTables);
 
 								const result = await cb(adapter);
 
@@ -804,8 +809,12 @@ export const mongodbAdapter = (
 	};
 	lazyAdapter = createAdapterFactory(adapterOptions);
 
-	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
+	return (
+		options: BetterAuthOptions,
+		tables?: BetterAuthDBSchema,
+	): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
-		return lazyAdapter(options);
+		lazyTables = tables;
+		return lazyAdapter(options, tables);
 	};
 };

@@ -1,4 +1,5 @@
 import type { Awaitable, BetterAuthOptions } from "@better-auth/core";
+import type { BetterAuthDBSchema } from "@better-auth/core/db";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
@@ -72,6 +73,7 @@ type PrismaClientInternal = {
 
 export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
+	let lazyTables: BetterAuthDBSchema | undefined;
 	const createCustomAdapter =
 		(
 			prisma: PrismaClient,
@@ -794,7 +796,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 										transaction: false,
 									},
 									adapter: createCustomAdapter(tx, true),
-								})(lazyOptions!);
+								})(lazyOptions!, lazyTables);
 								return cb(adapter);
 							})
 					: false,
@@ -803,8 +805,12 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 	};
 
 	const adapter = createAdapterFactory(adapterOptions);
-	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
+	return (
+		options: BetterAuthOptions,
+		tables?: BetterAuthDBSchema,
+	): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
-		return adapter(options);
+		lazyTables = tables;
+		return adapter(options, tables);
 	};
 };
