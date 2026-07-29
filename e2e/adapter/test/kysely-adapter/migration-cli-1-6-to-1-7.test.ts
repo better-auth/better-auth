@@ -96,18 +96,22 @@ it("guides a populated 1.6.25 PostgreSQL database through the CLI decisions file
 
 	const databaseName = createDatabaseName();
 	const connectionString = `postgres://user:password@localhost:5433/${databaseName}`;
-	const adminPool = new Pool({ connectionString: postgresAdminUrl });
-	await adminPool.query(`CREATE DATABASE "${databaseName}"`);
-	const pool = new Pool({ connectionString });
-	// The spawned CLI resolves `better-auth` and `pg` from the project directory
-	// upwards, so it has to sit inside this workspace rather than the OS temp dir.
-	const temporaryRoot = path.join(import.meta.dirname, ".tmp");
-	await mkdir(temporaryRoot, { recursive: true });
-	const projectDirectory = await mkdtemp(
-		path.join(temporaryRoot, "migrate-cli-"),
-	);
+	let adminPool: Pool | null = null;
+	let databaseCreated = false;
+	let pool: Pool | null = null;
+	let projectDirectory: string | null = null;
 
 	try {
+		adminPool = new Pool({ connectionString: postgresAdminUrl });
+		await adminPool.query(`CREATE DATABASE "${databaseName}"`);
+		databaseCreated = true;
+		pool = new Pool({ connectionString });
+		// The spawned CLI resolves `better-auth` and `pg` from the project directory
+		// upwards, so it has to sit inside this workspace rather than the OS temp dir.
+		const temporaryRoot = path.join(import.meta.dirname, ".tmp");
+		await mkdir(temporaryRoot, { recursive: true });
+		projectDirectory = await mkdtemp(path.join(temporaryRoot, "migrate-cli-"));
+
 		const { owner, registeredClient } = await seedPublishedOAuthProviderData({
 			database: pool,
 			emailDomain: "migrate-cli.example.com",
@@ -215,9 +219,15 @@ it("guides a populated 1.6.25 PostgreSQL database through the CLI decisions file
 			"oauthConsent__better_auth_1_6",
 		]);
 	} finally {
-		await rm(projectDirectory, { force: true, recursive: true });
-		await pool.end();
-		await adminPool.query(`DROP DATABASE "${databaseName}"`);
-		await adminPool.end();
+		if (projectDirectory) {
+			await rm(projectDirectory, { force: true, recursive: true });
+		}
+		if (pool) await pool.end();
+		if (adminPool) {
+			if (databaseCreated) {
+				await adminPool.query(`DROP DATABASE "${databaseName}"`);
+			}
+			await adminPool.end();
+		}
 	}
 });

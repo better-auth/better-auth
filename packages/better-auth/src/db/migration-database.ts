@@ -172,6 +172,12 @@ export async function getMigrationDatabase(config: BetterAuthOptions) {
 		return database;
 	}
 
+	if (directDatabase.kysely) {
+		throw new BetterAuthError(
+			"Migrations cannot determine the SQL dialect of the configured database. Declare it with the `database: { dialect, type }` configuration form.",
+		);
+	}
+
 	const adapter = await getAdapter(config);
 	const migrationConnection =
 		adapter.options?.adapterConfig.migrationConnection;
