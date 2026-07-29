@@ -153,7 +153,7 @@ const { data, error } = await authClient.siwe.verify({
 The SIWE plugin accepts the following configuration options:
 
 * **domain**: The domain name of your application (required for SIWE message generation)
-* **emailDomainName**: The email domain name for creating user accounts when not using anonymous mode. Defaults to the domain from your base URL
+* **emailDomainName**: A custom email domain for wallet-derived addresses. If omitted, the plugin uses `{walletAddress}@siwe.placeholder.invalid`
 * **anonymous**: Whether to allow anonymous sign-ins without requiring an email. Default is `true`
 * **getNonce**: Function to generate a globally unique nonce for each sign-in attempt. You must implement this function to return a cryptographically secure ERC-4361 nonce: 8-250 alphanumeric characters. Must return a `Promise<string>`
 * **verifyMessage**: Function to verify the signature over the SIWE message. It only needs to perform signature recovery for the supplied address (e.g. viem's `verifyMessage`) and return `Promise<boolean>` — the plugin independently validates the message's nonce, domain, address, Chain ID, and time bounds before creating a session

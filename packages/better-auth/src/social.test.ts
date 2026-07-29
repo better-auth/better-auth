@@ -3426,10 +3426,12 @@ describe("Reddit Provider — profile email mapping", async () => {
 		} as any);
 
 		// Without a mapped email the provider derives a unique, per-user
-		// synthetic email from the Reddit user id rather than falling back to
+		// placeholder email from the Reddit user id rather than falling back to
 		// the shared oauth_client_id, so users can never collide on one address.
 		// The non-routable `.invalid` domain keeps it from matching a real mailbox.
-		expect(result?.user.email).toBe("reddit-user-123@reddit.invalid");
+		expect(result?.user.email).toBe(
+			"reddit-user-123@reddit.placeholder.invalid",
+		);
 		expect(result?.user.email).not.toBe(profile.oauth_client_id);
 		expect(result?.user.emailVerified).toBe(false);
 	});

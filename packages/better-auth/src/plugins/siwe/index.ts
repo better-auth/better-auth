@@ -1,6 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { createLocalAccountIssuer } from "@better-auth/core/db";
+import { createPlaceholderEmail } from "@better-auth/core/utils/email";
 import * as z from "zod";
 import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
@@ -8,7 +9,6 @@ import { mergeSchema } from "../../db/schema";
 import type { InferOptionSchema, User } from "../../types";
 import { toChecksumAddress } from "../../utils/hashing";
 import { isAPIError } from "../../utils/is-api-error";
-import { getOrigin } from "../../utils/url";
 import { PACKAGE_VERSION } from "../../version";
 import { normalizeSiweDomain, parseSiweMessage } from "./parse-message";
 import type { WalletAddressSchema } from "./schema";
@@ -292,10 +292,13 @@ export const siwe = (options: SIWEPluginOptions) => {
 
 						// Create new user if none exists
 						if (!user) {
-							const domain =
-								options.emailDomainName ?? getOrigin(ctx.context.baseURL);
 							const normalizedEmail = email?.toLowerCase();
-							const walletEmail = `${walletAddress}@${domain}`;
+							const walletEmail = options.emailDomainName
+								? `${walletAddress}@${options.emailDomainName}`
+								: createPlaceholderEmail({
+										identifier: walletAddress,
+										namespace: "siwe",
+									});
 							// SIWE proves wallet control, not email ownership: bind the caller
 							// email only when unclaimed and atomically reserved, else keep
 							// the wallet-derived address.
