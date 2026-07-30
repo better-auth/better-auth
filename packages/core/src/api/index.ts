@@ -56,13 +56,37 @@ export const createAuthMiddleware = createMiddleware.create({
 	],
 });
 
-const use = [optionsMiddleware];
+const createEndpointWithAuthMiddleware = createEndpoint.create({
+	use: [optionsMiddleware],
+});
 
 type EndpointHandler<
 	Path extends string,
 	Options extends EndpointOptions,
 	R,
 > = (context: EndpointContext<Path, Options, AuthContext>) => Promise<R>;
+
+type PathlessEndpointHandler<
+	Options extends EndpointOptions,
+	R,
+> = EndpointHandler<string, Options, R>;
+
+function wrapEndpointHandler<
+	Path extends string,
+	Options extends EndpointOptions,
+	R,
+>(
+	handler: EndpointHandler<Path, Options, R>,
+): EndpointHandler<Path, Options, R> {
+	return async (context) => {
+		try {
+			return await runWithEndpointContext(context, () => handler(context));
+		} catch (error) {
+			attachResponseHeadersToAPIError(context.responseHeaders, error);
+			throw error;
+		}
+	};
+}
 
 export function createAuthEndpoint<
 	Path extends string,
@@ -74,61 +98,36 @@ export function createAuthEndpoint<
 	handler: EndpointHandler<Path, Options, R>,
 ): StrictEndpoint<Path, Options, R>;
 
-export function createAuthEndpoint<
-	Path extends string,
-	Options extends EndpointOptions,
-	R,
->(
+// Pathless endpoints use `never` because no route is registered.
+export function createAuthEndpoint<Options extends EndpointOptions, R>(
 	options: Options,
-	handler: EndpointHandler<Path, Options, R>,
-): StrictEndpoint<Path, Options, R>;
+	handler: PathlessEndpointHandler<Options, R>,
+): StrictEndpoint<never, Options, R>;
 
 export function createAuthEndpoint<
 	Path extends string,
 	Opts extends EndpointOptions,
 	R,
 >(
-	pathOrOptions: Path | Opts,
-	handlerOrOptions: EndpointHandler<Path, Opts, R> | Opts,
-	handlerOrNever?: any,
+	...args:
+		| [path: Path, options: Opts, handler: EndpointHandler<Path, Opts, R>]
+		| [options: Opts, handler: PathlessEndpointHandler<Opts, R>]
 ) {
-	const path: Path | undefined =
-		typeof pathOrOptions === "string" ? pathOrOptions : undefined;
-	const options: Opts =
-		typeof handlerOrOptions === "object"
-			? handlerOrOptions
-			: (pathOrOptions as Opts);
-	const handler: EndpointHandler<Path, Opts, R> =
-		typeof handlerOrOptions === "function" ? handlerOrOptions : handlerOrNever;
+	if (args.length === 3) {
+		const [path, options, handler] = args;
 
-	// todo: prettify the code, we want to call `runWithEndpointContext` to top level
-	const wrapped: EndpointHandler<Path, Opts, R> = async (ctx) => {
-		const runtimeCtx = ctx as unknown as { responseHeaders?: Headers };
-		try {
-			return await runWithEndpointContext(ctx as any, () => handler(ctx));
-		} catch (e) {
-			attachResponseHeadersToAPIError(runtimeCtx.responseHeaders, e);
-			throw e;
-		}
-	};
-
-	if (path) {
-		return createEndpoint(
+		return createEndpointWithAuthMiddleware(
 			path,
-			{
-				...options,
-				use: [...(options?.use || []), ...use],
-			},
-			wrapped,
+			options,
+			wrapEndpointHandler(handler),
 		);
 	}
 
-	return createEndpoint(
-		{
-			...options,
-			use: [...(options?.use || []), ...use],
-		},
-		wrapped,
+	const [options, handler] = args;
+
+	return createEndpointWithAuthMiddleware(
+		options,
+		wrapEndpointHandler(handler),
 	);
 }
 
@@ -167,14 +166,10 @@ function withServerOnly<Options extends EndpointOptions>(
  * )
  * ```
  */
-createAuthEndpoint.serverOnly = <
-	Path extends string,
-	Options extends EndpointOptions,
-	R,
->(
+createAuthEndpoint.serverOnly = <Options extends EndpointOptions, R>(
 	options: Options,
-	handler: EndpointHandler<Path, Options, R>,
-): StrictEndpoint<Path, Options, R> =>
+	handler: PathlessEndpointHandler<Options, R>,
+): StrictEndpoint<never, Options, R> =>
 	createAuthEndpoint(withServerOnly(options), handler);
 
 export type AuthEndpoint<
