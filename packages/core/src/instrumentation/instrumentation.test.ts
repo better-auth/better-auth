@@ -165,7 +165,7 @@ describe("instrumentation", () => {
 		void withSpan("scope.check", {}, () => undefined);
 
 		const span = await waitForSpan((s) => s.name === "scope.check");
-		expect(span.instrumentationLibrary?.name).toBe("better-auth");
+		expect(span.instrumentationScope?.name).toBe("better-auth");
 	});
 
 	it("does not record error status for redirect APIErrors (sync)", async () => {
