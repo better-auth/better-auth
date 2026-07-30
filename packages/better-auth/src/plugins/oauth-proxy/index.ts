@@ -8,6 +8,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import { defu } from "defu";
 import * as z from "zod";
 import { originCheck } from "../../api";
@@ -135,6 +136,7 @@ const oauthProxyQuerySchema = z.object({
 const oauthCallbackQuerySchema = z.object({
 	code: z.string().optional(),
 	error: z.string().optional(),
+	user: z.string().optional(),
 });
 
 export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
@@ -396,7 +398,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							);
 							return;
 						}
-						const { code, error } = query.data;
+						const { code, error, user: userData } = query.data;
 
 						// Decrypt state to get codeVerifier and callbackURL
 						let stateData: StateData;
@@ -470,8 +472,21 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							throw redirectOnError(ctx, errorURL, "invalid_code");
 						}
 
+						const parsedUserData = userData
+							? safeJSONParse<{
+									name?: {
+										firstName?: string;
+										lastName?: string;
+									};
+									email?: string;
+								}>(userData)
+							: null;
+
 						// Get user info from provider
-						const userInfoResult = await provider.getUserInfo(tokens);
+						const userInfoResult = await provider.getUserInfo({
+							...tokens,
+							user: parsedUserData ?? undefined,
+						});
 						const userInfo = userInfoResult?.user;
 
 						if (!userInfo) {
