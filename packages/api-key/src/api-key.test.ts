@@ -4801,6 +4801,15 @@ describe("api-key", async () => {
 
 			expect(session).not.toBeNull();
 			expect(session?.user.id).toBe(user.id);
+
+			const refreshedSession = await authWithSessionMocking.api.refreshSession({
+				headers: {
+					"x-api-key": userKey.key,
+				},
+			});
+
+			expect(refreshedSession).not.toBeNull();
+			expect(refreshedSession?.user.id).toBe(user.id);
 		});
 
 		it("should handle mixed user and org keys in same instance", async () => {

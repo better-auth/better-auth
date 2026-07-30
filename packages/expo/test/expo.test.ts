@@ -1362,7 +1362,7 @@ describe("expo session cache hydration", async () => {
 			email: testUser.email,
 			password: testUser.password,
 		});
-		await writer.getSession();
+		await writer.refreshSession();
 
 		const { client: coldStart } = await getTestInstance(serverConfig, {
 			clientOptions: { plugins: [expoClient(sharedClientOptions)] },

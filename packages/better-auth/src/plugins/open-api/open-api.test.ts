@@ -539,18 +539,24 @@ describe("open-api", async () => {
 		);
 	});
 
-	it("should use OpenAPI 3.1 nullable format for get-session response", async () => {
+	it("should use OpenAPI 3.1 nullable format for session responses", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const paths = schema.paths as Record<string, any>;
 
-		const getSessionSchema =
-			paths["/get-session"].post.responses["200"].content["application/json"]
-				.schema;
+		const sessionSchemas = [
+			paths["/get-session"].get.responses["200"].content["application/json"]
+				.schema,
+			paths["/refresh-session"].post.responses["200"].content[
+				"application/json"
+			].schema,
+		];
 
-		expect(Array.isArray(getSessionSchema.type)).toBe(true);
-		expect(getSessionSchema.type).toContain("object");
-		expect(getSessionSchema.type).toContain("null");
-		expect(getSessionSchema.nullable).toBe(undefined);
+		for (const sessionSchema of sessionSchemas) {
+			expect(Array.isArray(sessionSchema.type)).toBe(true);
+			expect(sessionSchema.type).toContain("object");
+			expect(sessionSchema.type).toContain("null");
+			expect(sessionSchema.nullable).toBe(undefined);
+		}
 	});
 
 	/**
@@ -571,7 +577,7 @@ describe("open-api", async () => {
 		}
 
 		expect(paths["/get-session"].get.operationId).toBe("getSession");
-		expect(paths["/get-session"].post.operationId).toBe("getSessionPost");
+		expect(paths["/refresh-session"].post.operationId).toBe("refreshSession");
 	});
 
 	it("should infer path parameters for routes with dynamic segments", async () => {
@@ -601,10 +607,10 @@ describe("open-api", async () => {
 		const paths = schema.paths as Record<string, any>;
 
 		expect(paths["/get-session"].get.parameters).not.toBe(
-			paths["/get-session"].post.parameters,
+			paths["/refresh-session"].post.parameters,
 		);
 		expect(paths["/get-session"].get.responses["200"]).not.toBe(
-			paths["/get-session"].post.responses["200"],
+			paths["/refresh-session"].post.responses["200"],
 		);
 		expect(paths["/callback/{id}"].get.parameters).not.toBe(
 			paths["/callback/{id}"].post.parameters,
@@ -619,7 +625,7 @@ describe("open-api", async () => {
 		const paths = schema.paths as Record<string, any>;
 
 		expect(paths["/get-session"].get.responses["200"]).not.toBe(
-			paths["/get-session"].post.responses["200"],
+			paths["/refresh-session"].post.responses["200"],
 		);
 
 		const response = await auth.handler(

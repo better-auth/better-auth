@@ -21,8 +21,8 @@ type SessionData = {
 } & Record<string, any>;
 
 type SessionResponse = (
-	| { session: null; user: null; needsRefresh?: boolean }
-	| { session: Session; user: User; needsRefresh?: boolean }
+	| { session: null; user: null }
+	| { session: Session; user: User }
 ) &
 	Record<string, any>;
 
@@ -120,8 +120,9 @@ export function getSessionAtom(
 		});
 
 		try {
-			const res = await $fetch<SessionResponse>("/get-session", {
-				method: "GET",
+			const res = await $fetch<SessionResponse>("/refresh-session", {
+				method: "POST",
+				body: {},
 				query: queryParams?.query,
 				signal: controller.signal,
 			});
@@ -130,26 +131,7 @@ export function getSessionAtom(
 				return;
 			}
 
-			let { data, error } = normalizeSessionResponse(res);
-
-			if (data?.needsRefresh) {
-				try {
-					const refreshRes = await $fetch<SessionResponse>("/get-session", {
-						method: "POST",
-						signal: controller.signal,
-					});
-					if (controller.signal.aborted) {
-						settleAbortedFetch(controller);
-						return;
-					}
-					({ data, error } = normalizeSessionResponse(refreshRes));
-				} catch {
-					if (controller.signal.aborted) {
-						settleAbortedFetch(controller);
-						return;
-					}
-				}
-			}
+			const { data, error } = normalizeSessionResponse(res);
 
 			if (error) {
 				const latest = session.get();

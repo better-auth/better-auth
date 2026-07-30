@@ -54,6 +54,8 @@ const { data: session } = await authClient.useSession(useFetch);
 </template>
 ```
 
+This SSR overload uses the read-only `GET /get-session` endpoint so rendering never mutates the session or attempts to write cookies. Trigger `authClient.refreshSession()` from the browser when you need an explicit sliding-session refresh.
+
 For client-only widgets like popovers or menus, call `authClient.useSession()` without an argument. It returns a reactive ref that updates on sign-in and sign-out.
 
 ## Protect pages

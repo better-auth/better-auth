@@ -106,7 +106,7 @@ export const auth = betterAuth({
 })
 ```
 
-Now, when you call functions that set cookies, they will be automatically set.
+Now, when you call functions that set cookies, they will be automatically set. The plugin does not change session policy: [`getSession`](/docs/concepts/session-management#get-session) remains read-only, while [`refreshSession`](/docs/concepts/session-management#refresh-session) updates the session and forwards its cookie from Server Actions. The reactive client performs refreshes through the dedicated endpoint, where the browser can receive the response cookie.
 
 ```ts
 "use server";

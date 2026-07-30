@@ -10,9 +10,10 @@ describe("createDynamicPathProxy", () => {
 	});
 
 	it("default atomListeners matcher covers session-rotating endpoints", () => {
-		const { atomListeners } = getClientConfig();
+		const { atomListeners, pluginPathMethods } = getClientConfig();
 		expect(atomListeners).toBeDefined();
 		const matcher = atomListeners![0]!.matcher;
+		expect(pluginPathMethods["/refresh-session"]).toBe("POST");
 
 		// existing entries (regression coverage)
 		expect(matcher("/sign-in/email")).toBe(true);
@@ -128,7 +129,13 @@ describe("createDynamicPathProxy", () => {
 
 		await (proxy.test as any)();
 
-		expect(client).toHaveBeenCalled();
+		expect(client).toHaveBeenCalledWith(
+			"/test",
+			expect.objectContaining({
+				body: {},
+				method: "POST",
+			}),
+		);
 
 		vi.runAllTimers();
 

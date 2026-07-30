@@ -219,7 +219,7 @@ describe("session", async () => {
 			const span = new Date();
 			span.setSeconds(span.getSeconds() + t);
 			vi.setSystemTime(span);
-			const response = await client.getSession({
+			const response = await client.refreshSession({
 				fetchOptions: {
 					headers,
 					onSuccess(context) {
@@ -231,6 +231,7 @@ describe("session", async () => {
 					},
 				},
 			});
+			expect(response.error).toBeNull();
 			if (t === 121) {
 				//expired
 				expect(response.data).toBeNull();
@@ -256,7 +257,7 @@ describe("session", async () => {
 
 			vi.useFakeTimers();
 			await vi.advanceTimersByTimeAsync(1000 * 60 * 5);
-			const session2 = await client.getSession();
+			const session2 = await client.refreshSession();
 			expect(session2.data?.session.expiresAt).not.toBe(
 				session.data?.session.expiresAt,
 			);
@@ -518,7 +519,7 @@ describe("session", async () => {
 		await vi.advanceTimersByTimeAsync(1000 * 31);
 
 		let refreshedMaxAge: number | undefined;
-		await client.getSession({
+		await client.refreshSession({
 			fetchOptions: {
 				headers,
 				onSuccess(context) {
@@ -730,7 +731,7 @@ describe("cookie cache", async () => {
 		});
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000 * 60 * 10); // 10 minutes
-		await client.getSession({
+		await client.refreshSession({
 			fetchOptions: {
 				headers,
 				onSuccess(context) {
@@ -1306,7 +1307,7 @@ describe("cookie cache refreshCache", async () => {
 
 		let refreshedSessionDataCookie: string | undefined;
 		let refreshedSessionTokenCookie: string | undefined;
-		const sessionFromCache = await client.getSession({
+		const sessionFromCache = await client.refreshSession({
 			fetchOptions: {
 				headers,
 				onSuccess(context) {
@@ -1383,7 +1384,7 @@ describe("cookie cache refreshCache", async () => {
 		// Advance time to trigger refresh (300 - 60 = 240, so at 241 we're in refresh window)
 		await vi.advanceTimersByTimeAsync(1000 * 241);
 
-		const sessionFromCache = await client.getSession({
+		const sessionFromCache = await client.refreshSession({
 			fetchOptions: {
 				headers,
 				onSuccess: cookieSetter(headers),
@@ -1402,7 +1403,7 @@ describe("cookie cache refreshCache", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8763
 	 */
-	it("should forward cookie cache headers from getSessionFromCtx", async () => {
+	it("should not emit cookie cache headers from getSessionFromCtx", async () => {
 		const { client, testUser, cookieSetter, auth } = await getTestInstance({
 			session: {
 				cookieCache: {
@@ -1459,14 +1460,14 @@ describe("cookie cache refreshCache", async () => {
 						name === ctx.authCookies.sessionData.name ||
 						name.startsWith(`${ctx.authCookies.sessionData.name}.`),
 				);
-				expect(forwardedSessionDataCookie).toBe(true);
+				expect(forwardedSessionDataCookie).toBe(false);
 			});
 		});
 	});
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/7994
 	 */
-	it("should extend session_token cookie expiry when refreshCache threshold is reached", async () => {
+	it("should not extend the session token cookie beyond session expiry", async () => {
 		const expiresIn = 60 * 5; // 5 minutes
 		const { client, testUser, cookieSetter, auth } = await getTestInstance({
 			database: undefined as any,
@@ -1511,7 +1512,7 @@ describe("cookie cache refreshCache", async () => {
 		await vi.advanceTimersByTimeAsync(1000 * 241);
 
 		let sessionTokenMaxAge: number | undefined;
-		await client.getSession({
+		await client.refreshSession({
 			fetchOptions: {
 				headers,
 				onSuccess(context) {
@@ -1526,8 +1527,8 @@ describe("cookie cache refreshCache", async () => {
 			},
 		});
 
-		// The session_token cookie should have its maxAge extended to expiresIn
-		expect(sessionTokenMaxAge).toBe(expiresIn);
+		expect(sessionTokenMaxAge).toBeGreaterThan(0);
+		expect(sessionTokenMaxAge).toBeLessThanOrEqual(60);
 
 		vi.useRealTimers();
 	});
@@ -1832,77 +1833,22 @@ describe("cookie cache versioning", async () => {
 	});
 });
 
-describe("deferSessionRefresh", async () => {
+describe("session refresh endpoints", async () => {
 	afterEach(() => {
 		vi.useRealTimers();
 	});
 
-	it("should return needsRefresh flag on GET when enabled", async () => {
+	it("should keep GET read-only when a session refresh is due", async () => {
 		const { auth, testUser } = await getTestInstance({
 			session: {
-				deferSessionRefresh: true,
-				updateAge: 0,
-			},
-		});
-
-		const headers = new Headers();
-		const signInRes = await auth.api.signInEmail({
-			body: {
-				email: testUser.email,
-				password: testUser.password,
-			},
-			returnHeaders: true,
-		});
-		headers.set("cookie", signInRes.headers.getSetCookie()[0]!);
-
-		vi.useFakeTimers();
-		await vi.advanceTimersByTimeAsync(1000);
-
-		const sessionRes = await auth.api.getSession({
-			headers,
-		});
-
-		expect(sessionRes).not.toBeNull();
-		expect((sessionRes as any).needsRefresh).toBe(true);
-
-		vi.useRealTimers();
-	});
-
-	it("should return needsRefresh: false when session is fresh", async () => {
-		const { auth, testUser } = await getTestInstance({
-			session: {
-				deferSessionRefresh: true,
-				updateAge: 60 * 60 * 24,
-			},
-		});
-
-		const headers = new Headers();
-		const signInRes = await auth.api.signInEmail({
-			body: {
-				email: testUser.email,
-				password: testUser.password,
-			},
-			returnHeaders: true,
-		});
-		headers.set("cookie", signInRes.headers.getSetCookie()[0]!);
-
-		const sessionRes = await auth.api.getSession({
-			headers,
-		});
-
-		expect(sessionRes).not.toBeNull();
-		expect((sessionRes as any).needsRefresh).toBe(false);
-	});
-
-	it("should not update session on GET when deferSessionRefresh is enabled", async () => {
-		const { auth, testUser } = await getTestInstance({
-			session: {
-				deferSessionRefresh: true,
+				cookieCache: {
+					enabled: true,
+				},
 				updateAge: 0,
 			},
 		});
 		const ctx = await auth.$context;
-		const updateFn = vi.spyOn(ctx.internalAdapter, "updateSession");
+		const updateSession = vi.spyOn(ctx.internalAdapter, "updateSession");
 
 		const headers = new Headers();
 		const signInRes = await auth.api.signInEmail({
@@ -1912,57 +1858,29 @@ describe("deferSessionRefresh", async () => {
 			},
 			returnHeaders: true,
 		});
-		headers.set("cookie", signInRes.headers.getSetCookie()[0]!);
-
-		vi.useFakeTimers();
-		await vi.advanceTimersByTimeAsync(1000);
-
-		await auth.api.getSession({
-			headers,
-		});
-
-		expect(updateFn).not.toHaveBeenCalled();
-
-		vi.useRealTimers();
-	});
-
-	it("should update session on POST when deferSessionRefresh is enabled", async () => {
-		const { auth, testUser } = await getTestInstance({
-			session: {
-				deferSessionRefresh: true,
-				updateAge: 0,
-			},
-		});
-		const ctx = await auth.$context;
-		const updateFn = vi.spyOn(ctx.internalAdapter, "updateSession");
-
-		const headers = new Headers();
-		const signInRes = await auth.api.signInEmail({
-			body: {
-				email: testUser.email,
-				password: testUser.password,
-			},
-			returnHeaders: true,
-		});
-		headers.set("cookie", signInRes.headers.getSetCookie()[0]!);
+		headers.set("cookie", signInRes.headers.getSetCookie().join("; "));
 
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000);
 
 		const sessionRes = await auth.api.getSession({
 			headers,
-			method: "POST",
+			returnHeaders: true,
 		});
 
-		expect(updateFn).toHaveBeenCalled();
-		expect(sessionRes).not.toBeNull();
-		expect((sessionRes as any).needsRefresh).toBeUndefined();
-
-		vi.useRealTimers();
+		expect(sessionRes.response).not.toBeNull();
+		expect(sessionRes.headers.getSetCookie()).toEqual([]);
+		expect(updateSession).not.toHaveBeenCalled();
 	});
 
-	it("should reject POST when deferSessionRefresh is not enabled", async () => {
-		const { auth, testUser } = await getTestInstance();
+	it("should refresh the database session and response cookie through POST", async () => {
+		const { auth, testUser } = await getTestInstance({
+			session: {
+				updateAge: 0,
+			},
+		});
+		const ctx = await auth.$context;
+		const updateSession = vi.spyOn(ctx.internalAdapter, "updateSession");
 
 		const headers = new Headers();
 		const signInRes = await auth.api.signInEmail({
@@ -1974,23 +1892,62 @@ describe("deferSessionRefresh", async () => {
 		});
 		headers.set("cookie", signInRes.headers.getSetCookie()[0]!);
 
-		await expect(
-			auth.api.getSession({
-				headers,
-				method: "POST",
-			}),
-		).rejects.toThrow("POST method requires deferSessionRefresh to be enabled");
+		const initialSession = await auth.api.getSession({ headers });
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000);
+
+		const refreshed = await auth.api.refreshSession({
+			headers,
+			returnHeaders: true,
+		});
+
+		expect(updateSession).toHaveBeenCalledOnce();
+		expect(refreshed.response).not.toBeNull();
+		expect(refreshed.response!.session.expiresAt.valueOf()).toBeGreaterThan(
+			initialSession!.session.expiresAt.valueOf(),
+		);
+		expect(refreshed.headers.getSetCookie()).toEqual(
+			expect.arrayContaining([
+				expect.stringContaining("better-auth.session_token="),
+			]),
+		);
 	});
 
-	it("should not delete expired session on GET when deferSessionRefresh is enabled", async () => {
+	it("should not update a session before updateAge is reached", async () => {
 		const { auth, testUser } = await getTestInstance({
 			session: {
-				deferSessionRefresh: true,
+				updateAge: 60 * 60,
+			},
+		});
+		const ctx = await auth.$context;
+		const updateSession = vi.spyOn(ctx.internalAdapter, "updateSession");
+
+		const headers = new Headers();
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			returnHeaders: true,
+		});
+		headers.set("cookie", signInRes.headers.getSetCookie()[0]!);
+
+		const session = await auth.api.refreshSession({
+			headers,
+		});
+
+		expect(session).not.toBeNull();
+		expect(updateSession).not.toHaveBeenCalled();
+	});
+
+	it("should not delete an expired session during GET", async () => {
+		const { auth, testUser } = await getTestInstance({
+			session: {
 				expiresIn: 60,
 			},
 		});
 		const ctx = await auth.$context;
-		const deleteFn = vi.spyOn(ctx.internalAdapter, "deleteSession");
+		const deleteSession = vi.spyOn(ctx.internalAdapter, "deleteSession");
 
 		const headers = new Headers();
 		const signInRes = await auth.api.signInEmail({
@@ -2007,23 +1964,22 @@ describe("deferSessionRefresh", async () => {
 
 		const sessionRes = await auth.api.getSession({
 			headers,
+			returnHeaders: true,
 		});
 
-		expect(sessionRes).toBeNull();
-		expect(deleteFn).not.toHaveBeenCalled();
-
-		vi.useRealTimers();
+		expect(sessionRes.response).toBeNull();
+		expect(sessionRes.headers.getSetCookie()).toEqual([]);
+		expect(deleteSession).not.toHaveBeenCalled();
 	});
 
-	it("should delete expired session on POST when deferSessionRefresh is enabled", async () => {
+	it("should delete an expired session during refresh", async () => {
 		const { auth, testUser } = await getTestInstance({
 			session: {
-				deferSessionRefresh: true,
 				expiresIn: 60,
 			},
 		});
 		const ctx = await auth.$context;
-		const deleteFn = vi.spyOn(ctx.internalAdapter, "deleteSession");
+		const deleteSession = vi.spyOn(ctx.internalAdapter, "deleteSession");
 
 		const headers = new Headers();
 		const signInRes = await auth.api.signInEmail({
@@ -2038,58 +1994,23 @@ describe("deferSessionRefresh", async () => {
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(61 * 1000);
 
-		const sessionRes = await auth.api.getSession({
+		const sessionRes = await auth.api.refreshSession({
 			headers,
-			method: "POST",
 		});
 
 		expect(sessionRes).toBeNull();
-		expect(deleteFn).toHaveBeenCalled();
-
-		vi.useRealTimers();
+		expect(deleteSession).toHaveBeenCalledOnce();
 	});
 
-	it("should still update session on GET when deferSessionRefresh is not enabled (default behavior)", async () => {
+	it("should respect disableSessionRefresh", async () => {
 		const { auth, testUser } = await getTestInstance({
 			session: {
-				updateAge: 0,
-			},
-		});
-		const ctx = await auth.$context;
-		const updateFn = vi.spyOn(ctx.internalAdapter, "updateSession");
-
-		const headers = new Headers();
-		const signInRes = await auth.api.signInEmail({
-			body: {
-				email: testUser.email,
-				password: testUser.password,
-			},
-			returnHeaders: true,
-		});
-		headers.set("cookie", signInRes.headers.getSetCookie()[0]!);
-
-		vi.useFakeTimers();
-		await vi.advanceTimersByTimeAsync(1000);
-
-		const sessionRes = await auth.api.getSession({
-			headers,
-		});
-
-		expect(updateFn).toHaveBeenCalled();
-		expect(sessionRes).not.toBeNull();
-		expect((sessionRes as any).needsRefresh).toBeUndefined();
-
-		vi.useRealTimers();
-	});
-
-	it("should respect disableSessionRefresh config when deferSessionRefresh is enabled", async () => {
-		const { auth, testUser } = await getTestInstance({
-			session: {
-				deferSessionRefresh: true,
 				disableSessionRefresh: true,
 				updateAge: 0,
 			},
 		});
+		const ctx = await auth.$context;
+		const updateSession = vi.spyOn(ctx.internalAdapter, "updateSession");
 
 		const headers = new Headers();
 		const signInRes = await auth.api.signInEmail({
@@ -2104,14 +2025,42 @@ describe("deferSessionRefresh", async () => {
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000);
 
-		const sessionRes = await auth.api.getSession({
+		const sessionRes = await auth.api.refreshSession({
 			headers,
 		});
 
 		expect(sessionRes).not.toBeNull();
-		expect((sessionRes as any).needsRefresh).toBe(false);
+		expect(updateSession).not.toHaveBeenCalled();
+	});
 
-		vi.useRealTimers();
+	it("should bypass cookie cache for authoritative stateful refreshes", async () => {
+		const { auth, testUser } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					maxAge: 60 * 5,
+				},
+				updateAge: 0,
+			},
+		});
+		const ctx = await auth.$context;
+
+		const headers = new Headers();
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			returnHeaders: true,
+		});
+		headers.set("cookie", signInRes.headers.getSetCookie().join("; "));
+		const session = await auth.api.getSession({ headers });
+		expect(session).not.toBeNull();
+
+		await ctx.internalAdapter.deleteSession(session!.session.token);
+
+		const refreshed = await auth.api.refreshSession({ headers });
+		expect(refreshed).toBeNull();
 	});
 });
 
@@ -2150,7 +2099,7 @@ describe("date field type consistency", async () => {
 		await vi.advanceTimersByTimeAsync(1000 * 241);
 
 		// Get session after refresh
-		const refreshed = await auth.api.getSession({ headers });
+		const refreshed = await auth.api.refreshSession({ headers });
 		vi.useRealTimers();
 
 		expect(refreshed).not.toBeNull();

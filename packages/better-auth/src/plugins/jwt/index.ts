@@ -316,7 +316,10 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 			after: [
 				{
 					matcher(context) {
-						return context.path === "/get-session";
+						return (
+							context.path === "/get-session" ||
+							context.path === "/refresh-session"
+						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						if (options?.disableSettingJwtHeader) {

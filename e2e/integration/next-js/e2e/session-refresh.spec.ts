@@ -1,4 +1,4 @@
-import type { APIRequestContext } from "@playwright/test";
+import type { APIRequestContext, BrowserContext } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { setup } from "./utils";
 
@@ -12,6 +12,31 @@ type SessionResponse = {
 };
 
 const app = setup();
+
+async function signUp(context: BrowserContext, email: string) {
+	const response = await context.request.post(
+		`${app.baseURL}/api/auth/sign-up/email`,
+		{
+			data: {
+				email,
+				name: "Next.js RSC",
+				password: "password123",
+			},
+		},
+	);
+	expect(
+		response.ok(),
+		`${response.status()} ${await response.text()}\n${app.output}`,
+	).toBe(true);
+}
+
+async function getSessionCookie(context: BrowserContext) {
+	const sessionCookie = (await context.cookies(app.baseURL)).find(
+		(cookie) => cookie.name === "better-auth.session_token",
+	);
+	expect(sessionCookie).toBeDefined();
+	return sessionCookie!;
+}
 
 async function getSessionExpiry(request: APIRequestContext, baseURL: string) {
 	const response = await request.get(
@@ -30,6 +55,8 @@ async function getSessionExpiry(request: APIRequestContext, baseURL: string) {
 }
 
 test.describe("Next.js session refresh", () => {
+	test.describe.configure({ mode: "serial" });
+
 	test.beforeEach(async () => {
 		await app.start();
 	});
@@ -41,32 +68,16 @@ test.describe("Next.js session refresh", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9776
 	 */
-	test("does not refresh the session during an RSC render", async ({
+	test("keeps RSC reads side-effect free when Next.js proxy strips routing headers", async ({
 		context,
 		page,
 	}) => {
 		const email = "next-js-rsc@example.com";
-		const signUpResponse = await context.request.post(
-			`${app.baseURL}/api/auth/sign-up/email`,
-			{
-				data: {
-					email,
-					name: "Next.js RSC",
-					password: "password123",
-				},
-			},
-		);
-		expect(
-			signUpResponse.ok(),
-			`${signUpResponse.status()} ${await signUpResponse.text()}\n${app.output}`,
-		).toBe(true);
+		await signUp(context, email);
 
 		await page.goto(app.baseURL);
 
-		const sessionCookieBefore = (await context.cookies(app.baseURL)).find(
-			(cookie) => cookie.name === "better-auth.session_token",
-		);
-		expect(sessionCookieBefore).toBeDefined();
+		const sessionCookieBefore = await getSessionCookie(context);
 		const sessionExpiryBefore = await getSessionExpiry(
 			context.request,
 			app.baseURL,
@@ -93,15 +104,63 @@ test.describe("Next.js session refresh", () => {
 			),
 		).toBe(true);
 
-		const sessionCookieAfter = (await context.cookies(app.baseURL)).find(
-			(cookie) => cookie.name === "better-auth.session_token",
-		);
-		expect(sessionCookieAfter).toBeDefined();
+		const sessionCookieAfter = await getSessionCookie(context);
 		expect(sessionCookieAfter).toEqual(sessionCookieBefore);
 		const sessionExpiryAfter = await getSessionExpiry(
 			context.request,
 			app.baseURL,
 		);
 		expect(sessionExpiryAfter).toBe(sessionExpiryBefore);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10588
+	 */
+	test("refreshes the database session and browser cookie through POST", async ({
+		context,
+		page,
+	}) => {
+		const email = "next-js-client@example.com";
+		await signUp(context, email);
+
+		const sessionCookieBefore = await getSessionCookie(context);
+		const sessionExpiryBefore = await getSessionExpiry(
+			context.request,
+			app.baseURL,
+		);
+		await page.waitForTimeout(1100);
+
+		const [refreshResponse] = await Promise.all([
+			page.waitForResponse((response) => {
+				const url = new URL(response.url());
+				return (
+					url.pathname === "/api/auth/refresh-session" &&
+					response.request().method() === "POST"
+				);
+			}),
+			page.goto(`${app.baseURL}/client-session`),
+		]);
+
+		const refreshBody = await refreshResponse.text();
+		expect(
+			refreshResponse.ok(),
+			`${refreshResponse.status()} ${refreshBody}\n${app.output}`,
+		).toBe(true);
+		const refreshedSession = JSON.parse(refreshBody) as SessionResponse | null;
+		expect(refreshedSession?.user.email).toBe(email);
+		expect(await refreshResponse.headerValue("set-cookie")).toContain(
+			"better-auth.session_token=",
+		);
+		await expect(page.getByTestId("session-email")).toHaveText(email);
+
+		const sessionCookieAfter = await getSessionCookie(context);
+		const sessionExpiryAfter = await getSessionExpiry(
+			context.request,
+			app.baseURL,
+		);
+		expect(sessionCookieAfter.expires).toBeGreaterThan(
+			sessionCookieBefore.expires,
+		);
+		expect(sessionExpiryAfter).toBeGreaterThan(sessionExpiryBefore);
 	});
 });

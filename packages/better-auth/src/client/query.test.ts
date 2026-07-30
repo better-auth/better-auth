@@ -73,7 +73,7 @@ describe("useAuthQuery - error handling", () => {
 			fetchOptions: {
 				customFetchImpl: async (url) => {
 					const urlStr = typeof url === "string" ? url : url.toString();
-					if (returnUnauthorized && urlStr.includes("/get-session")) {
+					if (returnUnauthorized && urlStr.includes("/refresh-session")) {
 						return new Response(JSON.stringify({ message: "Unauthorized" }), {
 							status: 401,
 						});
@@ -278,7 +278,7 @@ describe("useAuthQuery - error handling", () => {
 			fetchOptions: {
 				customFetchImpl: async (url) => {
 					const urlStr = typeof url === "string" ? url : url.toString();
-					if (returnServerError && urlStr.includes("/get-session")) {
+					if (returnServerError && urlStr.includes("/refresh-session")) {
 						return new Response(
 							JSON.stringify({ message: "Internal Server Error" }),
 							{ status: 500 },
@@ -339,6 +339,37 @@ describe("useAuthQuery - error handling", () => {
 
 		// Reference should be preserved because data is structurally identical
 		expect(session().data).toBe(initialData);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10588
+	 */
+	it("should fetch reactive sessions through the refresh endpoint", async () => {
+		const requests: Request[] = [];
+		const sessionPayload = {
+			user: { id: "1", email: "test@test.com" },
+			session: { id: "session-1" },
+		};
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (url, init) => {
+				requests.push(new Request(url, init));
+				return new Response(JSON.stringify(sessionPayload));
+			},
+		});
+		const { session } = getSessionAtom($fetch);
+
+		const unsubscribe = session.listen(() => {});
+		await vi.runAllTimersAsync();
+
+		expect(requests).toHaveLength(1);
+		expect(requests[0]?.method).toBe("POST");
+		expect(new URL(requests[0]!.url).pathname).toBe("/refresh-session");
+		expect(requests[0]?.headers.get("content-type")).toBe("application/json");
+		expect(await requests[0]?.text()).toBe("{}");
+		expect(session.get().data).toMatchObject(sessionPayload);
+
+		unsubscribe();
 	});
 
 	it("should clear loading flags when an unmounted session request is aborted", async () => {

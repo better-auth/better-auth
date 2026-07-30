@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { BetterAuthError } from "@better-auth/core/error";
-import { base64Url } from "@better-auth/utils/base64";
+import { base64, base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { createAuthClient } from "better-auth/client";
 import { parseSetCookieHeader } from "better-auth/cookies";
@@ -86,7 +86,8 @@ const mockElectron = vi.hoisted(() => {
 vi.mock("electron", () => mockElectron);
 
 describe("Electron", () => {
-	const { auth, client, proxyClient, options, customFetchImpl } = testUtils();
+	const { auth, client, proxyClient, options, customFetchImpl, storage } =
+		testUtils();
 
 	it("should throw error when making requests outside the main process", async ({
 		setProcessType,
@@ -1256,6 +1257,23 @@ describe("Electron", () => {
 			});
 
 			expect(mockElectron.safeStorage.decryptString).toHaveBeenCalled();
+		});
+
+		it("should cache refreshed sessions", async ({ setProcessType }) => {
+			setProcessType("browser");
+			await setupSessionWithTokenExchange();
+
+			const { data } = await client.refreshSession();
+			expect(data?.user).toBeDefined();
+
+			const encryptedCache = storage.get("better-auth.local_cache");
+			expect(encryptedCache).toBeDefined();
+			const cachedSession = JSON.parse(
+				mockElectron.safeStorage.decryptString(
+					Buffer.from(base64.decode(encryptedCache)),
+				),
+			);
+			expect(cachedSession.user.id).toBe(data?.user.id);
 		});
 
 		it("should get cookies", async ({ setProcessType }) => {
