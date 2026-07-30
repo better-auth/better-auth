@@ -106,6 +106,14 @@ type PassthroughPayload = {
 	errorURL?: string;
 	disableSignUp?: boolean;
 	timestamp: number;
+	/**
+	 * Link info for account linking operations (from linkSocial).
+	 * When present, the account should be linked to the specified user.
+	 */
+	link?: {
+		userId: string;
+		email: string;
+	};
 };
 
 const consumeOAuthProxyState = async (
@@ -268,6 +276,8 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							account: payload.account,
 							callbackURL: payload.callbackURL,
 							disableSignUp: payload.disableSignUp,
+							linkUserId: payload.link?.userId,
+							linkEmail: payload.link?.email,
 						});
 					} catch (e) {
 						if (isAPIError(e) && e.body?.code) {
@@ -293,7 +303,14 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						throw redirectOnError(ctx, errorURL, "user_creation_failed");
 					}
 
-					await setSessionCookie(ctx, result.data);
+					// For non-link operations, we set the session cookie
+					const isLinkOperation = !!payload.link?.userId;
+					if (!isLinkOperation && result.data.session) {
+						await setSessionCookie(
+							ctx,
+							result.data as { session: any; user: any },
+						);
+					}
 
 					// Redirect to final callback URL
 					const finalURL = result.isRegister
@@ -310,7 +327,8 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 					matcher(context) {
 						return !!(
 							context.path?.startsWith("/sign-in/social") ||
-							context.path?.startsWith("/sign-in/oauth2")
+							context.path?.startsWith("/sign-in/oauth2") ||
+							context.path?.startsWith("/link-social")
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
@@ -515,6 +533,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								(provider.disableImplicitSignUp && !stateData.requestSignUp) ||
 								provider.options?.disableSignUp,
 							timestamp: Date.now(),
+							link: stateData.link,
 						};
 
 						const encryptedPayload = await symmetricEncrypt({
@@ -535,7 +554,8 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 					matcher(context) {
 						return !!(
 							context.path?.startsWith("/sign-in/social") ||
-							context.path?.startsWith("/sign-in/oauth2")
+							context.path?.startsWith("/sign-in/oauth2") ||
+							context.path?.startsWith("/link-social")
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
@@ -555,7 +575,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						}
 
 						const { url: providerURL } = signInResponse;
-						if (typeof providerURL !== "string") {
+						if (typeof providerURL !== "string" || !providerURL) {
 							return;
 						}
 
