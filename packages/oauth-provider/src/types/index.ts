@@ -8,6 +8,7 @@ import type {
 	AuthServerMetadata,
 	Confirmation,
 	GrantType,
+	OAuthClient,
 	OIDCMetadata,
 	TokenEndpointAuthMethod,
 	TokenType,
@@ -40,6 +41,26 @@ type InternallySupportedScopes =
 	| "email"
 	| "offline_access";
 export type Scope = LiteralString | InternallySupportedScopes;
+
+/**
+ * OAuth client metadata returned by Dynamic Client Registration and
+ * user-managed client endpoints.
+ */
+export interface OAuthClientRegistrationResponse extends OAuthClient {
+	/** Server-owned resources linked to the registered client, when present. */
+	resources?: string[];
+}
+
+/**
+ * OAuth client metadata returned by administrative create and update
+ * endpoints.
+ */
+export interface OAuthClientAdministrativeResponse
+	extends OAuthClientRegistrationResponse {
+	/** Server-authorized scope ceiling for `client_credentials` tokens. */
+	client_credentials_scopes: Scope[];
+}
+
 export type Prompt = "none" | "consent" | "login" | "create" | "select_account";
 export type AuthorizePrompt =
 	| Prompt

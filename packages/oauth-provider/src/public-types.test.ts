@@ -3,8 +3,11 @@ import type {
 	ClientRegistrationRequest,
 	GrantType,
 	OAuthClient,
+	OAuthClientAdministrativeResponse,
+	OAuthClientRegistrationResponse,
 	OAuthOptions,
 	SchemaClient,
+	Scope,
 	TokenEndpointAuthMethod,
 } from "@better-auth/oauth-provider";
 import { describe, expectTypeOf, it } from "vitest";
@@ -40,6 +43,24 @@ describe("public oauth-provider types", () => {
 		expectTypeOf<ClientRegistrationRequest>().not.toHaveProperty("type");
 		expectTypeOf<OAuthClient>().not.toHaveProperty("public");
 		expectTypeOf<OAuthClient>().not.toHaveProperty("type");
+		expectTypeOf<OAuthClientRegistrationResponse["resources"]>().toEqualTypeOf<
+			string[] | undefined
+		>();
+		expectTypeOf<OAuthClientRegistrationResponse>().not.toHaveProperty(
+			"client_credentials_scopes",
+		);
+		expectTypeOf<
+			OAuthClientAdministrativeResponse["resources"]
+		>().toEqualTypeOf<string[] | undefined>();
+		expectTypeOf<
+			OAuthClientAdministrativeResponse["client_credentials_scopes"]
+		>().toEqualTypeOf<Scope[]>();
+		expectTypeOf<OAuthClientAdministrativeResponse>().not.toHaveProperty(
+			"public",
+		);
+		expectTypeOf<OAuthClientAdministrativeResponse>().not.toHaveProperty(
+			"type",
+		);
 		expectTypeOf<SchemaClient>().toHaveProperty("applicationType");
 		expectTypeOf<SchemaClient>().toHaveProperty("clientCredentialsScopes");
 		expectTypeOf<SchemaClient>().not.toHaveProperty("public");

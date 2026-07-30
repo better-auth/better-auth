@@ -23,6 +23,8 @@ import { assertClientPrivileges } from "./oauthClient/privileges";
 import { getResource } from "./resources";
 import type {
 	ClientRegistrationRequest,
+	OAuthClientAdministrativeResponse,
+	OAuthClientRegistrationResponse,
 	OAuthClientResource,
 	OAuthOptions,
 	SchemaClient,
@@ -46,11 +48,6 @@ export type OAuthClientRegistrationMetadata = Omit<
 	client_secret_expires_at?: number | string;
 	metadata?: Record<string, unknown>;
 	resources?: string[];
-};
-
-export type OAuthClientRegistrationResponse = OAuthClient & {
-	resources?: string[];
-	client_credentials_scopes?: Scope[];
 };
 
 function resolveClientRegistrationScopes(opts: OAuthOptions<Scope[]>): Scope[] {
@@ -251,7 +248,7 @@ function assertValidRegistrationJwks(jwks: NonNullable<OAuthClient["jwks"]>) {
 export async function registerEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-) {
+): Promise<OAuthClientRegistrationResponse> {
 	const body = ctx.body as ClientRegistrationRequest;
 
 	if (!opts.allowDynamicClientRegistration) {
@@ -973,7 +970,6 @@ async function persistOAuthClientRegistration(
 function createOAuthClientRegistrationResponse(
 	result: OAuthClientRegistrationResult,
 	opts: OAuthOptions<Scope[]>,
-	includeClientCredentialsScopes = false,
 ): OAuthClientRegistrationResponse {
 	const responseBody: OAuthClientRegistrationResponse = schemaToOAuth({
 		...result.client,
@@ -982,12 +978,19 @@ function createOAuthClientRegistrationResponse(
 			: undefined,
 	});
 	if (result.resources.length > 0) responseBody.resources = result.resources;
-	if (includeClientCredentialsScopes) {
-		responseBody.client_credentials_scopes = [
-			...(result.client.clientCredentialsScopes ?? []),
-		];
-	}
 	return responseBody;
+}
+
+function createOAuthClientAdministrativeResponse(
+	result: OAuthClientRegistrationResult,
+	opts: OAuthOptions<Scope[]>,
+): OAuthClientAdministrativeResponse {
+	return {
+		...createOAuthClientRegistrationResponse(result, opts),
+		client_credentials_scopes: [
+			...(result.client.clientCredentialsScopes ?? []),
+		],
+	};
 }
 
 /**
@@ -997,14 +1000,18 @@ async function createOAuthClientRegistration(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	input: CreateOAuthClientRegistrationInput,
-	includeClientCredentialsScopes = false,
 ): Promise<OAuthClientRegistrationResponse> {
 	const result = await persistOAuthClientRegistration(ctx, opts, input);
-	return createOAuthClientRegistrationResponse(
-		result,
-		opts,
-		includeClientCredentialsScopes,
-	);
+	return createOAuthClientRegistrationResponse(result, opts);
+}
+
+async function createOAuthClientAdministrativeRegistration(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	input: CreateOAuthClientRegistrationInput,
+): Promise<OAuthClientAdministrativeResponse> {
+	const result = await persistOAuthClientRegistration(ctx, opts, input);
+	return createOAuthClientAdministrativeResponse(result, opts);
 }
 
 function assertClientDiscoveryOwnership(
@@ -1140,11 +1147,23 @@ function isUniqueConstraintError(error: unknown): boolean {
 	);
 }
 
+export function createOAuthClientEndpoint(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	settings: { admin: true },
+): Promise<OAuthClientAdministrativeResponse>;
+export function createOAuthClientEndpoint(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	settings?: { admin?: false },
+): Promise<OAuthClientRegistrationResponse>;
 export async function createOAuthClientEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	settings?: { admin?: boolean },
-) {
+): Promise<
+	OAuthClientAdministrativeResponse | OAuthClientRegistrationResponse
+> {
 	const session = await getSessionFromCtx(ctx);
 	await assertClientPrivileges(ctx, session, opts, "create");
 	if (!session) throw new APIError("UNAUTHORIZED");
@@ -1176,18 +1195,20 @@ export async function createOAuthClientEndpoint(
 			"configure-client-credentials-scopes",
 		);
 	}
-	const responseBody = await createOAuthClientRegistration(
-		ctx,
-		opts,
-		{
-			metadata,
-			registrationSource: "managed",
-			userId: referenceId ? undefined : session.session.userId,
-			referenceId,
-			clientCredentialsScopes,
-		},
-		settings?.admin,
-	);
+	const registrationInput: CreateOAuthClientRegistrationInput = {
+		metadata,
+		registrationSource: "managed",
+		userId: referenceId ? undefined : session.session.userId,
+		referenceId,
+		clientCredentialsScopes,
+	};
+	const responseBody = settings?.admin
+		? await createOAuthClientAdministrativeRegistration(
+				ctx,
+				opts,
+				registrationInput,
+			)
+		: await createOAuthClientRegistration(ctx, opts, registrationInput);
 	ctx.setStatus(201);
 	return ctx.json(responseBody);
 }

@@ -1,12 +1,15 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
-import type {
-	OAuthClientRegistrationMetadata,
-	OAuthClientRegistrationResponse,
-} from "../register";
+import type { OAuthClientRegistrationMetadata } from "../register";
 import { checkOAuthClient, oauthToSchema, schemaToOAuth } from "../register";
-import type { OAuthOptions, SchemaClient, Scope } from "../types";
+import type {
+	OAuthClientAdministrativeResponse,
+	OAuthClientRegistrationResponse,
+	OAuthOptions,
+	SchemaClient,
+	Scope,
+} from "../types";
 import type { GrantType } from "../types/oauth";
 import { getClient, storeClientSecret } from "../utils";
 import {
@@ -180,6 +183,26 @@ export async function deleteClientEndpoint(
 	});
 }
 
+export function updateClientEndpoint(
+	ctx: GenericEndpointContext & {
+		body: {
+			client_id: string;
+			update: OAuthClientUpdate;
+		};
+	},
+	opts: OAuthOptions<Scope[]>,
+	settings: { admin: true },
+): Promise<OAuthClientAdministrativeResponse>;
+export function updateClientEndpoint(
+	ctx: GenericEndpointContext & {
+		body: {
+			client_id: string;
+			update: OAuthClientUpdate;
+		};
+	},
+	opts: OAuthOptions<Scope[]>,
+	settings?: { admin?: false },
+): Promise<OAuthClientRegistrationResponse>;
 export async function updateClientEndpoint(
 	ctx: GenericEndpointContext & {
 		body: {
@@ -189,7 +212,9 @@ export async function updateClientEndpoint(
 	},
 	opts: OAuthOptions<Scope[]>,
 	settings?: { admin?: boolean },
-): Promise<OAuthClientRegistrationResponse> {
+): Promise<
+	OAuthClientAdministrativeResponse | OAuthClientRegistrationResponse
+> {
 	const session = await getSessionFromCtx(ctx);
 	await assertClientPrivileges(ctx, session, opts, "update");
 	if (!session) throw new APIError("UNAUTHORIZED");
