@@ -485,6 +485,10 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						// Get user info from provider
 						const userInfoResult = await provider.getUserInfo({
 							...tokens,
+							/**
+							 * The user object from the provider
+							 * This is only available for some providers like Apple
+							 */
 							user: parsedUserData ?? undefined,
 						});
 						const userInfo = userInfoResult?.user;
