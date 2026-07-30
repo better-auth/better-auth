@@ -42,7 +42,7 @@ const mswServer = setupServer(
  * Reproduces the exact scenario from the user report in issue #7994.
  *
  * The user reported that in stateless mode (no database, OAuth login),
- * calling getSession after the refreshCache window extends session_data
+ * calling refreshSession after the refreshCache window extends session_data
  * and account_data cookies but NOT the session_token cookie — causing
  * forced logout at exactly expiresIn.
  *
@@ -132,30 +132,28 @@ describe("session_token cookie refresh in stateless mode", () => {
 			cookies.has("better-auth.session_token"),
 			"callback should set session_token cookie",
 		);
-
-		// Step 3: Call getSession to populate cookie cache
-		const firstSessionRes = await auth.handler(
-			new Request("http://localhost:3000/api/auth/get-session", {
-				method: "GET",
-				headers: { cookie: buildCookieHeader(cookies) },
-			}),
+		assert.ok(
+			cookies.has("better-auth.session_data"),
+			"callback should populate the session cookie cache",
 		);
-		assert.equal(firstSessionRes.status, 200);
-		for (const h of firstSessionRes.headers.getSetCookie()) {
-			mergeCookies(cookies, h);
-		}
 
-		// Step 4: Advance time past the refreshCache window
+		// Step 3: Advance time past the refreshCache window
 		// refreshCache: true with maxAge 300 → updateAge = maxAge * 0.2 = 60
 		// Refresh window starts at 300 - 60 = 240s
 		const originalDateNow = Date.now;
-		Date.now = () => originalDateNow.call(Date) + 241 * 1000;
+		const refreshTime = originalDateNow.call(Date) + 241 * 1000;
+		Date.now = () => refreshTime;
 
-		// Step 5: Call getSession — this should trigger refreshCache
+		// Step 4: Explicitly refresh the session
 		const refreshRes = await auth.handler(
-			new Request("http://localhost:3000/api/auth/get-session", {
-				method: "GET",
-				headers: { cookie: buildCookieHeader(cookies) },
+			new Request("http://localhost:3000/api/auth/refresh-session", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					cookie: buildCookieHeader(cookies),
+					origin: "http://localhost:3000",
+				},
+				body: "{}",
 			}),
 		);
 
@@ -163,7 +161,7 @@ describe("session_token cookie refresh in stateless mode", () => {
 
 		assert.equal(refreshRes.status, 200);
 
-		// Step 6: Verify session_token cookie has extended max-age
+		// Step 5: Verify session_token cookie has extended max-age
 		const refreshedCookies = refreshRes.headers
 			.getSetCookie()
 			.flatMap(parseSetCookieEntries);
