@@ -9,6 +9,7 @@ type SessionResponse = {
 	user: {
 		email: string;
 	};
+	needsRefresh?: boolean;
 };
 
 const app = setup();
@@ -130,7 +131,14 @@ test.describe("Next.js session refresh", () => {
 		);
 		await page.waitForTimeout(1100);
 
-		const [refreshResponse] = await Promise.all([
+		const [sessionReadResponse, refreshResponse] = await Promise.all([
+			page.waitForResponse((response) => {
+				const url = new URL(response.url());
+				return (
+					url.pathname === "/api/auth/get-session" &&
+					response.request().method() === "GET"
+				);
+			}),
 			page.waitForResponse((response) => {
 				const url = new URL(response.url());
 				return (
@@ -141,6 +149,10 @@ test.describe("Next.js session refresh", () => {
 			page.goto(`${app.baseURL}/client-session`),
 		]);
 
+		const sessionReadBody =
+			(await sessionReadResponse.json()) as SessionResponse;
+		expect(sessionReadBody.needsRefresh).toBe(true);
+		expect(await sessionReadResponse.headerValue("set-cookie")).toBeNull();
 		const refreshBody = await refreshResponse.text();
 		expect(
 			refreshResponse.ok(),

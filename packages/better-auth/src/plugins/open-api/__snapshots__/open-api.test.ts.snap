@@ -1618,6 +1618,10 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
+                    "needsRefresh": {
+                      "description": "Whether the client should refresh the session through POST /refresh-session",
+                      "type": "boolean",
+                    },
                     "session": {
                       "$ref": "#/components/schemas/Session",
                     },

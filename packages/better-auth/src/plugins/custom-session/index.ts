@@ -55,6 +55,7 @@ export const customSession = <
 		response: {
 			session: Session<O["session"], O["plugins"]>;
 			user: User<O["user"], O["plugins"]>;
+			needsRefresh?: true;
 		} | null;
 	};
 
@@ -77,7 +78,11 @@ export const customSession = <
 		if (!result.response) {
 			return ctx.json(null);
 		}
-		return ctx.json(await fn(result.response, ctx));
+		const transformedSession = await fn(result.response, ctx);
+		return ctx.json({
+			...transformedSession,
+			...(result.response.needsRefresh ? { needsRefresh: true as const } : {}),
+		});
 	};
 
 	return {

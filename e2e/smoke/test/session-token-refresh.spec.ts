@@ -144,7 +144,23 @@ describe("session_token cookie refresh in stateless mode", () => {
 		const refreshTime = originalDateNow.call(Date) + 241 * 1000;
 		Date.now = () => refreshTime;
 
-		// Step 4: Explicitly refresh the session
+		// Step 4: Confirm the read stays side-effect free and requests a refresh
+		const sessionRes = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				method: "GET",
+				headers: {
+					cookie: buildCookieHeader(cookies),
+				},
+			}),
+		);
+		assert.equal(sessionRes.status, 200);
+		const sessionData = (await sessionRes.json()) as {
+			needsRefresh?: boolean;
+		};
+		assert.equal(sessionData.needsRefresh, true);
+		assert.equal(sessionRes.headers.get("set-cookie"), null);
+
+		// Step 5: Explicitly refresh the session
 		const refreshRes = await auth.handler(
 			new Request("http://localhost:3000/api/auth/refresh-session", {
 				method: "POST",
@@ -161,7 +177,7 @@ describe("session_token cookie refresh in stateless mode", () => {
 
 		assert.equal(refreshRes.status, 200);
 
-		// Step 5: Verify session_token cookie has extended max-age
+		// Step 6: Verify session_token cookie has extended max-age
 		const refreshedCookies = refreshRes.headers
 			.getSetCookie()
 			.flatMap(parseSetCookieEntries);

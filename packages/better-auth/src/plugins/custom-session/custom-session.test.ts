@@ -69,6 +69,17 @@ describe("Custom Session Plugin Tests", async () => {
 		expect(refreshed.data?.newData).toEqual({ message: "Hello, World!" });
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10588
+	 */
+	it("should preserve the refresh hint on custom session reads", async () => {
+		const { headers } = await signInWithTestUser();
+
+		const session = await auth.api.getSession({ headers });
+
+		expect(session && Reflect.get(session, "needsRefresh")).toBe(true);
+	});
+
 	it("should return set cookie headers as separate entries", async () => {
 		const { headers } = await signInWithTestUser();
 		await client.refreshSession({

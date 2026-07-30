@@ -82,6 +82,7 @@ describe("useAuthQuery - error handling", () => {
 						JSON.stringify({
 							user: { id: "1", email: "test@test.com" },
 							session: { id: "session-1" },
+							needsRefresh: returnUnauthorized || undefined,
 						}),
 					);
 				},
@@ -288,6 +289,7 @@ describe("useAuthQuery - error handling", () => {
 						JSON.stringify({
 							user: { id: "1", email: "test@test.com" },
 							session: { id: "session-1" },
+							needsRefresh: returnServerError || undefined,
 						}),
 					);
 				},
@@ -344,7 +346,7 @@ describe("useAuthQuery - error handling", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10588
 	 */
-	it("should fetch reactive sessions through the refresh endpoint", async () => {
+	it("should read a fresh reactive session without refreshing it", async () => {
 		const requests: Request[] = [];
 		const sessionPayload = {
 			user: { id: "1", email: "test@test.com" },
@@ -363,12 +365,95 @@ describe("useAuthQuery - error handling", () => {
 		await vi.runAllTimersAsync();
 
 		expect(requests).toHaveLength(1);
-		expect(requests[0]?.method).toBe("POST");
-		expect(new URL(requests[0]!.url).pathname).toBe("/refresh-session");
-		expect(requests[0]?.headers.get("content-type")).toBe("application/json");
-		expect(await requests[0]?.text()).toBe("{}");
+		expect(requests[0]?.method).toBe("GET");
+		expect(new URL(requests[0]!.url).pathname).toBe("/get-session");
 		expect(session.get().data).toMatchObject(sessionPayload);
 
+		unsubscribe();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10588
+	 */
+	it("should refresh a reactive session only when the read requests it", async () => {
+		const requests: Request[] = [];
+		const sessionPayload = {
+			user: { id: "1", email: "test@test.com" },
+			session: { id: "session-1" },
+		};
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (url, init) => {
+				const request = new Request(url, init);
+				requests.push(request);
+				return new Response(
+					JSON.stringify({
+						...sessionPayload,
+						needsRefresh:
+							new URL(request.url).pathname === "/get-session" || undefined,
+					}),
+				);
+			},
+		});
+		const { session } = getSessionAtom($fetch);
+
+		const unsubscribe = session.listen(() => {});
+		await vi.runAllTimersAsync();
+
+		expect(requests).toHaveLength(2);
+		expect(requests[0]?.method).toBe("GET");
+		expect(new URL(requests[0]!.url).pathname).toBe("/get-session");
+		expect(requests[1]?.method).toBe("POST");
+		expect(new URL(requests[1]!.url).pathname).toBe("/refresh-session");
+		expect(requests[1]?.headers.get("content-type")).toBe("application/json");
+		expect(await requests[1]?.text()).toBe("{}");
+		expect(session.get().data).toEqual(sessionPayload);
+
+		unsubscribe();
+	});
+
+	it("should share an in-flight session refresh across concurrent reads", async () => {
+		let refreshCount = 0;
+		let resolveRefresh: ((response: Response) => void) | undefined;
+		const sessionPayload = {
+			user: { id: "1", email: "test@test.com" },
+			session: { id: "session-1" },
+		};
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (url) => {
+				if (new URL(url.toString()).pathname === "/get-session") {
+					return new Response(
+						JSON.stringify({ ...sessionPayload, needsRefresh: true }),
+					);
+				}
+				refreshCount++;
+				return new Promise<Response>((resolve) => {
+					resolveRefresh = resolve;
+				});
+			},
+		});
+		const { session } = getSessionAtom($fetch);
+
+		const unsubscribe = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		for (let index = 0; index < 10 && refreshCount === 0; index++) {
+			await Promise.resolve();
+		}
+		expect(refreshCount).toBe(1);
+
+		const firstRefetch = session.get().refetch();
+		const secondRefetch = session.get().refetch();
+		for (let index = 0; index < 10; index++) {
+			await Promise.resolve();
+		}
+		expect(resolveRefresh).toBeDefined();
+		expect(refreshCount).toBe(1);
+
+		resolveRefresh?.(new Response(JSON.stringify(sessionPayload)));
+		await Promise.all([firstRefetch, secondRefetch]);
+
+		expect(session.get().data).toEqual(sessionPayload);
 		unsubscribe();
 	});
 

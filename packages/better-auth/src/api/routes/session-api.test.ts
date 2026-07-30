@@ -1869,8 +1869,32 @@ describe("session refresh endpoints", async () => {
 		});
 
 		expect(sessionRes.response).not.toBeNull();
+		expect(sessionRes.response?.needsRefresh).toBe(true);
 		expect(sessionRes.headers.getSetCookie()).toEqual([]);
 		expect(updateSession).not.toHaveBeenCalled();
+	});
+
+	it("should not request a refresh before updateAge is reached", async () => {
+		const { auth, testUser } = await getTestInstance({
+			session: {
+				updateAge: 60 * 60,
+			},
+		});
+
+		const headers = new Headers();
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			returnHeaders: true,
+		});
+		headers.set("cookie", signInRes.headers.getSetCookie()[0]!);
+
+		const session = await auth.api.getSession({ headers });
+
+		expect(session).not.toBeNull();
+		expect(session?.needsRefresh).toBeUndefined();
 	});
 
 	it("should refresh the database session and response cookie through POST", async () => {

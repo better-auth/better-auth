@@ -33,6 +33,7 @@ type SessionEndpointMode = "read" | "refresh";
 type SessionEndpointResponse<Option extends BetterAuthOptions> = {
 	session: Session<Option["session"], Option["plugins"]>;
 	user: User<Option["user"], Option["plugins"]>;
+	needsRefresh?: true;
 };
 
 const createSessionHandler =
@@ -69,6 +70,9 @@ const createSessionHandler =
 				};
 				expiresAt: number;
 			} | null = null;
+			const cookieCacheNeedsRefresh =
+				!!ctx.context.options.session?.cookieCache?.enabled &&
+				!ctx.query?.disableCookieCache;
 
 			if (sessionDataCookie) {
 				const strategy =
@@ -228,7 +232,6 @@ const createSessionHandler =
 							ctx.context.sessionConfig.expiresIn * 1000 +
 							ctx.context.sessionConfig.updateAge * 1000;
 						const sessionRefreshDue =
-							refreshRequested &&
 							!dontRememberMe &&
 							!ctx.context.options.session?.disableSessionRefresh &&
 							!ctx.query?.disableRefresh &&
@@ -236,23 +239,23 @@ const createSessionHandler =
 						const cookieRefreshCache =
 							ctx.context.sessionConfig.cookieRefreshCache;
 						const cookieRefreshDue =
-							refreshRequested &&
 							cookieRefreshCache !== false &&
 							sessionDataPayload.expiresAt - Date.now() <
 								cookieRefreshCache.updateAge * 1000;
 						const refreshedAt = new Date();
-						const refreshedSession = sessionRefreshDue
-							? {
-									...session.session,
-									expiresAt: getDate(
-										ctx.context.sessionConfig.expiresIn,
-										"sec",
-									),
-									updatedAt: refreshedAt,
-								}
-							: session.session;
+						const refreshedSession =
+							refreshRequested && sessionRefreshDue
+								? {
+										...session.session,
+										expiresAt: getDate(
+											ctx.context.sessionConfig.expiresIn,
+											"sec",
+										),
+										updatedAt: refreshedAt,
+									}
+								: session.session;
 
-						if (sessionRefreshDue || cookieRefreshDue) {
+						if (refreshRequested && (sessionRefreshDue || cookieRefreshDue)) {
 							await setCookieCache(
 								ctx,
 								{
@@ -302,9 +305,13 @@ const createSessionHandler =
 						return ctx.json({
 							session: parsedSession,
 							user: parsedUser,
+							...(!refreshRequested && (sessionRefreshDue || cookieRefreshDue)
+								? { needsRefresh: true as const }
+								: {}),
 						} as {
 							session: Session<Option["session"], Option["plugins"]>;
 							user: User<Option["user"], Option["plugins"]>;
+							needsRefresh?: true;
 						});
 					}
 				}
@@ -361,6 +368,7 @@ const createSessionHandler =
 			const disableRefresh =
 				ctx.query?.disableRefresh ||
 				ctx.context.options.session?.disableSessionRefresh;
+			const shouldRefresh = shouldBeUpdated && !disableRefresh;
 			if (!refreshRequested) {
 				const parsedSession = parseSessionOutput(
 					ctx.context.options,
@@ -370,13 +378,15 @@ const createSessionHandler =
 				return ctx.json({
 					session: parsedSession,
 					user: parsedUser,
+					...(shouldRefresh || cookieCacheNeedsRefresh
+						? { needsRefresh: true as const }
+						: {}),
 				} as {
 					session: Session<Option["session"], Option["plugins"]>;
 					user: User<Option["user"], Option["plugins"]>;
+					needsRefresh?: true;
 				});
 			}
-
-			const shouldRefresh = shouldBeUpdated && !disableRefresh;
 
 			if (shouldRefresh) {
 				const updatedSession = await ctx.context.internalAdapter.updateSession(
@@ -475,6 +485,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 											},
 											user: {
 												$ref: "#/components/schemas/User",
+											},
+											needsRefresh: {
+												type: "boolean",
+												description:
+													"Whether the client should refresh the session through POST /refresh-session",
 											},
 										},
 										required: ["session", "user"],

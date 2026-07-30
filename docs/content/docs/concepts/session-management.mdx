@@ -51,11 +51,11 @@ export const auth = betterAuth({
 
 ### Refresh Session
 
-`GET /get-session` only validates and returns the current session. It does not update or delete the server-side session, and it does not emit `Set-Cookie` headers.
+`GET /get-session` only validates and returns the current session. It does not update or delete the server-side session, and it does not emit `Set-Cookie` headers. When maintenance is due, the response includes `needsRefresh: true`.
 
 `POST /refresh-session` performs session maintenance. If `updateAge` has been reached, it updates the server-side expiration and returns the matching `Set-Cookie` header. It also maintains the cookie cache and clears expired session state; before any maintenance is due, it leaves the session expiration unchanged.
 
-The default reactive `useSession` store uses the refresh endpoint automatically. SSR-specific adapters that perform session reads during rendering remain read-only. For an explicit refresh from a client or another writable response boundary, call:
+The default reactive `useSession` store reads the session first and calls the refresh endpoint only when `needsRefresh` is returned. Concurrent refresh requests from the same client are deduplicated. SSR-specific adapters that perform session reads during rendering remain read-only. For an explicit refresh from a client or another writable response boundary, call:
 
 ```ts
 await authClient.refreshSession()
