@@ -9,6 +9,10 @@ const USER_DELEGATED_SCOPES = new Set([
 	"offline_access",
 ]);
 
+export function isUserDelegatedScope(scope: string): boolean {
+	return USER_DELEGATED_SCOPES.has(scope);
+}
+
 export function normalizeClientCredentialsScopes(
 	scopes: readonly string[],
 ): Scope[] {
@@ -39,7 +43,7 @@ export function validateClientCredentialsScopes(
 
 	const providerScopes = new Set(opts.scopes ?? []);
 	const invalidScopes = scopes.filter(
-		(scope) => !providerScopes.has(scope) || USER_DELEGATED_SCOPES.has(scope),
+		(scope) => !providerScopes.has(scope) || isUserDelegatedScope(scope),
 	);
 	if (invalidScopes.length > 0) {
 		throw new APIError("BAD_REQUEST", {

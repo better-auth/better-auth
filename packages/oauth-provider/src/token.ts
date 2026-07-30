@@ -28,6 +28,7 @@ import {
 	getExtensionGrantHandler,
 	getSupportedGrantTypes,
 } from "./extensions";
+import { isUserDelegatedScope } from "./oauthClient/client-credentials";
 import type { ResolvedResourcePolicy } from "./resources";
 import { resolveResourcePolicy } from "./resources";
 import { getSupportedClaims, STANDARD_CLAIM_NAMES } from "./standard-claims";
@@ -1748,14 +1749,8 @@ async function handleClientCredentialsGrant(
 	let requestedScopes = scope?.split(" ");
 	if (requestedScopes) {
 		const validScopes = new Set(clientCredentialsScopes);
-		const oidcScopes = new Set([
-			"openid",
-			"profile",
-			"email",
-			"offline_access",
-		]);
 		const invalidScopes = requestedScopes.filter((scope) => {
-			return !validScopes?.has(scope) || oidcScopes.has(scope);
+			return !validScopes.has(scope) || isUserDelegatedScope(scope);
 		});
 		if (invalidScopes.length) {
 			throw new APIError("BAD_REQUEST", {
