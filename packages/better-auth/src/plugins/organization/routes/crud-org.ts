@@ -320,16 +320,27 @@ export const checkOrganizationSlug = <O extends OrganizationOptions>(
 		},
 		async (ctx) => {
 			const orgAdapter = getOrgAdapter<O>(ctx.context, options);
-			const org = await orgAdapter.findOrganizationBySlug(ctx.body.slug);
-			if (!org) {
-				return ctx.json({
-					status: true,
-				});
-			}
+			try{
+				const org = await orgAdapter.findOrganizationBySlug(ctx.body.slug);
+				if (!org) {
+					return ctx.json({
+						status: true,
+					});
+				} else if(org){
+					return ctx.json({
+						status: false,
+					});
+				}
+			}catch(error){
+			// Should not throw unless findOrganizationBySlug can fail somehow??
+			// If so i dont know what the error code should be
 			throw APIError.from(
 				"BAD_REQUEST",
-				ORGANIZATION_ERROR_CODES.ORGANIZATION_SLUG_ALREADY_TAKEN,
+				"An unknown error occured",
 			);
+			}
+			
+			
 		},
 	);
 
