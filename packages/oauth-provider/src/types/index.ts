@@ -835,19 +835,17 @@ export interface OAuthOptions<
 	 */
 	clientPrivileges?: (context: {
 		headers: Headers;
-		action: "create" | "read" | "update" | "delete" | "list" | "rotate";
+		action:
+			| "create"
+			| "read"
+			| "update"
+			| "delete"
+			| "list"
+			| "rotate"
+			| "configure-client-credentials-scopes";
 		user?: User & Record<string, unknown>;
 		session?: Session & Record<string, unknown>;
 	}) => Awaitable<boolean | undefined>;
-	/**
-	 * List default scopes when using the token endpoint's
-	 * grant type "client_credentials". This is used
-	 * only when oauthClients are stored in the database
-	 * without a scope and you do not want all `scopes` to be given.
-	 *
-	 * @default undefined
-	 */
-	clientCredentialGrantDefaultScopes?: Scopes;
 	/**
 	 * Grant types supported by the token endpoint
 	 *
@@ -1681,6 +1679,13 @@ export interface SchemaClient<
 	 * If not defined, any scope can be requested.
 	 */
 	scopes?: Scopes;
+	/**
+	 * Server-owned scope ceiling for the `client_credentials` grant.
+	 *
+	 * Missing, null, and empty values deny machine-to-machine token issuance.
+	 * This authority is independent from user-delegated {@link scopes}.
+	 */
+	clientCredentialsScopes?: Scopes | null;
 	//---- Recommended client data ----//
 	/** User who owns this client */
 	userId?: string | null;

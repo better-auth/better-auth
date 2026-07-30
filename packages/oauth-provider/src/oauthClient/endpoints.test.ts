@@ -8,6 +8,16 @@ import { oauthProviderClient } from "../client";
 import { oauthProvider } from "../oauth";
 import type { OAuthClient } from "../types/oauth";
 
+type TestOAuthClientUiMetadata = Pick<
+	OAuthClient,
+	| "client_name"
+	| "client_uri"
+	| "contacts"
+	| "logo_uri"
+	| "policy_uri"
+	| "tos_uri"
+>;
+
 describe("oauthClient", async () => {
 	const providerId = "test";
 	const baseUrl = "http://localhost:3000";
@@ -19,6 +29,7 @@ describe("oauthClient", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
+				scopes: ["openid", "profile", "email", "offline_access", "m2m:read"],
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -39,7 +50,7 @@ describe("oauthClient", async () => {
 		},
 	});
 
-	const testUiClientInput: Omit<OAuthClient, "client_id"> = {
+	const testUiClientInput: TestOAuthClientUiMetadata = {
 		client_name: "accept name",
 		client_uri: "https://example.com/ok",
 		logo_uri: "https://example.com/logo.png",
@@ -124,6 +135,88 @@ describe("oauthClient", async () => {
 		expect(updated).not.toHaveProperty("public");
 		expect(updated).not.toHaveProperty("type");
 		await authClient.oauth2.deleteClient({ client_id: created.client_id });
+	});
+
+	it("fails closed when no privilege callback can configure client_credentials scopes", async () => {
+		await expect(
+			auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					grant_types: ["client_credentials"],
+					client_credentials_scopes: ["m2m:read"],
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "UNAUTHORIZED",
+		});
+	});
+
+	it("rejects client_credentials scope authority for public clients", async () => {
+		await expect(
+			auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					grant_types: ["client_credentials"],
+					token_endpoint_auth_method: "none",
+					client_credentials_scopes: ["m2m:read"],
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+		});
+
+		const publicClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				token_endpoint_auth_method: "none",
+			},
+		});
+		await expect(
+			auth.api.adminUpdateOAuthClient({
+				headers,
+				body: {
+					client_id: publicClient.client_id,
+					update: {
+						client_credentials_scopes: ["m2m:read"],
+					},
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+		});
+		await authClient.oauth2.deleteClient({
+			client_id: publicClient.client_id,
+		});
+	});
+
+	it("does not let an administrative update mutate unowned client metadata", async () => {
+		const created = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+			},
+		});
+		const context = await auth.$context;
+		await context.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: created.client_id }],
+			update: { userId: null, referenceId: null },
+		});
+
+		await expect(
+			auth.api.adminUpdateOAuthClient({
+				headers,
+				body: {
+					client_id: created.client_id,
+					update: { client_name: "Cross-owner mutation" },
+				},
+			}),
+		).rejects.toMatchObject({ status: "UNAUTHORIZED" });
+		await context.adapter.delete({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: created.client_id }],
+		});
 	});
 
 	it("should create clients with minimum requirements", async () => {

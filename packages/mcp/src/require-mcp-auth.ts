@@ -6,7 +6,10 @@ import type {
 import { createDpopReplayStore } from "better-auth/oauth2";
 import type { BetterAuthOptions } from "better-auth/types";
 import type { JWTPayload } from "jose";
-import { mcpHandler, validateMcpResource } from "./handler";
+import {
+	createMcpProtectedRequestHandler,
+	validateMcpResource,
+} from "./handler";
 
 export interface RequireMcpAuthOptions {
 	/**
@@ -66,8 +69,9 @@ export interface RequireMcpAuthOptions {
  * it knows about by throwing `createInsufficientScopeError`.
  *
  * For a resource server that runs separately from the authorization server, or
- * a server using a dynamic `baseURL`, use {@link mcpHandler} with explicit
- * verification options instead.
+ * a server using a dynamic `baseURL`, use
+ * {@link createMcpProtectedRequestHandler} with explicit verification options
+ * instead.
  *
  * @external
  */
@@ -81,7 +85,10 @@ export const requireMcpAuth = <
 	},
 >(
 	auth: Auth,
-	handler: (req: Request, jwt: JWTPayload) => Awaitable<Response>,
+	handler: (
+		request: Request,
+		accessTokenClaims: JWTPayload,
+	) => Awaitable<Response>,
 	opts?: RequireMcpAuthOptions,
 ) => {
 	if (opts?.resource !== undefined) {
@@ -96,16 +103,18 @@ export const requireMcpAuth = <
 		const { baseURL, internalAdapter } = await auth.$context;
 		if (!baseURL) {
 			throw new Error(
-				"requireMcpAuth requires a resolvable base URL. For dynamic base URLs use `mcpHandler` with explicit verify options.",
+				"requireMcpAuth requires a resolvable base URL. For dynamic base URLs use `createMcpProtectedRequestHandler` with explicit verification options.",
 			);
 		}
 		const issuer = opts?.issuer ?? baseURL;
 		const resource = opts?.resource ?? baseURL;
 		const jwksUrl = opts?.jwksUrl ?? `${baseURL}/jwks`;
-		return mcpHandler(
+		return createMcpProtectedRequestHandler(
 			{
-				verifyOptions: { issuer, audience: resource },
+				issuer,
+				audience: resource,
 				requiredScopes: opts?.requiredScopes,
+				challengeScopes: opts?.challengeScopes,
 				isScopeSatisfied: opts?.isScopeSatisfied,
 				jwksUrl,
 				dpop: {
@@ -118,9 +127,6 @@ export const requireMcpAuth = <
 				},
 			},
 			handler,
-			{
-				challengeScopes: opts?.challengeScopes,
-			},
 		)(req);
 	};
 };

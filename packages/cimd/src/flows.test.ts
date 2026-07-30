@@ -600,14 +600,14 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 		redirect_uris: [redirectUri],
 		token_endpoint_auth_method: "none",
 		application_type: "native",
-		grant_types: ["authorization_code"],
+		grant_types: ["authorization_code", "client_credentials"],
 		response_types: ["code"],
 	};
 	const onClientRefreshed = vi.fn(() => {
 		throw new Error("notification sink unavailable");
 	});
 
-	// refreshRate: 0 makes every request stale, so the refresh path fires
+	// metadataRevalidationInterval: 0 makes every request stale, so the refresh path fires
 	// on the second authorize hit — giving us a deterministic way to test
 	// what refresh does (or does not) write.
 	const {
@@ -621,11 +621,21 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				scopes: ["openid", "profile", "email", "offline_access"],
+				scopes: [
+					"openid",
+					"profile",
+					"email",
+					"offline_access",
+					"service:read",
+				],
+				clientPrivileges: ({ action }) =>
+					action === "update" ||
+					action === "configure-client-credentials-scopes",
 				silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 			}),
 			cimd({
-				refreshRate: 0,
+				metadataRevalidationInterval: 0,
+				metadataFetchPolicy: { minimumFetchInterval: 0 },
 				fetchClientMetadataResource: (input, init) =>
 					globalThis.fetch(input, init),
 				onClientRefreshed,
@@ -647,8 +657,30 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 		vi.unstubAllGlobals();
 	});
 
-	it("preserves admin-set `disabled`, `skipConsent`, and `enableEndSession` across a stale refresh", async () => {
-		stubMetadataFetch(clientMetadataUrl, metadataDocument);
+	it("preserves server-owned flags and client_credentials scope authority across a stale refresh", async () => {
+		const { publicKey } = (await crypto.subtle.generateKey(
+			{ name: "ECDSA", namedCurve: "P-256" },
+			true,
+			["sign", "verify"],
+		)) as CryptoKeyPair;
+		const publicKeyJwk = await crypto.subtle.exportKey("jwk", publicKey);
+		stubMetadataFetch(clientMetadataUrl, {
+			...metadataDocument,
+			clientCredentialsScopes: ["admin"],
+			client_credentials_scopes: ["admin"],
+			name: "Ignored internal alias",
+			token_endpoint_auth_method: "private_key_jwt",
+			jwks: {
+				keys: [
+					{
+						...publicKeyJwk,
+						kid: "refresh-preserve-key",
+						alg: "ES256",
+						use: "sig",
+					},
+				],
+			},
+		});
 
 		const { headers } = await signInWithTestUser();
 		const authedClient = createAuthClient({
@@ -670,8 +702,29 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 		);
 		expect(redirect).toContain("/consent");
 
-		// Admin flips all three protected flags directly via the adapter.
+		// A discovered declaration never grants machine-to-machine scopes.
 		const ctx = await authorizationServer.$context;
+		const discovered = await ctx.adapter.findOne<SchemaClient<Scope[]>>({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientMetadataUrl }],
+		});
+		expect(discovered?.clientCredentialsScopes).toEqual([]);
+
+		// The administrative route is the only supported way to assign the
+		// server-owned M2M ceiling on this unowned discovered client.
+		const scopeUpdate = await authorizationServer.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: clientMetadataUrl,
+				update: {
+					client_credentials_scopes: ["service:read"],
+				},
+			},
+		});
+		expect(scopeUpdate.client_credentials_scopes).toEqual(["service:read"]);
+
+		// Admin-set lifecycle flags are modeled separately and remain protected
+		// from metadata refresh as before.
 		await ctx.adapter.update({
 			model: "oauthClient",
 			where: [{ field: "clientId", value: clientMetadataUrl }],
@@ -690,9 +743,10 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 			disabled: true,
 			skipConsent: true,
 			enableEndSession: true,
+			clientCredentialsScopes: ["service:read"],
 		});
 
-		// Second authorize must trigger a stale refresh (refreshRate: 0).
+		// Second authorize must trigger a stale refresh (metadataRevalidationInterval: 0).
 		// The document does NOT carry any of these flags, so preservation is
 		// the only way they survive.
 		await authedClient.$fetch(
@@ -708,14 +762,23 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 			disabled: true,
 			skipConsent: true,
 			enableEndSession: true,
+			clientCredentialsScopes: ["service:read"],
 		});
 		expect(onClientRefreshed).toHaveBeenCalledWith(
 			expect.objectContaining({
+				client: expect.objectContaining({
+					clientId: clientMetadataUrl,
+				}),
 				previousClient: expect.objectContaining({
 					disabled: true,
 					skipConsent: true,
 					enableEndSession: true,
+					clientCredentialsScopes: ["service:read"],
 				}),
+				clientMetadataDocument: expect.objectContaining({
+					client_id: clientMetadataUrl,
+				}),
+				context: expect.any(Object),
 			}),
 		);
 	});

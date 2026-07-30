@@ -483,8 +483,11 @@ async function verifyAccessTokenPayload(
  * cannot fix by re-authorizing must not send the user through consent again.
  *
  * @param requiredScopes - Every scope the operation requires but the token lacks.
+ * @param description - RFC 6750 `error_description` text. It must use the
+ * printable ASCII character set allowed by the specification.
  */
 const OAUTH_SCOPE_TOKEN_PATTERN = /^[\x21\x23-\x5b\x5d-\x7e]+$/;
+const OAUTH_ERROR_DESCRIPTION_PATTERN = /^[\x20-\x21\x23-\x5b\x5d-\x7e]+$/;
 const insufficientScopeErrors = new WeakSet<APIError>();
 
 function isOAuthScopeToken(value: string): boolean {
@@ -529,6 +532,12 @@ export function createInsufficientScopeError(
 		throw new TypeError("requiredScopes must contain at least one scope");
 	}
 	validateScopeTokens(requiredScopes, "required scope");
+	if (
+		typeof description !== "string" ||
+		!OAUTH_ERROR_DESCRIPTION_PATTERN.test(description)
+	) {
+		throw new TypeError("invalid error_description");
+	}
 	const error = new APIError("FORBIDDEN", {
 		message: description,
 		error: "insufficient_scope",

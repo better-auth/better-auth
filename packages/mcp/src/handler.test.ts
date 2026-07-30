@@ -2,7 +2,7 @@ import { createInsufficientScopeError } from "better-auth/oauth2";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { mcpHandler } from "./handler";
+import { createMcpProtectedRequestHandler } from "./handler";
 
 const { verifyAccessTokenRequest } = vi.hoisted(() => ({
 	verifyAccessTokenRequest: vi.fn(),
@@ -13,11 +13,9 @@ vi.mock("better-auth/oauth2", async (importOriginal) => {
 	return { ...actual, verifyAccessTokenRequest };
 });
 
-const verifyOptions = {
-	verifyOptions: {
-		issuer: "https://app.example.com",
-		audience: "https://app.example.com/mcp",
-	},
+const protectedRequestOptions = {
+	issuer: "https://app.example.com",
+	audience: "https://app.example.com/mcp",
 };
 
 const request = () =>
@@ -25,7 +23,7 @@ const request = () =>
 		headers: { Authorization: "Bearer access-token" },
 	});
 
-describe("mcpHandler", () => {
+describe("createMcpProtectedRequestHandler", () => {
 	beforeEach(() => {
 		verifyAccessTokenRequest.mockReset();
 	});
@@ -35,14 +33,46 @@ describe("mcpHandler", () => {
 			createInsufficientScopeError(["mcp:write"]),
 		);
 
-		const response = await mcpHandler(
-			{ ...verifyOptions, requiredScopes: ["mcp:write"] },
+		const response = await createMcpProtectedRequestHandler(
+			{ ...protectedRequestOptions, requiredScopes: ["mcp:write"] },
 			async () => new Response("unreachable"),
 		)(request());
 
 		expect(response.status).toBe(403);
 		expect(response.headers.get("WWW-Authenticate")).toBe(
 			`Bearer error="insufficient_scope", scope="mcp:write", resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/mcp", error_description="access token is missing required scope: mcp:write"`,
+		);
+	});
+
+	it("forwards flat JWT verification and challenge options", async () => {
+		verifyAccessTokenRequest.mockRejectedValue(
+			new APIError("UNAUTHORIZED", {
+				error: "invalid_token",
+				message: "invalid access token",
+			}),
+		);
+
+		const response = await createMcpProtectedRequestHandler(
+			{
+				...protectedRequestOptions,
+				jwtVerifyOptions: { algorithms: ["ES256"] },
+				challengeScopes: ["mcp:read"],
+			},
+			async () => new Response("unreachable"),
+		)(request());
+
+		expect(verifyAccessTokenRequest).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({
+				verifyOptions: {
+					algorithms: ["ES256"],
+					issuer: protectedRequestOptions.issuer,
+					audience: protectedRequestOptions.audience,
+				},
+			}),
+		);
+		expect(response.headers.get("WWW-Authenticate")).toContain(
+			'scope="mcp:read"',
 		);
 	});
 
@@ -54,7 +84,7 @@ describe("mcpHandler", () => {
 		} satisfies JWTPayload);
 
 		await expect(
-			mcpHandler(verifyOptions, async () => {
+			createMcpProtectedRequestHandler(protectedRequestOptions, async () => {
 				throw failure;
 			})(request()),
 		).rejects.toBe(failure);
@@ -69,7 +99,7 @@ describe("mcpHandler", () => {
 		} satisfies JWTPayload);
 
 		await expect(
-			mcpHandler(verifyOptions, async () => {
+			createMcpProtectedRequestHandler(protectedRequestOptions, async () => {
 				throw denial;
 			})(request()),
 		).rejects.toBe(denial);
@@ -83,7 +113,7 @@ describe("mcpHandler", () => {
 		verifyAccessTokenRequest.mockResolvedValue({ sub: "user-3" });
 
 		await expect(
-			mcpHandler(verifyOptions, async () => {
+			createMcpProtectedRequestHandler(protectedRequestOptions, async () => {
 				throw denial;
 			})(request()),
 		).rejects.toBe(denial);
@@ -93,7 +123,7 @@ describe("mcpHandler", () => {
 		verifyAccessTokenRequest.mockResolvedValue({ sub: "user-4" });
 
 		await expect(
-			mcpHandler(verifyOptions, async () => {
+			createMcpProtectedRequestHandler(protectedRequestOptions, async () => {
 				throw "primitive failure";
 			})(request()),
 		).rejects.toBe("primitive failure");
@@ -102,9 +132,12 @@ describe("mcpHandler", () => {
 	it("turns a typed handler insufficient-scope error into a 403 challenge", async () => {
 		verifyAccessTokenRequest.mockResolvedValue({ sub: "user-5" });
 
-		const response = await mcpHandler(verifyOptions, async () => {
-			throw createInsufficientScopeError(["mcp:admin"]);
-		})(request());
+		const response = await createMcpProtectedRequestHandler(
+			protectedRequestOptions,
+			async () => {
+				throw createInsufficientScopeError(["mcp:admin"]);
+			},
+		)(request());
 
 		expect(response.status).toBe(403);
 		expect(response.headers.get("WWW-Authenticate")).toContain(
@@ -120,7 +153,7 @@ describe("mcpHandler", () => {
 		});
 
 		await expect(
-			mcpHandler(verifyOptions, async () => {
+			createMcpProtectedRequestHandler(protectedRequestOptions, async () => {
 				throw spoofed;
 			})(request()),
 		).rejects.toBe(spoofed);
@@ -137,13 +170,8 @@ describe("mcpHandler", () => {
 		["query", "https://api.example.com/mcp?tenant=a"],
 	])("rejects an invalid canonical MCP resource: %s", (_name, resource) => {
 		expect(() =>
-			mcpHandler(
-				{
-					verifyOptions: {
-						...verifyOptions.verifyOptions,
-						audience: resource as string,
-					},
-				},
+			createMcpProtectedRequestHandler(
+				{ ...protectedRequestOptions, audience: resource as string },
 				async () => new Response("unreachable"),
 			),
 		).toThrow("MCP resource");
@@ -157,13 +185,8 @@ describe("mcpHandler", () => {
 		"http://[::1]:3000/mcp",
 	])("accepts a canonical MCP resource: %s", (resource) => {
 		expect(() =>
-			mcpHandler(
-				{
-					verifyOptions: {
-						...verifyOptions.verifyOptions,
-						audience: resource,
-					},
-				},
+			createMcpProtectedRequestHandler(
+				{ ...protectedRequestOptions, audience: resource },
 				async () => new Response("unused"),
 			),
 		).not.toThrow();

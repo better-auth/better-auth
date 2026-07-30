@@ -1,4 +1,4 @@
-import { mcp, mcpHandler } from "@better-auth/mcp";
+import { createMcpProtectedRequestHandler, mcp } from "@better-auth/mcp";
 import type { OAuthClientResource } from "@better-auth/oauth-provider";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import type {
@@ -36,6 +36,56 @@ type FetchImplementation = (
 function requestUrl(input: RequestInfo | URL): URL {
 	if (input instanceof Request) return new URL(input.url);
 	return new URL(input.toString());
+}
+
+interface VerifiedMcpAccessTokenClaims {
+	client_id?: unknown;
+	scope?: unknown;
+	exp?: number;
+	[claim: string]: unknown;
+}
+
+function requireAccessTokenClientId(
+	accessTokenClaims: VerifiedMcpAccessTokenClaims,
+): string {
+	const clientId = accessTokenClaims.client_id;
+	if (typeof clientId !== "string" || clientId.trim().length === 0) {
+		throw new TypeError(
+			"MCP access token client_id must be a non-empty string",
+		);
+	}
+	return clientId;
+}
+
+function extractPresentedAccessToken(request: Request): string {
+	const authorization = request.headers.get("authorization");
+	const token = /^(?:Bearer|DPoP)[ \t]+(\S+)$/i.exec(authorization ?? "")?.[1];
+	if (!token) {
+		throw new TypeError(
+			"verified MCP request is missing a valid Bearer or DPoP access token",
+		);
+	}
+	return token;
+}
+
+function parseGrantedScopes(scopeClaim: unknown): string[] {
+	if (typeof scopeClaim !== "string") return [];
+	return [...new Set(scopeClaim.split(" ").filter(Boolean))];
+}
+
+function createOfficialSdkAuthInfo(
+	request: Request,
+	accessTokenClaims: VerifiedMcpAccessTokenClaims,
+	resource: URL,
+): AuthInfo {
+	return {
+		token: extractPresentedAccessToken(request),
+		clientId: requireAccessTokenClientId(accessTokenClaims),
+		scopes: parseGrantedScopes(accessTokenClaims.scope),
+		expiresAt: accessTokenClaims.exp,
+		resource,
+		extra: { accessTokenClaims },
+	};
 }
 
 function createCimdClientProvider() {
@@ -112,6 +162,86 @@ function createCimdClientProvider() {
 	};
 }
 
+describe("official SDK AuthInfo mapping", () => {
+	it.each([
+		{},
+		{ client_id: "" },
+		{ client_id: "   " },
+		{ client_id: 42 },
+	])("rejects a missing or malformed client_id claim: %j", (claims) => {
+		expect(() => requireAccessTokenClientId(claims)).toThrow(
+			new TypeError("MCP access token client_id must be a non-empty string"),
+		);
+	});
+
+	it.each([
+		undefined,
+		"Basic access-token",
+		"Bearer",
+		"Bearer ",
+		"Bearer access-token trailing",
+		"DPoP ",
+	])("rejects a malformed authorization presentation: %j", (authorization) => {
+		const headers = authorization ? { authorization } : undefined;
+		expect(() =>
+			extractPresentedAccessToken(
+				new Request(MCP_RESOURCE, {
+					headers,
+				}),
+			),
+		).toThrow(
+			new TypeError(
+				"verified MCP request is missing a valid Bearer or DPoP access token",
+			),
+		);
+	});
+
+	it.each([
+		"Bearer",
+		"DPoP",
+	])("extracts the actual %s access token", (scheme) => {
+		expect(
+			extractPresentedAccessToken(
+				new Request(MCP_RESOURCE, {
+					headers: { authorization: `${scheme} presented-token` },
+				}),
+			),
+		).toBe("presented-token");
+	});
+
+	it("deduplicates string scopes and treats other claim types as empty", () => {
+		expect(parseGrantedScopes("mcp:base greeting mcp:base")).toEqual([
+			"mcp:base",
+			"greeting",
+		]);
+		expect(parseGrantedScopes(undefined)).toEqual([]);
+		expect(parseGrantedScopes(["mcp:base"])).toEqual([]);
+	});
+
+	it("maps verified claims and the presented token into SDK AuthInfo", () => {
+		const resource = new URL(MCP_RESOURCE);
+		const authInfo = createOfficialSdkAuthInfo(
+			new Request(MCP_RESOURCE, {
+				headers: { authorization: "DPoP actual-token" },
+			}),
+			{
+				client_id: "mcp-client",
+				scope: "mcp:base mcp:base",
+				exp: 1_800_000_000,
+			},
+			resource,
+		);
+
+		expect(authInfo).toMatchObject({
+			token: "actual-token",
+			clientId: "mcp-client",
+			scopes: ["mcp:base"],
+			expiresAt: 1_800_000_000,
+			resource,
+		});
+	});
+});
+
 describe("CIMD-first MCP authorization with the official SDK v2", async () => {
 	let metadataFetchCount = 0;
 	const metadataFetch = async (
@@ -164,6 +294,7 @@ describe("CIMD-first MCP authorization with the official SDK v2", async () => {
 			}),
 			cimd({
 				fetchClientMetadataResource: metadataFetch,
+				metadataFetchPolicy: { minimumFetchInterval: 0 },
 				metadataProfile: "mcp-2026-07-28",
 			}),
 		],
@@ -229,28 +360,19 @@ describe("CIMD-first MCP authorization with the official SDK v2", async () => {
 			request.headers.get("mcp-method") === "tools/call"
 				? ["greeting"]
 				: ["mcp:base"];
-		return mcpHandler(
+		return createMcpProtectedRequestHandler(
 			{
-				verifyOptions: {
-					issuer: AUTHORIZATION_SERVER,
-					audience: MCP_RESOURCE,
-				},
+				issuer: AUTHORIZATION_SERVER,
+				audience: MCP_RESOURCE,
 				jwksUrl: `${AUTHORIZATION_SERVER}/api/auth/jwks`,
 				requiredScopes,
 			},
-			async (verifiedRequest, claims) => {
-				const authInfo: AuthInfo = {
-					token:
-						verifiedRequest.headers
-							.get("authorization")
-							?.replace(/^Bearer /, "") ?? "",
-					clientId: String(claims.client_id),
-					scopes:
-						typeof claims.scope === "string" ? claims.scope.split(" ") : [],
-					expiresAt: claims.exp,
-					resource: new URL(MCP_RESOURCE),
-					extra: { jwt: claims },
-				};
+			async (verifiedRequest, accessTokenClaims) => {
+				const authInfo = createOfficialSdkAuthInfo(
+					verifiedRequest,
+					accessTokenClaims,
+					new URL(MCP_RESOURCE),
+				);
 				return sdkHandler.fetch(verifiedRequest, { authInfo });
 			},
 		)(request);

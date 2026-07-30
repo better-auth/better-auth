@@ -48,10 +48,13 @@ describe("requireMcpAuth", () => {
 		);
 
 		let verifiedSub: string | undefined;
-		const response = await requireMcpAuth(auth, async (_req, jwt) => {
-			verifiedSub = jwt.sub;
-			return Response.json({ ok: true });
-		})(
+		const response = await requireMcpAuth(
+			auth,
+			async (_request, accessTokenClaims) => {
+				verifiedSub = accessTokenClaims.sub;
+				return Response.json({ ok: true });
+			},
+		)(
 			new Request("https://app.example.com/mcp", {
 				headers: { Authorization: "Bearer access-token" },
 			}),

@@ -243,11 +243,7 @@ export async function fetchClientMetadataDocument(
 			originBoundFields: cimdOptions.originBoundFields,
 			metadataProfile: cimdOptions.metadataProfile,
 		});
-		if (!validation.valid || !validation.metadata) {
-			throw invalidClient(
-				validation.error ?? "Invalid Client ID Metadata Document",
-			);
-		}
+		if (!validation.valid) throw invalidClient(validation.error);
 		for (const warning of validation.warnings ?? []) {
 			ctx.context.logger.warn(`cimd metadata document warning: ${warning}`);
 		}
@@ -286,8 +282,8 @@ export async function persistMetadataDocumentClient(
 		try {
 			await cimdOptions.onClientCreated?.({
 				client: result.client,
-				metadata,
-				ctx,
+				clientMetadataDocument: metadata,
+				context: ctx,
 			});
 		} catch (error) {
 			ctx.context.logger.error(
@@ -301,8 +297,8 @@ export async function persistMetadataDocumentClient(
 				await cimdOptions.onClientRefreshed?.({
 					client: result.client,
 					previousClient,
-					metadata,
-					ctx,
+					clientMetadataDocument: metadata,
+					context: ctx,
 				});
 			}
 		} catch (error) {

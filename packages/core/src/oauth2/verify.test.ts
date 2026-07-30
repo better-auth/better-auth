@@ -166,6 +166,50 @@ describe("verifyBearerToken", () => {
 		);
 	});
 
+	it.each([
+		"",
+		'bad "quote"',
+		"bad\\slash",
+		"bad\r\ncontrol",
+		"café",
+	])("should reject an invalid insufficient-scope error_description at construction: %s", (description) => {
+		expect(() =>
+			createInsufficientScopeError(["files:write"], description),
+		).toThrow(new TypeError("invalid error_description"));
+	});
+
+	it.each([
+		42,
+		null,
+	])("should reject a non-string insufficient-scope error_description at construction: %j", (description) => {
+		expect(() =>
+			Reflect.apply(createInsufficientScopeError, undefined, [
+				["files:write"],
+				description,
+			]),
+		).toThrow(new TypeError("invalid error_description"));
+	});
+
+	it("should accept every error_description boundary character", () => {
+		const description = " !#[]~";
+		const error = createInsufficientScopeError(["files:write"], description);
+
+		expect(isInsufficientScopeError(error)).toBe(true);
+		expect(error.body).toMatchObject({
+			message: description,
+			error_description: description,
+		});
+	});
+
+	it("should construct a valid default insufficient-scope description", () => {
+		const error = createInsufficientScopeError(["files:write"]);
+
+		expect(isInsufficientScopeError(error)).toBe(true);
+		expect(error.body).toMatchObject({
+			error_description: "access token is missing required scope: files:write",
+		});
+	});
+
 	it("should reject invalid required scopes before bearer token verification", async () => {
 		await expect(
 			verifyBearerToken("not-a-jwt", {

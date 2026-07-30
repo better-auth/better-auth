@@ -395,7 +395,7 @@ export interface OAuthClient {
 	 * @default "web"
 	 * @see https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
 	 */
-	application_type?: "web" | "native";
+	application_type?: "web" | "native" | null;
 	//---- Not Part of RFC7591 Spec ----//
 	disabled?: boolean;
 	skip_consent?: boolean;
@@ -422,9 +422,8 @@ export interface OAuthClient {
 	 * @see https://openid.net/specs/openid-connect-core-1_0.html#SubjectIDTypes
 	 */
 	subject_type?: "public" | "pairwise";
-	//---- All other metadata ----//
+	//---- Server Metadata ----//
 	reference_id?: string;
-	[key: string]: unknown;
 }
 
 /**

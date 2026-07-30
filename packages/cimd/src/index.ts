@@ -4,7 +4,7 @@ import type { BetterAuthPlugin } from "better-auth";
 import { CIMD_CLIENT_DISCOVERY_ID } from "./client-store";
 import { createCimdResolver } from "./resolver";
 import type { CimdOptions } from "./types";
-import { isUrlClientId } from "./validate-metadata-document";
+import { isCimdClientIdUrlCandidate } from "./validate-metadata-document";
 import { PACKAGE_VERSION } from "./version";
 
 declare module "@better-auth/core" {
@@ -23,11 +23,13 @@ declare module "@better-auth/core" {
  * install the {@link cimd} plugin instead, which contributes this discovery
  * alongside whatever else is configured.
  */
-export function cimdClientDiscovery(options: CimdOptions): ClientDiscovery {
+export function createCimdClientDiscovery(
+	options: CimdOptions,
+): ClientDiscovery {
 	const resolver = createCimdResolver(options);
 	return {
 		id: CIMD_CLIENT_DISCOVERY_ID,
-		matches: isUrlClientId,
+		matches: isCimdClientIdUrlCandidate,
 		resolve: resolver,
 		fetchClientMetadataResource: options.fetchClientMetadataResource,
 		discoveryMetadata: { client_id_metadata_document_supported: true },
@@ -47,7 +49,7 @@ export function cimdClientDiscovery(options: CimdOptions): ClientDiscovery {
  * and {@link https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#client-id-metadata-documents | the MCP authorization spec}.
  */
 export const cimd = (options: CimdOptions) => {
-	const discovery = cimdClientDiscovery(options);
+	const discovery = createCimdClientDiscovery(options);
 
 	return {
 		id: "cimd",
@@ -58,13 +60,19 @@ export const cimd = (options: CimdOptions) => {
 	} satisfies BetterAuthPlugin;
 };
 
-export type { CimdMetadataProfile, CimdOptions } from "./types";
 export type {
-	ClientIdMetadataDocumentResult,
-	ValidateCimdMetadataOptions,
+	CimdClientCreatedEvent,
+	CimdClientRefreshedEvent,
+	CimdMetadataFetchPolicy,
+	CimdMetadataProfile,
+	CimdOptions,
+} from "./types";
+export type {
+	CimdMetadataValidationOptions,
+	CimdMetadataValidationResult,
 } from "./validate-metadata-document";
 export {
-	isUrlClientId,
+	isCimdClientIdUrlCandidate,
 	validateCimdMetadata,
 	validateClientIdUrl,
 } from "./validate-metadata-document";

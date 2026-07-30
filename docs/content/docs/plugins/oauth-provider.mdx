@@ -24,6 +24,8 @@ The default configuration chooses the safer protocol behavior, including PKCE fo
 * **`client_credentials`:** issues machine-to-machine access tokens.
 * **`device_code`:** adds the optional [Device Authorization](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api) flow for CLIs and limited-input clients.
 
+`client_credentials` is fail closed. A client's user-delegated `scope` metadata never authorizes machine access. Administrators must assign a non-empty `client_credentials_scopes` value through the administrative create or update endpoint, and `clientPrivileges` must explicitly approve the `configure-client-credentials-scopes` action. The assigned value is both the maximum requestable scope set and the default when the token request omits `scope`. DCR, CIMD, and user-managed registration can declare the grant but cannot assign this server-owned scope ceiling.
+
 ## Installation
 
 <Steps>
@@ -1815,7 +1817,7 @@ JWT access tokens always use the real user ID as `sub`, since resource servers m
 
 Use the [`@better-auth/mcp` plugin](/docs/plugins/mcp) when an MCP server is one of your protected resources. It builds on this OAuth Provider and adds MCP defaults, RFC 9728 protected resource metadata, and route helpers that return the authorization challenge MCP clients expect.
 
-`mcp()` is the OAuth Provider for that Better Auth instance, so do not register both `mcp()` and `oauthProvider()`. It accepts the OAuth Provider options directly. Use `requireMcpAuth` when the MCP route shares the auth instance, or `mcpHandler` when the resource server runs separately.
+`mcp()` is the OAuth Provider for that Better Auth instance, so do not register both `mcp()` and `oauthProvider()`. It accepts the OAuth Provider options directly. Use `requireMcpAuth` when the MCP route shares the auth instance, or `createMcpProtectedRequestHandler` when the resource server runs separately.
 
 The MCP plugin can also support a separate registered CLI through the device grant. MCP clients keep their discovery-driven authorization code flow, while the CLI asks the same provider for a resource-bound token through device authorization. See [Add device authorization for your own CLI](/docs/plugins/mcp#add-device-authorization-for-your-own-cli).
 

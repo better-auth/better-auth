@@ -1979,7 +1979,7 @@ describe("oauth token - client_credentials", async () => {
 	const rpBaseUrl = "http://localhost:5000";
 	const validResource = "https://myapi.example.com";
 	const allScopes = ["openid", "profile", "email", "read:posts", "write:posts"];
-	const clientScopes = ["openid", "profile", "email", "read:posts"];
+	const clientScopes = ["read:posts", "write:posts"];
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -1995,6 +1995,7 @@ describe("oauth token - client_credentials", async () => {
 				enforcePerClientResources: false,
 				allowDynamicClientRegistration: true,
 				scopes: allScopes,
+				clientPrivileges: () => true,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -2033,6 +2034,7 @@ describe("oauth token - client_credentials", async () => {
 				application_type: "native",
 				skip_consent: true,
 				scope: clientScopes.join(" "),
+				client_credentials_scopes: clientScopes,
 			},
 		});
 		expect(response?.client_id).toBeDefined();
@@ -2167,6 +2169,30 @@ describe("oauth token - client_credentials", async () => {
 		expect(accessToken.payload.iat).toBeDefined();
 		expect(accessToken.payload.exp).toBe(tokens.data?.expires_at);
 		expect(accessToken.payload.scope).toBe(scopes.join(" "));
+	});
+
+	it("rejects a client_credentials scope outside the administrator-owned ceiling", async () => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { body, headers } = await clientCredentialsTokenRequest({
+			scope: "delete:posts",
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+		const tokens = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body,
+			headers,
+		});
+		expect(tokens.error?.status).toBe(400);
+		expect((tokens.error as { error?: string } | null)?.error).toBe(
+			"invalid_scope",
+		);
 	});
 });
 
@@ -2348,6 +2374,7 @@ describe("oauth token - config", async () => {
 						resources: [validResource],
 						enforcePerClientResources: false,
 						scopes,
+						clientPrivileges: () => true,
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
 							openidConfig: true,
@@ -2387,6 +2414,11 @@ describe("oauth token - config", async () => {
 				redirect_uris: [redirectUri],
 				application_type: "native",
 				skip_consent: true,
+				client_credentials_scopes: [
+					"read:payments",
+					"write:payments",
+					"read:profile",
+				],
 			},
 		});
 
@@ -3587,6 +3619,14 @@ describe("customTokenResponseFields", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
+				scopes: [
+					"openid",
+					"profile",
+					"email",
+					"offline_access",
+					"service:read",
+				],
+				clientPrivileges: () => true,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -3631,6 +3671,7 @@ describe("customTokenResponseFields", async () => {
 				redirect_uris: [redirectUri],
 				application_type: "native",
 				skip_consent: true,
+				client_credentials_scopes: ["service:read"],
 			},
 		});
 		oauthClient = response;
@@ -4049,6 +4090,15 @@ describe("oauth token - per-client grant_type enforcement", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
+				scopes: [
+					"openid",
+					"profile",
+					"email",
+					"offline_access",
+					"m2m:read",
+					"m2m:write",
+				],
+				clientPrivileges: () => true,
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -4151,7 +4201,7 @@ describe("oauth token - per-client grant_type enforcement", async () => {
 
 	// Guard against over-blocking: a client explicitly registered for
 	// client_credentials must still be able to use it.
-	it("allows client_credentials for a client registered for it", async () => {
+	it("fails closed when a client_credentials client has no M2M scope authority", async () => {
 		const ccClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
@@ -4161,6 +4211,8 @@ describe("oauth token - per-client grant_type enforcement", async () => {
 				skip_consent: true,
 			},
 		});
+		expect(ccClient).toMatchObject({ client_credentials_scopes: [] });
+
 		const body = new URLSearchParams({ grant_type: "client_credentials" });
 		const reqHeaders = {
 			"content-type": "application/x-www-form-urlencoded",
@@ -4172,8 +4224,111 @@ describe("oauth token - per-client grant_type enforcement", async () => {
 			"/oauth2/token",
 			{ method: "POST", body, headers: reqHeaders },
 		);
+
+		expect(res.data?.access_token).toBeUndefined();
+		expect(res.error?.status).toBe(400);
+		expect((res.error as { error?: string } | null)?.error).toBe(
+			"unauthorized_client",
+		);
+	});
+
+	it("fails closed when a legacy client has a null M2M scope authority", async () => {
+		const ccClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["m2m:read"],
+			},
+		});
+		const context = await auth.$context;
+		await context.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: ccClient.client_id }],
+			update: { clientCredentialsScopes: null },
+		});
+
+		const res = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+				authorization: `Basic ${Buffer.from(
+					`${ccClient.client_id}:${ccClient.client_secret}`,
+				).toString("base64")}`,
+			},
+			body: new URLSearchParams({
+				grant_type: "client_credentials",
+			}),
+		});
+		expect(res.error?.status).toBe(400);
+		expect((res.error as { error?: string } | null)?.error).toBe(
+			"unauthorized_client",
+		);
+	});
+
+	it("classifies public client_credentials clients as unauthorized_client", async () => {
+		const publicClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				token_endpoint_auth_method: "none",
+			},
+		});
+		const context = await auth.$context;
+		await context.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: publicClient.client_id }],
+			update: { clientCredentialsScopes: ["m2m:read"] },
+		});
+
+		const res = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+			},
+			body: new URLSearchParams({
+				grant_type: "client_credentials",
+				client_id: publicClient.client_id,
+			}),
+		});
+		expect(res.error?.status).toBe(400);
+		expect((res.error as { error?: string } | null)?.error).toBe(
+			"unauthorized_client",
+		);
+		expect(
+			(res.error as { error_description?: string } | null)?.error_description,
+		).toBe("public clients cannot use the client_credentials grant");
+	});
+
+	// Guard against over-blocking: an administrator-authorized client explicitly
+	// registered for client_credentials must still be able to use it.
+	it("allows client_credentials for a client registered for it", async () => {
+		const ccClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: true,
+				client_credentials_scopes: ["m2m:read", "m2m:read"],
+			},
+		});
+		expect(ccClient).toMatchObject({
+			client_credentials_scopes: ["m2m:read"],
+		});
+		const body = new URLSearchParams({ grant_type: "client_credentials" });
+		const reqHeaders = {
+			"content-type": "application/x-www-form-urlencoded",
+			authorization: `Basic ${Buffer.from(
+				`${ccClient!.client_id!}:${ccClient!.client_secret!}`,
+			).toString("base64")}`,
+		};
+		const res = await client.$fetch<{
+			access_token?: string;
+			scope?: string;
+		}>("/oauth2/token", { method: "POST", body, headers: reqHeaders });
 		expect(res.error).toBeNull();
 		expect(res.data?.access_token).toBeDefined();
+		expect(res.data?.scope).toBe("m2m:read");
 	});
 
 	// The /authorize endpoint only serves authorization_code; a machine-to-machine

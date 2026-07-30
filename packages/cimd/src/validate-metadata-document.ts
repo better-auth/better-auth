@@ -21,14 +21,21 @@ const SYMMETRIC_AUTH_METHODS = new Set([
 	"client_secret_jwt",
 ]);
 
-export interface ClientIdMetadataDocumentResult {
-	valid: boolean;
-	error?: string;
-	warnings?: string[];
-	metadata?: OAuthClientMetadata;
-}
+export type CimdMetadataValidationResult =
+	| {
+			valid: true;
+			metadata: OAuthClientMetadata;
+			error?: never;
+			warnings?: string[];
+	  }
+	| {
+			valid: false;
+			error: string;
+			metadata?: never;
+			warnings?: string[];
+	  };
 
-export interface ValidateCimdMetadataOptions {
+export interface CimdMetadataValidationOptions {
 	originBoundFields?: readonly string[];
 	metadataProfile?: CimdMetadataProfile;
 }
@@ -40,7 +47,7 @@ export interface ValidateCimdMetadataOptions {
  * performs no DNS resolution, so callers MUST also run
  * {@link validateClientIdUrl} (and a fetch-time policy) before fetching.
  */
-export function isUrlClientId(clientId: string): boolean {
+export function isCimdClientIdUrlCandidate(clientId: string): boolean {
 	let parsed: URL;
 	try {
 		parsed = new URL(clientId);
@@ -139,20 +146,32 @@ function isAbsoluteRedirectUri(uri: string): boolean {
 /**
  * Validate a fetched Client ID Metadata Document per §4.1.
  *
- * @param fetchUrl - The URL the document was fetched from.
+ * @param clientIdUrl - The URL the document was fetched from.
  * @param raw - The parsed JSON body of the response.
  * @param options - Generic draft-02 validation options and an optional protocol profile.
  */
 export function validateCimdMetadata(
-	fetchUrl: string,
+	clientIdUrl: string,
 	raw: unknown,
-	options: ValidateCimdMetadataOptions = {},
-): ClientIdMetadataDocumentResult {
+	options: CimdMetadataValidationOptions = {},
+): CimdMetadataValidationResult {
 	if (!raw || typeof raw !== "object") {
 		return { valid: false, error: "metadata document is not a JSON object" };
 	}
 
-	const parsedMetadata = oauthClientMetadataSchema.safeParse(raw);
+	// Draft-02 ignores unknown members, but recognized credential, privilege,
+	// and server-control fields remain fatal even when they are not part of the
+	// shared wire schema.
+	for (const field of Object.keys(raw)) {
+		if (isForbiddenCimdClientMetadataField(field)) {
+			return {
+				valid: false,
+				error: `metadata document MUST NOT contain "${field}"`,
+			};
+		}
+	}
+
+	const parsedMetadata = oauthClientMetadataSchema.strip().safeParse(raw);
 	if (!parsedMetadata.success) {
 		const issue = parsedMetadata.error.issues[0];
 		const path = issue?.path.join(".") || "metadata document";
@@ -166,7 +185,7 @@ export function validateCimdMetadata(
 	const warnings: string[] = [];
 
 	// §4.1: client_id MUST equal the fetch URL (simple string comparison)
-	if (doc.client_id !== fetchUrl) {
+	if (doc.client_id !== clientIdUrl) {
 		return {
 			valid: false,
 			error: `client_id "${String(doc.client_id)}" does not match the metadata document URL`,
@@ -183,15 +202,7 @@ export function validateCimdMetadata(
 		};
 	}
 
-	// §4.1: prohibited fields MUST NOT be present
-	for (const field of Object.keys(doc)) {
-		if (isForbiddenCimdClientMetadataField(field)) {
-			return {
-				valid: false,
-				error: `metadata document MUST NOT contain "${field}"`,
-			};
-		}
-	}
+	// §4.1: prohibited recognized wire fields MUST NOT be present.
 	for (const field of [
 		"backchannel_logout_uri",
 		"backchannel_logout_session_required",
@@ -322,13 +333,13 @@ export function validateCimdMetadata(
 
 	let clientIdOrigin: string;
 	try {
-		clientIdOrigin = new URL(fetchUrl).origin;
+		clientIdOrigin = new URL(clientIdUrl).origin;
 	} catch {
 		return { valid: false, error: "client_id is not a valid URL" };
 	}
 
 	for (const key of fieldsToCheck) {
-		const value = doc[key];
+		const value = (doc as Record<string, unknown>)[key];
 		if (value === undefined) {
 			continue;
 		}
@@ -392,7 +403,7 @@ export function validateCimdMetadata(
 	}
 
 	// §3: SHOULD NOT have a query string
-	warnings.push(...getClientIdUrlWarnings(fetchUrl));
+	warnings.push(...getClientIdUrlWarnings(clientIdUrl));
 
 	return {
 		valid: true,

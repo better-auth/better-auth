@@ -12,6 +12,7 @@ const OAUTH_CLIENT_RECORD_FIELDS = {
 	clientDiscoveryId: true,
 	disabled: true,
 	scopes: true,
+	clientCredentialsScopes: true,
 	userId: true,
 	createdAt: true,
 	updatedAt: true,
@@ -46,9 +47,6 @@ const OAUTH_CLIENT_RECORD_FIELDS = {
 
 const OAUTH_CLIENT_RECORD_FIELD_NAMES = Object.freeze(
 	Object.keys(OAUTH_CLIENT_RECORD_FIELDS) as (keyof SchemaClient)[],
-);
-const OAUTH_CLIENT_RECORD_FIELD_NAME_SET = new Set<string>(
-	OAUTH_CLIENT_RECORD_FIELD_NAMES,
 );
 
 /**
@@ -96,15 +94,11 @@ const OPAQUE_METADATA_RESERVED_FIELDS = new Set<string>([
 	"public",
 	"type",
 	"resources",
+	"client_credentials_scopes",
 ]);
 
-/**
- * Standard metadata fields `contacts` and `jwks` intentionally share their
- * wire and internal spelling. They remain valid at the document top level.
- */
-const CIMD_ALLOWED_SHARED_FIELD_NAMES = new Set(["contacts", "jwks"]);
-
 const CIMD_FORBIDDEN_SERVER_FIELD_NAMES = new Set([
+	"disabled",
 	"client_secret",
 	"client_secret_expires_at",
 	"client_id_issued_at",
@@ -114,16 +108,36 @@ const CIMD_FORBIDDEN_SERVER_FIELD_NAMES = new Set([
 	"reference_id",
 	"user_id",
 	"resources",
-	"public",
-	"type",
+	"clientSecret",
+	"clientDiscoveryId",
+	"skipConsent",
+	"enableEndSession",
+	"requirePKCE",
+	"referenceId",
+	"userId",
+	"clientId",
+	"applicationType",
+	"tokenEndpointAuthMethod",
+	"redirectUris",
+	"postLogoutRedirectUris",
+	"grantTypes",
+	"responseTypes",
+	"scopes",
+	"expiresAt",
+	"createdAt",
+	"updatedAt",
+	"softwareId",
+	"softwareVersion",
+	"softwareStatement",
+	"backchannelLogoutUri",
+	"backchannelLogoutSessionRequired",
+	"jwksUri",
+	"dpopBoundAccessTokens",
+	"subjectType",
 ]);
 
 export function isForbiddenCimdClientMetadataField(field: string): boolean {
-	if (CIMD_FORBIDDEN_SERVER_FIELD_NAMES.has(field)) return true;
-	return (
-		OAUTH_CLIENT_RECORD_FIELD_NAME_SET.has(field) &&
-		!CIMD_ALLOWED_SHARED_FIELD_NAMES.has(field)
-	);
+	return CIMD_FORBIDDEN_SERVER_FIELD_NAMES.has(field);
 }
 
 export function stripReservedOAuthClientMetadataExtensions(

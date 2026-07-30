@@ -1,11 +1,55 @@
 import type { Awaitable } from "@better-auth/core";
 import { createResourceServerChallenge } from "@better-auth/oauth-provider";
+import type {
+	DpopReplayStore,
+	VerifyAccessTokenRequestOptions,
+} from "better-auth/oauth2";
 import {
 	isInsufficientScopeError,
 	requestToResourceInput,
 	verifyAccessTokenRequest,
 } from "better-auth/oauth2";
-import type { JWTPayload } from "jose";
+import type { JWTPayload, JWTVerifyOptions } from "jose";
+
+export interface McpProtectedRequestHandlerOptions {
+	/** Expected authorization-server issuer for the access token. */
+	issuer: string;
+	/** Canonical MCP protected-resource URL expected in the token audience. */
+	audience: string;
+	/**
+	 * Additional JOSE verification constraints. `issuer` and `audience` remain
+	 * authoritative from the top-level fields.
+	 */
+	jwtVerifyOptions?: Omit<JWTVerifyOptions, "issuer" | "audience">;
+	/** URL of the authorization server's JSON Web Key Set. */
+	jwksUrl?: string;
+	/** Remote introspection settings for opaque or remotely checked tokens. */
+	remoteVerify?: {
+		introspectUrl: string;
+		clientId: string;
+		clientSecret: string;
+		force?: boolean;
+		allowMissingAudience?: boolean;
+	};
+	/** Scopes every accepted access token must satisfy. */
+	requiredScopes?: readonly string[];
+	/**
+	 * Scopes to advertise in unauthenticated `WWW-Authenticate` challenges.
+	 * Defaults to `requiredScopes`.
+	 */
+	challengeScopes?: readonly string[];
+	/** Custom required-scope matcher. Defaults to exact membership. */
+	isScopeSatisfied?: (
+		requiredScope: string,
+		grantedScopes: ReadonlySet<string>,
+	) => boolean;
+	/** DPoP proof validation and replay-protection settings. */
+	dpop?: {
+		proofMaxAgeSeconds?: number;
+		signingAlgorithms?: readonly string[];
+		replayStore?: DpopReplayStore;
+	};
+}
 
 function isLoopbackHost(hostname: string): boolean {
 	const ipv4Octets = hostname.split(".");
@@ -53,7 +97,7 @@ export function validateMcpResource(resource: unknown): string {
 
 function toChallengeResponse(
 	error: unknown,
-	resource: string | string[],
+	resource: string,
 	opts?: Parameters<typeof createResourceServerChallenge>[2],
 ): Response {
 	const challenge = createResourceServerChallenge(error, resource, opts);
@@ -73,41 +117,50 @@ function toChallengeResponse(
 /**
  * A request middleware handler that verifies an MCP access token and responds
  * with an RFC 9728 `WWW-Authenticate` header for unauthenticated requests.
- * When `verifyOptions.requiredScopes` is set, tokens missing a required scope receive
+ * When `options.requiredScopes` is set, tokens missing a required scope receive
  * a 403 with an RFC 6750 `insufficient_scope` challenge naming them instead.
  *
  * @external
  */
-export const mcpHandler = (
-	/** Verifier options. `audience` must match the protected resource identifier. */
-	verifyOptions: Parameters<typeof verifyAccessTokenRequest>[1],
-	handler: (req: Request, jwt: JWTPayload) => Awaitable<Response>,
-	opts?: {
-		/** Scopes to advertise in `WWW-Authenticate` challenges (RFC 6750). */
-		challengeScopes?: readonly string[];
-	},
+export const createMcpProtectedRequestHandler = (
+	options: McpProtectedRequestHandlerOptions,
+	handler: (
+		request: Request,
+		accessTokenClaims: JWTPayload,
+	) => Awaitable<Response>,
 ) => {
-	const resource = validateMcpResource(verifyOptions.verifyOptions.audience);
-	const challengeOptions = {
-		...opts,
-		challengeScopes: opts?.challengeScopes ?? verifyOptions.requiredScopes,
-		dpopSigningAlgorithms: verifyOptions.dpop?.signingAlgorithms,
+	const resource = validateMcpResource(options.audience);
+	const resolvedChallengeOptions = {
+		challengeScopes: options.challengeScopes ?? options.requiredScopes,
+		dpopSigningAlgorithms: options.dpop?.signingAlgorithms,
 	};
-	return async (req: Request) => {
-		let token: JWTPayload;
+	const accessTokenVerificationOptions: VerifyAccessTokenRequestOptions = {
+		verifyOptions: {
+			...options.jwtVerifyOptions,
+			issuer: options.issuer,
+			audience: options.audience,
+		},
+		jwksUrl: options.jwksUrl,
+		remoteVerify: options.remoteVerify,
+		requiredScopes: options.requiredScopes,
+		isScopeSatisfied: options.isScopeSatisfied,
+		dpop: options.dpop,
+	};
+	return async (request: Request) => {
+		let accessTokenClaims: JWTPayload;
 		try {
-			token = await verifyAccessTokenRequest(
-				requestToResourceInput(req),
-				verifyOptions,
+			accessTokenClaims = await verifyAccessTokenRequest(
+				requestToResourceInput(request),
+				accessTokenVerificationOptions,
 			);
 		} catch (error) {
-			return toChallengeResponse(error, resource, challengeOptions);
+			return toChallengeResponse(error, resource, resolvedChallengeOptions);
 		}
 		try {
-			return await handler(req, token);
+			return await handler(request, accessTokenClaims);
 		} catch (error) {
 			if (isInsufficientScopeError(error)) {
-				return toChallengeResponse(error, resource, challengeOptions);
+				return toChallengeResponse(error, resource, resolvedChallengeOptions);
 			}
 			throw error;
 		}

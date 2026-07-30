@@ -26,8 +26,11 @@ function serializeChallengeScopes(scopes: readonly string[] | undefined) {
 	return [...new Set(scopes)].join(" ");
 }
 
-function validateErrorDescription(description: string): string {
-	if (!ERROR_DESCRIPTION_PATTERN.test(description)) {
+function validateErrorDescription(description: unknown): string {
+	if (
+		typeof description !== "string" ||
+		!ERROR_DESCRIPTION_PATTERN.test(description)
+	) {
 		throw new TypeError("invalid error_description");
 	}
 	return description;
@@ -76,7 +79,7 @@ function buildDpopChallenge(
 
 function extractInsufficientScope(error: APIError): {
 	scope: string;
-	description: string;
+	description: unknown;
 } {
 	const body = error.body as
 		| { error?: unknown; error_description?: unknown; scope?: unknown }
@@ -84,7 +87,7 @@ function extractInsufficientScope(error: APIError): {
 	return {
 		scope: body?.scope as string,
 		description:
-			typeof body?.error_description === "string"
+			body?.error_description !== undefined
 				? body.error_description
 				: error.message,
 	};
@@ -189,6 +192,9 @@ export function createResourceServerChallenge(
 	}
 	if (isInsufficientScopeError(error)) {
 		const insufficientScope = extractInsufficientScope(error);
+		const errorDescription = validateErrorDescription(
+			insufficientScope.description,
+		);
 		// RFC 6750 §3.1: a token that is valid but lacks the scopes the
 		// operation needs answers with 403 and an `insufficient_scope`
 		// challenge naming them, so the client can step up via re-authorization.
@@ -197,7 +203,7 @@ export function createResourceServerChallenge(
 		const scope = insufficientScope.scope || challengeScope;
 		return new APIError(
 			"FORBIDDEN",
-			{ message: insufficientScope.description },
+			{ message: errorDescription },
 			{
 				"WWW-Authenticate": buildBearerChallenge(
 					resource,
@@ -206,9 +212,7 @@ export function createResourceServerChallenge(
 						`error="insufficient_scope"`,
 						scope && `scope="${quoteAuthParam(scope)}"`,
 						`resource_metadata="${quoteAuthParam(metadataUrl)}"`,
-						`error_description="${validateErrorDescription(
-							insufficientScope.description,
-						)}"`,
+						`error_description="${errorDescription}"`,
 					],
 				),
 			},

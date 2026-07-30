@@ -41,6 +41,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				jwks: clientJwksSchema.optional(),
 				jwks_uri: z.string().optional(),
 				grant_types: grantTypesSchema.optional(),
+				client_credentials_scopes: z.array(z.string().trim().min(1)).optional(),
 				response_types: z.array(z.enum(["code"])).optional(),
 				// SERVER_ONLY applicable fields
 				client_secret_expires_at: z
@@ -86,6 +87,12 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 												type: "string",
 												description:
 													"Space-separated scopes allowed by the client",
+											},
+											client_credentials_scopes: {
+												type: "array",
+												items: { type: "string" },
+												description:
+													"Server-authorized scope ceiling for client_credentials tokens",
 											},
 											user_id: {
 												type: "string",
@@ -209,7 +216,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			},
 		},
 		async (ctx) => {
-			return createOAuthClientEndpoint(ctx, opts);
+			return createOAuthClientEndpoint(ctx, opts, { admin: true });
 		},
 	);
 
@@ -502,6 +509,9 @@ export const adminUpdateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					// registered authentication method also changes credential handling.
 					application_type: z.enum(["web", "native"]).optional(),
 					grant_types: grantTypesSchema.optional(),
+					client_credentials_scopes: z
+						.array(z.string().trim().min(1))
+						.optional(),
 					response_types: z.array(z.enum(["code"])).optional(),
 					// SERVER_ONLY applicable fields
 					client_secret_expires_at: z
@@ -522,7 +532,7 @@ export const adminUpdateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			},
 		},
 		async (ctx) => {
-			return updateClientEndpoint(ctx, opts);
+			return updateClientEndpoint(ctx, opts, { admin: true });
 		},
 	);
 

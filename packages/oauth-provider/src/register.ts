@@ -15,6 +15,10 @@ import {
 	getSupportedGrantTypes,
 	isExtensionTokenEndpointAuthMethod,
 } from "./extensions";
+import {
+	normalizeClientCredentialsScopes,
+	validateClientCredentialsScopes,
+} from "./oauthClient/client-credentials";
 import { assertClientPrivileges } from "./oauthClient/privileges";
 import { getResource } from "./resources";
 import type {
@@ -33,6 +37,22 @@ const DEFAULT_REGISTRATION_GRANT_TYPES = [
 	"authorization_code",
 ] as const satisfies GrantType[];
 
+export type OAuthClientRegistrationMetadata = Omit<
+	OAuthClient,
+	"client_id" | "redirect_uris" | "client_secret_expires_at"
+> & {
+	client_id?: string;
+	redirect_uris?: string[];
+	client_secret_expires_at?: number | string;
+	metadata?: Record<string, unknown>;
+	resources?: string[];
+};
+
+export type OAuthClientRegistrationResponse = OAuthClient & {
+	resources?: string[];
+	client_credentials_scopes?: Scope[];
+};
+
 function resolveClientRegistrationScopes(opts: OAuthOptions<Scope[]>): Scope[] {
 	return [
 		...new Set([
@@ -42,7 +62,9 @@ function resolveClientRegistrationScopes(opts: OAuthOptions<Scope[]>): Scope[] {
 	];
 }
 
-function resolveRegistrationGrantTypes(client: OAuthClient): GrantType[] {
+function resolveRegistrationGrantTypes(
+	client: OAuthClientRegistrationMetadata,
+): GrantType[] {
 	const grantTypes = client.grant_types ?? [
 		...DEFAULT_REGISTRATION_GRANT_TYPES,
 	];
@@ -54,7 +76,7 @@ function resolveRegistrationGrantTypes(client: OAuthClient): GrantType[] {
 }
 
 function resolveRegistrationResponseTypes(
-	client: OAuthClient,
+	client: OAuthClientRegistrationMetadata,
 	grantTypes: GrantType[],
 ): OAuthClient["response_types"] {
 	if (client.response_types) return client.response_types;
@@ -62,9 +84,9 @@ function resolveRegistrationResponseTypes(
 }
 
 function applyOAuthClientRegistrationDefaults(
-	client: OAuthClient,
+	client: OAuthClientRegistrationMetadata,
 	defaultApplicationType: "web" | null = "web",
-): OAuthClient {
+): OAuthClientRegistrationMetadata {
 	const grantTypes = resolveRegistrationGrantTypes(client);
 	return {
 		...client,
@@ -230,7 +252,7 @@ export async function registerEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const body = ctx.body as OAuthClient & { resources?: string[] };
+	const body = ctx.body as ClientRegistrationRequest;
 
 	if (!opts.allowDynamicClientRegistration) {
 		throw new APIError("FORBIDDEN", {
@@ -315,7 +337,7 @@ export async function registerEndpoint(
 }
 
 export async function checkOAuthClient(
-	client: OAuthClient,
+	client: OAuthClientRegistrationMetadata,
 	opts: OAuthOptions<Scope[]>,
 	settings?: {
 		registrationSource?: "dynamic" | "managed" | "clientMetadataDocument";
@@ -632,7 +654,7 @@ export async function checkOAuthClient(
 
 interface CreateOAuthClientRegistrationBaseInput {
 	/** Validated endpoint metadata or trusted internal metadata. */
-	metadata: OAuthClient;
+	metadata: OAuthClientRegistrationMetadata;
 	/** Already-authorized owner inputs resolved by the endpoint adapter. */
 	userId?: string;
 	referenceId?: string;
@@ -649,6 +671,8 @@ export type CreateOAuthClientRegistrationInput =
 	| (CreateOAuthClientRegistrationBaseInput & {
 			registrationSource: "managed";
 			requestedResources?: never;
+			/** Server-owned scope ceiling configured by an administrator. */
+			clientCredentialsScopes?: Scope[];
 	  });
 
 export interface OAuthClientRegistrationResult {
@@ -663,6 +687,40 @@ export interface RegisterClientMetadataDocumentInput {
 	clientId: string;
 	clientDiscoveryId: string;
 	existingClient?: SchemaClient<Scope[]>;
+}
+
+const CLIENT_REGISTRATION_COLLISION = Symbol("client-registration-collision");
+
+type ClientRegistrationCollision =
+	| {
+			[CLIENT_REGISTRATION_COLLISION]: true;
+			kind: "oauth-client-row-unique";
+			clientId: string;
+			cause: unknown;
+	  }
+	| {
+			[CLIENT_REGISTRATION_COLLISION]: true;
+			kind: "oauth-client-resource-link-unique";
+			clientId: string;
+			resourceId: string;
+			cause: unknown;
+	  };
+
+function isClientRegistrationCollision(
+	error: unknown,
+): error is ClientRegistrationCollision {
+	if (!error || typeof error !== "object") return false;
+	const candidate = error as {
+		[CLIENT_REGISTRATION_COLLISION]?: unknown;
+		kind?: unknown;
+		cause?: unknown;
+	};
+	return (
+		candidate[CLIENT_REGISTRATION_COLLISION] === true &&
+		(candidate.kind === "oauth-client-row-unique" ||
+			candidate.kind === "oauth-client-resource-link-unique") &&
+		"cause" in candidate
+	);
 }
 
 /**
@@ -769,6 +827,12 @@ async function persistOAuthClientRegistration(
 		user_id: owner?.referenceId ? undefined : owner?.userId,
 		reference_id: owner?.referenceId,
 	});
+	schema.clientCredentialsScopes =
+		input.registrationSource === "clientMetadataDocument"
+			? (input.existingClient?.clientCredentialsScopes ?? [])
+			: input.registrationSource === "managed"
+				? (input.clientCredentialsScopes ?? [])
+				: [];
 	schema.clientDiscoveryId =
 		input.registrationSource === "clientMetadataDocument"
 			? input.clientDiscoveryId
@@ -830,14 +894,29 @@ async function persistOAuthClientRegistration(
 				}
 				storedClient = updatedClient;
 			} else {
-				storedClient = await adapter.create<SchemaClient<Scope[]>>({
-					model: clientModel,
-					data: {
-						...schema,
-						createdAt: new Date(iat * 1000),
-						updatedAt: new Date(iat * 1000),
-					},
-				});
+				try {
+					storedClient = await adapter.create<SchemaClient<Scope[]>>({
+						model: clientModel,
+						data: {
+							...schema,
+							createdAt: new Date(iat * 1000),
+							updatedAt: new Date(iat * 1000),
+						},
+					});
+				} catch (error) {
+					if (
+						input.registrationSource === "clientMetadataDocument" &&
+						isUniqueConstraintError(error)
+					) {
+						throw {
+							[CLIENT_REGISTRATION_COLLISION]: true,
+							kind: "oauth-client-row-unique",
+							clientId,
+							cause: error,
+						} satisfies ClientRegistrationCollision;
+					}
+					throw error;
+				}
 				created = true;
 			}
 
@@ -854,14 +933,30 @@ async function persistOAuthClientRegistration(
 			const now = new Date();
 			for (const resourceId of resources) {
 				if (linkedResourceIds.has(resourceId)) continue;
-				await adapter.create<OAuthClientResource>({
-					model: clientResourceModel,
-					data: {
-						clientId,
-						resourceId,
-						createdAt: now,
-					},
-				});
+				try {
+					await adapter.create<OAuthClientResource>({
+						model: clientResourceModel,
+						data: {
+							clientId,
+							resourceId,
+							createdAt: now,
+						},
+					});
+				} catch (error) {
+					if (
+						input.registrationSource === "clientMetadataDocument" &&
+						isUniqueConstraintError(error)
+					) {
+						throw {
+							[CLIENT_REGISTRATION_COLLISION]: true,
+							kind: "oauth-client-resource-link-unique",
+							clientId,
+							resourceId,
+							cause: error,
+						} satisfies ClientRegistrationCollision;
+					}
+					throw error;
+				}
 			}
 			return { client: storedClient, created };
 		},
@@ -878,14 +973,20 @@ async function persistOAuthClientRegistration(
 function createOAuthClientRegistrationResponse(
 	result: OAuthClientRegistrationResult,
 	opts: OAuthOptions<Scope[]>,
-): OAuthClient & { resources?: string[] } {
-	const responseBody = schemaToOAuth({
+	includeClientCredentialsScopes = false,
+): OAuthClientRegistrationResponse {
+	const responseBody: OAuthClientRegistrationResponse = schemaToOAuth({
 		...result.client,
 		clientSecret: result.clientSecret
 			? (opts.prefix?.clientSecret ?? "") + result.clientSecret
 			: undefined,
 	});
 	if (result.resources.length > 0) responseBody.resources = result.resources;
+	if (includeClientCredentialsScopes) {
+		responseBody.client_credentials_scopes = [
+			...(result.client.clientCredentialsScopes ?? []),
+		];
+	}
 	return responseBody;
 }
 
@@ -896,9 +997,14 @@ async function createOAuthClientRegistration(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	input: CreateOAuthClientRegistrationInput,
-): Promise<OAuthClient & { resources?: string[] }> {
+	includeClientCredentialsScopes = false,
+): Promise<OAuthClientRegistrationResponse> {
 	const result = await persistOAuthClientRegistration(ctx, opts, input);
-	return createOAuthClientRegistrationResponse(result, opts);
+	return createOAuthClientRegistrationResponse(
+		result,
+		opts,
+		includeClientCredentialsScopes,
+	);
 }
 
 function assertClientDiscoveryOwnership(
@@ -963,20 +1069,44 @@ export async function registerClientMetadataDocument(
 	try {
 		return await persistOAuthClientRegistration(ctx, opts, registrationInput);
 	} catch (error) {
-		if (!isUniqueConstraintError(error)) throw error;
+		if (!isClientRegistrationCollision(error)) throw error;
 		const clientModel = opts.schema?.oauthClient?.modelName ?? "oauthClient";
+		const clientResourceModel =
+			opts.schema?.oauthClientResource?.modelName ?? "oauthClientResource";
 		const currentClient = await ctx.context.adapter.findOne<
 			SchemaClient<Scope[]>
 		>({
 			model: clientModel,
 			where: [{ field: "clientId", value: input.clientId }],
 		});
-		if (!currentClient) throw error;
-		assertClientDiscoveryOwnership(currentClient, input.clientDiscoveryId);
-		return persistOAuthClientRegistration(ctx, opts, {
-			...registrationInput,
-			existingClient: currentClient,
-		});
+		if (
+			error.clientId !== input.clientId ||
+			!currentClient ||
+			currentClient.clientDiscoveryId !== input.clientDiscoveryId
+		) {
+			throw error.cause;
+		}
+		if (error.kind === "oauth-client-resource-link-unique") {
+			const exactLink = await ctx.context.adapter.findOne<OAuthClientResource>({
+				model: clientResourceModel,
+				where: [
+					{ field: "clientId", value: error.clientId },
+					{ field: "resourceId", value: error.resourceId },
+				],
+			});
+			if (!exactLink) throw error.cause;
+		}
+		try {
+			return await persistOAuthClientRegistration(ctx, opts, {
+				...registrationInput,
+				existingClient: currentClient,
+			});
+		} catch (retryError) {
+			if (isClientRegistrationCollision(retryError)) {
+				throw retryError.cause;
+			}
+			throw retryError;
+		}
 	}
 }
 
@@ -1013,6 +1143,7 @@ function isUniqueConstraintError(error: unknown): boolean {
 export async function createOAuthClientEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
+	settings?: { admin?: boolean },
 ) {
 	const session = await getSessionFromCtx(ctx);
 	await assertClientPrivileges(ctx, session, opts, "create");
@@ -1023,12 +1154,40 @@ export async function createOAuthClientEndpoint(
 				session: session.session,
 			})
 		: undefined;
-	const responseBody = await createOAuthClientRegistration(ctx, opts, {
-		metadata: ctx.body as OAuthClient,
-		registrationSource: "managed",
-		userId: referenceId ? undefined : session.session.userId,
-		referenceId,
-	});
+	const { client_credentials_scopes: rawClientCredentialsScopes, ...metadata } =
+		ctx.body as OAuthClientRegistrationMetadata & {
+			client_credentials_scopes?: string[];
+		};
+	const clientCredentialsScopes = settings?.admin
+		? normalizeClientCredentialsScopes(rawClientCredentialsScopes ?? [])
+		: [];
+	const grantTypes = resolveRegistrationGrantTypes(metadata);
+	validateClientCredentialsScopes(
+		clientCredentialsScopes,
+		grantTypes,
+		metadata.token_endpoint_auth_method,
+		opts,
+	);
+	if (clientCredentialsScopes.length > 0) {
+		await assertClientPrivileges(
+			ctx,
+			session,
+			opts,
+			"configure-client-credentials-scopes",
+		);
+	}
+	const responseBody = await createOAuthClientRegistration(
+		ctx,
+		opts,
+		{
+			metadata,
+			registrationSource: "managed",
+			userId: referenceId ? undefined : session.session.userId,
+			referenceId,
+			clientCredentialsScopes,
+		},
+		settings?.admin,
+	);
 	ctx.setStatus(201);
 	return ctx.json(responseBody);
 }
@@ -1039,7 +1198,18 @@ export async function createOAuthClientEndpoint(
  * @param input
  * @returns
  */
-export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
+export function oauthToSchema(
+	input: OAuthClientRegistrationMetadata & {
+		client_id: string;
+		client_secret_expires_at?: number;
+	},
+): SchemaClient<Scope[]>;
+export function oauthToSchema(
+	input: OAuthClientRegistrationMetadata,
+): Partial<SchemaClient<Scope[]>>;
+export function oauthToSchema(
+	input: OAuthClientRegistrationMetadata,
+): Partial<SchemaClient<Scope[]>> {
 	const {
 		// Important Fields
 		client_id: clientId,
@@ -1081,20 +1251,17 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		subject_type: subjectType,
 		reference_id: referenceId,
 		metadata: inputMetadata,
-		// All other metadata
-		...rest
 	} = input;
 
 	// Type conversions
-	const expiresAt = _expiresAt ? new Date(_expiresAt * 1000) : undefined;
+	const expiresAt = _expiresAt
+		? new Date(Number(_expiresAt) * 1000)
+		: undefined;
 	const createdAt = _createdAt ? new Date(_createdAt * 1000) : undefined;
 	const scopes = _scope?.split(" ");
-	const metadataObj = stripReservedOAuthClientMetadataExtensions({
-		...(rest && Object.keys(rest).length ? rest : {}),
-		...(inputMetadata && typeof inputMetadata === "object"
-			? (inputMetadata as Record<string, unknown>)
-			: {}),
-	});
+	const metadataObj = stripReservedOAuthClientMetadataExtensions(
+		inputMetadata ?? {},
+	);
 	const metadata =
 		metadataObj && Object.keys(metadataObj).length
 			? JSON.stringify(metadataObj)

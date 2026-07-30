@@ -8,6 +8,64 @@ import type {
 
 export type CimdMetadataProfile = "mcp-2026-07-28";
 
+export interface CimdClientCreatedEvent {
+	/** Newly persisted discovery-owned OAuth client. */
+	client: SchemaClient<Scope[]>;
+	/** Validated Client ID Metadata Document that produced the client. */
+	clientMetadataDocument: OAuthClientMetadata;
+	/** Better Auth endpoint context for the discovery request. */
+	context: GenericEndpointContext;
+}
+
+export interface CimdClientRefreshedEvent {
+	/** Discovery-owned OAuth client after metadata reconciliation. */
+	client: SchemaClient<Scope[]>;
+	/** Client state captured before metadata reconciliation. */
+	previousClient: SchemaClient<Scope[]>;
+	/** Validated Client ID Metadata Document used for reconciliation. */
+	clientMetadataDocument: OAuthClientMetadata;
+	/** Better Auth endpoint context for the discovery request. */
+	context: GenericEndpointContext;
+}
+
+export interface CimdMetadataFetchPolicy {
+	/**
+	 * Minimum time between metadata fetch starts for one exact client ID.
+	 * Fresh-cache hits and callers joining an in-flight fetch do not consume
+	 * this interval. Numeric values are seconds. Set to `0` to disable
+	 * per-client pacing.
+	 *
+	 * @default 1
+	 */
+	minimumFetchInterval?: number | string;
+	/**
+	 * Maximum metadata fetches in flight across the plugin instance.
+	 *
+	 * @default 16
+	 */
+	maximumConcurrentFetches?: number;
+	/**
+	 * Maximum metadata fetches in flight for one URL origin.
+	 *
+	 * @default 4
+	 */
+	maximumConcurrentFetchesPerOrigin?: number;
+	/**
+	 * Maximum fetch starts in a rolling 60-second window across the
+	 * plugin instance.
+	 *
+	 * @default 120
+	 */
+	maximumFetchesPerMinute?: number;
+	/**
+	 * Maximum fetch starts in a rolling 60-second window for one URL
+	 * origin.
+	 *
+	 * @default 30
+	 */
+	maximumFetchesPerOriginPerMinute?: number;
+}
+
 /**
  * Options for the Client ID Metadata Document plugin.
  *
@@ -34,15 +92,24 @@ export interface CimdOptions {
 	 */
 	metadataProfile?: CimdMetadataProfile;
 	/**
-	 * How frequently to re-fetch a client's metadata document to pick up
-	 * changes from the client.
+	 * Maximum and fallback cache freshness lifetime for a client's metadata
+	 * document. An expired entry is revalidated on the next client resolution;
+	 * the plugin does not perform periodic or background fetches.
 	 *
 	 * Accepts a number of seconds or a duration string (e.g. `"60m"`,
 	 * `"1d"`).
 	 *
 	 * @default "60m"
 	 */
-	refreshRate?: number | string;
+	metadataRevalidationInterval?: number | string;
+	/**
+	 * Bounded request-amplification policy for metadata document fetches.
+	 *
+	 * A permitted fetch consumes its concurrency and rolling-window budget when
+	 * it starts. Same-client concurrent resolutions coalesce, while fresh-cache
+	 * hits consume no budget. Limits reject immediately rather than queueing.
+	 */
+	metadataFetchPolicy?: CimdMetadataFetchPolicy;
 	/**
 	 * Maximum number of validated metadata documents retained by this plugin
 	 * instance. The least-recently-used entry is evicted when the bound is
@@ -79,8 +146,8 @@ export interface CimdOptions {
 	 * @default always allow
 	 */
 	isMetadataDocumentUrlAllowed?: (
-		url: string,
-		ctx: GenericEndpointContext,
+		clientIdUrl: string,
+		context: GenericEndpointContext,
 	) => boolean | Promise<boolean>;
 	/**
 	 * Called after a client is created from a metadata document for the
@@ -91,11 +158,7 @@ export interface CimdOptions {
 	 * This is a best-effort notification. A rejected callback is logged and
 	 * does not roll back an otherwise valid registration.
 	 */
-	onClientCreated?: (data: {
-		client: SchemaClient<Scope[]>;
-		metadata: OAuthClientMetadata;
-		ctx: GenericEndpointContext;
-	}) => void | Promise<void>;
+	onClientCreated?: (event: CimdClientCreatedEvent) => void | Promise<void>;
 	/**
 	 * Called after a client is refreshed from a re-fetched metadata
 	 * document. Use this for change-detection logging or updating derived
@@ -104,10 +167,5 @@ export interface CimdOptions {
 	 * This is a best-effort notification. A rejected callback is logged and
 	 * does not roll back an otherwise valid refresh.
 	 */
-	onClientRefreshed?: (data: {
-		client: SchemaClient<Scope[]>;
-		previousClient: SchemaClient<Scope[]>;
-		metadata: OAuthClientMetadata;
-		ctx: GenericEndpointContext;
-	}) => void | Promise<void>;
+	onClientRefreshed?: (event: CimdClientRefreshedEvent) => void | Promise<void>;
 }

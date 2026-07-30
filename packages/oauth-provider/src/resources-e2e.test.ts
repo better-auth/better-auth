@@ -894,6 +894,7 @@ describe("JWT access tokens emit RFC 9068 §2.2.3 `client_id` claim", () => {
 			scopes: ["read"],
 			resources: [resource],
 			enforcePerClientResources: false,
+			clientPrivileges: () => true,
 			silenceWarnings,
 		} as OAuthOptions<Scope[]>;
 		const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance(
@@ -918,6 +919,7 @@ describe("JWT access tokens emit RFC 9068 §2.2.3 `client_id` claim", () => {
 			body: {
 				scope: "read",
 				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read"],
 				redirect_uris: ["https://client.example.com/callback"],
 			},
 		});

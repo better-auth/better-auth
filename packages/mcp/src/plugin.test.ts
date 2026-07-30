@@ -16,7 +16,7 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
-import { mcp, mcpHandler, requireMcpAuth } from "./index";
+import { createMcpProtectedRequestHandler, mcp, requireMcpAuth } from "./index";
 
 describe("mcp plugin", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
@@ -380,12 +380,14 @@ describe("mcp plugin", async () => {
 				vi.unstubAllGlobals();
 			});
 
-			const handler = vi.fn(async (_request: Request, jwt: { sub?: string }) =>
-				Response.json({ sub: jwt.sub }),
+			const handler = vi.fn(
+				async (_request: Request, accessTokenClaims: { sub?: string }) =>
+					Response.json({ sub: accessTokenClaims.sub }),
 			);
-			const protect = mcpHandler(
+			const protect = createMcpProtectedRequestHandler(
 				{
-					verifyOptions: { issuer: baseURL, audience: baseURL },
+					issuer: baseURL,
+					audience: baseURL,
 					jwksUrl: `${baseURL}/jwks`,
 					requiredScopes: ["mcp:write"],
 				},

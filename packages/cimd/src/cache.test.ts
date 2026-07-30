@@ -44,8 +44,13 @@ const instance = await getTestInstance({
 			silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 		}),
 		cimd({
-			refreshRate: 10,
+			metadataRevalidationInterval: 10,
 			maxCacheEntries: 2,
+			metadataFetchPolicy: {
+				minimumFetchInterval: 0,
+				maximumFetchesPerMinute: 1_000,
+				maximumFetchesPerOriginPerMinute: 1_000,
+			},
 			fetchClientMetadataResource: metadataFetch,
 		}),
 	],
@@ -112,7 +117,7 @@ describe("CIMD HTTP metadata cache", () => {
 	it.each([
 		{
 			name: "wrong content type",
-			clientId: "https://wrong-content-type.example/client.json",
+			clientId: "https://cache-tests.example/wrong-content-type.json",
 			response: () =>
 				new Response("not metadata", {
 					status: 200,
@@ -121,7 +126,7 @@ describe("CIMD HTTP metadata cache", () => {
 		},
 		{
 			name: "oversized document",
-			clientId: "https://oversized-document.example/client.json",
+			clientId: "https://cache-tests.example/oversized-document.json",
 			response: () =>
 				new Response("x".repeat(5 * 1024 + 1), {
 					status: 200,
@@ -130,7 +135,7 @@ describe("CIMD HTTP metadata cache", () => {
 		},
 		{
 			name: "invalid JSON",
-			clientId: "https://invalid-json.example/client.json",
+			clientId: "https://cache-tests.example/invalid-json.json",
 			response: () =>
 				new Response("{", {
 					status: 200,
@@ -139,7 +144,7 @@ describe("CIMD HTTP metadata cache", () => {
 		},
 		{
 			name: "redirect response",
-			clientId: "https://redirect-response.example/client.json",
+			clientId: "https://cache-tests.example/redirect-response.json",
 			response: () =>
 				new Response(null, {
 					status: 302,
@@ -148,7 +153,7 @@ describe("CIMD HTTP metadata cache", () => {
 		},
 		{
 			name: "201 response",
-			clientId: "https://created-response.example/client.json",
+			clientId: "https://cache-tests.example/created-response.json",
 			response: () =>
 				new Response("{}", {
 					status: 201,
@@ -167,8 +172,8 @@ describe("CIMD HTTP metadata cache", () => {
 		).toBeNull();
 	});
 
-	it("reuses a fresh response and caps max-age by refreshRate", async () => {
-		const clientId = "https://fresh-cache.example/client.json";
+	it("reuses a fresh response and caps max-age by metadataRevalidationInterval", async () => {
+		const clientId = "https://cache-tests.example/fresh-cache.json";
 		let now = 1_800_000_000_000;
 		vi.spyOn(Date, "now").mockImplementation(() => now);
 		responders.set(clientId, async () =>
@@ -186,7 +191,7 @@ describe("CIMD HTTP metadata cache", () => {
 	});
 
 	it("honors Expires freshness", async () => {
-		const clientId = "https://expires-cache.example/client.json";
+		const clientId = "https://cache-tests.example/expires-cache.json";
 		const now = Date.now();
 		responders.set(clientId, async () =>
 			jsonMetadataResponse(clientId, {
@@ -201,7 +206,7 @@ describe("CIMD HTTP metadata cache", () => {
 	});
 
 	it("prefers shared-cache s-maxage over max-age and Expires", async () => {
-		const clientId = "https://shared-cache.example/client.json";
+		const clientId = "https://cache-tests.example/shared-cache.json";
 		let now = 1_800_000_000_000;
 		vi.spyOn(Date, "now").mockImplementation(() => now);
 		responders.set(clientId, async () =>
@@ -223,7 +228,8 @@ describe("CIMD HTTP metadata cache", () => {
 	});
 
 	it("treats s-maxage=0 as requiring immediate revalidation", async () => {
-		const clientId = "https://shared-cache-revalidation.example/client.json";
+		const clientId =
+			"https://cache-tests.example/shared-cache-revalidation.json";
 		let requestCount = 0;
 		responders.set(clientId, async (_input, init) => {
 			requestCount += 1;
@@ -254,17 +260,17 @@ describe("CIMD HTTP metadata cache", () => {
 		{
 			name: "duplicate s-maxage",
 			cacheControl: "s-maxage=0, s-maxage=600",
-			clientId: "https://duplicate-shared-cache.example/client.json",
+			clientId: "https://cache-tests.example/duplicate-shared-cache.json",
 		},
 		{
 			name: "invalid s-maxage with valid max-age",
 			cacheControl: "s-maxage=invalid, max-age=600",
-			clientId: "https://invalid-shared-cache.example/client.json",
+			clientId: "https://cache-tests.example/invalid-shared-cache.json",
 		},
 		{
 			name: "invalid max-age",
 			cacheControl: "max-age=invalid",
-			clientId: "https://invalid-private-cache.example/client.json",
+			clientId: "https://cache-tests.example/invalid-private-cache.json",
 		},
 	])("immediately revalidates an ambiguous freshness policy: $name", async ({
 		cacheControl,
@@ -294,7 +300,7 @@ describe("CIMD HTTP metadata cache", () => {
 	});
 
 	it("conditionally revalidates no-cache entries with ETag and accepts 304", async () => {
-		const clientId = "https://etag-cache.example/client.json";
+		const clientId = "https://cache-tests.example/etag-cache.json";
 		let requestCount = 0;
 		responders.set(clientId, async (_input, init) => {
 			requestCount += 1;
@@ -321,7 +327,7 @@ describe("CIMD HTTP metadata cache", () => {
 	});
 
 	it("conditionally revalidates with Last-Modified", async () => {
-		const clientId = "https://last-modified.example/client.json";
+		const clientId = "https://cache-tests.example/last-modified.json";
 		const lastModified = "Wed, 29 Jul 2026 14:00:00 GMT";
 		let requestCount = 0;
 		responders.set(clientId, async (_input, init) => {
@@ -344,7 +350,7 @@ describe("CIMD HTTP metadata cache", () => {
 	});
 
 	it("does not cache a no-store response", async () => {
-		const clientId = "https://no-store.example/client.json";
+		const clientId = "https://cache-tests.example/no-store.json";
 		responders.set(clientId, async (_input, init) => {
 			expect(new Headers(init?.headers).has("if-none-match")).toBe(false);
 			return jsonMetadataResponse(clientId, {
@@ -361,12 +367,12 @@ describe("CIMD HTTP metadata cache", () => {
 	it.each([
 		{
 			name: "Cache-Control private",
-			clientId: "https://private-cache.example/client.json",
+			clientId: "https://cache-tests.example/private-cache.json",
 			headers: { "cache-control": "private, max-age=600" },
 		},
 		{
 			name: "Vary wildcard",
-			clientId: "https://vary-wildcard.example/client.json",
+			clientId: "https://cache-tests.example/vary-wildcard.json",
 			headers: { "cache-control": "max-age=600", vary: "*" },
 		},
 	] satisfies {
@@ -392,9 +398,9 @@ describe("CIMD HTTP metadata cache", () => {
 
 	it("evicts the least-recently-used entry at the configured bound", async () => {
 		const clientIds = [
-			"https://bounded-cache-a.example/client.json",
-			"https://bounded-cache-b.example/client.json",
-			"https://bounded-cache-c.example/client.json",
+			"https://cache-tests.example/bounded-cache-a.json",
+			"https://cache-tests.example/bounded-cache-b.json",
+			"https://cache-tests.example/bounded-cache-c.json",
 		];
 		for (const clientId of clientIds) {
 			responders.set(clientId, async () =>
@@ -408,7 +414,7 @@ describe("CIMD HTTP metadata cache", () => {
 	});
 
 	it("rejects a 304 without a validated cache entry", async () => {
-		const clientId = "https://orphan-304.example/client.json";
+		const clientId = "https://cache-tests.example/orphan-304.json";
 		responders.set(clientId, async () => new Response(null, { status: 304 }));
 
 		expect((await authorize(clientId)).status).toBeGreaterThanOrEqual(400);
@@ -422,7 +428,7 @@ describe("CIMD HTTP metadata cache", () => {
 	});
 
 	it("rejects an unconditional 304 when a cached document has no validator", async () => {
-		const clientId = "https://unconditional-304.example/client.json";
+		const clientId = "https://cache-tests.example/unconditional-304.json";
 		let requestCount = 0;
 		responders.set(clientId, async (_input, init) => {
 			requestCount += 1;
@@ -443,7 +449,7 @@ describe("CIMD HTTP metadata cache", () => {
 	});
 
 	it("fails closed on an invalid refresh while preserving DB and cache state", async () => {
-		const clientId = "https://invalid-refresh.example/client.json";
+		const clientId = "https://cache-tests.example/invalid-refresh.json";
 		let requestCount = 0;
 		responders.set(clientId, async () => {
 			requestCount += 1;
@@ -491,7 +497,7 @@ describe("CIMD HTTP metadata cache", () => {
 	});
 
 	it("fails closed on a network refresh and retries later", async () => {
-		const clientId = "https://failed-refresh.example/client.json";
+		const clientId = "https://cache-tests.example/failed-refresh.json";
 		let requestCount = 0;
 		responders.set(clientId, async () => {
 			requestCount += 1;
@@ -515,7 +521,7 @@ describe("CIMD HTTP metadata cache", () => {
 	});
 
 	it("does not cache metadata when canonical persistence fails", async () => {
-		const clientId = "https://persistence-failure.example/client.json";
+		const clientId = "https://cache-tests.example/persistence-failure.json";
 		responders.set(clientId, async () =>
 			jsonMetadataResponse(clientId, { "cache-control": "max-age=60" }),
 		);

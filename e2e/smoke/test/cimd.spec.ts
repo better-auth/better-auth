@@ -73,7 +73,7 @@ describe("CIMD end-to-end flow", () => {
 					silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 				}),
 				cimd({
-					refreshRate: "60m",
+					metadataRevalidationInterval: "60m",
 					fetchClientMetadataResource,
 				}),
 			],

@@ -39,6 +39,11 @@ export const schema = {
 				type: "string[]",
 				required: false,
 			},
+			clientCredentialsScopes: {
+				type: "string[]",
+				required: false,
+				defaultValue: [],
+			},
 			// Recommended client data
 			userId: {
 				type: "string",

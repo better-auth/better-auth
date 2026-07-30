@@ -1,5 +1,5 @@
 ---
-"@better-auth/cimd": minor
+"@better-auth/cimd": major
 "@better-auth/oauth-provider": minor
 ---
 
@@ -15,6 +15,8 @@ Add `@better-auth/cimd` for [Client ID Metadata Document draft-02](https://datat
 
 OAuth Provider also exposes `clientDiscovery` for custom verified client-resolution plugins. A discovery may provide `fetchClientMetadataResource`, and its stable `id` is persisted as client provenance.
 
-Prerelease adopters must rename `createCimdResolver` to `cimdClientDiscovery` and `MetadataDocumentFetch` to `ClientMetadataResourceFetch`. `CimdOptions` is now required because `fetchClientMetadataResource` is mandatory. Remove the prerelease `allowFetch`, `fetchMetadataDocument`, and `allowLoopback` options.
+Prerelease adopters must rename `createCimdResolver` or `cimdClientDiscovery` to `createCimdClientDiscovery`, `ClientIdMetadataDocumentResult` to `CimdMetadataValidationResult`, `ValidateCimdMetadataOptions` to `CimdMetadataValidationOptions`, `isUrlClientId` to `isCimdClientIdUrlCandidate`, and `MetadataDocumentFetch` to `ClientMetadataResourceFetch`. Rename `refreshRate` to `metadataRevalidationInterval`; there is no compatibility fallback. Numeric revalidation and `minimumFetchInterval` values are seconds.
+
+Lifecycle callbacks now receive named `CimdClientCreatedEvent` and `CimdClientRefreshedEvent` values. Read validated metadata from `clientMetadataDocument` instead of `metadata`, and the endpoint context from `context` instead of `ctx`. `CimdOptions` is now required because `fetchClientMetadataResource` is mandatory. Remove the prerelease `allowFetch`, `fetchMetadataDocument`, and `allowLoopback` options.
 
 When adopting CIMD, remove `allowUnauthenticatedClientRegistration` unless the authorization server deliberately supports Dynamic Client Registration as a separate fallback.

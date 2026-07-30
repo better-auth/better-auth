@@ -9,7 +9,7 @@ import { getTestInstance } from "better-auth/test";
 import type { Listener } from "listhen";
 import { listen } from "listhen";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { cimd, cimdClientDiscovery } from "./index";
+import { cimd, createCimdClientDiscovery } from "./index";
 
 const PKCE_CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 
@@ -237,7 +237,7 @@ describe("Client ID Metadata Document - integration", async () => {
 				response_types: ["code"],
 			}),
 		);
-		const restartedDiscovery = cimdClientDiscovery({
+		const restartedDiscovery = createCimdClientDiscovery({
 			fetchClientMetadataResource: metadataTransport,
 		});
 

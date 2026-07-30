@@ -629,6 +629,27 @@ describe("canonical client metadata document registration", () => {
 				updatedAt: new Date(),
 			},
 		});
+		const collisionCause = Object.assign(
+			new Error("unique constraint on managed client"),
+			{ code: "23505" },
+		);
+		const originalTransaction = instance.ctx.adapter.transaction.bind(
+			instance.ctx.adapter,
+		);
+		vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
+			async (callback) =>
+				originalTransaction(async (transactionAdapter) => {
+					const originalCreate =
+						transactionAdapter.create.bind(transactionAdapter);
+					vi.spyOn(transactionAdapter, "create").mockImplementation(
+						async (input) => {
+							if (input.model === "oauthClient") throw collisionCause;
+							return originalCreate(input);
+						},
+					);
+					return callback(transactionAdapter);
+				}),
+		);
 
 		await expect(
 			registerClientMetadataDocument(
@@ -647,7 +668,7 @@ describe("canonical client metadata document registration", () => {
 					},
 				},
 			),
-		).rejects.toThrow();
+		).rejects.toBe(collisionCause);
 
 		expect(
 			await instance.ctx.adapter.findOne({
@@ -773,7 +794,7 @@ describe("canonical client metadata document registration", () => {
 		});
 	});
 
-	it("converges a metadata refresh after a concurrent resource-link insert", async () => {
+	it("converges a metadata refresh only after the exact raced link is committed", async () => {
 		const resource = "https://api.example.com/concurrent-link";
 		const instance = await boot({ resources: [resource] }, true);
 		const clientId = "https://client.example.com/concurrent-link.json";
@@ -859,6 +880,182 @@ describe("canonical client metadata document registration", () => {
 			where: [{ field: "clientId", value: clientId }],
 		});
 		expect(links.map((link) => link.resourceId)).toEqual([resource]);
+	});
+
+	it("rethrows an unproven link-row unique cause without retrying", async () => {
+		const resource = "https://api.example.com/unproven-link";
+		const instance = await boot({ resources: [resource] }, true);
+		const clientId = "https://client.example.com/unproven-link.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+		const created = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				metadata: {
+					client_id: clientId,
+					client_name: "Before Unproven Link",
+					redirect_uris: ["https://client.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			},
+		);
+		instance.opts.clientRegistrationDefaultResources = [resource];
+
+		const uniqueCause = Object.assign(
+			new Error("unique constraint without committed link"),
+			{ code: "23505" },
+		);
+		const originalTransaction = instance.ctx.adapter.transaction.bind(
+			instance.ctx.adapter,
+		);
+		let transactionAttempts = 0;
+		vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
+			async (callback) => {
+				transactionAttempts += 1;
+				return originalTransaction(async (transactionAdapter) => {
+					const originalCreate =
+						transactionAdapter.create.bind(transactionAdapter);
+					vi.spyOn(transactionAdapter, "create").mockImplementation(
+						async (input) => {
+							if (input.model === "oauthClientResource") {
+								throw uniqueCause;
+							}
+							return originalCreate(input);
+						},
+					);
+					return callback(transactionAdapter);
+				});
+			},
+		);
+
+		await expect(
+			registerClientMetadataDocument(endpointContext, instance.opts, {
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				existingClient: created.client,
+				metadata: {
+					client_id: clientId,
+					client_name: "After Unproven Link",
+					redirect_uris: ["https://client.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			}),
+		).rejects.toBe(uniqueCause);
+		expect(transactionAttempts).toBe(1);
+		expect(
+			await instance.ctx.adapter.findOne({
+				model: "oauthClientResource",
+				where: [
+					{ field: "clientId", value: clientId },
+					{ field: "resourceId", value: resource },
+				],
+			}),
+		).toBeNull();
+	});
+
+	it("preserves an unrelated unique error thrown by client update", async () => {
+		const instance = await boot();
+		const clientId = "https://client.example.com/update-unique.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+		const created = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				metadata: {
+					client_id: clientId,
+					client_name: "Before Update Failure",
+					redirect_uris: ["https://client.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			},
+		);
+		const uniqueCause = Object.assign(
+			new Error("unique constraint from unrelated update field"),
+			{ code: "23505" },
+		);
+		const originalTransaction = instance.ctx.adapter.transaction.bind(
+			instance.ctx.adapter,
+		);
+		let transactionAttempts = 0;
+		vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
+			async (callback) => {
+				transactionAttempts += 1;
+				return originalTransaction(async (transactionAdapter) => {
+					vi.spyOn(transactionAdapter, "update").mockRejectedValueOnce(
+						uniqueCause,
+					);
+					return callback(transactionAdapter);
+				});
+			},
+		);
+
+		await expect(
+			registerClientMetadataDocument(endpointContext, instance.opts, {
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				existingClient: created.client,
+				metadata: {
+					client_id: clientId,
+					client_name: "After Update Failure",
+					redirect_uris: ["https://client.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			}),
+		).rejects.toBe(uniqueCause);
+		expect(transactionAttempts).toBe(1);
+	});
+
+	it("preserves an unrelated unique error thrown by the transaction", async () => {
+		const instance = await boot();
+		const clientId = "https://client.example.com/transaction-unique.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+		const metadata = {
+			client_id: clientId,
+			client_name: "Transaction Failure",
+			redirect_uris: ["https://client.example.com/callback"],
+			token_endpoint_auth_method: "none" as const,
+		};
+		await registerClientMetadataDocument(endpointContext, instance.opts, {
+			clientId,
+			clientDiscoveryId: "test-client-discovery",
+			metadata,
+		});
+		const uniqueCause = {
+			kind: "oauth-client-row-unique",
+			cause: new Error("coincidental nested cause"),
+			code: "23505",
+			message: "unique constraint from transaction",
+		};
+		const originalTransaction = instance.ctx.adapter.transaction.bind(
+			instance.ctx.adapter,
+		);
+		let transactionAttempts = 0;
+		vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
+			async (callback) => {
+				transactionAttempts += 1;
+				if (transactionAttempts === 1) throw uniqueCause;
+				return originalTransaction(callback);
+			},
+		);
+
+		await expect(
+			registerClientMetadataDocument(endpointContext, instance.opts, {
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				metadata,
+			}),
+		).rejects.toBe(uniqueCause);
+		expect(transactionAttempts).toBe(1);
 	});
 
 	it("does not mask a non-unique persistence failure when the fixed ID already exists", async () => {

@@ -89,28 +89,59 @@ describe("resource server challenge", () => {
 	});
 
 	it("rejects header-injection characters in challenge params", () => {
+		const insufficientScopeError = createInsufficientScopeError([
+			"files:write",
+		]);
+		(
+			insufficientScopeError.body as {
+				error_description: string;
+			}
+		).error_description = 'bad "scope"\r\nSet-Cookie: x=y';
+
 		expect(() =>
 			createResourceServerChallenge(
-				createInsufficientScopeError(
-					["files:write"],
-					'bad "scope"\r\nSet-Cookie: x=y',
-				),
+				insufficientScopeError,
+				"https://api.example.com",
+			),
+		).toThrow("invalid error_description");
+	});
+
+	it("retains serialization-time validation for a mutated typed scope error", () => {
+		const insufficientScopeError = createInsufficientScopeError([
+			"files:write",
+		]);
+		(
+			insufficientScopeError.body as {
+				error_description: string;
+			}
+		).error_description = "café";
+
+		expect(() =>
+			createResourceServerChallenge(
+				insufficientScopeError,
 				"https://api.example.com",
 			),
 		).toThrow("invalid error_description");
 	});
 
 	it.each([
-		'bad "quote"',
-		"bad\\slash",
-		"café",
-	])("rejects an invalid Bearer error_description: %s", (description) => {
+		42,
+		null,
+	])("rejects a non-string insufficient-scope error_description during serialization: %j", (description) => {
+		const insufficientScopeError = createInsufficientScopeError([
+			"files:write",
+		]);
+		if (!insufficientScopeError.body) {
+			throw new Error("insufficient-scope error body was not created");
+		}
+		Reflect.set(insufficientScopeError.body, "error_description", description);
+
 		expect(() =>
 			createResourceServerChallenge(
-				createInsufficientScopeError(["files:write"], description),
+				insufficientScopeError,
 				"https://api.example.com",
 			),
-		).toThrow("invalid error_description");
+		).toThrow(new TypeError("invalid error_description"));
 	});
 
 	it("rejects invalid configured challenge scope tokens", () => {

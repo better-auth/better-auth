@@ -1,4 +1,7 @@
-export { mcpHandler } from "./handler";
+export {
+	createMcpProtectedRequestHandler,
+	type McpProtectedRequestHandlerOptions,
+} from "./handler";
 export { type McpOptions, mcp } from "./plugin";
 export {
 	type RequireMcpAuthOptions,

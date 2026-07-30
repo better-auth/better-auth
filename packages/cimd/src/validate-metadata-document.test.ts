@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-	isUrlClientId,
+	isCimdClientIdUrlCandidate,
 	validateCimdMetadata,
 	validateClientIdUrl,
 } from "./validate-metadata-document";
@@ -18,39 +18,41 @@ function validMetadata(
 	};
 }
 
-describe("isUrlClientId", () => {
+describe("isCimdClientIdUrlCandidate", () => {
 	it("accepts https:// URLs", () => {
-		expect(isUrlClientId("https://example.com/meta")).toBe(true);
+		expect(isCimdClientIdUrlCandidate("https://example.com/meta")).toBe(true);
 	});
 
 	it("matches mixed-case URL schemes (schemes are case-insensitive)", () => {
-		expect(isUrlClientId("HTTPS://example.com/meta")).toBe(true);
-		expect(isUrlClientId("HtTpS://example.com/meta")).toBe(true);
+		expect(isCimdClientIdUrlCandidate("HTTPS://example.com/meta")).toBe(true);
+		expect(isCimdClientIdUrlCandidate("HtTpS://example.com/meta")).toBe(true);
 	});
 
 	it("routes https:// loopback-shaped IDs to validation", () => {
-		expect(isUrlClientId("https://127.0.0.1/meta")).toBe(true);
-		expect(isUrlClientId("https://localhost/meta")).toBe(true);
+		expect(isCimdClientIdUrlCandidate("https://127.0.0.1/meta")).toBe(true);
+		expect(isCimdClientIdUrlCandidate("https://localhost/meta")).toBe(true);
 	});
 
 	it("does not match http:// loopback", () => {
-		expect(isUrlClientId("http://localhost/meta")).toBe(false);
-		expect(isUrlClientId("http://127.0.0.1:8080/meta")).toBe(false);
-		expect(isUrlClientId("http://[::1]/meta")).toBe(false);
-		expect(isUrlClientId("http://app.localhost/meta")).toBe(false);
+		expect(isCimdClientIdUrlCandidate("http://localhost/meta")).toBe(false);
+		expect(isCimdClientIdUrlCandidate("http://127.0.0.1:8080/meta")).toBe(
+			false,
+		);
+		expect(isCimdClientIdUrlCandidate("http://[::1]/meta")).toBe(false);
+		expect(isCimdClientIdUrlCandidate("http://app.localhost/meta")).toBe(false);
 	});
 
 	it("rejects http:// non-loopback", () => {
-		expect(isUrlClientId("http://example.com/meta")).toBe(false);
+		expect(isCimdClientIdUrlCandidate("http://example.com/meta")).toBe(false);
 	});
 
 	it("rejects non-URL strings", () => {
-		expect(isUrlClientId("my-client-id")).toBe(false);
-		expect(isUrlClientId("ftp://example.com/meta")).toBe(false);
+		expect(isCimdClientIdUrlCandidate("my-client-id")).toBe(false);
+		expect(isCimdClientIdUrlCandidate("ftp://example.com/meta")).toBe(false);
 	});
 
 	it("rejects empty string", () => {
-		expect(isUrlClientId("")).toBe(false);
+		expect(isCimdClientIdUrlCandidate("")).toBe(false);
 	});
 });
 
@@ -260,6 +262,7 @@ describe("validateCimdMetadata", () => {
 			fetchUrl,
 			validMetadata(fetchUrl, { client_name: "  Display Name  " }),
 		);
+		expect(result.error).toBeUndefined();
 		expect(result.valid).toBe(true);
 		expect(result.metadata?.client_name).toBe("  Display Name  ");
 	});
@@ -385,7 +388,7 @@ describe("validateCimdMetadata", () => {
 		expect(result.error).toContain("client_secret_expires_at");
 	});
 
-	it("rejects server-owned registration controls", () => {
+	it("rejects recognized credential, privilege, and server-control fields", () => {
 		for (const field of [
 			"disabled",
 			"skip_consent",
@@ -412,11 +415,6 @@ describe("validateCimdMetadata", () => {
 			"expiresAt",
 			"createdAt",
 			"updatedAt",
-			"name",
-			"uri",
-			"icon",
-			"tos",
-			"policy",
 			"softwareId",
 			"softwareVersion",
 			"softwareStatement",
@@ -425,9 +423,6 @@ describe("validateCimdMetadata", () => {
 			"jwksUri",
 			"dpopBoundAccessTokens",
 			"subjectType",
-			"public",
-			"type",
-			"metadata",
 		]) {
 			const result = validateCimdMetadata(
 				fetchUrl,
@@ -438,24 +433,43 @@ describe("validateCimdMetadata", () => {
 		}
 	});
 
-	it("preserves non-conflicting OAuth metadata extensions", () => {
+	it("ignores unknown members and generic internal storage aliases", () => {
 		const result = validateCimdMetadata(
 			fetchUrl,
 			validMetadata(fetchUrl, {
-				contacts: ["security@example.com"],
+				name: "Internal alias",
+				uri: "https://ignored.example.com",
+				icon: "https://ignored.example.com/icon.png",
+				tos: "https://ignored.example.com/tos",
+				policy: "https://ignored.example.com/policy",
+				metadata: { privileged: true },
+				clientCredentialsScopes: ["admin"],
+				client_credentials_scopes: ["admin"],
+				public: true,
+				type: "web",
 				"https://example.com/oauth/custom": {
 					display_mode: "compact",
 				},
 			}),
 		);
 
+		expect(result.error).toBeUndefined();
 		expect(result.valid).toBe(true);
-		expect(result.metadata).toMatchObject({
-			contacts: ["security@example.com"],
-			"https://example.com/oauth/custom": {
-				display_mode: "compact",
-			},
-		});
+		for (const field of [
+			"name",
+			"uri",
+			"icon",
+			"tos",
+			"policy",
+			"metadata",
+			"clientCredentialsScopes",
+			"client_credentials_scopes",
+			"public",
+			"type",
+			"https://example.com/oauth/custom",
+		]) {
+			expect(result.metadata).not.toHaveProperty(field);
+		}
 	});
 
 	it("rejects symmetric auth method client_secret_post", () => {
@@ -780,9 +794,9 @@ describe("validateCimdMetadata", () => {
 				client_id: fetchUrl,
 				client_name: "Custom Origin Client",
 				redirect_uris: ["https://example.com/callback"],
-				custom_field: "https://evil.com/hook",
+				logo_uri: "https://evil.com/logo.png",
 			},
-			{ originBoundFields: ["custom_field"] },
+			{ originBoundFields: ["logo_uri"] },
 		);
 		expect(result.valid).toBe(false);
 		expect(result.error).toContain("same origin");

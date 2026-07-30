@@ -17,6 +17,10 @@ describe("oauth credential responses carry no-store", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
+				scopes: ["m2m:read"],
+				clientPrivileges: ({ action }) =>
+					action === "create" ||
+					action === "configure-client-credentials-scopes",
 				allowDynamicClientRegistration: true,
 				silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 			}),
@@ -40,6 +44,7 @@ describe("oauth credential responses carry no-store", async () => {
 				redirect_uris: [redirectUri],
 				application_type: "native",
 				skip_consent: true,
+				client_credentials_scopes: ["m2m:read"],
 			},
 		});
 		expect(oauthClient?.client_secret).toBeDefined();

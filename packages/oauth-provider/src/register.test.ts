@@ -442,8 +442,8 @@ describe("oauth register", async () => {
 		expect(response?.client_id).toBeDefined();
 		expect(response?.client_secret).toBeDefined();
 		// Metadata should be spread at the top level of the response
-		expect(response?.foo).toBe("bar");
-		expect(response?.nested).toEqual({ key: "value" });
+		expect(Reflect.get(response, "foo")).toBe("bar");
+		expect(Reflect.get(response, "nested")).toEqual({ key: "value" });
 	});
 
 	it("rejects a bare JWK array through dynamic registration", async () => {
@@ -551,8 +551,8 @@ describe("oauth register", async () => {
 		});
 		expect(response?.client_id).toBeDefined();
 		// metadata contents should be spread at the top level, extra fields not in schema should be stripped
-		expect(response?.fromMetadata).toBe("value1");
-		expect(response?.customField).toBe(undefined);
+		expect(Reflect.get(response, "fromMetadata")).toBe("value1");
+		expect(Reflect.get(response, "customField")).toBeUndefined();
 	});
 
 	it("round-trips backchannel_logout_uri and backchannel_logout_session_required", async () => {
@@ -1057,7 +1057,7 @@ describe("oauth register - protected dynamic registration", async () => {
 
 		return false;
 	});
-	const { customFetchImpl } = await getTestInstance({
+	const { auth, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
 			jwt(),
@@ -1090,6 +1090,8 @@ describe("oauth register - protected dynamic registration", async () => {
 					client_name: "Machine Client",
 					redirect_uris: [redirectUri],
 					grant_types: ["client_credentials"],
+					client_credentials_scopes: ["admin"],
+					clientCredentialsScopes: ["admin"],
 				}),
 			},
 		);
@@ -1104,6 +1106,36 @@ describe("oauth register - protected dynamic registration", async () => {
 		expect(body.reference_id).toBe("infra-provisioner");
 		expect(body.user_id).toBeUndefined();
 		expect(body.token_endpoint_auth_method).toBe("client_secret_basic");
+		expect(body).not.toHaveProperty("client_credentials_scopes");
+		expect(body).not.toHaveProperty("clientCredentialsScopes");
+		const context = await auth.$context;
+		const stored = await context.adapter.findOne<{
+			clientCredentialsScopes?: string[] | null;
+		}>({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: body.client_id }],
+		});
+		expect(stored?.clientCredentialsScopes).toEqual([]);
+
+		const tokenResponse = await customFetchImpl(
+			`${authServerBaseUrl}/api/auth/oauth2/token`,
+			{
+				method: "POST",
+				headers: {
+					authorization: `Basic ${Buffer.from(
+						`${body.client_id}:${body.client_secret}`,
+					).toString("base64")}`,
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+				}),
+			},
+		);
+		expect(tokenResponse.status).toBe(400);
+		expect(await tokenResponse.json()).toMatchObject({
+			error: "unauthorized_client",
+		});
 		expect(validateInitialAccessToken).toHaveBeenCalledWith(
 			expect.objectContaining({
 				initialAccessToken: validInitialAccessToken,
@@ -1584,7 +1616,7 @@ describe("oauth register - application_type", async () => {
 
 		const wire = schemaToOAuth(stored);
 		expect(wire.application_type).toBe("native");
-		expect(wire.custom).toBe("value");
+		expect(Reflect.get(wire, "custom")).toBe("value");
 		expect(wire).not.toHaveProperty("applicationType");
 	});
 
@@ -1604,6 +1636,7 @@ describe("oauth register - application_type", async () => {
 			grantTypes: ["client_credentials"],
 			responseTypes: ["token"],
 			scopes: ["admin"],
+			clientCredentialsScopes: ["admin"],
 			expiresAt: "2099-01-01T00:00:00.000Z",
 			createdAt: "2099-01-01T00:00:00.000Z",
 			updatedAt: "2099-01-01T00:00:00.000Z",
@@ -1627,6 +1660,7 @@ describe("oauth register - application_type", async () => {
 			type: "native",
 			metadata: { nested: "injected" },
 			resources: ["https://api.example.com/stale"],
+			client_credentials_scopes: ["admin"],
 		};
 		const stored = oauthToSchema({
 			client_id: "reserved-metadata-client",
@@ -1641,9 +1675,9 @@ describe("oauth register - application_type", async () => {
 		});
 
 		const wire = schemaToOAuth(stored);
-		expect(wire.custom).toBe("preserved");
+		expect(Reflect.get(wire, "custom")).toBe("preserved");
 		for (const [field, injectedValue] of Object.entries(reservedMetadata)) {
-			expect(wire[field]).not.toEqual(injectedValue);
+			expect(Reflect.get(wire, field)).not.toEqual(injectedValue);
 		}
 	});
 
