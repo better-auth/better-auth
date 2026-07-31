@@ -45,9 +45,13 @@ export interface McpOptions extends OAuthOptions<Scope[]> {
 		Scope[]
 	>["refreshTokenReuseInterval"];
 	/**
-	 * The protected resource identifier (RFC 8707 / RFC 9728) that access tokens
-	 * are bound to. Published as `resource` in the protected resource metadata,
-	 * added to `resources`, and used as the expected token audience.
+	 * The canonical protected resource identifier (RFC 8707 / RFC 9728) for this
+	 * MCP server. Issued tokens are audience-bound to it, and it is published as
+	 * `resource` in the protected resource metadata, added to `resources`, and
+	 * used as the expected token audience.
+	 *
+	 * Must be an HTTPS URL with no query, fragment, or credentials. HTTP is
+	 * accepted only on loopback hosts for local development.
 	 */
 	resource: string;
 }

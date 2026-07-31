@@ -148,6 +148,8 @@ mcp({
 })
 ```
 
+`resource` must be an HTTPS URL with no query, fragment, or credentials; HTTP is accepted only on loopback hosts for local development. A resource whose URL requires a query component cannot use `mcp()`, `requireMcpAuth`, or `createMcpProtectedRequestHandler`. Verify its tokens with `verifyAccessTokenRequest` from `better-auth/oauth2`, and build challenges with `createResourceServerChallenge` from `@better-auth/oauth-provider`.
+
 `mcp()` also registers this identifier as a default client-registration resource. A dynamically registered client is linked to the MCP resource even when its registration request omits the non-standard `resources` field. Any `clientRegistrationDefaultResources` you provide are preserved, and the MCP resource is appended once.
 
 ### Optional DCR fallback
@@ -244,7 +246,7 @@ requireMcpAuth(auth, handler, {
 })
 ```
 
-When the required scopes depend on the request — one tool needs more than another — throw `createInsufficientScopeError` from the handler to challenge for exactly those scopes:
+When the required scopes depend on the request (one tool needs more than another), throw `createInsufficientScopeError` from the handler to challenge for exactly those scopes:
 
 ```ts
 import { createInsufficientScopeError } from "better-auth/oauth2";
@@ -258,7 +260,7 @@ requireMcpAuth(auth, async (request, accessTokenClaims) => {
 ```
 
 <Callout type="warn">
-  Reach for this only when re-authorizing would actually help. A denial the user cannot fix by granting scopes — they are not a member of the organization, the record belongs to someone else — should stay an ordinary `403`: challenging sends them through consent to no effect. Errors your handler throws for any other reason propagate to your framework unchanged.
+  Reach for this only when re-authorizing would actually help. A denial the user cannot fix by granting scopes (they are not a member of the organization, the record belongs to someone else) should stay an ordinary `403`: challenging sends them through consent to no effect. Errors your handler throws for any other reason propagate to your framework unchanged.
 </Callout>
 
 ## Configuration

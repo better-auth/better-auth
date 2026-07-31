@@ -243,7 +243,7 @@ interface YourExtensionMetadata {
 type ExtendedOAuthClient = OAuthClient & YourExtensionMetadata;
 ```
 
-Remove `clientCredentialGrantDefaultScopes`. Administrative client creation and updates now use `client_credentials_scopes`; assigning a non-empty value requires `clientPrivileges` to approve `configure-client-credentials-scopes`. If you adopted the prerelease action name `configure-client-credentials`, rename it to `configure-client-credentials-scopes`; there is no compatibility fallback. DCR, CIMD, and user-managed routes cannot assign it, and removing `client_credentials` from a client clears the stored ceiling.
+Remove `clientCredentialGrantDefaultScopes`. Administrative client creation and updates now use `client_credentials_scopes`; assigning a non-empty value requires `clientPrivileges` to approve `configure-client-credentials-scopes`. DCR, CIMD, and user-managed routes cannot assign it, and removing `client_credentials` from a client clears the stored ceiling.
 
 ### Protected resources replace the audience list
 
@@ -284,9 +284,9 @@ The plain token-checking helper `verifyAccessToken` is renamed `verifyBearerToke
 
 Protected operations now separate scope enforcement from generic authorization failures. Configure required scopes with `requiredScopes`, and provide `isScopeSatisfied` only when your scope model is hierarchical. Use `createInsufficientScopeError` for a denial that the client can solve by authorizing more scopes.
 
-The resource-server challenge API is no longer exception-driven. Replace `raiseResourceServerChallenge` with `createResourceServerChallenge`, which returns an `APIError` for recognized token or scope failures and `undefined` for unrelated errors. Preserve ordinary handler responses and unrelated thrown values instead of converting them into OAuth challenges.
+`createResourceServerChallenge` builds the response for a protected-resource challenge. It returns an `APIError` for recognized token or scope failures and `undefined` for unrelated errors. Ordinary handler responses and unrelated thrown values keep their identity instead of turning into OAuth challenges.
 
-**What to do:** rename protected-operation `scopes` to `requiredScopes` and challenge `scope` to `challengeScopes`. Update any wrapper around `raiseResourceServerChallenge` to handle the new return value.
+**What to do:** rename protected-operation `scopes` to `requiredScopes`, and use `challengeScopes` for the challenge hint.
 
 ### Sign-out revokes session tokens
 
@@ -412,11 +412,11 @@ The MCP plugin moves from `better-auth` into `@better-auth/mcp`, built on the OA
 
 **What to do:**
 
-1. Install `@better-auth/mcp`, `@better-auth/cimd`, and the official version 2 MCP client or server package needed by your application. Authorization plugins and protected-request helpers come from the `@better-auth/mcp` package root. MCP protocol and transport code comes from `@modelcontextprotocol/client` and `@modelcontextprotocol/server`; remove imports from the deleted `@better-auth/mcp/client` and `@better-auth/mcp/client/adapters` subpaths.
+1. Install `@better-auth/mcp`, `@better-auth/cimd`, and the official version 2 MCP client or server package needed by your application. Authorization plugins and protected-request helpers come from the `@better-auth/mcp` package root. The in-core MCP client (`createMcpAuthClient` and its adapters under `better-auth/plugins/mcp/client`) is removed; MCP protocol and transport code comes from `@modelcontextprotocol/client` and `@modelcontextprotocol/server`.
 2. Add the `jwt()` plugin, which is now required.
 3. Compose `mcp({ ... })` with `cimd({ fetchClientMetadataResource, metadataProfile: "mcp-2026-07-28" })`. Client ID Metadata Documents are the recommended registration mechanism for MCP 2026-07-28, which pins CIMD draft-00, and `mcp()` no longer enables Dynamic Client Registration.
-4. Move options that were nested under `oidcConfig` up to the top level of `mcp({ ... })`. Replace `resourceMetadataMappings` with one canonical HTTPS `resource`, for example `resource: "https://api.example.com/mcp"`.
-5. Rename `withMcpAuth` to `requireMcpAuth` and `mcpHandler` to `createMcpProtectedRequestHandler`. The standalone factory accepts one flat `McpProtectedRequestHandlerOptions` object with `issuer`, a single `audience`, optional `jwtVerifyOptions`, verification fields, and challenge fields. Its callback receives `accessTokenClaims`. In protected-route options, rename `scopes` to `requiredScopes` and challenge `scope` to `challengeScopes`.
+4. Move options that were nested under `oidcConfig` up to the top level of `mcp({ ... })`. Replace `resourceMetadataMappings` with one canonical HTTPS `resource`, for example `resource: "https://api.example.com/mcp"`. `resource` was optional and defaulted to the server origin; it is now required and must be a query-free HTTPS URL without credentials or a fragment. HTTP is accepted only on loopback hosts for development.
+5. Rename `withMcpAuth` to `requireMcpAuth` and `mcpHandler` to `createMcpProtectedRequestHandler`. The standalone factory accepts one flat `McpProtectedRequestHandlerOptions` object with `issuer`, a single `audience`, optional `jwtVerifyOptions`, verification fields, and challenge fields. Its callback receives `accessTokenClaims`. In protected-route options, rename `scopes` to `requiredScopes`; use the new `challengeScopes` option to advertise scopes in `WWW-Authenticate` challenges.
 6. If application code raised or caught scope challenges directly, replace the exception-driven API with `createInsufficientScopeError`, `isInsufficientScopeError`, and `createResourceServerChallenge`.
 7. Replace the session-oriented MCP route with the SDK v2 `createMcpHandler`, set `legacy: "reject"`, wrap its handler with `requireMcpAuth`, and export only `POST`.
 8. Regenerate or migrate your schema.
@@ -702,5 +702,14 @@ Update prerelease CIMD integrations as follows:
 The transport must resolve once, reject RFC 6890 addresses, pin the approved address, preserve TLS hostname verification, and refuse redirects. Calling `globalThis.fetch` after a separate DNS check is not safe because Fetch can resolve the hostname again.
 
 The default `originBoundFields` no longer includes `redirect_uris`; requested redirects still require an exact match, and the consent page should show both the client-ID and redirect hosts. Cache freshness follows HTTP cache headers, with `private` and `Vary: *` treated as noncacheable. A stale refresh failure preserves stored state but fails the current request closed. Lifecycle hooks remain best-effort notifications, and `onClientRefreshed` now receives `previousClient`. Add nullable `oauthClient.clientDiscoveryId`, set it to `"cimd"` only for known CIMD-owned clients, and leave every managed or DCR client `NULL`. See the [CIMD requirements](/docs/plugins/cimd#draft-02-validation) for the complete contract.
+
+An earlier 1.7 prerelease shipped a different OAuth-provider and MCP surface. If you adopted it, update these names before finishing the upgrade:
+
+* Replace `raiseResourceServerChallenge` with `createResourceServerChallenge`.
+* The package root no longer exports `checkOAuthClient` or `oauthToSchema`.
+* The `@better-auth/mcp/client` and `@better-auth/mcp/client/adapters` subpaths are removed; use the official version 2 MCP packages.
+* The challenge `scope` option is renamed `challengeScopes`.
+* `mcp()` rejects a `resource` containing a query string; move discriminators into the path.
+* The client-privileges action `configure-client-credentials` is renamed `configure-client-credentials-scopes`.
 
 Two habits make this cheaper. Read `revert` entries in the changelog, not just `feat` and `fix`; a revert is a migration for you even though it does not announce itself as breaking. Bump only the packages that carry the change, and confirm your own plugins do not import the reverted surface before you rebuild them.

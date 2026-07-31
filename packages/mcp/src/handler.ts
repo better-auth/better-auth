@@ -82,7 +82,9 @@ export function validateMcpResource(resource: unknown): string {
 		throw new TypeError("MCP resource URL must not contain a fragment");
 	}
 	if (resource.includes("?")) {
-		throw new TypeError("MCP resource URL must not contain a query");
+		throw new TypeError(
+			"MCP resource URL must not contain a query; to protect a query-carrying resource, verify tokens with verifyAccessTokenRequest and build challenges with createResourceServerChallenge",
+		);
 	}
 	if (
 		url.protocol !== "https:" &&
