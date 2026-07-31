@@ -370,10 +370,6 @@ export const checkVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			if (!isValidEmail.success) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
-			const user = await ctx.context.internalAdapter.findUserByEmail(email);
-			if (!user) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
-			}
 			const identifier = toOTPIdentifier(ctx.body.type, email);
 			const verificationValue =
 				await ctx.context.internalAdapter.findVerificationValue(identifier);
@@ -404,6 +400,14 @@ export const checkVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 					},
 				);
 				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+			}
+			const user = await ctx.context.internalAdapter.findUserByEmail(email);
+			if (!user) {
+				/**
+				 * safe to leak the existence of a user, given the user has already the OTP from the
+				 * email
+				 */
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 			return ctx.json({
 				success: true,
