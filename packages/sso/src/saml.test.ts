@@ -6714,6 +6714,18 @@ describe("SAML user resolution HTTP", () => {
 		});
 	}
 
+	async function replacePersistedSAMLConfiguration(
+		instance: Awaited<ReturnType<typeof createSAMLUserResolutionInstance>>,
+		samlConfiguration: ReturnType<typeof persistedSAMLConfiguration>,
+	) {
+		const context = await instance.auth.$context;
+		await context.adapter.update({
+			model: "ssoProvider",
+			where: [{ field: "id", value: instance.providerRecord.id }],
+			update: { samlConfig: JSON.stringify(samlConfiguration) },
+		});
+	}
+
 	async function initiateSAMLSignIn(baseURL: string) {
 		const cookies: CookieJar = new Map();
 		const signIn = await fetchJSON<{ url: string; redirect: boolean }>(
@@ -6779,6 +6791,505 @@ describe("SAML user resolution HTTP", () => {
 			identityProviderResponse: signIn.identityProviderResponse,
 		};
 	}
+
+	function removeResponseSignature(xml: string): string {
+		return xml.replace(/<ds:Signature\b[\s\S]*?<\/ds:Signature>/, "");
+	}
+
+	function signSAMLContent(xml: string, assertion: boolean): string {
+		const signed = saml.SamlLib.constructSAMLSignature({
+			rawSamlMessage: xml,
+			referenceTagXPath: assertion
+				? "/*[local-name(.)='Response']/*[local-name(.)='Assertion']"
+				: undefined,
+			privateKey: idPk,
+			privateKeyPass: "jXmKf9By6ruLnUdRo90G",
+			signatureAlgorithm: "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+			signingCert: saml.Utility.normalizeCerString(
+				extractSigningCertificateFromMetadata(idpMetadata),
+			),
+			isBase64Output: false,
+			isMessageSigned: !assertion,
+			signatureConfig: {
+				prefix: "ds",
+				location: {
+					reference: assertion
+						? "/*[local-name(.)='Response']/*[local-name(.)='Assertion']/*[local-name(.)='Issuer']"
+						: "/*[local-name(.)='Response']/*[local-name(.)='Issuer']",
+					action: "after",
+				},
+			},
+		});
+		return Buffer.from(signed).toString("base64");
+	}
+
+	function withSAMLResponse(
+		signIn: Awaited<ReturnType<typeof initiateSAMLSignIn>>,
+		samlResponse: string,
+	) {
+		return {
+			...signIn,
+			identityProviderResponse: {
+				...signIn.identityProviderResponse,
+				samlResponse,
+			},
+		};
+	}
+
+	function strictAssertionSigningConfiguration(encrypted = false) {
+		const encryptionCertificate = certificate
+			.replace(/-----BEGIN CERTIFICATE-----|-----END CERTIFICATE-----/g, "")
+			.replace(/\s+/g, "");
+		const serviceProviderMetadata = (
+			encrypted
+				? spMetadata.replace(
+						/<ds:X509Certificate>[^<]+<\/ds:X509Certificate>/g,
+						`<ds:X509Certificate>${encryptionCertificate}</ds:X509Certificate>`,
+					)
+				: spMetadata
+		).replace('WantAssertionsSigned="false"', 'WantAssertionsSigned="true"');
+		return {
+			...persistedSAMLConfiguration(),
+			idpMetadata: {
+				...persistedSAMLConfiguration().idpMetadata,
+				isAssertionEncrypted: encrypted,
+			},
+			spMetadata: {
+				...persistedSAMLConfiguration().spMetadata,
+				metadata: serviceProviderMetadata,
+				isAssertionEncrypted: encrypted,
+				encPrivateKey: encrypted ? idpPrivateKey : undefined,
+				encPrivateKeyPass: encrypted
+					? "q9ALNhGT5EhfcRmp8Pg7e9zTQeP2x1bW"
+					: undefined,
+			},
+			wantAssertionsSigned: true,
+		};
+	}
+
+	function metadataRequiredAssertionSigningConfiguration() {
+		return {
+			...strictAssertionSigningConfiguration(),
+			wantAssertionsSigned: false,
+		};
+	}
+
+	function numericAssertionSigningConfiguration(value: "1" | "0") {
+		const configuration = persistedSAMLConfiguration();
+		return {
+			...configuration,
+			spMetadata: {
+				...configuration.spMetadata,
+				metadata: configuration.spMetadata.metadata.replace(
+					'WantAssertionsSigned="false"',
+					`WantAssertionsSigned="${value}"`,
+				),
+			},
+			wantAssertionsSigned: false,
+		};
+	}
+
+	async function encryptSAMLContent(xml: string): Promise<string> {
+		const encryptionCertificate = certificate
+			.replace(/-----BEGIN CERTIFICATE-----|-----END CERTIFICATE-----/g, "")
+			.replace(/\s+/g, "");
+		const encryptedServiceProviderMetadata = spMetadata.replace(
+			/<ds:X509Certificate>[^<]+<\/ds:X509Certificate>/g,
+			`<ds:X509Certificate>${encryptionCertificate}</ds:X509Certificate>`,
+		);
+		const identityProvider = saml.IdentityProvider({
+			metadata: idpMetadata,
+			privateKey: idPk,
+			privateKeyPass: "jXmKf9By6ruLnUdRo90G",
+			isAssertionEncrypted: true,
+		});
+		const serviceProvider = saml.ServiceProvider({
+			metadata: encryptedServiceProviderMetadata,
+		});
+		return saml.SamlLib.encryptAssertion(
+			identityProvider,
+			serviceProvider,
+			xml,
+		);
+	}
+
+	async function expectNoAuthenticationWrites(
+		instance: Awaited<ReturnType<typeof createSAMLUserResolutionInstance>>,
+	) {
+		expect(await instance.db.count({ model: "account", where: [] })).toBe(0);
+		expect(await instance.db.count({ model: "session", where: [] })).toBe(0);
+	}
+
+	it("accepts a response-only signature when the effective SP policy is false", async () => {
+		const instance = await createSAMLUserResolutionInstance({});
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const xml = Buffer.from(
+			signIn.identityProviderResponse.samlResponse,
+			"base64",
+		).toString("utf8");
+		const assertionIndex = xml.indexOf("<saml:Assertion");
+		expect(xml.indexOf("<ds:Signature")).toBeLessThan(assertionIndex);
+		expect(xml.slice(assertionIndex)).not.toContain("<ds:Signature");
+
+		const callback = await submitSAMLResponse(instance.baseURL, signIn);
+		expect(callback.status).toBe(302);
+		expect(await instance.db.count({ model: "account", where: [] })).toBe(1);
+		expect(await instance.db.count({ model: "session", where: [] })).toBe(1);
+	});
+
+	it("rejects a response-only signature when the effective SP policy requires signed assertions", async () => {
+		const instance = await createSAMLUserResolutionInstance(
+			{},
+			{},
+			strictAssertionSigningConfiguration(),
+		);
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const callback = await submitSAMLResponse(instance.baseURL, signIn);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toContain(
+			"error=invalid_saml_response",
+		);
+		await expectNoAuthenticationWrites(instance);
+	});
+
+	it("rejects a response-only signature when custom metadata requires signed assertions", async () => {
+		const instance = await createSAMLUserResolutionInstance(
+			{},
+			{},
+			metadataRequiredAssertionSigningConfiguration(),
+		);
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const callback = await submitSAMLResponse(instance.baseURL, signIn);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toContain(
+			"error=invalid_saml_response",
+		);
+		await expectNoAuthenticationWrites(instance);
+	});
+
+	it("rejects a response-only signature when custom metadata uses XML Schema numeric true", async () => {
+		const instance = await createSAMLUserResolutionInstance(
+			{},
+			{},
+			numericAssertionSigningConfiguration("1"),
+		);
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const callback = await submitSAMLResponse(instance.baseURL, signIn);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toContain(
+			"error=invalid_saml_response",
+		);
+		await expectNoAuthenticationWrites(instance);
+	});
+
+	it("accepts a response-only signature when custom metadata uses XML Schema numeric false", async () => {
+		const instance = await createSAMLUserResolutionInstance(
+			{},
+			{},
+			numericAssertionSigningConfiguration("0"),
+		);
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const callback = await submitSAMLResponse(instance.baseURL, signIn);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toBe(
+			`${instance.baseURL}/employee`,
+		);
+		expect(await instance.db.count({ model: "account", where: [] })).toBe(1);
+		expect(await instance.db.count({ model: "session", where: [] })).toBe(1);
+	});
+
+	it.each([
+		[
+			"an invalid WantAssertionsSigned lexical value",
+			(metadata: string): string =>
+				metadata.replace(
+					'WantAssertionsSigned="false"',
+					'WantAssertionsSigned="TRUE"',
+				),
+		],
+		[
+			"an unqualified metadata tree",
+			(_metadata: string): string => `
+				<EntityDescriptor entityID="https://service.example.com/saml">
+					<SPSSODescriptor WantAssertionsSigned="false">
+						<AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://service.example.com/saml/acs" />
+					</SPSSODescriptor>
+				</EntityDescriptor>
+			`,
+		],
+		[
+			"a foreign root around a metadata namespace decoy",
+			(_metadata: string): string => `
+				<foreign:EntityDescriptor xmlns:foreign="urn:example:foreign" xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="https://service.example.com/saml">
+					<md:EntityDescriptor entityID="https://service.example.com/saml">
+						<md:SPSSODescriptor WantAssertionsSigned="false">
+							<md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://service.example.com/saml/acs" />
+						</md:SPSSODescriptor>
+					</md:EntityDescriptor>
+				</foreign:EntityDescriptor>
+			`,
+		],
+		[
+			"a foreign service-provider descriptor",
+			(_metadata: string): string => `
+				<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:foreign="urn:example:foreign" entityID="https://service.example.com/saml">
+					<foreign:SPSSODescriptor WantAssertionsSigned="false">
+						<md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://service.example.com/saml/acs" />
+					</foreign:SPSSODescriptor>
+				</md:EntityDescriptor>
+			`,
+		],
+		[
+			"a foreign POST endpoint namespace decoy",
+			(_metadata: string): string => `
+				<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:foreign="urn:example:foreign" entityID="https://service.example.com/saml">
+					<md:SPSSODescriptor WantAssertionsSigned="false">
+						<foreign:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://service.example.com/saml/acs" />
+					</md:SPSSODescriptor>
+				</md:EntityDescriptor>
+			`,
+		],
+		[
+			"a valid descriptor followed by a foreign descriptor",
+			(_metadata: string): string => `
+				<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:foreign="urn:example:foreign" entityID="https://service.example.com/saml">
+					<md:SPSSODescriptor WantAssertionsSigned="false">
+						<md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://service.example.com/saml/acs" />
+					</md:SPSSODescriptor>
+					<foreign:SPSSODescriptor WantAssertionsSigned="true">
+						<foreign:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://attacker.example.com/saml/acs" />
+					</foreign:SPSSODescriptor>
+				</md:EntityDescriptor>
+			`,
+		],
+		[
+			"a foreign POST endpoint before a valid endpoint",
+			(_metadata: string): string => `
+				<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:foreign="urn:example:foreign" entityID="https://service.example.com/saml">
+					<md:SPSSODescriptor WantAssertionsSigned="false">
+						<foreign:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://attacker.example.com/saml/acs" />
+						<md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://service.example.com/saml/acs" />
+					</md:SPSSODescriptor>
+				</md:EntityDescriptor>
+			`,
+		],
+		[
+			"a foreign NameID format before a valid format",
+			(_metadata: string): string => `
+				<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:foreign="urn:example:foreign" entityID="https://service.example.com/saml">
+					<md:SPSSODescriptor WantAssertionsSigned="false">
+						<foreign:NameIDFormat>urn:example:attacker</foreign:NameIDFormat>
+						<md:NameIDFormat>urn:example:valid</md:NameIDFormat>
+						<md:AssertionConsumerService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://service.example.com/saml/acs" />
+					</md:SPSSODescriptor>
+				</md:EntityDescriptor>
+			`,
+		],
+	] as const)("rejects an ACS request after persisted SP metadata changes to %s", async (_description, replaceMetadata) => {
+		const instance = await createSAMLUserResolutionInstance({});
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const configuration = persistedSAMLConfiguration();
+		await replacePersistedSAMLConfiguration(instance, {
+			...configuration,
+			spMetadata: {
+				...configuration.spMetadata,
+				metadata: replaceMetadata(configuration.spMetadata.metadata),
+			},
+		});
+
+		const callback = await submitSAMLResponse(instance.baseURL, signIn);
+
+		expect(callback.status).toBe(302);
+		const location = new URL(callback.headers.get("location")!);
+		expect(location.origin).toBe(new URL(instance.baseURL).origin);
+		expect(location.pathname).toBe("/");
+		expect(location.searchParams.get("error")).toBe("saml_invalid_sp_metadata");
+		expect(location.searchParams.get("error_description")).toBe(
+			"Invalid SAML service provider metadata",
+		);
+		await expectNoAuthenticationWrites(instance);
+	});
+
+	it("accepts a cryptographically signed assertion through the HTTP ACS", async () => {
+		const instance = await createSAMLUserResolutionInstance(
+			{},
+			{},
+			strictAssertionSigningConfiguration(),
+		);
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const unsigned = removeResponseSignature(
+			Buffer.from(
+				signIn.identityProviderResponse.samlResponse,
+				"base64",
+			).toString("utf8"),
+		);
+		const callback = await submitSAMLResponse(
+			instance.baseURL,
+			withSAMLResponse(signIn, signSAMLContent(unsigned, true)),
+		);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toBe(
+			`${instance.baseURL}/employee`,
+		);
+		expect(await instance.db.count({ model: "account", where: [] })).toBe(1);
+		expect(await instance.db.count({ model: "session", where: [] })).toBe(1);
+	});
+
+	it("accepts a signed assertion when custom metadata supplies the effective policy", async () => {
+		const instance = await createSAMLUserResolutionInstance(
+			{},
+			{},
+			metadataRequiredAssertionSigningConfiguration(),
+		);
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const unsigned = removeResponseSignature(
+			Buffer.from(
+				signIn.identityProviderResponse.samlResponse,
+				"base64",
+			).toString("utf8"),
+		);
+		const callback = await submitSAMLResponse(
+			instance.baseURL,
+			withSAMLResponse(signIn, signSAMLContent(unsigned, true)),
+		);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toBe(
+			`${instance.baseURL}/employee`,
+		);
+		expect(await instance.db.count({ model: "account", where: [] })).toBe(1);
+		expect(await instance.db.count({ model: "session", where: [] })).toBe(1);
+	});
+
+	it("accepts valid response and assertion signatures through the strict HTTP ACS", async () => {
+		const instance = await createSAMLUserResolutionInstance(
+			{},
+			{},
+			strictAssertionSigningConfiguration(),
+		);
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const unsigned = removeResponseSignature(
+			Buffer.from(
+				signIn.identityProviderResponse.samlResponse,
+				"base64",
+			).toString("utf8"),
+		);
+		const assertionSigned = Buffer.from(
+			signSAMLContent(unsigned, true),
+			"base64",
+		).toString("utf8");
+		const responseAndAssertionSigned = signSAMLContent(assertionSigned, false);
+		const signedXml = Buffer.from(
+			responseAndAssertionSigned,
+			"base64",
+		).toString("utf8");
+		expect(signedXml.match(/<ds:Signature\b/g)).toHaveLength(2);
+
+		const callback = await submitSAMLResponse(
+			instance.baseURL,
+			withSAMLResponse(signIn, responseAndAssertionSigned),
+		);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toBe(
+			`${instance.baseURL}/employee`,
+		);
+		expect(await instance.db.count({ model: "account", where: [] })).toBe(1);
+		expect(await instance.db.count({ model: "session", where: [] })).toBe(1);
+	});
+
+	it("rejects a valid response signature with a bogus assertion signature", async () => {
+		const instance = await createSAMLUserResolutionInstance(
+			{},
+			{},
+			strictAssertionSigningConfiguration(),
+		);
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const unsigned = removeResponseSignature(
+			Buffer.from(
+				signIn.identityProviderResponse.samlResponse,
+				"base64",
+			).toString("utf8"),
+		).replace(
+			/<saml:Assertion\b([^>]*)>/,
+			'<saml:Assertion$1><ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#" />',
+		);
+		const responseSigned = signSAMLContent(unsigned, false);
+		const callback = await submitSAMLResponse(
+			instance.baseURL,
+			withSAMLResponse(signIn, responseSigned),
+		);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toContain(
+			"error=invalid_saml_response",
+		);
+		await expectNoAuthenticationWrites(instance);
+	});
+
+	it("rejects an encrypted unsigned assertion protected only by a response signature", async () => {
+		const instance = await createSAMLUserResolutionInstance(
+			{},
+			{},
+			strictAssertionSigningConfiguration(true),
+		);
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const unsigned = removeResponseSignature(
+			Buffer.from(
+				signIn.identityProviderResponse.samlResponse,
+				"base64",
+			).toString("utf8"),
+		);
+		const encrypted = await encryptSAMLContent(unsigned);
+		const encryptedXml = Buffer.from(encrypted, "base64").toString("utf8");
+		const responseSigned = signSAMLContent(encryptedXml, false);
+		const callback = await submitSAMLResponse(
+			instance.baseURL,
+			withSAMLResponse(signIn, responseSigned),
+		);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toContain(
+			"error=invalid_saml_response",
+		);
+		await expectNoAuthenticationWrites(instance);
+	});
+
+	it("accepts a signed and encrypted assertion through the HTTP ACS", async () => {
+		const instance = await createSAMLUserResolutionInstance(
+			{},
+			{},
+			strictAssertionSigningConfiguration(true),
+		);
+		const signIn = await initiateSAMLSignIn(instance.baseURL);
+		const unsigned = removeResponseSignature(
+			Buffer.from(
+				signIn.identityProviderResponse.samlResponse,
+				"base64",
+			).toString("utf8"),
+		);
+		const assertionSigned = Buffer.from(
+			signSAMLContent(unsigned, true),
+			"base64",
+		).toString("utf8");
+		const encrypted = await encryptSAMLContent(assertionSigned);
+		const callback = await submitSAMLResponse(
+			instance.baseURL,
+			withSAMLResponse(signIn, encrypted),
+		);
+
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get("location")).toBe(
+			`${instance.baseURL}/employee`,
+		);
+		expect(await instance.db.count({ model: "account", where: [] })).toBe(1);
+		expect(await instance.db.count({ model: "session", where: [] })).toBe(1);
+	});
 
 	it("links the signed NameID to the exact selected user without email fallback", async () => {
 		let selectedUserId = "";

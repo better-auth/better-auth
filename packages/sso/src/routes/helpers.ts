@@ -1,6 +1,7 @@
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { APIError } from "better-auth/api";
 import { resolveSigningCerts } from "../saml";
+import { parseSAMLServiceProviderMetadata } from "../saml/response-binding";
 import { saml } from "../samlify";
 import type { SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { normalizePem, safeJsonParse } from "../utils";
@@ -69,6 +70,7 @@ export function createSP(
 	// When no SP metadata XML is provided, generate it so samlify can read
 	// authnRequestsSigned and other flags that only work via metadata.
 	let metadata = spData?.metadata;
+	assertSAMLServiceProviderMetadataPolicy(config);
 	if (!metadata) {
 		metadata =
 			saml
@@ -92,7 +94,7 @@ export function createSP(
 								},
 							]
 						: undefined,
-					wantMessageSigned: config.wantAssertionsSigned || false,
+					wantAssertionsSigned: config.wantAssertionsSigned || false,
 					authnRequestsSigned: config.authnRequestsSigned || false,
 					nameIDFormat: config.identifierFormat
 						? [config.identifierFormat]
@@ -101,7 +103,7 @@ export function createSP(
 				.getMetadata() || "";
 	}
 
-	return saml.ServiceProvider({
+	const provider = saml.ServiceProvider({
 		metadata,
 		allowCreate: true,
 		wantLogoutRequestSigned: opts?.sloOptions?.wantLogoutRequestSigned ?? false,
@@ -118,6 +120,72 @@ export function createSP(
 				? [-opts.clockSkew, opts.clockSkew]
 				: undefined,
 	});
+	return provider;
+}
+
+/**
+ * Ensures custom SP metadata cannot weaken the configured assertion-signing
+ * policy. This is safe to call before persisting a provider configuration.
+ */
+export function assertSAMLServiceProviderMetadataPolicy(
+	config: SAMLConfig,
+): void {
+	const policy = deriveSAMLServiceProviderPolicy(config);
+	if (config.wantAssertionsSigned !== true || policy.wantAssertionsSigned) {
+		return;
+	}
+
+	throw new APIError("BAD_REQUEST", {
+		code: "SAML_SP_METADATA_ASSERTION_SIGNATURE_MISMATCH",
+		message: "SAML service provider metadata must require signed assertions",
+	});
+}
+
+export interface SAMLServiceProviderPolicy {
+	/** Effective assertion-signing requirement advertised by SP metadata. */
+	wantAssertionsSigned: boolean;
+}
+
+export function assertSAMLMetadataSize(
+	metadata: string | undefined,
+	kind: "IdP" | "SP",
+	maxMetadataSize: number,
+): void {
+	if (metadata && new TextEncoder().encode(metadata).length > maxMetadataSize) {
+		throw new APIError("BAD_REQUEST", {
+			message: `${kind} metadata exceeds maximum allowed size (${maxMetadataSize} bytes)`,
+		});
+	}
+}
+
+/**
+ * Parses custom SP metadata and returns its effective verification policy.
+ *
+ * Configurations without custom metadata use the code-defined policy directly.
+ * Invalid or unusable custom metadata throws an API error with the
+ * `SAML_INVALID_SP_METADATA` code.
+ */
+export function deriveSAMLServiceProviderPolicy(
+	config: Pick<SAMLConfig, "spMetadata" | "wantAssertionsSigned">,
+): SAMLServiceProviderPolicy {
+	const metadata = config.spMetadata?.metadata;
+	if (!metadata) {
+		return { wantAssertionsSigned: config.wantAssertionsSigned === true };
+	}
+	try {
+		const parsedMetadata = parseSAMLServiceProviderMetadata(metadata);
+		if (!parsedMetadata.postAssertionConsumerServiceUrls.length) {
+			throw new Error("Unusable SAML service provider metadata");
+		}
+		return {
+			wantAssertionsSigned: parsedMetadata.wantAssertionsSigned,
+		};
+	} catch {
+		throw new APIError("BAD_REQUEST", {
+			code: "SAML_INVALID_SP_METADATA",
+			message: "Invalid SAML service provider metadata",
+		});
+	}
 }
 
 export function assertSAMLIdentityProviderAuthority<
@@ -176,6 +244,14 @@ export function createIdP(config: SAMLConfig) {
 		encPrivateKey: normalizePem(idpData.encPrivateKey),
 		encPrivateKeyPass: idpData.encPrivateKeyPass,
 	});
+}
+
+/**
+ * Derive the verified SAML identity-provider entity ID using the same metadata
+ * parsing and manual-configuration validation as SAML authentication.
+ */
+export function deriveSAMLIdentityProviderEntityID(config: SAMLConfig): string {
+	return createIdP(config).entityMeta.getEntityID();
 }
 
 function escapeHtml(str: string | undefined | null): string {

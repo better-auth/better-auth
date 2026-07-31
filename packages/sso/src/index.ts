@@ -31,6 +31,11 @@ export {
 	DEFAULT_MAX_SAML_RESPONSE_SIZE,
 } from "./constants";
 export {
+	deriveSAMLIdentityProviderEntityID,
+	deriveSAMLServiceProviderPolicy,
+	type SAMLServiceProviderPolicy,
+} from "./routes/helpers";
+export {
 	type AlgorithmValidationOptions,
 	DataEncryptionAlgorithm,
 	type DeprecatedAlgorithmBehavior,

@@ -19,10 +19,12 @@ import {
 } from "../oidc";
 import { computeSSOProviderReference } from "../provider-reference";
 import {
+	getSAMLPostAssertionConsumerServiceUrls,
 	resolveSigningCerts,
 	validateCertSources,
 	validateConfigAlgorithms,
 } from "../saml";
+import { parseSAMLServiceProviderMetadata } from "../saml/response-binding";
 import type {
 	Member,
 	OIDCConfig,
@@ -34,8 +36,18 @@ import {
 	assertSSOAsyncContextSupport,
 	assertSSONativeTransactionSupport,
 } from "../user-resolution";
-import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
-import { assertSAMLIdentityProviderAuthority } from "./helpers";
+import {
+	maskClientId,
+	normalizePem,
+	parseCertificate,
+	safeJsonParse,
+} from "../utils";
+import {
+	assertSAMLIdentityProviderAuthority,
+	assertSAMLMetadataSize,
+	assertSAMLServiceProviderMetadataPolicy,
+	createIdP,
+} from "./helpers";
 import {
 	getUpdateSSOProviderBodySchema,
 	parseSSOProviderAdditionalFields,
@@ -72,18 +84,7 @@ const OIDC_IDENTITY_BOUNDARY_FIELDS = [
 	"tokenEndpoint",
 	"userInfoEndpoint",
 ] as const;
-const SAML_IDENTITY_BOUNDARY_FIELDS = [
-	"audience",
-	"callbackUrl",
-	"entryPoint",
-	"identifierFormat",
-] as const;
-const SAML_IDP_BOUNDARY_FIELDS = [
-	"metadata",
-	"entityID",
-	"singleSignOnService",
-] as const;
-const SAML_SP_BOUNDARY_FIELDS = ["metadata", "entityID"] as const;
+const SAML_IDENTITY_BOUNDARY_FIELDS = ["audience", "callbackUrl"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -129,17 +130,72 @@ function samlIdentityBoundaryChanged(
 	current: SAMLConfig,
 	updated: SAMLConfig,
 ): boolean {
+	const currentIdentityProvider = createIdP(current).entityMeta;
+	const updatedIdentityProvider = createIdP(updated).entityMeta;
+	let currentServiceProvider: ReturnType<
+		typeof parseSAMLServiceProviderMetadata
+	> | null;
+	let updatedServiceProvider: ReturnType<
+		typeof parseSAMLServiceProviderMetadata
+	> | null;
+	try {
+		currentServiceProvider = current.spMetadata?.metadata
+			? parseSAMLServiceProviderMetadata(current.spMetadata.metadata)
+			: null;
+		updatedServiceProvider = updated.spMetadata?.metadata
+			? parseSAMLServiceProviderMetadata(updated.spMetadata.metadata)
+			: null;
+	} catch {
+		return true;
+	}
+	const effectiveIdentityBoundary = (config: SAMLConfig) => {
+		const identityProvider =
+			config === current ? currentIdentityProvider : updatedIdentityProvider;
+		const serviceProvider =
+			config === current ? currentServiceProvider : updatedServiceProvider;
+		return {
+			idpEntityId: identityProvider.getEntityID(),
+			idpRedirectService: identityProvider.getSingleSignOnService("redirect"),
+			idpPostService: identityProvider.getSingleSignOnService("post"),
+			spEntityId:
+				serviceProvider?.entityID ??
+				config.spMetadata?.entityID ??
+				config.issuer,
+			spNameIDFormat:
+				serviceProvider?.nameIDFormats.at(0) ?? config.identifierFormat,
+			spPostServices: serviceProvider
+				? getSAMLPostAssertionConsumerServiceUrls(config.spMetadata?.metadata)
+				: config.callbackUrl
+					? [config.callbackUrl]
+					: [],
+			wantAssertionsSigned:
+				serviceProvider?.wantAssertionsSigned ??
+				config.wantAssertionsSigned === true,
+		};
+	};
+	const trustAnchors = (
+		identityProvider: ReturnType<typeof createIdP>["entityMeta"],
+	) => {
+		const certificates = identityProvider.getX509Certificate("signing");
+		return (
+			Array.isArray(certificates)
+				? certificates
+				: certificates
+					? [certificates]
+					: []
+		)
+			.map((certificate) => normalizePem(certificate) ?? certificate)
+			.sort();
+	};
 	return (
 		hasChangedField(current, updated, SAML_IDENTITY_BOUNDARY_FIELDS) ||
-		hasChangedField(
-			current.idpMetadata,
-			updated.idpMetadata,
-			SAML_IDP_BOUNDARY_FIELDS,
+		identityValueChanged(
+			trustAnchors(currentIdentityProvider),
+			trustAnchors(updatedIdentityProvider),
 		) ||
-		hasChangedField(
-			current.spMetadata,
-			updated.spMetadata,
-			SAML_SP_BOUNDARY_FIELDS,
+		identityValueChanged(
+			effectiveIdentityBoundary(current),
+			effectiveIdentityBoundary(updated),
 		)
 	);
 }
@@ -839,19 +895,18 @@ export const updateSSOProvider = (options: SSOOptions) => {
 					}
 
 					if (body.samlConfig) {
-						if (body.samlConfig.idpMetadata?.metadata) {
-							const maxMetadataSize =
-								options?.saml?.maxMetadataSize ??
-								DEFAULT_MAX_SAML_METADATA_SIZE;
-							if (
-								new TextEncoder().encode(body.samlConfig.idpMetadata.metadata)
-									.length > maxMetadataSize
-							) {
-								throw new APIError("BAD_REQUEST", {
-									message: `IdP metadata exceeds maximum allowed size (${maxMetadataSize} bytes)`,
-								});
-							}
-						}
+						const maxMetadataSize =
+							options?.saml?.maxMetadataSize ?? DEFAULT_MAX_SAML_METADATA_SIZE;
+						assertSAMLMetadataSize(
+							body.samlConfig.idpMetadata?.metadata,
+							"IdP",
+							maxMetadataSize,
+						);
+						assertSAMLMetadataSize(
+							body.samlConfig.spMetadata?.metadata,
+							"SP",
+							maxMetadataSize,
+						);
 
 						if (
 							body.samlConfig.signatureAlgorithm !== undefined ||
@@ -881,6 +936,7 @@ export const updateSSOProvider = (options: SSOOptions) => {
 
 						validateCertSources(updatedSamlConfig);
 						assertSAMLIdentityProviderAuthority(updatedSamlConfig);
+						assertSAMLServiceProviderMetadataPolicy(updatedSamlConfig);
 						if (
 							samlIdentityBoundaryChanged(currentSamlConfig, updatedSamlConfig)
 						) {

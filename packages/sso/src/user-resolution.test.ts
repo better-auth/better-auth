@@ -59,8 +59,11 @@ describe("SSO user resolution", () => {
 		>().toEqualTypeOf<unknown>();
 	});
 
-	it("logs resolver exceptions while returning a stable error", async () => {
-		const privateError = new Error("private directory topology");
+	it("does not expose resolver exceptions to custom loggers", async () => {
+		const secret = "tenant-token=directory-secret";
+		const privateError = Object.assign(new Error(secret), {
+			providerClaims: { access_token: secret },
+		});
 		const logger = { error: vi.fn() };
 
 		await expect(
@@ -78,10 +81,12 @@ describe("SSO user resolution", () => {
 				message: "Unable to resolve the SSO user",
 			},
 		});
-		expect(logger.error).toHaveBeenCalledWith(
-			"SSO user resolution failed",
-			privateError,
+		expect(logger.error).toHaveBeenCalledWith("SSO user resolution failed");
+		expect(logger.error).not.toHaveBeenCalledWith(
+			expect.anything(),
+			expect.anything(),
 		);
+		expect(JSON.stringify(logger.error.mock.calls)).not.toContain(secret);
 	});
 
 	it("logs malformed decisions without logging their value", async () => {

@@ -27,6 +27,7 @@ import {
 	validateSAMLAlgorithms,
 	validateSAMLResponseBinding,
 	validateSingleAssertion,
+	verifySAMLAssertionSignature,
 } from "../saml";
 import type { SAMLConditions } from "../saml/timestamp";
 import { validateSAMLTimestamp } from "../saml/timestamp";
@@ -54,7 +55,12 @@ import {
 	safeJsonParse,
 	validateEmailDomain,
 } from "../utils";
-import { createIdP, createSP, findSAMLProvider } from "./helpers";
+import {
+	createIdP,
+	createSP,
+	deriveSAMLServiceProviderPolicy,
+	findSAMLProvider,
+} from "./helpers";
 import { lockSSOProviderForAccountLink } from "./providers";
 
 type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
@@ -397,14 +403,10 @@ export async function processSAMLResponse(
 		if (!parsedResponse?.extract) {
 			throw new Error("Invalid SAML response structure");
 		}
-	} catch (error) {
-		ctx.context.logger.error("SAML response validation failed", {
-			error,
-			samlResponsePreview: SAMLResponse.slice(0, 200),
-		});
+	} catch {
+		ctx.context.logger.error("SAML response validation failed");
 		throw new APIError("BAD_REQUEST", {
 			message: "Invalid SAML response",
-			details: error instanceof Error ? error.message : String(error),
 		});
 	}
 
@@ -440,9 +442,17 @@ export async function processSAMLResponse(
 		currentCallbackPath,
 		assertionConsumerServiceUrl,
 	);
+	const serviceProviderPolicy =
+		deriveSAMLServiceProviderPolicy(parsedSamlConfig);
 	let samlBindingContent: string;
 	try {
 		samlBindingContent = await getSAMLResponseBindingContent(sp, samlContent);
+		if (serviceProviderPolicy.wantAssertionsSigned) {
+			verifySAMLAssertionSignature(samlBindingContent, {
+				metadata: idp.entityMeta,
+				signatureAlgorithm: idp.entitySetting.requestSignatureAlgorithm,
+			});
+		}
 		validateSAMLResponseBinding(samlBindingContent, {
 			expectedAudiences,
 			expectedRecipients,
@@ -452,8 +462,6 @@ export async function processSAMLResponse(
 			ctx.context.logger.error("SAML response binding validation failed", {
 				providerId,
 				code: error.body?.code,
-				expectedAudiences: expectedAudiences.filter(Boolean),
-				expectedRecipients: expectedRecipients.filter(Boolean),
 			});
 			throw ctx.redirect(
 				buildSAMLRedirectUrl(samlErrorRedirectUrl, {
@@ -465,9 +473,6 @@ export async function processSAMLResponse(
 		}
 		ctx.context.logger.error("SAML response binding validation failed", {
 			providerId,
-			error,
-			expectedAudiences: expectedAudiences.filter(Boolean),
-			expectedRecipients: expectedRecipients.filter(Boolean),
 		});
 		throw ctx.redirect(
 			buildSAMLRedirectUrl(samlErrorRedirectUrl, {
@@ -642,10 +647,10 @@ export async function processSAMLResponse(
 	};
 	if (!userInfo.id || !userInfo.email) {
 		ctx.context.logger.error("Missing essential user info from SAML response", {
-			attributes: Object.keys(attributes),
-			mapping,
-			extractedId: userInfo.id,
-			extractedEmail: userInfo.email,
+			providerId,
+			attributeNames: Object.keys(attributes),
+			hasNameId: Boolean(userInfo.id),
+			hasEmail: Boolean(userInfo.email),
 		});
 		throw new APIError("BAD_REQUEST", {
 			message: "Unable to extract user ID or email from SAML response",

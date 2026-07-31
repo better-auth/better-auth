@@ -156,9 +156,10 @@ export interface SAMLConfig {
 		encPrivateKeyPass?: string | undefined;
 	};
 	/**
-	 * Request signed assertions from the IdP. When true, the SP metadata
-	 * advertises `WantAssertionsSigned="true"` and samlify will reject
-	 * unsigned assertions.
+	 * Request and require signed assertions from the IdP. When true, generated
+	 * SP metadata advertises `WantAssertionsSigned="true"` and the ACS rejects
+	 * unsigned assertions. Custom SP metadata supplies the effective policy and
+	 * accepts the XML Schema boolean forms `true`, `false`, `1`, and `0`.
 	 */
 	wantAssertionsSigned?: boolean | undefined;
 	authnRequestsSigned?: boolean | undefined;
@@ -739,7 +740,7 @@ export interface SSOOptions {
 		 */
 		maxResponseSize?: number;
 		/**
-		 * Maximum allowed size for IdP metadata XML in bytes.
+		 * Maximum allowed size for IdP or SP metadata XML in bytes.
 		 *
 		 * @default 102400 (100KB)
 		 */

@@ -420,6 +420,15 @@ To register a SAML provider, use the `registerSSOProvider` endpoint with SAML co
 
 Better Auth identifies a SAML account by the IdP entity ID and the signed `NameID`. The `issuer` field identifies your service provider, while the IdP entity ID comes from `idpMetadata.metadata` or an explicit `idpMetadata.entityID` in a manual configuration. Attribute mappings can populate profile fields, but they cannot replace the signed `NameID` account subject.
 
+Applications that need to pin the IdP authority while storing a SAML connection can derive it through the same metadata parser used by SAML authentication:
+
+```ts title="saml-authority.ts"
+import { deriveSAMLIdentityProviderEntityID } from "@better-auth/sso";
+
+const identityProviderEntityID =
+    deriveSAMLIdentityProviderEntityID(samlConfig);
+```
+
 <Tabs items={["client", "server"]}>
   <Tab value="client">
     ```ts title="register-saml-provider.ts"
@@ -1328,7 +1337,7 @@ Better Auth enforces size limits on SAML payloads to protect against denial-of-s
 | Option            | Default | Description                         |
 | ----------------- | ------- | ----------------------------------- |
 | `maxResponseSize` | 256KB   | Maximum SAML response size in bytes |
-| `maxMetadataSize` | 100KB   | Maximum IdP metadata size in bytes  |
+| `maxMetadataSize` | 100KB   | Maximum IdP or SP metadata size     |
 
 #### Customizing Limits
 
@@ -1850,7 +1859,7 @@ export const ssoOptionsType = {
 				default: 262144,
 			},
 			maxMetadataSize: {
-				description: "Maximum allowed size for IdP metadata XML in bytes.",
+				description: "Maximum allowed size for IdP or SP metadata XML in bytes.",
 				type: "number",
 				default: 102400,
 			},

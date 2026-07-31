@@ -49,13 +49,9 @@ type ResolutionLogger = Pick<
 	"error"
 >;
 
-function logFailure(
-	logger: ResolutionLogger,
-	message: string,
-	error?: unknown,
-): void {
+function logFailure(logger: ResolutionLogger, message: string): void {
 	try {
-		logger.error(message, ...(error === undefined ? [] : [error]));
+		logger.error(message);
 	} catch {
 		// A custom logger must not change the stable authentication failure.
 	}
@@ -77,8 +73,8 @@ export async function resolveSSOUser(
 	let resolution: unknown;
 	try {
 		resolution = await resolveUser(input, { database });
-	} catch (error) {
-		logFailure(logger, "SSO user resolution failed", error);
+	} catch {
+		logFailure(logger, "SSO user resolution failed");
 		throw resolutionFailure();
 	}
 	if (!isSSOUserResolution(resolution)) {

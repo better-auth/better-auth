@@ -87,6 +87,8 @@ import {
 import { getVerificationIdentifier } from "./domain-verification";
 import {
 	assertSAMLIdentityProviderAuthority,
+	assertSAMLMetadataSize,
+	assertSAMLServiceProviderMetadataPolicy,
 	createIdP,
 	createSAMLPostForm,
 	createSP,
@@ -436,18 +438,20 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				"create",
 			);
 
-			if (body.samlConfig?.idpMetadata?.metadata) {
+			if (body.samlConfig) {
 				const maxMetadataSize =
 					options?.saml?.maxMetadataSize ??
 					constants.DEFAULT_MAX_SAML_METADATA_SIZE;
-				if (
-					new TextEncoder().encode(body.samlConfig.idpMetadata.metadata)
-						.length > maxMetadataSize
-				) {
-					throw new APIError("BAD_REQUEST", {
-						message: `IdP metadata exceeds maximum allowed size (${maxMetadataSize} bytes)`,
-					});
-				}
+				assertSAMLMetadataSize(
+					body.samlConfig.idpMetadata?.metadata,
+					"IdP",
+					maxMetadataSize,
+				);
+				assertSAMLMetadataSize(
+					body.samlConfig.spMetadata?.metadata,
+					"SP",
+					maxMetadataSize,
+				);
 			}
 
 			if (ctx.body.organizationId) {
@@ -641,6 +645,10 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 
 				validateCertSources(body.samlConfig);
 				assertSAMLIdentityProviderAuthority(body.samlConfig);
+				assertSAMLServiceProviderMetadataPolicy({
+					...body.samlConfig,
+					issuer: body.issuer,
+				});
 
 				// Validate that the config has a usable IdP entry point
 				const hasIdpMetadata = body.samlConfig.idpMetadata?.metadata;
