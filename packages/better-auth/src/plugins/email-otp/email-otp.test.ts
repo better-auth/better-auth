@@ -404,14 +404,18 @@ describe("email-otp", async () => {
 	});
 
 	it("should fail on expired otp", async () => {
+		const email = "expired-otp@test.com";
+		await auth.api.signUpEmail({
+			body: { email, password: "password", name: "expired-otp" },
+		});
 		await client.emailOtp.sendVerificationOtp({
-			email: testUser.email,
+			email,
 			type: "email-verification",
 		});
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000 * 60 * 6);
 		const res = await client.emailOtp.verifyEmail({
-			email: testUser.email,
+			email,
 			otp,
 		});
 		expect(res.error?.status).toBe(400);
@@ -419,14 +423,18 @@ describe("email-otp", async () => {
 	});
 
 	it("should not fail on time elapsed", async () => {
+		const email = "elapsed-otp@test.com";
+		await auth.api.signUpEmail({
+			body: { email, password: "password", name: "elapsed-otp" },
+		});
 		await client.emailOtp.sendVerificationOtp({
-			email: testUser.email,
+			email,
 			type: "email-verification",
 		});
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000 * 60 * 4);
 		const res = await client.emailOtp.verifyEmail({
-			email: testUser.email,
+			email,
 			otp,
 		});
 		const session = await client.getSession({
@@ -2078,8 +2086,9 @@ describe("race condition protection", async () => {
 
 	it("should delete OTP after successful email verification", async () => {
 		const email = "race-verify@domain.com";
-		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
-		await client.signIn.emailOtp({ email, otp });
+		await auth.api.signUpEmail({
+			body: { email, password: "password", name: "race-verify" },
+		});
 
 		await client.emailOtp.sendVerificationOtp({
 			email,
@@ -2152,8 +2161,9 @@ describe("race condition protection", async () => {
 
 	it("should allow exactly one success when the same email-verification OTP is verified concurrently", async () => {
 		const email = "race-concurrent-verify@domain.com";
-		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
-		await client.signIn.emailOtp({ email, otp });
+		await auth.api.signUpEmail({
+			body: { email, password: "password", name: "race-concurrent" },
+		});
 
 		await client.emailOtp.sendVerificationOtp({
 			email,
@@ -2652,6 +2662,90 @@ describe("email-otp send origin/CSRF protection", async () => {
 
 		const response = await auth.handler(legitimateRequest);
 		expect(response.status).toBe(200);
+		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("email-otp send-verification-otp on an already verified email", async () => {
+	const sendVerificationOTP = vi.fn(async () => {});
+	const { auth, client, testUser, signInWithTestUser } = await getTestInstance(
+		{
+			plugins: [
+				emailOTP({
+					sendVerificationOTP,
+					changeEmail: { enabled: true, verifyCurrentEmail: true },
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+
+	const markTestUserVerified = async () => {
+		const ctx = await auth.$context;
+		const found = await ctx.internalAdapter.findUserByEmail(testUser.email);
+		await ctx.internalAdapter.updateUser(found!.user.id, {
+			emailVerified: true,
+		});
+		return ctx;
+	};
+
+	/**
+	 * `/send-verification-email` refuses to mail an already verified address for a
+	 * caller with no session, and returns the same body it would for an unknown
+	 * address. This endpoint is the same operation through a different door, so an
+	 * unauthenticated caller must not be able to use it to mail a code to a
+	 * verified address either.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/7707
+	 */
+	it("should not send an email-verification OTP for a caller with no session", async () => {
+		const ctx = await markTestUserVerified();
+		sendVerificationOTP.mockClear();
+
+		const res = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/email-otp/send-verification-otp",
+				{
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						email: testUser.email,
+						type: "email-verification",
+					}),
+				},
+			),
+		);
+
+		expect(res.status).toBe(200);
+		expect(await res.json()).toEqual({ success: true });
+		expect(sendVerificationOTP).not.toHaveBeenCalled();
+		expect(
+			await ctx.internalAdapter.findVerificationValue(
+				`email-verification-otp-${testUser.email}`,
+			),
+		).toBeFalsy();
+	});
+
+	/**
+	 * `changeEmail.verifyCurrentEmail` sends an `email-verification` OTP to the
+	 * user's current — already verified — address as a step-up, so the session
+	 * owner must keep getting one.
+	 */
+	it("should still send when the session owns the email", async () => {
+		await markTestUserVerified();
+		const { headers } = await signInWithTestUser();
+		sendVerificationOTP.mockClear();
+
+		const res = await client.emailOtp.sendVerificationOtp(
+			{ email: testUser.email, type: "email-verification" },
+			{ headers },
+		);
+
+		expect(res.data?.success).toBe(true);
 		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
 	});
 });
