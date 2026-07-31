@@ -10,12 +10,14 @@ import { splitAtLastColon } from "./utils";
 
 describe("email-otp", async () => {
 	const otpFn = vi.fn();
+	const generateOTPFn = vi.fn(() => "123456");
 	let otp = "";
 	const { client, testUser, auth } = await getTestInstance(
 		{
 			plugins: [
 				bearer(),
 				emailOTP({
+					generateOTP: generateOTPFn,
 					async sendVerificationOTP({ email, otp: _otp, type }) {
 						otp = _otp;
 						otpFn(email, _otp, type);
@@ -224,7 +226,15 @@ describe("email-otp", async () => {
 			password: "password",
 			name: "test",
 		};
+		generateOTPFn.mockClear();
 		await client.signUp.email(testUser2);
+		expect(generateOTPFn).toHaveBeenCalledWith(
+			{
+				email: testUser2.email,
+				type: "email-verification",
+			},
+			expect.anything(),
+		);
 		expect(otpFn).toHaveBeenCalledWith(
 			testUser2.email,
 			otp,
