@@ -145,6 +145,7 @@ export async function getHttpTestInstance<
 				disableTestUser: config?.disableTestUser,
 				testUser: config?.testUser,
 				testWith: config?.testWith,
+				transaction: config?.transaction,
 			},
 		);
 		server.setRequestHandler(
