@@ -1,4 +1,6 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
@@ -7,7 +9,6 @@ import {
 	applyUpdateUserInfoOnLink,
 	handleOAuthUserInfo,
 } from "../../oauth2/link-account";
-import { resolveOAuthCallback } from "../../oauth2/resolve-callback";
 import { parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
@@ -112,23 +113,44 @@ export const callbackOAuth = createAuthEndpoint(
 			redirectOnError(c, resolvedErrorURL, "oauth_provider_not_found");
 		}
 
-		const { data, error: callbackError } = await resolveOAuthCallback(
-			provider,
-			{
-				code,
+		let tokens: OAuth2Tokens | null;
+		try {
+			tokens = await provider.validateAuthorizationCode({
+				code: code,
 				codeVerifier,
 				deviceId: device_id,
 				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
-			},
-			userData,
-		);
-		if (callbackError) {
-			c.context.logger.error(callbackError.message);
-			redirectOnError(c, resolvedErrorURL, callbackError.code.toLowerCase());
+			});
+		} catch (e) {
+			c.context.logger.error("", e);
+			redirectOnError(c, resolvedErrorURL, "invalid_code");
 		}
-		const { tokens, userInfo } = data;
+		if (!tokens) {
+			redirectOnError(c, resolvedErrorURL, "invalid_code");
+		}
+		const parsedUserData = userData
+			? safeJSONParse<{
+					name?: {
+						firstName?: string;
+						lastName?: string;
+					};
+					email?: string;
+				}>(userData)
+			: null;
+
+		const userInfo = await provider
+			.getUserInfo({
+				...tokens,
+				/**
+				 * The user object from the provider
+				 * This is only available for some providers like Apple
+				 */
+				user: parsedUserData ?? undefined,
+			})
+			.then((res) => res?.user);
 
 		if (
+			!userInfo ||
 			userInfo.id === undefined ||
 			userInfo.id === null ||
 			userInfo.id === ""

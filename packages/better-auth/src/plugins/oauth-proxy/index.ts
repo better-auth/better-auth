@@ -7,6 +7,8 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import { defu } from "defu";
 import * as z from "zod";
 import { originCheck } from "../../api";
@@ -16,7 +18,6 @@ import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { redirectOnError } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import { resolveOAuthCallback } from "../../oauth2/resolve-callback";
 import type { StateData } from "../../state";
 import { parseGenericState } from "../../state";
 import type { Account, User } from "../../types";
@@ -451,24 +452,51 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							throw redirectOnError(ctx, errorURL, "oauth_provider_not_found");
 						}
 
-						const { data, error: callbackError } = await resolveOAuthCallback(
-							provider,
-							{
+						// Exchange code for tokens
+						let tokens: OAuth2Tokens | null;
+						try {
+							tokens = await provider.validateAuthorizationCode({
 								code,
 								codeVerifier: stateData.codeVerifier,
 								redirectURI: `${ctx.context.baseURL}/callback/${provider.id}`,
-							},
-							userData,
-						);
-						if (callbackError) {
-							ctx.context.logger.error(callbackError.message);
-							throw redirectOnError(
-								ctx,
-								errorURL,
-								callbackError.code.toLowerCase(),
+							});
+						} catch (e) {
+							ctx.context.logger.error(
+								"Failed to validate authorization code",
+								e,
 							);
+							throw redirectOnError(ctx, errorURL, "invalid_code");
 						}
-						const { tokens, userInfo } = data;
+
+						if (!tokens) {
+							throw redirectOnError(ctx, errorURL, "invalid_code");
+						}
+
+						const parsedUserData = userData
+							? safeJSONParse<{
+									name?: {
+										firstName?: string;
+										lastName?: string;
+									};
+									email?: string;
+								}>(userData)
+							: null;
+
+						// Get user info from provider
+						const userInfoResult = await provider.getUserInfo({
+							...tokens,
+							/**
+							 * The user object from the provider
+							 * This is only available for some providers like Apple
+							 */
+							user: parsedUserData ?? undefined,
+						});
+						const userInfo = userInfoResult?.user;
+
+						if (!userInfo) {
+							ctx.context.logger.error("Unable to get user info from provider");
+							throw redirectOnError(ctx, errorURL, "unable_to_get_user_info");
+						}
 
 						if (!userInfo.email) {
 							ctx.context.logger.error("Provider did not return email");
