@@ -28,6 +28,7 @@ export type {
 } from "./oauth-endpoint";
 export { createResourceServerChallenge } from "./resource-challenge";
 export { getOAuthProviderApi } from "./token";
+export { verifyOAuthQueryParams } from "./utils";
 export type * from "./types";
 export type { OAuthClient, ResourceServerMetadata } from "./types/oauth";
 export type { OAuthClientMetadata } from "./types/zod";
