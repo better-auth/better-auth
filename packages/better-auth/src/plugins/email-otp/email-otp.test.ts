@@ -1130,6 +1130,27 @@ describe("email-otp-verify", async () => {
 		expect(successRes.error).toBeFalsy();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10603
+	 */
+	it("should not reveal whether an email is registered when checking an OTP", async () => {
+		const existing = await client.emailOtp.checkVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+			otp: "000000",
+		});
+		const nonExistent = await client.emailOtp.checkVerificationOtp({
+			email: "non-existent@domain.com",
+			type: "email-verification",
+			otp: "000000",
+		});
+
+		expect(existing.error?.status).toBe(400);
+		expect(existing.error?.code).toBe("INVALID_OTP");
+		expect(nonExistent.error?.status).toBe(existing.error?.status);
+		expect(nonExistent.error?.code).toBe(existing.error?.code);
+	});
+
 	it("should not send OTP email for non-existent users when disableSignUp is enabled", async () => {
 		const sendOtpSpy = vi.fn();
 		const { client: testClient, testUser: existingUser } =
