@@ -9,9 +9,7 @@ overrides:
   node-forge: '>=1.4.0 <2'
   h3@<2: '>=1.15.9'
   h3-v2: 'npm:h3@^2.0.1-rc.15'
-  brace-expansion@<2: 1.1.16
-  brace-expansion@>=2 <4: 2.1.2
-  brace-expansion@>=4: '>=5.0.8 <6'
+  brace-expansion: '>=5.0.8 <6'
   cookie@<0.7.0: '>=0.7.2 <0.8'
   '@xmldom/xmldom@<0.8.13': '>=0.8.13 <0.9'
   'devalue@>=5.6.3 <=5.8.0': 5.8.1
