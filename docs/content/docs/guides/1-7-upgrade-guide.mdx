@@ -20,6 +20,7 @@ Some areas need more care: OAuth, OpenID Connect, SAML, SCIM, two-factor authent
 | Uses Better Auth at all                                                | [Before you upgrade](#before-you-upgrade) and [Behind a proxy](#behind-a-proxy) |
 | Uses email and password, social login, generic OAuth, One Tap, or SSO  | [As a login client](#as-a-login-client)                                         |
 | Runs its own OAuth or OpenID provider                                  | [As an identity provider](#as-an-identity-provider)                             |
+| Uses OAuth client CRUD, DCR, or CIMD                                   | [As an identity provider](#as-an-identity-provider)                             |
 | Runs MCP                                                               | [MCP](#mcp)                                                                     |
 | Uses SAML or SSO domain verification                                   | [Enterprise SSO](#enterprise-sso)                                               |
 | Uses SCIM                                                              | [SCIM](#scim)                                                                   |
@@ -61,8 +62,9 @@ These features change the schema:
 | SCIM                       | Seven provisioning models with layouts that replace the legacy SCIM models | **No, reprovision**      |
 | Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                  | Not needed               |
 | Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables            | **No, move client data** |
+| OAuth client registration  | `applicationType`, discovery provenance, and a unique resource-link index  | **No, backfill clients** |
 
-Account identity, SCIM, and the provider client store require manual data steps. Plan each applicable cutover before you deploy.
+Account identity, OAuth clients, SCIM, and the provider client store require manual data steps. Plan each applicable cutover before you deploy.
 
 <Callout type="warn">
   Do not run the generated SCIM migration over populated prerelease `scimGroup` or `scimGroupMember` tables. Follow the [SCIM cutover](#scim-requires-full-reprovisioning) before creating the new schema.
@@ -70,6 +72,10 @@ Account identity, SCIM, and the provider client store require manual data steps.
 
 <Callout type="warn">
   **Migrating from `oidcProvider` or the in-core MCP plugin moves client data.** `@better-auth/oauth-provider` stores registered clients in `oauthClient`, not the old `oauthApplication`, and renames the `oauthAccessToken.accessToken` column to `token`. `auth migrate` only adds tables and columns; it never renames or copies data. Copy clients with an explicit field mapping or re-register them before cutover. The old and new client tables are not column-compatible: `redirectUrls` becomes the `redirectUris` array, `metadata` becomes JSON, and fields such as `grantTypes` and `tokenEndpointAuthMethod` are new. Dynamically registered clients can re-register. Drop or rename the legacy `oauthAccessToken` table before migrating because its rows are ephemeral access tokens and the new required `token` column cannot be added to populated rows automatically.
+</Callout>
+
+<Callout type="warn">
+  **Existing `@better-auth/oauth-provider` clients need a separate backfill.** The client schema replaces `type` and `public` with `applicationType`, adds nullable `clientDiscoveryId`, and the resource-link table gains a compound unique index. Follow [the OAuth client-record migration](#oauth-clients-separate-application-type-from-authentication) before dropping either legacy column or creating the unique index.
 </Callout>
 
 ***
@@ -202,6 +208,43 @@ Linking an anonymous account after a social login now works in Expo and other in
 
 This covers `@better-auth/oauth-provider`. Several changes need a schema migration; run `generate` and `migrate` once after applying them.
 
+### OAuth clients separate application type from authentication
+
+OAuth clients no longer store `type` or `public`. The new `applicationType` field controls redirect URI policy, while `tokenEndpointAuthMethod` alone determines whether the client authenticates. OAuth requests and responses use the wire names `application_type` and `token_endpoint_auth_method`.
+
+Use a maintenance window for this migration, and stop client registration and authorization writes before changing the tables:
+
+1. Back up `oauthClient` and `oauthClientResource`.
+2. Add `applicationType`, `clientDiscoveryId`, and `clientCredentialsScopes` as nullable. Copy `type: "web"` to `applicationType: "web"` and `type: "native"` to `applicationType: "native"`. Leave `user-agent-based` as `NULL`, then classify each affected client as `web` or `native` from its deployment and redirect behavior. Classify any other missing value explicitly instead of relying on a runtime default.
+3. Set `clientDiscoveryId` to `"cimd"` only for records that were actually discovered by CIMD. Leave DCR, administrative, user-managed, and migrated legacy clients as `NULL`. Do not infer discovery ownership from an `https://` client ID.
+4. Audit `tokenEndpointAuthMethod` independently. Store `none` for a client that does not authenticate, or its configured authentication method for a confidential client. Do not derive this value from the old `public` field.
+5. Find duplicate `(clientId, resourceId)` rows in `oauthClientResource`, decide which row to keep for each pair, and remove the duplicates before adding the compound unique index.
+6. Backfill `clientCredentialsScopes` to `[]` for every existing client and configure `[]` as the database default for new rows. Missing, `NULL`, and empty values all deny machine tokens at runtime, but the migration must write the exact empty-array value so stored state is deterministic. Audit every client that declares `client_credentials`, then let an administrator explicitly replace `[]` with its approved non-OIDC scopes. Never copy user-delegated `scopes` into this field.
+7. Drop `type` and `public` only after the backfill is complete. There is no compatibility reader for either field.
+
+Client creation and registration also use the new model:
+
+* Dynamic, administrative, and user-managed registration default a missing `application_type` to `web`. Client ID Metadata Documents preserve an omitted application type as `NULL`.
+* Web clients must use HTTPS redirects on non-loopback hosts.
+* Native clients may use a claimed HTTPS redirect, exact HTTP loopback hosts (`localhost`, `127.0.0.1`, or `[::1]`) with any port, or a reverse-domain private-use scheme such as `com.example.app:/callback`. Alternative numeric spellings such as `127.1` are rejected.
+* `token_endpoint_auth_method: "none"` creates a public client. Every authenticated method creates a confidential client, regardless of `application_type`.
+* Inline client keys must use the RFC 7517 JWK Set shape. Replace `jwks: [key]` with `jwks: { keys: [key] }` in DCR payloads, administrative and user client creation, Client ID Metadata Documents, test fixtures, and generated client code. EC keys must use P-256, P-384, or P-521; OKP keys must use Ed25519. If a key includes `alg`, use a supported `private_key_jwt` algorithm that matches its key type and curve, or omit `alg` and let the assertion header select it. OAuth client rows previously written through `oauthToSchema` already store the object shape, so this is a request, configuration, and type migration rather than another database rewrite. Audit custom-written rows separately if they bypassed Better Auth persistence.
+* Every `backchannel_logout_uri` must be a public HTTPS URL. Loopback HTTP callbacks are no longer accepted.
+
+**What to do:** update custom schemas, adapters, client-management code, and registration payloads to use the two independent fields.
+
+`OAuthClient` no longer has a catch-all string index, so removed fields such as `type` and `public` no longer type-check as unknown metadata. Model custom wire extensions explicitly:
+
+```ts
+interface YourExtensionMetadata {
+  your_extension: string;
+}
+
+type ExtendedOAuthClient = OAuthClient & YourExtensionMetadata;
+```
+
+Remove `clientCredentialGrantDefaultScopes`. Administrative client creation and updates now use `client_credentials_scopes`; assigning a non-empty value requires `clientPrivileges` to approve `configure-client-credentials-scopes`. DCR, CIMD, and user-managed routes cannot assign it, and removing `client_credentials` from a client clears the stored ceiling.
+
 ### Protected resources replace the audience list
 
 Audiences are now resources. Each resource can have its own token lifetime, scopes, claims, and signing keys. The old `validAudiences` list is removed.
@@ -214,6 +257,14 @@ Audiences are now resources. Each resource can have its own token lifetime, scop
 * Check your refresh-token lifetimes: the shortest applicable lifetime now wins, so a per-resource value longer than the provider default is capped at the default.
 
 **If you accept dynamically registered clients,** the resource model enforces per-client resource access by default. A dynamic client's token request can be rejected with `invalid_target`. Set `enforcePerClientResources: false` for that case, and register each client's `grant_types` explicitly, or the token endpoint rejects them with `unauthorized_client`.
+
+### Registration resources and scopes are server-owned policies
+
+The provider now distinguishes the capabilities an operator permits from the values a client requests during registration. `clientRegistrationDefaultResources` links every new client to server-owned resources. `clientRegistrationAllowedResources` controls which additional resources the optional DCR `resources` extension may request. A requested resource outside those lists returns `invalid_target`.
+
+Registration scopes follow the same boundary. Better Auth validates a client's requested `scope` as a subset of the configured registration scopes, but persists the full operator-approved capability set. Registration does not grant those scopes to a user.
+
+**What to do:** configure default and allowed resources before enabling DCR or client discovery. If existing DCR clients send `resources`, add each supported identifier to one of those options. Review `clientRegistrationDefaultScopes` and `clientRegistrationAllowedScopes` as capability policy rather than a default user grant.
 
 ### Token target is locked to the login
 
@@ -228,6 +279,14 @@ The plain token-checking helper `verifyAccessToken` is renamed `verifyBearerToke
 **What to do:** rename `verifyAccessToken` to `verifyBearerToken`, and switch DPoP-capable endpoints to `verifyAccessTokenRequest`. Run `generate` and `migrate` to add the token-binding column. To support DPoP, configure database-backed verification storage.
 
 **Watch the proxy case.** Native DPoP checks the proof's `htu` claim against the URL the token endpoint computes for itself. Behind a TLS-terminating proxy or a custom server, that computed URL can be the internal bind address (`http://0.0.0.0:3000`) or the proxy's internal scheme and port. The client signed `htu` from your public discovery URL, so a valid proof can be rejected. Canonicalize the incoming request's scheme and host to your configured `baseURL` at the route boundary before the provider reads it.
+
+### Protected-resource scope challenges are explicit
+
+Protected operations now separate scope enforcement from generic authorization failures. Configure required scopes with `requiredScopes`, and provide `isScopeSatisfied` only when your scope model is hierarchical. Use `createInsufficientScopeError` for a denial that the client can solve by authorizing more scopes.
+
+`createResourceServerChallenge` builds the response for a protected-resource challenge. It returns an `APIError` for recognized token or scope failures and `undefined` for unrelated errors. Ordinary handler responses and unrelated thrown values keep their identity instead of turning into OAuth challenges.
+
+**What to do:** rename protected-operation `scopes` to `requiredScopes`, and use `challengeScopes` for the challenge hint.
 
 ### Sign-out revokes session tokens
 
@@ -331,7 +390,7 @@ The authorization and userinfo endpoints now accept form-encoded (POST) requests
 
 The OAuth provider can replay the same refresh response for duplicate refresh requests during `refreshTokenReuseInterval`. Strict refresh-token replay handling remains the default.
 
-**What to do:** set `refreshTokenReuseInterval` only if a public or native client can retry a refresh request with an old token after another local session already rotated it. MCP defaults this window to 30 seconds for native and public clients. Set `refreshTokenReuseInterval: 0` to keep strict replay handling.
+**What to do:** set `refreshTokenReuseInterval` only when a client can retry a refresh request with an old token after another local session already rotated it. OAuth Provider keeps strict handling at `0`; `mcp()` defaults the interval to 30 seconds for every client configured through that plugin. Set `refreshTokenReuseInterval: 0` on `mcp()` to disable the overlap window.
 
 ### If you extended the OAuth provider by hand
 
@@ -353,13 +412,24 @@ The MCP plugin moves from `better-auth` into `@better-auth/mcp`, built on the OA
 
 **What to do:**
 
-1. Install `@better-auth/mcp` and update imports: the server plugin and helpers from `@better-auth/mcp`, the client and adapters from `@better-auth/mcp/client` and `@better-auth/mcp/client/adapters`.
+1. Install `@better-auth/mcp`, `@better-auth/cimd`, and the official version 2 MCP client or server package needed by your application. Authorization plugins and protected-request helpers come from the `@better-auth/mcp` package root. The in-core MCP client (`createMcpAuthClient` and its adapters under `better-auth/plugins/mcp/client`) is removed; MCP protocol and transport code comes from `@modelcontextprotocol/client` and `@modelcontextprotocol/server`.
 2. Add the `jwt()` plugin, which is now required.
-3. Move options that were nested under `oidcConfig` up to the top level of `mcp({ ... })`, and add a resource identifier, for example `resource: "https://api.example.com/mcp"`.
-4. Rename `withMcpAuth` to `requireMcpAuth`, and `createMcpAuthClient` to `createMcpResourceClient`.
-5. Regenerate or migrate your schema.
+3. Compose `mcp({ ... })` with `cimd({ fetchClientMetadataResource, metadataProfile: "mcp-2026-07-28" })`. Client ID Metadata Documents are the recommended registration mechanism for MCP 2026-07-28, which pins CIMD draft-00, and `mcp()` no longer enables Dynamic Client Registration.
+4. Move options that were nested under `oidcConfig` up to the top level of `mcp({ ... })`. Replace `resourceMetadataMappings` with one canonical HTTPS `resource`, for example `resource: "https://api.example.com/mcp"`. `resource` was optional and defaulted to the server origin; it is now required and must be a query-free HTTPS URL without credentials or a fragment. HTTP is accepted only on loopback hosts for development.
+5. Rename `withMcpAuth` to `requireMcpAuth` and `mcpHandler` to `createMcpProtectedRequestHandler`. The standalone factory accepts one flat `McpProtectedRequestHandlerOptions` object with `issuer`, a single `audience`, optional `jwtVerifyOptions`, verification fields, and challenge fields. Its callback receives `accessTokenClaims`. In protected-route options, rename `scopes` to `requiredScopes`; use the new `challengeScopes` option to advertise scopes in `WWW-Authenticate` challenges.
+6. If application code raised or caught scope challenges directly, replace the exception-driven API with `createInsufficientScopeError`, `isInsufficientScopeError`, and `createResourceServerChallenge`.
+7. Replace the session-oriented MCP route with the SDK v2 `createMcpHandler`, set `legacy: "reject"`, wrap its handler with `requireMcpAuth`, and export only `POST`.
+8. Regenerate or migrate your schema.
 
-The OAuth endpoints move from `/mcp/*` to `/oauth2/*`. Discovery-based MCP clients find the new locations on their own. Existing registered clients move to the shared `oauthClient` store and are not copied automatically; complete the provider-client data step in [Before you upgrade](#before-you-upgrade) before cutover. MCP also defaults `refreshTokenReuseInterval` to 30 seconds for native and public clients; set it to `0` if you want strict refresh-token replay handling.
+The OAuth endpoints move from `/mcp/*` to `/oauth2/*`. Discovery-based MCP clients find the new locations on their own. Existing registered clients move to the shared `oauthClient` store and are not copied automatically; complete the provider-client data step in [Before you upgrade](#before-you-upgrade) before cutover.
+
+MCP 2026-07-28 does not maintain protocol-level sessions between requests. Remove MCP-route `GET` and `DELETE` exports and session-store options such as `redisUrl`; each client JSON-RPC request or notification now travels through an independent `POST`. This does not remove the OAuth database tables, which still store clients, consent, authorization codes, refresh tokens, and security records. Deployments that use `subscriptions/listen` across multiple server instances need a shared SDK event bus, not an MCP session store. See [Protecting an MCP Route](/docs/plugins/mcp#protecting-an-mcp-route) for the complete SDK v2 example.
+
+If you deliberately support an older client that still requires Dynamic Client Registration, set both `allowDynamicClientRegistration` and `allowUnauthenticatedClientRegistration` on `mcp()`. Discovery advertises a registration endpoint only in that configuration. `mcp()` links its protected resource to every newly registered client, so a DCR request no longer needs Better Auth's `resources` extension.
+
+MCP defaults `refreshTokenReuseInterval` to 30 seconds for every client so a retry can recover a recently rotated refresh response. Set it to `0` if you require strict refresh-token replay handling.
+
+An insufficient-scope challenge names only the scopes the token is missing. It does not expose `offline_access` or repeat scopes the token already has.
 
 ***
 
@@ -490,6 +560,12 @@ betterAuth({
 
 Setups where the proxy rewrites the host for you, such as nginx, Vercel, Cloudflare, and Netlify, need no change.
 
+### Dynamic base URLs now fail closed
+
+When `baseURL` is resolved from each request, Better Auth now rejects a direct server API call that has no usable URL or host, or whose host is outside `allowedHosts`. Trusted proxy headers are considered only when `advanced.trustedProxyHeaders` enables them. OAuth issuer, discovery, protected-resource, and JWKS URLs then use the accepted request host.
+
+**What to do:** pass request URL and header data to direct server API calls that depend on a dynamic base URL. Configure `allowedHosts` and proxy trust before relying on forwarded values. For an MCP resource server whose host cannot be resolved from the Better Auth request, use `createMcpProtectedRequestHandler` with explicit issuer, audience, and JWKS values.
+
 ### IdP redirects and DPoP need your canonical origin
 
 Two OAuth-provider behaviors read the incoming request origin. Behind a custom server or TLS-terminating proxy, that origin can be the internal bind address rather than your public origin. The provider returns your `consentPage` and `loginPage` as relative paths, so a server-side redirect, such as `NextResponse.redirect`, needs them resolved against an absolute origin. Native DPoP also compares the proof's `htu` against the URL the token endpoint computes for itself.
@@ -583,18 +659,21 @@ These do not need action for most setups, but they change what you see.
 
 ## Upgrade checklist
 
-Run once, after applying the changes that affect you:
+Some data changes must happen before the generated schema migration. Use a maintenance window, stop authentication and provisioning writes, and complete the applicable preparation:
+
+* **Backfill account identities:** assign every account a reviewed issuer and provider account identifier, resolve collisions, and prepare the compound unique index.
+* **Move provider clients:** copy or re-register clients from `oidcProvider` or the in-core MCP plugin before switching to the shared OAuth provider tables.
+* **Backfill OAuth clients:** populate `applicationType`, assign `clientDiscoveryId` only from known provenance, audit `tokenEndpointAuthMethod`, and deduplicate client-resource links before dropping the legacy fields or adding the unique index.
+* **Prepare the SCIM cutover:** inventory retained identities and drop incompatible legacy models in the order described in the [full SCIM reprovisioning guide](#scim-requires-full-reprovisioning).
+
+After completing those steps, generate and apply the schema:
 
 ```bash title="Terminal"
 npx auth@rc generate
 npx auth@rc migrate
 ```
 
-Then complete the manual data step if it applies:
-
-* **Backfill account identities:** assign every account a reviewed issuer and provider account identifier, resolve collisions, and add the compound unique index before deploying.
-* **Move provider clients:** copy or re-register clients from `oidcProvider` or the in-core MCP plugin before switching to the shared OAuth provider tables.
-* **Reprovision SCIM:** follow the [full cutover](#scim-requires-full-reprovisioning), including reviewed handling of legacy core identities, then run a complete User and Group provisioning cycle.
+Then finish any post-migration work. Make the new account identity fields required, deploy the new OAuth client schema and configuration, and run a complete SCIM User and Group provisioning cycle when SCIM applies.
 
 ***
 
@@ -605,5 +684,32 @@ If you upgraded straight from 1.6 to the final 1.7, skip this. It applies only i
 A breaking change in one beta can be reverted in a later beta of the same line, and the reversal is a migration in the opposite direction. The clearest case is OAuth scopes: an early beta moved `account.scope` into a `grantedScopes` array, and a later beta reverted it, so the final 1.7 keeps the original `account.scope` string. If you adopted the `grantedScopes` column, drop it and restore the `scope` column on every schema you changed. When your migration tool cannot tell a rename from a drop, reconcile the column with direct SQL so you keep existing rows.
 
 An earlier 1.7 prerelease used organization-scoped SCIM providers and interim Group tables. The final SCIM schema does not convert those tables. If you adopted that prerelease, follow the same [full SCIM reprovisioning cutover](#scim-requires-full-reprovisioning) as an upgrade from 1.6.
+
+An earlier 1.7 prerelease accepted looser Client ID Metadata Documents, permitted loopback Client Identifier URLs, and refreshed documents on a fixed timer. The final generic plugin follows CIMD draft-02; `client_name` and `redirect_uris` are optional unless `metadataProfile: "mcp-2026-07-28"` selects MCP's draft-00 requirements. Revalidate every document: shared secrets, resource links, server-controlled fields, private JWK material, and back-channel logout metadata are forbidden, while the authentication method must be `none` or `private_key_jwt`.
+
+Update prerelease CIMD integrations as follows:
+
+* Replace `createCimdResolver` with `createCimdClientDiscovery`.
+* Replace `cimdClientDiscovery` with `createCimdClientDiscovery`.
+* Replace `ClientIdMetadataDocumentResult` with `CimdMetadataValidationResult` and `ValidateCimdMetadataOptions` with `CimdMetadataValidationOptions`.
+* Replace `isUrlClientId` with `isCimdClientIdUrlCandidate`.
+* Replace the `MetadataDocumentFetch` type with `ClientMetadataResourceFetch`.
+* Replace `refreshRate` with `metadataRevalidationInterval`. Numeric values are seconds, as are numeric `minimumFetchInterval` values.
+* Update lifecycle callback parameters: use the exported `CimdClientCreatedEvent` and `CimdClientRefreshedEvent` contracts, read `clientMetadataDocument` instead of `metadata`, and read `context` instead of `ctx`.
+* Pass the now-required `fetchClientMetadataResource` option. `CimdOptions` is no longer optional because every deployment must provide this network transport.
+* Remove `allowFetch`, `fetchMetadataDocument`, and `allowLoopback`.
+
+The transport must resolve once, reject RFC 6890 addresses, pin the approved address, preserve TLS hostname verification, and refuse redirects. Calling `globalThis.fetch` after a separate DNS check is not safe because Fetch can resolve the hostname again.
+
+The default `originBoundFields` no longer includes `redirect_uris`; requested redirects still require an exact match, and the consent page should show both the client-ID and redirect hosts. Cache freshness follows HTTP cache headers, with `private` and `Vary: *` treated as noncacheable. A stale refresh failure preserves stored state but fails the current request closed. Lifecycle hooks remain best-effort notifications, and `onClientRefreshed` now receives `previousClient`. Add nullable `oauthClient.clientDiscoveryId`, set it to `"cimd"` only for known CIMD-owned clients, and leave every managed or DCR client `NULL`. See the [CIMD requirements](/docs/plugins/cimd#draft-02-validation) for the complete contract.
+
+An earlier 1.7 prerelease shipped a different OAuth-provider and MCP surface. If you adopted it, update these names before finishing the upgrade:
+
+* Replace `raiseResourceServerChallenge` with `createResourceServerChallenge`.
+* The package root no longer exports `checkOAuthClient` or `oauthToSchema`.
+* The `@better-auth/mcp/client` and `@better-auth/mcp/client/adapters` subpaths are removed; use the official version 2 MCP packages.
+* The challenge `scope` option is renamed `challengeScopes`.
+* `mcp()` rejects a `resource` containing a query string; move discriminators into the path.
+* The client-privileges action `configure-client-credentials` is renamed `configure-client-credentials-scopes`.
 
 Two habits make this cheaper. Read `revert` entries in the changelog, not just `feat` and `fix`; a revert is a migration for you even though it does not announce itself as breaking. Bump only the packages that carry the change, and confirm your own plugins do not import the reverted surface before you rebuild them.

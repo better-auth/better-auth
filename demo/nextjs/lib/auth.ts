@@ -1,5 +1,4 @@
 import { DatabaseSync } from "node:sqlite";
-import { cimd } from "@better-auth/cimd";
 import { electron } from "@better-auth/electron";
 import { dash, sendEmail, sentinel } from "@better-auth/infra";
 import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
@@ -517,7 +516,6 @@ const authOptions = {
 				oauthAuthServerConfig: true,
 			},
 		}),
-		cimd(),
 		electron(),
 	],
 	trustedOrigins: [

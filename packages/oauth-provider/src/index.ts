@@ -25,10 +25,13 @@ export type {
 	OAuthFieldErrorCodeMap,
 	OAuthRedirectOnError,
 } from "./oauth-endpoint";
-export { checkOAuthClient, oauthToSchema } from "./register";
-export { raiseResourceServerChallenge } from "./resource-challenge";
+export { createResourceServerChallenge } from "./resource-challenge";
 export { getOAuthProviderApi } from "./token";
 export type * from "./types";
 export type { OAuthClient, ResourceServerMetadata } from "./types/oauth";
-export { ResourceUriSchema } from "./types/zod";
+export type { OAuthClientMetadata } from "./types/zod";
+export {
+	oauthClientMetadataSchema,
+	ResourceUriSchema,
+} from "./types/zod";
 export { consumeClientAssertion } from "./utils/client-assertion";

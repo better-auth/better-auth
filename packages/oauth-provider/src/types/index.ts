@@ -8,6 +8,7 @@ import type {
 	AuthServerMetadata,
 	Confirmation,
 	GrantType,
+	OAuthClient,
 	OIDCMetadata,
 	TokenEndpointAuthMethod,
 	TokenType,
@@ -40,11 +41,44 @@ type InternallySupportedScopes =
 	| "email"
 	| "offline_access";
 export type Scope = LiteralString | InternallySupportedScopes;
+
+/**
+ * OAuth client metadata returned by Dynamic Client Registration and
+ * user-managed client endpoints.
+ */
+export interface OAuthClientRegistrationResponse extends OAuthClient {
+	/** Server-owned resources linked to the registered client, when present. */
+	resources?: string[];
+}
+
+/**
+ * OAuth client metadata returned by administrative create and update
+ * endpoints.
+ */
+export interface OAuthClientAdministrativeResponse
+	extends OAuthClientRegistrationResponse {
+	/** Server-authorized scope ceiling for `client_credentials` tokens. */
+	client_credentials_scopes: Scope[];
+}
+
 export type Prompt = "none" | "consent" | "login" | "create" | "select_account";
 export type AuthorizePrompt =
 	| Prompt
 	| "login consent"
 	| "select_account consent";
+
+/**
+ * Runtime-owned HTTP transport for resources referenced by externally
+ * discovered client metadata.
+ *
+ * A discovery that accepts URL-owned metadata must document and enforce its
+ * network trust boundary. CIMD requires resolve-once DNS handling, rejection of
+ * RFC 6890 special-use addresses, connection pinning, and redirect refusal.
+ */
+export type ClientMetadataResourceFetch = (
+	input: RequestInfo | URL,
+	init?: RequestInit,
+) => Awaitable<Response>;
 
 /**
  * Describes how to resolve a `client_id` from an external source (a URL-based
@@ -57,8 +91,9 @@ export type AuthorizePrompt =
  */
 export interface ClientDiscovery {
 	/**
-	 * Stable identifier used in error messages and diagnostics. Convention
-	 * is to match the plugin id (for example `"cimd"`).
+	 * Stable, globally unique identifier persisted as client provenance.
+	 * Convention is to match the plugin id (for example `"cimd"`). Changing it
+	 * requires migrating every client owned by this discovery.
 	 */
 	readonly id: string;
 	/**
@@ -73,15 +108,22 @@ export interface ClientDiscovery {
 	 * refreshing, or passing through to the database result.
 	 *
 	 * Return:
-	 * - a client record: `getClient()` returns it (creation / refresh / takeover).
-	 * - `null`: `getClient()` falls through to the next matching discovery
-	 *   or to the database record (if any).
+	 * - a client record: `getClient()` returns it after creation or refresh.
+	 * - `null` for a new client: `getClient()` tries the next matching discovery.
+	 * - `null` for a client owned by this discovery: resolution fails closed;
+	 *   the stored record is not treated as a managed client.
 	 */
 	resolve: (
 		ctx: GenericEndpointContext,
 		clientId: string,
 		existing: SchemaClient<Scope[]> | null,
 	) => Awaitable<SchemaClient<Scope[]> | null>;
+	/**
+	 * Fetch transport for resources owned by this discovery, such as a CIMD
+	 * client's `jwks_uri`. The discovery defines the transport's network-safety
+	 * contract.
+	 */
+	fetchClientMetadataResource?: ClientMetadataResourceFetch;
 	/**
 	 * Fields merged into `/.well-known/oauth-authorization-server` and
 	 * `/.well-known/openid-configuration` responses. Useful for advertising
@@ -534,6 +576,21 @@ export interface OAuthOptions<
 	 */
 	enforcePerClientResources?: boolean;
 	/**
+	 * Resource identifiers linked to every newly registered OAuth client.
+	 *
+	 * Each value must also be present in {@link OAuthOptions.resources}.
+	 */
+	clientRegistrationDefaultResources?: readonly string[];
+	/**
+	 * Resource identifiers an explicit DCR `resources` extension may request.
+	 *
+	 * The effective allowlist is the union of this list and
+	 * {@link OAuthOptions.clientRegistrationDefaultResources}. Each value must
+	 * also be present in {@link OAuthOptions.resources}. When both registration
+	 * resource options are omitted, explicit resource requests are rejected.
+	 */
+	clientRegistrationAllowedResources?: readonly string[];
+	/**
 	 * Customize how a resource `identifier` is validated when resources are
 	 * created via CRUD or DCR. The default rejects non-URI identifiers per
 	 * RFC 8707 §2 (absolute URI, no fragment). Override only for trusted
@@ -714,26 +771,30 @@ export interface OAuthOptions<
 	 */
 	extensions?: OAuthProviderExtension[];
 	/**
-	 * List of scopes for newly registered clients
-	 * if not requested.
+	 * Baseline scope capabilities persisted for dynamically discovered and
+	 * dynamically registered clients.
 	 *
-	 * For scopes that shall automatically adapt to your scopes
-	 * list in the future (ie scopes: undefined), create that client
-	 * using the server's `createOAuthClient` function.
+	 * A client's registration request may ask for a subset, but that request is
+	 * not an authorization grant. Better Auth validates the requested subset,
+	 * then persists the deduplicated union of this list and
+	 * {@link OAuthOptions.clientRegistrationAllowedScopes} so a later user
+	 * authorization can step up within the operator-approved capability set.
 	 *
 	 * @default scopes
 	 */
 	clientRegistrationDefaultScopes?: Scopes;
 	/**
-	 * List of scopes for allowed clients in addition to
-	 * those listed in the default scope. Finalized allowed list is
-	 * the union of the default scopes and this list.
+	 * Additional scope capabilities for dynamically discovered and dynamically
+	 * registered clients. The effective client capability set is the
+	 * deterministic, deduplicated union with
+	 * {@link OAuthOptions.clientRegistrationDefaultScopes}.
 	 *
-	 * If both clientRegistrationDefaultScopes and this
-	 * are undefined, only scopes listed in the scopes option
-	 * are allowed.
+	 * Any registration metadata `scope` must be a subset of that effective set.
+	 * It does not narrow the persisted capability set or grant those scopes to a
+	 * user. If both registration scope options are omitted, {@link OAuthOptions.scopes}
+	 * is the effective set.
 	 *
-	 * @default - clientRegistrationDefaultScopes
+	 * @default []
 	 */
 	clientRegistrationAllowedScopes?: Scopes;
 	/**
@@ -795,19 +856,17 @@ export interface OAuthOptions<
 	 */
 	clientPrivileges?: (context: {
 		headers: Headers;
-		action: "create" | "read" | "update" | "delete" | "list" | "rotate";
+		action:
+			| "create"
+			| "read"
+			| "update"
+			| "delete"
+			| "list"
+			| "rotate"
+			| "configure-client-credentials-scopes";
 		user?: User & Record<string, unknown>;
 		session?: Session & Record<string, unknown>;
 	}) => Awaitable<boolean | undefined>;
-	/**
-	 * List default scopes when using the token endpoint's
-	 * grant type "client_credentials". This is used
-	 * only when oauthClients are stored in the database
-	 * without a scope and you do not want all `scopes` to be given.
-	 *
-	 * @default undefined
-	 */
-	clientCredentialGrantDefaultScopes?: Scopes;
 	/**
 	 * Grant types supported by the token endpoint
 	 *
@@ -1626,6 +1685,13 @@ export interface SchemaClient<
 	 * size 32
 	 */
 	clientSecret?: string;
+	/**
+	 * Stable identifier of the discovery that owns this client record.
+	 *
+	 * Null or absent records are managed or dynamically registered clients and
+	 * must never be refreshed by a discovery solely because of their ID shape.
+	 */
+	clientDiscoveryId?: string | null;
 	/** Whether the client is disabled or not. */
 	disabled?: boolean;
 	/**
@@ -1634,6 +1700,13 @@ export interface SchemaClient<
 	 * If not defined, any scope can be requested.
 	 */
 	scopes?: Scopes;
+	/**
+	 * Server-owned scope ceiling for the `client_credentials` grant.
+	 *
+	 * Missing, null, and empty values deny machine-to-machine token issuance.
+	 * This authority is independent from user-delegated {@link scopes}.
+	 */
+	clientCredentialsScopes?: Scopes | null;
 	//---- Recommended client data ----//
 	/** User who owns this client */
 	userId?: string | null;
@@ -1694,33 +1767,15 @@ export interface SchemaClient<
 	tokenEndpointAuthMethod?: TokenEndpointAuthMethod;
 	grantTypes?: GrantType[];
 	responseTypes?: "code"[];
+	/**
+	 * OIDC application type used only to classify redirect URI policy.
+	 * Authentication capability is determined by `tokenEndpointAuthMethod`.
+	 */
+	applicationType?: "web" | "native" | null;
 	/** Client's JSON Web Key Set metadata. Mutually exclusive with `jwksUri`. */
 	jwks?: string;
 	/** URI for the client's JSON Web Key Set. Mutually exclusive with `jwks`. Must be HTTPS. */
 	jwksUri?: string;
-	//---- RFC6749 Spec ----//
-	/**
-	 * Indicates whether the client is public or confidential.
-	 * If public, refreshing tokens doesn't require
-	 * a client_secret. Clients are considered confidential by default.
-	 *
-	 * Uses `token_endpoint_auth_method` field or `type` field to determine
-	 *
-	 * Described https://www.rfc-editor.org/rfc/rfc6749.html#section-2.1
-	 *
-	 * @default undefined
-	 */
-	public?: boolean;
-	/**
-	 * The client type
-	 *
-	 * Described https://www.rfc-editor.org/rfc/rfc6749.html#section-2.1
-	 *
-	 * - web - A web application (confidential client)
-	 * - native - A mobile application (public client)
-	 * - user-agent-based - A user-agent-based application (public client)
-	 */
-	type?: "web" | "native" | "user-agent-based";
 	/**
 	 * Whether this client requires PKCE for authorization code flow.
 	 *

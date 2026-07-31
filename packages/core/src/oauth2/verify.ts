@@ -164,8 +164,16 @@ export interface VerifyAccessTokenOptions {
 	/** Verify options */
 	verifyOptions: JWTVerifyOptions &
 		Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
-	/** Scopes to additionally verify. Token must include all but not exact. */
-	scopes?: string[];
+	/** Scopes the token must satisfy. */
+	requiredScopes?: readonly string[];
+	/**
+	 * Determines whether a required scope is satisfied by the granted scope
+	 * set. Defaults to exact set membership.
+	 */
+	isScopeSatisfied?: (
+		requiredScope: string,
+		grantedScopes: ReadonlySet<string>,
+	) => boolean;
 	/** Required to verify access token locally */
 	jwksUrl?: string;
 	/** If provided, can verify a token remotely */
@@ -442,21 +450,120 @@ async function verifyAccessTokenPayload(
 			message: `no token payload`,
 		});
 
-	// Check scopes if provided
-	if (opts.scopes) {
-		const validScopes = new Set(
-			(payload.scope as string | undefined)?.split(" "),
+	const grantedScopes = parseGrantedScopes(payload.scope);
+
+	// Check scopes if provided.
+	if (opts.requiredScopes) {
+		const isScopeSatisfied =
+			opts.isScopeSatisfied ??
+			((requiredScope: string, scopes: ReadonlySet<string>) =>
+				scopes.has(requiredScope));
+		// RFC 6750 §3.1: report every missing scope at once. Challenging with one
+		// scope at a time costs the user a browser round-trip per scope.
+		const missingScopes = opts.requiredScopes.filter(
+			(scope) => !isScopeSatisfied(scope, grantedScopes),
 		);
-		for (const sc of opts.scopes) {
-			if (!validScopes.has(sc)) {
-				throw new APIError("FORBIDDEN", {
-					message: `invalid scope ${sc}`,
-				});
-			}
+		if (missingScopes.length > 0) {
+			throw createInsufficientScopeError(missingScopes);
 		}
 	}
 
 	return payload;
+}
+
+/**
+ * Build the RFC 6750 §3.1 insufficient-scope failure: the access token is valid
+ * but lacks scopes the operation needs.
+ *
+ * Resource-server challenge builders turn this into a `403` carrying a
+ * `WWW-Authenticate: Bearer error="insufficient_scope"` challenge that names
+ * `scopes`, so the client knows what to request when it re-authorizes. Throw it
+ * from a route handler to challenge for scopes only that operation needs; a
+ * plain `FORBIDDEN` stays a plain `403`, since a permission denial the client
+ * cannot fix by re-authorizing must not send the user through consent again.
+ *
+ * @param requiredScopes - Every scope the operation requires but the token lacks.
+ * @param description - RFC 6750 `error_description` text. It must use the
+ * printable ASCII character set allowed by the specification.
+ */
+const OAUTH_SCOPE_TOKEN_PATTERN = /^[\x21\x23-\x5b\x5d-\x7e]+$/;
+const OAUTH_ERROR_DESCRIPTION_PATTERN = /^[\x20-\x21\x23-\x5b\x5d-\x7e]+$/;
+const insufficientScopeErrors = new WeakSet<APIError>();
+
+function isOAuthScopeToken(value: string): boolean {
+	return OAUTH_SCOPE_TOKEN_PATTERN.test(value);
+}
+
+function validateScopeTokens(scopes: readonly string[], label: string): void {
+	for (const scope of scopes) {
+		if (!isOAuthScopeToken(scope)) {
+			throw new TypeError(`invalid ${label}: ${JSON.stringify(scope)}`);
+		}
+	}
+}
+
+function validateRequiredScopes(opts: VerifyAccessTokenOptions): void {
+	if (opts.requiredScopes) {
+		validateScopeTokens(opts.requiredScopes, "required scope");
+	}
+}
+
+function parseGrantedScopes(scope: unknown): ReadonlySet<string> {
+	if (scope === undefined) return new Set();
+	if (
+		typeof scope !== "string" ||
+		scope.length === 0 ||
+		scope.split(" ").some((token) => !isOAuthScopeToken(token))
+	) {
+		throw new APIError("UNAUTHORIZED", {
+			message: "access token scope claim is invalid",
+			error: "invalid_token",
+			error_description: "access token scope claim is invalid",
+		});
+	}
+	return new Set(scope.split(" "));
+}
+
+export function createInsufficientScopeError(
+	requiredScopes: readonly string[],
+	description = `access token is missing required scope: ${requiredScopes.join(" ")}`,
+): APIError {
+	if (requiredScopes.length === 0) {
+		throw new TypeError("requiredScopes must contain at least one scope");
+	}
+	validateScopeTokens(requiredScopes, "required scope");
+	if (
+		typeof description !== "string" ||
+		!OAUTH_ERROR_DESCRIPTION_PATTERN.test(description)
+	) {
+		throw new TypeError("invalid error_description");
+	}
+	const error = new APIError("FORBIDDEN", {
+		message: description,
+		error: "insufficient_scope",
+		error_description: description,
+		scope: [...new Set(requiredScopes)].join(" "),
+	});
+	insufficientScopeErrors.add(error);
+	return error;
+}
+
+/**
+ * Returns whether an error is a typed RFC 6750 insufficient-scope failure.
+ */
+export function isInsufficientScopeError(error: unknown): error is APIError {
+	if (
+		!(error instanceof APIError) ||
+		!insufficientScopeErrors.has(error) ||
+		error.status !== "FORBIDDEN"
+	)
+		return false;
+	const body = error.body as { error?: unknown; scope?: unknown } | undefined;
+	if (body?.error !== "insufficient_scope" || typeof body.scope !== "string") {
+		return false;
+	}
+	const scopes = body.scope.split(" ");
+	return scopes.length > 0 && scopes.every(isOAuthScopeToken);
 }
 
 function throwDpopUnauthorized(
@@ -489,6 +596,7 @@ export async function verifyBearerToken(
 	token: string,
 	opts: VerifyAccessTokenOptions,
 ) {
+	validateRequiredScopes(opts);
 	const payload = await verifyAccessTokenPayload(token, opts);
 	if (getDpopJktFromPayload(payload)) {
 		throwDpopUnauthorized(
@@ -512,6 +620,7 @@ export async function verifyAccessTokenRequest(
 	request: ResourceRequestInput,
 	opts: VerifyAccessTokenRequestOptions,
 ) {
+	validateRequiredScopes(opts);
 	const authorization = parseAccessTokenAuthorization(
 		request.authorizationHeader,
 	);

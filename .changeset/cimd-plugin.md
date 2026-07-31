@@ -1,64 +1,22 @@
 ---
-"@better-auth/cimd": minor
+"@better-auth/cimd": major
 "@better-auth/oauth-provider": minor
 ---
 
-Add `@better-auth/cimd` plugin for [Client ID Metadata Document](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/) support, and expose a typed `clientDiscovery` extension point on `oauthProvider()` so plugins can resolve `client_id` values from external sources.
+Add `@better-auth/cimd` for [Client ID Metadata Document draft-02](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02). An exact HTTPS metadata-document URL becomes the OAuth `client_id`, and OAuth discovery advertises support when the plugin is installed. The explicit `metadataProfile: "mcp-2026-07-28"` mode applies the draft-00 metadata requirements pinned by MCP 2026-07-28.
 
-### `@better-auth/cimd` (new package)
+- Validate the complete shared OAuth client metadata schema. Generic draft-02 clients may omit `client_name` and `redirect_uris` and may use any grant supported by the OAuth Provider; the MCP profile requires `client_id`, `client_name`, and `redirect_uris`.
+- Reject client secrets, private JWK material, back-channel logout metadata, server-owned fields, unsafe metadata URLs, non-JSON responses, oversized documents, redirects, and private or reserved network targets. Loopback Client Identifier URLs are no longer supported.
+- Validate registered, discovered, and remotely fetched client JWKS through one public-asymmetric-key boundary. RFC 7517 JWK Sets must use `{ "keys": [...] }`; replace the removed bare-array form `jwks: [key]` with `jwks: { keys: [key] }`. Empty, malformed, symmetric, private, and unsupported key sets fail before they can enter a provider-scoped cache. EC keys must use P-256, P-384, or P-521; OKP keys must use Ed25519. A declared `alg` must match the key type and curve. Existing OAuth client rows written through `oauthToSchema` are already normalized, so no database rewrite is required unless rows were written outside Better Auth.
+- Require `fetchClientMetadataResource` as the deployment-owned transport for both metadata documents and discovery-owned `jwks_uri` resources. It must resolve once, reject RFC 6890 special-use addresses, pin the approved address for the connection, and refuse redirects. `isMetadataDocumentUrlAllowed` remains available for additional application policy.
+- Cache only valid successful metadata with bounded storage, HTTP shared-cache freshness rules, ETag and Last-Modified conditional revalidation, and fail-closed refresh behavior. `Cache-Control: private` and `Vary: *` are noncacheable, and an unconditional `304` is rejected.
+- Persist `oauthClient.clientDiscoveryId` as nullable discovery provenance. Discovery IDs are globally unique, and an owned client fails closed when its matching discovery is unavailable. Only that discovery may refresh the client or provide transport for its metadata-owned resources, so managed and DCR HTTPS client IDs cannot be taken over.
+- Preserve custom model names, resource links, and administrator-controlled client flags when clients are created or refreshed. Refresh notifications now receive `previousClient`.
 
-Install alongside `oauthProvider()` to let clients identify themselves by hosting an HTTPS metadata document; the URL becomes the `client_id`. This is the mechanism [MCP](https://modelcontextprotocol.io/specification/draft/basic/authorization#client-id-metadata-documents-flow) uses for unauthenticated dynamic client discovery.
+OAuth Provider also exposes `clientDiscovery` for custom verified client-resolution plugins. A discovery may provide `fetchClientMetadataResource`, and its stable `id` is persisted as client provenance.
 
-```ts
-import { oauthProvider } from "@better-auth/oauth-provider";
-import { cimd } from "@better-auth/cimd";
+Prerelease adopters must rename `createCimdResolver` or `cimdClientDiscovery` to `createCimdClientDiscovery`, `ClientIdMetadataDocumentResult` to `CimdMetadataValidationResult`, `ValidateCimdMetadataOptions` to `CimdMetadataValidationOptions`, `isUrlClientId` to `isCimdClientIdUrlCandidate`, and `MetadataDocumentFetch` to `ClientMetadataResourceFetch`. Rename `refreshRate` to `metadataRevalidationInterval`; there is no compatibility fallback. Numeric revalidation and `minimumFetchInterval` values are seconds.
 
-betterAuth({
-  plugins: [
-    oauthProvider({ /* ... */ }),
-    cimd({
-      refreshRate: "60m",
-      allowFetch: (url) => new URL(url).hostname.endsWith(".trusted.example"),
-    }),
-  ],
-});
-```
+Lifecycle callbacks now receive named `CimdClientCreatedEvent` and `CimdClientRefreshedEvent` values. Read validated metadata from `clientMetadataDocument` instead of `metadata`, and the endpoint context from `context` instead of `ctx`. `CimdOptions` is now required because `fetchClientMetadataResource` is mandatory. Remove the prerelease `allowFetch`, `fetchMetadataDocument`, and `allowLoopback` options.
 
-Ships with §3/§4.1 validation, SSRF protection that rejects private, reserved, link-local, unspecified, and cloud-metadata hosts (including IPv4-mapped IPv6 and 6to4/NAT64/Teredo tunnel forms), a 5-second fetch timeout, a 5 KB response size limit (UTF-8 byte-counted), origin binding for redirect URIs, and lifecycle hooks (`onClientCreated`, `onClientRefreshed`). Advertises `client_id_metadata_document_supported` in OAuth/OIDC discovery metadata.
-
-Loopback `client_id` URLs (`localhost`, `127.0.0.0/8`, `::1`, `*.localhost`), including plain HTTP, are fetched only when the new `allowLoopback` option is enabled, so a production server never fetches its own loopback interface. Loopback `redirect_uris` stay allowed for native and desktop flows.
-
-The `allowFetch` pre-fetch gate lets operators add origin allowlists, per-host rate limits, or DNS-level defenses beyond the built-in IP-literal check.
-
-Admin-controlled fields (`disabled`, `skipConsent`, `enableEndSession`) are preserved across refreshes so admin decisions survive document updates.
-
-### `@better-auth/oauth-provider`: `clientDiscovery` extension field
-
-```ts
-import type { ClientDiscovery } from "@better-auth/oauth-provider";
-
-oauthProvider({
-  extensions: [
-    {
-      clientDiscovery: {
-        id: "my-resolver",
-        matches: (clientId) => clientId.startsWith("custom://"),
-        resolve: async (ctx, clientId, existing) => {
-          // create, refresh, or return null to pass through
-        },
-        discoveryMetadata: { custom_flow_supported: true },
-      },
-    },
-  ],
-});
-```
-
-`clientDiscovery` accepts a single `ClientDiscovery` or an array. `getClient()` walks the entries in order after the database lookup; the first entry whose `matches()` returns `true` and whose `resolve()` returns a non-null client wins. Each entry can also contribute `discoveryMetadata` fields that are merged into `/.well-known/oauth-authorization-server` and `/.well-known/openid-configuration` responses.
-
-Plugins like `@better-auth/cimd` contribute an entry through the extension surface at init time, so multiple discoveries can coexist.
-
-The `checkOAuthClient` and `oauthToSchema` helpers are now exported for plugins that create client records directly.
-
-`jwks_uri` validation now accepts a same-origin URL when the `client_id` itself is an HTTPS URL, since URL-based discovery flows verify the origin through the `client_id` itself.
-
-Documentation now recommends removing the oauth-provider configuration `allowUnauthenticatedClientRegistration` when using CIMD.
+When adopting CIMD, remove `allowUnauthenticatedClientRegistration` unless the authorization server deliberately supports Dynamic Client Registration as a separate fallback.
