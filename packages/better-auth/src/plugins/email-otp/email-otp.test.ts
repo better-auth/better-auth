@@ -1133,22 +1133,45 @@ describe("email-otp-verify", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10603
 	 */
-	it("should not reveal whether an email is registered when checking an OTP", async () => {
-		const existing = await client.emailOtp.checkVerificationOtp({
-			email: testUser.email,
-			type: "email-verification",
-			otp: "000000",
-		});
-		const nonExistent = await client.emailOtp.checkVerificationOtp({
-			email: "non-existent@domain.com",
-			type: "email-verification",
-			otp: "000000",
-		});
+	it("should return INVALID_OTP regardless of email registration", async () => {
+		const { client: scopedClient, testUser: existingUser } =
+			await getTestInstance(
+				{
+					plugins: [
+						emailOTP({
+							async sendVerificationOTP() {},
+							disableSignUp: true,
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [emailOTPClient()],
+					},
+				},
+			);
 
-		expect(existing.error?.status).toBe(400);
-		expect(existing.error?.code).toBe("INVALID_OTP");
-		expect(nonExistent.error?.status).toBe(existing.error?.status);
-		expect(nonExistent.error?.code).toBe(existing.error?.code);
+		const registeredResponse = await scopedClient.emailOtp.checkVerificationOtp(
+			{
+				email: existingUser.email,
+				type: "email-verification",
+				otp: "000000",
+			},
+		);
+		const unregisteredResponse =
+			await scopedClient.emailOtp.checkVerificationOtp({
+				email: "non-existent@domain.com",
+				type: "email-verification",
+				otp: "000000",
+			});
+		const invalidOTPError = {
+			status: 400,
+			code: "INVALID_OTP",
+			message: "Invalid OTP",
+		};
+
+		expect(registeredResponse.error).toMatchObject(invalidOTPError);
+		expect(unregisteredResponse.error).toMatchObject(invalidOTPError);
 	});
 
 	it("should not send OTP email for non-existent users when disableSignUp is enabled", async () => {
