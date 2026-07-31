@@ -1,5 +1,5 @@
 ---
-"@better-auth/oauth-provider": major
+"@better-auth/oauth-provider": minor
 "@better-auth/mcp": minor
 "@better-auth/cimd": minor
 ---
