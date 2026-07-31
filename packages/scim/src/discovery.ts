@@ -1,7 +1,10 @@
 import { HIDE_METADATA } from "better-auth";
 import { createAuthEndpoint } from "better-auth/api";
 import { SCIM_MAX_PAGE_SIZE } from "./collection-query";
-import { SCIM_RESOURCE_SCHEMAS } from "./resource-schema-registry";
+import {
+	SCIM_DISCOVERY_SCHEMA_DESCRIPTORS,
+	SCIM_RESOURCE_SCHEMAS,
+} from "./resource-schema-registry";
 import { createSCIMError, SCIMErrorOpenAPISchemas } from "./scim-error";
 import {
 	createSCIMOpenAPIContent,
@@ -18,8 +21,8 @@ const SCIM_LIST_RESPONSE_SCHEMA =
 const SCIM_SERVICE_PROVIDER_CONFIG_SCHEMA =
 	"urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig";
 
-const supportedSCIMSchemas = SCIM_RESOURCE_SCHEMAS.map(
-	(resource) => resource.discoverySchema,
+const supportedSCIMSchemas = SCIM_DISCOVERY_SCHEMA_DESCRIPTORS.map(
+	(descriptor) => descriptor.discoverySchema,
 );
 const supportedSCIMResourceTypes = SCIM_RESOURCE_SCHEMAS.map(
 	(resource) => resource.resourceType,
@@ -54,6 +57,14 @@ function createListResponse<T>(resources: T[]) {
 		itemsPerPage: resources.length,
 		Resources: resources,
 	};
+}
+
+function readSCIMPathIdentifier(identifier: string): string {
+	try {
+		return decodeURIComponent(identifier);
+	} catch {
+		return identifier;
+	}
 }
 
 export const getSCIMServiceProviderConfig = createAuthEndpoint(
@@ -172,8 +183,9 @@ export const getSCIMSchema = createAuthEndpoint(
 		}),
 	},
 	async (ctx) => {
+		const schemaId = readSCIMPathIdentifier(ctx.params.schemaId);
 		const schema = supportedSCIMSchemas.find(
-			(supportedSchema) => supportedSchema.id === ctx.params.schemaId,
+			(supportedSchema) => supportedSchema.id === schemaId,
 		);
 		if (!schema) {
 			throw createSCIMError("NOT_FOUND", {

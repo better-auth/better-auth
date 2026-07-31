@@ -3,7 +3,7 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
-import type { SCIMBearerCredentialOptions } from "./configuration";
+import type { SCIMBearerCredentialOptions, SCIMOptions } from "./configuration";
 
 const BASE_URL = "http://localhost:3000";
 const SCIM_ERROR_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:Error";
@@ -15,6 +15,10 @@ const SCIM_GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
 const SCIM_PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
 const SCIM_ENTERPRISE_USER_SCHEMA =
 	"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User";
+const SCIM_MICROSOFT_ENTRA_LEGACY_GROUP_SCHEMA =
+	"http://schemas.microsoft.com/2006/11/ResourceManagement/ADSCIM/2.0/Group";
+const SCIM_MICROSOFT_GRAPH_GROUP_SCHEMA =
+	"urn:ietf:params:scim:schemas:extension:Microsoft:Entra:2.0:Group";
 
 interface SCIMUserResponse {
 	id: string;
@@ -34,6 +38,7 @@ function createSCIMAuth(
 	credentials: readonly SCIMBearerCredentialOptions[] = [
 		{ type: "bearer", id: "active-scim-token", token: "active-scim-token" },
 	],
+	compatibility?: SCIMOptions["compatibility"],
 ) {
 	const data = {
 		user: [] as User[],
@@ -55,6 +60,7 @@ function createSCIMAuth(
 		plugins: [
 			scim({
 				connections: [{ id: "workforce", credentials }],
+				...(compatibility ? { compatibility } : {}),
 			}),
 		],
 	});
@@ -136,6 +142,68 @@ describe("SCIM HTTP contract", () => {
 		await expectSCIMError(response, 400, "invalidValue");
 	});
 
+	it("rejects case-insensitive duplicate email types over HTTP POST", async () => {
+		const auth = createSCIMAuth();
+		const response = await auth.handler(
+			createUserRequest({
+				userName: "duplicate-types@example.com",
+				emails: [
+					{
+						value: "first@example.com",
+						type: "Work",
+						primary: true,
+					},
+					{ value: "second@example.com", type: "work" },
+				],
+			}),
+		);
+
+		await expectSCIMError(response, 400, "invalidValue");
+	});
+
+	it("rejects case-insensitive duplicate complex types over HTTP PUT without replacing the User", async () => {
+		const auth = createSCIMAuth();
+		const createResponse = await auth.handler(
+			createUserRequest({
+				userName: "replace-types@example.com",
+				displayName: "Original User",
+			}),
+		);
+		const created = await readJson<SCIMUserResponse>(createResponse);
+		const resourceURL = `${SCIM_USERS_URL}/${encodeURIComponent(created.id)}`;
+		const headers = {
+			accept: SCIM_MEDIA_TYPE,
+			authorization: "Bearer active-scim-token",
+			"content-type": SCIM_MEDIA_TYPE,
+		};
+		const beforeResponse = await auth.handler(
+			new Request(resourceURL, { headers }),
+		);
+		const before = await readJson(beforeResponse);
+
+		const response = await auth.handler(
+			new Request(resourceURL, {
+				method: "PUT",
+				headers,
+				body: JSON.stringify({
+					schemas: [SCIM_USER_SCHEMA],
+					userName: "replace-types@example.com",
+					displayName: "Rejected Replacement",
+					phoneNumbers: [
+						{ value: "+1-555-0100", type: "Work" },
+						{ value: "+1-555-0101", type: "work" },
+					],
+				}),
+			}),
+		);
+
+		await expectSCIMError(response, 400, "invalidValue");
+		const afterResponse = await auth.handler(
+			new Request(resourceURL, { headers }),
+		);
+		expect(await readJson(afterResponse)).toEqual(before);
+	});
+
 	it("returns invalidSyntax for malformed JSON before endpoint dispatch", async () => {
 		const auth = createSCIMAuth();
 		const response = await auth.handler(
@@ -166,7 +234,7 @@ describe("SCIM HTTP contract", () => {
 		await expectSCIMError(response, 400, "invalidValue");
 	});
 
-	it("rejects an unsupported User extension schema", async () => {
+	it("accepts the standard Enterprise User extension schema", async () => {
 		const auth = createSCIMAuth();
 		const response = await auth.handler(
 			new Request(SCIM_USERS_URL, {
@@ -179,6 +247,54 @@ describe("SCIM HTTP contract", () => {
 				body: JSON.stringify({
 					schemas: [SCIM_USER_SCHEMA, SCIM_ENTERPRISE_USER_SCHEMA],
 					userName: "enterprise@example.com",
+					[SCIM_ENTERPRISE_USER_SCHEMA]: { employeeNumber: "42" },
+				}),
+			}),
+		);
+
+		expect(response.status).toBe(201);
+		expect(await readJson(response)).toMatchObject({
+			schemas: [SCIM_USER_SCHEMA, SCIM_ENTERPRISE_USER_SCHEMA],
+			[SCIM_ENTERPRISE_USER_SCHEMA]: { employeeNumber: "42" },
+		});
+	});
+
+	it("rejects unknown User schema URIs", async () => {
+		const auth = createSCIMAuth();
+		const unsupportedUserSchema =
+			"urn:example:params:scim:schemas:extension:2.0:User";
+		const response = await auth.handler(
+			new Request(SCIM_USERS_URL, {
+				method: "POST",
+				headers: {
+					accept: SCIM_MEDIA_TYPE,
+					authorization: "Bearer active-scim-token",
+					"content-type": SCIM_MEDIA_TYPE,
+				},
+				body: JSON.stringify({
+					schemas: [SCIM_USER_SCHEMA, unsupportedUserSchema],
+					userName: "unsupported@example.com",
+					[unsupportedUserSchema]: { employeeNumber: "42" },
+				}),
+			}),
+		);
+
+		await expectSCIMError(response, 400, "invalidValue");
+	});
+
+	it("rejects Enterprise User data without its schema URI", async () => {
+		const auth = createSCIMAuth();
+		const response = await auth.handler(
+			new Request(SCIM_USERS_URL, {
+				method: "POST",
+				headers: {
+					accept: SCIM_MEDIA_TYPE,
+					authorization: "Bearer active-scim-token",
+					"content-type": SCIM_MEDIA_TYPE,
+				},
+				body: JSON.stringify({
+					schemas: [SCIM_USER_SCHEMA],
+					userName: "undeclared-enterprise@example.com",
 					[SCIM_ENTERPRISE_USER_SCHEMA]: { employeeNumber: "42" },
 				}),
 			}),
@@ -223,6 +339,231 @@ describe("SCIM HTTP contract", () => {
 					schemas: [SCIM_GROUP_SCHEMA, unsupportedGroupSchema],
 					displayName: "Engineering",
 					[unsupportedGroupSchema]: { code: "engineering" },
+				}),
+			}),
+		);
+
+		await expectSCIMError(response, 400, "invalidValue");
+	});
+
+	/**
+	 * @see https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups
+	 */
+	it("accepts the exact classic Entra Group marker only on enabled POST ingress", async () => {
+		const auth = createSCIMAuth(undefined, {
+			microsoftEntra: { acceptLegacyGroupSchema: true },
+		});
+		const headers = {
+			accept: SCIM_MEDIA_TYPE,
+			authorization: "Bearer active-scim-token",
+			"content-type": SCIM_MEDIA_TYPE,
+		};
+		const createResponse = await auth.handler(
+			new Request(SCIM_GROUPS_URL, {
+				method: "POST",
+				headers,
+				body: JSON.stringify({
+					schemas: [
+						SCIM_GROUP_SCHEMA,
+						SCIM_MICROSOFT_ENTRA_LEGACY_GROUP_SCHEMA,
+					],
+					externalId: "73f7f508-4e50-4b7f-ba50-0cdbf0638d95",
+					displayName: "Marketing",
+					members: [],
+					meta: { resourceType: "Group" },
+				}),
+			}),
+		);
+
+		expect(createResponse.status).toBe(201);
+		const created = await readJson<Record<string, unknown>>(createResponse);
+		expect(created.schemas).toEqual([SCIM_GROUP_SCHEMA]);
+		expect(created.meta).toMatchObject({
+			resourceType: "Group",
+			location: expect.stringMatching(/\/scim\/v2\/Groups\/[^/]+$/u),
+		});
+		expect(created).not.toHaveProperty(
+			SCIM_MICROSOFT_ENTRA_LEGACY_GROUP_SCHEMA,
+		);
+		expect(JSON.stringify(created)).not.toContain(
+			SCIM_MICROSOFT_ENTRA_LEGACY_GROUP_SCHEMA,
+		);
+		if (typeof created.id !== "string") {
+			throw new Error("Expected the classic Entra Group to have an id");
+		}
+
+		const getResponse = await auth.handler(
+			new Request(`${SCIM_GROUPS_URL}/${encodeURIComponent(created.id)}`, {
+				headers,
+			}),
+		);
+		expect(getResponse.status).toBe(200);
+		expect(JSON.stringify(await readJson(getResponse))).not.toContain(
+			SCIM_MICROSOFT_ENTRA_LEGACY_GROUP_SCHEMA,
+		);
+
+		const schemasResponse = await auth.handler(
+			new Request(`${BASE_URL}/api/auth/scim/v2/Schemas`, { headers }),
+		);
+		expect(schemasResponse.status).toBe(200);
+		expect(JSON.stringify(await readJson(schemasResponse))).not.toContain(
+			SCIM_MICROSOFT_ENTRA_LEGACY_GROUP_SCHEMA,
+		);
+
+		const replaceResponse = await auth.handler(
+			new Request(`${SCIM_GROUPS_URL}/${encodeURIComponent(created.id)}`, {
+				method: "PUT",
+				headers,
+				body: JSON.stringify({
+					schemas: [
+						SCIM_GROUP_SCHEMA,
+						SCIM_MICROSOFT_ENTRA_LEGACY_GROUP_SCHEMA,
+					],
+					displayName: "Marketing",
+				}),
+			}),
+		);
+		await expectSCIMError(replaceResponse, 400, "invalidValue");
+
+		const patchResponse = await auth.handler(
+			new Request(`${SCIM_GROUPS_URL}/${encodeURIComponent(created.id)}`, {
+				method: "PATCH",
+				headers,
+				body: JSON.stringify({
+					schemas: [
+						SCIM_PATCH_SCHEMA,
+						SCIM_MICROSOFT_ENTRA_LEGACY_GROUP_SCHEMA,
+					],
+					Operations: [
+						{
+							op: "Replace",
+							path: "displayName",
+							value: "Marketing leaders",
+						},
+					],
+				}),
+			}),
+		);
+		await expectSCIMError(patchResponse, 400, "invalidValue");
+
+		const attributedReplaceResponse = await auth.handler(
+			new Request(`${SCIM_GROUPS_URL}/${encodeURIComponent(created.id)}`, {
+				method: "PUT",
+				headers,
+				body: JSON.stringify({
+					schemas: [SCIM_GROUP_SCHEMA],
+					displayName: "Marketing",
+					[SCIM_MICROSOFT_ENTRA_LEGACY_GROUP_SCHEMA]: {},
+				}),
+			}),
+		);
+		await expectSCIMError(attributedReplaceResponse, 400, "invalidValue");
+
+		const attributedPatchResponse = await auth.handler(
+			new Request(`${SCIM_GROUPS_URL}/${encodeURIComponent(created.id)}`, {
+				method: "PATCH",
+				headers,
+				body: JSON.stringify({
+					schemas: [SCIM_PATCH_SCHEMA],
+					Operations: [
+						{
+							op: "Replace",
+							path: "displayName",
+							value: "Marketing leaders",
+						},
+					],
+					[SCIM_MICROSOFT_ENTRA_LEGACY_GROUP_SCHEMA]: {},
+				}),
+			}),
+		);
+		await expectSCIMError(attributedPatchResponse, 400, "invalidValue");
+	});
+
+	it("rejects disabled, attributed, duplicate, unknown, and Graph Group schema markers", async () => {
+		const disabledAuth = createSCIMAuth();
+		const enabledAuth = createSCIMAuth(undefined, {
+			microsoftEntra: { acceptLegacyGroupSchema: true },
+		});
+		const headers = {
+			accept: SCIM_MEDIA_TYPE,
+			authorization: "Bearer active-scim-token",
+			"content-type": SCIM_MEDIA_TYPE,
+		};
+		const create = (auth: ReturnType<typeof createSCIMAuth>, body: unknown) =>
+			auth.handler(
+				new Request(SCIM_GROUPS_URL, {
+					method: "POST",
+					headers,
+					body: JSON.stringify(body),
+				}),
+			);
+
+		await expectSCIMError(
+			await create(disabledAuth, {
+				schemas: [SCIM_GROUP_SCHEMA, SCIM_MICROSOFT_ENTRA_LEGACY_GROUP_SCHEMA],
+				displayName: "Disabled compatibility",
+			}),
+			400,
+			"invalidValue",
+		);
+		await expectSCIMError(
+			await create(enabledAuth, {
+				schemas: [SCIM_GROUP_SCHEMA, SCIM_MICROSOFT_ENTRA_LEGACY_GROUP_SCHEMA],
+				displayName: "Attributed marker",
+				[SCIM_MICROSOFT_ENTRA_LEGACY_GROUP_SCHEMA]: {
+					department: "Marketing",
+				},
+			}),
+			400,
+			"invalidValue",
+		);
+		await expectSCIMError(
+			await create(enabledAuth, {
+				schemas: [
+					SCIM_GROUP_SCHEMA,
+					SCIM_MICROSOFT_ENTRA_LEGACY_GROUP_SCHEMA,
+					SCIM_MICROSOFT_ENTRA_LEGACY_GROUP_SCHEMA,
+				],
+				displayName: "Duplicate marker",
+			}),
+			400,
+			"invalidValue",
+		);
+		await expectSCIMError(
+			await create(enabledAuth, {
+				schemas: [
+					SCIM_GROUP_SCHEMA,
+					"urn:example:params:scim:schemas:extension:2.0:Group",
+				],
+				displayName: "Unknown extension",
+			}),
+			400,
+			"invalidValue",
+		);
+		await expectSCIMError(
+			await create(enabledAuth, {
+				schemas: [SCIM_GROUP_SCHEMA, SCIM_MICROSOFT_GRAPH_GROUP_SCHEMA],
+				displayName: "Graph extension",
+			}),
+			400,
+			"invalidValue",
+		);
+	});
+
+	it("rejects the User-only Enterprise schema on a Group resource", async () => {
+		const auth = createSCIMAuth();
+		const response = await auth.handler(
+			new Request(SCIM_GROUPS_URL, {
+				method: "POST",
+				headers: {
+					accept: SCIM_MEDIA_TYPE,
+					authorization: "Bearer active-scim-token",
+					"content-type": SCIM_MEDIA_TYPE,
+				},
+				body: JSON.stringify({
+					schemas: [SCIM_GROUP_SCHEMA, SCIM_ENTERPRISE_USER_SCHEMA],
+					displayName: "Engineering",
+					[SCIM_ENTERPRISE_USER_SCHEMA]: { department: "Engineering" },
 				}),
 			}),
 		);

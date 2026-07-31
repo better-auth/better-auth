@@ -25,6 +25,7 @@ import {
 	patchSCIMGroup,
 	replaceSCIMGroup,
 } from "./group-provisioning";
+import { normalizeMicrosoftEntraGroupSchema } from "./group-schemas";
 import {
 	acquireActiveSCIMUserLink,
 	createSCIMIdentityCoordinator,
@@ -84,7 +85,7 @@ function isAPIErrorLike(value: unknown): value is APIErrorLike {
 function createSCIMErrorResponse(
 	status: "BAD_REQUEST" | "UNSUPPORTED_MEDIA_TYPE",
 	detail: string,
-	scimType?: "invalidSyntax",
+	scimType?: "invalidSyntax" | "invalidValue",
 ) {
 	const error = createSCIMError(status, {
 		detail,
@@ -580,6 +581,11 @@ function createSCIMPlugin(options: SCIMOptions) {
 						required: true,
 						returned: false,
 					},
+					serializedAttributes: {
+						type: "string",
+						required: false,
+						returned: false,
+					},
 					externalId: {
 						type: "string",
 						required: false,
@@ -792,12 +798,19 @@ export type {
 	SCIMBearerCredentialOptions,
 	SCIMBearerTokenVerificationInput,
 	SCIMBearerTokenVerificationResult,
+	SCIMCanonicalAddress,
 	SCIMCanonicalEmail,
+	SCIMCanonicalEntitlement,
+	SCIMCanonicalManager,
 	SCIMCanonicalName,
+	SCIMCanonicalPhoneNumber,
+	SCIMCanonicalRole,
 	SCIMCanonicalUser,
+	SCIMCompatibilityOptions,
 	SCIMConnectionDecommissionStatus,
 	SCIMConnectionOptions,
 	SCIMEmail,
+	SCIMEnterpriseUser,
 	SCIMGroupAuthorizationSource,
 	SCIMIdentity,
 	SCIMIdentityResolution,
@@ -805,6 +818,7 @@ export type {
 	SCIMIdentityResolutionInput,
 	SCIMIdentitySource,
 	SCIMIdentityState,
+	SCIMMicrosoftEntraCompatibilityOptions,
 	SCIMName,
 	SCIMOAuthBearerPrincipal,
 	SCIMOptions,

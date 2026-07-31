@@ -61,33 +61,22 @@ function requireGroupAttributeProjection(
 	return projection.value;
 }
 
-function requestsProjectedMutationResponse(
-	input: SCIMCollectionQueryInput,
-): boolean {
-	return (
-		input.attributes !== undefined || input.excludedAttributes !== undefined
-	);
-}
-
 const patchSCIMGroupBodySchema = z.object({
 	schemas: z
-		.array(z.string())
-		.refine((schemas) => schemas.includes(SCIM_PATCH_SCHEMA), {
-			message: "Invalid schemas for PatchOp",
+		.array(z.literal(SCIM_PATCH_SCHEMA))
+		.length(1, "schemas must contain only the PatchOp schema"),
+	// An empty array is a valid no-op PATCH (Microsoft Entra sends one).
+	Operations: z.array(
+		z.object({
+			op: z
+				.string()
+				.toLowerCase()
+				.default("replace")
+				.pipe(z.enum(["replace", "add", "remove"])),
+			path: z.string().optional(),
+			value: z.unknown().optional(),
 		}),
-	Operations: z
-		.array(
-			z.object({
-				op: z
-					.string()
-					.toLowerCase()
-					.default("replace")
-					.pipe(z.enum(["replace", "add", "remove"])),
-				path: z.string().optional(),
-				value: z.unknown().optional(),
-			}),
-		)
-		.min(1),
+	),
 });
 
 const GROUP_MEMBER_VALUE_PATH =
@@ -333,13 +322,14 @@ function parseIncrementalMembershipPatch(
 }
 
 function readPatchString(value: unknown, attribute: string): string {
-	if (typeof value !== "string" || !value.trim()) {
+	const scalar = Array.isArray(value) && value.length === 1 ? value[0] : value;
+	if (typeof scalar !== "string" || !scalar.trim()) {
 		throw createSCIMError("BAD_REQUEST", {
 			detail: `${attribute} must be a non-empty string`,
 			scimType: "invalidValue",
 		});
 	}
-	return value.trim();
+	return scalar.trim();
 }
 
 function applyGroupPatch(
@@ -1340,11 +1330,8 @@ export function patchSCIMGroup(
 					summary: "Patch SCIM Group",
 					responses: {
 						"200": {
-							description: "Projected SCIM Group resource",
+							description: "Updated SCIM Group resource",
 							content: createSCIMOpenAPIContent(OpenAPIGroupResourceSchema),
-						},
-						"204": {
-							description: "SCIM Group updated",
 						},
 						...SCIMErrorOpenAPISchemas,
 					},
@@ -1357,7 +1344,6 @@ export function patchSCIMGroup(
 			const connection = ctx.context.scimConnection;
 			const query = ctx.query ?? {};
 			const attributeProjection = requireGroupAttributeProjection(query);
-			const returnProjectedResource = requestsProjectedMutationResponse(query);
 			const group = await findSCIMGroup(
 				adapter,
 				connection,
@@ -1527,10 +1513,6 @@ export function patchSCIMGroup(
 				updatedGroup,
 			);
 			ctx.setHeader("location", completeResource.meta.location);
-			if (!returnProjectedResource) {
-				ctx.setStatus(204);
-				return;
-			}
 			return ctx.json(
 				await createProjectedGroupResource(
 					adapter,

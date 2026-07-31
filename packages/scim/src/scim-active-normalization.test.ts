@@ -657,19 +657,19 @@ describe("SCIM User active HTTP normalization", () => {
 			scenario: "path-patch",
 			active: "false",
 			expected: false,
-			expectedStatus: 204,
+			expectedStatus: 200,
 		},
 		{
 			scenario: "pathless-patch",
 			active: "TRUE",
 			expected: true,
-			expectedStatus: 204,
+			expectedStatus: 200,
 		},
 		{
 			scenario: "schema-qualified-patch",
 			active: "FaLsE",
 			expected: false,
-			expectedStatus: 204,
+			expectedStatus: 200,
 		},
 	] satisfies {
 		scenario: StringActiveScenario;
@@ -1141,7 +1141,7 @@ describe("SCIM User multi-valued primary HTTP normalization", () => {
 					],
 				}),
 			});
-			expect(addRole.status).toBe(204);
+			expect(addRole.status).toBe(200);
 
 			const response = await fetch(userURL, {
 				method: "PATCH",
@@ -1158,7 +1158,7 @@ describe("SCIM User multi-valued primary HTTP normalization", () => {
 				}),
 			});
 
-			expect(response.status).toBe(204);
+			expect(response.status).toBe(200);
 			const resourceResponse = await fetch(userURL, {
 				headers: createSCIMHeaders(),
 			});
