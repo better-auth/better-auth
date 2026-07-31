@@ -2700,6 +2700,7 @@ describe("email-otp send-verification-otp on an already verified email", async (
 	 * unauthenticated caller must not be able to use it to mail a code to a
 	 * verified address either.
 	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10614
 	 * @see https://github.com/better-auth/better-auth/issues/7707
 	 */
 	it("should not send an email-verification OTP for a caller with no session", async () => {
