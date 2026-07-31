@@ -1,4 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
+
+export const OAUTH_ERROR_CODES = defineErrorCodes({
+	INVALID_CODE: "Failed to validate authorization code",
+	UNABLE_TO_GET_USER_INFO: "Unable to get user info from provider",
+});
 
 const HANDLING_DOCS_URL =
 	"https://www.better-auth.com/docs/concepts/oauth#handling-providers-without-email";
