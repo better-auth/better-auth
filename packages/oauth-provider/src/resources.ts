@@ -58,28 +58,6 @@ const JWS_ALGORITHM_SET = new Set<string>(JWS_ALGORITHMS);
 const MAX_AUD_VALUES = 64;
 
 /**
- * Builds a deterministic primary-key value for an `oauthClientResource`
- * row. Used so the implicit PK uniqueness constraint enforces the composite
- * `(clientId, resourceId)` uniqueness that Better Auth's schema layer
- * cannot declare directly — making client-resource links idempotent across
- * the admin link endpoint and Dynamic Client Registration.
- *
- * The `::` separator is collision-free: client_id is a URL-safe random
- * string (no `::`) and resource identifier is an RFC 8707 absolute URI
- * (a bare `::` would be a malformed IPv6 host the validator rejects).
- *
- * @see comment block in `schema.ts` on `oauthClientResource` for the full
- * rationale.
- * @internal
- */
-export function buildClientResourceLinkId(
-	clientId: string,
-	resourceId: string,
-): string {
-	return `${clientId}::${resourceId}`;
-}
-
-/**
  * Result of {@link assertIdentifierValid}/{@link checkIdentifier}. When
  * `ok: false`, `reason` is a human-readable validation failure suitable for
  * `error_description` (admin endpoints throw `invalid_target`) or a `logger.warn`

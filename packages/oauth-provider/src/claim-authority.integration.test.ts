@@ -18,11 +18,7 @@ import { getTestInstance } from "better-auth/test";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
-import {
-	buildClientResourceLinkId,
-	resetSeedStateForTests,
-	seedResourcesOnce,
-} from "./resources";
+import { resetSeedStateForTests, seedResourcesOnce } from "./resources";
 import type { OAuthClaimExtensionInput, OAuthOptions, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
 
@@ -86,6 +82,7 @@ async function bootHarness(
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				scope: scopes.join(" "),
 				skip_consent: true,
 				...overrides,
@@ -174,9 +171,7 @@ async function bootHarness(
 		const ctx = await auth.$context;
 		await ctx.adapter.create({
 			model: "oauthClientResource",
-			forceAllowId: true,
 			data: {
-				id: buildClientResourceLinkId(clientId, resourceId),
 				clientId,
 				resourceId,
 				createdAt: new Date(),

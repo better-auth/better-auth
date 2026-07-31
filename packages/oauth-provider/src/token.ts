@@ -28,6 +28,7 @@ import {
 	getExtensionGrantHandler,
 	getSupportedGrantTypes,
 } from "./extensions";
+import { isUserDelegatedScope } from "./oauthClient/client-credentials";
 import type { ResolvedResourcePolicy } from "./resources";
 import { resolveResourcePolicy } from "./resources";
 import { getSupportedClaims, STANDARD_CLAIM_NAMES } from "./standard-claims";
@@ -1717,12 +1718,6 @@ async function handleClientCredentialsGrant(
 			error: "invalid_grant",
 		});
 	}
-	if (!client_secret && !preVerified) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "Missing a required client_secret",
-			error: "invalid_grant",
-		});
-	}
 
 	// Note: Scope check is done below instead of through the function since different requirements
 	const client = await validateClientCredentials(
@@ -1735,19 +1730,27 @@ async function handleClientCredentialsGrant(
 		"client_credentials",
 		authMethod,
 	);
+	if (client.tokenEndpointAuthMethod === "none") {
+		throw new APIError("BAD_REQUEST", {
+			error_description:
+				"public clients cannot use the client_credentials grant",
+			error: "unauthorized_client",
+		});
+	}
+	const clientCredentialsScopes = client.clientCredentialsScopes;
+	if (!clientCredentialsScopes?.length) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "client has no authorized client_credentials scopes",
+			error: "unauthorized_client",
+		});
+	}
 
 	// OIDC scopes should not be requestable (code authorization grant should be used)
 	let requestedScopes = scope?.split(" ");
 	if (requestedScopes) {
-		const validScopes = new Set(client.scopes ?? opts.scopes);
-		const oidcScopes = new Set([
-			"openid",
-			"profile",
-			"email",
-			"offline_access",
-		]);
+		const validScopes = new Set(clientCredentialsScopes);
 		const invalidScopes = requestedScopes.filter((scope) => {
-			return !validScopes?.has(scope) || oidcScopes.has(scope);
+			return !validScopes.has(scope) || isUserDelegatedScope(scope);
 		});
 		if (invalidScopes.length) {
 			throw new APIError("BAD_REQUEST", {
@@ -1756,13 +1759,10 @@ async function handleClientCredentialsGrant(
 			});
 		}
 	}
-	// Set default scopes to all those available for that client or all provided scopes.
+	// The server-owned client_credentials ceiling is also the omitted-scope
+	// default. User-delegated client scopes never authorize machine access.
 	if (!requestedScopes) {
-		requestedScopes =
-			client.scopes ??
-			opts.clientCredentialGrantDefaultScopes ??
-			opts.scopes ??
-			[];
+		requestedScopes = [...clientCredentialsScopes];
 	}
 
 	return createUserTokens(ctx, opts, {

@@ -1,38 +1,256 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
-import { logger } from "@better-auth/core/env";
-import type { OAuthClient } from "@better-auth/oauth-provider";
-import {
-	oauthProvider,
-	raiseResourceServerChallenge,
-} from "@better-auth/oauth-provider";
+import { createResourceServerChallenge } from "@better-auth/oauth-provider";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";
-import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
-import { UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import type { OAuthTokens } from "@modelcontextprotocol/sdk/shared/auth.js";
-import type { Implementation } from "@modelcontextprotocol/sdk/types.js";
+import type {
+	OAuthClientInformationContext,
+	OAuthClientProvider,
+	OAuthDiscoveryState,
+	StoredOAuthClientInformation,
+	StoredOAuthTokens,
+} from "@modelcontextprotocol/client";
+import {
+	auth as authorizeMcpClient,
+	Client,
+	refreshAuthorization,
+	StreamableHTTPClientTransport,
+	UnauthorizedError,
+} from "@modelcontextprotocol/client";
+import type { AuthInfo } from "@modelcontextprotocol/server";
+import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { createAuthClient } from "better-auth/client";
-import { generateRandomString } from "better-auth/crypto";
-import { toNodeHandler } from "better-auth/node";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { APIError } from "better-call";
-import type { JWTPayload } from "jose";
 import { decodeJwt } from "jose";
-import type { Listener } from "listhen";
-import { listen } from "listhen";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { mcpHandler } from "./index";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createMcpProtectedRequestHandler, mcp } from "./index";
 
-describe("mcp", async () => {
-	const authServerUrl = `http://localhost:3000`;
+const AUTHORIZATION_SERVER = "https://auth.example.test";
+const MCP_RESOURCE = "https://resource.example.test/mcp";
+const REDIRECT_URI = "https://client.example.test/oauth/callback";
+const PROTOCOL_VERSION = "2026-07-28";
+
+type FetchImplementation = (
+	input: RequestInfo | URL,
+	init?: RequestInit,
+) => Promise<Response>;
+
+function requestUrl(input: RequestInfo | URL): URL {
+	if (input instanceof Request) return new URL(input.url);
+	return new URL(input.toString());
+}
+
+interface VerifiedMcpAccessTokenClaims {
+	client_id?: unknown;
+	scope?: unknown;
+	exp?: number;
+	[claim: string]: unknown;
+}
+
+function requireAccessTokenClientId(
+	accessTokenClaims: VerifiedMcpAccessTokenClaims,
+): string {
+	const clientId = accessTokenClaims.client_id;
+	if (typeof clientId !== "string" || clientId.trim().length === 0) {
+		throw new TypeError(
+			"MCP access token client_id must be a non-empty string",
+		);
+	}
+	return clientId;
+}
+
+function extractPresentedAccessToken(request: Request): string {
+	const authorization = request.headers.get("authorization");
+	const token = /^(?:Bearer|DPoP)[ \t]+(\S+)$/i.exec(authorization ?? "")?.[1];
+	if (!token) {
+		throw new TypeError(
+			"verified MCP request is missing a valid Bearer or DPoP access token",
+		);
+	}
+	return token;
+}
+
+function parseGrantedScopes(scopeClaim: unknown): string[] {
+	if (typeof scopeClaim !== "string") return [];
+	return [...new Set(scopeClaim.split(" ").filter(Boolean))];
+}
+
+function createOfficialSdkAuthInfo(
+	request: Request,
+	accessTokenClaims: VerifiedMcpAccessTokenClaims,
+	resource: URL,
+): AuthInfo {
+	return {
+		token: extractPresentedAccessToken(request),
+		clientId: requireAccessTokenClientId(accessTokenClaims),
+		scopes: parseGrantedScopes(accessTokenClaims.scope),
+		expiresAt: accessTokenClaims.exp,
+		resource,
+		extra: { accessTokenClaims },
+	};
+}
+
+function createOAuthClientProvider(options?: { clientMetadataUrl?: string }) {
+	let authorizationUrl: URL | undefined;
+	let codeVerifier: string | undefined;
+	let discoveryState: OAuthDiscoveryState | undefined;
+	let latestClientInformation: StoredOAuthClientInformation | undefined;
+	let latestTokens: StoredOAuthTokens | undefined;
+	const clientInformationByIssuer = new Map<
+		string,
+		StoredOAuthClientInformation
+	>();
+	const tokensByIssuer = new Map<string, StoredOAuthTokens>();
+
+	const provider: OAuthClientProvider = {
+		redirectUrl: REDIRECT_URI,
+		clientMetadataUrl: options?.clientMetadataUrl,
+		clientMetadata: {
+			client_name: "Better Auth MCP SDK v2 client",
+			redirect_uris: [REDIRECT_URI],
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			grant_types: ["authorization_code", "refresh_token"],
+			response_types: ["code"],
+		},
+		state: () => "mcp-sdk-v2-state",
+		clientInformation(context?: OAuthClientInformationContext) {
+			return context
+				? clientInformationByIssuer.get(context.issuer)
+				: latestClientInformation;
+		},
+		saveClientInformation(clientInformation, context) {
+			if (!context)
+				throw new Error("client information issuer was not supplied");
+			expect(clientInformation.issuer).toBe(context.issuer);
+			clientInformationByIssuer.set(context.issuer, clientInformation);
+			latestClientInformation = clientInformation;
+		},
+		tokens(context?: OAuthClientInformationContext) {
+			return context ? tokensByIssuer.get(context.issuer) : latestTokens;
+		},
+		saveTokens(tokens, context) {
+			if (!context) throw new Error("token issuer was not supplied");
+			expect(tokens.issuer).toBe(context.issuer);
+			tokensByIssuer.set(context.issuer, tokens);
+			latestTokens = tokens;
+		},
+		redirectToAuthorization(url) {
+			authorizationUrl = url;
+		},
+		saveCodeVerifier(value) {
+			codeVerifier = value;
+		},
+		codeVerifier() {
+			if (!codeVerifier) throw new Error("PKCE verifier was not persisted");
+			return codeVerifier;
+		},
+		saveDiscoveryState(value) {
+			discoveryState = value;
+		},
+		discoveryState() {
+			return discoveryState;
+		},
+	};
+
+	return {
+		provider,
+		get authorizationUrl() {
+			return authorizationUrl;
+		},
+		get clientInformation() {
+			return latestClientInformation;
+		},
+		get discoveryState() {
+			return discoveryState;
+		},
+		get tokens() {
+			return latestTokens;
+		},
+	};
+}
+
+describe("official SDK AuthInfo mapping", () => {
+	it.each([
+		{},
+		{ client_id: "" },
+		{ client_id: "   " },
+		{ client_id: 42 },
+	])("rejects a missing or malformed client_id claim: %j", (claims) => {
+		expect(() => requireAccessTokenClientId(claims)).toThrow(
+			new TypeError("MCP access token client_id must be a non-empty string"),
+		);
+	});
+
+	it.each([
+		undefined,
+		"Basic access-token",
+		"Bearer",
+		"Bearer ",
+		"Bearer access-token trailing",
+		"DPoP ",
+	])("rejects a malformed authorization presentation: %j", (authorization) => {
+		const headers = authorization ? { authorization } : undefined;
+		expect(() =>
+			extractPresentedAccessToken(
+				new Request(MCP_RESOURCE, {
+					headers,
+				}),
+			),
+		).toThrow(
+			new TypeError(
+				"verified MCP request is missing a valid Bearer or DPoP access token",
+			),
+		);
+	});
+
+	it.each([
+		"Bearer",
+		"DPoP",
+	])("extracts the actual %s access token", (scheme) => {
+		expect(
+			extractPresentedAccessToken(
+				new Request(MCP_RESOURCE, {
+					headers: { authorization: `${scheme} presented-token` },
+				}),
+			),
+		).toBe("presented-token");
+	});
+
+	it("deduplicates string scopes and treats other claim types as empty", () => {
+		expect(parseGrantedScopes("mcp:base greeting mcp:base")).toEqual([
+			"mcp:base",
+			"greeting",
+		]);
+		expect(parseGrantedScopes(undefined)).toEqual([]);
+		expect(parseGrantedScopes(["mcp:base"])).toEqual([]);
+	});
+
+	it("maps verified claims and the presented token into SDK AuthInfo", () => {
+		const resource = new URL(MCP_RESOURCE);
+		const authInfo = createOfficialSdkAuthInfo(
+			new Request(MCP_RESOURCE, {
+				headers: { authorization: "DPoP actual-token" },
+			}),
+			{
+				client_id: "mcp-client",
+				scope: "mcp:base mcp:base",
+				exp: 1_800_000_000,
+			},
+			resource,
+		);
+
+		expect(authInfo).toMatchObject({
+			token: "actual-token",
+			clientId: "mcp-client",
+			scopes: ["mcp:base"],
+			expiresAt: 1_800_000_000,
+			resource,
+		});
+	});
+});
+
+describe("mcp", () => {
 	const apiServerBaseUrl = "http://localhost:5000";
-
 	const apiClient = createAuthClient({
 		plugins: [oauthProviderClient(), oauthProviderResourceClient()],
 		baseURL: apiServerBaseUrl,
@@ -50,415 +268,325 @@ describe("mcp", async () => {
 			resource: `${apiServerBaseUrl}/resource1`,
 			expected: `Bearer resource_metadata="${apiServerBaseUrl}/.well-known/oauth-protected-resource/resource1"`,
 		},
-		{
-			resource: `${apiServerBaseUrl}/resource1?tenant=a`,
-			expected: `Bearer resource_metadata="${apiServerBaseUrl}/.well-known/oauth-protected-resource/resource1?tenant=a"`,
-		},
-		{
-			resource: [apiServerBaseUrl, `${apiServerBaseUrl}/resource1`],
-			expected: `Bearer resource_metadata="${apiServerBaseUrl}/.well-known/oauth-protected-resource", Bearer resource_metadata="${apiServerBaseUrl}/.well-known/oauth-protected-resource/resource1"`,
-		},
-	])("should provide the correct metadata using resource: $resource", async ({
+	])("provides the OAuth resource challenge for $resource", async ({
 		resource,
 		expected,
 	}) => {
 		try {
 			await apiClient.verifyBearerToken("bad_access_token", {
 				verifyOptions: {
-					issuer: authServerUrl,
+					issuer: AUTHORIZATION_SERVER,
 					audience: resource,
 				},
-				jwksUrl: `${authServerUrl}/api/auth/jwks`,
+				jwksUrl: `${AUTHORIZATION_SERVER}/api/auth/jwks`,
 			});
 			expect.unreachable();
 		} catch (error) {
-			const err = error as APIError;
-			expect(err?.statusCode).toBe(401);
-			expect(new Headers(err.headers)?.get("WWW-Authenticate")).toBe(expected);
+			const challenge = createResourceServerChallenge(error, resource);
+			expect(challenge?.statusCode).toBe(401);
+			expect(
+				new Headers(challenge?.headers as HeadersInit).get("www-authenticate"),
+			).toBe(expected);
 		}
+	});
 
-		const response = await mcpHandler(
+	it("preserves the MCP challenge boundary", async () => {
+		const response = await createMcpProtectedRequestHandler(
 			{
-				verifyOptions: {
-					issuer: authServerUrl,
-					audience: resource,
-				},
+				issuer: AUTHORIZATION_SERVER,
+				audience: MCP_RESOURCE,
 			},
-			async () => {
-				return new Response("unused");
-			},
-		)(new Request(`${authServerUrl}/mcp`));
-		expect(response?.status).toBe(401);
-		expect(response?.headers.get("WWW-Authenticate")).toBe(expected);
+			async () => new Response("unused"),
+		)(new Request(MCP_RESOURCE));
+		expect(response.status).toBe(401);
+		expect(response.headers.get("www-authenticate")).toBe(
+			'Bearer resource_metadata="https://resource.example.test/.well-known/oauth-protected-resource/mcp"',
+		);
 	});
 });
 
-describe("mcp - server-client flows", async () => {
-	const port = 3003;
-	const apiPort = 5003;
-	const authServerUrl = `http://localhost:${port}`;
-	const apiServerBaseUrl = `http://localhost:${apiPort}`;
-	const mcpServerUrl = `${apiServerBaseUrl}/mcp`;
-	const resource = mcpServerUrl;
-	const providerId = "test";
-	const redirectUri = `${apiServerBaseUrl}/api/auth/callback/${providerId}`;
-	let codeVerifier: string | undefined;
-	let oAuthTokens: OAuthTokens | undefined;
-	const state = generateRandomString(32);
-	const scopes = ["openid", "offline_access", "greeting"];
-
-	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
-		await getTestInstance({
-			baseURL: authServerUrl,
-			plugins: [
-				jwt({
-					jwt: {
-						issuer: authServerUrl,
-					},
-				}),
-				oauthProvider({
-					loginPage: "/sign-in",
-					consentPage: "/consent",
-					resources: [apiServerBaseUrl, mcpServerUrl],
-					allowDynamicClientRegistration: true,
-					allowUnauthenticatedClientRegistration: true,
-					scopes,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
-				}),
-			],
-		});
-
-	const { headers } = await signInWithTestUser();
-	const authClient = createAuthClient({
-		plugins: [oauthProviderClient(), oauthProviderResourceClient(auth)],
-		baseURL: authServerUrl,
+describe("MCP SDK v2 explicit DCR flow", async () => {
+	const requestedRegistrationDocuments: unknown[] = [];
+	const tokenRequests: URLSearchParams[] = [];
+	const insufficientScopeChallenges: string[] = [];
+	const instance = await getTestInstance({
+		baseURL: AUTHORIZATION_SERVER,
+		advanced: { useSecureCookies: false },
+		plugins: [
+			jwt({ jwt: { issuer: AUTHORIZATION_SERVER } }),
+			mcp({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resource: MCP_RESOURCE,
+				enforcePerClientResources: true,
+				allowDynamicClientRegistration: true,
+				allowUnauthenticatedClientRegistration: true,
+				scopes: ["openid", "offline_access", "mcp:base", "greeting"],
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+	const { headers } = await instance.signInWithTestUser();
+	const userClient = createAuthClient({
+		baseURL: AUTHORIZATION_SERVER,
+		plugins: [oauthProviderClient()],
 		fetchOptions: {
-			customFetchImpl,
+			customFetchImpl: instance.customFetchImpl,
 			headers,
 		},
 	});
+	const serverHandler = createMcpHandler(
+		() => {
+			const server = new McpServer({
+				name: "better-auth-mcp-acceptance",
+				version: "1.0.0",
+			});
+			server.registerTool("greet", {}, async () => ({
+				content: [{ type: "text", text: "hello from protected MCP" }],
+			}));
+			return server;
+		},
+		{ legacy: "reject", responseMode: "json" },
+	);
+	const storage = createOAuthClientProvider();
 
-	const serverImplementation: Implementation = {
-		name: "demo-server",
-		version: "1.0.0",
+	const routeFetch: FetchImplementation = async (input, init) => {
+		const url = requestUrl(input);
+		const request = new Request(input, init);
+		if (
+			url.origin === AUTHORIZATION_SERVER &&
+			url.pathname === "/api/auth/oauth2/register"
+		) {
+			requestedRegistrationDocuments.push(await request.clone().json());
+		}
+		if (
+			url.origin === AUTHORIZATION_SERVER &&
+			url.pathname === "/api/auth/oauth2/token"
+		) {
+			tokenRequests.push(new URLSearchParams(await request.clone().text()));
+		}
+		if (url.origin === AUTHORIZATION_SERVER) {
+			return instance.customFetchImpl(request.url, {
+				method: request.method,
+				headers: request.headers,
+				body:
+					request.method === "GET" || request.method === "HEAD"
+						? undefined
+						: await request.clone().text(),
+			});
+		}
+		if (url.origin !== new URL(MCP_RESOURCE).origin) {
+			throw new Error(`unexpected request origin: ${url.origin}`);
+		}
+		if (url.pathname.startsWith("/.well-known/oauth-protected-resource")) {
+			return instance.customFetchImpl(request.url, {
+				method: request.method,
+				headers: request.headers,
+			});
+		}
+		if (url.pathname !== "/mcp") return new Response(null, { status: 404 });
+
+		const requiredScopes =
+			request.headers.get("mcp-method") === "tools/call"
+				? ["greeting"]
+				: ["mcp:base"];
+		const response = await createMcpProtectedRequestHandler(
+			{
+				issuer: AUTHORIZATION_SERVER,
+				audience: MCP_RESOURCE,
+				jwksUrl: `${AUTHORIZATION_SERVER}/api/auth/jwks`,
+				requiredScopes,
+			},
+			async (verifiedRequest, accessTokenClaims) => {
+				const authInfo = createOfficialSdkAuthInfo(
+					verifiedRequest,
+					accessTokenClaims,
+					new URL(MCP_RESOURCE),
+				);
+				return serverHandler.fetch(verifiedRequest, { authInfo });
+			},
+		)(request);
+		if (response.status === 403) {
+			const challenge = response.headers.get("www-authenticate");
+			if (challenge) insufficientScopeChallenges.push(challenge);
+		}
+		return response;
 	};
 
-	function createMcpServer() {
-		const mcpServer = new McpServer(serverImplementation);
-		mcpServer.registerResource(
-			"greeting",
-			"greet://me",
-			{
-				title: "Greeting Resource", // Display name for UI
-				description: "Dynamic greeting generator",
-			},
-			async (uri, extra) => {
-				const authInfo = extra.authInfo;
-				const jwt = authInfo?.extra?.jwt as JWTPayload;
-				return {
-					contents: [
-						{
-							uri: uri.href,
-							text: `Welcome ${jwt.sub} to ${authInfo?.clientId}`,
-						},
-					],
-				};
-			},
-		);
-		return mcpServer;
-	}
-
-	const mcpClient = new Client({
-		name: "example-client",
-		version: "1.0.0",
+	afterEach(async () => {
+		vi.unstubAllGlobals();
+		requestedRegistrationDocuments.length = 0;
+		tokenRequests.length = 0;
+		insufficientScopeChallenges.length = 0;
 	});
 
-	let authServer: Listener;
-	let apiServer: Listener;
-	let _apiClient: OAuthClient;
-	let dynamicRegisteredClient: OAuthClient;
-
-	beforeAll(async () => {
-		// Register a confidential client
-		const response = await auth.api.adminCreateOAuthClient({
-			headers,
-			body: {
-				redirect_uris: [redirectUri],
-			},
-		});
-		expect(response?.client_id).toBeDefined();
-		expect(response?.user_id).toBeDefined();
-		expect(response?.client_secret).toBeDefined();
-		expect(response?.redirect_uris).toEqual([redirectUri]);
-		_apiClient = response;
-
-		// Opens an authorization server and api server for testing
-		authServer = await listen(
-			async (req, res) => {
-				if (req.url === "/.well-known/openid-configuration") {
-					const config = await auth.api.getOpenIdConfig();
-					res.setHeader("Content-Type", "application/json");
-					res.end(JSON.stringify(config));
-				} else if (req.url === "/.well-known/oauth-authorization-server") {
-					const config = await auth.api.getOAuthServerConfig();
-					res.setHeader("Content-Type", "application/json");
-					res.end(JSON.stringify(config));
-				} else {
-					await toNodeHandler(auth.handler)(req, res);
-				}
-			},
-			{
-				port,
-			},
-		);
-		apiServer = await listen(
-			async (req: IncomingMessage & { auth?: AuthInfo }, res) => {
-				if (
-					req.url === "/.well-known/oauth-protected-resource" ||
-					req.url === "/.well-known/oauth-protected-resource/mcp"
-				) {
-					const config = await authClient.getProtectedResourceMetadata({
-						resource: mcpServerUrl,
-					});
-					res.setHeader("Content-Type", "application/json");
-					res.end(JSON.stringify(config));
-				} else if (req.url === "/mcp") {
-					await verifyBearerToken(req, res);
-					const mcpServer = createMcpServer();
-					const transport = new StreamableHTTPServerTransport({
-						sessionIdGenerator: undefined,
-						enableJsonResponse: true,
-					});
-					res.on("close", async () => {
-						await mcpServer.close();
-						transport.close();
-					});
-					await mcpServer.connect(transport);
-					await transport.handleRequest(req, res);
-				} else {
-					res.statusCode = 400;
-					res.setHeader("Content-Type", "application/json");
-					res.end(
-						JSON.stringify({
-							error: `unimplemented endpoint ${req.method} ${req.url}`,
-						}),
-					);
-				}
-			},
-			{
-				port: apiPort,
-			},
-		);
-	});
-
-	afterAll(async () => {
-		await mcpClient.close();
-		await apiServer.close();
-		await authServer.close();
-	});
-
-	async function verifyBearerToken(
-		req: IncomingMessage & { auth?: AuthInfo },
-		res: ServerResponse,
-	) {
-		const authorization = req.headers?.authorization ?? undefined;
-		const accessToken = authorization?.startsWith("Bearer ")
-			? authorization.replace("Bearer ", "")
-			: authorization;
-		try {
-			const jwtPayload = await authClient.verifyBearerToken(accessToken, {
-				verifyOptions: {
-					issuer: authServerUrl,
-					audience: resource,
-				},
-				jwksUrl: `${authServerUrl}/api/auth/jwks`,
-			});
-			req.auth = {
-				token: accessToken!,
-				clientId: jwtPayload?.client_id as string,
-				scopes: (jwtPayload?.scope as string | undefined)?.split(" ") ?? [],
-				expiresAt: jwtPayload?.exp,
-				resource: jwtPayload?.aud
-					? new URL(jwtPayload.aud.toString())
-					: undefined,
-				extra: {
-					jwt: jwtPayload,
-				},
-			} satisfies AuthInfo;
-		} catch (err) {
-			try {
-				raiseResourceServerChallenge(err, mcpServerUrl);
-			} catch (error) {
-				res.setHeader("Content-Type", "application/json");
-				if (error instanceof APIError) {
-					res.statusCode = error.statusCode;
-					for (const [key, value] of Object.entries(error.headers || {})) {
-						res.setHeader(key, value as string);
-					}
-					res.end(JSON.stringify(error.body));
-				} else {
-					res.statusCode = 500;
-					res.end(JSON.stringify(String(error)));
-				}
-				return;
-			}
-		}
-	}
-
-	let authorizeUrl: URL;
-	const clientMetadata = {
-		client_name: "my-client",
-		client_uri: "https://ai.example.com",
-		logo_uri: "https://ai.example.com/logo.png",
-		tos_uri: "https://ai.example.com/terms-of-service",
-		policy_uri: "https://ai.example.com/privacy-policy",
-		token_endpoint_auth_method: "none",
-		redirect_uris: [redirectUri],
-		resources: [resource],
-	} satisfies OAuthClientProvider["clientMetadata"] & { resources: string[] };
-
-	async function performAuthorize() {
+	async function completeAuthorization(authorizationUrl: URL): Promise<URL> {
 		let location = "";
-		await authClient.$fetch(authorizeUrl.toString(), {
+		await userClient.$fetch(authorizationUrl.toString(), {
 			method: "GET",
 			headers,
-			async onError(ctx) {
-				location = ctx.response.headers.get("Location") || "";
-				cookieSetter(headers)(ctx);
+			onError(context) {
+				location = context.response.headers.get("location") ?? "";
+				instance.cookieSetter(headers)(context);
 			},
 		});
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(location, authServerUrl).search,
-				},
-			},
-			writable: true,
-		});
-		if (location.startsWith("/consent")) {
-			const consentRes = await authClient.oauth2.consent(
-				{
-					accept: true,
-				},
-				{
-					headers,
-					onError(ctx) {
-						cookieSetter(headers)(ctx);
-					},
-					onResponse(ctx) {
-						location = ctx.response.headers.get("Location") || "";
-					},
-				},
-			);
-			const url = new URL(consentRes.data?.url ?? "");
-			const _state = url.searchParams.get("state");
-			if ((state || _state) && state !== _state) {
-				throw new Error("state mismatch");
-			}
-			const code = url.searchParams.get("code");
-			if (!code) throw new Error("missing auth code");
-			const _transport = getClientTransport();
-			await _transport.finishAuth(code);
+		if (!location.includes("/consent")) {
+			throw new Error(`authorization did not reach consent: ${location}`);
 		}
+		const consentUrl = new URL(location, AUTHORIZATION_SERVER);
+		vi.stubGlobal("window", { location: { search: consentUrl.search } });
+		const consent = await userClient.oauth2.consent(
+			{ accept: true },
+			{ headers, throw: true },
+		);
+		return new URL(consent.url);
 	}
 
-	let provider: OAuthClientProvider;
-	function getOAuthClientProvider() {
-		if (provider) return provider;
-		provider = {
-			redirectUrl: redirectUri,
-			clientMetadata,
-			state() {
-				return state;
-			},
-			codeVerifier() {
-				if (!codeVerifier) throw Error("no code verifier saved");
-				return codeVerifier;
-			},
-			tokens() {
-				return oAuthTokens;
-			},
-			clientInformation() {
-				return dynamicRegisteredClient;
-			},
-			saveCodeVerifier(_codeVerifier) {
-				codeVerifier = _codeVerifier;
-			},
-			saveTokens(tokens) {
-				oAuthTokens = tokens;
-			},
-			saveClientInformation(clientInformation) {
-				dynamicRegisteredClient = clientInformation as OAuthClient;
-			},
-			redirectToAuthorization: async (url) => {
-				authorizeUrl = url;
-			},
-		};
-		return provider;
-	}
-
-	let clientTransport: StreamableHTTPClientTransport;
-	function getClientTransport() {
-		const oauthProvider = getOAuthClientProvider();
-		clientTransport = new StreamableHTTPClientTransport(
-			new URL(`${apiServerBaseUrl}/mcp`),
+	function createSdkClientAndTransport() {
+		const client = new Client(
+			{ name: "better-auth-acceptance-client", version: "1.0.0" },
 			{
-				authProvider: oauthProvider,
+				versionNegotiation: {
+					mode: { pin: PROTOCOL_VERSION },
+				},
 			},
 		);
-		clientTransport.onerror = (error) =>
-			logger.error("client transport:", error);
-		return clientTransport;
+		const transport = new StreamableHTTPClientTransport(new URL(MCP_RESOURCE), {
+			authProvider: storage.provider,
+			fetch: routeFetch,
+		});
+		return { client, transport };
 	}
 
-	it("should fail first connection and obtain tokens from api server", async () => {
-		try {
-			const transport = getClientTransport();
-			await mcpClient.connect(transport);
-		} catch (error) {
-			expect(error).toBeInstanceOf(UnauthorizedError);
-			await mcpClient.close();
-		}
-	});
+	it("registers, binds, negotiates 2026-07-28, steps up, invokes a tool, and refreshes", async () => {
+		vi.stubGlobal("fetch", routeFetch);
+		let connection = createSdkClientAndTransport();
+		await expect(
+			connection.client.connect(connection.transport),
+		).rejects.toBeInstanceOf(UnauthorizedError);
 
-	it("should set oauth tokens", async () => {
-		await performAuthorize();
-		expect(oAuthTokens).toMatchObject({
-			access_token: expect.any(String),
-			expires_in: 3600,
-			id_token: expect.any(String),
-			scope: scopes.join(" "),
-			token_type: "Bearer",
+		expect(storage.authorizationUrl).toBeDefined();
+		expect(storage.authorizationUrl?.searchParams.get("resource")).toBe(
+			MCP_RESOURCE,
+		);
+		expect(requestedRegistrationDocuments).toHaveLength(1);
+		expect(requestedRegistrationDocuments[0]).not.toHaveProperty("resources");
+		expect(storage.clientInformation).toMatchObject({
+			client_id: expect.any(String),
+			issuer: AUTHORIZATION_SERVER,
+			scope: "openid offline_access mcp:base greeting",
 		});
+		expect(storage.discoveryState).toMatchObject({
+			authorizationServerUrl: AUTHORIZATION_SERVER,
+			resourceMetadata: {
+				resource: MCP_RESOURCE,
+				authorization_servers: [AUTHORIZATION_SERVER],
+				scopes_supported: ["mcp:base", "greeting"],
+			},
+			authorizationServerMetadata: {
+				issuer: AUTHORIZATION_SERVER,
+				authorization_response_iss_parameter_supported: true,
+			},
+		});
+
+		const callback = await completeAuthorization(storage.authorizationUrl!);
+		expect(callback.searchParams.get("iss")).toBe(AUTHORIZATION_SERVER);
+		await connection.transport.finishAuth(callback.searchParams);
+		expect(tokenRequests.at(-1)?.get("resource")).toBe(MCP_RESOURCE);
+		expect(storage.tokens).toMatchObject({
+			access_token: expect.any(String),
+			refresh_token: expect.any(String),
+			scope: "mcp:base offline_access",
+			issuer: AUTHORIZATION_SERVER,
+		});
+		await connection.client.close();
+
+		connection = createSdkClientAndTransport();
+		await connection.client.connect(connection.transport);
+		expect(connection.transport.protocolVersion).toBe(PROTOCOL_VERSION);
+
+		await expect(
+			connection.client.callTool({ name: "greet", arguments: {} }),
+		).rejects.toBeInstanceOf(UnauthorizedError);
+		expect(insufficientScopeChallenges).toHaveLength(1);
+		expect(insufficientScopeChallenges[0]).toContain(
+			'error="insufficient_scope"',
+		);
+		expect(insufficientScopeChallenges[0]).toContain('scope="greeting"');
+		expect(insufficientScopeChallenges[0]).not.toContain("mcp:base");
+		expect(insufficientScopeChallenges[0]).not.toContain("offline_access");
+		expect(storage.authorizationUrl?.searchParams.get("scope")).toBe(
+			"mcp:base offline_access greeting",
+		);
+		expect(storage.authorizationUrl?.searchParams.get("resource")).toBe(
+			MCP_RESOURCE,
+		);
+		const stepUpCallback = await completeAuthorization(
+			storage.authorizationUrl!,
+		);
+		expect(stepUpCallback.searchParams.get("iss")).toBe(AUTHORIZATION_SERVER);
+		await connection.transport.finishAuth(stepUpCallback.searchParams);
+		expect(tokenRequests.at(-1)?.get("resource")).toBe(MCP_RESOURCE);
+
+		const result = await connection.client.callTool({
+			name: "greet",
+			arguments: {},
+		});
+		expect(result.content).toEqual([
+			{ type: "text", text: "hello from protected MCP" },
+		]);
+		const accessTokenBeforeRefresh = storage.tokens?.access_token;
+		const refreshToken = storage.tokens?.refresh_token;
+		if (
+			!refreshToken ||
+			!storage.clientInformation ||
+			!storage.discoveryState
+		) {
+			throw new Error("OAuth state was not persisted");
+		}
+		const refreshed = await refreshAuthorization(AUTHORIZATION_SERVER, {
+			metadata: storage.discoveryState.authorizationServerMetadata,
+			clientInformation: storage.clientInformation,
+			refreshToken,
+			resource: new URL(MCP_RESOURCE),
+			fetchFn: routeFetch,
+		});
+		expect(refreshed.access_token).not.toBe(accessTokenBeforeRefresh);
+		expect(refreshed.refresh_token).toBeTruthy();
+		expect(tokenRequests.at(-1)?.get("resource")).toBe(MCP_RESOURCE);
+		expect(decodeJwt(refreshed.access_token).aud).toBe(MCP_RESOURCE);
+		await connection.client.close();
+		await serverHandler.close();
 	});
 
-	it("should connect with valid credentials second time", async () => {
-		try {
-			const transport = getClientTransport();
-			await mcpClient.connect(transport);
-		} catch (_error) {
-			expect.unreachable();
-		}
-	});
-
-	it("should obtain resource when authenticated", async () => {
-		try {
-			const res = await mcpClient.readResource({
-				uri: "greet://me",
-			});
-			const sub = oAuthTokens?.id_token
-				? decodeJwt(oAuthTokens?.id_token).sub
-				: undefined;
-			const content = res.contents[0];
-			expect(content).toMatchObject({
-				uri: "greet://me",
-				text: `Welcome ${sub} to ${dynamicRegisteredClient.client_id}`,
-			});
-		} catch (_error) {
-			expect.unreachable();
-		}
+	it("discards client credentials stamped for another issuer", async () => {
+		const freshStorage = createOAuthClientProvider();
+		const wrongIssuerClient = {
+			client_id: "wrong-issuer-client",
+			client_secret: "must-never-be-used",
+			issuer: "https://other-issuer.example.test",
+		};
+		const provider: OAuthClientProvider = {
+			...freshStorage.provider,
+			clientInformation: (context) =>
+				freshStorage.clientInformation ??
+				(context ? wrongIssuerClient : undefined),
+		};
+		expect(
+			await authorizeMcpClient(provider, {
+				serverUrl: MCP_RESOURCE,
+				fetchFn: routeFetch,
+			}),
+		).toBe("REDIRECT");
+		expect(freshStorage.clientInformation).toMatchObject({
+			client_id: expect.not.stringMatching(/^wrong-issuer-client$/),
+			issuer: AUTHORIZATION_SERVER,
+		});
+		expect(JSON.stringify(requestedRegistrationDocuments)).not.toContain(
+			wrongIssuerClient.client_secret,
+		);
 	});
 });

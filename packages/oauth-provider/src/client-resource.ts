@@ -16,7 +16,7 @@ import type {
 } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JWTPayload, JWTVerifyOptions } from "jose";
-import { raiseResourceServerChallenge } from "./resource-challenge";
+import { createResourceServerChallenge } from "./resource-challenge";
 import type { ResourceServerMetadata } from "./types/oauth";
 import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
 import { PACKAGE_VERSION } from "./version";
@@ -144,7 +144,8 @@ export const oauthProviderResourceClient = <
 					opts?: {
 						verifyOptions?: JWTVerifyOptions &
 							Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
-						scopes?: string[];
+						requiredScopes?: readonly string[];
+						isScopeSatisfied?: VerifyAccessTokenRequestOptions["isScopeSatisfied"];
 						jwksUrl?: string;
 						remoteVerify?: VerifyAccessTokenRemote;
 						/** Maps non-url (ie urn, client) resources to resource_metadata */
@@ -160,7 +161,7 @@ export const oauthProviderResourceClient = <
 						}
 						return await verifyBearerToken(token, verifyOptions);
 					} catch (error) {
-						raiseResourceServerChallenge(
+						const challenge = createResourceServerChallenge(
 							error,
 							verifyOptions.verifyOptions.audience,
 							{
@@ -168,6 +169,8 @@ export const oauthProviderResourceClient = <
 								dpopSigningAlgorithms: DPOP_SIGNING_ALGORITHMS,
 							},
 						);
+						if (challenge) throw challenge;
+						throw error;
 					}
 				}) as VerifyAccessTokenOutput<T>,
 				/**
@@ -181,7 +184,8 @@ export const oauthProviderResourceClient = <
 					opts?: {
 						verifyOptions?: JWTVerifyOptions &
 							Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
-						scopes?: string[];
+						requiredScopes?: readonly string[];
+						isScopeSatisfied?: VerifyAccessTokenRequestOptions["isScopeSatisfied"];
 						jwksUrl?: string;
 						remoteVerify?: VerifyAccessTokenRemote;
 						dpop?: VerifyAccessTokenRequestOptions["dpop"];
@@ -196,7 +200,7 @@ export const oauthProviderResourceClient = <
 							verifyOptions,
 						);
 					} catch (error) {
-						raiseResourceServerChallenge(
+						const challenge = createResourceServerChallenge(
 							error,
 							verifyOptions.verifyOptions.audience,
 							{
@@ -205,6 +209,8 @@ export const oauthProviderResourceClient = <
 									opts?.dpop?.signingAlgorithms ?? DPOP_SIGNING_ALGORITHMS,
 							},
 						);
+						if (challenge) throw challenge;
+						throw error;
 					}
 				}) as VerifyAccessTokenRequestOutput<T>,
 				/**
@@ -339,7 +345,8 @@ type VerifyAccessTokenRequestOutput<T> = T extends undefined
 type VerifyAccessTokenAuthOpts = {
 	verifyOptions?: JWTVerifyOptions &
 		Required<Pick<JWTVerifyOptions, "audience">>;
-	scopes?: string[];
+	requiredScopes?: readonly string[];
+	isScopeSatisfied?: VerifyAccessTokenRequestOptions["isScopeSatisfied"];
 	jwksUrl?: string;
 	remoteVerify?: VerifyAccessTokenRemote;
 	/** Maps non-url (ie urn, client) resources to resource_metadata */
@@ -352,7 +359,8 @@ type VerifyAccessTokenNoAuthOpts =
 	| {
 			verifyOptions: JWTVerifyOptions &
 				Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
-			scopes?: string[];
+			requiredScopes?: readonly string[];
+			isScopeSatisfied?: VerifyAccessTokenRequestOptions["isScopeSatisfied"];
 			jwksUrl: string;
 			remoteVerify?: VerifyAccessTokenRemote;
 			/** Maps non-url (ie urn, client) resources to resource_metadata */
@@ -361,7 +369,8 @@ type VerifyAccessTokenNoAuthOpts =
 	| {
 			verifyOptions: JWTVerifyOptions &
 				Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
-			scopes?: string[];
+			requiredScopes?: readonly string[];
+			isScopeSatisfied?: VerifyAccessTokenRequestOptions["isScopeSatisfied"];
 			jwksUrl?: string;
 			remoteVerify: VerifyAccessTokenRemote;
 			/** Maps non-url (ie urn, client) resources to resource_metadata */

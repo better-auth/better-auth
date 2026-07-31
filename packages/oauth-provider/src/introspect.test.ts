@@ -147,6 +147,7 @@ describe("oauth introspect", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				scope: "openid profile email offline_access",
 				skip_consent: true,
 			},
@@ -629,6 +630,12 @@ describe("oauth introspect - config", async () => {
 			"loginPage" | "consentPage"
 		>;
 	}) {
+		const clientCredentialsScopes = (
+			opts?.oauthProviderConfig?.scopes ?? scopes
+		).filter(
+			(scope) =>
+				!["openid", "profile", "email", "offline_access"].includes(scope),
+		);
 		const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance(
 			{
 				baseURL: authServerBaseUrl,
@@ -639,6 +646,9 @@ describe("oauth introspect - config", async () => {
 						resources: [validResource],
 						enforcePerClientResources: false,
 						scopes,
+						clientPrivileges: ({ action }) =>
+							action === "create" ||
+							action === "configure-client-credentials-scopes",
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
 							openidConfig: true,
@@ -676,7 +686,9 @@ describe("oauth introspect - config", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
+				client_credentials_scopes: clientCredentialsScopes,
 			},
 		});
 
@@ -1077,6 +1089,7 @@ describe("oauth introspect - rejects non-OAuth same-issuer JWTs", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				scope: "openid profile email offline_access",
 				skip_consent: true,
 			},

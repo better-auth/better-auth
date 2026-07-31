@@ -45,28 +45,12 @@
       "dev-source": "./src/index.ts",
       "types": "./dist/index.d.mts",
       "default": "./dist/index.mjs"
-    },
-    "./client": {
-      "dev-source": "./src/client/index.ts",
-      "types": "./dist/client/index.d.mts",
-      "default": "./dist/client/index.mjs"
-    },
-    "./client/adapters": {
-      "dev-source": "./src/client/adapters.ts",
-      "types": "./dist/client/adapters.d.mts",
-      "default": "./dist/client/adapters.mjs"
     }
   },
   "typesVersions": {
     "*": {
       "*": [
         "./dist/index.d.mts"
-      ],
-      "client": [
-        "./dist/client/index.d.mts"
-      ],
-      "client/adapters": [
-        "./dist/client/adapters.d.mts"
       ]
     }
   },
@@ -76,16 +60,14 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
-    "listhen": "1.9.0",
     "tsdown": "catalog:"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:^",
-    "@better-auth/utils": "catalog:",
-    "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:^",
     "better-call": "catalog:"
   }

@@ -27,7 +27,7 @@ function resolveUrl(url: string, baseUrl: string): URL {
 
 describe("PKCE optional - default behavior", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
-	const rpBaseUrl = "http://localhost:5000";
+	const rpBaseUrl = "https://rp.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -63,6 +63,7 @@ describe("PKCE optional - default behavior", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -73,6 +74,7 @@ describe("PKCE optional - default behavior", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 				token_endpoint_auth_method: "none",
 			},
@@ -154,7 +156,7 @@ describe("PKCE optional - default behavior", async () => {
 
 describe("PKCE optional - per-client opt-out", async () => {
 	const authServerBaseUrl = "http://localhost:3001";
-	const rpBaseUrl = "http://localhost:5001";
+	const rpBaseUrl = "https://rp.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -190,6 +192,7 @@ describe("PKCE optional - per-client opt-out", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 				require_pkce: false,
 			},
@@ -201,6 +204,7 @@ describe("PKCE optional - per-client opt-out", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 				token_endpoint_auth_method: "none",
 			},
@@ -282,7 +286,7 @@ describe("PKCE optional - per-client opt-out", async () => {
 
 describe("PKCE optional - dynamic client registration policy", async () => {
 	const authServerBaseUrl = "http://localhost:3005";
-	const rpBaseUrl = "http://localhost:5005";
+	const rpBaseUrl = "https://rp.example.com";
 	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -324,6 +328,7 @@ describe("PKCE optional - dynamic client registration policy", async () => {
 	it("confidential DCR client without PKCE should succeed when registration policy disables PKCE", async () => {
 		const registration = await unauthenticatedClient.oauth2.register({
 			redirect_uris: [redirectUri],
+			application_type: "native",
 		});
 		expect(registration.data?.client_id).toBeDefined();
 		expect(registration.data?.client_secret).toBeDefined();
@@ -400,9 +405,11 @@ describe("PKCE optional - dynamic client registration policy", async () => {
 		const registration = await unauthenticatedClient.oauth2.register({
 			token_endpoint_auth_method: "none",
 			redirect_uris: [redirectUri],
+			application_type: "native",
 		});
 		expect(registration.data?.client_id).toBeDefined();
-		expect(registration.data?.public).toBe(true);
+		expect(registration.data?.token_endpoint_auth_method).toBe("none");
+		expect(registration.data).not.toHaveProperty("public");
 
 		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
 		authUrl.searchParams.set("client_id", registration.data!.client_id);
@@ -425,7 +432,7 @@ describe("PKCE optional - dynamic client registration policy", async () => {
 
 describe("PKCE optional - offline_access scope", async () => {
 	const authServerBaseUrl = "http://localhost:3002";
-	const rpBaseUrl = "http://localhost:5002";
+	const rpBaseUrl = "https://rp.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -459,6 +466,7 @@ describe("PKCE optional - offline_access scope", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 				require_pkce: false, // Explicitly optional
 			},
@@ -633,7 +641,7 @@ describe("PKCE optional - offline_access scope", async () => {
 
 describe("PKCE optional - consistency checks", async () => {
 	const authServerBaseUrl = "http://localhost:3003";
-	const rpBaseUrl = "http://localhost:5003";
+	const rpBaseUrl = "https://rp.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -667,6 +675,7 @@ describe("PKCE optional - consistency checks", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 				require_pkce: false,
 			},
@@ -839,7 +848,7 @@ describe("PKCE optional - consistency checks", async () => {
 
 describe("PKCE optional - registration restrictions", async () => {
 	const authServerBaseUrl = "http://localhost:3004";
-	const rpBaseUrl = "http://localhost:5004";
+	const rpBaseUrl = "https://rp.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -873,6 +882,7 @@ describe("PKCE optional - registration restrictions", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				require_pkce: false,
 			},
 		});
@@ -882,6 +892,7 @@ describe("PKCE optional - registration restrictions", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				require_pkce: true,
 			},
 		});
@@ -899,6 +910,7 @@ describe("PKCE optional - registration restrictions", async () => {
 			method: "POST",
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				require_pkce: false,
 			},
 		});

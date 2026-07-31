@@ -202,7 +202,7 @@ export interface AuthServerMetadata {
 	authorization_response_iss_parameter_supported?: boolean;
 	/**
 	 * Whether the authorization server supports discovering clients via
-	 * [Client ID Metadata Documents](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/)
+	 * [Client ID Metadata Document](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document)
 	 * (an HTTPS URL as `client_id`).
 	 *
 	 * Set at runtime by the `@better-auth/cimd` plugin (or any other
@@ -357,8 +357,8 @@ export interface OAuthClient {
 	tos_uri?: string;
 	policy_uri?: string;
 	//---- Client key metadata (only one can be used) ----//
-	/** JWK Set — accepts either a bare key array or an RFC 7517 JWKS object `{"keys":[...]}` */
-	jwks?: Record<string, unknown>[] | { keys: Record<string, unknown>[] };
+	/** RFC 7517 JWK Set. The `keys` array must be non-empty. */
+	jwks?: { keys: Record<string, unknown>[] };
 	jwks_uri?: string;
 	//---- User Software Identifiers ----//
 	software_id?: string;
@@ -387,9 +387,15 @@ export interface OAuthClient {
 	grant_types?: GrantType[];
 	response_types?: "code"[];
 	// | "token" // NEVER SUPPORT - deprecated in OAuth 2.1
-	//---- RFC6749 Spec ----//
-	public?: boolean;
-	type?: "web" | "native" | "user-agent-based";
+	/**
+	 * OIDC Registration application type. This classifies redirect URI policy
+	 * only; client authentication is determined by
+	 * `token_endpoint_auth_method`.
+	 *
+	 * @default "web"
+	 * @see https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
+	 */
+	application_type?: "web" | "native" | null;
 	//---- Not Part of RFC7591 Spec ----//
 	disabled?: boolean;
 	skip_consent?: boolean;
@@ -416,9 +422,8 @@ export interface OAuthClient {
 	 * @see https://openid.net/specs/openid-connect-core-1_0.html#SubjectIDTypes
 	 */
 	subject_type?: "public" | "pairwise";
-	//---- All other metadata ----//
+	//---- Server Metadata ----//
 	reference_id?: string;
-	[key: string]: unknown;
 }
 
 /**

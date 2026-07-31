@@ -8,10 +8,20 @@ import { oauthProviderClient } from "../client";
 import { oauthProvider } from "../oauth";
 import type { OAuthClient } from "../types/oauth";
 
+type TestOAuthClientUiMetadata = Pick<
+	OAuthClient,
+	| "client_name"
+	| "client_uri"
+	| "contacts"
+	| "logo_uri"
+	| "policy_uri"
+	| "tos_uri"
+>;
+
 describe("oauthClient", async () => {
 	const providerId = "test";
 	const baseUrl = "http://localhost:3000";
-	const rpBaseUrl = "http://localhost:5000";
+	const rpBaseUrl = "https://rp.example.com";
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,
@@ -19,6 +29,7 @@ describe("oauthClient", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
+				scopes: ["openid", "profile", "email", "offline_access", "m2m:read"],
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -39,7 +50,7 @@ describe("oauthClient", async () => {
 		},
 	});
 
-	const testUiClientInput: Omit<OAuthClient, "client_id"> = {
+	const testUiClientInput: TestOAuthClientUiMetadata = {
 		client_name: "accept name",
 		client_uri: "https://example.com/ok",
 		logo_uri: "https://example.com/logo.png",
@@ -50,6 +61,163 @@ describe("oauthClient", async () => {
 	let oauthClient: OAuthClient;
 	let oauthPublicClient: OAuthClient;
 	let oauthUiClient: OAuthClient;
+
+	it("round-trips application_type through user create and update with redirect revalidation", async () => {
+		const created = await authClient.oauth2.createClient({
+			application_type: "native",
+			redirect_uris: ["com.example.desktop:/callback"],
+			token_endpoint_auth_method: "client_secret_post",
+		});
+		expect(created.error).toBeNull();
+		expect(created.data).toMatchObject({
+			application_type: "native",
+			token_endpoint_auth_method: "client_secret_post",
+		});
+		expect(created.data?.client_secret).toBeDefined();
+		expect(created.data).not.toHaveProperty("public");
+		expect(created.data).not.toHaveProperty("type");
+
+		const invalidUpdate = await authClient.oauth2.updateClient({
+			client_id: created.data!.client_id,
+			update: { application_type: "web" },
+		});
+		expect(invalidUpdate.error?.status).toBe(400);
+
+		const updated = await authClient.oauth2.updateClient({
+			client_id: created.data!.client_id,
+			update: {
+				application_type: "web",
+				redirect_uris: ["https://client.example.com/callback"],
+			},
+		});
+		expect(updated.error).toBeNull();
+		expect(updated.data?.application_type).toBe("web");
+		await authClient.oauth2.deleteClient({
+			client_id: created.data!.client_id,
+		});
+	});
+
+	it("round-trips application_type through admin create and update", async () => {
+		const created = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				application_type: "native",
+				redirect_uris: ["com.example.admin:/callback"],
+				token_endpoint_auth_method: "client_secret_basic",
+			},
+		});
+		expect(created.application_type).toBe("native");
+		expect(created.client_secret).toBeDefined();
+
+		await expect(
+			auth.api.adminUpdateOAuthClient({
+				headers,
+				body: {
+					client_id: created.client_id,
+					update: { application_type: "web" },
+				},
+			}),
+		).rejects.toMatchObject({
+			body: expect.objectContaining({ error: "invalid_redirect_uri" }),
+		});
+
+		const updated = await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: created.client_id,
+				update: {
+					application_type: "web",
+					redirect_uris: ["https://admin.example.com/callback"],
+				},
+			},
+		});
+		expect(updated.application_type).toBe("web");
+		expect(updated).not.toHaveProperty("public");
+		expect(updated).not.toHaveProperty("type");
+		await authClient.oauth2.deleteClient({ client_id: created.client_id });
+	});
+
+	it("fails closed when no privilege callback can configure client_credentials scopes", async () => {
+		await expect(
+			auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					grant_types: ["client_credentials"],
+					client_credentials_scopes: ["m2m:read"],
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "UNAUTHORIZED",
+		});
+	});
+
+	it("rejects client_credentials scope authority for public clients", async () => {
+		await expect(
+			auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					grant_types: ["client_credentials"],
+					token_endpoint_auth_method: "none",
+					client_credentials_scopes: ["m2m:read"],
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+		});
+
+		const publicClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				token_endpoint_auth_method: "none",
+			},
+		});
+		await expect(
+			auth.api.adminUpdateOAuthClient({
+				headers,
+				body: {
+					client_id: publicClient.client_id,
+					update: {
+						client_credentials_scopes: ["m2m:read"],
+					},
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+		});
+		await authClient.oauth2.deleteClient({
+			client_id: publicClient.client_id,
+		});
+	});
+
+	it("does not let an administrative update mutate unowned client metadata", async () => {
+		const created = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+			},
+		});
+		const context = await auth.$context;
+		await context.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: created.client_id }],
+			update: { userId: null, referenceId: null },
+		});
+
+		await expect(
+			auth.api.adminUpdateOAuthClient({
+				headers,
+				body: {
+					client_id: created.client_id,
+					update: { client_name: "Cross-owner mutation" },
+				},
+			}),
+		).rejects.toMatchObject({ status: "UNAUTHORIZED" });
+		await context.adapter.delete({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: created.client_id }],
+		});
+	});
 
 	it("should create clients with minimum requirements", async () => {
 		const client = await authClient.oauth2.createClient({
@@ -143,12 +311,11 @@ describe("oauthClient", async () => {
 		expect(checkPublic).toMatchObject(expectedPublic);
 	});
 
-	it("should not allow client to become public", async () => {
+	it("should not allow token endpoint authentication method updates", async () => {
 		const client = await authClient.oauth2.updateClient({
 			client_id: oauthClient.client_id,
 			update: {
 				// @ts-expect-error
-				public: true,
 				token_endpoint_auth_method: "none",
 				client_secret: undefined,
 			},
@@ -222,7 +389,7 @@ describe("oauthClient", async () => {
 
 describe("oauthClient private_key_jwt clients", async () => {
 	const baseUrl = "http://localhost:3002";
-	const redirectUri = "http://localhost:5002/callback";
+	const redirectUri = "https://rp.example.com/callback";
 	const trustedJwksUri = "https://trusted.example.com/.well-known/jwks.json";
 	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,
@@ -261,6 +428,17 @@ describe("oauthClient private_key_jwt clients", async () => {
 	beforeAll(async () => {
 		const { publicKey } = await generateKeyPair("RS256", { extractable: true });
 		publicJwk = await exportJWK(publicKey);
+	});
+
+	it("rejects a bare JWK array when a user creates a client", async () => {
+		const result = await authClient.oauth2.createClient({
+			redirect_uris: [redirectUri],
+			token_endpoint_auth_method: "private_key_jwt",
+			// @ts-expect-error RFC 7517 requires a JWK Set object.
+			jwks: [{ ...publicJwk, kid: "bare-user-key", alg: "RS256", use: "sig" }],
+		});
+
+		expect(result.error?.status).toBe(400);
 	});
 
 	it("should create private_key_jwt clients with jwks and jwks_uri", async () => {

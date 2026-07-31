@@ -100,7 +100,9 @@ export type {
 	VerifyAccessTokenRequestOptions,
 } from "./verify";
 export {
+	createInsufficientScopeError,
 	getJwks,
+	isInsufficientScopeError,
 	requestToResourceInput,
 	verifyAccessTokenRequest,
 	verifyBearerToken,

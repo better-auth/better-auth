@@ -27,6 +27,7 @@ import {
 	describe,
 	expect,
 	it,
+	vi,
 } from "vitest";
 import * as z from "zod";
 import { oauthProviderClient } from "./client";
@@ -71,6 +72,7 @@ async function startMockRp(
 	return {
 		received,
 		url,
+		publicUrl: `https://rp-${address.port}.example.com`,
 		async close() {
 			await new Promise<void>((resolve, reject) =>
 				server.close((err) => (err ? reject(err) : resolve())),
@@ -233,10 +235,27 @@ describe("oauth back-channel logout", async () => {
 	beforeEach(async () => {
 		shouldVetoSessionDeletion = false;
 		rp = await startMockRp();
+		const networkFetch = globalThis.fetch.bind(globalThis);
+		vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+			const requestedUrl =
+				typeof input === "string"
+					? input
+					: input instanceof URL
+						? input.href
+						: input.url;
+			if (requestedUrl.startsWith(rp.publicUrl)) {
+				return networkFetch(
+					`${rp.url}${requestedUrl.slice(rp.publicUrl.length)}`,
+					init,
+				);
+			}
+			return networkFetch(input, init);
+		});
 		const signed = await signInWithTestUser();
 		headers = signed.headers;
 	});
 	afterEach(async () => {
+		vi.unstubAllGlobals();
 		await rp.close();
 	});
 
@@ -252,9 +271,10 @@ describe("oauth back-channel logout", async () => {
 			headers,
 			body: {
 				redirect_uris: [`${rp.url}/callback`],
+				application_type: "native",
 				skip_consent: true,
 				enable_end_session: true,
-				backchannel_logout_uri: `${rp.url}/logout/backchannel`,
+				backchannel_logout_uri: `${rp.publicUrl}/logout/backchannel`,
 				...overrides,
 			},
 		});
@@ -627,7 +647,7 @@ describe("oauth back-channel logout", async () => {
 		await rp.close();
 		rp = await startMockRp({ status: 500 });
 		const oauthClient = await registerClient({
-			backchannel_logout_uri: `${rp.url}/logout/backchannel`,
+			backchannel_logout_uri: `${rp.publicUrl}/logout/backchannel`,
 		});
 		await issueTokens({ client: oauthClient });
 
@@ -700,6 +720,7 @@ describe("oauth back-channel logout (jwt plugin disabled)", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 				enable_end_session: true,
 			},
@@ -833,6 +854,7 @@ describe("oauth back-channel logout - secondaryStorage + preserveSessionInDataba
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 				enable_end_session: true,
 			},

@@ -13,7 +13,7 @@ Refresh tokens without `offline_access` are revoked on session end; `offline_acc
 
 Delivery runs through the host's background task handler when one is configured (Vercel `waitUntil`, Cloudflare `ctx.waitUntil`); without a handler it completes inline so notifications are not lost on request teardown. Configure `advanced.backgroundTasks.handler` on serverless runtimes to keep sign-out fast.
 
-Discovery at `/.well-known/openid-configuration` and `/.well-known/oauth-authorization-server` advertises `backchannel_logout_supported: true` and `backchannel_logout_session_supported: true` when the JWT plugin is enabled. Registering a `backchannel_logout_uri` rejects fragments, non-http(s) schemes, and non-HTTPS targets on confidential clients. Its SSRF host guard, which blocks private, reserved, tunneled, and cloud-metadata hosts, now also covers a `private_key_jwt` client's `jwks_uri`.
+Discovery at `/.well-known/openid-configuration` and `/.well-known/oauth-authorization-server` advertises `backchannel_logout_supported: true` and `backchannel_logout_session_supported: true` when the JWT plugin is enabled. Every registered `backchannel_logout_uri` must be a credential-free public HTTPS URL without a fragment; loopback HTTP is rejected for both public and confidential clients. CIMD documents cannot register back-channel logout metadata. The SSRF host guard, which blocks private, reserved, tunneled, and cloud-metadata hosts, also covers a `private_key_jwt` client's `jwks_uri`.
 
 Schema changes on `@better-auth/oauth-provider`:
 

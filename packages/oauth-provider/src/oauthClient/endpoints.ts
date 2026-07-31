@@ -1,11 +1,30 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
+import type { OAuthClientRegistrationMetadata } from "../register";
 import { checkOAuthClient, oauthToSchema, schemaToOAuth } from "../register";
-import type { OAuthOptions, SchemaClient, Scope } from "../types";
-import type { OAuthClient } from "../types/oauth";
+import type {
+	OAuthClientAdministrativeResponse,
+	OAuthClientRegistrationResponse,
+	OAuthOptions,
+	SchemaClient,
+	Scope,
+} from "../types";
+import type { GrantType } from "../types/oauth";
 import { getClient, storeClientSecret } from "../utils";
+import {
+	normalizeClientCredentialsScopes,
+	validateClientCredentialsScopes,
+} from "./client-credentials";
 import { assertClientPrivileges } from "./privileges";
+
+type OAuthClientUpdate = Omit<
+	OAuthClientRegistrationMetadata,
+	"application_type" | "client_id" | "resources"
+> & {
+	application_type?: "web" | "native";
+	client_credentials_scopes?: string[];
+};
 
 export async function getClientEndpoint(
 	ctx: GenericEndpointContext & { query: { client_id: string } },
@@ -164,15 +183,38 @@ export async function deleteClientEndpoint(
 	});
 }
 
+export function updateClientEndpoint(
+	ctx: GenericEndpointContext & {
+		body: {
+			client_id: string;
+			update: OAuthClientUpdate;
+		};
+	},
+	opts: OAuthOptions<Scope[]>,
+	settings: { admin: true },
+): Promise<OAuthClientAdministrativeResponse>;
+export function updateClientEndpoint(
+	ctx: GenericEndpointContext & {
+		body: {
+			client_id: string;
+			update: OAuthClientUpdate;
+		};
+	},
+	opts: OAuthOptions<Scope[]>,
+	settings?: { admin?: false },
+): Promise<OAuthClientRegistrationResponse>;
 export async function updateClientEndpoint(
 	ctx: GenericEndpointContext & {
 		body: {
 			client_id: string;
-			update: Omit<Partial<OAuthClient>, "client_id">;
+			update: OAuthClientUpdate;
 		};
 	},
 	opts: OAuthOptions<Scope[]>,
-) {
+	settings?: { admin?: boolean },
+): Promise<
+	OAuthClientAdministrativeResponse | OAuthClientRegistrationResponse
+> {
 	const session = await getSessionFromCtx(ctx);
 	await assertClientPrivileges(ctx, session, opts, "update");
 	if (!session) throw new APIError("UNAUTHORIZED");
@@ -194,21 +236,70 @@ export async function updateClientEndpoint(
 		});
 	}
 
-	if (client.userId) {
-		if (client.userId !== session.user.id) throw new APIError("UNAUTHORIZED");
-	} else if (client.referenceId && opts.clientReference) {
-		if (client.referenceId !== (await opts.clientReference(session)))
-			throw new APIError("UNAUTHORIZED");
-	} else {
+	const { client_credentials_scopes: rawClientCredentialsScopes, ...updates } =
+		ctx.body.update;
+	const ownsClient = client.userId
+		? client.userId === session.user.id
+		: client.referenceId && opts.clientReference
+			? client.referenceId === (await opts.clientReference(session))
+			: false;
+	const isCrossOwnerScopeConfiguration =
+		!ownsClient &&
+		settings?.admin &&
+		rawClientCredentialsScopes !== undefined &&
+		Object.keys(updates).length === 0;
+	if (!ownsClient && !isCrossOwnerScopeConfiguration) {
 		throw new APIError("UNAUTHORIZED");
 	}
+	if (isCrossOwnerScopeConfiguration) {
+		await assertClientPrivileges(
+			ctx,
+			session,
+			opts,
+			"configure-client-credentials-scopes",
+		);
+	}
 
-	const updates = ctx.body.update as OAuthClient;
-	if (Object.keys(updates).length === 0) {
+	if (
+		Object.keys(updates).length === 0 &&
+		rawClientCredentialsScopes === undefined
+	) {
 		// Never return @internal client_secret
 		const res = schemaToOAuth(client);
 		res.client_secret = undefined;
+		if (settings?.admin) {
+			return {
+				...res,
+				client_credentials_scopes: [...(client.clientCredentialsScopes ?? [])],
+			};
+		}
 		return res;
+	}
+
+	const finalGrantTypes = (updates.grant_types ??
+		client.grantTypes ??
+		[]) as GrantType[];
+	const finalTokenEndpointAuthMethod =
+		updates.token_endpoint_auth_method ?? client.tokenEndpointAuthMethod;
+	const clientCredentialsScopes =
+		rawClientCredentialsScopes === undefined
+			? undefined
+			: normalizeClientCredentialsScopes(rawClientCredentialsScopes);
+	if (clientCredentialsScopes !== undefined) {
+		validateClientCredentialsScopes(
+			clientCredentialsScopes,
+			finalGrantTypes,
+			finalTokenEndpointAuthMethod,
+			opts,
+		);
+		if (clientCredentialsScopes.length > 0 && !isCrossOwnerScopeConfiguration) {
+			await assertClientPrivileges(
+				ctx,
+				session,
+				opts,
+				"configure-client-credentials-scopes",
+			);
+		}
 	}
 
 	await checkOAuthClient(
@@ -226,6 +317,14 @@ export async function updateClientEndpoint(
 	const schemaUpdates: Record<string, unknown> = {
 		...oauthToSchema(updates),
 	};
+	if (
+		!finalGrantTypes.includes("client_credentials") ||
+		finalTokenEndpointAuthMethod === "none"
+	) {
+		schemaUpdates.clientCredentialsScopes = [];
+	} else if (clientCredentialsScopes !== undefined) {
+		schemaUpdates.clientCredentialsScopes = clientCredentialsScopes;
+	}
 	if (updates.token_endpoint_auth_method) {
 		if (updates.token_endpoint_auth_method === "private_key_jwt") {
 			schemaUpdates.clientSecret = null;
@@ -271,6 +370,14 @@ export async function updateClientEndpoint(
 	// Never return @internal client_secret
 	const res = schemaToOAuth(updatedClient);
 	res.client_secret = undefined;
+	if (settings?.admin) {
+		return {
+			...res,
+			client_credentials_scopes: [
+				...(updatedClient.clientCredentialsScopes ?? []),
+			],
+		};
+	}
 	return res;
 }
 
@@ -308,7 +415,7 @@ export async function rotateClientSecretEndpoint(
 		throw new APIError("UNAUTHORIZED");
 	}
 
-	if (client.public || !client.clientSecret) {
+	if (client.tokenEndpointAuthMethod === "none" || !client.clientSecret) {
 		throw new APIError("BAD_REQUEST", {
 			error_description:
 				"secret rotation is only available for clients using client_secret authentication",

@@ -1,11 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import type { Session, User } from "better-auth/types";
-import {
-	assertIdentifierValid,
-	buildClientResourceLinkId,
-	invalidateResourceCache,
-} from "../resources";
+import { assertIdentifierValid, invalidateResourceCache } from "../resources";
 import type {
 	OAuthOptions,
 	OAuthResource,
@@ -340,20 +336,11 @@ export async function linkClientResourceEndpoint(
 		});
 	}
 
-	// Idempotency: the row's `id` is the deterministic
-	// `${clientId}::${resourceId}` value, so duplicate inserts hit the
-	// primary-key UNIQUE constraint and surface as an adapter error. We
-	// optimistically attempt the insert and convert that conflict into the
-	// existing "alreadyLinked: true" response — race-safe (two concurrent
-	// admin calls both can't create the same row) without a TOCTOU gap
-	// between findMany and create.
-	const id = buildClientResourceLinkId(clientId, resourceId);
+	// The compound unique index makes this optimistic insert race-safe.
 	try {
 		await ctx.context.adapter.create({
 			model: linkModel(opts),
-			forceAllowId: true,
 			data: {
-				id,
 				clientId,
 				resourceId,
 				createdAt: new Date(),

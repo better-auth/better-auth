@@ -1,16 +1,19 @@
 // Validation for Client ID Metadata Documents.
-// Implements draft-ietf-oauth-client-id-metadata-document §3 and §4.1.
+// Implements draft-ietf-oauth-client-id-metadata-document-02 §3 and §4.
 import {
 	isLoopbackHost,
 	isPublicRoutableHost,
 } from "@better-auth/core/utils/host";
+import { isReverseDomainPrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
+import type { OAuthClientMetadata } from "@better-auth/oauth-provider";
+import { oauthClientMetadataSchema } from "@better-auth/oauth-provider";
+import {
+	isForbiddenCimdClientMetadataField,
+	validatePublicClientJwks,
+} from "@better-auth/oauth-provider/internal";
+import type { CimdMetadataProfile } from "./types";
 
 const DOT_SEGMENT_RE = /\/(?:\.|%2e)(?:\.|%2e)?(?:\/|$|#|\?)/i;
-
-const PROHIBITED_FIELDS = new Set([
-	"client_secret",
-	"client_secret_expires_at",
-]);
 
 const SYMMETRIC_AUTH_METHODS = new Set([
 	"client_secret_post",
@@ -18,66 +21,50 @@ const SYMMETRIC_AUTH_METHODS = new Set([
 	"client_secret_jwt",
 ]);
 
-const ALLOWED_GRANT_TYPES = new Set(["authorization_code", "refresh_token"]);
+export type CimdMetadataValidationResult =
+	| {
+			valid: true;
+			metadata: OAuthClientMetadata;
+			error?: never;
+			warnings?: string[];
+	  }
+	| {
+			valid: false;
+			error: string;
+			metadata?: never;
+			warnings?: string[];
+	  };
 
-const ALLOWED_RESPONSE_TYPES = new Set(["code"]);
-
-export interface ClientIdMetadataDocumentResult {
-	valid: boolean;
-	error?: string;
-	warnings?: string[];
-}
-
-export interface ClientIdUrlOptions {
-	/**
-	 * Permit loopback `client_id` URLs (`localhost`, `127.0.0.0/8`, `::1`,
-	 * `*.localhost`) and plain HTTP for them. Off by default.
-	 */
-	allowLoopback?: boolean;
+export interface CimdMetadataValidationOptions {
+	originBoundFields?: readonly string[];
+	metadataProfile?: CimdMetadataProfile;
 }
 
 /**
  * Detect a URL-formatted client_id (Client ID Metadata Document pattern).
  *
- * HTTPS URLs always match; plain HTTP matches only loopback hosts, and only
- * when `allowLoopback` is set. This is a routing predicate, not a security
- * gate: it performs no DNS resolution, so callers MUST also run
+ * HTTPS URLs match. This is a routing predicate, not a security gate: it
+ * performs no DNS resolution, so callers MUST also run
  * {@link validateClientIdUrl} (and a fetch-time policy) before fetching.
  */
-export function isUrlClientId(
-	clientId: string,
-	options?: ClientIdUrlOptions,
-): boolean {
+export function isCimdClientIdUrlCandidate(clientId: string): boolean {
 	let parsed: URL;
 	try {
 		parsed = new URL(clientId);
 	} catch {
 		return false;
 	}
-	if (parsed.protocol === "https:") {
-		return true;
-	}
-	if (parsed.protocol !== "http:") {
-		return false;
-	}
-	if (!options?.allowLoopback) {
-		return false;
-	}
-	return isLoopbackHost(parsed.hostname);
+	return parsed.protocol === "https:";
 }
 
 /**
- * Validate a client_id URL per IETF draft §3.
+ * Validate a client_id URL per Client ID Metadata Document draft-02 §3.
  * Returns null on success, an error string on failure.
  *
- * Loopback hosts are rejected unless `allowLoopback` is set; every other
- * non-public host (private, link-local, cloud-metadata, IPv6 tunnels) is
- * rejected.
+ * Loopback and every other non-public host (private, link-local,
+ * cloud-metadata, IPv6 tunnels) are rejected.
  */
-export function validateClientIdUrl(
-	url: string,
-	options?: ClientIdUrlOptions,
-): string | null {
+export function validateClientIdUrl(url: string): string | null {
 	// §3: check the raw URL for dot segments before the URL class normalizes them
 	if (DOT_SEGMENT_RE.test(url)) {
 		return "client_id URL MUST NOT contain dot segments";
@@ -95,8 +82,24 @@ export function validateClientIdUrl(
 		return "client_id is not a valid URL";
 	}
 
-	if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+	if (parsed.protocol !== "https:") {
 		return "client_id URL must use HTTPS";
+	}
+
+	const httpsAuthorityPrefix = /^https:\/\//i.exec(url);
+	if (!httpsAuthorityPrefix || url.includes("\\")) {
+		return "client_id URL MUST use an explicit HTTPS authority form";
+	}
+	const authorityAndSuffix = url.slice(httpsAuthorityPrefix[0].length);
+	const firstPathOrSuffixDelimiter = authorityAndSuffix.search(/[/?#]/);
+	if (firstPathOrSuffixDelimiter === 0) {
+		return "client_id URL MUST use an explicit HTTPS authority form";
+	}
+	if (
+		firstPathOrSuffixDelimiter < 0 ||
+		authorityAndSuffix[firstPathOrSuffixDelimiter] !== "/"
+	) {
+		return "client_id URL MUST contain an explicit path component";
 	}
 
 	// §3: MUST NOT contain credentials
@@ -104,21 +107,6 @@ export function validateClientIdUrl(
 		return "client_id URL MUST NOT contain credentials";
 	}
 
-	// §3: MUST contain a path (not just scheme + authority)
-	if (parsed.pathname === "/" || parsed.pathname === "") {
-		return "client_id URL MUST contain a path component";
-	}
-
-	if (isLoopbackHost(parsed.hostname)) {
-		if (!options?.allowLoopback) {
-			return "client_id URL must not target a loopback address (set allowLoopback to enable local development)";
-		}
-		return null;
-	}
-
-	if (parsed.protocol !== "https:") {
-		return "client_id URL must use HTTPS (HTTP is allowed only for loopback in development)";
-	}
 	if (!isPublicRoutableHost(parsed.hostname)) {
 		return "client_id URL must not target a private or reserved address";
 	}
@@ -126,23 +114,30 @@ export function validateClientIdUrl(
 	return null;
 }
 
-/** Warning: §3 SHOULD NOT have a query string. */
-function checkUrlQueryWarning(url: string): string | null {
+function getClientIdUrlWarnings(url: string): string[] {
+	const warnings: string[] = [];
 	try {
 		const parsed = new URL(url);
+		if (parsed.pathname === "/") {
+			warnings.push("client_id URL path / is NOT RECOMMENDED (§3)");
+		}
 		if (parsed.search) {
-			return "client_id URL SHOULD NOT contain a query string (§3)";
+			warnings.push("client_id URL SHOULD NOT contain a query string (§3)");
 		}
 	} catch {
 		// URL validation handled by validateClientIdUrl
 	}
-	return null;
+	return warnings;
 }
 
-function isAbsoluteHttpUri(uri: string): boolean {
+function isAbsoluteRedirectUri(uri: string): boolean {
 	try {
 		const parsed = new URL(uri);
-		return parsed.protocol === "http:" || parsed.protocol === "https:";
+		return (
+			parsed.protocol === "http:" ||
+			parsed.protocol === "https:" ||
+			isReverseDomainPrivateUseRedirectUri(parsed)
+		);
 	} catch {
 		return false;
 	}
@@ -151,33 +146,68 @@ function isAbsoluteHttpUri(uri: string): boolean {
 /**
  * Validate a fetched Client ID Metadata Document per §4.1.
  *
- * @param fetchUrl - The URL the document was fetched from.
+ * @param clientIdUrl - The URL the document was fetched from.
  * @param raw - The parsed JSON body of the response.
- * @param originBoundFields - Fields whose URL values must share the same origin as the `client_id` URL.
+ * @param options - Generic draft-02 validation options and an optional protocol profile.
  */
 export function validateCimdMetadata(
-	fetchUrl: string,
+	clientIdUrl: string,
 	raw: unknown,
-	originBoundFields?: string[],
-): ClientIdMetadataDocumentResult {
+	options: CimdMetadataValidationOptions = {},
+): CimdMetadataValidationResult {
 	if (!raw || typeof raw !== "object") {
 		return { valid: false, error: "metadata document is not a JSON object" };
 	}
 
-	const doc = raw as Record<string, unknown>;
+	// Draft-02 ignores unknown members, but recognized credential, privilege,
+	// and server-control fields remain fatal even when they are not part of the
+	// shared wire schema.
+	for (const field of Object.keys(raw)) {
+		if (isForbiddenCimdClientMetadataField(field)) {
+			return {
+				valid: false,
+				error: `metadata document MUST NOT contain "${field}"`,
+			};
+		}
+	}
+
+	const parsedMetadata = oauthClientMetadataSchema.strip().safeParse(raw);
+	if (!parsedMetadata.success) {
+		const issue = parsedMetadata.error.issues[0];
+		const path = issue?.path.join(".") || "metadata document";
+		return {
+			valid: false,
+			error: `${path}: ${issue?.message ?? "invalid client metadata"}`,
+		};
+	}
+
+	const doc = parsedMetadata.data;
 	const warnings: string[] = [];
 
 	// §4.1: client_id MUST equal the fetch URL (simple string comparison)
-	if (doc.client_id !== fetchUrl) {
+	if (doc.client_id !== clientIdUrl) {
 		return {
 			valid: false,
 			error: `client_id "${String(doc.client_id)}" does not match the metadata document URL`,
 		};
 	}
 
-	// §4.1: prohibited fields MUST NOT be present
-	for (const field of PROHIBITED_FIELDS) {
-		if (field in doc) {
+	if (
+		options.metadataProfile === "mcp-2026-07-28" &&
+		!doc.client_name?.trim()
+	) {
+		return {
+			valid: false,
+			error: "client_name must be a non-empty string",
+		};
+	}
+
+	// §4.1: prohibited recognized wire fields MUST NOT be present.
+	for (const field of [
+		"backchannel_logout_uri",
+		"backchannel_logout_session_required",
+	] as const) {
+		if (doc[field] !== undefined) {
 			return {
 				valid: false,
 				error: `metadata document MUST NOT contain "${field}"`,
@@ -187,15 +217,6 @@ export function validateCimdMetadata(
 
 	// §4.1: only non-secret auth methods are allowed
 	const ALLOWED_AUTH_METHODS = new Set(["none", "private_key_jwt"]);
-	if (
-		doc.token_endpoint_auth_method !== undefined &&
-		typeof doc.token_endpoint_auth_method !== "string"
-	) {
-		return {
-			valid: false,
-			error: "token_endpoint_auth_method must be a string",
-		};
-	}
 	if (typeof doc.token_endpoint_auth_method === "string") {
 		if (SYMMETRIC_AUTH_METHODS.has(doc.token_endpoint_auth_method)) {
 			return {
@@ -223,54 +244,60 @@ export function validateCimdMetadata(
 		}
 	}
 
-	// redirect_uris: required, non-empty array of absolute HTTP(S) URIs
+	if (doc.jwks) {
+		const result = validatePublicClientJwks(doc.jwks);
+		if (!result.valid) {
+			return {
+				valid: false,
+				error: "jwks must contain only structurally valid public keys",
+			};
+		}
+	}
+	if (doc.jwks_uri) {
+		try {
+			const jwksUri = new URL(doc.jwks_uri);
+			if (jwksUri.username || jwksUri.password) {
+				return {
+					valid: false,
+					error: "jwks_uri must not contain credentials",
+				};
+			}
+			if (doc.jwks_uri.includes("#")) {
+				return {
+					valid: false,
+					error: "jwks_uri must not contain a fragment",
+				};
+			}
+		} catch {
+			return { valid: false, error: "jwks_uri must be a valid URL" };
+		}
+	}
+
+	const redirectUrisAreRequired = options.metadataProfile === "mcp-2026-07-28";
+	if (redirectUrisAreRequired && !doc.redirect_uris) {
+		return {
+			valid: false,
+			error:
+				"redirect_uris must be a non-empty array of absolute HTTP(S) or private-use URIs",
+		};
+	}
 	if (
-		!Array.isArray(doc.redirect_uris) ||
-		doc.redirect_uris.length === 0 ||
-		!doc.redirect_uris.every(
-			(uri: unknown) => typeof uri === "string" && isAbsoluteHttpUri(uri),
-		)
+		doc.redirect_uris &&
+		!doc.redirect_uris.every((uri) => isAbsoluteRedirectUri(uri))
 	) {
 		return {
 			valid: false,
-			error: "redirect_uris must be a non-empty array of absolute HTTP(S) URIs",
+			error:
+				"redirect_uris must be a non-empty array of absolute HTTP(S) or private-use URIs",
 		};
 	}
 
-	// grant_types: must be a subset of allowed types
-	if (
-		doc.grant_types !== undefined &&
-		!(
-			Array.isArray(doc.grant_types) &&
-			doc.grant_types.every(
-				(g: unknown) => typeof g === "string" && ALLOWED_GRANT_TYPES.has(g),
-			)
-		)
-	) {
-		return {
-			valid: false,
-			error: `grant_types must be a subset of [${[...ALLOWED_GRANT_TYPES].map((g) => `"${g}"`).join(", ")}]`,
-		};
-	}
-
-	// response_types: must be a subset of allowed types
-	if (
-		doc.response_types !== undefined &&
-		!(
-			Array.isArray(doc.response_types) &&
-			doc.response_types.every(
-				(r: unknown) => typeof r === "string" && ALLOWED_RESPONSE_TYPES.has(r),
-			)
-		)
-	) {
-		return {
-			valid: false,
-			error: 'response_types must be a subset of ["code"]',
-		};
-	}
-
-	// Validate client_uri and logo_uri for SSRF if present
-	for (const field of ["client_uri", "logo_uri"] as const) {
+	for (const field of [
+		"client_uri",
+		"logo_uri",
+		"tos_uri",
+		"policy_uri",
+	] as const) {
 		if (doc[field] !== undefined && typeof doc[field] !== "string") {
 			return { valid: false, error: `${field} must be a string` };
 		}
@@ -279,6 +306,12 @@ export function validateCimdMetadata(
 				const parsed = new URL(doc[field]);
 				if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
 					return { valid: false, error: `${field} must use HTTP(S)` };
+				}
+				if (parsed.username || parsed.password) {
+					return {
+						valid: false,
+						error: `${field} must not contain credentials`,
+					};
 				}
 				if (!isPublicRoutableHost(parsed.hostname)) {
 					return {
@@ -293,21 +326,20 @@ export function validateCimdMetadata(
 	}
 
 	// Origin-bound fields: values must share the same origin as the client_id URL
-	const fieldsToCheck = originBoundFields ?? [
-		"redirect_uris",
+	const fieldsToCheck = options.originBoundFields ?? [
 		"post_logout_redirect_uris",
 		"client_uri",
 	];
 
 	let clientIdOrigin: string;
 	try {
-		clientIdOrigin = new URL(fetchUrl).origin;
+		clientIdOrigin = new URL(clientIdUrl).origin;
 	} catch {
 		return { valid: false, error: "client_id is not a valid URL" };
 	}
 
 	for (const key of fieldsToCheck) {
-		const value = doc[key];
+		const value = (doc as Record<string, unknown>)[key];
 		if (value === undefined) {
 			continue;
 		}
@@ -340,17 +372,26 @@ export function validateCimdMetadata(
 				};
 			}
 
-			if (uri.protocol !== "https:" && uri.protocol !== "http:") {
+			const isRedirectField =
+				key === "redirect_uris" || key === "post_logout_redirect_uris";
+			const isPrivateUseRedirect =
+				isRedirectField && isReverseDomainPrivateUseRedirectUri(uri);
+			if (
+				uri.protocol !== "https:" &&
+				uri.protocol !== "http:" &&
+				!isPrivateUseRedirect
+			) {
 				return {
 					valid: false,
-					error: `all values for ${key} must use HTTP(S)`,
+					error: `all values for ${key} must use HTTP(S) or an authority-free private-use scheme`,
 				};
+			}
+			if (isPrivateUseRedirect) {
+				continue;
 			}
 
 			// Loopback redirect URIs are allowed for local/native app flows
 			// (RFC 8252); this exception applies only to redirect URI fields.
-			const isRedirectField =
-				key === "redirect_uris" || key === "post_logout_redirect_uris";
 			const localhostAllowed = isRedirectField && isLoopbackHost(uri.hostname);
 			if (uri.origin !== clientIdOrigin && !localhostAllowed) {
 				return {
@@ -362,13 +403,14 @@ export function validateCimdMetadata(
 	}
 
 	// §3: SHOULD NOT have a query string
-	const queryWarning = checkUrlQueryWarning(fetchUrl);
-	if (queryWarning) {
-		warnings.push(queryWarning);
-	}
+	warnings.push(...getClientIdUrlWarnings(clientIdUrl));
 
 	return {
 		valid: true,
+		metadata: {
+			...doc,
+			token_endpoint_auth_method: doc.token_endpoint_auth_method ?? "none",
+		},
 		...(warnings.length > 0 ? { warnings } : {}),
 	};
 }

@@ -14,6 +14,10 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			clientDiscoveryId: {
+				type: "string",
+				required: false,
+			},
 			disabled: {
 				type: "boolean",
 				defaultValue: false,
@@ -34,6 +38,11 @@ export const schema = {
 			scopes: {
 				type: "string[]",
 				required: false,
+			},
+			clientCredentialsScopes: {
+				type: "string[]",
+				required: false,
+				defaultValue: [],
 			},
 			// Recommended client data
 			userId: {
@@ -112,6 +121,10 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			applicationType: {
+				type: "string",
+				required: false,
+			},
 			jwks: {
 				type: "string",
 				required: false,
@@ -126,15 +139,6 @@ export const schema = {
 			},
 			responseTypes: {
 				type: "string[]",
-				required: false,
-			},
-			// RFC6749 Spec
-			public: {
-				type: "boolean",
-				required: false,
-			},
-			type: {
-				type: "string",
 				required: false,
 			},
 			requirePKCE: {
@@ -256,18 +260,6 @@ export const schema = {
 	 * Composite uniqueness on `(clientId, resourceId)` is load-bearing — the
 	 * `enforcePerClientResources` linkage check assumes one row per pair.
 	 *
-	 * Better Auth's schema layer doesn't expose composite-UNIQUE syntax (no
-	 * way to declare `UNIQUE(clientId, resourceId)` at the column level). To
-	 * enforce it at the database level for free, we set the row's `id` to a
-	 * deterministic `${clientId}::${resourceId}` value at write time and let
-	 * the implicit `UNIQUE` constraint on the primary key catch duplicates
-	 * (see `buildClientResourceLinkId` and the `forceAllowId: true` flag on
-	 * the `adapter.create` call in `oauthResource/endpoints.ts`). The double
-	 * colon separator is chosen because `::` cannot appear in either a
-	 * client_id (URL-safe random string) or a resource identifier (RFC 8707
-	 * absolute URI — `::` would be an IPv6 form rejected by the validator),
-	 * so the encoding is collision-free.
-	 *
 	 * Concurrent inserts of the same pair surface as a UNIQUE-constraint
 	 * error which the endpoint catches and converts to a 200 "alreadyLinked"
 	 * response (idempotency).
@@ -304,6 +296,7 @@ export const schema = {
 				required: false,
 			},
 		},
+		indexes: [{ fields: ["clientId", "resourceId"], unique: true }],
 	},
 	/**
 	 * An opaque refresh token created with "offline_access"

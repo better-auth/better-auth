@@ -81,16 +81,19 @@ describe("private_key_jwt e2e", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 				token_endpoint_auth_method: "private_key_jwt",
-				jwks: [
-					{
-						...publicJwk,
-						kid: "e2e-key-1",
-						alg: "RS256",
-						use: "sig",
-					},
-				],
+				jwks: {
+					keys: [
+						{
+							...publicJwk,
+							kid: "e2e-key-1",
+							alg: "RS256",
+							use: "sig",
+						},
+					],
+				},
 			},
 		}))!;
 		expect(oauthClient.client_id).toBeDefined();
@@ -100,6 +103,7 @@ describe("private_key_jwt e2e", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 				token_endpoint_auth_method: "private_key_jwt",
 				jwks_uri: "https://trusted.example.com/.well-known/jwks.json",

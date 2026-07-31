@@ -49,6 +49,7 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -164,6 +165,7 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 		it("disabled registration does not leak supported auth methods", async () => {
 			const { status, body } = await postJson("/oauth2/register", {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				token_endpoint_auth_method: "not_a_real_method",
 			});
 			expect(status).toBe(403);

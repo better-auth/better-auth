@@ -84,6 +84,7 @@ describe("oauthConsent", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 			},
 		});
 		expect(client1?.client_id).toBeDefined();
@@ -95,6 +96,7 @@ describe("oauthConsent", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				scope: oauthClient2Scopes.join(" "),
 			},
 		});
