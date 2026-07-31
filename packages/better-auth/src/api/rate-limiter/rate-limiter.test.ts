@@ -166,6 +166,62 @@ describe("atomic concurrent enforcement", () => {
 	}
 });
 
+describe("database cleanup", async () => {
+	const { auth, client } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+			storage: "database",
+			window: 10,
+			max: 20,
+		},
+	});
+	const ctx = await auth.$context;
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10618
+	 */
+	it("awaits expired row cleanup when no background handler is configured", async () => {
+		await ctx.adapter.create({
+			model: "rateLimit",
+			data: {
+				key: "127.0.0.1|/get-session",
+				count: 1,
+				lastRequest: Date.now() - 11_000,
+			},
+		});
+
+		let releaseCleanup = () => {};
+		const cleanupGate = new Promise<void>((resolve) => {
+			releaseCleanup = resolve;
+		});
+		const originalDeleteMany = ctx.adapter.deleteMany.bind(ctx.adapter);
+		const deleteMany = vi
+			.spyOn(ctx.adapter, "deleteMany")
+			.mockImplementation(async (data) => {
+				await cleanupGate;
+				return originalDeleteMany(data);
+			});
+
+		let requestSettled = false;
+		const request = client.getSession().finally(() => {
+			requestSettled = true;
+		});
+
+		let settledBeforeCleanup: boolean;
+		try {
+			await vi.waitFor(() => expect(deleteMany).toHaveBeenCalledOnce());
+			await Promise.resolve();
+			settledBeforeCleanup = requestSettled;
+		} finally {
+			releaseCleanup();
+		}
+
+		await request;
+		deleteMany.mockRestore();
+		expect(settledBeforeCleanup).toBe(false);
+	});
+});
+
 describe("custom rate limiting storage", async () => {
 	const store = new Map<string, string>();
 	const expirationMap = new Map<string, number>();
