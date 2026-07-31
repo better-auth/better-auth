@@ -1206,7 +1206,12 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 				}
 
-				const { state: relayState } = await generateRelayState(ctx, undefined);
+				const providerReference = await computeSSOProviderReference(provider);
+				const { state: relayState } = await generateRelayState(
+					ctx,
+					undefined,
+					providerReference,
+				);
 
 				const sp = createSP(
 					parsedSamlConfig,
@@ -1238,6 +1243,7 @@ export const signInSSO = (options?: SSOOptions) => {
 					const record: AuthnRequestRecord = {
 						id: loginRequest.id,
 						providerId: provider.providerId,
+						providerReference,
 						createdAt: Date.now(),
 						expiresAt: Date.now() + ttl,
 					};
@@ -1351,7 +1357,12 @@ async function handleOIDCCallback(
 			}?error=invalid_provider&error_description=provider not found`,
 		);
 	}
-	if (!(await isCurrentSSOProviderReference(provider, providerReference))) {
+	const acceptedProviderReference =
+		providerReference ??
+		redirectOIDCError("invalid_state", "missing_sso_provider_reference");
+	if (
+		!(await isCurrentSSOProviderReference(provider, acceptedProviderReference))
+	) {
 		redirectOIDCError(
 			"invalid_state",
 			"sso_provider_changed_during_authentication",
@@ -1718,7 +1729,7 @@ async function handleOIDCCallback(
 					!currentProvider ||
 					!(await isCurrentSSOProviderReference(
 						currentProvider,
-						providerReference,
+						acceptedProviderReference,
 					))
 				) {
 					throw new APIError("CONFLICT", {
@@ -1736,6 +1747,8 @@ async function handleOIDCCallback(
 								accountKey,
 								providerUser,
 								providerClaims: rawProfile ?? {},
+								verifiedIdTokenClaims: verifiedIdToken?.payload ?? {},
+								providerReference: acceptedProviderReference,
 							},
 							await getCurrentAdapter(ctx.context.adapter),
 							ctx.context.logger,

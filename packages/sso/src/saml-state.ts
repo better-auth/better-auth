@@ -2,6 +2,8 @@ import type { GenericEndpointContext, StateData } from "better-auth";
 import { generateGenericState, parseGenericState } from "better-auth";
 import { APIError } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
+import type { SSOProviderReference } from "./provider-reference";
+import { SSO_PROVIDER_STATE_KEY } from "./provider-reference";
 
 export async function generateRelayState(
 	c: GenericEndpointContext,
@@ -11,6 +13,7 @@ export async function generateRelayState(
 				userId: string;
 		  }
 		| undefined,
+	providerReference?: SSOProviderReference,
 ) {
 	const callbackURL = c.body.callbackURL;
 	if (!callbackURL) {
@@ -20,9 +23,6 @@ export async function generateRelayState(
 	}
 
 	const codeVerifier = generateRandomString(128);
-	// SAML relay state does not carry `serverContext`: no plugin sets server
-	// context on the SAML sign-in path. If that changes, merge
-	// `getOAuthServerContext()` here as `generateState` does.
 	const stateData: StateData = {
 		callbackURL,
 		codeVerifier,
@@ -34,6 +34,9 @@ export async function generateRelayState(
 		 */
 		expiresAt: Date.now() + 10 * 60 * 1000,
 		requestSignUp: c.body.requestSignUp,
+		serverContext: providerReference
+			? { [SSO_PROVIDER_STATE_KEY]: providerReference }
+			: undefined,
 	};
 
 	try {

@@ -346,14 +346,18 @@ If the Identity Provider is misconfigured or unreachable, registration will fail
 * Discovery errors are structured and well-defined
 * Public-client IdPs or mock servers may require overriding `tokenEndpointAuthentication`
 
-### Resolve OIDC Users
+### Resolve SSO Users
 
-Use `resolveUser` when an OIDC identity must be mapped to an existing Better Auth user instead of relying on email matching. The resolver runs on every OIDC sign-in. It is not used for SAML callbacks.
+Use `resolveUser` when an OIDC or SAML identity must be mapped to an existing Better Auth user instead of relying on email matching. The resolver runs on every SSO sign-in after the protocol identity has been verified.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 import { sso } from "@better-auth/sso";
-import { findProvisionedUserBySubject } from "@/lib/provisioning";
+import {
+    findProvisionedUserByAccountKey,
+    validateOIDCClaims,
+    validateSAMLAttributes,
+} from "@/lib/provisioning";
 
 const auth = betterAuth({
     plugins: [
@@ -363,7 +367,13 @@ const auth = betterAuth({
                     return { action: "continue" };
                 }
 
-                const provisionedUser = await findProvisionedUserBySubject({
+                if (input.protocol === "oidc") {
+                    await validateOIDCClaims(input.verifiedIdTokenClaims);
+                } else {
+                    await validateSAMLAttributes(input.providerAttributes);
+                }
+
+                const provisionedUser = await findProvisionedUserByAccountKey({
                     providerId: input.providerId,
                     issuer: input.accountKey.issuer,
                     subject: input.accountKey.providerAccountId,
@@ -388,17 +398,19 @@ const auth = betterAuth({
 });
 ```
 
-`accountKey.issuer` and `accountKey.providerAccountId` come from the validated ID Token's exact `iss` and `sub` claims. Subject matching is case-sensitive. `providerUser` contains normalized profile fields, while `providerClaims` contains the protocol-accepted raw claims used for that profile. Do not treat every profile field or raw claim as having the same verification guarantees as the issuer and subject; apply any application-specific validation before using them for authorization.
+For OIDC, `accountKey.issuer` and `accountKey.providerAccountId` come from the validated ID Token's exact `iss` and `sub` claims. `verifiedIdTokenClaims` contains the complete verified ID Token payload, while `providerClaims` contains the protocol-accepted raw claims used for the profile. For SAML, the account key is the verified IdP entity ID and signed `NameID`; `providerAttributes` contains the verified assertion attributes without coercing multi-valued attributes into scalars. Subject and `NameID` matching is case-sensitive.
 
-`findProvisionedUserBySubject` is application-owned in this example. It should resolve the exact provider, issuer, and subject tuple through the transaction-scoped `database` adapter. Do not fall back to matching an email address when the exact provisioned subject is absent.
+`providerUser` contains normalized profile fields for either protocol. Profile fields, OIDC UserInfo claims, and SAML attributes may still require application-specific validation before they are used for authorization. `providerReference` is an opaque reference to the provider configuration accepted for this authentication flow. It detects provider replacement or authentication-configuration changes during the flow; do not persist it as a tenant or user binding.
+
+`findProvisionedUserByAccountKey` is application-owned in this example. It should resolve the exact provider, issuer, and subject tuple through the transaction-scoped `database` adapter. Do not fall back to matching an email address when the exact provisioned subject is absent.
 
 The resolver returns one of three decisions:
 
 * `{ action: "continue" }` continues the normal SSO sign-in behavior.
-* `{ action: "link", userId, profile }` links the exact OIDC account to that user. Use `profile: "preserve"` to keep the local profile or `profile: "update"` to update it from the provider profile.
+* `{ action: "link", userId, profile }` links the exact SSO account to that user. Use `profile: "preserve"` to keep the local profile or `profile: "update"` to update it from the provider profile.
 * `{ action: "reject", code, message? }` rejects the sign-in with an application-defined error.
 
-The callback receives the active transaction adapter as `context.database`. Keep resolver work database-local and idempotent because a fresh SSO authentication attempt may invoke it again; an already consumed OIDC callback is not replayed. Better Auth requires native database transactions and transaction async-context support before calling the resolver. If secondary storage is configured, set `session.storeSessionInDatabase: true` and leave `session.preserveSessionInDatabase` unset or `false` so the database remains the session fallback.
+The callback receives the active transaction adapter as `context.database`. Keep resolver work database-local and idempotent because a fresh SSO authentication attempt may invoke it again; an already consumed OIDC callback or SAML assertion is not replayed. Better Auth requires native database transactions and transaction async-context support before calling the resolver. If secondary storage is configured, set `session.storeSessionInDatabase: true` and leave `session.preserveSessionInDatabase` unset or `false` so the database remains the session fallback.
 
 Database writes made through the transaction adapter during resolution, account linking, profile updates, and database session creation commit or roll back together. Network calls and other external side effects performed by the resolver or database hooks cannot be rolled back. Account and session cookies are published only after commit. Secondary-storage session mirroring and other deferred hooks run after commit; failures are logged without undoing the committed database session or suppressing its cookies.
 
@@ -1067,6 +1079,8 @@ samlConfig: {
 Both `samlConfig.cert` and `samlConfig.idpMetadata.cert` accept either a single PEM string or an array. When both are set, `idpMetadata.cert` wins.
 
 If your IdP publishes a metadata XML document, pass it as `idpMetadata.metadata` instead and leave `cert` unset. The certificates come from the document and rotation happens when the IdP republishes it. If a config supplies neither `cert` nor `idpMetadata.metadata`, registration fails with `CERT_SOURCE_MISSING`, since samlify has nothing to verify SAML responses against.
+
+Applications can use `guardProviderMutation` to coordinate SSO changes with a paired directory-sync control plane. IdP entity IDs, endpoints, signing certificates, SP entity IDs, NameID formats, POST assertion-consumer URLs, and assertion-signing policy are authentication-boundary changes. If the guard blocks authentication-boundary changes while a directory is paired, unpair the directory, update the IdP trust configuration, and then re-pair it. OIDC client-secret rotation and SAML SP private-key rotation do not change the authentication boundary.
 
 ### SAML Attribute Mapping
 

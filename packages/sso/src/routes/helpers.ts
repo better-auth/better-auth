@@ -17,7 +17,7 @@ function normalizePemList(certs: string[] | undefined): string[] | undefined {
 export async function findSAMLProvider(
 	providerId: string,
 	options: SSOOptions | undefined,
-	adapter: DBAdapter,
+	adapter: Pick<DBAdapter, "findOne">,
 ): Promise<SSOProvider<SSOOptions> | null> {
 	if (options?.defaultSSO?.length) {
 		const match = options.defaultSSO.find((p) => p.providerId === providerId);

@@ -21,6 +21,15 @@ const input = {
 		image: null,
 	},
 	providerClaims: { sub: "directory-user-1" },
+	verifiedIdTokenClaims: {
+		iss: "https://idp.example.com",
+		sub: "directory-user-1",
+	},
+	providerReference: {
+		providerId: "workforce",
+		source: { type: "configured" },
+		authenticationConfigurationFingerprint: "fingerprint",
+	},
 } satisfies SSOUserResolutionInput;
 
 const database = {} as DBTransactionAdapter;

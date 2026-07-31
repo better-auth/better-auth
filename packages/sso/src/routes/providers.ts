@@ -17,6 +17,7 @@ import {
 	mapDiscoveryErrorToAPIError,
 	validateOIDCEndpointUrls,
 } from "../oidc";
+import { computeSSOProviderReference } from "../provider-reference";
 import {
 	resolveSigningCerts,
 	validateCertSources,
@@ -29,6 +30,10 @@ import type {
 	SAMLIdentityProviderMetadata,
 	SSOOptions,
 } from "../types";
+import {
+	assertSSOAsyncContextSupport,
+	assertSSONativeTransactionSupport,
+} from "../user-resolution";
 import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
 import { assertSAMLIdentityProviderAuthority } from "./helpers";
 import {
@@ -192,14 +197,84 @@ function ssoProviderIdentityBoundaryChanged(
 }
 
 async function lockSSOProviderRow(
-	adapter: AuthContext["adapter"],
-	providerId: string,
+	context: AuthContext,
+	provider: Pick<SSOProviderRecord, "providerId"> &
+		Partial<Pick<SSOProviderRecord, "id">>,
 ): Promise<SSOProviderRecord | null> {
-	const trx = await getCurrentAdapter(adapter);
+	const where = [
+		...(provider.id ? [{ field: "id", value: provider.id }] : []),
+		{ field: "providerId", value: provider.providerId },
+	];
+	const trx = await getCurrentAdapter(context.adapter);
 	return trx.update<SSOProviderRecord>({
 		model: "ssoProvider",
-		where: [{ field: "providerId", value: providerId }],
-		update: { providerId },
+		where,
+		update: { providerId: provider.providerId },
+	});
+}
+
+async function guardSSOProviderMutation(
+	options: SSOOptions | undefined,
+	mutation:
+		| { action: "update"; isAuthenticationBoundaryChange: boolean }
+		| { action: "delete" },
+	provider: SSOProviderRecord,
+	database: Awaited<ReturnType<typeof getCurrentAdapter>>,
+	logger: AuthContext["logger"],
+): Promise<void> {
+	if (!options?.guardProviderMutation) return;
+	const oidcConfig = provider.oidcConfig
+		? parseConfigSnapshot<OIDCConfig>(provider.oidcConfig, "OIDC")
+		: undefined;
+	const samlConfig = provider.samlConfig
+		? parseConfigSnapshot<SAMLConfig>(provider.samlConfig, "SAML")
+		: undefined;
+	const providerReference = await computeSSOProviderReference({
+		...provider,
+		organizationId: provider.organizationId ?? undefined,
+		oidcConfig,
+		samlConfig,
+	});
+	try {
+		await options.guardProviderMutation(
+			{
+				...mutation,
+				provider: {
+					id: provider.id,
+					providerId: provider.providerId,
+					organizationId: provider.organizationId ?? null,
+				},
+				providerReference,
+			},
+			{ database },
+		);
+	} catch {
+		try {
+			logger.error("SSO provider mutation guard rejected the mutation");
+		} catch {
+			// A custom logger must not change the stable conflict response.
+		}
+		throw new APIError("CONFLICT", {
+			code: "SSO_PROVIDER_MUTATION_REJECTED",
+			message: "SSO provider mutation is not allowed",
+		});
+	}
+}
+
+async function assertProviderMutationGuardCapabilities(
+	options: SSOOptions | undefined,
+	adapter: AuthContext["adapter"],
+): Promise<void> {
+	if (!options?.guardProviderMutation) return;
+	assertSSONativeTransactionSupport(adapter, {
+		code: "SSO_PROVIDER_MUTATION_GUARD_REQUIRES_NATIVE_TRANSACTIONS",
+		message:
+			"SSO provider mutation guards require a database adapter with native transaction support",
+	});
+	await assertSSOAsyncContextSupport({
+		code: "SSO_PROVIDER_MUTATION_GUARD_REQUIRES_ASYNC_CONTEXT",
+		message:
+			"SSO provider mutation guards require database transaction async context support",
 	});
 }
 
@@ -210,10 +285,10 @@ export async function lockSSOProviderForAccountLink(
 	if (typeof provider.id !== "string") {
 		return;
 	}
-	const lockedProvider = await lockSSOProviderRow(
-		ctx.context.adapter,
-		provider.providerId,
-	);
+	const lockedProvider = await lockSSOProviderRow(ctx.context, {
+		id: provider.id,
+		providerId: provider.providerId,
+	});
 	if (!lockedProvider) {
 		throw new APIError("CONFLICT", {
 			code: "SSO_PROVIDER_CHANGED",
@@ -726,22 +801,25 @@ export const updateSSOProvider = (options: SSOOptions) => {
 				});
 			}
 
-			await checkProviderAccess(ctx, providerId);
+			const authorizedProvider = await checkProviderAccess(ctx, providerId);
+			await assertProviderMutationGuardCapabilities(
+				options,
+				ctx.context.adapter,
+			);
 
 			const fullProvider = await runWithTransaction(
 				ctx.context.adapter,
 				async () => {
 					const trx = await getCurrentAdapter(ctx.context.adapter);
-					const existingProvider = await lockSSOProviderRow(
-						ctx.context.adapter,
+					const existingProvider = await lockSSOProviderRow(ctx.context, {
+						id: authorizedProvider.id,
 						providerId,
-					);
+					});
 					if (!existingProvider) {
 						throw new APIError("NOT_FOUND", {
 							message: "Provider not found",
 						});
 					}
-
 					const updateData: Partial<SSOProviderRecord> = {
 						...additionalFields,
 					};
@@ -875,6 +953,17 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						updateData.oidcConfig = JSON.stringify(updatedOidcConfig);
 					}
 
+					await guardSSOProviderMutation(
+						options,
+						{
+							action: "update",
+							isAuthenticationBoundaryChange: providerIdentityBoundaryChanged,
+						},
+						existingProvider,
+						trx,
+						ctx.context.logger,
+					);
+
 					if (providerIdentityBoundaryChanged) {
 						const linkedAccount = await trx.findOne<{ id: string }>({
 							model: "account",
@@ -918,7 +1007,7 @@ export const updateSSOProvider = (options: SSOOptions) => {
 	);
 };
 
-export const deleteSSOProvider = () => {
+export const deleteSSOProvider = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/delete-provider",
 		{
@@ -949,17 +1038,40 @@ export const deleteSSOProvider = () => {
 		async (ctx) => {
 			const { providerId } = ctx.body;
 
-			await checkProviderAccess(ctx, providerId);
+			const authorizedProvider = await checkProviderAccess(ctx, providerId);
+			await assertProviderMutationGuardCapabilities(
+				options,
+				ctx.context.adapter,
+			);
 
 			await runWithTransaction(ctx.context.adapter, async () => {
 				const trx = await getCurrentAdapter(ctx.context.adapter);
+				const existingProvider = await lockSSOProviderRow(ctx.context, {
+					id: authorizedProvider.id,
+					providerId,
+				});
+				if (!existingProvider) {
+					throw new APIError("NOT_FOUND", {
+						message: "Provider not found",
+					});
+				}
+				await guardSSOProviderMutation(
+					options,
+					{ action: "delete" },
+					existingProvider,
+					trx,
+					ctx.context.logger,
+				);
 				await trx.deleteMany({
 					model: "account",
 					where: [{ field: "providerId", value: providerId }],
 				});
 				await trx.delete({
 					model: "ssoProvider",
-					where: [{ field: "providerId", value: providerId }],
+					where: [
+						{ field: "id", value: existingProvider.id },
+						{ field: "providerId", value: providerId },
+					],
 				});
 			});
 
