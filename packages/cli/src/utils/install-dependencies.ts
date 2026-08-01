@@ -89,7 +89,8 @@ export function installDependencies({
 		exec(command, { cwd }, (error, stdout, stderr) => {
 			if (error) {
 				const message =
-					[stderr, stdout].filter(Boolean).join("\n").trim() ||
+					(stderr || "").trim() ||
+					(stdout || "").trim() ||
 					error.message ||
 					"Failed to install dependencies";
 				reject(new Error(message));

@@ -337,6 +337,26 @@ describe("installDependencies", () => {
 	);
 
 	testWithTmpDir(
+		"should prefer stderr over stdout on exec error",
+		async ({ tmp }) => {
+			const execError = Object.assign(new Error("Command failed"), { code: 1 });
+			mockExec.mockImplementation((_cmd, _opts, callback) => {
+				if (callback) {
+					callback(execError, "progress output", "actual error");
+				}
+				return {} as ReturnType<typeof exec>;
+			});
+
+			const promise = installDependencies({
+				dependencies: "nonexistent-package",
+				packageManager: "npm",
+				cwd: tmp,
+			});
+			await expect(promise).rejects.toThrow("actual error");
+		},
+	);
+
+	testWithTmpDir(
 		"should reject with stderr message on exec error",
 		async ({ tmp }) => {
 			const execError = Object.assign(new Error("Command failed"), { code: 1 });
