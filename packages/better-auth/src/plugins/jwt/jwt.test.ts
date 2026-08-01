@@ -1,8 +1,13 @@
+import { DatabaseSync } from "node:sqlite";
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import { runWithTransaction } from "@better-auth/core/context";
+import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import type { JSONWebKeySet } from "jose";
 import { createLocalJWKSet, jwtVerify } from "jose";
 import { describe, expect, expectTypeOf, it } from "vitest";
+import { betterAuth } from "../../auth/full";
 import { createAuthClient } from "../../client";
+import { getMigrations } from "../../db/get-migration";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { inferAdditionalFields } from "../additional-fields/client";
 import { jwt } from ".";
@@ -780,6 +785,47 @@ describe("jwt - custom jwksPath", async () => {
 		// Verify old /jwks endpoint is not found
 		const oldJwks = await client.$fetch<JSONWebKeySet>("/jwks");
 		expect(oldJwks.error?.status).toBe(404);
+	});
+});
+
+describe("jwt - JWKS minting inside an active transaction", async () => {
+	it("mints the first signing key through the transaction-scoped adapter instead of deadlocking on the connection", async () => {
+		const auth = betterAuth({
+			baseURL: "http://localhost:3000",
+			secret: "better-auth.secret",
+			database: {
+				dialect: new NodeSqliteDialect({
+					database: new DatabaseSync(":memory:"),
+				}),
+				type: "sqlite",
+				transaction: true,
+			},
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [jwt()],
+		});
+
+		const { runMigrations } = await getMigrations(auth.options);
+		await runMigrations();
+
+		const signUpResult = await auth.api.signUpEmail({
+			body: {
+				email: "transactional-jwks@example.com",
+				password: "password123",
+				name: "Transactional JWKS User",
+			},
+			returnHeaders: true,
+		});
+		const headers = new Headers();
+		headers.set("cookie", signUpResult.headers.getSetCookie()[0]!);
+
+		const ctx = await auth.$context;
+		const token = await runWithTransaction(ctx.adapter, () =>
+			auth.api.getToken({ headers }),
+		);
+
+		expect(token.token).toEqual(expect.any(String));
 	});
 });
 
