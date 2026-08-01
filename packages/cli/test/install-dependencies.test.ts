@@ -296,6 +296,47 @@ describe("installDependencies", () => {
 	});
 
 	testWithTmpDir(
+		"should skip exec when dependencies array is empty",
+		async ({ tmp }) => {
+			const result = await installDependencies({
+				dependencies: [],
+				packageManager: "pnpm",
+				cwd: tmp,
+				type: "dev",
+			});
+
+			expect(result).toBe(true);
+			expect(mockExec).not.toHaveBeenCalled();
+		},
+	);
+
+	testWithTmpDir(
+		"should reject with stdout when stderr is empty",
+		async ({ tmp }) => {
+			const execError = Object.assign(new Error("Command failed"), { code: 1 });
+			mockExec.mockImplementation((_cmd, _opts, callback) => {
+				if (callback) {
+					callback(
+						execError,
+						"ERR_PNPM_MISSING_PACKAGE_NAME  `pnpm add` requires the package name",
+						"",
+					);
+				}
+				return {} as ReturnType<typeof exec>;
+			});
+
+			const promise = installDependencies({
+				dependencies: "nonexistent-package",
+				packageManager: "pnpm",
+				cwd: tmp,
+			});
+			await expect(promise).rejects.toThrow(
+				"ERR_PNPM_MISSING_PACKAGE_NAME  `pnpm add` requires the package name",
+			);
+		},
+	);
+
+	testWithTmpDir(
 		"should reject with stderr message on exec error",
 		async ({ tmp }) => {
 			const execError = Object.assign(new Error("Command failed"), { code: 1 });
