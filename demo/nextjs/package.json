@@ -7,13 +7,12 @@
   "scripts": {
     "dev": "next dev",
     "dev:secure": "next dev --experimental-https",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "git clean -xdf .next && next typegen && tsc --noEmit --incremental false",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"
   },
   "dependencies": {
-    "@better-auth/cimd": "link:../../packages/cimd",
     "@better-auth/core": "link:../../packages/core",
     "@better-auth/electron": "link:../../packages/electron",
     "@better-auth/infra": "^0.3.5",
@@ -26,7 +25,7 @@
     "@better-auth/stripe": "link:../../packages/stripe",
     "@hookform/resolvers": "^5.2.2",
     "@libsql/kysely-libsql": "^0.4.1",
-    "@modelcontextprotocol/sdk": "1.26.0",
+    "@modelcontextprotocol/server": "2.0.0",
     "@number-flow/react": "^0.6.0",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -72,7 +71,6 @@
     "jose": "^6.2.3",
     "kysely": "0.28.17",
     "lucide-react": "^0.575.0",
-    "mcp-handler": "^1.1.0",
     "mysql2": "^3.18.2",
     "next": "^16.2.6",
     "next-themes": "^0.4.6",

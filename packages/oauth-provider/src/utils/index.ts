@@ -65,23 +65,27 @@ export function parseBearerToken(
 	return credentials;
 }
 
-class TTLCache<K, V extends { expiresAt?: Date }> {
-	private cache = new Map<K, V>();
-	constructor() {}
+interface TTLCache<K, V> {
+	get(key: K): V | undefined;
+	set(key: K, value: V): void;
+}
 
-	set(key: K, value: V) {
-		this.cache.set(key, value);
-	}
-
-	get(key: K): V | undefined {
-		const entry = this.cache.get(key);
-		if (!entry) return undefined;
-		if (entry.expiresAt && entry.expiresAt < new Date()) {
-			this.cache.delete(key);
-			return undefined;
-		}
-		return entry;
-	}
+function createTTLCache<K, V extends { expiresAt?: Date }>(): TTLCache<K, V> {
+	const cache = new Map<K, V>();
+	return {
+		get(key) {
+			const entry = cache.get(key);
+			if (!entry) return undefined;
+			if (entry.expiresAt && entry.expiresAt < new Date()) {
+				cache.delete(key);
+				return undefined;
+			}
+			return entry;
+		},
+		set(key, value) {
+			cache.set(key, value);
+		},
+	};
 }
 
 /**
@@ -202,7 +206,20 @@ export function toAudienceClaim(
 	return audience.length === 1 ? audience.at(0) : audience;
 }
 
-const cachedTrustedClients = new TTLCache<string, SchemaClient<Scope[]>>();
+const trustedClientCaches = new WeakMap<
+	OAuthOptions<Scope[]>,
+	TTLCache<string, SchemaClient<Scope[]>>
+>();
+
+function getTrustedClientCache(
+	options: OAuthOptions<Scope[]>,
+): TTLCache<string, SchemaClient<Scope[]>> {
+	const existingCache = trustedClientCaches.get(options);
+	if (existingCache) return existingCache;
+	const cache = createTTLCache<string, SchemaClient<Scope[]>>();
+	trustedClientCaches.set(options, cache);
+	return cache;
+}
 
 export async function verifyOAuthQueryParams(
 	oauth_query: string,
@@ -233,8 +250,9 @@ export async function getClient(
 	options: OAuthOptions<Scope[]>,
 	clientId: string,
 ) {
-	const trustedClient = cachedTrustedClients.get(clientId);
-	if (trustedClient) {
+	const trustedClientCache = getTrustedClientCache(options);
+	const trustedClient = trustedClientCache.get(clientId);
+	if (trustedClient && !trustedClient.clientDiscoveryId) {
 		return Object.assign({}, trustedClient);
 	}
 
@@ -244,17 +262,28 @@ export async function getClient(
 	});
 
 	const discoveries = getClientDiscoveries(options);
-	for (const discovery of discoveries) {
-		if (!discovery.matches(clientId)) continue;
-		const resolved = await discovery.resolve(ctx, clientId, dbClient);
-		if (resolved) {
-			dbClient = resolved;
-			break;
+	if (dbClient?.clientDiscoveryId) {
+		const clientDiscoveryId = dbClient.clientDiscoveryId;
+		const discovery = discoveries.find(
+			(candidate) => candidate.id === clientDiscoveryId,
+		);
+		if (!discovery?.matches(clientId)) return null;
+		dbClient = await discovery.resolve(ctx, clientId, dbClient);
+		if (!dbClient) return null;
+	} else if (dbClient) {
+		if (options.cachedTrustedClients?.has(clientId)) {
+			trustedClientCache.set(clientId, Object.assign({}, dbClient));
 		}
-	}
-
-	if (dbClient && options.cachedTrustedClients?.has(clientId)) {
-		cachedTrustedClients.set(clientId, Object.assign({}, dbClient));
+		return dbClient;
+	} else {
+		for (const discovery of discoveries) {
+			if (!discovery.matches(clientId)) continue;
+			const resolved = await discovery.resolve(ctx, clientId, null);
+			if (resolved) {
+				dbClient = resolved;
+				break;
+			}
+		}
 	}
 
 	return dbClient;
@@ -602,8 +631,8 @@ export async function validateClientCredentials(
 
 	// Skip secret checks for pre-verified clients (already authenticated via assertion)
 	if (!preVerified) {
-		// Require secret for confidential clients
-		if (!client.public && !clientSecret) {
+		// Only token_endpoint_auth_method=none identifies a public client.
+		if (client.tokenEndpointAuthMethod !== "none" && !clientSecret) {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "client secret must be provided",
 				error: "invalid_client",
@@ -954,11 +983,7 @@ export function isPKCERequired(
 	request?: AuthorizationPKCEContext,
 ): false | PKCERequirementErrors {
 	// Determine if client is public
-	const isPublicClient =
-		client.tokenEndpointAuthMethod === "none" ||
-		client.type === "native" ||
-		client.type === "user-agent-based" ||
-		client.public === true;
+	const isPublicClient = client.tokenEndpointAuthMethod === "none";
 
 	// PKCE always required for public clients
 	if (isPublicClient) {

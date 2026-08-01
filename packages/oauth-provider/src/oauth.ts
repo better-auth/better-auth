@@ -153,6 +153,30 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		}
 	}
 
+	const configuredResourceIdentifiers = new Set(
+		(options.resources ?? []).map((resource) =>
+			typeof resource === "string" ? resource : resource.identifier,
+		),
+	);
+	for (const [optionName, identifiers] of [
+		[
+			"clientRegistrationDefaultResources",
+			options.clientRegistrationDefaultResources,
+		],
+		[
+			"clientRegistrationAllowedResources",
+			options.clientRegistrationAllowedResources,
+		],
+	] as const) {
+		for (const identifier of identifiers ?? []) {
+			if (!configuredResourceIdentifiers.has(identifier)) {
+				throw new BetterAuthError(
+					`${optionName} resource ${identifier} not found in resources`,
+				);
+			}
+		}
+	}
+
 	// Discovery `claims_supported`: protocol claims that are always present, plus
 	// the standard identity claims whose backing scope is configured. The
 	// identity set is derived from the one claim registry so the advertisement
@@ -1595,15 +1619,20 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														description:
 															"Response types the client may use at the authorization endpoint",
 													},
-													public: {
-														type: "boolean",
-														description:
-															"Whether the client is public as determined by the type",
-													},
-													type: {
+													application_type: {
 														type: "string",
-														description: "Type of the client",
-														enum: ["web", "native", "user-agent-based"],
+														description:
+															"OIDC application type used to classify redirect URI policy",
+														enum: ["web", "native"],
+													},
+													resources: {
+														type: "array",
+														items: {
+															type: "string",
+															format: "uri",
+														},
+														description:
+															"Final resource identifiers linked to the registered client",
 													},
 													disabled: {
 														type: "boolean",
@@ -1652,7 +1681,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			adminUnlinkClientResource:
 				oauthResourceEndpoints.adminUnlinkClientResource(opts),
 		},
-		schema: mergeSchema(schema, opts?.schema),
+		// `mergeSchema` applies overrides in place. Clone the package schema so
+		// one auth instance's custom model/field names cannot leak into another
+		// instance created in the same process.
+		schema: mergeSchema(structuredClone(schema), opts?.schema),
 		rateLimit: [
 			// Token endpoint - critical for preventing credential stuffing
 			...(opts.rateLimit?.token !== false

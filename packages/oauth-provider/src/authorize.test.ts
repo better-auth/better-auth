@@ -241,6 +241,7 @@ describe("oauth authorize - unauthenticated", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -392,11 +393,19 @@ describe("oauth authorize - max_age (OIDC Core 1.0 §3.1.2.1)", async () => {
 	beforeAll(async () => {
 		oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
-			body: { redirect_uris: [redirectUri], skip_consent: true },
+			body: {
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: true,
+			},
 		});
 		oauthClientNeedsConsent = await auth.api.adminCreateOAuthClient({
 			headers,
-			body: { redirect_uris: [redirectUri], skip_consent: false },
+			body: {
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: false,
+			},
 		});
 	});
 
@@ -527,7 +536,11 @@ describe("oauth authorize - acr_values (OIDC Core 1.0 §3.1.2.1)", async () => {
 	beforeAll(async () => {
 		oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
-			body: { redirect_uris: [redirectUri], skip_consent: true },
+			body: {
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: true,
+			},
 		});
 	});
 
@@ -677,6 +690,7 @@ describe("oauth authorize - request_uri resolution", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -870,6 +884,7 @@ describe("oauth authorize - authenticated", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -883,6 +898,7 @@ describe("oauth authorize - authenticated", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: false,
 			},
 		});
@@ -1124,6 +1140,7 @@ describe("oauth authorize - consented resources", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: false,
 			},
 		});
@@ -1171,6 +1188,7 @@ describe("oauth authorize - consented resources", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: false,
 			},
 		});
@@ -1296,6 +1314,7 @@ describe("oauth authorize - consented resources", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: false,
 			},
 		});
@@ -1378,6 +1397,7 @@ describe("oauth authorize - consented resources", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: false,
 			},
 		});

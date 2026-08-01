@@ -223,6 +223,7 @@ describe("oauth userinfo", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
