@@ -214,10 +214,10 @@ describe("database cleanup", async () => {
 			settledBeforeCleanup = requestSettled;
 		} finally {
 			releaseCleanup();
+			deleteMany.mockRestore();
 		}
 
 		await request;
-		deleteMany.mockRestore();
 		expect(settledBeforeCleanup).toBe(false);
 	});
 });
