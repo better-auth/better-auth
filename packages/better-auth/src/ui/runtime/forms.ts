@@ -445,6 +445,15 @@ export function updateBindings(key: string, value: unknown): void {
 			else if ("value" in el)
 				(el as HTMLInputElement).value = value == null ? "" : String(value);
 		});
+	applyConditions();
+}
+
+/**
+ * Evaluate every `data-ba-when` condition against the current binding state.
+ * Runs at bootstrap as well as on each binding change, so server-rendered
+ * conditional blocks resolve before the user interacts with the page.
+ */
+export function applyConditions(): void {
 	document.querySelectorAll<HTMLElement>("[data-ba-when]").forEach((el) => {
 		try {
 			const condition = JSON.parse(el.getAttribute("data-ba-when") || "false");

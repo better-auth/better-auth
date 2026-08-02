@@ -94,6 +94,17 @@ function mergeClassName(tag: string, props: UIProps | undefined) {
 	};
 }
 
+/**
+ * Serialize a `data-ba-*` attribute. Object values are JSON encoded as-is;
+ * `renderAttribute` would otherwise re-prefix them into `data-data-ba-*`.
+ */
+function renderDataAttribute(name: string, value: unknown) {
+	if (value === undefined || value === null) return "";
+	const serialized =
+		typeof value === "object" ? JSON.stringify(value) : String(value);
+	return ` ${escapeHTML(name)}="${escapeHTML(serialized)}"`;
+}
+
 function renderAttributes(component: UIComponent) {
 	const props = mergeClassName(component.tag, component.props);
 	const attributes: string[] = [];
@@ -107,14 +118,18 @@ function renderAttributes(component: UIComponent) {
 		attributes.push(renderAttribute("data-ba-enhanced", true));
 	}
 	if (component.bind) {
-		attributes.push(renderAttribute("data-ba-bind", component.bind));
+		attributes.push(renderDataAttribute("data-ba-bind", component.bind));
 	}
 	if (component.when !== undefined) {
-		attributes.push(renderAttribute("data-ba-when", component.when));
+		attributes.push(renderDataAttribute("data-ba-when", component.when));
+		// A statically false condition must not paint before the runtime loads.
+		if (component.when === false) {
+			attributes.push(" hidden");
+		}
 	}
 	if (component.on) {
 		for (const [event, action] of Object.entries(component.on)) {
-			attributes.push(renderAttribute(`data-ba-on-${event}`, action));
+			attributes.push(renderDataAttribute(`data-ba-on-${event}`, action));
 		}
 	}
 	if (component.tag === "alert" && !props?.role) {

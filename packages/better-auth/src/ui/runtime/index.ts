@@ -17,13 +17,16 @@ import {
 	shouldAttachCaptcha,
 } from "./captcha";
 import {
+	applyConditions,
 	clearFieldError,
 	clearLegacyFormStatus,
 	closeDialog,
 	executeEffects,
 	formToJSON,
+	getBase,
 	getMessage,
 	isValidatableControl,
+	joinPath,
 	openDialog,
 	openDialogs,
 	parseEffects,
@@ -171,6 +174,8 @@ document.querySelectorAll<HTMLElement>("[data-ba-bind]").forEach((el) => {
 	el.addEventListener("change", () => updateBindings(key, read(el)));
 });
 
+applyConditions();
+
 document
 	.querySelectorAll<HTMLFormElement>("form[data-ba-enhanced]")
 	.forEach((form) => {
@@ -297,23 +302,33 @@ document.addEventListener("click", async (event) => {
 	}
 	if (action.type !== "server") return;
 	event.preventDefault();
+	// Server actions are mounted on the UI router, not relative to the page.
 	const response = await fetch(
-		window.location.pathname.replace(/\/$/, "") +
-			"/_ba/action/" +
-			encodeURIComponent(action.id),
+		joinPath(
+			getBase("data-ba-ui-base"),
+			"/_ba/action/" + encodeURIComponent(action.id),
+		),
 		{
 			method: "POST",
+			credentials: "include",
 			headers: { "content-type": "application/json" },
 			body: JSON.stringify({ params: action.params || {} }),
 		},
 	);
-	const effects = await response.json().catch(() => []);
-	await executeEffects(
-		Array.isArray(effects) ? effects : [effects],
-		null,
-		"info",
-		"Completed successfully.",
-	);
+	const payload = await readPayload(response);
+	if (!response.ok) {
+		const message =
+			payload && typeof payload === "object" && payload !== null
+				? String(
+						(payload as Record<string, unknown>).message ??
+							"Something went wrong.",
+					)
+				: "Something went wrong.";
+		showToast("error", message);
+		return;
+	}
+	const effects = Array.isArray(payload) ? payload : payload ? [payload] : [];
+	await executeEffects(effects, null, "info", "Completed successfully.");
 });
 
 document.addEventListener("submit", async (event) => {

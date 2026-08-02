@@ -11,6 +11,8 @@
  * and injects the captcha token header on outgoing form submissions.
  */
 
+import { getBase } from "./forms";
+
 type TurnstileParams = {
 	sitekey: string;
 	callback?: (token: string) => void;
@@ -164,12 +166,41 @@ export function initCaptcha(): void {
 export function shouldAttachCaptcha(actionPath: string): boolean {
 	if (!captchaState.provider) return false;
 	if (captchaState.endpoints.length === 0) return false;
+	return matchesCaptchaEndpoint(
+		captchaState.endpoints,
+		actionPath,
+		getBase("data-ba-api-base"),
+		typeof window === "undefined" ? undefined : window.location.href,
+	);
+}
+
+/**
+ * The captcha plugin declares endpoints relative to the auth API base path
+ * (e.g. `/sign-in/email`), while a form action resolves to the full request
+ * URL (e.g. `https://app.test/api/auth/sign-in/email`). Match against both the
+ * resolved pathname and the pathname with the API base path stripped.
+ */
+export function matchesCaptchaEndpoint(
+	endpoints: string[],
+	actionPath: string,
+	apiBase: string,
+	pageURL?: string | undefined,
+): boolean {
+	const candidates = new Set<string>([actionPath]);
 	try {
-		const url = new URL(actionPath, window.location.href);
-		return captchaState.endpoints.includes(url.pathname);
-	} catch {
-		return captchaState.endpoints.includes(actionPath);
+		const url = new URL(actionPath, pageURL);
+		candidates.add(url.pathname);
+		const basePath = apiBase
+			? new URL(apiBase, pageURL).pathname.replace(/\/+$/, "")
+			: "";
+		if (basePath && url.pathname.startsWith(basePath)) {
+			candidates.add(url.pathname.slice(basePath.length) || "/");
+		}
+	} catch {}
+	for (const candidate of candidates) {
+		if (endpoints.includes(candidate)) return true;
 	}
+	return false;
 }
 
 export function getCaptchaHeader(): { name: string; value: string } | null {
