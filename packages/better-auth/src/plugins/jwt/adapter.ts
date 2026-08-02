@@ -2,11 +2,12 @@ import type {
 	BetterAuthOptions,
 	GenericEndpointContext,
 } from "@better-auth/core";
+import { getCurrentAdapter } from "@better-auth/core/context";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import type { Jwk, JwtOptions } from "./types";
 
 export const getJwksAdapter = (
-	adapter: DBAdapter<BetterAuthOptions>,
+	baseAdapter: DBAdapter<BetterAuthOptions>,
 	options?: JwtOptions,
 ) => {
 	return {
@@ -14,6 +15,7 @@ export const getJwksAdapter = (
 			if (options?.adapter?.getJwks) {
 				return await options.adapter.getJwks(ctx);
 			}
+			const adapter = await getCurrentAdapter(baseAdapter);
 			return await adapter.findMany<Jwk>({
 				model: "jwks",
 			});
@@ -25,6 +27,7 @@ export const getJwksAdapter = (
 					(a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
 				)[0];
 			}
+			const adapter = await getCurrentAdapter(baseAdapter);
 			const keys = await adapter.findMany<Jwk>({
 				model: "jwks",
 			});
@@ -36,6 +39,7 @@ export const getJwksAdapter = (
 			if (options?.adapter?.createJwk) {
 				return await options.adapter.createJwk(webKey, ctx);
 			}
+			const adapter = await getCurrentAdapter(baseAdapter);
 			const jwk = await adapter.create<Omit<Jwk, "id">, Jwk>({
 				model: "jwks",
 				data: {
