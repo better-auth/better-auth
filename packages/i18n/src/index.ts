@@ -66,7 +66,7 @@ function parseAcceptLanguage(header: string | null): string[] {
  */
 export const i18n = <Locales extends string[]>(
 	options: I18nOptions<Locales>,
-) => {
+): BetterAuthPlugin => {
 	const availableLocales = Object.keys(options.translations);
 
 	let defaultLocale: Locales[number];
