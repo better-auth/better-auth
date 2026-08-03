@@ -3120,9 +3120,9 @@ describe("oauth2", async () => {
 				sub: "token-pairwise-sub",
 				oid: "token-stable-oid",
 				tid: "token-tenant-id",
+				email: "token-stable-oid@microsoft-entra-id.placeholder.invalid",
 				emailVerified: false,
 			});
-			expect(userInfo?.email).toBeUndefined();
 			expect(userInfo?.name).toBeUndefined();
 			expect(userInfo?.image).toBeUndefined();
 		});

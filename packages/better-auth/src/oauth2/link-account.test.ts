@@ -2119,7 +2119,7 @@ describe("oauth2 - providers without email", async () => {
 
 	// Preserve existing coverage for custom profile mapping that only augments
 	// optional fields without removing the provider account identifier.
-	describe("with mapProfileToUser synthesizing email", async () => {
+	describe("with mapProfileToUser creating a placeholder email", async () => {
 		const { auth, client, cookieSetter } = await getTestInstance({
 			socialProviders: {
 				discord: {
@@ -2127,7 +2127,7 @@ describe("oauth2 - providers without email", async () => {
 					clientSecret: "test",
 					enabled: true,
 					mapProfileToUser: (profile) => ({
-						email: profile.email ?? `${profile.id}@discord.placeholder.local`,
+						email: profile.email ?? `${profile.id}@discord.placeholder.invalid`,
 					}),
 				},
 			},
@@ -2135,7 +2135,7 @@ describe("oauth2 - providers without email", async () => {
 
 		const ctx = await auth.$context;
 
-		it("signs in a Discord phone-only user with a synthesized email", async () => {
+		it("signs in a Discord phone-only user with a placeholder email", async () => {
 			const discordId = "920138789012345001";
 			mockDiscordToken(discordId, "phoneonly");
 
@@ -2163,13 +2163,13 @@ describe("oauth2 - providers without email", async () => {
 
 			expect(redirectLocation).not.toContain("error");
 
-			const synthesizedEmail = `${discordId}@discord.placeholder.local`;
+			const placeholderEmail = `${discordId}@discord.placeholder.invalid`;
 			const user = await ctx.adapter.findOne<User>({
 				model: "user",
-				where: [{ field: "email", value: synthesizedEmail }],
+				where: [{ field: "email", value: placeholderEmail }],
 			});
 			expect(user).toBeTruthy();
-			expect(user?.email).toBe(synthesizedEmail);
+			expect(user?.email).toBe(placeholderEmail);
 
 			const accounts = await ctx.adapter.findMany<{
 				providerId: string;
