@@ -20,7 +20,7 @@ export const user = mysqlTable("user", {
     .defaultNow()
     .$onUpdate(() => /* @__PURE__ */ new Date())
     .notNull(),
-  status: mysqlEnum(["active", "inactive", "pending"]),
+  status: mysqlEnum("status", ["active", "inactive", "pending"]),
 });
 
 export const session = mysqlTable(
