@@ -56,4 +56,15 @@ describe("init (with Kysely)", () => {
 			`Invalid base URL: ws://localhost:6969. URL must include 'http://' or 'https://'`,
 		);
 	});
+
+	it("should support native adapter transactions when given a raw database instance", async () => {
+		const res = await init({
+			baseURL: "http://localhost:3000",
+			database,
+		});
+
+		expect(typeof res.adapter.options?.adapterConfig?.transaction).toBe(
+			"function",
+		);
+	});
 });
