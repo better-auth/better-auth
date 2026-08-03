@@ -1,4 +1,5 @@
 import type { DBAdapter, DBTransactionAdapter } from "better-auth";
+import { BetterAuthError } from "better-auth";
 import type { SCIMConnectionBinding } from "./persistence";
 import { createScopedKey } from "./resource-key";
 import { createSCIMError } from "./scim-error";
@@ -6,6 +7,68 @@ import { createSCIMError } from "./scim-error";
 /** Creates the stable lookup key for a code-defined connection id. */
 export function createSCIMConnectionKey(connectionId: string): string {
 	return createScopedKey(["scim-connection", connectionId]);
+}
+
+/**
+ * Finds a connection's persisted binding, or creates it with the caller's
+ * initial lifecycle fields. Concurrent creators race on the unique
+ * connectionKey; the loser re-reads and validates the winner's row instead
+ * of failing.
+ */
+export async function findOrCreateSCIMConnectionBinding(
+	database: Pick<DBAdapter, "create" | "findOne">,
+	connectionId: string,
+	provisioningDomainId: string | undefined,
+	now: Date,
+	initialFields: Pick<SCIMConnectionBinding, "decommissionStatus"> &
+		Partial<
+			Pick<
+				SCIMConnectionBinding,
+				"decommissionedAt" | "decommissionCompletedAt"
+			>
+		>,
+	assertBinding: (binding: SCIMConnectionBinding) => void,
+): Promise<SCIMConnectionBinding> {
+	const connectionKey = createSCIMConnectionKey(connectionId);
+	const findBinding = () =>
+		database.findOne<SCIMConnectionBinding>({
+			model: "scimConnectionBinding",
+			where: [{ field: "connectionKey", value: connectionKey }],
+		});
+	const existing = await findBinding();
+	if (existing) {
+		assertBinding(existing);
+		return existing;
+	}
+	if (!provisioningDomainId) {
+		throw new BetterAuthError(
+			`SCIM connection "${connectionId}" has no persisted binding.`,
+		);
+	}
+
+	try {
+		return await database.create<
+			Omit<SCIMConnectionBinding, "id">,
+			SCIMConnectionBinding
+		>({
+			model: "scimConnectionBinding",
+			data: {
+				connectionId,
+				connectionKey,
+				provisioningDomainId,
+				createdAt: now,
+				decommissionReconciledUserCount: 0,
+				decommissionBatchCount: 0,
+				decommissionRevision: 0,
+				...initialFields,
+			},
+		});
+	} catch (error) {
+		const concurrentlyCreated = await findBinding();
+		if (!concurrentlyCreated) throw error;
+		assertBinding(concurrentlyCreated);
+		return concurrentlyCreated;
+	}
 }
 
 /** Finds connections that no longer participate in lifecycle or access state. */

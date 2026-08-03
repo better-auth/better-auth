@@ -8,14 +8,17 @@ import { authClient } from "@/lib/auth-client";
 interface EmployeeSignInProps {
 	buttonLabel?: string;
 	callbackURL: string;
-	email: string;
-	loginHint: string;
+	/**
+	 * The exact employee link's portal token. Carried to the identity
+	 * provider as login_hint so a second tab overwriting the shared portal
+	 * cookie cannot redirect this sign-in to a different employee.
+	 */
+	loginHint?: string | null;
 }
 
 export function EmployeeSignIn({
 	buttonLabel = "Continue with Acme SSO",
 	callbackURL,
-	email,
 	loginHint,
 }: EmployeeSignInProps) {
 	const [isRedirecting, setIsRedirecting] = useState(false);
@@ -30,8 +33,7 @@ export function EmployeeSignIn({
 				providerId: "scim-demo-sso",
 				callbackURL,
 				errorCallbackURL: callbackURL,
-				email,
-				loginHint,
+				...(loginHint ? { loginHint } : {}),
 			});
 			if (result.error) {
 				setError("We couldn’t start Acme SSO. Try again.");

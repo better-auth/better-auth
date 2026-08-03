@@ -1,5 +1,6 @@
 import { ArrowLeft, Building2 } from "lucide-react";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -10,18 +11,21 @@ import {
 	CardDescription,
 	CardHeader,
 } from "@/components/ui/card";
-import { isSCIMDemoEnabled } from "@/lib/scim-demo";
+import { auth } from "@/lib/auth";
+import { isSCIMDemoEmployeePortalEnabled } from "@/lib/scim-demo";
+import { resolveSCIMDemoEmployeePortalIdentityForFlow } from "@/lib/scim-demo-employee";
 import type { SCIMDemoOIDCSearchParams } from "@/lib/scim-demo-oidc";
 import {
 	getSCIMDemoOIDCAuthorizationFormFields,
 	getSCIMDemoOIDCAuthorizationView,
+	getSCIMDemoOIDCLoginHint,
 } from "@/lib/scim-demo-oidc";
-import type { IdentityProviderAuthorizationField } from "./account-picker";
-import { AccountPicker } from "./account-picker";
+import type { IdentityProviderAuthorizationField } from "./account-confirmation";
+import { AccountConfirmation } from "./account-confirmation";
 
 export const metadata: Metadata = {
 	title: "Acme Identity",
-	description: "Choose an Acme employee account for the SCIM SSO demo.",
+	description: "Confirm the provisioned Acme identity for the SCIM SSO demo.",
 };
 
 interface IdentityProviderPageProps {
@@ -33,9 +37,35 @@ interface IdentityProviderPageProps {
 export default async function IdentityProviderPage({
 	searchParams,
 }: IdentityProviderPageProps) {
-	if (!isSCIMDemoEnabled()) notFound();
+	if (!isSCIMDemoEmployeePortalEnabled()) notFound();
 	const parameters: SCIMDemoOIDCSearchParams = await searchParams;
-	const view = await getSCIMDemoOIDCAuthorizationView(parameters);
+	const [requestHeaders, context] = await Promise.all([
+		headers(),
+		auth.$context,
+	]);
+	const identity = await resolveSCIMDemoEmployeePortalIdentityForFlow(
+		context.adapter,
+		context.internalAdapter,
+		requestHeaders.get("cookie"),
+		getSCIMDemoOIDCLoginHint(parameters),
+	);
+	if (!identity) {
+		return (
+			<main className="flex min-h-[70vh] items-center justify-center px-4 py-10">
+				<Card className="w-full max-w-md rounded-none">
+					<CardHeader>
+						<h1 className="text-2xl font-semibold tracking-tight">
+							Sign-in unavailable
+						</h1>
+						<CardDescription>
+							The employee portal session is invalid or expired.
+						</CardDescription>
+					</CardHeader>
+				</Card>
+			</main>
+		);
+	}
+	const view = await getSCIMDemoOIDCAuthorizationView(parameters, identity);
 
 	if (view.status === "invalid") {
 		return (
@@ -70,17 +100,14 @@ export default async function IdentityProviderPage({
 		...Object.entries(getSCIMDemoOIDCAuthorizationFormFields(view.request)).map(
 			([name, value]) => ({ name, value }),
 		),
-		{ name: "workspace_id", value: view.loginHintUser.workspaceId },
 	];
-	const accounts = [
-		{
-			displayName: view.loginHintUser.displayName,
-			email: view.loginHintUser.email,
-			givenName: view.loginHintUser.givenName,
-			initials: view.loginHintUser.initials,
-			userKey: view.loginHintUser.userKey,
-		},
-	];
+	const account = {
+		displayName: view.employee.displayName,
+		email: view.employee.email,
+		givenName: view.employee.givenName,
+		initials: view.employee.initials,
+		userKey: view.employee.userKey,
+	};
 
 	return (
 		<main className="flex min-h-[70vh] items-center justify-center px-4 py-10">
@@ -96,18 +123,17 @@ export default async function IdentityProviderPage({
 						Sign in with Acme Identity
 					</h1>
 					<CardDescription>
-						Choose the employee who is signing in to the Better Auth demo
+						Confirm the provisioned employee identity for this sign-in
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<h2 className="mb-2 text-sm font-semibold">Choose an account</h2>
+					<h2 className="mb-2 text-sm font-semibold">Provisioned account</h2>
 					<p className="mb-5 text-sm leading-relaxed text-muted-foreground">
-						Acme Identity represents the company identity provider. Choose an
-						account to complete its authentication step and return to Better
-						Auth.
+						Acme Identity represents the company identity provider. This exact
+						directory account is bound to the employee portal session.
 					</p>
-					<AccountPicker
-						accounts={accounts}
+					<AccountConfirmation
+						account={account}
 						authorizationFields={authorizationFields}
 					/>
 				</CardContent>

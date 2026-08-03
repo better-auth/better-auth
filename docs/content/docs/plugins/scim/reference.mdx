@@ -7,13 +7,14 @@ This reference describes the SCIM operations and configuration supported by `@be
 
 ## Plugin options
 
-| Option           | Type                               | Description                                                          |
-| ---------------- | ---------------------------------- | -------------------------------------------------------------------- |
-| `connections`    | `readonly SCIMConnectionOptions[]` | Required. Configures one or more provisioning connections.           |
-| `authentication` | `SCIMAuthenticationOptions`        | Optional. Verifies externally issued OAuth bearer access tokens.     |
-| `identity`       | `SCIMIdentity`                     | Optional. Links existing users and applies global lifecycle state.   |
-| `projection`     | `SCIMProjection`                   | Optional. Maps Groups to roles and applies application access state. |
-| `compatibility`  | `SCIMCompatibilityOptions`         | Optional. Enables narrow, provider-specific HTTP ingress shapes.     |
+| Option               | Type                               | Description                                                                                                                                         |
+| -------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `connections`        | `readonly SCIMConnectionOptions[]` | Required. Configures zero or more code-defined connections. The list may be empty when the bearer verifier or managed catalog resolves connections. |
+| `authentication`     | `SCIMAuthenticationOptions`        | Optional. Verifies bearer tokens and can resolve application-owned connections.                                                                     |
+| `managedConnections` | `SCIMManagedConnectionOptions`     | Optional. Enables the SCIM-owned persisted connection and credential catalog and its trusted server APIs.                                           |
+| `identity`           | `SCIMIdentity`                     | Optional. Links existing users and applies global lifecycle state.                                                                                  |
+| `projection`         | `SCIMProjection`                   | Optional. Maps Groups to roles and applies application access state.                                                                                |
+| `compatibility`      | `SCIMCompatibilityOptions`         | Optional. Enables narrow, provider-specific HTTP ingress shapes.                                                                                    |
 
 ### Connection options
 
@@ -37,9 +38,9 @@ A connection owns its Users, Groups, and memberships. Changing `provisioningDoma
 
 Store tokens in a secret manager, use a different value for each connection, and require HTTPS in production.
 
-### OAuth bearer verification
+### Bearer verification
 
-Use `authentication.verifyBearerToken` when an authorization server issues access tokens through OAuth client credentials or another OAuth grant. The verifier validates the token and returns the connection, credential, and operation scopes represented by its claims.
+Use `authentication.verifyBearerToken` when an authorization server issues access tokens through OAuth client credentials or another OAuth grant. The verifier validates the token and returns the configured connection ID, credential ID, and operation scopes represented by its claims. Existing 1-argument verifier callbacks remain supported.
 
 ```ts title="auth.ts"
 scim({
@@ -61,6 +62,113 @@ scim({
 ```
 
 The plugin does not issue access tokens or run an OAuth token endpoint. The application-owned verifier must validate the signature or introspection response, issuer, audience, expiry, and client identity before returning a principal.
+
+The callback returns the strict `SCIMBearerTokenVerification` union. `SCIMDeclaredConnectionVerificationResult` selects a connection from `connections` by ID, while `SCIMResolvedConnectionVerificationResult` carries an application-resolved `SCIMConnection`; a result cannot contain both `connectionId` and `connection`.
+
+The verifier can instead resolve a connection from an application-owned database at request time. This path permits an empty `connections` list and returns the connection atomically with the verified credential, so the plugin does not perform a second connection lookup.
+
+```ts title="auth.ts"
+scim({
+  connections: [],
+  authentication: {
+    async verifyBearerToken({ token }, { database }) {
+      const credential = await database.findOne<EnterpriseSCIMCredentialRecord>({
+        model: "enterpriseSCIMCredential",
+        where: [{ field: "tokenHash", value: await hashSCIMToken(token) }],
+      });
+      if (
+        !credential ||
+        credential.revokedAt ||
+        credential.expiresAt <= new Date()
+      ) {
+        return null;
+      }
+
+      await database.update({
+        model: "enterpriseSCIMCredential",
+        where: [{ field: "id", value: credential.id }],
+        update: { lastAuthenticatedAt: new Date() },
+      });
+      return {
+        connection: {
+          id: credential.connectionId,
+          provisioningDomainId: credential.provisioningDomainId,
+        },
+        credentialId: credential.id,
+        scopes: credential.scopes,
+        expiresAt: credential.expiresAt,
+      };
+    },
+  },
+});
+```
+
+Register the application-owned credential model through your own server plugin schema. Use high-entropy credentials with finite expiry, persist only a cryptographic hash or keyed digest, and never store the raw token. The verifier context exposes only `database.findOne` and `database.update`; this low-level path does not require the SCIM-owned catalog.
+
+Dynamic connection IDs must be opaque, globally unique, never reused, and disjoint from code-defined connection IDs. The returned connection ID and provisioning domain ID must be trimmed, nonempty strings no longer than 255 characters. The plugin rejects malformed or ambiguous results with `401 Unauthorized`, rejects a dynamic ID that collides with a configured ID, and preserves the first durable connection-to-domain binding. A verifier infrastructure exception remains a server error instead of being reported as an invalid credential.
+
+Credential revocation is prospective. The verifier can deny every request that begins after revocation, but a request that authenticated before the control-plane update may finish through the SCIM transaction and final decommission fence. Decommission the connection when its resource and projection effects must become terminal.
+
+### Managed connection catalog
+
+Use `managedConnections` when Better Auth should persist runtime tenant connections and issue their bearer credentials. This mode needs no code-defined connection and does not add fields to the Better Auth User, Organization, Account, or SSO models.
+
+```ts title="auth.ts"
+scim({
+  connections: [],
+  managedConnections: {
+    credentialHashSecret: process.env.SCIM_CREDENTIAL_HASH_SECRET!,
+    maxActiveCredentials: 5,
+    lastUsedWriteIntervalSeconds: 300,
+  },
+});
+```
+
+`credentialHashSecret` is an independent HMAC secret with at least 32 characters. Keep it in a server secret manager and rotate it only through an application migration that understands the stored hash version. `maxActiveCredentials` is an integer from 1 through 100 and defaults to 5. `lastUsedWriteIntervalSeconds` is a nonnegative integer and defaults to 300.
+
+The catalog generates opaque connection and credential IDs in reserved `ba_scim_connection_` and `ba_scim_credential_` namespaces. A generated token contains its credential ID and a high-entropy secret. Better Auth stores only a versioned HMAC-SHA256 digest, returns the raw token only from create or rotate, compares it in constant time, enforces its exact scopes and expiry, and throttles persisted `lastUsedAt` writes. Code-defined credentials are checked first. A token in the managed credential namespace that does not validate against the catalog never falls through to `authentication.verifyBearerToken`.
+
+All catalog methods are server-only `auth.api` methods. They have no HTTP path, are omitted from OpenAPI, and are not exposed through a browser client:
+
+```ts title="organization-scim-service.ts"
+// Authenticate the caller and prove that they can manage this tenant first.
+await requireOrganizationSCIMAdmin(session.user.id, organizationId);
+
+const created = await auth.api.createSCIMManagedConnection({
+  body: {
+    creationRequestId: crypto.randomUUID(),
+    provisioningDomainId: organizationId,
+    actorId: session.user.id,
+    scopes: [
+      "scim.users.read",
+      "scim.users.write",
+      "scim.groups.read",
+      "scim.groups.write",
+    ],
+    expiresAt: new Date("2027-01-01T00:00:00.000Z"),
+  },
+});
+
+// Display created.token once, then discard it.
+```
+
+`creationRequestId` is a required, globally unique opaque value between 16 and 255 characters after trimming. Generate it once for the logical application-side creation reservation and keep it stable while recovering that reservation. Better Auth persists it atomically with the connection and returns it on create, list, and get. It is an immutable ownership correlation, not an idempotency key: reusing it returns `409 Conflict` with code `SCIM_MANAGED_CREATION_REQUEST_ID_CONFLICT` and never replays the original token. Start a genuinely new logical creation attempt with a new value.
+
+`actorId` is audit attribution, not authorization. An application route that wraps these methods must authenticate the administrator, authorize the exact `provisioningDomainId`, enforce its normal CSRF or origin policy, avoid logging the response, and send `Cache-Control: no-store` whenever it returns a raw token.
+
+| Server method                       | Required body                                                                 | Result                                                                                         |
+| ----------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `createSCIMManagedConnection`       | `creationRequestId`, `provisioningDomainId`, `actorId`, `scopes`, `expiresAt` | Creates a connection and initial credential; returns the raw token once.                       |
+| `listSCIMManagedConnections`        | `provisioningDomainId`                                                        | Lists only connections in the qualified provisioning domain.                                   |
+| `getSCIMManagedConnection`          | `connectionId`, `provisioningDomainId`                                        | Returns connection and credential metadata without secrets.                                    |
+| `rotateSCIMManagedCredential`       | `connectionId`, `provisioningDomainId`, `actorId`, `scopes`, `expiresAt`      | Adds an overlapping credential atomically and returns its raw token once.                      |
+| `revokeSCIMManagedCredential`       | `connectionId`, `provisioningDomainId`, `credentialId`, `actorId`             | Immediately rejects future requests that use that credential.                                  |
+| `listSCIMManagedConnectionEvents`   | `connectionId`, `provisioningDomainId`                                        | Returns the latest 100 connection and credential lifecycle events in sequence order.           |
+| `decommissionSCIMManagedConnection` | `connectionId`, `provisioningDomainId`, `actorId`                             | Disables credentials, runs canonical reconciliation, and permanently completes the connection. |
+
+Every item lookup is qualified by both the opaque connection ID and provisioning domain. A connection from another tenant and an unknown connection produce the same not-found response. Credential creation, rotation, revocation, and decommissioning use transaction fences; lowering the active-credential limit cannot leave a rotation above the new cap. Expired credentials free a slot, overlapping live credentials remain valid until expiry or explicit revocation, and decommissioning disables all credentials before it reconciles canonical lifecycle and projection state.
+
+Decommissioning is irreversible. If reconciliation is interrupted, the managed connection remains `decommissioning` and its credentials remain unusable; calling `decommissionSCIMManagedConnection` again resumes the leased canonical saga and eventually records `decommissioned`. The catalog never hard-deletes or re-enables the connection.
 
 | Scope               | Operations                                |
 | ------------------- | ----------------------------------------- |
@@ -370,13 +478,20 @@ This method requires `projection.reconcileUser` to be configured. It returns `pr
 
 ```ts
 const result = await auth.api.decommissionSCIMConnection({
-  body: { connectionId: "workforce-acme" },
+  body: {
+    connectionId: "workforce-acme",
+    provisioningDomainId: "workspace-acme",
+  },
 });
 ```
 
 Rejects the connection's credentials and removes its contribution from lifecycle and access state. If the result is `reconciling`, wait for `retryAfter` and call the method again until it returns `complete`.
 
-The connection must have authenticated at least once so a binding exists. Remove a never-used connection from configuration directly. Decommissioning is irreversible, and `retryAfter` is a `Date` indicating the earliest retry time.
+`provisioningDomainId` is optional for a connection that already has a binding. Supply it when retiring an application-resolved connection that may never have authenticated: the plugin atomically retains a terminal connection-to-domain binding, so the ID can never be reused or reassigned. If a binding already exists, the supplied domain must match it exactly. Omitting the domain preserves the previous behavior and requires an existing binding.
+
+For an application-owned connection catalog, first persist a `decommissioning` state and disable every credential, then call this method with both immutable IDs outside the application transaction. Persist the catalog's terminal state only after this method returns `complete`. A failed or interrupted call can be retried without re-enabling credentials or duplicating core reconciliation.
+
+Decommissioning is irreversible, and `retryAfter` is a `Date` indicating the earliest retry time. Canonical Users, Groups, memberships, identity tombstones, and the retained binding remain stored; the operation removes the connection's lifecycle and access contribution rather than deleting its directory history.
 
 ## Unsupported features
 
@@ -389,7 +504,7 @@ The plugin does not support the following SCIM features:
 * Bulk requests, POST-based search, `/Me`, ETags, cursors, or sorting
 * Operators other than equality and logical `and`
 * A built-in OAuth token endpoint, Basic authentication, or mutual TLS
-* Dynamic connection management, audit events, or webhooks
+* HTTP management endpoints, SCIM request audit records, or webhooks
 
 The package is server-only and does not export a client plugin. SCIM provisioning does not configure user authentication.
 
@@ -407,9 +522,25 @@ The plugin adds the following models. Use `auth generate` to create the exact sc
 | `scimIdentityTombstone` | Preserves a stable `externalId` link after a SCIM User is deleted.              |
 | `scimProjectionGrant`   | Stores validated role grants and their Group sources.                           |
 
+When `managedConnections` is configured, the plugin also adds these models:
+
+| Model                        | Purpose                                                                                               |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `scimManagedConnection`      | Stores globally unique creation correlation, tenant-qualified lifecycle state, and mutation revision. |
+| `scimManagedCredential`      | Stores versioned token digests, scopes, expiry, revocation, and throttled last-used state.            |
+| `scimManagedConnectionEvent` | Stores bounded actor-attributed connection and credential lifecycle events.                           |
+
 Better Auth supplies the primary `id` field for each model. The SCIM models also reference the core `user` model where required.
 
-`scimUser.serializedAttributes` is the required, bounded source of truth for the complete non-indexed canonical profile, including Enterprise User and other extension attributes. The `formattedName`, `givenName`, `familyName`, and `serializedEmails` fields are compatibility mirrors and are not read as canonical state.
+### Legacy SCIM cutover
+
+The current schema does not convert legacy `scimProvider` runtime connections, their credentials, or SCIM-created authentication `account` rows. Choose one post-cutover mode: static code-defined connections, application-owned atomic runtime resolution through `authentication.verifyBearerToken`, or the optional `managedConnections` catalog.
+
+Use a maintenance window and pause provisioning before changing the schema. Back up and inventory the exact legacy provider, account, User, Group, membership, and application-owned rows; Better Auth does not identify or remove legacy account rows automatically, so preserve every unrelated account and application record. Never import a legacy token hash, reuse a legacy raw token, or accept the legacy bearer syntax. Clear legacy SCIM-owned rows in dependency order while the old schema is still active, confirm the incompatible tables are empty, and only then apply the new schema. Issue a new managed credential after the managed tables exist, or create a new secret through the selected static or application-owned mode, update the directory, and require a complete User and Group reprovisioning cycle. See the [1.7 SCIM upgrade guide](/docs/guides/1-7-upgrade-guide#scim-requires-full-reprovisioning) for the full sequence.
+
+`scimUser.serializedAttributes` is the required, bounded source of truth for the complete non-indexed canonical profile. The `formattedName`, `givenName`, `familyName`, and `serializedEmails` fields remain compatibility mirrors for databases created by an earlier 1.7 prerelease, but the plugin does not read them as canonical state.
+
+The migration deliberately gives `serializedAttributes` no default because an empty payload would fabricate canonical state that the directory never supplied. A populated 1.7 prerelease database must therefore follow the same legacy cutover and complete reprovisioning sequence.
 
 ## Related
 

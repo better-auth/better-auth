@@ -505,24 +505,6 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				});
 			}
 
-			if (ctx.context.hasPlugin("scim")) {
-				const existingSCIMProvider = await ctx.context.adapter.findOne<{
-					id: string;
-				}>({
-					model: "scimProvider",
-					where: [{ field: "providerId", value: body.providerId }],
-				});
-				if (existingSCIMProvider) {
-					ctx.context.logger.warn(
-						`SSO provider registration rejected for SCIM providerId: ${body.providerId}`,
-					);
-					throw new APIError("UNPROCESSABLE_ENTITY", {
-						message:
-							"This providerId is already used by a SCIM provider and cannot be used for an SSO provider",
-					});
-				}
-			}
-
 			const existingProvider = await ctx.context.adapter.findOne({
 				model: "ssoProvider",
 				where: [

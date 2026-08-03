@@ -2,7 +2,7 @@ import type { User } from "better-auth";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, it } from "vitest";
-import type { SCIMBearerTokenVerificationResult } from ".";
+import type { SCIMDeclaredConnectionVerificationResult } from ".";
 import { scim } from ".";
 
 type SCIMUserRow = {
@@ -662,7 +662,7 @@ describe("SCIM connection provisioning", () => {
 									connectionId: "workforce",
 									credentialId: "oauth-client-1",
 									scopes: ["administrator"],
-								} as unknown as SCIMBearerTokenVerificationResult;
+								} as unknown as SCIMDeclaredConnectionVerificationResult;
 							}
 							if (input.token !== "oauth-write-token") return null;
 							return {

@@ -12,53 +12,20 @@ import {
 	CardHeader,
 } from "@/components/ui/card";
 import { auth } from "@/lib/auth";
-import { isSCIMDemoEnabled } from "@/lib/scim-demo";
-import type {
-	SCIMDemoAccountLinkStatus,
-	SCIMDemoSessionStatus,
-	SCIMDemoUserLifecycle,
-} from "@/lib/scim-demo-contract";
-import { createSCIMDemoEmployeePortalPath } from "@/lib/scim-demo-identity";
-import { createSCIMDemoOIDCLoginHint } from "@/lib/scim-demo-oidc";
+import { isSCIMDemoEmployeePortalEnabled } from "@/lib/scim-demo";
 import {
-	getSCIMDemoEmployeePortalState,
-	hasSCIMDemoEmployeeRecord,
-} from "@/lib/scim-demo-service";
+	getSCIMDemoEmployeePortalIdentity,
+	getSCIMDemoEmployeePortalToken,
+} from "@/lib/scim-demo-employee";
 import { EmployeeSignIn, EmployeeSignOut } from "./employee-actions";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
 	title: "Acme employee sign-in",
 	description: "Sign in as a provisioned Acme employee through the SCIM demo.",
+	referrer: "no-referrer",
 };
-
-interface EmployeePortalPageProps {
-	searchParams: Promise<
-		Readonly<Record<string, string | string[] | undefined>>
-	>;
-}
-
-type SCIMDemoEmployeePortalStatus =
-	| SCIMDemoAccountLinkStatus
-	| SCIMDemoSessionStatus
-	| SCIMDemoUserLifecycle;
-
-const SCIMDemoEmployeePortalStatusLabels = {
-	active: "Active",
-	deleted: "Deleted",
-	inactive: "Inactive",
-	linked: "Linked",
-	none: "No active session",
-	"not-linked": "Not linked",
-	"not-provisioned": "Not provisioned",
-} as const satisfies Record<SCIMDemoEmployeePortalStatus, string>;
-
-function readSearchParameter(
-	searchParams: Readonly<Record<string, string | string[] | undefined>>,
-	name: string,
-) {
-	const value = searchParams[name];
-	return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
-}
 
 interface MessageCardProps {
 	description: string;
@@ -87,48 +54,49 @@ function MessageCard({ description, title }: MessageCardProps) {
 	);
 }
 
+interface EmployeePortalPageProps {
+	searchParams: Promise<
+		Readonly<Record<string, string | string[] | undefined>>
+	>;
+}
+
+function readSingleParam(value: string | string[] | undefined): string | null {
+	const first = Array.isArray(value) ? value[0] : value;
+	return first ? first : null;
+}
+
 export default async function EmployeePortalPage({
 	searchParams,
 }: EmployeePortalPageProps) {
-	if (!isSCIMDemoEnabled()) notFound();
+	if (!isSCIMDemoEmployeePortalEnabled()) notFound();
 	const parameters = await searchParams;
-	const accessToken = readSearchParameter(parameters, "access");
-	const workspaceId = readSearchParameter(parameters, "workspace");
-	const userKey = readSearchParameter(parameters, "user");
-	const callbackError = readSearchParameter(parameters, "error");
+	const signInErrorDescription =
+		readSingleParam(parameters.error_description) ??
+		readSingleParam(parameters.error);
 	const requestHeaders = await headers();
-	const [session, context] = await Promise.all([
-		auth.api.getSession({ headers: requestHeaders }),
-		auth.$context,
-	]);
-	const portal = await getSCIMDemoEmployeePortalState(
-		context.adapter,
-		workspaceId,
-		userKey,
-		accessToken,
-		session?.user.id,
+	const context = await auth.$context;
+	const portalToken = getSCIMDemoEmployeePortalToken(
+		requestHeaders.get("cookie"),
 	);
-
-	if (portal.status === "invalid") {
+	const [portal, session] = await Promise.all([
+		getSCIMDemoEmployeePortalIdentity(
+			context.adapter,
+			context.internalAdapter,
+			requestHeaders.get("cookie"),
+		),
+		auth.api.getSession({ headers: requestHeaders }),
+	]);
+	if (!portal) {
 		return (
 			<main className="flex min-h-[70vh] items-center justify-center px-4 py-10">
 				<MessageCard
 					title="Access not available"
-					description="This employee sign-in link isn't valid. Ask your administrator for a new link."
+					description="This employee portal session is invalid or expired. Ask your administrator for a new link."
 				/>
 			</main>
 		);
 	}
-
-	const employeePortalPath = await createSCIMDemoEmployeePortalPath(
-		portal.workspaceId,
-		portal.userKey,
-	);
-	const isDifferentEmployee =
-		session && !portal.isCurrentEmployee
-			? await hasSCIMDemoEmployeeRecord(context.adapter, session.user.id)
-			: false;
-	if (session && !portal.isCurrentEmployee && isDifferentEmployee) {
+	if (session && session.user.id !== portal.userId) {
 		return (
 			<main className="flex min-h-[70vh] items-center justify-center px-4 py-10">
 				<Card className="w-full max-w-lg rounded-none">
@@ -140,52 +108,18 @@ export default async function EmployeePortalPage({
 							Switch employee account
 						</h1>
 						<CardDescription>
-							This link is for {portal.displayName}, but you’re signed in as{" "}
-							{session.user.name || session.user.email}. Switch accounts to
-							continue.
+							This portal is for {portal.displayName}, but another account is
+							signed in.
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
-						<EmployeeSignOut
-							buttonLabel="Sign out to switch account"
-							returnURL={employeePortalPath}
-						/>
+						<EmployeeSignOut returnURL="/scim-demo/employee" />
 					</CardContent>
 				</Card>
 			</main>
 		);
 	}
-	if (session && !portal.isCurrentEmployee) {
-		return (
-			<main className="flex min-h-[70vh] items-center justify-center px-4 py-10">
-				<Card className="w-full max-w-lg rounded-none">
-					<CardHeader>
-						<Badge variant="outline" className="w-fit">
-							Employee
-						</Badge>
-						<h1 className="pt-2 text-2xl font-semibold tracking-tight">
-							Use a private window
-						</h1>
-						<CardDescription>
-							You’re already signed in as {session.user.email}. Open this
-							employee link in a private window or another browser to keep the
-							employee session separate.
-						</CardDescription>
-					</CardHeader>
-					<CardContent>
-						<Button variant="outline" className="min-h-11 w-full gap-2" asChild>
-							<Link href="/dashboard/scim">
-								<ArrowLeft className="size-4" aria-hidden="true" />
-								Return to administrator workspace
-							</Link>
-						</Button>
-					</CardContent>
-				</Card>
-			</main>
-		);
-	}
-
-	if (portal.isCurrentEmployee && session) {
+	if (session) {
 		return (
 			<main className="flex min-h-[70vh] items-center justify-center px-4 py-10">
 				<Card className="w-full max-w-lg rounded-none">
@@ -200,81 +134,34 @@ export default async function EmployeePortalPage({
 							You’re signed in
 						</h1>
 						<CardDescription>
-							Better Auth linked your verified Acme identity to the provisioned
-							user.
+							Better Auth linked your verified Acme identity to the exact
+							provisioned user.
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="space-y-5">
-						<section aria-labelledby="employee-account-heading">
-							<h2
-								id="employee-account-heading"
-								className="text-sm font-semibold"
-							>
-								Your account
-							</h2>
-							<dl className="mt-3 divide-y border text-sm">
-								{[
-									["Name", session.user.name],
-									["Work email", session.user.email],
-									["Better Auth user ID", session.user.id],
-									["Provisioned role", portal.role ?? "No provisioned role"],
-									["Profile source", "Directory (SCIM)"],
-									[
-										"Directory status",
-										SCIMDemoEmployeePortalStatusLabels[portal.directoryStatus],
-									],
-									[
-										"SSO account",
-										SCIMDemoEmployeePortalStatusLabels[
-											portal.accountLinkStatus
-										],
-									],
-									[
-										"Session",
-										SCIMDemoEmployeePortalStatusLabels[portal.sessionStatus],
-									],
-								].map(([label, value]) => (
-									<div
-										key={label}
-										className="grid gap-1 px-3 py-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-4"
-									>
-										<dt className="text-muted-foreground">{label}</dt>
-										<dd className="min-w-0 break-words font-medium">{value}</dd>
-									</div>
-								))}
-							</dl>
-						</section>
-						<EmployeeSignOut returnURL={employeePortalPath} />
+						<dl className="divide-y border text-sm">
+							{[
+								["Name", session.user.name],
+								["Work email", session.user.email],
+								["Better Auth user ID", session.user.id],
+								["Application role", portal.role ?? "None"],
+								["Profile source", "Directory (SCIM)"],
+							].map(([label, value]) => (
+								<div
+									key={label}
+									className="grid gap-1 px-3 py-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-4"
+								>
+									<dt className="text-muted-foreground">{label}</dt>
+									<dd className="min-w-0 break-words font-medium">{value}</dd>
+								</div>
+							))}
+						</dl>
+						<EmployeeSignOut returnURL="/scim-demo/employee" />
 					</CardContent>
 				</Card>
 			</main>
 		);
 	}
-
-	if (portal.directoryStatus === "inactive") {
-		return (
-			<main className="flex min-h-[70vh] items-center justify-center px-4 py-10">
-				<MessageCard
-					title="Account inactive"
-					description="Your administrator has disabled application access. Contact them if you need access restored."
-				/>
-			</main>
-		);
-	}
-
-	if (portal.directoryStatus !== "active" || !portal.applicationUserId) {
-		const description =
-			portal.directoryStatus === "not-provisioned"
-				? "Your directory account hasn’t been provisioned. Contact your administrator, then try again."
-				: "Your directory account is no longer provisioned. Contact your administrator if you need access restored.";
-		return (
-			<main className="flex min-h-[70vh] items-center justify-center px-4 py-10">
-				<MessageCard title="Access not available" description={description} />
-			</main>
-		);
-	}
-
-	const signInUnavailable = Boolean(callbackError);
 	return (
 		<main className="flex min-h-[70vh] items-center justify-center px-4 py-10">
 			<Card className="w-full max-w-lg rounded-none">
@@ -286,15 +173,24 @@ export default async function EmployeePortalPage({
 						Employee
 					</Badge>
 					<h1 className="pt-2 text-2xl font-semibold tracking-tight">
-						{signInUnavailable ? "Sign-in unavailable" : "Sign in to Acme"}
+						Sign in to Acme
 					</h1>
 					<CardDescription>
-						{signInUnavailable
-							? "Acme SSO couldn’t start. Try again or contact your administrator."
-							: "Use your Acme identity provider account. Your administrator must provision you before your first sign-in."}
+						Use the local OIDC provider. Your directory account must remain
+						active throughout sign-in.
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="space-y-5">
+					{signInErrorDescription ? (
+						<div className="border border-destructive/50 bg-destructive/10 p-3">
+							<p className="text-sm font-medium text-destructive">
+								Sign-in failed
+							</p>
+							<p className="mt-1 text-xs text-destructive">
+								{signInErrorDescription}. Try again below.
+							</p>
+						</div>
+					) : null}
 					<div className="border bg-muted/20 p-3">
 						<p className="text-xs text-muted-foreground">Signing in as</p>
 						<p className="mt-1 font-medium">{portal.displayName}</p>
@@ -303,10 +199,8 @@ export default async function EmployeePortalPage({
 						</p>
 					</div>
 					<EmployeeSignIn
-						buttonLabel={signInUnavailable ? "Try again" : undefined}
-						callbackURL={employeePortalPath}
-						email={portal.email}
-						loginHint={createSCIMDemoOIDCLoginHint(portal.email, accessToken)}
+						callbackURL="/scim-demo/employee"
+						loginHint={portalToken}
 					/>
 				</CardContent>
 			</Card>

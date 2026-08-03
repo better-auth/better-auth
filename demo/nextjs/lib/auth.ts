@@ -4,7 +4,6 @@ import { dash, sendEmail, sentinel } from "@better-auth/infra";
 import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
-import { acquireActiveSCIMUserLink } from "@better-auth/scim";
 import { sso } from "@better-auth/sso";
 import { stripe } from "@better-auth/stripe";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
@@ -31,20 +30,21 @@ import { createPool } from "mysql2/promise";
 import { Stripe } from "stripe";
 import {
 	createSCIMDemoPlugin,
+	isSCIMDemoEmployeePortalEnabled,
 	isSCIMDemoEnabled,
-	SCIM_DEMO_CONNECTION_ID,
 } from "./scim-demo.ts";
-import {
-	getSCIMDemoOIDCIssuer,
-	getSCIMDemoOIDCProvider,
-	SCIM_DEMO_SSO_PROVIDER_ID,
-} from "./scim-demo-oidc.ts";
+import { resolveSCIMDemoSSOUser } from "./scim-demo-employee.ts";
+import { getSCIMDemoOIDCProvider } from "./scim-demo-oidc.ts";
+
+const DEMO_SQLITE_CONTENTION_TIMEOUT_MS = 5_000;
 
 const database = (() => {
 	if (process.env.DEMO_SQLITE_PATH) {
 		return {
 			dialect: new NodeSqliteDialect({
-				database: new DatabaseSync(process.env.DEMO_SQLITE_PATH),
+				database: new DatabaseSync(process.env.DEMO_SQLITE_PATH, {
+					timeout: DEMO_SQLITE_CONTENTION_TIMEOUT_MS,
+				}),
 			}),
 			type: "sqlite" as const,
 			transaction: true,
@@ -82,7 +82,7 @@ if (!database) {
 	throw new Error("No dialect found");
 }
 
-const scimDemoPlugin = createSCIMDemoPlugin();
+const scimDemoPlugins = isSCIMDemoEnabled() ? [createSCIMDemoPlugin()] : [];
 
 function isBetterAuthPlugin(plugin: unknown): plugin is BetterAuthPlugin {
 	return (
@@ -290,36 +290,7 @@ const authOptions = {
 			},
 		}),
 		sso({
-			resolveUser: async (input, context) => {
-				if (input.providerId !== SCIM_DEMO_SSO_PROVIDER_ID) {
-					return { action: "continue" };
-				}
-				if (input.accountKey.issuer !== getSCIMDemoOIDCIssuer()) {
-					return {
-						action: "reject",
-						code: "SCIM_DEMO_ISSUER_MISMATCH",
-						message: "The SCIM demo identity provider issuer did not match",
-					};
-				}
-				const link = await acquireActiveSCIMUserLink(
-					{
-						connectionId: SCIM_DEMO_CONNECTION_ID,
-						externalId: input.accountKey.providerAccountId,
-					},
-					context,
-				);
-				return link
-					? {
-							action: "link",
-							profile: "preserve",
-							userId: link.userId,
-						}
-					: {
-							action: "reject",
-							code: "SCIM_USER_NOT_ACTIVE",
-							message: "This directory user is not active",
-						};
-			},
+			resolveUser: resolveSCIMDemoSSOUser,
 			defaultSSO: [
 				{
 					domain: "http://localhost:3000",
@@ -419,10 +390,12 @@ const authOptions = {
 						callbackUrl: "/dashboard",
 					},
 				},
-				...(isSCIMDemoEnabled() ? [getSCIMDemoOIDCProvider()] : []),
+				...(isSCIMDemoEmployeePortalEnabled()
+					? [getSCIMDemoOIDCProvider()]
+					: []),
 			],
 		}),
-		scimDemoPlugin,
+		...scimDemoPlugins,
 		deviceAuthorization({
 			expiresIn: "3min",
 			interval: "5s",

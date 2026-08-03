@@ -103,6 +103,10 @@ Each SCIM User links to a Better Auth User. Provisioning does not create a sign-
     ```
 
     The connection ID owns the resources provisioned with this credential. The optional `provisioningDomainId` identifies the workspace, tenant, project, or other application boundary that receives lifecycle and role updates. It defaults to the connection ID.
+
+    <Callout type="info">
+      For runtime tenant onboarding and credential rotation, configure the optional [`managedConnections` catalog](/docs/plugins/scim/reference#managed-connection-catalog). It persists plugin-owned connection metadata and token digests while your server authorizes the customer-administrator UI. Applications with an existing catalog can instead resolve the connection atomically in `authentication.verifyBearerToken`.
+    </Callout>
   </Step>
 
   <Step>
@@ -143,11 +147,11 @@ Each SCIM User links to a Better Auth User. Provisioning does not create a sign-
 
 Use the following values in your directory's SCIM connection settings:
 
-| Setting        | Value                                                                                                |
-| -------------- | ---------------------------------------------------------------------------------------------------- |
-| Base URL       | Your Better Auth base URL followed by `/scim/v2`, such as `https://app.example.com/api/auth/scim/v2` |
-| Authentication | Bearer token                                                                                         |
-| Token          | The token configured in `connections[].credentials`                                                  |
+| Setting        | Value                                                                                                             |
+| -------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Base URL       | Your Better Auth base URL followed by `/scim/v2`, such as `https://app.example.com/api/auth/scim/v2`              |
+| Authentication | Bearer token                                                                                                      |
+| Token          | A static token from `connections[].credentials` or the one-time token returned by a managed create or rotate call |
 
 The directory must send the token as `Authorization: Bearer <token>`. User and Group requests use `application/scim+json` or `application/json`. Discovery endpoints are public so the directory can inspect the supported resources and operations before provisioning.
 

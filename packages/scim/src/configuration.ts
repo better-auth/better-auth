@@ -57,9 +57,15 @@ export interface SCIMOAuthBearerPrincipal extends SCIMPrincipalFields {
 	type: "oauth-bearer";
 }
 
+/** A principal authenticated by the framework-managed connection catalog. */
+export interface SCIMManagedBearerPrincipal extends SCIMPrincipalFields {
+	type: "managed-bearer";
+}
+
 /** The authenticated identity attached to a SCIM request. */
 export type SCIMPrincipal =
 	| SCIMStaticBearerPrincipal
+	| SCIMManagedBearerPrincipal
 	| SCIMOAuthBearerPrincipal;
 
 /** Bearer request data passed to an application-owned token verifier. */
@@ -71,21 +77,71 @@ export interface SCIMBearerTokenVerificationInput {
 }
 
 /** Verified bearer claims resolved before a SCIM request is authorized. */
-export interface SCIMBearerTokenVerificationResult {
+export interface SCIMDeclaredConnectionVerificationResult {
+	/** Identifier of a connection declared in `SCIMOptions.connections`. */
 	connectionId: string;
+	/** A configured-connection result cannot also resolve a connection. */
+	connection?: never;
 	credentialId: string;
 	scopes: readonly SCIMScope[];
 	expiresAt?: Date;
 }
 
-/** Application-owned verification boundary for OAuth access tokens. */
+/**
+ * Verified bearer claims and their application-resolved provisioning
+ * connection.
+ */
+export interface SCIMResolvedConnectionVerificationResult {
+	/**
+	 * Application-owned connection resolved in the same operation that verifies
+	 * the bearer credential.
+	 */
+	connection: SCIMConnection;
+	/** A resolved-connection result cannot also reference a configured ID. */
+	connectionId?: never;
+	credentialId: string;
+	scopes: readonly SCIMScope[];
+	expiresAt?: Date;
+}
+
+/** A configured or application-resolved bearer token verification. */
+export type SCIMBearerTokenVerification =
+	| SCIMDeclaredConnectionVerificationResult
+	| SCIMResolvedConnectionVerificationResult;
+
+/** Database access available to an application-owned bearer token verifier. */
+export interface SCIMBearerTokenVerificationContext {
+	database: Pick<DBAdapter, "findOne" | "update">;
+}
+
+/** Application-owned verification boundary for bearer access tokens. */
 export interface SCIMAuthenticationOptions {
 	verifyBearerToken(
 		input: SCIMBearerTokenVerificationInput,
+		context: SCIMBearerTokenVerificationContext,
 	):
-		| SCIMBearerTokenVerificationResult
+		| SCIMBearerTokenVerification
 		| null
-		| Promise<SCIMBearerTokenVerificationResult | null>;
+		| Promise<SCIMBearerTokenVerification | null>;
+}
+
+/** Configuration for the optional SCIM-owned connection catalog. */
+export interface SCIMManagedConnectionOptions {
+	/**
+	 * Independent HMAC secret used to digest managed bearer credentials.
+	 * Must contain at least 32 characters.
+	 */
+	credentialHashSecret: string;
+	/**
+	 * Maximum number of unexpired, non-revoked credentials per connection.
+	 * Must be an integer from `1` through `100`. Defaults to `5`.
+	 */
+	maxActiveCredentials?: number;
+	/**
+	 * Minimum interval between persisted last-used updates for a credential.
+	 * Must be a nonnegative integer. Defaults to `300` seconds.
+	 */
+	lastUsedWriteIntervalSeconds?: number;
 }
 
 /** Durable lifecycle state for one persisted SCIM connection binding. */
@@ -346,10 +402,16 @@ export interface SCIMCompatibilityOptions {
 
 /** Configuration for the SCIM plugin. */
 export interface SCIMOptions {
-	/** Code-defined provisioning connections accepted by the SCIM endpoint. */
+	/**
+	 * Code-defined provisioning connections accepted by the SCIM endpoint.
+	 * May be empty when an application verifier or the managed connection
+	 * catalog resolves connections.
+	 */
 	connections: readonly SCIMConnectionOptions[];
-	/** Optional verification boundary for OAuth bearer access tokens. */
+	/** Optional verification boundary for bearer access tokens. */
 	authentication?: SCIMAuthenticationOptions;
+	/** Optional SCIM-owned persisted connection and credential catalog. */
+	managedConnections?: SCIMManagedConnectionOptions;
 	/** Optional explicit linking and global lifecycle integration. */
 	identity?: SCIMIdentity;
 	/** Optional application or tenancy projection. No projection grants access. */

@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { isSCIMDemoEnabled } from "@/lib/scim-demo";
+import { isSCIMDemoEmployeePortalEnabled } from "@/lib/scim-demo";
 import {
 	exchangeSCIMDemoOIDCAuthorizationCode,
 	getSCIMDemoOIDCError,
@@ -8,7 +8,7 @@ import {
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-	if (!isSCIMDemoEnabled()) {
+	if (!isSCIMDemoEmployeePortalEnabled()) {
 		return Response.json({ error: "not_found" }, { status: 404 });
 	}
 	try {
