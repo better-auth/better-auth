@@ -87,6 +87,8 @@ import {
 import { getVerificationIdentifier } from "./domain-verification";
 import {
 	assertSAMLIdentityProviderAuthority,
+	assertSAMLMetadataSize,
+	assertSAMLServiceProviderMetadataPolicy,
 	createIdP,
 	createSAMLPostForm,
 	createSP,
@@ -436,18 +438,20 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				"create",
 			);
 
-			if (body.samlConfig?.idpMetadata?.metadata) {
+			if (body.samlConfig) {
 				const maxMetadataSize =
 					options?.saml?.maxMetadataSize ??
 					constants.DEFAULT_MAX_SAML_METADATA_SIZE;
-				if (
-					new TextEncoder().encode(body.samlConfig.idpMetadata.metadata)
-						.length > maxMetadataSize
-				) {
-					throw new APIError("BAD_REQUEST", {
-						message: `IdP metadata exceeds maximum allowed size (${maxMetadataSize} bytes)`,
-					});
-				}
+				assertSAMLMetadataSize(
+					body.samlConfig.idpMetadata?.metadata,
+					"IdP",
+					maxMetadataSize,
+				);
+				assertSAMLMetadataSize(
+					body.samlConfig.spMetadata?.metadata,
+					"SP",
+					maxMetadataSize,
+				);
 			}
 
 			if (ctx.body.organizationId) {
@@ -641,6 +645,10 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 
 				validateCertSources(body.samlConfig);
 				assertSAMLIdentityProviderAuthority(body.samlConfig);
+				assertSAMLServiceProviderMetadataPolicy({
+					...body.samlConfig,
+					issuer: body.issuer,
+				});
 
 				// Validate that the config has a usable IdP entry point
 				const hasIdpMetadata = body.samlConfig.idpMetadata?.metadata;
@@ -1206,7 +1214,12 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 				}
 
-				const { state: relayState } = await generateRelayState(ctx, undefined);
+				const providerReference = await computeSSOProviderReference(provider);
+				const { state: relayState } = await generateRelayState(
+					ctx,
+					undefined,
+					providerReference,
+				);
 
 				const sp = createSP(
 					parsedSamlConfig,
@@ -1238,6 +1251,7 @@ export const signInSSO = (options?: SSOOptions) => {
 					const record: AuthnRequestRecord = {
 						id: loginRequest.id,
 						providerId: provider.providerId,
+						providerReference,
 						createdAt: Date.now(),
 						expiresAt: Date.now() + ttl,
 					};
@@ -1351,7 +1365,12 @@ async function handleOIDCCallback(
 			}?error=invalid_provider&error_description=provider not found`,
 		);
 	}
-	if (!(await isCurrentSSOProviderReference(provider, providerReference))) {
+	const acceptedProviderReference =
+		providerReference ??
+		redirectOIDCError("invalid_state", "missing_sso_provider_reference");
+	if (
+		!(await isCurrentSSOProviderReference(provider, acceptedProviderReference))
+	) {
 		redirectOIDCError(
 			"invalid_state",
 			"sso_provider_changed_during_authentication",
@@ -1718,7 +1737,7 @@ async function handleOIDCCallback(
 					!currentProvider ||
 					!(await isCurrentSSOProviderReference(
 						currentProvider,
-						providerReference,
+						acceptedProviderReference,
 					))
 				) {
 					throw new APIError("CONFLICT", {
@@ -1736,6 +1755,8 @@ async function handleOIDCCallback(
 								accountKey,
 								providerUser,
 								providerClaims: rawProfile ?? {},
+								verifiedIdTokenClaims: verifiedIdToken?.payload ?? {},
+								providerReference: acceptedProviderReference,
 							},
 							await getCurrentAdapter(ctx.context.adapter),
 							ctx.context.logger,

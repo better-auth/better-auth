@@ -461,6 +461,12 @@ The callback URL is derived automatically, service-provider metadata is generate
 
 **What to do:** remove the empty `spMetadata` and the removed fields from your config. Register the ACS URL with your IdP as your base URL plus `/sso/saml2/sp/acs/:providerId`; with the default base path that is `https://yourapp.com/api/auth/sso/saml2/sp/acs/:providerId`. For SP-initiated logins, set the post-login redirect with `callbackURL` in `signIn.sso()`. The `callbackUrl` config field is no longer the ACS URL and is now optional, but it remains the post-login redirect for IdP-initiated logins. Keep it if you enable `allowIdpInitiated` and need a specific landing page. If you read SAML error codes from the redirect URL, switch to the lowercased codes.
 
+### SAML signature enforcement matches its configuration
+
+In 1.6, `wantAssertionsSigned` enforced a signature on the SAML response message instead of the assertion. 1.7 verifies the assertion element itself and applies the configured requirement to it, so sign-ins from an IdP that signs only the response message fail when the service provider requires signed assertions. A callback that carries RelayState validates it unconditionally, and provider registration rejects service-provider metadata that weakens a signed-assertion policy, exceeds the metadata size limit, or declares an ACS location containing a URL fragment.
+
+**What to do:** confirm each IdP signs assertions, or set `wantAssertionsSigned: false` deliberately for an IdP that cannot. Fix or re-register stored SP metadata that no longer validates. If a custom integration supplies its own RelayState on SAML callbacks, make sure it round-trips the value Better Auth issued.
+
 ### `/sso/update-provider` rejects partial mappings
 
 Updating an SSO provider now rejects a partial OIDC or SAML mapping object.

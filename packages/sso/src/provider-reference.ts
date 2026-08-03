@@ -1,16 +1,18 @@
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import type { OIDCConfig, SSOOptions, SSOProvider } from "./types";
+import type {
+	OIDCConfig,
+	SAMLConfig,
+	SSOOptions,
+	SSOProvider,
+	SSOProviderReference,
+} from "./types";
+
+export type { SSOProviderReference } from "./types";
 
 export const SSO_PROVIDER_STATE_KEY = "ssoProviderReference";
 
 type ReferencedProvider = SSOProvider<SSOOptions> & { id?: string | undefined };
-
-export interface SSOProviderReference {
-	providerId: string;
-	source: { type: "configured" } | { type: "persisted"; recordId: string };
-	authenticationConfigurationFingerprint: string;
-}
 
 function serializeCanonical(value: unknown): string {
 	if (value === null) return "null";
@@ -53,6 +55,32 @@ function withoutOIDCSecret(
 	return result;
 }
 
+function withoutSAMLPrivateKeys(
+	configuration: SAMLConfig | undefined,
+): SAMLConfig | undefined {
+	if (!configuration) return undefined;
+	return {
+		...configuration,
+		privateKey: undefined,
+		idpMetadata: {
+			...configuration.idpMetadata,
+			privateKey: undefined,
+			privateKeyPass: undefined,
+			encPrivateKey: undefined,
+			encPrivateKeyPass: undefined,
+		},
+		spMetadata: configuration.spMetadata
+			? {
+					...configuration.spMetadata,
+					privateKey: undefined,
+					privateKeyPass: undefined,
+					encPrivateKey: undefined,
+					encPrivateKeyPass: undefined,
+				}
+			: undefined,
+	};
+}
+
 function getProviderSource(provider: ReferencedProvider) {
 	return typeof provider.id === "string" && provider.id.length > 0
 		? ({ type: "persisted", recordId: provider.id } as const)
@@ -70,6 +98,7 @@ async function computeProviderAuthenticationFingerprint(
 			issuer: provider.issuer,
 			organizationId: provider.organizationId,
 			oidcConfig: withoutOIDCSecret(provider.oidcConfig),
+			samlConfig: withoutSAMLPrivateKeys(provider.samlConfig),
 		}),
 	);
 	return base64Url.encode(new Uint8Array(digest), { padding: false });

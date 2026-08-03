@@ -9,7 +9,10 @@ export {
 	validateConfigAlgorithms,
 	validateSAMLAlgorithms,
 } from "./algorithms";
-export { validateSingleAssertion } from "./assertions";
+export {
+	validateSingleAssertion,
+	verifySAMLAssertionSignature,
+} from "./assertions";
 export { resolveSigningCerts, validateCertSources } from "./cert";
 export {
 	getSAMLPostAssertionConsumerServiceUrls,

@@ -31,6 +31,11 @@ export {
 	DEFAULT_MAX_SAML_RESPONSE_SIZE,
 } from "./constants";
 export {
+	deriveSAMLIdentityProviderEntityID,
+	deriveSAMLServiceProviderPolicy,
+	type SAMLServiceProviderPolicy,
+} from "./routes/helpers";
+export {
 	type AlgorithmValidationOptions,
 	DataEncryptionAlgorithm,
 	type DeprecatedAlgorithmBehavior,
@@ -49,10 +54,15 @@ import type {
 	OIDCConfig,
 	SAMLConfig,
 	SAMLIdentityProviderMetadata,
+	SSOOIDCUserResolutionInput,
 	SSOOptions,
 	SSOProvider,
+	SSOProviderMutationGuardContext,
+	SSOProviderMutationGuardInput,
+	SSOProviderReference,
 	SSOProviderSchema,
 	SSOProviderUserProfile,
+	SSOSAMLUserResolutionInput,
 	SSOUserResolution,
 	SSOUserResolutionContext,
 	SSOUserResolutionInput,
@@ -63,9 +73,14 @@ export type {
 	OIDCConfig,
 	SAMLConfig,
 	SAMLIdentityProviderMetadata,
+	SSOOIDCUserResolutionInput,
 	SSOOptions,
 	SSOProvider,
+	SSOProviderMutationGuardContext,
+	SSOProviderMutationGuardInput,
+	SSOProviderReference,
 	SSOProviderUserProfile,
+	SSOSAMLUserResolutionInput,
 	SSOUserResolution,
 	SSOUserResolutionContext,
 	SSOUserResolutionInput,
@@ -271,7 +286,7 @@ export function sso<O extends SSOOptions>(
 		listSSOProviders: listSSOProviders(optionsWithStore),
 		getSSOProvider: getSSOProvider(optionsWithStore),
 		updateSSOProvider: updateSSOProvider(optionsWithStore),
-		deleteSSOProvider: deleteSSOProvider(),
+		deleteSSOProvider: deleteSSOProvider(optionsWithStore),
 	};
 
 	if (options?.domainVerification?.enabled) {

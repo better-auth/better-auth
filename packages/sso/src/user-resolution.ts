@@ -49,13 +49,9 @@ type ResolutionLogger = Pick<
 	"error"
 >;
 
-function logFailure(
-	logger: ResolutionLogger,
-	message: string,
-	error?: unknown,
-): void {
+function logFailure(logger: ResolutionLogger, message: string): void {
 	try {
-		logger.error(message, ...(error === undefined ? [] : [error]));
+		logger.error(message);
 	} catch {
 		// A custom logger must not change the stable authentication failure.
 	}
@@ -77,8 +73,8 @@ export async function resolveSSOUser(
 	let resolution: unknown;
 	try {
 		resolution = await resolveUser(input, { database });
-	} catch (error) {
-		logFailure(logger, "SSO user resolution failed", error);
+	} catch {
+		logFailure(logger, "SSO user resolution failed");
 		throw resolutionFailure();
 	}
 	if (!isSSOUserResolution(resolution)) {
@@ -91,24 +87,47 @@ export async function resolveSSOUser(
 export function assertSSOUserResolutionNativeTransactionSupport(
 	adapter: Pick<DBAdapter, "options">,
 ): void {
-	if (typeof adapter.options?.adapterConfig.transaction === "function") return;
-	throw new APIError("NOT_IMPLEMENTED", {
+	assertSSONativeTransactionSupport(adapter, {
 		code: "SSO_USER_RESOLUTION_REQUIRES_NATIVE_TRANSACTIONS",
 		message:
 			"SSO user resolution requires a database adapter with native transaction support",
 	});
 }
 
+export function assertSSONativeTransactionSupport(
+	adapter: Pick<DBAdapter, "options">,
+	error: { code: string; message: string },
+): void {
+	if (typeof adapter.options?.adapterConfig.transaction === "function") return;
+	throw new APIError("NOT_IMPLEMENTED", {
+		code: error.code,
+		message: error.message,
+	});
+}
+
 export async function assertSSOUserResolutionAsyncContextSupport(
+	getStorage: typeof getCurrentDBAdapterAsyncLocalStorage = getCurrentDBAdapterAsyncLocalStorage,
+): Promise<void> {
+	await assertSSOAsyncContextSupport(
+		{
+			code: "SSO_USER_RESOLUTION_REQUIRES_ASYNC_CONTEXT",
+			message:
+				"SSO user resolution requires database transaction async context support",
+		},
+		getStorage,
+	);
+}
+
+export async function assertSSOAsyncContextSupport(
+	error: { code: string; message: string },
 	getStorage: typeof getCurrentDBAdapterAsyncLocalStorage = getCurrentDBAdapterAsyncLocalStorage,
 ): Promise<void> {
 	try {
 		await getStorage();
 	} catch {
 		throw new APIError("NOT_IMPLEMENTED", {
-			code: "SSO_USER_RESOLUTION_REQUIRES_ASYNC_CONTEXT",
-			message:
-				"SSO user resolution requires database transaction async context support",
+			code: error.code,
+			message: error.message,
 		});
 	}
 }

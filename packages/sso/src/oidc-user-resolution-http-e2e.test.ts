@@ -249,6 +249,15 @@ describe("SSO OIDC user resolution HTTP", () => {
 			},
 			providerUser: { email: firstProviderEmail },
 			providerClaims: { sub: subject },
+			verifiedIdTokenClaims: {
+				iss: identityProvider.issuer.url,
+				sub: subject,
+			},
+			providerReference: {
+				providerId: "workforce",
+				source: { type: "configured" },
+				authenticationConfigurationFingerprint: expect.any(String),
+			},
 		});
 		expect(databases).toHaveLength(2);
 		expect(validationActions).toEqual(["link-account", "sign-in"]);
