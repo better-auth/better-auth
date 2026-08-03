@@ -65,6 +65,7 @@
     }
   },
   "dependencies": {
+    "@xmldom/xmldom": "^0.9.10",
     "fast-xml-parser": "^5.8.0",
     "jose": "^6.2.3",
     "samlify": "^2.13.1",

@@ -156,9 +156,10 @@ export interface SAMLConfig {
 		encPrivateKeyPass?: string | undefined;
 	};
 	/**
-	 * Request signed assertions from the IdP. When true, the SP metadata
-	 * advertises `WantAssertionsSigned="true"` and samlify will reject
-	 * unsigned assertions.
+	 * Request and require signed assertions from the IdP. When true, generated
+	 * SP metadata advertises `WantAssertionsSigned="true"` and the ACS rejects
+	 * unsigned assertions. Custom SP metadata supplies the effective policy and
+	 * accepts the XML Schema boolean forms `true`, `false`, `1`, and `0`.
 	 */
 	wantAssertionsSigned?: boolean | undefined;
 	authnRequestsSigned?: boolean | undefined;
@@ -173,6 +174,7 @@ export interface SAMLConfig {
 export interface AuthnRequestRecord {
 	id: string;
 	providerId: string;
+	providerReference: SSOProviderReference;
 	createdAt: number;
 	expiresAt: number;
 }
@@ -304,20 +306,88 @@ export type SSOProviderUserProfile = {
 	image?: string | null | undefined;
 } & Record<string, unknown>;
 
-/** OIDC identity and profile data available to an application's SSO resolver. */
-export interface SSOUserResolutionInput {
-	protocol: "oidc";
+/**
+ * Opaque reference to the SSO provider configuration accepted for the current
+ * authentication flow.
+ *
+ * This reference is a transient authentication fence. Applications must not
+ * persist it as a tenant or user binding.
+ */
+export interface SSOProviderReference {
+	providerId: string;
+	source: { type: "configured" } | { type: "persisted"; recordId: string };
+	authenticationConfigurationFingerprint: string;
+}
+
+interface BaseSSOUserResolutionInput {
 	providerId: string;
 	accountKey: {
 		issuer: string;
 		providerAccountId: string;
 	};
 	providerUser: SSOProviderUserProfile;
-	providerClaims: Record<string, unknown>;
+	providerReference: SSOProviderReference;
 }
+
+/** OIDC identity and profile data available to an application's SSO resolver. */
+export interface SSOOIDCUserResolutionInput extends BaseSSOUserResolutionInput {
+	protocol: "oidc";
+	/** Raw claims from UserInfo, or the verified ID Token when UserInfo is absent. */
+	providerClaims: Record<string, unknown>;
+	/** Claims from the cryptographically verified ID Token. */
+	verifiedIdTokenClaims: Record<string, unknown>;
+}
+
+/** SAML identity and assertion data available to an application's SSO resolver. */
+export interface SSOSAMLUserResolutionInput extends BaseSSOUserResolutionInput {
+	protocol: "saml";
+	/**
+	 * Attributes from the verified assertion. Multi-valued attributes remain
+	 * arrays and all scalar values remain strings.
+	 */
+	providerAttributes: Record<string, string | readonly string[]>;
+}
+
+/** Verified SSO identity and provider data available to an application resolver. */
+export type SSOUserResolutionInput =
+	| SSOOIDCUserResolutionInput
+	| SSOSAMLUserResolutionInput;
 
 /** Transaction-bound capabilities available while resolving an SSO user. */
 export interface SSOUserResolutionContext {
+	database: DBTransactionAdapter;
+}
+
+interface BaseSSOProviderMutationGuardInput {
+	provider: {
+		id: string;
+		providerId: string;
+		organizationId: string | null;
+	};
+	/**
+	 * Opaque reference to the exact locked provider configuration.
+	 *
+	 * This value is transient and must not be persisted as a tenant binding.
+	 */
+	providerReference: SSOProviderReference;
+}
+
+/** Mutation attempted against one exact persisted SSO provider row. */
+export type SSOProviderMutationGuardInput =
+	| (BaseSSOProviderMutationGuardInput & {
+			action: "update";
+			/**
+			 * True when the validated proposal changes provider identity,
+			 * routing, or verification policy used to authenticate accounts.
+			 */
+			isAuthenticationBoundaryChange: boolean;
+	  })
+	| (BaseSSOProviderMutationGuardInput & {
+			action: "delete";
+	  });
+
+/** Transaction-bound context for guarding a persisted provider mutation. */
+export interface SSOProviderMutationGuardContext {
 	database: DBTransactionAdapter;
 }
 
@@ -325,22 +395,34 @@ export interface SSOOptions {
 	/**
 	 * Resolve a verified provider identity to a Better Auth user.
 	 *
-	 * Currently invoked for OIDC callbacks only.
+	 * For OIDC, `accountKey` is derived from the validated ID Token. For SAML,
+	 * it contains the verified IdP entity ID and signed NameID. Profile fields,
+	 * raw OIDC claims, and SAML assertion attributes are protocol-accepted
+	 * provider data and may require application-level validation.
 	 *
-	 * TODO: Invoke this resolver for SAML callbacks after normalizing the verified
-	 * IdP entity ID as `accountKey.issuer` and the signed NameID as
-	 * `accountKey.providerAccountId`.
-	 *
-	 * `accountKey` is derived from the validated ID Token. Profile fields and raw
-	 * claims are protocol-accepted provider data and may require application-level
-	 * validation. The callback runs on every OIDC sign-in inside the same native
-	 * database transaction as account finalization and session creation.
+	 * The callback runs on every SSO sign-in inside the same native database
+	 * transaction as account finalization and session creation.
 	 */
 	resolveUser?:
 		| ((
 				input: SSOUserResolutionInput,
 				context: SSOUserResolutionContext,
 		  ) => Awaitable<SSOUserResolution>)
+		| undefined;
+	/**
+	 * Guards updates and deletion of an exact persisted SSO provider.
+	 *
+	 * The callback runs after the provider row is locked and before any provider
+	 * or linked Account mutation. Update inputs disclose only whether the
+	 * validated proposal changes the authentication boundary; proposed secrets
+	 * and configuration values are never exposed. Throw to reject the mutation.
+	 * Better Auth converts callback failures into a stable conflict response.
+	 */
+	guardProviderMutation?:
+		| ((
+				input: SSOProviderMutationGuardInput,
+				context: SSOProviderMutationGuardContext,
+		  ) => Awaitable<void>)
 		| undefined;
 	/**
 	 * custom function to provision a user when they sign in with an SSO provider.
@@ -658,7 +740,7 @@ export interface SSOOptions {
 		 */
 		maxResponseSize?: number;
 		/**
-		 * Maximum allowed size for IdP metadata XML in bytes.
+		 * Maximum allowed size for IdP or SP metadata XML in bytes.
 		 *
 		 * @default 102400 (100KB)
 		 */

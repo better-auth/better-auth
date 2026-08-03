@@ -17,11 +17,14 @@ import {
 	mapDiscoveryErrorToAPIError,
 	validateOIDCEndpointUrls,
 } from "../oidc";
+import { computeSSOProviderReference } from "../provider-reference";
 import {
+	getSAMLPostAssertionConsumerServiceUrls,
 	resolveSigningCerts,
 	validateCertSources,
 	validateConfigAlgorithms,
 } from "../saml";
+import { parseSAMLServiceProviderMetadata } from "../saml/response-binding";
 import type {
 	Member,
 	OIDCConfig,
@@ -29,8 +32,22 @@ import type {
 	SAMLIdentityProviderMetadata,
 	SSOOptions,
 } from "../types";
-import { maskClientId, parseCertificate, safeJsonParse } from "../utils";
-import { assertSAMLIdentityProviderAuthority } from "./helpers";
+import {
+	assertSSOAsyncContextSupport,
+	assertSSONativeTransactionSupport,
+} from "../user-resolution";
+import {
+	maskClientId,
+	normalizePem,
+	parseCertificate,
+	safeJsonParse,
+} from "../utils";
+import {
+	assertSAMLIdentityProviderAuthority,
+	assertSAMLMetadataSize,
+	assertSAMLServiceProviderMetadataPolicy,
+	createIdP,
+} from "./helpers";
 import {
 	getUpdateSSOProviderBodySchema,
 	parseSSOProviderAdditionalFields,
@@ -67,18 +84,7 @@ const OIDC_IDENTITY_BOUNDARY_FIELDS = [
 	"tokenEndpoint",
 	"userInfoEndpoint",
 ] as const;
-const SAML_IDENTITY_BOUNDARY_FIELDS = [
-	"audience",
-	"callbackUrl",
-	"entryPoint",
-	"identifierFormat",
-] as const;
-const SAML_IDP_BOUNDARY_FIELDS = [
-	"metadata",
-	"entityID",
-	"singleSignOnService",
-] as const;
-const SAML_SP_BOUNDARY_FIELDS = ["metadata", "entityID"] as const;
+const SAML_IDENTITY_BOUNDARY_FIELDS = ["audience", "callbackUrl"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -124,17 +130,72 @@ function samlIdentityBoundaryChanged(
 	current: SAMLConfig,
 	updated: SAMLConfig,
 ): boolean {
+	const currentIdentityProvider = createIdP(current).entityMeta;
+	const updatedIdentityProvider = createIdP(updated).entityMeta;
+	let currentServiceProvider: ReturnType<
+		typeof parseSAMLServiceProviderMetadata
+	> | null;
+	let updatedServiceProvider: ReturnType<
+		typeof parseSAMLServiceProviderMetadata
+	> | null;
+	try {
+		currentServiceProvider = current.spMetadata?.metadata
+			? parseSAMLServiceProviderMetadata(current.spMetadata.metadata)
+			: null;
+		updatedServiceProvider = updated.spMetadata?.metadata
+			? parseSAMLServiceProviderMetadata(updated.spMetadata.metadata)
+			: null;
+	} catch {
+		return true;
+	}
+	const effectiveIdentityBoundary = (config: SAMLConfig) => {
+		const identityProvider =
+			config === current ? currentIdentityProvider : updatedIdentityProvider;
+		const serviceProvider =
+			config === current ? currentServiceProvider : updatedServiceProvider;
+		return {
+			idpEntityId: identityProvider.getEntityID(),
+			idpRedirectService: identityProvider.getSingleSignOnService("redirect"),
+			idpPostService: identityProvider.getSingleSignOnService("post"),
+			spEntityId:
+				serviceProvider?.entityID ??
+				config.spMetadata?.entityID ??
+				config.issuer,
+			spNameIDFormat:
+				serviceProvider?.nameIDFormats.at(0) ?? config.identifierFormat,
+			spPostServices: serviceProvider
+				? getSAMLPostAssertionConsumerServiceUrls(config.spMetadata?.metadata)
+				: config.callbackUrl
+					? [config.callbackUrl]
+					: [],
+			wantAssertionsSigned:
+				serviceProvider?.wantAssertionsSigned ??
+				config.wantAssertionsSigned === true,
+		};
+	};
+	const trustAnchors = (
+		identityProvider: ReturnType<typeof createIdP>["entityMeta"],
+	) => {
+		const certificates = identityProvider.getX509Certificate("signing");
+		return (
+			Array.isArray(certificates)
+				? certificates
+				: certificates
+					? [certificates]
+					: []
+		)
+			.map((certificate) => normalizePem(certificate) ?? certificate)
+			.sort();
+	};
 	return (
 		hasChangedField(current, updated, SAML_IDENTITY_BOUNDARY_FIELDS) ||
-		hasChangedField(
-			current.idpMetadata,
-			updated.idpMetadata,
-			SAML_IDP_BOUNDARY_FIELDS,
+		identityValueChanged(
+			trustAnchors(currentIdentityProvider),
+			trustAnchors(updatedIdentityProvider),
 		) ||
-		hasChangedField(
-			current.spMetadata,
-			updated.spMetadata,
-			SAML_SP_BOUNDARY_FIELDS,
+		identityValueChanged(
+			effectiveIdentityBoundary(current),
+			effectiveIdentityBoundary(updated),
 		)
 	);
 }
@@ -192,14 +253,84 @@ function ssoProviderIdentityBoundaryChanged(
 }
 
 async function lockSSOProviderRow(
-	adapter: AuthContext["adapter"],
-	providerId: string,
+	context: AuthContext,
+	provider: Pick<SSOProviderRecord, "providerId"> &
+		Partial<Pick<SSOProviderRecord, "id">>,
 ): Promise<SSOProviderRecord | null> {
-	const trx = await getCurrentAdapter(adapter);
+	const where = [
+		...(provider.id ? [{ field: "id", value: provider.id }] : []),
+		{ field: "providerId", value: provider.providerId },
+	];
+	const trx = await getCurrentAdapter(context.adapter);
 	return trx.update<SSOProviderRecord>({
 		model: "ssoProvider",
-		where: [{ field: "providerId", value: providerId }],
-		update: { providerId },
+		where,
+		update: { providerId: provider.providerId },
+	});
+}
+
+async function guardSSOProviderMutation(
+	options: SSOOptions | undefined,
+	mutation:
+		| { action: "update"; isAuthenticationBoundaryChange: boolean }
+		| { action: "delete" },
+	provider: SSOProviderRecord,
+	database: Awaited<ReturnType<typeof getCurrentAdapter>>,
+	logger: AuthContext["logger"],
+): Promise<void> {
+	if (!options?.guardProviderMutation) return;
+	const oidcConfig = provider.oidcConfig
+		? parseConfigSnapshot<OIDCConfig>(provider.oidcConfig, "OIDC")
+		: undefined;
+	const samlConfig = provider.samlConfig
+		? parseConfigSnapshot<SAMLConfig>(provider.samlConfig, "SAML")
+		: undefined;
+	const providerReference = await computeSSOProviderReference({
+		...provider,
+		organizationId: provider.organizationId ?? undefined,
+		oidcConfig,
+		samlConfig,
+	});
+	try {
+		await options.guardProviderMutation(
+			{
+				...mutation,
+				provider: {
+					id: provider.id,
+					providerId: provider.providerId,
+					organizationId: provider.organizationId ?? null,
+				},
+				providerReference,
+			},
+			{ database },
+		);
+	} catch {
+		try {
+			logger.error("SSO provider mutation guard rejected the mutation");
+		} catch {
+			// A custom logger must not change the stable conflict response.
+		}
+		throw new APIError("CONFLICT", {
+			code: "SSO_PROVIDER_MUTATION_REJECTED",
+			message: "SSO provider mutation is not allowed",
+		});
+	}
+}
+
+async function assertProviderMutationGuardCapabilities(
+	options: SSOOptions | undefined,
+	adapter: AuthContext["adapter"],
+): Promise<void> {
+	if (!options?.guardProviderMutation) return;
+	assertSSONativeTransactionSupport(adapter, {
+		code: "SSO_PROVIDER_MUTATION_GUARD_REQUIRES_NATIVE_TRANSACTIONS",
+		message:
+			"SSO provider mutation guards require a database adapter with native transaction support",
+	});
+	await assertSSOAsyncContextSupport({
+		code: "SSO_PROVIDER_MUTATION_GUARD_REQUIRES_ASYNC_CONTEXT",
+		message:
+			"SSO provider mutation guards require database transaction async context support",
 	});
 }
 
@@ -210,10 +341,10 @@ export async function lockSSOProviderForAccountLink(
 	if (typeof provider.id !== "string") {
 		return;
 	}
-	const lockedProvider = await lockSSOProviderRow(
-		ctx.context.adapter,
-		provider.providerId,
-	);
+	const lockedProvider = await lockSSOProviderRow(ctx.context, {
+		id: provider.id,
+		providerId: provider.providerId,
+	});
 	if (!lockedProvider) {
 		throw new APIError("CONFLICT", {
 			code: "SSO_PROVIDER_CHANGED",
@@ -726,22 +857,25 @@ export const updateSSOProvider = (options: SSOOptions) => {
 				});
 			}
 
-			await checkProviderAccess(ctx, providerId);
+			const authorizedProvider = await checkProviderAccess(ctx, providerId);
+			await assertProviderMutationGuardCapabilities(
+				options,
+				ctx.context.adapter,
+			);
 
 			const fullProvider = await runWithTransaction(
 				ctx.context.adapter,
 				async () => {
 					const trx = await getCurrentAdapter(ctx.context.adapter);
-					const existingProvider = await lockSSOProviderRow(
-						ctx.context.adapter,
+					const existingProvider = await lockSSOProviderRow(ctx.context, {
+						id: authorizedProvider.id,
 						providerId,
-					);
+					});
 					if (!existingProvider) {
 						throw new APIError("NOT_FOUND", {
 							message: "Provider not found",
 						});
 					}
-
 					const updateData: Partial<SSOProviderRecord> = {
 						...additionalFields,
 					};
@@ -761,19 +895,18 @@ export const updateSSOProvider = (options: SSOOptions) => {
 					}
 
 					if (body.samlConfig) {
-						if (body.samlConfig.idpMetadata?.metadata) {
-							const maxMetadataSize =
-								options?.saml?.maxMetadataSize ??
-								DEFAULT_MAX_SAML_METADATA_SIZE;
-							if (
-								new TextEncoder().encode(body.samlConfig.idpMetadata.metadata)
-									.length > maxMetadataSize
-							) {
-								throw new APIError("BAD_REQUEST", {
-									message: `IdP metadata exceeds maximum allowed size (${maxMetadataSize} bytes)`,
-								});
-							}
-						}
+						const maxMetadataSize =
+							options?.saml?.maxMetadataSize ?? DEFAULT_MAX_SAML_METADATA_SIZE;
+						assertSAMLMetadataSize(
+							body.samlConfig.idpMetadata?.metadata,
+							"IdP",
+							maxMetadataSize,
+						);
+						assertSAMLMetadataSize(
+							body.samlConfig.spMetadata?.metadata,
+							"SP",
+							maxMetadataSize,
+						);
 
 						if (
 							body.samlConfig.signatureAlgorithm !== undefined ||
@@ -803,6 +936,7 @@ export const updateSSOProvider = (options: SSOOptions) => {
 
 						validateCertSources(updatedSamlConfig);
 						assertSAMLIdentityProviderAuthority(updatedSamlConfig);
+						assertSAMLServiceProviderMetadataPolicy(updatedSamlConfig);
 						if (
 							samlIdentityBoundaryChanged(currentSamlConfig, updatedSamlConfig)
 						) {
@@ -875,6 +1009,17 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						updateData.oidcConfig = JSON.stringify(updatedOidcConfig);
 					}
 
+					await guardSSOProviderMutation(
+						options,
+						{
+							action: "update",
+							isAuthenticationBoundaryChange: providerIdentityBoundaryChanged,
+						},
+						existingProvider,
+						trx,
+						ctx.context.logger,
+					);
+
 					if (providerIdentityBoundaryChanged) {
 						const linkedAccount = await trx.findOne<{ id: string }>({
 							model: "account",
@@ -918,7 +1063,7 @@ export const updateSSOProvider = (options: SSOOptions) => {
 	);
 };
 
-export const deleteSSOProvider = () => {
+export const deleteSSOProvider = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/delete-provider",
 		{
@@ -949,17 +1094,40 @@ export const deleteSSOProvider = () => {
 		async (ctx) => {
 			const { providerId } = ctx.body;
 
-			await checkProviderAccess(ctx, providerId);
+			const authorizedProvider = await checkProviderAccess(ctx, providerId);
+			await assertProviderMutationGuardCapabilities(
+				options,
+				ctx.context.adapter,
+			);
 
 			await runWithTransaction(ctx.context.adapter, async () => {
 				const trx = await getCurrentAdapter(ctx.context.adapter);
+				const existingProvider = await lockSSOProviderRow(ctx.context, {
+					id: authorizedProvider.id,
+					providerId,
+				});
+				if (!existingProvider) {
+					throw new APIError("NOT_FOUND", {
+						message: "Provider not found",
+					});
+				}
+				await guardSSOProviderMutation(
+					options,
+					{ action: "delete" },
+					existingProvider,
+					trx,
+					ctx.context.logger,
+				);
 				await trx.deleteMany({
 					model: "account",
 					where: [{ field: "providerId", value: providerId }],
 				});
 				await trx.delete({
 					model: "ssoProvider",
-					where: [{ field: "providerId", value: providerId }],
+					where: [
+						{ field: "id", value: existingProvider.id },
+						{ field: "providerId", value: providerId },
+					],
 				});
 			});
 
