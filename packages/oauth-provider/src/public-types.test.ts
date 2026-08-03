@@ -62,6 +62,19 @@ describe("claim callbacks infer configured additional user fields", () => {
 		>().toEqualTypeOf<string>();
 	});
 
+	it("does not widen the user into an index signature", () => {
+		type Info = Parameters<NonNullable<Options["customUserInfoClaims"]>>[0];
+
+		// A field nobody configured must not resolve to something usable — that is
+		// what distinguishes real inference from `any` or a catch-all record.
+		// @ts-expect-error `notConfigured` is not a field on this user
+		type _NotAField = Info["user"]["notConfigured"];
+
+		expectTypeOf<Info["user"]["loyaltyPoints"]>().toEqualTypeOf<
+			number | undefined | null
+		>();
+	});
+
 	it("leaves the user type intact when no options are supplied", () => {
 		type Info = Parameters<
 			NonNullable<OAuthOptions["customUserInfoClaims"]>

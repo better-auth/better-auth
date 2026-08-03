@@ -1,3 +1,4 @@
+import { jwtVerify } from "jose";
 import { listen } from "listhen";
 import { afterAll, describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
@@ -1605,5 +1606,151 @@ describe("mcp pkce enforcement for public clients (security)", async () => {
 
 		expect(redirect.searchParams.get("code")).toBeTruthy();
 		expect(redirect.searchParams.get("error")).toBeNull();
+	});
+});
+
+/**
+ * Without the jwt plugin there are no published keys, so an id token can only
+ * be verified by something the client already holds — its own secret. A public
+ * client holds nothing, and must get no id token rather than an unverifiable
+ * one.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10638
+ */
+describe("mcp id token without the jwt plugin (security)", async () => {
+	const tempServer = await listen(
+		toNodeHandler(async () => new Response("temp")),
+		{ port: 0 },
+	);
+	const port = tempServer.address?.port || 3004;
+	const baseURL = `http://localhost:${port}`;
+	await tempServer.close();
+
+	// Deliberately no jwt() here.
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL,
+		plugins: [mcp({ loginPage: "/login" })],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const serverClient = createAuthClient({
+		baseURL,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	const server = await listen(toNodeHandler(auth.handler), { port });
+	afterAll(async () => {
+		await server.close();
+	});
+
+	const b64url = (bytes: Uint8Array) =>
+		btoa(String.fromCharCode(...bytes))
+			.replace(/\+/g, "-")
+			.replace(/\//g, "_")
+			.replace(/=+$/, "");
+
+	async function tokenFor(authMethod: "none" | "client_secret_basic") {
+		const registered = await serverClient.$fetch("/mcp/register", {
+			method: "POST",
+			body: {
+				client_name: `no-jwt-${authMethod}`,
+				redirect_uris: ["http://localhost:3000/callback"],
+				token_endpoint_auth_method: authMethod,
+			},
+		});
+		const client = registered.data as any;
+
+		const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
+		const challenge = b64url(
+			new Uint8Array(
+				await crypto.subtle.digest(
+					"SHA-256",
+					new TextEncoder().encode(verifier),
+				),
+			),
+		);
+
+		let redirect = "";
+		await serverClient.$fetch(
+			`${baseURL}/api/auth/mcp/authorize?` +
+				new URLSearchParams({
+					client_id: client.client_id,
+					redirect_uri: client.redirect_uris[0],
+					response_type: "code",
+					scope: "openid profile email",
+					code_challenge: challenge,
+					code_challenge_method: "S256",
+				}).toString(),
+			{
+				method: "GET",
+				onError(context: any) {
+					redirect = context.response.headers.get("Location") || "";
+				},
+				onSuccess(context: any) {
+					redirect = context.response.headers.get("Location") || redirect;
+				},
+			},
+		);
+		const code = new URL(redirect).searchParams.get("code");
+
+		const body = new URLSearchParams({
+			grant_type: "authorization_code",
+			code: code!,
+			client_id: client.client_id,
+			redirect_uri: client.redirect_uris[0],
+			code_verifier: verifier,
+		});
+		if (client.client_secret) {
+			body.set("client_secret", client.client_secret);
+		}
+
+		const response = await customFetchImpl(`${baseURL}/api/auth/mcp/token`, {
+			method: "POST",
+			headers: { "Content-Type": "application/x-www-form-urlencoded" },
+			body: body.toString(),
+		});
+		return { body: await response.json(), client };
+	}
+
+	it("should sign a confidential client's id token with its client secret", async ({
+		expect,
+	}) => {
+		const { body, client } = await tokenFor("client_secret_basic");
+
+		expect(body.id_token).toBeTruthy();
+		await expect(
+			jwtVerify(body.id_token, new TextEncoder().encode(client.client_secret)),
+		).resolves.toBeTruthy();
+	});
+
+	it("should reject an id token verified with the wrong secret", async ({
+		expect,
+	}) => {
+		const { body } = await tokenFor("client_secret_basic");
+
+		await expect(
+			jwtVerify(body.id_token, new TextEncoder().encode("not-the-secret")),
+		).rejects.toThrow();
+	});
+
+	it("should issue no id token to a public client, which holds no secret", async ({
+		expect,
+	}) => {
+		const { body } = await tokenFor("none");
+
+		expect(body.access_token).toBeTruthy();
+		expect(body.id_token).toBeUndefined();
+	});
+
+	it("should advertise HS256 when there are no published keys", async ({
+		expect,
+	}) => {
+		const metadata = await serverClient.$fetch<Record<string, any>>(
+			"/.well-known/oauth-authorization-server",
+		);
+
+		expect(metadata.data?.id_token_signing_alg_values_supported).toEqual([
+			"HS256",
+		]);
 	});
 });
