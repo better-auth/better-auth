@@ -1,5 +1,32 @@
 # @better-auth/scim
 
+## 1.7.0-rc.3
+
+### Minor Changes
+
+- [#10592](https://github.com/better-auth/better-auth/pull/10592) [`26b1949`](https://github.com/better-auth/better-auth/commit/26b194960fe539d2189cb1b7554c16d9f5318906) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Allow SCIM bearer verification to resolve application-owned connections at request time. Dynamic connections use the same scope enforcement, immutable provisioning-domain binding, decommissioning, and request fencing as code-defined connections, while an empty static connection list is supported when a verifier is configured.
+
+- [#10620](https://github.com/better-auth/better-auth/pull/10620) [`b7683b8`](https://github.com/better-auth/better-auth/commit/b7683b82be4048263c667d97004a47701d58793a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add the standard Enterprise User extension (`employeeNumber`, `costCenter`, `organization`, `division`, `department`, `manager`) and the classic `title`, `userType`, `preferredLanguage`, `locale`, `timezone`, `phoneNumbers`, `addresses`, `roles`, and `entitlements` User attributes, plus `name.middleName`, `name.honorificPrefix`, and `name.honorificSuffix`. All are readable, filterable by `type` or `primary`, and writable through PATCH, including the classic Microsoft Entra `manager` path aliases.
+
+  Add `compatibility.microsoftEntra.acceptLegacyGroupSchema` to accept Microsoft Entra's legacy, attribute-less Group schema marker on `POST /Groups` without storing or returning it.
+
+  Microsoft Entra interoperability fixes:
+  - A bare `attributes`/`excludedAttributes` name for an Enterprise User sub-attribute (for example `?attributes=manager`) no longer drops the whole extension from the response.
+  - Multi-op PATCH paths filtered by `[primary eq true]` (or `[primary eq "true"]`) with a sub-attribute target now work on `emails`, `phoneNumbers`, `addresses`, `roles`, and `entitlements`.
+  - A single-element array wrapping a scalar PATCH replace value is unwrapped instead of rejected, on User scalars, Enterprise User fields, and Group `displayName` and `externalId`.
+  - Removing the last sub-attribute of a complex attribute (for example `manager.value`) clears the emptied Enterprise User extension instead of leaving it declared.
+  - Replacing `manager` with an empty string clears it, matching how Microsoft Entra removes a manager.
+  - A PATCH with an empty `Operations` array is a valid no-op instead of an error, for both Users and Groups.
+  - `PATCH /Users/:id` and `PATCH /Groups/:id` return `200 OK` with the updated resource instead of `204 No Content`.
+
+- [#10592](https://github.com/better-auth/better-auth/pull/10592) [`26b1949`](https://github.com/better-auth/better-auth/commit/26b194960fe539d2189cb1b7554c16d9f5318906) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add an optional SCIM-owned connection and credential catalog. Configure `managedConnections` to let trusted server code create runtime tenant connections and issue, rotate, and revoke their bearer credentials through server-only `auth.api` methods, without a code-defined connection or an application-owned verifier.
+
+### Patch Changes
+
+- [#10620](https://github.com/better-auth/better-auth/pull/10620) [`b7683b8`](https://github.com/better-auth/better-auth/commit/b7683b82be4048263c667d97004a47701d58793a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Accept exact case-insensitive string Boolean values for SCIM User `active` and the `primary` sub-attribute of `emails`, `phoneNumbers`, `addresses`, `roles`, and `entitlements` at the HTTP ingress for Microsoft Entra interoperability.
+
+- [#10592](https://github.com/better-auth/better-auth/pull/10592) [`26b1949`](https://github.com/better-auth/better-auth/commit/26b194960fe539d2189cb1b7554c16d9f5318906) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Allow trusted server code to retain a terminal connection binding before a dynamic SCIM connection's first authenticated request by supplying its provisioning domain during decommissioning.
+
 ## 1.7.0-rc.2
 
 ### Minor Changes

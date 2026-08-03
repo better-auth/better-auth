@@ -1,5 +1,13 @@
 # @better-auth/kysely-adapter
 
+## 1.7.0-rc.3
+
+### Minor Changes
+
+- [#10622](https://github.com/better-auth/better-auth/pull/10622) [`ecd83da`](https://github.com/better-auth/better-auth/commit/ecd83daa01ec482d31667019737cb6697f03da0b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Raw database instances (better-sqlite3, `node:sqlite`, `bun:sqlite`, `mysql2`, `pg`) passed directly as `database` now get native adapter transactions automatically, matching the behavior of the explicit `{ db }`/`{ dialect }` config shapes. This unblocks plugins that require native transactions (such as `@better-auth/scim`) when the database is provided in the quickstart `database: new Database(...)` shape.
+
+  Cloudflare D1 still reports no native transaction support, since D1 has no interactive transactions.
+
 ## 1.7.0-rc.2
 
 ### Patch Changes

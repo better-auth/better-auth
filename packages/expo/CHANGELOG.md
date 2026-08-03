@@ -1,5 +1,11 @@
 # @better-auth/expo
 
+## 1.7.0-rc.3
+
+### Patch Changes
+
+- [#10505](https://github.com/better-auth/better-auth/pull/10505) [`d701f90`](https://github.com/better-auth/better-auth/commit/d701f90e6f81ede26209a50a5100bd9914a7ad5a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - One Tap, Electron, and Expo client plugins now compose with `createAuthClient` without TypeScript errors, and the resulting client preserves each plugin's inferred actions.
+
 ## 1.7.0-rc.2
 
 ## 1.7.0-rc.1
