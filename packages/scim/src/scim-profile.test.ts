@@ -16,7 +16,7 @@ describe("SCIM canonical User profiles", () => {
 			scimConnectionBinding: [] as { id: string }[],
 			scimIdentityTombstone: [] as { id: string }[],
 			scimSubject: [] as { id: string; userId: string }[],
-			scimUser: [] as { id: string; serializedEmails: string }[],
+			scimUser: [] as { id: string; serializedAttributes: string }[],
 			scimGroupMember: [] as { id: string }[],
 			scimProjectionGrant: [] as { id: string }[],
 		};
@@ -59,7 +59,7 @@ describe("SCIM canonical User profiles", () => {
 						primary: true,
 					},
 					{ value: "ada.shared@example.com", type: "work" },
-					{ value: "ada.alias@example.com", type: "work" },
+					{ value: "ada.alias@example.com", type: "other" },
 				],
 			},
 			headers,
@@ -92,14 +92,14 @@ describe("SCIM canonical User profiles", () => {
 				},
 				{
 					value: "ada.alias@example.com",
-					type: "work",
+					type: "other",
 					primary: false,
 				},
 			],
 		});
-		expect(JSON.parse(data.scimUser[0]?.serializedEmails ?? "[]")).toEqual(
-			retrieved.emails,
-		);
+		expect(
+			JSON.parse(data.scimUser[0]?.serializedAttributes ?? "{}"),
+		).toMatchObject({ emails: retrieved.emails });
 		expect(data.user[0]).toMatchObject({
 			email: "ada.shared@example.com",
 			name: "Countess of Lovelace",
@@ -107,7 +107,7 @@ describe("SCIM canonical User profiles", () => {
 
 		const persisted = data.scimUser[0];
 		if (!persisted) throw new Error("Expected the persisted SCIM User");
-		persisted.serializedEmails = "corrupt";
+		persisted.serializedAttributes = "corrupt";
 		await expect(
 			auth.api.getSCIMUser({
 				params: { userId: created.id },
@@ -117,7 +117,7 @@ describe("SCIM canonical User profiles", () => {
 			expect.objectContaining({
 				statusCode: 500,
 				body: expect.objectContaining({
-					detail: "Stored SCIM User email state is invalid",
+					detail: "Stored SCIM User attribute state is invalid",
 				}),
 			}),
 		);

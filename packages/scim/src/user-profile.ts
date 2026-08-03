@@ -1,34 +1,21 @@
-import type { SCIMCanonicalEmail, SCIMEmail, SCIMName } from "./configuration";
-import type { SCIMUser } from "./persistence";
+import type {
+	SCIMCanonicalEmail,
+	SCIMCanonicalName,
+	SCIMEmail,
+} from "./configuration";
 import { createScopedKey } from "./resource-key";
-import { createSCIMError } from "./scim-error";
-
-interface SCIMProfileInput {
-	userName: string;
-	displayName?: string;
-	name?: SCIMName;
-	emails?: readonly SCIMEmail[];
-}
+import type { APIUser, SCIMCanonicalUserAttributes } from "./user-schemas";
+import { SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR } from "./user-schemas";
 
 /** Canonical provider-owned profile fields stored on a SCIM User. */
 export interface CanonicalSCIMUserProfile {
 	userName: string;
 	displayName: string;
 	formattedName: string;
-	givenName: string | undefined;
-	familyName: string | undefined;
+	name: SCIMCanonicalName;
 	emails: SCIMCanonicalEmail[];
 	primaryEmail: string;
-}
-
-/** Create a case-insensitive identity for one complex email value. */
-export function createSCIMEmailTupleKey(
-	email: Pick<SCIMEmail, "type" | "value">,
-): string {
-	return JSON.stringify([
-		email.type?.trim().toLowerCase() ?? null,
-		email.value.trim().toLowerCase(),
-	]);
+	attributes: SCIMCanonicalUserAttributes;
 }
 
 function normalizeOptionalString(value?: string): string | undefined {
@@ -66,7 +53,7 @@ export function normalizeSCIMEmails(
 
 /** Resolve the provider profile independently from the Better Auth User row. */
 export function createCanonicalSCIMUserProfile(
-	input: SCIMProfileInput,
+	input: APIUser,
 ): CanonicalSCIMUserProfile {
 	const userName = input.userName.trim();
 	const emails = normalizeSCIMEmails(userName, input.emails);
@@ -76,6 +63,9 @@ export function createCanonicalSCIMUserProfile(
 		userName;
 	const givenName = normalizeOptionalString(input.name?.givenName);
 	const familyName = normalizeOptionalString(input.name?.familyName);
+	const middleName = normalizeOptionalString(input.name?.middleName);
+	const honorificPrefix = normalizeOptionalString(input.name?.honorificPrefix);
+	const honorificSuffix = normalizeOptionalString(input.name?.honorificSuffix);
 	const composedName = [givenName, familyName].filter(Boolean).join(" ");
 	const formattedName =
 		normalizeOptionalString(input.name?.formatted) ??
@@ -83,21 +73,46 @@ export function createCanonicalSCIMUserProfile(
 		(composedName || primaryEmail);
 	const displayName =
 		normalizeOptionalString(input.displayName) ?? formattedName;
+	const name = {
+		formatted: formattedName,
+		...(givenName ? { givenName } : {}),
+		...(familyName ? { familyName } : {}),
+		...(middleName ? { middleName } : {}),
+		...(honorificPrefix ? { honorificPrefix } : {}),
+		...(honorificSuffix ? { honorificSuffix } : {}),
+	};
+	const attributes: SCIMCanonicalUserAttributes = {
+		schemas: input.schemas,
+		name,
+		emails,
+		...(input.title ? { title: input.title } : {}),
+		...(input.userType ? { userType: input.userType } : {}),
+		...(input.preferredLanguage
+			? { preferredLanguage: input.preferredLanguage }
+			: {}),
+		...(input.locale ? { locale: input.locale } : {}),
+		...(input.timezone ? { timezone: input.timezone } : {}),
+		...(input.phoneNumbers ? { phoneNumbers: input.phoneNumbers } : {}),
+		...(input.addresses ? { addresses: input.addresses } : {}),
+		...(input.roles ? { roles: input.roles } : {}),
+		...(input.entitlements ? { entitlements: input.entitlements } : {}),
+		...(input[SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.id]
+			? {
+					[SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.canonicalAttribute]:
+						input[SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.id],
+				}
+			: {}),
+	};
 
 	return {
 		userName,
 		displayName,
 		formattedName,
-		givenName,
-		familyName,
+		name,
 		emails,
 		primaryEmail,
+		attributes,
 	};
-}
-
-/** Serialize a bounded canonical email set for adapter-portable storage. */
-export function serializeSCIMEmails(emails: readonly SCIMEmail[]): string {
-	return JSON.stringify(emails);
 }
 
 /** Build an adapter-portable exact-membership index for email equality filters. */
@@ -122,53 +137,4 @@ export function createSCIMEmailValueIndex(
 /** Create one delimiter-safe token used by an email equality query. */
 export function createSCIMEmailValueToken(email: string): string {
 	return createScopedKey(["scim-email-value", email.trim().toLowerCase()]);
-}
-
-function invalidStoredEmailState(): never {
-	throw createSCIMError("INTERNAL_SERVER_ERROR", {
-		detail: "Stored SCIM User email state is invalid",
-	});
-}
-
-/** Read and validate the complete canonical email set from storage. */
-export function readSCIMEmails(user: SCIMUser): SCIMCanonicalEmail[] {
-	let parsed: unknown;
-	try {
-		parsed = JSON.parse(user.serializedEmails);
-	} catch {
-		return invalidStoredEmailState();
-	}
-	if (!Array.isArray(parsed) || parsed.length < 1 || parsed.length > 20) {
-		return invalidStoredEmailState();
-	}
-
-	const emails: SCIMCanonicalEmail[] = [];
-	for (const candidate of parsed) {
-		if (
-			typeof candidate !== "object" ||
-			candidate === null ||
-			!("value" in candidate) ||
-			typeof candidate.value !== "string" ||
-			candidate.value.trim().toLowerCase() !== candidate.value ||
-			("type" in candidate &&
-				(typeof candidate.type !== "string" ||
-					candidate.type.trim().toLowerCase() !== candidate.type)) ||
-			("primary" in candidate && typeof candidate.primary !== "boolean")
-		) {
-			return invalidStoredEmailState();
-		}
-		const type = "type" in candidate ? candidate.type : undefined;
-		emails.push({
-			value: candidate.value,
-			...(type ? { type } : {}),
-			primary: "primary" in candidate && candidate.primary === true,
-		});
-	}
-	if (
-		emails.filter((email) => email.primary).length !== 1 ||
-		new Set(emails.map(createSCIMEmailTupleKey)).size !== emails.length
-	) {
-		return invalidStoredEmailState();
-	}
-	return emails;
 }

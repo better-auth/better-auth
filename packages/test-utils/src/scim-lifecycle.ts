@@ -308,7 +308,10 @@ export async function runSCIMLifecycle(
 			},
 		},
 	);
-	await expectSCIMNoContent(unchangedUserPatchResponse);
+	expectSCIMResponse(unchangedUserPatchResponse, 200);
+	expect(
+		await readJson<SCIMUserResource>(unchangedUserPatchResponse),
+	).toMatchObject({ id: createdUser.id, displayName: "Ada Byron" });
 	const unchangedUserResponse = await request(
 		`/Users/${encodeURIComponent(createdUser.id)}`,
 	);
@@ -377,7 +380,10 @@ export async function runSCIMLifecycle(
 	}
 
 	const addMemberResponse = await addMember();
-	await expectSCIMNoContent(addMemberResponse);
+	expectSCIMResponse(addMemberResponse, 200);
+	expect(
+		(await readJson<SCIMGroupResource>(addMemberResponse)).members,
+	).toEqual([expect.objectContaining({ value: createdUser.id })]);
 
 	const groupWithMemberResponse = await request(
 		`/Groups/${encodeURIComponent(createdGroup.id)}`,
@@ -410,7 +416,10 @@ export async function runSCIMLifecycle(
 			},
 		},
 	);
-	await expectSCIMNoContent(oktaRemovalResponse);
+	expectSCIMResponse(oktaRemovalResponse, 200);
+	expect(
+		(await readJson<SCIMGroupResource>(oktaRemovalResponse)).members,
+	).toEqual([]);
 	const groupAfterOktaRemovalResponse = await request(
 		`/Groups/${encodeURIComponent(createdGroup.id)}`,
 	);
@@ -436,7 +445,10 @@ export async function runSCIMLifecycle(
 			},
 		},
 	);
-	await expectSCIMNoContent(secondAddResponse);
+	expectSCIMResponse(secondAddResponse, 200);
+	expect(
+		(await readJson<SCIMGroupResource>(secondAddResponse)).members,
+	).toEqual([expect.objectContaining({ value: createdUser.id })]);
 	const entraRemovalResponse = await request(
 		`/Groups/${encodeURIComponent(createdGroup.id)}`,
 		{
@@ -453,7 +465,10 @@ export async function runSCIMLifecycle(
 			},
 		},
 	);
-	await expectSCIMNoContent(entraRemovalResponse);
+	expectSCIMResponse(entraRemovalResponse, 200);
+	expect(
+		(await readJson<SCIMGroupResource>(entraRemovalResponse)).members,
+	).toEqual([]);
 	const groupAfterEntraRemovalResponse = await request(
 		`/Groups/${encodeURIComponent(createdGroup.id)}`,
 	);
@@ -464,7 +479,7 @@ export async function runSCIMLifecycle(
 	await checkpoint("entra-member-removed");
 
 	const restoreMemberResponse = await addMember();
-	await expectSCIMNoContent(restoreMemberResponse);
+	expectSCIMResponse(restoreMemberResponse, 200);
 	const restoredGroupResponse = await request(
 		`/Groups/${encodeURIComponent(createdGroup.id)}`,
 	);
@@ -486,7 +501,10 @@ export async function runSCIMLifecycle(
 			},
 		},
 	);
-	await expectSCIMNoContent(deactivateUserResponse);
+	expectSCIMResponse(deactivateUserResponse, 200);
+	expect(
+		await readJson<SCIMUserResource>(deactivateUserResponse),
+	).toMatchObject({ id: createdUser.id, active: false });
 	const inactiveUserResponse = await request(
 		`/Users/${encodeURIComponent(createdUser.id)}`,
 	);
@@ -515,7 +533,10 @@ export async function runSCIMLifecycle(
 			},
 		},
 	);
-	await expectSCIMNoContent(reactivateUserResponse);
+	expectSCIMResponse(reactivateUserResponse, 200);
+	expect(
+		await readJson<SCIMUserResource>(reactivateUserResponse),
+	).toMatchObject({ id: createdUser.id, active: true });
 	const activeUserResponse = await request(
 		`/Users/${encodeURIComponent(createdUser.id)}`,
 	);
@@ -588,7 +609,7 @@ export async function runSCIMLifecycle(
 			},
 		},
 	);
-	await expectSCIMNoContent(addReprovisionedMemberResponse);
+	expectSCIMResponse(addReprovisionedMemberResponse, 200);
 	const groupWithReprovisionedMemberResponse = await request(
 		`/Groups/${encodeURIComponent(createdGroup.id)}`,
 	);

@@ -3,7 +3,10 @@ import type {
 	SCIM_RESOURCE_SCHEMA_REGISTRY,
 	SCIMResourceType,
 } from "./resource-schema-registry";
-import { stripSCIMCoreAttributePrefix } from "./resource-schema-registry";
+import {
+	resolveSCIMResponseAttributePath,
+	stripSCIMCoreAttributePrefix,
+} from "./resource-schema-registry";
 
 export type { SCIMResourceType } from "./resource-schema-registry";
 
@@ -220,6 +223,116 @@ function canonicalizeFilterAttribute(
 	}
 }
 
+interface SCIMFilterOperation {
+	rawAttribute: string;
+	rawOperator: string;
+	rawValue: string;
+}
+
+interface SCIMTopLevelWord {
+	end: number;
+	start: number;
+	value: string;
+}
+
+function invalidFilterSyntax(detail: string): SCIMQueryParseResult<never> {
+	return {
+		ok: false,
+		error: {
+			code: "invalid-filter-syntax",
+			parameter: "filter",
+			scimType: "invalidFilter",
+			detail,
+		},
+	};
+}
+
+function scanSCIMFilterTopLevel(
+	filter: string,
+): SCIMQueryParseResult<readonly SCIMTopLevelWord[]> {
+	const words: SCIMTopLevelWord[] = [];
+	let bracketDepth = 0;
+	let quoted = false;
+	let escaped = false;
+
+	for (let index = 0; index < filter.length; index += 1) {
+		const character = filter[index];
+		if (quoted) {
+			if (escaped) {
+				escaped = false;
+				continue;
+			}
+			if (character === "\\") {
+				escaped = true;
+				continue;
+			}
+			if (character === '"') quoted = false;
+			continue;
+		}
+
+		if (character === '"') {
+			quoted = true;
+			continue;
+		}
+		if (character === "[") {
+			bracketDepth += 1;
+			continue;
+		}
+		if (character === "]") {
+			if (bracketDepth === 0) {
+				return invalidFilterSyntax(
+					"filter contains malformed quotes or brackets",
+				);
+			}
+			bracketDepth -= 1;
+			continue;
+		}
+		if (bracketDepth !== 0 || !character || !/[A-Za-z]/.test(character)) {
+			continue;
+		}
+
+		const start = index;
+		while (/[A-Za-z]/.test(filter[index + 1] ?? "")) index += 1;
+		const end = index + 1;
+		words.push({ start, end, value: filter.slice(start, end) });
+	}
+
+	if (quoted || bracketDepth !== 0) {
+		return invalidFilterSyntax("filter contains malformed quotes or brackets");
+	}
+	return { ok: true, value: words };
+}
+
+function findTopLevelFilterOperation(
+	filter: string,
+): SCIMQueryParseResult<SCIMFilterOperation | undefined> {
+	const scan = scanSCIMFilterTopLevel(filter);
+	if (!scan.ok) return scan;
+
+	for (const word of scan.value) {
+		const before = filter[word.start - 1];
+		const after = filter[word.end];
+		if (
+			before === undefined ||
+			after === undefined ||
+			!/\s/.test(before) ||
+			!/\s/.test(after)
+		) {
+			continue;
+		}
+
+		const rawAttribute = filter.slice(0, word.start).trim();
+		const rawValue = filter.slice(word.end).trim();
+		if (!rawAttribute || !rawValue) continue;
+		return {
+			ok: true,
+			value: { rawAttribute, rawOperator: word.value, rawValue },
+		};
+	}
+
+	return { ok: true, value: undefined };
+}
+
 function parseSCIMEqualityFilter(
 	resourceType: "User",
 	filter?: string,
@@ -241,36 +354,27 @@ function parseSCIMEqualityFilter(
 		return { ok: true, value: undefined };
 	}
 
-	const match = filter.trim().match(/^([\s\S]+)\s+([A-Za-z]+)\s+([\s\S]+)$/);
-	if (!match) {
-		return {
-			ok: false,
-			error: {
-				code: "invalid-filter-syntax",
-				parameter: "filter",
-				scimType: "invalidFilter",
-				detail: 'filter must use the form attribute eq "value"',
-			},
-		};
+	const parsedOperation = findTopLevelFilterOperation(filter.trim());
+	if (!parsedOperation.ok) return parsedOperation;
+	const operation = parsedOperation.value;
+	if (!operation) {
+		return invalidFilterSyntax('filter must use the form attribute eq "value"');
 	}
 
-	const [, rawAttribute, rawOperator, rawValue] = match;
-	if (rawOperator?.toLowerCase() !== "eq") {
+	const { rawAttribute, rawOperator, rawValue } = operation;
+	if (rawOperator.toLowerCase() !== "eq") {
 		return {
 			ok: false,
 			error: {
 				code: "unsupported-filter-operator",
 				parameter: "filter",
 				scimType: "invalidFilter",
-				detail: `filter operator ${rawOperator ?? ""} is not supported`,
+				detail: `filter operator ${rawOperator} is not supported`,
 			},
 		};
 	}
 
-	const attribute = canonicalizeFilterAttribute(
-		resourceType,
-		rawAttribute?.trim() ?? "",
-	);
+	const attribute = canonicalizeFilterAttribute(resourceType, rawAttribute);
 	if (!attribute) {
 		return {
 			ok: false,
@@ -278,14 +382,14 @@ function parseSCIMEqualityFilter(
 				code: "unsupported-filter-attribute",
 				parameter: "filter",
 				scimType: "invalidFilter",
-				detail: `filter attribute ${rawAttribute ?? ""} is not supported for ${resourceType}`,
+				detail: `filter attribute ${rawAttribute} is not supported for ${resourceType}`,
 			},
 		};
 	}
 
 	let value: unknown;
 	try {
-		value = JSON.parse(rawValue ?? "");
+		value = JSON.parse(rawValue);
 	} catch {
 		return {
 			ok: false,
@@ -319,79 +423,38 @@ function parseSCIMEqualityFilter(
 function splitFilterConjunction(
 	filter: string,
 ): SCIMQueryParseResult<readonly string[]> {
+	const scan = scanSCIMFilterTopLevel(filter);
+	if (!scan.ok) return scan;
 	const expressions: string[] = [];
 	let expressionStart = 0;
-	let bracketDepth = 0;
-	let quoted = false;
-	let escaped = false;
 
-	for (let index = 0; index < filter.length; index += 1) {
-		const character = filter[index];
-		if (quoted) {
-			if (escaped) {
-				escaped = false;
-				continue;
-			}
-			if (character === "\\") {
-				escaped = true;
-				continue;
-			}
-			if (character === '"') quoted = false;
-			continue;
-		}
-
-		if (character === '"') {
-			quoted = true;
-			continue;
-		}
-		if (character === "[") {
-			bracketDepth += 1;
-			continue;
-		}
-		if (character === "]") {
-			bracketDepth -= 1;
-			if (bracketDepth < 0) break;
-			continue;
-		}
-		if (bracketDepth !== 0) continue;
-
-		const token = filter.slice(index, index + 3);
-		const before = filter[index - 1];
-		const after = filter[index + 3];
+	for (const word of scan.value) {
+		const before = filter[word.start - 1];
+		const after = filter[word.end];
 		if (
-			token.toLowerCase() === "and" &&
+			word.value.toLowerCase() === "and" &&
 			before !== undefined &&
 			after !== undefined &&
 			/\s/.test(before) &&
 			/\s/.test(after)
 		) {
-			const expression = filter.slice(expressionStart, index).trim();
-			if (!expression) break;
+			const expression = filter.slice(expressionStart, word.start).trim();
+			if (!expression) {
+				return invalidFilterSyntax("filter contains an invalid conjunction");
+			}
 			expressions.push(expression);
-			expressionStart = index + 3;
-			index += 2;
+			expressionStart = word.end;
 		}
 	}
 
 	const finalExpression = filter.slice(expressionStart).trim();
-	if (
-		quoted ||
-		bracketDepth !== 0 ||
-		!finalExpression ||
-		expressions.length >= 10
-	) {
-		return {
-			ok: false,
-			error: {
-				code: "invalid-filter-syntax",
-				parameter: "filter",
-				scimType: "invalidFilter",
-				detail:
-					expressions.length >= 10
-						? "filter supports at most 10 equality expressions"
-						: "filter contains an invalid conjunction",
-			},
-		};
+	if (!finalExpression) {
+		return invalidFilterSyntax("filter contains an invalid conjunction");
+	}
+	if (expressions.length >= 10) {
+		return invalidFilterSyntax(
+			"filter supports at most 10 equality expressions",
+		);
 	}
 	expressions.push(finalExpression);
 	return { ok: true, value: expressions };
@@ -455,7 +518,7 @@ function normalizeAttributeList(
 					},
 				};
 			}
-			const normalizedAttribute = stripSCIMCoreAttributePrefix(
+			const normalizedAttribute = resolveSCIMResponseAttributePath(
 				resourceType,
 				attribute,
 			);

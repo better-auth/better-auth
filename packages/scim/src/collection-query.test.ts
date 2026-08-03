@@ -8,6 +8,9 @@ import {
 	parseSCIMCollectionQuery,
 } from "./collection-query";
 
+const SCIM_ENTERPRISE_USER_SCHEMA =
+	"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User";
+
 describe("parseSCIMCollectionQuery", () => {
 	it("defaults classic pagination to the first page capped at 100 resources", () => {
 		const result = parseSCIMCollectionQuery("User", {});
@@ -145,13 +148,60 @@ describe("collection filters", () => {
 	});
 
 	it.each([
+		[
+			'displayName eq "MyPlatform BA SCIM - Admins"',
+			"MyPlatform BA SCIM - Admins",
+		],
+		['displayName eq "Research and Development"', "Research and Development"],
+		['displayName eq "Platform - \\"Admins\\""', 'Platform - "Admins"'],
+	] as const)("finds the top-level equality operator in %s", (filter, value) => {
+		expect(parseSCIMCollectionQuery("Group", { filter })).toMatchObject({
+			ok: true,
+			value: {
+				filters: [{ attribute: "displayName", operator: "eq", value }],
+			},
+		});
+	});
+
+	it("preserves top-level conjunctions when a quoted value contains and", () => {
+		expect(
+			parseSCIMCollectionQuery("Group", {
+				filter:
+					'displayName eq "Research and Development" and externalId eq "research-and-development"',
+			}),
+		).toMatchObject({
+			ok: true,
+			value: {
+				filters: [
+					{
+						attribute: "displayName",
+						operator: "eq",
+						value: "Research and Development",
+					},
+					{
+						attribute: "externalId",
+						operator: "eq",
+						value: "research-and-development",
+					},
+				],
+			},
+		});
+	});
+
+	it.each([
 		["Group", 'userName eq "ada"', "unsupported-filter-attribute"],
-		["User", 'user Name eq "ada"', "unsupported-filter-attribute"],
+		["User", 'user Name eq "ada"', "unsupported-filter-operator"],
 		["User", 'userName ne "ada"', "unsupported-filter-operator"],
+		[
+			"Group",
+			'displayName ne "MyPlatform BA SCIM - Admins"',
+			"unsupported-filter-operator",
+		],
 		["User", "userName pr", "invalid-filter-syntax"],
 		["User", "userName eq ada", "invalid-filter-value"],
 		["User", 'userName eq "ada" trailing', "invalid-filter-value"],
 		["User", "userName eq 7", "invalid-filter-value"],
+		["Group", 'displayName eq "one" ne "two"', "invalid-filter-value"],
 	] as const)("returns %s filter failures without throwing", (resourceType, filter, code) => {
 		const result =
 			resourceType === "User"
@@ -161,6 +211,26 @@ describe("collection filters", () => {
 		expect(result).toMatchObject({
 			ok: false,
 			error: { code, parameter: "filter", scimType: "invalidFilter" },
+		});
+	});
+
+	it.each([
+		["Group", 'displayName eq "unterminated'],
+		["Group", 'displayName] eq "Admins"'],
+		["User", 'emails[type eq "work".value eq "ada@example.com"'],
+	] as const)("returns invalid filter syntax for malformed %s quote or bracket state", (resourceType, filter) => {
+		const result =
+			resourceType === "User"
+				? parseSCIMCollectionQuery("User", { filter })
+				: parseSCIMCollectionQuery("Group", { filter });
+
+		expect(result).toMatchObject({
+			ok: false,
+			error: {
+				code: "invalid-filter-syntax",
+				parameter: "filter",
+				scimType: "invalidFilter",
+			},
 		});
 	});
 
@@ -209,6 +279,28 @@ describe("parseSCIMAttributeProjection", () => {
 			value: {
 				mode: "exclude",
 				excludedAttributes: new Set(["members", "meta.version"]),
+			},
+		});
+	});
+
+	it("resolves qualified Enterprise User paths by their longest schema URI", () => {
+		expect(
+			parseSCIMAttributeProjection("User", {
+				attributes: [
+					SCIM_ENTERPRISE_USER_SCHEMA,
+					`${SCIM_ENTERPRISE_USER_SCHEMA.toUpperCase()}:department`,
+					`${SCIM_ENTERPRISE_USER_SCHEMA}:manager.value`,
+				],
+			}),
+		).toEqual({
+			ok: true,
+			value: {
+				mode: "include",
+				attributes: new Set([
+					SCIM_ENTERPRISE_USER_SCHEMA.toLowerCase(),
+					`${SCIM_ENTERPRISE_USER_SCHEMA.toLowerCase()}.department`,
+					`${SCIM_ENTERPRISE_USER_SCHEMA.toLowerCase()}.manager.value`,
+				]),
 			},
 		});
 	});

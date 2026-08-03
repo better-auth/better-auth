@@ -40,11 +40,30 @@ function createAttributePathNode(): AttributePathNode {
 
 function createAttributePathTree(
 	attributePaths: ReadonlySet<string>,
+	resourceAttributeNames: readonly string[],
 ): AttributePathNode {
 	const root = createAttributePathNode();
+	const orderedResourceAttributeNames = [...resourceAttributeNames].sort(
+		(left, right) => right.length - left.length,
+	);
 
 	for (const attributePath of attributePaths) {
-		const segments = attributePath.split(".");
+		const rootAttribute = orderedResourceAttributeNames.find(
+			(attributeName) => {
+				const normalizedName = attributeName.toLowerCase();
+				return (
+					attributePath === normalizedName ||
+					attributePath.startsWith(`${normalizedName}.`)
+				);
+			},
+		);
+		const relativePath = rootAttribute
+			? attributePath.slice(rootAttribute.length).replace(/^\./, "")
+			: attributePath;
+		const segments = [
+			...(rootAttribute ? [rootAttribute] : []),
+			...(relativePath ? relativePath.split(".") : []),
+		];
 		let node = root;
 		for (const segment of segments) {
 			const normalizedSegment = segment.toLowerCase();
@@ -148,7 +167,7 @@ export function projectSCIMResourceAttributes<
 		projection.mode === "include"
 			? projection.attributes
 			: projection.excludedAttributes;
-	const tree = createAttributePathTree(attributePaths);
+	const tree = createAttributePathTree(attributePaths, Object.keys(resource));
 	const output: Record<string, unknown> = {
 		schemas: resource.schemas,
 		id: resource.id,

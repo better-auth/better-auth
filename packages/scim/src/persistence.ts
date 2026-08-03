@@ -34,10 +34,16 @@ export interface SCIMUser {
 	workEmailValueIndex: string;
 	emailValueIndex: string;
 	displayName: string;
+	/** Compatibility mirror for the Better Auth 1.7 prerelease schema. */
 	formattedName: string;
+	/** Compatibility mirror for the Better Auth 1.7 prerelease schema. */
 	givenName?: string | null;
+	/** Compatibility mirror for the Better Auth 1.7 prerelease schema. */
 	familyName?: string | null;
+	/** Compatibility mirror for the Better Auth 1.7 prerelease schema. */
 	serializedEmails: string;
+	/** Authoritative complete canonical attribute payload; absent on rows persisted before this field existed. */
+	serializedAttributes?: string | null;
 	externalId?: string | null;
 	externalIdKey?: string | null;
 	active: boolean;

@@ -863,7 +863,7 @@ async function updateProfile(
 	const response = await requestSCIM(context.baseURL, resourcePath, {
 		method: "PATCH",
 		body: requestBody,
-		expectedStatus: 204,
+		expectedStatus: 200,
 	});
 	const state = await readApplicationState(context.database, scimUser.id);
 	assertState(
@@ -992,7 +992,7 @@ async function setGroups(
 			const response = await requestSCIM(context.baseURL, resourcePath, {
 				method: "PATCH",
 				body: requestBody,
-				expectedStatus: 204,
+				expectedStatus: 200,
 			});
 			operations.push(
 				createOperation({
@@ -1074,7 +1074,7 @@ async function setUserActive(
 	const response = await requestSCIM(context.baseURL, resourcePath, {
 		method: "PATCH",
 		body: requestBody,
-		expectedStatus: 204,
+		expectedStatus: 200,
 	});
 	const state = await readApplicationState(context.database, scimUser.id);
 	assertState(
