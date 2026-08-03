@@ -136,9 +136,19 @@ export async function authorizeMCPOAuth(
 		);
 	}
 
+	/**
+	 * A public client proves nothing at the token endpoint — it has no secret —
+	 * so the PKCE challenge is the only thing binding an authorization code to
+	 * the client that asked for it. Require it for public clients whatever
+	 * `requirePKCE` says; without a stored challenge the token endpoint has
+	 * nothing to check a verifier against, and an intercepted code is redeemable
+	 * by anyone. Confidential clients authenticate with their secret, so for them
+	 * PKCE stays opt-in.
+	 */
+	const isPublicClient = client.type === "public";
 	if (
 		(!query.code_challenge || !query.code_challenge_method) &&
-		options.requirePKCE
+		(options.requirePKCE || isPublicClient)
 	) {
 		throw ctx.redirect(
 			redirectErrorURL(

@@ -1488,3 +1488,122 @@ describe("mcp id token verifiability (security)", async () => {
 		);
 	});
 });
+
+/**
+ * A public client cannot keep a secret, so PKCE is the only thing binding an
+ * authorization code to the client that requested it. It must not be optional.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10637
+ */
+describe("mcp pkce enforcement for public clients (security)", async () => {
+	const tempServer = await listen(
+		toNodeHandler(async () => new Response("temp")),
+		{ port: 0 },
+	);
+	const port = tempServer.address?.port || 3003;
+	const baseURL = `http://localhost:${port}`;
+	await tempServer.close();
+
+	// No requirePKCE here on purpose: the default must already be safe.
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL,
+		plugins: [mcp({ loginPage: "/login" })],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const serverClient = createAuthClient({
+		baseURL,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	const server = await listen(toNodeHandler(auth.handler), { port });
+	afterAll(async () => {
+		await server.close();
+	});
+
+	async function register(authMethod: "none" | "client_secret_basic") {
+		const created = await serverClient.$fetch("/mcp/register", {
+			method: "POST",
+			body: {
+				client_name: `pkce-${authMethod}`,
+				redirect_uris: ["http://localhost:3000/callback"],
+				token_endpoint_auth_method: authMethod,
+			},
+		});
+		return created.data as any;
+	}
+
+	/** Authorizes without any code_challenge and returns the resulting redirect. */
+	async function authorizeWithoutPKCE(client: any) {
+		const url =
+			`${baseURL}/api/auth/mcp/authorize?` +
+			new URLSearchParams({
+				client_id: client.client_id,
+				redirect_uri: client.redirect_uris[0],
+				response_type: "code",
+				scope: "openid profile email",
+			}).toString();
+
+		let location = "";
+		await serverClient.$fetch(url, {
+			method: "GET",
+			onError(context: any) {
+				location = context.response.headers.get("Location") || "";
+			},
+			onSuccess(context: any) {
+				location = context.response.headers.get("Location") || location;
+			},
+		});
+		return new URL(location);
+	}
+
+	it("should reject a public client that omits PKCE, by default", async ({
+		expect,
+	}) => {
+		const redirect = await authorizeWithoutPKCE(await register("none"));
+
+		expect(redirect.searchParams.get("code")).toBeNull();
+		expect(redirect.searchParams.get("error")).toBe("invalid_request");
+	});
+
+	it("should still issue a code to a public client that uses PKCE", async ({
+		expect,
+	}) => {
+		const client = await register("none");
+		const challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"; // S256 of a known verifier
+
+		const url =
+			`${baseURL}/api/auth/mcp/authorize?` +
+			new URLSearchParams({
+				client_id: client.client_id,
+				redirect_uri: client.redirect_uris[0],
+				response_type: "code",
+				scope: "openid profile email",
+				code_challenge: challenge,
+				code_challenge_method: "S256",
+			}).toString();
+
+		let location = "";
+		await serverClient.$fetch(url, {
+			method: "GET",
+			onError(context: any) {
+				location = context.response.headers.get("Location") || "";
+			},
+			onSuccess(context: any) {
+				location = context.response.headers.get("Location") || location;
+			},
+		});
+		expect(new URL(location).searchParams.get("code")).toBeTruthy();
+	});
+
+	it("should leave confidential clients free to skip PKCE", async ({
+		expect,
+	}) => {
+		const redirect = await authorizeWithoutPKCE(
+			await register("client_secret_basic"),
+		);
+
+		expect(redirect.searchParams.get("code")).toBeTruthy();
+		expect(redirect.searchParams.get("error")).toBeNull();
+	});
+});
