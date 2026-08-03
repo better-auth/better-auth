@@ -2655,3 +2655,90 @@ describe("email-otp send origin/CSRF protection", async () => {
 		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
 	});
 });
+
+/**
+ * A change-email OTP is stored against both the current and the new address,
+ * because that pairing is what binds the code to one target mailbox. The
+ * generic endpoints build the identifier from the current address alone, so
+ * they can neither read nor write a real change-email code — and the one they
+ * do write carries no target at all. `sendVerificationOTP` already refuses the
+ * type for this reason; the rest must too.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10612
+ */
+describe("email-otp generic endpoints reject change-email", async () => {
+	let sentOtp = "";
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			emailOTP({
+				generateOTP: () => "123456",
+				changeEmail: { enabled: true },
+				async sendVerificationOTP({ otp }) {
+					sentOtp = otp;
+				},
+			}),
+		],
+	});
+
+	it("should reject change-email in createVerificationOTP", async () => {
+		await expect(
+			auth.api.createVerificationOTP({
+				body: { email: "test@test.com", type: "change-email" },
+			}),
+		).rejects.toThrow();
+	});
+
+	it("should reject change-email in getVerificationOTP", async () => {
+		await expect(
+			auth.api.getVerificationOTP({
+				query: { email: "test@test.com", type: "change-email" },
+			}),
+		).rejects.toThrow();
+	});
+
+	it("should reject change-email in checkVerificationOTP", async () => {
+		await expect(
+			auth.api.checkVerificationOTP({
+				body: {
+					email: "test@test.com",
+					type: "change-email",
+					otp: "123456",
+				},
+			}),
+		).rejects.toThrow();
+	});
+
+	it("should leave the other otp types working", async () => {
+		const created = await auth.api.createVerificationOTP({
+			body: { email: "test@test.com", type: "email-verification" },
+		});
+		expect(created).toBeTruthy();
+
+		await expect(
+			auth.api.checkVerificationOTP({
+				body: {
+					email: "test@test.com",
+					type: "email-verification",
+					otp: created,
+				},
+			}),
+		).resolves.toMatchObject({ success: true });
+	});
+
+	it("should leave the dedicated change-email flow working", async () => {
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.requestEmailChangeEmailOTP({
+			body: { newEmail: "changed@test.com" },
+			headers,
+		});
+		expect(sentOtp).toBeTruthy();
+
+		await expect(
+			auth.api.changeEmailEmailOTP({
+				body: { newEmail: "changed@test.com", otp: sentOtp },
+				headers,
+			}),
+		).resolves.toBeTruthy();
+	});
+});
