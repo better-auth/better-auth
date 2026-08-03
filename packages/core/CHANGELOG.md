@@ -1,5 +1,34 @@
 # @better-auth/core
 
+## 1.7.0-rc.3
+
+### Minor Changes
+
+- [#10577](https://github.com/better-auth/better-auth/pull/10577) [`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Client ID Metadata Documents now follow shared-cache freshness rules and fail closed when freshness is ambiguous. The plugin prefers `s-maxage` over `max-age` and `Expires`, honors `s-maxage=0`, conditionally revalidates with ETag or Last-Modified, and treats invalid or duplicate freshness directives as immediately stale. Concurrent refreshes converge on one client-resource link instead of failing on its unique constraint.
+
+  Shared OAuth metadata validation now rejects a blank `client_name` without trimming a valid display name. Native private-use redirects require the RFC 8252 single-slash form, such as `com.example.app:/callback`. Native HTTP redirects accept only exact `localhost`, `127.0.0.1`, or `[::1]` hosts; other `127.0.0.0/8` addresses and localhost subdomains are rejected.
+
+  CIMD now bounds metadata request amplification through `metadataFetchPolicy`: same-client fetches coalesce, per-client pacing and global/per-origin concurrency reject immediately, and rolling 60-second budgets cap unique-client sprays. HTTP `no-store`, `private`, and `Vary: *` behavior is unchanged and never feeds metadata or validators into the governor.
+
+  Node.js deployments can import `fetchClientMetadataResource` from `@better-auth/cimd/node`. The transport resolves once, rejects any non-public DNS answer, pins the approved connection without using the global HTTPS pool, preserves Host and TLS certificate identity, and returns redirects and response bodies without buffering. Other runtimes remain responsible for providing an equivalent secure transport.
+
+  Unknown draft-02 metadata members are now ignored and never persisted. Recognized secrets, privilege fields, and server controls remain fatal, while generic internal aliases and nonstandard client-credentials authority spellings are stripped.
+
+- [#9368](https://github.com/better-auth/better-auth/pull/9368) [`430c895`](https://github.com/better-auth/better-auth/commit/430c89549060ef6bd477ed2510650b9e49bba560) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Generic OAuth users can now sign out from the configured OpenID provider when they call `authClient.signOut()`. When a provider exposes a discovered or configured logout endpoint, Better Auth redirects to it and includes the stored `id_token_hint` when available. Pass `callbackURL` or configure `postLogoutRedirectURI` for the return flow, with optional `state`, or set `disableRedirect` to handle the returned `url` yourself. When multiple linked providers support logout, Better Auth selects the most recently updated account. Set `disableProviderLogout: true` to keep sign-out local.
+
+- [#10577](https://github.com/better-auth/better-auth/pull/10577) [`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - MCP clients that hit a scope wall now learn exactly which scopes to ask for. Missing protected scopes produce a `403` with an RFC 6750 `insufficient_scope` `WWW-Authenticate` challenge that names every missing scope. Clients can union those scopes into one authorization request instead of opening one browser redirect per scope.
+  - Configure protected scopes with `requiredScopes` through `RequireMcpAuthOptions` or the matching `createMcpProtectedRequestHandler` verifier option. Exact membership remains the default; `isScopeSatisfied` can define hierarchical policies.
+  - Use `createInsufficientScopeError` when an operation determines its required scopes dynamically. `createResourceServerChallenge` converts that signal and recognized token failures into safe RFC 6750 challenges.
+  - Use `challengeScopes` only as the unauthenticated challenge hint.
+
+  Handler-produced responses, ordinary permission denials, configuration failures, and unrelated thrown values keep their original status and identity.
+
+- [#10204](https://github.com/better-auth/better-auth/pull/10204) [`0683a5f`](https://github.com/better-auth/better-auth/commit/0683a5f36befb45ade3866c7f8057791eadeee59) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Microsoft sign-in now identifies Entra accounts with the stable `oid` claim in both the built-in `microsoft` provider and the Generic OAuth `microsoftEntraId` helper. Tokens without a valid `oid` are rejected, and the Generic OAuth helper refuses to initialize unless Microsoft discovery provides ID-token verification metadata. Existing Microsoft account rows created from `sub` must be migrated before upgrading.
+
+### Patch Changes
+
+- [#10505](https://github.com/better-auth/better-auth/pull/10505) [`d701f90`](https://github.com/better-auth/better-auth/commit/d701f90e6f81ede26209a50a5100bd9914a7ad5a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - One Tap, Electron, and Expo client plugins now compose with `createAuthClient` without TypeScript errors, and the resulting client preserves each plugin's inferred actions.
+
 ## 1.7.0-rc.2
 
 ### Minor Changes
