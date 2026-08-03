@@ -117,6 +117,13 @@ export interface SAMLAssertionExtract {
 	nameID?: string;
 	sessionIndex?: string;
 	inResponseTo?: string;
+	/**
+	 * samlify's `loginResponseFields` extractor puts the Response element's own
+	 * attributes here, which is where a login response carries `InResponseTo`.
+	 */
+	response?: {
+		inResponseTo?: string;
+	};
 	conditions?: {
 		notBefore?: string;
 		notOnOrAfter?: string;
