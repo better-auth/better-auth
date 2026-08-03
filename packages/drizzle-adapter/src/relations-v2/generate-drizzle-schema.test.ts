@@ -3,6 +3,13 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { generateDrizzleSchema } from "./generate-drizzle-schema";
 
+const TYPE_CHECK_TIMEOUT_MS = 15_000;
+
+/** Run compiler-backed tests with their dedicated synchronous-work timeout. */
+function test(name: string, callback: () => Promise<void>): void {
+	it(name, callback, TYPE_CHECK_TIMEOUT_MS);
+}
+
 const generate = (options: BetterAuthOptions) =>
 	generateDrizzleSchema({
 		options,
@@ -65,12 +72,12 @@ function typeErrors(code: string): string[] {
 }
 
 describe("relations-v2 schema generator", () => {
-	it("generates valid TypeScript for the default schema", async () => {
+	test("generates valid TypeScript for the default schema", async () => {
 		const { code = "" } = await generate({});
 		expect(typeErrors(code)).toEqual([]);
 	});
 
-	it("generates compound indexes with physical field names", async () => {
+	test("generates compound indexes with physical field names", async () => {
 		const { code = "" } = await generateFor("mysql", {
 			plugins: [
 				{
@@ -112,7 +119,7 @@ describe("relations-v2 schema generator", () => {
 		expect(typeErrors(code)).toEqual([]);
 	});
 
-	it("does not generate externally managed tables or their indexes", async () => {
+	test("does not generate externally managed tables or their indexes", async () => {
 		const { code = "" } = await generate({
 			plugins: [
 				{
@@ -157,7 +164,7 @@ describe("relations-v2 schema generator", () => {
 			expect(code).not.toMatch(/^export const relations\s*=/m);
 		});
 
-		it("compiles without duplicate identifier errors when a model's table name is `relations`", async () => {
+		test("compiles without duplicate identifier errors when a model's table name is `relations`", async () => {
 			const { code = "" } = await generate({
 				verification: { modelName: "relations" },
 			});
@@ -202,7 +209,7 @@ describe("relations-v2 schema generator", () => {
 	 *
 	 * @see https://github.com/better-auth/better-auth/pull/10048
 	 */
-	it("serializes array, object, and quoted-string additionalField defaultValue to a literal", async () => {
+	test("serializes array, object, and quoted-string additionalField defaultValue to a literal", async () => {
 		const { code = "" } = await generate({
 			user: {
 				additionalFields: {
@@ -224,7 +231,7 @@ describe("relations-v2 schema generator", () => {
 	});
 
 	describe("schemaName (PostgreSQL namespace)", () => {
-		it("declares a pgSchema and uses schema.table() when schemaName is set", async () => {
+		test("declares a pgSchema and uses schema.table() when schemaName is set", async () => {
 			const { code = "" } = await generateDrizzleSchema({
 				options: {},
 				provider: "pg",
@@ -268,7 +275,7 @@ describe("relations-v2 schema generator", () => {
 			}
 		});
 
-		it("converts a hyphenated schemaName into a valid identifier", async () => {
+		test("converts a hyphenated schemaName into a valid identifier", async () => {
 			const { code = "" } = await generateDrizzleSchema({
 				options: {},
 				provider: "pg",
@@ -290,7 +297,7 @@ describe("relations-v2 schema generator", () => {
 			expect(code).not.toContain("pgTable");
 		});
 
-		it("avoids variable collision when schemaName is 'pg'", async () => {
+		test("avoids variable collision when schemaName is 'pg'", async () => {
 			const { code = "" } = await generateDrizzleSchema({
 				options: {},
 				provider: "pg",
@@ -303,7 +310,7 @@ describe("relations-v2 schema generator", () => {
 			expect(typeErrors(code)).toEqual([]);
 		});
 
-		it("escapes quotes and backslashes in schemaName", async () => {
+		test("escapes quotes and backslashes in schemaName", async () => {
 			const { code = "" } = await generateDrizzleSchema({
 				options: {},
 				provider: "pg",

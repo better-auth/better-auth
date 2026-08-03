@@ -37,7 +37,10 @@ import {
 	createSCIMUserExternalIdKey,
 	createScopedKey,
 } from "./resource-key";
-import { SCIM_RESOURCE_SCHEMA_REGISTRY } from "./resource-schema-registry";
+import {
+	SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR,
+	SCIM_RESOURCE_SCHEMA_REGISTRY,
+} from "./resource-schema-registry";
 import { runSCIMCreateWithUniquenessCheck } from "./resource-uniqueness";
 import { createSCIMError, SCIMErrorOpenAPISchemas } from "./scim-error";
 import {
@@ -47,6 +50,11 @@ import {
 	SCIM_REQUEST_MEDIA_TYPES,
 } from "./scim-metadata";
 import {
+	readSCIMUserAttributes,
+	serializeSCIMUserAttributes,
+} from "./user-attributes";
+import { serializeSCIMEmails } from "./user-email";
+import {
 	applySCIMUserPatch,
 	patchSCIMUserBodySchema,
 	scimUserPatchChangesState,
@@ -55,15 +63,10 @@ import {
 	createCanonicalSCIMUserProfile,
 	createSCIMEmailValueIndex,
 	createSCIMEmailValueToken,
-	readSCIMEmails,
-	serializeSCIMEmails,
 } from "./user-profile";
 
-const {
-	inputSchema: APIUserSchema,
-	openAPISchema: OpenAPIUserResourceSchema,
-	schemaId: SCIM_USER_SCHEMA,
-} = SCIM_RESOURCE_SCHEMA_REGISTRY.User;
+const { inputSchema: APIUserSchema, openAPISchema: OpenAPIUserResourceSchema } =
+	SCIM_RESOURCE_SCHEMA_REGISTRY.User;
 
 function requireUserAttributeProjection(
 	input: SCIMCollectionQueryInput,
@@ -76,14 +79,6 @@ function requireUserAttributeProjection(
 		});
 	}
 	return projection.value;
-}
-
-function requestsProjectedMutationResponse(
-	input: SCIMCollectionQueryInput,
-): boolean {
-	return (
-		input.attributes !== undefined || input.excludedAttributes !== undefined
-	);
 }
 
 function createUserNameKey(connectionId: string, userName: string): string {
@@ -158,19 +153,23 @@ function createUserCollectionWhere(
 }
 
 function createUserResource(baseURL: string, scimUser: SCIMUser) {
+	const {
+		[SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.canonicalAttribute]: enterprise,
+		...attributes
+	} = readSCIMUserAttributes(scimUser);
 	return {
-		schemas: [SCIM_USER_SCHEMA],
+		...attributes,
 		id: scimUser.id,
 		...(scimUser.externalId ? { externalId: scimUser.externalId } : {}),
 		userName: scimUser.userName,
-		name: {
-			formatted: scimUser.formattedName,
-			...(scimUser.givenName ? { givenName: scimUser.givenName } : {}),
-			...(scimUser.familyName ? { familyName: scimUser.familyName } : {}),
-		},
 		displayName: scimUser.displayName,
 		active: scimUser.active,
-		emails: readSCIMEmails(scimUser),
+		...(enterprise
+			? {
+					[SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.responseAttribute]:
+						enterprise,
+				}
+			: {}),
 		meta: {
 			resourceType: "User",
 			created: scimUser.createdAt,
@@ -414,16 +413,11 @@ export function createSCIMUser(
 					connectionId: connection.id,
 					provisioningDomainId: connection.provisioningDomainId,
 					resource: {
+						...profile.attributes,
 						...(ctx.body.externalId ? { externalId: ctx.body.externalId } : {}),
 						userName: profile.userName,
 						primaryEmail: profile.primaryEmail,
 						displayName: profile.displayName,
-						name: {
-							formatted: profile.formattedName,
-							...(profile.givenName ? { givenName: profile.givenName } : {}),
-							...(profile.familyName ? { familyName: profile.familyName } : {}),
-						},
-						emails: profile.emails,
 						active,
 					},
 				},
@@ -488,9 +482,12 @@ export function createSCIMUser(
 									emailValueIndex: createSCIMEmailValueIndex(profile.emails),
 									displayName: profile.displayName,
 									formattedName: profile.formattedName,
-									givenName: profile.givenName,
-									familyName: profile.familyName,
+									givenName: profile.name.givenName,
+									familyName: profile.name.familyName,
 									serializedEmails: serializeSCIMEmails(profile.emails),
+									serializedAttributes: serializeSCIMUserAttributes(
+										profile.attributes,
+									),
 									externalId: ctx.body.externalId,
 									externalIdKey,
 									active,
@@ -833,9 +830,12 @@ export function replaceSCIMUser(
 							emailValueIndex: createSCIMEmailValueIndex(profile.emails),
 							displayName: profile.displayName,
 							formattedName: profile.formattedName,
-							givenName: profile.givenName ?? null,
-							familyName: profile.familyName ?? null,
+							givenName: profile.name.givenName ?? null,
+							familyName: profile.name.familyName ?? null,
 							serializedEmails: serializeSCIMEmails(profile.emails),
+							serializedAttributes: serializeSCIMUserAttributes(
+								profile.attributes,
+							),
 							externalId: ctx.body.externalId ?? null,
 							externalIdKey: externalIdKey ?? null,
 							active,
@@ -892,11 +892,8 @@ export function patchSCIMUser(
 				openapi: {
 					summary: "Patch SCIM User",
 					responses: {
-						"204": {
-							description: "SCIM User updated",
-						},
 						"200": {
-							description: "Projected SCIM User resource",
+							description: "Updated SCIM User resource",
 							content: createSCIMOpenAPIContent(OpenAPIUserResourceSchema),
 						},
 						...SCIMErrorOpenAPISchemas,
@@ -909,7 +906,6 @@ export function patchSCIMUser(
 			const adapter: DBAdapter = ctx.context.adapter;
 			const query = ctx.query ?? {};
 			const attributeProjection = requireUserAttributeProjection(query);
-			const returnResource = requestsProjectedMutationResponse(query);
 			const scimUser = await findSCIMUser(
 				adapter,
 				ctx.context.scimConnection,
@@ -1011,6 +1007,9 @@ export function patchSCIMUser(
 							givenName: patch.givenName ?? null,
 							familyName: patch.familyName ?? null,
 							serializedEmails: serializeSCIMEmails(patch.emails),
+							serializedAttributes: serializeSCIMUserAttributes(
+								patch.attributes,
+							),
 							externalId: patch.externalId ?? null,
 							externalIdKey: externalIdKey ?? null,
 							active: patch.active,
@@ -1043,13 +1042,9 @@ export function patchSCIMUser(
 				updatedSCIMUser,
 			);
 			ctx.setHeader("location", completeResource.meta.location);
-			if (returnResource) {
-				return ctx.json(
-					projectSCIMResourceAttributes(completeResource, attributeProjection),
-				);
-			}
-			ctx.setStatus(204);
-			return;
+			return ctx.json(
+				projectSCIMResourceAttributes(completeResource, attributeProjection),
+			);
 		},
 	);
 }

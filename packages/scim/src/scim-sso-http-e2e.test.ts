@@ -273,7 +273,7 @@ describe("SCIM-provisioned SSO authentication over HTTP", () => {
 					}),
 				},
 			);
-			expect(response.status).toBe(204);
+			expect(response.status).toBe(200);
 		}
 
 		async function deleteSCIMUser(userId: string): Promise<void> {

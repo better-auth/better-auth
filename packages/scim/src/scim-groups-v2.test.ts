@@ -286,6 +286,147 @@ describe("SCIM connection-owned Groups", () => {
 		);
 	});
 
+	it("rejects a cross-connection Group member add atomically", async () => {
+		const data = {
+			user: [] as User[],
+			session: [] as { id: string }[],
+			verification: [] as { id: string }[],
+			account: [] as { id: string }[],
+			scimConnectionBinding: [] as { id: string }[],
+			organization: [] as { id: string }[],
+			member: [] as { id: string }[],
+			scimConnection: [] as { id: string }[],
+			scimCredential: [] as { id: string }[],
+			scimIdentityTombstone: [] as { id: string }[],
+			scimSubject: [] as { id: string; userId: string }[],
+			scimUser: [] as SCIMUserRow[],
+			scimGroup: [] as SCIMGroupRow[],
+			scimGroupMember: [] as SCIMGroupMemberRow[],
+			scimProjectionGrant: [] as { id: string }[],
+		};
+		const auth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: memoryAdapter(data),
+			plugins: [
+				scim({
+					connections: [
+						{
+							id: "workforce-a",
+							credentials: [
+								{
+									type: "bearer",
+									id: "connection-a-token",
+									token: "connection-a-token",
+								},
+							],
+						},
+						{
+							id: "workforce-b",
+							credentials: [
+								{
+									type: "bearer",
+									id: "connection-b-token",
+									token: "connection-b-token",
+								},
+							],
+						},
+					],
+				}),
+			],
+		});
+		const connectionAHeaders = {
+			authorization: "Bearer connection-a-token",
+		};
+		const connectionBHeaders = {
+			authorization: "Bearer connection-b-token",
+		};
+		const connectionAMember = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "member-a@example.com",
+			},
+			headers: connectionAHeaders,
+		});
+		const connectionBMember = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "member-b@example.com",
+			},
+			headers: connectionBHeaders,
+		});
+		const connectionAGroup = await auth.api.createSCIMGroup({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+				displayName: "Engineering A",
+				members: [{ value: connectionAMember.id }],
+			},
+			headers: connectionAHeaders,
+		});
+		const membershipsBefore = data.scimGroupMember
+			.filter((membership) => membership.groupId === connectionAGroup.id)
+			.map((membership) => ({ ...membership }));
+		const groupBefore = data.scimGroup.find(
+			(group) => group.id === connectionAGroup.id,
+		);
+		if (!groupBefore) throw new Error("Expected connection A Group");
+		const groupStateBefore = {
+			displayName: groupBefore.displayName,
+			revision: groupBefore.revision,
+			updatedAt: groupBefore.updatedAt.getTime(),
+		};
+
+		const response = await auth.handler(
+			new Request(
+				`http://localhost:3000/api/auth/scim/v2/Groups/${encodeURIComponent(
+					connectionAGroup.id,
+				)}`,
+				{
+					method: "PATCH",
+					headers: {
+						...connectionAHeaders,
+						"content-type": "application/scim+json",
+					},
+					body: JSON.stringify({
+						schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+						Operations: [
+							{
+								op: "replace",
+								path: "displayName",
+								value: "Must not persist",
+							},
+							{
+								op: "add",
+								path: "members",
+								value: [{ value: connectionBMember.id }],
+							},
+						],
+					}),
+				},
+			),
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+			status: "400",
+			scimType: "invalidValue",
+		});
+		expect(
+			data.scimGroupMember
+				.filter((membership) => membership.groupId === connectionAGroup.id)
+				.map((membership) => ({ ...membership })),
+		).toEqual(membershipsBefore);
+		const groupAfter = data.scimGroup.find(
+			(group) => group.id === connectionAGroup.id,
+		);
+		if (!groupAfter) throw new Error("Expected connection A Group after PATCH");
+		expect({
+			displayName: groupAfter.displayName,
+			revision: groupAfter.revision,
+			updatedAt: groupAfter.updatedAt.getTime(),
+		}).toEqual(groupStateBefore);
+	});
+
 	it("replaces a Group and its connection-owned membership set", async () => {
 		const data = {
 			user: [] as User[],
@@ -779,6 +920,143 @@ describe("SCIM connection-owned Groups", () => {
 		expect(groupRow).toMatchObject({ displayName: "Platform" });
 		expect(groupRow?.externalId).toBeNull();
 		expect(data.scimProjectionGrant).toEqual([]);
+	});
+
+	/**
+	 * @see https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups
+	 */
+	it("applies Microsoft Entra's array-wrapped Group Replace Attributes PATCH", async () => {
+		const data = {
+			user: [] as User[],
+			session: [] as { id: string }[],
+			verification: [] as { id: string }[],
+			account: [] as { id: string }[],
+			scimConnectionBinding: [] as { id: string }[],
+			scimIdentityTombstone: [] as { id: string }[],
+			scimSubject: [] as { id: string; userId: string }[],
+			scimUser: [] as SCIMUserRow[],
+			scimGroup: [] as SCIMGroupRow[],
+			scimGroupMember: [] as SCIMGroupMemberRow[],
+			scimProjectionGrant: [] as { id: string }[],
+		};
+		const auth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: memoryAdapter(data),
+			plugins: [
+				scim({
+					connections: [
+						{
+							id: "workforce",
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
+						},
+					],
+				}),
+			],
+		});
+		const authorization = { authorization: "Bearer test-scim-token" };
+		const group = await auth.api.createSCIMGroup({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+				externalId: "directory-engineering",
+				displayName: "Engineering",
+			},
+			headers: authorization,
+		});
+
+		await auth.api.patchSCIMGroup({
+			params: { groupId: group.id },
+			body: {
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+				Operations: [
+					{ op: "Replace", path: "displayName", value: ["Platform"] },
+					{
+						op: "Replace",
+						path: "externalId",
+						value: ["directory-platform"],
+					},
+				],
+			},
+			headers: authorization,
+		});
+		const patched = await auth.api.getSCIMGroup({
+			params: { groupId: group.id },
+			headers: authorization,
+		});
+
+		expect(patched).toMatchObject({
+			id: group.id,
+			displayName: "Platform",
+			externalId: "directory-platform",
+		});
+	});
+
+	/**
+	 * @see https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups
+	 */
+	it("accepts an empty Operations array as a no-op Group PATCH", async () => {
+		const data = {
+			user: [] as User[],
+			session: [] as { id: string }[],
+			verification: [] as { id: string }[],
+			account: [] as { id: string }[],
+			scimConnectionBinding: [] as { id: string }[],
+			scimIdentityTombstone: [] as { id: string }[],
+			scimSubject: [] as { id: string; userId: string }[],
+			scimUser: [] as SCIMUserRow[],
+			scimGroup: [] as SCIMGroupRow[],
+			scimGroupMember: [] as SCIMGroupMemberRow[],
+			scimProjectionGrant: [] as { id: string }[],
+		};
+		const auth = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: memoryAdapter(data),
+			plugins: [
+				scim({
+					connections: [
+						{
+							id: "workforce",
+							credentials: [
+								{
+									type: "bearer",
+									id: "test-scim-token",
+									token: "test-scim-token",
+								},
+							],
+						},
+					],
+				}),
+			],
+		});
+		const authorization = { authorization: "Bearer test-scim-token" };
+		const group = await auth.api.createSCIMGroup({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+				displayName: "No Op Group",
+			},
+			headers: authorization,
+		});
+
+		await auth.api.patchSCIMGroup({
+			params: { groupId: group.id },
+			body: {
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+				Operations: [],
+			},
+			headers: authorization,
+		});
+
+		await expect(
+			auth.api.getSCIMGroup({
+				params: { groupId: group.id },
+				headers: authorization,
+			}),
+		).resolves.toMatchObject({ displayName: "No Op Group" });
 	});
 
 	it("enforces connection-scoped, case-insensitive Group displayName uniqueness", async () => {

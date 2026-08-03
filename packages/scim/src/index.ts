@@ -2,6 +2,7 @@ import type { BetterAuthPlugin, Status } from "better-auth";
 import { BetterAuthError } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { statusCodes } from "better-call";
+import { normalizeSCIMUserEntraCompatibilityRequestBody } from "./active-normalization";
 import type { SCIMOptions } from "./configuration";
 import {
 	areValidSCIMScopes,
@@ -24,6 +25,7 @@ import {
 	patchSCIMGroup,
 	replaceSCIMGroup,
 } from "./group-provisioning";
+import { normalizeMicrosoftEntraGroupSchema } from "./group-schemas";
 import {
 	acquireActiveSCIMUserLink,
 	createSCIMIdentityCoordinator,
@@ -83,7 +85,7 @@ function isAPIErrorLike(value: unknown): value is APIErrorLike {
 function createSCIMErrorResponse(
 	status: "BAD_REQUEST" | "UNSUPPORTED_MEDIA_TYPE",
 	detail: string,
-	scimType?: "invalidSyntax",
+	scimType?: "invalidSyntax" | "invalidValue",
 ) {
 	const error = createSCIMError(status, {
 		detail,
@@ -228,8 +230,9 @@ function createSCIMPlugin(options: SCIMOptions) {
 					),
 				};
 			}
+			let body: unknown;
 			try {
-				JSON.parse(await request.clone().text());
+				body = JSON.parse(await request.clone().text());
 			} catch {
 				return {
 					response: createSCIMErrorResponse(
@@ -239,6 +242,54 @@ function createSCIMPlugin(options: SCIMOptions) {
 					),
 				};
 			}
+			const isUserMutation =
+				/\/scim\/v2\/Users(?:\/[^/]+)?$/.test(path) &&
+				((request.method === "POST" && path.endsWith("/Users")) ||
+					(["PUT", "PATCH"].includes(request.method) &&
+						!path.endsWith("/Users")));
+			const isGroupCreate =
+				request.method === "POST" && /\/scim\/v2\/Groups$/.test(path);
+			const isGroupMutation =
+				/\/scim\/v2\/Groups(?:\/[^/]+)?$/.test(path) &&
+				(isGroupCreate ||
+					(["PUT", "PATCH"].includes(request.method) &&
+						!path.endsWith("/Groups")));
+			let normalizedBody = body;
+			if (isGroupMutation) {
+				const groupNormalization = normalizeMicrosoftEntraGroupSchema(
+					normalizedBody,
+					isGroupCreate &&
+						options.compatibility?.microsoftEntra?.acceptLegacyGroupSchema ===
+							true,
+				);
+				if (!groupNormalization.ok) {
+					return {
+						response: createSCIMErrorResponse(
+							"BAD_REQUEST",
+							groupNormalization.detail,
+							"invalidValue",
+						),
+					};
+				}
+				normalizedBody = groupNormalization.body;
+			}
+			if (isUserMutation) {
+				normalizedBody = normalizeSCIMUserEntraCompatibilityRequestBody(
+					request.method,
+					normalizedBody,
+				);
+			}
+			if (normalizedBody === body) return;
+			const headers = new Headers(request.headers);
+			headers.delete("content-length");
+			return {
+				request: new Request(request.url, {
+					method: request.method,
+					headers,
+					body: JSON.stringify(normalizedBody),
+					signal: request.signal,
+				}),
+			};
 		},
 		endpoints: {
 			decommissionSCIMConnection: createDecommissionSCIMConnectionEndpoint(
@@ -530,6 +581,11 @@ function createSCIMPlugin(options: SCIMOptions) {
 						required: true,
 						returned: false,
 					},
+					serializedAttributes: {
+						type: "string",
+						required: false,
+						returned: false,
+					},
 					externalId: {
 						type: "string",
 						required: false,
@@ -742,12 +798,19 @@ export type {
 	SCIMBearerCredentialOptions,
 	SCIMBearerTokenVerificationInput,
 	SCIMBearerTokenVerificationResult,
+	SCIMCanonicalAddress,
 	SCIMCanonicalEmail,
+	SCIMCanonicalEntitlement,
+	SCIMCanonicalManager,
 	SCIMCanonicalName,
+	SCIMCanonicalPhoneNumber,
+	SCIMCanonicalRole,
 	SCIMCanonicalUser,
+	SCIMCompatibilityOptions,
 	SCIMConnectionDecommissionStatus,
 	SCIMConnectionOptions,
 	SCIMEmail,
+	SCIMEnterpriseUser,
 	SCIMGroupAuthorizationSource,
 	SCIMIdentity,
 	SCIMIdentityResolution,
@@ -755,6 +818,7 @@ export type {
 	SCIMIdentityResolutionInput,
 	SCIMIdentitySource,
 	SCIMIdentityState,
+	SCIMMicrosoftEntraCompatibilityOptions,
 	SCIMName,
 	SCIMOAuthBearerPrincipal,
 	SCIMOptions,

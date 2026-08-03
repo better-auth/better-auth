@@ -99,6 +99,9 @@ export interface SCIMName {
 	formatted?: string;
 	givenName?: string;
 	familyName?: string;
+	middleName?: string;
+	honorificPrefix?: string;
+	honorificSuffix?: string;
 }
 
 /** One email address supplied on a SCIM User resource. */
@@ -113,6 +116,9 @@ export interface SCIMCanonicalName {
 	formatted: string;
 	givenName?: string;
 	familyName?: string;
+	middleName?: string;
+	honorificPrefix?: string;
+	honorificSuffix?: string;
 }
 
 /** A normalized email supplied to application-owned SCIM integrations. */
@@ -122,14 +128,75 @@ export interface SCIMCanonicalEmail {
 	type?: string;
 }
 
+/** A normalized phone number supplied on a SCIM User resource. */
+export interface SCIMCanonicalPhoneNumber {
+	value: string;
+	type?: string;
+	primary?: boolean;
+}
+
+/** A normalized postal address supplied on a SCIM User resource. */
+export interface SCIMCanonicalAddress {
+	formatted?: string;
+	streetAddress?: string;
+	locality?: string;
+	region?: string;
+	postalCode?: string;
+	country?: string;
+	type?: string;
+	primary?: boolean;
+}
+
+/** A normalized role supplied on a SCIM User resource. */
+export interface SCIMCanonicalRole {
+	value: string;
+	display?: string;
+	type?: string;
+	primary?: boolean;
+}
+
+/** A normalized entitlement supplied on a SCIM User resource. */
+export interface SCIMCanonicalEntitlement {
+	value: string;
+	display?: string;
+	type?: string;
+	primary?: boolean;
+}
+
+/** A manager reference containing an identifier, resource URI, or both. */
+export type SCIMCanonicalManager =
+	| { value: string; $ref?: string }
+	| { value?: string; $ref: string };
+
+/** Supported attributes from the standard Enterprise User extension. */
+export interface SCIMEnterpriseUser {
+	employeeNumber?: string;
+	costCenter?: string;
+	organization?: string;
+	division?: string;
+	department?: string;
+	manager?: SCIMCanonicalManager;
+}
+
 /** The normalized SCIM User supplied to application-owned integrations. */
 export interface SCIMCanonicalUser {
+	schemas: readonly string[];
 	externalId?: string;
 	userName: string;
 	primaryEmail: string;
 	displayName: string;
 	name: SCIMCanonicalName;
 	emails: readonly SCIMCanonicalEmail[];
+	title?: string;
+	userType?: string;
+	preferredLanguage?: string;
+	locale?: string;
+	timezone?: string;
+	phoneNumbers?: readonly SCIMCanonicalPhoneNumber[];
+	addresses?: readonly SCIMCanonicalAddress[];
+	roles?: readonly SCIMCanonicalRole[];
+	entitlements?: readonly SCIMCanonicalEntitlement[];
+	enterprise?: SCIMEnterpriseUser;
 	active: boolean;
 }
 
@@ -262,6 +329,21 @@ export interface SCIMProjection {
 	): void | Promise<void>;
 }
 
+/** Microsoft Entra provisioning client compatibility. */
+export interface SCIMMicrosoftEntraCompatibilityOptions {
+	/**
+	 * Accept Microsoft's classic, attribute-less Group schema marker on
+	 * `POST /Groups`. The marker is never advertised, persisted, or returned.
+	 * Defaults to `false`.
+	 */
+	acceptLegacyGroupSchema?: boolean;
+}
+
+/** Narrow ingress compatibility for documented provider request shapes. */
+export interface SCIMCompatibilityOptions {
+	microsoftEntra?: SCIMMicrosoftEntraCompatibilityOptions;
+}
+
 /** Configuration for the SCIM plugin. */
 export interface SCIMOptions {
 	/** Code-defined provisioning connections accepted by the SCIM endpoint. */
@@ -272,4 +354,6 @@ export interface SCIMOptions {
 	identity?: SCIMIdentity;
 	/** Optional application or tenancy projection. No projection grants access. */
 	projection?: SCIMProjection;
+	/** Narrow ingress compatibility for documented provider request shapes. */
+	compatibility?: SCIMCompatibilityOptions;
 }
