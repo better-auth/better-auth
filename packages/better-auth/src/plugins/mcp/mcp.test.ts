@@ -1599,6 +1599,81 @@ describe("mcp pkce enforcement for public clients (security)", async () => {
 		expect(new URL(location).searchParams.get("code")).toBeTruthy();
 	});
 
+	it("should honour the plain-method opt-in for public clients", async ({
+		expect,
+	}) => {
+		// `allowPlainCodeChallengeMethod` is a documented compatibility path: a
+		// caller who opts in may omit `code_challenge_method` and have it default
+		// to "plain". Requiring PKCE for public clients must not withdraw it.
+		const tempServer = await listen(
+			toNodeHandler(async () => new Response("temp")),
+			{ port: 0 },
+		);
+		const plainPort = tempServer.address?.port || 3006;
+		const plainBaseURL = `http://localhost:${plainPort}`;
+		await tempServer.close();
+
+		const {
+			auth: plainAuth,
+			signInWithTestUser: plainSignIn,
+			customFetchImpl: plainFetch,
+		} = await getTestInstance({
+			baseURL: plainBaseURL,
+			plugins: [
+				mcp({
+					loginPage: "/login",
+					oidcConfig: {
+						loginPage: "/login",
+						allowPlainCodeChallengeMethod: true,
+					},
+				}),
+			],
+		});
+		const { headers: plainHeaders } = await plainSignIn();
+		const plainClient = createAuthClient({
+			baseURL: plainBaseURL,
+			fetchOptions: { customFetchImpl: plainFetch, headers: plainHeaders },
+		});
+		const plainServer = await listen(toNodeHandler(plainAuth.handler), {
+			port: plainPort,
+		});
+
+		const registered = await plainClient.$fetch("/mcp/register", {
+			method: "POST",
+			body: {
+				client_name: "plain-pkce-public",
+				redirect_uris: ["http://localhost:3000/callback"],
+				token_endpoint_auth_method: "none",
+			},
+		});
+		const client = registered.data as { client_id: string };
+
+		let location = "";
+		await plainClient.$fetch(
+			`${plainBaseURL}/api/auth/mcp/authorize?` +
+				new URLSearchParams({
+					client_id: client.client_id,
+					redirect_uri: "http://localhost:3000/callback",
+					response_type: "code",
+					scope: "openid",
+					// A challenge, but deliberately no method.
+					code_challenge: "a-plain-challenge-value",
+				}).toString(),
+			{
+				method: "GET",
+				onError(context: { response: Response }) {
+					location = context.response.headers.get("Location") || "";
+				},
+				onSuccess(context: { response: Response }) {
+					location = context.response.headers.get("Location") || location;
+				},
+			},
+		);
+		await plainServer.close();
+
+		expect(new URL(location).searchParams.get("code")).toBeTruthy();
+	});
+
 	it("should leave confidential clients free to skip PKCE", async ({
 		expect,
 	}) => {

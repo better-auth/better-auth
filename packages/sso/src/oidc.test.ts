@@ -258,6 +258,33 @@ describe("SSO", async () => {
 		expect(parsed.searchParams.get("error_description")).toBe("user said no");
 	});
 
+	it("should name a concrete error when the callback carries neither code nor error", async () => {
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "test",
+			callbackURL: "/dashboard",
+			errorCallbackURL: "/error?title=Invalid%20invite",
+			fetchOptions: { throw: true, onSuccess: cookieSetter(headers) },
+		});
+		const state = new URL(res.url).searchParams.get("state");
+
+		// An aborted or malformed IdP redirection: state comes back, nothing else.
+		const response = await auth.handler(
+			new Request(
+				`http://localhost:3000/api/auth/sso/callback/test?state=${state}`,
+				{ headers },
+			),
+		);
+		const parsed = new URL(
+			response.headers.get("location") || "",
+			"http://localhost:3000",
+		);
+
+		expect(parsed.searchParams.get("error")).toBeTruthy();
+		expect(parsed.searchParams.get("error")).not.toBe("undefined");
+		expect(parsed.searchParams.get("error_description")).not.toBe("undefined");
+	});
+
 	it("should sign in with SSO provider with domain", async () => {
 		const headers = new Headers();
 		const res = await authClient.signIn.sso({

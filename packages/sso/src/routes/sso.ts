@@ -1482,8 +1482,13 @@ async function handleOIDCCallback(
 	if (!code || error) {
 		throw ctx.redirect(
 			buildSAMLRedirectUrl(errorURL || callbackURL, {
-				error: String(error),
-				error_description: String(error_description ?? ""),
+				// This branch also covers a callback carrying neither a code nor an
+				// error — an aborted or malformed redirection — where the provider
+				// named nothing to report.
+				error: error ? String(error) : "invalid_request",
+				error_description: error_description
+					? String(error_description)
+					: "missing_authorization_code",
 			}),
 		);
 	}

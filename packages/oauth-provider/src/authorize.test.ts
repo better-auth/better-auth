@@ -747,11 +747,19 @@ describe("signed query URL safety", () => {
 
 	it("should survive an intermediary decoding the query one extra time", async () => {
 		const { params, sig } = await signedParamsWithUnsafeChars();
+
+		// The defect: standard base64 percent-encodes `+` as `%2B`, and one extra
+		// decode turns it back into a space, which is what #10427 reports.
+		params.set("sig", sig);
+		const mangledStandard = decodeURIComponent(params.toString());
+		expect(new URLSearchParams(mangledStandard).get("sig")).toContain(" ");
+		expect(await verifyOAuthQueryParams(mangledStandard, secret)).toBe(false);
+
+		// The url-safe form has nothing for that decode to corrupt.
 		params.set("sig", toUrlSafe(sig));
-
-		const mangled = decodeURIComponent(params.toString());
-
-		expect(await verifyOAuthQueryParams(mangled, secret)).toBe(true);
+		const mangledUrlSafe = decodeURIComponent(params.toString());
+		expect(new URLSearchParams(mangledUrlSafe).get("sig")).not.toContain(" ");
+		expect(await verifyOAuthQueryParams(mangledUrlSafe, secret)).toBe(true);
 	});
 
 	it("should still reject a tampered signature", async () => {

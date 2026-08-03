@@ -146,10 +146,22 @@ export async function authorizeMCPOAuth(
 	 * PKCE stays opt-in.
 	 */
 	const isPublicClient = client.type === "public";
-	if (
-		(!query.code_challenge || !query.code_challenge_method) &&
-		(options.requirePKCE || isPublicClient)
-	) {
+	const missingChallenge = !query.code_challenge;
+	const missingMethod = !query.code_challenge_method;
+
+	// `requirePKCE` keeps the strictness it always had: both parts or nothing.
+	const failsExplicitRequirement =
+		options.requirePKCE && (missingChallenge || missingMethod);
+
+	// A public client must always send the challenge. The method may still be
+	// omitted by a caller who opted into the legacy plain fallback below, which
+	// is a documented compatibility path and not ours to withdraw here.
+	const failsPublicClientRequirement =
+		isPublicClient &&
+		(missingChallenge ||
+			(missingMethod && !options.allowPlainCodeChallengeMethod));
+
+	if (failsExplicitRequirement || failsPublicClientRequirement) {
 		throw ctx.redirect(
 			redirectErrorURL(
 				query.redirect_uri,
