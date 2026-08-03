@@ -1,5 +1,23 @@
 # @better-auth/sso
 
+## 1.7.0-rc.3
+
+### Minor Changes
+
+- [#10621](https://github.com/better-auth/better-auth/pull/10621) [`59c4c83`](https://github.com/better-auth/better-auth/commit/59c4c832fc4eed813e98b5b2c45a91cf2d4ad9e7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Extend `resolveUser` to SAML sign-ins. The callback now receives a discriminated `protocol` field: OIDC input keeps `verifiedIdTokenClaims` and `providerClaims`, while SAML input carries the verified assertion's `providerAttributes`. Both variants include a `providerReference`, an opaque reference to the accepted provider configuration that detects provider replacement or configuration changes mid-flow.
+
+  Add `guardProviderMutation`, a callback that authorizes updates and deletions of a persisted SSO provider before Better Auth applies them.
+
+### Patch Changes
+
+- [#10621](https://github.com/better-auth/better-auth/pull/10621) [`59c4c83`](https://github.com/better-auth/better-auth/commit/59c4c832fc4eed813e98b5b2c45a91cf2d4ad9e7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Verify SAML assertion signatures directly instead of trusting an already-parsed response, and enforce a signing policy and size limit on SP metadata the same way IdP metadata is already enforced. `wantAssertionsSigned` now controls whether the SP requires signed assertions instead of signed response messages, matching how IdPs sign SAML responses in practice.
+
+  A SAML callback that supplies RelayState now validates it unconditionally; a malformed or expired value is rejected even when `enableInResponseToValidation` is disabled. Service Provider metadata with an ACS location containing a URL fragment is rejected.
+
+  Redact provider claims and resolver-thrown errors from log output on SAML and OIDC resolution failures.
+
+- [#10592](https://github.com/better-auth/better-auth/pull/10592) [`26b1949`](https://github.com/better-auth/better-auth/commit/26b194960fe539d2189cb1b7554c16d9f5318906) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Allow SSO provider registration to reuse a SCIM connection ID. SCIM connections no longer participate in the authentication provider namespace.
+
 ## 1.7.0-rc.2
 
 ### Minor Changes
