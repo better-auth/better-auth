@@ -52,6 +52,18 @@ export interface MCPOptions {
 	oidcConfig?: OIDCOptions | undefined;
 }
 
+/**
+ * The URL discovery should name for the keys that verify an issued id token.
+ *
+ * The jwt plugin owns the JWKS and may serve it from a custom path or host it
+ * remotely, so neither is safe to assume. Without that plugin an id token is
+ * signed with the client secret and there is no key set to fetch.
+ */
+function resolveJwksUri(ctx: GenericEndpointContext, baseURL: string) {
+	const jwks = ctx.context.getPlugin("jwt")?.options?.jwks;
+	return jwks?.remoteUrl ?? `${baseURL}${jwks?.jwksPath ?? "/jwks"}`;
+}
+
 export const getMCPProviderMetadata = (
 	ctx: GenericEndpointContext,
 	options?: OIDCOptions | undefined,
@@ -69,18 +81,23 @@ export const getMCPProviderMetadata = (
 		});
 	}
 	/**
-	 * Advertise what the token endpoint actually signs with: the jwt plugin's
-	 * published keys when it is installed, otherwise the client secret.
+	 * Advertise the algorithm the id token is really signed with. The jwt
+	 * plugin's key pair may be any supported algorithm, and a client that is
+	 * handed one it was never told about rejects the token. Without that plugin
+	 * the id token is signed with the client secret, which is HS256.
 	 */
-	const supportedAlgs = ctx.context.getPlugin("jwt")
-		? ["RS256", "EdDSA"]
+	// Presence of the plugin decides, not presence of its options: `jwt()` takes
+	// none, and then signs with the default EdDSA key pair.
+	const jwtPlugin = ctx.context.getPlugin("jwt");
+	const supportedAlgs = jwtPlugin
+		? [jwtPlugin.options?.jwks?.keyPairConfig?.alg ?? "EdDSA"]
 		: ["HS256"];
 	return {
 		issuer,
 		authorization_endpoint: `${baseURL}/mcp/authorize`,
 		token_endpoint: `${baseURL}/mcp/token`,
 		userinfo_endpoint: `${baseURL}/mcp/userinfo`,
-		jwks_uri: `${baseURL}/jwks`,
+		jwks_uri: resolveJwksUri(ctx, baseURL),
 		registration_endpoint: `${baseURL}/mcp/register`,
 		scopes_supported: ["openid", "profile", "email", "offline_access"],
 		response_types_supported: ["code"],
@@ -124,7 +141,8 @@ export const getMCPProtectedResourceMetadata = (
 	return {
 		resource: options?.resource ?? origin,
 		authorization_servers: [origin],
-		jwks_uri: options?.oidcConfig?.metadata?.jwks_uri ?? `${baseURL}/jwks`,
+		jwks_uri:
+			options?.oidcConfig?.metadata?.jwks_uri ?? resolveJwksUri(ctx, baseURL),
 		scopes_supported: options?.oidcConfig?.metadata?.scopes_supported ?? [
 			"openid",
 			"profile",

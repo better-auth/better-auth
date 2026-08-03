@@ -443,7 +443,8 @@ describe("mcp", async () => {
 			response_modes_supported: ["query"],
 			grant_types_supported: ["authorization_code", "refresh_token"],
 			subject_types_supported: ["public"],
-			id_token_signing_alg_values_supported: ["RS256", "EdDSA"],
+			// This instance installs jwt() with its default key pair.
+			id_token_signing_alg_values_supported: ["EdDSA"],
 			token_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
@@ -1766,5 +1767,81 @@ describe("mcp public types", () => {
 	it("exports MCPOptions from the plugins entrypoint", () => {
 		expectTypeOf<MCPOptions["loginPage"]>().toEqualTypeOf<string>();
 		expectTypeOf<MCPOptions["resource"]>().toEqualTypeOf<string | undefined>();
+	});
+});
+
+/**
+ * Discovery has to name the key location and algorithm the signer actually
+ * uses. The jwt plugin can move its JWKS and can be configured for any
+ * supported algorithm, so neither may be assumed.
+ */
+describe("mcp discovery follows the jwt plugin's configuration", async () => {
+	async function metadataFor(jwtOptions?: Parameters<typeof jwt>[0]) {
+		const tempServer = await listen(
+			toNodeHandler(async () => new Response("temp")),
+			{ port: 0 },
+		);
+		const port = tempServer.address?.port || 3005;
+		const baseURL = `http://localhost:${port}`;
+		await tempServer.close();
+
+		const { auth, customFetchImpl } = await getTestInstance({
+			baseURL,
+			plugins: jwtOptions
+				? [mcp({ loginPage: "/login" }), jwt(jwtOptions)]
+				: [mcp({ loginPage: "/login" })],
+		});
+		const server = await listen(toNodeHandler(auth.handler), { port });
+
+		const client = createAuthClient({
+			baseURL,
+			fetchOptions: { customFetchImpl },
+		});
+		const metadata = await client.$fetch<Record<string, any>>(
+			"/.well-known/oauth-authorization-server",
+		);
+		await server.close();
+		return metadata.data!;
+	}
+
+	it("should advertise a custom jwks path", async ({ expect }) => {
+		const metadata = await metadataFor({
+			jwks: { jwksPath: "/.well-known/jwks.json" },
+		});
+
+		expect(metadata.jwks_uri).toContain("/.well-known/jwks.json");
+		expect(metadata.jwks_uri).not.toMatch(/\/jwks$/);
+	});
+
+	it("should advertise a remotely hosted jwks", async ({ expect }) => {
+		// The library requires an explicit alg alongside remoteUrl, since it can no
+		// longer read one off a locally generated key pair.
+		const metadata = await metadataFor({
+			jwks: {
+				remoteUrl: "https://cdn.example.com/keys.json",
+				keyPairConfig: { alg: "RS256" },
+			},
+		});
+
+		expect(metadata.jwks_uri).toBe("https://cdn.example.com/keys.json");
+		expect(metadata.id_token_signing_alg_values_supported).toEqual(["RS256"]);
+	});
+
+	it("should advertise the configured signing algorithm", async ({
+		expect,
+	}) => {
+		const metadata = await metadataFor({
+			jwks: { keyPairConfig: { alg: "ES256" } },
+		});
+
+		expect(metadata.id_token_signing_alg_values_supported).toEqual(["ES256"]);
+	});
+
+	it("should advertise EdDSA when the jwt plugin uses its default key", async ({
+		expect,
+	}) => {
+		const metadata = await metadataFor({});
+
+		expect(metadata.id_token_signing_alg_values_supported).toEqual(["EdDSA"]);
 	});
 });
