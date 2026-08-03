@@ -8,6 +8,7 @@ import {
 	PencilLine,
 	Scale,
 	Search,
+	Store,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -166,6 +167,120 @@ const ScribblePattern: React.FC<{ className?: string }> = ({ className }) => (
 	</svg>
 );
 
+/** Compact plugin-card grid for the Plugin Marketplace nav tile. */
+const MarketplacePattern: React.FC<{ className?: string }> = ({
+	className,
+}) => (
+	<svg
+		width="56"
+		height="40"
+		viewBox="0 0 56 40"
+		fill="none"
+		shapeRendering="geometricPrecision"
+		className={className}
+		aria-hidden="true"
+	>
+		{/* Top-left card */}
+		<rect
+			x="2"
+			y="2"
+			width="24"
+			height="16"
+			stroke="currentColor"
+			strokeWidth="1"
+		/>
+		<line
+			x1="6"
+			y1="7"
+			x2="16"
+			y2="7"
+			stroke="currentColor"
+			strokeWidth="1"
+			strokeLinecap="round"
+		/>
+		<line
+			x1="6"
+			y1="11"
+			x2="20"
+			y2="11"
+			stroke="currentColor"
+			strokeWidth="1"
+			strokeLinecap="round"
+			opacity="0.55"
+		/>
+		{/* Top-right card */}
+		<rect
+			x="30"
+			y="2"
+			width="24"
+			height="16"
+			stroke="currentColor"
+			strokeWidth="1"
+		/>
+		<line
+			x1="34"
+			y1="7"
+			x2="44"
+			y2="7"
+			stroke="currentColor"
+			strokeWidth="1"
+			strokeLinecap="round"
+		/>
+		<line
+			x1="34"
+			y1="11"
+			x2="48"
+			y2="11"
+			stroke="currentColor"
+			strokeWidth="1"
+			strokeLinecap="round"
+			opacity="0.55"
+		/>
+		{/* Bottom-left card */}
+		<rect
+			x="2"
+			y="22"
+			width="24"
+			height="16"
+			stroke="currentColor"
+			strokeWidth="1"
+		/>
+		<line
+			x1="6"
+			y1="27"
+			x2="16"
+			y2="27"
+			stroke="currentColor"
+			strokeWidth="1"
+			strokeLinecap="round"
+		/>
+		<line
+			x1="6"
+			y1="31"
+			x2="20"
+			y2="31"
+			stroke="currentColor"
+			strokeWidth="1"
+			strokeLinecap="round"
+			opacity="0.55"
+		/>
+		{/* Bottom-right card (slightly faded — “more plugins”) */}
+		<rect
+			x="30"
+			y="22"
+			width="24"
+			height="16"
+			stroke="currentColor"
+			strokeWidth="1"
+			opacity="0.45"
+			strokeDasharray="2 2"
+		/>
+		<circle cx="42" cy="30" r="1.25" fill="currentColor" opacity="0.45" />
+		<circle cx="47" cy="30" r="1.25" fill="currentColor" opacity="0.35" />
+		<circle cx="37" cy="30" r="1.25" fill="currentColor" opacity="0.55" />
+	</svg>
+);
+
 const _HorizontalLinesPattern: React.FC<{ className?: string }> = ({
 	className,
 }) => {
@@ -264,6 +379,16 @@ const products: ProductItem[] = [
 ];
 
 const featuredResources: ProductItem[] = [
+	{
+		title: "Plugin Marketplace",
+		tagline: "Plugins",
+		description: "Community plugins extending Better Auth",
+		href: "/marketplace",
+		Icon: Store,
+		Pattern: MarketplacePattern,
+		patternClassName:
+			"absolute right-3 top-3 text-foreground/30 group-hover/p:text-foreground/60 transition-colors duration-200 pointer-events-none",
+	},
 	{
 		title: "Blog",
 		tagline: "Writing",
@@ -761,9 +886,9 @@ export function StaggeredNavFiles() {
 									animate={{ opacity: 1, y: 0 }}
 									exit={{ opacity: 0, y: -4 }}
 									transition={{ duration: 0.12, ease: "easeOut" }}
-									className={`absolute top-full right-0 z-50 w-[480px] max-w-[calc(100vw-2rem)] border ${dropdownBorderClass} bg-background shadow-2xl shadow-black/20 dark:shadow-black/60`}
+									className={`absolute top-full right-0 z-50 w-[560px] max-w-[calc(100vw-2rem)] border ${dropdownBorderClass} bg-background shadow-2xl shadow-black/20 dark:shadow-black/60`}
 								>
-									<div className="grid grid-cols-2 divide-x divide-foreground/[0.06]">
+									<div className="grid grid-cols-3 divide-x divide-foreground/[0.06]">
 										{featuredResources.map((r) => (
 											<Link
 												key={r.title}

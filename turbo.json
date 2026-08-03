@@ -5,7 +5,8 @@
     "affectedUsingTaskInputs": true
   },
   "global": {
-    "inputs": ["tsconfig.json", "tsconfig.base.json", "pnpm-workspace.yaml"]
+    "inputs": ["tsconfig.json", "tsconfig.base.json", "pnpm-workspace.yaml"],
+    "concurrency": "25"
   },
   "tasks": {
     "dev": {

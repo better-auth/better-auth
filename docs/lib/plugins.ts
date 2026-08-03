@@ -1,4 +1,4 @@
-import { communityPlugins } from "@/lib/community-plugins-data";
+import { communityMarketplacePlugins } from "@/lib/marketplace/registry";
 import { source } from "@/lib/source";
 
 export interface Plugin {
@@ -234,14 +234,14 @@ export function getOfficialPlugins(): Plugin[] {
 }
 
 export function getCommunityPlugins(): Plugin[] {
-	return communityPlugins.map((p) => ({
+	return communityMarketplacePlugins.map((p) => ({
 		name: p.name,
-		slug: p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+		slug: p.slug,
 		description: p.description,
 		tagline: p.description,
 		category: "Community",
 		type: "community" as const,
-		href: p.url,
+		href: `/marketplace/${p.slug}`,
 		author: p.author.name,
 		icon: "Package",
 	}));

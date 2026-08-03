@@ -3,6 +3,7 @@ import { createMDX } from "fumadocs-mdx/next";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	experimental: {
+		viewTransition: true,
 		optimizePackageImports: [
 			"lucide-react",
 			"framer-motion",
@@ -74,6 +75,16 @@ const nextConfig = {
 			{
 				source: "/docs/agent-tools/:path*",
 				destination: "/docs/ai-resources/:path*",
+				permanent: true,
+			},
+			{
+				source: "/docs/plugins/community-plugins",
+				destination: "/marketplace",
+				permanent: true,
+			},
+			{
+				source: "/docs/beta/plugins/community-plugins",
+				destination: "/marketplace",
 				permanent: true,
 			},
 		];
