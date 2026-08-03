@@ -1,5 +1,10 @@
 import type { GenericEndpointContext, LiteralString } from "@better-auth/core";
-import type { InferOptionSchema, Session, User } from "better-auth/types";
+import type {
+	BetterAuthOptions,
+	InferOptionSchema,
+	Session,
+	User,
+} from "better-auth/types";
 import type { JWTPayload } from "jose";
 import type { schema } from "../schema";
 import type { Awaitable } from "./helpers";
@@ -35,6 +40,12 @@ export type AuthorizePrompt =
 
 export interface OAuthOptions<
 	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+	/**
+	 * The auth options this provider is installed into. Supply them as the second
+	 * argument to `oauthProvider` and the claim callbacks receive the user with
+	 * its configured `additionalFields` typed, instead of as `unknown`.
+	 */
+	AuthOptions extends BetterAuthOptions = BetterAuthOptions,
 > {
 	/**
 	 * Custom schema definitions
@@ -449,7 +460,7 @@ export interface OAuthOptions<
 	 */
 	customUserInfoClaims?: (info: {
 		/** The user object */
-		user: User & Record<string, unknown>;
+		user: User<AuthOptions["user"], AuthOptions["plugins"]>;
 		/** The scopes from the access token used
 		 * in the /userinfo request (matches jwt.scopes) */
 		scopes: Scopes;
@@ -468,7 +479,7 @@ export interface OAuthOptions<
 	 */
 	customIdTokenClaims?: (info: {
 		/** The user object if token is associated to a user. */
-		user: User & Record<string, unknown>;
+		user: User<AuthOptions["user"], AuthOptions["plugins"]>;
 		/** Scopes granted for this token */
 		scopes: Scopes;
 		/** oAuthClient metadata */
@@ -489,7 +500,7 @@ export interface OAuthOptions<
 	 */
 	customAccessTokenClaims?: (info: {
 		/** The user object if token is associated to a user. Null if user doesn't exist. Undefined if user not applicable. */
-		user?: (User & Record<string, unknown>) | null;
+		user?: User<AuthOptions["user"], AuthOptions["plugins"]> | null;
 		/** reference of the consent/authorization */
 		referenceId?: string;
 		/** Scopes granted for this token */

@@ -13,7 +13,7 @@ import {
 } from "better-auth/api";
 import { parseSetCookieHeader } from "better-auth/cookies";
 import { mergeSchema } from "better-auth/db";
-import type { BetterAuthPlugin } from "better-auth/types";
+import type { BetterAuthOptions, BetterAuthPlugin } from "better-auth/types";
 import * as z from "zod";
 import type { AuthorizeEndpointSettings } from "./authorize";
 import { authorizeEndpoint } from "./authorize";
@@ -68,7 +68,21 @@ export const getOAuthProviderState = oAuthState.get;
  * @param options - The options for the oAuth Provider plugin.
  * @returns A Better Auth plugin.
  */
-export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
+export const oauthProvider = <
+	AuthOptions extends BetterAuthOptions = BetterAuthOptions,
+	O extends OAuthOptions<Scope[], AuthOptions> = OAuthOptions<
+		Scope[],
+		AuthOptions
+	>,
+>(
+	options: O,
+	/**
+	 * The auth options this provider is installed into. Passing them is optional
+	 * and changes nothing at runtime — it lets the claim callbacks type the user
+	 * with its configured `additionalFields` instead of `unknown`.
+	 */
+	_authOptions?: AuthOptions | undefined,
+) => {
 	let clientRegistrationAllowedScopes = options.clientRegistrationAllowedScopes;
 	if (options.clientRegistrationDefaultScopes) {
 		const _allowedScopes = clientRegistrationAllowedScopes
