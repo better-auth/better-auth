@@ -144,6 +144,20 @@ export function resolveSessionAuthTime(value: unknown): Date | undefined {
 
 const cachedTrustedClients = new TTLCache<string, SchemaClient<Scope[]>>();
 
+/**
+ * Re-encodes a standard-base64 signature with the url-safe alphabet.
+ *
+ * `makeSignature` returns standard base64, whose `+` and `/` survive correct
+ * percent-encoding but not a second decode by an intermediary — `+` comes back
+ * as a space and the signature is unverifiable. Anything travelling in a URL
+ * uses this form instead. `makeSignature` itself is left alone: it also derives
+ * pairwise subject identifiers, which are stable values relying parties have
+ * already seen.
+ */
+export function toUrlSafeSignature(signature: string) {
+	return signature.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 export async function verifyOAuthQueryParams(
 	oauth_query: string,
 	secret: string,
@@ -157,10 +171,15 @@ export async function verifyOAuthQueryParams(
 		canonicalizeOAuthQueryParams(queryParams).toString(),
 		secret,
 	);
+	// Signatures are emitted url-safe so a stray decode cannot mangle them, but
+	// standard base64 is still accepted: a URL signed before this change is
+	// typically still in flight when it is redeemed.
+	const verifySigUrlSafe = toUrlSafeSignature(verifySig);
 	return (
 		sigs.length === 1 &&
 		!!sig &&
-		constantTimeEqual(sig, verifySig) &&
+		(constantTimeEqual(sig, verifySigUrlSafe) ||
+			constantTimeEqual(sig, verifySig)) &&
 		new Date(exp * 1000) >= new Date()
 	);
 }

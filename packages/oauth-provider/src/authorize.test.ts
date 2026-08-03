@@ -692,3 +692,72 @@ describe("oauth authorize - authenticated", async () => {
 		expect(callbackRedirectUrl).not.toContain("/consent");
 	});
 });
+
+/**
+ * The signed query travels in a URL. A standard-base64 signature carries `+`
+ * and `/`, so one stray decode by an intermediary (SSR hosts rebuilding request
+ * URLs, link rewriters, deep-link handoffs) turns `+` into a space and
+ * verification can never succeed again.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10427
+ */
+describe("signed query URL safety", () => {
+	const secret = "url-safety-test-secret";
+
+	/**
+	 * Builds signed params whose standard-base64 signature contains a character
+	 * that URL decoding would mangle. Deterministic: the same state is found on
+	 * every run.
+	 */
+	async function signedParamsWithUnsafeChars() {
+		for (let i = 0; i < 500; i++) {
+			const params = new URLSearchParams();
+			params.set("client_id", "demo");
+			params.set("state", `s${i}`);
+			params.set("exp", "9999999999");
+			params.set(signedQueryIssuedAtParam, "1");
+			setSignedOAuthQueryParameterNames(params);
+			const sig = await makeSignature(
+				canonicalizeOAuthQueryParams(params).toString(),
+				secret,
+			);
+			if (sig.includes("+") || sig.includes("/")) {
+				return { params, sig };
+			}
+		}
+		throw new Error("no signature with url-unsafe characters found");
+	}
+
+	const toUrlSafe = (sig: string) =>
+		sig.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+	it("should accept a url-safe signature", async () => {
+		const { params, sig } = await signedParamsWithUnsafeChars();
+		params.set("sig", toUrlSafe(sig));
+
+		expect(await verifyOAuthQueryParams(params.toString(), secret)).toBe(true);
+	});
+
+	it("should still accept a standard-base64 signature", async () => {
+		const { params, sig } = await signedParamsWithUnsafeChars();
+		params.set("sig", sig);
+
+		expect(await verifyOAuthQueryParams(params.toString(), secret)).toBe(true);
+	});
+
+	it("should survive an intermediary decoding the query one extra time", async () => {
+		const { params, sig } = await signedParamsWithUnsafeChars();
+		params.set("sig", toUrlSafe(sig));
+
+		const mangled = decodeURIComponent(params.toString());
+
+		expect(await verifyOAuthQueryParams(mangled, secret)).toBe(true);
+	});
+
+	it("should still reject a tampered signature", async () => {
+		const { params, sig } = await signedParamsWithUnsafeChars();
+		params.set("sig", toUrlSafe(sig).slice(0, -1) + "X");
+
+		expect(await verifyOAuthQueryParams(params.toString(), secret)).toBe(false);
+	});
+});

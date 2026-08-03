@@ -27,6 +27,7 @@ import {
 	isPKCERequired,
 	parsePrompt,
 	storeToken,
+	toUrlSafeSignature,
 } from "./utils";
 
 /**
@@ -671,6 +672,6 @@ async function signParams(
 		canonicalizeOAuthQueryParams(params).toString(),
 		ctx.context.secret,
 	);
-	params.set("sig", signature);
+	params.set("sig", toUrlSafeSignature(signature));
 	return params.toString();
 }
