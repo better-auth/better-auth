@@ -1,5 +1,5 @@
 import type {
-	EndpointContext,
+	EndpointHandler,
 	EndpointOptions,
 	StrictEndpoint,
 } from "better-call";
@@ -56,13 +56,37 @@ export const createAuthMiddleware = createMiddleware.create({
 	],
 });
 
-const use = [optionsMiddleware];
+const createEndpointWithAuthContext = createEndpoint.create({
+	use: [optionsMiddleware],
+});
 
-type EndpointHandler<
+type AuthEndpointHandler<
 	Path extends string,
 	Options extends EndpointOptions,
 	R,
-> = (context: EndpointContext<Path, Options, AuthContext>) => Promise<R>;
+> = EndpointHandler<Path, Options, R, AuthContext>;
+
+type PathlessAuthEndpointHandler<
+	Options extends EndpointOptions,
+	R,
+> = AuthEndpointHandler<string, Options, R>;
+
+function wrapEndpointHandler<
+	Path extends string,
+	Options extends EndpointOptions,
+	R,
+>(
+	handler: AuthEndpointHandler<Path, Options, R>,
+): AuthEndpointHandler<Path, Options, R> {
+	return async (context) => {
+		try {
+			return await runWithEndpointContext(context, () => handler(context));
+		} catch (error) {
+			attachResponseHeadersToAPIError(context.responseHeaders, error);
+			throw error;
+		}
+	};
+}
 
 export function createAuthEndpoint<
 	Path extends string,
@@ -71,65 +95,42 @@ export function createAuthEndpoint<
 >(
 	path: Path,
 	options: Options,
-	handler: EndpointHandler<Path, Options, R>,
+	handler: AuthEndpointHandler<Path, Options, R>,
 ): StrictEndpoint<Path, Options, R>;
+
+export function createAuthEndpoint<
+	InferredPath extends string,
+	Options extends EndpointOptions,
+	R,
+>(
+	options: Options,
+	handler: PathlessAuthEndpointHandler<Options, R>,
+): StrictEndpoint<InferredPath, Options, R>;
 
 export function createAuthEndpoint<
 	Path extends string,
 	Options extends EndpointOptions,
 	R,
 >(
-	options: Options,
-	handler: EndpointHandler<Path, Options, R>,
-): StrictEndpoint<Path, Options, R>;
-
-export function createAuthEndpoint<
-	Path extends string,
-	Opts extends EndpointOptions,
-	R,
->(
-	pathOrOptions: Path | Opts,
-	handlerOrOptions: EndpointHandler<Path, Opts, R> | Opts,
-	handlerOrNever?: any,
+	...args:
+		| [
+				path: Path,
+				options: Options,
+				handler: AuthEndpointHandler<Path, Options, R>,
+		  ]
+		| [options: Options, handler: PathlessAuthEndpointHandler<Options, R>]
 ) {
-	const path: Path | undefined =
-		typeof pathOrOptions === "string" ? pathOrOptions : undefined;
-	const options: Opts =
-		typeof handlerOrOptions === "object"
-			? handlerOrOptions
-			: (pathOrOptions as Opts);
-	const handler: EndpointHandler<Path, Opts, R> =
-		typeof handlerOrOptions === "function" ? handlerOrOptions : handlerOrNever;
-
-	// todo: prettify the code, we want to call `runWithEndpointContext` to top level
-	const wrapped: EndpointHandler<Path, Opts, R> = async (ctx) => {
-		const runtimeCtx = ctx as unknown as { responseHeaders?: Headers };
-		try {
-			return await runWithEndpointContext(ctx as any, () => handler(ctx));
-		} catch (e) {
-			attachResponseHeadersToAPIError(runtimeCtx.responseHeaders, e);
-			throw e;
-		}
-	};
-
-	if (path) {
-		return createEndpoint(
+	if (args.length === 3) {
+		const [path, options, handler] = args;
+		return createEndpointWithAuthContext(
 			path,
-			{
-				...options,
-				use: [...(options?.use || []), ...use],
-			},
-			wrapped,
+			options,
+			wrapEndpointHandler(handler),
 		);
 	}
 
-	return createEndpoint(
-		{
-			...options,
-			use: [...(options?.use || []), ...use],
-		},
-		wrapped,
-	);
+	const [options, handler] = args;
+	return createEndpointWithAuthContext(options, wrapEndpointHandler(handler));
 }
 
 /**
@@ -168,14 +169,17 @@ function withServerOnly<Options extends EndpointOptions>(
  * ```
  */
 createAuthEndpoint.serverOnly = <
-	Path extends string,
+	InferredPath extends string,
 	Options extends EndpointOptions,
 	R,
 >(
 	options: Options,
-	handler: EndpointHandler<Path, Options, R>,
-): StrictEndpoint<Path, Options, R> =>
-	createAuthEndpoint(withServerOnly(options), handler);
+	handler: PathlessAuthEndpointHandler<Options, R>,
+): StrictEndpoint<InferredPath, Options, R> =>
+	createAuthEndpoint<InferredPath, Options, R>(
+		withServerOnly(options),
+		handler,
+	);
 
 export type AuthEndpoint<
 	Path extends string,
