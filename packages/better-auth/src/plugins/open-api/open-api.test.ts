@@ -4,6 +4,7 @@ import * as z from "zod";
 import { createAuthEndpoint } from "../../api";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { emailOTP } from "../email-otp";
+import { phoneNumber } from "../phone-number";
 import { username } from "../username";
 import { openAPI } from ".";
 import type { OpenAPISchema, Path } from "./generator";
@@ -976,6 +977,37 @@ describe("open-api", async () => {
 		);
 		expect(getSchemaProperty(requestBodySchema, "unionOptional").type).toBe(
 			"string",
+		);
+	});
+});
+
+/**
+ * This endpoint accepts arbitrary extra fields, expressed as
+ * `z.object({...}).and(z.record(...))`. That makes the schema an intersection
+ * rather than an object, and the generated spec must still describe the fields
+ * a caller has to send.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/8122
+ */
+describe("open-api request bodies for intersection schemas", () => {
+	it("documents the phone-number verify body", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				phoneNumber({
+					sendOTP() {},
+				}),
+				openAPI(),
+			],
+		});
+
+		const schema = await auth.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+		const body = getPostRequestBody(paths, "/phone-number/verify");
+		const properties =
+			body.content["application/json"]?.schema?.properties ?? {};
+
+		expect(Object.keys(properties)).toEqual(
+			expect.arrayContaining(["phoneNumber", "code"]),
 		);
 	});
 });
