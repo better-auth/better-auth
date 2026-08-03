@@ -26,6 +26,7 @@ import {
 } from "../../utils/url";
 import { PACKAGE_VERSION } from "../../version";
 import { getJwtToken } from "../jwt";
+import type { JWSAlgorithms } from "../jwt/types";
 import type {
 	Client,
 	CodeVerificationValue,
@@ -53,14 +54,42 @@ export interface MCPOptions {
 }
 
 /**
+ * Every algorithm the jwt plugin can be configured to sign with.
+ *
+ * Discovery cannot know which one a given token used: the signer prefers the
+ * algorithm recorded on the active persisted key over the configured one, and
+ * reading that key is asynchronous. `id_token_signing_alg_values_supported` is
+ * the set the server supports rather than the one currently in use, so listing
+ * all of them is both accurate and safe — a client never meets an algorithm it
+ * was not told about.
+ *
+ * Declared as a complete record so adding a member to `JWSAlgorithms` fails the
+ * build here until discovery advertises it too.
+ */
+const JWT_PLUGIN_ALGORITHMS: Record<JWSAlgorithms, true> = {
+	EdDSA: true,
+	ES256: true,
+	ES512: true,
+	PS256: true,
+	RS256: true,
+};
+
+/**
  * The URL discovery should name for the keys that verify an issued id token.
  *
  * The jwt plugin owns the JWKS and may serve it from a custom path or host it
  * remotely, so neither is safe to assume. Without that plugin an id token is
- * signed with the client secret and there is no key set to fetch.
+ * signed with the client secret: there is no key set to publish, and naming one
+ * would send clients to an endpoint that does not exist. Mirrors how
+ * `@better-auth/oauth-provider` builds the same field.
  */
-function resolveJwksUri(ctx: GenericEndpointContext, baseURL: string) {
-	const jwks = ctx.context.getPlugin("jwt")?.options?.jwks;
+function resolveJwksUri(
+	ctx: GenericEndpointContext,
+	baseURL: string,
+): string | undefined {
+	const jwtPlugin = ctx.context.getPlugin("jwt");
+	if (!jwtPlugin) return undefined;
+	const jwks = jwtPlugin.options?.jwks;
 	return jwks?.remoteUrl ?? `${baseURL}${jwks?.jwksPath ?? "/jwks"}`;
 }
 
@@ -80,17 +109,11 @@ export const getMCPProviderMetadata = (
 				"issuer or baseURL is not set. If you're the app developer, please make sure to set the `baseURL` in your auth config.",
 		});
 	}
-	/**
-	 * Advertise the algorithm the id token is really signed with. The jwt
-	 * plugin's key pair may be any supported algorithm, and a client that is
-	 * handed one it was never told about rejects the token. Without that plugin
-	 * the id token is signed with the client secret, which is HS256.
-	 */
 	// Presence of the plugin decides, not presence of its options: `jwt()` takes
-	// none, and then signs with the default EdDSA key pair.
-	const jwtPlugin = ctx.context.getPlugin("jwt");
-	const supportedAlgs = jwtPlugin
-		? [jwtPlugin.options?.jwks?.keyPairConfig?.alg ?? "EdDSA"]
+	// none and still signs. Without it the id token is signed with the client
+	// secret, which is HS256.
+	const supportedAlgs = ctx.context.getPlugin("jwt")
+		? Object.keys(JWT_PLUGIN_ALGORITHMS)
 		: ["HS256"];
 	return {
 		issuer,

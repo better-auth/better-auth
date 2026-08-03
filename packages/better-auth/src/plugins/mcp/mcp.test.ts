@@ -443,8 +443,13 @@ describe("mcp", async () => {
 			response_modes_supported: ["query"],
 			grant_types_supported: ["authorization_code", "refresh_token"],
 			subject_types_supported: ["public"],
-			// This instance installs jwt() with its default key pair.
-			id_token_signing_alg_values_supported: ["EdDSA"],
+			id_token_signing_alg_values_supported: [
+				"EdDSA",
+				"ES256",
+				"ES512",
+				"PS256",
+				"RS256",
+			],
 			token_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
@@ -1899,24 +1904,35 @@ describe("mcp discovery follows the jwt plugin's configuration", async () => {
 		});
 
 		expect(metadata.jwks_uri).toBe("https://cdn.example.com/keys.json");
-		expect(metadata.id_token_signing_alg_values_supported).toEqual(["RS256"]);
 	});
 
-	it("should advertise the configured signing algorithm", async ({
+	it("should advertise every algorithm the plugin can sign with", async ({
 		expect,
 	}) => {
-		const metadata = await metadataFor({
+		// The signer prefers the algorithm on the active persisted key over the
+		// configured one, so discovery cannot name a single value. Advertising the
+		// whole supported set means a client never meets an unadvertised one.
+		const configured = await metadataFor({
 			jwks: { keyPairConfig: { alg: "ES256" } },
 		});
+		const defaulted = await metadataFor({});
 
-		expect(metadata.id_token_signing_alg_values_supported).toEqual(["ES256"]);
+		for (const algs of [
+			configured.id_token_signing_alg_values_supported,
+			defaulted.id_token_signing_alg_values_supported,
+		]) {
+			expect(algs).toEqual(
+				expect.arrayContaining(["EdDSA", "ES256", "ES512", "PS256", "RS256"]),
+			);
+		}
 	});
 
-	it("should advertise EdDSA when the jwt plugin uses its default key", async ({
+	it("should publish no jwks_uri when there is no jwt plugin to serve one", async ({
 		expect,
 	}) => {
-		const metadata = await metadataFor({});
+		const metadata = await metadataFor();
 
-		expect(metadata.id_token_signing_alg_values_supported).toEqual(["EdDSA"]);
+		expect(metadata.jwks_uri).toBeUndefined();
+		expect(metadata.id_token_signing_alg_values_supported).toEqual(["HS256"]);
 	});
 });

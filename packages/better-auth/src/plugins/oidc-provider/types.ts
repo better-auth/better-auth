@@ -447,7 +447,7 @@ export interface OIDCMetadata {
 	 *
 	 * @default `/jwks`
 	 */
-	jwks_uri: string;
+	jwks_uri?: string;
 	/**
 	 * The URL of the dynamic client registration endpoint.
 	 *
