@@ -1,6 +1,9 @@
 // cspell:ignore AQAB
-import { afterEach, describe, expect, it, vi } from "vitest";
+import type { BetterAuthClientPlugin } from "@better-auth/core";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { oneTapClient } from "./client";
 import { oneTap } from "./index";
 
 vi.mock("@better-fetch/fetch", async (importOriginal) => {
@@ -710,5 +713,31 @@ describe("one-tap disableSignUp", () => {
 			status: "UNAUTHORIZED",
 			body: { message: "signup disabled" },
 		});
+	});
+});
+
+/**
+ * Declaration emit previously left `getActions`'s `$fetch` parameter
+ * un-annotated. With no import of `BetterFetch` in the file, emit had no
+ * name to reference and inlined `import("@better-fetch/fetch").BetterFetch`
+ * instead - a form not assignable to `BetterAuthClientPlugin`'s
+ * `getActions`, so `oneTapClient()` failed `createAuthClient`'s check and
+ * the client lost the `oneTap` action.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10583
+ */
+describe("oneTapClient types", () => {
+	it("should be assignable to BetterAuthClientPlugin", () => {
+		const plugin: BetterAuthClientPlugin = oneTapClient({
+			clientId: "test-client",
+		});
+		expect(plugin.id).toBe("one-tap");
+	});
+
+	it("should preserve the oneTap client action", () => {
+		const client = createAuthClient({
+			plugins: [oneTapClient({ clientId: "test-client" })],
+		});
+		expectTypeOf(client.oneTap).toBeFunction();
 	});
 });
