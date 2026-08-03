@@ -111,7 +111,7 @@ export function getSetCookie(header: string, prevCookie?: string | undefined) {
 	return JSON.stringify(toSetCookie);
 }
 
-export function getCookie(cookie: string | null | undefined) {
+export function getCookie(cookie: string | null) {
 	const parsed = safeJSONParse<Record<string, StoredCookie>>(cookie) ?? {};
 	const toSend = Object.entries(parsed).reduce((acc, [key, value]) => {
 		if (value.expires && new Date(value.expires) < new Date()) {
