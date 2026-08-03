@@ -6,7 +6,10 @@ import type { AuthContext, DBAdapter } from "better-auth";
 import { BetterAuthError, generateId } from "better-auth";
 import { createAuthEndpoint } from "better-auth/api";
 import * as z from "zod";
-import { createSCIMConnectionKey } from "./connection-state";
+import {
+	createSCIMConnectionKey,
+	findOrCreateSCIMConnectionBinding,
+} from "./connection-state";
 import type { SCIMIdentityCoordinator } from "./identity";
 import type { SCIMConnectionBinding } from "./persistence";
 import type { SCIMProjectionCoordinator } from "./projection";
@@ -19,6 +22,7 @@ const SCIM_DECOMMISSION_LEASE_DURATION_MS = 5 * 60 * 1000;
 
 const decommissionConnectionBodySchema = z.object({
 	connectionId: z.string().trim().min(1).max(255),
+	provisioningDomainId: z.string().trim().min(1).max(255).optional(),
 });
 
 function createDecommissionResult(binding: SCIMConnectionBinding) {
@@ -40,6 +44,40 @@ function createDecommissionResult(binding: SCIMConnectionBinding) {
 		reconciledUsers: binding.decommissionReconciledUserCount,
 		batches: binding.decommissionBatchCount,
 	};
+}
+
+function assertProvisioningDomainBinding(
+	binding: SCIMConnectionBinding,
+	provisioningDomainId: string,
+): void {
+	if (binding.provisioningDomainId === provisioningDomainId) return;
+	throw new BetterAuthError(
+		`SCIM connection "${binding.connectionId}" is already bound to provisioning domain "${binding.provisioningDomainId}".`,
+	);
+}
+
+async function findOrCreateConnectionBinding(
+	database: Pick<DBAdapter, "create" | "findOne">,
+	connectionId: string,
+	provisioningDomainId?: string,
+): Promise<SCIMConnectionBinding> {
+	const completedAt = new Date();
+	return findOrCreateSCIMConnectionBinding(
+		database,
+		connectionId,
+		provisioningDomainId,
+		completedAt,
+		{
+			decommissionStatus: "complete",
+			decommissionedAt: completedAt,
+			decommissionCompletedAt: completedAt,
+		},
+		(binding) => {
+			if (provisioningDomainId) {
+				assertProvisioningDomainBinding(binding, provisioningDomainId);
+			}
+		},
+	);
 }
 
 async function findConnectionBinding(
@@ -64,13 +102,25 @@ async function findConnectionBinding(
 async function acquireDecommissionLease(
 	database: DBAdapter,
 	connectionId: string,
+	provisioningDomainId?: string,
 ): Promise<{
 	binding: SCIMConnectionBinding;
 	leaseId?: string;
 }> {
+	const currentDatabase = await getCurrentAdapter(database);
 	const leaseId = generateId(32);
 	for (let attempt = 0; attempt < 10; attempt++) {
-		const binding = await findConnectionBinding(database, connectionId);
+		const binding =
+			attempt === 0
+				? await findOrCreateConnectionBinding(
+						currentDatabase,
+						connectionId,
+						provisioningDomainId,
+					)
+				: await findConnectionBinding(currentDatabase, connectionId);
+		if (provisioningDomainId) {
+			assertProvisioningDomainBinding(binding, provisioningDomainId);
+		}
 		if (binding.decommissionStatus === "complete") return { binding };
 
 		const now = new Date();
@@ -81,7 +131,7 @@ async function acquireDecommissionLease(
 			binding.decommissionLeaseExpiresAt.getTime() > now.getTime();
 		if (activeLease) return { binding };
 
-		const acquired = await database.incrementOne<SCIMConnectionBinding>({
+		const acquired = await currentDatabase.incrementOne<SCIMConnectionBinding>({
 			model: "scimConnectionBinding",
 			where: [
 				{ field: "id", value: binding.id },
@@ -118,8 +168,9 @@ async function releaseDecommissionLease(input: {
 	bindingId: string;
 	leaseId: string;
 }): Promise<void> {
+	const currentDatabase = await getCurrentAdapter(input.database);
 	for (let attempt = 0; attempt < 3; attempt++) {
-		const binding = await input.database.findOne<SCIMConnectionBinding>({
+		const binding = await currentDatabase.findOne<SCIMConnectionBinding>({
 			model: "scimConnectionBinding",
 			where: [{ field: "id", value: input.bindingId }],
 		});
@@ -130,7 +181,7 @@ async function releaseDecommissionLease(input: {
 		) {
 			return;
 		}
-		const released = await input.database.incrementOne<SCIMConnectionBinding>({
+		const released = await currentDatabase.incrementOne<SCIMConnectionBinding>({
 			model: "scimConnectionBinding",
 			where: [
 				{ field: "id", value: binding.id },
@@ -320,7 +371,42 @@ async function reconcileDecommissionedConnection(input: {
 	}
 }
 
-/** Creates the trusted server API for permanently retiring one connection. */
+/**
+ * Permanently retires one connection through the leased canonical
+ * reconciliation saga.
+ */
+export async function decommissionSCIMConnection(input: {
+	database: DBAdapter;
+	auth: AuthContext;
+	projection: SCIMProjectionCoordinator;
+	identity: SCIMIdentityCoordinator;
+	connectionId: string;
+	provisioningDomainId?: string;
+}) {
+	const acquired = await acquireDecommissionLease(
+		input.database,
+		input.connectionId,
+		input.provisioningDomainId,
+	);
+	if (!acquired.leaseId) {
+		return createDecommissionResult(acquired.binding);
+	}
+	const binding = await reconcileDecommissionedConnection({
+		database: input.database,
+		auth: input.auth,
+		projection: input.projection,
+		identity: input.identity,
+		binding: acquired.binding,
+		leaseId: acquired.leaseId,
+	});
+	return createDecommissionResult(binding);
+}
+
+/**
+ * Creates the trusted server API for permanently retiring one connection.
+ * A provisioning domain may be supplied to retain a terminal binding before
+ * the connection's first authenticated request.
+ */
 export function createDecommissionSCIMConnectionEndpoint(
 	projection: SCIMProjectionCoordinator,
 	identity: SCIMIdentityCoordinator,
@@ -331,22 +417,16 @@ export function createDecommissionSCIMConnectionEndpoint(
 			body: decommissionConnectionBodySchema,
 		},
 		async (ctx) => {
-			const acquired = await acquireDecommissionLease(
-				ctx.context.adapter,
-				ctx.body.connectionId,
+			return ctx.json(
+				await decommissionSCIMConnection({
+					database: ctx.context.adapter,
+					auth: ctx.context,
+					projection,
+					identity,
+					connectionId: ctx.body.connectionId,
+					provisioningDomainId: ctx.body.provisioningDomainId,
+				}),
 			);
-			if (!acquired.leaseId) {
-				return ctx.json(createDecommissionResult(acquired.binding));
-			}
-			const binding = await reconcileDecommissionedConnection({
-				database: ctx.context.adapter,
-				auth: ctx.context,
-				projection,
-				identity,
-				binding: acquired.binding,
-				leaseId: acquired.leaseId,
-			});
-			return ctx.json(createDecommissionResult(binding));
 		},
 	);
 }
