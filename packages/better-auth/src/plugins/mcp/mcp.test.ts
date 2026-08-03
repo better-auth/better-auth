@@ -434,14 +434,14 @@ describe("mcp", async () => {
 			authorization_endpoint: `${baseURL}/api/auth/mcp/authorize`,
 			token_endpoint: `${baseURL}/api/auth/mcp/token`,
 			userinfo_endpoint: `${baseURL}/api/auth/mcp/userinfo`,
-			jwks_uri: `${baseURL}/api/auth/mcp/jwks`,
+			jwks_uri: `${baseURL}/api/auth/jwks`,
 			registration_endpoint: `${baseURL}/api/auth/mcp/register`,
 			scopes_supported: ["openid", "profile", "email", "offline_access"],
 			response_types_supported: ["code"],
 			response_modes_supported: ["query"],
 			grant_types_supported: ["authorization_code", "refresh_token"],
 			subject_types_supported: ["public"],
-			id_token_signing_alg_values_supported: ["RS256"],
+			id_token_signing_alg_values_supported: ["RS256", "EdDSA"],
 			token_endpoint_auth_methods_supported: [
 				"client_secret_basic",
 				"client_secret_post",
@@ -472,7 +472,7 @@ describe("mcp", async () => {
 		expect(metadata.data).toMatchObject({
 			resource: origin,
 			authorization_servers: [origin],
-			jwks_uri: `${baseURL}/api/auth/mcp/jwks`,
+			jwks_uri: `${baseURL}/api/auth/jwks`,
 			scopes_supported: ["openid", "profile", "email", "offline_access"],
 			bearer_methods_supported: ["header"],
 			resource_signing_alg_values_supported: ["RS256"],
@@ -1327,5 +1327,164 @@ describe("mcp session freshness (security)", () => {
 		expect(response.status).toBe(401);
 		expect(body?.error).toBe("invalid_grant");
 		expect(body?.access_token).toBeUndefined();
+	});
+});
+
+/**
+ * The discovery document advertises RS256 id tokens verifiable through a JWKS.
+ * These assert the issued token actually matches that contract.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10638
+ */
+describe("mcp id token verifiability (security)", async () => {
+	const tempServer = await listen(
+		toNodeHandler(async () => new Response("temp")),
+		{ port: 0 },
+	);
+	const port = tempServer.address?.port || 3002;
+	const baseURL = `http://localhost:${port}`;
+	await tempServer.close();
+
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL,
+		plugins: [mcp({ loginPage: "/login" }), jwt()],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const serverClient = createAuthClient({
+		baseURL,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	const server = await listen(toNodeHandler(auth.handler), { port });
+	afterAll(async () => {
+		await server.close();
+	});
+
+	const base64url = (bytes: Uint8Array) =>
+		btoa(String.fromCharCode(...bytes))
+			.replace(/\+/g, "-")
+			.replace(/\//g, "_")
+			.replace(/=+$/, "");
+
+	/** Decodes a JWT's protected header the way a verifying client would. */
+	function decodeJwtHeader(token: string): { alg?: string; kid?: string } {
+		const [encodedHeader] = token.split(".");
+		if (!encodedHeader) {
+			throw new Error(`not a JWT: ${token}`);
+		}
+		return JSON.parse(
+			new TextDecoder().decode(
+				Uint8Array.from(
+					atob(encodedHeader.replace(/-/g, "+").replace(/_/g, "/")),
+					(c) => c.charCodeAt(0),
+				),
+			),
+		);
+	}
+
+	/** Runs a full authorization-code exchange and returns the raw token response. */
+	async function getTokenResponse() {
+		const registered = await serverClient.$fetch("/mcp/register", {
+			method: "POST",
+			body: {
+				client_name: "idtoken-verifiability-client",
+				redirect_uris: ["http://localhost:3000/callback"],
+				token_endpoint_auth_method: "client_secret_basic",
+			},
+		});
+		const client = registered.data as any;
+
+		const verifier = base64url(crypto.getRandomValues(new Uint8Array(32)));
+		const challenge = base64url(
+			new Uint8Array(
+				await crypto.subtle.digest(
+					"SHA-256",
+					new TextEncoder().encode(verifier),
+				),
+			),
+		);
+
+		const authorizeURL =
+			`${baseURL}/api/auth/mcp/authorize?` +
+			new URLSearchParams({
+				client_id: client.client_id,
+				redirect_uri: client.redirect_uris[0],
+				response_type: "code",
+				scope: "openid profile email",
+				code_challenge: challenge,
+				code_challenge_method: "S256",
+			}).toString();
+
+		let redirectURI = "";
+		await serverClient.$fetch(authorizeURL, {
+			method: "GET",
+			onError(context: any) {
+				redirectURI = context.response.headers.get("Location") || "";
+			},
+			onSuccess(context: any) {
+				redirectURI = context.response.headers.get("Location") || redirectURI;
+			},
+		});
+		const code = new URL(redirectURI).searchParams.get("code");
+
+		const response = await customFetchImpl(`${baseURL}/api/auth/mcp/token`, {
+			method: "POST",
+			headers: { "Content-Type": "application/x-www-form-urlencoded" },
+			body: new URLSearchParams({
+				grant_type: "authorization_code",
+				code: code!,
+				client_id: client.client_id,
+				client_secret: client.client_secret,
+				redirect_uri: client.redirect_uris[0],
+				code_verifier: verifier,
+			}).toString(),
+		});
+		return { body: await response.json(), client };
+	}
+
+	it("should issue an id token a client can actually verify", async ({
+		expect,
+	}) => {
+		const { body } = await getTokenResponse();
+		expect(body.id_token).toBeTruthy();
+
+		const metadata = await serverClient.$fetch<Record<string, any>>(
+			"/.well-known/oauth-authorization-server",
+		);
+		const advertisedAlgs =
+			metadata.data?.id_token_signing_alg_values_supported ?? [];
+
+		expect(advertisedAlgs).toContain(decodeJwtHeader(body.id_token).alg);
+	});
+
+	it("should sign successive id tokens with the same, published key", async ({
+		expect,
+	}) => {
+		const first = await getTokenResponse();
+		const second = await getTokenResponse();
+
+		const kidOf = (token: string) => decodeJwtHeader(token).kid;
+
+		expect(kidOf(first.body.id_token)).toBeDefined();
+		expect(kidOf(first.body.id_token)).toBe(kidOf(second.body.id_token));
+	});
+
+	it("should publish the signing key at the advertised jwks_uri", async ({
+		expect,
+	}) => {
+		const { body } = await getTokenResponse();
+		const metadata = await serverClient.$fetch<Record<string, any>>(
+			"/.well-known/oauth-authorization-server",
+		);
+
+		// Follow the advertised URL exactly as a client would, rather than a
+		// path this test happens to know.
+		const jwks = await (await customFetchImpl(metadata.data!.jwks_uri)).json();
+		expect(jwks.keys?.length).toBeGreaterThan(0);
+
+		expect(jwks.keys.map((k: { kid: string }) => k.kid)).toContain(
+			decodeJwtHeader(body.id_token).kid,
+		);
 	});
 });

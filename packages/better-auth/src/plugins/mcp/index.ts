@@ -10,7 +10,6 @@ import {
 import { isProduction, logger } from "@better-auth/core/env";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { isSafeUrlScheme } from "@better-auth/core/utils/url";
-import { getWebcryptoSubtle } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { SignJWT } from "jose";
@@ -26,6 +25,7 @@ import {
 	resolveBaseURL,
 } from "../../utils/url";
 import { PACKAGE_VERSION } from "../../version";
+import { getJwtToken } from "../jwt";
 import type {
 	Client,
 	CodeVerificationValue,
@@ -68,12 +68,19 @@ export const getMCPProviderMetadata = (
 				"issuer or baseURL is not set. If you're the app developer, please make sure to set the `baseURL` in your auth config.",
 		});
 	}
+	/**
+	 * Advertise what the token endpoint actually signs with: the jwt plugin's
+	 * published keys when it is installed, otherwise the client secret.
+	 */
+	const supportedAlgs = ctx.context.getPlugin("jwt")
+		? ["RS256", "EdDSA"]
+		: ["HS256"];
 	return {
 		issuer,
 		authorization_endpoint: `${baseURL}/mcp/authorize`,
 		token_endpoint: `${baseURL}/mcp/token`,
 		userinfo_endpoint: `${baseURL}/mcp/userinfo`,
-		jwks_uri: `${baseURL}/mcp/jwks`,
+		jwks_uri: `${baseURL}/jwks`,
 		registration_endpoint: `${baseURL}/mcp/register`,
 		scopes_supported: ["openid", "profile", "email", "offline_access"],
 		response_types_supported: ["code"],
@@ -84,7 +91,7 @@ export const getMCPProviderMetadata = (
 			"urn:mace:incommon:iap:bronze",
 		],
 		subject_types_supported: ["public"],
-		id_token_signing_alg_values_supported: ["RS256"],
+		id_token_signing_alg_values_supported: supportedAlgs,
 		token_endpoint_auth_methods_supported: [
 			"client_secret_basic",
 			"client_secret_post",
@@ -117,7 +124,7 @@ export const getMCPProtectedResourceMetadata = (
 	return {
 		resource: options?.resource ?? origin,
 		authorization_servers: [origin],
-		jwks_uri: options?.oidcConfig?.metadata?.jwks_uri ?? `${baseURL}/mcp/jwks`,
+		jwks_uri: options?.oidcConfig?.metadata?.jwks_uri ?? `${baseURL}/jwks`,
 		scopes_supported: options?.oidcConfig?.metadata?.scopes_supported ?? [
 			"openid",
 			"profile",
@@ -724,17 +731,6 @@ export const mcp = (options: MCPOptions) => {
 							error: "invalid_grant",
 						});
 					}
-					const secretKey = {
-						alg: "HS256",
-						key: await getWebcryptoSubtle().generateKey(
-							{
-								name: "HMAC",
-								hash: "SHA-256",
-							},
-							true,
-							["sign", "verify"],
-						),
-					};
 					const profile = {
 						given_name: user.name.split(" ")[0]!,
 						family_name: user.name.split(" ")[1]!,
@@ -759,7 +755,7 @@ export const mcp = (options: MCPOptions) => {
 							)
 						: {};
 
-					const idToken = await new SignJWT({
+					const idTokenPayload = {
 						sub: user.id,
 						aud: client_id.toString(),
 						iat: Date.now(),
@@ -770,13 +766,43 @@ export const mcp = (options: MCPOptions) => {
 						acr: "urn:mace:incommon:iap:silver", // default to silver - ⚠︎ this should be configurable and should be validated against the client's metadata
 						...userClaims,
 						...additionalUserClaims,
-					})
-						.setProtectedHeader({ alg: secretKey.alg })
-						.setIssuedAt()
-						.setExpirationTime(
-							Math.floor(Date.now() / 1000) + opts.accessTokenExpiresIn,
-						)
-						.sign(secretKey.key);
+					};
+					const idTokenExpiresAt =
+						Math.floor(Date.now() / 1000) + opts.accessTokenExpiresIn;
+
+					/**
+					 * The discovery document advertises RS256 id tokens and a JWKS, so sign
+					 * with the jwt plugin's published key whenever it is installed — that is
+					 * the key clients fetch to verify. Without it, fall back to the client
+					 * secret so a confidential client can still verify with something it
+					 * holds; a public client has no such secret and gets no id token rather
+					 * than one nothing can check.
+					 */
+					const jwtPlugin = ctx.context.getPlugin("jwt");
+					let idToken: string | undefined;
+					if (jwtPlugin) {
+						idToken = await getJwtToken(ctx, {
+							...jwtPlugin.options,
+							jwt: {
+								...jwtPlugin.options?.jwt,
+								getSubject: () => user.id,
+								audience: client_id.toString(),
+								issuer:
+									jwtPlugin.options?.jwt?.issuer ??
+									(typeof ctx.context.options.baseURL === "string"
+										? ctx.context.options.baseURL
+										: undefined),
+								expirationTime: idTokenExpiresAt,
+								definePayload: () => idTokenPayload,
+							},
+						});
+					} else if (client.clientSecret) {
+						idToken = await new SignJWT(idTokenPayload)
+							.setProtectedHeader({ alg: "HS256" })
+							.setIssuedAt()
+							.setExpirationTime(idTokenExpiresAt)
+							.sign(new TextEncoder().encode(client.clientSecret));
+					}
 					return ctx.json(
 						{
 							access_token: accessToken,
