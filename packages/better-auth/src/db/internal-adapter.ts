@@ -13,7 +13,6 @@ import type { InternalLogger } from "@better-auth/core/env";
 import { generateId } from "@better-auth/core/utils/id";
 import { getIp } from "@better-auth/core/utils/ip";
 import { safeJSONParse } from "@better-auth/core/utils/json";
-import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
@@ -1400,14 +1399,32 @@ export const createInternalAdapter = (
 			value: string;
 			expiresAt: Date;
 		}): Promise<boolean> => {
-			const reservationId = base64Url.encode(
-				new Uint8Array(
-					await createHash("SHA-256").digest(
-						new TextEncoder().encode("reserve:" + data.identifier),
-					),
+			/**
+			 * The reservation's uniqueness is the primary key: the same identifier
+			 * must derive the same id so a second caller collides and loses. Shape
+			 * it as a UUID, because adapters configured for UUID ids validate the
+			 * value passed with `forceAllowId` and discard anything else — which
+			 * would hand every caller a different id and turn the guard into a
+			 * silent no-op (or a NOT NULL failure, depending on the dialect).
+			 */
+			const digest = new Uint8Array(
+				await createHash("SHA-256").digest(
+					new TextEncoder().encode("reserve:" + data.identifier),
 				),
-				{ padding: false },
 			);
+			const uuidBytes = digest.slice(0, 16);
+			uuidBytes[6] = (uuidBytes[6]! & 0x0f) | 0x50; // version 5: name-derived
+			uuidBytes[8] = (uuidBytes[8]! & 0x3f) | 0x80; // RFC 4122 variant
+			const hex = Array.from(uuidBytes, (b) =>
+				b.toString(16).padStart(2, "0"),
+			).join("");
+			const reservationId = [
+				hex.slice(0, 8),
+				hex.slice(8, 12),
+				hex.slice(12, 16),
+				hex.slice(16, 20),
+				hex.slice(20),
+			].join("-");
 			const storageOption = getStorageOption(
 				data.identifier,
 				options.verification?.storeIdentifier,

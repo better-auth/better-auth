@@ -1967,5 +1967,74 @@ describe("internal adapter test", async () => {
 			expect(first).toBe(true);
 			expect(second).toBe(true);
 		});
+
+		/**
+		 * The reservation is a replay guard, so it has to hold under every id
+		 * strategy — a deployment that silently always reserves is worse than one
+		 * that never does, because callers believe they hold the marker.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/10624
+		 */
+		describe("under advanced.database.generateId: uuid", () => {
+			const uuidOptions = {
+				advanced: { database: { generateId: "uuid" } },
+			} satisfies Partial<BetterAuthOptions>;
+
+			it("returns false the second time for the same identifier", async () => {
+				const adapter = await makeAdapter(uuidOptions);
+
+				const first = await adapter.reserveVerificationValue({
+					identifier: "reserve:uuid-once",
+					value: "jti-uuid",
+					expiresAt: new Date(Date.now() + 60_000),
+				});
+				const second = await adapter.reserveVerificationValue({
+					identifier: "reserve:uuid-once",
+					value: "jti-uuid-replay",
+					expiresAt: new Date(Date.now() + 60_000),
+				});
+
+				expect(first).toBe(true);
+				expect(second).toBe(false);
+			});
+
+			it("yields exactly one winner under concurrent reserve", async () => {
+				const adapter = await makeAdapter(uuidOptions);
+
+				const results = await Promise.all([
+					adapter.reserveVerificationValue({
+						identifier: "reserve:uuid-race",
+						value: "jti-uuid-race",
+						expiresAt: new Date(Date.now() + 60_000),
+					}),
+					adapter.reserveVerificationValue({
+						identifier: "reserve:uuid-race",
+						value: "jti-uuid-race",
+						expiresAt: new Date(Date.now() + 60_000),
+					}),
+				]);
+
+				expect(results.filter((r) => r === true)).toHaveLength(1);
+				expect(results.filter((r) => r === false)).toHaveLength(1);
+			});
+
+			it("still reserves independently across different identifiers", async () => {
+				const adapter = await makeAdapter(uuidOptions);
+
+				const first = await adapter.reserveVerificationValue({
+					identifier: "reserve:uuid-a",
+					value: "jti-uuid-a",
+					expiresAt: new Date(Date.now() + 60_000),
+				});
+				const second = await adapter.reserveVerificationValue({
+					identifier: "reserve:uuid-b",
+					value: "jti-uuid-b",
+					expiresAt: new Date(Date.now() + 60_000),
+				});
+
+				expect(first).toBe(true);
+				expect(second).toBe(true);
+			});
+		});
 	});
 });
