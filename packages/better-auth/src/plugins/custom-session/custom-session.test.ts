@@ -1,3 +1,4 @@
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
@@ -448,5 +449,69 @@ describe("Custom Session Plugin Tests", async () => {
 		expectTypeOf<CustomData>().toMatchObjectType<{
 			message: string;
 		}>();
+	});
+});
+
+/**
+ * `null` is the "not authenticated" signal, so callers redirect to login and
+ * clear cookies on it. A lookup failure must not be reported that way, or a few
+ * seconds of database trouble signs out users whose sessions are valid.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10566
+ */
+describe("Custom Session error semantics", async () => {
+	let failSessionLookup = false;
+	const db = {
+		user: [],
+		session: [],
+		account: [],
+		verification: [],
+	};
+
+	const failingAdapter: BetterAuthOptions["database"] = (options) => {
+		const adapter = memoryAdapter(db)(options);
+		const findOne: typeof adapter.findOne = async (data) => {
+			if (failSessionLookup && data.model === "session") {
+				throw new Error("database unavailable");
+			}
+			return adapter.findOne(data);
+		};
+		return { ...adapter, findOne };
+	};
+
+	const { auth, signInWithTestUser } = await getTestInstance({
+		database: failingAdapter,
+		// The DB must actually be consulted, so no cookie cache.
+		session: { cookieCache: { enabled: false } },
+		plugins: [customSession(async ({ user, session }) => ({ user, session }))],
+	});
+
+	it("should propagate a session lookup failure instead of returning null", async () => {
+		const { headers } = await signInWithTestUser();
+
+		// Sanity: the same call succeeds while the store is healthy, so a null
+		// below could only come from the failure, never from a bad fixture.
+		await expect(auth.api.getSession({ headers })).resolves.not.toBeNull();
+
+		failSessionLookup = true;
+		try {
+			await expect(auth.api.getSession({ headers })).rejects.toThrow();
+		} finally {
+			failSessionLookup = false;
+		}
+	});
+
+	it("should still return null when there is genuinely no session", async () => {
+		await expect(
+			auth.api.getSession({ headers: new Headers() }),
+		).resolves.toBeNull();
+	});
+
+	it("should still return the custom shape when healthy", async () => {
+		const { headers } = await signInWithTestUser();
+		const session = await auth.api.getSession({ headers });
+
+		expect(session?.user).toBeDefined();
+		expect(session?.session).toBeDefined();
 	});
 });
