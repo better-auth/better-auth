@@ -215,6 +215,49 @@ describe("SSO", async () => {
 		expect(callbackURL).toContain("/dashboard");
 	});
 
+	/**
+	 * The SAML path in this plugin merges error params through
+	 * `buildSAMLRedirectUrl`. The OIDC callback concatenated `?error=` instead, so
+	 * an error URL that already carried a query got a second `?`, and values went
+	 * out unencoded.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/3875
+	 */
+	it("should merge encoded error params into an error URL that already has a query", async () => {
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "test",
+			callbackURL: "/dashboard",
+			errorCallbackURL: "/error?title=Invalid%20invite",
+			fetchOptions: { throw: true, onSuccess: cookieSetter(headers) },
+		});
+
+		const state = new URL(res.url).searchParams.get("state");
+		expect(state).toBeTruthy();
+
+		// The IdP declines: the `!code || error` branch of the callback.
+		const response = await auth.handler(
+			new Request(
+				`http://localhost:3000/api/auth/sso/callback/test?state=${state}&error=access_denied&error_description=${encodeURIComponent(
+					"user said no",
+				)}`,
+				{ headers },
+			),
+		);
+		const location = response.headers.get("location") || "";
+
+		// A second `?` is not a query separator: everything after it is swallowed
+		// into the previous parameter's value, so the app sees neither.
+		expect(location.split("?").length - 1).toBe(1);
+		// Values must be encoded — a raw space is not legal in a URL.
+		expect(location).not.toContain(" ");
+
+		const parsed = new URL(location, "http://localhost:3000");
+		expect(parsed.searchParams.get("title")).toBe("Invalid invite");
+		expect(parsed.searchParams.get("error")).toBe("access_denied");
+		expect(parsed.searchParams.get("error_description")).toBe("user said no");
+	});
+
 	it("should sign in with SSO provider with domain", async () => {
 		const headers = new Headers();
 		const res = await authClient.signIn.sso({
