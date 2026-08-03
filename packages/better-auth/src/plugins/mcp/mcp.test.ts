@@ -1,9 +1,10 @@
 import { jwtVerify } from "jose";
 import { listen } from "listhen";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { toNodeHandler } from "../../integrations/node";
 import { getTestInstance } from "../../test-utils/test-instance";
+import type { MCPOptions } from "..";
 import { genericOAuth } from "../generic-oauth";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { jwt } from "../jwt";
@@ -1752,5 +1753,18 @@ describe("mcp id token without the jwt plugin (security)", async () => {
 		expect(metadata.data?.id_token_signing_alg_values_supported).toEqual([
 			"HS256",
 		]);
+	});
+});
+
+/**
+ * A consumer whose exported value is typed by this plugin needs to name the
+ * options type, or declaration emit fails with TS4023.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10532
+ */
+describe("mcp public types", () => {
+	it("exports MCPOptions from the plugins entrypoint", () => {
+		expectTypeOf<MCPOptions["loginPage"]>().toEqualTypeOf<string>();
+		expectTypeOf<MCPOptions["resource"]>().toEqualTypeOf<string | undefined>();
 	});
 });
