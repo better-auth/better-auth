@@ -458,7 +458,7 @@ export interface OAuthOptions<
 	 * @param info - context that may be useful when creating custom claims
 	 * @returns Additional claims for userinfo request
 	 */
-	customUserInfoClaims?: (info: {
+	customUserInfoClaims?(info: {
 		/** The user object */
 		user: User<AuthOptions["user"], AuthOptions["plugins"]>;
 		/** The scopes from the access token used
@@ -466,7 +466,7 @@ export interface OAuthOptions<
 		scopes: Scopes;
 		/** The access token payload used in the /userinfo request */
 		jwt: JWTPayload;
-	}) => Awaitable<Record<string, any>>;
+	}): Awaitable<Record<string, any>>;
 	/**
 	 * Custom claims attached to OIDC id tokens.
 	 *
@@ -477,14 +477,14 @@ export interface OAuthOptions<
 	 *
 	 * @param info - context that may be useful when creating custom claims
 	 */
-	customIdTokenClaims?: (info: {
+	customIdTokenClaims?(info: {
 		/** The user object if token is associated to a user. */
 		user: User<AuthOptions["user"], AuthOptions["plugins"]>;
 		/** Scopes granted for this token */
 		scopes: Scopes;
 		/** oAuthClient metadata */
 		metadata?: Record<string, any>;
-	}) => Awaitable<Record<string, any>>;
+	}): Awaitable<Record<string, any>>;
 	/**
 	 * Custom claims attached to access tokens.
 	 *
@@ -498,7 +498,7 @@ export interface OAuthOptions<
 	 *
 	 * @param info - context that may be useful when creating custom claims
 	 */
-	customAccessTokenClaims?: (info: {
+	customAccessTokenClaims?(info: {
 		/** The user object if token is associated to a user. Null if user doesn't exist. Undefined if user not applicable. */
 		user?: User<AuthOptions["user"], AuthOptions["plugins"]> | null;
 		/** reference of the consent/authorization */
@@ -509,7 +509,7 @@ export interface OAuthOptions<
 		resource?: string;
 		/** oAuthClient metadata */
 		metadata?: Record<string, any>;
-	}) => Awaitable<Record<string, any>>;
+	}): Awaitable<Record<string, any>>;
 	/**
 	 * Custom fields to include in the token response body.
 	 *
