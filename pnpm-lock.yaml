@@ -988,6 +988,9 @@ importers:
       '@types/react':
         specifier: catalog:react19
         version: 19.2.14
+      '@types/react-dom':
+        specifier: catalog:react19
+        version: 19.2.3(@types/react@19.2.14)
       happy-dom:
         specifier: '>=20.8.9 <21'
         version: 20.8.9
