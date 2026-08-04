@@ -10,12 +10,14 @@ import { splitAtLastColon } from "./utils";
 
 describe("email-otp", async () => {
 	const otpFn = vi.fn();
+	const generateOTPFn = vi.fn(() => "123456");
 	let otp = "";
 	const { client, testUser, auth } = await getTestInstance(
 		{
 			plugins: [
 				bearer(),
 				emailOTP({
+					generateOTP: generateOTPFn,
 					async sendVerificationOTP({ email, otp: _otp, type }) {
 						otp = _otp;
 						otpFn(email, _otp, type);
@@ -273,7 +275,15 @@ describe("email-otp", async () => {
 			password: "password",
 			name: "test",
 		};
+		generateOTPFn.mockClear();
 		await client.signUp.email(testUser2);
+		expect(generateOTPFn).toHaveBeenCalledWith(
+			{
+				email: testUser2.email,
+				type: "email-verification",
+			},
+			expect.anything(),
+		);
 		expect(otpFn).toHaveBeenCalledWith(
 			testUser2.email,
 			otp,
@@ -296,6 +306,36 @@ describe("email-otp", async () => {
 			password: "changed-password",
 		});
 		expect(data?.user).toBeDefined();
+	});
+
+	it.for([
+		{
+			invalidPassword: "short",
+			validationError: "PASSWORD_TOO_SHORT",
+		},
+		{
+			invalidPassword: "a".repeat(129),
+			validationError: "PASSWORD_TOO_LONG",
+		},
+	])("should preserve OTP after $validationError", async (testCase) => {
+		await client.emailOtp.requestPasswordReset({
+			email: testUser.email,
+		});
+		const passwordResetOtp = otp;
+
+		const invalidReset = await client.emailOtp.resetPassword({
+			email: testUser.email,
+			otp: passwordResetOtp,
+			password: testCase.invalidPassword,
+		});
+		expect(invalidReset.error?.code).toBe(testCase.validationError);
+
+		const validReset = await client.emailOtp.resetPassword({
+			email: testUser.email,
+			otp: passwordResetOtp,
+			password: "valid-password",
+		});
+		expect(validReset.data?.success).toBe(true);
 	});
 
 	it("should reset password using deprecated forgetPassword endpoint (backward compatibility)", async () => {
@@ -1156,6 +1196,50 @@ describe("email-otp-verify", async () => {
 		});
 		expect(successRes.data?.success).toBe(true);
 		expect(successRes.error).toBeFalsy();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10603
+	 */
+	it("should return INVALID_OTP regardless of email registration", async () => {
+		const { client: scopedClient, testUser: existingUser } =
+			await getTestInstance(
+				{
+					plugins: [
+						emailOTP({
+							async sendVerificationOTP() {},
+							disableSignUp: true,
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [emailOTPClient()],
+					},
+				},
+			);
+
+		const registeredResponse = await scopedClient.emailOtp.checkVerificationOtp(
+			{
+				email: existingUser.email,
+				type: "email-verification",
+				otp: "000000",
+			},
+		);
+		const unregisteredResponse =
+			await scopedClient.emailOtp.checkVerificationOtp({
+				email: "non-existent@domain.com",
+				type: "email-verification",
+				otp: "000000",
+			});
+		const invalidOTPError = {
+			status: 400,
+			code: "INVALID_OTP",
+			message: "Invalid OTP",
+		};
+
+		expect(registeredResponse.error).toMatchObject(invalidOTPError);
+		expect(unregisteredResponse.error).toMatchObject(invalidOTPError);
 	});
 
 	it("should not send OTP email for non-existent users when disableSignUp is enabled", async () => {

@@ -189,7 +189,8 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							idToken,
 							scope: "openid,profile,email",
 						},
-						disableSignUp: options?.disableSignup,
+						disableSignUp:
+							options?.disableSignup || googleProvider?.disableSignUp,
 						source: {
 							method: "oauth",
 							oauth: {

@@ -299,6 +299,124 @@ describe("secondary storage - storeSessionInDatabase", () => {
 	});
 });
 
+describe("secondary storage - deleteUser", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10687#discussion_r3716703104
+	 */
+	it("keeps cached sessions when user deletion is vetoed", async () => {
+		const store = new Map<string, string>();
+		const { auth } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+			databaseHooks: {
+				user: {
+					delete: {
+						before: async () => false,
+					},
+				},
+			},
+			rateLimit: { enabled: false },
+		});
+		const { internalAdapter } = await auth.$context;
+		const user = await internalAdapter.createUser(
+			{
+				name: "Retained User",
+				email: "retained-user@test.com",
+			},
+			{ method: "test" },
+		);
+		const session = await internalAdapter.createSession(user.id);
+		const activeSessionsKey = `active-sessions-${user.id}`;
+
+		await internalAdapter.deleteUser(user.id);
+
+		expect(await internalAdapter.findUserById(user.id)).not.toBeNull();
+		expect(store.has(session.token)).toBe(true);
+		expect(store.has(activeSessionsKey)).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10687#discussion_r3716703104
+	 */
+	it("keeps cached sessions when session deletion is vetoed", async () => {
+		const store = new Map<string, string>();
+		const { auth, db } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+			session: { storeSessionInDatabase: true },
+			databaseHooks: {
+				session: {
+					delete: {
+						before: async () => false,
+					},
+				},
+			},
+			rateLimit: { enabled: false },
+		});
+		const { internalAdapter } = await auth.$context;
+		const user = await internalAdapter.createUser(
+			{
+				name: "Retained Session User",
+				email: "retained-session-user@test.com",
+			},
+			{ method: "test" },
+		);
+		const session = await internalAdapter.createSession(user.id);
+		const activeSessionsKey = `active-sessions-${user.id}`;
+
+		await internalAdapter.deleteUserSessions(user.id);
+
+		expect(
+			await db.findMany({
+				model: "session",
+				where: [{ field: "userId", value: user.id }],
+			}),
+		).toHaveLength(1);
+		expect(store.has(session.token)).toBe(true);
+		expect(store.has(activeSessionsKey)).toBe(true);
+	});
+
+	it("deletes user sessions from secondary storage and database", async () => {
+		const store = new Map<string, string>();
+		const { auth, db } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+			session: {
+				storeSessionInDatabase: true,
+				preserveSessionInDatabase: true,
+			},
+			rateLimit: { enabled: false },
+		});
+		const { internalAdapter } = await auth.$context;
+		const user = await internalAdapter.createUser(
+			{
+				name: "Deleted User",
+				email: "deleted-user@test.com",
+			},
+			{ method: "test" },
+		);
+		const session = await internalAdapter.createSession(user.id);
+		const activeSessionsKey = `active-sessions-${user.id}`;
+
+		expect(store.has(session.token)).toBe(true);
+		expect(store.has(activeSessionsKey)).toBe(true);
+		expect(
+			await db.findMany({
+				model: "session",
+				where: [{ field: "userId", value: user.id }],
+			}),
+		).toHaveLength(1);
+
+		await internalAdapter.deleteUser(user.id);
+
+		expect(store.has(session.token)).toBe(false);
+		expect(store.has(activeSessionsKey)).toBe(false);
+		expect(
+			await db.findMany({
+				model: "session",
+				where: [{ field: "userId", value: user.id }],
+			}),
+		).toHaveLength(0);
+	});
+});
+
 /**
  * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-2vg6-77g8-24mp
  */

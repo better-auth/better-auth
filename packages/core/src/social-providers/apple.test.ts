@@ -48,6 +48,48 @@ function mockAppleJwks(publicJWK: JWK) {
 	} as Awaited<ReturnType<typeof betterFetch>>);
 }
 
+function codeChallenge(codeVerifier: string) {
+	return createHash("sha256").update(codeVerifier).digest("base64url");
+}
+
+describe("apple.createAuthorizationURL", () => {
+	it("sends a PKCE code challenge when a code verifier is provided", async () => {
+		const verifier = "apple-code-verifier";
+		const provider = apple({
+			clientId: "service.example.app",
+			clientSecret: "test-secret",
+		});
+
+		const url = await provider.createAuthorizationURL({
+			state: "state",
+			redirectURI: "https://example.com/api/auth/callback/apple",
+			codeVerifier: verifier,
+		});
+
+		expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+		expect(url.searchParams.get("code_challenge")).toBe(
+			codeChallenge(verifier),
+		);
+		expect(url.searchParams.has("code_verifier")).toBe(false);
+	});
+
+	it("omits PKCE parameters when no code verifier is provided", async () => {
+		const provider = apple({
+			clientId: "service.example.app",
+			clientSecret: "test-secret",
+		});
+
+		const url = await provider.createAuthorizationURL({
+			state: "state",
+			redirectURI: "https://example.com/api/auth/callback/apple",
+			codeVerifier: "",
+		});
+
+		expect(url.searchParams.has("code_challenge_method")).toBe(false);
+		expect(url.searchParams.has("code_challenge")).toBe(false);
+	});
+});
+
 describe("apple id_token verification", () => {
 	beforeEach(() => {
 		mockedBetterFetch.mockReset();
