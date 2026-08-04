@@ -37,7 +37,7 @@ export const blogCollection = defineCollections({
 	schema: z.object({
 		title: z.string(),
 		description: z.string(),
-		date: z.date(),
+		date: z.coerce.date(),
 		draft: z.boolean().optional(),
 		author: z
 			.object({
