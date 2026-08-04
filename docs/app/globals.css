@@ -1,5 +1,6 @@
 /* spell-checker:disable */
 @import "tailwindcss";
+@import "fumadocs-ui/css/generated/glass.css";
 @import "fumadocs-ui/css/black.css";
 @import "fumadocs-ui/css/preset.css";
 @source "../components/**/*.{ts,tsx}";
@@ -9,6 +10,16 @@
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
+
+@media (width < 80rem) {
+	.blog-toc:has(#nd-toc-title.opacity-0) {
+		width: 1.25rem;
+		padding-inline: 0.375rem;
+		border-color: transparent;
+		background-color: transparent;
+		box-shadow: none;
+	}
+}
 
 @layer utilities {
 	.bg-noise-pattern {

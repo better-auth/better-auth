@@ -43,6 +43,12 @@ export interface SAMLConfig {
 	entryPoint: string;
 	cert: string;
 	callbackUrl: string;
+	/**
+	 * Fallback absolute URL or same-origin relative path for IdP-initiated SAML
+	 * responses when `RelayState` does not contain a safe callback, including
+	 * validation error redirects.
+	 */
+	idpInitiatedCallbackUrl?: string | undefined;
 	audience?: string | undefined;
 	idpMetadata?:
 		| {
@@ -426,6 +432,12 @@ export interface SSOOptions {
 		 * @default false
 		 */
 		wantLogoutResponseSigned?: boolean;
+		/**
+		 * Fallback absolute URL or same-origin relative path for IdP-initiated SAML
+		 * responses when `RelayState` does not contain a safe callback, including
+		 * validation error redirects.
+		 */
+		idpInitiatedCallbackUrl?: string | undefined;
 	};
 }
 
