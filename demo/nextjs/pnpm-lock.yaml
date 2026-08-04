@@ -255,7 +255,7 @@ importers:
         specifier: ^0.7.39
         version: 0.7.39
       postcss:
-        specifier: ^8.5.22
+        specifier: ^8.5.25
         version: 8.5.25
       tailwindcss:
         specifier: ^4.2.1
