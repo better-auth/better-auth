@@ -617,6 +617,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 			 * whichever goes second is lost to a throw in the first — so the session
 			 * clear runs in a `finally` and a throwing hook still surfaces.
 			 */
+			let hookError: unknown;
 			try {
 				if (options?.organizationHooks?.afterDeleteOrganization) {
 					await options.organizationHooks.afterDeleteOrganization(
@@ -627,11 +628,25 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 						ctx,
 					);
 				}
-			} finally {
-				if (organizationId === session.session.activeOrganizationId) {
+			} catch (error) {
+				hookError = error;
+			}
+
+			if (organizationId === session.session.activeOrganizationId) {
+				try {
 					await adapter.setActiveOrganization(session.session.token, null, ctx);
+				} catch (error) {
+					// A hook failure is the cause worth reporting, and rethrowing here
+					// would replace it, so report this one where it cannot be lost.
+					if (!hookError) throw error;
+					ctx.context.logger.error(
+						"Failed to clear the active organization of a deleted organization",
+						error,
+					);
 				}
 			}
+
+			if (hookError) throw hookError;
 			return ctx.json(org);
 		},
 	);

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { APIError } from "../../api";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { organization } from ".";
@@ -429,6 +429,35 @@ describe("organization delete rejected by a before hook", async () => {
 			}),
 		).toBeNull();
 		expect(await activeOrgOf(headers)).toBeNull();
+	});
+
+	it("should report the hook error when the cleanup write also fails", async () => {
+		// Both fail at once: the caller must learn why the request failed, not just
+		// that the follow-up write did.
+		const { headers, org } = await setup();
+		const context = await auth.$context;
+		const updateSession = context.internalAdapter.updateSession;
+		const spy = vi
+			.spyOn(context.internalAdapter, "updateSession")
+			.mockImplementation(async (token, data, ctx) => {
+				if (data && "activeOrganizationId" in data) {
+					throw new Error("session write failed");
+				}
+				return updateSession(token, data, ctx);
+			});
+
+		failAfterHook = true;
+		try {
+			await expect(
+				auth.api.deleteOrganization({
+					body: { organizationId: org.id },
+					headers,
+				}),
+			).rejects.toThrow("notification failed");
+		} finally {
+			failAfterHook = false;
+			spy.mockRestore();
+		}
 	});
 
 	it("should leave a non-active organization's pointer alone", async () => {
