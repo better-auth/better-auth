@@ -223,8 +223,9 @@ function createDatabaseStorageWrapper(
 		};
 	};
 
-	// Best-effort sweep of clearly-expired rows to bound table growth. A failure
-	// here never blocks the request.
+	// Best-effort sweep of clearly-expired rows to bound table growth. Without a
+	// background handler, the request awaits cleanup so it survives teardown;
+	// failures are logged and do not reject the request.
 	const deleteExpiredRows = async (now: number) => {
 		const cutoff = now - longestObservedWindow * 1000;
 		await ctx.runInBackgroundOrAwait(
