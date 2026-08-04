@@ -439,11 +439,11 @@ describe("organization delete rejected by a before hook", async () => {
 		const updateSession = context.internalAdapter.updateSession;
 		const spy = vi
 			.spyOn(context.internalAdapter, "updateSession")
-			.mockImplementation(async (token, data, ctx) => {
-				if (data && "activeOrganizationId" in data) {
+			.mockImplementation(async (sessionToken, sessionData) => {
+				if ("activeOrganizationId" in sessionData) {
 					throw new Error("session write failed");
 				}
-				return updateSession(token, data, ctx);
+				return updateSession(sessionToken, sessionData);
 			});
 
 		failAfterHook = true;
