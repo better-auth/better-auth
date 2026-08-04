@@ -180,14 +180,18 @@ export const createInternalAdapter = (
 		await secondaryStorage.delete(activeSessionsKey);
 	}
 
-	async function queueCachedUserSessionDeletion(userId: string) {
+	async function queueCachedUserSessionDeletion(
+		userId: string,
+		sessionReferences?: readonly ActiveSessionReference[],
+	) {
 		if (!secondaryStorage) return;
 
-		// Callers may create a replacement session before queued hooks run.
-		// Capture the revocation set now so that replacement remains active.
-		const sessionReferences = await getActiveSessionReferences(userId);
+		// Callers may capture the revocation set before destructive work because a
+		// replacement session created by a later hook must remain active.
+		const references =
+			sessionReferences ?? (await getActiveSessionReferences(userId));
 		await queueAfterTransactionHook(
-			() => deleteCachedUserSessions(userId, sessionReferences),
+			() => deleteCachedUserSessions(userId, references),
 			{
 				onError(error) {
 					logger.error(
@@ -421,7 +425,7 @@ export const createInternalAdapter = (
 			return total;
 		},
 		deleteUser: async (userId: string) => {
-			await queueCachedUserSessionDeletion(userId);
+			const sessionReferences = await getActiveSessionReferences(userId);
 			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
 				await deleteManyWithHooks(
 					[
@@ -445,7 +449,7 @@ export const createInternalAdapter = (
 				undefined,
 			);
 
-			await deleteWithHooks(
+			const deletedUser = await deleteWithHooks(
 				[
 					{
 						field: "id",
@@ -455,6 +459,9 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
+			if (deletedUser !== null) {
+				await queueCachedUserSessionDeletion(userId, sessionReferences);
+			}
 		},
 		createSession: async (
 			userId: string,
@@ -934,17 +941,23 @@ export const createInternalAdapter = (
 			);
 		},
 		deleteUserSessions: async (userId: string) => {
-			await queueCachedUserSessionDeletion(userId);
+			const sessionReferences = await getActiveSessionReferences(userId);
 			if (secondaryStorage) {
 				if (!options.session?.storeSessionInDatabase) {
+					await queueCachedUserSessionDeletion(userId, sessionReferences);
 					return;
 				}
 				if (ctx.options.session?.preserveSessionInDatabase) {
-					await endPreservedSessions([{ field: "userId", value: userId }]);
+					const endedSessions = await endPreservedSessions([
+						{ field: "userId", value: userId },
+					]);
+					if (endedSessions !== null) {
+						await queueCachedUserSessionDeletion(userId, sessionReferences);
+					}
 					return;
 				}
 			}
-			await deleteManyWithHooks(
+			const deletedSessions = await deleteManyWithHooks(
 				[
 					{
 						field: "userId",
@@ -954,6 +967,9 @@ export const createInternalAdapter = (
 				"session",
 				undefined,
 			);
+			if (deletedSessions !== null) {
+				await queueCachedUserSessionDeletion(userId, sessionReferences);
+			}
 		},
 		deleteSessions: async (sessionTokens: string[]) => {
 			if (secondaryStorage) {
