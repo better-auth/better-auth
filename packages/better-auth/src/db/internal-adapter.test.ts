@@ -1456,45 +1456,49 @@ describe("internal adapter test", async () => {
 		expect(sessions.length).toBe(0);
 	});
 
-	it("findSessions should skip corrupt sessions without blanking the list", async () => {
+	it.each([
+		{
+			caseName: "malformed JSON sessions",
+			storedValue: "invalid-json{{{",
+		},
+		{
+			caseName: "JSON null sessions",
+			storedValue: "null",
+		},
+	])("findSessions skips $caseName without discarding valid sessions", async ({
+		storedValue,
+	}) => {
 		const testMap = new Map<string, string>();
-
 		const testOpts = {
 			database: new DatabaseSync(":memory:"),
 			secondaryStorage: createStringSecondaryStorage(testMap),
 		} satisfies BetterAuthOptions;
 
 		(await getMigrations(testOpts)).runMigrations();
-
-		const testCtx = await init(testOpts);
-		const testInternalAdapter = testCtx.internalAdapter;
-
-		const user = await testInternalAdapter.createUser(
+		const { internalAdapter } = await init(testOpts);
+		const user = await internalAdapter.createUser(
 			{
 				name: "test-user-find",
 				email: "test-find@email.com",
 			},
 			{ method: "test" },
 		);
+		const session1 = await internalAdapter.createSession(user.id);
+		const session2 = await internalAdapter.createSession(user.id);
+		const session3 = await internalAdapter.createSession(user.id);
 
-		// Create 3 sessions
-		const session1 = await testInternalAdapter.createSession(user.id);
-		const session2 = await testInternalAdapter.createSession(user.id);
-		const session3 = await testInternalAdapter.createSession(user.id);
+		testMap.set(session2.token, storedValue);
 
-		// Corrupt session2 data
-		testMap.set(session2.token, "invalid-json{{{");
-
-		// findSessions should still return session1 and session3
-		const sessions = await testInternalAdapter.findSessions([
+		const sessions = await internalAdapter.findSessions([
 			session1.token,
 			session2.token,
 			session3.token,
 		]);
-		expect(sessions.length).toBe(2);
-		expect(sessions.map((s) => s.session.token).sort()).toEqual(
-			[session1.token, session3.token].sort(),
-		);
+
+		expect(sessions.map(({ session }) => session.token)).toEqual([
+			session1.token,
+			session3.token,
+		]);
 	});
 
 	it("should update session and active-sessions list in secondary storage", async () => {

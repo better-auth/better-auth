@@ -180,6 +180,25 @@ export const createInternalAdapter = (
 		await secondaryStorage.delete(activeSessionsKey);
 	}
 
+	async function queueCachedUserSessionDeletion(userId: string) {
+		if (!secondaryStorage) return;
+
+		// Callers may create a replacement session before queued hooks run.
+		// Capture the revocation set now so that replacement remains active.
+		const sessionReferences = await getActiveSessionReferences(userId);
+		await queueAfterTransactionHook(
+			() => deleteCachedUserSessions(userId, sessionReferences),
+			{
+				onError(error) {
+					logger.error(
+						"Failed to delete committed user sessions from secondary storage",
+						error,
+					);
+				},
+			},
+		);
+	}
+
 	async function withVerificationConsumeLock<T>(
 		key: string,
 		fn: () => Promise<T>,
@@ -402,6 +421,7 @@ export const createInternalAdapter = (
 			return total;
 		},
 		deleteUser: async (userId: string) => {
+			await queueCachedUserSessionDeletion(userId);
 			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
 				await deleteManyWithHooks(
 					[
@@ -665,7 +685,7 @@ export const createInternalAdapter = (
 								session: Session;
 								user: User;
 							};
-							if (!s) return [];
+							if (!s) continue;
 							const expiresAt = new Date(s.session.expiresAt);
 							if (options?.onlyActiveSessions && expiresAt <= new Date()) {
 								continue;
@@ -914,22 +934,8 @@ export const createInternalAdapter = (
 			);
 		},
 		deleteUserSessions: async (userId: string) => {
+			await queueCachedUserSessionDeletion(userId);
 			if (secondaryStorage) {
-				// Callers may create a replacement session before queued hooks run.
-				// Capture the revocation set now so that replacement remains active.
-				const sessionReferences = await getActiveSessionReferences(userId);
-				await queueAfterTransactionHook(
-					() => deleteCachedUserSessions(userId, sessionReferences),
-					{
-						onError(error) {
-							logger.error(
-								"Failed to delete committed user sessions from secondary storage",
-								error,
-							);
-						},
-					},
-				);
-
 				if (!options.session?.storeSessionInDatabase) {
 					return;
 				}
