@@ -941,12 +941,9 @@ describe("cookie cache with JWT strategy backed by JWKS", async () => {
 				enabled: true,
 				strategy: "jwt",
 				refreshCache: false,
-				jwt: {
-					signingKey: "jwt-plugin",
-				},
 			},
 		},
-		plugins: [jwt()],
+		plugins: [jwt({ sessionCookieCache: true })],
 	});
 	const ctx = await auth.$context;
 
@@ -1136,13 +1133,11 @@ describe("cookie cache with JWT strategy backed by JWKS", async () => {
 				cookieCache: {
 					enabled: true,
 					strategy: "jwt",
-					jwt: {
-						signingKey: "jwt-plugin",
-					},
 				},
 			},
 			plugins: [
 				jwt({
+					sessionCookieCache: true,
 					jwks: {
 						rotationInterval: 1,
 						gracePeriod: 60,

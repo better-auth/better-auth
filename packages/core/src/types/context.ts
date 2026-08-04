@@ -12,7 +12,11 @@ import type { DBAdapter, Where } from "../db/adapter";
 import type { AccountKey } from "../db/schema/account";
 import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
-import type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
+import type {
+	BetterAuthCookie,
+	BetterAuthCookies,
+	CookieCachePayload,
+} from "./cookie";
 import type { Awaitable, LiteralString } from "./helper";
 import type {
 	BetterAuthOptions,
@@ -84,6 +88,21 @@ export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,
 > = EndpointContext<string, any> & {
 	context: AuthContext<Options>;
+};
+
+type CookieCacheSigner = {
+	sign: (
+		ctx: GenericEndpointContext,
+		payload: CookieCachePayload,
+		expiresIn: number,
+	) => Promise<string>;
+	verify: (
+		ctx: GenericEndpointContext,
+		token: string,
+	) => Promise<{
+		payload: CookieCachePayload;
+		expiresAt: number;
+	} | null>;
 };
 
 export interface InternalAdapter<
@@ -403,6 +422,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				updateAge: number;
 				expiresIn: number;
 				freshAge: number;
+				cookieCacheSigner?: CookieCacheSigner | undefined;
 				cookieRefreshCache:
 					| false
 					| {

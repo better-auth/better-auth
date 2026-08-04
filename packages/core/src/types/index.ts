@@ -11,6 +11,7 @@ export type {
 export type {
 	BetterAuthCookie,
 	BetterAuthCookies,
+	CookieCachePayload,
 } from "./cookie";
 export type * from "./helper";
 export type {
