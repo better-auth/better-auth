@@ -1,5 +1,11 @@
 # @better-auth/core
 
+## 1.6.26
+
+### Patch Changes
+
+- [#10576](https://github.com/better-auth/better-auth/pull/10576) [`a30e274`](https://github.com/better-auth/better-auth/commit/a30e274b5daed6057086d76b91d17abfa02196d7) Thanks [@bytaesu](https://github.com/bytaesu)! - Add a utility for creating stable, namespaced placeholder emails on the reserved `placeholder.invalid` domain.
+
 ## 1.6.25
 
 ### Patch Changes
