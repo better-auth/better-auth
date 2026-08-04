@@ -299,6 +299,50 @@ describe("secondary storage - storeSessionInDatabase", () => {
 	});
 });
 
+describe("secondary storage - deleteUser", () => {
+	it("deletes user sessions from secondary storage and database", async () => {
+		const store = new Map<string, string>();
+		const { auth, db } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+			session: {
+				storeSessionInDatabase: true,
+				preserveSessionInDatabase: true,
+			},
+			rateLimit: { enabled: false },
+		});
+		const { internalAdapter } = await auth.$context;
+		const user = await internalAdapter.createUser(
+			{
+				name: "Deleted User",
+				email: "deleted-user@test.com",
+			},
+			{ method: "test" },
+		);
+		const session = await internalAdapter.createSession(user.id);
+		const activeSessionsKey = `active-sessions-${user.id}`;
+
+		expect(store.has(session.token)).toBe(true);
+		expect(store.has(activeSessionsKey)).toBe(true);
+		expect(
+			await db.findMany({
+				model: "session",
+				where: [{ field: "userId", value: user.id }],
+			}),
+		).toHaveLength(1);
+
+		await internalAdapter.deleteUser(user.id);
+
+		expect(store.has(session.token)).toBe(false);
+		expect(store.has(activeSessionsKey)).toBe(false);
+		expect(
+			await db.findMany({
+				model: "session",
+				where: [{ field: "userId", value: user.id }],
+			}),
+		).toHaveLength(0);
+	});
+});
+
 /**
  * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-2vg6-77g8-24mp
  */

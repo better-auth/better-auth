@@ -89,6 +89,7 @@ export const apple = (options: AppleOptions) => {
 			scopes,
 			redirectURI,
 			additionalParams,
+			codeVerifier,
 		}) {
 			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
 				logger.error(
@@ -106,6 +107,7 @@ export const apple = (options: AppleOptions) => {
 				scopes: _scope,
 				state,
 				redirectURI,
+				codeVerifier,
 				responseMode: "form_post",
 				responseType: "code id_token",
 				additionalParams,
