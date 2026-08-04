@@ -104,6 +104,7 @@ export function getSessionAtom(
 			error: null,
 			refetch,
 		});
+		if (signal.aborted) return;
 
 		try {
 			const res = await $fetch<SessionResponse>("/get-session", {
@@ -182,9 +183,13 @@ export function getSessionAtom(
 	): Promise<void> => {
 		activeRequest?.cancel();
 		const controller = new AbortController();
+		const promise = Promise.resolve().then(() => {
+			if (controller.signal.aborted) return;
+			return executeSessionFetch(controller.signal, queryParams);
+		});
 		const request: SessionRequest = {
 			cancel: () => controller.abort(),
-			promise: executeSessionFetch(controller.signal, queryParams),
+			promise,
 		};
 		activeRequest = request;
 		const clearActiveRequest = () => {

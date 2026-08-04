@@ -412,6 +412,42 @@ describe("useAuthQuery - error handling", () => {
 		unsubscribe();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10667
+	 */
+	it("should let a listener refetch supersede the current session request", async () => {
+		const requests: Array<{
+			resolve: (response: Response) => void;
+			signal: AbortSignal | null;
+		}> = [];
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (_url, init) =>
+				new Promise<Response>((resolve) => {
+					requests.push({ resolve, signal: init?.signal ?? null });
+				}),
+		});
+		const { session } = getSessionAtom($fetch);
+		let refetchPromise: Promise<void> | undefined;
+		const unsubscribe = session.listen((current) => {
+			if (current.isRefetching && !refetchPromise) {
+				refetchPromise = current.refetch();
+			}
+		});
+
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(requests).toHaveLength(1);
+		expect(requests[0]?.signal?.aborted).toBe(false);
+
+		requests[0]?.resolve(
+			new Response(JSON.stringify({ session: null, user: null })),
+		);
+		if (!refetchPromise) throw new Error("Listener refetch was not triggered");
+		await refetchPromise;
+		unsubscribe();
+	});
+
 	it("should revalidate session after a settled request is remounted", async () => {
 		let fetchCount = 0;
 		const $fetch = createFetch({
