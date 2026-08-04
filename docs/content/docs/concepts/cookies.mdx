@@ -8,7 +8,7 @@ Cookies are used to store data such as session tokens, session data, OAuth state
 * The primary `session_token` cookie remains an opaque, secret-signed session identifier.
 * The `session_data` cookie is only present when `session.cookieCache` is enabled, and its encoding depends on the configured strategy:
   * `compact`: base64url + HMAC with your Better Auth secret
-  * `jwt`: HS256 by default, or asymmetric signing with the JWT plugin's JWKS when `session.cookieCache.jwt.signingKey = "jwt-plugin"` and the `jwt()` plugin is installed
+  * `jwt`: HS256 by default, or asymmetric signing when `sessionCookieCache` is enabled on the JWT plugin
   * `jwe`: encrypted with your Better Auth secret
 
 If you use [versioned secrets](/docs/reference/options#secrets) for rotation, secret-backed cookie data (including signed cookies and encrypted JWE session caches) will automatically use the current key and remain compatible with previous keys where supported.

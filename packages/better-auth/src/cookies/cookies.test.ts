@@ -1179,12 +1179,9 @@ describe("Cookie Cache Field Filtering", () => {
 				cookieCache: {
 					enabled: true,
 					strategy: "jwt",
-					jwt: {
-						signingKey: "jwt-plugin",
-					},
 				},
 			},
-			plugins: [jwt()],
+			plugins: [jwt({ sessionCookieCache: true })],
 		});
 
 		const headers = new Headers();
@@ -1218,7 +1215,6 @@ describe("Cookie Cache Field Filtering", () => {
 		const cache = await getCookieCache(request, {
 			strategy: "jwt",
 			jwt: {
-				signingKey: "jwt-plugin",
 				jwks,
 			},
 		});
@@ -1290,7 +1286,7 @@ describe("Cookie Cache Field Filtering", () => {
 		expect(cache).toBeNull();
 	});
 
-	it("should require JWKS input for helper verification in JWKS mode", async () => {
+	it("should require a secret when helper verification has no JWKS", async () => {
 		const headers = new Headers();
 		headers.set("cookie", "better-auth.session_data=token");
 
@@ -1301,13 +1297,8 @@ describe("Cookie Cache Field Filtering", () => {
 		await expect(
 			getCookieCache(request, {
 				strategy: "jwt",
-				jwt: {
-					signingKey: "jwt-plugin",
-				},
 			}),
-		).rejects.toThrow(
-			'getCookieCache requires `jwt.jwks` when `jwt.signingKey` is set to `"jwt-plugin"`.',
-		);
+		).rejects.toThrow("getCookieCache requires a secret to be provided");
 	});
 
 	it("should reject JWT plugin tokens that are not cookie-cache JWTs", async () => {
@@ -1332,7 +1323,6 @@ describe("Cookie Cache Field Filtering", () => {
 		const cache = await getCookieCache(request, {
 			strategy: "jwt",
 			jwt: {
-				signingKey: "jwt-plugin",
 				jwks,
 			},
 		});
@@ -1346,12 +1336,9 @@ describe("Cookie Cache Field Filtering", () => {
 				cookieCache: {
 					enabled: true,
 					strategy: "jwt",
-					jwt: {
-						signingKey: "jwt-plugin",
-					},
 				},
 			},
-			plugins: [jwt()],
+			plugins: [jwt({ sessionCookieCache: true })],
 		});
 
 		const headers = new Headers();
@@ -1374,7 +1361,6 @@ describe("Cookie Cache Field Filtering", () => {
 		const cache = await getCookieCache(request, {
 			strategy: "jwt",
 			jwt: {
-				signingKey: "jwt-plugin",
 				jwks: {
 					keys: [],
 				},
@@ -1521,12 +1507,9 @@ describe("Cookie Chunking", () => {
 				cookieCache: {
 					enabled: true,
 					strategy: "jwt",
-					jwt: {
-						signingKey: "jwt-plugin",
-					},
 				},
 			},
-			plugins: [jwt()],
+			plugins: [jwt({ sessionCookieCache: true })],
 		});
 
 		const headers = new Headers();
@@ -1568,7 +1551,6 @@ describe("Cookie Chunking", () => {
 		const cache = await getCookieCache(request, {
 			strategy: "jwt",
 			jwt: {
-				signingKey: "jwt-plugin",
 				jwks: await auth.api.getJwks(),
 			},
 		});
