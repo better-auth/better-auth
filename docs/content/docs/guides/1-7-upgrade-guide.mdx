@@ -1,6 +1,6 @@
 ---
 title: Upgrading to Better Auth 1.7
-description: Upgrade Better Auth from 1.6 to 1.7, including OAuth, OpenID Connect, MCP, SAML, SCIM, proxy, and custom adapter changes.
+description: Upgrade Better Auth from 1.6 to 1.7, including Expo, OAuth, OpenID Connect, MCP, SAML, SCIM, proxy, and custom adapter changes.
 ---
 
 Most Better Auth 1.7 changes are additive. Most projects start with one command:
@@ -19,6 +19,7 @@ Some areas need more care: OAuth, OpenID Connect, SAML, SCIM, two-factor authent
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | Uses Better Auth at all                                                | [Before you upgrade](#before-you-upgrade) and [Behind a proxy](#behind-a-proxy) |
 | Uses email and password, social login, generic OAuth, One Tap, or SSO  | [As a login client](#as-a-login-client)                                         |
+| Uses Expo or React Native                                              | [Expo and React Native](#expo-and-react-native)                                 |
 | Runs its own OAuth or OpenID provider                                  | [As an identity provider](#as-an-identity-provider)                             |
 | Runs MCP                                                               | [MCP](#mcp)                                                                     |
 | Uses SAML or SSO domain verification                                   | [Enterprise SSO](#enterprise-sso)                                               |
@@ -199,6 +200,20 @@ A signed-assertion login setup, also called private-key JWT, is now checked when
 Linking an anonymous account after a social login now works in Expo and other in-app browsers, where the callback returns without the usual cookie. A new `addOAuthServerContext` API carries trusted data across the login that a client cannot forge.
 
 **What to do:** nothing for most apps. If you carried anonymous-link state across the OAuth redirect yourself, move it onto `addOAuthServerContext`.
+
+***
+
+## Expo and React Native
+
+### Secure storage access is asynchronous
+
+The Expo client now uses the asynchronous SecureStore APIs for cookie and session-cache access. `authClient.getCookie()` returns a promise, so await it directly and make callbacks that read cookies asynchronous.
+
+```ts
+const cookie = await authClient.getCookie();
+```
+
+Passing `expo-secure-store` directly continues to work without a wrapper. A custom storage implementation must provide `getItem`, `getItemAsync`, `setItem`, and `setItemAsync`. The exported `storageAdapter.setItem()` method is synchronous; use `setItemAsync()` when the caller must wait for persistence.
 
 ***
 

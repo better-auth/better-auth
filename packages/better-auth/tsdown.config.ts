@@ -12,6 +12,7 @@ export default defineConfig({
 		"./src/types/index.ts",
 		"./src/crypto/index.ts",
 		"./src/cookies/index.ts",
+		"./src/cookies/cookie-utils.ts",
 		"./src/adapters/prisma-adapter/index.ts",
 		"./src/adapters/drizzle-adapter/index.ts",
 		"./src/adapters/mongodb-adapter/index.ts",
