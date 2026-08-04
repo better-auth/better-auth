@@ -608,16 +608,6 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 			}
 			await adapter.deleteOrganization(organizationId);
 
-			/**
-			 * Only once the organization is actually gone. Clearing beforehand meant a
-			 * `beforeDeleteOrganization` hook that rejected the delete — or a failing
-			 * delete — left the organization intact but the session pointing at
-			 * nothing, with no way back.
-			 */
-			if (organizationId === session.session.activeOrganizationId) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
-			}
-
 			if (options?.organizationHooks?.afterDeleteOrganization) {
 				await options.organizationHooks.afterDeleteOrganization(
 					{
@@ -626,6 +616,17 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 					},
 					ctx,
 				);
+			}
+
+			/**
+			 * Last, and only once the organization is actually gone. Clearing before
+			 * the delete meant a `beforeDeleteOrganization` hook that rejected it left
+			 * the organization intact but the session pointing at nothing; clearing
+			 * before `afterDeleteOrganization` meant a failed session write skipped
+			 * that hook for a delete that had already committed.
+			 */
+			if (organizationId === session.session.activeOrganizationId) {
+				await adapter.setActiveOrganization(session.session.token, null, ctx);
 			}
 			return ctx.json(org);
 		},
