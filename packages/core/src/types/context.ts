@@ -90,7 +90,10 @@ export type GenericEndpointContext<
 	context: AuthContext<Options>;
 };
 
-type CookieCacheSigner = {
+/**
+ * Signs and verifies session cookie-cache values.
+ */
+export type CookieCacheSigner = {
 	sign: (
 		ctx: GenericEndpointContext,
 		payload: CookieCachePayload,

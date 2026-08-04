@@ -1,6 +1,6 @@
 import type {
-	AuthContext,
 	CookieCachePayload,
+	CookieCacheSigner,
 	GenericEndpointContext,
 } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
@@ -15,10 +15,6 @@ import {
 import { getJwksAdapter } from "./adapter";
 import { resolveSigningKey } from "./sign";
 import type { JwtOptions } from "./types";
-
-type CookieCacheSigner = NonNullable<
-	AuthContext["sessionConfig"]["cookieCacheSigner"]
->;
 
 function getCookieCacheJwtIssuer(ctx: GenericEndpointContext) {
 	const baseURL = ctx.context.options.baseURL;

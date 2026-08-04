@@ -3,6 +3,7 @@ export type {
 	AuthContext,
 	BetterAuthPluginRegistry,
 	BetterAuthPluginRegistryIdentifier,
+	CookieCacheSigner,
 	GenericEndpointContext,
 	InfoContext,
 	InternalAdapter,
