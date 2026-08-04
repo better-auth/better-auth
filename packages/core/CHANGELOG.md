@@ -161,6 +161,18 @@
 
 ## 1.7.0-beta.4
 
+## 1.6.26
+
+### Patch Changes
+
+- [#10576](https://github.com/better-auth/better-auth/pull/10576) [`a30e274`](https://github.com/better-auth/better-auth/commit/a30e274b5daed6057086d76b91d17abfa02196d7) Thanks [@bytaesu](https://github.com/bytaesu)! - Add a utility for creating stable, namespaced placeholder emails on the reserved `placeholder.invalid` domain.
+
+## 1.6.25
+
+### Patch Changes
+
+- [#10294](https://github.com/better-auth/better-auth/pull/10294) [`0ffd1fb`](https://github.com/better-auth/better-auth/commit/0ffd1fb28d44a8266d62791cd4c97e263444d03b) Thanks [@jsj](https://github.com/jsj)! - Send Apple OAuth PKCE code challenges during authorization so callback token exchanges include a matching code verifier.
+
 ## 1.6.24
 
 ### Patch Changes

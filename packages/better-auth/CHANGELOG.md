@@ -363,6 +363,58 @@
 
 ## 1.7.0-beta.4
 
+## 1.6.26
+
+### Patch Changes
+
+- [#10619](https://github.com/better-auth/better-auth/pull/10619) [`9ede805`](https://github.com/better-auth/better-auth/commit/9ede8059b56e1415c1e8cfdd93ff72691b848bbf) Thanks [@jeroenvandermerwe](https://github.com/jeroenvandermerwe)! - Ensure database rate-limit cleanup completes when no background task handler is configured.
+
+- [#10608](https://github.com/better-auth/better-auth/pull/10608) [`5a811f1`](https://github.com/better-auth/better-auth/commit/5a811f1b4314b8bcf6f21c0b72de5cb67d552d97) Thanks [@bytaesu](https://github.com/bytaesu)! - Pass the email verification type to custom OTP generators after email sign-up.
+
+- [#10605](https://github.com/better-auth/better-auth/pull/10605) [`d8327f1`](https://github.com/better-auth/better-auth/commit/d8327f1fea92243b6fea1b0ab183e2a989792c0c) Thanks [@XXMOHAMED012](https://github.com/XXMOHAMED012)! - The email OTP verification check no longer reveals whether an email is registered before the OTP itself is verified.
+
+- [#10513](https://github.com/better-auth/better-auth/pull/10513) [`e2c73fb`](https://github.com/better-auth/better-auth/commit/e2c73fbec87f5e19f6a2b5ac371bc5bba9bd49ff) Thanks [@mrosberghaus](https://github.com/mrosberghaus)! - Fix `jwtClient()` collapsing `createAuthClient` type inference when combined with other client plugins such as `inferAdditionalFields`. Additional user fields (for example on `updateUser`) are preserved again.
+
+- [#10635](https://github.com/better-auth/better-auth/pull/10635) [`af50c45`](https://github.com/better-auth/better-auth/commit/af50c45553a62cfb6cdcdede86828731ca00c22c) Thanks [@krish-vachhani](https://github.com/krish-vachhani)! - Fix `oneTapClient()` collapsing `createAuthClient` type inference when combined with other client plugins. The `oneTap` action is available on the client again.
+
+- [#10633](https://github.com/better-auth/better-auth/pull/10633) [`701cd43`](https://github.com/better-auth/better-auth/commit/701cd43babac52784d855291a6adc0cf3fba7970) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Minting or reading a JWKS signing key inside an active database transaction now uses the transaction-scoped adapter instead of the root connection. On a single-connection SQLite database with native transactions enabled, this no longer deadlocks, and on Postgres and MySQL the key commits with the surrounding transaction instead of independently of it.
+
+- [#10599](https://github.com/better-auth/better-auth/pull/10599) [`e7b0eba`](https://github.com/better-auth/better-auth/commit/e7b0eba327e050f50764802e21484c6cabb56600) Thanks [@bytaesu](https://github.com/bytaesu)! - Preserve Apple user data from `form_post` callbacks when using `oAuthProxy`.
+
+- [#10552](https://github.com/better-auth/better-auth/pull/10552) [`2b4a14f`](https://github.com/better-auth/better-auth/commit/2b4a14f180ed2eeb9692d6933064b001f66ec52c) Thanks [@bytaesu](https://github.com/bytaesu)! - Allow users to retry email OTP password resets after entering an invalid password.
+
+- [#10467](https://github.com/better-auth/better-auth/pull/10467) [`7552a3b`](https://github.com/better-auth/better-auth/commit/7552a3b563fe1ae922fb65db12d005c38a12614d) Thanks [@jlucaso1](https://github.com/jlucaso1)! - Improve `nextCookies` performance in instrumented Next.js applications.
+
+- [#10580](https://github.com/better-auth/better-auth/pull/10580) [`ea38fca`](https://github.com/better-auth/better-auth/commit/ea38fcac7435137604e9b3ba2fe149a1848d0eeb) Thanks [@Emmaccen](https://github.com/Emmaccen)! - Skip invalid secondary-storage session entries without discarding other valid sessions.
+
+- [#10520](https://github.com/better-auth/better-auth/pull/10520) [`a03e4c1`](https://github.com/better-auth/better-auth/commit/a03e4c18677e2dc01a9b47b2a8017b92dbf9ece7) Thanks [@bytaesu](https://github.com/bytaesu)! - Ensure deleting a user also removes their sessions from secondary storage.
+
+- Updated dependencies [[`a30e274`](https://github.com/better-auth/better-auth/commit/a30e274b5daed6057086d76b91d17abfa02196d7)]:
+  - @better-auth/core@1.6.26
+  - @better-auth/drizzle-adapter@1.6.26
+  - @better-auth/kysely-adapter@1.6.26
+  - @better-auth/memory-adapter@1.6.26
+  - @better-auth/mongo-adapter@1.6.26
+  - @better-auth/prisma-adapter@1.6.26
+  - @better-auth/telemetry@1.6.26
+
+## 1.6.25
+
+### Patch Changes
+
+- [#10479](https://github.com/better-auth/better-auth/pull/10479) [`5124c34`](https://github.com/better-auth/better-auth/commit/5124c3487903e96223bb3f54347724bb0204bb95) Thanks [@krish-vachhani](https://github.com/krish-vachhani)! - Prevent Google One Tap from creating new users when sign-up is disabled for the Google provider.
+
+- [#10444](https://github.com/better-auth/better-auth/pull/10444) [`7439359`](https://github.com/better-auth/better-auth/commit/743935991f9991e8243d6c3d14773b9cfca462e8) Thanks [@birkskyum](https://github.com/birkskyum)! - Expose the real `$fetch` instance and `$store` atoms from the Solid client instead of resolving them as dynamic API routes.
+
+- Updated dependencies [[`0ffd1fb`](https://github.com/better-auth/better-auth/commit/0ffd1fb28d44a8266d62791cd4c97e263444d03b)]:
+  - @better-auth/core@1.6.25
+  - @better-auth/drizzle-adapter@1.6.25
+  - @better-auth/kysely-adapter@1.6.25
+  - @better-auth/memory-adapter@1.6.25
+  - @better-auth/mongo-adapter@1.6.25
+  - @better-auth/prisma-adapter@1.6.25
+  - @better-auth/telemetry@1.6.25
+
 ## 1.6.24
 
 ### Patch Changes
