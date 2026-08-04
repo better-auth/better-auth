@@ -2685,7 +2685,7 @@ describe("email-otp generic endpoints reject change-email", async () => {
 			auth.api.createVerificationOTP({
 				body: { email: "test@test.com", type: "change-email" },
 			}),
-		).rejects.toThrow();
+		).rejects.toThrow("Invalid OTP type");
 	});
 
 	it("should reject change-email in getVerificationOTP", async () => {
@@ -2693,7 +2693,7 @@ describe("email-otp generic endpoints reject change-email", async () => {
 			auth.api.getVerificationOTP({
 				query: { email: "test@test.com", type: "change-email" },
 			}),
-		).rejects.toThrow();
+		).rejects.toThrow("Invalid OTP type");
 	});
 
 	it("should reject change-email in checkVerificationOTP", async () => {
@@ -2705,7 +2705,7 @@ describe("email-otp generic endpoints reject change-email", async () => {
 					otp: "123456",
 				},
 			}),
-		).rejects.toThrow();
+		).rejects.toThrow("Invalid OTP type");
 	});
 
 	it("should leave the other otp types working", async () => {
