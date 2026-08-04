@@ -69,8 +69,10 @@ function isMissingKyselyMigrationModule(
 	}
 
 	if (
-		error.message.includes('Missing "./migration" specifier') &&
-		error.message.includes('"kysely" package')
+		(error.message.includes('Missing "./migration" specifier') &&
+			error.message.includes('"kysely" package')) ||
+		(error.message.includes('"./migration" is not exported') &&
+			error.message.includes("kysely"))
 	) {
 		return true;
 	}
