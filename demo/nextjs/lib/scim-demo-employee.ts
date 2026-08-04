@@ -595,7 +595,7 @@ export async function resolveSCIMDemoSSOUser(
 	}
 	const connectionId =
 		input.verifiedIdTokenClaims[SCIM_DEMO_CONNECTION_ID_CLAIM];
-	const subject = input.accountKey.providerAccountId;
+	const subject = input.accountKey.accountId;
 	if (typeof connectionId !== "string" || !isSCIMDemoV2Subject(subject)) {
 		return rejectSCIMDemoSSOUser();
 	}

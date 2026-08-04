@@ -174,7 +174,7 @@ describe("internal adapter test", async () => {
 			{
 				providerId: "provider",
 				issuer: "local:provider",
-				providerAccountId: "account",
+				accountId: "account",
 				accessTokenExpiresAt: new Date(),
 				refreshTokenExpiresAt: new Date(),
 				createdAt: new Date(),
@@ -196,7 +196,7 @@ describe("internal adapter test", async () => {
 				userId: expect.any(String),
 				providerId: "provider",
 				issuer: "local:provider",
-				providerAccountId: "account",
+				accountId: "account",
 				accessToken: null,
 				refreshToken: null,
 				refreshTokenExpiresAt: expect.any(Date),
@@ -240,7 +240,7 @@ describe("internal adapter test", async () => {
 					{
 						providerId: "provider",
 						issuer: "local:provider",
-						providerAccountId: "account",
+						accountId: "account",
 						accessTokenExpiresAt: new Date(),
 						refreshTokenExpiresAt: new Date(),
 					},
@@ -920,12 +920,12 @@ describe("internal adapter test", async () => {
 			userId: user.id,
 			providerId: "test-provider",
 			issuer: "https://issuer.example.com",
-			providerAccountId: "test-account-id-1",
+			accountId: "test-account-id-1",
 		});
 
 		let foundAccount = await internalAdapter.findAccountByKey({
 			issuer: account.issuer,
-			providerAccountId: account.providerAccountId,
+			accountId: account.accountId,
 		});
 		expect(foundAccount).toBeDefined();
 
@@ -933,7 +933,7 @@ describe("internal adapter test", async () => {
 
 		foundAccount = await internalAdapter.findAccountByKey({
 			issuer: account.issuer,
-			providerAccountId: account.providerAccountId,
+			accountId: account.accountId,
 		});
 		expect(foundAccount).toBeNull();
 	});
@@ -953,25 +953,25 @@ describe("internal adapter test", async () => {
 			},
 			{ method: "test" },
 		);
-		const providerAccountId = "shared-provider-subject";
+		const accountId = "shared-provider-subject";
 		const firstAccount = await internalAdapter.createAccount({
 			userId: firstUser.id,
 			providerId: "first-provider-configuration",
 			issuer: "https://first-issuer.example.com",
-			providerAccountId,
+			accountId,
 		});
 		const secondAccount = await internalAdapter.createAccount({
 			userId: secondUser.id,
 			providerId: "second-provider-configuration",
 			issuer: "https://second-issuer.example.com",
-			providerAccountId,
+			accountId,
 		});
 		await expect(
 			internalAdapter.createAccount({
 				userId: secondUser.id,
 				providerId: "another-provider-configuration",
 				issuer: firstAccount.issuer,
-				providerAccountId,
+				accountId,
 			}),
 		).rejects.toThrow();
 
@@ -982,7 +982,7 @@ describe("internal adapter test", async () => {
 		await expect(
 			internalAdapter.findAccountByKey({
 				issuer: firstAccount.issuer,
-				providerAccountId,
+				accountId,
 			}),
 		).resolves.toMatchObject({
 			id: firstAccount.id,
@@ -991,7 +991,7 @@ describe("internal adapter test", async () => {
 		await expect(
 			internalAdapter.findAccountOwnerByKey({
 				issuer: secondAccount.issuer,
-				providerAccountId,
+				accountId,
 			}),
 		).resolves.toMatchObject({
 			kind: "owned",
@@ -1004,7 +1004,7 @@ describe("internal adapter test", async () => {
 		await expect(
 			internalAdapter.findAccountOwnerByKey({
 				issuer: "https://missing-issuer.example.com",
-				providerAccountId,
+				accountId,
 			}),
 		).resolves.toBeNull();
 	});
@@ -1018,7 +1018,7 @@ describe("internal adapter test", async () => {
 					userId: "missing-account-owner",
 					providerId: "orphaned-provider",
 					issuer: "https://issuer.example.com",
-					providerAccountId: "orphaned-subject",
+					accountId: "orphaned-subject",
 				});
 			} finally {
 				database.exec("PRAGMA foreign_keys = ON");
@@ -1028,7 +1028,7 @@ describe("internal adapter test", async () => {
 		await expect(
 			internalAdapter.findAccountOwnerByKey({
 				issuer: account.issuer,
-				providerAccountId: account.providerAccountId,
+				accountId: account.accountId,
 			}),
 		).resolves.toMatchObject({
 			kind: "orphaned",
@@ -1048,19 +1048,19 @@ describe("internal adapter test", async () => {
 			userId: user.id,
 			providerId: "credential",
 			issuer: "local:credential",
-			providerAccountId: user.id,
+			accountId: user.id,
 			password: "password-hash",
 		});
 
 		await expect(
 			internalAdapter.findCredentialAccount(user.id),
-		).resolves.toMatchObject({ id: account.id, providerAccountId: user.id });
+		).resolves.toMatchObject({ id: account.id, accountId: user.id });
 		await internalAdapter.updateUser(user.id, {
 			email: "changed.stable.credential@example.com",
 		});
 		await expect(
 			internalAdapter.findCredentialAccount(user.id),
-		).resolves.toMatchObject({ id: account.id, providerAccountId: user.id });
+		).resolves.toMatchObject({ id: account.id, accountId: user.id });
 	});
 
 	it("should delete multiple accounts for a user", async () => {
@@ -1076,14 +1076,14 @@ describe("internal adapter test", async () => {
 			userId: user.id,
 			providerId: "test-provider-1",
 			issuer: "local:test-provider-1",
-			providerAccountId: "test-account-id-2",
+			accountId: "test-account-id-2",
 		});
 
 		await internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "test-provider-2",
 			issuer: "local:test-provider-2",
-			providerAccountId: "test-account-id-3",
+			accountId: "test-account-id-3",
 		});
 
 		let accounts = await internalAdapter.findAccounts(user.id);

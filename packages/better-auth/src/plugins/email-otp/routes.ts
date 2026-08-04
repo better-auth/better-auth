@@ -972,7 +972,7 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					userId: user.user.id,
 					providerId: "credential",
 					issuer: createLocalAccountIssuer("credential"),
-					providerAccountId: user.user.id,
+					accountId: user.user.id,
 					password: passwordHash,
 				});
 			} else {

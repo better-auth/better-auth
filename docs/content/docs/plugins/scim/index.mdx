@@ -245,7 +245,7 @@ export const auth = betterAuth({
         const link = await acquireActiveSCIMUserLink(
           {
             connectionId: workforceConnectionId,
-            externalId: input.accountKey.providerAccountId,
+            externalId: input.accountKey.accountId,
           },
           context,
         );
@@ -266,7 +266,7 @@ export const auth = betterAuth({
 });
 ```
 
-Configure the directory to send the OIDC provider's immutable, case-exact subject as the SCIM User's `externalId`. The example uses the validated OIDC `sub` from `input.accountKey.providerAccountId`. The helper never falls back to `userName`, email, another connection, or a deleted-resource tombstone.
+Configure the directory to send the OIDC provider's immutable, case-exact subject as the SCIM User's `externalId`. The example uses the validated OIDC `sub` from `input.accountKey.accountId`. The helper never falls back to `userName`, email, another connection, or a deleted-resource tombstone.
 
 Call the helper with the `context` supplied by `resolveUser`; its `database` is the same native transaction adapter used for account linking and session creation. The helper fences the link against concurrent subject changes, source deactivation or deletion, and connection decommissioning. A direct helper caller can retry its entire transaction after a conflict.
 

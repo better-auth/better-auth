@@ -350,7 +350,7 @@ export const setPassword = createAuthEndpoint.serverOnly(
 				userId: session.user.id,
 				providerId: "credential",
 				issuer: createLocalAccountIssuer("credential"),
-				providerAccountId: session.user.id,
+				accountId: session.user.id,
 				password: passwordHash,
 			});
 			return ctx.json({

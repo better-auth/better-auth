@@ -384,7 +384,7 @@ export const siwe = (options: SIWEPluginOptions) => {
 								userId: user.id,
 								providerId: "siwe",
 								issuer: createLocalAccountIssuer("siwe"),
-								providerAccountId: `${walletAddress}:${chainId}`,
+								accountId: `${walletAddress}:${chainId}`,
 								createdAt: new Date(),
 								updatedAt: new Date(),
 							});
@@ -408,7 +408,7 @@ export const siwe = (options: SIWEPluginOptions) => {
 									userId: user.id,
 									providerId: "siwe",
 									issuer: createLocalAccountIssuer("siwe"),
-									providerAccountId: `${walletAddress}:${chainId}`,
+									accountId: `${walletAddress}:${chainId}`,
 									createdAt: new Date(),
 									updatedAt: new Date(),
 								});

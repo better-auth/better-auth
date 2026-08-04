@@ -166,7 +166,7 @@ describe("SSO", async () => {
 		const { headers: adminHeaders } = await signInWithTestUser();
 		const providerAliases = ["workforce-browser", "workforce-desktop"] as const;
 		const issuer = server.issuer.url!;
-		const providerAccountId = "shared-workforce-subject";
+		const accountId = "shared-workforce-subject";
 		const originalUserInfoListeners =
 			server.service.listeners("beforeUserinfo");
 		const originalTokenListeners =
@@ -178,7 +178,7 @@ describe("SSO", async () => {
 		server.service.on("beforeUserinfo", (userInfoResponse) => {
 			profileRevision += 1;
 			userInfoResponse.body = {
-				sub: providerAccountId,
+				sub: accountId,
 				employee_id: `mutable-employee-id-${profileRevision}`,
 				email: "shared-workforce@example.com",
 				name: "Shared Workforce User",
@@ -187,7 +187,7 @@ describe("SSO", async () => {
 			userInfoResponse.statusCode = 200;
 		});
 		server.service.on("beforeTokenSigning", (token) => {
-			token.payload.sub = providerAccountId;
+			token.payload.sub = accountId;
 			token.payload.email = "shared-workforce@example.com";
 			token.payload.email_verified = true;
 			token.payload.name = "Shared Workforce User";
@@ -245,13 +245,12 @@ describe("SSO", async () => {
 			});
 			const matchingAccounts = accounts.data?.filter(
 				(account) =>
-					account.issuer === issuer &&
-					account.providerAccountId === providerAccountId,
+					account.issuer === issuer && account.accountId === accountId,
 			);
 			expect(matchingAccounts).toEqual([
 				expect.objectContaining({
 					issuer,
-					providerAccountId,
+					accountId,
 					providerId: providerAliases[1],
 				}),
 			]);

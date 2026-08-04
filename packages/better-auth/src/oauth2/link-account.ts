@@ -53,7 +53,7 @@ export async function handleOAuthUserInfo(
 	const accountOwner = await c.context.internalAdapter
 		.findAccountOwnerByKey({
 			issuer: account.issuer,
-			providerAccountId: account.providerAccountId,
+			accountId: account.accountId,
 		})
 		.catch((e) => {
 			c.context.logger.error(
@@ -145,8 +145,7 @@ export async function handleOAuthUserInfo(
 			dbUser.linkedAccount ??
 			dbUser.accounts.find(
 				(acc) =>
-					acc.issuer === account.issuer &&
-					acc.providerAccountId === account.providerAccountId,
+					acc.issuer === account.issuer && acc.accountId === account.accountId,
 			);
 		if (!linkedAccount) {
 			const accountLinking = c.context.options.account?.accountLinking;
@@ -176,7 +175,7 @@ export async function handleOAuthUserInfo(
 				};
 			}
 			try {
-				const { id: _providerAccountId, ...providerUserInfo } = userInfo;
+				const { id: _accountId, ...providerUserInfo } = userInfo;
 				await assertValidUserInfo(c, {
 					user: {
 						...providerUserInfo,
@@ -188,7 +187,7 @@ export async function handleOAuthUserInfo(
 				const createdAccount = await c.context.internalAdapter.linkAccount({
 					providerId: account.providerId,
 					issuer: account.issuer,
-					providerAccountId: account.providerAccountId,
+					accountId: account.accountId,
 					userId: dbUser.user.id,
 					accessToken: await setTokenUtil(account.accessToken, c.context),
 					refreshToken: await setTokenUtil(account.refreshToken, c.context),
@@ -206,7 +205,7 @@ export async function handleOAuthUserInfo(
 				if (
 					requireExactAccountBinding &&
 					(createdAccount.issuer !== account.issuer ||
-						createdAccount.providerAccountId !== account.providerAccountId ||
+						createdAccount.accountId !== account.accountId ||
 						createdAccount.providerId !== account.providerId ||
 						createdAccount.userId !== dbUser.user.id)
 				) {
@@ -252,7 +251,7 @@ export async function handleOAuthUserInfo(
 					user;
 			}
 		} else {
-			const { id: _providerAccountId, ...providerUserInfo } = userInfo;
+			const { id: _accountId, ...providerUserInfo } = userInfo;
 			await assertValidUserInfo(c, {
 				user: {
 					...providerUserInfo,
@@ -307,7 +306,7 @@ export async function handleOAuthUserInfo(
 				if (
 					requireExactAccountBinding &&
 					(updatedAccount.issuer !== account.issuer ||
-						updatedAccount.providerAccountId !== account.providerAccountId ||
+						updatedAccount.accountId !== account.accountId ||
 						updatedAccount.providerId !== account.providerId ||
 						updatedAccount.userId !== dbUser.user.id)
 				) {
@@ -412,7 +411,7 @@ export async function handleOAuthUserInfo(
 				scope: account.scope,
 				providerId: account.providerId,
 				issuer: account.issuer,
-				providerAccountId: account.providerAccountId,
+				accountId: account.accountId,
 			};
 			const { createdUser, createdAccount } = await runWithTransaction(
 				c.context.adapter,
@@ -437,7 +436,7 @@ export async function handleOAuthUserInfo(
 			if (
 				requireExactAccountBinding &&
 				(createdAccount.issuer !== account.issuer ||
-					createdAccount.providerAccountId !== account.providerAccountId ||
+					createdAccount.accountId !== account.accountId ||
 					createdAccount.providerId !== account.providerId ||
 					createdAccount.userId !== createdUser.id)
 			) {
