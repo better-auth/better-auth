@@ -390,13 +390,18 @@ export const expoClient = (opts: ExpoClientOptions) => {
 	const storage = storageAdapter(opts.storage);
 	const isWeb = Platform.OS === "web";
 	const cookiePrefix = opts?.cookiePrefix || "better-auth";
-	const hydrateSessionCache = async () => {
+	let sessionCacheHydration: Promise<void> | undefined;
+	const restoreSessionCache = async () => {
 		if (isWeb || opts?.disableCache) {
 			return;
 		}
 
 		const sessionAtom = store?.atoms.session;
-		if (!sessionAtom || sessionAtom.get().data !== null) {
+		if (!sessionAtom) {
+			return;
+		}
+		const initialSessionState = sessionAtom.get();
+		if (initialSessionState.data !== null) {
 			return;
 		}
 
@@ -408,13 +413,22 @@ export const expoClient = (opts: ExpoClientOptions) => {
 		const expiresAtMs = expiresAt ? new Date(expiresAt).getTime() : Number.NaN;
 		const fresh =
 			!!cached?.user?.id && !!cached.session?.id && expiresAtMs > Date.now();
-		if (fresh) {
+		if (fresh && sessionAtom.get() === initialSessionState) {
 			sessionAtom.set({
-				...sessionAtom.get(),
+				...initialSessionState,
 				data: cached,
 				error: null,
 			});
 		}
+	};
+	const hydrateSessionCache = () => {
+		if (!sessionCacheHydration) {
+			sessionCacheHydration = restoreSessionCache().catch((error) => {
+				sessionCacheHydration = undefined;
+				throw error;
+			});
+		}
+		return sessionCacheHydration;
 	};
 	const clearSessionCache = async () => {
 		await storage.setItemAsync(cookieName, "{}");

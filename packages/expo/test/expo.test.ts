@@ -1464,6 +1464,84 @@ describe("expo secure storage availability", () => {
  * @see https://github.com/better-auth/better-auth/issues/8952
  */
 describe("expo session cache hydration", async () => {
+	it("shares cold-start hydration without restoring stale session data", async () => {
+		let resolveSessionCacheRead: (value: string | null) => void = () => {};
+		const sessionCacheRead = new Promise<string | null>((resolve) => {
+			resolveSessionCacheRead = resolve;
+		});
+		const getItemAsync = vi.fn((key: string) => {
+			if (key === "better-auth_session_data") {
+				return sessionCacheRead;
+			}
+			return Promise.resolve(null);
+		});
+		const { client } = await getTestInstance(
+			{ plugins: [expo()], trustedOrigins: ["better-auth://"] },
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem: () => null,
+								setItem: () => {},
+								getItemAsync,
+								setItemAsync: async () => {},
+							},
+						}),
+					],
+				},
+			},
+		);
+
+		const firstRequest = client.getSession();
+		const secondRequest = client.getSession();
+		await vi.waitFor(() => {
+			expect(getItemAsync).toHaveBeenCalledWith("better-auth_session_data");
+		});
+
+		const sessionAtom = client.$store.atoms.session!;
+		const now = new Date();
+		const serverSession = {
+			user: {
+				id: "server-user",
+				name: "Server User",
+				email: "server@example.com",
+				emailVerified: true,
+				createdAt: now,
+				updatedAt: now,
+			},
+			session: {
+				id: "server-session",
+				userId: "server-user",
+				token: "server-token",
+				expiresAt: new Date(now.getTime() + 60_000),
+				createdAt: now,
+				updatedAt: now,
+			},
+		};
+		sessionAtom.set({
+			...sessionAtom.get(),
+			data: serverSession,
+			error: null,
+		});
+		resolveSessionCacheRead(
+			JSON.stringify({
+				user: { id: "cached-user" },
+				session: {
+					id: "cached-session",
+					expiresAt: new Date(Date.now() + 60_000).toISOString(),
+				},
+			}),
+		);
+		await Promise.all([firstRequest, secondRequest]);
+
+		const sessionCacheReads = getItemAsync.mock.calls.filter(
+			([key]) => key === "better-auth_session_data",
+		);
+		expect(sessionAtom.get().data).toEqual(serverSession);
+		expect(sessionCacheReads).toHaveLength(1);
+	});
+
 	it("preserves additional fields through the cache round-trip", async () => {
 		const storage = new Map<string, string>();
 		const getItemAsync = vi.fn(async (key: string) => storage.get(key) || null);
