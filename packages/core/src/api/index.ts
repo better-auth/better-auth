@@ -1,6 +1,7 @@
 import type {
 	EndpointHandler,
 	EndpointOptions,
+	MiddlewareHandler,
 	StrictEndpoint,
 } from "better-call";
 import {
@@ -186,4 +187,5 @@ export type AuthEndpoint<
 	Opts extends EndpointOptions,
 	R,
 > = ReturnType<typeof createAuthEndpoint<Path, Opts, R>>;
-export type AuthMiddleware = ReturnType<typeof createAuthMiddleware>;
+
+export type AuthMiddleware = MiddlewareHandler;
