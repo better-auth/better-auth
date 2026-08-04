@@ -9,7 +9,7 @@ import {
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
 	stripSecureCookiePrefix,
-} from "better-auth/cookies";
+} from "better-auth/cookies/utils";
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import type * as SecureStore from "expo-secure-store";
@@ -636,6 +636,6 @@ export const expoClient = (opts: ExpoClientOptions) => {
 	});
 };
 
-export { parseSetCookieHeader } from "better-auth/cookies";
+export { parseSetCookieHeader } from "better-auth/cookies/utils";
 export * from "./focus-manager";
 export * from "./online-manager";
