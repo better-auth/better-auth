@@ -1379,7 +1379,7 @@ describe("SCIM classic Enterprise User provisioning", () => {
 		]);
 	});
 
-	it("rejects a primary-filtered replace when no value is currently primary", async () => {
+	it("creates a primary-filtered replace target when no value is currently primary", async () => {
 		const { auth } = createEnterpriseFixture();
 		const createResponse = await auth.handler(
 			createSCIMRequest("/scim/v2/Users", {
@@ -1410,10 +1410,12 @@ describe("SCIM classic Enterprise User provisioning", () => {
 				},
 			}),
 		);
-		expect(patchResponse.status).toBe(400);
-		expect(await readJSON(patchResponse)).toMatchObject({
-			scimType: "noTarget",
-		});
+		const patched = await readJSON<SCIMUserResponse>(patchResponse);
+		expect(patchResponse.status, JSON.stringify(patched)).toBe(200);
+		expect(patched.roles).toEqual([
+			{ value: "engineer", primary: false },
+			{ value: "senior-engineer", primary: true },
+		]);
 	});
 
 	it("cascades an emptied manager object out of the Enterprise extension on subattribute removal", async () => {
