@@ -378,8 +378,6 @@ const createTemplateCallback =
 			SubjectConfirmationDataNotOnOrAfter: fiveMinutesLater.toISOString(),
 			NameIDFormat: selectedNameIDFormat,
 			NameID: email,
-			// An IdP-initiated response carries no InResponseTo. The literal string
-			// "null" would be indistinguishable from a real request id once parsed.
 			InResponseTo: overrides.inResponseTo ?? "",
 			AuthnStatement: "",
 			attrFirstName: "Test",
@@ -387,9 +385,16 @@ const createTemplateCallback =
 			attrEmail: "test@email.com",
 		};
 
+		const rendered = saml.SamlLib.replaceTagsByValue(template, tagValues);
+
 		return {
 			id,
-			context: saml.SamlLib.replaceTagsByValue(template, tagValues),
+			// A real IdP omits InResponseTo entirely on an unsolicited response
+			// rather than sending it empty, so drop the attribute rather than
+			// leaving these fixtures resting on how samlify reads an empty one.
+			context: overrides.inResponseTo
+				? rendered
+				: rendered.replaceAll(' InResponseTo=""', ""),
 		};
 	};
 
