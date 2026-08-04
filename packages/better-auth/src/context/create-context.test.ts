@@ -416,21 +416,19 @@ describe("base context creation", () => {
 			});
 		});
 
-		it("should require the jwt plugin for cookie-cache JWKS mode", async () => {
+		it("should require the JWT cookie-cache strategy for JWT plugin signing", async () => {
 			await expect(
 				initBase({
 					session: {
 						cookieCache: {
 							enabled: true,
-							strategy: "jwt",
-							jwt: {
-								signingKey: "jwt-plugin",
-							},
-						} as any,
+							strategy: "compact",
+						},
 					},
+					plugins: [jwt({ sessionCookieCache: true })],
 				}),
 			).rejects.toThrow(
-				'`session.cookieCache.jwt.signingKey = "jwt-plugin"` requires the `jwt()` plugin to be installed.',
+				'`jwt({ sessionCookieCache: true })` requires `session.cookieCache.strategy = "jwt"`.',
 			);
 		});
 
@@ -441,13 +439,11 @@ describe("base context creation", () => {
 						cookieCache: {
 							enabled: true,
 							strategy: "jwt",
-							jwt: {
-								signingKey: "jwt-plugin",
-							},
-						} as any,
+						},
 					},
 					plugins: [
 						jwt({
+							sessionCookieCache: true,
 							jwks: {
 								remoteUrl: "https://example.com/jwks",
 								keyPairConfig: {
@@ -461,7 +457,7 @@ describe("base context creation", () => {
 					],
 				}),
 			).rejects.toThrow(
-				'`session.cookieCache.jwt.signingKey = "jwt-plugin"` requires locally managed JWT plugin keys and does not support `jwt({ jwt: { sign } })`.',
+				"`jwt({ sessionCookieCache: true })` requires locally managed JWT plugin keys and does not support `jwt.sign`.",
 			);
 		});
 
@@ -477,13 +473,11 @@ describe("base context creation", () => {
 						enabled: true,
 						strategy: "jwt",
 						maxAge: 301,
-						jwt: {
-							signingKey: "jwt-plugin",
-						},
-					} as any,
+					},
 				},
 				plugins: [
 					jwt({
+						sessionCookieCache: true,
 						jwks: {
 							gracePeriod: 300,
 						},
