@@ -1927,6 +1927,49 @@ describe("mcp discovery follows the jwt plugin's configuration", async () => {
 		}
 	});
 
+	it("should let a deployment declare the algorithms of its own signer", async ({
+		expect,
+	}) => {
+		// `jwt.sign` owns every header including `alg`, so the built-in set cannot
+		// describe it. The deployment says what it signs with, and that wins.
+		const tempServer = await listen(
+			toNodeHandler(async () => new Response("temp")),
+			{ port: 0 },
+		);
+		const port = tempServer.address?.port || 3007;
+		const baseURL = `http://localhost:${port}`;
+		await tempServer.close();
+
+		const { auth, customFetchImpl } = await getTestInstance({
+			baseURL,
+			plugins: [
+				mcp({
+					loginPage: "/login",
+					oidcConfig: {
+						loginPage: "/login",
+						metadata: {
+							id_token_signing_alg_values_supported: ["HS512"],
+						},
+					},
+				}),
+				jwt(),
+			],
+		});
+		const server = await listen(toNodeHandler(auth.handler), { port });
+		const client = createAuthClient({
+			baseURL,
+			fetchOptions: { customFetchImpl },
+		});
+		const metadata = await client.$fetch<Record<string, any>>(
+			"/.well-known/oauth-authorization-server",
+		);
+		await server.close();
+
+		expect(metadata.data!.id_token_signing_alg_values_supported).toEqual([
+			"HS512",
+		]);
+	});
+
 	it("should publish no jwks_uri when there is no jwt plugin to serve one", async ({
 		expect,
 	}) => {

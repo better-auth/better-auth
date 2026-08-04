@@ -65,6 +65,12 @@ export interface MCPOptions {
  *
  * Declared as a complete record so adding a member to `JWSAlgorithms` fails the
  * build here until discovery advertises it too.
+ *
+ * A deployment that supplies `jwt.sign` signs outside this set entirely — that
+ * callback owns every header, `alg` included, so no value here can describe it.
+ * Such a deployment declares its own algorithms through
+ * `oidcConfig.metadata.id_token_signing_alg_values_supported`, which is merged
+ * over this default.
  */
 const JWT_PLUGIN_ALGORITHMS: Record<JWSAlgorithms, true> = {
 	EdDSA: true,
@@ -321,7 +327,9 @@ export const mcp = (options: MCPOptions) => {
 				},
 				async (c) => {
 					try {
-						const metadata = getMCPProviderMetadata(c, options);
+						// `opts` carries the resolved oidc config; `options` is MCPOptions and
+						// has no `metadata`, so passing it silently dropped every override.
+						const metadata = getMCPProviderMetadata(c, opts);
 						return c.json(metadata);
 					} catch (e) {
 						console.log(e);
