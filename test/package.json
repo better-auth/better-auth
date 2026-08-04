@@ -13,7 +13,7 @@
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
     "openid-client": "^6.8.2",
-    "undici": "^7.29.0",
+    "undici": "^8.9.0",
     "vitest": "catalog:vitest"
   }
 }
