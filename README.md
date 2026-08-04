@@ -36,6 +36,6 @@ You could help continuing its development by:
 - [Suggest new features and report issues](https://github.com/better-auth/better-auth/issues)
 
 ## Security
-If you discover a security vulnerability within Better Auth, please send an e-mail to [security@better-auth.com](mailto:security@better-auth.com).
+If you discover a security vulnerability within Better Auth, please report it via [GitHub Security Advisories](https://github.com/better-auth/better-auth/security/advisories/new).
 
 All reports will be promptly addressed, and you'll be credited accordingly.
