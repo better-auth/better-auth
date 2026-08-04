@@ -71,7 +71,7 @@ async function importLocalPublicKey(
 	};
 }
 
-export async function signCookieCacheJWT(
+async function signCookieCacheJWT(
 	ctx: GenericEndpointContext,
 	payload: CookieCachePayload,
 	expiresIn: number,
@@ -102,7 +102,7 @@ export async function signCookieCacheJWT(
 	return await jwt.sign(resolvedKey.privateKey);
 }
 
-export async function verifyCookieCacheJWT(
+async function verifyCookieCacheJWT(
 	ctx: GenericEndpointContext,
 	token: string,
 	options?: JwtOptions,
