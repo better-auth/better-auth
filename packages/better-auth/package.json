@@ -81,6 +81,11 @@
       "types": "./dist/cookies/index.d.mts",
       "default": "./dist/cookies/index.mjs"
     },
+    "./cookies/utils": {
+      "dev-source": "./src/cookies/cookie-utils.ts",
+      "types": "./dist/cookies/cookie-utils.d.mts",
+      "default": "./dist/cookies/cookie-utils.mjs"
+    },
     "./oauth2": {
       "dev-source": "./src/oauth2/index.ts",
       "types": "./dist/oauth2/index.d.mts",
@@ -344,6 +349,9 @@
       ],
       "cookies": [
         "./dist/cookies/index.d.mts"
+      ],
+      "cookies/utils": [
+        "./dist/cookies/cookie-utils.d.mts"
       ],
       "oauth2": [
         "./dist/oauth2/index.d.mts"
