@@ -371,7 +371,7 @@ describe("magic link", async () => {
 			userId,
 			providerId: "google",
 			issuer: "local:google",
-			providerAccountId: "attacker-google",
+			accountId: "attacker-google",
 		});
 
 		// Precondition: the password is blocked behind the verification gate.

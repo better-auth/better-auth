@@ -57,7 +57,7 @@ These features change the schema:
 | Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables                                                            | Not needed               |
 | Back-channel logout        | Logout-URL and revoked columns                                                                                          | Not needed               |
 | Requested user-info claims | A requested-claims column on the token and consent tables                                                               | Not needed               |
-| Account identity           | An issuer column, a renamed provider-account column, and a compound index                                               | **No, backfill**         |
+| Account identity           | An issuer column and a compound index with the existing provider-account column                                         | **No, backfill**         |
 | SCIM                       | Seven provisioning models, plus three optional managed-catalog models, with layouts that replace the legacy SCIM models | **No, reprovision**      |
 | Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                                                               | Not needed               |
 | Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables                                                         | **No, move client data** |
@@ -80,19 +80,23 @@ This covers email and password, social login, the generic OAuth plugin, One Tap,
 
 ### Account identity is scoped by issuer
 
-Better Auth now recognizes an external account by the unique pair of `issuer` and `providerAccountId`. The `providerId` remains the local provider configuration, while `account.id` identifies the Better Auth account row. The account schema replaces `accountId` with `providerAccountId`, adds the required `issuer` field, and creates a unique compound index across both identity fields.
+Better Auth now recognizes an external account by the unique pair of `issuer` and `accountId`. The `providerId` remains the local provider configuration, while `account.id` identifies the Better Auth account row and `account.accountId` remains the stable identifier assigned by the provider. The account schema adds the required `issuer` field and creates a unique compound index across both identity fields without renaming `accountId`.
 
 <Callout type="warn">
   Use a maintenance window and stop authentication writes before changing the account schema. The generated migration cannot choose trusted issuers or resolve identity collisions for you.
 </Callout>
 
+<Callout type="warn">
+  The `1.7.0-rc.2` and `1.7.0-rc.3` prereleases temporarily used `providerAccountId`. If you deployed either prerelease, rename that physical column and any custom field mapping back to `accountId` as part of this migration. Also rename or recreate the generated compound index so its physical name uses `accountId`; leaving the prerelease index name can make schema tools attempt to create a duplicate index. Applications upgrading from Better Auth 1.6 should keep their existing `accountId` column.
+</Callout>
+
 **Backfill the account identity:**
 
 1. Back up the `account` and `user` tables, then inventory every distinct `providerId`. Include custom physical field names from `account.fields` in that inventory.
-2. Rename the physical `accountId` column to `providerAccountId`, or add `providerAccountId` as nullable and copy the existing values if your migration tool cannot express a rename. Add `issuer` as nullable during the backfill.
+2. Add `issuer` as nullable during the backfill. Keep the existing physical `accountId` column; only prerelease deployments that adopted `providerAccountId` need to rename it back.
 3. Populate both fields according to the account type:
 
-   | Account type                     | `issuer`                                  | `providerAccountId`                    |
+   | Account type                     | `issuer`                                  | `accountId`                            |
    | -------------------------------- | ----------------------------------------- | -------------------------------------- |
    | Credential                       | `local:credential`                        | Stable `id` from the linked `user` row |
    | Provider with an issuer          | Exact trusted issuer used by the provider | Existing provider account identifier   |
@@ -102,27 +106,27 @@ Better Auth now recognizes an external account by the unique pair of `issuer` an
 4. Find collisions before creating the unique index. Adapt this query to your physical table and field names:
 
    ```sql title="Identity collision check"
-   SELECT issuer, providerAccountId, COUNT(*) AS accountCount,
+   SELECT issuer, accountId, COUNT(*) AS accountCount,
           COUNT(DISTINCT userId) AS userCount
    FROM account
-   GROUP BY issuer, providerAccountId
+   GROUP BY issuer, accountId
    HAVING COUNT(*) > 1;
    ```
 
    If duplicate rows belong to one user, choose the account record to keep and reconcile its provider configuration, tokens, scopes, and timestamps before deleting the others. If a key belongs to multiple users, stop the migration and establish the owner from trusted provider data. Never merge users by matching email alone.
-5. Confirm that every row has both identity fields, make them non-nullable, and add the unique compound index on `issuer` and `providerAccountId`. Remove the old column only after verifying a copy-based migration.
-6. Update custom adapters, database hooks, generated schemas, and field mappings to use `issuer` and `providerAccountId`. Credential accounts keep the linked user's stable `id` as `providerAccountId`; email remains a mutable sign-in identifier and does not change the account key.
+5. Confirm that every row has both identity fields, make `issuer` non-nullable, and add the unique compound index on `issuer` and `accountId`.
+6. Update custom adapters, database hooks, and generated schemas to include `issuer`. Credential accounts keep the linked user's stable `id` as `accountId`; email remains a mutable sign-in identifier and does not change the account key.
 
 Account-specific APIs now use explicit, strongly typed selectors. Read `id` from `listAccounts`, then pass it as `accountId` to `unlinkAccount`. For `getAccessToken`, `refreshToken`, and `accountInfo`, choose exactly one of these request shapes:
 
 * `{ accountId: account.id, userId? }` selects the local account row.
 * `{ useAccountCookie: true, userId? }` selects the account from its signed cookie.
 
-Remove `providerId` from every account selector, and do not pass `providerAccountId` in its place. A token or provider-profile request that previously omitted the selector to use the account cookie must now send `useAccountCookie: true`; omitting both supported selectors is invalid.
+Remove `providerId` from every account selector. The selector's `accountId` value is the local `account.id`, not the provider-side `account.accountId`. A token or provider-profile request that previously omitted the selector to use the account cookie must now send `useAccountCookie: true`; omitting both supported selectors is invalid.
 
 Deploy only after the collision query returns no rows and the required unique index exists. Verify email-and-password sign-in, returning OAuth and SSO sign-in, explicit account linking, unlinking, provider profile retrieval, and token refresh against the migrated data.
 
-Review every custom OAuth provider's account subject. OpenID Connect discovery providers now use verified `sub`; plain OAuth providers use `id`; the previous runtime fallback between those fields is removed. Set `accountSubject` when either default is not the provider's immutable identifier. `getUserInfo().user` now contains only mutable local-user fields; keep the provider identifier in `getUserInfo().data`. `mapProfileToUser` can no longer return `id`. The `accountInfo` response exposes the selected identity as `account.providerAccountId` instead of `user.id`.
+Review every custom OAuth provider's account subject. OpenID Connect discovery providers now use verified `sub`; plain OAuth providers use `id`; the previous runtime fallback between those fields is removed. Set `accountSubject` when either default is not the provider's immutable identifier. `getUserInfo().user` now contains only mutable local-user fields; keep the provider identifier in `getUserInfo().data`. `mapProfileToUser` can no longer return `id`. The `accountInfo` response exposes the selected identity as `account.accountId` instead of `user.id`.
 
 The generic `microsoftEntraId` helper now requires a concrete tenant GUID. Replace `common`, `organizations`, or `consumers` configurations with the built-in Microsoft social provider, which validates tenant claims and derives the token's actual issuer.
 

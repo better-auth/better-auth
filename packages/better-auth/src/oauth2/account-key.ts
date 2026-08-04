@@ -27,13 +27,13 @@ export async function resolveOAuthAccountKey<Profile extends object>(
 	const accountKeyContext = { tokens, profile };
 	const accountSubject = provider.accountSubject;
 	const resolvedSubject = await accountSubject(accountKeyContext);
-	const providerAccountId = String(resolvedSubject);
+	const accountId = String(resolvedSubject);
 	if (
 		(typeof resolvedSubject === "number" &&
 			!Number.isFinite(resolvedSubject)) ||
-		providerAccountId.trim().length === 0 ||
-		providerAccountId === "undefined" ||
-		providerAccountId === "null"
+		accountId.trim().length === 0 ||
+		accountId === "undefined" ||
+		accountId === "null"
 	) {
 		throw new BetterAuthError("OAUTH_ACCOUNT_SUBJECT_INVALID");
 	}
@@ -54,7 +54,7 @@ export async function resolveOAuthAccountKey<Profile extends object>(
 		throw new BetterAuthError("OAUTH_ACCOUNT_ISSUER_INVALID");
 	}
 
-	return { issuer, providerAccountId };
+	return { issuer, accountId };
 }
 
 /**

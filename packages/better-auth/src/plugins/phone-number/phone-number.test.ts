@@ -505,7 +505,7 @@ describe("phone auth flow", async () => {
 			userId,
 			providerId: "credential",
 			issuer: "local:credential",
-			providerAccountId: userId,
+			accountId: userId,
 		});
 		const emailSignIn = await client.signIn.email({
 			email: newEmail,
@@ -847,7 +847,7 @@ describe("reset password flow attempts", async () => {
 			userId,
 			providerId: "credential",
 			issuer: "local:credential",
-			providerAccountId: userId,
+			accountId: userId,
 		});
 	});
 

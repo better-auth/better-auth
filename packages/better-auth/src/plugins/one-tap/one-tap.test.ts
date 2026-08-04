@@ -261,7 +261,7 @@ describe("one-tap implicit linking gate", async () => {
 			userId: otherUser.id,
 			providerId: "github",
 			issuer: "local:github",
-			providerAccountId: verifiedPayload.sub,
+			accountId: verifiedPayload.sub,
 		});
 
 		await client.signUp.email({
@@ -284,7 +284,7 @@ describe("one-tap implicit linking gate", async () => {
 			where: [
 				{ field: "providerId", value: "google" },
 				{ field: "issuer", value: "https://accounts.google.com" },
-				{ field: "providerAccountId", value: verifiedPayload.sub },
+				{ field: "accountId", value: verifiedPayload.sub },
 			],
 		});
 		expect(googleAccounts).toHaveLength(1);
@@ -329,7 +329,7 @@ describe("one-tap implicit linking gate", async () => {
 			where: [
 				{ field: "providerId", value: "google" },
 				{ field: "issuer", value: "https://accounts.google.com" },
-				{ field: "providerAccountId", value: verifiedPayload.sub },
+				{ field: "accountId", value: verifiedPayload.sub },
 			],
 		});
 		expect(googleAccounts).toHaveLength(1);
@@ -370,7 +370,7 @@ describe("one-tap implicit linking gate", async () => {
 			userId: userA.id,
 			providerId: "google",
 			issuer: "https://accounts.google.com",
-			providerAccountId: sharedSub,
+			accountId: sharedSub,
 		});
 		const userB = await ctx.internalAdapter.createUser(
 			{

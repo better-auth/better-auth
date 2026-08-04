@@ -521,7 +521,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 
 						const payload: PassthroughPayload = {
 							userInfo: {
-								id: accountKey.providerAccountId,
+								id: accountKey.accountId,
 								email: userInfo.email,
 								name: userInfo.name || "",
 								image: userInfo.image,

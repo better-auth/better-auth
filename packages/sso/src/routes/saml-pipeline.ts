@@ -671,7 +671,7 @@ export async function processSAMLResponse(
 	};
 	const accountKey = {
 		issuer,
-		providerAccountId: userInfo.id as string,
+		accountId: userInfo.id as string,
 	};
 
 	// 16. Session creation
@@ -749,7 +749,7 @@ export async function processSAMLResponse(
 					account: {
 						providerId,
 						issuer: accountKey.issuer,
-						providerAccountId: accountKey.providerAccountId,
+						accountId: accountKey.accountId,
 						accessToken: "",
 						refreshToken: "",
 					},
@@ -827,7 +827,7 @@ export async function processSAMLResponse(
 		profile: {
 			providerType: "saml",
 			providerId,
-			providerAccountId: userInfo.id as string,
+			accountId: userInfo.id as string,
 			email: userInfo.email as string,
 			emailVerified: userInfo.emailVerified,
 			rawAttributes: attributes,

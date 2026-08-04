@@ -12,7 +12,7 @@ const input = {
 	providerId: "workforce",
 	accountKey: {
 		issuer: "https://idp.example.com",
-		providerAccountId: "directory-user-1",
+		accountId: "directory-user-1",
 	},
 	providerUser: {
 		email: "employee@example.com",

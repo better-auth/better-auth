@@ -553,7 +553,7 @@ describe("oauth-proxy", async () => {
 				account: {
 					providerId: string;
 					issuer: string;
-					providerAccountId: string;
+					accountId: string;
 					accessToken?: string;
 					refreshToken?: string;
 				};
@@ -567,7 +567,7 @@ describe("oauth-proxy", async () => {
 			expect(payload.account).toBeDefined();
 			expect(payload.account.providerId).toBe("google");
 			expect(payload.account.issuer).toBe("https://accounts.google.com");
-			expect(payload.account.providerAccountId).toBe("1234567890");
+			expect(payload.account.accountId).toBe("1234567890");
 			expect(payload.state).toBeDefined();
 			expect(payload.timestamp).toBeDefined();
 		});
@@ -837,7 +837,7 @@ describe("oauth-proxy", async () => {
 				account: {
 					providerId: "google",
 					issuer: "https://accounts.google.com",
-					providerAccountId: "123",
+					accountId: "123",
 					accessToken: "test",
 				},
 				state: "test-state",
@@ -889,7 +889,7 @@ describe("oauth-proxy", async () => {
 				account: {
 					providerId: "google",
 					issuer: "https://accounts.google.com",
-					providerAccountId: "123",
+					accountId: "123",
 					accessToken: "test",
 				},
 				state: "test-state",
@@ -1015,7 +1015,7 @@ describe("oauth-proxy", async () => {
 				account: {
 					providerId: "google",
 					issuer: "https://accounts.google.com",
-					providerAccountId: "123",
+					accountId: "123",
 					accessToken: "test",
 				},
 				state: "test-state",
@@ -1043,7 +1043,7 @@ describe("oauth-proxy", async () => {
 				account: {
 					providerId: "google",
 					issuer: "https://accounts.google.com",
-					providerAccountId: "123",
+					accountId: "123",
 					accessToken: "test",
 				},
 				state: "test-state",
@@ -1077,7 +1077,7 @@ describe("oauth-proxy", async () => {
 				account: {
 					providerId: "google",
 					issuer: "https://accounts.google.com",
-					providerAccountId: "123",
+					accountId: "123",
 					accessToken: "test",
 				},
 				state: "test-state",
@@ -1214,7 +1214,7 @@ describe("oauth-proxy", async () => {
 				expect.objectContaining({
 					providerId: "google",
 					issuer: "https://accounts.google.com",
-					providerAccountId: "1234567890",
+					accountId: "1234567890",
 				}),
 			);
 		});
@@ -1262,7 +1262,7 @@ describe("oauth-proxy", async () => {
 				account: {
 					providerId: "google",
 					issuer: "https://accounts.google.com",
-					providerAccountId: "google-user-id",
+					accountId: "google-user-id",
 					accessToken: "test123",
 				},
 				state: "test-state",
@@ -1430,7 +1430,7 @@ describe("oauth-proxy", async () => {
 				account: {
 					providerId: "google",
 					issuer: "https://accounts.google.com",
-					providerAccountId: "123",
+					accountId: "123",
 					accessToken: "test",
 				},
 				state: "non-existent-state-id",

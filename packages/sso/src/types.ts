@@ -323,7 +323,7 @@ interface BaseSSOUserResolutionInput {
 	providerId: string;
 	accountKey: {
 		issuer: string;
-		providerAccountId: string;
+		accountId: string;
 	};
 	providerUser: SSOProviderUserProfile;
 	providerReference: SSOProviderReference;
