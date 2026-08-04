@@ -2049,8 +2049,7 @@ describe("account", async () => {
 		let refreshedAccountCookie = false;
 		let refreshedSessionCookie = false;
 
-		await client.getSession({
-			query: { disableCookieCache: true },
+		await client.refreshSession({
 			fetchOptions: {
 				headers,
 				onSuccess(context) {
@@ -2146,7 +2145,7 @@ describe("account", async () => {
 		let refreshedAccountCookie = false;
 		let refreshedSessionCookie = false;
 
-		await client.getSession({
+		await client.refreshSession({
 			fetchOptions: {
 				headers,
 				onSuccess(context) {
@@ -2410,7 +2409,8 @@ describe("account resolution in stateless mode", async () => {
 		const { accountCookieName, mixed } = await signInOnTwoInstances();
 
 		const res = await makeStatelessAuth().handler(
-			new Request("http://localhost:3000/api/auth/get-session", {
+			new Request("http://localhost:3000/api/auth/refresh-session", {
+				method: "POST",
 				headers: requestHeaders(mixed),
 			}),
 		);

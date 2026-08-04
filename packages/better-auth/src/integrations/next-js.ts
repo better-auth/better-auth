@@ -1,6 +1,5 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { setShouldSkipSessionRefresh } from "../api/state/should-session-refresh";
 import { parseSetCookieHeader, toCookieOptions } from "../cookies";
 import { PACKAGE_VERSION } from "../version";
 import { warnIfCookiePluginNotLast } from "./cookie-plugin-guard";
@@ -51,53 +50,16 @@ export const nextCookies = () => {
 		id: "next-cookies",
 		version: PACKAGE_VERSION,
 		hooks: {
-			before: [
-				{
-					matcher(ctx) {
-						return ctx.path === "/get-session";
-					},
-					handler: createAuthMiddleware(async (ctx) => {
-						if (!hasWarned) {
-							warnIfCookiePluginNotLast(ctx.context, "next-cookies");
-							hasWarned = true;
-						}
-						// Real HTTP requests (via router) set cookies through
-						// response headers -- no need to skip refresh.
-						if ("_flag" in ctx && ctx._flag === "router") {
-							return;
-						}
-						let headersStore: Awaited<ReturnType<NextHeadersModule["headers"]>>;
-						try {
-							const { headers } = await loadNextHeadersModule();
-							headersStore = await headers();
-						} catch {
-							return;
-						}
-						/**
-						 * Detect RSC via headers, NOT by probing cookies().set().
-						 * In Next.js, cookies().set() unconditionally triggers router
-						 * cache invalidation -- even if the value is unchanged.
-						 *
-						 * RSC sends `RSC: 1` without `next-action`. Only in that
-						 * context cookies cannot be written -- skip session refresh
-						 * to avoid DB/cookie mismatch.
-						 *
-						 * @see https://github.com/vercel/next.js/blob/8c5af211d580/packages/next/src/server/web/spec-extension/adapters/request-cookies.ts#L112-L157
-						 */
-						const isRSC = headersStore.get("RSC") === "1";
-						const isServerAction = !!headersStore.get("next-action");
-						if (isRSC && !isServerAction) {
-							await setShouldSkipSessionRefresh(true);
-						}
-					}),
-				},
-			],
 			after: [
 				{
 					matcher(ctx) {
 						return true;
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						if (!hasWarned) {
+							warnIfCookiePluginNotLast(ctx.context, "next-cookies");
+							hasWarned = true;
+						}
 						const returned = ctx.context.responseHeaders;
 						if ("_flag" in ctx && ctx._flag === "router") {
 							return;

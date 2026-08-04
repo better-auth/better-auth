@@ -1618,152 +1618,10 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               "application/json": {
                 "schema": {
                   "properties": {
-                    "session": {
-                      "$ref": "#/components/schemas/Session",
+                    "needsRefresh": {
+                      "description": "Whether the client should refresh the session through POST /refresh-session",
+                      "type": "boolean",
                     },
-                    "user": {
-                      "$ref": "#/components/schemas/User",
-                    },
-                  },
-                  "required": [
-                    "session",
-                    "user",
-                  ],
-                  "type": [
-                    "object",
-                    "null",
-                  ],
-                },
-              },
-            },
-            "description": "Success",
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "required": [
-                    "message",
-                  ],
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unauthorized. Due to missing or invalid authentication.",
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Not Found. The requested resource was not found.",
-          },
-          "429": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
-          },
-        },
-        "security": [
-          {
-            "bearerAuth": [],
-          },
-        ],
-        "tags": [
-          "Default",
-        ],
-      },
-      "post": {
-        "description": "Get the current session",
-        "operationId": "getSessionPost",
-        "parameters": [],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "properties": {},
-                "type": "object",
-              },
-            },
-          },
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
                     "session": {
                       "$ref": "#/components/schemas/Session",
                     },
@@ -2460,6 +2318,154 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
               },
             },
             "description": "API is working",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "message",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "message",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Unauthorized. Due to missing or invalid authentication.",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Not Found. The requested resource was not found.",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+        ],
+        "tags": [
+          "Default",
+        ],
+      },
+    },
+    "/refresh-session": {
+      "post": {
+        "description": "Refresh the current session",
+        "operationId": "refreshSession",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object",
+              },
+            },
+          },
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "session": {
+                      "$ref": "#/components/schemas/Session",
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User",
+                    },
+                  },
+                  "required": [
+                    "session",
+                    "user",
+                  ],
+                  "type": [
+                    "object",
+                    "null",
+                  ],
+                },
+              },
+            },
+            "description": "Success",
           },
           "400": {
             "content": {

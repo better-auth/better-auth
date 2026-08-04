@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -61,13 +61,28 @@ describe("Custom Session Plugin Tests", async () => {
 		const { headers } = await signInWithTestUser();
 		const session = await auth.api.getSession({ headers });
 		const s = await client.getSession({ fetchOptions: { headers } });
+		const refreshed = await client.refreshSession({
+			fetchOptions: { headers },
+		});
 		expect(s.data?.newData).toEqual({ message: "Hello, World!" });
 		expect(session?.newData).toEqual({ message: "Hello, World!" });
+		expect(refreshed.data?.newData).toEqual({ message: "Hello, World!" });
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10588
+	 */
+	it("should preserve the refresh hint on custom session reads", async () => {
+		const { headers } = await signInWithTestUser();
+
+		const session = await auth.api.getSession({ headers });
+
+		expect(session && Reflect.get(session, "needsRefresh")).toBe(true);
 	});
 
 	it("should return set cookie headers as separate entries", async () => {
 		const { headers } = await signInWithTestUser();
-		await client.getSession({
+		await client.refreshSession({
 			fetchOptions: {
 				headers,
 				onResponse(context) {
@@ -83,7 +98,54 @@ describe("Custom Session Plugin Tests", async () => {
 		});
 	});
 
-	it("should not double-encode session cookie during get-session refresh", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10567
+	 */
+	it("should forward cleanup cookies for a missing session during refresh", async () => {
+		const { headers } = await signInWithTestUser();
+		const session = await auth.api.getSession({ headers });
+		expect(session).not.toBeNull();
+
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(session!.session.token);
+
+		let setCookies: string[] = [];
+		const refreshed = await client.refreshSession({
+			fetchOptions: {
+				headers,
+				onResponse(context) {
+					setCookies = context.response.headers.getSetCookie();
+				},
+			},
+		});
+
+		expect(refreshed.data).toBeNull();
+		expect(setCookies).toEqual(
+			expect.arrayContaining([
+				expect.stringMatching(/better-auth\.session_token=.*Max-Age=0/i),
+			]),
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10566
+	 */
+	it("should preserve internal session errors", async () => {
+		const { headers } = await signInWithTestUser();
+		const ctx = await auth.$context;
+		vi.spyOn(ctx.internalAdapter, "findSession").mockRejectedValueOnce(
+			new Error("Database unavailable"),
+		);
+
+		const session = await client.getSession({
+			fetchOptions: { headers },
+		});
+
+		expect(session.data).toBeNull();
+		expect(session.error?.status).toBe(500);
+	});
+
+	it("should not double-encode session cookie during session refresh", async () => {
 		const { headers } = await signInWithTestUser();
 		const signedInCookie = headers.get("cookie");
 		const signedInSessionToken = signedInCookie?.match(
@@ -92,7 +154,7 @@ describe("Custom Session Plugin Tests", async () => {
 		expect(signedInSessionToken).toBeDefined();
 
 		let refreshedSessionToken: string | undefined;
-		await client.getSession({
+		await client.refreshSession({
 			fetchOptions: {
 				headers,
 				onResponse(context) {
@@ -170,7 +232,7 @@ describe("Custom Session Plugin Tests", async () => {
 		});
 
 		const { headers } = await signInWithCache();
-		await cacheClient.getSession({
+		await cacheClient.refreshSession({
 			fetchOptions: {
 				headers,
 				onResponse(context) {
@@ -257,7 +319,7 @@ describe("Custom Session Plugin Tests", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9231
 	 */
-	it("should preserve partitioned cookie attributes during get-session refresh", async () => {
+	it("should preserve partitioned cookie attributes during session refresh", async () => {
 		const {
 			auth: partitionedAuth,
 			signInWithTestUser: signInWithPartitionedCookies,
@@ -289,7 +351,7 @@ describe("Custom Session Plugin Tests", async () => {
 
 		const { headers } = await signInWithPartitionedCookies();
 
-		await partitionedClient.getSession({
+		await partitionedClient.refreshSession({
 			fetchOptions: {
 				headers,
 				onResponse(context) {

@@ -156,7 +156,8 @@ export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 						}
 
 						if (
-							context.request.url.toString().includes("/get-session") &&
+							(context.request.url.toString().includes("/get-session") ||
+								context.request.url.toString().includes("/refresh-session")) &&
 							!opts.disableCache
 						) {
 							const data = context.data;

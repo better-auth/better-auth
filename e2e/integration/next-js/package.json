@@ -1,0 +1,20 @@
+{
+  "name": "@better-auth-test/fixtures-next-js",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev"
+  },
+  "dependencies": {
+    "better-auth": "workspace:*",
+    "next": "16.2.11",
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19"
+  },
+  "devDependencies": {
+    "@better-auth-test/test-utils": "workspace:*",
+    "@types/react": "catalog:react19",
+    "@types/react-dom": "catalog:react19",
+    "typescript": "catalog:"
+  }
+}

@@ -18,7 +18,7 @@ The session table stores the session data. The session table has the following f
 
 ## Session Expiration
 
-The session expires after 7 days by default. But whenever the session is used and the `updateAge` is reached, the session expiration is updated to the current time plus the `expiresIn` value.
+The session expires after 7 days by default. Better Auth keeps session reads side-effect free and refreshes the expiration through a separate write operation. When a refresh is requested after `updateAge` is reached, the expiration is updated to the current time plus the `expiresIn` value.
 
 You can change both the `expiresIn` and `updateAge` values by passing the `session` object to the `auth` configuration.
 
@@ -49,21 +49,27 @@ export const auth = betterAuth({
 })
 ```
 
-### Defer Session Refresh
+### Refresh Session
 
-By default, `GET /get-session` performs database writes to refresh the session. This can cause issues with read-replica database setups where GET requests are routed to read-only replicas.
+`GET /get-session` only validates and returns the current session. It does not update or delete the server-side session, and it does not emit `Set-Cookie` headers. When maintenance is due, the response includes `needsRefresh: true`.
 
-When enabled, GET becomes read-only and returns `needsRefresh: true` when refresh is needed. The client automatically calls POST to perform the refresh.
+`POST /refresh-session` performs session maintenance. If `updateAge` has been reached, it updates the server-side expiration and returns the matching `Set-Cookie` header. It also maintains the cookie cache and clears expired session state; before any maintenance is due, it leaves the session expiration unchanged.
 
-```ts title="auth.ts"
-import { betterAuth } from "better-auth"
+The default reactive `useSession` store reads the session first and calls the refresh endpoint only when `needsRefresh` is returned. Concurrent refresh requests from the same client are deduplicated. SSR-specific adapters that perform session reads during rendering remain read-only. For an explicit refresh from a client or another writable response boundary, call:
 
-export const auth = betterAuth({
-    session: {
-        deferSessionRefresh: true
-    }
+```ts
+await authClient.refreshSession()
+```
+
+On the server, call `refreshSession` only from an HTTP response boundary that can write cookies, such as a Route Handler or Server Action:
+
+```ts
+await auth.api.refreshSession({
+    headers: await headers()
 })
 ```
+
+This separation keeps Server Component reads and read-replica traffic free from session writes.
 
 ## Session Freshness
 

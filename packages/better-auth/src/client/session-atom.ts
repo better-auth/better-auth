@@ -18,22 +18,24 @@ export type SessionAtom = AuthQueryAtom<{
 type SessionData = {
 	user: User;
 	session: Session;
-} & Record<string, any>;
+} & Record<string, unknown>;
 
 type SessionResponse = (
 	| { session: null; user: null; needsRefresh?: boolean }
 	| { session: Session; user: User; needsRefresh?: boolean }
 ) &
-	Record<string, any>;
+	Record<string, unknown>;
+
+type NormalizedSessionResponse = {
+	data: SessionResponse | null;
+	error: unknown;
+};
 
 /**
  * Normalize $fetch response: `throw: true` returns data directly,
  * otherwise `{ data, error }`.
  */
-function normalizeSessionResponse(res: unknown): {
-	data: SessionResponse | null;
-	error: unknown;
-} {
+function normalizeSessionResponse(res: unknown): NormalizedSessionResponse {
 	if (
 		typeof res === "object" &&
 		res !== null &&
@@ -50,7 +52,8 @@ function normalizeSessionData(
 ): SessionData | null {
 	if (!data) return null;
 	if (data.session === null && data.user === null) return null;
-	return data as SessionData;
+	const { needsRefresh: _, ...sessionData } = data;
+	return sessionData as SessionData;
 }
 
 function isSessionAtomEqual(
@@ -73,6 +76,34 @@ export function getSessionAtom(
 	const $signal = atom<boolean>(false);
 
 	let abortController: AbortController | undefined;
+	const refreshRequests = new Map<string, Promise<NormalizedSessionResponse>>();
+
+	const refreshSession = (
+		query?: SessionQueryParams | undefined,
+	): Promise<NormalizedSessionResponse> => {
+		const requestKey = `${query?.disableCookieCache === true}:${query?.disableRefresh === true}`;
+		const activeRequest = refreshRequests.get(requestKey);
+		if (activeRequest) return activeRequest;
+
+		const request = (async () => {
+			const response = await $fetch<SessionResponse>("/refresh-session", {
+				method: "POST",
+				body: {},
+				query,
+			});
+			return normalizeSessionResponse(response);
+		})();
+		refreshRequests.set(requestKey, request);
+
+		const clearRequest = () => {
+			if (refreshRequests.get(requestKey) === request) {
+				refreshRequests.delete(requestKey);
+			}
+		};
+		void request.then(clearRequest, clearRequest);
+
+		return request;
+	};
 
 	const refetch = (
 		queryParams?: { query?: SessionQueryParams } | undefined,
@@ -132,22 +163,20 @@ export function getSessionAtom(
 
 			let { data, error } = normalizeSessionResponse(res);
 
-			if (data?.needsRefresh) {
+			if (!error && data?.needsRefresh) {
+				const readData = data;
 				try {
-					const refreshRes = await $fetch<SessionResponse>("/get-session", {
-						method: "POST",
-						signal: controller.signal,
-					});
-					if (controller.signal.aborted) {
-						settleAbortedFetch(controller);
-						return;
-					}
-					({ data, error } = normalizeSessionResponse(refreshRes));
-				} catch {
-					if (controller.signal.aborted) {
-						settleAbortedFetch(controller);
-						return;
-					}
+					const refreshed = await refreshSession(queryParams?.query);
+					data = refreshed.error ? readData : refreshed.data;
+					error = refreshed.error;
+				} catch (refreshError) {
+					data = readData;
+					error = refreshError;
+				}
+
+				if (controller.signal.aborted) {
+					settleAbortedFetch(controller);
+					return;
 				}
 			}
 
@@ -155,7 +184,9 @@ export function getSessionAtom(
 				const latest = session.get();
 				const isUnauthorized = (error as BetterFetchError)?.status === 401;
 				session.set({
-					data: isUnauthorized ? null : latest.data,
+					data: isUnauthorized
+						? null
+						: (normalizeSessionData(data) ?? latest.data),
 					error: error as BetterFetchError,
 					isPending: false,
 					isRefetching: false,

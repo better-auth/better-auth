@@ -49,6 +49,20 @@ describe("jwt", async () => {
 		expect(token.length).toBeGreaterThan(10);
 	});
 
+	it("Client gets a token from refreshed session", async () => {
+		let token = "";
+		await client.refreshSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					token = context.response.headers.get("set-auth-jwt") || "";
+				},
+			},
+		});
+
+		expect(token.length).toBeGreaterThan(10);
+	});
+
 	it("Client gets a token", async () => {
 		const token = await client.token({
 			fetchOptions: {

@@ -8,29 +8,16 @@ describe("next-js integration", () => {
 		vi.doUnmock("next/headers.js");
 	});
 
-	async function getSessionWithNextHeaders(
-		nextHeaders: HeadersInit | "unavailable",
-	) {
-		const cookiesMock = vi.fn(async () => ({
-			set: vi.fn(),
+	async function callDueSession(operation: "read" | "refresh") {
+		const cookieSet = vi.fn();
+		const cookies = vi.fn(async () => ({
+			set: cookieSet,
 			delete: vi.fn(),
 			get: vi.fn(),
 		}));
-		const headersMock =
-			nextHeaders === "unavailable"
-				? vi.fn(async () => {
-						throw new Error("`headers` was called outside a request scope.");
-					})
-				: vi.fn(async () => new Headers(nextHeaders));
 
 		vi.doMock("next/headers.js", () => ({
-			cookies:
-				nextHeaders === "unavailable"
-					? vi.fn(async () => {
-							throw new Error("`cookies` was called outside a request scope.");
-						})
-					: cookiesMock,
-			headers: headersMock,
+			cookies,
 		}));
 
 		const [{ getTestInstance }, { nextCookies }] = await Promise.all([
@@ -41,10 +28,11 @@ describe("next-js integration", () => {
 		const { auth, testUser } = await getTestInstance({
 			plugins: [nextCookies()],
 			session: {
-				deferSessionRefresh: true,
 				updateAge: 0,
 			},
 		});
+		const ctx = await auth.$context;
+		const updateSession = vi.spyOn(ctx.internalAdapter, "updateSession");
 
 		const signInRes = await auth.api.signInEmail({
 			body: {
@@ -56,73 +44,52 @@ describe("next-js integration", () => {
 		const requestHeaders = new Headers();
 		requestHeaders.set("cookie", signInRes.headers.getSetCookie()[0]!);
 
-		cookiesMock.mockClear();
-		headersMock.mockClear();
+		cookies.mockClear();
+		cookieSet.mockClear();
 
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000);
 
-		const session = await auth.api.getSession({
-			headers: requestHeaders,
-		});
+		const session =
+			operation === "read"
+				? await auth.api.getSession({ headers: requestHeaders })
+				: await auth.api.refreshSession({ headers: requestHeaders });
 
 		return {
-			cookiesMock,
-			headersMock,
-			session: session as { needsRefresh?: boolean } | null,
+			cookieSet,
+			cookies,
+			session,
+			updateSession,
 		};
 	}
 
 	/**
-	 * @see https://github.com/better-auth/better-auth/issues/8464
+	 * @see https://github.com/better-auth/better-auth/issues/9776
 	 */
-	it("should not probe cookies in server action context", async () => {
-		const { cookiesMock, headersMock, session } =
-			await getSessionWithNextHeaders({
-				RSC: "1",
-				"next-action": "abc123",
-			});
+	it("should keep direct session reads side-effect free", async () => {
+		const { cookieSet, session, updateSession } = await callDueSession("read");
 
-		expect(headersMock).toHaveBeenCalledTimes(1);
-		expect(cookiesMock).not.toHaveBeenCalled();
+		expect(updateSession).not.toHaveBeenCalled();
+		expect(cookieSet).not.toHaveBeenCalled();
 		expect(session).not.toBeNull();
-		expect(session?.needsRefresh).toBe(true);
 	});
 
 	/**
-	 * @see https://github.com/better-auth/better-auth/issues/8464
+	 * @see https://github.com/better-auth/better-auth/issues/9776
 	 */
-	it("should skip refresh in server component context", async () => {
-		const { cookiesMock, headersMock, session } =
-			await getSessionWithNextHeaders({ RSC: "1" });
+	it("should write refreshed cookies only for explicit refreshes", async () => {
+		const { cookieSet, session, updateSession } =
+			await callDueSession("refresh");
 
-		expect(headersMock).toHaveBeenCalledTimes(1);
-		expect(cookiesMock).not.toHaveBeenCalled();
+		expect(updateSession).toHaveBeenCalledOnce();
+		expect(cookieSet).toHaveBeenCalled();
 		expect(session).not.toBeNull();
-		expect(session?.needsRefresh).toBe(false);
-	});
-
-	it("should allow refresh in route handler context", async () => {
-		const { cookiesMock, session } = await getSessionWithNextHeaders({});
-
-		expect(cookiesMock).not.toHaveBeenCalled();
-		expect(session).not.toBeNull();
-		expect(session?.needsRefresh).toBe(true);
 	});
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8828
 	 */
 	it("should not leak __better-auth-cookie-store cookie", async () => {
-		vi.doMock("next/headers.js", () => ({
-			cookies: vi.fn(async () => ({
-				set: vi.fn(),
-				delete: vi.fn(),
-				get: vi.fn(),
-			})),
-			headers: vi.fn(async () => new Headers({ RSC: "1" })),
-		}));
-
 		const [{ getTestInstance }, { nextCookies }] = await Promise.all([
 			import("../test-utils/test-instance"),
 			import("./next-js"),
@@ -153,12 +120,6 @@ describe("next-js integration", () => {
 			c.includes("__better-auth-cookie-store"),
 		);
 		expect(hasProbeCookie).toBe(false);
-	});
-
-	it("should handle unavailable headers gracefully", async () => {
-		const { session } = await getSessionWithNextHeaders("unavailable");
-
-		expect(session).not.toBeNull();
 	});
 
 	/**
@@ -221,60 +182,81 @@ describe("next-js integration", () => {
 	 */
 	describe("next/headers module loading", () => {
 		function mockNextHeaders() {
-			const headers = vi.fn(async () => new Headers());
-			vi.doMock(import("next/headers.js"), () => ({
-				headers,
+			const cookies = vi.fn(async () => ({
+				set: vi.fn(),
+				delete: vi.fn(),
+				get: vi.fn(),
 			}));
-			return headers;
+			vi.doMock("next/headers.js", () => ({
+				cookies,
+			}));
+			return cookies;
 		}
 
 		it("should reuse the import between requests", async () => {
-			const firstHeaders = mockNextHeaders();
+			const firstCookies = mockNextHeaders();
 			const [{ getTestInstance }, { nextCookies }] = await Promise.all([
 				import("../test-utils/test-instance"),
 				import("./next-js"),
 			]);
-			const { auth } = await getTestInstance(
-				{ plugins: [nextCookies()] },
-				{ disableTestUser: true },
-			);
-
-			await auth.api.getSession({ headers: new Headers() });
+			const { auth, testUser } = await getTestInstance({
+				plugins: [nextCookies()],
+			});
+			const callsAfterSetup = firstCookies.mock.calls.length;
+			expect(callsAfterSetup).toBeGreaterThan(0);
 
 			vi.resetModules();
-			vi.doUnmock(import("next/headers.js"));
-			const secondHeaders = mockNextHeaders();
+			vi.doUnmock("next/headers.js");
+			const secondCookies = mockNextHeaders();
 
-			await auth.api.getSession({ headers: new Headers() });
+			await auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				},
+			});
 
-			expect(firstHeaders).toHaveBeenCalledTimes(2);
-			expect(secondHeaders).not.toHaveBeenCalled();
+			expect(firstCookies).toHaveBeenCalledTimes(callsAfterSetup + 1);
+			expect(secondCookies).not.toHaveBeenCalled();
 		});
 
 		it("should retry after a failed import", async () => {
 			const failedImport = vi.fn(() => {
-				throw new Error("transient next/headers import failure");
+				throw new Error("Cannot find module 'next/headers.js'");
 			});
-			vi.doMock(import("next/headers.js"), failedImport);
+			vi.doMock("next/headers.js", failedImport);
 			const [{ getTestInstance }, { nextCookies }] = await Promise.all([
 				import("../test-utils/test-instance"),
 				import("./next-js"),
 			]);
-			const { auth } = await getTestInstance(
+			const { auth, testUser } = await getTestInstance(
 				{ plugins: [nextCookies()] },
 				{ disableTestUser: true },
 			);
 
-			await auth.api.getSession({ headers: new Headers() });
+			await expect(
+				auth.api.signUpEmail({
+					body: {
+						email: testUser.email,
+						name: testUser.name,
+						password: testUser.password,
+					},
+				}),
+			).rejects.toThrow("There was an error when mocking a module");
 			expect(failedImport).toHaveBeenCalledOnce();
 
 			vi.resetModules();
-			vi.doUnmock(import("next/headers.js"));
-			const headersMock = mockNextHeaders();
+			vi.doUnmock("next/headers.js");
+			const cookiesMock = mockNextHeaders();
 
-			await auth.api.getSession({ headers: new Headers() });
+			await auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				},
+			});
 
-			expect(headersMock).toHaveBeenCalledOnce();
+			expect(cookiesMock).toHaveBeenCalledOnce();
 		});
 	});
 });

@@ -261,7 +261,10 @@ export function apiKey(
 
 						ctx.context.session = session;
 
-						if (ctx.path === "/get-session") {
+						if (
+							ctx.path === "/get-session" ||
+							ctx.path === "/refresh-session"
+						) {
 							return session;
 						} else {
 							return {

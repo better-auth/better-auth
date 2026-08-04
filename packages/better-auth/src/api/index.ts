@@ -34,6 +34,7 @@ import {
 	listSessions,
 	listUserAccounts,
 	ok,
+	refreshSession,
 	refreshToken,
 	requestPasswordReset,
 	requestPasswordResetCallback,
@@ -231,6 +232,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		signInSocial: signInSocial<Option>(),
 		callbackOAuth,
 		getSession: getSession<Option>(),
+		refreshSession: refreshSession<Option>(),
 		signOut,
 		signUpEmail: signUpEmail<Option>(),
 		signInEmail: signInEmail<Option>(),
@@ -415,7 +417,3 @@ export { type DispatchContext, dispatchAuthEndpoint } from "./dispatch";
 export * from "./middlewares";
 export * from "./routes";
 export { getOAuthState } from "./state/oauth";
-export {
-	getShouldSkipSessionRefresh,
-	setShouldSkipSessionRefresh,
-} from "./state/should-session-refresh";

@@ -101,6 +101,7 @@ export const getClientConfig = (
 		session,
 	} as Record<string, WritableAtom<any>>;
 	const pluginPathMethods: Record<string, "POST" | "GET"> = {
+		"/refresh-session": "POST",
 		"/sign-out": "POST",
 		"/revoke-sessions": "POST",
 		"/revoke-other-sessions": "POST",
