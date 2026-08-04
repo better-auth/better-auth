@@ -249,7 +249,7 @@ export const callbackOAuth = createAuthEndpoint(
 				OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_GET_USER_INFO,
 			);
 		}
-		const { providerAccountId } = accountKey;
+		const { accountId } = accountKey;
 
 		if (!callbackURL) {
 			c.context.logger.error("No callback URL found");
@@ -368,7 +368,7 @@ export const callbackOAuth = createAuthEndpoint(
 			result = await handleOAuthUserInfo(c, {
 				userInfo: {
 					...userInfo,
-					id: providerAccountId,
+					id: accountId,
 					email: userInfo.email,
 					name: userInfo.name || "",
 				},

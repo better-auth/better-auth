@@ -1381,7 +1381,7 @@ describe("Admin plugin", async () => {
 			userId,
 			providerId: "credential",
 			issuer: "local:credential",
-			providerAccountId: userId,
+			accountId: userId,
 		});
 
 		await client.admin.removeUser({ userId }, { headers: adminHeaders });

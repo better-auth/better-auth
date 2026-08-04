@@ -936,7 +936,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 		try {
 			const accounts = accountDatabase
 				.prepare(
-					`SELECT "providerId", "providerAccountId", "userId"
+					`SELECT "providerId", "accountId", "userId"
 					 FROM "account"
 					 WHERE "providerId" = 'scim-demo-sso'`,
 				)
@@ -944,7 +944,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 			expect(accounts).toEqual([
 				{
 					providerId: "scim-demo-sso",
-					providerAccountId: maya.externalId,
+					accountId: maya.externalId,
 					userId: maya.userId,
 				},
 			]);

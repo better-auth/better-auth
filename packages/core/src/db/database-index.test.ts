@@ -212,7 +212,7 @@ describe("database indexes", () => {
 					tableName: "account",
 				},
 				{
-					fields: { providerAccountId: { type: "string" } },
+					fields: { accountId: { type: "string" } },
 					indexes: undefined,
 					tableName: "account",
 				},
@@ -295,11 +295,11 @@ describe("database indexes", () => {
 			resolveDatabaseTableIndexes({
 				fields: {
 					issuer: { type: "string" },
-					providerAccountId: { type: "string", required: false },
+					accountId: { type: "string", required: false },
 				},
 				indexes: [
 					{
-						fields: ["issuer", "providerAccountId"],
+						fields: ["issuer", "accountId"],
 						unique: true,
 					},
 				],

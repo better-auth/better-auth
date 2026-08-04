@@ -329,7 +329,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					userInfo: {
 						...userInfo.user,
 						email: userInfo.user.email,
-						id: accountKey.providerAccountId,
+						id: accountKey.accountId,
 						name: userInfo.user.name || "",
 						image: userInfo.user.image,
 						emailVerified: userInfo.user.emailVerified || false,
@@ -534,7 +534,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				(account) =>
 					account.providerId === "credential" &&
 					account.issuer === credentialIssuer &&
-					account.providerAccountId === userRecord.user.id,
+					account.accountId === userRecord.user.id,
 			);
 
 			if (!userRecord || !credentialAccount) {

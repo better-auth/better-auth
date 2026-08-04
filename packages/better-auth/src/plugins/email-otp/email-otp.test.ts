@@ -119,7 +119,7 @@ describe("email-otp", async () => {
 			userId,
 			providerId: "google",
 			issuer: "local:google",
-			providerAccountId: "attacker-google",
+			accountId: "attacker-google",
 		});
 
 		// Precondition: the password is blocked behind the verification gate.
@@ -399,7 +399,7 @@ describe("email-otp", async () => {
 			userId,
 			providerId: "credential",
 			issuer: "local:credential",
-			providerAccountId: userId,
+			accountId: userId,
 		});
 	});
 

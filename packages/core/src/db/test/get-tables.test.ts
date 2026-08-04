@@ -19,12 +19,12 @@ describe("getAuthTables", () => {
 	it("creates a local account key without changing the provider account id", () => {
 		const credentialAccountKey: AccountKey = {
 			issuer: createLocalAccountIssuer("credential"),
-			providerAccountId: "user-id",
+			accountId: "user-id",
 		};
 
 		expect(credentialAccountKey).toEqual({
 			issuer: "local:credential",
-			providerAccountId: "user-id",
+			accountId: "user-id",
 		});
 	});
 
@@ -105,20 +105,20 @@ describe("getAuthTables", () => {
 			account: {
 				fields: {
 					issuer: "identity_issuer",
-					providerAccountId: "provider_subject",
+					accountId: "provider_subject",
 					providerId: "provider_alias",
 				},
 			},
 		});
 
 		expect(tables.account?.fields.issuer?.fieldName).toBe("identity_issuer");
-		expect(tables.account?.fields.providerAccountId?.fieldName).toBe(
+		expect(tables.account?.fields.accountId?.fieldName).toBe(
 			"provider_subject",
 		);
 		expect(tables.account?.fields.providerId?.fieldName).toBe("provider_alias");
-		expect(tables.account?.fields.accountId).toBeUndefined();
+		expect(tables.account?.fields.providerAccountId).toBeUndefined();
 		expect(tables.account?.indexes).toContainEqual({
-			fields: ["issuer", "providerAccountId"],
+			fields: ["issuer", "accountId"],
 			unique: true,
 		});
 	});
@@ -163,11 +163,11 @@ describe("getAuthTables", () => {
 						account: {
 							fields: {
 								issuer: { type: "string" },
-								providerAccountId: { type: "string" },
+								accountId: { type: "string" },
 							},
 							indexes: [
 								{
-									fields: ["issuer", "providerAccountId"],
+									fields: ["issuer", "accountId"],
 									unique: true,
 								},
 							],
@@ -179,7 +179,7 @@ describe("getAuthTables", () => {
 
 		expect(tables.account?.indexes).toEqual([
 			{
-				fields: ["issuer", "providerAccountId"],
+				fields: ["issuer", "accountId"],
 				unique: true,
 			},
 		]);

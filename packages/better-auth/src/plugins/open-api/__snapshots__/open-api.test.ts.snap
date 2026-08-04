@@ -13,6 +13,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "format": "date-time",
             "type": "string",
           },
+          "accountId": {
+            "type": "string",
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string",
@@ -28,9 +31,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "type": "string",
           },
           "password": {
-            "type": "string",
-          },
-          "providerAccountId": {
             "type": "string",
           },
           "providerId": {
@@ -57,7 +57,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
         "required": [
           "id",
           "issuer",
-          "providerAccountId",
+          "accountId",
           "providerId",
           "userId",
           "createdAt",
@@ -225,13 +225,13 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "account": {
                       "additionalProperties": false,
                       "properties": {
+                        "accountId": {
+                          "type": "string",
+                        },
                         "id": {
                           "type": "string",
                         },
                         "issuer": {
-                          "type": "string",
-                        },
-                        "providerAccountId": {
                           "type": "string",
                         },
                         "providerId": {
@@ -242,7 +242,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                         "id",
                         "providerId",
                         "issuer",
-                        "providerAccountId",
+                        "accountId",
                       ],
                       "type": "object",
                     },
@@ -2214,6 +2214,9 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                 "schema": {
                   "items": {
                     "properties": {
+                      "accountId": {
+                        "type": "string",
+                      },
                       "createdAt": {
                         "format": "date-time",
                         "type": "string",
@@ -2222,9 +2225,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                         "type": "string",
                       },
                       "issuer": {
-                        "type": "string",
-                      },
-                      "providerAccountId": {
                         "type": "string",
                       },
                       "providerId": {
@@ -2250,7 +2250,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "createdAt",
                       "updatedAt",
                       "issuer",
-                      "providerAccountId",
+                      "accountId",
                       "userId",
                       "scopes",
                     ],

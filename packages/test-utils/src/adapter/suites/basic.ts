@@ -103,7 +103,7 @@ export const getNormalTestSuiteTests = (
 				userId: firstUser.id,
 				providerId: "issuer-key-first-alias",
 				issuer: "https://issuer-key.example.com",
-				providerAccountId: "shared-subject",
+				accountId: "shared-subject",
 			};
 			await adapter.create<Account>({
 				model: "account",
@@ -119,7 +119,7 @@ export const getNormalTestSuiteTests = (
 						userId: secondUser.id,
 						providerId: "issuer-key-second-alias",
 						issuer: firstAccount.issuer,
-						providerAccountId: firstAccount.providerAccountId,
+						accountId: firstAccount.accountId,
 					},
 					forceAllowId: true,
 				}),
@@ -133,13 +133,13 @@ export const getNormalTestSuiteTests = (
 						userId: secondUser.id,
 						providerId: "issuer-key-other-issuer",
 						issuer: "https://other-issuer-key.example.com",
-						providerAccountId: firstAccount.providerAccountId,
+						accountId: firstAccount.accountId,
 					},
 					forceAllowId: true,
 				}),
 			).resolves.toMatchObject({
 				issuer: "https://other-issuer-key.example.com",
-				providerAccountId: "shared-subject",
+				accountId: "shared-subject",
 			});
 		},
 		"create - should use generateId if provided": async () => {

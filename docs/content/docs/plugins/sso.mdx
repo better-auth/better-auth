@@ -376,7 +376,7 @@ const auth = betterAuth({
                 const provisionedUser = await findProvisionedUserByAccountKey({
                     providerId: input.providerId,
                     issuer: input.accountKey.issuer,
-                    subject: input.accountKey.providerAccountId,
+                    subject: input.accountKey.accountId,
                     database: context.database,
                 });
 
@@ -398,7 +398,7 @@ const auth = betterAuth({
 });
 ```
 
-For OIDC, `accountKey.issuer` and `accountKey.providerAccountId` come from the validated ID Token's exact `iss` and `sub` claims. `verifiedIdTokenClaims` contains the complete verified ID Token payload, while `providerClaims` contains the protocol-accepted raw claims used for the profile. For SAML, the account key is the verified IdP entity ID and signed `NameID`; `providerAttributes` contains the verified assertion attributes without coercing multi-valued attributes into scalars. Subject and `NameID` matching is case-sensitive.
+For OIDC, `accountKey.issuer` and `accountKey.accountId` come from the validated ID Token's exact `iss` and `sub` claims. `verifiedIdTokenClaims` contains the complete verified ID Token payload, while `providerClaims` contains the protocol-accepted raw claims used for the profile. For SAML, the account key is the verified IdP entity ID and signed `NameID`; `providerAttributes` contains the verified assertion attributes without coercing multi-valued attributes into scalars. Subject and `NameID` matching is case-sensitive.
 
 `providerUser` contains normalized profile fields for either protocol. Profile fields, OIDC UserInfo claims, and SAML attributes may still require application-specific validation before they are used for authorization. `providerReference` is an opaque reference to the provider configuration accepted for this authentication flow. It detects provider replacement or authentication-configuration changes during the flow; do not persist it as a tenant or user binding.
 

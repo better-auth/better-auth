@@ -50,9 +50,7 @@ export const custom_account = mysqlTable(
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     issuer: varchar("issuer", { length: 191 }).notNull(),
-    providerAccountId: varchar("provider_account_id", {
-      length: 191,
-    }).notNull(),
+    accountId: varchar("account_id", { length: 191 }).notNull(),
     providerId: text("provider_id").notNull(),
     userId: varchar("user_id", { length: 36 })
       .notNull()
@@ -70,9 +68,9 @@ export const custom_account = mysqlTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("custom_account_issuer_providerAccountId_uidx").on(
+    uniqueIndex("custom_account_issuer_accountId_uidx").on(
       table.issuer,
-      table.providerAccountId,
+      table.accountId,
     ),
     index("custom_account_userId_idx").on(table.userId),
   ],

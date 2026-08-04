@@ -1285,7 +1285,7 @@ kBGIJYs=
 						id: "replacement-account",
 						userId: replacement.userId,
 						providerId: replacement.providerId,
-						providerAccountId: "replacement-subject",
+						accountId: "replacement-subject",
 						issuer: replacement.issuer,
 						createdAt: new Date(),
 						updatedAt: new Date(),
@@ -1327,7 +1327,7 @@ kBGIJYs=
 				}),
 			).toMatchObject({
 				providerId: replacement.providerId,
-				providerAccountId: "replacement-subject",
+				accountId: "replacement-subject",
 			});
 			instance.server.close();
 		}, 20_000);
@@ -2238,7 +2238,7 @@ kBGIJYs=
 				id: "linked-saml-account",
 				userId: user!.id,
 				providerId: "my-saml-provider",
-				providerAccountId: "saml-account-id",
+				accountId: "saml-account-id",
 			});
 
 			const response = await auth.api.updateSSOProvider({
@@ -2272,7 +2272,7 @@ kBGIJYs=
 				id: "linked-saml-account",
 				userId: user!.id,
 				providerId: "my-saml-provider",
-				providerAccountId: "saml-account-id",
+				accountId: "saml-account-id",
 			});
 
 			const updated = await auth.api.updateSSOProvider({
@@ -2304,7 +2304,7 @@ kBGIJYs=
 				id: "linked-oidc-account",
 				userId: user!.id,
 				providerId: "my-oidc-provider",
-				providerAccountId: "oidc-account-id",
+				accountId: "oidc-account-id",
 			});
 
 			const response = await auth.api.updateSSOProvider({
@@ -2337,7 +2337,7 @@ kBGIJYs=
 				id: "linked-oidc-account",
 				userId: user!.id,
 				providerId: "my-oidc-provider",
-				providerAccountId: "oidc-account-id",
+				accountId: "oidc-account-id",
 			});
 
 			const updated = await auth.api.updateSSOProvider({
@@ -2373,7 +2373,7 @@ kBGIJYs=
 				id: "linked-oidc-account",
 				userId: user!.id,
 				providerId: "my-oidc-provider",
-				providerAccountId: "oidc-account-id",
+				accountId: "oidc-account-id",
 			});
 
 			const updated = await auth.api.updateSSOProvider({
@@ -2886,7 +2886,7 @@ kBGIJYs=
 				id: "guarded-account",
 				userId: provider.userId,
 				providerId: provider.providerId,
-				providerAccountId: "subject",
+				accountId: "subject",
 			});
 
 			await expect(
@@ -3044,7 +3044,7 @@ kBGIJYs=
 					model: "account",
 					data: {
 						id: "concurrent-account",
-						providerAccountId: "saml-subject",
+						accountId: "saml-subject",
 						providerId: provider.providerId,
 						issuer: provider.issuer,
 						userId: provider.userId,
@@ -3516,7 +3516,7 @@ kBGIJYs=
 				id: "account-1",
 				userId: user!.id,
 				providerId: "my-saml-provider",
-				providerAccountId: "saml-account-id",
+				accountId: "saml-account-id",
 				accessToken: "token",
 				refreshToken: "refresh",
 			});

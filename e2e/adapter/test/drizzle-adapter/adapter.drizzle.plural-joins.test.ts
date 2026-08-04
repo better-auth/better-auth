@@ -51,7 +51,7 @@ const sessions = sqliteTable("session", {
 const accounts = sqliteTable("account", {
 	id: text("id").primaryKey(),
 	issuer: text("issuer").notNull(),
-	providerAccountId: text("providerAccountId").notNull(),
+	accountId: text("accountId").notNull(),
 	providerId: text("providerId").notNull(),
 	userId: text("userId")
 		.notNull()
@@ -147,7 +147,7 @@ describe("drizzle adapter: singular config.schema keys with plural db.query keys
 			CREATE TABLE account (
 				id TEXT PRIMARY KEY,
 				issuer TEXT NOT NULL,
-				providerAccountId TEXT NOT NULL,
+				accountId TEXT NOT NULL,
 				providerId TEXT NOT NULL,
 				userId TEXT NOT NULL REFERENCES user(id),
 				accessToken TEXT,

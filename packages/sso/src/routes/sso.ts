@@ -1691,7 +1691,7 @@ async function handleOIDCCallback(
 		issuer:
 			(verifiedIdToken && readStringClaim(verifiedIdToken.payload, "iss")) ||
 			provider.issuer,
-		providerAccountId: userInfoId,
+		accountId: userInfoId,
 	};
 	const isTrustedProvider =
 		"domainVerified" in provider &&
@@ -1766,7 +1766,7 @@ async function handleOIDCCallback(
 						accessToken: tokenResponse.accessToken,
 						refreshToken: tokenResponse.refreshToken,
 						issuer: accountKey.issuer,
-						providerAccountId: userInfoId,
+						accountId: userInfoId,
 						providerId: provider.providerId,
 						accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
 						refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
@@ -1847,7 +1847,7 @@ async function handleOIDCCallback(
 		profile: {
 			providerType: "oidc",
 			providerId: provider.providerId,
-			providerAccountId: userInfoId,
+			accountId: userInfoId,
 			email: userInfoEmail,
 			emailVerified: Boolean(userInfo.emailVerified),
 			rawAttributes: userInfo,

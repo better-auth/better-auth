@@ -269,7 +269,7 @@ describe("oauth2", async () => {
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]).toMatchObject({
 			providerId: "test",
-			providerAccountId: "oauth2",
+			accountId: "oauth2",
 		});
 	});
 
@@ -315,7 +315,7 @@ describe("oauth2", async () => {
 		const account = accounts[0];
 		expect(account).toMatchObject({
 			providerId,
-			providerAccountId: "oauth2-2",
+			accountId: "oauth2-2",
 			userId: session.data?.user.id,
 			accessToken: expect.any(String),
 			refreshToken: expect.any(String),
@@ -1581,7 +1581,7 @@ describe("oauth2", async () => {
 		expect(accountsAfterFirst).toHaveLength(1);
 		expect(accountsAfterFirst[0]).toMatchObject({
 			providerId: "numeric-test",
-			providerAccountId: String(numericAccountId),
+			accountId: String(numericAccountId),
 			userId: userId,
 		});
 
@@ -1621,9 +1621,7 @@ describe("oauth2", async () => {
 
 		const accountsAfterSecond = await ctx.internalAdapter.findAccounts(userId);
 		expect(accountsAfterSecond).toHaveLength(1);
-		expect(accountsAfterSecond[0]!.providerAccountId).toBe(
-			String(numericAccountId),
-		);
+		expect(accountsAfterSecond[0]!.accountId).toBe(String(numericAccountId));
 	});
 
 	it("rejects sign-in when the provider omits an account id, preventing account collisions", async () => {
@@ -1696,7 +1694,7 @@ describe("oauth2", async () => {
 
 		// No account should have been created with an empty/undefined account id.
 		const emptyIdAccounts = await ctx.adapter.findMany<{
-			providerAccountId: string;
+			accountId: string;
 		}>({
 			model: "account",
 			where: [{ field: "providerId", value: "no-sub-test" }],
@@ -1925,7 +1923,7 @@ describe("oauth2", async () => {
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]).toMatchObject({
 			providerId: "derived-id-test",
-			providerAccountId: "derived-id-user",
+			accountId: "derived-id-user",
 		});
 	});
 
@@ -1994,7 +1992,7 @@ describe("oauth2", async () => {
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]).toMatchObject({
 			providerId: "sub-over-empty-id-test",
-			providerAccountId: "abc",
+			accountId: "abc",
 		});
 	});
 
@@ -2063,7 +2061,7 @@ describe("oauth2", async () => {
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]).toMatchObject({
 			providerId: "sub-over-null-id-test",
-			providerAccountId: "null-id-sub",
+			accountId: "null-id-sub",
 		});
 	});
 
@@ -2132,7 +2130,7 @@ describe("oauth2", async () => {
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]).toMatchObject({
 			providerId: "id-over-sub-test",
-			providerAccountId: "subject-1",
+			accountId: "subject-1",
 		});
 	});
 
@@ -2215,7 +2213,7 @@ describe("oauth2", async () => {
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]).toMatchObject({
 			issuer: server.issuer.url,
-			providerAccountId: "workforce-subject",
+			accountId: "workforce-subject",
 			providerId: "workforce-mobile",
 		});
 	});
@@ -2282,10 +2280,10 @@ describe("oauth2", async () => {
 			secondSession.user.id,
 		);
 		expect(firstAccounts[0]).toMatchObject({
-			providerAccountId: "subject-a",
+			accountId: "subject-a",
 		});
 		expect(secondAccounts[0]).toMatchObject({
-			providerAccountId: "subject-b",
+			accountId: "subject-b",
 		});
 	});
 
@@ -2351,7 +2349,7 @@ describe("oauth2", async () => {
 			session.data?.user.id!,
 		);
 
-		expect(accounts[0]!.providerAccountId).toBe(String(numericId));
+		expect(accounts[0]!.accountId).toBe(String(numericId));
 	});
 
 	it("should handle accountSubject returning a numeric subject", async () => {
@@ -2426,7 +2424,7 @@ describe("oauth2", async () => {
 			session.data?.user.id!,
 		);
 
-		expect(accounts[0]!.providerAccountId).toBe(String(numericProfileId));
+		expect(accounts[0]!.accountId).toBe(String(numericProfileId));
 	});
 
 	it("should handle Strava OAuth with custom mapProfileToUser", async () => {
@@ -2518,7 +2516,7 @@ describe("oauth2", async () => {
 
 		expect(accounts[0]).toMatchObject({
 			providerId: "strava",
-			providerAccountId: String(stravaUserId),
+			accountId: String(stravaUserId),
 			userId: session.data?.user.id,
 		});
 	});

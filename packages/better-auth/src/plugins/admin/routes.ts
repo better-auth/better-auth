@@ -462,7 +462,7 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				await ctx.context.internalAdapter.linkAccount({
 					providerId: "credential",
 					issuer: createLocalAccountIssuer("credential"),
-					providerAccountId: user.id,
+					accountId: user.id,
 					password: hashedPassword,
 					userId: user.id,
 				});
@@ -1741,7 +1741,7 @@ export const setUserPassword = (opts: AdminOptions) =>
 					userId,
 					providerId: "credential",
 					issuer: createLocalAccountIssuer("credential"),
-					providerAccountId: user.id,
+					accountId: user.id,
 					password: hashedPassword,
 				});
 			}

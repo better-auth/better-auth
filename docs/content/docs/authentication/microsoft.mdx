@@ -92,9 +92,9 @@ If you already have Microsoft accounts created with an older Better Auth version
 
 * Built-in provider rows use `providerId: "microsoft"`.
 * Generic OAuth helper rows use `providerId: "microsoft-entra-id"`.
-* Preserve the row's trusted `issuer` and update `providerAccountId` from the old `sub` value to the user's `oid` value.
+* Preserve the row's trusted `issuer` and update `accountId` from the old `sub` value to the user's `oid` value.
 
-When stored Microsoft ID tokens are available, verify each token and copy its `oid` claim into that row's `providerAccountId`. `mapProfileToUser` only maps local user fields and cannot override this provider-owned account identifier.
+When stored Microsoft ID tokens are available, verify each token and copy its `oid` claim into that row's `accountId`. `mapProfileToUser` only maps local user fields and cannot override this provider-owned account identifier.
 
 If stored Microsoft ID tokens are not available, Better Auth's account row only has the old `sub` value and cannot derive `oid` from Better Auth data alone. Run this as a controlled migration: pause Microsoft sign-in and account linking during the cutover, or migrate from an external Microsoft Entra export before accepting production traffic on the new identifier. Otherwise, users who were not migrated can create duplicate Microsoft account rows.
 

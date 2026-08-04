@@ -204,7 +204,7 @@ describe("account", async () => {
 			userId: user.id,
 			providerId: "google",
 			issuer: "https://accounts.google.com",
-			providerAccountId: "local-account-selector-subject",
+			accountId: "local-account-selector-subject",
 			accessToken: "local-account-selector-token",
 		});
 
@@ -216,10 +216,8 @@ describe("account", async () => {
 		);
 		assert(googleAccount, "google account should be listed");
 		expect(googleAccount.issuer).toBe("https://accounts.google.com");
-		expect(googleAccount.providerAccountId).toBe(
-			"local-account-selector-subject",
-		);
-		expect(googleAccount.id).not.toBe(googleAccount.providerAccountId);
+		expect(googleAccount.accountId).toBe("local-account-selector-subject");
+		expect(googleAccount.id).not.toBe(googleAccount.accountId);
 
 		const accessToken = await isolatedClient.getAccessToken(
 			{ accountId: googleAccount.id },
@@ -255,13 +253,13 @@ describe("account", async () => {
 		const session = await scopedClient.getSession({
 			fetchOptions: { headers },
 		});
-		const providerAccountId = "empty-scope-google-account";
+		const accountId = "empty-scope-google-account";
 		const testCtx = await auth.$context;
 		const storedAccount = await testCtx.internalAdapter.createAccount({
 			userId: session.data!.user.id,
 			providerId: "google",
 			issuer: "https://accounts.google.com",
-			providerAccountId,
+			accountId,
 			accessToken: "access-token",
 			scope: "",
 		});
@@ -270,7 +268,7 @@ describe("account", async () => {
 			fetchOptions: { headers },
 		});
 		const googleAccount = accounts.data?.find(
-			(account) => account.providerAccountId === providerAccountId,
+			(account) => account.accountId === accountId,
 		);
 		expect(googleAccount?.scopes).toEqual([]);
 
@@ -314,7 +312,7 @@ describe("account", async () => {
 			userId: user.id,
 			providerId: "google",
 			issuer: "https://accounts.google.com",
-			providerAccountId: "provider-subject",
+			accountId: "provider-subject",
 			accessToken: "provider-access-token",
 		});
 
@@ -331,7 +329,7 @@ describe("account", async () => {
 					id: googleAccount.id,
 					providerId: googleAccount.providerId,
 					issuer: googleAccount.issuer,
-					providerAccountId: googleAccount.providerAccountId,
+					accountId: googleAccount.accountId,
 				},
 				data: expect.any(Object),
 			});
@@ -358,7 +356,7 @@ describe("account", async () => {
 			userId: user.id,
 			providerId: "google",
 			issuer: "https://accounts.google.com",
-			providerAccountId: "unavailable-provider-subject",
+			accountId: "unavailable-provider-subject",
 			accessToken: "provider-access-token",
 		});
 
@@ -398,7 +396,7 @@ describe("account", async () => {
 			userId: user.id,
 			providerId: "google",
 			issuer: "https://accounts.google.com",
-			providerAccountId: "server-side-provider-subject",
+			accountId: "server-side-provider-subject",
 			accessToken: "server-side-access-token",
 		});
 		const googleProvider = context.socialProviders.find(
@@ -410,7 +408,7 @@ describe("account", async () => {
 				email: user.email,
 				emailVerified: true,
 			},
-			data: { sub: googleAccount.providerAccountId },
+			data: { sub: googleAccount.accountId },
 		});
 
 		// No headers: the server-side caller identifies the user via userId.
@@ -429,7 +427,7 @@ describe("account", async () => {
 				id: googleAccount.id,
 				providerId: googleAccount.providerId,
 				issuer: googleAccount.issuer,
-				providerAccountId: googleAccount.providerAccountId,
+				accountId: googleAccount.accountId,
 			},
 			data: expect.any(Object),
 		});
@@ -473,7 +471,7 @@ describe("account", async () => {
 			userId: otherUser.id,
 			providerId: "google",
 			issuer: "https://accounts.google.com",
-			providerAccountId: "other-user-google-subject",
+			accountId: "other-user-google-subject",
 			accessToken: "other-access-token",
 		});
 
@@ -522,14 +520,14 @@ describe("account", async () => {
 			userId: user.id,
 			providerId: "google",
 			issuer: "https://accounts.google.com",
-			providerAccountId: sharedProviderAccountId,
+			accountId: sharedProviderAccountId,
 			accessToken: "google-access-token",
 		});
 		const githubAccount = await ctx.internalAdapter.createAccount({
 			userId: user.id,
 			providerId: "github",
 			issuer: "local:oauth:github",
-			providerAccountId: sharedProviderAccountId,
+			accountId: sharedProviderAccountId,
 			accessToken: "github-access-token",
 		});
 
@@ -588,7 +586,7 @@ describe("account", async () => {
 			userId: otherUser.id,
 			providerId: "github",
 			issuer: "local:oauth:github",
-			providerAccountId: "other-server-side-subject",
+			accountId: "other-server-side-subject",
 			accessToken: "github-access-token",
 		});
 
@@ -944,14 +942,14 @@ describe("account", async () => {
 			(provider) => provider.id === "google",
 		);
 		assert(googleProvider, "google provider should be configured");
-		const providerAccountId = "shared-direct-link-subject";
+		const accountId = "shared-direct-link-subject";
 		vi.spyOn(googleProvider, "getUserInfo").mockResolvedValue({
 			user: {
 				name: "Shared Social User",
 				email: "shared-social@example.com",
 				emailVerified: true,
 			},
-			data: { sub: providerAccountId },
+			data: { sub: accountId },
 		});
 		isolatedContext.socialProviders.push({
 			...googleProvider,
@@ -986,7 +984,7 @@ describe("account", async () => {
 			firstUserAccounts.filter(
 				(account) =>
 					account.issuer === "https://accounts.google.com" &&
-					account.providerAccountId === providerAccountId,
+					account.accountId === accountId,
 			),
 		).toHaveLength(1);
 
@@ -1021,7 +1019,7 @@ describe("account", async () => {
 			secondUserAccounts.some(
 				(account) =>
 					account.issuer === "https://accounts.google.com" &&
-					account.providerAccountId === providerAccountId,
+					account.accountId === accountId,
 			),
 		).toBe(false);
 	});
@@ -1104,7 +1102,7 @@ describe("account", async () => {
 			data: {
 				providerId: "google",
 				issuer: "https://accounts.google.com",
-				providerAccountId: "123",
+				accountId: "123",
 				userId: user.id,
 				createdAt: new Date(),
 				updatedAt: new Date(),
@@ -1116,7 +1114,7 @@ describe("account", async () => {
 			data: {
 				providerId: "google",
 				issuer: "https://accounts.google.com",
-				providerAccountId: "345",
+				accountId: "345",
 				userId: user.id,
 				createdAt: new Date(),
 				updatedAt: new Date(),
@@ -1331,7 +1329,7 @@ describe("account", async () => {
 		});
 		const googleAccount = accounts.data?.find((a) => a.providerId === "google");
 		assert(googleAccount, "google account should exist");
-		assert(googleAccount.id !== googleAccount.providerAccountId);
+		assert(googleAccount.id !== googleAccount.accountId);
 
 		const findAccountsSpy = vi.spyOn(testCtx.internalAdapter, "findAccounts");
 
@@ -1450,7 +1448,7 @@ describe("account", async () => {
 			userId: session.user.id,
 			providerId: "google",
 			issuer: "https://accounts.google.com",
-			providerAccountId: "second-google-sub",
+			accountId: "second-google-sub",
 			accessToken: "second-access-token",
 			refreshToken: "second-refresh-token",
 			scope: "email",
@@ -2654,7 +2652,7 @@ describe("account selector validation", async () => {
 			userId: user.id,
 			providerId: "google",
 			issuer: "https://accounts.google.com",
-			providerAccountId: "stale-google-subject",
+			accountId: "stale-google-subject",
 			accessToken: "stale-access-token",
 		});
 		const signedAccountCookie = await symmetricEncodeJWT(
@@ -2908,7 +2906,7 @@ describe("account resolution in stateless mode", async () => {
 		assert(info, "expected accountInfo to resolve from the account cookie");
 		expect(info.account).toMatchObject({
 			issuer: IDP,
-			providerAccountId: "shared-idp-user",
+			accountId: "shared-idp-user",
 			providerId: "idp",
 		});
 		expect(info.data).toMatchObject({ accessTokenSeen: "idp-access-token" });

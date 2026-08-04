@@ -899,7 +899,7 @@ export const createInternalAdapter = (
 		/**
 		 * Delete an account by its primary key.
 		 *
-		 * @param id - The account row's primary key, not its providerAccountId.
+		 * @param id - The account row's primary key, not its accountId.
 		 */
 		deleteAccount: async (id: string) => {
 			await deleteWithHooks(
@@ -980,7 +980,7 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
-		findAccountOwnerByKey: async ({ issuer, providerAccountId }) => {
+		findAccountOwnerByKey: async ({ issuer, accountId }) => {
 			const accountWithUser = await (await getCurrentAdapter(adapter)).findOne<
 				Account & { user: User | null }
 			>({
@@ -991,8 +991,8 @@ export const createInternalAdapter = (
 						value: issuer,
 					},
 					{
-						field: "providerAccountId",
-						value: providerAccountId,
+						field: "accountId",
+						value: accountId,
 					},
 				],
 				join: {
@@ -1135,7 +1135,7 @@ export const createInternalAdapter = (
 						value: createLocalAccountIssuer("credential"),
 					},
 					{
-						field: "providerAccountId",
+						field: "accountId",
 						value: userId,
 					},
 				],
@@ -1167,11 +1167,11 @@ export const createInternalAdapter = (
 						field: "issuer",
 						value: createLocalAccountIssuer("credential"),
 					},
-					{ field: "providerAccountId", value: userId },
+					{ field: "accountId", value: userId },
 				],
 			});
 		},
-		findAccountByKey: async ({ issuer, providerAccountId }) => {
+		findAccountByKey: async ({ issuer, accountId }) => {
 			const account = await (await getCurrentAdapter(adapter)).findOne<Account>(
 				{
 					model: "account",
@@ -1181,8 +1181,8 @@ export const createInternalAdapter = (
 							value: issuer,
 						},
 						{
-							field: "providerAccountId",
-							value: providerAccountId,
+							field: "accountId",
+							value: accountId,
 						},
 					],
 				},

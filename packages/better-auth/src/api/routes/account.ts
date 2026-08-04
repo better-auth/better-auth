@@ -78,7 +78,7 @@ export const listUserAccounts = createAuthEndpoint(
 											issuer: {
 												type: "string",
 											},
-											providerAccountId: {
+											accountId: {
 												type: "string",
 											},
 											userId: {
@@ -97,7 +97,7 @@ export const listUserAccounts = createAuthEndpoint(
 											"createdAt",
 											"updatedAt",
 											"issuer",
-											"providerAccountId",
+											"accountId",
 											"userId",
 											"scopes",
 										],
@@ -996,14 +996,9 @@ export const accountInfo = createAuthEndpoint(
 												id: { type: "string" },
 												providerId: { type: "string" },
 												issuer: { type: "string" },
-												providerAccountId: { type: "string" },
+												accountId: { type: "string" },
 											},
-											required: [
-												"id",
-												"providerId",
-												"issuer",
-												"providerAccountId",
-											],
+											required: ["id", "providerId", "issuer", "accountId"],
 											additionalProperties: false,
 										},
 										data: {
@@ -1068,7 +1063,7 @@ export const accountInfo = createAuthEndpoint(
 				id: account.id,
 				providerId: account.providerId,
 				issuer: account.issuer,
-				providerAccountId: account.providerAccountId,
+				accountId: account.accountId,
 			},
 		});
 	},

@@ -192,7 +192,7 @@ describe("SCIM-provisioned SSO authentication over HTTP", () => {
 							const link = await acquireActiveSCIMUserLink(
 								{
 									connectionId: WORKFORCE_CONNECTION_ID,
-									externalId: input.accountKey.providerAccountId,
+									externalId: input.accountKey.accountId,
 								},
 								{
 									database: {
@@ -491,7 +491,7 @@ describe("SCIM-provisioned SSO authentication over HTTP", () => {
 		});
 		expect(account).toMatchObject({
 			issuer: identityProvider.issuer.url,
-			providerAccountId: externalId,
+			accountId: externalId,
 			providerId: "workforce",
 			userId: provisionedUserId,
 		});
@@ -529,7 +529,7 @@ describe("SCIM-provisioned SSO authentication over HTTP", () => {
 			await instance.db.findOne<Account>({ model: "account", where: [] }),
 		).toMatchObject({
 			issuer: identityProvider.issuer.url,
-			providerAccountId: externalId,
+			accountId: externalId,
 			providerId: "workforce",
 			userId: provisionedUserId,
 		});

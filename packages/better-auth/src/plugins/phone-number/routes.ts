@@ -825,7 +825,7 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					userId: user.id,
 					providerId: "credential",
 					issuer: createLocalAccountIssuer("credential"),
-					providerAccountId: user.id,
+					accountId: user.id,
 					password: hashedPassword,
 				});
 			} else {

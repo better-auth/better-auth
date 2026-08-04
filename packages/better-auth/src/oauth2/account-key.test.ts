@@ -27,14 +27,14 @@ describe("resolveOAuthAccountKey", () => {
 			resolveOAuthAccountKey(createProvider(), tokens, result.data),
 		).resolves.toEqual({
 			issuer: "local:oauth:company-oauth",
-			providerAccountId: "provider-subject",
+			accountId: "provider-subject",
 		});
 	});
 
 	it.each([
 		["provider-subject", "provider-subject"],
 		[42, "42"],
-	] as const)("normalizes the account subject resolved from provider data %j", async (accountSubject, providerAccountId) => {
+	] as const)("normalizes the account subject resolved from provider data %j", async (accountSubject, accountId) => {
 		await expect(
 			resolveOAuthAccountKey(
 				createProvider({ accountSubject: () => accountSubject }),
@@ -43,7 +43,7 @@ describe("resolveOAuthAccountKey", () => {
 			),
 		).resolves.toEqual({
 			issuer: "local:oauth:company-oauth",
-			providerAccountId,
+			accountId,
 		});
 	});
 
@@ -56,7 +56,7 @@ describe("resolveOAuthAccountKey", () => {
 			),
 		).resolves.toEqual({
 			issuer: "https://idp.example.com",
-			providerAccountId: "provider-subject",
+			accountId: "provider-subject",
 		});
 	});
 
@@ -74,7 +74,7 @@ describe("resolveOAuthAccountKey", () => {
 			),
 		).resolves.toEqual({
 			issuer: "https://login.example.com/acme",
-			providerAccountId: "provider-subject",
+			accountId: "provider-subject",
 		});
 		expect(accountIssuer).toHaveBeenCalledWith({
 			tokens,

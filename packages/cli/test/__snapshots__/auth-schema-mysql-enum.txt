@@ -48,9 +48,7 @@ export const account = mysqlTable(
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     issuer: varchar("issuer", { length: 191 }).notNull(),
-    providerAccountId: varchar("provider_account_id", {
-      length: 191,
-    }).notNull(),
+    accountId: varchar("account_id", { length: 191 }).notNull(),
     providerId: text("provider_id").notNull(),
     userId: varchar("user_id", { length: 36 })
       .notNull()
@@ -68,9 +66,9 @@ export const account = mysqlTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("account_issuer_providerAccountId_uidx").on(
+    uniqueIndex("account_issuer_accountId_uidx").on(
       table.issuer,
-      table.providerAccountId,
+      table.accountId,
     ),
     index("account_userId_idx").on(table.userId),
   ],

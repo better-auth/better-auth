@@ -388,7 +388,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					userId: createdUser.id,
 					providerId: "credential",
 					issuer: createLocalAccountIssuer("credential"),
-					providerAccountId: createdUser.id,
+					accountId: createdUser.id,
 					password: hash,
 				});
 				const shouldSendVerificationEmail =

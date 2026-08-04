@@ -33,7 +33,7 @@ describe("resolveSCIMDemoSSOUser", () => {
 			providerId: SCIM_DEMO_SSO_PROVIDER_ID,
 			accountKey: {
 				issuer: getSCIMDemoOIDCIssuer(),
-				providerAccountId: subject,
+				accountId: subject,
 			},
 			providerUser: {
 				email: "alex@acme.example",
@@ -75,7 +75,7 @@ describe("resolveSCIMDemoSSOUser", () => {
 				providerId: SCIM_DEMO_SSO_PROVIDER_ID,
 				accountKey: {
 					issuer: getSCIMDemoOIDCIssuer(),
-					providerAccountId: "scim-demo:v2:invalid",
+					accountId: "scim-demo:v2:invalid",
 				},
 				providerUser: {
 					email: "alex@acme.example",

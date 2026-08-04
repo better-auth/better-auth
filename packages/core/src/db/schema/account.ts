@@ -10,7 +10,7 @@ import { coreSchema } from "./shared";
 export const accountSchema = coreSchema.extend({
 	providerId: z.string(),
 	issuer: z.string(),
-	providerAccountId: z.string(),
+	accountId: z.string(),
 	userId: z.coerce.string(),
 	accessToken: z.string().nullish(),
 	refreshToken: z.string().nullish(),
@@ -39,9 +39,7 @@ export const accountSchema = coreSchema.extend({
 export type BaseAccount = z.infer<typeof accountSchema>;
 
 /** The stable provider-side key used to recognize an account. */
-export type AccountKey = Readonly<
-	Pick<BaseAccount, "issuer" | "providerAccountId">
->;
+export type AccountKey = Readonly<Pick<BaseAccount, "issuer" | "accountId">>;
 
 function encodeAccountIssuerProviderId(providerId: string): string {
 	return encodeURIComponent(providerId);
