@@ -326,6 +326,7 @@ describe("organization creation in database hooks", async () => {
  */
 describe("organization delete rejected by a before hook", async () => {
 	let rejectDelete = false;
+	let failAfterHook = false;
 
 	const { auth, signInWithTestUser, db } = await getTestInstance({
 		plugins: [
@@ -335,6 +336,13 @@ describe("organization delete rejected by a before hook", async () => {
 						if (rejectDelete) {
 							throw new APIError("BAD_REQUEST", {
 								message: "org still has other members",
+							});
+						}
+					},
+					afterDeleteOrganization: async () => {
+						if (failAfterHook) {
+							throw new APIError("BAD_REQUEST", {
+								message: "notification failed",
 							});
 						}
 					},
@@ -394,6 +402,32 @@ describe("organization delete rejected by a before hook", async () => {
 			headers,
 		});
 
+		expect(await activeOrgOf(headers)).toBeNull();
+	});
+
+	it("should clear the active organization even when the after hook throws", async () => {
+		// The delete has already committed, so the session must not be left pointing
+		// at an organization that no longer exists — whatever the notification does.
+		const { headers, org } = await setup();
+
+		failAfterHook = true;
+		try {
+			await expect(
+				auth.api.deleteOrganization({
+					body: { organizationId: org.id },
+					headers,
+				}),
+			).rejects.toThrow("notification failed");
+		} finally {
+			failAfterHook = false;
+		}
+
+		expect(
+			await db.findOne({
+				model: "organization",
+				where: [{ field: "id", value: org.id }],
+			}),
+		).toBeNull();
 		expect(await activeOrgOf(headers)).toBeNull();
 	});
 

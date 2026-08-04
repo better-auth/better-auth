@@ -608,25 +608,29 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 			}
 			await adapter.deleteOrganization(organizationId);
 
-			if (options?.organizationHooks?.afterDeleteOrganization) {
-				await options.organizationHooks.afterDeleteOrganization(
-					{
-						organization: org,
-						user: session.user,
-					},
-					ctx,
-				);
-			}
-
 			/**
-			 * Last, and only once the organization is actually gone. Clearing before
-			 * the delete meant a `beforeDeleteOrganization` hook that rejected it left
-			 * the organization intact but the session pointing at nothing; clearing
-			 * before `afterDeleteOrganization` meant a failed session write skipped
-			 * that hook for a delete that had already committed.
+			 * Both of these must happen once the organization is gone, and neither
+			 * may be skipped because the other failed. Clearing before the delete was
+			 * the original defect: a `beforeDeleteOrganization` hook that rejected the
+			 * delete left the organization intact but the session pointing at nothing.
+			 * Running the two in sequence afterwards only moves the problem, since
+			 * whichever goes second is lost to a throw in the first — so the session
+			 * clear runs in a `finally` and a throwing hook still surfaces.
 			 */
-			if (organizationId === session.session.activeOrganizationId) {
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
+			try {
+				if (options?.organizationHooks?.afterDeleteOrganization) {
+					await options.organizationHooks.afterDeleteOrganization(
+						{
+							organization: org,
+							user: session.user,
+						},
+						ctx,
+					);
+				}
+			} finally {
+				if (organizationId === session.session.activeOrganizationId) {
+					await adapter.setActiveOrganization(session.session.token, null, ctx);
+				}
 			}
 			return ctx.json(org);
 		},
