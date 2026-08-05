@@ -769,7 +769,42 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 		},
 		async (ctx) => {
 			const phoneResetIdentifier = `${ctx.body.phoneNumber}-request-password-reset`;
-			await verifyPhoneNumberOTP(ctx, opts, phoneResetIdentifier, ctx.body.otp);
+			if (opts?.verifyOTP) {
+				// A custom verifier owns OTP validation for every flow, so the
+				// reset code is checked against it rather than the stored value.
+				const isValid = await opts.verifyOTP(
+					{
+						phoneNumber: ctx.body.phoneNumber,
+						code: ctx.body.otp,
+					},
+					ctx,
+				);
+
+				if (!isValid) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
+					);
+				}
+
+				// Clean up verification value
+				const otp =
+					await ctx.context.internalAdapter.findVerificationValue(
+						phoneResetIdentifier,
+					);
+				if (otp) {
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						phoneResetIdentifier,
+					);
+				}
+			} else {
+				await verifyPhoneNumberOTP(
+					ctx,
+					opts,
+					phoneResetIdentifier,
+					ctx.body.otp,
+				);
+			}
 			const userRes = await ctx.context.adapter.findOne<
 				UserWithPhoneNumber & { account: Account[] | undefined }
 			>({
