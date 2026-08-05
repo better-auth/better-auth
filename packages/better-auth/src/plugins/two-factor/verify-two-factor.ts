@@ -147,7 +147,13 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 				// row means a lost race or an expired challenge.
 				const consumed = await ctx.context.internalAdapter
 					.consumeVerificationValue(identifier)
-					.catch(() => null);
+					.catch((error) => {
+						ctx.context.logger.debug(
+							"Two-factor: failed to consume the attempt counter; treating the challenge as invalid.",
+							error,
+						);
+						return null;
+					});
 				if (!consumed) {
 					throw APIError.from(
 						"UNAUTHORIZED",
@@ -163,7 +169,12 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 					// start a new sign-in, and clear the now-dead cookie.
 					await ctx.context.internalAdapter
 						.consumeVerificationValue(signedTwoFactorCookie)
-						.catch(() => {});
+						.catch((error) => {
+							ctx.context.logger.debug(
+								"Two-factor: failed to cancel the challenge after the attempt budget was spent.",
+								error,
+							);
+						});
 					expireCookie(ctx, twoFactorCookie);
 					throw APIError.from(
 						"BAD_REQUEST",
@@ -177,7 +188,12 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 							identifier,
 							expiresAt: verificationToken.expiresAt,
 						})
-						.catch(() => {});
+						.catch((error) => {
+							ctx.context.logger.debug(
+								"Two-factor: failed to rearm the attempt counter.",
+								error,
+							);
+						});
 				return {
 					// recordFailure spends a slot; restore returns it on a server
 					// error. Both swallow write errors (fail closed).
