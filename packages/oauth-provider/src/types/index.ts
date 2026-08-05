@@ -33,6 +33,31 @@ export type AuthorizePrompt =
 	| "login consent"
 	| "select_account consent";
 
+/**
+ * Context handed to an {@link OAuthOptions.accessTokenExpiresIn} resolver when a user
+ * grant is issued. Every field has already been validated by the provider.
+ */
+export interface AccessTokenExpiresInContext<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	ctx: GenericEndpointContext;
+	/** The authenticated user the grant is being issued for. */
+	user: User;
+	/** The authenticated client the grant is being issued to. */
+	client: SchemaClient<Scopes>;
+	/** The scopes granted, after validation. */
+	scopes: Scopes[number][];
+	/** The grant type in play, when the flow provides one. */
+	grantType: GrantType | undefined;
+}
+
+/**
+ * Resolves the user access-token lifetime, in seconds, for a single grant.
+ */
+export type AccessTokenExpiresInResolver<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> = (params: AccessTokenExpiresInContext<Scopes>) => Awaitable<number>;
+
 export interface OAuthOptions<
 	Scopes extends readonly Scope[] = InternallySupportedScopes[],
 > {
@@ -73,9 +98,29 @@ export interface OAuthOptions<
 	/**
 	 * The amount of time in seconds that the access token is valid for.
 	 *
+	 * May also be a function, evaluated each time a user grant is issued, so the
+	 * lifetime can be decided per grant rather than once per process. It receives
+	 * the grant context the provider has already validated — never anything read
+	 * from the token request body — so a client cannot obtain a longer token by
+	 * asking for one.
+	 *
+	 * The resolver must return a finite, positive number of seconds. Any other
+	 * result (including a rejected promise being avoided by returning `NaN`) falls
+	 * back to the default below rather than to a longer lifetime. Throwing is
+	 * propagated and denies the token, which is the fail-closed outcome.
+	 *
+	 * Client-credentials (machine-to-machine) grants are unaffected and continue to
+	 * use {@link OAuthOptions.m2mAccessTokenExpiresIn}.
+	 *
 	 * @default 3600 (1 hour) - Industry standard
+	 *
+	 * @example
+	 * ```ts
+	 * accessTokenExpiresIn: async ({ user, client }) =>
+	 * 	(await lookupConsentedLifetime(user.id, client.clientId)) ?? 3600,
+	 * ```
 	 */
-	accessTokenExpiresIn?: number;
+	accessTokenExpiresIn?: number | AccessTokenExpiresInResolver<Scopes>;
 	/**
 	 * The amount of time in seconds that a client
 	 * credentials grant access token is valid for.
