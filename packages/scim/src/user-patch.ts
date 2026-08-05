@@ -303,24 +303,18 @@ function replaceAllEmailValues(
 function replaceSelectedEmail(
 	state: SCIMUserPatchState,
 	selector: string,
-	op: "add" | "replace",
 	value: unknown,
 ): void {
 	const replacement = readEmail(value);
 	const matches = (email: SCIMEmail) => email.type === selector;
 	const hasSelection = state.emails.some(matches);
-	if (!hasSelection && op === "add") {
+	// A selector miss appends the email: Entra replaces addresses it has not created yet.
+	if (!hasSelection) {
 		setEmails(state, [
 			...state.emails,
 			{ value: replacement, type: selector, primary: false },
 		]);
 		return;
-	}
-	if (!hasSelection) {
-		throw createSCIMError("BAD_REQUEST", {
-			detail: `No ${selector} email matches the PATCH path`,
-			scimType: "noTarget",
-		});
 	}
 	const emails = state.emails.map((email) =>
 		matches(email) ? { ...email, value: replacement } : email,
@@ -680,17 +674,9 @@ function applySCIMMultiValuePatch(
 			: true;
 	});
 	const hasTarget = matches.some(Boolean);
+	// A selector miss creates the value instead of returning RFC 7644 noTarget: Entra replaces values that do not exist yet, and rejecting would void the whole PATCH.
 	if (!hasTarget) {
 		if (op === "remove") return;
-		if (
-			op === "replace" &&
-			(resolved.selectorType || resolved.selectorPrimary !== undefined)
-		) {
-			throw createSCIMError("BAD_REQUEST", {
-				detail: `No value matches the User PATCH path ${path}`,
-				scimType: "noTarget",
-			});
-		}
 		if (!resolved.subAttributeName) {
 			const additions = normalizeMultiValueAdditions(value).map((item) =>
 				isRecord(item)
@@ -1153,7 +1139,7 @@ export function applySCIMUserPatch(
 						setEmails(state, remaining);
 						return;
 					}
-					replaceSelectedEmail(state, selectorType, op, value);
+					replaceSelectedEmail(state, selectorType, value);
 					return;
 				}
 				if (EMAIL_PRIMARY_VALUE_PATH.test(schemaRelativePath)) {

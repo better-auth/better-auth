@@ -367,7 +367,9 @@ Operations run in array order and accept case-insensitive `add`, `replace`, and 
 
 In this table, `enterpriseUrn` is `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User`.
 
-User paths may include the core User schema prefix. An `add` or `replace` operation may omit `path` and provide an object of writable attributes, including flat Enterprise URI keys. Unfiltered `replace` adds a missing target, while a filtered value path with no match returns `noTarget`. `id`, `schemas`, `meta`, and `manager.displayName` are read-only.
+User paths may include the core User schema prefix. An `add` or `replace` operation may omit `path` and provide an object of writable attributes, including flat Enterprise URI keys. Unfiltered `replace` adds a missing target. `id`, `schemas`, `meta`, and `manager.displayName` are read-only.
+
+When a filtered value path such as `phoneNumbers[type eq "work"].value` matches no stored value, Better Auth creates the value with the filtered `type` or `primary` stamped on it instead of returning the [RFC 7644](https://datatracker.ietf.org/doc/html/rfc7644#section-3.5.2.3) `noTarget` error. [Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups) sends these operations for attributes that are not populated yet, and because PATCH is atomic, rejecting one of them would also discard every other operation in the same request. A created email is never primary, so a filter miss cannot move the sign-in address. A `remove` on a filtered path that matches nothing stays a no-op, and a `remove` without a path still returns `noTarget`.
 
 ### Group PATCH paths
 
