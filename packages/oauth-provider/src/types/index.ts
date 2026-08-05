@@ -201,8 +201,8 @@ export interface OAuthOptions<
 	 * }
 	 */
 	clientReference?: (context: {
-		user?: User & Record<string, unknown>;
-		session?: Session & Record<string, unknown>;
+		user?: User & Record<string, any>;
+		session?: Session & Record<string, any>;
 	}) => Awaitable<string | undefined>;
 	/**
 	 * RBAC on OAuth Clients.
@@ -213,8 +213,8 @@ export interface OAuthOptions<
 	clientPrivileges?: (context: {
 		headers: Headers;
 		action: "create" | "read" | "update" | "delete" | "list" | "rotate";
-		user?: User & Record<string, unknown>;
-		session?: Session & Record<string, unknown>;
+		user?: User & Record<string, any>;
+		session?: Session & Record<string, any>;
 	}) => Awaitable<boolean | undefined>;
 	/**
 	 * List default scopes when using the token endpoint's
@@ -291,8 +291,8 @@ export interface OAuthOptions<
 		 */
 		shouldRedirect?: (context: {
 			headers: Headers;
-			user: User & Record<string, unknown>;
-			session: Session & Record<string, unknown>;
+			user: User & Record<string, any>;
+			session: Session & Record<string, any>;
 			scopes: Scopes;
 		}) => Awaitable<boolean | string>;
 	};
@@ -320,8 +320,8 @@ export interface OAuthOptions<
 		 */
 		shouldRedirect: (context: {
 			headers: Headers;
-			user: User & Record<string, unknown>;
-			session: Session & Record<string, unknown>;
+			user: User & Record<string, any>;
+			session: Session & Record<string, any>;
 			scopes: Scopes;
 		}) => Awaitable<boolean>;
 	};
@@ -340,8 +340,8 @@ export interface OAuthOptions<
 		 * scope doesn't have a reference id and it should.
 		 */
 		consentReferenceId: (context: {
-			user: User & Record<string, unknown>;
-			session: Session & Record<string, unknown>;
+			user: User & Record<string, any>;
+			session: Session & Record<string, any>;
 			scopes: Scopes;
 		}) => Awaitable<string | undefined>;
 		/**
@@ -358,8 +358,8 @@ export interface OAuthOptions<
 		 */
 		shouldRedirect: (context: {
 			headers: Headers;
-			user: User & Record<string, unknown>;
-			session: Session & Record<string, unknown>;
+			user: User & Record<string, any>;
+			session: Session & Record<string, any>;
 			scopes: Scopes;
 		}) => Awaitable<boolean>;
 	};
@@ -449,7 +449,7 @@ export interface OAuthOptions<
 	 */
 	customUserInfoClaims?: (info: {
 		/** The user object */
-		user: User & Record<string, unknown>;
+		user: User & Record<string, any>;
 		/** The scopes from the access token used
 		 * in the /userinfo request (matches jwt.scopes) */
 		scopes: Scopes;
@@ -468,7 +468,7 @@ export interface OAuthOptions<
 	 */
 	customIdTokenClaims?: (info: {
 		/** The user object if token is associated to a user. */
-		user: User & Record<string, unknown>;
+		user: User & Record<string, any>;
 		/** Scopes granted for this token */
 		scopes: Scopes;
 		/** oAuthClient metadata */
@@ -489,7 +489,7 @@ export interface OAuthOptions<
 	 */
 	customAccessTokenClaims?: (info: {
 		/** The user object if token is associated to a user. Null if user doesn't exist. Undefined if user not applicable. */
-		user?: (User & Record<string, unknown>) | null;
+		user?: (User & Record<string, any>) | null;
 		/** reference of the consent/authorization */
 		referenceId?: string;
 		/** Scopes granted for this token */
@@ -518,7 +518,7 @@ export interface OAuthOptions<
 		 * Undefined for `client_credentials` (M2M, no user).
 		 * Always present for `authorization_code` and `refresh_token`.
 		 */
-		user?: (User & Record<string, unknown>) | null;
+		user?: (User & Record<string, any>) | null;
 		/** Scopes granted for this token */
 		scopes: Scopes;
 		/** oAuthClient metadata */
