@@ -1,5 +1,20 @@
 # better-auth
 
+## 1.7.0-rc.4
+
+### Patch Changes
+
+- [#10676](https://github.com/better-auth/better-auth/pull/10676) [`90b5093`](https://github.com/better-auth/better-auth/commit/90b509344794b8064700371cbc04b985d0519839) Thanks [@bytaesu](https://github.com/bytaesu)! - Deduplicate in-flight session requests when React retries a suspended component.
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-rc.4
+  - @better-auth/drizzle-adapter@1.7.0-rc.4
+  - @better-auth/kysely-adapter@1.7.0-rc.4
+  - @better-auth/memory-adapter@1.7.0-rc.4
+  - @better-auth/mongo-adapter@1.7.0-rc.4
+  - @better-auth/prisma-adapter@1.7.0-rc.4
+  - @better-auth/telemetry@1.7.0-rc.4
+
 ## 1.7.0-rc.3
 
 ### Minor Changes

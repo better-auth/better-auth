@@ -1,5 +1,7 @@
 # @better-auth/cimd
 
+## 1.7.0-rc.4
+
 ## 1.7.0-rc.3
 
 ### Minor Changes
