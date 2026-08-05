@@ -38,6 +38,7 @@ export async function handleOAuthUserInfo(
 		});
 	let user = dbUser?.user;
 	const isRegister = !user;
+	let newLinkedAccount: Account;
 
 	if (dbUser) {
 		const linkedAccount =
@@ -73,7 +74,7 @@ export async function handleOAuthUserInfo(
 				};
 			}
 			try {
-				await c.context.internalAdapter.linkAccount({
+				newLinkedAccount = await c.context.internalAdapter.linkAccount({
 					providerId: account.providerId,
 					accountId: userInfo.id.toString(),
 					userId: dbUser.user.id,
@@ -90,6 +91,9 @@ export async function handleOAuthUserInfo(
 					error: "unable to link account",
 					data: null,
 				};
+			}
+			if (c.context.options.account?.storeAccountCookie) {
+				await setAccountCookie(c, newLinkedAccount);
 			}
 
 			// Reachable only when `requireLocalEmailVerified: false` lets the link

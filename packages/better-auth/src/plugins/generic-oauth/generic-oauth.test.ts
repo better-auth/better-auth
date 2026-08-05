@@ -318,6 +318,124 @@ describe("oauth2", async () => {
 		expect(accessTokenRes.data?.accessToken).toBeTruthy();
 	});
 
+	it("should resolve getAccessToken after implicit account linking (storeAccountCookie)", async () => {
+		const { customFetchImpl, auth } = await getTestInstance({
+			account: {
+				storeAccountCookie: true,
+			},
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-implicit-link-a",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId,
+							clientSecret,
+							pkce: true,
+						},
+						{
+							providerId: "test-implicit-link-b",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId,
+							clientSecret,
+							pkce: true,
+						},
+					],
+				}),
+			],
+		});
+
+		const ctx = await auth.$context;
+		const accountDataCookieName = ctx.authCookies.accountData.name;
+
+		const newAuthClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const sharedEmail = "implicit-link-cookie@test.com";
+
+		// First sign-in with provider A creates the user.
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: sharedEmail,
+				name: "Implicit Link Cookie",
+				sub: "implicit-link-cookie-a",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const firstHeaders = new Headers();
+		const firstSignInRes = await newAuthClient.signIn.oauth2({
+			providerId: "test-implicit-link-a",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(firstHeaders),
+			},
+		});
+
+		await simulateOAuthFlow(
+			firstSignInRes.data?.url || "",
+			firstHeaders,
+			customFetchImpl,
+		);
+
+		// Sign in with provider B using the same email.
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: sharedEmail,
+				name: "Implicit Link Cookie",
+				sub: "implicit-link-cookie-b",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const secondHeaders = new Headers();
+		const secondSignInRes = await newAuthClient.signIn.oauth2({
+			providerId: "test-implicit-link-b",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(secondHeaders),
+			},
+		});
+
+		const { headers: postCallbackHeaders, setCookieHeader } =
+			await simulateOAuthFlow(
+				secondSignInRes.data?.url || "",
+				secondHeaders,
+				customFetchImpl,
+			);
+
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		const accountDataCookie = cookies.get(accountDataCookieName);
+
+		expect(accountDataCookie).toBeDefined();
+		expect(accountDataCookie?.value).toBeTruthy();
+
+		await expect(
+			symmetricDecodeJWT(
+				accountDataCookie!.value!,
+				ctx.secret,
+				"better-auth-account",
+			),
+		).resolves.toMatchObject({
+			providerId: "test-implicit-link-b",
+		});
+
+		const accessTokenRes = await newAuthClient.getAccessToken(
+			{ providerId: "test-implicit-link-b" },
+			{ headers: postCallbackHeaders },
+		);
+
+		expect(accessTokenRes.error).toBeNull();
+		expect(accessTokenRes.data?.accessToken).toBeTruthy();
+	});
+
 	it("should redirect to the provider and handle the response after linked", async () => {
 		const headers = new Headers();
 		const res = await authClient.signIn.oauth2({
