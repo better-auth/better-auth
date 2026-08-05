@@ -1,10 +1,12 @@
+import type { SCIMScope } from "@better-auth/scim";
 import { scim } from "@better-auth/scim";
 import type { BetterAuthPlugin } from "better-auth";
 import { SCIM_DEMO_ROLE } from "./scim-demo-catalog.ts";
-import { SCIM_DEMO_EXTERNAL_ID_PREFIX } from "./scim-demo-identity.ts";
+import {
+	isSCIMDemoOIDCConfigured,
+	SCIM_DEMO_EXTERNAL_ID_PREFIX,
+} from "./scim-demo-identity.ts";
 
-export const SCIM_DEMO_CONNECTION_ID = "demo-directory";
-export const SCIM_DEMO_PROVISIONING_DOMAIN_ID = "scim-demo";
 export { SCIM_DEMO_ROLE };
 
 const disabledSCIMDemoPlugin = {
@@ -16,20 +18,35 @@ interface SCIMDemoUserRow {
 	scimDemoRole?: string | null;
 }
 
-export function getSCIMDemoToken() {
-	const token = process.env.SCIM_DEMO_TOKEN;
-	if (!token) {
-		throw new Error("SCIM_DEMO_TOKEN is not configured");
+export const SCIM_DEMO_SCOPES = [
+	"scim.users.read",
+	"scim.users.write",
+	"scim.groups.read",
+	"scim.groups.write",
+] as const satisfies readonly SCIMScope[];
+
+export function getSCIMDemoProvisioningDomainId(
+	organizationId: string,
+): string {
+	const provisioningDomainId = `scim-demo-org:${organizationId}`;
+	if (provisioningDomainId.length > 255) {
+		throw new Error(
+			"The organization identifier is too long for a SCIM provisioning domain",
+		);
 	}
-	return token;
+	return provisioningDomainId;
 }
 
 export function isSCIMDemoEnabled() {
 	return (
 		process.env.SCIM_DEMO_ENABLED === "true" &&
-		Boolean(process.env.SCIM_DEMO_TOKEN) &&
+		Boolean(process.env.SCIM_DEMO_CREDENTIAL_PEPPER) &&
 		Boolean(process.env.BETTER_AUTH_URL)
 	);
+}
+
+export function isSCIMDemoEmployeePortalEnabled() {
+	return isSCIMDemoEnabled() && isSCIMDemoOIDCConfigured();
 }
 
 export function getSCIMDemoBaseURL() {
@@ -54,17 +71,21 @@ export function getSCIMDemoBaseURL() {
 export function createSCIMDemoPlugin() {
 	if (!isSCIMDemoEnabled()) return disabledSCIMDemoPlugin;
 	getSCIMDemoBaseURL();
+	const credentialHashSecret = process.env.SCIM_DEMO_CREDENTIAL_PEPPER;
+	if (!credentialHashSecret || credentialHashSecret.length < 32) {
+		throw new Error(
+			"SCIM_DEMO_CREDENTIAL_PEPPER must contain at least 32 characters",
+		);
+	}
 
 	return scim({
-		connections: [
-			{
-				id: SCIM_DEMO_CONNECTION_ID,
-				provisioningDomainId: SCIM_DEMO_PROVISIONING_DOMAIN_ID,
-				credentials: [
-					{ type: "bearer", id: "demo-directory", token: getSCIMDemoToken() },
-				],
+		connections: [],
+		managedConnections: { credentialHashSecret },
+		compatibility: {
+			microsoftEntra: {
+				acceptLegacyGroupSchema: true,
 			},
-		],
+		},
 		projection: {
 			roles: {
 				map: ({ source }) =>

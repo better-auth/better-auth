@@ -1,5 +1,13 @@
 # @better-auth/passkey
 
+## 1.7.0-rc.4
+
+## 1.7.0-rc.3
+
+### Minor Changes
+
+- [#9873](https://github.com/better-auth/better-auth/pull/9873) [`2f3a714`](https://github.com/better-auth/better-auth/commit/2f3a71458db9d6a37f2d666acbd24255330ba8a3) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Add the optional `createSession` setting to passkey registration. When enabled, successful registration signs the user in, sets the session cookie, and returns the session and user with the registered passkey.
+
 ## 1.7.0-rc.2
 
 ## 1.7.0-rc.1
@@ -49,6 +57,22 @@
   - @better-auth/core@1.7.0-beta.5
 
 ## 1.7.0-beta.4
+
+## 1.6.26
+
+### Patch Changes
+
+- Updated dependencies [[`9ede805`](https://github.com/better-auth/better-auth/commit/9ede8059b56e1415c1e8cfdd93ff72691b848bbf), [`5a811f1`](https://github.com/better-auth/better-auth/commit/5a811f1b4314b8bcf6f21c0b72de5cb67d552d97), [`d8327f1`](https://github.com/better-auth/better-auth/commit/d8327f1fea92243b6fea1b0ab183e2a989792c0c), [`e2c73fb`](https://github.com/better-auth/better-auth/commit/e2c73fbec87f5e19f6a2b5ac371bc5bba9bd49ff), [`af50c45`](https://github.com/better-auth/better-auth/commit/af50c45553a62cfb6cdcdede86828731ca00c22c), [`701cd43`](https://github.com/better-auth/better-auth/commit/701cd43babac52784d855291a6adc0cf3fba7970), [`a30e274`](https://github.com/better-auth/better-auth/commit/a30e274b5daed6057086d76b91d17abfa02196d7), [`e7b0eba`](https://github.com/better-auth/better-auth/commit/e7b0eba327e050f50764802e21484c6cabb56600), [`2b4a14f`](https://github.com/better-auth/better-auth/commit/2b4a14f180ed2eeb9692d6933064b001f66ec52c), [`7552a3b`](https://github.com/better-auth/better-auth/commit/7552a3b563fe1ae922fb65db12d005c38a12614d), [`ea38fca`](https://github.com/better-auth/better-auth/commit/ea38fcac7435137604e9b3ba2fe149a1848d0eeb), [`a03e4c1`](https://github.com/better-auth/better-auth/commit/a03e4c18677e2dc01a9b47b2a8017b92dbf9ece7)]:
+  - better-auth@1.6.26
+  - @better-auth/core@1.6.26
+
+## 1.6.25
+
+### Patch Changes
+
+- Updated dependencies [[`5124c34`](https://github.com/better-auth/better-auth/commit/5124c3487903e96223bb3f54347724bb0204bb95), [`0ffd1fb`](https://github.com/better-auth/better-auth/commit/0ffd1fb28d44a8266d62791cd4c97e263444d03b), [`7439359`](https://github.com/better-auth/better-auth/commit/743935991f9991e8243d6c3d14773b9cfca462e8)]:
+  - better-auth@1.6.25
+  - @better-auth/core@1.6.25
 
 ## 1.6.24
 

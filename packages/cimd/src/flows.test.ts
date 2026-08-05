@@ -1,3 +1,8 @@
+import {
+	CLIENT_ASSERTION_TYPE,
+	signPrivateKeyJwtClientAssertion,
+} from "@better-auth/core/oauth2";
+import type { SchemaClient, Scope } from "@better-auth/oauth-provider";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { createAuthClient } from "better-auth/client";
@@ -64,7 +69,11 @@ function stubMetadataFetch(
 }
 
 async function extractAuthorizationCode(
-	authedClient: ReturnType<typeof createAuthClient>,
+	authedClient: ReturnType<
+		typeof createAuthClient<{
+			plugins: [ReturnType<typeof oauthProviderClient>];
+		}>
+	>,
 	authorizeUrl: string,
 ): Promise<string> {
 	let redirect = "";
@@ -89,7 +98,7 @@ async function extractAuthorizationCode(
 		location: { search: new URL(redirect, baseURL).search },
 	});
 
-	const consent = await (authedClient as any).oauth2.consent(
+	const consent = await authedClient.oauth2.consent(
 		{ accept: true },
 		{ throw: true },
 	);
@@ -120,9 +129,14 @@ describe("CIMD - token exchange flow", async () => {
 		client_name: "Token Exchange Test Client",
 		redirect_uris: [redirectUri],
 		token_endpoint_auth_method: "none",
+		application_type: "native",
 		grant_types: ["authorization_code"],
 		response_types: ["code"],
 	};
+	const fetchClientMetadataResource = vi.fn(
+		(input: RequestInfo | URL, init?: RequestInit) =>
+			globalThis.fetch(input, init),
+	);
 
 	const {
 		auth: authorizationServer,
@@ -138,7 +152,9 @@ describe("CIMD - token exchange flow", async () => {
 				scopes: ["openid", "profile", "email", "offline_access"],
 				silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 			}),
-			cimd(),
+			cimd({
+				fetchClientMetadataResource,
+			}),
 		],
 	});
 
@@ -154,7 +170,127 @@ describe("CIMD - token exchange flow", async () => {
 	});
 	afterEach(() => {
 		vi.unstubAllGlobals();
+		fetchClientMetadataResource.mockClear();
 	});
+
+	async function exchangeWithUnsafeJwksResponse(
+		responseKind: "redirected" | "wrong-mime" | "oversized",
+	): Promise<{
+		body: Record<string, unknown>;
+		status: number;
+		jwksUri: string;
+	}> {
+		const clientMetadataUrl = `https://${responseKind}-key-client.example.com/client-metadata.json`;
+		const jwksUri = `https://${responseKind}-key-client.example.com/.well-known/jwks.json`;
+		const redirectUri = `http://localhost:${5200 + responseKind.length}/callback`;
+		const keyId = `${responseKind}-key`;
+		const { privateKey, publicKey } = (await crypto.subtle.generateKey(
+			{
+				name: "RSASSA-PKCS1-v1_5",
+				modulusLength: 2048,
+				publicExponent: new Uint8Array([1, 0, 1]),
+				hash: "SHA-256",
+			},
+			true,
+			["sign", "verify"],
+		)) as CryptoKeyPair;
+		const privateKeyJwk = await crypto.subtle.exportKey("jwk", privateKey);
+		const publicKeyJwk = await crypto.subtle.exportKey("jwk", publicKey);
+		const jwks = {
+			keys: [
+				{
+					...publicKeyJwk,
+					kid: keyId,
+					alg: "RS256",
+					use: "sig",
+				},
+			],
+		};
+		const originalFetch = globalThis.fetch.bind(globalThis);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+				const requestedUrl =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				if (requestedUrl === clientMetadataUrl) {
+					return Promise.resolve(
+						Response.json({
+							client_id: clientMetadataUrl,
+							client_name: `${responseKind} JWKS Client`,
+							redirect_uris: [redirectUri],
+							token_endpoint_auth_method: "private_key_jwt",
+							application_type: "native",
+							grant_types: ["authorization_code"],
+							response_types: ["code"],
+							jwks_uri: jwksUri,
+						}),
+					);
+				}
+				if (requestedUrl === jwksUri) {
+					if (responseKind === "redirected") {
+						const response = Response.json(jwks);
+						Object.defineProperty(response, "redirected", { value: true });
+						return Promise.resolve(response);
+					}
+					if (responseKind === "wrong-mime") {
+						return Promise.resolve(
+							new Response(JSON.stringify(jwks), {
+								headers: { "content-type": "text/plain" },
+							}),
+						);
+					}
+					return Promise.resolve(
+						Response.json({
+							...jwks,
+							padding: "x".repeat(70 * 1024),
+						}),
+					);
+				}
+				return originalFetch(input, init);
+			}),
+		);
+
+		const { headers } = await signInWithTestUser();
+		const authedClient = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: { customFetchImpl, headers },
+		});
+		const code = await extractAuthorizationCode(
+			authedClient,
+			buildAuthorizeUrl(authServerBaseUrl, clientMetadataUrl, redirectUri),
+		);
+		const tokenEndpoint = `${authServerBaseUrl}/api/auth/oauth2/token`;
+		const assertion = await signPrivateKeyJwtClientAssertion({
+			clientId: clientMetadataUrl,
+			tokenEndpoint,
+			privateKeyJwk,
+			kid: keyId,
+			algorithm: "RS256",
+		});
+		const tokenResponse = await fetch(tokenEndpoint, {
+			method: "POST",
+			headers: { "Content-Type": "application/x-www-form-urlencoded" },
+			body: new URLSearchParams({
+				grant_type: "authorization_code",
+				code,
+				redirect_uri: redirectUri,
+				client_id: clientMetadataUrl,
+				client_assertion_type: CLIENT_ASSERTION_TYPE,
+				client_assertion: assertion,
+				code_verifier: PKCE_VERIFIER,
+			}).toString(),
+		});
+		return {
+			body: (await tokenResponse.json()) as Record<string, unknown>,
+			status: tokenResponse.status,
+			jwksUri,
+		};
+	}
 
 	it("exchanges an authorization code for an access token", async () => {
 		stubMetadataFetch(clientMetadataUrl, metadataDocument);
@@ -191,6 +327,152 @@ describe("CIMD - token exchange flow", async () => {
 		expect(typeof body.access_token).toBe("string");
 		expect(body.token_type).toBe("Bearer");
 		expect(typeof body.expires_in).toBe("number");
+	});
+
+	it("authenticates an uppercase URL client_id with a same-origin jwks_uri", async () => {
+		const uppercaseClientMetadataUrl =
+			"HTTPS://key-client.example.com/client-metadata.json";
+		const jwksUri = "https://key-client.example.com/.well-known/jwks.json";
+		const keyId = "uppercase-url-client-key";
+		const { privateKey, publicKey } = (await crypto.subtle.generateKey(
+			{
+				name: "RSASSA-PKCS1-v1_5",
+				modulusLength: 2048,
+				publicExponent: new Uint8Array([1, 0, 1]),
+				hash: "SHA-256",
+			},
+			true,
+			["sign", "verify"],
+		)) as CryptoKeyPair;
+		const privateKeyJwk = await crypto.subtle.exportKey("jwk", privateKey);
+		const publicKeyJwk = await crypto.subtle.exportKey("jwk", publicKey);
+		const privateKeyRedirectUri = "http://localhost:5106/callback";
+		const originalFetch = globalThis.fetch.bind(globalThis);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+				const requested =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				if (requested === uppercaseClientMetadataUrl) {
+					return Promise.resolve(
+						new Response(
+							JSON.stringify({
+								client_id: uppercaseClientMetadataUrl,
+								client_name: "Uppercase URL Client",
+								redirect_uris: [privateKeyRedirectUri],
+								token_endpoint_auth_method: "private_key_jwt",
+								application_type: "native",
+								grant_types: ["authorization_code"],
+								response_types: ["code"],
+								jwks_uri: jwksUri,
+							}),
+							{
+								status: 200,
+								headers: { "content-type": "application/json" },
+							},
+						),
+					);
+				}
+				if (requested === jwksUri) {
+					return Promise.resolve(
+						new Response(
+							JSON.stringify({
+								keys: [
+									{
+										...publicKeyJwk,
+										kid: keyId,
+										alg: "RS256",
+										use: "sig",
+									},
+								],
+							}),
+							{
+								status: 200,
+								headers: { "content-type": "application/json" },
+							},
+						),
+					);
+				}
+				return originalFetch(input, init);
+			}),
+		);
+
+		const { headers } = await signInWithTestUser();
+		const authedClient = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: { customFetchImpl, headers },
+		});
+		const code = await extractAuthorizationCode(
+			authedClient,
+			buildAuthorizeUrl(
+				authServerBaseUrl,
+				uppercaseClientMetadataUrl,
+				privateKeyRedirectUri,
+			),
+		);
+		const tokenEndpoint = `${authServerBaseUrl}/api/auth/oauth2/token`;
+		const assertion = await signPrivateKeyJwtClientAssertion({
+			clientId: uppercaseClientMetadataUrl,
+			tokenEndpoint,
+			privateKeyJwk,
+			kid: keyId,
+			algorithm: "RS256",
+		});
+
+		const tokenResponse = await fetch(tokenEndpoint, {
+			method: "POST",
+			headers: { "Content-Type": "application/x-www-form-urlencoded" },
+			body: new URLSearchParams({
+				grant_type: "authorization_code",
+				code,
+				redirect_uri: privateKeyRedirectUri,
+				client_id: uppercaseClientMetadataUrl,
+				client_assertion_type: CLIENT_ASSERTION_TYPE,
+				client_assertion: assertion,
+				code_verifier: PKCE_VERIFIER,
+			}).toString(),
+		});
+
+		expect(tokenResponse.status).toBe(200);
+		const body = (await tokenResponse.json()) as Record<string, unknown>;
+		expect(typeof body.access_token).toBe("string");
+		const discoveryFetchUrls = fetchClientMetadataResource.mock.calls.map(
+			([input]) =>
+				typeof input === "string"
+					? input
+					: input instanceof URL
+						? input.href
+						: input.url,
+		);
+		expect(discoveryFetchUrls).toContain(uppercaseClientMetadataUrl);
+		expect(discoveryFetchUrls).toContain(jwksUri);
+	});
+
+	it.each([
+		"redirected",
+		"wrong-mime",
+		"oversized",
+	] as const)("rejects a %s discovery-owned JWKS response", async (responseKind) => {
+		const result = await exchangeWithUnsafeJwksResponse(responseKind);
+		expect(
+			fetchClientMetadataResource.mock.calls.some(([input]) => {
+				const requestedUrl =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				return requestedUrl === result.jwksUri;
+			}),
+		).toBe(true);
+		expect(result).toMatchObject({
+			status: expect.toSatisfy((status: number) => status >= 400),
+		});
 	});
 
 	it("returns user claims from /oauth2/userinfo with a CIMD-issued access token", async () => {
@@ -317,11 +599,15 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 		client_name: "Refresh Preserve Test Client",
 		redirect_uris: [redirectUri],
 		token_endpoint_auth_method: "none",
-		grant_types: ["authorization_code"],
+		application_type: "native",
+		grant_types: ["authorization_code", "client_credentials"],
 		response_types: ["code"],
 	};
+	const onClientRefreshed = vi.fn(() => {
+		throw new Error("notification sink unavailable");
+	});
 
-	// refreshRate: 0 makes every request stale, so the refresh path fires
+	// metadataRevalidationInterval: 0 makes every request stale, so the refresh path fires
 	// on the second authorize hit — giving us a deterministic way to test
 	// what refresh does (or does not) write.
 	const {
@@ -335,10 +621,25 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				scopes: ["openid", "profile", "email", "offline_access"],
+				scopes: [
+					"openid",
+					"profile",
+					"email",
+					"offline_access",
+					"service:read",
+				],
+				clientPrivileges: ({ action }) =>
+					action === "update" ||
+					action === "configure-client-credentials-scopes",
 				silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 			}),
-			cimd({ refreshRate: 0 }),
+			cimd({
+				metadataRevalidationInterval: 0,
+				metadataFetchPolicy: { minimumFetchInterval: 0 },
+				fetchClientMetadataResource: (input, init) =>
+					globalThis.fetch(input, init),
+				onClientRefreshed,
+			}),
 		],
 	});
 
@@ -356,8 +657,30 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 		vi.unstubAllGlobals();
 	});
 
-	it("preserves admin-set `disabled`, `skipConsent`, and `enableEndSession` across a stale refresh", async () => {
-		stubMetadataFetch(clientMetadataUrl, metadataDocument);
+	it("preserves server-owned flags and client_credentials scope authority across a stale refresh", async () => {
+		const { publicKey } = (await crypto.subtle.generateKey(
+			{ name: "ECDSA", namedCurve: "P-256" },
+			true,
+			["sign", "verify"],
+		)) as CryptoKeyPair;
+		const publicKeyJwk = await crypto.subtle.exportKey("jwk", publicKey);
+		stubMetadataFetch(clientMetadataUrl, {
+			...metadataDocument,
+			clientCredentialsScopes: ["admin"],
+			client_credentials_scopes: ["admin"],
+			name: "Ignored internal alias",
+			token_endpoint_auth_method: "private_key_jwt",
+			jwks: {
+				keys: [
+					{
+						...publicKeyJwk,
+						kid: "refresh-preserve-key",
+						alg: "ES256",
+						use: "sig",
+					},
+				],
+			},
+		});
 
 		const { headers } = await signInWithTestUser();
 		const authedClient = createAuthClient({
@@ -379,8 +702,29 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 		);
 		expect(redirect).toContain("/consent");
 
-		// Admin flips all three protected flags directly via the adapter.
-		const ctx = await (authorizationServer as any).$context;
+		// A discovered declaration never grants machine-to-machine scopes.
+		const ctx = await authorizationServer.$context;
+		const discovered = await ctx.adapter.findOne<SchemaClient<Scope[]>>({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientMetadataUrl }],
+		});
+		expect(discovered?.clientCredentialsScopes).toEqual([]);
+
+		// The administrative route is the only supported way to assign the
+		// server-owned M2M ceiling on this unowned discovered client.
+		const scopeUpdate = await authorizationServer.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: clientMetadataUrl,
+				update: {
+					client_credentials_scopes: ["service:read"],
+				},
+			},
+		});
+		expect(scopeUpdate.client_credentials_scopes).toEqual(["service:read"]);
+
+		// Admin-set lifecycle flags are modeled separately and remain protected
+		// from metadata refresh as before.
 		await ctx.adapter.update({
 			model: "oauthClient",
 			where: [{ field: "clientId", value: clientMetadataUrl }],
@@ -391,15 +735,18 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 			},
 		});
 
-		const afterAdmin = await ctx.adapter.findOne({
+		const afterAdmin = await ctx.adapter.findOne<SchemaClient<Scope[]>>({
 			model: "oauthClient",
 			where: [{ field: "clientId", value: clientMetadataUrl }],
 		});
-		expect(afterAdmin.disabled).toBe(true);
-		expect(afterAdmin.skipConsent).toBe(true);
-		expect(afterAdmin.enableEndSession).toBe(true);
+		expect(afterAdmin).toMatchObject({
+			disabled: true,
+			skipConsent: true,
+			enableEndSession: true,
+			clientCredentialsScopes: ["service:read"],
+		});
 
-		// Second authorize must trigger a stale refresh (refreshRate: 0).
+		// Second authorize must trigger a stale refresh (metadataRevalidationInterval: 0).
 		// The document does NOT carry any of these flags, so preservation is
 		// the only way they survive.
 		await authedClient.$fetch(
@@ -407,17 +754,37 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 			{ method: "GET", onError() {} },
 		);
 
-		const afterRefresh = await ctx.adapter.findOne({
+		const afterRefresh = await ctx.adapter.findOne<SchemaClient<Scope[]>>({
 			model: "oauthClient",
 			where: [{ field: "clientId", value: clientMetadataUrl }],
 		});
-		expect(afterRefresh.disabled).toBe(true);
-		expect(afterRefresh.skipConsent).toBe(true);
-		expect(afterRefresh.enableEndSession).toBe(true);
+		expect(afterRefresh).toMatchObject({
+			disabled: true,
+			skipConsent: true,
+			enableEndSession: true,
+			clientCredentialsScopes: ["service:read"],
+		});
+		expect(onClientRefreshed).toHaveBeenCalledWith(
+			expect.objectContaining({
+				client: expect.objectContaining({
+					clientId: clientMetadataUrl,
+				}),
+				previousClient: expect.objectContaining({
+					disabled: true,
+					skipConsent: true,
+					enableEndSession: true,
+					clientCredentialsScopes: ["service:read"],
+				}),
+				clientMetadataDocument: expect.objectContaining({
+					client_id: clientMetadataUrl,
+				}),
+				context: expect.any(Object),
+			}),
+		);
 	});
 });
 
-describe("CIMD - allowFetch gate", async () => {
+describe("CIMD - metadata document URL policy", async () => {
 	const port = 3104;
 	const authServerBaseUrl = `http://localhost:${port}`;
 	const blockedClientUrl = "https://blocked.example.com/client-metadata.json";
@@ -427,8 +794,10 @@ describe("CIMD - allowFetch gate", async () => {
 
 	const allowedDocument = {
 		client_id: allowedClientUrl,
+		client_name: "Allowed Fetch Client",
 		redirect_uris: [redirectUriAllowed],
 		token_endpoint_auth_method: "none",
+		application_type: "native",
 	};
 
 	const {
@@ -446,7 +815,10 @@ describe("CIMD - allowFetch gate", async () => {
 				silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 			}),
 			cimd({
-				allowFetch: (url) => new URL(url).hostname === "allowed.example.com",
+				fetchClientMetadataResource: (input, init) =>
+					globalThis.fetch(input, init),
+				isMetadataDocumentUrlAllowed: (url) =>
+					new URL(url).hostname === "allowed.example.com",
 			}),
 		],
 	});
@@ -465,7 +837,7 @@ describe("CIMD - allowFetch gate", async () => {
 		vi.unstubAllGlobals();
 	});
 
-	it("rejects a URL blocked by allowFetch before the fetch runs", async () => {
+	it("rejects a URL blocked by isMetadataDocumentUrlAllowed before the fetch runs", async () => {
 		const fetchSpy = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>
 			globalThis.fetch.call(globalThis, input, init),
 		);
@@ -507,7 +879,7 @@ describe("CIMD - allowFetch gate", async () => {
 		expect(metadataFetches).toHaveLength(0);
 	});
 
-	it("allows a URL permitted by allowFetch", async () => {
+	it("allows a URL permitted by isMetadataDocumentUrlAllowed", async () => {
 		stubMetadataFetch(allowedClientUrl, allowedDocument);
 
 		const { headers } = await signInWithTestUser();

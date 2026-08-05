@@ -1,9 +1,14 @@
 import { auth } from "@/lib/auth";
-import { getSCIMDemoBaseURL, isSCIMDemoEnabled } from "@/lib/scim-demo";
+import {
+	getSCIMDemoBaseURL,
+	isSCIMDemoEmployeePortalEnabled,
+} from "@/lib/scim-demo";
+import { resolveSCIMDemoEmployeePortalIdentityForFlow } from "@/lib/scim-demo-employee";
 import {
 	getSCIMDemoOIDCAuthorizationPageURL,
 	getSCIMDemoOIDCAuthorizationView,
 	getSCIMDemoOIDCError,
+	getSCIMDemoOIDCLoginHint,
 	issueSCIMDemoOIDCAuthorizationCode,
 } from "@/lib/scim-demo-oidc";
 
@@ -26,16 +31,34 @@ function oauthError(error: unknown) {
 }
 
 export async function GET(request: Request) {
-	if (!isSCIMDemoEnabled()) {
+	if (!isSCIMDemoEmployeePortalEnabled()) {
 		return Response.json({ error: "not_found" }, { status: 404 });
 	}
-	const view = await getSCIMDemoOIDCAuthorizationView(
-		new URL(request.url).searchParams,
+	const context = await auth.$context;
+	const searchParams = new URL(request.url).searchParams;
+	const identity = await resolveSCIMDemoEmployeePortalIdentityForFlow(
+		context.adapter,
+		context.internalAdapter,
+		request.headers.get("cookie"),
+		getSCIMDemoOIDCLoginHint(searchParams),
 	);
+	if (!identity) {
+		return Response.json(
+			{ error: "access_denied", error_description: "Sign-in is unavailable" },
+			{ status: 400, headers: { "cache-control": "no-store" } },
+		);
+	}
+	const view = await getSCIMDemoOIDCAuthorizationView(searchParams, identity);
 	if (view.status === "invalid") {
 		return Response.json(
-			{ error: "invalid_request", error_description: view.message },
-			{ status: 400, headers: { "cache-control": "no-store" } },
+			{
+				error: view.error.code,
+				error_description: view.error.message,
+			},
+			{
+				status: view.error.status,
+				headers: { "cache-control": "no-store" },
+			},
 		);
 	}
 	return Response.redirect(
@@ -45,7 +68,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-	if (!isSCIMDemoEnabled()) {
+	if (!isSCIMDemoEmployeePortalEnabled()) {
 		return Response.json({ error: "not_found" }, { status: 404 });
 	}
 	if (request.headers.get("origin") !== getSCIMDemoBaseURL()) {
@@ -60,13 +83,22 @@ export async function POST(request: Request) {
 	const form = new URLSearchParams(await request.text());
 	try {
 		const context = await auth.$context;
+		const identity = await resolveSCIMDemoEmployeePortalIdentityForFlow(
+			context.adapter,
+			context.internalAdapter,
+			request.headers.get("cookie"),
+			getSCIMDemoOIDCLoginHint(form),
+		);
+		if (!identity) {
+			return Response.json(
+				{ error: "access_denied", error_description: "Sign-in is unavailable" },
+				{ status: 400, headers: { "cache-control": "no-store" } },
+			);
+		}
 		const callback = await issueSCIMDemoOIDCAuthorizationCode(
 			context.internalAdapter,
 			form,
-			{
-				workspaceId: form.get("workspace_id") ?? "",
-				userKey: form.get("user_key") ?? "",
-			},
+			identity,
 		);
 		return Response.redirect(callback, 303);
 	} catch (error) {

@@ -142,7 +142,7 @@ New features start with discussion. Open a [feature request](https://github.com/
 ### Security Reports
 
 Do not open a public issue for security vulnerabilities.
-Email [security@better-auth.com](mailto:security@better-auth.com) instead.
+Report them via [GitHub Security Advisories](https://github.com/better-auth/better-auth/security/advisories/new) instead.
 See [SECURITY.md](/SECURITY.md) for details.
 
 ## Pull Request Guidelines

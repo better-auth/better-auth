@@ -83,7 +83,7 @@ const bootCodeFlowHarness = async (
 	invalidateResourceCache();
 
 	const authServerBaseUrl = "http://localhost:3000";
-	const rpBaseUrl = "http://localhost:5000";
+	const rpBaseUrl = "https://rp.example.com";
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 	const state = "state-123";
@@ -894,6 +894,7 @@ describe("JWT access tokens emit RFC 9068 §2.2.3 `client_id` claim", () => {
 			scopes: ["read"],
 			resources: [resource],
 			enforcePerClientResources: false,
+			clientPrivileges: () => true,
 			silenceWarnings,
 		} as OAuthOptions<Scope[]>;
 		const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance(
@@ -918,6 +919,7 @@ describe("JWT access tokens emit RFC 9068 §2.2.3 `client_id` claim", () => {
 			body: {
 				scope: "read",
 				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read"],
 				redirect_uris: ["https://client.example.com/callback"],
 			},
 		});

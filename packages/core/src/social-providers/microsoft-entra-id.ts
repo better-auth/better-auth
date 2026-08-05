@@ -187,7 +187,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 	return {
 		id: "microsoft",
 		name: "Microsoft EntraID",
-		accountSubject: ({ profile }) => profile.sub,
+		accountSubject: ({ profile }) => profile.oid,
 		accountIssuer: ({ profile }) => profile.iss,
 		createAuthorizationURL(data) {
 			// Microsoft Entra supports public clients (SPA / native apps with
@@ -279,33 +279,41 @@ export const microsoft = (options: MicrosoftOptions) => {
 				return null;
 			}
 			const user = decodeJwt(token.idToken) as MicrosoftEntraIDProfile;
+			if (typeof user.oid !== "string" || user.oid.trim().length === 0) {
+				logger.error(
+					"Microsoft Entra ID token did not include a valid oid claim; unable to resolve a stable account identifier.",
+				);
+				return null;
+			}
 			const profilePhotoSize = options.profilePhotoSize || 48;
-			await betterFetch<ArrayBuffer>(
-				`https://graph.microsoft.com/v1.0/me/photos/${profilePhotoSize}x${profilePhotoSize}/$value`,
-				{
-					headers: {
-						Authorization: `Bearer ${token.accessToken}`,
+			if (!options.disableProfilePhoto && token.accessToken) {
+				await betterFetch<ArrayBuffer>(
+					`https://graph.microsoft.com/v1.0/me/photos/${profilePhotoSize}x${profilePhotoSize}/$value`,
+					{
+						headers: {
+							Authorization: `Bearer ${token.accessToken}`,
+						},
+						async onResponse(context) {
+							if (!context.response.ok) {
+								return;
+							}
+							try {
+								const response = context.response.clone();
+								const pictureBuffer = await response.arrayBuffer();
+								const pictureBase64 = base64.encode(pictureBuffer);
+								user.picture = `data:image/jpeg;base64, ${pictureBase64}`;
+							} catch (e) {
+								logger.error(
+									e && typeof e === "object" && "name" in e
+										? (e.name as string)
+										: "",
+									e,
+								);
+							}
+						},
 					},
-					async onResponse(context) {
-						if (options.disableProfilePhoto || !context.response.ok) {
-							return;
-						}
-						try {
-							const response = context.response.clone();
-							const pictureBuffer = await response.arrayBuffer();
-							const pictureBase64 = base64.encode(pictureBuffer);
-							user.picture = `data:image/jpeg;base64, ${pictureBase64}`;
-						} catch (e) {
-							logger.error(
-								e && typeof e === "object" && "name" in e
-									? (e.name as string)
-									: "",
-								e,
-							);
-						}
-					},
-				},
-			);
+				);
+			}
 			const userMap = await options.mapProfileToUser?.(user);
 			// Microsoft Entra ID does NOT include email_verified claim by default.
 			// It must be configured as an optional claim in the app registration.

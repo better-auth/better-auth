@@ -7,6 +7,7 @@ import type { SCIMUser } from "./persistence";
 
 const PATCH_OP_SCHEMA =
 	"urn:ietf:params:scim:api:messages:2.0:PatchOp" as const;
+const SCIM_MEDIA_TYPE = "application/scim+json";
 
 function createTestContext() {
 	const data = {
@@ -21,6 +22,7 @@ function createTestContext() {
 		scimGroupMember: [] as { id: string }[],
 		scimProjectionGrant: [] as { id: string }[],
 	};
+	let identityResolutionCount = 0;
 	const auth = betterAuth({
 		baseURL: "http://localhost:3000",
 		database: memoryAdapter(data),
@@ -38,6 +40,12 @@ function createTestContext() {
 						],
 					},
 				],
+				identity: {
+					resolveUser() {
+						identityResolutionCount += 1;
+						return { action: "create" };
+					},
+				},
 			}),
 		],
 	});
@@ -46,6 +54,7 @@ function createTestContext() {
 		auth,
 		data,
 		headers: { authorization: "Bearer test-scim-token" },
+		getIdentityResolutionCount: () => identityResolutionCount,
 	};
 }
 
@@ -187,7 +196,7 @@ describe("SCIM User PATCH provider compatibility", () => {
 		expect(persisted.user.email).toBe("shared@example.com");
 	});
 
-	it("adds a missing work email and treats a missing filtered removal as a no-op", async () => {
+	it("creates a missing work email for add and replace and treats a missing filtered removal as a no-op", async () => {
 		const { auth, data, headers } = createTestContext();
 		const created = await auth.api.createSCIMUser({
 			body: {
@@ -235,29 +244,39 @@ describe("SCIM User PATCH provider compatibility", () => {
 			},
 			headers,
 		});
+		await auth.api.patchSCIMUser({
+			params: { userId: created.id },
+			body: {
+				schemas: [PATCH_OP_SCHEMA],
+				Operations: [
+					{
+						op: "replace",
+						path: 'emails[type eq "work"].value',
+						value: "replacement@example.com",
+					},
+				],
+			},
+			headers,
+		});
+		const withReplacedWorkEmail = await auth.api.getSCIMUser({
+			params: { userId: created.id },
+			headers,
+		});
+		expect(withReplacedWorkEmail.emails).toEqual([
+			{ value: "home@example.com", type: "home", primary: true },
+			{ value: "replacement@example.com", type: "work", primary: false },
+		]);
+
+		await auth.api.patchSCIMUser({
+			params: { userId: created.id },
+			body: {
+				schemas: [PATCH_OP_SCHEMA],
+				Operations: [{ op: "remove", path: 'emails[type eq "work"].value' }],
+			},
+			headers,
+		});
 		const updatedAtAfterRemoval = getPersistedUser(data, created.id).scimUser
 			.updatedAt;
-		await expect(
-			auth.api.patchSCIMUser({
-				params: { userId: created.id },
-				body: {
-					schemas: [PATCH_OP_SCHEMA],
-					Operations: [
-						{
-							op: "replace",
-							path: 'emails[type eq "work"].value',
-							value: "replacement@example.com",
-						},
-					],
-				},
-				headers,
-			}),
-		).rejects.toThrowError(
-			expect.objectContaining({
-				statusCode: 400,
-				body: expect.objectContaining({ scimType: "noTarget" }),
-			}),
-		);
 		await auth.api.patchSCIMUser({
 			params: { userId: created.id },
 			body: {
@@ -269,6 +288,86 @@ describe("SCIM User PATCH provider compatibility", () => {
 		expect(getPersistedUser(data, created.id).scimUser.updatedAt).toEqual(
 			updatedAtAfterRemoval,
 		);
+	});
+
+	it("adds, replaces, and removes a non-work typed email through the filtered path", async () => {
+		const { auth, headers } = createTestContext();
+		const created = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "home-email@example.com",
+				emails: [
+					{
+						value: "work@example.com",
+						type: "work",
+						primary: true,
+					},
+				],
+			},
+			headers,
+		});
+
+		await auth.api.patchSCIMUser({
+			params: { userId: created.id },
+			body: {
+				schemas: [PATCH_OP_SCHEMA],
+				Operations: [
+					{
+						op: "add",
+						path: 'emails[type eq "home"].value',
+						value: "home@example.com",
+					},
+				],
+			},
+			headers,
+		});
+		const withHomeEmail = await auth.api.getSCIMUser({
+			params: { userId: created.id },
+			headers,
+		});
+		expect(withHomeEmail.emails).toEqual([
+			{ value: "work@example.com", type: "work", primary: true },
+			{ value: "home@example.com", type: "home", primary: false },
+		]);
+
+		await auth.api.patchSCIMUser({
+			params: { userId: created.id },
+			body: {
+				schemas: [PATCH_OP_SCHEMA],
+				Operations: [
+					{
+						op: "replace",
+						path: 'emails[type eq "home"].value',
+						value: "home-updated@example.com",
+					},
+				],
+			},
+			headers,
+		});
+		const withReplacedHomeEmail = await auth.api.getSCIMUser({
+			params: { userId: created.id },
+			headers,
+		});
+		expect(withReplacedHomeEmail.emails).toEqual([
+			{ value: "work@example.com", type: "work", primary: true },
+			{ value: "home-updated@example.com", type: "home", primary: false },
+		]);
+
+		await auth.api.patchSCIMUser({
+			params: { userId: created.id },
+			body: {
+				schemas: [PATCH_OP_SCHEMA],
+				Operations: [{ op: "remove", path: 'emails[type eq "home"].value' }],
+			},
+			headers,
+		});
+		const finalResource = await auth.api.getSCIMUser({
+			params: { userId: created.id },
+			headers,
+		});
+		expect(finalResource.emails).toEqual([
+			{ value: "work@example.com", type: "work", primary: true },
+		]);
 	});
 
 	it("appends email tuples and treats duplicate additions as a no-op", async () => {
@@ -390,6 +489,104 @@ describe("SCIM User PATCH provider compatibility", () => {
 		);
 	});
 
+	it("rejects duplicate email types atomically across HTTP PATCH shapes", async () => {
+		const { auth, data, getIdentityResolutionCount, headers } =
+			createTestContext();
+		const created = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "patch-type-collision@example.com",
+				emails: [
+					{
+						value: "home@example.com",
+						type: "home",
+						primary: true,
+					},
+					{ value: "work@example.com", type: "work" },
+				],
+			},
+			headers,
+		});
+		const resourceURL = `http://localhost:3000/api/auth/scim/v2/Users/${encodeURIComponent(
+			created.id,
+		)}`;
+		const resourceBefore = await auth.api.getSCIMUser({
+			params: { userId: created.id },
+			headers,
+		});
+		const persistedBefore = getPersistedUser(data, created.id);
+		const serializedAttributesBefore =
+			persistedBefore.scimUser.serializedAttributes;
+		const backingUserBefore = { ...persistedBefore.user };
+		const callbackCountBefore = getIdentityResolutionCount();
+		const operationSets = [
+			[
+				{
+					op: "add",
+					path: "emails",
+					value: [{ value: "second-work@example.com", type: "Work" }],
+				},
+			],
+			[
+				{
+					op: "replace",
+					path: "emails",
+					value: [
+						{
+							value: "home@example.com",
+							type: "home",
+							primary: true,
+						},
+						{ value: "first-work@example.com", type: "Work" },
+						{ value: "second-work@example.com", type: "work" },
+					],
+				},
+			],
+			[
+				{
+					op: "add",
+					value: {
+						emails: [{ value: "pathless-work@example.com", type: "Work" }],
+					},
+				},
+			],
+		] as const;
+
+		for (const Operations of operationSets) {
+			const response = await auth.handler(
+				new Request(resourceURL, {
+					method: "PATCH",
+					headers: {
+						...headers,
+						accept: SCIM_MEDIA_TYPE,
+						"content-type": SCIM_MEDIA_TYPE,
+					},
+					body: JSON.stringify({
+						schemas: [PATCH_OP_SCHEMA],
+						Operations,
+					}),
+				}),
+			);
+
+			expect(response.status).toBe(400);
+			expect(await response.json()).toMatchObject({
+				scimType: "invalidValue",
+			});
+			expect(
+				await auth.api.getSCIMUser({
+					params: { userId: created.id },
+					headers,
+				}),
+			).toEqual(resourceBefore);
+			const persistedAfter = getPersistedUser(data, created.id);
+			expect(persistedAfter.scimUser.serializedAttributes).toBe(
+				serializedAttributesBefore,
+			);
+			expect(persistedAfter.user).toEqual(backingUserBefore);
+			expect(getIdentityResolutionCount()).toBe(callbackCountBefore);
+		}
+	});
+
 	it("rejects an email replacement with a duplicate type and value tuple", async () => {
 		const { auth, data, headers } = createTestContext();
 		const created = await auth.api.createSCIMUser({
@@ -404,10 +601,6 @@ describe("SCIM User PATCH provider compatibility", () => {
 					},
 					{
 						value: "work@example.com",
-						type: "work",
-					},
-					{
-						value: "other-work@example.com",
 						type: "work",
 					},
 				],
@@ -435,8 +628,8 @@ describe("SCIM User PATCH provider compatibility", () => {
 									type: "home",
 									primary: true,
 								},
-								{ value: "duplicate@example.com", type: "work" },
-								{ value: "duplicate@example.com", type: "work" },
+								{ value: "duplicate@example.com" },
+								{ value: "duplicate@example.com" },
 							],
 						},
 					],
@@ -456,16 +649,13 @@ describe("SCIM User PATCH provider compatibility", () => {
 		});
 		const persistedAfter = getPersistedUser(data, created.id);
 		expect(resourceAfter).toEqual(resourceBefore);
-		expect(persistedAfter.scimUser.serializedEmails).toBe(
-			persistedBefore.scimUser.serializedEmails,
+		expect(persistedAfter.scimUser.serializedAttributes).toBe(
+			persistedBefore.scimUser.serializedAttributes,
 		);
 		expect(persistedAfter.user.email).toBe(persistedBefore.user.email);
 	});
 
-	it.each([
-		"emails.value",
-		'emails[type eq "work"].value',
-	])("rejects %s replacements that collapse distinct email tuples", async (path) => {
+	it("rejects emails.value replacements that collapse distinct email tuples", async () => {
 		const { auth, headers } = createTestContext();
 		const created = await auth.api.createSCIMUser({
 			body: {
@@ -474,10 +664,9 @@ describe("SCIM User PATCH provider compatibility", () => {
 				emails: [
 					{
 						value: "primary-work@example.com",
-						type: "work",
 						primary: true,
 					},
-					{ value: "secondary-work@example.com", type: "work" },
+					{ value: "secondary-work@example.com" },
 				],
 			},
 			headers,
@@ -495,7 +684,7 @@ describe("SCIM User PATCH provider compatibility", () => {
 					Operations: [
 						{
 							op: "replace",
-							path,
+							path: "emails.value",
 							value: "collision@example.com",
 						},
 					],
@@ -590,6 +779,44 @@ describe("SCIM User PATCH provider compatibility", () => {
 			statusCode: 400,
 			body: expect.objectContaining({ scimType: "invalidPath" }),
 		});
+	});
+
+	it("rejects a PATCH attribute path with a trailing empty segment", async () => {
+		const { auth, headers } = createTestContext();
+		const created = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "path-trailing-dot@example.com",
+				name: { formatted: "Original Name" },
+			},
+			headers,
+		});
+
+		await expect(
+			auth.api.patchSCIMUser({
+				params: { userId: created.id },
+				body: {
+					schemas: [PATCH_OP_SCHEMA],
+					Operations: [
+						{
+							op: "replace",
+							path: "name.",
+							value: { formatted: "Unexpected Name" },
+						},
+					],
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			statusCode: 400,
+			body: expect.objectContaining({ scimType: "invalidPath" }),
+		});
+
+		const resource = await auth.api.getSCIMUser({
+			params: { userId: created.id },
+			headers,
+		});
+		expect(resource.name).toMatchObject({ formatted: "Original Name" });
 	});
 
 	it("atomically applies pathless object updates and removes externalId", async () => {
@@ -804,5 +1031,112 @@ describe("SCIM User PATCH provider compatibility", () => {
 				scimType: "mutability",
 			}),
 		});
+	});
+});
+
+describe("SCIM User compatibility with pre-serializedAttributes rows", () => {
+	it("serves GET, PUT, and PATCH for a scimUser row persisted before serializedAttributes existed", async () => {
+		const { auth, data, headers } = createTestContext();
+		const created = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "legacy.login@example.com",
+				name: {
+					formatted: "Legacy Employee",
+					givenName: "Legacy",
+					familyName: "Employee",
+				},
+				emails: [{ value: "legacy.primary@example.com", primary: true }],
+			},
+			headers,
+		});
+
+		function forgetSerializedAttributes() {
+			getPersistedUser(data, created.id).scimUser.serializedAttributes =
+				undefined;
+		}
+
+		forgetSerializedAttributes();
+		const retrieved = await auth.api.getSCIMUser({
+			params: { userId: created.id },
+			headers,
+		});
+		expect(retrieved).toMatchObject({
+			userName: "legacy.login@example.com",
+			name: {
+				formatted: "Legacy Employee",
+				givenName: "Legacy",
+				familyName: "Employee",
+			},
+			emails: [{ value: "legacy.primary@example.com", primary: true }],
+		});
+		expect(
+			getPersistedUser(data, created.id).scimUser.serializedAttributes,
+		).toBeFalsy();
+
+		forgetSerializedAttributes();
+		const replaced = await auth.api.replaceSCIMUser({
+			params: { userId: created.id },
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "legacy.login@example.com",
+				name: {
+					formatted: "Legacy Employee Renewed",
+					givenName: "Legacy",
+					familyName: "Employee",
+				},
+				emails: [{ value: "legacy.primary@example.com", primary: true }],
+			},
+			headers,
+		});
+		expect(replaced.name).toMatchObject({
+			formatted: "Legacy Employee Renewed",
+		});
+		expect(
+			getPersistedUser(data, created.id).scimUser.serializedAttributes,
+		).toBeTruthy();
+
+		forgetSerializedAttributes();
+		await auth.api.patchSCIMUser({
+			params: { userId: created.id },
+			body: {
+				schemas: [PATCH_OP_SCHEMA],
+				Operations: [{ op: "replace", path: "title", value: "Archivist" }],
+			},
+			headers,
+		});
+		const patchedResource = await auth.api.getSCIMUser({
+			params: { userId: created.id },
+			headers,
+		});
+		expect(patchedResource.title).toBe("Archivist");
+		expect(
+			getPersistedUser(data, created.id).scimUser.serializedAttributes,
+		).toBeTruthy();
+	});
+
+	/**
+	 * @see https://learn.microsoft.com/en-us/entra/identity/app-provisioning/use-scim-to-provision-users-and-groups
+	 */
+	it("accepts an empty Operations array as a no-op PATCH", async () => {
+		const { auth, headers } = createTestContext();
+		const created = await auth.api.createSCIMUser({
+			body: {
+				schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+				userName: "no-op-patch@example.com",
+				displayName: "No Op",
+			},
+			headers,
+		});
+
+		await auth.api.patchSCIMUser({
+			params: { userId: created.id },
+			body: { schemas: [PATCH_OP_SCHEMA], Operations: [] },
+			headers,
+		});
+
+		await expect(
+			auth.api.getSCIMUser({ params: { userId: created.id }, headers }),
+		).resolves.toMatchObject({ displayName: "No Op" });
 	});
 });

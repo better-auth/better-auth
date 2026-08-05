@@ -303,6 +303,7 @@ describe("oauth", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -754,6 +755,7 @@ describe("oauth", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -851,6 +853,7 @@ describe("oauth", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -1166,6 +1169,7 @@ describe("oauth - prompt", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 			},
 		});
 		expect(response?.client_id).toBeDefined();
@@ -1406,6 +1410,7 @@ describe("oauth - prompt", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 			},
 		});
 		if (!tempClient?.client_id || !tempClient.client_secret) {
@@ -2962,6 +2967,10 @@ describe("oauth - config", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
+						scopes: ["m2m:read"],
+						clientPrivileges: ({ action }) =>
+							action === "create" ||
+							action === "configure-client-credentials-scopes",
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
 							openidConfig: true,
@@ -2996,7 +3005,9 @@ describe("oauth - config", () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
+				client_credentials_scopes: ["m2m:read"],
 			},
 		});
 		expect(createdClient?.client_id).toBeDefined();
@@ -3080,6 +3091,7 @@ describe("oauth - config", () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -3186,6 +3198,7 @@ describe("oauth - config", () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -3302,6 +3315,7 @@ describe("oauth - config", () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				token_endpoint_auth_method: publicClient ? "none" : undefined,
 				skip_consent: true,
 			},
@@ -3622,6 +3636,10 @@ describe("oauth - rate limiting", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
+						scopes: ["m2m:read"],
+						clientPrivileges: ({ action }) =>
+							action === "create" ||
+							action === "configure-client-credentials-scopes",
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
 							openidConfig: true,
@@ -3644,6 +3662,8 @@ describe("oauth - rate limiting", () => {
 					"refresh_token",
 				],
 				redirect_uris: ["http://localhost:5000/callback"],
+				application_type: "native",
+				client_credentials_scopes: ["m2m:read"],
 			},
 		});
 
@@ -3687,6 +3707,10 @@ describe("oauth - rate limiting", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
+						scopes: ["m2m:read"],
+						clientPrivileges: ({ action }) =>
+							action === "create" ||
+							action === "configure-client-credentials-scopes",
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
 							openidConfig: true,
@@ -3709,6 +3733,8 @@ describe("oauth - rate limiting", () => {
 					"refresh_token",
 				],
 				redirect_uris: ["http://localhost:5000/callback"],
+				application_type: "native",
+				client_credentials_scopes: ["m2m:read"],
 			},
 		});
 

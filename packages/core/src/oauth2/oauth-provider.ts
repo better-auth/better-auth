@@ -229,6 +229,17 @@ export interface OAuthProvider<
 		| undefined;
 	revokeToken?: ((token: string) => Promise<void>) | undefined;
 	/**
+	 * Builds an OpenID Connect RP-Initiated Logout URL for this provider.
+	 * Returns `null` when provider logout is unavailable or disabled.
+	 */
+	createEndSessionURL?:
+		| ((data: {
+				idToken?: string | null | undefined;
+				postLogoutRedirectURI?: string | undefined;
+				state?: string | undefined;
+		  }) => Awaitable<URL | null>)
+		| undefined;
+	/**
 	 * Declarative id_token verification config consumed by the shared
 	 * `verifyProviderIdToken` verifier. Providers set this instead of implementing a boolean
 	 * verify method, which keeps verification centralized and fail-closed.

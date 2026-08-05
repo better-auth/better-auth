@@ -1,6 +1,6 @@
 {
   "name": "auth",
-  "version": "1.7.0-rc.2",
+  "version": "1.7.0-rc.4",
   "description": "The CLI for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -56,7 +56,7 @@
     "auth": "./dist/index.mjs"
   },
   "dependencies": {
-    "@babel/core": "^7.29.0",
+    "@babel/core": "^7.29.7",
     "@babel/preset-react": "^7.28.5",
     "@babel/preset-typescript": "^7.28.5",
     "@better-auth/core": "workspace:*",

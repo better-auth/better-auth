@@ -253,7 +253,7 @@ const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 			indexes: mergeTableIndexes(
 				[
 					{
-						fields: ["issuer", "providerAccountId"],
+						fields: ["issuer", "accountId"],
 						unique: true,
 					},
 				],
@@ -265,11 +265,10 @@ const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 					required: true,
 					fieldName: options.account?.fields?.issuer || "issuer",
 				},
-				providerAccountId: {
+				accountId: {
 					type: "string",
 					required: true,
-					fieldName:
-						options.account?.fields?.providerAccountId || "providerAccountId",
+					fieldName: options.account?.fields?.accountId || "accountId",
 				},
 				providerId: {
 					type: "string",

@@ -179,15 +179,27 @@ type HasRequiredKeysInUnion<T> = true extends (
 	? true
 	: false;
 
+type HasRequiredCtx<
+	C extends InputContext<any, any>,
+	FetchOptions extends ClientFetchOption,
+> =
+	IsAny<C["body"]> extends true
+		? HasRequiredKeysInUnion<InferCtx<C, FetchOptions>>
+		: undefined extends C["body"]
+			? HasRequiredKeysInUnion<InferCtxQuery<C, FetchOptions>>
+			: HasRequiredKeysInUnion<InferCtx<C, FetchOptions>>;
+
 export type InferCtx<
 	C extends InputContext<any, any>,
 	FetchOptions extends ClientFetchOption,
 > =
 	IsAny<C["body"]> extends true
 		? InferCtxQuery<C, FetchOptions>
-		: C["body"] extends Record<string, any>
-			? InferBodyCtx<C["body"], FetchOptions>
-			: InferCtxQuery<C, FetchOptions>;
+		: [NonNullable<C["body"]>] extends [never]
+			? InferCtxQuery<C, FetchOptions>
+			: NonNullable<C["body"]> extends Record<string, any>
+				? InferBodyCtx<NonNullable<C["body"]>, FetchOptions>
+				: InferCtxQuery<C, FetchOptions>;
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
 
@@ -219,9 +231,7 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 											C["params"]
 										>,
 									>(
-										...data: HasRequiredKeysInUnion<
-											InferCtx<C, FetchOptions>
-										> extends true
+										...data: HasRequiredCtx<C, FetchOptions> extends true
 											? [
 													PrettifyUnion<
 														T["path"] extends `/sign-up/email`

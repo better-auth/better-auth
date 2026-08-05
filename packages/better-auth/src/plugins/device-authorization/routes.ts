@@ -7,9 +7,65 @@ import { ms } from "../../utils/time";
 import type { DeviceAuthorizationOptions } from ".";
 import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
 import type { DeviceCode } from "./schema";
+import { DEVICE_AUTHORIZATION_CODE_MAX_LENGTH } from "./schema";
 
 /* cspell:disable-next-line */
 const defaultCharset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+function validateGeneratedCode(code: unknown, label: "device" | "user") {
+	if (typeof code !== "string") {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_request",
+			error_description: `Generated ${label} code must be a string`,
+		});
+	}
+	if (Array.from(code).length > DEVICE_AUTHORIZATION_CODE_MAX_LENGTH) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_request",
+			error_description: `Generated ${label} code must be at most ${DEVICE_AUTHORIZATION_CODE_MAX_LENGTH} characters`,
+		});
+	}
+	return code;
+}
+
+function serializeResource(resource: string | string[]): string {
+	return typeof resource === "string" ? resource : JSON.stringify(resource);
+}
+
+function parseStoredResource(
+	resource: string | null | undefined,
+): string | string[] | undefined {
+	if (!resource) return undefined;
+	if (!resource.startsWith("[")) return resource;
+	try {
+		const parsed: unknown = JSON.parse(resource);
+		if (
+			Array.isArray(parsed) &&
+			parsed.every((value): value is string => typeof value === "string")
+		) {
+			return parsed;
+		}
+	} catch {
+		// Treat legacy/unrecognized stored values as a single resource string.
+	}
+	return resource;
+}
+
+async function extractFormResources(
+	request: Request | undefined,
+): Promise<string[] | undefined> {
+	const contentType = request?.headers.get("content-type")?.toLowerCase() ?? "";
+	if (!request || !contentType.includes("application/x-www-form-urlencoded")) {
+		return undefined;
+	}
+	try {
+		const params = new URLSearchParams(await request.text());
+		if (!params.has("resource")) return undefined;
+		return params.getAll("resource").filter(Boolean);
+	} catch {
+		return undefined;
+	}
+}
 
 const deviceCodeBodySchema = z.object({
 	client_id: z.string().meta({
@@ -27,12 +83,27 @@ const deviceCodeBodySchema = z.object({
 			description: "Space-separated list of scopes",
 		})
 		.optional(),
+	resource: z
+		.union([z.string(), z.array(z.string())])
+		.meta({
+			description:
+				"RFC 8707 resource indicator(s) to bind to this authorization request",
+		})
+		.optional(),
 });
 
 const deviceCodeErrorSchema = z.object({
-	error: z.enum(["invalid_request", "invalid_client"]).meta({
-		description: "Error code",
-	}),
+	error: z
+		.enum([
+			"invalid_request",
+			"invalid_client",
+			"unauthorized_client",
+			"invalid_scope",
+			"invalid_target",
+		])
+		.meta({
+			description: "Error code",
+		}),
 	error_description: z.string().meta({
 		description: "Detailed error description",
 	}),
@@ -40,26 +111,31 @@ const deviceCodeErrorSchema = z.object({
 
 export const deviceCode = (opts: DeviceAuthorizationOptions) => {
 	const generateDeviceCode = async () => {
-		if (opts.generateDeviceCode) {
-			return opts.generateDeviceCode();
-		}
-		return defaultGenerateDeviceCode(opts.deviceCodeLength);
+		const code = opts.generateDeviceCode
+			? await opts.generateDeviceCode()
+			: defaultGenerateDeviceCode(opts.deviceCodeLength);
+		return validateGeneratedCode(code, "device");
 	};
 
 	const generateUserCode = async () => {
-		if (opts.generateUserCode) {
-			return opts.generateUserCode();
-		}
-		return defaultGenerateUserCode(opts.userCodeLength);
+		const code = opts.generateUserCode
+			? await opts.generateUserCode()
+			: defaultGenerateUserCode(opts.userCodeLength);
+		return validateGeneratedCode(code, "user");
 	};
 	return createAuthEndpoint(
 		"/device/code",
 		{
 			method: "POST",
+			cloneRequest: true,
 			body: deviceCodeBodySchema,
 			error: deviceCodeErrorSchema,
 			metadata: {
 				noStore: true,
+				allowedMediaTypes: [
+					"application/json",
+					"application/x-www-form-urlencoded",
+				],
 				openapi: {
 					description: `Request a device and user code
 
@@ -114,7 +190,13 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 										properties: {
 											error: {
 												type: "string",
-												enum: ["invalid_request", "invalid_client"],
+												enum: [
+													"invalid_request",
+													"invalid_client",
+													"unauthorized_client",
+													"invalid_scope",
+													"invalid_target",
+												],
 											},
 											error_description: {
 												type: "string",
@@ -129,6 +211,11 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			},
 		},
 		async (ctx) => {
+			const formResources = await extractFormResources(ctx.request);
+			if (formResources) {
+				ctx.body.resource =
+					formResources.length === 1 ? formResources[0] : formResources;
+			}
 			if (opts.validateClient) {
 				const isValid = await opts.validateClient(ctx.body.client_id);
 				if (!isValid) {
@@ -140,7 +227,11 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			}
 
 			if (opts.onDeviceAuthRequest) {
-				await opts.onDeviceAuthRequest(ctx.body.client_id, ctx.body.scope);
+				await opts.onDeviceAuthRequest(
+					ctx.body.client_id,
+					ctx.body.scope,
+					ctx.body.resource,
+				);
 			}
 
 			const deviceCode = await generateDeviceCode();
@@ -159,6 +250,9 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					pollingInterval: ms(opts.interval),
 					clientId: ctx.body.client_id,
 					scope: ctx.body.scope,
+					resource: ctx.body.resource
+						? serializeResource(ctx.body.resource)
+						: null,
 				},
 			});
 
@@ -528,6 +622,24 @@ export const deviceVerify = createAuthEndpoint(
 											enum: ["pending", "approved", "denied"],
 											description: "Current status of the device authorization",
 										},
+										client_id: {
+											type: "string",
+											description:
+												"The client requesting authorization, returned only to the authenticated user who owns this request",
+										},
+										scope: {
+											type: "string",
+											description:
+												"The requested scopes, returned only to the authenticated user who owns this request",
+										},
+										resource: {
+											oneOf: [
+												{ type: "string" },
+												{ type: "array", items: { type: "string" } },
+											],
+											description:
+												"The requested resource indicators, returned only to the authenticated user who owns this request",
+										},
 									},
 								},
 							},
@@ -589,9 +701,19 @@ export const deviceVerify = createAuthEndpoint(
 			}
 		}
 
+		const canReviewRequest =
+			session?.user.id !== undefined &&
+			deviceCodeRecord.userId === session.user.id;
 		return ctx.json({
 			user_code: user_code,
 			status: deviceCodeRecord.status,
+			...(canReviewRequest
+				? {
+						client_id: deviceCodeRecord.clientId,
+						scope: deviceCodeRecord.scope,
+						resource: parseStoredResource(deviceCodeRecord.resource),
+					}
+				: {}),
 		});
 	},
 );

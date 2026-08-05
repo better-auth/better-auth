@@ -180,6 +180,29 @@ export const createInternalAdapter = (
 		await secondaryStorage.delete(activeSessionsKey);
 	}
 
+	async function queueCachedUserSessionDeletion(
+		userId: string,
+		sessionReferences?: readonly ActiveSessionReference[],
+	) {
+		if (!secondaryStorage) return;
+
+		// Callers may capture the revocation set before destructive work because a
+		// replacement session created by a later hook must remain active.
+		const references =
+			sessionReferences ?? (await getActiveSessionReferences(userId));
+		await queueAfterTransactionHook(
+			() => deleteCachedUserSessions(userId, references),
+			{
+				onError(error) {
+					logger.error(
+						"Failed to delete committed user sessions from secondary storage",
+						error,
+					);
+				},
+			},
+		);
+	}
+
 	async function withVerificationConsumeLock<T>(
 		key: string,
 		fn: () => Promise<T>,
@@ -402,6 +425,7 @@ export const createInternalAdapter = (
 			return total;
 		},
 		deleteUser: async (userId: string) => {
+			const sessionReferences = await getActiveSessionReferences(userId);
 			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
 				await deleteManyWithHooks(
 					[
@@ -425,7 +449,7 @@ export const createInternalAdapter = (
 				undefined,
 			);
 
-			await deleteWithHooks(
+			const deletedUser = await deleteWithHooks(
 				[
 					{
 						field: "id",
@@ -435,6 +459,9 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
+			if (deletedUser !== null) {
+				await queueCachedUserSessionDeletion(userId, sessionReferences);
+			}
 		},
 		createSession: async (
 			userId: string,
@@ -665,7 +692,7 @@ export const createInternalAdapter = (
 								session: Session;
 								user: User;
 							};
-							if (!s) return [];
+							if (!s) continue;
 							const expiresAt = new Date(s.session.expiresAt);
 							if (options?.onlyActiveSessions && expiresAt <= new Date()) {
 								continue;
@@ -899,7 +926,7 @@ export const createInternalAdapter = (
 		/**
 		 * Delete an account by its primary key.
 		 *
-		 * @param id - The account row's primary key, not its providerAccountId.
+		 * @param id - The account row's primary key, not its accountId.
 		 */
 		deleteAccount: async (id: string) => {
 			await deleteWithHooks(
@@ -914,31 +941,23 @@ export const createInternalAdapter = (
 			);
 		},
 		deleteUserSessions: async (userId: string) => {
+			const sessionReferences = await getActiveSessionReferences(userId);
 			if (secondaryStorage) {
-				// Callers may create a replacement session before queued hooks run.
-				// Capture the revocation set now so that replacement remains active.
-				const sessionReferences = await getActiveSessionReferences(userId);
-				await queueAfterTransactionHook(
-					() => deleteCachedUserSessions(userId, sessionReferences),
-					{
-						onError(error) {
-							logger.error(
-								"Failed to delete committed user sessions from secondary storage",
-								error,
-							);
-						},
-					},
-				);
-
 				if (!options.session?.storeSessionInDatabase) {
+					await queueCachedUserSessionDeletion(userId, sessionReferences);
 					return;
 				}
 				if (ctx.options.session?.preserveSessionInDatabase) {
-					await endPreservedSessions([{ field: "userId", value: userId }]);
+					const endedSessions = await endPreservedSessions([
+						{ field: "userId", value: userId },
+					]);
+					if (endedSessions !== null) {
+						await queueCachedUserSessionDeletion(userId, sessionReferences);
+					}
 					return;
 				}
 			}
-			await deleteManyWithHooks(
+			const deletedSessions = await deleteManyWithHooks(
 				[
 					{
 						field: "userId",
@@ -948,6 +967,9 @@ export const createInternalAdapter = (
 				"session",
 				undefined,
 			);
+			if (deletedSessions !== null) {
+				await queueCachedUserSessionDeletion(userId, sessionReferences);
+			}
 		},
 		deleteSessions: async (sessionTokens: string[]) => {
 			if (secondaryStorage) {
@@ -980,7 +1002,7 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
-		findAccountOwnerByKey: async ({ issuer, providerAccountId }) => {
+		findAccountOwnerByKey: async ({ issuer, accountId }) => {
 			const accountWithUser = await (await getCurrentAdapter(adapter)).findOne<
 				Account & { user: User | null }
 			>({
@@ -991,8 +1013,8 @@ export const createInternalAdapter = (
 						value: issuer,
 					},
 					{
-						field: "providerAccountId",
-						value: providerAccountId,
+						field: "accountId",
+						value: accountId,
 					},
 				],
 				join: {
@@ -1135,7 +1157,7 @@ export const createInternalAdapter = (
 						value: createLocalAccountIssuer("credential"),
 					},
 					{
-						field: "providerAccountId",
+						field: "accountId",
 						value: userId,
 					},
 				],
@@ -1167,11 +1189,11 @@ export const createInternalAdapter = (
 						field: "issuer",
 						value: createLocalAccountIssuer("credential"),
 					},
-					{ field: "providerAccountId", value: userId },
+					{ field: "accountId", value: userId },
 				],
 			});
 		},
-		findAccountByKey: async ({ issuer, providerAccountId }) => {
+		findAccountByKey: async ({ issuer, accountId }) => {
 			const account = await (await getCurrentAdapter(adapter)).findOne<Account>(
 				{
 					model: "account",
@@ -1181,8 +1203,8 @@ export const createInternalAdapter = (
 							value: issuer,
 						},
 						{
-							field: "providerAccountId",
-							value: providerAccountId,
+							field: "accountId",
+							value: accountId,
 						},
 					],
 				},

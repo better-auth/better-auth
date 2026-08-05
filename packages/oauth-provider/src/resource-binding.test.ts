@@ -76,7 +76,11 @@ describe("oauth-provider resource indicator binding", async () => {
 	beforeAll(async () => {
 		oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
-			body: { redirect_uris: [redirectUri], skip_consent: true },
+			body: {
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: true,
+			},
 		});
 		expect(oauthClient?.client_id).toBeDefined();
 		expect(oauthClient?.client_secret).toBeDefined();

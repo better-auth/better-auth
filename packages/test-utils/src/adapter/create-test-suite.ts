@@ -523,7 +523,7 @@ export const createTestSuite = <
 						createdAt: randomDate,
 						updatedAt: new Date(),
 						issuer: createLocalAccountIssuer("test"),
-						providerAccountId: generateId(),
+						accountId: generateId(),
 						providerId: "test",
 						userId: generateId(),
 						accessToken: generateId(),

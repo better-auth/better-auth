@@ -518,7 +518,7 @@ describe("siwe", async () => {
 			expect.objectContaining({
 				providerId: "siwe",
 				issuer: "local:siwe",
-				providerAccountId: `${walletAddress}:${chainId}`,
+				accountId: `${walletAddress}:${chainId}`,
 			}),
 		);
 	});

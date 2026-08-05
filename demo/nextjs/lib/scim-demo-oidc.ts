@@ -10,21 +10,22 @@ import {
 } from "jose";
 import { getSCIMDemoBaseURL } from "./scim-demo.ts";
 import type { SCIMDemoUserKey } from "./scim-demo-catalog.ts";
+import { SCIM_DEMO_DIRECTORY_USERS } from "./scim-demo-catalog.ts";
+import type { SCIMDemoEmployeeIdentity } from "./scim-demo-employee.ts";
+import { SCIM_DEMO_CONNECTION_ID_CLAIM } from "./scim-demo-employee.ts";
 import {
-	isSCIMDemoUserKey,
-	SCIM_DEMO_DIRECTORY_USERS,
-} from "./scim-demo-catalog.ts";
-import {
-	createSCIMDemoUserEmail,
-	createSCIMDemoUserExternalId,
-	isSCIMDemoWorkspaceId,
-	parseSCIMDemoUserEmail,
-	verifySCIMDemoEmployeeAccessToken,
+	getSCIMDemoOIDCIssuer as getIdentityIssuer,
+	resolveSCIMDemoV2Subject,
+	SCIM_DEMO_OIDC_CLIENT_ID,
+	SCIM_DEMO_OIDC_ISSUER_PATH,
+	SCIM_DEMO_SSO_PROVIDER_ID,
 } from "./scim-demo-identity.ts";
 
-export const SCIM_DEMO_SSO_PROVIDER_ID = "scim-demo-sso";
-export const SCIM_DEMO_OIDC_CLIENT_ID = "scim-demo-client";
-export const SCIM_DEMO_OIDC_ISSUER_PATH = "/api/scim-demo/idp";
+export {
+	SCIM_DEMO_OIDC_CLIENT_ID,
+	SCIM_DEMO_OIDC_ISSUER_PATH,
+	SCIM_DEMO_SSO_PROVIDER_ID,
+};
 export const SCIM_DEMO_OIDC_AUTHORIZATION_PATH = `${SCIM_DEMO_OIDC_ISSUER_PATH}/authorize`;
 export const SCIM_DEMO_OIDC_TOKEN_PATH = `${SCIM_DEMO_OIDC_ISSUER_PATH}/token`;
 export const SCIM_DEMO_OIDC_JWKS_PATH = `${SCIM_DEMO_OIDC_ISSUER_PATH}/jwks`;
@@ -34,14 +35,17 @@ export const SCIM_DEMO_OIDC_AUTHORIZATION_PAGE_PATH =
 const SCIM_DEMO_OIDC_CODE_PREFIX = "scim-demo:oidc:code:";
 const SCIM_DEMO_OIDC_CODE_TTL_MS = 2 * 60 * 1_000;
 const SCIM_DEMO_OIDC_TOKEN_TTL_SECONDS = 5 * 60;
-const SCIM_DEMO_OIDC_LOGIN_HINT_SEPARATOR = "~";
+const SCIM_DEMO_OIDC_SCOPES = ["openid", "email", "profile"] as const;
+const SCIM_DEMO_OIDC_SCOPE_SET: ReadonlySet<string> = new Set(
+	SCIM_DEMO_OIDC_SCOPES,
+);
 const PKCE_VALUE_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/;
 
 export interface SCIMDemoOIDCAuthorizationRequest {
 	clientId: string;
 	codeChallenge: string;
 	codeChallengeMethod: "S256";
-	loginHint: string;
+	loginHint: string | null;
 	nonce: string | null;
 	redirectURI: string;
 	responseType: "code";
@@ -55,17 +59,21 @@ export interface SCIMDemoOIDCAuthorizationUser {
 	givenName: string;
 	initials: string;
 	userKey: SCIMDemoUserKey;
-	workspaceId: string;
+	connectionId: string;
 }
 
 export type SCIMDemoOIDCAuthorizationView =
 	| {
 			request: SCIMDemoOIDCAuthorizationRequest;
-			loginHintUser: SCIMDemoOIDCAuthorizationUser;
+			employee: SCIMDemoOIDCAuthorizationUser;
 			status: "ready";
 	  }
 	| {
-			message: string;
+			error: {
+				code: string;
+				message: string;
+				status: number;
+			};
 			status: "invalid";
 	  };
 
@@ -92,15 +100,17 @@ export interface SCIMDemoOIDCTokenResponse {
 	token_type: "Bearer";
 }
 
-interface SCIMDemoOIDCAuthorizationCode {
+export interface SCIMDemoOIDCAuthorizationCode {
 	clientId: string;
 	codeChallenge: string;
+	connectionId: string;
 	email: string;
 	name: string;
 	nonce: string | null;
 	redirectURI: string;
 	scope: string;
 	subject: string;
+	userKey: SCIMDemoUserKey;
 }
 
 type SCIMDemoOIDCError = Error & {
@@ -147,44 +157,20 @@ function readSearchParam(input: SCIMDemoOIDCSearchParams, name: string) {
 	return Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
 }
 
+/**
+ * Reads login_hint ahead of full request parsing so a route can resolve the
+ * exact link's portal identity before validating the rest of the request.
+ */
+export function getSCIMDemoOIDCLoginHint(
+	searchParams: SCIMDemoOIDCSearchParams,
+): string | null {
+	return readSearchParam(searchParams, "login_hint");
+}
+
 function getDirectoryUser(userKey: SCIMDemoUserKey) {
 	const user = SCIM_DEMO_DIRECTORY_USERS.find((entry) => entry.key === userKey);
 	if (!user) throw createOIDCError("Directory user not found", "access_denied");
 	return user;
-}
-
-export function createSCIMDemoOIDCLoginHint(
-	email: string,
-	accessToken: string,
-) {
-	return `${email}${SCIM_DEMO_OIDC_LOGIN_HINT_SEPARATOR}${accessToken}`;
-}
-
-function parseSCIMDemoOIDCLoginHint(value: string) {
-	const separatorIndex = value.lastIndexOf(SCIM_DEMO_OIDC_LOGIN_HINT_SEPARATOR);
-	if (separatorIndex <= 0) return null;
-	const accessToken = value.slice(separatorIndex + 1);
-	const identity = parseSCIMDemoUserEmail(value.slice(0, separatorIndex));
-	if (!identity || !accessToken || accessToken.length > 128) return null;
-	return { accessToken, identity };
-}
-
-async function resolveSCIMDemoOIDCLoginHint(value: string) {
-	const loginHint = parseSCIMDemoOIDCLoginHint(value);
-	if (
-		!loginHint ||
-		!(await verifySCIMDemoEmployeeAccessToken(
-			loginHint.accessToken,
-			loginHint.identity.workspaceId,
-			loginHint.identity.userKey,
-		))
-	) {
-		throw createOIDCError(
-			"The demo employee sign-in link is invalid",
-			"access_denied",
-		);
-	}
-	return loginHint.identity;
 }
 
 function parseAuthorizationRequest(
@@ -215,14 +201,31 @@ function parseAuthorizationRequest(
 	if (redirectURI !== getSCIMDemoOIDCRedirectURI()) {
 		throw createOIDCError("Invalid OAuth redirect URI", "invalid_request");
 	}
-	if (!scope || !scope.split(/\s+/).includes("openid")) {
+	const requestedScopes = scope?.split(/\s+/) ?? [];
+	if (!requestedScopes.includes("openid")) {
 		throw createOIDCError("The openid scope is required", "invalid_scope");
+	}
+	if (
+		requestedScopes.some(
+			(requestedScope) => !SCIM_DEMO_OIDC_SCOPE_SET.has(requestedScope),
+		)
+	) {
+		throw createOIDCError(
+			"An unsupported scope was requested",
+			"invalid_scope",
+		);
 	}
 	if (!state || state.length > 2_048) {
 		throw createOIDCError("A valid OAuth state is required", "invalid_request");
 	}
 	if (nonce && nonce.length > 2_048) {
 		throw createOIDCError("The OAuth nonce is too long", "invalid_request");
+	}
+	if (loginHint && loginHint.length > 2_048) {
+		throw createOIDCError(
+			"The OAuth login_hint is too long",
+			"invalid_request",
+		);
 	}
 	if (!codeChallenge || !PKCE_VALUE_PATTERN.test(codeChallenge)) {
 		throw createOIDCError(
@@ -233,46 +236,53 @@ function parseAuthorizationRequest(
 	if (codeChallengeMethod !== "S256") {
 		throw createOIDCError("PKCE S256 is required", "invalid_request");
 	}
-	if (!loginHint || !parseSCIMDemoOIDCLoginHint(loginHint)) {
-		throw createOIDCError(
-			"Choose a provisioned demo employee before continuing",
-			"login_required",
-		);
-	}
 	return {
 		clientId,
 		codeChallenge,
 		codeChallengeMethod,
-		loginHint,
+		loginHint: loginHint || null,
 		nonce: nonce || null,
 		redirectURI,
 		responseType,
-		scope,
+		scope: SCIM_DEMO_OIDC_SCOPES.filter((supportedScope) =>
+			requestedScopes.includes(supportedScope),
+		).join(" "),
 		state,
 	};
 }
 
 export async function getSCIMDemoOIDCAuthorizationView(
 	searchParams: SCIMDemoOIDCSearchParams,
+	identity: SCIMDemoEmployeeIdentity,
 ): Promise<SCIMDemoOIDCAuthorizationView> {
 	try {
 		const request = parseAuthorizationRequest(searchParams);
-		const identity = await resolveSCIMDemoOIDCLoginHint(request.loginHint);
 		const user = getDirectoryUser(identity.userKey);
+		if (
+			(await resolveSCIMDemoV2Subject(
+				identity.connectionId,
+				identity.subject,
+			)) !== identity.userKey
+		) {
+			throw createOIDCError(
+				"The demo employee portal session is invalid",
+				"access_denied",
+			);
+		}
 		return {
 			status: "ready",
 			request,
-			loginHintUser: {
+			employee: {
 				displayName: user.displayName,
-				email: createSCIMDemoUserEmail(identity.workspaceId, identity.userKey),
+				email: identity.email,
 				givenName: user.givenName,
 				initials: user.initials,
 				userKey: identity.userKey,
-				workspaceId: identity.workspaceId,
+				connectionId: identity.connectionId,
 			},
 		};
 	} catch (error) {
-		return { status: "invalid", message: getSCIMDemoOIDCError(error).message };
+		return { status: "invalid", error: getSCIMDemoOIDCError(error) };
 	}
 }
 
@@ -303,12 +313,12 @@ export function getSCIMDemoOIDCAuthorizationFormFields(
 		code_challenge: request.codeChallenge,
 		code_challenge_method: request.codeChallengeMethod,
 		nonce: request.nonce ?? "",
-		login_hint: request.loginHint,
+		login_hint: request.loginHint ?? "",
 	} as const;
 }
 
 export function getSCIMDemoOIDCIssuer() {
-	return `${getSCIMDemoBaseURL()}${SCIM_DEMO_OIDC_ISSUER_PATH}`;
+	return getIdentityIssuer();
 }
 
 export function getSCIMDemoOIDCRedirectURI() {
@@ -316,10 +326,10 @@ export function getSCIMDemoOIDCRedirectURI() {
 }
 
 export function getSCIMDemoOIDCClientSecret() {
-	const value = process.env.SCIM_DEMO_OIDC_CLIENT_SECRET;
-	if (!value) {
+	const value = process.env.SCIM_DEMO_OIDC_CLIENT_SECRET?.trim();
+	if (!value || value.length < 32) {
 		throw new Error(
-			"SCIM_DEMO_OIDC_CLIENT_SECRET is required when the SCIM demo is enabled",
+			"SCIM_DEMO_OIDC_CLIENT_SECRET must contain at least 32 characters",
 		);
 	}
 	return value;
@@ -336,7 +346,7 @@ export function getSCIMDemoOIDCProvider() {
 			clientSecret: getSCIMDemoOIDCClientSecret(),
 			discoveryEndpoint: `${issuer}/.well-known/openid-configuration`,
 			pkce: true,
-			scopes: ["openid", "email", "profile"],
+			scopes: [...SCIM_DEMO_OIDC_SCOPES],
 			tokenEndpointAuthentication: "client_secret_post" as const,
 		},
 	};
@@ -353,10 +363,17 @@ export function getSCIMDemoOIDCDiscoveryDocument() {
 		grant_types_supported: ["authorization_code"],
 		subject_types_supported: ["public"],
 		id_token_signing_alg_values_supported: ["RS256"],
-		scopes_supported: ["openid", "email", "profile"],
+		scopes_supported: [...SCIM_DEMO_OIDC_SCOPES],
 		token_endpoint_auth_methods_supported: ["client_secret_post"],
 		code_challenge_methods_supported: ["S256"],
-		claims_supported: ["sub", "email", "email_verified", "name", "nonce"],
+		claims_supported: [
+			"sub",
+			"email",
+			"email_verified",
+			"name",
+			"nonce",
+			SCIM_DEMO_CONNECTION_ID_CLAIM,
+		],
 	};
 }
 
@@ -469,39 +486,33 @@ export async function getSCIMDemoOIDCJWKS() {
 export async function issueSCIMDemoOIDCAuthorizationCode(
 	store: Pick<SCIMDemoOIDCAuthorizationCodeStore, "createVerificationValue">,
 	searchParams: SCIMDemoOIDCSearchParams,
-	selection: { userKey: string; workspaceId: string },
+	identity: SCIMDemoEmployeeIdentity,
 ) {
 	const request = parseAuthorizationRequest(searchParams);
 	if (
-		!isSCIMDemoUserKey(selection.userKey) ||
-		!isSCIMDemoWorkspaceId(selection.workspaceId)
-	) {
-		throw createOIDCError("Invalid demo employee selection", "access_denied");
-	}
-	const hintedIdentity = await resolveSCIMDemoOIDCLoginHint(request.loginHint);
-	if (
-		hintedIdentity.workspaceId !== selection.workspaceId ||
-		hintedIdentity.userKey !== selection.userKey
+		(await resolveSCIMDemoV2Subject(
+			identity.connectionId,
+			identity.subject,
+		)) !== identity.userKey
 	) {
 		throw createOIDCError(
-			"The selected employee does not match this sign-in request",
+			"The demo employee portal session is invalid",
 			"access_denied",
 		);
 	}
-	const user = getDirectoryUser(selection.userKey);
+	const user = getDirectoryUser(identity.userKey);
 	const authorizationCode = crypto.randomUUID();
 	const record: SCIMDemoOIDCAuthorizationCode = {
 		clientId: request.clientId,
 		codeChallenge: request.codeChallenge,
-		email: createSCIMDemoUserEmail(selection.workspaceId, selection.userKey),
+		connectionId: identity.connectionId,
+		email: identity.email,
 		name: user.displayName,
 		nonce: request.nonce,
 		redirectURI: request.redirectURI,
 		scope: request.scope,
-		subject: createSCIMDemoUserExternalId(
-			selection.workspaceId,
-			selection.userKey,
-		),
+		subject: identity.subject,
+		userKey: identity.userKey,
 	};
 	await store.createVerificationValue({
 		identifier: `${SCIM_DEMO_OIDC_CODE_PREFIX}${authorizationCode}`,
@@ -524,12 +535,14 @@ function isAuthorizationCode(
 	return (
 		typeof record.clientId === "string" &&
 		typeof record.codeChallenge === "string" &&
+		typeof record.connectionId === "string" &&
 		typeof record.email === "string" &&
 		typeof record.name === "string" &&
 		(record.nonce === null || typeof record.nonce === "string") &&
 		typeof record.redirectURI === "string" &&
 		typeof record.scope === "string" &&
-		typeof record.subject === "string"
+		typeof record.subject === "string" &&
+		SCIM_DEMO_DIRECTORY_USERS.some((user) => user.key === record.userKey)
 	);
 }
 
@@ -625,6 +638,7 @@ export async function exchangeSCIMDemoOIDCAuthorizationCode(
 
 	const { privateKey, publicJWK } = await getSigningKeys();
 	const idToken = await new SignJWT({
+		[SCIM_DEMO_CONNECTION_ID_CLAIM]: record.connectionId,
 		email: record.email,
 		email_verified: true,
 		name: record.name,
