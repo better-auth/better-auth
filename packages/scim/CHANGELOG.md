@@ -1,5 +1,11 @@
 # @better-auth/scim
 
+## 1.7.0-rc.4
+
+### Minor Changes
+
+- [#10682](https://github.com/better-auth/better-auth/pull/10682) [`8b96573`](https://github.com/better-auth/better-auth/commit/8b96573d78b8d114b83d2484ba94bb1f608e15e0) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SCIM PATCH operations that target filtered multi-valued attributes (`phoneNumbers`, `addresses`, `roles`, `entitlements`, `emails`) now create the value when the filter matches nothing instead of rejecting the request with a `noTarget` error. Microsoft Entra ID sends these operations for attributes that are not populated yet, and the rejection also discarded every other operation bundled in the same PATCH request.
+
 ## 1.7.0-rc.3
 
 ### Minor Changes

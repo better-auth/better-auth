@@ -1,5 +1,11 @@
 # @better-auth/expo
 
+## 1.7.0-rc.4
+
+### Minor Changes
+
+- [#10438](https://github.com/better-auth/better-auth/pull/10438) [`44e04d4`](https://github.com/better-auth/better-auth/commit/44e04d4bbe0d3bb9860265fc88bba835974cbd77) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent Expo apps from crashing synchronously when iOS Keychain storage is unavailable by using asynchronous SecureStore access. `getCookie()` now returns a promise, custom storage implementations must provide both synchronous and asynchronous SecureStore methods, and `storageAdapter.setItem()` is synchronous, so use `setItemAsync()` when the write must be awaited.
+
 ## 1.7.0-rc.3
 
 ### Patch Changes
