@@ -225,9 +225,27 @@ export function authorizationCodeGrantId(authorizationCodeId: string) {
 	);
 }
 
+export const DEFAULT_ACCESS_TOKEN_EXPIRES_IN = 3600;
+
+/**
+ * The configured lifetime where no grant is in scope to resolve one against.
+ *
+ * A resolver can only be evaluated with a grant, so on these paths a configured
+ * function is treated as "not a static value" and the default applies. Both callers
+ * are reached with an already-computed `exp` during a normal grant, so this is the
+ * fallback for direct callers rather than the usual path.
+ */
+export function staticAccessTokenExpiresIn(
+	opts: OAuthOptions<Scope[]>,
+): number {
+	return typeof opts.accessTokenExpiresIn === "number"
+		? opts.accessTokenExpiresIn
+		: DEFAULT_ACCESS_TOKEN_EXPIRES_IN;
+}
+
 /** How long a grant's revocation mark lasts, before its one-second margin. */
 export function grantRevocationWindowMs(opts: OAuthOptions<Scope[]>) {
-	return (opts.accessTokenExpiresIn ?? 3600) * 1000;
+	return staticAccessTokenExpiresIn(opts) * 1000;
 }
 
 /**
