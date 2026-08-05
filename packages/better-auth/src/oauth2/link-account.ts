@@ -89,7 +89,7 @@ export async function handleOAuthUserInfo(
 				};
 			}
 			try {
-				await c.context.internalAdapter.linkAccount({
+				const newlyLinkedAccount = await c.context.internalAdapter.linkAccount({
 					providerId: account.providerId,
 					accountId: userInfo.id.toString(),
 					userId: dbUser.user.id,
@@ -100,6 +100,14 @@ export async function handleOAuthUserInfo(
 					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 					scope: account.scope,
 				});
+				// Stateless `storeAccountCookie` mode: path 3 (existing user, new
+				// provider link) must persist tokens to the account_data cookie the
+				// same way paths 1 (new user) and 2 (already linked) do. Without
+				// this, getAccessToken permanently fails with ACCOUNT_NOT_FOUND
+				// after the session is created. (#10690)
+				if (c.context.options.account?.storeAccountCookie && newlyLinkedAccount) {
+					await setAccountCookie(c, newlyLinkedAccount);
+				}
 			} catch (e) {
 				c.context.logger.error("Unable to link account", e);
 				return {
