@@ -196,7 +196,7 @@ describe("SCIM User PATCH provider compatibility", () => {
 		expect(persisted.user.email).toBe("shared@example.com");
 	});
 
-	it("adds a missing work email and treats a missing filtered removal as a no-op", async () => {
+	it("creates a missing work email for add and replace and treats a missing filtered removal as a no-op", async () => {
 		const { auth, data, headers } = createTestContext();
 		const created = await auth.api.createSCIMUser({
 			body: {
@@ -244,29 +244,39 @@ describe("SCIM User PATCH provider compatibility", () => {
 			},
 			headers,
 		});
+		await auth.api.patchSCIMUser({
+			params: { userId: created.id },
+			body: {
+				schemas: [PATCH_OP_SCHEMA],
+				Operations: [
+					{
+						op: "replace",
+						path: 'emails[type eq "work"].value',
+						value: "replacement@example.com",
+					},
+				],
+			},
+			headers,
+		});
+		const withReplacedWorkEmail = await auth.api.getSCIMUser({
+			params: { userId: created.id },
+			headers,
+		});
+		expect(withReplacedWorkEmail.emails).toEqual([
+			{ value: "home@example.com", type: "home", primary: true },
+			{ value: "replacement@example.com", type: "work", primary: false },
+		]);
+
+		await auth.api.patchSCIMUser({
+			params: { userId: created.id },
+			body: {
+				schemas: [PATCH_OP_SCHEMA],
+				Operations: [{ op: "remove", path: 'emails[type eq "work"].value' }],
+			},
+			headers,
+		});
 		const updatedAtAfterRemoval = getPersistedUser(data, created.id).scimUser
 			.updatedAt;
-		await expect(
-			auth.api.patchSCIMUser({
-				params: { userId: created.id },
-				body: {
-					schemas: [PATCH_OP_SCHEMA],
-					Operations: [
-						{
-							op: "replace",
-							path: 'emails[type eq "work"].value',
-							value: "replacement@example.com",
-						},
-					],
-				},
-				headers,
-			}),
-		).rejects.toThrowError(
-			expect.objectContaining({
-				statusCode: 400,
-				body: expect.objectContaining({ scimType: "noTarget" }),
-			}),
-		);
 		await auth.api.patchSCIMUser({
 			params: { userId: created.id },
 			body: {
