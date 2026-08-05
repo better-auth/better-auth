@@ -485,6 +485,9 @@
       "plugins/device-authorization": [
         "./dist/plugins/device-authorization/index.d.mts"
       ],
+      "plugins/mcp": [
+        "./dist/plugins/mcp/index.d.mts"
+      ],
       "plugins/mcp/client": [
         "./dist/plugins/mcp/client/index.d.mts"
       ],
