@@ -2010,6 +2010,146 @@ describe("oauth token - config", async () => {
 		expect(tokens.error?.status).toBeUndefined();
 		expect(tokens.data?.access_token).toBeDefined();
 	});
+
+	/**
+	 * Run one authorization_code grant and return the issued tokens.
+	 */
+	async function authorizationCodeTokens(
+		oauthProviderConfig?: Omit<
+			OAuthOptions<Scope[]>,
+			"loginPage" | "consentPage"
+		>,
+	) {
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig,
+		});
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			clientId: oauthClient?.client_id!,
+			clientSecret: oauthClient?.client_secret,
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const url = new URL(callbackRedirectUrl);
+		const tokens = await client.oauth2.token(
+			{
+				code: url.searchParams.get("code")!,
+				code_verifier: codeVerifier,
+				grant_type: "authorization_code",
+				// Requesting the audience yields a JWT access token, so the tests below
+				// can read `exp`/`iat` back off the token itself and not only trust
+				// `expires_in` in the response body.
+				resource: validAudience,
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				redirect_uri: redirectUri,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		return { client, oauthClient, tokens };
+	}
+
+	it("accessTokenExpiresIn - a number keeps its existing behaviour", async () => {
+		const { tokens } = await authorizationCodeTokens({
+			accessTokenExpiresIn: 7200,
+		});
+		expect(tokens.data?.expires_in).toBe(7200);
+		const accessToken = decodeJwt(tokens.data?.access_token ?? "");
+		expect((accessToken.exp ?? 0) - (accessToken.iat ?? 0)).toBe(7200);
+	});
+
+	it("accessTokenExpiresIn - a function decides the lifetime per grant", async () => {
+		const { tokens } = await authorizationCodeTokens({
+			accessTokenExpiresIn: () => 1800,
+		});
+		expect(tokens.data?.expires_in).toBe(1800);
+		const accessToken = decodeJwt(tokens.data?.access_token ?? "");
+		expect((accessToken.exp ?? 0) - (accessToken.iat ?? 0)).toBe(1800);
+	});
+
+	it("accessTokenExpiresIn - an async function is awaited", async () => {
+		const { tokens } = await authorizationCodeTokens({
+			accessTokenExpiresIn: async () => {
+				await new Promise((resolve) => setTimeout(resolve, 1));
+				return 900;
+			},
+		});
+		expect(tokens.data?.expires_in).toBe(900);
+	});
+
+	it("accessTokenExpiresIn - the resolver receives the validated grant", async () => {
+		let seen: {
+			userId?: string;
+			clientId?: string;
+			scopes?: string[];
+			grantType?: string;
+		} = {};
+		const { oauthClient } = await authorizationCodeTokens({
+			accessTokenExpiresIn: ({ user, client, scopes, grantType }) => {
+				seen = {
+					userId: user?.id,
+					clientId: client?.clientId,
+					scopes,
+					grantType,
+				};
+				return 1200;
+			},
+		});
+		expect(seen.userId).toBeDefined();
+		expect(seen.clientId).toBe(oauthClient?.client_id);
+		expect(seen.scopes).toContain("openid");
+		expect(seen.grantType).toBe("authorization_code");
+	});
+
+	// A resolver is trusted to throw, but never trusted to return a sane number:
+	// anything that is not finite and positive falls back to the 1 hour default
+	// rather than to a longer lifetime.
+	it.for([
+		{ label: "zero", value: 0 },
+		{ label: "negative", value: -60 },
+		{ label: "NaN", value: Number.NaN },
+		{ label: "Infinity", value: Number.POSITIVE_INFINITY },
+	])(
+		"accessTokenExpiresIn - $label result falls back to the default",
+		async ({ value }) => {
+			const { tokens } = await authorizationCodeTokens({
+				accessTokenExpiresIn: () => value,
+			});
+			expect(tokens.data?.expires_in).toBe(3600);
+		},
+	);
+
+	it("accessTokenExpiresIn - a function does not affect client_credentials", async () => {
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				accessTokenExpiresIn: () => 60,
+				m2mAccessTokenExpiresIn: 7200,
+			},
+		});
+		const tokens = await client.oauth2.token(
+			{
+				grant_type: "client_credentials",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				scope: "read:profile",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(tokens.data?.expires_in).toBe(7200);
+	});
 });
 
 describe("oauth token - client secret validation", async () => {

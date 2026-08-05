@@ -85,7 +85,7 @@ async function createJwtAccessToken(
 	},
 ) {
 	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
-	const exp = overrides?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
+	const exp = overrides?.exp ?? iat + staticAccessTokenExpiresIn(opts);
 	const customClaims = opts.customAccessTokenClaims
 		? await opts.customAccessTokenClaims({
 				user,
@@ -247,7 +247,7 @@ async function createOpaqueAccessToken(
 	refreshId?: string,
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
-	const exp = payload?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
+	const exp = payload?.exp ?? iat + staticAccessTokenExpiresIn(opts);
 	const token = opts.generateOpaqueAccessToken
 		? await opts.generateOpaqueAccessToken()
 		: generateRandomString(32, "A-Z", "a-z");
@@ -471,6 +471,62 @@ interface CreateUserTokensParams {
 	verificationValue?: VerificationValue;
 }
 
+const DEFAULT_ACCESS_TOKEN_EXPIRES_IN = 3600;
+
+/**
+ * The configured lifetime where no grant is in scope to resolve one against.
+ *
+ * A resolver can only be evaluated with a grant, so on these paths a configured
+ * function is treated as "not a static value" and the default applies. Both callers
+ * are reached with an already-computed `exp` during a normal grant, so this is the
+ * fallback for direct callers rather than the usual path.
+ */
+function staticAccessTokenExpiresIn(opts: OAuthOptions<Scope[]>): number {
+	return typeof opts.accessTokenExpiresIn === "number"
+		? opts.accessTokenExpiresIn
+		: DEFAULT_ACCESS_TOKEN_EXPIRES_IN;
+}
+
+/**
+ * Resolve the user access-token lifetime for a single grant.
+ *
+ * A number behaves exactly as before. A function is evaluated with the grant context
+ * the provider has already validated, never with anything taken from the request body,
+ * so a client cannot lengthen its own token by asking.
+ *
+ * The resolver is trusted to throw — a throw propagates and denies the token, which is
+ * the fail-closed outcome — but it is not trusted to return a sane number. A
+ * non-finite or non-positive result falls back to the default rather than to a longer
+ * lifetime, so a buggy resolver can never widen the window it was added to narrow.
+ */
+async function resolveUserAccessTokenExpiresIn(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: {
+		user: User;
+		client: SchemaClient<Scope[]>;
+		scopes: string[];
+		grantType: GrantType | undefined;
+	},
+): Promise<number> {
+	const configured = opts.accessTokenExpiresIn;
+	if (typeof configured !== "function") {
+		return configured ?? DEFAULT_ACCESS_TOKEN_EXPIRES_IN;
+	}
+	const resolved = await configured({
+		ctx,
+		user: params.user,
+		client: params.client,
+		scopes: params.scopes,
+		grantType: params.grantType,
+	});
+	return typeof resolved === "number" &&
+		Number.isFinite(resolved) &&
+		resolved > 0
+		? Math.floor(resolved)
+		: DEFAULT_ACCESS_TOKEN_EXPIRES_IN;
+}
+
 async function createUserTokens(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -491,7 +547,12 @@ async function createUserTokens(
 
 	const iat = Math.floor(Date.now() / 1000);
 	const baseExpiry = user
-		? (opts.accessTokenExpiresIn ?? 3600)
+		? await resolveUserAccessTokenExpiresIn(ctx, opts, {
+				user,
+				client,
+				scopes,
+				grantType,
+			})
 		: (opts.m2mAccessTokenExpiresIn ?? 3600);
 	const defaultExp = iat + baseExpiry;
 	const exp = opts.scopeExpirations

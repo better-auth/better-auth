@@ -1059,7 +1059,7 @@ The callback receives the grant type, user (undefined for `client_credentials`),
 
 Each token type and grant type can independently can set a default expiration.
 
-* `accessTokenExpiresIn` defaults 1 hour
+* `accessTokenExpiresIn` defaults 1 hour (also accepts a function, see [Per-grant access token expiration](#per-grant-access-token-expiration))
 * `m2mAccessTokenExpiresIn` defaults 1 hour
 * `idTokenExpiresIn` defaults 10 hours
 * `refreshTokenExpiresIn` defaults 30 days
@@ -1075,6 +1075,25 @@ oauthProvider({
   },
 })
 ```
+
+#### Per-grant access token expiration
+
+`accessTokenExpiresIn` also accepts a function, evaluated each time a user grant is issued. Use this when the lifetime is a property of the individual connection rather than of the whole process — for example when a consent screen lets the approver choose how long the connection's access token should live.
+
+```ts title="auth.ts"
+oauthProvider({
+  accessTokenExpiresIn: async ({ user, client, scopes, grantType }) => {
+    const choice = await getConsentedLifetime(user.id, client.clientId);
+    return choice ?? 3600;
+  },
+})
+```
+
+The function receives only values the provider has already validated — the authenticated `user`, the authenticated `client`, the granted `scopes`, the `grantType`, and the endpoint `ctx`. Nothing from the token request body is passed, so a client cannot obtain a longer token by asking for one.
+
+It must return a finite, positive number of seconds. Any other result falls back to the 1 hour default rather than to a longer lifetime, so a faulty resolver cannot widen the window. Throwing propagates and denies the token.
+
+Client credentials grants are unaffected and continue to use `m2mAccessTokenExpiresIn`. `scopeExpirations` still applies on top, so the earliest expiration wins.
 
 ### Registration
 
