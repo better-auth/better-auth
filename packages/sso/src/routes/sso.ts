@@ -1541,6 +1541,7 @@ async function handleOIDCCallback(
 		emailVerified?: boolean;
 	} & Record<string, unknown>;
 	let userInfo: OIDCUserInfo | null = null;
+	let claims: Record<string, unknown> = {};
 	const mapping = config.mapping || {};
 	const readStringClaim = (
 		claims: Record<string, unknown>,
@@ -1621,6 +1622,7 @@ async function handleOIDCCallback(
 			);
 		}
 		rawProfile = rawUserInfo;
+		claims = rawUserInfo;
 		userInfo = {
 			...Object.fromEntries(
 				Object.entries(mapping.extraFields || {}).map(([key, value]) => [
@@ -1640,6 +1642,7 @@ async function handleOIDCCallback(
 		};
 	} else if (verifiedIdToken) {
 		const idToken = verifiedIdToken.payload;
+		claims = idToken;
 		rawProfile = idToken;
 		userInfo = {
 			...Object.fromEntries(
@@ -1851,6 +1854,7 @@ async function handleOIDCCallback(
 			email: userInfoEmail,
 			emailVerified: Boolean(userInfo.emailVerified),
 			rawAttributes: userInfo,
+			claims,
 		},
 		provider,
 		token: tokenResponse,

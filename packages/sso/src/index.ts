@@ -52,6 +52,9 @@ export {
 import type {
 	InferSSOProvider,
 	OIDCConfig,
+	OrganizationProvisioningOptions,
+	OrganizationProvisioningRole,
+	OrganizationRoleResolverData,
 	SAMLConfig,
 	SAMLIdentityProviderMetadata,
 	SSOOIDCUserResolutionInput,
@@ -71,6 +74,9 @@ import { PACKAGE_VERSION } from "./version";
 
 export type {
 	OIDCConfig,
+	OrganizationProvisioningOptions,
+	OrganizationProvisioningRole,
+	OrganizationRoleResolverData,
 	SAMLConfig,
 	SAMLIdentityProviderMetadata,
 	SSOOIDCUserResolutionInput,

@@ -1,18 +1,12 @@
 import type { GenericEndpointContext, OAuth2Tokens, User } from "better-auth";
-import type { SSOOptions, SSOProvider } from "../types";
+import type {
+	OrganizationProvisioningOptions,
+	OrganizationRoleResolverData,
+	SSOOptions,
+	SSOProvider,
+} from "../types";
 import { domainMatches } from "../utils";
 import type { NormalizedSSOProfile } from "./types";
-
-export interface OrganizationProvisioningOptions {
-	disabled?: boolean;
-	defaultRole?: string;
-	getRole?: (data: {
-		user: User & Record<string, any>;
-		userInfo: Record<string, any>;
-		token?: OAuth2Tokens;
-		provider: SSOProvider<SSOOptions>;
-	}) => Promise<string>;
-}
 
 export interface AssignOrganizationFromProviderOptions {
 	user: User;
@@ -30,7 +24,7 @@ export async function assignOrganizationFromProvider(
 	ctx: GenericEndpointContext,
 	options: AssignOrganizationFromProviderOptions,
 ): Promise<void> {
-	const { user, profile, provider, token, provisioningOptions } = options;
+	const { user, provider, provisioningOptions } = options;
 
 	if (!provider.organizationId) {
 		return;
@@ -44,7 +38,10 @@ export async function assignOrganizationFromProvider(
 		return;
 	}
 
-	const isAlreadyMember = await ctx.context.adapter.findOne({
+	const existingMember = await ctx.context.adapter.findOne<{
+		id: string;
+		role: string;
+	}>({
 		model: "member",
 		where: [
 			{ field: "organizationId", value: provider.organizationId },
@@ -52,18 +49,39 @@ export async function assignOrganizationFromProvider(
 		],
 	});
 
-	if (isAlreadyMember) {
+	if (existingMember) {
+		if (!shouldSyncRoleOnLogin(provisioningOptions)) {
+			return;
+		}
+		const role = await resolveOrganizationRole(options);
+		if (existingMember.role === role) {
+			return;
+		}
+		const creatorRole =
+			ctx.context.getPlugin("organization")?.options?.creatorRole || "owner";
+		const removesCreatorRole =
+			roleIncludes(existingMember.role, creatorRole) &&
+			!roleIncludes(role, creatorRole);
+		if (removesCreatorRole) {
+			ctx.context.logger.warn(
+				"Skipped SSO organization role sync because automatic synchronization cannot remove a creator role",
+				{
+					memberId: existingMember.id,
+					organizationId: provider.organizationId,
+					providerId: provider.providerId,
+				},
+			);
+			return;
+		}
+		await ctx.context.adapter.update({
+			model: "member",
+			where: [{ field: "id", value: existingMember.id }],
+			update: { role },
+		});
 		return;
 	}
 
-	const role = provisioningOptions?.getRole
-		? await provisioningOptions.getRole({
-				user,
-				userInfo: profile.rawAttributes || {},
-				token,
-				provider,
-			})
-		: provisioningOptions?.defaultRole || "member";
+	const role = await resolveOrganizationRole(options);
 
 	await ctx.context.adapter.create({
 		model: "member",
@@ -173,4 +191,53 @@ export async function assignOrganizationByDomain(
 			createdAt: new Date(),
 		},
 	});
+}
+
+async function resolveOrganizationRole(
+	options: AssignOrganizationFromProviderOptions,
+) {
+	const { user, profile, provider, token, provisioningOptions } = options;
+	const resolverData: OrganizationRoleResolverData = {
+		user,
+		userInfo: profile.rawAttributes || {},
+		claims: profile.claims || profile.rawAttributes || {},
+		token,
+		provider,
+	};
+	if (provisioningOptions?.mapClaimsToRoles) {
+		return provisioningOptions.mapClaimsToRoles(resolverData);
+	}
+	if (provisioningOptions?.getRole) {
+		return provisioningOptions.getRole({
+			...resolverData,
+			userInfo: getLegacyRoleUserInfo(profile),
+		});
+	}
+	return provisioningOptions?.defaultRole || "member";
+}
+
+function getLegacyRoleUserInfo(profile: NormalizedSSOProfile) {
+	if (profile.providerType === "saml") {
+		return profile.claims || profile.rawAttributes || {};
+	}
+	return profile.rawAttributes || {};
+}
+
+function shouldSyncRoleOnLogin(
+	provisioningOptions?: OrganizationProvisioningOptions,
+) {
+	if (!provisioningOptions?.mapClaimsToRoles && !provisioningOptions?.getRole) {
+		return false;
+	}
+	return (
+		provisioningOptions.syncRoleOnLogin ??
+		Boolean(provisioningOptions.mapClaimsToRoles)
+	);
+}
+
+function roleIncludes(role: string, targetRole: string) {
+	return role
+		.split(",")
+		.map((entry) => entry.trim())
+		.includes(targetRole);
 }

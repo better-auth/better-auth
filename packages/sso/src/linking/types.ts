@@ -7,4 +7,5 @@ export interface NormalizedSSOProfile {
 	name?: string;
 	image?: string;
 	rawAttributes?: Record<string, unknown>;
+	claims?: Record<string, unknown>;
 }
