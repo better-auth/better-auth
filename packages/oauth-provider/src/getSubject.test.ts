@@ -384,6 +384,7 @@ describe("custom subject (getSubject)", async () => {
 
 describe("custom subject skips client_credentials", async () => {
 	const machineScope = "m2m:read";
+	const getSubjectCalls: string[] = [];
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
@@ -404,8 +405,10 @@ describe("custom subject skips client_credentials", async () => {
 					shouldRedirect: async () => false,
 					consentReferenceId: async () => "AAA",
 				},
-				getSubject: ({ userId, referenceId }) =>
-					referenceId ? `mem-${referenceId}` : userId,
+				getSubject: ({ userId, referenceId }) => {
+					getSubjectCalls.push(userId);
+					return referenceId ? `mem-${referenceId}` : userId;
+				},
 			}),
 		],
 	});
@@ -454,6 +457,40 @@ describe("custom subject skips client_credentials", async () => {
 		expect(accessToken.sub).toBe(machineClient!.client_id);
 		expect(accessToken.sub).not.toBe("mem-AAA");
 		expect(accessToken).not.toHaveProperty(resolvedSubjectClaim);
+	});
+
+	it("does not invoke getSubject when introspecting a client_credentials token", async () => {
+		// There is no resource owner, so the hook must not be handed the client
+		// id as if it were a user id.
+		const tokens = await client.oauth2.token(
+			{
+				grant_type: "client_credentials",
+				client_id: machineClient!.client_id,
+				client_secret: machineClient!.client_secret,
+				scope: machineScope,
+				resource: validResource,
+			},
+			{ headers: { "content-type": "application/x-www-form-urlencoded" } },
+		);
+		expect(tokens.error).toBeNull();
+
+		getSubjectCalls.length = 0;
+		const introspection = await client.$fetch<{
+			active: boolean;
+			sub?: string;
+		}>("/oauth2/introspect", {
+			method: "POST",
+			headers: introspectHeaders,
+			body: new URLSearchParams({
+				token: tokens.data!.access_token!,
+				client_id: machineClient!.client_id,
+				client_secret: machineClient!.client_secret!,
+			}).toString(),
+		});
+
+		expect(introspection.data?.active).toBe(true);
+		expect(introspection.data?.sub).toBe(machineClient!.client_id);
+		expect(getSubjectCalls).toEqual([]);
 	});
 });
 

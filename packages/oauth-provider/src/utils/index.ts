@@ -927,6 +927,29 @@ export function presentationSubjectClaim(
 }
 
 /**
+ * Applies pairwise hashing to an already-resolved base subject, or returns it
+ * unchanged when the client did not opt in.
+ *
+ * Use this instead of {@link resolveSubjectIdentifier} on a subject read back
+ * off a token: pairwise only needs the issuing client, whereas `getSubject`
+ * needs the grant's `referenceId` and a resource owner, so re-running it on a
+ * value that already went through it — or on a `client_credentials` subject,
+ * which is a client id and not a user — would produce a different identity.
+ *
+ * @internal
+ */
+export async function applyPairwiseSubject(
+	base: string,
+	client: SchemaClient<Scope[]>,
+	opts: OAuthOptions<Scope[]>,
+): Promise<string> {
+	if (client.subjectType === "pairwise" && opts.pairwiseSecret) {
+		return computePairwiseSub(base, client, opts.pairwiseSecret);
+	}
+	return base;
+}
+
+/**
  * Resolves the subject for a user+client pair: the `getSubject` hook (or raw
  * `user.id`) as the base, with pairwise hashing applied on top when enabled.
  *
@@ -950,10 +973,7 @@ export async function resolveSubjectIdentifier(
 			);
 		}
 	}
-	if (client.subjectType === "pairwise" && opts.pairwiseSecret) {
-		return computePairwiseSub(base, client, opts.pairwiseSecret);
-	}
-	return base;
+	return applyPairwiseSubject(base, client, opts);
 }
 
 /**

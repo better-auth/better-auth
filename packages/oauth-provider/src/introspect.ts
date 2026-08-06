@@ -25,6 +25,7 @@ import type {
 	Scope,
 } from "./types";
 import {
+	applyPairwiseSubject,
 	destructureCredentials,
 	extractClientCredentials,
 	getClient,
@@ -695,7 +696,13 @@ async function resolveIntrospectionSub(
 			? introspectingClient
 			: await getClient(ctx, opts, issuerClientId);
 	if (!issuingClient) return rest;
-	const resolvedSub = await resolveSubjectIdentifier(
+	// Pairwise only, never `getSubject`. Reaching here with a hook configured
+	// means the token carries no resolved subject, which is either a
+	// `client_credentials` token — whose `sub` is a client id, not a user — or
+	// one minted before the hook existed. In both cases the raw `sub` is what
+	// the client was given, and re-running the hook without the grant's
+	// `referenceId` would answer with a different identity.
+	const resolvedSub = await applyPairwiseSubject(
 		payload.sub as string,
 		issuingClient,
 		opts,

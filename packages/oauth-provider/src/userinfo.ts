@@ -17,6 +17,7 @@ import { requireActiveAccessTokenWithClaims } from "./introspect";
 import { STANDARD_CLAIMS } from "./standard-claims";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import {
+	applyPairwiseSubject,
 	getClient,
 	resolvedSubjectClaim,
 	resolveSubjectIdentifier,
@@ -123,7 +124,11 @@ async function resolvePresentationSub(
 ): Promise<string> {
 	if (opts.getSubject) {
 		const carried = jwt[resolvedSubjectClaim];
-		return typeof carried === "string" ? carried : user.id;
+		if (typeof carried === "string") return carried;
+		// No carrier means the token predates the hook, so it was issued under
+		// the raw id. Re-running `getSubject` here without the grant's
+		// `referenceId` would answer with a different identity.
+		return client ? applyPairwiseSubject(user.id, client, opts) : user.id;
 	}
 	if (opts.pairwiseSecret && client) {
 		return resolveSubjectIdentifier(user.id, client, opts);
