@@ -2140,3 +2140,109 @@ describe("oauth2 - account-linking logs use the configured logger", async () => 
 		);
 	});
 });
+
+describe("oauth2 - storeAccountCookie when linking a new provider (#10690)", async () => {
+	// Register a second social provider so the implicit-link path can fire for a
+	// user who already has email/password identity verified in the DB.
+	const { auth, client, cookieSetter } = await getTestInstance({
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+			},
+		},
+		emailAndPassword: {
+			enabled: true,
+		},
+		account: {
+			storeAccountCookie: true,
+			accountLinking: {
+				enabled: true,
+				trustedProviders: ["google"],
+			},
+		},
+	});
+
+	const ctx = await auth.$context;
+
+	it("writes account_data cookie after linking a new provider to an existing user", async () => {
+		const email = "cookie-link-new-provider@example.com";
+		const { data } = await client.signUp.email({
+			email,
+			password: "password123",
+			name: "Cookie Link User",
+		});
+		await ctx.adapter.update({
+			model: "user",
+			where: [{ field: "id", value: data!.user.id }],
+			update: { emailVerified: true },
+		});
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile: GoogleProfile = {
+					email,
+					email_verified: true,
+					name: "Cookie Link User",
+					picture: "https://example.com/photo.jpg",
+					exp: 1234567890,
+					sub: "google_sub_cookie_link",
+					iat: 1234567890,
+					aud: "test",
+					azp: "test",
+					nbf: 1234567890,
+					iss: "test",
+					locale: "en",
+					jti: "test",
+					given_name: "Cookie",
+					family_name: "Link",
+				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "linked_access_token",
+					refresh_token: "linked_refresh_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		const setCookies: string[] = [];
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers,
+			onError(context) {
+				const sc = context.response.headers.getSetCookie?.() ?? [];
+				if (sc.length) setCookies.push(...sc);
+				else {
+					const single = context.response.headers.get("set-cookie");
+					if (single) setCookies.push(single);
+				}
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		const accountCookieName = ctx.authCookies.accountData.name;
+		const hasAccountCookie = setCookies.some((c) =>
+			c.includes(accountCookieName),
+		);
+		// Fallback: cookie may already be on headers after cookieSetter
+		const headerCookie = headers.get("cookie") || "";
+		expect(
+			hasAccountCookie || headerCookie.includes(accountCookieName),
+		).toBe(true);
+
+		const accounts = await ctx.internalAdapter.findAccounts(data!.user.id);
+		expect(
+			accounts.some((a) => a.providerId === "google"),
+		).toBe(true);
+	});
+});
