@@ -1,6 +1,6 @@
 ---
 title: Upgrading to Better Auth 1.7
-description: Upgrade Better Auth from 1.6 to 1.7, including OAuth, OpenID Connect, MCP, SAML, SCIM, proxy, and custom adapter changes.
+description: Upgrade Better Auth from 1.6 to 1.7, including Expo, OAuth, OpenID Connect, MCP, SAML, SCIM, proxy, and custom adapter changes.
 ---
 
 Most Better Auth 1.7 changes are additive. Most projects start with one command:
@@ -9,15 +9,21 @@ Most Better Auth 1.7 changes are additive. Most projects start with one command:
 npx auth@rc upgrade
 ```
 
+<Callout type="warn">
+  The commands in this guide use the `rc` tag because 1.7 is a release candidate. The `latest` tag still resolves the 1.6 CLI until 1.7 is stable, so `auth@latest` or an untagged `auth` would generate a 1.6 schema. Upgrade `better-auth` and every `@better-auth/*` package to the `rc` version too. Once 1.7 is stable, use `@latest` or drop the tag.
+</Callout>
+
 Some areas need more care: OAuth, OpenID Connect, SAML, SCIM, two-factor authentication, MCP, custom storage, and proxy setups. Use this table to choose the sections that apply to your project.
 
 | If your project                                                        | Read                                                                            |
 | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | Uses Better Auth at all                                                | [Before you upgrade](#before-you-upgrade) and [Behind a proxy](#behind-a-proxy) |
-| Uses social login, generic OAuth, One Tap, or SSO                      | [As a login client](#as-a-login-client)                                         |
+| Uses email and password, social login, generic OAuth, One Tap, or SSO  | [As a login client](#as-a-login-client)                                         |
+| Uses Expo or React Native                                              | [Expo and React Native](#expo-and-react-native)                                 |
 | Runs its own OAuth or OpenID provider                                  | [As an identity provider](#as-an-identity-provider)                             |
 | Runs MCP                                                               | [MCP](#mcp)                                                                     |
-| Uses SAML, SSO domain verification, or SCIM                            | [Enterprise SSO](#enterprise-sso)                                               |
+| Uses SAML or SSO domain verification                                   | [Enterprise SSO](#enterprise-sso)                                               |
+| Uses SCIM                                                              | [SCIM](#scim)                                                                   |
 | Uses Stripe billing                                                    | [Stripe](#stripe)                                                               |
 | Uses two-factor auth, magic links, or email OTP                        | [Two-factor and passwordless security](#two-factor-and-passwordless-security)   |
 | Uses a custom database adapter, secondary storage, or rate-limit store | [Custom adapters and storage](#custom-adapters-and-storage)                     |
@@ -33,8 +39,8 @@ The upgrade command handles package updates. The database needs more care. A few
 Use the CLI migration commands:
 
 ```bash title="Terminal"
-npx auth@latest generate
-npx auth@latest migrate
+npx auth@rc generate
+npx auth@rc migrate
 ```
 
 If you manage your own schema with Drizzle or Prisma, run `generate` and apply the result through your own migration tooling.
@@ -43,30 +49,87 @@ The `auth` CLI now requires Node.js 22.12 or newer to run.
 
 These features change the schema:
 
-| Feature                    | What it adds                                                                         | Converts data for you?   |
-| -------------------------- | ------------------------------------------------------------------------------------ | ------------------------ |
-| Protected resources        | New resource tables and key columns                                                  | Not needed (config move) |
-| Resource-bound tokens      | Resource columns on the token tables                                                 | Yes                      |
-| DPoP                       | A token-binding column                                                               | Not needed               |
-| Refresh-token reuse window | A cached replay-response column on refresh tokens                                    | Not needed               |
-| Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables                         | Not needed               |
-| Back-channel logout        | Logout-URL and revoked columns                                                       | Not needed               |
-| Requested user-info claims | A requested-claims column on the token and consent tables                            | Not needed               |
-| SCIM org scoping           | `organizationId` required, `userId` removed, `providerKey` added                     | **No, reclaim old rows** |
-| Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                            | Not needed               |
-| SCIM groups                | New `scimGroup`, `scimGroupMember`, `scimGroupRole`, and `scimGroupRoleGrant` tables | Not needed               |
+| Feature                    | What it adds                                                                                                            | Converts data for you?   |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| Protected resources        | New resource tables and key columns                                                                                     | Not needed (config move) |
+| Resource-bound tokens      | Resource columns on the token tables                                                                                    | Yes                      |
+| DPoP                       | A token-binding column                                                                                                  | Not needed               |
+| Refresh-token reuse window | A cached replay-response column on refresh tokens                                                                       | Not needed               |
+| Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables                                                            | Not needed               |
+| Back-channel logout        | Logout-URL and revoked columns                                                                                          | Not needed               |
+| Requested user-info claims | A requested-claims column on the token and consent tables                                                               | Not needed               |
+| Account identity           | An issuer column and a compound index with the existing provider-account column                                         | **No, backfill**         |
+| SCIM                       | Seven provisioning models, plus three optional managed-catalog models, with layouts that replace the legacy SCIM models | **No, reprovision**      |
+| Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                                                               | Not needed               |
+| Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables                                                         | **No, move client data** |
 
-The SCIM reclaim is the one manual data step. Plan for it before you cut over.
+Account identity, SCIM, and the provider client store require manual data steps. Plan each applicable cutover before you deploy.
 
 <Callout type="warn">
-  The SCIM reclaim is not automatic. Connections created before 1.7 may have no organization, so you must delete or assign an `organizationId` to rows without one before regenerating their tokens.
+  Do not run the generated SCIM migration over populated prerelease `scimGroup` or `scimGroupMember` tables. Follow the [SCIM cutover](#scim-requires-full-reprovisioning) before creating the new schema.
+</Callout>
+
+<Callout type="warn">
+  **Migrating from `oidcProvider` or the in-core MCP plugin moves client data.** `@better-auth/oauth-provider` stores registered clients in `oauthClient`, not the old `oauthApplication`, and renames the `oauthAccessToken.accessToken` column to `token`. `auth migrate` only adds tables and columns; it never renames or copies data. Copy clients with an explicit field mapping or re-register them before cutover. The old and new client tables are not column-compatible: `redirectUrls` becomes the `redirectUris` array, `metadata` becomes JSON, and fields such as `grantTypes` and `tokenEndpointAuthMethod` are new. Dynamically registered clients can re-register. Drop or rename the legacy `oauthAccessToken` table before migrating because its rows are ephemeral access tokens and the new required `token` column cannot be added to populated rows automatically.
 </Callout>
 
 ***
 
 ## As a login client
 
-This covers social login, the generic OAuth plugin, One Tap, and consuming SSO.
+This covers email and password, social login, the generic OAuth plugin, One Tap, and consuming SSO.
+
+### Account identity is scoped by issuer
+
+Better Auth now recognizes an external account by the unique pair of `issuer` and `accountId`. The `providerId` remains the local provider configuration, while `account.id` identifies the Better Auth account row and `account.accountId` remains the stable identifier assigned by the provider. The account schema adds the required `issuer` field and creates a unique compound index across both identity fields without renaming `accountId`.
+
+<Callout type="warn">
+  Use a maintenance window and stop authentication writes before changing the account schema. The generated migration cannot choose trusted issuers or resolve identity collisions for you.
+</Callout>
+
+<Callout type="warn">
+  The `1.7.0-rc.2` and `1.7.0-rc.3` prereleases temporarily used `providerAccountId`. If you deployed either prerelease, rename that physical column and any custom field mapping back to `accountId` as part of this migration. Also rename or recreate the generated compound index so its physical name uses `accountId`; leaving the prerelease index name can make schema tools attempt to create a duplicate index. Applications upgrading from Better Auth 1.6 should keep their existing `accountId` column.
+</Callout>
+
+**Backfill the account identity:**
+
+1. Back up the `account` and `user` tables, then inventory every distinct `providerId`. Include custom physical field names from `account.fields` in that inventory.
+2. Add `issuer` as nullable during the backfill. Keep the existing physical `accountId` column; only prerelease deployments that adopted `providerAccountId` need to rename it back.
+3. Populate both fields according to the account type:
+
+   | Account type                     | `issuer`                                  | `accountId`                            |
+   | -------------------------------- | ----------------------------------------- | -------------------------------------- |
+   | Credential                       | `local:credential`                        | Stable `id` from the linked `user` row |
+   | Provider with an issuer          | Exact trusted issuer used by the provider | Existing provider account identifier   |
+   | OAuth provider without an issuer | `local:oauth:<encoded providerId>`        | Existing provider account identifier   |
+
+   The synthetic issuer percent-encodes its provider ID segment exactly as `encodeURIComponent(providerId)`; for example, `local:oauth:github` and `local:oauth:team%2Fgithub`. Build an explicit `providerId`-to-issuer map for your deployment. Multiple provider configurations that represent the same OpenID Connect authority must use the same issuer. Do not derive an issuer from email, display name, an unverified request value, or a mutable authorization endpoint.
+4. Find collisions before creating the unique index. Adapt this query to your physical table and field names:
+
+   ```sql title="Identity collision check"
+   SELECT issuer, accountId, COUNT(*) AS accountCount,
+          COUNT(DISTINCT userId) AS userCount
+   FROM account
+   GROUP BY issuer, accountId
+   HAVING COUNT(*) > 1;
+   ```
+
+   If duplicate rows belong to one user, choose the account record to keep and reconcile its provider configuration, tokens, scopes, and timestamps before deleting the others. If a key belongs to multiple users, stop the migration and establish the owner from trusted provider data. Never merge users by matching email alone.
+5. Confirm that every row has both identity fields, make `issuer` non-nullable, and add the unique compound index on `issuer` and `accountId`.
+6. Update custom adapters, database hooks, and generated schemas to include `issuer`. Credential accounts keep the linked user's stable `id` as `accountId`; email remains a mutable sign-in identifier and does not change the account key.
+
+Account-specific APIs now use explicit, strongly typed selectors. Read `id` from `listAccounts`, then pass it as `accountId` to `unlinkAccount`. For `getAccessToken`, `refreshToken`, and `accountInfo`, choose exactly one of these request shapes:
+
+* `{ accountId: account.id, userId? }` selects the local account row.
+* `{ useAccountCookie: true, userId? }` selects the account from its signed cookie.
+
+Remove `providerId` from every account selector. The selector's `accountId` value is the local `account.id`, not the provider-side `account.accountId`. A token or provider-profile request that previously omitted the selector to use the account cookie must now send `useAccountCookie: true`; omitting both supported selectors is invalid.
+
+Deploy only after the collision query returns no rows and the required unique index exists. Verify email-and-password sign-in, returning OAuth and SSO sign-in, explicit account linking, unlinking, provider profile retrieval, and token refresh against the migrated data.
+
+Review every custom OAuth provider's account subject. OpenID Connect discovery providers now use verified `sub`; plain OAuth providers use `id`; the previous runtime fallback between those fields is removed. Set `accountSubject` when either default is not the provider's immutable identifier. `getUserInfo().user` now contains only mutable local-user fields; keep the provider identifier in `getUserInfo().data`. `mapProfileToUser` can no longer return `id`. The `accountInfo` response exposes the selected identity as `account.accountId` instead of `user.id`.
+
+The generic `microsoftEntraId` helper now requires a concrete tenant GUID. Replace `common`, `organizations`, or `consumers` configurations with the built-in Microsoft social provider, which validates tenant claims and derives the token's actual issuer.
 
 ### Generic OAuth is rebuilt on the social-provider path
 
@@ -137,6 +200,20 @@ A signed-assertion login setup, also called private-key JWT, is now checked when
 Linking an anonymous account after a social login now works in Expo and other in-app browsers, where the callback returns without the usual cookie. A new `addOAuthServerContext` API carries trusted data across the login that a client cannot forge.
 
 **What to do:** nothing for most apps. If you carried anonymous-link state across the OAuth redirect yourself, move it onto `addOAuthServerContext`.
+
+***
+
+## Expo and React Native
+
+### Secure storage access is asynchronous
+
+The Expo client now uses the asynchronous SecureStore APIs for cookie and session-cache access. `authClient.getCookie()` returns a promise, so await it directly and make callbacks that read cookies asynchronous.
+
+```ts
+const cookie = await authClient.getCookie();
+```
+
+Passing `expo-secure-store` directly continues to work without a wrapper. A custom storage implementation must provide `getItem`, `getItemAsync`, `setItem`, and `setItemAsync`. The exported `storageAdapter.setItem()` method is synchronous; use `setItemAsync()` when the caller must wait for persistence.
 
 ***
 
@@ -301,11 +378,19 @@ The MCP plugin moves from `better-auth` into `@better-auth/mcp`, built on the OA
 4. Rename `withMcpAuth` to `requireMcpAuth`, and `createMcpAuthClient` to `createMcpResourceClient`.
 5. Regenerate or migrate your schema.
 
-The OAuth endpoints move from `/mcp/*` to `/oauth2/*`. Discovery-based MCP clients find the new locations on their own. MCP also defaults `refreshTokenReuseInterval` to 30 seconds for native and public clients; set it to `0` if you want strict refresh-token replay handling.
+The OAuth endpoints move from `/mcp/*` to `/oauth2/*`. Discovery-based MCP clients find the new locations on their own. Existing registered clients move to the shared `oauthClient` store and are not copied automatically; complete the provider-client data step in [Before you upgrade](#before-you-upgrade) before cutover. MCP also defaults `refreshTokenReuseInterval` to 30 seconds for native and public clients; set it to `0` if you want strict refresh-token replay handling.
 
 ***
 
 ## Enterprise SSO
+
+### SSO account subjects are protocol-defined
+
+OIDC SSO now uses the verified `sub` claim as the account subject, and SAML uses the signed `NameID`. Profile mappings can still select email, name, image, and additional fields, but `oidcConfig.mapping.id` and `samlConfig.mapping.id` are removed. Manual SAML configurations that do not provide `idpMetadata.metadata` must set `idpMetadata.entityID`; `samlConfig.issuer` identifies the service provider and no longer acts as an IdP fallback.
+
+**What to do:** remove `id` from every OIDC and SAML mapping, then confirm that each OIDC provider returns a stable `sub` and each SAML provider returns a stable, signed `NameID`. During the account-identity backfill, use the exact OIDC issuer and subject or the exact SAML IdP entity ID and `NameID`. Provider aliases with the same OIDC issuer and subject deduplicate one external identity, but this change does not introduce independent grant or provider lifecycle records for those aliases.
+
+If a previous mapping used `mapping.id`, prepare its replacement before the maintenance window. Build a trusted mapping from every old account subject to the protocol-defined identity, then rewrite those account rows before adding the compound index: OIDC needs the exact issuer and verified `sub`; SAML needs the actual IdP metadata entity ID and signed `NameID`. Obtain this mapping from the identity provider, not email or a mutable profile attribute. Do not deploy a runtime fallback for the old mapping.
 
 ### IdP-initiated SAML is off by default
 
@@ -323,19 +408,13 @@ Signing certificates now accept a single value or a list, which lets you rotate 
 
 The callback URL is derived automatically, service-provider metadata is generated for you, and several fields are removed. One endpoint path changes, and error codes in the redirect change from short aliases to the full lowercased internal code (for example `saml_multiple_assertions`).
 
-**What to do:** remove `callbackUrl`, the empty `spMetadata`, and the removed fields from your config. Update your provider callback URL to `/sso/saml2/sp/acs/:providerId`. Set the post-login redirect with `callbackURL` in `signIn.sso()`. If you read SAML error codes from the redirect URL, switch to the lowercased codes.
+**What to do:** remove the empty `spMetadata` and the removed fields from your config. Register the ACS URL with your IdP as your base URL plus `/sso/saml2/sp/acs/:providerId`; with the default base path that is `https://yourapp.com/api/auth/sso/saml2/sp/acs/:providerId`. For SP-initiated logins, set the post-login redirect with `callbackURL` in `signIn.sso()`. The `callbackUrl` config field is no longer the ACS URL and is now optional, but it remains the post-login redirect for IdP-initiated logins. Keep it if you enable `allowIdpInitiated` and need a specific landing page. If you read SAML error codes from the redirect URL, switch to the lowercased codes.
 
-### SCIM writes are safer
+### SAML signature enforcement matches its configuration
 
-SCIM user writes now honor the `active` attribute, and non-organization SCIM deletes only remove the global user when the SCIM account is their only identity. `PUT` and `PATCH` reject changing a user's email to one already used by another user.
+In 1.6, `wantAssertionsSigned` enforced a signature on the SAML response message instead of the assertion. 1.7 verifies the assertion element itself and applies the configured requirement to it, so sign-ins from an IdP that signs only the response message fail when the service provider requires signed assertions. A callback that carries RelayState validates it unconditionally, and provider registration rejects service-provider metadata that weakens a signed-assertion policy, exceeds the metadata size limit, or declares an ACS location containing a URL fragment.
 
-**What to do:** if your SCIM client sends `active: false`, Better Auth now deactivates the user through the admin plugin and revokes their sessions. If your SCIM client changes emails, handle `409` conflicts. Honoring `active` requires the admin plugin.
-
-### SCIM connections are scoped to an organization
-
-SCIM connections now require `organizationId`, add a `providerKey` column, and drop the old `userId` column. The `defaultSCIM` option becomes `staticProviders`, `trustedDomains` is removed, and provider IDs are namespaced per organization. The old per-user ownership option (`providerOwnership`) is removed, so every connection is bound to an organization.
-
-**What to do:** run the migration, set `organizationId` on connections, rename the `defaultSCIM` config to `staticProviders`, and remove `trustedDomains`. Reclaim pre-1.7 connections that have no organization by assigning an `organizationId` or deleting them, then regenerate their tokens.
+**What to do:** confirm each IdP signs assertions, or set `wantAssertionsSigned: false` deliberately for an IdP that cannot. Fix or re-register stored SP metadata that no longer validates. If a custom integration supplies its own RelayState on SAML callbacks, make sure it round-trips the value Better Auth issued.
 
 ### `/sso/update-provider` rejects partial mappings
 
@@ -343,17 +422,65 @@ Updating an SSO provider now rejects a partial OIDC or SAML mapping object.
 
 **What to do:** send a complete mapping object when you call `/sso/update-provider`.
 
-### SCIM gains durable group resources
-
-SCIM now manages groups with membership, roles, and lifecycle endpoints, backed by new `scimGroup`, `scimGroupMember`, `scimGroupRole`, and `scimGroupRoleGrant` tables.
-
-**What to do:** run `generate` and `migrate` to add the SCIM group tables before using group provisioning.
-
 ### OIDC SSO works on Cloudflare Workers
 
 OIDC SSO with discovery now works on Cloudflare Workers. A discovery or token endpoint that redirects is rejected with a clear configuration error instead of failing in a runtime-specific way.
 
 **What to do:** nothing. If a provider endpoint redirects, point your config at the final URL.
+
+***
+
+## SCIM
+
+### SCIM supports three connection modes
+
+Every SCIM request resolves an immutable connection ID, credential identity, scopes, and provisioning domain. The plugin no longer depends on the Organization or SSO plugins, and applications can choose one of three connection modes:
+
+* **Static code-defined:** declare connections and bearer credentials in `scim({ connections })`.
+* **Application-owned runtime:** verify the bearer token and return its connection atomically from `authentication.verifyBearerToken`.
+* **Plugin-managed runtime:** configure `managedConnections`, then call its trusted server APIs from an application-authorized administrator workflow.
+
+The legacy runtime connection-management endpoints, SCIM client plugin, CLI scaffolding, `defaultSCIM`, `staticProviders`, `trustedDomains`, `providerOwnership`, and organization-scoped provider configuration are removed. Provisioned identities no longer create authentication accounts. Use `identity` callbacks to link existing Better Auth Users and apply lifecycle state, and use `projection` callbacks to map Groups into your application's roles.
+
+**What to do:** choose one supported connection mode, assign a stable `provisioningDomainId` to the application boundary that receives lifecycle and access changes, and configure a separate sign-in method for provisioned Users. The following example uses the static mode:
+
+```ts title="auth.ts"
+scim({
+  connections: [
+    {
+      id: "workforce-acme",
+      provisioningDomainId: "workspace-acme",
+      credentials: [
+        { type: "bearer", id: "workforce-primary", token: workforceToken },
+      ],
+    },
+  ],
+});
+```
+
+### SCIM requires full reprovisioning
+
+The new SCIM models do not read or convert the legacy SCIM tables. The prerelease and final `scimGroup` and `scimGroupMember` models also use incompatible layouts, so this change cannot use an in-place generated migration.
+
+<Callout type="warn">
+  Use a maintenance window. Pause provisioning and stop every application instance that runs the old SCIM plugin before changing the schema.
+</Callout>
+
+**What to do:**
+
+1. Back up every legacy SCIM table. Build a reviewed inventory of the exact `scimProvider` rows, SCIM-created `account` rows, their linked `user` rows, and any organization membership or team state created by provisioning. Use the configured providers and directory subjects to identify them. Do not classify rows by a `providerId` prefix alone: stable 1.6 could store a raw provider ID that another account source also uses, while later prereleases used a `scim:` namespace.
+2. Decide how each legacy User and account row will be handled. To retain a User, copy a stable connection-and-subject-to-`userId` mapping into application-owned storage, remove only the confirmed legacy SCIM account row, and configure `identity.resolveUser` before reprovisioning. To recreate a User, remove the confirmed SCIM account and delete the User only after proving that no other sign-in method or application data depends on it. Preserve every unrelated account and application row; Better Auth does not identify or remove legacy SCIM account rows automatically.
+3. Choose the static, application-owned runtime, or plugin-managed connection mode, and prepare new opaque connection and credential identifiers. Never import a legacy token hash, reuse a legacy raw token, or add a compatibility path that accepts the legacy bearer syntax. Static and application-owned modes use a new high-entropy secret; the managed mode issues its new secret after the managed tables exist in step 6.
+4. While the old plugin is stopped, clear its SCIM-owned resources in dependency order through the old SCIM endpoints or an operator-controlled transaction. Confirm that the legacy plugin tables are empty and that every inventoried SCIM account row has a reviewed disposition. If you adopted prerelease Group provisioning, clear `scimGroupRoleGrant`, `scimGroupRole`, `scimGroupMember`, and `scimGroup` in child-first order. Drop or rename the incompatible legacy physical tables, including `scimProvider`, only after the reviewed backup and cleanup are complete. Use the physical table names from your schema if you customized model names.
+5. Enable native interactive transactions in your database adapter, then run `auth generate` or `auth migrate` to create `scimConnectionBinding`, `scimIdentityTombstone`, `scimSubject`, `scimUser`, `scimGroup`, `scimGroupMember`, and `scimProjectionGrant`. The managed mode also creates `scimManagedConnection`, `scimManagedCredential`, and `scimManagedConnectionEvent`. Cloudflare D1 cannot provide the required transaction behavior.
+6. Deploy the selected mode. For the managed mode, create the connection and issue its first credential through the trusted server API after the new schema exists. Configure the directory with the new credential, then trigger a complete User and Group provisioning cycle.
+7. Verify User linking, Group state, lifecycle, and role projection in your application, then resume provisioning.
+
+<Callout type="warn">
+  The new plugin never links by email. Retained legacy Users will cause `409 Conflict` during reprovisioning unless `identity.resolveUser` returns an explicit link decision for them.
+</Callout>
+
+See the [SCIM plugin documentation](/docs/plugins/scim) for the final configuration and supported protocol behavior.
 
 ***
 
@@ -488,13 +615,15 @@ These do not need action for most setups, but they change what you see.
 Run once, after applying the changes that affect you:
 
 ```bash title="Terminal"
-npx auth@latest generate
-npx auth@latest migrate
+npx auth@rc generate
+npx auth@rc migrate
 ```
 
 Then complete the manual data step if it applies:
 
-* **Reclaim SCIM connections:** delete or assign an `organizationId` to connection rows that have no organization.
+* **Backfill account identities:** assign every account a reviewed issuer and provider account identifier, resolve collisions, and add the compound unique index before deploying.
+* **Move provider clients:** copy or re-register clients from `oidcProvider` or the in-core MCP plugin before switching to the shared OAuth provider tables.
+* **Reprovision SCIM:** follow the [full cutover](#scim-requires-full-reprovisioning), including reviewed handling of legacy core identities, then run a complete User and Group provisioning cycle.
 
 ***
 
@@ -503,5 +632,7 @@ Then complete the manual data step if it applies:
 If you upgraded straight from 1.6 to the final 1.7, skip this. It applies only if you adopted a 1.7 beta and followed its changes.
 
 A breaking change in one beta can be reverted in a later beta of the same line, and the reversal is a migration in the opposite direction. The clearest case is OAuth scopes: an early beta moved `account.scope` into a `grantedScopes` array, and a later beta reverted it, so the final 1.7 keeps the original `account.scope` string. If you adopted the `grantedScopes` column, drop it and restore the `scope` column on every schema you changed. When your migration tool cannot tell a rename from a drop, reconcile the column with direct SQL so you keep existing rows.
+
+An earlier 1.7 prerelease used organization-scoped SCIM providers and interim Group tables. The final SCIM schema does not convert those tables. If you adopted that prerelease, follow the same [full SCIM reprovisioning cutover](#scim-requires-full-reprovisioning) as an upgrade from 1.6.
 
 Two habits make this cheaper. Read `revert` entries in the changelog, not just `feat` and `fix`; a revert is a migration for you even though it does not announce itself as breaking. Bump only the packages that carry the change, and confirm your own plugins do not import the reverted surface before you rebuild them.

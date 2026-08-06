@@ -13,6 +13,7 @@ import { getTestInstance } from "better-auth/test";
 import { beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
+import { checkOAuthClient, oauthToSchema, schemaToOAuth } from "./register";
 import { resetSeedStateForTests } from "./resources";
 import type { OAuthOptions } from "./types";
 import type { OAuthClient } from "./types/oauth";
@@ -27,6 +28,10 @@ describe("oauth register", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
+				resources: ["https://api.example.com/dcr-dedupe"],
+				clientRegistrationAllowedResources: [
+					"https://api.example.com/dcr-dedupe",
+				],
 				silenceWarnings: {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
@@ -53,8 +58,7 @@ describe("oauth register", async () => {
 		},
 	});
 
-	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+	const redirectUri = "https://rp.example.com/api/auth/callback/test";
 
 	it("should fail without body", async () => {
 		const response = await serverClient.$fetch("/oauth2/register", {
@@ -101,6 +105,100 @@ describe("oauth register", async () => {
 		expect(response.data?.client_secret).toBeDefined();
 	});
 
+	it("persists operator-approved scopes so a DCR client can step up later", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			scope: "openid",
+		});
+
+		expect(response.error).toBeNull();
+		expect(response.data?.scope?.split(" ")).toEqual([
+			"openid",
+			"profile",
+			"email",
+			"offline_access",
+			"create:test",
+			"delete:test",
+		]);
+		const context = await auth.$context;
+		const stored = await context.adapter.findOne<{ scopes: string[] }>({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: response.data!.client_id }],
+		});
+		expect(stored?.scopes).toEqual(response.data?.scope?.split(" "));
+	});
+
+	it("resolves registration scope policy as a deterministic default and allowed union", async () => {
+		const policyBaseUrl = "http://localhost:3018";
+		const { customFetchImpl: policyFetch } = await getTestInstance({
+			baseURL: policyBaseUrl,
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					allowDynamicClientRegistration: true,
+					allowUnauthenticatedClientRegistration: true,
+					scopes: ["openid", "read", "write", "admin"],
+					clientRegistrationDefaultScopes: ["openid", "read", "read"],
+					clientRegistrationAllowedScopes: ["write", "read"],
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+				}),
+			],
+		});
+		const policyClient = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: policyBaseUrl,
+			fetchOptions: { customFetchImpl: policyFetch },
+		});
+
+		const accepted = await policyClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			token_endpoint_auth_method: "none",
+			scope: "read",
+		});
+		expect(accepted.error).toBeNull();
+		expect(accepted.data?.scope).toBe("openid read write");
+
+		const rejected = await policyClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			token_endpoint_auth_method: "none",
+			scope: "admin",
+		});
+		expect(rejected.error?.status).toBe(400);
+	});
+
+	it("defaults omitted application_type to web independently of public client authentication", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: ["https://client.example.com/callback"],
+			token_endpoint_auth_method: "none",
+		});
+
+		expect(response.error).toBeNull();
+		expect(response.data).toMatchObject({
+			application_type: "web",
+			token_endpoint_auth_method: "none",
+		});
+		expect(response.data?.client_secret).toBeUndefined();
+		expect(response.data).not.toHaveProperty("public");
+		expect(response.data).not.toHaveProperty("type");
+
+		const ctx = await auth.$context;
+		const stored = await ctx.adapter.findOne({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: response.data!.client_id }],
+		});
+		expect(stored).toMatchObject({
+			applicationType: "web",
+			tokenEndpointAuthMethod: "none",
+		});
+		expect(stored).not.toHaveProperty("public");
+		expect(stored).not.toHaveProperty("type");
+	});
+
 	it("should fail authorization_code without response type code", async () => {
 		const response = await serverClient.oauth2.register({
 			// @ts-expect-error testing with a different response type even though unsupported
@@ -108,44 +206,6 @@ describe("oauth register", async () => {
 			redirect_uris: [redirectUri],
 		});
 		expect(response.error?.status).toBe(400);
-	});
-
-	it("should fail type check for public client request", async () => {
-		const response = await serverClient.oauth2.register({
-			token_endpoint_auth_method: "none",
-			type: "web",
-			redirect_uris: [redirectUri],
-		});
-		expect(response.error?.status).toBe(400);
-	});
-
-	it.for([
-		"native",
-		"user-agent-based",
-	] as OAuthClient["type"][])("should fail with type '%s' check for confidential client request", async (type) => {
-		const response = await serverClient.oauth2.register({
-			token_endpoint_auth_method: "client_secret_post",
-			type,
-			redirect_uris: [redirectUri],
-		});
-		expect(response.error?.status).toBe(400);
-	});
-
-	it.for([
-		"native",
-		"user-agent-based",
-	] as OAuthClient["type"][])("should register public '%s' client with minimum requirements via server", async (type) => {
-		const response = await auth.api.adminCreateOAuthClient({
-			headers,
-			body: {
-				token_endpoint_auth_method: "none",
-				redirect_uris: [redirectUri],
-				type,
-			},
-		});
-		expect(response?.client_id).toBeDefined();
-		expect(response?.user_id).toBeDefined();
-		expect(response?.client_secret).toBeUndefined();
 	});
 
 	it("should register confidential client and check that certain fields are overwritten", async () => {
@@ -165,7 +225,7 @@ describe("oauth register", async () => {
 			tos_uri: "https://example.com/terms",
 			policy_uri: "https://example.com/policy",
 			//---- Client key metadata (only one can be used) ----//
-			// jwks: [],
+			// jwks: { keys: [] },
 			// jwks_uri: "https://example.com/.well-known/jwks.json",
 			//---- User Software Identifiers ----//
 			software_id: "custom-software-id",
@@ -180,9 +240,7 @@ describe("oauth register", async () => {
 				"refresh_token",
 			],
 			response_types: ["code"],
-			//---- RFC6749 Spec ----//
-			public: true, // test never set on this (based off of token_endpoint_auth_method)
-			type: "web",
+			application_type: "web",
 			//---- Not Part of RFC7591 Spec ----//
 			disabled: false,
 		};
@@ -201,7 +259,14 @@ describe("oauth register", async () => {
 			applicationRequest.client_secret,
 		);
 		expect(response.data?.client_secret_expires_at).toEqual(0);
-		expect(response.data?.scope).toBe(applicationRequest.scope);
+		expect(response.data?.scope?.split(" ")).toEqual([
+			"openid",
+			"profile",
+			"email",
+			"offline_access",
+			"create:test",
+			"delete:test",
+		]);
 
 		expect(response.data?.user_id).toBeDefined();
 		expect(response.data?.user_id).not.toEqual(applicationRequest.user_id);
@@ -229,15 +294,35 @@ describe("oauth register", async () => {
 			response_types: applicationRequest.response_types,
 		});
 
-		expect(response.data?.public).toBeFalsy();
+		expect(response.data).not.toHaveProperty("public");
+		expect(response.data).not.toHaveProperty("type");
 
 		expect(response.data?.disabled).toBeFalsy();
 	});
 
-	it("should preserve confidential method and type for authenticated registration", async () => {
+	it("preserves surrounding client_name whitespace through registration", async () => {
+		const clientName = "  Deliberately Spaced Client  ";
+		const response = await serverClient.oauth2.register({
+			client_name: clientName,
+			redirect_uris: ["https://example.com/callback"],
+		});
+
+		expect(response.error).toBeNull();
+		expect(response.data?.client_name).toBe(clientName);
+		const clientId = response.data?.client_id;
+		if (!clientId) throw new Error("registered client ID was not returned");
+		const context = await auth.$context;
+		const stored = await context.adapter.findOne<{ name?: string }>({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+		});
+		expect(stored?.name).toBe(clientName);
+	});
+
+	it("should preserve confidential method and application type for authenticated registration", async () => {
 		const response = await serverClient.oauth2.register({
 			token_endpoint_auth_method: "client_secret_post",
-			type: "web",
+			application_type: "web",
 			redirect_uris: [redirectUri],
 		});
 		expect(response.data?.client_id).toBeDefined();
@@ -245,20 +330,16 @@ describe("oauth register", async () => {
 		expect(response.data?.token_endpoint_auth_method).toBe(
 			"client_secret_post",
 		);
-		expect(response.data?.type).toBe("web");
-		expect(response.data?.public).toBeFalsy();
+		expect(response.data?.application_type).toBe("web");
+		expect(response.data).not.toHaveProperty("public");
+		expect(response.data).not.toHaveProperty("type");
 	});
 
 	it("dedupes repeated DCR resources to a single client/resource link row", async () => {
 		const identifier = "https://api.example.com/dcr-dedupe";
-		await auth.api.adminCreateOAuthResource({
-			headers,
-			body: { identifier },
-		});
 
 		// A client that lists the same resource twice must not produce two
-		// link rows: the deterministic `${clientId}::${resourceId}` id makes
-		// the second insert a no-op via the PK uniqueness constraint.
+		// link rows under the compound uniqueness contract.
 		const response = await serverClient.$fetch<
 			OAuthClient & { resources?: string[] }
 		>("/oauth2/register", {
@@ -307,6 +388,7 @@ describe("oauth register", async () => {
 						consentPage: "/consent",
 						allowDynamicClientRegistration: true,
 						resources: [identifier],
+						clientRegistrationAllowedResources: [identifier],
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
 							openidConfig: true,
@@ -360,15 +442,16 @@ describe("oauth register", async () => {
 		expect(response?.client_id).toBeDefined();
 		expect(response?.client_secret).toBeDefined();
 		// Metadata should be spread at the top level of the response
-		expect(response?.foo).toBe("bar");
-		expect(response?.nested).toEqual({ key: "value" });
+		expect(Reflect.get(response, "foo")).toBe("bar");
+		expect(Reflect.get(response, "nested")).toEqual({ key: "value" });
 	});
 
-	it("should reject registration with an empty jwks array", async () => {
+	it("rejects a bare JWK array through dynamic registration", async () => {
 		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
 			token_endpoint_auth_method: "private_key_jwt",
-			jwks: [] as Record<string, unknown>[],
+			// @ts-expect-error RFC 7517 requires a JWK Set object.
+			jwks: [{ kty: "RSA", n: "modulus", e: "AQAB" }],
 		});
 		expect(response.error?.status).toBe(400);
 	});
@@ -377,7 +460,7 @@ describe("oauth register", async () => {
 		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
 			token_endpoint_auth_method: "private_key_jwt",
-			jwks: { keys: [] } as { keys: Record<string, unknown>[] },
+			jwks: { keys: [] },
 		});
 		expect(response.error?.status).toBe(400);
 	});
@@ -400,6 +483,10 @@ describe("oauth register", async () => {
 		{ kty: "EC", crv: "P-256", x: "test" },
 		{ kty: "OKP", crv: "Ed25519" },
 		{ kty: "unsupported", n: "test", e: "test-exponent" },
+		{ kty: "RSA", n: "test", e: "AQAB", alg: "HS256" },
+		{ kty: "EC", crv: "P-256", x: "x", y: "y", alg: "RS256" },
+		{ kty: "EC", crv: "P-256", x: "x", y: "y", alg: "ES384" },
+		{ kty: "OKP", crv: "Ed448", x: "x", alg: "EdDSA" },
 	])("should reject malformed jwks public keys", async (key) => {
 		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
@@ -408,14 +495,44 @@ describe("oauth register", async () => {
 		expect(response.error?.status).toBe(400);
 	});
 
-	it("should reject admin registration with an empty jwks array", async () => {
+	it.each([
+		{
+			jwksUri: "https://user:password@example.com/.well-known/jwks.json",
+			error: "credentials",
+		},
+		{
+			jwksUri: "https://example.com/.well-known/jwks.json#keys",
+			error: "fragment",
+		},
+	])("rejects jwks_uri containing $error", async ({ jwksUri, error }) => {
+		await expect(
+			checkOAuthClient(
+				{
+					client_id: "jwks-uri-client",
+					redirect_uris: [redirectUri],
+					jwks_uri: jwksUri,
+				},
+				{
+					loginPage: "/login",
+					consentPage: "/consent",
+				},
+			),
+		).rejects.toMatchObject({
+			body: {
+				error_description: expect.stringContaining(error),
+			},
+		});
+	});
+
+	it("rejects a bare JWK array through managed registration", async () => {
 		await expect(
 			auth.api.adminCreateOAuthClient({
 				headers,
 				body: {
 					redirect_uris: [redirectUri],
 					token_endpoint_auth_method: "private_key_jwt",
-					jwks: [] as Record<string, unknown>[],
+					// @ts-expect-error RFC 7517 requires a JWK Set object.
+					jwks: [{ kty: "RSA", n: "modulus", e: "AQAB" }],
 				},
 			}),
 		).rejects.toThrow();
@@ -434,12 +551,12 @@ describe("oauth register", async () => {
 		});
 		expect(response?.client_id).toBeDefined();
 		// metadata contents should be spread at the top level, extra fields not in schema should be stripped
-		expect(response?.fromMetadata).toBe("value1");
-		expect(response?.customField).toBe(undefined);
+		expect(Reflect.get(response, "fromMetadata")).toBe("value1");
+		expect(Reflect.get(response, "customField")).toBeUndefined();
 	});
 
 	it("round-trips backchannel_logout_uri and backchannel_logout_session_required", async () => {
-		const backchannelUri = `${rpBaseUrl}/logout/backchannel`;
+		const backchannelUri = "https://rp.example.com/logout/backchannel";
 		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
 			backchannel_logout_uri: backchannelUri,
@@ -453,7 +570,8 @@ describe("oauth register", async () => {
 	it("rejects backchannel_logout_uri with a fragment", async () => {
 		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
-			backchannel_logout_uri: `${rpBaseUrl}/logout/backchannel#section`,
+			backchannel_logout_uri:
+				"https://rp.example.com/logout/backchannel#section",
 		});
 		expect(response.error?.status).toBe(400);
 	});
@@ -463,7 +581,7 @@ describe("oauth register", async () => {
 		// be checked to honor spec §2.2 (no fragment component).
 		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
-			backchannel_logout_uri: `${rpBaseUrl}/logout/backchannel#`,
+			backchannel_logout_uri: "https://rp.example.com/logout/backchannel#",
 		});
 		expect(response.error?.status).toBe(400);
 	});
@@ -476,17 +594,22 @@ describe("oauth register", async () => {
 		expect(response.error?.status).toBe(400);
 	});
 
-	it("allows http backchannel_logout_uri on public clients", async () => {
+	it("rejects http backchannel_logout_uri on public clients", async () => {
 		const response = await serverClient.oauth2.register({
 			redirect_uris: [redirectUri],
 			token_endpoint_auth_method: "none",
-			type: "native",
 			backchannel_logout_uri: `${rpBaseUrl}/logout/backchannel`,
 		});
-		expect(response.data?.client_id).toBeDefined();
-		expect(response.data?.backchannel_logout_uri).toBe(
-			`${rpBaseUrl}/logout/backchannel`,
-		);
+		expect(response.error?.status).toBe(400);
+	});
+
+	it("rejects credentials in backchannel_logout_uri", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			backchannel_logout_uri:
+				"https://user:password@rp.example.com/logout/backchannel",
+		});
+		expect(response.error?.status).toBe(400);
 	});
 
 	it("rejects backchannel_logout_uri pointing at private, tunneled, or metadata targets", async () => {
@@ -546,7 +669,6 @@ describe("oauth register - disableJwtPlugin", async () => {
 
 describe("oauth register - unauthenticated", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
-	const rpBaseUrl = "http://localhost:5000";
 	const { customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -571,8 +693,7 @@ describe("oauth register - unauthenticated", async () => {
 		},
 	});
 
-	const providerId = "test";
-	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+	const redirectUri = "https://rp.example.com/api/auth/callback/test";
 
 	it("should create public clients without authentication", async () => {
 		const response = await unauthenticatedClient.oauth2.register({
@@ -600,7 +721,7 @@ describe("oauth register - unauthenticated", async () => {
 		expect(response.data?.token_endpoint_auth_method).toBe(
 			"client_secret_basic",
 		);
-		expect(response.data?.public).toBe(false);
+		expect(response.data).not.toHaveProperty("public");
 	});
 
 	/**
@@ -619,7 +740,7 @@ describe("oauth register - unauthenticated", async () => {
 		expect(response.data?.token_endpoint_auth_method).toBe(
 			"client_secret_post",
 		);
-		expect(response.data?.public).toBe(false);
+		expect(response.data).not.toHaveProperty("public");
 	});
 
 	/**
@@ -645,10 +766,10 @@ describe("oauth register - unauthenticated", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8588
 	 */
-	it("should preserve type 'web' for unauthenticated confidential DCR", async () => {
+	it("should preserve application_type 'web' for unauthenticated confidential DCR", async () => {
 		const response = await unauthenticatedClient.oauth2.register({
 			token_endpoint_auth_method: "client_secret_post",
-			type: "web",
+			application_type: "web",
 			redirect_uris: [redirectUri],
 		});
 		expect(response.data?.client_id).toBeDefined();
@@ -656,7 +777,7 @@ describe("oauth register - unauthenticated", async () => {
 		expect(response.data?.token_endpoint_auth_method).toBe(
 			"client_secret_post",
 		);
-		expect(response.data?.type).toBe("web");
+		expect(response.data?.application_type).toBe("web");
 	});
 
 	/**
@@ -683,7 +804,7 @@ describe("oauth register - unauthenticated", async () => {
  */
 describe("oauth register - unauthenticated DCR full flow", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
-	const rpBaseUrl = "http://localhost:5000";
+	const rpBaseUrl = "https://rp.example.com";
 	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -805,7 +926,7 @@ describe("oauth register - unauthenticated DCR full flow", async () => {
 describe("oauth register - organization", async () => {
 	const providerId = "test";
 	const baseUrl = "http://localhost:3000";
-	const rpBaseUrl = "http://localhost:5000";
+	const rpBaseUrl = "https://rp.example.com";
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,
@@ -905,7 +1026,7 @@ describe("oauth register - skip_consent blocked", async () => {
 
 	it("should reject skip_consent during dynamic registration", async () => {
 		const res = await serverClient.oauth2.register({
-			redirect_uris: ["http://localhost:5000/callback"],
+			redirect_uris: ["https://rp.example.com/callback"],
 			// @ts-expect-error testing skip consent mimicing client incorrectly sending parameter
 			skip_consent: true,
 		});
@@ -914,7 +1035,7 @@ describe("oauth register - skip_consent blocked", async () => {
 
 	it("should allow registration without skip_consent", async () => {
 		const res = await serverClient.oauth2.register({
-			redirect_uris: ["http://localhost:5000/callback"],
+			redirect_uris: ["https://rp.example.com/callback"],
 		});
 		expect(res.data?.client_id).toBeDefined();
 	});
@@ -922,7 +1043,7 @@ describe("oauth register - skip_consent blocked", async () => {
 
 describe("oauth register - protected dynamic registration", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
-	const rpBaseUrl = "http://localhost:5000";
+	const rpBaseUrl = "https://rp.example.com";
 	const validInitialAccessToken = "valid-initial-registration-token";
 	const validateInitialAccessToken = vi.fn<
 		NonNullable<OAuthOptions["validateInitialAccessToken"]>
@@ -936,7 +1057,7 @@ describe("oauth register - protected dynamic registration", async () => {
 
 		return false;
 	});
-	const { customFetchImpl } = await getTestInstance({
+	const { auth, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
 			jwt(),
@@ -969,6 +1090,8 @@ describe("oauth register - protected dynamic registration", async () => {
 					client_name: "Machine Client",
 					redirect_uris: [redirectUri],
 					grant_types: ["client_credentials"],
+					client_credentials_scopes: ["admin"],
+					clientCredentialsScopes: ["admin"],
 				}),
 			},
 		);
@@ -983,6 +1106,36 @@ describe("oauth register - protected dynamic registration", async () => {
 		expect(body.reference_id).toBe("infra-provisioner");
 		expect(body.user_id).toBeUndefined();
 		expect(body.token_endpoint_auth_method).toBe("client_secret_basic");
+		expect(body).not.toHaveProperty("client_credentials_scopes");
+		expect(body).not.toHaveProperty("clientCredentialsScopes");
+		const context = await auth.$context;
+		const stored = await context.adapter.findOne<{
+			clientCredentialsScopes?: string[] | null;
+		}>({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: body.client_id }],
+		});
+		expect(stored?.clientCredentialsScopes).toEqual([]);
+
+		const tokenResponse = await customFetchImpl(
+			`${authServerBaseUrl}/api/auth/oauth2/token`,
+			{
+				method: "POST",
+				headers: {
+					authorization: `Basic ${Buffer.from(
+						`${body.client_id}:${body.client_secret}`,
+					).toString("base64")}`,
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+				}),
+			},
+		);
+		expect(tokenResponse.status).toBe(400);
+		expect(await tokenResponse.json()).toMatchObject({
+			error: "unauthorized_client",
+		});
 		expect(validateInitialAccessToken).toHaveBeenCalledWith(
 			expect.objectContaining({
 				initialAccessToken: validInitialAccessToken,
@@ -1422,5 +1575,273 @@ describe("oauth register - protected dynamic registration", async () => {
 		const tokenBody = (await tokenResponse.json()) as OAuthClient;
 		expect(tokenBody.reference_id).toBe("infra-provisioner");
 		expect(tokenBody.user_id).toBeUndefined();
+	});
+});
+
+describe("oauth register - application_type", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const { customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				allowUnauthenticatedClientRegistration: true,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+		],
+	});
+
+	const register = (body: Record<string, unknown>) =>
+		customFetchImpl(`${authServerBaseUrl}/api/auth/oauth2/register`, {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify(body),
+		});
+
+	it("maps applicationType as a first-class field without hiding it in metadata", () => {
+		const stored = oauthToSchema({
+			client_id: "mapping-client",
+			redirect_uris: ["com.example.app:/callback"],
+			application_type: "native",
+			metadata: { custom: "value" },
+		});
+		expect(stored.applicationType).toBe("native");
+		expect(stored.metadata).toBe(JSON.stringify({ custom: "value" }));
+
+		const wire = schemaToOAuth(stored);
+		expect(wire.application_type).toBe("native");
+		expect(Reflect.get(wire, "custom")).toBe("value");
+		expect(wire).not.toHaveProperty("applicationType");
+	});
+
+	it("keeps reserved client fields out of opaque metadata responses", () => {
+		const reservedMetadata = {
+			skipConsent: true,
+			enableEndSession: true,
+			requirePKCE: true,
+			clientSecret: "injected-secret",
+			referenceId: "injected-reference",
+			userId: "injected-user",
+			clientId: "injected-client",
+			applicationType: "native",
+			tokenEndpointAuthMethod: "none",
+			redirectUris: ["https://evil.example.com/callback"],
+			postLogoutRedirectUris: ["https://evil.example.com/logout"],
+			grantTypes: ["client_credentials"],
+			responseTypes: ["token"],
+			scopes: ["admin"],
+			clientCredentialsScopes: ["admin"],
+			expiresAt: "2099-01-01T00:00:00.000Z",
+			createdAt: "2099-01-01T00:00:00.000Z",
+			updatedAt: "2099-01-01T00:00:00.000Z",
+			disabled: true,
+			name: "Injected name",
+			uri: "https://evil.example.com",
+			icon: "https://evil.example.com/icon.png",
+			contacts: ["attacker@example.com"],
+			tos: "https://evil.example.com/tos",
+			policy: "https://evil.example.com/policy",
+			softwareId: "injected-software",
+			softwareVersion: "99",
+			softwareStatement: "injected-statement",
+			backchannelLogoutUri: "https://evil.example.com/logout",
+			backchannelLogoutSessionRequired: true,
+			jwks: "injected-jwks",
+			jwksUri: "https://evil.example.com/jwks",
+			dpopBoundAccessTokens: true,
+			subjectType: "pairwise",
+			public: true,
+			type: "native",
+			metadata: { nested: "injected" },
+			resources: ["https://api.example.com/stale"],
+			client_credentials_scopes: ["admin"],
+		};
+		const stored = oauthToSchema({
+			client_id: "reserved-metadata-client",
+			redirect_uris: ["https://app.example.com/callback"],
+			metadata: {
+				custom: "preserved",
+				...reservedMetadata,
+			},
+		});
+		expect(JSON.parse(stored.metadata ?? "{}")).toEqual({
+			custom: "preserved",
+		});
+
+		const wire = schemaToOAuth(stored);
+		expect(Reflect.get(wire, "custom")).toBe("preserved");
+		for (const [field, injectedValue] of Object.entries(reservedMetadata)) {
+			expect(Reflect.get(wire, field)).not.toEqual(injectedValue);
+		}
+	});
+
+	it("registers a native client with exact loopback hosts and custom-scheme redirect URIs", async () => {
+		const response = await register({
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			redirect_uris: [
+				"http://localhost:3005/callback",
+				"http://127.0.0.1:3005/callback",
+				"com.example.app:/callback",
+			],
+		});
+		expect(response.status).toBe(201);
+		const body = (await response.json()) as OAuthClient;
+		expect(body.application_type).toBe("native");
+	});
+
+	it("rejects a native client with an http redirect URI on a routable host", async () => {
+		const response = await register({
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			redirect_uris: ["http://example.com/callback"],
+		});
+		expect(response.status).toBe(400);
+		const body = (await response.json()) as { error?: string };
+		expect(body.error).toBe("invalid_redirect_uri");
+	});
+
+	it("rejects alternate numeric spellings of the IPv4 loopback host", async () => {
+		const response = await register({
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			redirect_uris: ["http://127.1/callback"],
+		});
+		expect(response.status).toBe(400);
+		const body = (await response.json()) as { error?: string };
+		expect(body.error).toBe("invalid_redirect_uri");
+	});
+
+	it("rejects loopback back-channel logout targets", async () => {
+		const response = await register({
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			redirect_uris: ["http://127.0.0.1/callback"],
+			backchannel_logout_uri: "https://127.0.0.1/backchannel",
+		});
+		expect(response.status).toBe(400);
+		const body = (await response.json()) as {
+			error?: string;
+			error_description?: string;
+		};
+		expect(body.error).toBe("invalid_client_metadata");
+		expect(body.error_description).toContain("private or reserved");
+	});
+
+	it("rejects a web client with an http redirect URI", async () => {
+		const response = await register({
+			application_type: "web",
+			redirect_uris: ["http://example.com/callback"],
+		});
+		expect(response.status).toBe(400);
+		const body = (await response.json()) as { error?: string };
+		expect(body.error).toBe("invalid_redirect_uri");
+	});
+
+	it("rejects a web client with a loopback redirect URI", async () => {
+		for (const redirectUri of [
+			"https://localhost:3005/callback",
+			"https://localhost./callback",
+			"https://localhost../callback",
+		]) {
+			const response = await register({
+				application_type: "web",
+				redirect_uris: [redirectUri],
+			});
+			expect(response.status).toBe(400);
+			const body = (await response.json()) as { error?: string };
+			expect(body.error).toBe("invalid_redirect_uri");
+		}
+	});
+
+	it("registers a web client with an https redirect URI", async () => {
+		const response = await register({
+			application_type: "web",
+			redirect_uris: ["https://rp.example.com/callback"],
+		});
+		expect(response.status).toBe(201);
+		const body = (await response.json()) as OAuthClient;
+		expect(body.application_type).toBe("web");
+	});
+
+	it("keeps application type and client authentication as orthogonal axes", async () => {
+		const response = await register({
+			application_type: "native",
+			token_endpoint_auth_method: "client_secret_post",
+			redirect_uris: ["com.example.app:/callback"],
+		});
+		expect(response.status).toBe(201);
+		const body = (await response.json()) as OAuthClient;
+		expect(body.application_type).toBe("native");
+		expect(body.token_endpoint_auth_method).toBe("client_secret_post");
+		expect(body.client_secret).toBeDefined();
+	});
+
+	it.for([
+		"file:///callback",
+		"ftp://example.com/callback",
+		"mailto:oauth@example.com",
+		"myapp:/callback",
+		"com.example.app:callback",
+		"com.example.app:///callback",
+		"com..example.app:/callback",
+		"com.example..app:/callback",
+		"com.example.-app:/callback",
+		"com.example.app-:/callback",
+		"com.example.app://host/callback",
+		"https://localhost/callback",
+		"https://localhost./callback",
+		"https://localhost../callback",
+		"http://localhost./callback",
+		"http://localhost../callback",
+		"https://127.0.0.1/callback",
+		"http://example.com/callback",
+		"http://192.168.1.2/callback",
+		"http://tenant.localhost/callback",
+		"http://127.42.7.9:49152/callback",
+		"https://user:password@example.com/callback",
+		"https://example.com/callback#fragment",
+	])("rejects invalid native redirect URI %s", async (redirectUri) => {
+		const response = await register({
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			redirect_uris: [redirectUri],
+		});
+		expect(response.status).toBe(400);
+	});
+
+	it.for([
+		"http://localhost:54921/callback",
+		"http://127.0.0.1:54921/callback",
+		"http://[::1]:61234/callback",
+		"com.example.app:/callback",
+		"https://app.example.com/callback",
+	])("accepts valid native redirect URI %s", async (redirectUri) => {
+		const response = await register({
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			redirect_uris: [redirectUri],
+		});
+		expect(response.status).toBe(201);
+	});
+
+	it("defaults omitted application_type to web and applies web redirect policy", async () => {
+		const rejected = await register({
+			redirect_uris: ["http://localhost:5000/api/auth/callback/test"],
+		});
+		expect(rejected.status).toBe(400);
+
+		const accepted = await register({
+			redirect_uris: ["https://rp.example.com/callback"],
+		});
+		expect(accepted.status).toBe(201);
+		const body = (await accepted.json()) as OAuthClient;
+		expect(body.application_type).toBe("web");
 	});
 });

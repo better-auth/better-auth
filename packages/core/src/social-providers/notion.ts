@@ -28,6 +28,7 @@ export const notion = (options: NotionOptions) => {
 	return {
 		id: "notion",
 		name: "Notion",
+		accountSubject: ({ profile }) => profile.id,
 		createAuthorizationURL({
 			state,
 			scopes,
@@ -100,7 +101,6 @@ export const notion = (options: NotionOptions) => {
 			const userMap = await options.mapProfileToUser?.(userProfile);
 			return {
 				user: {
-					id: userProfile.id,
 					name: userProfile.name || "",
 					email: userProfile.person?.email || null,
 					image: userProfile.avatar_url,

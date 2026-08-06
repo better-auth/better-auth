@@ -8,7 +8,6 @@
     "url": "git+https://github.com/better-auth/better-auth.git"
   },
   "scripts": {
-    "prepare": "lefthook install --reset-hooks-path",
     "build": "turbo build --filter=./packages/*",
     "dev": "turbo dev --filter=./packages/* --filter=!./packages/cli",
     "clean": "turbo clean --filter=./packages/* && rm -rf node_modules",
@@ -33,8 +32,9 @@
     "coverage:open": "open coverage/lcov-report/index.html",
     "e2e:smoke": "turbo e2e:smoke",
     "e2e:integration": "turbo e2e:integration",
-    "typecheck": "tsc --build",
-    "typecheck:dist": "tsc --project tsconfig.dist-check.json"
+    "typecheck": "tsc --build --force",
+    "typecheck:dist": "tsc --project tsconfig.dist-check.json",
+    "typecheck:consumers": "turbo run typecheck:consumer"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.3",

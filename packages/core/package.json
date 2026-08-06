@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/core",
-  "version": "1.7.0-rc.1",
+  "version": "1.7.0-rc.4",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -89,6 +89,11 @@
       "types": "./dist/db/index.d.mts",
       "default": "./dist/db/index.mjs"
     },
+    "./db/internal": {
+      "dev-source": "./src/db/internal.ts",
+      "types": "./dist/db/internal.d.mts",
+      "default": "./dist/db/internal.mjs"
+    },
     "./db/adapter": {
       "dev-source": "./src/db/adapter/index.ts",
       "types": "./dist/db/adapter/index.d.mts",
@@ -144,6 +149,9 @@
       "db": [
         "dist/db/index.d.mts"
       ],
+      "db/internal": [
+        "dist/db/internal.d.mts"
+      ],
       "db/adapter": [
         "dist/db/adapter/index.d.mts"
       ],
@@ -165,8 +173,8 @@
     "@better-fetch/fetch": "catalog:",
     "@cloudflare/workers-types": "^4.20250121.0",
     "@opentelemetry/api": "^1.9.1",
-    "@opentelemetry/sdk-trace-base": "^2.8.0",
-    "@opentelemetry/sdk-trace-node": "^2.8.0",
+    "@opentelemetry/sdk-trace-base": "^2.10.0",
+    "@opentelemetry/sdk-trace-node": "^2.10.0",
     "better-call": "catalog:",
     "jose": "^6.2.3",
     "kysely": "catalog:",

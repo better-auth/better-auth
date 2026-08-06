@@ -9,6 +9,7 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/prisma-adapter": "workspace:*",
+    "@better-auth/scim": "workspace:*",
     "@better-auth/test-utils": "workspace:*",
     "@prisma/adapter-better-sqlite3": "^7.8.0",
     "@prisma/adapter-mariadb": "^7.8.0",

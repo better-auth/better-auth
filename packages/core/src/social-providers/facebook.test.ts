@@ -82,8 +82,16 @@ describe("facebook.getUserInfo (opaque access token)", () => {
 		const res = await provider.getUserInfo({
 			accessToken: "opaque-access-token",
 		} as any);
-		expect(res?.user.id).toBe("u1");
+		expect(res?.user).not.toHaveProperty("id");
 		expect(res?.user.email).toBe("u1@example.com");
+		expect(typeof provider.accountSubject).toBe("function");
+		if (typeof provider.accountSubject !== "function" || !res) return;
+		expect(
+			await provider.accountSubject({
+				tokens: { accessToken: "opaque-access-token" },
+				profile: res.data,
+			}),
+		).toBe("u1");
 	});
 
 	it("rejects a token issued to a different app (token substitution)", async () => {

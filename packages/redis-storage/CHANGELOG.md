@@ -1,5 +1,11 @@
 # @better-auth/redis-storage
 
+## 1.7.0-rc.4
+
+## 1.7.0-rc.3
+
+## 1.7.0-rc.2
+
 ## 1.7.0-rc.1
 
 ## 1.7.0-rc.0
@@ -42,6 +48,29 @@
   - @better-auth/core@1.7.0-beta.5
 
 ## 1.7.0-beta.4
+
+## 1.6.26
+
+### Patch Changes
+
+- [#10507](https://github.com/better-auth/better-auth/pull/10507) [`2ebd766`](https://github.com/better-auth/better-auth/commit/2ebd766d60e2ebdae9810f9c68e84976726f5638) Thanks [@jashkarangiya](https://github.com/jashkarangiya)! - Enumerate keys with `SCAN` instead of `KEYS` in `listKeys()` and `clear()` so large keyspaces no longer block the Redis server. Escape glob metacharacters in the key prefix so `clear()` cannot match keys outside the store, and make `clear()` a safe no-op on an empty store.
+
+- Updated dependencies [[`a30e274`](https://github.com/better-auth/better-auth/commit/a30e274b5daed6057086d76b91d17abfa02196d7)]:
+  - @better-auth/core@1.6.26
+
+## 1.6.25
+
+### Patch Changes
+
+- Updated dependencies [[`0ffd1fb`](https://github.com/better-auth/better-auth/commit/0ffd1fb28d44a8266d62791cd4c97e263444d03b)]:
+  - @better-auth/core@1.6.25
+
+## 1.6.24
+
+### Patch Changes
+
+- Updated dependencies [[`6758231`](https://github.com/better-auth/better-auth/commit/6758231905d2e86a7b3f058dd05c17ba739aa80f), [`54fab08`](https://github.com/better-auth/better-auth/commit/54fab084469a27257e66a0814523ebac7145ef5d), [`c4d1dda`](https://github.com/better-auth/better-auth/commit/c4d1ddaa952eab7edfec942fab223f35798518ab)]:
+  - @better-auth/core@1.6.24
 
 ## 1.6.23
 

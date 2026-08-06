@@ -31,6 +31,11 @@ export {
 	DEFAULT_MAX_SAML_RESPONSE_SIZE,
 } from "./constants";
 export {
+	deriveSAMLIdentityProviderEntityID,
+	deriveSAMLServiceProviderPolicy,
+	type SAMLServiceProviderPolicy,
+} from "./routes/helpers";
+export {
 	type AlgorithmValidationOptions,
 	DataEncryptionAlgorithm,
 	type DeprecatedAlgorithmBehavior,
@@ -48,13 +53,38 @@ import type {
 	InferSSOProvider,
 	OIDCConfig,
 	SAMLConfig,
+	SAMLIdentityProviderMetadata,
+	SSOOIDCUserResolutionInput,
 	SSOOptions,
 	SSOProvider,
+	SSOProviderMutationGuardContext,
+	SSOProviderMutationGuardInput,
+	SSOProviderReference,
 	SSOProviderSchema,
+	SSOProviderUserProfile,
+	SSOSAMLUserResolutionInput,
+	SSOUserResolution,
+	SSOUserResolutionContext,
+	SSOUserResolutionInput,
 } from "./types";
 import { PACKAGE_VERSION } from "./version";
 
-export type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider };
+export type {
+	OIDCConfig,
+	SAMLConfig,
+	SAMLIdentityProviderMetadata,
+	SSOOIDCUserResolutionInput,
+	SSOOptions,
+	SSOProvider,
+	SSOProviderMutationGuardContext,
+	SSOProviderMutationGuardInput,
+	SSOProviderReference,
+	SSOProviderUserProfile,
+	SSOSAMLUserResolutionInput,
+	SSOUserResolution,
+	SSOUserResolutionContext,
+	SSOUserResolutionInput,
+};
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -256,7 +286,7 @@ export function sso<O extends SSOOptions>(
 		listSSOProviders: listSSOProviders(optionsWithStore),
 		getSSOProvider: getSSOProvider(optionsWithStore),
 		updateSSOProvider: updateSSOProvider(optionsWithStore),
-		deleteSSOProvider: deleteSSOProvider(),
+		deleteSSOProvider: deleteSSOProvider(optionsWithStore),
 	};
 
 	if (options?.domainVerification?.enabled) {

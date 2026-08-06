@@ -31,7 +31,7 @@
         "RESEND_API_KEY",
         "TYPESENSE_ADMIN_API_KEY",
         "GITHUB_TOKEN",
-        "OPENROUTER_API_KEY",
+        "AI_GATEWAY_API_KEY",
         "UPSTASH_REDIS_REST_URL",
         "UPSTASH_REDIS_REST_TOKEN"
       ]
@@ -57,6 +57,10 @@
     "lint:package": {
       "dependsOn": ["^build", "build"],
       "inputs": ["dist/**", "package.json"],
+      "outputs": []
+    },
+    "typecheck:consumer": {
+      "dependsOn": ["^build"],
       "outputs": []
     },
     "test": {

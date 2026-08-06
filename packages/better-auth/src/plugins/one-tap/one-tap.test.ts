@@ -1,7 +1,10 @@
 // cspell:ignore AQAB
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { jwtVerify } from "jose";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { oneTapClient } from "./client";
 import { oneTap } from "./index";
 
 vi.mock("@better-fetch/fetch", async (importOriginal) => {
@@ -260,6 +263,7 @@ describe("one-tap implicit linking gate", async () => {
 		await ctx.internalAdapter.createAccount({
 			userId: otherUser.id,
 			providerId: "github",
+			issuer: "local:github",
 			accountId: verifiedPayload.sub,
 		});
 
@@ -282,6 +286,7 @@ describe("one-tap implicit linking gate", async () => {
 			model: "account",
 			where: [
 				{ field: "providerId", value: "google" },
+				{ field: "issuer", value: "https://accounts.google.com" },
 				{ field: "accountId", value: verifiedPayload.sub },
 			],
 		});
@@ -326,6 +331,7 @@ describe("one-tap implicit linking gate", async () => {
 			model: "account",
 			where: [
 				{ field: "providerId", value: "google" },
+				{ field: "issuer", value: "https://accounts.google.com" },
 				{ field: "accountId", value: verifiedPayload.sub },
 			],
 		});
@@ -366,6 +372,7 @@ describe("one-tap implicit linking gate", async () => {
 		await ctx.internalAdapter.createAccount({
 			userId: userA.id,
 			providerId: "google",
+			issuer: "https://accounts.google.com",
 			accountId: sharedSub,
 		});
 		const userB = await ctx.internalAdapter.createUser(
@@ -714,5 +721,105 @@ describe("one-tap hosted domain (hd)", async () => {
 
 		expect(res.error).toBeFalsy();
 		expect(res.data?.token).toBeTruthy();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10478
+ */
+describe("one-tap disableSignUp", () => {
+	afterEach(() => {
+		Object.assign(verifiedPayload, defaultVerifiedPayload);
+	});
+
+	it("rejects provider-disabled sign-up without creating a user", async () => {
+		verifiedPayload.email = "one-tap-disable-signup@example.com";
+		verifiedPayload.sub = "one-tap-disable-signup-sub";
+
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+					disableSignUp: true,
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		await expect(
+			auth.api.oneTapCallback({
+				body: { idToken: "stub-id-token" },
+			}),
+		).rejects.toMatchObject({
+			statusCode: 401,
+			status: "UNAUTHORIZED",
+			body: { message: "signup disabled" },
+		});
+
+		const ctx = await auth.$context;
+		const users = await ctx.adapter.findMany<{ email: string }>({
+			model: "user",
+			where: [
+				{
+					field: "email",
+					value: verifiedPayload.email,
+				},
+			],
+		});
+		expect(users).toHaveLength(0);
+	});
+
+	it("keeps provider sign-up disabled when One Tap enables it", async () => {
+		verifiedPayload.email = "one-tap-signup-override@example.com";
+		verifiedPayload.sub = "one-tap-signup-override-sub";
+
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					enabled: true,
+					disableSignUp: true,
+				},
+			},
+			plugins: [oneTap({ disableSignup: false })],
+		});
+
+		await expect(
+			auth.api.oneTapCallback({
+				body: { idToken: "stub-id-token" },
+			}),
+		).rejects.toMatchObject({
+			statusCode: 401,
+			status: "UNAUTHORIZED",
+			body: { message: "signup disabled" },
+		});
+	});
+});
+
+/**
+ * Declaration emit previously left `getActions`'s `$fetch` parameter
+ * un-annotated. With no import of `BetterFetch` in the file, emit had no
+ * name to reference and inlined `import("@better-fetch/fetch").BetterFetch`
+ * instead, which is not assignable to `BetterAuthClientPlugin`'s
+ * `getActions`. As a result, the client lost the `oneTap` action.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10583
+ */
+describe("oneTapClient types", () => {
+	it("should be assignable to BetterAuthClientPlugin", () => {
+		const plugin: BetterAuthClientPlugin = oneTapClient({
+			clientId: "test-client",
+		});
+		expect(plugin.id).toBe("one-tap");
+	});
+
+	it("should preserve the oneTap client action", () => {
+		const client = createAuthClient({
+			plugins: [oneTapClient({ clientId: "test-client" })],
+		});
+		expectTypeOf(client.oneTap).toBeFunction();
 	});
 });

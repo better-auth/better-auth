@@ -23,12 +23,6 @@ import type {
 	GenericOAuthUserInfo,
 } from "./types";
 
-function isNonEmptyOAuthId(
-	id: string | number | null | undefined,
-): id is string | number {
-	return id !== undefined && id !== null && id !== "";
-}
-
 export * from "./providers";
 export type {
 	GenericOAuthConfig,
@@ -55,6 +49,9 @@ export type BaseOAuthProviderOptions = Pick<
 	| "tokenEndpointAuth"
 	| "scopes"
 	| "redirectURI"
+	| "endSessionEndpoint"
+	| "postLogoutRedirectURI"
+	| "disableProviderLogout"
 	| "pkce"
 	| "disableImplicitSignUp"
 	| "disableSignUp"
@@ -67,6 +64,7 @@ interface DiscoveryDocument {
 	userinfo_endpoint?: string;
 	issuer?: string;
 	jwks_uri?: string;
+	end_session_endpoint?: string;
 	id_token_signing_alg_values_supported?: string[];
 }
 
@@ -161,18 +159,8 @@ async function fetchUserInfo(
 	if (userInfo.error || !userInfo.data) {
 		return null;
 	}
-	const { id: profileId, ...profileFields } = userInfo.data;
-	// Non-empty `id` wins over `sub` to keep stored account ids stable. OIDC
-	// UserInfo responses must include `sub`; generic OAuth profiles may omit it
-	// and let `mapProfileToUser` derive the account id from another field.
-	const subjectId = isNonEmptyOAuthId(profileId)
-		? profileId
-		: isNonEmptyOAuthId(userInfo.data.sub)
-			? userInfo.data.sub
-			: undefined;
 	return {
-		...profileFields,
-		...(subjectId !== undefined ? { id: subjectId } : {}),
+		...userInfo.data,
 		email: userInfo.data.email,
 		emailVerified: userInfo.data.email_verified ?? false,
 		image: userInfo.data.picture,
@@ -217,6 +205,7 @@ export const genericOAuth = <const ID extends string>(
 				let authorizationUrl = c.authorizationUrl;
 				let tokenUrl = c.tokenUrl;
 				let userInfoUrl = c.userInfoUrl;
+				let endSessionEndpoint = c.endSessionEndpoint;
 
 				let issuer: string | undefined;
 				let isOidc = false;
@@ -233,36 +222,49 @@ export const genericOAuth = <const ID extends string>(
 						return null;
 					});
 					if (discovered) {
+						if (!discovered.issuer && !c.accountIssuer) {
+							throw new Error(
+								`Provider "${c.providerId}": discovery did not return an issuer. Configure accountIssuer explicitly to establish a stable account namespace.`,
+							);
+						}
 						authorizationUrl ??= discovered.authorization_endpoint;
 						tokenUrl ??= discovered.token_endpoint;
 						userInfoUrl ??= discovered.userinfo_endpoint;
+						endSessionEndpoint ??= discovered.end_session_endpoint;
 						issuer = discovered.issuer;
 						const signingAlgs =
 							discovered.id_token_signing_alg_values_supported;
 						isOidc = Array.isArray(signingAlgs) && signingAlgs.length > 0;
 						if (discovered.jwks_uri && discovered.issuer) {
+							let jwksUrl: URL;
 							try {
-								idTokenConfig = {
-									jwks: createRemoteJWKSet(
-										new URL(discovered.jwks_uri, c.discoveryUrl),
-									),
-									issuer: discovered.issuer,
-									audience: c.clientId,
-									algorithms: isOidc ? signingAlgs : undefined,
-								};
-							} catch (err) {
-								// A malformed jwks_uri must not break provider registration;
-								// fall back to the decode posture used by non-discovery providers.
-								ctx.logger.error(
-									`Provider "${c.providerId}": invalid jwks_uri in discovery document, skipping id_token verification: ${err}`,
+								jwksUrl = new URL(discovered.jwks_uri, c.discoveryUrl);
+							} catch {
+								throw new Error(
+									`Provider "${c.providerId}": invalid jwks_uri "${discovered.jwks_uri}" in discovery document.`,
 								);
 							}
+							idTokenConfig = {
+								jwks: createRemoteJWKSet(jwksUrl),
+								issuer: discovered.issuer,
+								audience: c.clientId,
+								algorithms: isOidc ? signingAlgs : undefined,
+							};
 						}
+					} else if (!c.accountIssuer) {
+						throw new Error(
+							`Provider "${c.providerId}": discovery returned no valid data. Provider initialization stopped to keep its account issuer stable.`,
+						);
 					} else if (!authorizationUrl || !tokenUrl) {
 						ctx.logger.error(
 							`Provider "${c.providerId}": discovery returned no data and no explicit endpoints configured. OAuth sign-in will fail for this provider.`,
 						);
 					}
+				}
+				if (c.requireIdTokenVerification && !idTokenConfig) {
+					throw new Error(
+						`Provider "${c.providerId}": requires verified ID tokens, but discovery did not provide a usable issuer and jwks_uri.`,
+					);
 				}
 
 				const tokenEndpointAuth = c.tokenEndpointAuth;
@@ -294,15 +296,75 @@ export const genericOAuth = <const ID extends string>(
 					);
 				}
 
+				const accountSubject = c.accountSubject;
+				const accountIssuer = c.accountIssuer;
 				const provider: OAuthProvider = {
 					id: c.providerId,
 					name: c.name ?? c.providerId,
 					issuer,
+					accountSubject: ({ tokens, profile }) => {
+						// AuthContext erases heterogeneous provider profile types. This
+						// provider always emits GenericOAuthUserInfo from getUserInfo below.
+						const genericProfile = profile as GenericOAuthUserInfo;
+						if (accountSubject) {
+							return accountSubject({ tokens, profile: genericProfile });
+						}
+						return isOidc
+							? (genericProfile.sub ?? "")
+							: (genericProfile.id ?? "");
+					},
+					accountIssuer:
+						typeof accountIssuer === "function"
+							? ({ tokens, profile }) =>
+									accountIssuer({
+										tokens,
+										profile: profile as GenericOAuthUserInfo,
+									})
+							: (accountIssuer ?? issuer),
 					idToken: idTokenConfig,
 					requiresIdTokenNonce:
 						idTokenConfig !== undefined &&
 						c.disableIdTokenNonceBinding !== true,
 					allowIdpInitiated: c.allowIdpInitiated,
+					async createEndSessionURL(data: {
+						idToken?: string | null | undefined;
+						postLogoutRedirectURI?: string | undefined;
+						state?: string | undefined;
+					}) {
+						if (c.disableProviderLogout) {
+							return null;
+						}
+						if (!endSessionEndpoint) {
+							return null;
+						}
+						let url: URL;
+						try {
+							url = new URL(endSessionEndpoint);
+						} catch {
+							return null;
+						}
+						if (data.idToken) {
+							url.searchParams.set("id_token_hint", data.idToken);
+						}
+						const configuredRedirectURI =
+							data.postLogoutRedirectURI ?? c.postLogoutRedirectURI;
+						const postLogoutRedirectURI = configuredRedirectURI
+							? new URL(configuredRedirectURI, ctx.baseURL).toString()
+							: undefined;
+						if (postLogoutRedirectURI) {
+							url.searchParams.set(
+								"post_logout_redirect_uri",
+								postLogoutRedirectURI,
+							);
+							url.searchParams.set("client_id", c.clientId);
+							if (data.state) {
+								url.searchParams.set("state", data.state);
+							}
+						} else if (!data.idToken) {
+							url.searchParams.set("client_id", c.clientId);
+						}
+						return url;
+					},
 					createAuthorizationURL(data) {
 						if (!authorizationUrl) {
 							throw APIError.from(
@@ -399,23 +461,12 @@ export const genericOAuth = <const ID extends string>(
 						const mapped = c.mapProfileToUser
 							? await c.mapProfileToUser(raw)
 							: {};
-						const rawId = isNonEmptyOAuthId(mapped.id)
-							? mapped.id
-							: isNonEmptyOAuthId(raw.id)
-								? raw.id
-								: isNonEmptyOAuthId(raw.sub)
-									? raw.sub
-									: undefined;
-						if (rawId === undefined) {
-							return null;
-						}
 						const user = {
 							email: raw.email,
 							emailVerified: raw.emailVerified,
 							image: raw.image,
 							name: raw.name,
 							...mapped,
-							id: String(rawId),
 						};
 						return {
 							user: {

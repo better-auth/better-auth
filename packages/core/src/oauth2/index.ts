@@ -65,7 +65,10 @@ export {
 export type {
 	OAuth2Tokens,
 	OAuth2UserInfo,
+	OAuthAccountKeyContext,
+	OAuthAccountSubject,
 	OAuthIdTokenConfig,
+	OAuthMappedUser,
 	OAuthProvider,
 	OAuthRefreshContext,
 	ProviderOptions,
@@ -97,7 +100,9 @@ export type {
 	VerifyAccessTokenRequestOptions,
 } from "./verify";
 export {
+	createInsufficientScopeError,
 	getJwks,
+	isInsufficientScopeError,
 	requestToResourceInput,
 	verifyAccessTokenRequest,
 	verifyBearerToken,

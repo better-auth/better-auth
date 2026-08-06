@@ -1,9 +1,32 @@
 import type { BetterAuthOptions } from "../types";
-import type { BetterAuthDBSchema, DBFieldAttribute } from "./type";
+import { resolveDatabaseSchemaIndexes } from "./database-index";
+import type {
+	BetterAuthDBSchema,
+	DBFieldAttribute,
+	DBTableIndex,
+} from "./type";
 
-export const getAuthTables = (
-	options: BetterAuthOptions,
-): BetterAuthDBSchema => {
+function mergeTableIndexes(
+	...indexCollections: ReadonlyArray<readonly DBTableIndex[] | undefined>
+) {
+	const indexes: DBTableIndex[] = [];
+	const seenIndexDefinitions = new Set<string>();
+	for (const index of indexCollections.flatMap(
+		(collection) => collection ?? [],
+	)) {
+		const definition = JSON.stringify([
+			index.name ?? null,
+			index.fields,
+			index.unique ?? false,
+		]);
+		if (seenIndexDefinitions.has(definition)) continue;
+		seenIndexDefinitions.add(definition);
+		indexes.push(index);
+	}
+	return indexes;
+}
+
+const buildAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema => {
 	const pluginSchema = (options.plugins ?? []).reduce(
 		(acc, plugin) => {
 			const schema = plugin.schema;
@@ -14,6 +37,7 @@ export const getAuthTables = (
 						...acc[key]?.fields,
 						...value.fields,
 					},
+					indexes: mergeTableIndexes(acc[key]?.indexes, value.indexes),
 					modelName: value.modelName || key,
 					disableMigrations:
 						value.disableMigration ?? acc[key]?.disableMigrations,
@@ -25,6 +49,7 @@ export const getAuthTables = (
 			string,
 			{
 				fields: Record<string, DBFieldAttribute>;
+				indexes?: readonly DBTableIndex[] | undefined;
 				modelName: string;
 				disableMigrations?: boolean | undefined;
 			}
@@ -64,6 +89,7 @@ export const getAuthTables = (
 	const verificationTable = {
 		verification: {
 			modelName: options.verification?.modelName || "verification",
+			indexes: verification?.indexes,
 			fields: {
 				identifier: {
 					type: "string",
@@ -104,6 +130,7 @@ export const getAuthTables = (
 	const sessionTable = {
 		session: {
 			modelName: options.session?.modelName || "session",
+			indexes: session?.indexes,
 			fields: {
 				expiresAt: {
 					type: "date",
@@ -142,7 +169,18 @@ export const getAuthTables = (
 					type: "string",
 					fieldName: options.session?.fields?.userId || "userId",
 					references: {
-						model: options.user?.modelName || "user",
+						// Use the canonical user schema key here rather than
+						// `options.user.modelName`. Downstream consumers (e.g.
+						// `getSchema`, `getMigrations`, and the runtime adapter
+						// resolvers) treat `references.model` as a schema key
+						// and look it up via `tables[references.model]` /
+						// `getDefaultModelName`. Writing the modelName alias
+						// here would collide when a user picks a modelName that
+						// matches another schema key (for example
+						// `user.modelName = "account"`), causing the FK to
+						// resolve to the wrong table.
+						// @see https://github.com/better-auth/better-auth/issues/8111
+						model: "user",
 						field: "id",
 						onDelete: "cascade",
 					},
@@ -156,9 +194,10 @@ export const getAuthTables = (
 		},
 	} satisfies BetterAuthDBSchema;
 
-	return {
+	const authTables = {
 		user: {
 			modelName: options.user?.modelName || "user",
+			indexes: user?.indexes,
 			fields: {
 				name: {
 					type: "string",
@@ -211,7 +250,21 @@ export const getAuthTables = (
 			: {}),
 		account: {
 			modelName: options.account?.modelName || "account",
+			indexes: mergeTableIndexes(
+				[
+					{
+						fields: ["issuer", "accountId"],
+						unique: true,
+					},
+				],
+				account?.indexes,
+			),
 			fields: {
+				issuer: {
+					type: "string",
+					required: true,
+					fieldName: options.account?.fields?.issuer || "issuer",
+				},
 				accountId: {
 					type: "string",
 					required: true,
@@ -225,7 +278,11 @@ export const getAuthTables = (
 				userId: {
 					type: "string",
 					references: {
-						model: options.user?.modelName || "user",
+						// See note on `session.userId.references.model` above:
+						// always use the canonical user schema key so the FK
+						// target survives `user.modelName` aliasing.
+						// @see https://github.com/better-auth/better-auth/issues/8111
+						model: "user",
 						field: "id",
 						onDelete: "cascade",
 					},
@@ -301,4 +358,26 @@ export const getAuthTables = (
 		...pluginTables,
 		...(shouldAddRateLimitTable ? rateLimitTable : {}),
 	} satisfies BetterAuthDBSchema;
+
+	return authTables;
 };
+
+export function getAuthTablesWithResolvedIndexes(options: BetterAuthOptions) {
+	const tables = buildAuthTables(options);
+	const indexesByTable = resolveDatabaseSchemaIndexes(
+		Object.values(tables)
+			.filter(
+				(table) => !("disableMigrations" in table) || !table.disableMigrations,
+			)
+			.map((table) => ({
+				fields: table.fields,
+				indexes: "indexes" in table ? table.indexes : undefined,
+				tableName: table.modelName,
+			})),
+	);
+
+	return { indexesByTable, tables };
+}
+
+export const getAuthTables = (options: BetterAuthOptions): BetterAuthDBSchema =>
+	getAuthTablesWithResolvedIndexes(options).tables;

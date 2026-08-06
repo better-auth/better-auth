@@ -37,7 +37,7 @@ export const blogCollection = defineCollections({
 	schema: z.object({
 		title: z.string(),
 		description: z.string(),
-		date: z.date(),
+		date: z.coerce.date(),
 		draft: z.boolean().optional(),
 		author: z
 			.object({
@@ -46,7 +46,15 @@ export const blogCollection = defineCollections({
 				twitter: z.string().optional(),
 			})
 			.optional(),
-		image: z.string().optional(),
+		image: z
+			.union([
+				z.string(),
+				z.object({
+					light: z.string(),
+					dark: z.string(),
+				}),
+			])
+			.optional(),
 		tags: z.array(z.string()).optional(),
 	}),
 	postprocess: {

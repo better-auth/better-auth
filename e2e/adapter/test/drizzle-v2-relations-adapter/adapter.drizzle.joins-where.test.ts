@@ -1,5 +1,5 @@
 /**
- * Under `experimental.joins`, a `where` with `mode: "insensitive"` must fall back
+ * With joins, a `where` with `mode: "insensitive"` must fall back
  * to the SQL builder instead of silently degrading to a case-sensitive match.
  */
 import type { User } from "@better-auth/core/db";
@@ -31,7 +31,9 @@ describe("drizzle relations-v2 adapter: joins path honors insensitive mode", () 
 	const adapter = drizzleAdapter(db, {
 		schema,
 		provider: "sqlite",
-	})({ experimental: { joins: true } });
+	})({
+		advanced: { database: { joins: true } },
+	});
 
 	beforeEach(() => {
 		sqliteDb.exec("DROP TABLE IF EXISTS user;");

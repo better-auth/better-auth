@@ -150,6 +150,8 @@ export const google = (options: GoogleOptions) => {
 	return {
 		id: "google",
 		name: "Google",
+		accountSubject: ({ profile }) => profile.sub,
+		accountIssuer: "https://accounts.google.com",
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -254,7 +256,6 @@ export const google = (options: GoogleOptions) => {
 			const userMap = await options.mapProfileToUser?.(user);
 			return {
 				user: {
-					id: user.sub,
 					name: user.name,
 					email: user.email,
 					image: user.picture,

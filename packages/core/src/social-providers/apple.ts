@@ -82,11 +82,14 @@ export const apple = (options: AppleOptions) => {
 	return {
 		id: "apple",
 		name: "Apple",
+		accountSubject: ({ profile }) => profile.sub,
+		accountIssuer: "https://appleid.apple.com",
 		async createAuthorizationURL({
 			state,
 			scopes,
 			redirectURI,
 			additionalParams,
+			codeVerifier,
 		}) {
 			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
 				logger.error(
@@ -104,6 +107,7 @@ export const apple = (options: AppleOptions) => {
 				scopes: _scope,
 				state,
 				redirectURI,
+				codeVerifier,
 				responseMode: "form_post",
 				responseType: "code id_token",
 				additionalParams,
@@ -174,7 +178,6 @@ export const apple = (options: AppleOptions) => {
 			const userMap = await options.mapProfileToUser?.(enrichedProfile);
 			return {
 				user: {
-					id: profile.sub,
 					name: enrichedProfile.name,
 					emailVerified: emailVerified,
 					email: profile.email,

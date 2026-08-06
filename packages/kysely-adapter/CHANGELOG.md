@@ -1,5 +1,21 @@
 # @better-auth/kysely-adapter
 
+## 1.7.0-rc.4
+
+## 1.7.0-rc.3
+
+### Minor Changes
+
+- [#10622](https://github.com/better-auth/better-auth/pull/10622) [`ecd83da`](https://github.com/better-auth/better-auth/commit/ecd83daa01ec482d31667019737cb6697f03da0b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Raw database instances (better-sqlite3, `node:sqlite`, `bun:sqlite`, `mysql2`, `pg`) passed directly as `database` now get native adapter transactions automatically, matching the behavior of the explicit `{ db }`/`{ dialect }` config shapes. This unblocks plugins that require native transactions (such as `@better-auth/scim`) when the database is provided in the quickstart `database: new Database(...)` shape.
+
+  Cloudflare D1 still reports no native transaction support, since D1 has no interactive transactions.
+
+## 1.7.0-rc.2
+
+### Patch Changes
+
+- [#10377](https://github.com/better-auth/better-auth/pull/10377) [`e4818b5`](https://github.com/better-auth/better-auth/commit/e4818b545984dce99e3c798ead5691c5bf775a70) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Fix SQLite dialect bundles with Kysely 0.29 by using locally mirrored migration-table constants.
+
 ## 1.7.0-rc.1
 
 ## 1.7.0-rc.0
@@ -42,6 +58,27 @@
   - @better-auth/core@1.7.0-beta.5
 
 ## 1.7.0-beta.4
+
+## 1.6.26
+
+### Patch Changes
+
+- Updated dependencies [[`a30e274`](https://github.com/better-auth/better-auth/commit/a30e274b5daed6057086d76b91d17abfa02196d7)]:
+  - @better-auth/core@1.6.26
+
+## 1.6.25
+
+### Patch Changes
+
+- Updated dependencies [[`0ffd1fb`](https://github.com/better-auth/better-auth/commit/0ffd1fb28d44a8266d62791cd4c97e263444d03b)]:
+  - @better-auth/core@1.6.25
+
+## 1.6.24
+
+### Patch Changes
+
+- Updated dependencies [[`6758231`](https://github.com/better-auth/better-auth/commit/6758231905d2e86a7b3f058dd05c17ba739aa80f), [`54fab08`](https://github.com/better-auth/better-auth/commit/54fab084469a27257e66a0814523ebac7145ef5d), [`c4d1dda`](https://github.com/better-auth/better-auth/commit/c4d1ddaa952eab7edfec942fab223f35798518ab)]:
+  - @better-auth/core@1.6.24
 
 ## 1.6.23
 

@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { refreshAccessToken } from "@better-auth/core/oauth2";
 import type {
 	GoogleProfile,
@@ -511,13 +512,12 @@ describe("Social Providers", async (c) => {
 				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
 			},
 		});
-		await client.listAccounts({
+		const accounts = await client.listAccounts({
 			fetchOptions: { headers },
 		});
 		await client.$fetch("/refresh-token", {
 			body: {
-				accountId: "test-id",
-				providerId: "google",
+				accountId: accounts.data?.[0]?.id,
 			},
 			headers,
 			method: "POST",
@@ -1174,6 +1174,42 @@ describe("Google Provider — multiple client IDs", async () => {
 		expect(res.error?.status).toBe(401);
 	});
 
+	it("returns 401 over HTTP when a verified profile resolves an invalid account subject", async () => {
+		const idToken = await signIdToken(webClientId);
+		const { auth, client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: webClientId,
+						clientSecret: "test-secret",
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const context = await auth.$context;
+		const googleProvider = context.socialProviders.find(
+			(provider) => provider.id === "google",
+		);
+		expect(googleProvider).toBeDefined();
+		googleProvider!.accountSubject = () => "";
+
+		const result = await client.$fetch("/sign-in/social", {
+			method: "POST",
+			body: {
+				provider: "google",
+				idToken: { token: idToken },
+			},
+		});
+
+		expect(result.data).toBeNull();
+		expect(result.error).toMatchObject({
+			status: 401,
+			code: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO.code,
+			message: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO.message,
+		});
+	});
+
 	it("uses the first configured client id when building the authorization URL", async () => {
 		const { client } = await getTestInstance(
 			{
@@ -1682,6 +1718,138 @@ describe("Apple Provider", async () => {
 		expect(data.user.email).toBe("noname-user@privaterelay.appleid.com");
 		expect(data.user.name).toBe("");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/1214
+	 */
+	it("should pass request ctx to verifyIdToken for id-token sign-in", async () => {
+		const appleProfile = {
+			sub: "001341.example.ctx-signin",
+			email: "ctx-signin@privaterelay.appleid.com",
+			email_verified: true,
+			is_private_email: true,
+			real_user_status: 2,
+		};
+		const idToken = await signJWT(appleProfile, DEFAULT_SECRET);
+		let seenPlatform: string | null | undefined;
+
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					apple: {
+						clientId: "test-apple-client",
+						clientSecret: "test-apple-secret",
+						verifyIdToken: async (_token, _nonce, ctx) => {
+							seenPlatform = ctx?.headers?.get("x-platform") ?? null;
+							return seenPlatform === "ios";
+						},
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const rejected = await client.signIn.social({
+			provider: "apple",
+			idToken: { token: idToken },
+			fetchOptions: {
+				headers: {
+					"x-platform": "android",
+				},
+			},
+		});
+		expect(seenPlatform).toBe("android");
+		expect(rejected.error?.status).toBe(401);
+
+		const accepted = await client.signIn.social({
+			provider: "apple",
+			idToken: { token: idToken },
+			fetchOptions: {
+				headers: {
+					"x-platform": "ios",
+				},
+			},
+		});
+		expect(seenPlatform).toBe("ios");
+		expect(accepted.data).toBeDefined();
+		expect(accepted.data!.redirect).toBe(false);
+		const data = accepted.data as { user: { email: string } };
+		expect(data.user.email).toBe("ctx-signin@privaterelay.appleid.com");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/1214
+ */
+describe("verifyIdToken request ctx — account linking", async () => {
+	it("should pass request ctx to verifyIdToken for id-token account linking", async () => {
+		const googleProfile = {
+			email: "test@test.com",
+			email_verified: true,
+			name: "Ctx Link",
+			picture: "https://example.com/picture.png",
+			exp: 1234567890,
+			sub: "ctx-link-google-sub",
+			iat: 1234567890,
+			aud: "test",
+			azp: "test",
+			nbf: 1234567890,
+			iss: "test",
+			locale: "en",
+			jti: "ctx-link",
+			given_name: "Ctx",
+			family_name: "Link",
+		};
+		const idToken = await signJWT(googleProfile, DEFAULT_SECRET);
+		let seenPlatform: string | null | undefined;
+
+		const { client, signInWithTestUser } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					verifyIdToken: async (_token, _nonce, ctx) => {
+						seenPlatform = ctx?.headers?.get("x-platform") ?? null;
+						return seenPlatform === "ios";
+					},
+				},
+			},
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async (headers) => {
+			headers.set("x-platform", "android");
+			const rejected = await client.linkSocial(
+				{
+					provider: "google",
+					idToken: { token: idToken },
+				},
+				{ headers },
+			);
+			expect(seenPlatform).toBe("android");
+			expect(rejected.error?.status).toBe(401);
+
+			headers.set("x-platform", "ios");
+			const accepted = await client.linkSocial(
+				{
+					provider: "google",
+					idToken: { token: idToken },
+				},
+				{ headers },
+			);
+			expect(seenPlatform).toBe("ios");
+			expect(accepted.error).toBeNull();
+
+			const accounts = await client.listAccounts({
+				fetchOptions: { headers },
+			});
+			expect(
+				accounts.data?.some((account) => account.providerId === "google"),
+			).toBe(true);
+		});
+	});
 });
 
 describe("Vercel Provider", async () => {
@@ -2072,6 +2240,7 @@ describe("Microsoft Provider", async () => {
 	it("should support verifyIdToken with custom function", async () => {
 		const microsoftProfile: Partial<MicrosoftEntraIDProfile> = {
 			sub: "ms-user-123",
+			iss: "https://login.microsoftonline.com/ms-tenant-123/v2.0",
 			email: "msuser@outlook.com",
 			name: "Microsoft User",
 			oid: "ms-oid-123",
@@ -2147,6 +2316,7 @@ describe("Microsoft Provider", async () => {
 	it("should verify id token using JWKS endpoint", async () => {
 		const microsoftProfile: Partial<MicrosoftEntraIDProfile> = {
 			sub: "ms-jwks-user-456",
+			iss: "https://login.microsoftonline.com/ms-tenant-456/v2.0",
 			email: "jwksuser@outlook.com",
 			name: "JWKS User",
 			oid: "ms-oid-456",
@@ -2158,6 +2328,7 @@ describe("Microsoft Provider", async () => {
 		)
 			.setProtectedHeader({ alg: "RS256", kid: msKid })
 			.setIssuedAt()
+			.setIssuer("https://login.microsoftonline.com/ms-tenant-456/v2.0")
 			.setAudience("test-ms-client-jwks")
 			.setExpirationTime("1h")
 			.sign(rsaKeyPair.privateKey);
@@ -2187,7 +2358,7 @@ describe("Microsoft Provider", async () => {
 			}),
 		);
 
-		const { client, cookieSetter } = await getTestInstance(
+		const { auth, client, cookieSetter } = await getTestInstance(
 			{
 				socialProviders: {
 					microsoft: {
@@ -2232,6 +2403,13 @@ describe("Microsoft Provider", async () => {
 
 		expect(session.data?.user.email).toBe("jwksuser@outlook.com");
 		expect(session.data?.user.name).toBe("JWKS User");
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data!.user.id,
+		);
+		expect(
+			accounts.find((account) => account.providerId === "microsoft")?.accountId,
+		).toBe("ms-oid-456");
 	});
 
 	it("should support id token sign in", async () => {
@@ -2267,7 +2445,7 @@ describe("Microsoft Provider", async () => {
 			}),
 		);
 
-		const { client } = await getTestInstance(
+		const { auth, client } = await getTestInstance(
 			{
 				socialProviders: {
 					microsoft: {
@@ -2293,11 +2471,79 @@ describe("Microsoft Provider", async () => {
 		expect(res.data!.redirect).toBe(false);
 		const data = res.data as {
 			token: string;
-			user: { email: string; name: string };
+			user: { id: string; email: string; name: string };
 		};
 		expect(data.token).toBeDefined();
 		expect(data.user.email).toBe("id-tokenuser@outlook.com");
 		expect(data.user.name).toBe("IdToken User");
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(data.user.id);
+		expect(
+			accounts.find((account) => account.providerId === "microsoft")?.accountId,
+		).toBe("ms-oid-789");
+	});
+
+	it("should reject id token sign in when oid is missing", async () => {
+		const microsoftProfile: Partial<MicrosoftEntraIDProfile> = {
+			sub: "ms-missing-oid-user",
+			email: "missing-oid@outlook.com",
+			name: "Missing Oid User",
+			tid: "ms-tenant-missing-oid",
+		};
+
+		const idToken = await new SignJWT(
+			microsoftProfile as unknown as Record<string, unknown>,
+		)
+			.setProtectedHeader({ alg: "RS256", kid: msKid })
+			.setIssuedAt()
+			.setIssuer("https://login.microsoftonline.com/ms-tenant-missing-oid/v2.0")
+			.setAudience("test-ms-client-missing-oid")
+			.setExpirationTime("1h")
+			.sign(rsaKeyPair.privateKey);
+
+		mswServer.use(
+			http.get(
+				"https://login.microsoftonline.com/common/discovery/v2.0/keys",
+				async () => {
+					return HttpResponse.json({
+						keys: [rsaJwk],
+					});
+				},
+			),
+			http.get("https://graph.microsoft.com/v1.0/me/photos/*", async () => {
+				return new HttpResponse(null, { status: 404 });
+			}),
+		);
+
+		const { auth, client } = await getTestInstance(
+			{
+				socialProviders: {
+					microsoft: {
+						clientId: "test-ms-client-missing-oid",
+						clientSecret: "test-ms-secret-missing-oid",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const res = await client.signIn.social({
+			provider: "microsoft",
+			callbackURL: "/callback",
+			idToken: {
+				token: idToken,
+			},
+		});
+
+		expect(res.error?.status).toBe(401);
+		const ctx = await auth.$context;
+		const accounts = await ctx.adapter.findMany({
+			model: "account",
+			where: [{ field: "providerId", value: "microsoft" }],
+		});
+		expect(accounts).toHaveLength(0);
 	});
 
 	it("should report id_token sign-in unsupported when disableIdTokenSignIn is true", async () => {
@@ -2363,6 +2609,7 @@ describe("Microsoft Provider", async () => {
 			sub: "ms-tenant-user",
 			email: "tenant@outlook.com",
 			name: "Tenant User",
+			oid: "ms-tenant-oid",
 			tid: tenantId,
 		};
 
@@ -3395,8 +3642,7 @@ describe("account.scope path-dependent semantics", async () => {
 		);
 		const refresh = await client.$fetch<{ scope?: string }>("/refresh-token", {
 			body: {
-				accountId: accounts[0]!.accountId,
-				providerId: "google",
+				accountId: accounts[0]!.id,
 			},
 			headers,
 			method: "POST",
@@ -3445,8 +3691,7 @@ describe("account.scope path-dependent semantics", async () => {
 		);
 		const refresh = await client.$fetch<{ scope?: string }>("/refresh-token", {
 			body: {
-				accountId: accounts[0]!.accountId,
-				providerId: "google",
+				accountId: accounts[0]!.id,
 			},
 			headers,
 			method: "POST",

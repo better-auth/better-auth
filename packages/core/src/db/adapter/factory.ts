@@ -425,19 +425,19 @@ export const createAdapterFactory =
 				joinConfig,
 			} of requiredModels) {
 				let joinedData = await (async () => {
-					if (options.experimental?.joins) {
-						const result = data[modelName];
-						return result;
-					} else {
-						// doesn't support joins, so fallback to handleFallbackJoin
-						const result = await handleFallbackJoin({
-							baseModel: unsafe_model,
-							baseData: transformedData,
-							joinModel: modelName,
-							specificJoinConfig: joinConfig,
-						});
-						return result;
+					if (options.advanced?.database?.joins) {
+						// Use native joined data when the adapter included the key;
+						// otherwise fall back to separate queries.
+						if (modelName in data) {
+							return data[modelName];
+						}
 					}
+					return await handleFallbackJoin({
+						baseModel: unsafe_model,
+						baseData: transformedData,
+						joinModel: modelName,
+						specificJoinConfig: joinConfig,
+					});
 				})();
 
 				// If joinedData is undefined, initialize it based on relationship type
@@ -863,8 +863,8 @@ export const createAdapterFactory =
 			}: {
 				model: string;
 				data: T;
-				select?: string[];
-				forceAllowId?: boolean;
+				select?: string[] | undefined;
+				forceAllowId?: boolean | undefined;
 			}): Promise<R> => {
 				transactionId++;
 				const thisTransactionId = transactionId;
@@ -1098,8 +1098,8 @@ export const createAdapterFactory =
 			}: {
 				model: string;
 				where: Where[];
-				select?: string[];
-				join?: JoinOption;
+				select?: string[] | undefined;
+				join?: JoinOption | undefined;
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
@@ -1118,9 +1118,12 @@ export const createAdapterFactory =
 						join = result.join;
 						select = result.select;
 					}
-					// If adapter doesn't support joins and we have joins, don't pass them to the adapter
-					const experimentalJoins = options.experimental?.joins;
-					if (!experimentalJoins && join && Object.keys(join).length > 0) {
+					// If joins are disabled and we have joins, don't pass them to the adapter
+					if (
+						!options.advanced?.database?.joins &&
+						join &&
+						Object.keys(join).length > 0
+					) {
 						passJoinToAdapter = false;
 					}
 				} else {
@@ -1178,12 +1181,12 @@ export const createAdapterFactory =
 				join: unsafeJoin,
 			}: {
 				model: string;
-				where?: Where[];
-				limit?: number;
+				where?: Where[] | undefined;
+				limit?: number | undefined;
 				select?: string[] | undefined;
-				sortBy?: { field: string; direction: "asc" | "desc" };
-				offset?: number;
-				join?: JoinOption;
+				sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
+				offset?: number | undefined;
+				join?: JoinOption | undefined;
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
@@ -1206,9 +1209,12 @@ export const createAdapterFactory =
 						join = result.join;
 						select = result.select;
 					}
-					// If adapter doesn't support joins and we have joins, don't pass them to the adapter
-					const experimentalJoins = options.experimental?.joins;
-					if (!experimentalJoins && join && Object.keys(join).length > 0) {
+					// If joins are disabled and we have joins, don't pass them to the adapter
+					if (
+						!options.advanced?.database?.joins &&
+						join &&
+						Object.keys(join).length > 0
+					) {
 						passJoinToAdapter = false;
 					}
 				} else {
@@ -1503,7 +1509,7 @@ export const createAdapterFactory =
 				where: unsafeWhere,
 			}: {
 				model: string;
-				where?: Where[];
+				where?: Where[] | undefined;
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;

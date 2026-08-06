@@ -1,14 +1,16 @@
 import type { Awaitable } from "@better-auth/core";
-import type { User } from "@better-auth/core/db";
 import type {
 	OAuth2Tokens,
 	OAuth2UserInfo,
+	OAuthAccountKeyContext,
+	OAuthMappedUser,
 	OAuthRefreshContext,
 	TokenEndpointAuth,
 } from "@better-auth/core/oauth2";
 
+/** Raw profile returned by a Generic OAuth provider. */
 export type GenericOAuthUserInfo = Omit<OAuth2UserInfo, "id"> & {
-	id?: OAuth2UserInfo["id"] | null | undefined;
+	id?: string | number | null | undefined;
 	sub?: string | number | null | undefined;
 	[key: string]: unknown;
 };
@@ -32,10 +34,50 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 */
 	name?: string | undefined;
 	/**
+	 * Stable subject assigned by the provider.
+	 *
+	 * OpenID Connect discovery providers use the verified profile's `sub` field
+	 * by default. Plain OAuth providers use `id`. Configure this resolver when
+	 * the provider uses a different immutable identifier. Better Auth never
+	 * switches between fields at runtime because that could change an account's
+	 * identity. The resolver never receives the mapped local user, so profile
+	 * mapping cannot redefine provider identity.
+	 */
+	accountSubject?:
+		| ((
+				context: OAuthAccountKeyContext<GenericOAuthUserInfo>,
+		  ) => Awaitable<string | number>)
+		| undefined;
+	/**
+	 * Stable issuer namespace paired with the provider account ID.
+	 *
+	 * Discovery providers use the discovered issuer by default. Set this for
+	 * providers without discovery, provider aliases that share one identity
+	 * namespace, or tenant-specific issuers derived from verified provider data.
+	 * The resolver must not use unverified request input.
+	 */
+	accountIssuer?:
+		| string
+		| ((
+				context: OAuthAccountKeyContext<GenericOAuthUserInfo>,
+		  ) => Awaitable<string>)
+		| undefined;
+	/**
 	 * URL to fetch OAuth 2.0 configuration.
 	 * If provided, the authorization and token endpoints will be fetched from this URL.
 	 */
 	discoveryUrl?: string | undefined;
+	/**
+	 * Require discovery to provide the issuer and JWKS metadata needed to verify
+	 * ID tokens before this provider is registered.
+	 *
+	 * Enable this when provider identity is derived from ID-token claims. This
+	 * prevents an unavailable or incomplete discovery document from silently
+	 * downgrading the provider to unverified token decoding.
+	 *
+	 * @default false
+	 */
+	requireIdTokenVerification?: boolean | undefined;
 	/**
 	 * URL for the authorization endpoint.
 	 * Optional if using discoveryUrl.
@@ -51,6 +93,22 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * Optional if using discoveryUrl.
 	 */
 	userInfoUrl?: string | undefined;
+	/**
+	 * URL for the OIDC RP-Initiated Logout endpoint.
+	 * Optional if using discoveryUrl and the discovery document includes
+	 * `end_session_endpoint`.
+	 */
+	endSessionEndpoint?: string | undefined;
+	/**
+	 * URL the provider should redirect back to after logout.
+	 * This must also be registered with the provider as a post-logout redirect URI.
+	 */
+	postLogoutRedirectURI?: string | undefined;
+	/**
+	 * Disable automatic provider logout on `authClient.signOut()`.
+	 * When set, sign out only clears the Better Auth session.
+	 */
+	disableProviderLogout?: boolean | undefined;
 	/** OAuth client ID */
 	clientId: string;
 	/** OAuth client secret */
@@ -136,7 +194,7 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * Custom function to fetch user info.
 	 * If provided, this function will be used instead of the default user info fetching logic.
 	 * @param tokens - The OAuth tokens received after successful authentication
-	 * @returns A promise that resolves to a User object or null
+	 * @returns A promise that resolves to a raw provider profile or null
 	 */
 	getUserInfo?:
 		| ((tokens: OAuth2Tokens) => Promise<GenericOAuthUserInfo | null>)
@@ -148,7 +206,7 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	mapProfileToUser?:
 		| ((
 				profile: GenericOAuthUserInfo,
-		  ) => Partial<User> | Promise<Partial<User>>)
+		  ) => OAuthMappedUser | Promise<OAuthMappedUser>)
 		| undefined;
 	/**
 	 * Additional search-params to add to the authorizationUrl.

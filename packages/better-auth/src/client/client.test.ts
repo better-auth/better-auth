@@ -7,6 +7,7 @@ import type { Accessor } from "solid-js";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { Ref } from "vue";
 import type { Session, SessionQueryParams } from "../types";
+import { createAuthClient as createLynxClient } from "./lynx";
 import {
 	adminClient,
 	deviceAuthorizationClient,
@@ -28,6 +29,12 @@ import {
 import { createAuthClient as createVanillaClient } from "./vanilla";
 import { createAuthClient as createVueClient } from "./vue";
 
+vi.mock("@lynx-js/react", () => ({
+	useCallback: vi.fn(),
+	useRef: vi.fn(),
+	useSyncExternalStore: vi.fn(),
+}));
+
 describe("run time proxy", async () => {
 	afterEach(() => {
 		vi.useRealTimers();
@@ -37,6 +44,29 @@ describe("run time proxy", async () => {
 		const client = createVanillaClient();
 		const atom = client.$store.atoms.session;
 		expect(isProxy(atom)).toBe(false);
+	});
+
+	it("every framework client should expose the real $fetch and $store", async () => {
+		// A key missing from the proxy routes silently falls through to the
+		// dynamic path handler, so `client.$fetch(...)` would issue a request
+		// to a phantom `/fetch` action instead of using the better-fetch
+		// instance, and `$store.atoms.session` would resolve to a path proxy
+		// instead of the session atom.
+		const clients = {
+			vanilla: createVanillaClient(),
+			react: createReactClient(),
+			solid: createSolidClient(),
+			svelte: createSvelteClient(),
+			vue: createVueClient(),
+			lynx: createLynxClient(),
+		};
+		for (const [framework, client] of Object.entries(clients)) {
+			expect(isProxy(client.$fetch), `${framework} $fetch`).toBe(false);
+			expect(
+				isProxy(client.$store.atoms.session),
+				`${framework} session atom`,
+			).toBe(false);
+		}
 	});
 
 	it("proxy api should be called", async () => {
@@ -638,6 +668,99 @@ describe("type", () => {
 				};
 			} | null>
 		>();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9781
+	 */
+	describe("useSession().data with nullable types", () => {
+		it("useSession().data should be nullable with `throw:true` - react", () => {
+			const client = createReactClient({
+				plugins: [testClientPlugin()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					throw: true,
+					customFetchImpl: async (url, init) => {
+						return new Response();
+					},
+				},
+			});
+
+			type UseSessionReturn = ReturnType<typeof client.useSession>;
+			type DataField = UseSessionReturn["data"];
+			expectTypeOf<null>().toMatchTypeOf<DataField>();
+		});
+
+		it("useSession().data should be nullable with `throw:true` - vue", () => {
+			const client = createVueClient({
+				plugins: [testClientPlugin()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					throw: true,
+					customFetchImpl: async (url, init) => {
+						return new Response();
+					},
+				},
+			});
+
+			const session = client.useSession();
+			type DataField = (typeof session)["value"]["data"];
+			expectTypeOf<null>().toMatchTypeOf<DataField>();
+		});
+
+		it("useSession().data should be nullable with `throw:true` - solid", () => {
+			const client = createSolidClient({
+				plugins: [testClientPlugin()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					throw: true,
+					customFetchImpl: async (url, init) => {
+						return new Response();
+					},
+				},
+			});
+
+			type UseSession = ReturnType<typeof client.useSession>;
+			type UseSessionReturn = ReturnType<UseSession>;
+			type DataField = UseSessionReturn["data"];
+			expectTypeOf<null>().toMatchTypeOf<DataField>();
+		});
+
+		it("useSession().data should be nullable with `throw:true` - svelte", () => {
+			const client = createSvelteClient({
+				plugins: [testClientPlugin()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					throw: true,
+					customFetchImpl: async (url, init) => {
+						return new Response();
+					},
+				},
+			});
+
+			type UseSessionAtom = ReturnType<typeof client.useSession>;
+			type UseSessionReturn = ReturnType<UseSessionAtom["get"]>;
+			type DataField = UseSessionReturn["data"];
+			expectTypeOf<null>().toMatchTypeOf<DataField>();
+		});
+
+		it("useSession().data should be nullable with `throw:true` - vanilla", () => {
+			const client = createVanillaClient({
+				plugins: [testClientPlugin()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					throw: true,
+					customFetchImpl: async (url, init) => {
+						return new Response();
+					},
+				},
+			});
+
+			type UseSessionAtom = typeof client.useSession;
+			type UseSessionReturn = ReturnType<UseSessionAtom["get"]>;
+			type DataField = UseSessionReturn["data"];
+			expectTypeOf<null>().toMatchTypeOf<DataField>();
+		});
 	});
 
 	it("should infer `error` schema correctly", async () => {

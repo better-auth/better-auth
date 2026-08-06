@@ -19,6 +19,36 @@ import { cliPath } from "./utils";
 
 const execFileAsync = promisify(execFile);
 
+const compoundIndexPlugin = (): BetterAuthPlugin => ({
+	id: "compound-index-test",
+	schema: {
+		directoryUser: {
+			modelName: "directory_user",
+			fields: {
+				connectionId: {
+					type: "string",
+					fieldName: "connection_id",
+				},
+				externalId: {
+					type: "string",
+					fieldName: "external_id",
+				},
+				status: {
+					type: ["active", "suspended"],
+					fieldName: "provisioning_status",
+				},
+			},
+			indexes: [
+				{
+					fields: ["connectionId", "externalId"],
+					unique: true,
+				},
+				{ fields: ["connectionId", "status"] },
+			],
+		},
+	},
+});
+
 describe("generate", async () => {
 	describe("command output paths", () => {
 		it("should use adapter-specific filenames when output points to an existing directory", async () => {
@@ -98,6 +128,69 @@ export const auth = betterAuth({
 				}
 			}
 		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10136
+		 */
+		it("should remove a config import stub before generating a new Prisma schema", async () => {
+			const cacheDir = path.join(
+				process.cwd(),
+				"node_modules",
+				".cache",
+				"generate-output-",
+			);
+			fs.mkdirSync(path.dirname(cacheDir), { recursive: true });
+			const tmpDir = fs.mkdtempSync(cacheDir);
+			const outputPath = path.join(tmpDir, "schema.ts");
+			fs.writeFileSync(
+				path.join(tmpDir, "auth.ts"),
+				`import schema from "./schema";
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+	secret: "test-secret",
+	baseURL: "http://localhost:3000",
+});
+
+export const __schema = schema;
+`,
+			);
+
+			try {
+				await execFileAsync(
+					process.execPath,
+					[
+						cliPath,
+						"generate",
+						"--cwd",
+						tmpDir,
+						"--config",
+						"auth.ts",
+						"--adapter",
+						"prisma",
+						"--dialect",
+						"sqlite",
+						"--output",
+						"schema.ts",
+						"--yes",
+					],
+					{
+						cwd: tmpDir,
+						env: {
+							...process.env,
+							BETTER_AUTH_TELEMETRY_DISABLED: "true",
+						},
+					},
+				);
+
+				const schema = fs.readFileSync(outputPath, "utf-8");
+				expect(schema).toContain("generator client");
+				expect(schema).toContain("datasource db");
+				expect(schema).toContain("model User");
+			} finally {
+				fs.rmSync(tmpDir, { recursive: true, force: true });
+			}
+		});
 	});
 
 	it("should generate prisma schema", async () => {
@@ -122,6 +215,230 @@ export const auth = betterAuth({
 		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/schema.prisma",
 		);
+	});
+
+	it("should generate Prisma compound indexes with physical field names", async () => {
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: prismaAdapter(
+				{},
+				{
+					provider: "mysql",
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: prismaAdapter(
+					{},
+					{
+						provider: "mysql",
+					},
+				),
+				plugins: [compoundIndexPlugin()],
+			},
+		});
+
+		expect(schema.code).toContain(
+			'@@unique([connection_id, external_id], map: "directory_user_connection_id_external_id_uidx")',
+		);
+		expect(schema.code).toContain(
+			'@@index([connection_id, provisioning_status], map: "directory_user_connection_id_provisioning_status_idx")',
+		);
+		expect(schema.code).toMatch(/connection_id\s+String\s+@db\.VarChar\(191\)/);
+		expect(schema.code).toMatch(/external_id\s+String\s+@db\.VarChar\(191\)/);
+		expect(schema.code).toMatch(
+			/provisioning_status\s+String\s+@db\.VarChar\(191\)/,
+		);
+	});
+
+	it("should bound existing MySQL string fields before adding compound indexes", async () => {
+		const tmpDir = fs.mkdtempSync(
+			path.join(os.tmpdir(), "prisma-compound-index-upgrade-"),
+		);
+		const filePath = path.join(tmpDir, "schema.prisma");
+		const relativePath = path.relative(process.cwd(), filePath);
+		fs.writeFileSync(
+			filePath,
+			`
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url = env("DATABASE_URL")
+}
+
+model Directory_user {
+  id                  String @id
+  connection_id       String @db.Text
+  external_id         String @db.Text
+  provisioning_status String @db.Text
+
+  @@map("directory_user")
+}
+`,
+		);
+
+		try {
+			const schema = await generatePrismaSchema({
+				file: relativePath,
+				adapter: prismaAdapter(
+					{},
+					{
+						provider: "mysql",
+					},
+				)({} as BetterAuthOptions),
+				options: {
+					database: prismaAdapter(
+						{},
+						{
+							provider: "mysql",
+						},
+					),
+					plugins: [compoundIndexPlugin()],
+				},
+			});
+
+			expect(schema.code).toMatch(
+				/connection_id\s+String\s+@db\.VarChar\(191\)/,
+			);
+			expect(schema.code).toMatch(/external_id\s+String\s+@db\.VarChar\(191\)/);
+			expect(schema.code).toMatch(
+				/provisioning_status\s+String\s+@db\.VarChar\(191\)/,
+			);
+			expect(schema.code).toContain(
+				'@@unique([connection_id, external_id], map: "directory_user_connection_id_external_id_uidx")',
+			);
+		} finally {
+			fs.rmSync(tmpDir, { force: true, recursive: true });
+		}
+	});
+
+	it("should reject a conflicting existing Prisma compound index", async () => {
+		const tmpDir = fs.mkdtempSync(
+			path.join(os.tmpdir(), "prisma-compound-index-"),
+		);
+		const filePath = path.join(tmpDir, "schema.prisma");
+		const relativePath = path.relative(process.cwd(), filePath);
+		fs.writeFileSync(
+			filePath,
+			`
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url = env("DATABASE_URL")
+}
+
+model Directory_user {
+  id                  String @id
+  connection_id       String
+  external_id         String
+  provisioning_status String
+
+  @@index([external_id], map: "Directory_User_Connection_Id_External_Id_UIDX")
+  @@map("directory_user")
+}
+`,
+		);
+
+		try {
+			await expect(
+				generatePrismaSchema({
+					file: relativePath,
+					adapter: prismaAdapter(
+						{},
+						{
+							provider: "mysql",
+						},
+					)({} as BetterAuthOptions),
+					options: {
+						database: prismaAdapter(
+							{},
+							{
+								provider: "mysql",
+							},
+						),
+						plugins: [compoundIndexPlugin()],
+					},
+				}),
+			).rejects.toThrow(
+				'Prisma index "directory_user_connection_id_external_id_uidx" on model "Directory_user" does not match the configured fields and uniqueness.',
+			);
+		} finally {
+			fs.rmSync(tmpDir, { force: true, recursive: true });
+		}
+	});
+
+	it("should name matching existing Prisma compound indexes", async () => {
+		const tmpDir = fs.mkdtempSync(
+			path.join(os.tmpdir(), "prisma-compound-index-name-"),
+		);
+		const filePath = path.join(tmpDir, "schema.prisma");
+		const relativePath = path.relative(process.cwd(), filePath);
+		fs.writeFileSync(
+			filePath,
+			`
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url = env("DATABASE_URL")
+}
+
+model Directory_user {
+  id                  String @id
+  connection_id       String
+  external_id         String
+  provisioning_status String
+
+  @@unique([connection_id, external_id])
+  @@index([connection_id, provisioning_status])
+  @@map("directory_user")
+}
+`,
+		);
+
+		try {
+			const schema = await generatePrismaSchema({
+				file: relativePath,
+				adapter: prismaAdapter(
+					{},
+					{
+						provider: "mysql",
+					},
+				)({} as BetterAuthOptions),
+				options: {
+					database: prismaAdapter(
+						{},
+						{
+							provider: "mysql",
+						},
+					),
+					plugins: [compoundIndexPlugin()],
+				},
+			});
+			const schemaCode = schema.code ?? "";
+
+			expect(
+				schemaCode.match(/@@unique\(\[connection_id, external_id\]/g),
+			).toHaveLength(1);
+			expect(
+				schemaCode.match(/@@index\(\[connection_id, provisioning_status\]/g),
+			).toHaveLength(1);
+			expect(schemaCode).toContain(
+				'@@unique([connection_id, external_id], map: "directory_user_connection_id_external_id_uidx")',
+			);
+			expect(schemaCode).toContain(
+				'@@index([connection_id, provisioning_status], map: "directory_user_connection_id_provisioning_status_idx")',
+			);
+		} finally {
+			fs.rmSync(tmpDir, { force: true, recursive: true });
+		}
 	});
 
 	/**
@@ -419,6 +736,77 @@ export const auth = betterAuth({
 		);
 	});
 
+	it("should generate Drizzle compound indexes with physical field names", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "mysql",
+					schema: {},
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "mysql",
+						schema: {},
+					},
+				),
+				plugins: [compoundIndexPlugin()],
+			},
+		});
+
+		expect(schema.code).toMatch(
+			/uniqueIndex\("directory_user_connection_id_external_id_uidx"\)\.on\(\s*table\.connection_id,\s*table\.external_id,?\s*\)/,
+		);
+		expect(schema.code).toMatch(
+			/index\("directory_user_connection_id_provisioning_status_idx"\)\.on\(\s*table\.connection_id,\s*table\.provisioning_status,?\s*\)/,
+		);
+		expect(schema.code).toMatch(
+			/connection_id:\s*varchar\(["']connection_id["'], \{ length: 191 \}\)/,
+		);
+		expect(schema.code).toMatch(
+			/external_id:\s*varchar\(["']external_id["'], \{ length: 191 \}\)/,
+		);
+		expect(schema.code).toMatch(
+			/provisioning_status:\s*mysqlEnum\("provisioning_status", \[\s*"active",\s*"suspended",?\s*\]\)/,
+		);
+	});
+
+	it("should reject duplicate Drizzle field-level and table-level indexes", async () => {
+		await expect(
+			generateDrizzleSchema({
+				file: "test.drizzle",
+				adapter: drizzleAdapter(
+					{},
+					{
+						provider: "sqlite",
+						schema: {},
+					},
+				)({} as BetterAuthOptions),
+				options: {
+					plugins: [
+						{
+							id: "directory",
+							schema: {
+								directoryUser: {
+									fields: {
+										subject: { type: "string", index: true },
+									},
+									indexes: [{ fields: ["subject"] }],
+								},
+							},
+						},
+					],
+				},
+			}),
+		).rejects.toThrow(
+			'Database index name "directoryUser_subject_idx" is already reserved by field-level index metadata on table "directoryUser".',
+		);
+	});
+
 	it("should generate drizzle schema with number id", async () => {
 		const schema = await generateDrizzleSchema({
 			file: "test.drizzle",
@@ -551,6 +939,41 @@ export const auth = betterAuth({
 		expect(schema.code).not.toContain(String.raw`.default("say "hi"\done")`);
 	});
 
+	it("should not emit duplicate unique indexes for unique indexed fields", async () => {
+		const pluginWithUniqueIndexedField = (): BetterAuthPlugin => ({
+			id: "unique-index-test",
+			schema: {
+				testTable: {
+					fields: {
+						slug: {
+							type: "string",
+							index: true,
+							unique: true,
+						},
+					},
+				},
+			},
+		});
+
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "pg",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				plugins: [pluginWithUniqueIndexedField()],
+			} as BetterAuthOptions,
+		});
+
+		expect(schema.code).toContain('slug: text("slug").notNull().unique()');
+		expect(schema.code).not.toContain("slug_uidx");
+	});
+
 	it("should treat fields with omitted required as non-optional in prisma schema", async () => {
 		const originalCwd = process.cwd();
 		const tmpDir = fs.mkdtempSync(
@@ -667,6 +1090,171 @@ export const auth = betterAuth({
 		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-duplicate-relations.txt",
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8849
+	 */
+	it("should disambiguate duplicate relations when usePlural is enabled", async () => {
+		const database = drizzleAdapter(
+			{},
+			{
+				provider: "sqlite",
+				schema: {},
+				usePlural: true,
+			},
+		);
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: database({} as BetterAuthOptions),
+			options: {
+				database,
+				plugins: [testPlugin()],
+			},
+		});
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-drizzle-use-plural-duplicate-relations.txt",
+		);
+	});
+
+	it("should emit one() for unique reverse relations", async () => {
+		const uniqueProfilePlugin = (): BetterAuthPlugin => ({
+			id: "unique-profile",
+			schema: {
+				profile: {
+					fields: {
+						userId: {
+							type: "string",
+							required: true,
+							unique: true,
+							references: {
+								model: "user",
+								field: "id",
+								onDelete: "cascade",
+							},
+						},
+					},
+				},
+			},
+		});
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "sqlite",
+					schema: {},
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "sqlite",
+						schema: {},
+					},
+				),
+				plugins: [uniqueProfilePlugin()],
+			},
+		});
+		expect(schema.code).toContain("profile: one(profile)");
+		expect(schema.code).not.toMatch(/profile:\s*many\(profile\)/);
+	});
+
+	it("should avoid colliding one-side relation keys after Id stripping", async () => {
+		const collidingFkPlugin = (
+			fieldOrder: "owner-first" | "ownerId-first",
+		): BetterAuthPlugin => ({
+			id: "colliding-fk",
+			schema: {
+				project: {
+					fields:
+						fieldOrder === "owner-first"
+							? {
+									owner: {
+										type: "string",
+										required: false,
+										references: {
+											model: "user",
+											field: "id",
+											onDelete: "set null",
+										},
+									},
+									ownerId: {
+										type: "string",
+										required: false,
+										references: {
+											model: "user",
+											field: "id",
+											onDelete: "set null",
+										},
+									},
+								}
+							: {
+									ownerId: {
+										type: "string",
+										required: false,
+										references: {
+											model: "user",
+											field: "id",
+											onDelete: "set null",
+										},
+									},
+									owner: {
+										type: "string",
+										required: false,
+										references: {
+											model: "user",
+											field: "id",
+											onDelete: "set null",
+										},
+									},
+								},
+				},
+			},
+		});
+
+		for (const fieldOrder of ["owner-first", "ownerId-first"] as const) {
+			const schema = await generateDrizzleSchema({
+				file: "test.drizzle",
+				adapter: drizzleAdapter(
+					{},
+					{
+						provider: "sqlite",
+						schema: {},
+					},
+				)({} as BetterAuthOptions),
+				options: {
+					database: drizzleAdapter(
+						{},
+						{
+							provider: "sqlite",
+							schema: {},
+						},
+					),
+					plugins: [collidingFkPlugin(fieldOrder)],
+				},
+			});
+			expect(schema.code).toBeTruthy();
+			expect(schema.code).toContain('relationName: "project_owner"');
+			expect(schema.code).toContain('relationName: "project_ownerId"');
+			const projectRelations = schema.code!.match(
+				/export const projectRelations = relations\([\s\S]*?\n\}\)\);/,
+			)?.[0];
+			expect(projectRelations).toBeTruthy();
+			const oneKeys = [
+				...projectRelations!.matchAll(/^\s+(\w+):\s+one\(user,/gm),
+			].map((match) => match[1]);
+			expect(oneKeys).toHaveLength(2);
+			expect(new Set(oneKeys).size).toBe(2);
+			if (fieldOrder === "owner-first") {
+				expect(oneKeys).toEqual(expect.arrayContaining(["owner", "ownerId"]));
+			} else {
+				// ownerId is stripped to `owner` first, so the later `owner`
+				// field needs a unique fallback key.
+				expect(oneKeys).toEqual(expect.arrayContaining(["owner", "owner_2"]));
+			}
+		}
 	});
 
 	// Plugin that tests multiple relations to different models (should be combined)

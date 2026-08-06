@@ -1,17 +1,79 @@
 import * as z from "zod";
 
+const SCIM_GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
+
+/**
+ * Attribute-less Group marker sent by Microsoft's classic Entra provisioning
+ * client. It is an input compatibility token, not a SCIM extension schema.
+ */
+const SCIM_MICROSOFT_ENTRA_LEGACY_GROUP_SCHEMA =
+	"http://schemas.microsoft.com/2006/11/ResourceManagement/ADSCIM/2.0/Group";
+
+/** Maximum number of direct User members in one canonical SCIM Group. */
+export const SCIM_MAX_GROUP_MEMBERS = 1_000;
+
 const groupMemberSchema = z.object({
-	value: z.string().optional(),
-	$ref: z.string().optional(),
-	display: z.string().optional(),
-	type: z.string().optional(),
+	value: z.string().min(1),
+	type: z
+		.string()
+		.refine((type) => type.toLowerCase() === "user")
+		.optional(),
 });
 
 export const APIGroupSchema = z.object({
-	externalId: z.string().optional(),
-	displayName: z.string().min(1),
-	members: z.array(groupMemberSchema).optional(),
+	schemas: z
+		.array(z.literal(SCIM_GROUP_SCHEMA))
+		.length(1, "schemas must contain only the core SCIM Group schema"),
+	externalId: z.string().min(1).optional(),
+	displayName: z.string().trim().min(1),
+	members: z.array(groupMemberSchema).max(SCIM_MAX_GROUP_MEMBERS).optional(),
 });
+
+export type MicrosoftEntraGroupSchemaNormalization =
+	| { ok: true; body: unknown }
+	| { ok: false; detail: string };
+
+/**
+ * Remove the exact classic Entra Group marker from an enabled POST request.
+ * Marker attributes and duplicate marker declarations are always rejected.
+ */
+export function normalizeMicrosoftEntraGroupSchema(
+	body: unknown,
+	enabled: boolean,
+): MicrosoftEntraGroupSchemaNormalization {
+	if (typeof body !== "object" || body === null || Array.isArray(body)) {
+		return { ok: true, body };
+	}
+	if (Object.hasOwn(body, SCIM_MICROSOFT_ENTRA_LEGACY_GROUP_SCHEMA)) {
+		return {
+			ok: false,
+			detail:
+				"The Microsoft Entra Group compatibility schema cannot contain attributes",
+		};
+	}
+	const schemas = Reflect.get(body, "schemas");
+	if (!Array.isArray(schemas)) return { ok: true, body };
+	const markerCount = schemas.filter(
+		(schema) => schema === SCIM_MICROSOFT_ENTRA_LEGACY_GROUP_SCHEMA,
+	).length;
+	if (markerCount === 0 || !enabled) return { ok: true, body };
+	if (markerCount !== 1) {
+		return {
+			ok: false,
+			detail:
+				"The Microsoft Entra Group compatibility schema must not be duplicated",
+		};
+	}
+	return {
+		ok: true,
+		body: {
+			...body,
+			schemas: schemas.filter(
+				(schema) => schema !== SCIM_MICROSOFT_ENTRA_LEGACY_GROUP_SCHEMA,
+			),
+		},
+	};
+}
 
 export const OpenAPIGroupResourceSchema = {
 	type: "object",
@@ -21,13 +83,14 @@ export const OpenAPIGroupResourceSchema = {
 		displayName: { type: "string" },
 		members: {
 			type: "array",
+			maxItems: SCIM_MAX_GROUP_MEMBERS,
 			items: {
 				type: "object",
 				properties: {
 					value: { type: "string" },
 					$ref: { type: "string" },
 					display: { type: "string" },
-					type: { type: "string" },
+					type: { type: "string", enum: ["User"] },
 				},
 			},
 		},
@@ -45,6 +108,7 @@ export const OpenAPIGroupResourceSchema = {
 			items: { type: "string" },
 		},
 	},
+	required: ["schemas", "id"] as string[],
 } as const;
 
 export const SCIMGroupResourceSchema = {
@@ -54,29 +118,6 @@ export const SCIMGroupResourceSchema = {
 	description: "Group",
 	attributes: [
 		{
-			name: "id",
-			type: "string",
-			multiValued: false,
-			description: "Unique opaque identifier for the Group",
-			required: false,
-			caseExact: true,
-			mutability: "readOnly",
-			returned: "default",
-			uniqueness: "server",
-		},
-		{
-			name: "externalId",
-			type: "string",
-			multiValued: false,
-			description:
-				"An identifier for the Group as defined by the provisioning client.",
-			required: false,
-			caseExact: true,
-			mutability: "readWrite",
-			returned: "default",
-			uniqueness: "none",
-		},
-		{
 			name: "displayName",
 			type: "string",
 			multiValued: false,
@@ -85,7 +126,7 @@ export const SCIMGroupResourceSchema = {
 			caseExact: false,
 			mutability: "readWrite",
 			returned: "default",
-			uniqueness: "none",
+			uniqueness: "server",
 		},
 		{
 			name: "members",
@@ -102,8 +143,8 @@ export const SCIMGroupResourceSchema = {
 					type: "string",
 					multiValued: false,
 					description: "Identifier of the member of this Group.",
-					required: false,
-					caseExact: true,
+					required: true,
+					caseExact: false,
 					mutability: "immutable",
 					returned: "default",
 					uniqueness: "none",
@@ -111,10 +152,11 @@ export const SCIMGroupResourceSchema = {
 				{
 					name: "$ref",
 					type: "reference",
+					referenceTypes: ["User"],
 					multiValued: false,
 					description: "The URI corresponding to a SCIM member resource.",
 					required: false,
-					caseExact: true,
+					caseExact: false,
 					mutability: "immutable",
 					returned: "default",
 					uniqueness: "none",
@@ -126,7 +168,7 @@ export const SCIMGroupResourceSchema = {
 					description: "A human-readable name for the member.",
 					required: false,
 					caseExact: false,
-					mutability: "immutable",
+					mutability: "readOnly",
 					returned: "default",
 					uniqueness: "none",
 				},
@@ -137,6 +179,7 @@ export const SCIMGroupResourceSchema = {
 					description: "A label indicating the member resource type.",
 					required: false,
 					caseExact: false,
+					canonicalValues: ["User"],
 					mutability: "immutable",
 					returned: "default",
 					uniqueness: "none",

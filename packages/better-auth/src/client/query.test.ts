@@ -1,10 +1,13 @@
 // @vitest-environment happy-dom
 
 import { createFetch } from "@better-fetch/fetch";
-import { atom } from "nanostores";
+import { atom, STORE_UNMOUNT_DELAY } from "nanostores";
+import { act, createElement, Suspense } from "react";
+import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getGlobalFocusManager } from "./focus-manager";
 import { useAuthQuery } from "./query";
+import { createAuthClient as createReactAuthClient } from "./react";
 import { getSessionAtom } from "./session-atom";
 import { createAuthClient } from "./solid";
 import { testClientPlugin } from "./test-plugin";
@@ -20,6 +23,7 @@ describe("useAuthQuery - error handling", () => {
 	afterEach(() => {
 		vi.useRealTimers();
 		vi.restoreAllMocks();
+		vi.unstubAllGlobals();
 		delete (globalThis as any)[Symbol.for("better-auth:broadcast-channel")];
 		delete (globalThis as any)[Symbol.for("better-auth:focus-manager")];
 		delete (globalThis as any)[Symbol.for("better-auth:online-manager")];
@@ -145,14 +149,20 @@ describe("useAuthQuery - error handling", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9077
 	 */
-	it("should not refetch when atom re-mounts before the initial fetch resolves", async () => {
+	it("should defer remount refetch until the initial fetch resolves", async () => {
 		let fetchCount = 0;
+		let resolveInitialFetch: ((response: Response) => void) | undefined;
 		const $fetch = createFetch({
 			baseURL: "http://localhost:3000",
 			customFetchImpl: async () => {
 				fetchCount++;
-				// Keep the fetch pending to widen the race window.
-				return new Promise<Response>(() => {});
+				if (fetchCount === 1) {
+					// Keep the first fetch pending to widen the race window.
+					return new Promise<Response>((resolve) => {
+						resolveInitialFetch = resolve;
+					});
+				}
+				return new Response(JSON.stringify({ data: "fresh" }));
 			},
 		});
 
@@ -174,18 +184,67 @@ describe("useAuthQuery - error handling", () => {
 		await vi.advanceTimersByTimeAsync(0);
 		expect(fetchCount).toBe(1);
 
+		if (!resolveInitialFetch) throw new Error("Initial fetch did not start");
+		resolveInitialFetch(new Response(JSON.stringify({ data: "stale" })));
+		await vi.runAllTimersAsync();
+		expect(fetchCount).toBe(2);
+
 		unsubscribe2();
 	});
 
 	/**
-	 * Reproduces the actual storm mechanism from
-	 * https://github.com/better-auth/better-auth/issues/9077: multiple
-	 * `onMount` callbacks accumulate on the value atom (nanostores appends
-	 * MOUNT listeners) and all fire inside a single mount cycle, each
-	 * scheduling its own `setTimeout(0)`. Before the fix they all drained
-	 * before the flag flipped and each started a fetch.
+	 * @see https://github.com/better-auth/better-auth/issues/10363
 	 */
-	it("should fire only one fetch when multiple onMount callbacks run in one mount cycle", async () => {
+	it("should revalidate and restore signal listeners after remount", async () => {
+		let fetchCount = 0;
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async () => {
+				fetchCount++;
+				return new Response(
+					JSON.stringify({
+						data: `request-${fetchCount}`,
+					}),
+				);
+			},
+		});
+
+		const $signal = atom(false);
+		const queryAtom = useAuthQuery<{ data: string }>($signal, "/test", $fetch, {
+			method: "GET",
+		});
+
+		const unsubscribe1 = queryAtom.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		expect(fetchCount).toBe(1);
+		expect(queryAtom.get().data).toEqual({ data: "request-1" });
+
+		unsubscribe1();
+		await vi.advanceTimersByTimeAsync(1000);
+
+		// Signals emitted while unmounted are recovered by remount revalidation.
+		$signal.set(true);
+		await vi.runAllTimersAsync();
+		expect(fetchCount).toBe(1);
+
+		const unsubscribe2 = queryAtom.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		expect(fetchCount).toBe(2);
+		expect(queryAtom.get().data).toEqual({ data: "request-2" });
+
+		// The signal listener must be active again after remount.
+		$signal.set(false);
+		await vi.runAllTimersAsync();
+		expect(fetchCount).toBe(3);
+		expect(queryAtom.get().data).toEqual({ data: "request-3" });
+
+		unsubscribe2();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9077
+	 */
+	it("should fire only one initial fetch when signals change around mount", async () => {
 		let fetchCount = 0;
 		const $fetch = createFetch({
 			baseURL: "http://localhost:3000",
@@ -200,14 +259,14 @@ describe("useAuthQuery - error handling", () => {
 			method: "GET",
 		});
 
-		// Flipping the signal before any listener attaches re-runs the
-		// subscribe callback, which appends another onMount listener each
-		// time. After three flips there are four queued callbacks.
+		// Signals emitted before the query mounts must not create extra initial
+		// fetches or lifecycle callbacks.
 		$signal.set(true);
 		$signal.set(false);
 		$signal.set(true);
 
 		const unsubscribe = queryAtom.listen(() => {});
+		$signal.set(false);
 		await vi.advanceTimersByTimeAsync(0);
 
 		expect(fetchCount).toBe(1);
@@ -315,13 +374,16 @@ describe("useAuthQuery - error handling", () => {
 		expect(session().data).toBe(initialData);
 	});
 
-	it("should clear loading flags when an unmounted session request is aborted", async () => {
+	it("should allow an unmounted session request to settle", async () => {
 		let fetchSignal: AbortSignal | undefined;
+		let resolveFetch: ((response: Response) => void) | undefined;
 		const $fetch = createFetch({
 			baseURL: "http://localhost:3000",
 			customFetchImpl: async (_url, init) => {
 				fetchSignal = init?.signal ?? undefined;
-				return new Promise<Response>(() => {});
+				return new Promise<Response>((resolve) => {
+					resolveFetch = resolve;
+				});
 			},
 		});
 		const { session } = getSessionAtom($fetch);
@@ -333,11 +395,179 @@ describe("useAuthQuery - error handling", () => {
 		expect(session.get().isRefetching).toBe(true);
 
 		unsubscribe();
-		await vi.advanceTimersByTimeAsync(1000);
+		await vi.advanceTimersByTimeAsync(STORE_UNMOUNT_DELAY);
 
-		expect(fetchSignal?.aborted).toBe(true);
-		expect(session.get().isPending).toBe(false);
-		expect(session.get().isRefetching).toBe(false);
+		expect(fetchSignal?.aborted).toBe(false);
+		expect(session.value.isPending).toBe(true);
+		expect(session.value.isRefetching).toBe(true);
+
+		if (!resolveFetch) throw new Error("Session fetch did not start");
+		resolveFetch(new Response(JSON.stringify({ session: null, user: null })));
+		await vi.runAllTimersAsync();
+
+		expect(session.value.isPending).toBe(false);
+		expect(session.value.isRefetching).toBe(false);
+	});
+
+	it("should abort a session request superseded by refetch", async () => {
+		const requests: Array<{
+			resolve: (response: Response) => void;
+			signal: AbortSignal | null;
+		}> = [];
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (_url, init) => {
+				return new Promise<Response>((resolve) => {
+					requests.push({ resolve, signal: init?.signal ?? null });
+				});
+			},
+		});
+		const { session } = getSessionAtom($fetch);
+		const unsubscribe = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+
+		const refetchPromise = session.value.refetch();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(requests).toHaveLength(2);
+		expect(requests[0]?.signal?.aborted).toBe(true);
+		expect(requests[1]?.signal?.aborted).toBe(false);
+
+		for (const request of requests) {
+			request.resolve(
+				new Response(JSON.stringify({ session: null, user: null })),
+			);
+		}
+		await refetchPromise;
+		unsubscribe();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10667
+	 */
+	it("should let a listener refetch supersede the current session request", async () => {
+		const requests: Array<{
+			resolve: (response: Response) => void;
+			signal: AbortSignal | null;
+		}> = [];
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (_url, init) =>
+				new Promise<Response>((resolve) => {
+					requests.push({ resolve, signal: init?.signal ?? null });
+				}),
+		});
+		const { session } = getSessionAtom($fetch);
+		let refetchPromise: Promise<void> | undefined;
+		const unsubscribe = session.listen((current) => {
+			if (current.isRefetching && !refetchPromise) {
+				refetchPromise = current.refetch();
+			}
+		});
+
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(requests).toHaveLength(1);
+		expect(requests[0]?.signal?.aborted).toBe(false);
+
+		requests[0]?.resolve(
+			new Response(JSON.stringify({ session: null, user: null })),
+		);
+		if (!refetchPromise) throw new Error("Listener refetch was not triggered");
+		await refetchPromise;
+		unsubscribe();
+	});
+
+	it("should revalidate session after a settled request is remounted", async () => {
+		let fetchCount = 0;
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async () => {
+				fetchCount++;
+				return new Response(JSON.stringify({ session: null, user: null }));
+			},
+		});
+		const { session } = getSessionAtom($fetch);
+
+		const unsubscribeFirst = session.listen(() => {});
+		await vi.runAllTimersAsync();
+		expect(fetchCount).toBe(1);
+
+		unsubscribeFirst();
+		await vi.advanceTimersByTimeAsync(STORE_UNMOUNT_DELAY);
+		const unsubscribeSecond = session.listen(() => {});
+		await vi.runAllTimersAsync();
+
+		expect(fetchCount).toBe(2);
+		unsubscribeSecond();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10667
+	 */
+	it("should deduplicate the initial session request across Suspense retries", async () => {
+		vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+		let suspended = true;
+		let resumeRender: (() => void) | undefined;
+		const requests: Array<{
+			resolve: (response: Response) => void;
+			signal: AbortSignal | null;
+		}> = [];
+		const client = createReactAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: (_url, init) => {
+					return new Promise<Response>((resolve) => {
+						requests.push({ resolve, signal: init?.signal ?? null });
+					});
+				},
+			},
+		});
+		const SessionWatcher = () => {
+			client.useSession();
+			if (suspended) {
+				throw new Promise<void>((resolve) => {
+					resumeRender = resolve;
+				});
+			}
+			return null;
+		};
+		const root = createRoot(document.createElement("div"));
+
+		await act(async () => {
+			root.render(
+				createElement(
+					Suspense,
+					{ fallback: null },
+					createElement(SessionWatcher),
+				),
+			);
+			await vi.advanceTimersByTimeAsync(0);
+		});
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(STORE_UNMOUNT_DELAY);
+		});
+
+		const retry = resumeRender;
+		if (!retry) throw new Error("Suspense retry was not scheduled");
+		suspended = false;
+		await act(async () => retry());
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(0);
+		});
+
+		const observedRequests = requests.map(({ signal }) => ({
+			aborted: signal?.aborted ?? false,
+		}));
+		await act(async () => {
+			root.unmount();
+			for (const request of requests) {
+				request.resolve(
+					new Response(JSON.stringify({ session: null, user: null })),
+				);
+			}
+			await Promise.resolve();
+		});
+		expect(observedRequests).toEqual([{ aborted: false }]);
 	});
 
 	/**

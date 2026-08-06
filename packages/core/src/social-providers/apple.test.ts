@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import type { JWK } from "jose";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { GenericEndpointContext } from "../types";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
@@ -46,6 +47,48 @@ function mockAppleJwks(publicJWK: JWK) {
 		error: null,
 	} as Awaited<ReturnType<typeof betterFetch>>);
 }
+
+function codeChallenge(codeVerifier: string) {
+	return createHash("sha256").update(codeVerifier).digest("base64url");
+}
+
+describe("apple.createAuthorizationURL", () => {
+	it("sends a PKCE code challenge when a code verifier is provided", async () => {
+		const verifier = "apple-code-verifier";
+		const provider = apple({
+			clientId: "service.example.app",
+			clientSecret: "test-secret",
+		});
+
+		const url = await provider.createAuthorizationURL({
+			state: "state",
+			redirectURI: "https://example.com/api/auth/callback/apple",
+			codeVerifier: verifier,
+		});
+
+		expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+		expect(url.searchParams.get("code_challenge")).toBe(
+			codeChallenge(verifier),
+		);
+		expect(url.searchParams.has("code_verifier")).toBe(false);
+	});
+
+	it("omits PKCE parameters when no code verifier is provided", async () => {
+		const provider = apple({
+			clientId: "service.example.app",
+			clientSecret: "test-secret",
+		});
+
+		const url = await provider.createAuthorizationURL({
+			state: "state",
+			redirectURI: "https://example.com/api/auth/callback/apple",
+			codeVerifier: "",
+		});
+
+		expect(url.searchParams.has("code_challenge_method")).toBe(false);
+		expect(url.searchParams.has("code_challenge")).toBe(false);
+	});
+});
 
 describe("apple id_token verification", () => {
 	beforeEach(() => {
@@ -100,5 +143,29 @@ describe("apple id_token verification", () => {
 		await expect(
 			verifyProviderIdToken(provider, token, "different-nonce"),
 		).resolves.toBe(false);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/1214
+	 */
+	it("forwards request ctx to a custom verifyIdToken option", async () => {
+		const ctx = {
+			headers: new Headers({ "x-platform": "ios" }),
+		} as GenericEndpointContext;
+		let seenPlatform: string | null = null;
+
+		const provider = apple({
+			clientId: "service.example.app",
+			clientSecret: "test-secret",
+			verifyIdToken: async (_token, _nonce, requestCtx) => {
+				seenPlatform = requestCtx?.headers?.get("x-platform") ?? null;
+				return seenPlatform === "ios";
+			},
+		});
+
+		await expect(
+			verifyProviderIdToken(provider, "token", "nonce", ctx),
+		).resolves.toBe(true);
+		expect(seenPlatform).toBe("ios");
 	});
 });

@@ -3,38 +3,28 @@ title: OAuth 2.1 Provider
 description: A Better Auth plugin that enables your auth server to serve as an OAuth 2.1 provider.
 ---
 
-An **OAuth 2.1 Provider Plugin** that allows you to turn your authentication server into an OAuth provider with OIDC compatibility allowing users and other services to authenticate with your API.
+The **OAuth 2.1 Provider** plugin turns your Better Auth server into an OAuth authorization server. Applications can request user access through the authorization code flow, while services can use client credentials. Add the `openid` scope when clients also need OpenID Connect (OIDC) identity claims.
 
-The plugin has a secured configuration by default providing ease to users unfamiliar with the details of OAuth.
+The default configuration chooses the safer protocol behavior, including PKCE for public clients and exact redirect URI matching. Start with [Installation](#installation), then enable only the grants and registration paths your clients use.
 
-**Key Features**:
+**Key features**
 
-* **OAuth 2.1**: Restricted security practices to [OAuth 2.1](https://oauth.net/2.1/)
-* **Issuer Validation**: Authorization responses include `iss` parameter to prevent [mix-up attacks](https://datatracker.ietf.org/doc/html/rfc9207)
-* **MCP Enabled**: Support with [MCP authentication](#mcp)
-* **OIDC compatibility**: [OIDC](https://openid.net/specs/openid-connect-core-1_0.html)-compliant with the `openid` scope
-  * **UserInfo**: Endpoint providing current user details
-  * **id\_token**: JWT-signed user information
-  * **OIDC Logout**: [RP-initiated](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)-compliant Logout
-* **Dynamic Client Registration**: Allow clients to register clients dynamically.
-  * **Public Clients**: Support public clients for native mobile clients and user-agent clients (like AI)
-  * **Confidential Clients**: Supports confidential clients for web clients
-  * **Trusted Clients**: Store first-party clients with optional consent bypass and cache them by `client_id`.
-* **JWT Plugin compatibility**: required by default with an option to disable
-  * **JWT Signing**: sign JWT tokens when requesting a `resource`
-  * **JWKS Verifiable**: verify tokens remotely at the [`/jwks`](/docs/plugins/jwt#verifying-the-token) endpoint
-* **Authorization Prompts**: prompts that initiate specific login flows
-  * **Consent**: Ensure consent is granted for each scope. Forcible with `prompt=consent`.
-  * **Select Account**: Ensure an account is selected prior when specific scopes being granted. Forcible with `prompt=select_account`.
-* **Resource Endpoints**: Read and manage tokens.
-  * **Introspection**: [RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)-compliant Introspection.
-  * **Revocation**: [RFC7009](https://datatracker.ietf.org/doc/html/rfc7009)-compliant Revocation.
+* **OAuth security profile:** follows [OAuth 2.1](https://oauth.net/2.1/) practices and includes the RFC 9207 `iss` parameter to prevent [authorization-server mix-up attacks](https://datatracker.ietf.org/doc/html/rfc9207).
+* **OpenID Connect:** issues ID tokens, serves UserInfo, and supports [RP-initiated logout](https://openid.net/specs/openid-connect-rpinitiated-1_0.html) when clients request `openid`.
+* **Client registration:** supports administrator-managed clients, first-party trusted clients, and optional [Dynamic Client Registration](#dynamic-registration-endpoint).
+* **Public and confidential clients:** derives authentication from `token_endpoint_auth_method`; use `"none"` for clients that cannot keep a secret.
+* **Resource-bound access:** issues tokens for protected resources, supports introspection and revocation, and exposes signing keys through the JWT plugin's [`/jwks`](/docs/plugins/jwt#verifying-the-token) endpoint.
+* **Authorization prompts:** supports consent and account-selection prompts.
+* **MCP composition:** use the [MCP plugin](#mcp) when the protected resource is an MCP server.
 
-**Grants Supported**
+**Supported grants**
 
-* **authorization\_code**: Code for user token exchange with PKCE and S256 requirements.
-* **refresh\_token**: Issue refresh tokens and handle access token renewal using `offline_access` scope.
-* **client\_credentials**: Machine to Machine tokens for API communication.
+* **`authorization_code`:** exchanges a user authorization code with S256 PKCE.
+* **`refresh_token`:** renews access through the `offline_access` scope.
+* **`client_credentials`:** issues machine-to-machine access tokens.
+* **`device_code`:** adds the optional [Device Authorization](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api) flow for CLIs and limited-input clients.
+
+`client_credentials` is fail closed. A client's user-delegated `scope` metadata never authorizes machine access. Administrators must assign a non-empty `client_credentials_scopes` value through the administrative create or update endpoint, and `clientPrivileges` must explicitly approve the `configure-client-credentials-scopes` action. The assigned value is both the maximum requestable scope set and the default when the token request omits `scope`. DCR, CIMD, and user-managed registration can declare the grant but cannot assign this server-owned scope ceiling.
 
 ## Installation
 
@@ -98,9 +88,9 @@ The plugin has a secured configuration by default providing ease to users unfami
   </Step>
 
   <Step>
-    ### Create your first oauth client
+    ### Create your first OAuth client
 
-    Create your first confidential oauth client.
+    Create a confidential client:
 
     ```ts
     const client = await auth.api.createOAuthClient({
@@ -113,18 +103,18 @@ The plugin has a secured configuration by default providing ease to users unfami
     ```
 
     <Callout type="info">
-      To create a public client (ie. without a client secret), set `token_endpoint_auth_method: "none"`.
+      To create a public client without a client secret, set `token_endpoint_auth_method: "none"`.
     </Callout>
   </Step>
 </Steps>
 
 ## Client Plugins
 
-There exists two clients. You may wish to add one or both depending on your setup.
+Two client plugins cover different roles. Add the OAuth client when your app starts authorization flows, and add the resource client when your API verifies access tokens.
 
 ### OAuth Client
 
-The OAuth Client is the connecting `oauthClient` such a mobile or web application.
+The OAuth client connects a web or native application to the authorization server.
 
 ```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";
@@ -139,7 +129,7 @@ export const authClient = createAuthClient({
 
 ### Resource Client
 
-The Resource Server is a client that operates on your API server to perform actions like token verification and provide metadata.
+The resource client runs in the API that receives access tokens. It verifies those tokens and serves protected-resource metadata.
 
 ```ts title="server-client.ts"
 import { auth } from "@/lib/auth";
@@ -159,10 +149,11 @@ The plugin operates as an OAuth 2.1 server with OIDC compatible endpoints and JW
 
 ### OAuth Clients
 
-In OAuth there are two types of clients:
+OAuth client authentication capability and application topology are separate:
 
-* **Public Clients**: Cannot store a client secret such as native mobile clients and user-agent clients (like AI)
-* **Confidential Clients**: Can store a client secret such as web clients
+* **Public Clients**: Cannot keep a client secret and use `token_endpoint_auth_method: "none"`.
+* **Confidential Clients**: Authenticate at the token endpoint with a registered method such as `client_secret_basic`, `client_secret_post`, or `private_key_jwt`.
+* **Application Type**: `application_type` is either `web` or `native` and controls redirect URI validation only. It does not determine whether the client is public or confidential.
 
 #### Get Client
 
@@ -280,7 +271,7 @@ To update an oauth client tied to a specific user or organization, use the `/oau
 
 Restrictions on this endpoint:
 
-* You are unable to switch between confidential and public clients. The client type must be determined at creation.
+* You cannot change `token_endpoint_auth_method` after creation. The method selected at creation determines whether the client has credential capability.
 * You cannot update the client secret. To rotate the `client_secret` use the rotate client secret endpoint.
 
 In some cases, you may wish to create logic to update oauth clients with restricted fields through custom APIs, company admin portals, or server initialization, you may use the following server-only endpoint. The fields are described in the create section.:
@@ -421,7 +412,7 @@ oauthProvider({
 To enable open client registration without a Better Auth session, additionally set `allowUnauthenticatedClientRegistration: true` in your auth config. Public clients are registered with `token_endpoint_auth_method: "none"`. Confidential clients receive a one-time `client_secret` in the registration response.
 
 <Callout type="info">
-  For MCP public-client identity, [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991) are [available](/docs/plugins/cimd).
+  For MCP public-client identity, use [Client ID Metadata Documents](/docs/plugins/cimd). The [MCP 2026-07-28 spec](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration) deprecates Dynamic Client Registration in favor of CIMD; DCR remains supported for backwards compatibility.
 </Callout>
 
 ```ts title="auth.ts"
@@ -446,6 +437,12 @@ const client = await authClient.oauth2.register({
 ```
 
 For all endpoint parameters, see [RFC 7591 Registration](https://datatracker.ietf.org/doc/html/rfc7591#section-2).
+
+`application_type` ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)) defaults to `web` when omitted. A `web` client requires `https` redirect URIs on non-loopback hosts. A `native` client may use a claimed `https` URI, an `http` loopback URI on exactly `localhost`, `127.0.0.1`, or `[::1]` with any port, or an authority-free private-use URI with a reverse-domain scheme such as `com.example.app:/callback` ([RFC 8252 §7](https://datatracker.ietf.org/doc/html/rfc8252#section-7)). Loopback host matching uses the raw URI authority, so alternative numeric IPv4 spellings such as `127.1` are rejected before URL normalization. Better Auth also rejects credentials, fragments, malformed or reserved schemes such as `file:` and `mailto:`, loopback `https`, and routable-host `http` redirects.
+
+Application type is independent of client authentication. For example, a native client may use `client_secret_post`, while a web client may use `token_endpoint_auth_method: "none"`. Authentication capability is derived only from `token_endpoint_auth_method`; the removed `type` and `public` metadata fields are not accepted or returned.
+
+The [MCP 2026-07-28 spec](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#application-type-and-redirect-uri-constraints) requires MCP clients to send an appropriate `application_type`. A [Client ID Metadata Document](/docs/plugins/cimd) may omit it; Better Auth stores that omission as `null` and validates redirects against the safe union of web and native forms.
 
 Note the following parameters are not yet supported:
 
@@ -560,7 +557,7 @@ const response = await auth.api.adminCreateOAuthClient({
 ```
 
 <Callout type="info">
-  `jwks` and `jwks_uri` are general OIDC client key metadata and are mutually exclusive. Inline `jwks` must contain only public asymmetric keys. When using `jwks_uri`, it must be an HTTPS URL pointing to a public (non-private) host.
+  `jwks` and `jwks_uri` are general OIDC client key metadata and are mutually exclusive. Inline `jwks` must be an RFC 7517 JWK Set object with a non-empty `keys` array containing only public asymmetric signing keys; a bare key array is rejected. EC keys must use P-256, P-384, or P-521; OKP keys must use Ed25519. A key may omit `alg`. When present, `alg` must be a supported `private_key_jwt` algorithm that matches the key type and curve. When using `jwks_uri`, it must be an HTTPS URL pointing to a public (non-private) host and must return the same JWK Set object shape.
 </Callout>
 
 When exchanging tokens, the client sends a `client_assertion` JWT instead of a `client_secret`:
@@ -604,7 +601,7 @@ The refresh token grant enables clients to update their access token without nee
 
 This implementation currently issues a new refresh token for every refresh request.
 
-Set `refreshTokenReuseInterval` to allow a rotated refresh token to be reused for a short interval and receive the same token response. This helps native and public clients recover from duplicate refresh requests, lost responses, or retrying requests without minting another token pair.
+Set `refreshTokenReuseInterval` to allow a rotated refresh token to be reused for a short interval and receive the same token response. This lets clients recover from duplicate refresh requests, lost responses, or retries without minting another token pair.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -615,6 +612,10 @@ oauthProvider({
 The default is `0`, which keeps strict replay detection. During the interval, Better Auth replays the cached response only when the reused refresh token is from the same client and the request resolves to the same effective scopes, requested resources, and sender constraint (for example the same DPoP key). A mismatch during the interval returns `invalid_grant` without invalidating the whole family; once the interval expires, using the old refresh token is treated as replay and invalidates the refresh-token family.
 
 The cached response is stored encrypted on the consumed refresh-token row and includes the replacement refresh token. `expires_in` is recalculated from the cached `expires_at` each time the response is replayed.
+
+#### Device code grant
+
+The device authorization grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) lets limited-input clients (CLIs, smart TVs, IoT) obtain an OAuth access token. It is opt-in: add the `deviceCodeGrant()` companion plugin (which requires the [Device Authorization](/docs/plugins/device-authorization) plugin) to register the `urn:ietf:params:oauth:grant-type:device_code` grant and advertise `device_authorization_endpoint`. The device requests codes at `/device/code`, the user approves them, and the client polls `/oauth2/token` for a first-class OAuth token. See [Issuing OAuth access tokens](/docs/plugins/device-authorization#issuing-oauth-access-tokens-oauth-provider-integration).
 
 ### Consent Endpoint
 
@@ -749,7 +750,7 @@ await auth.api.adminCreateOAuthClient({
 
 When `backchannel_logout_session_required` is `true`, the RP requires a `sid` claim in every Logout Token. Every Logout Token the OP sends already includes `sid`, so such clients are always served.
 
-The `backchannel_logout_uri` is validated at registration. It must be an absolute URL with no fragment, and must use `https` for confidential clients (loopback `http` such as `http://127.0.0.1:<port>` is allowed for local development). It is also rejected when its host is private, reserved, tunneled (NAT64, 6to4, IPv4-mapped IPv6), or a cloud-metadata name. This host check is syntactic: it does not resolve DNS, so pin or re-check the resolved address if you need protection against DNS rebinding. The same host check guards a client's `jwks_uri`, which separately requires `https` unconditionally and a trusted origin. A URI that fails validation is rejected with `invalid_client_metadata`.
+The `backchannel_logout_uri` is validated at registration. Every client must use an absolute, credential-free, public `https` URL with no fragment; loopback and private targets are rejected even for local development. Hosts that are reserved, tunneled (NAT64, 6to4, IPv4-mapped IPv6), or cloud-metadata names are also rejected. This host check is syntactic: it does not resolve DNS, so pin or re-check the resolved address if you need protection against DNS rebinding. The same host check guards a client's `jwks_uri`, which separately requires `https` unconditionally and a trusted origin. A URI that fails validation is rejected with `invalid_client_metadata`. CIMD documents cannot register back-channel logout because the discovery transport is a GET-only trust boundary.
 
 The OP enumerates clients with active tokens bound to the ending session and POSTs one `logout_token` to each in parallel (5s per-RP timeout, no retry per spec §2.5). It then revokes the session's tokens:
 
@@ -869,7 +870,7 @@ export const GET = async (req: Request) => {
       issuer: "https://auth.example.com",
       audience: "https://api.example.com",
     },
-    scopes: ["read:post"], // optional
+    requiredScopes: ["read:post"], // optional
   });
   // ...continue
 }
@@ -890,7 +891,7 @@ export const POST = async (req: Request) => {
         issuer: "https://auth.example.com",
         audience: "https://api.example.com",
       },
-      scopes: ["write:post"], // optional
+      requiredScopes: ["write:post"], // optional
     }
   );
   // ...continue
@@ -1185,6 +1186,25 @@ oauthProvider({
 
 Use the admin resource endpoints when resource policy needs to change at runtime.
 
+Dynamic registration can attach protected resources to the new client in the same transaction as the client row. `clientRegistrationDefaultResources` adds server-owned defaults to every registration. `clientRegistrationAllowedResources` lists additional resources a client may request; the effective allowlist is the union of the default and allowed lists. Defaults appear first, duplicates are removed, and every configured value must also be present in `resources`.
+
+```ts title="auth.ts"
+oauthProvider({
+  resources: [
+    "https://api.example.com/default",
+    "https://api.example.com/optional",
+  ],
+  clientRegistrationDefaultResources: [
+    "https://api.example.com/default",
+  ],
+  clientRegistrationAllowedResources: [
+    "https://api.example.com/optional",
+  ],
+})
+```
+
+Explicit resource requests are closed by default: when both registration-resource options are omitted, no resource may be requested. A requested resource outside the effective allowlist is rejected with `invalid_target`; missing and disabled resources are rejected too. Registrations with resolved resources return the final `resources` list and create the corresponding `oauthClientResource` links atomically.
+
 ### Scopes
 
 Scopes allow clients specific access to specific resources.
@@ -1353,7 +1373,9 @@ oauthProvider({
 
 #### Dynamic Client Registration Scopes
 
-To set a list of default scopes for newly registered clients when scopes parameter is not sent, set the `clientRegistrationDefaultScopes` field. All scopes must be defined in `scopes`.
+Registration scope metadata describes the scopes a client is capable of requesting; it is not a user authorization grant. Better Auth validates a requested `scope` as a subset of the operator policy, then persists the complete operator-approved capability set so later authorization can step up without re-registering the client.
+
+Set the baseline capability list with `clientRegistrationDefaultScopes`. All values must be defined in `scopes`.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -1362,7 +1384,7 @@ oauthProvider({
 })
 ```
 
-To also set a list of allowed scopes for newly registered clients when scopes parameter is not sent, set the `clientRegistrationAllowedScopes` field. These are **in addition** to the `clientRegistrationDefaultScopes`. All scopes must be defined in `scopes`.
+Add capabilities with `clientRegistrationAllowedScopes`. The effective set is the deterministic, deduplicated union of both lists. When both options are omitted, `scopes` is the effective set. A DCR or CIMD document may request a subset, but that subset does not permanently prevent a later operation-specific step-up.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -1382,7 +1404,7 @@ By default, PKCE is required for all clients. This provides maximum security and
 
 **PKCE is always required for:**
 
-* Public clients (native/user-agent-based applications)
+* Clients using `token_endpoint_auth_method: "none"`
 * Authorization requests with the `offline_access` scope, unless a confidential client has opted out of PKCE and the OIDC request includes both `openid` and `nonce`
 
 #### Per-Client PKCE Configuration
@@ -1446,11 +1468,11 @@ Only disable PKCE for confidential clients when absolutely necessary for legacy 
 Some clients (notably MCP clients) need to connect to your authorization server without being registered in advance. The OAuth Provider plugin supports this through two mechanisms:
 
 * **`allowUnauthenticatedClientRegistration`**: lets anonymous callers hit `/oauth2/register` to create a client at request time. Confidential registrations receive a one-time `client_secret`; public registrations use `token_endpoint_auth_method: "none"`.
-* **[`@better-auth/cimd`](/docs/plugins/cimd)**: an optional plugin that lets clients identify themselves by hosting a metadata document at an HTTPS URL. The URL itself becomes the `client_id`; the server fetches and validates the document. This is the pattern MCP calls [Client ID Metadata Documents](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/).
+* **[`@better-auth/cimd`](/docs/plugins/cimd)**: an optional plugin that lets clients identify themselves by hosting a metadata document at an HTTPS URL. The URL itself becomes the `client_id`; the server fetches and validates the document. Generic discovery follows [Client ID Metadata Document draft-02](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02), while the MCP 2026-07-28 profile explicitly pins draft-00 requirements.
 
 ### Provider extensions
 
-OAuth companion plugins can extend the provider without changing OAuth Provider core. Use `extendOAuthProvider()` from a plugin `init()` hook to add token grants, assertion-based client authentication methods, additive discovery metadata, token or UserInfo claims, and client-id discovery sources. The [`@better-auth/cimd`](/docs/plugins/cimd) plugin uses this same surface to contribute its URL-based client discovery.
+OAuth companion plugins can extend the provider without changing OAuth Provider core. Use `extendOAuthProvider()` from a plugin `init()` hook to add token grants, assertion-based client authentication methods, additive discovery metadata, token or UserInfo claims, and client-id discovery sources. The [`@better-auth/cimd`](/docs/plugins/cimd) plugin uses this same surface to contribute its URL-based client discovery. A discovery source provides a stable, globally unique `id` that is persisted as client provenance and can provide `fetchClientMetadataResource` for resources owned by that discovery, such as a CIMD client's `jwks_uri`. Changing the ID requires migrating owned client rows; removing the matching discovery makes those clients fail closed.
 
 ```ts title="custom-oauth-extension.ts"
 import type { BetterAuthPlugin } from "better-auth";
@@ -1793,162 +1815,11 @@ JWT access tokens always use the real user ID as `sub`, since resource servers m
 
 ### MCP
 
-You can easily make your APIs [MCP-compatible](https://modelcontextprotocol.io/specification/draft/basic/authorization) simply by adding a resource server which directs users to this OAuth 2.1 authorization server.
+Use the [`@better-auth/mcp` plugin](/docs/plugins/mcp) when an MCP server is one of your protected resources. It builds on this OAuth Provider and adds MCP defaults, RFC 9728 protected resource metadata, and route helpers that return the authorization challenge MCP clients expect.
 
-<Callout type="info">
-  If you are using "openid" and confidential MCP clients, you cannot disable the JWT plugin since `id_token` verification may not necessarily be supported via a `client_secret`.
-</Callout>
+`mcp()` is the OAuth Provider for that Better Auth instance, so do not register both `mcp()` and `oauthProvider()`. It accepts the OAuth Provider options directly. Use `requireMcpAuth` when the MCP route shares the auth instance, or `createMcpProtectedRequestHandler` when the resource server runs separately.
 
-#### Installation
-
-<Steps>
-  <Step>
-    ### Ensure Well Known Paths are correct
-
-    See [well-known endpoints](#well-known).
-  </Step>
-
-  <Step>
-    ### Add Resource Server Client
-
-    (Optional) If you have your auth configuration available locally, add the configuration as a parameter to the client to fill in these values and warn you about configuration errors. You can always override these values in the function call. If this is not supplied, typescript will guide you with the minimal configuration values needed.
-
-    ```ts title="server-client.ts"
-    import { auth } from "@/lib/auth";
-    import { createAuthClient } from "better-auth/client";
-    import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client"
-
-    export const serverClient = createAuthClient({
-      plugins: [oauthProviderResourceClient(auth)], // auth optional
-    });
-    ```
-  </Step>
-
-  <Step>
-    ### Add OAuth Protected Resource Metadata to your API
-
-    ```ts title="/.well-known/oauth-protected-resource/[resource-path]/route.ts"
-    import { serverClient } from "@/lib/server-client";
-
-    export const GET = async () => {
-      const metadata = await serverClient.getProtectedResourceMetadata({
-        resource: "https://api.example.com", // protected resource identifier
-        authorization_servers: ["https://auth.example.com"],
-      })
-
-      return new Response(JSON.stringify(metadata), {
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control":
-            "public, max-age=15, stale-while-revalidate=15, stale-if-error=86400",
-        },
-      });
-    };
-    ```
-  </Step>
-
-  <Step>
-    If you use the [`cimd`](/docs/plugins/cimd) plugin or `allowUnauthenticatedClientRegistration`, you must ensure that your API Server is a confidential client itself:
-
-    ```ts
-    await auth.api.createOAuthClient({
-      headers,
-      body: {
-        redirect_uris: [redirectUri],
-      }
-    });
-    ```
-
-    These values should be used in the verify options `remoteVerify.clientId` and `remoteVerify.clientSecret`. Additionally, `remoteVerify.introspectUrl` would be something like `${BASE_URL}/${AUTH_PATH}/oauth2/introspect`.
-
-    <Callout type="info">
-      If you choose not to support the [`cimd`](/docs/plugins/cimd) plugin or `allowUnauthenticatedClientRegistration` (and only `allowDynamicClientRegistration`), the MCP client (ie. ChatGPT, Anthropic, Gemini) would need to allow you to put in a public client\_id in their UI or at runtime while chatting with the AI.
-    </Callout>
-  </Step>
-
-  <Step>
-    ### Handle MCP Errors for your API
-
-    Set `verifyOptions.audience` to your protected resource identifier. If omitted, the resource client falls back to the authorization server base URL as the expected audience.
-
-    * Using the client `verifyAccessTokenRequest` function
-
-    See [Verification](#verification) for verification examples.
-
-    * With auth available, use the client `verifyAccessTokenRequest` function to automatically determine endpoints
-
-    ```ts title="api/[endpoint].ts"
-    import { auth } from "@/lib/auth";
-    import { serverClient } from "@/lib/server-client";
-
-    export const GET = async (req: Request) => {
-      const payload = await serverClient.verifyAccessTokenRequest(
-        req,
-        {
-          verifyOptions: {
-            audience: "https://api.example.com",
-          }
-        }
-      );
-      // ...continue
-    }
-    ```
-
-    * Using `mcpHandler` helper
-
-    ```ts title="api/[transport]/route.ts"
-    import { createMcpHandler } from "mcp-handler";
-    import { mcpHandler } from "@better-auth/oauth-provider";
-    import { z } from "zod";
-
-    const handler = mcpHandler({
-      jwksUrl: "https://auth.example.com/api/auth/jwks",
-      verifyOptions: {
-        issuer: "https://auth.example.com",
-        audience: "https://api.example.com",
-      },
-    }, (req, jwt) => {
-      return createMcpHandler(
-        (server) => {
-          server.registerTool(
-            "echo", {
-              description: "Echo a message",
-              inputSchema: {
-                message: z.string(),
-              },
-            },
-            async ({ message }) => {
-              return {
-                content: [
-                  {
-                    type: "text",
-                    text: `Echo: ${message}${
-                      jwt?.sub
-                        ? ` for user ${jwt.sub}`
-                        : ""
-                    }`,
-                  },
-                ],
-              };
-            }
-          );
-        }, {
-          serverInfo: {
-            name: "demo-better-auth",
-            version: "1.0.0",
-          }
-        }, {
-          basePath: "/api",
-          maxDuration: 60,
-          verboseLogs: true,
-        }
-      )(req);
-    });
-
-    export { handler as GET, handler as POST, handler as DELETE };
-    ```
-  </Step>
-</Steps>
+The MCP plugin can also support a separate registered CLI through the device grant. MCP clients keep their discovery-driven authorization code flow, while the CLI asks the same provider for a resource-bound token through device authorization. See [Add device authorization for your own CLI](/docs/plugins/mcp#add-device-authorization-for-your-own-cli).
 
 ## Schema
 
@@ -2141,16 +2012,17 @@ export const oauthClientTableFields = [
     isOptional: true,
   },
   {
-    name: "public",
-    type: "boolean",
-    description: "Indication if the client is confidential or public",
+    name: "applicationType",
+    type: "string",
+    description:
+      "OIDC application type used to classify redirect URI policy. Supports: ['web', 'native']",
     isOptional: true,
   },
   {
-    name: "type",
+    name: "clientDiscoveryId",
     type: "string",
     description:
-      "Type of OAuth client. Supports: ['web', 'native', 'user-agent-based']",
+      "Stable identifier of the client-discovery extension that owns refresh and metadata-resource transport for this client",
     isOptional: true,
   },
   {

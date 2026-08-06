@@ -9,7 +9,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
-export interface FacebookProfile {
+export interface FacebookGraphProfile {
 	id: string;
 	name: string;
 	email?: string;
@@ -23,6 +23,17 @@ export interface FacebookProfile {
 		};
 	};
 }
+
+export interface FacebookLimitedLoginProfile {
+	sub: string;
+	email: string;
+	name: string;
+	picture: string;
+}
+
+export type FacebookProfile =
+	| FacebookGraphProfile
+	| FacebookLimitedLoginProfile;
 
 interface FacebookDebugTokenData {
 	app_id?: string;
@@ -95,6 +106,9 @@ export const facebook = (options: FacebookOptions) => {
 	return {
 		id: "facebook",
 		name: "Facebook",
+		accountSubject: ({ profile }) =>
+			"sub" in profile ? profile.sub : profile.id,
+		accountIssuer: "https://www.facebook.com",
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -167,38 +181,18 @@ export const facebook = (options: FacebookOptions) => {
 			}
 
 			if (token.idToken && token.idToken.split(".").length === 3) {
-				const profile = decodeJwt(token.idToken) as {
-					sub: string;
-					email: string;
-					name: string;
-					picture: string;
-				};
-
-				const user = {
-					id: profile.sub,
-					name: profile.name,
-					email: profile.email,
-					picture: {
-						data: {
-							url: profile.picture,
-							height: 100,
-							width: 100,
-							is_silhouette: false,
-						},
-					},
-				};
+				const profile = decodeJwt(token.idToken) as FacebookLimitedLoginProfile;
 
 				// https://developers.facebook.com/docs/facebook-login/limited-login/permissions
 				// Facebook ID token does not include email_verified claim.
 				// We default to false for security consistency.
-				const userMap = await options.mapProfileToUser?.({
-					...user,
-					email_verified: false,
-				});
+				const userMap = await options.mapProfileToUser?.(profile);
 
 				return {
 					user: {
-						...user,
+						name: profile.name,
+						email: profile.email,
+						image: profile.picture,
 						emailVerified: false,
 						...userMap,
 					},
@@ -228,7 +222,7 @@ export const facebook = (options: FacebookOptions) => {
 				"picture",
 				...(options?.fields || []),
 			];
-			const { data: profile, error } = await betterFetch<FacebookProfile>(
+			const { data: profile, error } = await betterFetch<FacebookGraphProfile>(
 				"https://graph.facebook.com/me?fields=" + fields.join(","),
 				{
 					auth: {
@@ -247,7 +241,6 @@ export const facebook = (options: FacebookOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.id,
 					name: profile.name,
 					email: profile.email,
 					image: profile.picture.data.url,

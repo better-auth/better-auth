@@ -1,5 +1,9 @@
 import type { JWTVerifyGetKey } from "jose";
-import type { Awaitable, LiteralString } from "../types";
+import type {
+	Awaitable,
+	GenericEndpointContext,
+	LiteralString,
+} from "../types";
 
 /**
  * id_token verification config for a social provider.
@@ -51,7 +55,11 @@ export type OAuthIdTokenConfig =
 			 * Custom verifier for providers that cannot verify against a local JWKS, such as a
 			 * remote verification endpoint (e.g. LINE).
 			 */
-			verify: (token: string, nonce?: string) => Promise<boolean>;
+			verify: (
+				token: string,
+				nonce?: string,
+				ctx?: GenericEndpointContext,
+			) => Promise<boolean>;
 	  };
 
 export interface OAuth2Tokens {
@@ -69,12 +77,50 @@ export interface OAuth2Tokens {
 	raw?: Record<string, unknown> | undefined;
 }
 
+/** Mutable local-user attributes normalized from an OAuth provider profile. */
 export type OAuth2UserInfo = {
-	id: string | number;
+	/** Provider identity belongs in raw profile data and `accountSubject`. */
+	id?: never;
 	name?: string | undefined;
 	email?: (string | null) | undefined;
 	image?: string | undefined;
 	emailVerified: boolean;
+};
+
+/**
+ * Verified provider data available when deriving a stable OAuth account key.
+ *
+ * Account-key resolvers must use the raw provider profile or verified token
+ * response. They never receive the mapped local user, so profile mapping
+ * cannot redefine provider identity.
+ */
+export interface OAuthAccountKeyContext<Profile extends object = object> {
+	tokens: OAuth2Tokens;
+	profile: Profile;
+}
+
+/**
+ * Resolves one part of an account key from a profile returned by the same
+ * provider. The method-derived callback keeps that profile pairing intact when
+ * providers with different profile shapes share an `OAuthProvider[]`.
+ */
+type OAuthAccountKeyResolver<Profile extends object, Value> = {
+	resolve(context: OAuthAccountKeyContext<Profile>): Awaitable<Value>;
+}["resolve"];
+
+/** Resolves the stable provider subject used to build an OAuth account key. */
+export type OAuthAccountSubject<Profile extends object = object> =
+	OAuthAccountKeyResolver<Profile, string | number>;
+
+/** Mutable local-user attributes returned by `mapProfileToUser`. */
+export type OAuthMappedUser = {
+	/** Provider identity is defined by `accountSubject`, not local user mapping. */
+	id?: never;
+	name?: string;
+	email?: string | null;
+	image?: string;
+	emailVerified?: boolean;
+	[key: string]: unknown;
 };
 
 /**
@@ -90,8 +136,8 @@ export interface OAuthRefreshContext {
 }
 
 export interface OAuthProvider<
-	T extends Record<string, any> = Record<string, any>,
-	O extends Record<string, any> = Partial<ProviderOptions>,
+	T extends object = object,
+	O extends object = Partial<ProviderOptions>,
 > {
 	id: LiteralString;
 	/**
@@ -127,6 +173,15 @@ export interface OAuthProvider<
 		additionalParams?: Record<string, string> | undefined;
 	}) => Awaitable<URL>;
 	name: string;
+	/**
+	 * Stable subject that identifies the provider account.
+	 *
+	 * Read this value from the raw, provider-verified profile. For OpenID
+	 * Connect providers, use the `sub` claim. For OAuth providers, use the
+	 * provider's documented immutable user identifier. Never derive this value
+	 * from `mapProfileToUser`.
+	 */
+	accountSubject: OAuthAccountSubject<T>;
 	validateAuthorizationCode: (data: {
 		code: string;
 		redirectURI: string;
@@ -174,6 +229,17 @@ export interface OAuthProvider<
 		| undefined;
 	revokeToken?: ((token: string) => Promise<void>) | undefined;
 	/**
+	 * Builds an OpenID Connect RP-Initiated Logout URL for this provider.
+	 * Returns `null` when provider logout is unavailable or disabled.
+	 */
+	createEndSessionURL?:
+		| ((data: {
+				idToken?: string | null | undefined;
+				postLogoutRedirectURI?: string | undefined;
+				state?: string | undefined;
+		  }) => Awaitable<URL | null>)
+		| undefined;
+	/**
 	 * Declarative id_token verification config consumed by the shared
 	 * `verifyProviderIdToken` verifier. Providers set this instead of implementing a boolean
 	 * verify method, which keeps verification centralized and fail-closed.
@@ -185,6 +251,16 @@ export interface OAuthProvider<
 	 * against this value to prevent authorization server mix-up attacks.
 	 */
 	issuer?: string | undefined;
+	/**
+	 * Stable issuer used with the provider subject to recognize an account.
+	 *
+	 * Use the validated OpenID Connect issuer for OIDC providers. A resolver is
+	 * supported for tenant-specific issuers and receives only provider-verified
+	 * data. OAuth providers without an issuer omit this property and are scoped
+	 * to the synthetic `local:oauth:<encoded providerId>` issuer, where the
+	 * provider ID segment is percent-encoded.
+	 */
+	accountIssuer?: string | OAuthAccountKeyResolver<T, string> | undefined;
 	/**
 	 * Require shared OAuth redirect routes to bind ID-token verification to an
 	 * authorization request nonce. When true, routes generate `idTokenNonce`,
@@ -218,7 +294,15 @@ export interface OAuthProvider<
 	options?: O | undefined;
 }
 
-export type ProviderOptions<Profile extends Record<string, any> = any> = {
+/**
+ * Maps a provider-specific profile while remaining compatible with the erased
+ * profile type used by shared OAuth helpers.
+ */
+type OAuthProfileMapper<Profile extends object> = {
+	map(profile: Profile): Awaitable<OAuthMappedUser>;
+}["map"];
+
+export type ProviderOptions<Profile extends object = object> = {
 	/**
 	 * The client ID of your application.
 	 *
@@ -262,25 +346,28 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 */
 	disableIdTokenSignIn?: boolean | undefined;
 	/**
-	 * verifyIdToken function to verify the id token
+	 * verifyIdToken function to verify the id token.
+	 *
+	 * The optional endpoint context exposes request metadata to custom
+	 * verifiers without coupling built-in provider verification to a runtime.
 	 */
 	verifyIdToken?:
-		| ((token: string, nonce?: string) => Promise<boolean>)
+		| ((
+				token: string,
+				nonce?: string,
+				ctx?: GenericEndpointContext,
+		  ) => Promise<boolean>)
 		| undefined;
 	/**
 	 * Custom function to get user info from the provider
+	 *
+	 * `data` must preserve the declared raw profile shape because account-key
+	 * resolvers consume it after this hook returns.
 	 */
 	getUserInfo?:
 		| ((token: OAuth2Tokens) => Promise<{
-				user: {
-					id: string;
-					name?: string;
-					email?: string | null;
-					image?: string;
-					emailVerified: boolean;
-					[key: string]: any;
-				};
-				data: any;
+				user: OAuth2UserInfo & Record<string, unknown>;
+				data: Profile;
 		  } | null>)
 		| undefined;
 	/**
@@ -293,25 +380,7 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 * Custom function to map the provider profile to a
 	 * user.
 	 */
-	mapProfileToUser?:
-		| ((profile: Profile) =>
-				| {
-						id?: string;
-						name?: string;
-						email?: string | null;
-						image?: string;
-						emailVerified?: boolean;
-						[key: string]: any;
-				  }
-				| Promise<{
-						id?: string;
-						name?: string;
-						email?: string | null;
-						image?: string;
-						emailVerified?: boolean;
-						[key: string]: any;
-				  }>)
-		| undefined;
+	mapProfileToUser?: OAuthProfileMapper<Profile> | undefined;
 	/**
 	 * Disable implicit sign up for new users. When set to true for the provider,
 	 * sign-in need to be called with with requestSignUp as true to create new users.

@@ -184,11 +184,13 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						},
 						account: {
 							providerId: "google",
+							issuer: "https://accounts.google.com",
 							accountId: sub,
 							idToken,
 							scope: "openid,profile,email",
 						},
-						disableSignUp: options?.disableSignup,
+						disableSignUp:
+							options?.disableSignup || googleProvider?.disableSignUp,
 						source: {
 							method: "oauth",
 							oauth: {

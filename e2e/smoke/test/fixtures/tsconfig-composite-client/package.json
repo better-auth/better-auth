@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --build tsconfig.json"
+    "typecheck": "tsc --build tsconfig.json",
+    "typecheck:consumer": "tsc --build --force tsconfig.json"
   },
   "dependencies": {
     "better-auth": "workspace:*",

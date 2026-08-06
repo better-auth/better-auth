@@ -24,6 +24,7 @@ export const figma = (options: FigmaOptions) => {
 	return {
 		id: "figma",
 		name: "Figma",
+		accountSubject: ({ profile }) => profile.id,
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -106,7 +107,6 @@ export const figma = (options: FigmaOptions) => {
 
 				return {
 					user: {
-						id: profile.id,
 						name: profile.handle,
 						email: profile.email,
 						image: profile.img_url,

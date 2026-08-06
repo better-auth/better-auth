@@ -3,7 +3,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import type { Account, User } from "@better-auth/core/db";
+import type { User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { createEmailVerificationToken } from "../../api";
@@ -477,19 +477,8 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 						);
 					}
 
-					const account = await ctx.context.adapter.findOne<Account>({
-						model: "account",
-						where: [
-							{
-								field: "userId",
-								value: user.id,
-							},
-							{
-								field: "providerId",
-								value: "credential",
-							},
-						],
-					});
+					const account =
+						await ctx.context.internalAdapter.findCredentialAccount(user.id);
 					if (!account) {
 						throw APIError.from(
 							"UNAUTHORIZED",

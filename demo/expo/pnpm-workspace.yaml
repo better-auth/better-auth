@@ -1,16 +1,24 @@
 allowBuilds:
   better-sqlite3: true
 
+catalog:
+  typescript: ^6.0.3
+
 overrides:
   '@babel/plugin-transform-modules-systemjs@<=7.29.3': 7.29.4
-  brace-expansion@<2: 1.1.13
-  brace-expansion@>=4: 5.0.6
+  '@babel/core': '>=7.29.6 <8'
+  brace-expansion: '>=5.0.8 <6'
+  minimatch@<10: '>=10.2.4 <11'
+  test-exclude@<7: '>=7.0.1 <8'
   node-forge: ^1.4.0
   picomatch@<2.3.2: 2.3.2
   picomatch@>=4: ^4.0.4
-  postcss@<8.5.10: ^8.5.14
+  postcss@<8.5.18: '>=8.5.18 <9'
+  'js-yaml@<4': '>=3.15.0 <4'
+  'js-yaml@>=4 <5': '>=4.3.0 <5'
   'yaml@>=2.0.0 <2.8.3': 2.8.3
   '@xmldom/xmldom': ^0.8.12
   uuid@<11.1.1: '>=11.1.1 <12'
-  'ws@>=8 <8.20.1': '>=8.20.1 <9'
-  shell-quote@<=1.8.3: 1.8.4
+  'ws@>=8 <8.21.0': '>=8.21.0 <9'
+  'ws@<7.5.11': '>=7.5.11 <8'
+  shell-quote@<=1.8.4: '>=1.9.0 <2'

@@ -1,4 +1,7 @@
-import { runWithTransaction } from "@better-auth/core/context";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type {
 	PrivateKeyJwtSigningAlgorithm,
@@ -21,13 +24,16 @@ import {
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "better-auth/api";
-import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
+import {
+	deleteSessionCookie,
+	setAccountCookie,
+	setSessionCookie,
+} from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import {
 	additionalAuthorizationParamsSchema,
 	handleOAuthUserInfo,
 } from "better-auth/oauth2";
-import { decodeJwt } from "jose";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { RequestInfo } from "samlify/types/src/types";
 import * as z from "zod";
@@ -43,6 +49,13 @@ import {
 	validateOIDCEndpointUrls,
 	validateOIDCIdToken,
 } from "../oidc";
+import type { SSOProviderReference } from "../provider-reference";
+import {
+	computeSSOProviderReference,
+	isCurrentSSOProviderReference,
+	parseSSOProviderReference,
+	SSO_PROVIDER_STATE_KEY,
+} from "../provider-reference";
 import { validateCertSources, validateConfigAlgorithms } from "../saml";
 import { SAML_ERROR_CODES } from "../saml/error-codes";
 import { generateRelayState } from "../saml-state";
@@ -58,6 +71,14 @@ import type {
 	SSOProviderAdditionalFieldsInput,
 } from "../types";
 import {
+	assertSSOUserResolutionAsyncContextSupport,
+	assertSSOUserResolutionNativeTransactionSupport,
+	assertSSOUserResolutionSessionStorage,
+	getFailedSSOAuthenticationResult,
+	requireSuccessfulSSOAuthentication,
+	resolveSSOUser,
+} from "../user-resolution";
+import {
 	domainMatches,
 	parseProviderEmailVerified,
 	safeJsonParse,
@@ -65,6 +86,9 @@ import {
 } from "../utils";
 import { getVerificationIdentifier } from "./domain-verification";
 import {
+	assertSAMLIdentityProviderAuthority,
+	assertSAMLMetadataSize,
+	assertSAMLServiceProviderMetadataPolicy,
 	createIdP,
 	createSAMLPostForm,
 	createSP,
@@ -75,7 +99,12 @@ import {
 	hasOrgAdminRole,
 	lockSSOProviderForAccountLink,
 } from "./providers";
-import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
+import {
+	buildSAMLRedirectUrl,
+	getSAMLRedirectCandidates,
+	getSafeRedirectUrl,
+	processSAMLResponse,
+} from "./saml-pipeline";
 import {
 	getRegisterSSOProviderBodySchema,
 	parseSSOProviderAdditionalFields,
@@ -296,11 +325,6 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 														type: "object",
 														nullable: true,
 														properties: {
-															id: {
-																type: "string",
-																description:
-																	"Field mapping for user ID (defaults to 'sub')",
-															},
 															email: {
 																type: "string",
 																description:
@@ -330,7 +354,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 																description: "Additional field mappings",
 															},
 														},
-														required: ["id", "email", "name"],
+														required: ["email", "name"],
 													},
 												},
 												required: [
@@ -414,18 +438,20 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				"create",
 			);
 
-			if (body.samlConfig?.idpMetadata?.metadata) {
+			if (body.samlConfig) {
 				const maxMetadataSize =
 					options?.saml?.maxMetadataSize ??
 					constants.DEFAULT_MAX_SAML_METADATA_SIZE;
-				if (
-					new TextEncoder().encode(body.samlConfig.idpMetadata.metadata)
-						.length > maxMetadataSize
-				) {
-					throw new APIError("BAD_REQUEST", {
-						message: `IdP metadata exceeds maximum allowed size (${maxMetadataSize} bytes)`,
-					});
-				}
+				assertSAMLMetadataSize(
+					body.samlConfig.idpMetadata?.metadata,
+					"IdP",
+					maxMetadataSize,
+				);
+				assertSAMLMetadataSize(
+					body.samlConfig.spMetadata?.metadata,
+					"SP",
+					maxMetadataSize,
+				);
 			}
 
 			if (ctx.body.organizationId) {
@@ -477,24 +503,6 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					message:
 						"This providerId is reserved and cannot be used for an SSO provider",
 				});
-			}
-
-			if (ctx.context.hasPlugin("scim")) {
-				const existingSCIMProvider = await ctx.context.adapter.findOne<{
-					id: string;
-				}>({
-					model: "scimProvider",
-					where: [{ field: "providerId", value: body.providerId }],
-				});
-				if (existingSCIMProvider) {
-					ctx.context.logger.warn(
-						`SSO provider registration rejected for SCIM providerId: ${body.providerId}`,
-					);
-					throw new APIError("UNPROCESSABLE_ENTITY", {
-						message:
-							"This providerId is already used by a SCIM provider and cannot be used for an SSO provider",
-					});
-				}
 			}
 
 			const existingProvider = await ctx.context.adapter.findOne({
@@ -618,6 +626,11 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				);
 
 				validateCertSources(body.samlConfig);
+				assertSAMLIdentityProviderAuthority(body.samlConfig);
+				assertSAMLServiceProviderMetadataPolicy({
+					...body.samlConfig,
+					issuer: body.issuer,
+				});
 
 				// Validate that the config has a usable IdP entry point
 				const hasIdpMetadata = body.samlConfig.idpMetadata?.metadata;
@@ -691,6 +704,8 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 								cert: body.samlConfig.cert,
 								audience: body.samlConfig.audience,
 								callbackUrl: body.samlConfig.callbackUrl,
+								idpInitiatedCallbackUrl:
+									body.samlConfig.idpInitiatedCallbackUrl,
 								idpMetadata: body.samlConfig.idpMetadata,
 								spMetadata: body.samlConfig.spMetadata,
 								wantAssertionsSigned: body.samlConfig.wantAssertionsSigned,
@@ -1122,13 +1137,9 @@ export const signInSSO = (options?: SSOOptions) => {
 						message: "Invalid OIDC configuration. Authorization URL not found.",
 					});
 				}
-				if (options?.redirectURI?.trim()) {
-					// The shared OIDC callback resolves the provider from server-only
-					// state, so it must not be client-spoofable.
-					await addOAuthServerContext({
-						ssoProviderId: provider.providerId,
-					});
-				}
+				await addOAuthServerContext({
+					[SSO_PROVIDER_STATE_KEY]: await computeSSOProviderReference(provider),
+				});
 				const state = await generateState(ctx);
 				const redirectURI = getOIDCRedirectURI(
 					ctx.context.baseURL,
@@ -1185,7 +1196,12 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 				}
 
-				const { state: relayState } = await generateRelayState(ctx, undefined);
+				const providerReference = await computeSSOProviderReference(provider);
+				const { state: relayState } = await generateRelayState(
+					ctx,
+					undefined,
+					providerReference,
+				);
 
 				const sp = createSP(
 					parsedSamlConfig,
@@ -1217,6 +1233,7 @@ export const signInSSO = (options?: SSOOptions) => {
 					const record: AuthnRequestRecord = {
 						id: loginRequest.id,
 						providerId: provider.providerId,
+						providerReference,
 						createdAt: Date.now(),
 						expiresAt: Date.now() + ttl,
 					};
@@ -1289,6 +1306,7 @@ async function handleOIDCCallback(
 	options: SSOOptions | undefined,
 	providerId: string,
 	stateData?: Awaited<ReturnType<typeof parseState>>,
+	parsedProviderReference?: SSOProviderReference,
 ) {
 	const { code, error, error_description } = ctx.query;
 	if (!stateData) {
@@ -1300,6 +1318,11 @@ async function handleOIDCCallback(
 			`${ctx.context.baseURL}/error`;
 		throw ctx.redirect(`${errorURL}?error=invalid_state`);
 	}
+	const providerReference =
+		parsedProviderReference ??
+		parseSSOProviderReference(
+			stateData.serverContext?.[SSO_PROVIDER_STATE_KEY],
+		);
 	const { callbackURL, errorURL, newUserURL, requestSignUp } = stateData;
 	const redirectOIDCError = (error: string, description: string): never => {
 		const baseURL = errorURL || callbackURL;
@@ -1322,6 +1345,17 @@ async function handleOIDCCallback(
 			`${
 				errorURL || callbackURL
 			}?error=invalid_provider&error_description=provider not found`,
+		);
+	}
+	const acceptedProviderReference =
+		providerReference ??
+		redirectOIDCError("invalid_state", "missing_sso_provider_reference");
+	if (
+		!(await isCurrentSSOProviderReference(provider, acceptedProviderReference))
+	) {
+		redirectOIDCError(
+			"invalid_state",
+			"sso_provider_changed_during_authentication",
 		);
 	}
 
@@ -1499,18 +1533,59 @@ async function handleOIDCCallback(
 			}?error=invalid_provider&error_description=token_response_not_found`,
 		);
 	}
-	let userInfo: {
+	type OIDCUserInfo = {
 		id?: string;
 		email?: string;
 		name?: string;
 		image?: string;
 		emailVerified?: boolean;
-		[key: string]: any;
-	} | null = null;
+	} & Record<string, unknown>;
+	let userInfo: OIDCUserInfo | null = null;
 	const mapping = config.mapping || {};
+	const readStringClaim = (
+		claims: Record<string, unknown>,
+		claim: string,
+	): string | undefined => {
+		const value = claims[claim];
+		return typeof value === "string" && value.length > 0 ? value : undefined;
+	};
 	// The raw, unmapped provider claims, forwarded to the validateUserInfo gate
 	// as `source.sso.profile` so a policy can inspect provider-specific fields.
 	let rawProfile: Record<string, unknown> | undefined;
+	let verifiedIdToken: Awaited<ReturnType<typeof validateOIDCIdToken>> | null =
+		null;
+
+	if (tokenResponse.idToken) {
+		const jwksEndpoint = config.jwksEndpoint;
+		if (!jwksEndpoint) {
+			redirectOIDCError("invalid_provider", "jwks_endpoint_not_found");
+		}
+		const verified = await validateOIDCIdToken(
+			tokenResponse.idToken,
+			jwksEndpoint!,
+			{ audience: config.clientId, issuer: provider.issuer },
+			(url) => ctx.context.isTrustedOrigin(url),
+		).catch((error) => {
+			if (error instanceof DiscoveryError) {
+				redirectOIDCError("invalid_provider", error.message);
+			}
+			ctx.context.logger.error(error);
+			return null;
+		});
+		if (!verified) {
+			redirectOIDCError("invalid_provider", "token_not_verified");
+		}
+		if (!readStringClaim(verified!.payload, "sub")) {
+			redirectOIDCError("invalid_provider", "id_token_subject_missing");
+		}
+		verifiedIdToken = verified!;
+	}
+	if (options?.resolveUser && !verifiedIdToken) {
+		redirectOIDCError(
+			"invalid_provider",
+			"id_token_required_for_user_resolution",
+		);
+	}
 
 	if (config.userInfoEndpoint) {
 		const userInfoResponse = await fetchOIDCEndpoint<Record<string, unknown>>(
@@ -1539,6 +1614,12 @@ async function handleOIDCCallback(
 		const rawUserInfo =
 			userInfoResponse.data ??
 			redirectOIDCError("invalid_provider", "userinfo_response_not_found");
+		if (verifiedIdToken && rawUserInfo.sub !== verifiedIdToken.payload.sub) {
+			redirectOIDCError(
+				"invalid_provider",
+				"id_token_userinfo_subject_mismatch",
+			);
+		}
 		rawProfile = rawUserInfo;
 		userInfo = {
 			...Object.fromEntries(
@@ -1547,71 +1628,35 @@ async function handleOIDCCallback(
 					rawUserInfo[value],
 				]),
 			),
-			id: rawUserInfo[mapping.id || "sub"] as string | undefined,
-			email: rawUserInfo[mapping.email || "email"] as string | undefined,
+			id: readStringClaim(rawUserInfo, "sub"),
+			email: readStringClaim(rawUserInfo, mapping.email || "email"),
 			emailVerified: options?.trustEmailVerified
 				? parseProviderEmailVerified(
 						rawUserInfo[mapping.emailVerified || "email_verified"],
 					)
 				: false,
-			name: rawUserInfo[mapping.name || "name"] as string | undefined,
-			image: rawUserInfo[mapping.image || "picture"] as string | undefined,
+			name: readStringClaim(rawUserInfo, mapping.name || "name"),
+			image: readStringClaim(rawUserInfo, mapping.image || "picture"),
 		};
-	} else if (tokenResponse.idToken) {
-		const idToken = decodeJwt(tokenResponse.idToken);
-		rawProfile = idToken as Record<string, unknown>;
-		if (!config.jwksEndpoint) {
-			throw ctx.redirect(
-				`${
-					errorURL || callbackURL
-				}?error=invalid_provider&error_description=jwks_endpoint_not_found`,
-			);
-		}
-		const verified = await validateOIDCIdToken(
-			tokenResponse.idToken,
-			config.jwksEndpoint,
-			{
-				audience: config.clientId,
-				issuer: provider.issuer,
-			},
-			(url) => ctx.context.isTrustedOrigin(url),
-		).catch((e) => {
-			if (e instanceof DiscoveryError) {
-				redirectOIDCError("invalid_provider", e.message);
-			}
-			ctx.context.logger.error(e);
-			return null;
-		});
-		if (!verified) {
-			throw ctx.redirect(
-				`${
-					errorURL || callbackURL
-				}?error=invalid_provider&error_description=token_not_verified`,
-			);
-		}
-
+	} else if (verifiedIdToken) {
+		const idToken = verifiedIdToken.payload;
+		rawProfile = idToken;
 		userInfo = {
 			...Object.fromEntries(
 				Object.entries(mapping.extraFields || {}).map(([key, value]) => [
 					key,
-					verified.payload[value],
+					idToken[value],
 				]),
 			),
-			id: idToken[mapping.id || "sub"],
-			email: idToken[mapping.email || "email"],
+			id: idToken.sub,
+			email: readStringClaim(idToken, mapping.email || "email"),
 			emailVerified: options?.trustEmailVerified
 				? parseProviderEmailVerified(
 						idToken[mapping.emailVerified || "email_verified"],
 					)
 				: false,
-			name: idToken[mapping.name || "name"],
-			image: idToken[mapping.image || "picture"],
-		} as {
-			id?: string;
-			email?: string;
-			name?: string;
-			image?: string;
-			emailVerified?: boolean;
+			name: readStringClaim(idToken, mapping.name || "name"),
+			image: readStringClaim(idToken, mapping.image || "picture"),
 		};
 	} else {
 		throw ctx.redirect(
@@ -1630,6 +1675,24 @@ async function handleOIDCCallback(
 	}
 	const userInfoEmail = userInfo.email;
 	const userInfoId = userInfo.id;
+	const providerUserAttributes = Object.fromEntries(
+		Object.entries(userInfo).filter(([key]) => key !== "id"),
+	);
+	const providerUser = {
+		...providerUserAttributes,
+		email: userInfoEmail,
+		name: typeof userInfo.name === "string" ? userInfo.name : "",
+		image: typeof userInfo.image === "string" ? userInfo.image : undefined,
+		emailVerified: options?.trustEmailVerified
+			? userInfo.emailVerified === true
+			: false,
+	};
+	const accountKey = {
+		issuer:
+			(verifiedIdToken && readStringClaim(verifiedIdToken.payload, "iss")) ||
+			provider.issuer,
+		accountId: userInfoId,
+	};
 	const isTrustedProvider =
 		"domainVerified" in provider &&
 		(provider as { domainVerified?: boolean }).domainVerified === true &&
@@ -1637,52 +1700,127 @@ async function handleOIDCCallback(
 
 	let linked: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 	try {
-		linked = await runWithTransaction(ctx.context.adapter, async () => {
-			await lockSSOProviderForAccountLink(ctx, provider);
-			return handleOAuthUserInfo(ctx, {
-				userInfo: {
-					email: userInfoEmail,
-					name: userInfo.name || "",
-					id: userInfoId,
-					image: userInfo.image,
-					emailVerified: options?.trustEmailVerified
-						? userInfo.emailVerified || false
-						: false,
+		if (options?.resolveUser) {
+			assertSSOUserResolutionNativeTransactionSupport(ctx.context.adapter);
+			assertSSOUserResolutionSessionStorage(ctx.context.options);
+			await assertSSOUserResolutionAsyncContextSupport();
+		}
+		linked = await runWithTransaction(
+			ctx.context.adapter,
+			async () => {
+				await lockSSOProviderForAccountLink(ctx, provider);
+				const currentProvider = await resolveOIDCProvider(
+					ctx,
+					options,
+					providerId,
+					await getCurrentAdapter(ctx.context.adapter),
+				);
+				if (
+					!currentProvider ||
+					!(await isCurrentSSOProviderReference(
+						currentProvider,
+						acceptedProviderReference,
+					))
+				) {
+					throw new APIError("CONFLICT", {
+						code: "SSO_PROVIDER_CHANGED",
+						message:
+							"SSO provider changed while account linking was in progress",
+					});
+				}
+				const resolution = options?.resolveUser
+					? await resolveSSOUser(
+							options.resolveUser,
+							{
+								protocol: "oidc",
+								providerId: provider.providerId,
+								accountKey,
+								providerUser,
+								providerClaims: rawProfile ?? {},
+								verifiedIdTokenClaims: verifiedIdToken?.payload ?? {},
+								providerReference: acceptedProviderReference,
+							},
+							await getCurrentAdapter(ctx.context.adapter),
+							ctx.context.logger,
+						)
+					: undefined;
+				if (resolution?.action === "reject") {
+					throw new APIError("FORBIDDEN", {
+						code: resolution.code,
+						...(resolution.message === undefined
+							? {}
+							: { message: resolution.message }),
+					});
+				}
+				const authentication = await handleOAuthUserInfo(ctx, {
+					userInfo: {
+						...providerUser,
+						email: providerUser.email,
+						name: providerUser.name,
+						id: userInfoId,
+						image: providerUser.image,
+						emailVerified: providerUser.emailVerified,
+					},
+					account: {
+						idToken: tokenResponse.idToken,
+						accessToken: tokenResponse.accessToken,
+						refreshToken: tokenResponse.refreshToken,
+						issuer: accountKey.issuer,
+						accountId: userInfoId,
+						providerId: provider.providerId,
+						accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
+						refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
+						scope: tokenResponse.scopes?.join(","),
+					},
+					callbackURL,
+					disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
+					overrideUserInfo: config.overrideUserInfo,
+					source: {
+						method: "sso-oidc",
+						sso: { providerId: provider.providerId, profile: rawProfile },
+					},
+					isTrustedProvider,
+					// SSO provider ids are user-controlled and live in the same namespace
+					// as social providers. Never inherit trust from the global
+					// `trustedProviders` list by name — rely solely on the SSO-specific
+					// `isTrustedProvider` (verified domain ownership) computed above.
+					trustProviderByName: false,
+					selectedUser:
+						resolution?.action === "link"
+							? {
+									userId: resolution.userId,
+									profile: resolution.profile,
+								}
+							: undefined,
+					deferNonDatabaseWrites: !!options?.resolveUser,
+					requireExactAccountBinding: !!options?.resolveUser,
+				});
+				return options?.resolveUser
+					? requireSuccessfulSSOAuthentication(authentication)
+					: authentication;
+			},
+			{
+				onAfterCommitHookError(error) {
+					ctx.context.logger.error(
+						"Committed SSO authentication after-hook failed",
+						error,
+					);
 				},
-				account: {
-					idToken: tokenResponse.idToken,
-					accessToken: tokenResponse.accessToken,
-					refreshToken: tokenResponse.refreshToken,
-					accountId: userInfoId,
-					providerId: provider.providerId,
-					accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
-					refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
-					scope: tokenResponse.scopes?.join(","),
-				},
-				callbackURL,
-				disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
-				overrideUserInfo: config.overrideUserInfo,
-				source: {
-					method: "sso-oidc",
-					sso: { providerId: provider.providerId, profile: rawProfile },
-				},
-				isTrustedProvider,
-				// SSO provider ids are user-controlled and live in the same namespace
-				// as social providers. Never inherit trust from the global
-				// `trustedProviders` list by name — rely solely on the SSO-specific
-				// `isTrustedProvider` (verified domain ownership) computed above.
-				trustProviderByName: false,
-			});
-		});
+			},
+		);
 	} catch (e) {
-		if (isAPIError(e) && e.body?.code) {
+		const failedAuthentication = getFailedSSOAuthenticationResult(e);
+		if (failedAuthentication) {
+			linked = failedAuthentication;
+		} else if (isAPIError(e) && e.body?.code) {
 			const baseURL = errorURL || callbackURL;
 			const params = new URLSearchParams({ error: e.body.code });
 			if (e.body.message) params.set("error_description", e.body.message);
 			const sep = baseURL.includes("?") ? "&" : "?";
 			throw ctx.redirect(`${baseURL}${sep}${params.toString()}`);
+		} else {
+			throw e;
 		}
-		throw e;
 	}
 	if (linked.error) {
 		const baseURL = errorURL || callbackURL;
@@ -1719,6 +1857,9 @@ async function handleOIDCCallback(
 		provisioningOptions: options?.organizationProvisioning,
 	});
 
+	if ("accountCookie" in linked && linked.accountCookie) {
+		await setAccountCookie(ctx, linked.accountCookie);
+	}
 	await setSessionCookie(ctx, {
 		session,
 		user,
@@ -1765,6 +1906,7 @@ async function resolveOIDCProvider(
 	ctx: any,
 	options: SSOOptions | undefined,
 	providerId: string,
+	adapter = ctx.context.adapter,
 ): Promise<SSOProvider<SSOOptions> | null> {
 	const matchingDefault = options?.defaultSSO?.find(
 		(defaultProvider) => defaultProvider.providerId === providerId,
@@ -1777,7 +1919,7 @@ async function resolveOIDCProvider(
 			...(options?.domainVerification?.enabled ? { domainVerified: true } : {}),
 		} as SSOProvider<SSOOptions>;
 	}
-	return ctx.context.adapter
+	return adapter
 		.findOne({
 			model: "ssoProvider",
 			where: [{ field: "providerId", value: providerId }],
@@ -1824,11 +1966,9 @@ async function bounceIfIdpInitiated(
 		return;
 	}
 
-	if (options?.redirectURI?.trim()) {
-		// The shared OIDC callback resolves the provider from server-only state,
-		// so it must not be client-spoofable.
-		await addOAuthServerContext({ ssoProviderId: provider.providerId });
-	}
+	await addOAuthServerContext({
+		[SSO_PROVIDER_STATE_KEY]: await computeSSOProviderReference(provider),
+	});
 	const state = await generateState(ctx);
 	const redirectURI = getOIDCRedirectURI(
 		ctx.context.baseURL,
@@ -1894,17 +2034,23 @@ export const callbackSSOShared = (options?: SSOOptions) => {
 				throw ctx.redirect(`${errorURL}?error=invalid_state`);
 			}
 
-			const providerId = stateData.serverContext?.ssoProviderId as
-				| string
-				| undefined;
-			if (!providerId) {
+			const providerReference = parseSSOProviderReference(
+				stateData.serverContext?.[SSO_PROVIDER_STATE_KEY],
+			);
+			if (!providerReference) {
 				const errorURL = stateData.errorURL || stateData.callbackURL;
 				throw ctx.redirect(
-					`${errorURL}?error=invalid_state&error_description=missing_provider_id`,
+					`${errorURL}?error=invalid_state&error_description=missing_sso_provider_reference`,
 				);
 			}
 
-			return handleOIDCCallback(ctx, options, providerId, stateData);
+			return handleOIDCCallback(
+				ctx,
+				options,
+				providerReference.providerId,
+				stateData,
+				providerReference,
+			);
 		},
 	);
 };
@@ -1955,6 +2101,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			const { providerId } = ctx.params;
 			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`;
 			const appOrigin = new URL(ctx.context.baseURL).origin;
+			let resolvedErrorRedirectUrl: string | undefined;
 
 			// GET: post-auth redirect (e.g., after IdP-initiated flow completes)
 			const isGetRequest = ctx.method === "GET" && !ctx.body?.SAMLResponse;
@@ -1968,7 +2115,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				const relayState = ctx.query?.RelayState as string | undefined;
 				throw ctx.redirect(
 					getSafeRedirectUrl(
-						relayState,
+						[relayState],
 						currentCallbackPath,
 						appOrigin,
 						(url, settings) => ctx.context.isTrustedOrigin(url, settings),
@@ -1991,6 +2138,9 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						RelayState: ctx.body.RelayState,
 						providerId,
 						currentCallbackPath,
+						onErrorRedirectResolved: (url) => {
+							resolvedErrorRedirectUrl = url;
+						},
 					},
 					options,
 				);
@@ -2007,14 +2157,38 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				}
 				if (error instanceof APIError && error.statusCode === 400) {
 					const errorCode = (error.body?.code || "saml_error").toLowerCase();
-					const redirectUrl = getSafeRedirectUrl(
-						ctx.body?.RelayState || undefined,
-						currentCallbackPath,
-						appOrigin,
-						(url, settings) => ctx.context.isTrustedOrigin(url, settings),
-					);
+					let redirectUrl = resolvedErrorRedirectUrl;
+					if (!redirectUrl) {
+						let parsedSamlConfig: SAMLConfig | undefined;
+						try {
+							const provider = await findSAMLProvider(
+								providerId,
+								options,
+								ctx.context.adapter,
+							);
+							parsedSamlConfig = provider?.samlConfig;
+						} catch (providerLookupError) {
+							ctx.context.logger.warn(
+								"Failed to resolve SAML provider for error redirect",
+								{ providerId, error: providerLookupError },
+							);
+						}
+						redirectUrl = getSafeRedirectUrl(
+							getSAMLRedirectCandidates(
+								undefined,
+								parsedSamlConfig,
+								options?.saml,
+							),
+							currentCallbackPath,
+							appOrigin,
+							(url, settings) => ctx.context.isTrustedOrigin(url, settings),
+						);
+					}
 					throw ctx.redirect(
-						`${redirectUrl}${redirectUrl.includes("?") ? "&" : "?"}error=${encodeURIComponent(errorCode)}&error_description=${encodeURIComponent(error.message)}`,
+						buildSAMLRedirectUrl(redirectUrl, {
+							error: errorCode,
+							error_description: error.message,
+						}),
 					);
 				}
 				throw error;
@@ -2061,7 +2235,7 @@ export const sloEndpoint = (options?: SSOOptions) => {
 			const relayState = ctx.body?.RelayState || ctx.query?.RelayState;
 			const appOrigin = new URL(ctx.context.baseURL).origin;
 			const safeErrorURL = getSafeRedirectUrl(
-				relayState,
+				[relayState],
 				`${appOrigin}/sso/saml2/sp/slo/${providerId}`,
 				appOrigin,
 				(url, settings) => ctx.context.isTrustedOrigin(url, settings),
@@ -2169,7 +2343,7 @@ async function handleLogoutResponse(
 
 	const appOrigin = new URL(ctx.context.baseURL).origin;
 	const safeRedirectUrl = getSafeRedirectUrl(
-		relayState,
+		[relayState],
 		`${appOrigin}/sso/saml2/sp/slo/${providerId}`,
 		appOrigin,
 		(url, settings) => ctx.context.isTrustedOrigin(url, settings),

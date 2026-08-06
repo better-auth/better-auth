@@ -303,6 +303,7 @@ describe("oauth", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -340,6 +341,10 @@ describe("oauth", async () => {
 							{
 								scopes: ["openid", "profile", "email"],
 								...config,
+								accountSubject:
+									config?.accountSubject ??
+									(({ profile }) => profile.sub ?? ""),
+								accountIssuer: config?.accountIssuer ?? authServerBaseUrl,
 								providerId,
 								redirectURI: redirectUri,
 								authorizationUrl: config?.discoveryUrl
@@ -750,6 +755,7 @@ describe("oauth", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -764,6 +770,8 @@ describe("oauth", async () => {
 					config: [
 						{
 							scopes: ["openid", "profile", "email"],
+							accountSubject: ({ profile }) => profile.sub ?? "",
+							accountIssuer: authServerBaseUrl,
 							providerId,
 							redirectURI: redirectUri,
 							authorizationUrl: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
@@ -845,6 +853,7 @@ describe("oauth", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -859,6 +868,8 @@ describe("oauth", async () => {
 					config: [
 						{
 							scopes: ["openid", "profile", "email"],
+							accountSubject: ({ profile }) => profile.sub ?? "",
+							accountIssuer: authServerBaseUrl,
 							providerId,
 							redirectURI: redirectUri,
 							authorizationUrl: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
@@ -1158,6 +1169,7 @@ describe("oauth - prompt", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 			},
 		});
 		expect(response?.client_id).toBeDefined();
@@ -1205,6 +1217,10 @@ describe("oauth - prompt", async () => {
 							{
 								scopes: ["openid", "profile", "email"],
 								...config,
+								accountSubject:
+									config?.accountSubject ??
+									(({ profile }) => profile.sub ?? ""),
+								accountIssuer: config?.accountIssuer ?? authServerBaseUrl,
 								providerId,
 								redirectURI: redirectUri,
 								authorizationUrl: config?.discoveryUrl
@@ -1394,6 +1410,7 @@ describe("oauth - prompt", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 			},
 		});
 		if (!tempClient?.client_id || !tempClient.client_secret) {
@@ -1410,6 +1427,8 @@ describe("oauth - prompt", async () => {
 						config: [
 							{
 								scopes: ["openid", "profile", "email"],
+								accountSubject: ({ profile }) => profile.sub ?? "",
+								accountIssuer: authServerBaseUrl,
 								providerId,
 								redirectURI: redirectUri,
 								authorizationUrl: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
@@ -1769,16 +1788,23 @@ describe("oauth - prompt", async () => {
 			},
 		});
 		expect(authToken).toBeDefined();
+		if (!authToken) throw new Error("missing session bearer token");
 
 		// Retrieve the access token via the RP and verify narrowed scopes
+		const requestHeaders = new Headers({
+			authorization: `Bearer ${authToken}`,
+		});
+		const accounts = await client.listAccounts({
+			fetchOptions: { headers: requestHeaders },
+		});
+		const accountId = accounts.data?.find(
+			(account) => account.providerId === providerId,
+		)?.id;
+		expect(accountId).toBeDefined();
+		if (!accountId) throw new Error("missing provider account");
 		const tokens = await client.getAccessToken(
-			{ providerId },
-			{
-				auth: {
-					type: "Bearer",
-					token: authToken,
-				},
-			},
+			{ accountId },
+			{ headers: requestHeaders },
 		);
 		expect(tokens.data?.accessToken).toBeDefined();
 
@@ -2896,6 +2922,10 @@ describe("oauth - config", () => {
 							{
 								scopes: ["openid", "profile", "email"],
 								...config,
+								accountSubject:
+									config?.accountSubject ??
+									(({ profile }) => profile.sub ?? ""),
+								accountIssuer: config?.accountIssuer ?? authServerBaseUrl,
 								providerId,
 								redirectURI: redirectUri,
 								authorizationUrl: config?.discoveryUrl
@@ -2937,6 +2967,10 @@ describe("oauth - config", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
+						scopes: ["m2m:read"],
+						clientPrivileges: ({ action }) =>
+							action === "create" ||
+							action === "configure-client-credentials-scopes",
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
 							openidConfig: true,
@@ -2971,7 +3005,9 @@ describe("oauth - config", () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
+				client_credentials_scopes: ["m2m:read"],
 			},
 		});
 		expect(createdClient?.client_id).toBeDefined();
@@ -3055,6 +3091,7 @@ describe("oauth - config", () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -3161,6 +3198,7 @@ describe("oauth - config", () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -3277,6 +3315,7 @@ describe("oauth - config", () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				token_endpoint_auth_method: publicClient ? "none" : undefined,
 				skip_consent: true,
 			},
@@ -3342,16 +3381,24 @@ describe("oauth - config", () => {
 			},
 		});
 		expect(callbackURL).toContain("/success");
+		expect(authToken).toBeDefined();
+		if (!authToken) throw new Error("missing session bearer token");
 
 		// Get and check tokens
+		const requestHeaders = new Headers({
+			authorization: `Bearer ${authToken}`,
+		});
+		const accounts = await client.listAccounts({
+			fetchOptions: { headers: requestHeaders },
+		});
+		const accountId = accounts.data?.find(
+			(account) => account.providerId === "test",
+		)?.id;
+		expect(accountId).toBeDefined();
+		if (!accountId) throw new Error("missing provider account");
 		const tokens = await client.getAccessToken(
-			{ providerId: "test", userId: user.id },
-			{
-				auth: {
-					type: "Bearer",
-					token: authToken,
-				},
-			},
+			{ accountId, userId: user.id },
+			{ headers: requestHeaders },
 		);
 
 		// Check for access tokens
@@ -3589,6 +3636,10 @@ describe("oauth - rate limiting", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
+						scopes: ["m2m:read"],
+						clientPrivileges: ({ action }) =>
+							action === "create" ||
+							action === "configure-client-credentials-scopes",
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
 							openidConfig: true,
@@ -3611,6 +3662,8 @@ describe("oauth - rate limiting", () => {
 					"refresh_token",
 				],
 				redirect_uris: ["http://localhost:5000/callback"],
+				application_type: "native",
+				client_credentials_scopes: ["m2m:read"],
 			},
 		});
 
@@ -3654,6 +3707,10 @@ describe("oauth - rate limiting", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
+						scopes: ["m2m:read"],
+						clientPrivileges: ({ action }) =>
+							action === "create" ||
+							action === "configure-client-credentials-scopes",
 						silenceWarnings: {
 							oauthAuthServerConfig: true,
 							openidConfig: true,
@@ -3676,6 +3733,8 @@ describe("oauth - rate limiting", () => {
 					"refresh_token",
 				],
 				redirect_uris: ["http://localhost:5000/callback"],
+				application_type: "native",
+				client_credentials_scopes: ["m2m:read"],
 			},
 		});
 
