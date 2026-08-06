@@ -80,26 +80,29 @@ function getAffectedRowCount(
 	} else if (hasDriverRowCount(result)) {
 		count = readDriverRowCount(result);
 	}
-	if (typeof count !== "number") {
+	if (typeof count !== "number" || !Number.isFinite(count)) {
 		logger.error(
-			`[Drizzle Adapter] The result of the ${operation} operation is not a number. This is likely a bug in the adapter. Please report this issue to the Better Auth team.`,
+			`[Drizzle Adapter] The result of the ${operation} operation is not a finite number. This is likely a bug in the adapter. Please report this issue to the Better Auth team.`,
 			{ result, ...context },
 		);
-		return 0;
+		throw new BetterAuthError(
+			`Drizzle adapter ${operation} returned an invalid affected row count`,
+		);
 	}
 	return count;
 }
 
 function readDriverRowCount(result: unknown): unknown {
 	if (!result || typeof result !== "object") return undefined;
-	if ("affectedRows" in result) return result.affectedRows;
-	if ("rowsAffected" in result) return result.rowsAffected;
-	if ("changes" in result) return result.changes;
+	const driverResult = result as Record<string, unknown>;
+	if ("affectedRows" in driverResult) return driverResult.affectedRows;
+	if ("rowsAffected" in driverResult) return driverResult.rowsAffected;
+	if ("changes" in driverResult) return driverResult.changes;
 
 	// Cloudflare D1 nests the affected-row count under `meta.changes`.
 	// @see https://developers.cloudflare.com/d1/worker-api/return-object/
-	if ("meta" in result) {
-		const meta = result.meta;
+	if ("meta" in driverResult) {
+		const meta = driverResult.meta;
 		if (meta && typeof meta === "object" && "changes" in meta) {
 			return meta.changes;
 		}
@@ -148,6 +151,22 @@ export interface DrizzleAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
+	/**
+	 * Database schema namespace, used during the Better Auth CLI to generate the schema.
+	 *
+	 * Only applies to PostgreSQL. It will generate something like this:
+	 *
+	 * ```ts
+	 * const authSchema = pgSchema("auth");
+	 *
+	 * export const user = authSchema.table("user", {...});
+	 * export const session = authSchema.table("session", {...});
+	 * ```
+	 *
+	 * @example "auth"
+	 * @default undefined
+	 */
+	schemaName?: string | undefined;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
@@ -703,6 +722,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			 *    corresponds to the same table object
 			 */
 			function getQueryModel(model: string): string | null {
+				if (!db.query) return null;
 				if (db.query[model]) return model;
 
 				if (config.usePlural) {
@@ -739,7 +759,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
 
-					if (options.experimental?.joins) {
+					if (join) {
 						const queryModel = getQueryModel(model);
 						if (!db.query || !queryModel) {
 							logger.error(
@@ -752,22 +772,20 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| undefined;
 
 							const pluralJoinResults: string[] = [];
-							if (join) {
-								includes = {};
-								const joinEntries = Object.entries(join);
-								for (const [model, joinAttr] of joinEntries) {
-									const limit =
-										joinAttr.limit ??
-										options.advanced?.database?.defaultFindManyLimit ??
-										100;
-									const isUnique = joinAttr.relation === "one-to-one";
-									const pluralSuffix = isUnique || config.usePlural ? "" : "s";
-									includes[`${model}${pluralSuffix}`] = isUnique
-										? true
-										: { limit };
-									if (!isUnique) {
-										pluralJoinResults.push(`${model}${pluralSuffix}`);
-									}
+							includes = {};
+							const joinEntries = Object.entries(join);
+							for (const [model, joinAttr] of joinEntries) {
+								const limit =
+									joinAttr.limit ??
+									options.advanced?.database?.defaultFindManyLimit ??
+									100;
+								const isUnique = joinAttr.relation === "one-to-one";
+								const pluralSuffix = isUnique || config.usePlural ? "" : "s";
+								includes[`${model}${pluralSuffix}`] = isUnique
+									? true
+									: { limit };
+								if (!isUnique) {
+									pluralJoinResults.push(`${model}${pluralSuffix}`);
 								}
 							}
 							const query = db.query[queryModel].findFirst({
@@ -826,9 +844,9 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const clause = where ? convertWhereClause(where, model) : [];
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
 
-					if (options.experimental?.joins) {
+					if (join) {
 						const queryModel = getQueryModel(model);
-						if (!queryModel) {
+						if (!db.query || !queryModel) {
 							logger.error(
 								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx auth@latest generate".`,
 							);
@@ -839,22 +857,20 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| undefined;
 
 							const pluralJoinResults: string[] = [];
-							if (join) {
-								includes = {};
-								const joinEntries = Object.entries(join);
-								for (const [model, joinAttr] of joinEntries) {
-									const isUnique = joinAttr.relation === "one-to-one";
-									const limit =
-										joinAttr.limit ??
-										options.advanced?.database?.defaultFindManyLimit ??
-										100;
-									const pluralSuffix = isUnique || config.usePlural ? "" : "s";
-									includes[`${model}${pluralSuffix}`] = isUnique
-										? true
-										: { limit };
-									if (!isUnique)
-										pluralJoinResults.push(`${model}${pluralSuffix}`);
-								}
+							includes = {};
+							const joinEntries = Object.entries(join);
+							for (const [model, joinAttr] of joinEntries) {
+								const isUnique = joinAttr.relation === "one-to-one";
+								const limit =
+									joinAttr.limit ??
+									options.advanced?.database?.defaultFindManyLimit ??
+									100;
+								const pluralSuffix = isUnique || config.usePlural ? "" : "s";
+								includes[`${model}${pluralSuffix}`] = isUnique
+									? true
+									: { limit };
+								if (!isUnique)
+									pluralJoinResults.push(`${model}${pluralSuffix}`);
 							}
 							let orderBy: SQL<unknown>[] | undefined = undefined;
 							if (sortBy?.field) {
@@ -1046,7 +1062,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								`The field "${field}" does not exist in the schema for the model "${model}". Please update your schema.`,
 							);
 						}
-						assignments[columnName] = sql`${column} + ${delta}`;
+						assignments[columnName] = sql`${column} + ${sql.param(delta)}`;
 					}
 					if (set) {
 						for (const [field, value] of Object.entries(set)) {

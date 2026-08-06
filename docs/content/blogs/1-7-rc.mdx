@@ -168,6 +168,7 @@ export const auth = betterAuth({
 | SCIM connections need a manual reclaim                    | Assign an `organizationId` to pre-1.7 connections, or delete unowned rows, before regenerating their tokens.                                       |
 | Proxy headers are not trusted by default                  | Opt in with `advanced.trustedProxyHeaders: true` only when your proxy requires it.                                                                 |
 | Custom adapters and storage need atomic methods           | Implement `incrementOne` and `consumeOne` (adapters), `increment` and `getAndDelete` (secondary storage), or `consume` (rate-limit storage).       |
+| Expo secure storage access is asynchronous                | Await `getCookie()`, provide asynchronous methods in custom storage, and use `storageAdapter.setItemAsync()` when writes must be awaited.          |
 | Captcha rules match full paths                            | Replace partial paths like `/sign-in` with `/sign-in/*` or `/sign-in/**`.                                                                          |
 | Custom-scheme trusted origins match by host               | A host-bearing entry like `myapp://callback` no longer accepts `myapp://callback.attacker.tld`. Re-check native and mobile `trustedOrigins`.       |
 | Electron requires S256 PKCE                               | Upgrade the Electron client and server together.                                                                                                   |
@@ -261,6 +262,7 @@ Then run `npx auth@rc generate` for any schema changes; the unscoped `npx auth` 
 | MCP                                            | A package move to `@better-auth/mcp`, new imports, new endpoint paths, and a schema migration        |
 | SAML or SCIM                                   | Safer SAML and SSO checks, and a manual SCIM ownership cleanup                                       |
 | Magic links or email OTP                       | Safer handling for accounts whose email was never confirmed                                          |
+| Expo or React Native                           | Await cookie reads and update custom SecureStore-compatible storage implementations                  |
 | Custom adapters, storage, or rate-limit stores | New atomic methods are required                                                                      |
 | Custom proxy or TLS termination                | Check how your app computes its public origin before relying on DPoP or identity-provider redirects  |
 

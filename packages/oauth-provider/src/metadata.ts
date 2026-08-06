@@ -1,6 +1,18 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import {
+	DPOP_SIGNING_ALGORITHMS,
+	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
+} from "@better-auth/core/oauth2";
 import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
+import { UNSPECIFIED_ACR } from "./authentication-context";
 import { validateIssuerUrl } from "./authorize";
+import {
+	applyOAuthProviderMetadataExtensions,
+	getClientDiscoveries,
+	getSupportedAuthMethods,
+	getSupportedGrantTypes,
+} from "./extensions";
+import { getSupportedClaims } from "./standard-claims";
 import type { OAuthOptions, Scope } from "./types";
 import type {
 	AuthServerMetadata,
@@ -8,7 +20,7 @@ import type {
 	OIDCMetadata,
 	TokenEndpointAuthMethod,
 } from "./types/oauth";
-import { getJwtPlugin } from "./utils";
+import { getJwtPlugin, mergeDiscoveryMetadata } from "./utils";
 
 export function authServerMetadata(
 	ctx: GenericEndpointContext,
@@ -18,10 +30,16 @@ export function authServerMetadata(
 		dynamic_client_registration_supported?: boolean;
 		public_client_supported?: boolean;
 		grant_types_supported?: GrantType[];
+		token_endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
+		endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
 		jwt_disabled?: boolean;
+		dpop_signing_alg_values_supported?: JWSAlgorithms[];
 	},
 ) {
 	const baseURL = ctx.context.baseURL;
+	// Back-channel logout requires a verifiable Logout Token, which depends on
+	// the JWT plugin's JWKS. Advertise support only when the plugin is enabled.
+	const backchannelSupported = !overrides?.jwt_disabled;
 	const metadata: AuthServerMetadata = {
 		scopes_supported: overrides?.scopes_supported,
 		issuer: validateIssuerUrl(opts?.jwt?.issuer ?? baseURL),
@@ -47,25 +65,97 @@ export function authServerMetadata(
 			"client_credentials",
 			"refresh_token",
 		],
-		token_endpoint_auth_methods_supported: [
-			...(overrides?.public_client_supported
-				? (["none"] satisfies TokenEndpointAuthMethod[])
-				: []),
-			"client_secret_basic",
-			"client_secret_post",
+		token_endpoint_auth_methods_supported:
+			overrides?.token_endpoint_auth_methods_supported ?? [
+				...(overrides?.public_client_supported
+					? (["none"] satisfies TokenEndpointAuthMethod[])
+					: []),
+				"client_secret_basic",
+				"client_secret_post",
+				"private_key_jwt",
+			],
+		token_endpoint_auth_signing_alg_values_supported: [
+			...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 		],
-		introspection_endpoint_auth_methods_supported: [
-			"client_secret_basic",
-			"client_secret_post",
+		introspection_endpoint_auth_methods_supported:
+			overrides?.endpoint_auth_methods_supported ?? [
+				"client_secret_basic",
+				"client_secret_post",
+				"private_key_jwt",
+			],
+		introspection_endpoint_auth_signing_alg_values_supported: [
+			...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 		],
-		revocation_endpoint_auth_methods_supported: [
-			"client_secret_basic",
-			"client_secret_post",
+		revocation_endpoint_auth_methods_supported:
+			overrides?.endpoint_auth_methods_supported ?? [
+				"client_secret_basic",
+				"client_secret_post",
+				"private_key_jwt",
+			],
+		revocation_endpoint_auth_signing_alg_values_supported: [
+			...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 		],
 		code_challenge_methods_supported: ["S256"],
 		authorization_response_iss_parameter_supported: true,
+		dpop_signing_alg_values_supported:
+			overrides?.dpop_signing_alg_values_supported ??
+			([...DPOP_SIGNING_ALGORITHMS] as JWSAlgorithms[]),
+		backchannel_logout_supported: backchannelSupported,
+		backchannel_logout_session_supported: backchannelSupported,
 	};
 	return metadata;
+}
+
+/**
+ * Builds the authorization-server metadata shared by the
+ * `/.well-known/oauth-authorization-server` and `/.well-known/openid-configuration`
+ * responses, plus the inputs both need to finish their own document.
+ */
+function buildAuthServerMetadata(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+) {
+	const jwtPluginOptions = opts.disableJwtPlugin
+		? undefined
+		: getJwtPlugin(ctx.context).options;
+	const clientDiscoveries = getClientDiscoveries(opts);
+	// Any contributed `clientDiscovery` implicitly produces public clients
+	// (CIMD, wallet attestation, etc.), so it flips `public_client_supported`
+	// and the advertised `"none"` auth method alongside unauthenticated DCR.
+	const publicClientSupported =
+		opts.allowUnauthenticatedClientRegistration || clientDiscoveries.length > 0;
+	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
+		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+		dynamic_client_registration_supported: opts.allowDynamicClientRegistration,
+		public_client_supported: publicClientSupported,
+		grant_types_supported: getSupportedGrantTypes(opts),
+		token_endpoint_auth_methods_supported: getSupportedAuthMethods(opts, {
+			includeNone: publicClientSupported,
+		}),
+		endpoint_auth_methods_supported: getSupportedAuthMethods(opts),
+		jwt_disabled: opts.disableJwtPlugin,
+		dpop_signing_alg_values_supported: opts.dpop?.signingAlgorithms,
+	});
+	return { jwtPluginOptions, clientDiscoveries, authMetadata };
+}
+
+export function oauthAuthorizationServerMetadata(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+): AuthServerMetadata {
+	const { clientDiscoveries, authMetadata } = buildAuthServerMetadata(
+		ctx,
+		opts,
+	);
+	return applyOAuthProviderMetadataExtensions(
+		ctx,
+		opts,
+		"oauth-authorization-server",
+		{
+			...mergeDiscoveryMetadata(clientDiscoveries),
+			...authMetadata,
+		},
+	);
 }
 
 export function oidcServerMetadata(
@@ -73,16 +163,8 @@ export function oidcServerMetadata(
 	opts: OAuthOptions<Scope[]> & { claims?: string[] },
 ) {
 	const baseURL = ctx.context.baseURL;
-	const jwtPluginOptions = opts.disableJwtPlugin
-		? undefined
-		: getJwtPlugin(ctx.context).options;
-	const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
-		scopes_supported: opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
-		dynamic_client_registration_supported: opts.allowDynamicClientRegistration,
-		public_client_supported: opts.allowUnauthenticatedClientRegistration,
-		grant_types_supported: opts.grantTypes,
-		jwt_disabled: opts.disableJwtPlugin,
-	});
+	const { jwtPluginOptions, clientDiscoveries, authMetadata } =
+		buildAuthServerMetadata(ctx, opts);
 	const metadata: Omit<
 		OIDCMetadata,
 		"id_token_signing_alg_values_supported"
@@ -90,20 +172,27 @@ export function oidcServerMetadata(
 		id_token_signing_alg_values_supported: JWSAlgorithms[] | ["HS256"];
 	} = {
 		...authMetadata,
-		claims_supported:
-			opts?.advertisedMetadata?.claims_supported ?? opts?.claims ?? [],
+		claims_supported: getSupportedClaims(opts),
+		claims_parameter_supported: true,
 		userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 		subject_types_supported: opts.pairwiseSecret
 			? ["public", "pairwise"]
 			: ["public"],
-		id_token_signing_alg_values_supported: jwtPluginOptions?.jwks?.keyPairConfig
-			?.alg
-			? [jwtPluginOptions?.jwks?.keyPairConfig?.alg]
-			: opts.disableJwtPlugin
-				? ["HS256"]
-				: ["EdDSA"],
+		acr_values_supported: [UNSPECIFIED_ACR],
+		id_token_signing_alg_values_supported: (() => {
+			if (opts.disableJwtPlugin) return ["HS256" as const];
+			// Advertise every algorithm the plugin can sign with: the primary
+			// keyPairConfig.alg plus every alg declared in keyPairConfigs[]
+			// (lazy-minted on demand for per-resource signing pins).
+			// Deduplicated so overlapping declarations don't produce repeats.
+			const primary = jwtPluginOptions?.jwks?.keyPairConfig?.alg ?? "EdDSA";
+			const extras =
+				jwtPluginOptions?.jwks?.keyPairConfigs?.map((c) => c.alg) ?? [];
+			return Array.from(new Set<JWSAlgorithms>([primary, ...extras]));
+		})(),
 		end_session_endpoint: `${baseURL}/oauth2/end-session`,
-		acr_values_supported: ["urn:mace:incommon:iap:bronze"],
+		request_parameter_supported: false,
+		request_uri_parameter_supported: false,
 		prompt_values_supported: [
 			"login",
 			"consent",
@@ -112,7 +201,15 @@ export function oidcServerMetadata(
 			"none",
 		],
 	};
-	return metadata;
+	return applyOAuthProviderMetadataExtensions(
+		ctx,
+		opts,
+		"openid-configuration",
+		{
+			...mergeDiscoveryMetadata(clientDiscoveries),
+			...metadata,
+		},
+	);
 }
 
 // Cache for 15s with a short stale window; metadata rarely changes.

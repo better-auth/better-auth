@@ -281,6 +281,16 @@ export type DBFieldAttribute<T extends DBFieldType = DBFieldType> = {
 	type: T;
 } & DBFieldAttributeConfig;
 
+/** A database index spanning one or more logical schema fields. */
+export interface DBTableIndex {
+	/** One to sixteen logical field names included in the index, in index order. */
+	fields: readonly [string, ...string[]];
+	/** Portable database index name of at most 63 UTF-8 bytes. */
+	name?: string | undefined;
+	/** Whether the indexed field tuple must be unique. */
+	unique?: boolean | undefined;
+}
+
 export type BetterAuthDBSchema = Record<
 	string,
 	{
@@ -292,6 +302,8 @@ export type BetterAuthDBSchema = Record<
 		 * The fields of the table
 		 */
 		fields: Record<string, DBFieldAttribute>;
+		/** Table-level indexes, including compound indexes. */
+		indexes?: readonly DBTableIndex[] | undefined;
 		/**
 		 * Whether to disable migrations for this table
 		 * @default false
@@ -313,16 +325,8 @@ export interface SecondaryStorage {
 	get: (key: string) => Awaitable<unknown>;
 	/**
 	 * Atomically get a value and delete it from storage.
-	 *
-	 * This is optional for backwards compatibility with existing secondary
-	 * storage implementations. Single-use credential consumers use it when
-	 * present to avoid a read-then-delete race.
-	 *
-	 * TODO(secondary-storage-atomic-consume): make this required in the next
-	 * breaking release, or require database-backed verification storage for
-	 * security-sensitive consume paths.
 	 */
-	getAndDelete?: (key: string) => Awaitable<unknown>;
+	getAndDelete: (key: string) => Awaitable<unknown>;
 	/**
 	 * Atomically increment the counter at `key` by one, returning the
 	 * post-increment value.
@@ -332,12 +336,10 @@ export interface SecondaryStorage {
 	 * never extend it, so the counter expires a fixed window after it was first
 	 * created.
 	 *
-	 * This is optional for backwards compatibility with existing secondary
-	 * storage implementations. TODO(secondary-storage-increment-required): make
-	 * this required for secondary-storage-backed rate limiting in the next minor
-	 * on `next`.
+	 * Required so secondary-storage-backed rate limiting can enforce the limit
+	 * in one distributed-safe operation.
 	 */
-	increment?: (key: string, ttl: number) => Awaitable<number>;
+	increment: (key: string, ttl: number) => Awaitable<number>;
 	set: (
 		/**
 		 * Key to store

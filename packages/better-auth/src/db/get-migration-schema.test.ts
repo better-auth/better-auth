@@ -758,4 +758,72 @@ describe("index generation for columns added to existing tables", () => {
 		const sql = await second.compileMigrations();
 		expect(sql).toBe(";");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10025
+	 */
+	it("should add table indexes to existing device authorization columns", async () => {
+		const db = new DatabaseSync(":memory:");
+		const baseConfig: BetterAuthOptions = {
+			database: db,
+			plugins: [
+				{
+					id: "old-device-code",
+					schema: {
+						deviceCode: {
+							fields: {
+								deviceCode: {
+									type: "string",
+									required: true,
+								},
+								userCode: {
+									type: "string",
+									required: true,
+								},
+							},
+						},
+					},
+				},
+			],
+		};
+
+		const initial = await getMigrations(baseConfig);
+		await initial.runMigrations();
+
+		const upgradedConfig: BetterAuthOptions = {
+			...baseConfig,
+			plugins: [
+				{
+					id: "new-device-code",
+					schema: {
+						deviceCode: {
+							fields: {
+								deviceCode: {
+									type: "string",
+									required: true,
+								},
+								userCode: {
+									type: "string",
+									required: true,
+								},
+							},
+							indexes: [{ fields: ["deviceCode"] }, { fields: ["userCode"] }],
+						},
+					},
+				},
+			],
+		};
+
+		const migration = await getMigrations(upgradedConfig);
+		const sql = await migration.compileMigrations();
+
+		expect(migration.toBeAdded).toEqual([]);
+		expect(sql).toContain('create index "deviceCode_deviceCode_idx"');
+		expect(sql).toContain('create index "deviceCode_userCode_idx"');
+
+		await migration.runMigrations();
+
+		const repeated = await getMigrations(upgradedConfig);
+		await expect(repeated.compileMigrations()).resolves.toBe(";");
+	});
 });

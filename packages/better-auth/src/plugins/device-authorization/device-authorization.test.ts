@@ -38,6 +38,18 @@ describe("device authorization plugin input validation", () => {
 			}
 		`);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10025
+	 */
+	it("should reject generated code lengths that exceed indexed columns", () => {
+		expect(() =>
+			deviceAuthorizationOptionsSchema.parse({ deviceCodeLength: 192 }),
+		).toThrow();
+		expect(() =>
+			deviceAuthorizationOptionsSchema.parse({ userCodeLength: 192 }),
+		).toThrow();
+	});
 });
 
 describe("client validation", async () => {
@@ -125,7 +137,7 @@ describe("client validation", async () => {
 });
 
 describe("device authorization flow", async () => {
-	const { auth, signInWithTestUser, db } = await getTestInstance(
+	const { auth, client, signInWithTestUser, db } = await getTestInstance(
 		{
 			plugins: [
 				deviceAuthorization({
@@ -173,6 +185,37 @@ describe("device authorization flow", async () => {
 
 			expect(response.device_code).toBeDefined();
 			expect(response.user_code).toBeDefined();
+		});
+
+		it("should preserve repeated resources from a form request", async () => {
+			const form = new URLSearchParams({
+				client_id: "test-client",
+				scope: "read",
+			});
+			form.append("resource", "https://api.example.com");
+			form.append("resource", "https://files.example.com");
+
+			const created = await client.$fetch<Record<string, unknown>>(
+				"/device/code",
+				{
+					method: "POST",
+					body: form,
+					headers: {
+						"content-type": "application/x-www-form-urlencoded",
+					},
+				},
+			);
+			expect(created.error).toBeNull();
+
+			const { headers } = await signInWithTestUser();
+			const verification = await auth.api.deviceVerify({
+				query: { user_code: created.data!.user_code as string },
+				headers,
+			});
+			expect(verification.resource).toEqual([
+				"https://api.example.com",
+				"https://files.example.com",
+			]);
 		});
 	});
 
@@ -252,20 +295,41 @@ describe("device authorization flow", async () => {
 	});
 
 	describe("device verification", () => {
-		it("should verify valid user code", async () => {
+		it("only returns authorization context to the authenticated owner", async () => {
 			const { user_code } = await auth.api.deviceCode({
 				body: {
 					client_id: "test-client",
+					scope: "read write",
+					resource: ["https://api.example.com", "https://files.example.com"],
 				},
 			});
 
+			const anonymousResponse = await auth.api.deviceVerify({
+				query: { user_code },
+			});
+			expect(anonymousResponse).toMatchObject({
+				user_code,
+				status: "pending",
+			});
+			expect(anonymousResponse).not.toHaveProperty("client_id");
+			expect(anonymousResponse).not.toHaveProperty("scope");
+			expect(anonymousResponse).not.toHaveProperty("resource");
+
+			const { headers } = await signInWithTestUser();
 			const response = await auth.api.deviceVerify({
 				query: { user_code },
+				headers,
 			});
 			expect("error" in response).toBe(false);
 			if (!("error" in response)) {
 				expect(response.user_code).toBe(user_code);
 				expect(response.status).toBe("pending");
+				expect(response.client_id).toBe("test-client");
+				expect(response.scope).toBe("read write");
+				expect(response.resource).toEqual([
+					"https://api.example.com",
+					"https://files.example.com",
+				]);
 			}
 		});
 
@@ -284,6 +348,36 @@ describe("device authorization flow", async () => {
 	});
 
 	describe("device approval flow", () => {
+		// RFC 8628 §3.2: the device authorization response must not be cached.
+		it("sends no-store on the device code response", async () => {
+			const response = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+				asResponse: true,
+			});
+			expect(response.headers.get("Cache-Control")).toBe("no-store");
+			expect(response.headers.get("Pragma")).toBe("no-cache");
+		});
+
+		// The device token response carries live credentials.
+		it("sends no-store on the device token response", async () => {
+			const { headers } = await signInWithTestUser();
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			await auth.api.deviceVerify({ query: { user_code }, headers });
+			await auth.api.deviceApprove({ body: { userCode: user_code }, headers });
+			const response = await auth.api.deviceToken({
+				body: {
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code,
+					client_id: "test-client",
+				},
+				asResponse: true,
+			});
+			expect(response.headers.get("Cache-Control")).toBe("no-store");
+			expect(response.headers.get("Pragma")).toBe("no-cache");
+		});
+
 		it("should approve device and create session", async () => {
 			// First, sign in as a user
 			const { headers } = await signInWithTestUser();
@@ -827,7 +921,7 @@ describe("device authorization ownership gate", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-cq3f-vc6p-68fh
 	 */
-	it("rejects approve from a different user after another claimed the code", async () => {
+	it("does not expose or authorize a code claimed by a different user", async () => {
 		const { auth, client, signInWithTestUser, signInWithUser } =
 			await getTestInstance(
 				{
@@ -858,13 +952,25 @@ describe("device authorization ownership gate", () => {
 		);
 
 		const { user_code } = await auth.api.deviceCode({
-			body: { client_id: "test-client" },
+			body: {
+				client_id: "test-client",
+				scope: "read write",
+				resource: "https://api.example.com",
+			},
 		});
 
 		await auth.api.deviceVerify({
 			query: { user_code },
 			headers: claimerHeaders,
 		});
+
+		const verification = await auth.api.deviceVerify({
+			query: { user_code },
+			headers: attackerHeaders,
+		});
+		expect(verification).not.toHaveProperty("client_id");
+		expect(verification).not.toHaveProperty("scope");
+		expect(verification).not.toHaveProperty("resource");
 
 		await expect(
 			auth.api.deviceApprove({
@@ -1183,6 +1289,97 @@ describe("device authorization with custom options", async () => {
 		});
 		expect(response.device_code).toBe(customDeviceCode);
 		expect(response.user_code).toBe(customUserCode);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10025
+	 */
+	it.each([
+		{
+			label: "device",
+			options: {
+				generateDeviceCode: () => "d".repeat(192),
+				generateUserCode: () => "USERCODE",
+			},
+		},
+		{
+			label: "user",
+			options: {
+				generateDeviceCode: () => "device-code",
+				generateUserCode: () => "u".repeat(192),
+			},
+		},
+	])("should reject an oversized custom $label code", async ({
+		label,
+		options,
+	}) => {
+		const { auth } = await getTestInstance({
+			plugins: [deviceAuthorization(options)],
+		});
+
+		await expect(
+			auth.api.deviceCode({
+				body: {
+					client_id: "test-client",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_request",
+				error_description: `Generated ${label} code must be at most 191 characters`,
+			},
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10025
+	 */
+	it.each([
+		"device",
+		"user",
+	] as const)("should reject a non-string custom %s code", async (label) => {
+		const options = deviceAuthorizationOptionsSchema.parse(
+			label === "device"
+				? { generateDeviceCode: () => 42 }
+				: { generateUserCode: () => 42 },
+		);
+		const { auth } = await getTestInstance({
+			plugins: [deviceAuthorization(options)],
+		});
+
+		await expect(
+			auth.api.deviceCode({
+				body: {
+					client_id: "test-client",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_request",
+				error_description: `Generated ${label} code must be a string`,
+			},
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10025
+	 */
+	it("should count Unicode code points when validating custom codes", async () => {
+		const customDeviceCode = "🦋".repeat(191);
+		const { auth } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					generateDeviceCode: () => customDeviceCode,
+				}),
+			],
+		});
+
+		const response = await auth.api.deviceCode({
+			body: {
+				client_id: "test-client",
+			},
+		});
+		expect(response.device_code).toBe(customDeviceCode);
 	});
 
 	it("should respect custom expiration time", async () => {
