@@ -359,6 +359,83 @@ describe("oauth authorize - unauthenticated", async () => {
 	});
 });
 
+describe("oauth authorize - localhost redirect port", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const registeredLocalhostRedirect = "http://localhost/callback?source=cli";
+	const registeredPublicRedirect = "https://client.example.com/callback";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const unauthenticatedClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl },
+	});
+
+	let clientId: string | undefined;
+	beforeAll(async () => {
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				application_type: "native",
+				redirect_uris: [registeredLocalhostRedirect, registeredPublicRedirect],
+			},
+		});
+		clientId = client?.client_id;
+		expect(clientId).toBeDefined();
+	});
+
+	async function authorizeRedirect(redirectUri: string) {
+		if (!clientId) throw new Error("beforeAll not run properly");
+		const url = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		url.searchParams.set("client_id", clientId);
+		url.searchParams.set("redirect_uri", redirectUri);
+		url.searchParams.set("response_type", "code");
+		url.searchParams.set("scope", "openid");
+		url.searchParams.set("code_challenge", generateRandomString(43));
+		url.searchParams.set("code_challenge_method", "S256");
+
+		let location = "";
+		await unauthenticatedClient.$fetch(url.toString(), {
+			onError(context) {
+				location = context.response.headers.get("Location") ?? "";
+			},
+		});
+		return location;
+	}
+
+	it("allows an ephemeral port for the exact localhost hostname", async () => {
+		const location = await authorizeRedirect(
+			"http://localhost:56053/callback?source=cli",
+		);
+		expect(location).toContain("/login");
+	});
+
+	it.each([
+		["path", "http://localhost:56053/other?source=cli"],
+		["query", "http://localhost:56053/callback?source=other"],
+		["protocol", "https://localhost:56053/callback?source=cli"],
+		["hostname", "http://tenant.localhost:56053/callback?source=cli"],
+		["non-loopback host port", "https://client.example.com:56053/callback"],
+	])("rejects a changed %s", async (_component, requestedRedirect) => {
+		const location = await authorizeRedirect(requestedRedirect);
+		expect(location).toContain("/error");
+		expect(location).not.toContain("/login");
+	});
+});
+
 describe("oauth authorize - max_age (OIDC Core 1.0 §3.1.2.1)", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
