@@ -50,10 +50,6 @@ describe("oauth metadata", async () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 					allowDynamicClientRegistration: true,
 					...opts?.oauthProviderConfig,
 				}),
@@ -379,10 +375,6 @@ describe("oauth metadata", async () => {
 						advertisedMetadata: {
 							scopes_supported: advertisedScopes,
 						},
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					jwt(),
 				],
@@ -465,10 +457,6 @@ describe("dynamic baseURL metadata wrappers", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],
@@ -519,10 +507,6 @@ describe("oauth resource metadata", async () => {
 				resources: [validResource],
 				enforcePerClientResources: false,
 				scopes: supportedScopes,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});

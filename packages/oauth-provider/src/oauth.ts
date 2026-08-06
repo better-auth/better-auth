@@ -1,6 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { defineRequestState } from "@better-auth/core/context";
-import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { DispatchContext } from "better-auth/api";
 import {
@@ -512,9 +511,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			// `resolveEnforcePerClientResources` so validation flow stays cheap.
 			logEnforcePerClientResourcesResolution(opts);
 
-			// Well-known warnings are best-effort and only make sense with the
-			// JWT plugin. A dynamic baseURL resolves per-request, so there is
-			// nothing to emit at init time for that deployment shape either.
+			// Fail fast on an invalid configured issuer. A dynamic baseURL
+			// resolves per-request, so there is nothing to validate at init
+			// time for that deployment shape.
 			if (!opts.disableJwtPlugin) {
 				const jwtPlugin = getJwtPlugin(ctx);
 				const jwtPluginOptions = jwtPlugin?.options;
@@ -524,30 +523,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					typeof ctx.options.baseURL === "object" &&
 					ctx.options.baseURL !== null &&
 					"allowedHosts" in ctx.options.baseURL;
-				let issuerPath: string | undefined;
 				try {
-					issuerPath = new URL(issuer).pathname;
+					new URL(issuer);
 				} catch (error) {
 					if (!isDynamicBaseURLInit || issuer !== "") throw error;
-				}
-				if (
-					issuerPath !== undefined &&
-					!opts.silenceWarnings?.oauthAuthServerConfig &&
-					!(ctx.options.basePath === "/" && issuerPath === "/")
-				) {
-					logger.warn(
-						`Please ensure '/.well-known/oauth-authorization-server${issuerPath === "/" ? "" : issuerPath}' exists. Upon completion, clear with silenceWarnings.oauthAuthServerConfig.`,
-					);
-				}
-				if (
-					issuerPath !== undefined &&
-					!opts.silenceWarnings?.openidConfig &&
-					ctx.options.basePath !== issuerPath &&
-					opts.scopes?.includes("openid")
-				) {
-					logger.warn(
-						`Please ensure '${issuerPath}${issuerPath.endsWith("/") ? "" : "/"}.well-known/openid-configuration' exists. Upon completion, clear with silenceWarnings.openidConfig.`,
-					);
 				}
 			}
 

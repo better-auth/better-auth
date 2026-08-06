@@ -72,10 +72,6 @@ async function createGovernorHarness(
 				loginPage: "/login",
 				consentPage: "/consent",
 				scopes: ["openid"],
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			cimd({
 				fetchClientMetadataResource,

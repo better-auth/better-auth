@@ -31,10 +31,6 @@ describe("oauth logout", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 				scopes,
 			}),
 			jwt(),
@@ -398,10 +394,6 @@ describe("oauth logout - disableJwtPlugin", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 				scopes,
 			}),
 			jwt(),

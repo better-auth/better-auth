@@ -41,7 +41,6 @@ const instance = await getTestInstance({
 			allowDynamicClientRegistration: false,
 			allowUnauthenticatedClientRegistration: false,
 			scopes: ["openid"],
-			silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 		}),
 		cimd({
 			metadataRevalidationInterval: 10,

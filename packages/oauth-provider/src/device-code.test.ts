@@ -33,10 +33,6 @@ describe("oauth-provider device-code grant", async () => {
 					enforcePerClientResources: false,
 					allowDynamicClientRegistration: true,
 					scopes: ["openid", "profile", "email", "offline_access"],
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 				deviceCodeGrant(),
 			],
@@ -461,10 +457,6 @@ describe("oauth-provider device-code grant expiry", async () => {
 					consentPage: "/consent",
 					allowDynamicClientRegistration: true,
 					scopes: ["openid", "profile", "email"],
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 				deviceCodeGrant(),
 			],
@@ -532,10 +524,6 @@ describe("oauth-provider device-code grant reuse", async () => {
 						},
 					},
 				],
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			sharedDeviceCodeGrant,
 		],
@@ -550,10 +538,6 @@ describe("oauth-provider device-code grant reuse", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				scopes: ["openid"],
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			sharedDeviceCodeGrant,
 		],

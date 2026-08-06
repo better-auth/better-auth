@@ -22,7 +22,6 @@ describe("oauth credential responses carry no-store", async () => {
 					action === "create" ||
 					action === "configure-client-credentials-scopes",
 				allowDynamicClientRegistration: true,
-				silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 			}),
 		],
 	});

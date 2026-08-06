@@ -31,10 +31,6 @@ describe("oauth revoke", async () => {
 				consentPage: "/consent",
 				resources: [validResource],
 				enforcePerClientResources: false,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -371,10 +367,6 @@ describe("oauth revoke - config", async () => {
 						clientPrivileges: ({ action }) =>
 							action === "create" ||
 							action === "configure-client-credentials-scopes",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 						...opts?.oauthProviderConfig,
 					}),
 					...(opts?.oauthProviderConfig?.disableJwtPlugin

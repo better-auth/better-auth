@@ -225,10 +225,6 @@ describe("oauth-provider extensions", async () => {
 					sub: "malicious-custom-sub", // re-pinned by the endpoint
 					email_verified: true, // first-party override of a base claim
 				}),
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			extensionPlugin,
 		],
@@ -675,10 +671,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					invalidExtensionPlugin,
 				],
@@ -717,10 +709,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					invalidExtensionPlugin,
 				],
@@ -761,10 +749,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					invalidExtensionPlugin,
 				],
@@ -805,10 +789,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					invalidExtensionPlugin,
 				],
@@ -842,10 +822,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					makeExtensionPlugin("ext-a"),
 					makeExtensionPlugin("ext-b"),
@@ -883,10 +859,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					makeAuthExtensionPlugin("auth-ext-a", "urn:better-auth:test:a"),
 					makeAuthExtensionPlugin("auth-ext-b", "urn:better-auth:test:b"),
@@ -924,10 +896,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					makeAssertionExtensionPlugin("assert-ext-a", "method_a_jwt"),
 					makeAssertionExtensionPlugin("assert-ext-b", "method_b_jwt"),
@@ -959,10 +927,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					makeDiscoveryExtensionPlugin("discovery-ext-a"),
 					makeDiscoveryExtensionPlugin("discovery-ext-b"),
@@ -988,10 +952,6 @@ describe("oauth-provider extensions", async () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 				makeMetadataExtensionPlugin("meta-ext-a", "first"),
 				makeMetadataExtensionPlugin("meta-ext-b", "second"),

@@ -66,10 +66,6 @@ describe("oauth token - authorization_code", async () => {
 				consentPage: "/consent",
 				resources: [validResource],
 				enforcePerClientResources: false,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -746,10 +742,6 @@ describe("oauth token - refresh_token", async () => {
 				consentPage: "/consent",
 				resources: [validResource],
 				enforcePerClientResources: false,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -1659,10 +1651,6 @@ describe("oauth token - refresh_token reuse interval", async () => {
 						refresh_call: `${refreshTokenResponseCalls}`,
 					};
 				},
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -1996,10 +1984,6 @@ describe("oauth token - client_credentials", async () => {
 				allowDynamicClientRegistration: true,
 				scopes: allScopes,
 				clientPrivileges: () => true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -2210,10 +2194,6 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 				customIdTokenClaims: () => ({
 					given_name: "CustomFirst",
 					family_name: "CustomLast",
@@ -2375,10 +2355,6 @@ describe("oauth token - config", async () => {
 						enforcePerClientResources: false,
 						scopes,
 						clientPrivileges: () => true,
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 						...opts?.oauthProviderConfig,
 					}),
 					...(opts?.oauthProviderConfig?.disableJwtPlugin
@@ -2769,10 +2745,6 @@ describe("oauth token - client secret validation", async () => {
 						resources: [validResource],
 						enforcePerClientResources: false,
 						scopes,
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 						...opts?.oauthProviderConfig,
 					}),
 					...(opts?.oauthProviderConfig?.disableJwtPlugin
@@ -2909,10 +2881,6 @@ describe("id token claim override security", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 				customIdTokenClaims: () => ({
 					acr: "silver",
 					auth_time: 0,
@@ -3071,10 +3039,6 @@ describe("loopback redirect URI matching", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -3288,10 +3252,6 @@ describe("scope preservation through authorization code flow", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -3381,10 +3341,6 @@ describe("at_hash in id tokens", async () => {
 				consentPage: "/consent",
 				resources: [validResource],
 				enforcePerClientResources: false,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -3532,10 +3488,6 @@ describe("at_hash in id tokens", async () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 					customIdTokenClaims: (info) => {
 						receivedKeys = Object.keys(info);
 						return {};
@@ -3627,10 +3579,6 @@ describe("customTokenResponseFields", async () => {
 					"service:read",
 				],
 				clientPrivileges: () => true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 				customTokenResponseFields: ({ grantType, verificationValue }) => {
 					if (
 						grantType === "authorization_code" &&
@@ -3745,10 +3693,6 @@ describe("customTokenResponseFields", async () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 					customTokenResponseFields: () => ({
 						access_token: "should-be-ignored",
 						token_type: "should-be-ignored",
@@ -4099,10 +4043,6 @@ describe("oauth token - per-client grant_type enforcement", async () => {
 					"m2m:write",
 				],
 				clientPrivileges: () => true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -4392,10 +4332,6 @@ describe("oauth token - DPoP", async () => {
 					},
 				],
 				enforcePerClientResources: false,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});

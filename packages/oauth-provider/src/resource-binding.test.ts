@@ -54,10 +54,6 @@ describe("oauth-provider resource indicator binding", async () => {
 				consentPage: "/consent",
 				resources: [resourceA, resourceB],
 				enforcePerClientResources: false,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});

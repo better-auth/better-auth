@@ -30,10 +30,6 @@ describe("oauthClient", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				scopes: ["openid", "profile", "email", "offline_access", "m2m:read"],
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 				allowPublicClientPrelogin: true,
 			}),
 			jwt(),
@@ -401,10 +397,6 @@ describe("oauthClient private_key_jwt clients", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 				allowPublicClientPrelogin: true,
 			}),
 			jwt(),

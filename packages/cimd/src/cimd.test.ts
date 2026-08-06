@@ -46,10 +46,6 @@ describe("Client ID Metadata Document - integration", async () => {
 				allowDynamicClientRegistration: false,
 				allowUnauthenticatedClientRegistration: false,
 				scopes: ["openid", "profile", "email", "offline_access"],
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			cimd({
 				fetchClientMetadataResource: (input, init) =>

@@ -215,10 +215,6 @@ describe("oauth authorize - unauthenticated", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],
@@ -372,10 +368,6 @@ describe("oauth authorize - max_age (OIDC Core 1.0 §3.1.2.1)", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],
@@ -516,10 +508,6 @@ describe("oauth authorize - acr_values (OIDC Core 1.0 §3.1.2.1)", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],
@@ -667,10 +655,6 @@ describe("oauth authorize - request_uri resolution", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				requestUriResolver,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],
@@ -856,10 +840,6 @@ describe("oauth authorize - authenticated", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],
@@ -1083,10 +1063,6 @@ describe("oauth authorize - consented resources", async () => {
 				consentPage: "/consent",
 				resources: [validResource, secondValidResource],
 				enforcePerClientResources: false,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 			{

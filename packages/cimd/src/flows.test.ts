@@ -150,7 +150,6 @@ describe("CIMD - token exchange flow", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				scopes: ["openid", "profile", "email", "offline_access"],
-				silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 			}),
 			cimd({
 				fetchClientMetadataResource,
@@ -631,7 +630,6 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 				clientPrivileges: ({ action }) =>
 					action === "update" ||
 					action === "configure-client-credentials-scopes",
-				silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 			}),
 			cimd({
 				metadataRevalidationInterval: 0,
@@ -812,7 +810,6 @@ describe("CIMD - metadata document URL policy", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				scopes: ["openid", "profile", "email", "offline_access"],
-				silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 			}),
 			cimd({
 				fetchClientMetadataResource: (input, init) =>

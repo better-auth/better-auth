@@ -1,4 +1,3 @@
-import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import type {
 	ResourceRequestInput,
@@ -227,9 +226,6 @@ export const oauthProviderResourceClient = <
 					overrides: Partial<ResourceServerMetadata> | undefined,
 					opts:
 						| {
-								silenceWarnings?: {
-									oidcScopes?: boolean;
-								};
 								externalScopes?: string[];
 						  }
 						| undefined,
@@ -260,13 +256,6 @@ export const oauthProviderResourceClient = <
 								throw new BetterAuthError(
 									"Only the Auth Server should utilize the openid scope",
 								);
-							}
-							if (["profile", "email", "phone", "address"].includes(sc)) {
-								if (!opts?.silenceWarnings?.oidcScopes) {
-									logger.warn(
-										`"${sc}" is typically restricted for the authorization server, a resource server typically shouldn't handle this scope`,
-									);
-								}
 							}
 							if (!allValidScopes.has(sc)) {
 								throw new BetterAuthError(
@@ -384,18 +373,12 @@ type ProtectedResourceMetadataOutput<T> = T extends undefined
 	? (
 			overrides: ResourceServerMetadata,
 			opts?: {
-				silenceWarnings?: {
-					oidcScopes?: boolean;
-				};
 				externalScopes?: string[];
 			},
 		) => Promise<ResourceServerMetadata>
 	: (
 			overrides?: Partial<ResourceServerMetadata>,
 			opts?: {
-				silenceWarnings?: {
-					oidcScopes?: boolean;
-				};
 				externalScopes?: string[];
 			},
 		) => Promise<ResourceServerMetadata>;

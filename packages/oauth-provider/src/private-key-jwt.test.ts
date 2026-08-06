@@ -51,10 +51,6 @@ describe("private_key_jwt authentication", async () => {
 						},
 					},
 				],
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -246,10 +242,6 @@ describe("private_key_jwt authentication", async () => {
 					},
 				},
 			],
-			silenceWarnings: {
-				oauthAuthServerConfig: true,
-				openidConfig: true,
-			},
 		} satisfies OAuthOptions<Scope[]>;
 		const instance = await getTestInstance({
 			baseURL: input.baseURL,
@@ -1056,10 +1048,6 @@ describe("private_key_jwt registration validation", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
