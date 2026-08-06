@@ -323,6 +323,44 @@ const auth = betterAuth({
 })
 ```
 
+### Disable Display Username
+
+By default, the plugin adds a separate `displayUsername` field to the user table to store the non-normalized username. If your app doesn't need it, set `displayUsername` to `false`. When disabled:
+
+* the `displayUsername` field is not added to the user schema (no extra column or migration)
+* `displayUsername` is never written during sign-up or update
+* the inferred user/session types exclude `displayUsername`
+* username normalization continues to work as usual
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+    },
+    plugins: [
+        username({
+            displayUsername: false
+        })
+    ]
+})
+```
+
+Pass the same option to the client plugin so client-side inferred types match the server:
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { usernameClient } from "better-auth/client/plugins"
+
+const authClient = createAuthClient({
+    plugins: [
+        usernameClient({ displayUsername: false })
+    ]
+})
+```
+
 ### Immutable Username
 
 By default, users can update their username. Set `immutableUsername` to `true` to prevent users from changing their username after it has been set.
@@ -366,7 +404,7 @@ const auth = betterAuth({
 
 ## Schema
 
-The plugin requires 2 fields to be added to the user table:
+The plugin requires 2 fields to be added to the user table (the `displayUsername` field is omitted when [`displayUsername: false`](#disable-display-username) is set):
 
 export const usernameUserTableFields = [
 	{

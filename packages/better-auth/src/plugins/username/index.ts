@@ -98,6 +98,16 @@ export type UsernameOptions = {
 	 * @default false
 	 */
 	immutableUsername?: boolean | undefined;
+	/**
+	 * Whether to add and maintain a separate `displayUsername` field.
+	 *
+	 * When set to `false`, the `displayUsername` field is not added to the user
+	 * schema, is never written during sign-up/update, and is excluded from the
+	 * inferred user/session types. Username normalization continues to work.
+	 *
+	 * @default true
+	 */
+	displayUsername?: boolean | undefined;
 };
 
 function defaultUsernameValidator(username: string) {
@@ -128,7 +138,10 @@ const isUsernameAvailableBodySchema = z.object({
 	}),
 });
 
-export const username = (options?: UsernameOptions | undefined) => {
+const usernameImpl = <IncludeDisplayUsername extends boolean>(
+	options: UsernameOptions | undefined,
+	includeDisplayUsername: IncludeDisplayUsername,
+) => {
 	const normalizer = (username: string) => {
 		if (options?.usernameNormalization === false) {
 			return username;
@@ -253,9 +266,13 @@ export const username = (options?: UsernameOptions | undefined) => {
 											data: {
 												...user,
 												username: normalizer(username),
-												displayUsername: displayUsername
-													? displayUsernameNormalizer(displayUsername)
-													: username,
+												...(includeDisplayUsername
+													? {
+															displayUsername: displayUsername
+																? displayUsernameNormalizer(displayUsername)
+																: username,
+														}
+													: {}),
 											},
 										};
 									}
@@ -263,7 +280,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 									return {
 										data: {
 											...user,
-											...(displayUsername
+											...(includeDisplayUsername && displayUsername
 												? {
 														displayUsername:
 															displayUsernameNormalizer(displayUsername),
@@ -304,7 +321,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 											data: {
 												...user,
 												username: normalizer(username),
-												...(displayUsername
+												...(includeDisplayUsername && displayUsername
 													? {
 															displayUsername:
 																displayUsernameNormalizer(displayUsername),
@@ -317,7 +334,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 									return {
 										data: {
 											...user,
-											...(displayUsername
+											...(includeDisplayUsername && displayUsername
 												? {
 														displayUsername:
 															displayUsernameNormalizer(displayUsername),
@@ -612,10 +629,13 @@ export const username = (options?: UsernameOptions | undefined) => {
 			),
 		},
 		schema: mergeSchema(
-			getSchema({
-				username: normalizer,
-				displayUsername: displayUsernameNormalizer,
-			}),
+			getSchema<IncludeDisplayUsername>(
+				{
+					username: normalizer,
+					displayUsername: displayUsernameNormalizer,
+				},
+				includeDisplayUsername,
+			),
 			options?.schema,
 		),
 		hooks: {
@@ -700,6 +720,10 @@ export const username = (options?: UsernameOptions | undefined) => {
 							}
 						}
 
+						if (!includeDisplayUsername) {
+							return;
+						}
+
 						const displayUsername =
 							typeof ctx.body.displayUsername === "string" &&
 							options?.validationOrder?.displayUsername === "post-normalization"
@@ -728,6 +752,9 @@ export const username = (options?: UsernameOptions | undefined) => {
 						return context.path === "/sign-up/email";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						if (!includeDisplayUsername) {
+							return;
+						}
 						if (ctx.body.username && !ctx.body.displayUsername) {
 							ctx.body.displayUsername = ctx.body.username;
 						}
@@ -739,3 +766,16 @@ export const username = (options?: UsernameOptions | undefined) => {
 		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
+
+export type UsernamePlugin = ReturnType<typeof usernameImpl<true>>;
+export type UsernamePluginWithoutDisplayUsername = ReturnType<
+	typeof usernameImpl<false>
+>;
+
+export function username(
+	options: UsernameOptions & { displayUsername: false },
+): UsernamePluginWithoutDisplayUsername;
+export function username(options?: UsernameOptions): UsernamePlugin;
+export function username(options?: UsernameOptions) {
+	return usernameImpl(options, options?.displayUsername !== false);
+}
