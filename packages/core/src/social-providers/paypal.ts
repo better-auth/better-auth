@@ -7,6 +7,7 @@ import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL } from "../oauth2";
 
 export interface PayPalProfile {
+	sub?: string | undefined;
 	user_id: string;
 	name: string;
 	given_name: string;
@@ -78,6 +79,7 @@ export const paypal = (options: PayPalOptions) => {
 	return {
 		id: "paypal",
 		name: "PayPal",
+		accountSubject: ({ profile }) => profile.user_id,
 		async createAuthorizationURL({
 			state,
 			codeVerifier,
@@ -200,22 +202,6 @@ export const paypal = (options: PayPalOptions) => {
 					}
 				},
 
-		async verifyIdToken(token, nonce) {
-			if (options.disableIdTokenSignIn) {
-				return false;
-			}
-			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
-			}
-			try {
-				const payload = decodeJwt(token);
-				return !!payload.sub;
-			} catch (error) {
-				logger.error("Failed to verify PayPal ID token:", error);
-				return false;
-			}
-		},
-
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
@@ -243,11 +229,30 @@ export const paypal = (options: PayPalOptions) => {
 				}
 
 				const userInfo = response.data;
+				if (token.idToken) {
+					let idTokenSubject: string | undefined;
+					try {
+						idTokenSubject = decodeJwt(token.idToken).sub;
+					} catch (error) {
+						logger.error("Failed to decode PayPal ID token:", error);
+						return null;
+					}
+
+					// OIDC binds UserInfo to the ID Token with `sub`. Keep `user_id`
+					// as the account id below for existing PayPal account mappings.
+					const userInfoSubject = userInfo.sub ?? userInfo.user_id;
+					if (!idTokenSubject || userInfoSubject !== idTokenSubject) {
+						logger.error(
+							"PayPal user info subject does not match ID token subject",
+						);
+						return null;
+					}
+				}
+
 				const userMap = await options.mapProfileToUser?.(userInfo);
 
 				const result = {
 					user: {
-						id: userInfo.user_id,
 						name: userInfo.name,
 						email: userInfo.email,
 						image: userInfo.picture,

@@ -31,10 +31,6 @@ describe("oauth logout", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 				scopes,
 			}),
 			jwt(),
@@ -61,6 +57,7 @@ describe("oauth logout", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 				enable_end_session: true,
 			},
@@ -169,6 +166,7 @@ describe("oauth logout", async () => {
 		const response = await client.oauth2.register(
 			{
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				post_logout_redirect_uris: [logoutRedirectUri],
 				// @ts-expect-error only through adminCreateOAuthClient
 				enable_end_session: true,
@@ -192,6 +190,7 @@ describe("oauth logout", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -307,6 +306,7 @@ describe("oauth logout", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				enable_end_session: true,
 				skip_consent: true,
 				post_logout_redirect_uris: [logoutRedirectUri],
@@ -394,10 +394,6 @@ describe("oauth logout - disableJwtPlugin", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 				scopes,
 			}),
 			jwt(),
@@ -424,6 +420,7 @@ describe("oauth logout - disableJwtPlugin", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 				enable_end_session: true,
 			},
@@ -579,6 +576,7 @@ describe("oauth logout - disableJwtPlugin", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				enable_end_session: true,
 				skip_consent: true,
 				post_logout_redirect_uris: [logoutRedirectUri],

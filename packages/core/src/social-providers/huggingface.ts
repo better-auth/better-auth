@@ -47,6 +47,7 @@ export const huggingface = (options: HuggingFaceOptions) => {
 	return {
 		id: "huggingface",
 		name: "Hugging Face",
+		accountSubject: ({ profile }) => profile.sub,
 		createAuthorizationURL({
 			state,
 			scopes,
@@ -111,7 +112,6 @@ export const huggingface = (options: HuggingFaceOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.sub,
 					name: profile.name || profile.preferred_username || "",
 					email: profile.email,
 					image: profile.picture,

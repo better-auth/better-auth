@@ -1,6 +1,25 @@
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import { getClientIP } from "@/lib/ai-chat/rate-limit";
 import { contactSchema, isFreeEmail } from "@/lib/enterprise-contact";
+
+let _ratelimit: Ratelimit | null = null;
+function getRatelimit(): Ratelimit {
+	if (!_ratelimit) {
+		const redis = new Redis({
+			url: process.env.UPSTASH_REDIS_REST_URL!,
+			token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+		});
+		_ratelimit = new Ratelimit({
+			redis,
+			limiter: Ratelimit.slidingWindow(5, "1 h"),
+			prefix: "enterprise-contact",
+		});
+	}
+	return _ratelimit;
+}
 
 function escapeHtml(text: string): string {
 	const map: Record<string, string> = {
@@ -11,6 +30,11 @@ function escapeHtml(text: string): string {
 		"'": "&#039;",
 	};
 	return text.replace(/[&<>"']/g, (m) => map[m] ?? m);
+}
+
+function getFirstName(fullName: string): string {
+	const firstName = fullName.trim().split(/\s+/)[0];
+	return firstName || "there";
 }
 
 export async function POST(request: Request) {
@@ -29,6 +53,16 @@ export async function POST(request: Request) {
 				: {};
 		if (typeof raw._hp === "string" && raw._hp) {
 			return NextResponse.json({});
+		}
+
+		if (process.env.NODE_ENV === "production") {
+			const { success } = await getRatelimit().limit(getClientIP(request));
+			if (!success) {
+				return NextResponse.json(
+					{ message: "Too many requests. Please try again later." },
+					{ status: 429 },
+				);
+			}
 		}
 
 		const parsed = contactSchema.safeParse(body);
@@ -68,11 +102,14 @@ export async function POST(request: Request) {
 		}
 
 		const resend = new Resend(resendApiKey);
-		const { error } = await resend.emails.send({
-			from: "Enterprise Support <enterprise@better-auth.com>",
-			to: toEmail,
-			subject: `Enterprise Inquiry from ${fullName}`,
-			html: `
+		const firstName = getFirstName(fullName);
+
+		const [internalResult, acknowledgementResult] = await Promise.all([
+			resend.emails.send({
+				from: "Enterprise Support <enterprise@better-auth.com>",
+				to: toEmail,
+				subject: `Enterprise Inquiry from ${fullName}`,
+				html: `
 					<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
 						<h2 style="color: #18181b;">Enterprise Inquiry</h2>
 						<div style="background: #f4f4f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
@@ -89,12 +126,40 @@ export async function POST(request: Request) {
 						</p>
 					</div>
 				`,
-		});
-		if (error) {
-			console.error("Resend email failed", error);
+			}),
+			resend.emails.send({
+				from: "Ravi <ravi@better-auth.com>",
+				to: email,
+				cc: toEmail,
+				subject: "Re: Enterprise Inquiry",
+				text: `Hi ${firstName},
+
+Thanks for reaching out. We've received your inquiry and someone from our team will follow up shortly.
+
+In the meantime, if there are any timelines, technical requirements, or procurement details we should be aware of, feel free to reply here.
+
+Best,
+Ravi`,
+			}),
+		]);
+
+		if (internalResult.error) {
+			console.error(
+				"Resend internal email failed (email=%s)",
+				email,
+				internalResult.error,
+			);
 			return NextResponse.json(
 				{ message: "Something went wrong. Please try again." },
 				{ status: 500 },
+			);
+		}
+
+		if (acknowledgementResult.error) {
+			console.error(
+				"Resend acknowledgement email failed (email=%s)",
+				email,
+				acknowledgementResult.error,
 			);
 		}
 

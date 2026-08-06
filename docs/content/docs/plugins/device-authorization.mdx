@@ -98,7 +98,123 @@ The device flow follows these steps:
 3. **Device polls for token**: The device polls the server until the user completes authorization
 4. **Access granted**: Once authorized, the device receives an access token
 
-## Basic Usage
+## Choose the token your device needs
+
+Device authorization can finish with two different token types. Choose the token based on what the client needs to call:
+
+| Use case                                                                         | Token                     | Plugins                                                                      | Token endpoint  |
+| -------------------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------- | --------------- |
+| Sign your own device into the same Better Auth application                       | Better Auth session token | `deviceAuthorization()`                                                      | `/device/token` |
+| Let a registered CLI, TV app, or other public client call an OAuth-protected API | Scoped OAuth access token | `jwt()`, `deviceAuthorization()`, `oauthProvider()`, and `deviceCodeGrant()` | `/oauth2/token` |
+
+A command-line application commonly needs the second path. The CLI cannot safely keep a client secret, and it may not have a reliable redirect listener, but it still needs a user-authorized token for your API. The device grant lets the user approve the request in a browser while the CLI receives an audience-bound OAuth access token.
+
+### Authorize a CLI to call an API
+
+Add the [JWT](/docs/plugins/jwt), Device Authorization, and [OAuth Provider](/docs/plugins/oauth-provider) plugins. `deviceCodeGrant()` connects the device verification flow to the provider's token endpoint:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { deviceAuthorization, jwt } from "better-auth/plugins";
+import {
+  deviceCodeGrant,
+  oauthProvider,
+} from "@better-auth/oauth-provider"; // [!code highlight]
+
+export const auth = betterAuth({
+  plugins: [
+    jwt(),
+    deviceAuthorization({
+      verificationUri: "/device",
+    }),
+    oauthProvider({
+      loginPage: "/sign-in",
+      consentPage: "/consent",
+      scopes: ["openid", "profile", "offline_access", "api:read"],
+      resources: ["https://api.example.com"],
+    }),
+    deviceCodeGrant(), // [!code highlight]
+  ],
+});
+```
+
+Register the CLI as a public native client and link it to the API resource. Public clients use `token_endpoint_auth_method: "none"` because an installed CLI cannot keep a shared secret confidential:
+
+```ts title="register-cli.ts"
+import { DEVICE_CODE_GRANT_TYPE } from "@better-auth/oauth-provider";
+
+await auth.api.adminCreateOAuthClient({
+  headers,
+  body: {
+    token_endpoint_auth_method: "none",
+    type: "native",
+    grant_types: [DEVICE_CODE_GRANT_TYPE, "refresh_token"],
+    scope: "openid profile offline_access api:read",
+    resources: ["https://api.example.com"],
+  },
+});
+```
+
+The CLI then requests a device code for the API it intends to call:
+
+```ts title="cli.ts"
+import { createAuthClient } from "better-auth/client";
+import { deviceAuthorizationClient } from "better-auth/client/plugins";
+
+const authBaseURL = "https://auth.example.com/api/auth";
+const clientId = "YOUR_CLIENT_ID";
+const resource = "https://api.example.com";
+
+const authClient = createAuthClient({
+  baseURL: authBaseURL,
+  plugins: [deviceAuthorizationClient()],
+});
+
+const { data } = await authClient.device.code({
+  client_id: clientId,
+  scope: "openid profile offline_access api:read",
+  resource,
+});
+
+if (!data) throw new Error("Could not start device authorization");
+
+console.log(`Open ${data.verification_uri}`);
+console.log(`Enter code ${data.user_code}`);
+```
+
+While the user signs in and approves the request, repeat the following request at the interval returned by the device-code response:
+
+```ts title="cli.ts"
+const response = await fetch(`${authBaseURL}/oauth2/token`, {
+  method: "POST",
+  headers: {
+    "content-type": "application/x-www-form-urlencoded",
+  },
+  body: new URLSearchParams({
+    grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+    device_code: data.device_code,
+    client_id: clientId,
+  }),
+});
+
+const tokens = await response.json();
+```
+
+The access token is a signed JWT whose `aud` identifies `https://api.example.com`. Send it to that API as `Authorization: Bearer <access_token>`, then verify its signature, issuer, audience, expiry, and required scopes at the API. See [API Server verification](/docs/plugins/oauth-provider#api-server). If the CLI requests `offline_access`, store the returned refresh token in the operating system's secure credential store and use it to renew short-lived access tokens.
+
+<Callout type="warn">
+  Do not call `authClient.device.token` for this OAuth flow. That client method polls `/device/token` and returns a Better Auth session token. Registered OAuth clients must poll `/oauth2/token`.
+</Callout>
+
+`deviceCodeGrant()` registers the `urn:ietf:params:oauth:grant-type:device_code` grant and advertises `/device/code` as `device_authorization_endpoint` in provider discovery. The provider validates the registered client, scopes, and [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707) resource before creating the request. The approval page can show the client, scopes, and resource to the signed-in user.
+
+<Callout type="info">
+  Both token paths can coexist. First-party device login keeps using `/device/token`. Registered OAuth clients use `/oauth2/token`; `deviceCodeGrant()` prevents their device codes from being redeemed for a Better Auth session token.
+</Callout>
+
+## First-party session flow
+
+The rest of this page describes the first-party path, where `/device/token` returns a Better Auth session token.
 
 ### Requesting Device Authorization
 
@@ -115,6 +231,16 @@ To initiate device authorization, call `device.code` with the client ID:
        * Space-separated list of requested scopes (optional)
        */
       scope?: string;
+      /**
+       * RFC 8707 resource indicator(s) to bind to this request (optional)
+       */
+      resource?: string | string[];
+      /**
+       * The user ID to which the device code should be pre-bound.
+       * When set, only that user can approve or deny the code.
+       * Pass this from trusted server-side code only. (optional)
+       */
+      user_id?: string;
   }
   ```
 </APIMethod>
@@ -135,6 +261,26 @@ if (data) {
   console.log(`Complete verification URL: ${data.verification_uri_complete}`);
 }
 ```
+
+### Pre-binding to a User
+
+If your server already knows which user a device belongs to, pass `user_id` when requesting the device code. The code is then bound to that user from the start. It skips the claiming step, and only the bound user can approve or deny it. Any other signed-in user receives an `access_denied` error.
+
+This is useful when the user code is displayed where others can see it, because no one else can claim the code before the intended user verifies it.
+
+```ts title="server.ts"
+const data = await auth.api.deviceCode({
+  body: {
+    client_id: "your-client-id",
+    scope: "openid profile email",
+    user_id: user.id,
+  },
+});
+```
+
+<Callout type="warn">
+  Pass `user_id` from trusted server-side code. The parameter only restricts who can approve the code, so an untrusted device cannot use it to access another user's account. The protection is only meaningful when your server controls how codes are issued.
+</Callout>
 
 ### Polling for Token
 
@@ -206,18 +352,20 @@ pollForToken();
 
 The user authorization flow requires two steps:
 
-1. **Code Verification**: Check if the entered user code is valid
-2. **Authorization**: User must be authenticated to approve/deny the device
+1. **Code Verification**: Validate the user code via `GET /device`. The verification request claims the pending device code for the calling session.
+2. **Authorization**: The session that claimed the code can approve or deny it.
 
 <Callout type="warn">
-  Users must be authenticated before they can approve or deny device authorization requests. If not authenticated, redirect them to the login page with a return URL.
+  Users must be authenticated when calling `GET /device`, because the verification step binds the pending device code to that session. Only the same session can later approve or deny. If the user is not authenticated when entering the code, redirect them to the login page with a return URL and re-call `GET /device` after sign-in.
 </Callout>
 
 Create a page where users can enter their code:
 
 ```tsx title="app/device/page.tsx"
 export default function DeviceAuthorizationPage() {
-  const [userCode, setUserCode] = useState("");
+  const { data: session } = authClient.useSession();
+  const searchParams = useSearchParams();
+  const [userCode, setUserCode] = useState(searchParams.get("user_code") || "");
   const [error, setError] = useState(null);
   
   const handleSubmit = async (e) => {
@@ -226,6 +374,13 @@ export default function DeviceAuthorizationPage() {
     try {
       // Format the code: remove dashes and convert to uppercase
       const formattedCode = userCode.trim().replace(/-/g, "").toUpperCase();
+      const approvalPath = `/device/approve?user_code=${encodeURIComponent(formattedCode)}`;
+
+      if (!session?.user) {
+        const verificationPath = `/device?user_code=${encodeURIComponent(formattedCode)}`;
+        window.location.href = `/login?redirect=${encodeURIComponent(verificationPath)}`;
+        return;
+      }
 
       // Check if the code is valid using GET /device endpoint
       const response = await authClient.device({
@@ -234,7 +389,7 @@ export default function DeviceAuthorizationPage() {
       
       if (response.data) {
         // Redirect to approval page
-        window.location.href = `/device/approve?user_code=${formattedCode}`;
+        window.location.href = approvalPath;
       }
     } catch (err) {
       setError("Invalid or expired code");
@@ -295,6 +450,18 @@ export default function DeviceApprovalPage() {
   const searchParams = useSearchParams();
   const userCode = searchParams.get("user_code");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [request, setRequest] = useState<{
+    client_id?: string;
+    scope?: string;
+    resource?: string | string[];
+  } | null>(null);
+
+  useEffect(() => {
+    if (!user || !userCode) return;
+    authClient.device({ query: { user_code: userCode } }).then(({ data }) => {
+      setRequest(data);
+    });
+  }, [user, userCode]);
   
   const handleApprove = async () => {
     setIsProcessing(true);
@@ -327,14 +494,21 @@ export default function DeviceApprovalPage() {
 
   if (!user) {
     // Redirect to login if not authenticated
-    window.location.href = `/login?redirect=/device/approve?user_code=${userCode}`;
+    const verificationPath = `/device?user_code=${encodeURIComponent(userCode || "")}`;
+    window.location.href = `/login?redirect=${encodeURIComponent(verificationPath)}`;
     return null;
   }
   
   return (
     <div>
       <h2>Device Authorization Request</h2>
-      <p>A device is requesting access to your account.</p>
+      <p>Client: {request?.client_id}</p>
+      <p>Scopes: {request?.scope || "None"}</p>
+      <p>
+        Resources: {Array.isArray(request?.resource)
+          ? request.resource.join(", ")
+          : request?.resource || "None"}
+      </p>
       <p>Code: {userCode}</p>
       
       <button onClick={handleApprove} disabled={isProcessing}>
@@ -362,9 +536,9 @@ deviceAuthorization({
     return client && client.allowDeviceFlow;
   },
   
-  onDeviceAuthRequest: async (clientId, scope) => {
+  onDeviceAuthRequest: async (clientId, scope, resource) => {
     // Log device authorization requests
-    await logDeviceAuthRequest(clientId, scope);
+    await logDeviceAuthRequest(clientId, scope, resource);
   },
 })
 ```
@@ -545,7 +719,8 @@ authenticateCLI().catch((err) => {
 3. **Client Validation**: Always validate client IDs in production to prevent unauthorized access
 4. **HTTPS Only**: Always use HTTPS in production for device authorization
 5. **User Code Format**: User codes use a limited character set (excluding similar-looking characters like 0/O, 1/I) to reduce typing errors
-6. **Authentication Required**: Users must be authenticated before they can approve or deny device requests
+6. **Authentication Required**: Users must be authenticated when calling `GET /device`. The verification step claims the pending device code for the calling session, and only that session can later approve or deny it
+7. **Pre-binding**: Device codes issued with `user_id` skip the claiming step and can only be approved or denied by that user. Pass `user_id` from trusted server-side code only
 
 ## Options
 
@@ -557,17 +732,17 @@ authenticateCLI().catch((err) => {
 
 **interval**: The minimum polling interval. Default: `"5s"` (5 seconds).
 
-**userCodeLength**: The length of the user code. Default: `8`.
+**userCodeLength**: The length of the user code. Maximum: `191`. Default: `8`.
 
-**deviceCodeLength**: The length of the device code. Default: `40`.
+**deviceCodeLength**: The length of the device code. Maximum: `191`. Default: `40`.
 
-**generateDeviceCode**: Custom function to generate device codes. Returns a string or `Promise<string>`.
+**generateDeviceCode**: Custom function to generate device codes. Returns a string or `Promise<string>` with at most 191 characters.
 
-**generateUserCode**: Custom function to generate user codes. Returns a string or `Promise<string>`.
+**generateUserCode**: Custom function to generate user codes. Returns a string or `Promise<string>` with at most 191 characters.
 
 **validateClient**: Function to validate client IDs. Takes a clientId and returns boolean or `Promise<boolean>`.
 
-**onDeviceAuthRequest**: Hook called when device authorization is requested. Takes clientId and optional scope.
+**onDeviceAuthRequest**: Hook called when device authorization is requested. Takes clientId, optional scope, and optional resource indicator(s).
 
 ### Client
 
@@ -585,6 +760,12 @@ The plugin requires a new table to store device authorization data.
 
 Table Name: `deviceCode`
 
+`deviceCode` and `userCode` are indexed by the generated schema because the device token, verification, approval, and denial flows use them as lookup fields. Both values are limited to 191 characters so these indexes remain portable across supported databases.
+
+<Callout type="warn">
+  Existing MySQL and SQL Server installations may use unbounded columns for these values. Before running the migration, convert `deviceCode` and `userCode` to strings bounded at 191 characters and resolve any longer values. The migration stops with an error when the existing columns cannot support portable indexes.
+</Callout>
+
 export const deviceCodeTableFields = [
 	{
 		name: "id",
@@ -596,11 +777,13 @@ export const deviceCodeTableFields = [
 		name: "deviceCode",
 		type: "string",
 		description: "The device verification code",
+		isIndexed: true,
 	},
 	{
 		name: "userCode",
 		type: "string",
 		description: "The user-friendly code for verification",
+		isIndexed: true,
 	},
 	{
 		name: "userId",
@@ -618,6 +801,12 @@ export const deviceCodeTableFields = [
 		name: "scope",
 		type: "string",
 		description: "Requested OAuth scopes",
+		isOptional: true,
+	},
+	{
+		name: "resource",
+		type: "string",
+		description: "Requested resource indicator or serialized resource list",
 		isOptional: true,
 	},
 	{

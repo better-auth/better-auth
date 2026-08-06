@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 
-import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
+import { decodeJwt, importJWK } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
@@ -82,11 +82,14 @@ export const apple = (options: AppleOptions) => {
 	return {
 		id: "apple",
 		name: "Apple",
+		accountSubject: ({ profile }) => profile.sub,
+		accountIssuer: "https://appleid.apple.com",
 		async createAuthorizationURL({
 			state,
 			scopes,
 			redirectURI,
 			additionalParams,
+			codeVerifier,
 		}) {
 			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
 				logger.error(
@@ -104,6 +107,7 @@ export const apple = (options: AppleOptions) => {
 				scopes: _scope,
 				state,
 				redirectURI,
+				codeVerifier,
 				responseMode: "form_post",
 				responseType: "code id_token",
 				additionalParams,
@@ -119,41 +123,17 @@ export const apple = (options: AppleOptions) => {
 				tokenEndpoint,
 			});
 		},
-		async verifyIdToken(token, nonce) {
-			if (options.disableIdTokenSignIn) {
-				return false;
-			}
-			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
-			}
-			try {
-				const decodedHeader = decodeProtectedHeader(token);
-				const { kid, alg: jwtAlg } = decodedHeader;
-				if (!kid || !jwtAlg) return false;
-				const publicKey = await getApplePublicKey(kid);
-				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
-					algorithms: [jwtAlg],
-					issuer: "https://appleid.apple.com",
-					audience:
-						options.audience && options.audience.length
-							? options.audience
-							: options.appBundleIdentifier
-								? options.appBundleIdentifier
-								: options.clientId,
-					maxTokenAge: "1h",
-				});
-				["email_verified", "is_private_email"].forEach((field) => {
-					if (jwtClaims[field] !== undefined) {
-						jwtClaims[field] = Boolean(jwtClaims[field]);
-					}
-				});
-				if (nonce && jwtClaims.nonce !== nonce) {
-					return false;
-				}
-				return !!jwtClaims;
-			} catch {
-				return false;
-			}
+		idToken: {
+			jwks: (header) => getApplePublicKey(header.kid!),
+			issuer: "https://appleid.apple.com",
+			audience:
+				options.audience && options.audience.length
+					? options.audience
+					: options.appBundleIdentifier
+						? options.appBundleIdentifier
+						: options.clientId,
+			maxTokenAge: "1h",
+			nonceComparison: "exact-or-sha256",
 		},
 		refreshAccessToken: options.refreshAccessToken
 			? options.refreshAccessToken
@@ -198,7 +178,6 @@ export const apple = (options: AppleOptions) => {
 			const userMap = await options.mapProfileToUser?.(enrichedProfile);
 			return {
 				user: {
-					id: profile.sub,
 					name: enrichedProfile.name,
 					emailVerified: emailVerified,
 					email: profile.email,

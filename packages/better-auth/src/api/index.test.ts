@@ -239,3 +239,54 @@ describe("skipTrailingSlashes option", () => {
 		expect(response.status).not.toBe(404);
 	});
 });
+
+describe("base path leading-prefix enforcement", () => {
+	it("rejects a path where basePath is not a leading prefix", async () => {
+		const { auth } = await getTestInstance({
+			basePath: "/api/auth",
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/x/api/auth/ok", {
+				method: "GET",
+			}),
+		);
+
+		expect(response.status).toBe(404);
+	});
+
+	it("rejects a path before basePath that targets a disabled route", async () => {
+		const { auth } = await getTestInstance({
+			basePath: "/api/auth",
+			disabledPaths: ["/sign-up/email"],
+		});
+
+		const body = JSON.stringify({
+			email: "user@example.com",
+			password: "password12345",
+			name: "Test User",
+		});
+
+		// The canonical path is rejected by `disabledPaths` in onRequest.
+		const blocked = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-up/email", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body,
+			}),
+		);
+		expect(blocked.status).toBe(404);
+
+		// The confused variant resolves to `/sign-up/email` on a router that
+		// strips basePath anywhere. The leading-prefix router rejects it before
+		// routing, so it never reaches the endpoint or the deny-list.
+		const confused = await auth.handler(
+			new Request("http://localhost:3000/x/api/auth/sign-up/email", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body,
+			}),
+		);
+		expect(confused.status).toBe(404);
+	});
+});

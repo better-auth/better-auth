@@ -9,7 +9,7 @@ export function deleteAllExpiredApiKeysEndpoint({
 		byPassLastCheckTime?: boolean | undefined,
 	): Promise<void>;
 }) {
-	return createAuthEndpoint(
+	return createAuthEndpoint.serverOnly(
 		{
 			method: "POST",
 		},

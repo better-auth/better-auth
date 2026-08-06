@@ -70,21 +70,18 @@ export const bearer = (options?: BearerOptions | undefined) => {
 							return;
 						}
 
-						let signedToken: string;
 						let decodedToken: string;
 
 						if (token.includes(".")) {
-							const isEncoded = token.includes("%");
-							signedToken = isEncoded ? token : encodeURIComponent(token);
-							decodedToken = isEncoded ? tryDecode(token) : token;
+							decodedToken = token.includes("%") ? tryDecode(token) : token;
 						} else {
 							if (options?.requireSignature) {
 								return;
 							}
-							signedToken = (
+							const signed = (
 								await serializeSignedCookie("", token, c.context.secret)
 							).replace("=", "");
-							decodedToken = tryDecode(signedToken);
+							decodedToken = tryDecode(signed);
 						}
 						try {
 							const isValid = await createHMAC(
@@ -109,7 +106,7 @@ export const bearer = (options?: BearerOptions | undefined) => {
 						setRequestCookie(
 							headers,
 							c.context.authCookies.sessionToken.name,
-							signedToken,
+							decodedToken,
 						);
 						return {
 							context: {

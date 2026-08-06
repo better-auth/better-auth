@@ -89,7 +89,13 @@
 		"%[0-9A-Fa-f]{2}(?:%[0-9A-Fa-f]{2})*",
 
 		// ignore vitest assertions (probably the source of the typo comes from somewhere else)
-		"toBe\\([^\\)]*\\)"
+		"toBe\\([^\\)]*\\)",
+
+		// ignore GitHub security advisory IDs (GHSA-xxxx-xxxx-xxxx)
+		"GHSA(?:-[a-z0-9]+)+",
+
+		// ignore git commit short-hashes in changelog/changeset links (e.g. [`fcabaaf`])
+		"\\[`[0-9a-f]{7,40}`\\]"
 	],
 	"ignorePaths": [
 		"patches",
@@ -98,7 +104,9 @@
 		"e2e/smoke/test/fixtures/cloudflare/worker-configuration.d.ts",
 		"*.config.js",
 		"*.config.ts",
+		"docker-compose.override.yml",
 		"*.json",
+		"*.test.ts",
 		".gitignore",
 		// locale translation files contain non-English text that CSpell doesn't recognize
 		"packages/i18n/src/locales/**"

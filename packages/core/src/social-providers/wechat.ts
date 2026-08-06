@@ -59,6 +59,7 @@ export const wechat = (options: WeChatOptions) => {
 	return {
 		id: "wechat",
 		name: "WeChat",
+		accountSubject: ({ profile }) => profile.unionid || profile.openid,
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope ? [] : ["snsapi_login"];
 			options.scope && _scopes.push(...options.scope);
@@ -206,9 +207,15 @@ export const wechat = (options: WeChatOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.unionid || profile.openid || openid,
 					name: profile.nickname,
-					email: profile.email || null,
+					// WeChat does not return an email, and the OAuth callback rejects a
+					// missing one, so the default sign-in would always fail. Synthesize a
+					// stable, non-routable placeholder (RFC 2606 `.invalid`) keyed to the
+					// user's WeChat id, left unverified. Applications that collect a real
+					// email override it via `mapProfileToUser`.
+					email:
+						profile.email ||
+						`${profile.unionid || profile.openid || openid}@wechat.invalid`,
 					image: profile.headimgurl,
 					emailVerified: false,
 					...userMap,

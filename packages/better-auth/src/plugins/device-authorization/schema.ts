@@ -1,6 +1,8 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import * as z from "zod";
 
+export const DEVICE_AUTHORIZATION_CODE_MAX_LENGTH = 191;
+
 export const schema = {
 	deviceCode: {
 		fields: {
@@ -40,7 +42,12 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			resource: {
+				type: "string",
+				required: false,
+			},
 		},
+		indexes: [{ fields: ["deviceCode"] }, { fields: ["userCode"] }],
 	},
 } satisfies BetterAuthPluginDBSchema;
 
@@ -55,6 +62,7 @@ const deviceCode = z.object({
 	pollingInterval: z.number().optional(),
 	clientId: z.string().optional(),
 	scope: z.string().optional(),
+	resource: z.string().optional(),
 });
 
 export type DeviceCode = z.infer<typeof deviceCode>;

@@ -17,7 +17,7 @@ type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 describe("oauth revoke", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -29,11 +29,8 @@ describe("oauth revoke", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				validAudiences: [validAudience],
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
+				resources: [validResource],
+				enforcePerClientResources: false,
 			}),
 		],
 	});
@@ -144,6 +141,7 @@ describe("oauth revoke", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -170,8 +168,8 @@ describe("oauth revoke", async () => {
 		expect(revocation.error?.status).toBe(401);
 	});
 
-	it("should pass verification with token_type_hint access_token and sent jwt access_token", async () => {
-		const tokens = await getTokens(undefined, validAudience);
+	it("reports unsupported_token_type for a jwt access_token with token_type_hint access_token", async () => {
+		const tokens = await getTokens(undefined, validResource);
 		const revocation = await client.oauth2.revoke(
 			{
 				client_id: oauthClient?.client_id,
@@ -186,8 +184,10 @@ describe("oauth revoke", async () => {
 				},
 			},
 		);
-		expect(revocation.data).toBe(null);
-		expect(revocation.error).toBe(null);
+		expect(revocation.error?.status).toBe(400);
+		expect(revocation.error).toMatchObject({
+			error: "unsupported_token_type",
+		});
 	});
 
 	it("should pass verification with token_type_hint access_token and sent opaque access_token", async () => {
@@ -268,8 +268,8 @@ describe("oauth revoke", async () => {
 		expect(revocation.error?.status).toBe(400);
 	});
 
-	it("should pass verification without token_type_hint and sent jwt access_token", async () => {
-		const tokens = await getTokens(undefined, validAudience);
+	it("reports unsupported_token_type for a jwt access_token without token_type_hint", async () => {
+		const tokens = await getTokens(undefined, validResource);
 		const revocation = await client.oauth2.revoke(
 			{
 				client_id: oauthClient?.client_id,
@@ -283,8 +283,10 @@ describe("oauth revoke", async () => {
 				},
 			},
 		);
-		expect(revocation.data).toBe(null);
-		expect(revocation.error).toBe(null);
+		expect(revocation.error?.status).toBe(400);
+		expect(revocation.error).toMatchObject({
+			error: "unsupported_token_type",
+		});
 	});
 
 	it("should pass verification without token_type_hint and sent opaque access_token", async () => {
@@ -329,7 +331,7 @@ describe("oauth revoke", async () => {
 describe("oauth revoke - config", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
-	const validAudience = "https://myapi.example.com";
+	const validResource = "https://myapi.example.com";
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 	const scopes = [
@@ -346,6 +348,12 @@ describe("oauth revoke - config", async () => {
 			"loginPage" | "consentPage"
 		>;
 	}) {
+		const clientCredentialsScopes = (
+			opts?.oauthProviderConfig?.scopes ?? scopes
+		).filter(
+			(scope) =>
+				!["openid", "profile", "email", "offline_access"].includes(scope),
+		);
 		const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance(
 			{
 				baseURL: authServerBaseUrl,
@@ -353,12 +361,12 @@ describe("oauth revoke - config", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						validAudiences: [validAudience],
+						resources: [validResource],
+						enforcePerClientResources: false,
 						scopes,
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
+						clientPrivileges: ({ action }) =>
+							action === "create" ||
+							action === "configure-client-credentials-scopes",
 						...opts?.oauthProviderConfig,
 					}),
 					...(opts?.oauthProviderConfig?.disableJwtPlugin
@@ -386,8 +394,15 @@ describe("oauth revoke - config", async () => {
 		const registeredClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
+				client_credentials_scopes: clientCredentialsScopes,
 			},
 		});
 

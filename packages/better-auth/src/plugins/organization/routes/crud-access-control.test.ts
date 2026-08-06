@@ -10,6 +10,16 @@ import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { organization } from "../organization";
 
 describe("dynamic access control", async () => {
+	it("should preserve exact built-in organization role statement types", () => {
+		expectTypeOf(adminAc.statements.organization).toEqualTypeOf<
+			readonly ["update"]
+		>();
+		expectTypeOf(ownerAc.statements.organization).toEqualTypeOf<
+			readonly ["update", "delete"]
+		>();
+		expectTypeOf(memberAc.statements.organization).toEqualTypeOf<readonly []>();
+	});
+
 	const ac = createAccessControl({
 		project: ["create", "read", "update", "delete"],
 		sales: ["create", "read", "update", "delete"],
@@ -164,6 +174,55 @@ describe("dynamic access control", async () => {
 	// Create normal users in the org.
 	const { headers: normalHeaders, member: normalMember } = await createUser({
 		role: "member",
+	});
+
+	it("does not reveal dynamic role existence to members without update permission", async () => {
+		const { member: targetMember } = await createUser({
+			role: "member",
+		});
+		const roleName = `hidden-role-${crypto.randomUUID()}`;
+		const createdRole = await authClient.organization.createRole(
+			{
+				role: roleName,
+				permission: {
+					project: ["read"],
+				},
+				additionalFields: {
+					color: "#ff0000",
+				},
+			},
+			{
+				headers,
+			},
+		);
+		expect(createdRole.error).toBeNull();
+
+		const existingRoleAttempt = await authClient.organization.updateMemberRole(
+			{
+				memberId: targetMember.id,
+				role: roleName,
+			},
+			{
+				headers: normalHeaders,
+			},
+		);
+		const missingRoleAttempt = await authClient.organization.updateMemberRole(
+			{
+				memberId: targetMember.id,
+				role: `missing-role-${crypto.randomUUID()}`,
+			},
+			{
+				headers: normalHeaders,
+			},
+		);
+
+		expect(existingRoleAttempt.error?.status).toBe(403);
+		expect(missingRoleAttempt.error?.status).toBe(403);
+		expect(existingRoleAttempt.error?.message).toBe(
+			missingRoleAttempt.error?.message,
+		);
+		expect(existingRoleAttempt.data).toBeNull();
+		expect(missingRoleAttempt.data).toBeNull();
 	});
 
 	/**

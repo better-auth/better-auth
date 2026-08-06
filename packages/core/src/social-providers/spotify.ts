@@ -24,6 +24,7 @@ export const spotify = (options: SpotifyOptions) => {
 	return {
 		id: "spotify",
 		name: "Spotify",
+		accountSubject: ({ profile }) => profile.id,
 		createAuthorizationURL({
 			state,
 			scopes,
@@ -86,7 +87,6 @@ export const spotify = (options: SpotifyOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.id,
 					name: profile.display_name,
 					email: profile.email,
 					image: profile.images[0]?.url,

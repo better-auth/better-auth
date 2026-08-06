@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { USERNAME_ERROR_CODES, username } from ".";
 import { usernameClient } from "./client";
@@ -52,6 +52,60 @@ describe("username", async () => {
 			},
 		);
 		expect(res.data?.token).toBeDefined();
+	});
+
+	it("uses only the canonical credential account during username sign-in", async () => {
+		const { auth, client } = await getTestInstance(
+			{
+				plugins: [username()],
+			},
+			{
+				clientOptions: { plugins: [usernameClient()] },
+			},
+		);
+		const signUp = await client.signUp.email({
+			email: "canonical-username@example.com",
+			username: "canonical_username",
+			password: "canonical-password",
+			name: "Canonical Username",
+		});
+		const userId = signUp.data!.user.id;
+		const context = await auth.$context;
+		const canonicalAccount =
+			await context.internalAdapter.findCredentialAccount(userId);
+		assert(
+			canonicalAccount?.password,
+			"canonical credential account is required",
+		);
+
+		await context.internalAdapter.deleteAccount(canonicalAccount.id);
+		await context.internalAdapter.createAccount({
+			userId,
+			providerId: "credential",
+			issuer: "local:decoy-credential",
+			accountId: "decoy-subject",
+			password: await context.password.hash("decoy-password"),
+		});
+		await context.internalAdapter.createAccount({
+			userId,
+			providerId: "credential",
+			issuer: "local:credential",
+			accountId: userId,
+			password: canonicalAccount.password,
+		});
+
+		const canonicalSignIn = await client.signIn.username({
+			username: "canonical_username",
+			password: "canonical-password",
+		});
+		expect(canonicalSignIn.data?.user.id).toBe(userId);
+
+		const decoySignIn = await client.signIn.username({
+			username: "canonical_username",
+			password: "decoy-password",
+		});
+		expect(decoySignIn.data).toBeNull();
+		expect(decoySignIn.error?.status).toBe(401);
 	});
 
 	/**
@@ -276,7 +330,7 @@ describe("username", async () => {
 		await client.signUp.email(
 			{
 				email: "display-test@email.com",
-				displayUsername: "Test Username",
+				displayUsername: "Test_Username",
 				password: "test-password",
 				name: "test-name",
 			},
@@ -292,8 +346,47 @@ describe("username", async () => {
 			},
 		});
 
-		expect(session?.user.username).toBe("test username");
-		expect(session?.user.displayUsername).toBe("Test Username");
+		expect(session?.user.username).toBe("test_username");
+		expect(session?.user.displayUsername).toBe("Test_Username");
+	});
+
+	it("should not store an invalid displayUsername-only value as username", async () => {
+		const headers = new Headers();
+		const res = await client.signUp.email(
+			{
+				email: "invalid-display-username@email.com",
+				displayUsername: "Invalid Username",
+				password: "test-password",
+				name: "test-name",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		expect(res.error).toBeNull();
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+
+		expect(session?.user.username).toBeNull();
+		expect(session?.user.displayUsername).toBe("Invalid Username");
+	});
+
+	it("should not replace an explicit empty username with displayUsername", async () => {
+		const res = await client.signUp.email({
+			email: "empty-username@email.com",
+			username: "",
+			displayUsername: "valid_username",
+			password: "test-password",
+			name: "test-name",
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(USERNAME_ERROR_CODES.USERNAME_TOO_SHORT.code);
 	});
 
 	it("should preserve both username and displayUsername when both are provided", async () => {
@@ -439,11 +532,14 @@ describe("username with displayUsername validation", async () => {
 			name: "test-name",
 		});
 		expect(res.error).toBeNull();
+		expect(res.data?.user.username).toBeNull();
+		expect(res.data?.user.displayUsername).toBe("Valid_Display-123");
 	});
 
 	it("should reject invalid displayUsername", async () => {
 		const res = await client.signUp.email({
 			email: "display-invalid@email.com",
+			username: "invalid_display",
 			displayUsername: "Invalid Display!",
 			password: "test-password",
 			name: "test-name",
@@ -452,6 +548,19 @@ describe("username with displayUsername validation", async () => {
 		expect(res.error?.code).toBe(
 			USERNAME_ERROR_CODES.INVALID_DISPLAY_USERNAME.code,
 		);
+	});
+
+	it("should not validate inferred displayUsername during sign-up", async () => {
+		const res = await client.signUp.email({
+			email: "inferred-display@email.com",
+			username: "valid.username",
+			password: "test-password",
+			name: "test-name",
+		});
+
+		expect(res.error).toBeNull();
+		expect(res.data?.user.username).toBe("valid.username");
+		expect(res.data?.user.displayUsername).toBe("valid.username");
 	});
 
 	it("should update displayUsername with valid value", async () => {
@@ -501,6 +610,7 @@ describe("username with displayUsername validation", async () => {
 		await client.signUp.email(
 			{
 				email: "update-invalid@email.com",
+				username: "valid_name",
 				displayUsername: "Valid_Name",
 				password: "test-password",
 				name: "test-name",
@@ -817,5 +927,168 @@ describe("immutable username", async () => {
 		});
 		expect(session?.user.username).toBe("immutable_display_user");
 		expect(session?.user.displayUsername).toBe("Updated Display Name");
+	});
+});
+
+describe("username sign-in verify-email callbackURL", async () => {
+	/**
+	 * The verify-email link sent on username sign-in for an unverified user must
+	 * keep the caller's `callbackURL` intact. A raw interpolation truncates any
+	 * value containing `&` at the first ampersand.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/6086
+	 */
+	it("encodes callbackURL in the verify-email link on username sign-in", async () => {
+		let capturedUrl = "";
+		const { client } = await getTestInstance(
+			{
+				emailAndPassword: { enabled: true, requireEmailVerification: true },
+				emailVerification: {
+					sendOnSignIn: true,
+					async sendVerificationEmail({ url }) {
+						capturedUrl = url;
+					},
+				},
+				plugins: [username()],
+			},
+			{
+				clientOptions: {
+					plugins: [usernameClient()],
+				},
+			},
+		);
+
+		await client.signUp.email({
+			email: "encode-username@example.com",
+			username: "encode_username",
+			password: "correct-password",
+			name: "Encode Username",
+		});
+
+		const callbackURL = "/welcome?ref=username&plan=pro";
+		await client.signIn.username({
+			username: "encode_username",
+			password: "correct-password",
+			callbackURL,
+		});
+
+		expect(capturedUrl).not.toBe("");
+		expect(new URL(capturedUrl).searchParams.get("callbackURL")).toBe(
+			callbackURL,
+		);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10312
+ */
+describe("username with displayUsername disabled", async () => {
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				username({
+					displayUsername: false,
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [usernameClient({ displayUsername: false })],
+			},
+		},
+	);
+
+	it("should sign up and normalize username without writing displayUsername", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "no-display@example.com",
+				username: "No_Display_User",
+				password: "new-password",
+				name: "No Display",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("no_display_user");
+		expect("displayUsername" in (session?.user ?? {})).toBe(false);
+		// @ts-expect-error displayUsername should be excluded from inferred types
+		expect(session?.user.displayUsername).toBeUndefined();
+	});
+
+	it("should update username without writing displayUsername", async () => {
+		const headers = new Headers();
+		await client.signUp.email(
+			{
+				email: "no-display-update@example.com",
+				username: "update_no_display",
+				password: "new-password",
+				name: "Update No Display",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.updateUser({
+			username: "Updated_No_Display",
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.error).toBeNull();
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+				throw: true,
+			},
+		});
+		expect(session?.user.username).toBe("updated_no_display");
+		expect("displayUsername" in (session?.user ?? {})).toBe(false);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10312
+ */
+describe("username with displayUsername disabled and a validator", async () => {
+	const { client } = await getTestInstance(
+		{
+			plugins: [
+				username({
+					displayUsername: false,
+					displayUsernameValidator: (displayUsername) =>
+						/^[a-zA-Z0-9_-]+$/.test(displayUsername),
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [usernameClient({ displayUsername: false })],
+			},
+		},
+	);
+
+	it("should not validate displayUsername from the body when the field is disabled", async () => {
+		const res = await client.signUp.email({
+			email: "disabled-validator@example.com",
+			username: "disabled_validator_user",
+			password: "new-password",
+			name: "Disabled Validator",
+			// displayUsername is disabled, so an invalid value must not be rejected
+			displayUsername: "Invalid Display!",
+		} as Parameters<typeof client.signUp.email>[0]);
+
+		expect(res.error).toBeNull();
+		expect(res.data?.user.username).toBe("disabled_validator_user");
+		expect("displayUsername" in (res.data?.user ?? {})).toBe(false);
 	});
 });

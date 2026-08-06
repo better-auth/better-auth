@@ -37,7 +37,7 @@
         "noRestrictedTypes": "off",
         "noRestrictedGlobals": "off"
       },
-      "recommended": false,
+      "preset": "none",
       "suspicious": {
         "noImplicitAnyLet": "warn",
         "noDuplicateObjectKeys": "warn",
@@ -141,6 +141,7 @@
       "!**/.source",
       "!**/.expo",
       "!**/.cache",
+      "!**/.tsc",
       "!**/dev/cloudflare/drizzle",
       "!**/playwright-report",
       "!**/.output",

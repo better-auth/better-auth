@@ -1,13 +1,19 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cliPath } from "./utils";
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 let tmpDir = ".";
+
+const runInfoCommand = (args: string[] = []) => {
+	return execFileAsync(process.execPath, [cliPath, "info", ...args, "--json"], {
+		cwd: tmpDir,
+	});
+};
 
 describe("info command", () => {
 	beforeEach(async () => {
@@ -43,9 +49,7 @@ describe("info command", () => {
 				},
 			}),
 		);
-		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
-			cwd: tmpDir,
-		});
+		const { stdout } = await runInfoCommand();
 
 		const output = JSON.parse(stdout);
 
@@ -107,9 +111,7 @@ describe("info command", () => {
 			})`,
 		);
 
-		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
-			cwd: tmpDir,
-		});
+		const { stdout } = await runInfoCommand();
 
 		const output = JSON.parse(stdout);
 
@@ -139,6 +141,44 @@ describe("info command", () => {
 		expect(output.betterAuth.config.baseURL).toBe("https://example.com");
 	});
 
+	it("should redact versioned secrets", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify({
+				name: "test-project",
+				version: "1.0.0",
+				dependencies: {
+					"better-auth": "^1.0.0",
+				},
+			}),
+		);
+
+		await fs.writeFile(
+			path.join(tmpDir, "auth.ts"),
+			`import { betterAuth } from "better-auth";
+
+			export const auth = betterAuth({
+				secrets: [
+					{ version: 1, value: "old-rotation-secret-123" },
+					{ version: 2, value: "new-rotation-secret-456" },
+				],
+				emailAndPassword: {
+					enabled: true,
+				}
+			})`,
+		);
+
+		const { stdout } = await runInfoCommand();
+
+		const output = JSON.parse(stdout);
+
+		expect(output.betterAuth.config).toBeDefined();
+		expect(output.betterAuth.config.secrets).toBe("[REDACTED]");
+		const configStr = JSON.stringify(output.betterAuth.config);
+		expect(configStr).not.toContain("old-rotation-secret-123");
+		expect(configStr).not.toContain("new-rotation-secret-456");
+	});
+
 	it("should detect installed frameworks", async () => {
 		// Create package.json with various frameworks
 		await fs.writeFile(
@@ -158,9 +198,7 @@ describe("info command", () => {
 			}),
 		);
 
-		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
-			cwd: tmpDir,
-		});
+		const { stdout } = await runInfoCommand();
 
 		const output = JSON.parse(stdout);
 
@@ -202,9 +240,7 @@ describe("info command", () => {
 			}),
 		);
 
-		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
-			cwd: tmpDir,
-		});
+		const { stdout } = await runInfoCommand();
 
 		const output = JSON.parse(stdout);
 
@@ -258,10 +294,10 @@ describe("info command", () => {
 			})`,
 		);
 
-		const { stdout } = await execAsync(
-			`node ${cliPath} info --config config/auth.config.ts --json`,
-			{ cwd: tmpDir },
-		);
+		const { stdout } = await runInfoCommand([
+			"--config",
+			"config/auth.config.ts",
+		]);
 
 		const output = JSON.parse(stdout);
 
@@ -308,9 +344,7 @@ describe("info command", () => {
 			})`,
 		);
 
-		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
-			cwd: tmpDir,
-		});
+		const { stdout } = await runInfoCommand();
 
 		const output = JSON.parse(stdout);
 
@@ -331,9 +365,7 @@ describe("info command", () => {
 
 	it("should handle missing package.json gracefully", async () => {
 		// Don't create package.json
-		const { stdout } = await execAsync(`node ${cliPath} info --json`, {
-			cwd: tmpDir,
-		});
+		const { stdout } = await runInfoCommand();
 
 		const output = JSON.parse(stdout);
 
@@ -346,4 +378,4 @@ describe("info command", () => {
 		expect(output.frameworks).toBeNull();
 		expect(output.databases).toBeNull();
 	});
-}, 20000);
+});

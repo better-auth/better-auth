@@ -57,15 +57,9 @@ export const electron = (options?: ElectronOptions | undefined) => {
 			client_id: string;
 			state: string;
 			code_challenge: string;
-			code_challenge_method?: string | undefined;
 		},
 	) => {
-		const {
-			client_id,
-			state,
-			code_challenge,
-			code_challenge_method = "plain",
-		} = payload;
+		const { client_id, state, code_challenge } = payload;
 		const userId =
 			ctx.context.session?.user.id || ctx.context.newSession?.user.id;
 		if (!userId || client_id !== opts.clientID) {
@@ -88,7 +82,6 @@ export const electron = (options?: ElectronOptions | undefined) => {
 			value: JSON.stringify({
 				userId,
 				codeChallenge: code_challenge,
-				codeChallengeMethod: code_challenge_method.toLowerCase(),
 				state,
 			}),
 			expiresAt,
@@ -110,22 +103,6 @@ export const electron = (options?: ElectronOptions | undefined) => {
 	return {
 		id: "electron",
 		version: PACKAGE_VERSION,
-		async onRequest(request, _ctx) {
-			if (opts.disableOriginOverride || request.headers.get("origin")) {
-				return;
-			}
-
-			const electronOrigin = request.headers.get("electron-origin");
-			if (!electronOrigin) {
-				return;
-			}
-
-			const req = request.clone();
-			req.headers.set("origin", electronOrigin);
-			return {
-				request: req,
-			};
-		},
 		hooks: {
 			after: [
 				{
@@ -159,7 +136,6 @@ export const electron = (options?: ElectronOptions | undefined) => {
 						const querySchema = z.object({
 							client_id: z.string(),
 							code_challenge: z.string().nonempty(),
-							code_challenge_method: z.string().optional().default("plain"),
 							state: z.string().nonempty(),
 						});
 						const cookie = ctx.context.createAuthCookie("transfer_token", {

@@ -50,6 +50,8 @@ export const line = (options: LineOptions) => {
 	return {
 		id: "line",
 		name: "LINE",
+		accountSubject: ({ profile }) => profile.sub,
+		accountIssuer: "https://access.line.me",
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -96,34 +98,30 @@ export const line = (options: LineOptions) => {
 						tokenEndpoint,
 					});
 				},
-		async verifyIdToken(token, nonce) {
-			if (options.disableIdTokenSignIn) {
-				return false;
-			}
-			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
-			}
-			const body = new URLSearchParams();
-			body.set("id_token", token);
-			body.set("client_id", options.clientId);
-			if (nonce) body.set("nonce", nonce);
-			const { data, error } = await betterFetch<LineIdTokenPayload>(
-				verifyIdTokenEndpoint,
-				{
-					method: "POST",
-					headers: {
-						"content-type": "application/x-www-form-urlencoded",
+		idToken: {
+			verify: async (token, nonce) => {
+				const body = new URLSearchParams();
+				body.set("id_token", token);
+				body.set("client_id", options.clientId);
+				if (nonce) body.set("nonce", nonce);
+				const { data, error } = await betterFetch<LineIdTokenPayload>(
+					verifyIdTokenEndpoint,
+					{
+						method: "POST",
+						headers: {
+							"content-type": "application/x-www-form-urlencoded",
+						},
+						body,
 					},
-					body,
-				},
-			);
-			if (error || !data) {
-				return false;
-			}
-			// aud must match clientId; nonce (if provided) must also match nonce
-			if (data.aud !== options.clientId) return false;
-			if (data.nonce && data.nonce !== nonce) return false;
-			return true;
+				);
+				if (error || !data) {
+					return false;
+				}
+				// aud must match clientId; nonce (if provided) must also match nonce
+				if (data.aud !== options.clientId) return false;
+				if (data.nonce && data.nonce !== nonce) return false;
+				return true;
+			},
 		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
@@ -146,24 +144,17 @@ export const line = (options: LineOptions) => {
 				profile = data || null;
 			}
 			if (!profile) return null;
-			const userMap = await options.mapProfileToUser?.(profile as any);
-			// ID preference order
-			const id = (profile as any).sub || (profile as any).userId;
-			const name = (profile as any).name || (profile as any).displayName || "";
-			const image =
-				(profile as any).picture || (profile as any).pictureUrl || undefined;
-			const email = (profile as any).email;
+			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id,
-					name,
-					email,
-					image,
+					name: profile.name || "",
+					email: profile.email,
+					image: profile.picture,
 					// LINE does not expose email verification status in ID token/userinfo
 					emailVerified: false,
 					...userMap,
 				},
-				data: profile as any,
+				data: profile,
 			};
 		},
 		options,

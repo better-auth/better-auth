@@ -1,0 +1,10 @@
+allowBuilds:
+  '@swc/core': true
+  esbuild: true
+  sharp: true
+
+overrides:
+  esbuild@<0.28.1: '>=0.28.1 <0.29'
+  next: 16.2.11
+  postcss@<8.5.18: '>=8.5.18 <9'
+  sharp: '>=0.35.3 <0.36'

@@ -1,22 +1,10 @@
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { APIError } from "better-auth/api";
 import { resolveSigningCerts } from "../saml";
+import { parseSAMLServiceProviderMetadata } from "../saml/response-binding";
 import { saml } from "../samlify";
 import type { SAMLConfig, SSOOptions, SSOProvider } from "../types";
-import { safeJsonParse } from "../utils";
-
-/**
- * Normalizes a PEM string by trimming leading/trailing whitespace from each
- * line. Native `crypto.createPrivateKey` (used by samlify 2.12+) rejects PEM
- * blocks with leading whitespace, which is common when keys are stored in
- * indented config files, environment variables, or JSON.
- */
-function normalizePem(pem: string | undefined): string | undefined {
-	if (!pem) return pem;
-	return pem
-		.split("\n")
-		.map((line) => line.trim())
-		.join("\n");
-}
+import { normalizePem, safeJsonParse } from "../utils";
 
 /**
  * Same as `normalizePem`, but applied across the resolved list of IdP signing
@@ -30,7 +18,7 @@ function normalizePemList(certs: string[] | undefined): string[] | undefined {
 export async function findSAMLProvider(
 	providerId: string,
 	options: SSOOptions | undefined,
-	adapter: DBAdapter,
+	adapter: Pick<DBAdapter, "findOne">,
 ): Promise<SSOProvider<SSOOptions> | null> {
 	if (options?.defaultSSO?.length) {
 		const match = options.defaultSSO.find((p) => p.providerId === providerId);
@@ -67,6 +55,7 @@ export function createSP(
 	baseURL: string,
 	providerId: string,
 	opts?: {
+		clockSkew?: number;
 		relayState?: string;
 		sloOptions?: {
 			wantLogoutRequestSigned?: boolean;
@@ -81,6 +70,7 @@ export function createSP(
 	// When no SP metadata XML is provided, generate it so samlify can read
 	// authnRequestsSigned and other flags that only work via metadata.
 	let metadata = spData?.metadata;
+	assertSAMLServiceProviderMetadataPolicy(config);
 	if (!metadata) {
 		metadata =
 			saml
@@ -104,7 +94,7 @@ export function createSP(
 								},
 							]
 						: undefined,
-					wantMessageSigned: config.wantAssertionsSigned || false,
+					wantAssertionsSigned: config.wantAssertionsSigned || false,
 					authnRequestsSigned: config.authnRequestsSigned || false,
 					nameIDFormat: config.identifierFormat
 						? [config.identifierFormat]
@@ -113,7 +103,7 @@ export function createSP(
 				.getMetadata() || "";
 	}
 
-	return saml.ServiceProvider({
+	const provider = saml.ServiceProvider({
 		metadata,
 		allowCreate: true,
 		wantLogoutRequestSigned: opts?.sloOptions?.wantLogoutRequestSigned ?? false,
@@ -125,10 +115,109 @@ export function createSP(
 		encPrivateKey: normalizePem(spData?.encPrivateKey),
 		encPrivateKeyPass: spData?.encPrivateKeyPass,
 		relayState: opts?.relayState,
+		clockDrifts:
+			opts?.clockSkew && opts?.clockSkew !== 0
+				? [-opts.clockSkew, opts.clockSkew]
+				: undefined,
+	});
+	return provider;
+}
+
+/**
+ * Ensures custom SP metadata cannot weaken the configured assertion-signing
+ * policy. This is safe to call before persisting a provider configuration.
+ */
+export function assertSAMLServiceProviderMetadataPolicy(
+	config: SAMLConfig,
+): void {
+	const policy = deriveSAMLServiceProviderPolicy(config);
+	if (config.wantAssertionsSigned !== true || policy.wantAssertionsSigned) {
+		return;
+	}
+
+	throw new APIError("BAD_REQUEST", {
+		code: "SAML_SP_METADATA_ASSERTION_SIGNATURE_MISMATCH",
+		message: "SAML service provider metadata must require signed assertions",
+	});
+}
+
+export interface SAMLServiceProviderPolicy {
+	/** Effective assertion-signing requirement advertised by SP metadata. */
+	wantAssertionsSigned: boolean;
+}
+
+export function assertSAMLMetadataSize(
+	metadata: string | undefined,
+	kind: "IdP" | "SP",
+	maxMetadataSize: number,
+): void {
+	if (metadata && new TextEncoder().encode(metadata).length > maxMetadataSize) {
+		throw new APIError("BAD_REQUEST", {
+			message: `${kind} metadata exceeds maximum allowed size (${maxMetadataSize} bytes)`,
+		});
+	}
+}
+
+/**
+ * Parses custom SP metadata and returns its effective verification policy.
+ *
+ * Configurations without custom metadata use the code-defined policy directly.
+ * Invalid or unusable custom metadata throws an API error with the
+ * `SAML_INVALID_SP_METADATA` code.
+ */
+export function deriveSAMLServiceProviderPolicy(
+	config: Pick<SAMLConfig, "spMetadata" | "wantAssertionsSigned">,
+): SAMLServiceProviderPolicy {
+	const metadata = config.spMetadata?.metadata;
+	if (!metadata) {
+		return { wantAssertionsSigned: config.wantAssertionsSigned === true };
+	}
+	try {
+		const parsedMetadata = parseSAMLServiceProviderMetadata(metadata);
+		if (!parsedMetadata.postAssertionConsumerServiceUrls.length) {
+			throw new Error("Unusable SAML service provider metadata");
+		}
+		return {
+			wantAssertionsSigned: parsedMetadata.wantAssertionsSigned,
+		};
+	} catch {
+		throw new APIError("BAD_REQUEST", {
+			code: "SAML_INVALID_SP_METADATA",
+			message: "Invalid SAML service provider metadata",
+		});
+	}
+}
+
+export function assertSAMLIdentityProviderAuthority<
+	Config extends {
+		idpMetadata?:
+			| {
+					metadata?: string | undefined;
+					entityID?: string | undefined;
+			  }
+			| undefined;
+	},
+>(
+	config: Config,
+): asserts config is Config & {
+	idpMetadata: NonNullable<Config["idpMetadata"]> &
+		(
+			| { metadata: string; entityID?: string | undefined }
+			| { metadata?: undefined; entityID: string }
+		);
+} {
+	if (config.idpMetadata?.metadata || config.idpMetadata?.entityID) {
+		return;
+	}
+
+	throw new APIError("BAD_REQUEST", {
+		message:
+			"SAML manual IdP configuration requires idpMetadata.entityID; issuer identifies the service provider and cannot identify the IdP",
 	});
 }
 
 export function createIdP(config: SAMLConfig) {
+	assertSAMLIdentityProviderAuthority(config);
 	const idpData = config.idpMetadata;
 	if (idpData?.metadata) {
 		return saml.IdentityProvider({
@@ -141,20 +230,28 @@ export function createIdP(config: SAMLConfig) {
 		});
 	}
 	return saml.IdentityProvider({
-		entityID: idpData?.entityID || config.issuer,
-		singleSignOnService: idpData?.singleSignOnService || [
+		entityID: idpData.entityID,
+		singleSignOnService: idpData.singleSignOnService || [
 			{
 				Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
 				Location: config.entryPoint,
 			},
 		],
-		singleLogoutService: idpData?.singleLogoutService,
+		singleLogoutService: idpData.singleLogoutService,
 		signingCert: normalizePemList(resolveSigningCerts(config)),
 		wantAuthnRequestsSigned: config.authnRequestsSigned || false,
-		isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
-		encPrivateKey: normalizePem(idpData?.encPrivateKey),
-		encPrivateKeyPass: idpData?.encPrivateKeyPass,
+		isAssertionEncrypted: idpData.isAssertionEncrypted || false,
+		encPrivateKey: normalizePem(idpData.encPrivateKey),
+		encPrivateKeyPass: idpData.encPrivateKeyPass,
 	});
+}
+
+/**
+ * Derive the verified SAML identity-provider entity ID using the same metadata
+ * parsing and manual-configuration validation as SAML authentication.
+ */
+export function deriveSAMLIdentityProviderEntityID(config: SAMLConfig): string {
+	return createIdP(config).entityMeta.getEntityID();
 }
 
 function escapeHtml(str: string | undefined | null): string {
@@ -167,12 +264,30 @@ function escapeHtml(str: string | undefined | null): string {
 		.replace(/'/g, "&#39;");
 }
 
+function isSAMLPostBindingLocation(value: string): boolean {
+	let url: URL;
+	try {
+		url = new URL(value);
+	} catch {
+		return false;
+	}
+	return url.protocol === "http:" || url.protocol === "https:";
+}
+
 export function createSAMLPostForm(
 	action: string,
 	samlParam: string,
 	samlValue: string,
 	relayState?: string,
 ): Response {
+	// `action` is an IdP-supplied endpoint (e.g. the SLO Location); only emit
+	// http(s) URLs into the auto-submitting form.
+	if (!isSAMLPostBindingLocation(action)) {
+		throw new APIError("BAD_REQUEST", {
+			message:
+				"SAML POST binding location must be an absolute http or https URL",
+		});
+	}
 	const safeAction = escapeHtml(action);
 	const safeSamlParam = escapeHtml(samlParam);
 	const safeSamlValue = escapeHtml(samlValue);
