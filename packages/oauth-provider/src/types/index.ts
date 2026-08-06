@@ -1359,7 +1359,8 @@ export interface OAuthOptions<
 	 * and a thrown error propagates — either one fails the token, `/userinfo`,
 	 * and `/introspect` request rather than falling back to a different identity.
 	 *
-	 * Applies to the presentation layer only — the id token, `/userinfo`, and
+	 * Applies to the presentation layer only — the id token, the back-channel
+	 * Logout Token, `/userinfo`, and
 	 * `/introspect`. A JWT access token's own `sub` stays the raw `user.id`
 	 * because `/userinfo` uses it as the lookup key, so a relying party that
 	 * validates JWT access tokens statelessly reads the raw id. Issue **opaque**

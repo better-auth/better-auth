@@ -1839,6 +1839,9 @@ The resolved subject appears in:
 * `id_token`
 * `/oauth2/userinfo` response
 * Token introspection (`/oauth2/introspect`), including introspection of a refresh token
+* The back-channel Logout Token, so a relying party can match the session it was given
+
+Because one login session can hold grants for several workspaces on the same client, back-channel logout sends one Logout Token per workspace subject rather than a single token for the user.
 
 `getSubject` returns the *base* subject, so pairwise hashing still applies on top when the client sets `subject_type: "pairwise"`. Composing the two gives a subject that is both workspace-scoped and unlinkable across relying parties.
 

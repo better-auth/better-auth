@@ -4,7 +4,7 @@
 
 Add an optional `getSubject` hook so a multi-tenant issuer can return a per-(user, workspace) OIDC `sub` while keeping a single login and session per human.
 
-By default the subject is the raw `user.id` (unchanged). When `getSubject` is set, its return value becomes the *base* subject and pairwise hashing — when the client opts in — still applies on top. Resolution happens only at the presentation layer (the id token, `/userinfo`, and `/introspect`); the access token's internal `sub` always stays the raw `user.id` so it remains the lookup key used to load the user in `/userinfo`.
+By default the subject is the raw `user.id` (unchanged). When `getSubject` is set, its return value becomes the *base* subject and pairwise hashing — when the client opts in — still applies on top. Resolution happens only at the presentation layer (the id token, the back-channel Logout Token, `/userinfo`, and `/introspect`); the access token's internal `sub` always stays the raw `user.id` so it remains the lookup key used to load the user in `/userinfo`.
 
 ```ts
 oauthProvider({
