@@ -892,8 +892,66 @@ async function computePairwiseSub(
 }
 
 /**
- * Returns the appropriate subject identifier for a user+client pair.
- * Uses pairwise when the client opts in and the server has a secret configured.
+ * Private, URI-namespaced claim carrying the resolved presentation subject on
+ * an access token (the same value as the id token `sub`, so it discloses
+ * nothing new). Stripped before any response leaves the server.
+ *
+ * @internal
+ */
+export const resolvedSubjectClaim =
+	"https://better-auth.com/oauth/resolved-sub";
+
+/**
+ * The carrier claim to stamp on an access token, or `{}` when there is nothing
+ * to carry.
+ *
+ * Emitted for every user-bound token once `getSubject` is configured, never
+ * otherwise. Two consequences follow, and both are load-bearing:
+ * - A deployment with no hook gets byte-for-byte the same token as before.
+ * - With a hook, the presentation layer never has to re-derive the subject, so
+ *   it never has to call `getSubject` without the grant's `referenceId` — which
+ *   would silently resolve a different identity.
+ *
+ * Pairwise alone is deliberately excluded: `/userinfo` and `/introspect` can
+ * recompute a pairwise subject from the token's own client, so carrying it
+ * would add a claim that buys nothing.
+ *
+ * @internal
+ */
+export function presentationSubjectClaim(
+	opts: OAuthOptions<Scope[]>,
+	resolvedSub: string | undefined,
+): Record<string, string> {
+	if (!opts.getSubject || !resolvedSub) return {};
+	return { [resolvedSubjectClaim]: resolvedSub };
+}
+
+/**
+ * Applies pairwise hashing to an already-resolved base subject, or returns it
+ * unchanged when the client did not opt in.
+ *
+ * Use this instead of {@link resolveSubjectIdentifier} on a subject read back
+ * off a token: pairwise only needs the issuing client, whereas `getSubject`
+ * needs the grant's `referenceId` and a resource owner, so re-running it on a
+ * value that already went through it — or on a `client_credentials` subject,
+ * which is a client id and not a user — would produce a different identity.
+ *
+ * @internal
+ */
+export async function applyPairwiseSubject(
+	base: string,
+	client: SchemaClient<Scope[]>,
+	opts: OAuthOptions<Scope[]>,
+): Promise<string> {
+	if (client.subjectType === "pairwise" && opts.pairwiseSecret) {
+		return computePairwiseSub(base, client, opts.pairwiseSecret);
+	}
+	return base;
+}
+
+/**
+ * Resolves the subject for a user+client pair: the `getSubject` hook (or raw
+ * `user.id`) as the base, with pairwise hashing applied on top when enabled.
  *
  * @internal
  */
@@ -901,11 +959,21 @@ export async function resolveSubjectIdentifier(
 	userId: string,
 	client: SchemaClient<Scope[]>,
 	opts: OAuthOptions<Scope[]>,
+	referenceId?: string,
 ): Promise<string> {
-	if (client.subjectType === "pairwise" && opts.pairwiseSecret) {
-		return computePairwiseSub(userId, client, opts.pairwiseSecret);
+	let base = userId;
+	if (opts.getSubject) {
+		base = await opts.getSubject({ userId, client, referenceId });
+		// An empty subject would split the surfaces rather than degrade them:
+		// the id token would carry `sub: ""` while `/userinfo` fell back to the
+		// raw user id. Fail the request instead of presenting two identities.
+		if (typeof base !== "string" || base.trim() === "") {
+			throw new BetterAuthError(
+				"getSubject must return a non-empty string subject",
+			);
+		}
 	}
-	return userId;
+	return applyPairwiseSubject(base, client, opts);
 }
 
 /**

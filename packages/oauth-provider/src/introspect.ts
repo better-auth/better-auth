@@ -25,12 +25,15 @@ import type {
 	Scope,
 } from "./types";
 import {
+	applyPairwiseSubject,
 	destructureCredentials,
 	extractClientCredentials,
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
 	parseClientMetadata,
+	presentationSubjectClaim,
+	resolvedSubjectClaim,
 	resolveSubjectIdentifier,
 	toAudienceClaim,
 	validateClientCredentials,
@@ -396,6 +399,20 @@ async function validateOpaqueAccessToken(
 			})
 		: {};
 
+	// Re-resolve the presentation subject from the stored referenceId, against
+	// the token's own (issuing) client, so the raw reference never leaves the
+	// server. The JWT path carries the same claim from mint, which is what lets
+	// `/userinfo` read one field regardless of token format.
+	const presentationSub =
+		user && client && opts.getSubject
+			? await resolveSubjectIdentifier(
+					user.id,
+					client,
+					opts,
+					accessToken.referenceId ?? undefined,
+				)
+			: undefined;
+
 	// Return the access token in introspection format
 	// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
 	const jwtPlugin = opts.disableJwtPlugin
@@ -411,6 +428,7 @@ async function validateOpaqueAccessToken(
 			client_id: accessToken.clientId,
 			azp: accessToken.clientId,
 			sub: user?.id,
+			...presentationSubjectClaim(opts, presentationSub),
 			sid: sessionId,
 			exp: Math.floor(new Date(accessToken.expiresAt).getTime() / 1000),
 			iat: Math.floor(new Date(accessToken.createdAt).getTime() / 1000),
@@ -490,6 +508,22 @@ async function validateRefreshToken(
 			undefined;
 	}
 
+	// A refresh token persists the grant's referenceId just like an opaque
+	// access token, so resolve the subject from it here. Without this the
+	// downstream recompute would call `getSubject` with no reference and report
+	// the raw user id for a grant that was issued for a workspace subject.
+	const issuingClient =
+		user && opts.getSubject ? await getClient(ctx, opts, clientId) : undefined;
+	const presentationSub =
+		user && issuingClient
+			? await resolveSubjectIdentifier(
+					user.id,
+					issuingClient,
+					opts,
+					refreshToken.referenceId ?? undefined,
+				)
+			: undefined;
+
 	// Return the access token in introspection format
 	// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
 	const jwtPlugin = opts.disableJwtPlugin
@@ -502,6 +536,7 @@ async function validateRefreshToken(
 		client_id: clientId,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 		sub: user?.id,
+		...presentationSubjectClaim(opts, presentationSub),
 		sid: sessionId,
 		exp: Math.floor(new Date(refreshToken.expiresAt).getTime() / 1000),
 		iat: Math.floor(new Date(refreshToken.createdAt).getTime() / 1000),
@@ -622,9 +657,9 @@ export async function requireActiveAccessTokenWithClaims(
 }
 
 /**
- * Resolves pairwise sub on an introspection payload.
- * Applied at the presentation layer so internal validation functions
- * keep real user.id (needed for user lookup in /userinfo).
+ * Resolves the presentation subject on an introspection payload, using an
+ * already-resolved subject when present and recomputing otherwise (pairwise).
+ * The internal claim is stripped so it never reaches the response.
  */
 async function resolveIntrospectionSub(
 	ctx: GenericEndpointContext,
@@ -632,7 +667,20 @@ async function resolveIntrospectionSub(
 	payload: JWTPayload,
 	introspectingClient: SchemaClient<Scope[]>,
 ): Promise<JWTPayload> {
-	if (!payload.active || !payload.sub) return payload;
+	// Destructured in every branch so the carrier never reaches a response,
+	// including the early returns below.
+	const { [resolvedSubjectClaim]: carried, ...rest } = payload;
+	if (!payload.active || !payload.sub) return rest;
+
+	// The carrier is authoritative when present: it was resolved at mint (JWT)
+	// or from the stored referenceId (opaque, refresh), both with the grant's
+	// reference in hand, which cannot be recovered from the payload here. Only
+	// a configured `getSubject` produces it and reserved-claim stripping keeps
+	// contributors from planting one, so a same-named claim can't impersonate it.
+	if (opts.getSubject && typeof carried === "string") {
+		return { ...rest, sub: carried };
+	}
+
 	// Pairwise `sub` is scoped to the TOKEN's client (its sector), not the
 	// caller. Resolve against the issuing client so a resource server that
 	// introspects a token issued to a different client sees the token's actual
@@ -642,18 +690,24 @@ async function resolveIntrospectionSub(
 	const issuerClientId = (payload.client_id ?? payload.azp) as
 		| string
 		| undefined;
-	if (!issuerClientId) return payload;
+	if (!issuerClientId) return rest;
 	const issuingClient =
 		issuerClientId === introspectingClient.clientId
 			? introspectingClient
 			: await getClient(ctx, opts, issuerClientId);
-	if (!issuingClient) return payload;
-	const resolvedSub = await resolveSubjectIdentifier(
+	if (!issuingClient) return rest;
+	// Pairwise only, never `getSubject`. Reaching here with a hook configured
+	// means the token carries no resolved subject, which is either a
+	// `client_credentials` token — whose `sub` is a client id, not a user — or
+	// one minted before the hook existed. In both cases the raw `sub` is what
+	// the client was given, and re-running the hook without the grant's
+	// `referenceId` would answer with a different identity.
+	const resolvedSub = await applyPairwiseSubject(
 		payload.sub as string,
 		issuingClient,
 		opts,
 	);
-	return { ...payload, sub: resolvedSub };
+	return { ...rest, sub: resolvedSub };
 }
 
 export async function introspectEndpoint(
