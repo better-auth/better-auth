@@ -10,6 +10,7 @@ import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
 import { HIDE_METADATA } from "../../utils";
 import { getDate } from "../../utils/date";
+import { rehashPasswordIfNeeded } from "../../utils/password";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
 import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
 
@@ -171,6 +172,12 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 				);
 			}
+			await rehashPasswordIfNeeded(ctx, {
+				accountId: credentialAccount.id,
+				password,
+				currentHash: currentPassword,
+				verifyResult: validPassword,
+			});
 			const session = await ctx.context.internalAdapter.createSession(
 				user.id,
 				ctx.body.rememberMe === false,
