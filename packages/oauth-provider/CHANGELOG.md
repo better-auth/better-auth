@@ -1,5 +1,11 @@
 # @better-auth/oauth-provider
 
+## 1.7.0-rc.5
+
+### Minor Changes
+
+- [#10703](https://github.com/better-auth/better-auth/pull/10703) [`a796214`](https://github.com/better-auth/better-auth/commit/a7962147b3a759ce6da542300e31f3b5705a63fa) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Removed the `silenceWarnings` option from the oauth-provider plugin. The plugin already serves the oauth-authorization-server and openid-configuration metadata endpoints, so the init warnings and the config flag used to silence them are no longer needed. Delete any `silenceWarnings` entries from your oauthProvider config.
+
 ## 1.7.0-rc.4
 
 ## 1.7.0-rc.3

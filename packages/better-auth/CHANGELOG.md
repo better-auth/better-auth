@@ -1,5 +1,22 @@
 # better-auth
 
+## 1.7.0-rc.5
+
+### Minor Changes
+
+- [#10330](https://github.com/better-auth/better-auth/pull/10330) [`081d3c3`](https://github.com/better-auth/better-auth/commit/081d3c379c720926295067d878c421b5e8684c78) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Introduces the functionality to disable `displayName` from the username plugin.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-rc.5
+  - @better-auth/drizzle-adapter@1.7.0-rc.5
+  - @better-auth/kysely-adapter@1.7.0-rc.5
+  - @better-auth/memory-adapter@1.7.0-rc.5
+  - @better-auth/mongo-adapter@1.7.0-rc.5
+  - @better-auth/prisma-adapter@1.7.0-rc.5
+  - @better-auth/telemetry@1.7.0-rc.5
+
 ## 1.7.0-rc.4
 
 ### Patch Changes
