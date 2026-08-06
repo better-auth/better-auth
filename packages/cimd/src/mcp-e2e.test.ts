@@ -287,10 +287,6 @@ describe("CIMD-first MCP authorization with the official SDK v2", async () => {
 				resource: MCP_RESOURCE,
 				enforcePerClientResources: true,
 				scopes: ["openid", "offline_access", "mcp:base", "greeting"],
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			cimd({
 				fetchClientMetadataResource: metadataFetch,

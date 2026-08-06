@@ -31,10 +31,6 @@ describe("oauth introspect", async () => {
 				consentPage: "/consent",
 				resources: [validResource],
 				enforcePerClientResources: false,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -649,10 +645,6 @@ describe("oauth introspect - config", async () => {
 						clientPrivileges: ({ action }) =>
 							action === "create" ||
 							action === "configure-client-credentials-scopes",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 						...opts?.oauthProviderConfig,
 					}),
 					...(opts?.oauthProviderConfig?.disableJwtPlugin
@@ -1064,10 +1056,6 @@ describe("oauth introspect - rejects non-OAuth same-issuer JWTs", async () => {
 				consentPage: "/consent",
 				resources: [authServerBaseUrl],
 				enforcePerClientResources: false,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});

@@ -124,10 +124,6 @@ describe("oauth back-channel logout", async () => {
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
 				pairwiseSecret: "test-backchannel-pairwise-secret-32-chars",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 				scopes,
 			}),
 			jwt(),
@@ -701,10 +697,6 @@ describe("oauth back-channel logout (jwt plugin disabled)", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				disableJwtPlugin: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -835,10 +827,6 @@ describe("oauth back-channel logout - secondaryStorage + preserveSessionInDataba
 				loginPage: "/login",
 				consentPage: "/consent",
 				disableJwtPlugin: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});

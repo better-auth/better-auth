@@ -322,10 +322,6 @@ describe("MCP SDK v2 explicit DCR flow", async () => {
 				allowDynamicClientRegistration: true,
 				allowUnauthenticatedClientRegistration: true,
 				scopes: ["openid", "offline_access", "mcp:base", "greeting"],
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});

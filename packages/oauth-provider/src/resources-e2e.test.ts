@@ -29,11 +29,6 @@ import type {
 } from "./types";
 import type { OAuthClient } from "./types/oauth";
 
-const silenceWarnings = {
-	oauthAuthServerConfig: true,
-	openidConfig: true,
-} as const;
-
 /**
  * Boots an in-memory better-auth instance with the oauth-provider plugin and
  * (when not disabled by callers) the jwt plugin. Pre-seeds resource rows so
@@ -43,7 +38,6 @@ const bootProvider = async (options: Partial<OAuthOptions<Scope[]>> = {}) => {
 	const opts = {
 		loginPage: "/login",
 		consentPage: "/consent",
-		silenceWarnings,
 		// Resource-linkage enforcement has its own coverage; disable here so
 		// unit-level resolveResourcePolicy tests don't have to seed
 		// `oauthClientResource` rows just to validate policy fields.
@@ -91,7 +85,6 @@ const bootCodeFlowHarness = async (
 	const opts = {
 		loginPage: "/login",
 		consentPage: "/consent",
-		silenceWarnings,
 		// Disable the per-client resource-linkage check for the harness.
 		// Bug-fix coverage targets the policy / introspection / refresh paths;
 		// per-client linkage has its own coverage in resources.test.ts.
@@ -895,7 +888,6 @@ describe("JWT access tokens emit RFC 9068 §2.2.3 `client_id` claim", () => {
 			resources: [resource],
 			enforcePerClientResources: false,
 			clientPrivileges: () => true,
-			silenceWarnings,
 		} as OAuthOptions<Scope[]>;
 		const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance(
 			{

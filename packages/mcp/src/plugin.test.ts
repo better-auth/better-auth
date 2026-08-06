@@ -26,10 +26,6 @@ describe("mcp plugin", async () => {
 		loginPage: "/login",
 		consentPage: "/consent",
 		resource: baseURL,
-		silenceWarnings: {
-			oauthAuthServerConfig: true,
-			openidConfig: true,
-		},
 	});
 
 	// No custom jwt.issuer here, so discovery documents are served under the
@@ -92,10 +88,6 @@ describe("mcp plugin", async () => {
 							resource: explicitResource,
 							allowDynamicClientRegistration: true,
 							allowUnauthenticatedClientRegistration: true,
-							silenceWarnings: {
-								oauthAuthServerConfig: true,
-								openidConfig: true,
-							},
 						}),
 					],
 				});
@@ -175,10 +167,6 @@ describe("mcp plugin", async () => {
 						loginPage: "/login",
 						consentPage: "/consent",
 						resource: `${deviceBaseURL}/api/auth`,
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					deviceCodeGrant(),
 				],
@@ -239,10 +227,6 @@ describe("mcp plugin", async () => {
 						consentPage: "/consent",
 						resource: resourceBaseURL,
 						scopes: ["openid", "offline_access", "mcp:read"],
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			});
@@ -589,10 +573,6 @@ describe("mcp refresh_token grant client authentication", async () => {
 				resource: `${authServerBaseUrl}/api/auth`,
 				allowDynamicClientRegistration: true,
 				allowUnauthenticatedClientRegistration: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
