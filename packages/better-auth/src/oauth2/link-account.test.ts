@@ -2244,5 +2244,14 @@ describe("oauth2 - storeAccountCookie when linking a new provider (#10690)", asy
 		expect(
 			accounts.some((a) => a.providerId === "google"),
 		).toBe(true);
+
+		// Regression: cookie must actually back getAccessToken for the new provider
+		// (asserting only that a Set-Cookie name appeared is not enough).
+		const accessTokenRes = await client.getAccessToken(
+			{ providerId: "google" },
+			{ headers },
+		);
+		expect(accessTokenRes.data).toBeDefined();
+		expect(accessTokenRes.data?.accessToken).toBe("linked_access_token");
 	});
 });
