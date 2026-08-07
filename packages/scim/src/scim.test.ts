@@ -172,6 +172,8 @@ describe("SCIM", () => {
 				    },
 				  ],
 				  "bulk": {
+				    "maxOperations": 0,
+				    "maxPayloadSize": 0,
 				    "supported": false,
 				  },
 				  "changePassword": {
@@ -181,9 +183,12 @@ describe("SCIM", () => {
 				    "supported": false,
 				  },
 				  "filter": {
+				    "maxResults": 100,
 				    "supported": true,
 				  },
+				  "id": "ServiceProviderConfig",
 				  "meta": {
+				    "location": "http://localhost:3000/api/auth/scim/v2/ServiceProviderConfig",
 				    "resourceType": "ServiceProviderConfig",
 				  },
 				  "patch": {
