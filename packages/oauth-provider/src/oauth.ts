@@ -14,6 +14,7 @@ import {
 import { parseSetCookieHeader } from "better-auth/cookies";
 import { mergeSchema } from "better-auth/db";
 import type { BetterAuthPlugin } from "better-auth/types";
+import type { OpenAPIParameter } from "better-call";
 import * as z from "zod";
 import type { AuthorizeEndpointSettings } from "./authorize";
 import { authorizeEndpoint } from "./authorize";
@@ -366,7 +367,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							schema: { type: "string" },
 							description: "OAuth2 prompt parameter",
 						},
-					],
+					] as OpenAPIParameter[],
 					responses: {
 						"302": {
 							description: "Redirect to client with code or error",
