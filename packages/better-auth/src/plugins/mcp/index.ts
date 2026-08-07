@@ -46,7 +46,7 @@ declare module "@better-auth/core" {
 	}
 }
 
-interface MCPOptions {
+export interface MCPOptions {
 	loginPage: string;
 	resource?: string | undefined;
 	oidcConfig?: OIDCOptions | undefined;

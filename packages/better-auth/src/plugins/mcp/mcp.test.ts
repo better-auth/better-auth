@@ -5,8 +5,10 @@ import { toNodeHandler } from "../../integrations/node";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from "../generic-oauth";
 import { genericOAuthClient } from "../generic-oauth/client";
+import type { MCPOptions as MCPOptionsFromPluginsBarrel } from "../index";
 import { jwt } from "../jwt";
 import type { Client } from "../oidc-provider/types";
+import type { MCPOptions } from ".";
 import { mcp, withMcpAuth } from ".";
 
 // Pre-verifies any user the RP creates via OAuth signup so the existing-user
@@ -1327,5 +1329,23 @@ describe("mcp session freshness (security)", () => {
 		expect(response.status).toBe(401);
 		expect(body?.error).toBe("invalid_grant");
 		expect(body?.access_token).toBeUndefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10532
+	 *
+	 * `MCPOptions` was declared without `export`, so it had no importable
+	 * specifier anywhere reachable. TypeScript's declaration emitter could
+	 * therefore not name it, and any consumer building with `declaration: true`
+	 * hit `TS4023: ... but cannot be named` on any exported value typed by
+	 * `mcp()`. These are type-only imports: they fail to compile (not just fail
+	 * at runtime) if the export is ever dropped again, from either the plugin's
+	 * own module or the `plugins` barrel every sibling options type goes
+	 * through.
+	 */
+	it("exports MCPOptions from its own module and the plugins barrel", () => {
+		const fromOwnModule: MCPOptions = { loginPage: "/login" };
+		const fromBarrel: MCPOptionsFromPluginsBarrel = { loginPage: "/login" };
+		expect(fromOwnModule).toEqual(fromBarrel);
 	});
 });
