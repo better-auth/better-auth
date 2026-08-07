@@ -7,6 +7,16 @@ description: MCP provider plugin for Better Auth
 
 <Callout type="warn">
   This plugin will soon be deprecated in favor of the [OAuth Provider Plugin](/docs/plugins/oauth-provider).
+
+  One difference worth knowing before you choose: this plugin does not emit the
+  [RFC 9207](https://datatracker.ietf.org/doc/html/rfc9207) `iss` parameter on
+  authorization responses, and does not advertise
+  `authorization_response_iss_parameter_supported` in its metadata. MCP
+  specification revision
+  [2026-07-28](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization)
+  asks MCP authorization servers to include `iss` (a `SHOULD`, and a `MUST` to
+  advertise it once you do). The
+  [OAuth Provider Plugin](/docs/plugins/oauth-provider) implements both.
 </Callout>
 
 The **MCP** plugin lets your app act as an OAuth provider for MCP clients. It handles authentication and makes it easy to issue and manage access tokens for MCP applications.
