@@ -354,6 +354,38 @@ An object with the following properties:
 
 When enabled, users cannot sign in with their phone number until it has been verified. If an unverified user attempts to sign in, the server will respond with a 401 error (PHONE\_NUMBER\_NOT\_VERIFIED) and automatically trigger an OTP send to start the verification process.
 
+### `maskPhoneNumber`
+
+When enabled, `phoneNumber` is masked in client-facing user payloads (including `/get-session` and the session cookie cache). The default mask keeps a leading `+` (when present) and the last 4 digits (for example, `+15551234567` becomes `+*******4567`).
+
+The full number is still returned on:
+
+* Admin plugin routes under `/admin/*`
+* `POST /sign-in/phone-number`
+* `POST /phone-number/verify`
+
+Server-internal session loads keep the full value. If your server needs the unmasked number outside those reveal routes, read it from the database or an admin endpoint.
+
+```ts
+import { betterAuth } from "better-auth";
+import { phoneNumber } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        phoneNumber({
+            sendOTP: ({ phoneNumber, code }, ctx) => {
+                // Implement sending OTP code via SMS
+            },
+            maskPhoneNumber: true, // [!code highlight]
+            // Or with a custom mask:
+            // maskPhoneNumber: {
+            //     mask: (phoneNumber) => phoneNumber.slice(0, 3) + "****"
+            // }
+        })
+    ]
+})
+```
+
 ## Schema
 
 The plugin requires 2 fields to be added to the user table

@@ -166,7 +166,9 @@ export async function setCookieCache(
 		ctx.context.options.session?.additionalFields,
 	);
 
-	const filteredUser = parseUserOutput(ctx.context.options, session.user);
+	const filteredUser = parseUserOutput(ctx.context.options, session.user, {
+		forCookie: true,
+	});
 
 	const versionConfig = ctx.context.options.session?.cookieCache?.version;
 	let version = "1";
