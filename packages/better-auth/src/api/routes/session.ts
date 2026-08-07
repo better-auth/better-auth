@@ -848,6 +848,7 @@ export const revokeSessions = createAuthEndpoint(
 	"/revoke-sessions",
 	{
 		method: "POST",
+		disableBody: true,
 		use: [sensitiveSessionMiddleware],
 		requireHeaders: true,
 		metadata: {
@@ -903,6 +904,7 @@ export const revokeOtherSessions = createAuthEndpoint(
 	"/revoke-other-sessions",
 	{
 		method: "POST",
+		disableBody: true,
 		requireHeaders: true,
 		use: [sensitiveSessionMiddleware],
 		metadata: {
