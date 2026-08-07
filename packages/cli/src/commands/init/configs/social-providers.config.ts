@@ -1,6 +1,7 @@
 export const SOCIAL_PROVIDERS = [
 	"apple",
 	"atlassian",
+	"cloudflare",
 	"cognito",
 	"discord",
 	"dropbox",
@@ -59,6 +60,12 @@ export const SOCIAL_PROVIDER_CONFIGS: Record<SocialProvider, ProviderConfig> = {
 		options: [
 			{ name: "clientId", envVar: "ATLASSIAN_CLIENT_ID" },
 			{ name: "clientSecret", envVar: "ATLASSIAN_CLIENT_SECRET" },
+		],
+	},
+	cloudflare: {
+		options: [
+			{ name: "clientId", envVar: "CLOUDFLARE_CLIENT_ID" },
+			{ name: "clientSecret", envVar: "CLOUDFLARE_CLIENT_SECRET" },
 		],
 	},
 	cognito: {
