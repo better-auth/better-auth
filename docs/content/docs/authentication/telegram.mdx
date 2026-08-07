@@ -1,0 +1,79 @@
+---
+title: Telegram
+description: Telegram OIDC provider setup and usage guide.
+---
+
+<Steps>
+  <Step>
+    ### Get your Telegram OIDC credentials
+
+    To use Telegram sign-in over OpenID Connect (OIDC), obtain your Client ID and Client Secret from Telegram's [@BotFather](https://t.me/BotFather).
+
+    1. Open Telegram and search for `@BotFather`.
+    2. Click the **Open** button at the bottom of the chat window (or send `/mybots` / `/newbot`).
+    3. In the BotFather app panel under **My bots**, select your bot (or click **Create a New Bot**).
+    4. Select **Bot Settings** ➔ **Login Widget**.
+    5. Click **Switch to OpenID Connect Login**.
+    6. BotFather will display your OIDC credentials panel:
+       * Copy your **Client ID** (e.g., `8591788030`).
+       * Copy your **Client Secret**.
+       * Under **Redirect URIs**, click **Add a Redirect URI** and enter your callback URL.
+
+    <Callout type="warning">
+      Telegram OIDC strictly requires an **HTTPS** URL for Redirect URIs (e.g., `https://yourdomain.com/api/auth/callback/telegram`). Plain `http://localhost` is rejected by Telegram BotFather. For local development, use an HTTPS tunnel such as Cloudflare Tunnels to get an `https://...` forwarding URL.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Configure the provider
+
+    Import the Telegram provider options and pass them to the `socialProviders` option of the auth instance.
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+
+    export const auth = betterAuth({
+        socialProviders: {
+            telegram: { // [!code highlight]
+                clientId: process.env.TELEGRAM_CLIENT_ID as string, // [!code highlight]
+                clientSecret: process.env.TELEGRAM_CLIENT_SECRET as string, // [!code highlight]
+            }, // [!code highlight]
+        },
+    })
+    ```
+  </Step>
+
+  <Step>
+    ### Sign In with Telegram
+
+    To sign in with Telegram, use the `signIn.social` function provided by the client:
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+    const authClient = createAuthClient()
+
+    const signIn = async () => {
+        const data = await authClient.signIn.social({
+            provider: "telegram"
+        })
+    }
+    ```
+  </Step>
+</Steps>
+
+## User Profile Metadata
+
+Telegram OIDC exposes standard user profile claims embedded in the signed ID Token:
+
+| Property             | Type     | Description                 |
+| -------------------- | -------- | --------------------------- |
+| `sub`                | `string` | Unique Telegram user ID     |
+| `name`               | `string` | Full display name           |
+| `given_name`         | `string` | User's given / first name   |
+| `family_name`        | `string` | User's family / last name   |
+| `preferred_username` | `string` | Telegram `@username` handle |
+| `picture`            | `string` | Avatar photo URL            |
+
+<Callout>
+  Telegram does not expose user email addresses over OpenID Connect. The `email` field defaults to `null` unless custom profile mapping (`mapProfileToUser`) is provided.
+</Callout>
