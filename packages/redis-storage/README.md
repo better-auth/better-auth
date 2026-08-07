@@ -10,7 +10,9 @@ npm install @better-auth/redis-storage
 
 ## Documentation
 
-For full documentation, visit [better-auth.com/docs/storage](https://www.better-auth.com/docs/storage).
+For setup and usage documentation, see [Redis Storage](https://www.better-auth.com/docs/concepts/database#redis-storage).
+
+Redis secondary storage can be used for [session storage](https://www.better-auth.com/docs/concepts/session-management#sessions-in-secondary-storage) and [rate limiting](https://www.better-auth.com/docs/concepts/rate-limit#storage).
 
 ## License
 
