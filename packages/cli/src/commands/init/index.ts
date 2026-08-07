@@ -1481,6 +1481,7 @@ export const auth = betterAuth({
 		}
 
 		for (const [type, dependencies] of Object.entries(deps)) {
+			if (dependencies.size === 0) continue;
 			await installDependencies({
 				cwd,
 				dependencies: [...dependencies],

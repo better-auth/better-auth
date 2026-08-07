@@ -42,6 +42,13 @@ export function installDependencies({
 	type?: "prod" | "peer" | "optional" | "dev" | "catalog" | undefined;
 	catalogName?: string;
 }): Promise<boolean> {
+	const dependencyList = Array.isArray(dependencies)
+		? dependencies
+		: [dependencies];
+	if (dependencyList.length === 0 || dependencyList.every((dep) => !dep)) {
+		return Promise.resolve(true);
+	}
+
 	let installCommand: string;
 	const flags: string[] = [];
 	switch (packageManager) {
@@ -76,12 +83,17 @@ export function installDependencies({
 			flags.push(flag);
 		}
 	}
-	const command = `${installCommand}${flags.length > 0 ? ` ${flags.join(" ")}` : ""} ${Array.isArray(dependencies) ? dependencies.join(" ") : dependencies}`;
+	const command = `${installCommand}${flags.length > 0 ? ` ${flags.join(" ")}` : ""} ${dependencyList.join(" ")}`;
 
 	return new Promise((resolve, reject) => {
 		exec(command, { cwd }, (error, stdout, stderr) => {
 			if (error) {
-				reject(new Error(stderr));
+				const message =
+					(stderr || "").trim() ||
+					(stdout || "").trim() ||
+					error.message ||
+					"Failed to install dependencies";
+				reject(new Error(message));
 				return;
 			}
 			resolve(true);
