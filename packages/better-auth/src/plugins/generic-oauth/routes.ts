@@ -181,18 +181,9 @@ export const signInWithOAuth2 = (options: GenericOAuthOptions) =>
 					GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
 				);
 			}
-			if (authorizationUrlParams) {
-				const withAdditionalParams = new URL(finalAuthUrl);
-				for (const [paramName, paramValue] of Object.entries(
-					authorizationUrlParams,
-				)) {
-					withAdditionalParams.searchParams.set(paramName, paramValue);
-				}
-				finalAuthUrl = withAdditionalParams.toString();
-			}
 			const additionalParams =
 				typeof authorizationUrlParams === "function"
-					? authorizationUrlParams(ctx)
+					? await authorizationUrlParams(ctx)
 					: authorizationUrlParams;
 
 			const { state, codeVerifier } = await generateState(
@@ -758,7 +749,7 @@ export const oAuth2LinkAccount = (options: GenericOAuthOptions) =>
 
 			const additionalParams =
 				typeof authorizationUrlParams === "function"
-					? authorizationUrlParams(c)
+					? await authorizationUrlParams(c)
 					: authorizationUrlParams;
 
 			const url = await createAuthorizationURL({
