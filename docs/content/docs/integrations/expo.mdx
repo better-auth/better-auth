@@ -119,6 +119,34 @@ Expo is a popular framework for building cross-platform apps with React Native. 
     });
     ```
 
+    Use `origin` when you want Expo requests to identify as an HTTPS App Link or
+    Universal Link origin, such as email verification or magic link flows. If
+    you omit it, Expo continues to derive the origin from your app scheme by
+    default. `rewriteCallbackToDeepLink` defaults to `true`, which preserves the
+    current scheme-based deep-link callback behavior.
+
+    When you set `origin`, add that HTTPS origin to your server's
+    `trustedOrigins` list as well, or Better Auth will reject the request
+    during origin validation.
+
+    If you want to keep callback URLs as HTTPS App Links / Universal Links
+    instead of rewriting relative callback paths into deep links, configure the
+    options explicitly:
+
+    ```ts
+    expoClient({
+        storage: SecureStore,
+        storagePrefix: "myapp",
+        origin: "https://myapp.example.com",
+        rewriteCallbackToDeepLink: false,
+    });
+    ```
+
+    When `rewriteCallbackToDeepLink` is `false`, pass an absolute callback URL
+    such as an HTTPS App Link / Universal Link. Relative callback paths like
+    `/dashboard` are only supported when the default deep-link rewriting stays
+    enabled.
+
     <Callout>
       Be sure to include the full URL, including the path, if you've changed the default path from `/api/auth`.
     </Callout>
@@ -139,11 +167,13 @@ Expo is a popular framework for building cross-platform apps with React Native. 
     }
     ```
 
-    Then, update your Better Auth config to include the scheme in the `trustedOrigins` list.
+    Then, update your Better Auth config to include the scheme in the
+    `trustedOrigins` list. If you use `expoClient({ origin: "https://..." })`,
+    include that HTTPS origin too.
 
     ```ts title="auth.ts"
     export const auth = betterAuth({
-        trustedOrigins: ["myapp://"]
+        trustedOrigins: ["myapp://", "https://myapp.example.com"]
     })
     ```
 
