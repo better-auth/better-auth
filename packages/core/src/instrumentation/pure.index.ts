@@ -10,7 +10,15 @@
  * Public surface must stay identical to `./index` (enforced by `pure.test.ts`).
  */
 
+import type { OpenTelemetryAPI } from "./noop";
+import { noopOpenTelemetryAPI } from "./noop";
+
 export * from "./attributes";
+export { INSTRUMENTATION_SCOPE, INSTRUMENTATION_VERSION } from "./scope";
+
+export function getOpenTelemetryAPI(): OpenTelemetryAPI {
+	return noopOpenTelemetryAPI;
+}
 
 export function withSpan<T>(
 	name: string,
