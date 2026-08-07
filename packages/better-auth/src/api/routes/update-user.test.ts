@@ -1,8 +1,11 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthMiddleware } from "@better-auth/core/api";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { inferAdditionalFields } from "../../client/plugins";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account, Session } from "../../types";
+import { getSessionFromCtx } from "./session";
 
 describe("updateUser", async () => {
 	const sendChangeEmail = vi.fn();
@@ -792,6 +795,96 @@ describe("delete user", async () => {
 			),
 		);
 		expect(response.status).toBe(404);
+	});
+
+	/**
+	 * Resolving the session from a `before` hook is a documented plugin pattern,
+	 * and it memoizes the cookie-cached session on `ctx.context.session`. The
+	 * authoritative re-read must not be satisfied by that memoized value, or a
+	 * revoked session paired with a valid token can still complete the deletion.
+	 *
+	 * @see https://github.com/better-auth/better-auth/pull/10187
+	 */
+	it("rejects /delete-user/callback with a revoked session when an earlier hook already resolved it", async () => {
+		let token = "";
+		const sessionReadingPlugin = {
+			id: "session-reading-hook",
+			hooks: {
+				before: [
+					{
+						matcher: (ctx) => ctx.path === "/delete-user/callback",
+						handler: createAuthMiddleware(async (ctx) => {
+							// Pins `ctx.context.session` to the cookie-cached session.
+							await getSessionFromCtx(ctx);
+						}),
+					},
+				],
+			},
+		} satisfies BetterAuthPlugin;
+
+		const { client, auth, db, cookieSetter } = await getTestInstance(
+			{
+				baseURL: "http://localhost:3000",
+				session: { cookieCache: { enabled: true, maxAge: 60 } },
+				plugins: [sessionReadingPlugin],
+				user: {
+					deleteUser: {
+						enabled: true,
+						async sendDeleteAccountVerification(data) {
+							token = data.token;
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const email = `delete-callback-hook-${Date.now()}@test.com`;
+		const password = "testPassword123";
+		await client.signUp.email({
+			email,
+			password,
+			name: "Delete Callback Hook",
+		});
+
+		const headers = new Headers();
+		await client.signIn.email({
+			email,
+			password,
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+
+		// `cookieSetter` keeps the `session_data` cookie, so the cookie cache is
+		// what the earlier hook will resolve the session from.
+		const sessionRes = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const sessionToken = sessionRes.data?.session.token;
+		if (!sessionToken) throw new Error("expected an active session");
+		expect(headers.get("cookie")).toContain("session_data");
+
+		await client.deleteUser({ password, fetchOptions: { headers } });
+		expect(token.length).toBe(32);
+
+		await db.delete({
+			model: "session",
+			where: [{ field: "token", value: sessionToken }],
+		});
+
+		const response = await auth.handler(
+			new Request(
+				`http://localhost:3000/api/auth/delete-user/callback?token=${token}`,
+				{ method: "GET", headers: { cookie: headers.get("cookie") ?? "" } },
+			),
+		);
+		expect(response.status).toBe(404);
+
+		// The user must still exist: the revoked session cannot authorize deletion.
+		const stillThere = await db.findOne({
+			model: "user",
+			where: [{ field: "email", value: email }],
+		});
+		expect(stillThere).not.toBeNull();
 	});
 });
 
