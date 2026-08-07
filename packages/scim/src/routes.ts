@@ -170,6 +170,7 @@ async function findOrganizationMember(
  */
 async function canLinkExistingUser(
 	ctx: GenericEndpointContext,
+	provider: Pick<SCIMProvider, "providerId" | "organizationId">,
 	opts: SCIMOptions,
 	existingUser: User,
 	email: string,
@@ -178,7 +179,7 @@ async function canLinkExistingUser(
 	if (!policy) return false;
 	if (policy === true) return true;
 
-	const { organizationId, providerId } = ctx.context.scimProvider;
+	const { organizationId, providerId } = provider;
 
 	// An empty policy object must not silently allow linking — require at least
 	// one positive constraint to be configured.
@@ -834,6 +835,7 @@ export const createSCIMUser = (
 				// Require an explicit, configured policy to allow it.
 				const allowLink = await canLinkExistingUser(
 					ctx,
+					ctx.context.scimProvider,
 					opts,
 					existingUser,
 					email,

@@ -593,12 +593,10 @@ export const getSessionFromCtx = async <
 			if (lowerKey === "cache-control" || lowerKey === "pragma") {
 				return;
 			}
-			if (!ctx.context.responseHeaders) {
-				ctx.context.responseHeaders = new Headers({ [key]: value });
-			} else if (lowerKey === "set-cookie") {
-				ctx.context.responseHeaders.append(key, value);
+			if (lowerKey === "set-cookie") {
+				ctx.responseHeaders.append(key, value);
 			} else {
-				ctx.context.responseHeaders.set(key, value);
+				ctx.responseHeaders.set(key, value);
 			}
 		});
 	}
