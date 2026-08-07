@@ -15,6 +15,7 @@ import {
 } from "vitest";
 import { createAuthMiddleware, getSessionFromCtx } from "../../api";
 import { createAuthClient } from "../../client";
+import { inferAdditionalFields } from "../../client/plugins";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
@@ -2364,6 +2365,89 @@ describe("edge cases: userId validation", async () => {
 				},
 			}),
 		).rejects.toThrow("user not found");
+	});
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9951
+	 */
+	it("should propagate additional fields type inference to admin endpoints", async () => {
+		const {
+			auth: testAuth,
+			signInWithTestUser: testSignIn,
+			customFetchImpl: testFetch,
+		} = await getTestInstance(
+			{
+				user: {
+					additionalFields: {
+						approved: {
+							type: "boolean",
+							defaultValue: false,
+							input: false,
+						},
+					},
+				},
+				plugins: [admin()],
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => ({
+								data: {
+									...user,
+									emailVerified: true,
+									role: "admin",
+								},
+							}),
+						},
+					},
+				},
+			},
+			{
+				testUser: {
+					name: "Admin",
+				},
+			},
+		);
+
+		type Auth = typeof testAuth;
+
+		const authClient = createAuthClient({
+			fetchOptions: {
+				customFetchImpl: testFetch,
+			},
+			plugins: [inferAdditionalFields<Auth>(), adminClient()],
+			baseURL: "http://localhost:3000",
+		});
+
+		// Verify Case 1: getSession has 'approved' in type system
+		const session = await authClient.getSession();
+		// This should be allowed by TypeScript (we verify it compiles/does not have error)
+		const approvedFromSession: boolean | undefined | null =
+			session.data?.user.approved;
+		void approvedFromSession;
+
+		// Verify Case 2: admin.listUsers propagates 'approved' to type system
+		const result = await authClient.admin.listUsers({
+			query: {
+				limit: 10,
+			},
+		});
+
+		const approvedFromAdminList: boolean | undefined | null =
+			result.data?.users[0]?.approved;
+		void approvedFromAdminList;
+
+		// Runtime test: the field actually exists on the user returned
+		const { headers } = await testSignIn();
+		const runtimeResult = await authClient.admin.listUsers({
+			query: {
+				limit: 1,
+			},
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(runtimeResult.data?.users[0]).toHaveProperty("approved");
+		expect(runtimeResult.data?.users[0]?.approved).toBe(false);
 	});
 });
 

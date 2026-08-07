@@ -94,6 +94,7 @@ export const setRole = <O extends AdminOptions>(opts: O) =>
 			requireHeaders: true,
 			use: [adminMiddleware],
 			metadata: {
+				inferAdditionalFields: true,
 				openapi: {
 					operationId: "setUserRole",
 					summary: "Set the role of a user",
@@ -187,6 +188,7 @@ export const getUser = (opts: AdminOptions) =>
 			query: getUserQuerySchema,
 			use: [adminMiddleware],
 			metadata: {
+				inferAdditionalFields: true,
 				openapi: {
 					operationId: "getUser",
 					summary: "Get an existing user",
@@ -297,6 +299,7 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 			method: "POST",
 			body: createUserBodySchema,
 			metadata: {
+				inferAdditionalFields: true,
 				openapi: {
 					operationId: "createUser",
 					summary: "Create a new user",
@@ -500,6 +503,7 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 			body: adminUpdateUserBodySchema,
 			use: [adminMiddleware],
 			metadata: {
+				inferAdditionalFields: true,
 				openapi: {
 					operationId: "adminUpdateUser",
 					summary: "Update a user",
@@ -755,6 +759,7 @@ export const listUsers = (opts: AdminOptions) =>
 			use: [adminMiddleware],
 			query: listUsersQuerySchema,
 			metadata: {
+				inferAdditionalFields: true,
 				openapi: {
 					operationId: "listUsers",
 					summary: "List users",
@@ -888,6 +893,7 @@ export const listUserSessions = (opts: AdminOptions) =>
 			use: [adminMiddleware],
 			body: listUserSessionsBodySchema,
 			metadata: {
+				inferAdditionalFields: true,
 				openapi: {
 					operationId: "adminListUserSessions",
 					summary: "List user sessions",
@@ -971,6 +977,7 @@ export const unbanUser = (opts: AdminOptions) =>
 			body: unbanUserBodySchema,
 			use: [adminMiddleware],
 			metadata: {
+				inferAdditionalFields: true,
 				openapi: {
 					operationId: "unbanUser",
 					summary: "Unban a user",
@@ -1081,6 +1088,7 @@ export const banUser = (opts: AdminOptions) =>
 			body: banUserBodySchema,
 			use: [adminMiddleware],
 			metadata: {
+				inferAdditionalFields: true,
 				openapi: {
 					operationId: "banUser",
 					summary: "Ban a user",
@@ -1186,6 +1194,7 @@ export const impersonateUser = (opts: AdminOptions) =>
 			body: impersonateUserBodySchema,
 			use: [adminMiddleware],
 			metadata: {
+				inferAdditionalFields: true,
 				openapi: {
 					operationId: "impersonateUser",
 					summary: "Impersonate a user",
@@ -1335,6 +1344,9 @@ export const stopImpersonating = () =>
 		{
 			method: "POST",
 			requireHeaders: true,
+			metadata: {
+				inferAdditionalFields: true,
+			},
 		},
 		async (ctx) => {
 			const session = await getSessionFromCtx<
