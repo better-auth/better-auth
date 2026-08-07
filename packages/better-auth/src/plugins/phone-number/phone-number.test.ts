@@ -1282,4 +1282,40 @@ describe("custom verifyOTP", async () => {
 		expect(user.data?.user.phoneNumber).toBe(updatedPhoneNumber);
 		expect(user.data?.user.phoneNumberVerified).toBe(true);
 	});
+
+	it("should use custom verifyOTP when resetting the password", async () => {
+		const resetPhoneNumber = "+1222333444";
+
+		// Register the phone number so a user exists to reset the password for.
+		await client.phoneNumber.sendOtp({ phoneNumber: resetPhoneNumber });
+		mockVerifyOTP.mockResolvedValueOnce(true);
+		await client.phoneNumber.verify({
+			phoneNumber: resetPhoneNumber,
+			code: "123456",
+		});
+
+		await client.phoneNumber.requestPasswordReset({
+			phoneNumber: resetPhoneNumber,
+		});
+
+		mockVerifyOTP.mockClear();
+		// The provider accepts this code even though it is not the stored one,
+		// which is the point of delegating verification to it.
+		mockVerifyOTP.mockResolvedValueOnce(true);
+
+		const res = await client.phoneNumber.resetPassword({
+			phoneNumber: resetPhoneNumber,
+			otp: "999999",
+			newPassword: "new-password-123",
+		});
+
+		expect(mockVerifyOTP).toHaveBeenCalledWith(
+			expect.objectContaining({
+				phoneNumber: resetPhoneNumber,
+				code: "999999",
+			}),
+			expect.anything(),
+		);
+		expect(res.error).toBe(null);
+	});
 });
