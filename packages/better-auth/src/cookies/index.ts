@@ -307,6 +307,10 @@ export async function setSessionCookie(
 			ctx.context.secret,
 			ctx.context.authCookies.dontRememberToken.attributes,
 		);
+	} else if (dontRememberMeCookie) {
+		// Clear a stale marker so a later remembered sign-in stays persistent
+		// across session refreshes that read this cookie.
+		expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
 	}
 	await setCookieCache(ctx, session, dontRememberMe);
 	ctx.context.setNewSession(session);

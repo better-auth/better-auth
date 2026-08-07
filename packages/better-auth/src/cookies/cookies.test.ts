@@ -705,6 +705,43 @@ describe("getSessionCookie", async () => {
 		);
 	});
 
+	it("should expire a stale dont_remember cookie on a later remembered sign-in", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+		});
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+				rememberMe: false,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		expect(headers.get("cookie")).toContain("better-auth.dont_remember");
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				headers,
+				onSuccess(c) {
+					const parsed = parseSetCookieHeader(
+						c.response.headers.get("set-cookie") || "",
+					);
+					const sessionToken = parsed.get("better-auth.session_token");
+					expect(sessionToken?.["max-age"]).toBeDefined();
+					expect(parsed.get("better-auth.dont_remember")?.["max-age"]).toBe(0);
+				},
+			},
+		);
+	});
+
 	it("should return null if the cookie is invalid", async () => {
 		const { client, testUser } = await getTestInstance({
 			session: {

@@ -591,6 +591,13 @@ const signInEmailOTPBodySchema = z
 					"User profile image URL. Only used if the user is registering for the first time.",
 			})
 			.optional(),
+		rememberMe: z
+			.boolean()
+			.meta({
+				description:
+					"If this is false, the session will not be remembered. Default is `true`.",
+			})
+			.optional(),
 	})
 	.and(z.record(z.string(), z.any()));
 
@@ -646,8 +653,16 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			},
 		},
 		async (ctx) => {
-			const { email: rawEmail, otp, name, image, ...rest } = ctx.body;
+			const {
+				email: rawEmail,
+				otp,
+				name,
+				image,
+				rememberMe,
+				...rest
+			} = ctx.body;
 			const email = rawEmail.toLowerCase();
+			const dontRememberMe = rememberMe === false;
 
 			// Use atomic verification to prevent race conditions
 			await atomicVerifyOTP(ctx, opts, toOTPIdentifier("sign-in", email), otp);
@@ -671,11 +686,16 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 				const session = await ctx.context.internalAdapter.createSession(
 					newUser.id,
+					dontRememberMe,
 				);
-				await setSessionCookie(ctx, {
-					session,
-					user: newUser,
-				});
+				await setSessionCookie(
+					ctx,
+					{
+						session,
+						user: newUser,
+					},
+					dontRememberMe,
+				);
 				return ctx.json({
 					token: session.token,
 					user: parseUserOutput(ctx.context.options, newUser),
@@ -691,11 +711,16 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 
 			const session = await ctx.context.internalAdapter.createSession(
 				user.user.id,
+				dontRememberMe,
 			);
-			await setSessionCookie(ctx, {
-				session,
-				user: user.user,
-			});
+			await setSessionCookie(
+				ctx,
+				{
+					session,
+					user: user.user,
+				},
+				dontRememberMe,
+			);
 			return ctx.json({
 				token: session.token,
 				user: parseUserOutput(ctx.context.options, user.user),
