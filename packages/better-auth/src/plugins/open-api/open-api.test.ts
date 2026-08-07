@@ -9,6 +9,24 @@ import { openAPI } from ".";
 import type { OpenAPISchema, Path } from "./generator";
 
 type PostRequestBody = NonNullable<NonNullable<Path["post"]>["requestBody"]>;
+type TestRequestSchema = {
+	type?: "object";
+	properties?: Record<string, { type: "string" }>;
+	required?: string[];
+	$ref?: string;
+};
+
+type TestRequestMediaType = {
+	schema: TestRequestSchema;
+};
+
+type TestRequestBody = {
+	required: boolean;
+	content: {
+		"application/json": TestRequestMediaType;
+		[contentType: string]: TestRequestMediaType | undefined;
+	};
+};
 
 function getPostRequestBody(
 	paths: Record<string, Path>,
@@ -19,6 +37,17 @@ function getPostRequestBody(
 		throw new Error(`Expected ${path} to define a POST request body`);
 	}
 	return requestBody;
+}
+
+function getRequestBodySchema(
+	requestBody: PostRequestBody,
+	contentType = "application/json",
+) {
+	const mediaType = requestBody.content[contentType];
+	if (!mediaType) {
+		throw new Error(`Expected request body to define ${contentType}`);
+	}
+	return mediaType.schema;
 }
 
 function getSchemaProperty(schema: OpenAPISchema, propertyName: string) {
@@ -268,6 +297,92 @@ const wrapperSemanticsPlugin = {
 	},
 } satisfies BetterAuthPlugin;
 
+const formEncodedBodyPlugin = {
+	id: "form-encoded-body-test",
+	endpoints: {
+		formEncodedBody: createAuthEndpoint(
+			"/test/form-encoded-body",
+			{
+				method: "POST",
+				body: z.object({
+					token: z.string(),
+				}),
+				metadata: {
+					allowedMediaTypes: ["application/x-www-form-urlencoded"],
+				},
+			},
+			async () => ({ success: true }),
+		),
+	},
+} satisfies BetterAuthPlugin;
+
+const emptyAllowedMediaTypesPlugin = {
+	id: "empty-allowed-media-types-test",
+	endpoints: {
+		emptyAllowedMediaTypes: createAuthEndpoint(
+			"/test/empty-allowed-media-types",
+			{
+				method: "POST",
+				body: z.object({
+					token: z.string(),
+				}),
+				metadata: {
+					allowedMediaTypes: [""],
+				},
+			},
+			async () => ({ success: true }),
+		),
+	},
+} satisfies BetterAuthPlugin;
+
+const explicitRequestBodyContentPlugin = {
+	id: "explicit-request-body-content-test",
+	endpoints: {
+		explicitRequestBodyContent: createAuthEndpoint(
+			"/test/explicit-request-body-content",
+			{
+				method: "POST",
+				metadata: {
+					allowedMediaTypes: [
+						"application/json",
+						"application/x-www-form-urlencoded",
+					],
+					openapi: {
+						requestBody: {
+							required: true,
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											jsonToken: {
+												type: "string",
+											},
+										},
+										required: ["jsonToken"],
+									},
+								},
+								"application/x-www-form-urlencoded": {
+									schema: {
+										type: "object",
+										properties: {
+											formToken: {
+												type: "string",
+											},
+										},
+										required: ["formToken"],
+									},
+								},
+							},
+						} as TestRequestBody,
+					},
+				},
+			},
+			async () => ({ success: true }),
+		),
+	},
+} satisfies BetterAuthPlugin;
+
 describe("open-api", async () => {
 	const { auth } = await getTestInstance({
 		plugins: [openAPI()],
@@ -313,6 +428,15 @@ describe("open-api", async () => {
 	});
 	const { auth: authWithWrapperSemantics } = await getTestInstance({
 		plugins: [openAPI(), wrapperSemanticsPlugin],
+	});
+	const { auth: authWithFormEncodedBody } = await getTestInstance({
+		plugins: [openAPI(), formEncodedBodyPlugin],
+	});
+	const { auth: authWithEmptyAllowedMediaTypes } = await getTestInstance({
+		plugins: [openAPI(), emptyAllowedMediaTypesPlugin],
+	});
+	const { auth: authWithExplicitRequestBodyContent } = await getTestInstance({
+		plugins: [openAPI(), explicitRequestBodyContentPlugin],
 	});
 
 	it("should generate OpenAPI schema", async () => {
@@ -822,10 +946,10 @@ describe("open-api", async () => {
 		const requestBody = paths["/test/nullable-intersection"].post.requestBody;
 		expect(requestBody.required).toBe(true);
 
-		const requestBodySchema = requestBody.content["application/json"].schema;
+		const requestBodySchema = getRequestBodySchema(requestBody);
 		expect(requestBodySchema.type).toEqual(["object", "null"]);
-		expect(requestBodySchema.properties.email.type).toBe("string");
-		expect(requestBodySchema.properties.otp.type).toBe("string");
+		expect(getSchemaProperty(requestBodySchema, "email").type).toBe("string");
+		expect(getSchemaProperty(requestBodySchema, "otp").type).toBe("string");
 		expect(requestBodySchema.required).toEqual(["email", "otp"]);
 	});
 
@@ -836,9 +960,11 @@ describe("open-api", async () => {
 		const requestBody = paths["/test/default-body"].post.requestBody;
 		expect(requestBody.required).toBe(false);
 
-		const requestBodySchema = requestBody.content["application/json"].schema;
+		const requestBodySchema = getRequestBodySchema(requestBody);
 		expect(requestBodySchema.type).toBe("object");
-		expect(requestBodySchema.properties.rememberMe.type).toBe("boolean");
+		expect(getSchemaProperty(requestBodySchema, "rememberMe").type).toBe(
+			"boolean",
+		);
 		expect(requestBodySchema.default).toBeUndefined();
 	});
 
@@ -849,7 +975,7 @@ describe("open-api", async () => {
 		const requestBody = getPostRequestBody(paths, "/test/choose-role");
 		expect(requestBody.required).toBe(true);
 
-		const requestBodySchema = requestBody.content["application/json"].schema;
+		const requestBodySchema = getRequestBodySchema(requestBody);
 		expect(requestBodySchema.allOf).toHaveLength(2);
 		expect(getComposedSchemaItem(requestBodySchema.allOf, 0)).toEqual({
 			type: "object",
@@ -888,7 +1014,7 @@ describe("open-api", async () => {
 		const paths = schema.paths as Record<string, Path>;
 
 		const requestBody = getPostRequestBody(paths, "/test/update-fields");
-		const requestBodySchema = requestBody.content["application/json"].schema;
+		const requestBodySchema = getRequestBodySchema(requestBody);
 
 		expect(requestBodySchema.type).toBe("object");
 		expect(requestBodySchema.required).toEqual(["knownField"]);
@@ -939,7 +1065,7 @@ describe("open-api", async () => {
 		expect(requestBody.required).toBe(false);
 		expect(defaultFactoryCallCount).toBe(0);
 
-		const requestBodySchema = requestBody.content["application/json"].schema;
+		const requestBodySchema = getRequestBodySchema(requestBody);
 		expect(requestBodySchema.default).toBeUndefined();
 		expect(getSchemaProperty(requestBodySchema, "nonce").type).toBe("string");
 	});
@@ -952,7 +1078,7 @@ describe("open-api", async () => {
 		const requestBody = getPostRequestBody(paths, "/test/wrapper-semantics");
 		expect(requestBody.required).toBe(true);
 
-		const requestBodySchema = requestBody.content["application/json"].schema;
+		const requestBodySchema = getRequestBodySchema(requestBody);
 		expect(requestBodySchema.required).toEqual(["nonOptional"]);
 		expect(wrapperDefaultFactoryCallCount).toBe(0);
 
@@ -977,5 +1103,75 @@ describe("open-api", async () => {
 		expect(getSchemaProperty(requestBodySchema, "unionOptional").type).toBe(
 			"string",
 		);
+	});
+
+	it("should document generated request bodies with allowed media types", async () => {
+		const schema = await authWithFormEncodedBody.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+
+		const requestBody = getPostRequestBody(paths, "/test/form-encoded-body");
+		expect(requestBody.content["application/json"]).toBeUndefined();
+		expect(
+			requestBody.content["application/x-www-form-urlencoded"]?.schema,
+		).toEqual({
+			type: "object",
+			properties: {
+				token: {
+					type: "string",
+				},
+			},
+			required: ["token"],
+		});
+	});
+
+	it("should fall back to JSON when allowed media types are empty", async () => {
+		const schema =
+			await authWithEmptyAllowedMediaTypes.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+
+		const requestBody = getPostRequestBody(
+			paths,
+			"/test/empty-allowed-media-types",
+		);
+		expect(getRequestBodySchema(requestBody)).toEqual({
+			type: "object",
+			properties: {
+				token: {
+					type: "string",
+				},
+			},
+			required: ["token"],
+		});
+	});
+
+	it("should preserve explicit request body content schemas", async () => {
+		const schema =
+			await authWithExplicitRequestBodyContent.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+
+		const requestBody = getPostRequestBody(
+			paths,
+			"/test/explicit-request-body-content",
+		);
+		expect(getRequestBodySchema(requestBody)).toEqual({
+			type: "object",
+			properties: {
+				jsonToken: {
+					type: "string",
+				},
+			},
+			required: ["jsonToken"],
+		});
+		expect(
+			getRequestBodySchema(requestBody, "application/x-www-form-urlencoded"),
+		).toEqual({
+			type: "object",
+			properties: {
+				formToken: {
+					type: "string",
+				},
+			},
+			required: ["formToken"],
+		});
 	});
 });
