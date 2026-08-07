@@ -382,7 +382,8 @@ description: Learn how to configure Better Auth in your project.
 
         app.use(express.json());
 
-        app.all("/api/auth/*", toNodeHandler(auth));
+        app.all("/api/auth/{*any}", toNodeHandler(auth)); // For ExpressJS v5
+        // app.all("/api/auth/*", toNodeHandler(auth)); // For ExpressJS v4
 
         app.listen(port, () => {
             console.log(`Better Auth app listening on port ${port}`);
