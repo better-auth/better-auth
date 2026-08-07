@@ -149,6 +149,9 @@ export const tiktok = (options: TiktokOptions) => {
 				code,
 				redirectURI: options.redirectURI || redirectURI,
 				options: {
+					// TikTok uses clientKey; token auth layer requires clientId
+					// when clientSecret is present (client_secret_post).
+					clientId: options.clientKey,
 					clientKey: options.clientKey,
 					clientSecret: options.clientSecret,
 				},
@@ -161,6 +164,8 @@ export const tiktok = (options: TiktokOptions) => {
 					return refreshAccessToken({
 						refreshToken,
 						options: {
+							// Same clientId mapping as code exchange (see #10696).
+							clientId: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
 						tokenEndpoint,
