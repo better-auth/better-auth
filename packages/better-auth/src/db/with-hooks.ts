@@ -3,6 +3,7 @@ import {
 	getCurrentAdapter,
 	getCurrentAuthContext,
 	queueAfterTransactionHook,
+	runWithTransaction,
 } from "@better-auth/core/context";
 import type { BaseModelNames } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
@@ -65,13 +66,70 @@ export function getWithHooks(
 			}
 		}
 
-		let created: any = null;
-		if (!customCreateFn || customCreateFn.executeMainFn) {
-			created = await (await getCurrentAdapter(adapter)).create<T>({
+		// acts as a helper function to avoid writing this code twice in bellow block
+		const createFn = async (adapter: DBAdapter<BetterAuthOptions>) => {
+			return await (await getCurrentAdapter(adapter)).create<T>({
 				model,
 				data: actualData as any,
 				forceAllowId: true,
 			});
+		};
+
+		type AfterTransactionHook = NonNullable<
+			NonNullable<
+				NonNullable<BetterAuthOptions["databaseHooks"]>["user"]
+			>["create"]
+		>["afterTransaction"];
+
+		const createFnTransaction = async (
+			adapter: DBAdapter<BetterAuthOptions>,
+			transactionHooks: { source: string; hook: AfterTransactionHook }[],
+		) => {
+			const result = await runWithTransaction(adapter, async () => {
+				const tempCreated = await createFn(adapter);
+				// transaction hook does not allow muttating the final user object
+				for (const transaction of transactionHooks) {
+					await withSpan(
+						`db create.afterTransaction ${model}`,
+						{
+							[ATTR_HOOK_TYPE]: "create.afterTransaction",
+							[ATTR_DB_COLLECTION_NAME]: model,
+							[ATTR_CONTEXT]: transaction.source,
+						},
+						() =>
+							// @ts-expect-error context type mismatch
+							transaction.hook(tempCreated as any, context),
+					);
+				}
+
+				return tempCreated;
+			});
+
+			return result;
+		};
+
+		let created: any = null;
+		if (!customCreateFn || customCreateFn.executeMainFn) {
+			if (model == "user") {
+				const transactionHooksToRun: {
+					source: string;
+					hook: AfterTransactionHook;
+				}[] = [];
+
+				for (const { source, hooks } of hooksEntries) {
+					const transaction = hooks["user"]?.create?.afterTransaction;
+					if (transaction)
+						transactionHooksToRun.push({ source, hook: transaction });
+				}
+
+				if (transactionHooksToRun.length > 0) {
+					created = await createFnTransaction(adapter, transactionHooksToRun);
+				} else {
+					created = await createFn(adapter);
+				}
+			} else {
+				created = await createFn(adapter);
+			}
 		}
 		if (customCreateFn?.fn) {
 			created = await customCreateFn.fn(created ?? actualData);
