@@ -73,3 +73,8 @@ pjpeg
 styl
 vbscript
 unvalidated
+nginx
+caddy
+traefik
+dockerignore
+isready
