@@ -26,6 +26,11 @@ type SessionResponse = (
 ) &
 	Record<string, any>;
 
+type SessionRequest = {
+	cancel: () => void;
+	promise: Promise<void>;
+};
+
 /**
  * Normalize $fetch response: `throw: true` returns data directly,
  * otherwise `{ data, error }`.
@@ -72,7 +77,7 @@ export function getSessionAtom(
 ) {
 	const $signal = atom<boolean>(false);
 
-	let abortController: AbortController | undefined;
+	let activeRequest: SessionRequest | undefined;
 
 	const refetch = (
 		queryParams?: { query?: SessionQueryParams } | undefined,
@@ -87,30 +92,11 @@ export function getSessionAtom(
 	});
 	withEquality(session, isSessionAtomEqual);
 
-	const settleAbortedFetch = (controller: AbortController) => {
-		if (abortController !== controller) return;
-
-		const current = session.get();
-		abortController = undefined;
-
-		if (!current.isPending && !current.isRefetching) return;
-
-		session.set({
-			...current,
-			isPending: false,
-			isRefetching: false,
-			refetch,
-		});
-	};
-
-	const fetchSession = async (
+	const executeSessionFetch = async (
+		signal: AbortSignal,
 		queryParams?: { query?: SessionQueryParams } | undefined,
 	): Promise<void> => {
-		abortController?.abort();
-		const controller = new AbortController();
-		abortController = controller;
-
-		const current = session.get();
+		const current = session.value;
 		session.set({
 			...current,
 			isPending: current.data === null,
@@ -118,15 +104,15 @@ export function getSessionAtom(
 			error: null,
 			refetch,
 		});
+		if (signal.aborted) return;
 
 		try {
 			const res = await $fetch<SessionResponse>("/get-session", {
 				method: "GET",
 				query: queryParams?.query,
-				signal: controller.signal,
+				signal,
 			});
-			if (controller.signal.aborted) {
-				settleAbortedFetch(controller);
+			if (signal.aborted) {
 				return;
 			}
 
@@ -136,23 +122,21 @@ export function getSessionAtom(
 				try {
 					const refreshRes = await $fetch<SessionResponse>("/get-session", {
 						method: "POST",
-						signal: controller.signal,
+						signal,
 					});
-					if (controller.signal.aborted) {
-						settleAbortedFetch(controller);
+					if (signal.aborted) {
 						return;
 					}
 					({ data, error } = normalizeSessionResponse(refreshRes));
 				} catch {
-					if (controller.signal.aborted) {
-						settleAbortedFetch(controller);
+					if (signal.aborted) {
 						return;
 					}
 				}
 			}
 
 			if (error) {
-				const latest = session.get();
+				const latest = session.value;
 				const isUnauthorized = (error as BetterFetchError)?.status === 401;
 				session.set({
 					data: isUnauthorized ? null : latest.data,
@@ -165,7 +149,7 @@ export function getSessionAtom(
 			}
 
 			const sessionData = normalizeSessionData(data);
-			const current = session.get();
+			const current = session.value;
 			const stableData =
 				current.data != null &&
 				sessionData != null &&
@@ -180,11 +164,10 @@ export function getSessionAtom(
 				refetch,
 			});
 		} catch (fetchError) {
-			if (controller.signal.aborted) {
-				settleAbortedFetch(controller);
+			if (signal.aborted) {
 				return;
 			}
-			const latest = session.get();
+			const latest = session.value;
 			session.set({
 				data: latest.data,
 				error: fetchError as BetterFetchError,
@@ -195,6 +178,30 @@ export function getSessionAtom(
 		}
 	};
 
+	const fetchSession = (
+		queryParams?: { query?: SessionQueryParams } | undefined,
+	): Promise<void> => {
+		activeRequest?.cancel();
+		const controller = new AbortController();
+		const promise = Promise.resolve().then(() => {
+			if (controller.signal.aborted) return;
+			return executeSessionFetch(controller.signal, queryParams);
+		});
+		const request: SessionRequest = {
+			cancel: () => controller.abort(),
+			promise,
+		};
+		activeRequest = request;
+		const clearActiveRequest = () => {
+			if (activeRequest === request) activeRequest = undefined;
+		};
+		void request.promise.then(clearActiveRequest, clearActiveRequest);
+		return request.promise;
+	};
+
+	const fetchSessionOnMount = (): Promise<void> =>
+		activeRequest?.promise ?? fetchSession();
+
 	let broadcastSessionUpdate: (
 		trigger: "signout" | "getSession" | "updateUser",
 	) => void = () => {};
@@ -204,13 +211,13 @@ export function getSessionAtom(
 
 		if (!isServer()) {
 			timeoutId = setTimeout(() => {
-				void fetchSession();
+				void fetchSessionOnMount();
 			}, 0);
 		}
 
 		const refreshManager = createSessionRefreshManager({
 			fetchSession,
-			shouldPollSession: () => session.get().data != null,
+			shouldPollSession: () => session.value.data != null,
 			sessionSignal: $signal,
 			options,
 		});
@@ -219,9 +226,6 @@ export function getSessionAtom(
 
 		return () => {
 			if (timeoutId) clearTimeout(timeoutId);
-			const controller = abortController;
-			controller?.abort();
-			if (controller) settleAbortedFetch(controller);
 			refreshManager.cleanup();
 		};
 	});
