@@ -954,3 +954,379 @@ describe("change-email rejects confirmation-only config for verified users", asy
 		});
 	});
 });
+
+const verificationTableOptions = (overrides: Record<string, unknown> = {}) => ({
+	user: {
+		changeEmail: {
+			enabled: true,
+			strategy: "verification-table" as const,
+			...overrides,
+		},
+	},
+});
+
+describe("change-email strategy: verification-table", async () => {
+	it("stores pendingEmail and leaves the current email untouched", async () => {
+		const onChangeEmailRequested = vi.fn();
+		const { client, db, signInWithTestUser } = await getTestInstance(
+			verificationTableOptions({
+				sendVerificationEmail: async () => {},
+				onChangeEmailRequested,
+			}),
+		);
+		const { headers, user } = await signInWithTestUser();
+
+		const res = await client.changeEmail(
+			{ newEmail: "pending@example.com" },
+			{ headers },
+		);
+		expect(res.data?.status).toBe(true);
+		expect(onChangeEmailRequested).toHaveBeenCalled();
+
+		const [stored] = await db.findMany<{
+			email: string;
+			pendingEmail: string | null;
+		}>({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		});
+		expect(stored!.email).toBe(user.email);
+		expect(stored!.pendingEmail).toBe("pending@example.com");
+	});
+
+	it("applies the change once the token is verified", async () => {
+		let verifyURL = "";
+		const onChangeEmailCompleted = vi.fn();
+		const { client, db, signInWithTestUser } = await getTestInstance(
+			verificationTableOptions({
+				sendVerificationEmail: async ({ url }: { url: string }) => {
+					verifyURL = url;
+				},
+				onChangeEmailCompleted,
+			}),
+		);
+		const { headers, user } = await signInWithTestUser();
+		await client.changeEmail({ newEmail: "applied@example.com" }, { headers });
+
+		await client.$fetch(verifyURL.replace(/^.*\/api\/auth/, ""), {
+			headers,
+			method: "GET",
+		});
+
+		expect(onChangeEmailCompleted).toHaveBeenCalled();
+		const [stored] = await db.findMany<{
+			email: string;
+			pendingEmail: string | null;
+		}>({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		});
+		expect(stored!.email).toBe("applied@example.com");
+		expect(stored!.pendingEmail).toBe(null);
+	});
+
+	it("consumes the token so it cannot be replayed", async () => {
+		let verifyURL = "";
+		const { client, db, signInWithTestUser } = await getTestInstance(
+			verificationTableOptions({
+				sendVerificationEmail: async ({ url }: { url: string }) => {
+					verifyURL = url;
+				},
+			}),
+		);
+		const { headers, user } = await signInWithTestUser();
+		await client.changeEmail({ newEmail: "once@example.com" }, { headers });
+		const path = verifyURL.replace(/^.*\/api\/auth/, "");
+
+		await client.$fetch(path, { headers, method: "GET" });
+		// A second click must not re-apply anything: the verification row is gone.
+		await client.$fetch(path, { headers, method: "GET" });
+
+		const [stored] = await db.findMany<{
+			email: string;
+			pendingEmail: string | null;
+		}>({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		});
+		expect(stored!.email).toBe("once@example.com");
+		expect(stored!.pendingEmail).toBe(null);
+	});
+
+	it("does not consume the pending change when the token is wrong", async () => {
+		let verifyURL = "";
+		const { client, db, signInWithTestUser } = await getTestInstance(
+			verificationTableOptions({
+				sendVerificationEmail: async ({ url }: { url: string }) => {
+					verifyURL = url;
+				},
+			}),
+		);
+		const { headers, user } = await signInWithTestUser();
+		await client.changeEmail({ newEmail: "guarded@example.com" }, { headers });
+		const path = verifyURL.replace(/^.*\/api\/auth/, "");
+
+		// The row is keyed by user, so a bogus token must not discard the request.
+		const [, , userIdSegment] = path.split("/");
+		await client.$fetch(
+			`/verify-email-change/${userIdSegment}/not-the-real-token`,
+			{ headers, method: "GET" },
+		);
+
+		const [afterBadToken] = await db.findMany<{
+			email: string;
+			pendingEmail: string | null;
+		}>({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		});
+		expect(afterBadToken!.email).toBe(user.email);
+		expect(afterBadToken!.pendingEmail).toBe("guarded@example.com");
+
+		// ...and the genuine link must still work afterwards.
+		await client.$fetch(path, { headers, method: "GET" });
+		const [afterGoodToken] = await db.findMany<{
+			email: string;
+			pendingEmail: string | null;
+		}>({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		});
+		expect(afterGoodToken!.email).toBe("guarded@example.com");
+		expect(afterGoodToken!.pendingEmail).toBe(null);
+	});
+
+	it("does not let a superseded link win over a newer request", async () => {
+		const urls: string[] = [];
+		const { client, db, signInWithTestUser } = await getTestInstance(
+			verificationTableOptions({
+				sendVerificationEmail: async ({ url }: { url: string }) => {
+					urls.push(url);
+				},
+			}),
+		);
+		const { headers, user } = await signInWithTestUser();
+
+		await client.changeEmail({ newEmail: "first@example.com" }, { headers });
+		await client.changeEmail({ newEmail: "second@example.com" }, { headers });
+		const [urlA, urlB] = urls;
+
+		// Clicking the superseded link must neither apply A nor destroy B.
+		await client.$fetch(urlA!.replace(/^.*\/api\/auth/, ""), {
+			headers,
+			method: "GET",
+		});
+
+		const [afterStale] = await db.findMany<{
+			email: string;
+			pendingEmail: string | null;
+		}>({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		});
+		expect(afterStale!.email).toBe(user.email);
+		expect(afterStale!.pendingEmail).toBe("second@example.com");
+
+		// The current link still works.
+		await client.$fetch(urlB!.replace(/^.*\/api\/auth/, ""), {
+			headers,
+			method: "GET",
+		});
+		const [afterCurrent] = await db.findMany<{
+			email: string;
+			pendingEmail: string | null;
+		}>({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		});
+		expect(afterCurrent!.email).toBe("second@example.com");
+		expect(afterCurrent!.pendingEmail).toBe(null);
+	});
+
+	it("keeps both links valid when the same address is requested twice", async () => {
+		const urls: string[] = [];
+		const { client, db, signInWithTestUser } = await getTestInstance(
+			verificationTableOptions({
+				sendVerificationEmail: async ({ url }: { url: string }) => {
+					urls.push(url);
+				},
+			}),
+		);
+		const { headers, user } = await signInWithTestUser();
+
+		await client.changeEmail({ newEmail: "same@example.com" }, { headers });
+		await client.changeEmail({ newEmail: "same@example.com" }, { headers });
+		const [urlA] = urls;
+
+		/**
+		 * Documented semantics: `pendingEmail` arbitrates the target *address*, not the
+		 * individual request. Two requests for the same address produce two links that
+		 * both remain valid — they lead to the same outcome, so there is nothing to
+		 * arbitrate. Requesting a *different* address is what makes earlier links inert,
+		 * which the superseded-link test above covers.
+		 */
+		await client.$fetch(urlA!.replace(/^.*\/api\/auth/, ""), {
+			headers,
+			method: "GET",
+		});
+
+		const [stored] = await db.findMany<{
+			email: string;
+			pendingEmail: string | null;
+		}>({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		});
+		expect(stored!.email).toBe("same@example.com");
+		expect(stored!.pendingEmail).toBe(null);
+	});
+
+	it("leaves the pending change in place when the token has expired", async () => {
+		let verifyURL = "";
+		const { client, db, signInWithTestUser, auth } = await getTestInstance(
+			verificationTableOptions({
+				sendVerificationEmail: async ({ url }: { url: string }) => {
+					verifyURL = url;
+				},
+			}),
+		);
+		const { headers, user } = await signInWithTestUser();
+		await client.changeEmail({ newEmail: "expired@example.com" }, { headers });
+
+		// Force expiry rather than waiting it out. The row is keyed by token, so read it
+		// back out of the link.
+		const token = verifyURL.split("?")[0]!.split("/").pop()!;
+		const ctx = await auth.$context;
+		await ctx.adapter.update({
+			model: "verification",
+			where: [
+				{
+					field: "identifier",
+					value: `change-email:${user.id}:${token}`,
+				},
+			],
+			update: { expiresAt: new Date(Date.now() - 1000) },
+		});
+
+		await client.$fetch(verifyURL.replace(/^.*\/api\/auth/, ""), {
+			headers,
+			method: "GET",
+		});
+
+		const [stored] = await db.findMany<{
+			email: string;
+			pendingEmail: string | null;
+		}>({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		});
+		// Documented choice: an expired link never applies the change, and the pending
+		// state survives so the user can ask for a fresh mail without losing what they
+		// typed. (The expired row itself is claimed and discarded on the way through.)
+		expect(stored!.email).toBe(user.email);
+		expect(stored!.pendingEmail).toBe("expired@example.com");
+	});
+
+	it("clears the pending change on cancel", async () => {
+		const onChangeEmailCancelled = vi.fn();
+		const { client, db, signInWithTestUser } = await getTestInstance(
+			verificationTableOptions({
+				sendVerificationEmail: async () => {},
+				onChangeEmailCancelled,
+			}),
+		);
+		const { headers, user } = await signInWithTestUser();
+		await client.changeEmail(
+			{ newEmail: "cancelled@example.com" },
+			{ headers },
+		);
+
+		const res = await client.cancelEmailChange({}, { headers });
+		expect(res.data?.status).toBe(true);
+		expect(onChangeEmailCancelled).toHaveBeenCalled();
+
+		const [stored] = await db.findMany<{ pendingEmail: string | null }>({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		});
+		expect(stored!.pendingEmail).toBe(null);
+	});
+
+	it("does not leak whether the target email already exists", async () => {
+		const sendVerificationEmail = vi.fn();
+		const { client, signInWithTestUser, auth } = await getTestInstance(
+			verificationTableOptions({
+				sendVerificationEmail: async () => {
+					sendVerificationEmail();
+				},
+			}),
+		);
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.createUser({
+			email: "taken@example.com",
+			name: "taken",
+			emailVerified: false,
+		});
+
+		const { headers } = await signInWithTestUser();
+		const res = await client.changeEmail(
+			{ newEmail: "taken@example.com" },
+			{ headers },
+		);
+
+		expect(res.error).toBeNull();
+		expect(res.data?.status).toBe(true);
+		expect(sendVerificationEmail).not.toHaveBeenCalled();
+	});
+
+	it("rolls the pending state back when the send fails", async () => {
+		const { client, db, signInWithTestUser } = await getTestInstance(
+			verificationTableOptions({
+				sendVerificationEmail: async () => {
+					throw new Error("smtp down");
+				},
+			}),
+		);
+		const { headers, user } = await signInWithTestUser();
+
+		await client.changeEmail({ newEmail: "rollback@example.com" }, { headers });
+
+		const [stored] = await db.findMany<{
+			email: string;
+			pendingEmail: string | null;
+		}>({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		});
+		expect(stored!.email).toBe(user.email);
+		expect(stored!.pendingEmail).toBe(null);
+	});
+});
+
+describe("change-email strategy: jwt is the default", async () => {
+	const { client, db, signInWithTestUser } = await getTestInstance({
+		emailVerification: {
+			async sendVerificationEmail() {},
+		},
+		user: {
+			changeEmail: {
+				enabled: true,
+			},
+		},
+	});
+
+	it("does not add pendingEmail to the user table", async () => {
+		const { user } = await signInWithTestUser();
+		const [stored] = await db.findMany<Record<string, unknown>>({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		});
+		expect("pendingEmail" in stored!).toBe(false);
+	});
+
+	it("does not expose cancel-email-change", async () => {
+		const { headers } = await signInWithTestUser();
+		const res = await client.cancelEmailChange({}, { headers });
+		expect(res.error?.status).toBe(404);
+	});
+});
