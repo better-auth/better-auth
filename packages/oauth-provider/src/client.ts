@@ -33,6 +33,10 @@ export const oauthProviderClient = () => {
 								...body,
 								oauth_query: buildSignedOAuthQuery(window.location.search),
 							});
+							// Force a JSON response so endpoints that resume the oauth
+							// flow mid-request (eg /passkey/verify-authentication) return
+							// a JSON redirect body instead of throwing a 302 redirect.
+							headers.set("accept", "application/json");
 						}
 					},
 				},
