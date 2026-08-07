@@ -74,11 +74,11 @@ export const getPasskeyActions = (
 				},
 				useBrowserAutofill: opts?.autoFill,
 			});
-		} catch (err) {
+		} catch (_err) {
 			return {
 				data: null,
 				error: {
-					code: err instanceof WebAuthnError ? err.code : "AUTH_CANCELLED",
+					code: "AUTH_CANCELLED",
 					message: PASSKEY_ERROR_CODES.AUTH_CANCELLED.message,
 					status: 400,
 					statusText: "BAD_REQUEST",
@@ -237,7 +237,7 @@ export const getPasskeyActions = (
 					return {
 						data: null,
 						error: {
-							code: e.code,
+							code: "PREVIOUSLY_REGISTERED",
 							message: PASSKEY_ERROR_CODES.PREVIOUSLY_REGISTERED.message,
 							status: 400,
 							statusText: "BAD_REQUEST",
@@ -248,7 +248,7 @@ export const getPasskeyActions = (
 					return {
 						data: null,
 						error: {
-							code: e.code,
+							code: "REGISTRATION_CANCELLED",
 							message: PASSKEY_ERROR_CODES.REGISTRATION_CANCELLED.message,
 							status: 400,
 							statusText: "BAD_REQUEST",
