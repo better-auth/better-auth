@@ -804,6 +804,16 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 					session: updatedSession,
 					user: session.user,
 				});
+				// Keep the current session context in sync so after-hooks and
+				// subsequent middleware observe the cleared active organization.
+				// `setSessionCookie` already updates `ctx.context.newSession`.
+				// @see https://github.com/better-auth/better-auth/issues/4708
+				if (updatedSession) {
+					ctx.context.session = {
+						session: updatedSession,
+						user: session.user,
+					};
+				}
 				return ctx.json(null);
 			}
 
@@ -862,6 +872,16 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				session: updatedSession,
 				user: session.user,
 			});
+			// Keep the current session context in sync so after-hooks and
+			// subsequent middleware observe the new active organization.
+			// `setSessionCookie` already updates `ctx.context.newSession`.
+			// @see https://github.com/better-auth/better-auth/issues/4708
+			if (updatedSession) {
+				ctx.context.session = {
+					session: updatedSession,
+					user: session.user,
+				};
+			}
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
 						members: InferMember<O>[];
