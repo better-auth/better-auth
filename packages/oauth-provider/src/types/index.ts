@@ -1048,9 +1048,9 @@ export interface OAuthRefreshToken<
 	expiresAt: Date;
 	createdAt: Date;
 	/**
-	 * When token was revoked. If set, token is considered a replay attack.
+	 * When token was revoked. If set to a date, token is considered a replay attack.
 	 */
-	revoked?: Date;
+	revoked?: Date | null;
 	/**
 	 * The time the user originally authenticated.
 	 * Persisted so refreshed ID tokens can include a correct `auth_time` claim.
