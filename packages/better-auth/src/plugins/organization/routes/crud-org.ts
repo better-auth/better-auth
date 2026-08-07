@@ -593,13 +593,6 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
 				);
 			}
-			if (organizationId === session.session.activeOrganizationId) {
-				/**
-				 * If the organization is deleted, we set the active organization to null
-				 */
-				await adapter.setActiveOrganization(session.session.token, null, ctx);
-			}
-
 			const org = await adapter.findOrganizationById(organizationId);
 			if (!org) {
 				throw APIError.fromStatus("BAD_REQUEST");
@@ -614,15 +607,46 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				);
 			}
 			await adapter.deleteOrganization(organizationId);
-			if (options?.organizationHooks?.afterDeleteOrganization) {
-				await options.organizationHooks.afterDeleteOrganization(
-					{
-						organization: org,
-						user: session.user,
-					},
-					ctx,
-				);
+
+			/**
+			 * Both of these must happen once the organization is gone, and neither
+			 * may be skipped because the other failed. Clearing before the delete was
+			 * the original defect: a `beforeDeleteOrganization` hook that rejected the
+			 * delete left the organization intact but the session pointing at nothing.
+			 * Running the two in sequence afterwards only moves the problem, since
+			 * whichever goes second is lost to a throw in the first — so the session
+			 * clear runs in a `finally` and a throwing hook still surfaces.
+			 */
+			let hookError: unknown;
+			try {
+				if (options?.organizationHooks?.afterDeleteOrganization) {
+					await options.organizationHooks.afterDeleteOrganization(
+						{
+							organization: org,
+							user: session.user,
+						},
+						ctx,
+					);
+				}
+			} catch (error) {
+				hookError = error;
 			}
+
+			if (organizationId === session.session.activeOrganizationId) {
+				try {
+					await adapter.setActiveOrganization(session.session.token, null, ctx);
+				} catch (error) {
+					// A hook failure is the cause worth reporting, and rethrowing here
+					// would replace it, so report this one where it cannot be lost.
+					if (!hookError) throw error;
+					ctx.context.logger.error(
+						"Failed to clear the active organization of a deleted organization",
+						error,
+					);
+				}
+			}
+
+			if (hookError) throw hookError;
 			return ctx.json(org);
 		},
 	);
