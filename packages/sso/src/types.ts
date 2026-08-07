@@ -38,6 +38,13 @@ export interface OIDCConfig {
 	mapping?: OIDCMapping | undefined;
 }
 
+export interface EncryptedOIDCConfig extends Omit<OIDCConfig, "clientSecret"> {
+	clientSecret: {
+		encrypted: true;
+		value: string;
+	};
+}
+
 export interface SAMLConfig {
 	issuer: string;
 	entryPoint: string;
@@ -317,6 +324,18 @@ export interface SSOOptions {
 	 * per-provider callback URLs. Can be a path or a full URL.
 	 */
 	redirectURI?: string;
+	/**
+	 * How to store sensitive secrets such as the OIDC clientSecret.
+	 * You can choose "plain", "encrypted" (uses BETTER_AUTH_SECRET), or provide a custom encryptor.
+	 * @default "plain"
+	 */
+	storeSecretAs?:
+		| "plain"
+		| "encrypted"
+		| {
+				encrypt: (value: string) => Promise<string>;
+				decrypt: (value: string) => Promise<string>;
+		  };
 	/**
 	 * SAML security options for AuthnRequest/InResponseTo validation.
 	 * This prevents unsolicited responses, replay attacks, and cross-provider injection.

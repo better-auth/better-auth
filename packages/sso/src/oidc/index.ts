@@ -20,6 +20,13 @@ export {
 	validateSkipDiscoveryEndpoints,
 } from "./discovery";
 
+export {
+	decryptOIDCConfig,
+	encryptOIDCConfig,
+	isEncryptedOIDCConfig,
+	isEncryptionEnabled,
+} from "./encryption";
+
 export { mapDiscoveryErrorToAPIError } from "./errors";
 
 export {

@@ -157,28 +157,28 @@ export function sso<O extends SSOOptions>(
 export function sso<O extends SSOOptions>(
 	options?: O | undefined,
 ): BetterAuthPlugin {
-	const optionsWithStore = options as O;
+	const coalescedOptions = options || {};
 
 	let endpoints = {
-		spMetadata: spMetadata(optionsWithStore),
-		registerSSOProvider: registerSSOProvider(optionsWithStore),
-		signInSSO: signInSSO(optionsWithStore),
-		callbackSSO: callbackSSO(optionsWithStore),
-		callbackSSOShared: callbackSSOShared(optionsWithStore),
-		callbackSSOSAML: callbackSSOSAML(optionsWithStore),
-		acsEndpoint: acsEndpoint(optionsWithStore),
-		sloEndpoint: sloEndpoint(optionsWithStore),
-		initiateSLO: initiateSLO(optionsWithStore),
+		spMetadata: spMetadata(coalescedOptions),
+		registerSSOProvider: registerSSOProvider(coalescedOptions),
+		signInSSO: signInSSO(coalescedOptions),
+		callbackSSO: callbackSSO(coalescedOptions),
+		callbackSSOShared: callbackSSOShared(coalescedOptions),
+		callbackSSOSAML: callbackSSOSAML(coalescedOptions),
+		acsEndpoint: acsEndpoint(coalescedOptions),
+		sloEndpoint: sloEndpoint(coalescedOptions),
+		initiateSLO: initiateSLO(coalescedOptions),
 		listSSOProviders: listSSOProviders(),
 		getSSOProvider: getSSOProvider(),
-		updateSSOProvider: updateSSOProvider(optionsWithStore),
+		updateSSOProvider: updateSSOProvider(coalescedOptions),
 		deleteSSOProvider: deleteSSOProvider(),
 	};
 
 	if (options?.domainVerification?.enabled) {
 		const domainVerificationEndpoints = {
-			requestDomainVerification: requestDomainVerification(optionsWithStore),
-			verifyDomain: verifyDomain(optionsWithStore),
+			requestDomainVerification: requestDomainVerification(coalescedOptions),
+			verifyDomain: verifyDomain(coalescedOptions),
 		};
 
 		endpoints = {

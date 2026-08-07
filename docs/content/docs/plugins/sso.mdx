@@ -638,6 +638,59 @@ const auth = betterAuth({
 });
 ```
 
+## Encrypting client secrets at rest
+
+By default, an OIDC provider's `clientSecret` is stored as plaintext in the `ssoProvider.oidcConfig` column. You can have Better Auth encrypt it at rest with the `storeSecretAs` option.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
+const auth = betterAuth({
+    plugins: [
+        sso({
+            // "plain" (default) | "encrypted" | custom encryptor
+            storeSecretAs: "encrypted", // [!code highlight]
+        }),
+    ],
+});
+```
+
+* **`"plain"`** (default) — the client secret is stored as-is.
+* **`"encrypted"`** — the client secret is encrypted with your `BETTER_AUTH_SECRET` using `symmetricEncrypt`. The secret is decrypted only when needed (sign-in, token exchange).
+* **Custom encryptor** — bring your own KMS/HSM by providing `encrypt`/`decrypt` functions:
+
+  ```ts
+  sso({
+      storeSecretAs: {
+          encrypt: async (clientSecret) => myKms.encrypt(clientSecret),
+          decrypt: async (ciphertext) => myKms.decrypt(ciphertext),
+      },
+  });
+  ```
+
+<Callout type="warn">
+  Encryption is keyed on `BETTER_AUTH_SECRET` (or your custom encryptor). If that key changes, previously encrypted secrets can no longer be decrypted. Rotate deliberately.
+</Callout>
+
+### Migrating existing providers
+
+Enabling `storeSecretAs` does not require a database migration — reads are backward compatible. A provider registered before encryption was enabled keeps its plaintext secret and is still read correctly, so plaintext and encrypted providers can coexist in the same table.
+
+New and updated providers are encrypted automatically. Existing plaintext providers are converted to encrypted-at-rest in one of two ways:
+
+1. **Lazily, on use.** The first time a provider is used for sign-in after encryption is enabled, its stored secret is re-encrypted in place. Over time every actively-used provider converges to encrypted-at-rest with no action required. (This best-effort re-encryption never blocks the sign-in flow.)
+2. **Eagerly, via the migration endpoint.** To encrypt every existing provider immediately (e.g. for compliance), call `migrateSSOSecretEncryption`. It re-encrypts every provider the caller can manage that is still stored in plaintext and is idempotent.
+
+   ```ts title="server.ts"
+   const summary = await auth.api.migrateSSOSecretEncryption({
+       headers, // an authenticated session
+   });
+   // => { total, migrated, alreadyEncrypted, skipped, failed }
+   ```
+
+   The endpoint requires `storeSecretAs` to be configured for encryption; otherwise it returns a `400`.
+
 ## Provisioning
 
 The SSO plugin provides powerful provisioning capabilities to automatically set up users and manage their organization memberships when they sign in through SSO providers.
