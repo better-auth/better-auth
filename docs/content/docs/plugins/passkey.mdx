@@ -179,6 +179,14 @@ To sign in with a passkey you can use the `signIn.passkey` method. This will pro
        * Return WebAuthn response and extension results
        */
       returnWebAuthnResponse?: boolean
+      /**
+       * Override the server-issued `allowCredentials` list to scope the OS
+       * credential picker to specific credential IDs. Client-side picker hint
+       * only — the server still verifies the assertion against stored public
+       * keys. Pairs naturally with `returnWebAuthnResponse: true` for
+       * "remember the credential, then narrow next sign-in" flows.
+       */
+      allowCredentials?: { id: string; type: "public-key"; transports?: AuthenticatorTransport[] }[]
   }
   ```
 </APIMethod>
@@ -205,6 +213,25 @@ await authClient.signIn.passkey({
     }
 });
 ```
+
+#### Scoping the credential picker
+
+If you already know which credential the user should sign in with — for
+example, on a "Continue with Passkey" screen for a returning user where you
+previously stored the credential ID via `returnWebAuthnResponse: true` — pass
+`allowCredentials` to narrow the OS picker to that one credential.
+
+```ts
+await authClient.signIn.passkey({
+    allowCredentials: [
+        { id: storedCredentialId, type: "public-key" },
+    ],
+});
+```
+
+When `allowCredentials` is omitted, the plugin uses the server-issued list
+(every passkey registered for the current session, or empty for unauthenticated
+flows) and behavior is unchanged.
 
 ### Extensions
 
