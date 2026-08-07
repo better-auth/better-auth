@@ -778,7 +778,7 @@ export const createSCIMUser = (
 				body.userName,
 				body.emails,
 			).toLowerCase();
-			const name = getUserFullName(email, body.name);
+			const name = getUserFullName(email, body.name, body.displayName);
 
 			const existingUser = await ctx.context.adapter.findOne<User>({
 				model: "user",
@@ -938,7 +938,7 @@ export const updateSCIMUser = (authMiddleware: AuthMiddleware) =>
 				body.userName,
 				body.emails,
 			).toLowerCase();
-			const name = getUserFullName(email, body.name);
+			const name = getUserFullName(email, body.name, body.displayName);
 			const emailChanged = email !== user.email;
 
 			if (emailChanged) {
