@@ -190,6 +190,24 @@ describe("trusted origins", () => {
 			).resolves.toBe(true);
 		});
 
+		it("should allow relative paths with tildes", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance();
+
+			// `~` is an RFC 3986 unreserved character and is commonly used in
+			// route segments (e.g. `/~settings`). See issue #10022.
+			await expect(
+				isTrustedOrigin("/my-team/~settings/account", {
+					allowRelativePaths: true,
+				}),
+			).resolves.toBe(true);
+
+			await expect(
+				isTrustedOrigin("/dashboard?redirect=/~home", {
+					allowRelativePaths: true,
+				}),
+			).resolves.toBe(true);
+		});
+
 		it("should reject urls with double dash", async () => {
 			const { isTrustedOrigin } = await createAuthTestInstance();
 
