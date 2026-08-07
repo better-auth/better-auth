@@ -1908,7 +1908,7 @@ describe("oauth - prompt", async () => {
 		);
 
 		let selectAccountRedirectUri = "";
-		await serverClient.$fetch(data.url, {
+		await serverClient.$fetch(data.url!, {
 			method: "GET",
 			headers,
 			onError(ctx) {
