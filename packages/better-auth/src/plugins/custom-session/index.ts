@@ -98,14 +98,19 @@ export const customSession = <
 					requireHeaders: true,
 				},
 				async (ctx): Promise<Returns | null> => {
+					/**
+					 * Deliberately uncaught: `/get-session` already rethrows APIErrors
+					 * and normalizes anything else to INTERNAL_SERVER_ERROR, returning
+					 * null only when there is genuinely no session. Swallowing that here
+					 * reported a failed lookup as "not signed in", so callers that gate
+					 * on null signed out users whose sessions were valid.
+					 */
 					const session = await getSession()({
 						...ctx,
 						method: "GET",
 						asResponse: false,
 						headers: ctx.headers,
 						returnHeaders: true,
-					}).catch((e) => {
-						return null;
 					});
 					if (!session?.response) {
 						return ctx.json(null);
