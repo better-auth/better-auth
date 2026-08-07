@@ -336,6 +336,8 @@ interface MockSAMLTemplateOverrides {
 	audience?: string;
 	destination?: string;
 	subjectRecipient?: string;
+	/** Echo an AuthnRequest id back, the way a real IdP answers an SP-initiated login. */
+	inResponseTo?: string;
 }
 
 const createTemplateCallback =
@@ -376,16 +378,23 @@ const createTemplateCallback =
 			SubjectConfirmationDataNotOnOrAfter: fiveMinutesLater.toISOString(),
 			NameIDFormat: selectedNameIDFormat,
 			NameID: email,
-			InResponseTo: "null",
+			InResponseTo: overrides.inResponseTo ?? "",
 			AuthnStatement: "",
 			attrFirstName: "Test",
 			attrLastName: "User",
 			attrEmail: "test@email.com",
 		};
 
+		const rendered = saml.SamlLib.replaceTagsByValue(template, tagValues);
+
 		return {
 			id,
-			context: saml.SamlLib.replaceTagsByValue(template, tagValues),
+			// A real IdP omits InResponseTo entirely on an unsolicited response
+			// rather than sending it empty, so drop the attribute rather than
+			// leaving these fixtures resting on how samlify reads an empty one.
+			context: overrides.inResponseTo
+				? rendered
+				: rendered.replaceAll(' InResponseTo=""', ""),
 		};
 	};
 
@@ -534,6 +543,7 @@ const createMockSAMLIdP = (port: number, options: MockIdPOptions = {}) => {
 				audience: queryValue(req.query.audience),
 				destination: queryValue(req.query.destination),
 				subjectRecipient: queryValue(req.query.recipient),
+				inResponseTo: queryValue(req.query.inResponseTo),
 			};
 			const { context, entityEndpoint } = (await idp.createLoginResponse(
 				sp,
@@ -4775,6 +4785,104 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 
 		expect(succeeded).toHaveLength(1);
 		expect(failed).toHaveLength(1);
+	});
+
+	/**
+	 * The login extractor puts InResponseTo under `response`, so reading only the
+	 * top level made every solicited login look unsolicited: the replay check
+	 * silently never ran, and `allowIdpInitiated: false` refused real logins.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10504
+	 */
+	it("should validate InResponseTo on a solicited login instead of calling it unsolicited", async () => {
+		const { auth, signInWithTestUser, db } = await getTestInstance({
+			plugins: [sso({ saml: { allowIdpInitiated: false } })],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "sp-initiated-only-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: { metadata: idpMetadata },
+					spMetadata: { metadata: spMetadata },
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		const signInRes = await auth.api.signInSSO({
+			body: {
+				providerId: "sp-initiated-only-provider",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+			returnHeaders: true,
+		});
+		const signInUrl = signInRes.response?.url;
+		const relayState = new URL(signInUrl!).searchParams.get("RelayState");
+
+		// A real IdP echoes the AuthnRequest id back on the Response element.
+		// Read the id better-auth stored, and have the mock IdP answer with it.
+		const stored = await db.findMany<{ identifier: string; value: string }>({
+			model: "verification",
+		});
+		const authnRequest = stored.find((row) =>
+			row.identifier.startsWith("saml-authn-request:"),
+		);
+		expect(authnRequest).toBeDefined();
+		const requestId = authnRequest!.identifier.replace(
+			"saml-authn-request:",
+			"",
+		);
+
+		let samlResponse: any;
+		await betterFetch(`${signInUrl}&inResponseTo=${requestId}`, {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		const submit = () =>
+			auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/sp-initiated-only-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+							Cookie: signInRes.headers.get("set-cookie") ?? "",
+						},
+						body: new URLSearchParams({
+							SAMLResponse: samlResponse.samlResponse,
+							RelayState: relayState!,
+						}),
+					},
+				),
+			);
+
+		const first = await submit();
+		const firstLocation = first.headers.get("location") || "";
+
+		// The response carries an InResponseTo, so this login is solicited and
+		// must not be refused as IdP-initiated.
+		expect(firstLocation).not.toContain("unsolicited");
+		expect(firstLocation).toContain("dashboard");
+
+		// The AuthnRequest is one-shot: the same signed response cannot be
+		// redeemed twice.
+		const second = await submit();
+		expect(second.headers.get("location") || "").toContain("error");
 	});
 
 	it("should issue only one session when the same IdP-initiated assertion is submitted concurrently", async () => {

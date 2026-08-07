@@ -431,9 +431,17 @@ export async function processSAMLResponse(
 	}
 
 	// 12. InResponseTo validation
-	const inResponseTo = (extract as SAMLAssertionExtract).inResponseTo as
-		| string
-		| undefined;
+	/**
+	 * samlify's login extractor puts the Response element's attributes under
+	 * `response`, so that is where a login carries `InResponseTo`; the logout
+	 * pipeline already reads it there. Reading only the top level made every
+	 * SP-initiated login look unsolicited — which silently skipped the replay
+	 * check by default, and rejected every real login under
+	 * `allowIdpInitiated: false`.
+	 */
+	const samlExtract = extract as SAMLAssertionExtract;
+	const inResponseTo =
+		samlExtract.inResponseTo ?? samlExtract.response?.inResponseTo;
 	const shouldValidateInResponseTo =
 		options?.saml?.enableInResponseToValidation !== false;
 
