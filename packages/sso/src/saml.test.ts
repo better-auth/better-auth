@@ -5,6 +5,7 @@ import {
 	randomUUID,
 } from "node:crypto";
 import type { createServer } from "node:http";
+import { inflateRawSync } from "node:zlib";
 import { betterFetch } from "@better-fetch/fetch";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
@@ -965,6 +966,97 @@ describe("SAML SSO without signed AuthnRequests", async () => {
 		// When authnRequestsSigned is false (default), no Signature should be in the URL
 		expect(signInResponse.url).not.toContain("Signature=");
 		expect(signInResponse.url).not.toContain("SigAlg=");
+	});
+});
+
+describe("SAML SSO with ForceAuthn", async () => {
+	/**
+	 * Decodes the `<samlp:AuthnRequest>` XML carried by an HTTP-Redirect
+	 * binding URL. Per SAML 2.0 Bindings §3.4.4.1 the request is raw-DEFLATE
+	 * compressed then base64-encoded in the `SAMLRequest` query parameter.
+	 */
+	const decodeAuthnRequest = (redirectUrl: string): string => {
+		const samlRequest = new URL(redirectUrl).searchParams.get("SAMLRequest");
+		if (!samlRequest) {
+			throw new Error("redirect URL is missing the SAMLRequest parameter");
+		}
+		return inflateRawSync(Buffer.from(samlRequest, "base64")).toString("utf8");
+	};
+
+	const buildAuth = (forceAuthn?: boolean) => {
+		const data = {
+			user: [],
+			session: [],
+			verification: [],
+			account: [],
+			ssoProvider: [],
+		};
+
+		return betterAuth({
+			database: memoryAdapter(data),
+			baseURL: "http://localhost:3000",
+			emailAndPassword: {
+				enabled: true,
+			},
+			plugins: [
+				sso({
+					defaultSSO: [
+						{
+							domain: "localhost:8081",
+							providerId: "forceauthn-saml",
+							samlConfig: {
+								issuer: "http://localhost:8081",
+								entryPoint: "http://localhost:8081/api/sso/saml2/idp/redirect",
+								cert: certificate,
+								callbackUrl: "http://localhost:8081/dashboard",
+								wantAssertionsSigned: false,
+								// Only set forceAuthn when the test supplies it, so the
+								// unset case exercises the opt-in default.
+								...(forceAuthn === undefined ? {} : { forceAuthn }),
+								idpMetadata: {
+									metadata: idpMetadata,
+								},
+								spMetadata: {
+									metadata: spMetadata,
+								},
+								identifierFormat:
+									"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+							},
+						},
+					],
+				}),
+			],
+		});
+	};
+
+	const signIn = (auth: ReturnType<typeof buildAuth>) =>
+		auth.api.signInSSO({
+			body: {
+				providerId: "forceauthn-saml",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+		});
+
+	it('emits ForceAuthn="true" when forceAuthn is enabled', async () => {
+		const signInResponse = await signIn(buildAuth(true));
+		const authnRequest = decodeAuthnRequest(signInResponse.url);
+		expect(authnRequest).toContain('ForceAuthn="true"');
+	});
+
+	it("omits ForceAuthn from the AuthnRequest when it is unset (opt-in default)", async () => {
+		const signInResponse = await signIn(buildAuth());
+		const authnRequest = decodeAuthnRequest(signInResponse.url);
+		expect(authnRequest).not.toContain("ForceAuthn");
+	});
+
+	it("never emits ForceAuthn across repeated sign-ins when not opted in", async () => {
+		// A provider that never opted in must never force re-authentication,
+		// even across repeated sign-ins.
+		const auth = buildAuth();
+		const first = decodeAuthnRequest((await signIn(auth)).url);
+		const second = decodeAuthnRequest((await signIn(auth)).url);
+		expect(first).not.toContain("ForceAuthn");
+		expect(second).not.toContain("ForceAuthn");
 	});
 });
 
