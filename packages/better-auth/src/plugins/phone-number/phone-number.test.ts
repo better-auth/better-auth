@@ -146,6 +146,9 @@ describe("phone-number callbackOnVerification on updatePhoneNumber", async () =>
 			{ phoneNumber: initialPhoneNumber, code: otp },
 			{ onSuccess: sessionSetter(headers) },
 		);
+		// First verify is the sign-up-on-verification branch — the callback
+		// should have fired here too. See #9290.
+		expect(callbackOnVerification).toHaveBeenCalledTimes(1);
 		callbackOnVerification.mockClear();
 
 		await client.phoneNumber.sendOtp({
