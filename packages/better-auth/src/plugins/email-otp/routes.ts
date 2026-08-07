@@ -200,6 +200,17 @@ export const createVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			},
 		},
 		async (ctx) => {
+			// A change-email OTP is keyed by both the current and the new address,
+			// so this endpoint can neither read nor write a real one. Refuse the
+			// type rather than act on an identifier that binds no target mailbox.
+			if (ctx.body.type === "change-email") {
+				ctx.context.logger.error(
+					"Use the /email-otp/request-email-change and /email-otp/change-email endpoints for changing email",
+				);
+				throw APIError.fromStatus("BAD_REQUEST", {
+					message: "Invalid OTP type",
+				});
+			}
 			const email = ctx.body.email.toLowerCase();
 			const otp =
 				opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
@@ -270,6 +281,17 @@ export const getVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			},
 		},
 		async (ctx) => {
+			// A change-email OTP is keyed by both the current and the new address,
+			// so this endpoint can neither read nor write a real one. Refuse the
+			// type rather than act on an identifier that binds no target mailbox.
+			if (ctx.query.type === "change-email") {
+				ctx.context.logger.error(
+					"Use the /email-otp/request-email-change and /email-otp/change-email endpoints for changing email",
+				);
+				throw APIError.fromStatus("BAD_REQUEST", {
+					message: "Invalid OTP type",
+				});
+			}
 			const email = ctx.query.email.toLowerCase();
 			const verificationValue =
 				await ctx.context.internalAdapter.findVerificationValue(
@@ -365,6 +387,17 @@ export const checkVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			},
 		},
 		async (ctx) => {
+			// A change-email OTP is keyed by both the current and the new address,
+			// so this endpoint can neither read nor write a real one. Refuse the
+			// type rather than act on an identifier that binds no target mailbox.
+			if (ctx.body.type === "change-email") {
+				ctx.context.logger.error(
+					"Use the /email-otp/request-email-change and /email-otp/change-email endpoints for changing email",
+				);
+				throw APIError.fromStatus("BAD_REQUEST", {
+					message: "Invalid OTP type",
+				});
+			}
 			const email = ctx.body.email.toLowerCase();
 			const isValidEmail = z.email().safeParse(email);
 			if (!isValidEmail.success) {
