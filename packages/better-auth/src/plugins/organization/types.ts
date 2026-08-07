@@ -422,7 +422,7 @@ export interface OrganizationOptions {
 				beforeUpdateOrganization?: (data: {
 					organization: {
 						name?: string;
-						slug?: string;
+						slug?: string | null;
 						logo?: string | null;
 						metadata?: Record<string, any>;
 						[key: string]: any;
@@ -432,7 +432,7 @@ export interface OrganizationOptions {
 				}) => Promise<void | {
 					data: {
 						name?: string;
-						slug?: string;
+						slug?: string | null;
 						logo?: string | null;
 						metadata?: Record<string, any>;
 						[key: string]: any;

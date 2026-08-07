@@ -253,6 +253,234 @@ describe("get-full-organization", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/6662
+ */
+describe("slug optional", async () => {
+	it("allows creating organization without slug when slug is optional", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					schema: {
+						organization: {
+							additionalFields: {
+								slug: {
+									type: "string",
+									required: false,
+								},
+							},
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			// @ts-expect-error slug is optional
+			body: {
+				name: "no-slug-org",
+			},
+			headers,
+		});
+		expect(org).toBeDefined();
+		expect(org?.name).toBe("no-slug-org");
+		// slug should not be required; allow undefined or null (empty string should remain invalid)
+		expect(org?.slug === undefined || org?.slug === null).toBeTruthy();
+	});
+
+	it("allows updating organization name when slug is optional", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					schema: {
+						organization: {
+							additionalFields: {
+								slug: {
+									type: "string",
+									required: false,
+								},
+							},
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			// @ts-expect-error slug is optional
+			body: {
+				name: "no-slug-org",
+			},
+			headers,
+		});
+
+		const updated = await auth.api.updateOrganization({
+			body: {
+				organizationId: org?.id,
+				data: {
+					name: "no-slug-org-updated",
+				},
+			},
+			headers,
+		});
+		expect(updated?.name).toBe("no-slug-org-updated");
+	});
+
+	it("allows setting a slug after creation and persisting it", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					schema: {
+						organization: {
+							additionalFields: {
+								slug: {
+									type: "string",
+									required: false,
+								},
+							},
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			// @ts-expect-error slug is optional
+			body: {
+				name: "no-slug-org",
+			},
+			headers,
+		});
+
+		const setSlug = await auth.api.updateOrganization({
+			body: {
+				organizationId: org?.id,
+				data: {
+					slug: "no-slug-org-slug",
+				},
+			},
+			headers,
+		});
+		expect(setSlug?.slug).toBe("no-slug-org-slug");
+	});
+
+	it("applies transform.output to force slug to null", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					schema: {
+						organization: {
+							additionalFields: {
+								slug: {
+									type: "string",
+									required: false,
+									transform: {
+										output: (value: any) => (value = null),
+									},
+								},
+							},
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "transform-slug-org",
+				slug: "should-be-null",
+			},
+			headers,
+		});
+		expect(org).toBeDefined();
+		expect(org?.name).toBe("transform-slug-org");
+		// transform.output should force slug to null
+		expect(org?.slug).toBeNull();
+
+		const getOrg = await auth.api.getFullOrganization({
+			query: {
+				organizationId: org?.id,
+			},
+			headers,
+		});
+		expect(getOrg?.slug).toBeNull();
+	});
+
+	it("allows clearing slug by setting null or empty string", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					schema: {
+						organization: {
+							additionalFields: {
+								slug: {
+									type: "string",
+									required: false,
+								},
+							},
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			// @ts-expect-error slug is optional
+			body: {
+				name: "no-slug-org",
+			},
+			headers,
+		});
+
+		const setSlug = await auth.api.updateOrganization({
+			body: {
+				organizationId: org?.id,
+				data: {
+					slug: "temp-slug",
+				},
+			},
+			headers,
+		});
+		expect(setSlug?.slug).toBe("temp-slug");
+
+		const clearedNull = await auth.api.updateOrganization({
+			body: {
+				organizationId: org?.id,
+				data: {
+					// @ts-expect-error allow clearing slug by setting null
+					slug: null,
+				},
+			},
+			headers,
+		});
+		expect(clearedNull?.slug === null || clearedNull?.slug === "").toBeTruthy();
+
+		const setAgain = await auth.api.updateOrganization({
+			body: {
+				organizationId: org?.id,
+				data: {
+					slug: "temp-slug-2",
+				},
+			},
+			headers,
+		});
+		expect(setAgain?.slug).toBe("temp-slug-2");
+
+		const clearedEmpty = await auth.api.updateOrganization({
+			body: {
+				organizationId: org?.id,
+				data: {
+					slug: "",
+				},
+			},
+			headers,
+		});
+		expect(
+			clearedEmpty?.slug === null || clearedEmpty?.slug === "",
+		).toBeTruthy();
+	});
+});
+
 describe("organization hooks", async () => {
 	it("should apply beforeCreateOrganization hook", async () => {
 		const beforeCreateOrganization = vi.fn();
