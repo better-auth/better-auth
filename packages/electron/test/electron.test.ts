@@ -1415,15 +1415,16 @@ describe("Electron", () => {
 			password: "password",
 		});
 
-		const before = client.$store.atoms.session!.get();
+		const { refetch } = client.$store.atoms.session!.get();
 		await client.signOut();
-		const after = client.$store.atoms.session!.get();
-
-		expect(after).toMatchObject({
-			...before,
-			data: null,
-			error: null,
-			isPending: false,
+		await vi.waitFor(() => {
+			expect(client.$store.atoms.session!.get()).toEqual({
+				data: null,
+				error: null,
+				isPending: false,
+				isRefetching: false,
+				refetch,
+			});
 		});
 	});
 
