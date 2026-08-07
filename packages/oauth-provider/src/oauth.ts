@@ -1275,7 +1275,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				{
 					method: "POST",
 					body: z.object({
-						redirect_uris: z.array(SafeUrlSchema).min(1).min(1),
+						redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 						scope: z.string().optional(),
 						client_name: z.string().optional(),
 						client_uri: z.string().optional(),

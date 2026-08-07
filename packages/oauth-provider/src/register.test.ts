@@ -83,6 +83,57 @@ describe("oauth register", async () => {
 		expect(response.data?.client_secret).toBeDefined();
 	});
 
+	// RFC 7591 §2 makes `redirect_uris` REQUIRED only for "clients using
+	// flows with redirection" — a client_credentials-only client has no
+	// redirection leg and so has no redirect URI to register.
+	// checkOAuthClient already states that rule correctly; the request
+	// schema must not contradict it.
+	it("should register a client_credentials-only client without redirect_uris", async () => {
+		const response = await serverClient.oauth2.register({
+			grant_types: ["client_credentials"],
+		});
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.client_secret).toBeDefined();
+		expect(response.data?.redirect_uris).toEqual([]);
+	});
+
+	it("should still fail without redirect_uris when grant_types defaults to authorization_code", async () => {
+		const response = await serverClient.oauth2.register({
+			client_name: "no grant_types, no redirect_uris",
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
+	it("should still fail without redirect_uris when grant_types includes authorization_code", async () => {
+		const response = await serverClient.oauth2.register({
+			grant_types: ["authorization_code", "client_credentials"],
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
+	// Same defect, same fix, on the session-gated sibling endpoint. This one
+	// matters more in practice: a first-party machine client is created
+	// through /oauth2/create-client, not through public dynamic registration,
+	// because only that path leaves the client secret non-expiring.
+	it("should create a client_credentials-only client without redirect_uris via /oauth2/create-client", async () => {
+		const response = await auth.api.createOAuthClient({
+			headers,
+			body: { grant_types: ["client_credentials"] },
+		});
+		expect(response?.client_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		expect(response?.redirect_uris).toEqual([]);
+	});
+
+	it("should still fail without redirect_uris via /oauth2/create-client for authorization_code", async () => {
+		await expect(
+			auth.api.createOAuthClient({
+				headers,
+				body: { grant_types: ["authorization_code"] },
+			}),
+		).rejects.toThrow();
+	});
+
 	it("should fail authorization_code without response type code", async () => {
 		const response = await serverClient.oauth2.register({
 			// @ts-expect-error testing with a different response type even though unsupported

@@ -271,6 +271,12 @@ export async function createOAuthClientEndpoint(
 		model: "oauthClient",
 		data: {
 			...schema,
+			// `redirectUris` is a required column, but a client registering
+			// only non-redirect grants (e.g. client_credentials) legitimately
+			// has none — checkOAuthClient above already rejected every client
+			// that DOES need them. Normalize to the empty list, matching what
+			// schemaToOAuth already reports on the way back out.
+			redirectUris: schema.redirectUris ?? [],
 			createdAt: new Date(iat * 1000),
 			updatedAt: new Date(iat * 1000),
 		},
