@@ -712,3 +712,85 @@ describe("two-factor security: OTP attempts are atomic under concurrency", async
 		expect(successCount).toBeLessThanOrEqual(1);
 	});
 });
+
+/**
+ * Regression coverage for TOTP one-time use on the step-up (re-verification)
+ * path (RFC 6238 §5.2 / OWASP ASVS 5.0 §6.5.1). When `verifyTOTP` runs with an
+ * already-active session there is no per-challenge verification row to consume,
+ * so before the fix the exact same code was accepted again and again. The
+ * `twoFactor` row now records the last consumed time step and rejects any
+ * candidate step at or below it. Each test uses its own instance so the
+ * persisted `lastUsedStep` cannot leak between them.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10387
+ */
+describe("two-factor security: step-up TOTP codes are single-use (RFC 6238 §5.2)", () => {
+	async function setupTotpUser() {
+		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [twoFactor({ skipVerificationOnEnable: true })],
+		});
+		const { headers } = await signInWithTestUser();
+		const enableRes = await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		// skipVerificationOnEnable activates 2FA immediately and rotates the
+		// session, so use the cookies from the enable response going forward.
+		const sessionHeaders = convertSetCookieToCookie(enableRes.headers);
+		const dbUser = await db.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: testUser.email }],
+		});
+		const row = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: dbUser?.id as string }],
+		});
+		const secret = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: row!.secret,
+		});
+		return { auth, secret, sessionHeaders };
+	}
+
+	it("rejects a code reused on the step-up (active session) path", async () => {
+		const { auth, secret, sessionHeaders } = await setupTotpUser();
+		const code = await createOTP(secret).totp();
+
+		// First use on the active session must succeed.
+		const first = await auth.api.verifyTOTP({
+			body: { code },
+			headers: sessionHeaders,
+		});
+		expect(first.token).toBeDefined();
+
+		// Reusing the same code (same time step) must now be rejected. The
+		// step-up path has no challenge to burn, so before the fix this returned
+		// success on every repeat.
+		await expect(
+			auth.api.verifyTOTP({ body: { code }, headers: sessionHeaders }),
+		).rejects.toThrow();
+	});
+
+	it("accepts a step-up code exactly once across repeated attempts", async () => {
+		const { auth, secret, sessionHeaders } = await setupTotpUser();
+		const code = await createOTP(secret).totp();
+
+		// The reported repro accepted the same code 3/3 times. Verify it now
+		// succeeds exactly once and is rejected on every later attempt.
+		let successes = 0;
+		for (let i = 0; i < 3; i++) {
+			try {
+				const res = await auth.api.verifyTOTP({
+					body: { code },
+					headers: sessionHeaders,
+				});
+				if (res.token) successes++;
+			} catch {
+				// Replay rejected — expected after the first success.
+			}
+		}
+		expect(successes).toBe(1);
+	});
+});
