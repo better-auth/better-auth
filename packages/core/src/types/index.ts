@@ -13,6 +13,7 @@ export type {
 	BetterAuthCookies,
 } from "./cookie";
 export type * from "./helper";
+export type { InferDatabaseHooks } from "./inferred-options";
 export type {
 	BaseURLConfig,
 	BetterAuthAdvancedOptions,

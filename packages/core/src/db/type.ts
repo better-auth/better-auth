@@ -119,10 +119,10 @@ export type InferDBFieldsFromOptions<
 
 export type InferDBFieldsFromPluginsInput<
 	ModelName extends string,
-	Plugins extends unknown[] | undefined,
+	Plugins extends readonly unknown[] | undefined,
 > = Plugins extends []
 	? {}
-	: Plugins extends [infer P, ...infer Rest]
+	: Plugins extends readonly [infer P, ...infer Rest]
 		? P extends {
 				schema: {
 					[key in ModelName]: {
@@ -141,10 +141,10 @@ export type InferDBFieldsFromPluginsInput<
 
 export type InferDBFieldsFromPlugins<
 	ModelName extends string,
-	Plugins extends unknown[] | undefined,
+	Plugins extends readonly unknown[] | undefined,
 > = Plugins extends []
 	? {}
-	: Plugins extends [infer P, ...infer Rest]
+	: Plugins extends readonly [infer P, ...infer Rest]
 		? P extends {
 				schema: {
 					[key in ModelName]: {

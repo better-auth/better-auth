@@ -23,7 +23,10 @@ export type BaseUser = z.infer<typeof userSchema>;
  */
 export type User<
 	DBOptions extends BetterAuthOptions["user"] = BetterAuthOptions["user"],
-	Plugins extends BetterAuthOptions["plugins"] = BetterAuthOptions["plugins"],
+	Plugins extends
+		| BetterAuthOptions["plugins"]
+		| readonly unknown[]
+		| undefined = BetterAuthOptions["plugins"],
 > = Prettify<
 	BaseUser &
 		InferDBFieldsFromOptions<DBOptions> &

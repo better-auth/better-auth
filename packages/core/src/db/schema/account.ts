@@ -39,7 +39,10 @@ export type BaseAccount = z.infer<typeof accountSchema>;
  */
 export type Account<
 	DBOptions extends BetterAuthOptions["account"] = BetterAuthOptions["account"],
-	Plugins extends BetterAuthOptions["plugins"] = BetterAuthOptions["plugins"],
+	Plugins extends
+		| BetterAuthOptions["plugins"]
+		| readonly unknown[]
+		| undefined = BetterAuthOptions["plugins"],
 > = Prettify<
 	BaseAccount &
 		InferDBFieldsFromOptions<DBOptions> &

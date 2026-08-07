@@ -186,9 +186,9 @@ describe("additionalFields", async () => {
 				name: string;
 				createdAt: Date;
 				updatedAt: Date;
-				image?: string | undefined;
+				image?: string | null | undefined;
 				newField: string;
-				nonRequiredFiled?: string | undefined;
+				nonRequiredFiled?: string | null | undefined;
 			};
 			session: Session;
 		} | null>;
@@ -257,7 +257,7 @@ describe("additionalFields", async () => {
 				name: string;
 				createdAt: Date;
 				updatedAt: Date;
-				image?: string | undefined;
+				image?: string | null | undefined;
 				newField: string;
 			};
 			session: Session;
