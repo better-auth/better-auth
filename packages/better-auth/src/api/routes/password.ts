@@ -290,16 +290,22 @@ export const resetPassword = createAuthEndpoint(
 
 		const id = `reset-password:${token}`;
 
-		// Consume the single-use reset token before any password change so two
-		// concurrent requests with the same token cannot both proceed: the first
-		// caller wins, every racer (and any expired token) gets null.
+		// Look up (but do not consume) first so password validation — including
+		// haveIBeenPwned wrapping `password.hash` — can reject without burning
+		// the single-use reset link. Consume only after hash succeeds; checking
+		// the consume result keeps the concurrent single-winner guarantee.
 		const verification =
-			await ctx.context.internalAdapter.consumeVerificationValue(id);
-		if (!verification) {
+			await ctx.context.internalAdapter.findVerificationValue(id);
+		if (!verification || verification.expiresAt < new Date()) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const userId = verification.value;
 		const hashedPassword = await ctx.context.password.hash(newPassword);
+		const consumed =
+			await ctx.context.internalAdapter.consumeVerificationValue(id);
+		if (!consumed) {
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
+		}
 		const accounts = await ctx.context.internalAdapter.findAccounts(userId);
 		const account = accounts.find((ac) => ac.providerId === "credential");
 		if (!account) {

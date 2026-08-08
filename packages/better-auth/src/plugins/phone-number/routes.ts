@@ -769,6 +769,21 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 		},
 		async (ctx) => {
 			const phoneResetIdentifier = `${ctx.body.phoneNumber}-request-password-reset`;
+			const minLength = ctx.context.password.config.minPasswordLength;
+			const maxLength = ctx.context.password.config.maxPasswordLength;
+			if (ctx.body.newPassword.length < minLength) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
+			}
+			if (ctx.body.newPassword.length > maxLength) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
+			}
+			// Hash (and plugin checks like haveIBeenPwned) before consuming the
+			// OTP so a rejected password does not burn the reset code. Keep the
+			// user lookup after OTP proof so invalid OTPs cannot enumerate
+			// registered phone numbers.
+			const hashedPassword = await ctx.context.password.hash(
+				ctx.body.newPassword,
+			);
 			await verifyPhoneNumberOTP(ctx, opts, phoneResetIdentifier, ctx.body.otp);
 			const userRes = await ctx.context.adapter.findOne<
 				UserWithPhoneNumber & { account: Account[] | undefined }
@@ -791,17 +806,6 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				);
 			}
 			const { account: accounts = [], ...user } = userRes;
-			const minLength = ctx.context.password.config.minPasswordLength;
-			const maxLength = ctx.context.password.config.maxPasswordLength;
-			if (ctx.body.newPassword.length < minLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-			}
-			if (ctx.body.newPassword.length > maxLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
-			}
-			const hashedPassword = await ctx.context.password.hash(
-				ctx.body.newPassword,
-			);
 			const account = accounts.find(
 				(account) => account.providerId === "credential",
 			);

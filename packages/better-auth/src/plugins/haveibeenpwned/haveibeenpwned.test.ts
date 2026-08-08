@@ -40,6 +40,10 @@ describe("have-i-been-pwned", async () => {
 	);
 	const ctx = await auth.$context;
 
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
 	it("should prevent account creation with compromised password", async () => {
 		const uniqueEmail = `test-${Date.now()}@example.com`;
 		const compromisedPassword = "123456789";
@@ -90,6 +94,66 @@ describe("have-i-been-pwned", async () => {
 		);
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toBe(400);
+	});
+
+	it("should not burn the reset-password token when HIBP rejects the password", async () => {
+		let resetToken = "";
+		const { client: resetClient, auth: resetAuth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					async sendResetPassword({ token }) {
+						resetToken = token;
+					},
+				},
+				plugins: [haveIBeenPwned()],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const resetCtx = await resetAuth.$context;
+		const email = `reset-hibp-${Date.now()}@example.com`;
+		const initialPassword = `Str0ng!P@ssw0rd-${Date.now()}`;
+		const safePassword = `another-unique-passphrase-${Date.now()}-qz7`;
+
+		await resetClient.signUp.email({
+			email,
+			password: initialPassword,
+			name: "Reset User",
+		});
+		await resetClient.requestPasswordReset({
+			email,
+			redirectTo: "http://localhost:3000",
+		});
+		expect(resetToken.length).toBeGreaterThan(10);
+
+		const breached = "Password123!";
+		await mockBreached(breached);
+		const first = await resetClient.resetPassword({
+			newPassword: breached,
+			token: resetToken,
+		});
+		expect(first.error?.status).toBe(400);
+		expect(first.error?.code).toBe("PASSWORD_COMPROMISED");
+
+		const stillPresent = await resetCtx.internalAdapter.findVerificationValue(
+			`reset-password:${resetToken}`,
+		);
+		expect(stillPresent).toBeTruthy();
+
+		vi.restoreAllMocks();
+		const second = await resetClient.resetPassword({
+			newPassword: safePassword,
+			token: resetToken,
+		});
+		expect(second.data?.status).toBe(true);
+
+		const signIn = await resetClient.signIn.email({
+			email,
+			password: safePassword,
+		});
+		expect(signIn.data?.user).toBeDefined();
 	});
 
 	describe("when enabled is false", async () => {
@@ -161,6 +225,35 @@ describe("have-i-been-pwned", async () => {
 			expect(result.error?.status).toBe(400);
 			expect(result.error?.code).toBe("PASSWORD_COMPROMISED");
 		});
+
+		it("should allow retry with the same OTP after a HIBP rejection", async () => {
+			const email = `email-otp-retry-${Date.now()}@example.com`;
+			const safePassword = `safe-email-otp-${Date.now()}-qz7`;
+			await client.signUp.email({
+				email,
+				password: `Str0ng!P@ssw0rd-${Date.now()}`,
+				name: "Test User",
+			});
+			await client.emailOtp.requestPasswordReset({ email });
+			const reusedOtp = otp;
+
+			const breached = "breached-email-otp-retry";
+			await mockBreached(breached);
+			const first = await client.emailOtp.resetPassword({
+				email,
+				otp: reusedOtp,
+				password: breached,
+			});
+			expect(first.error?.code).toBe("PASSWORD_COMPROMISED");
+
+			vi.restoreAllMocks();
+			const second = await client.emailOtp.resetPassword({
+				email,
+				otp: reusedOtp,
+				password: safePassword,
+			});
+			expect(second.data?.success).toBe(true);
+		});
 	});
 
 	describe("reset password with phone number OTP", async () => {
@@ -213,6 +306,32 @@ describe("have-i-been-pwned", async () => {
 
 			expect(result.error?.status).toBe(400);
 			expect(result.error?.code).toBe("PASSWORD_COMPROMISED");
+		});
+
+		it("should allow retry with the same OTP after a HIBP rejection", async () => {
+			const phone = `+1555${Date.now().toString().slice(-7)}`;
+			const safePassword = `safe-phone-otp-${Date.now()}-qz7`;
+			await client.phoneNumber.sendOtp({ phoneNumber: phone });
+			await client.phoneNumber.verify({ phoneNumber: phone, code: signUpOtp });
+			await client.phoneNumber.requestPasswordReset({ phoneNumber: phone });
+			const reusedOtp = resetOtp;
+
+			const breached = "breached-phone-otp-retry";
+			await mockBreached(breached);
+			const first = await client.phoneNumber.resetPassword({
+				phoneNumber: phone,
+				otp: reusedOtp,
+				newPassword: breached,
+			});
+			expect(first.error?.code).toBe("PASSWORD_COMPROMISED");
+
+			vi.restoreAllMocks();
+			const second = await client.phoneNumber.resetPassword({
+				phoneNumber: phone,
+				otp: reusedOtp,
+				newPassword: safePassword,
+			});
+			expect(second.data?.status).toBe(true);
 		});
 	});
 
