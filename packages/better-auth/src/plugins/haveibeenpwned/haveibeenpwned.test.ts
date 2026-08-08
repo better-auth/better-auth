@@ -40,6 +40,10 @@ describe("have-i-been-pwned", async () => {
 	);
 	const ctx = await auth.$context;
 
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
 	it("should prevent account creation with compromised password", async () => {
 		const uniqueEmail = `test-${Date.now()}@example.com`;
 		const compromisedPassword = "123456789";

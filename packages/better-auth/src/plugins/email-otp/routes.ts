@@ -946,14 +946,10 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 			}
 
-			const user = await ctx.context.internalAdapter.findUserByEmail(email, {
-				includeAccounts: true,
-			});
-			if (!user) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
-			}
 			// Hash (and plugin checks like haveIBeenPwned) before consuming the
-			// OTP so a rejected password does not burn the reset code.
+			// OTP so a rejected password does not burn the reset code. Keep the
+			// user lookup after OTP proof so invalid OTPs cannot enumerate
+			// registered emails.
 			const passwordHash = await ctx.context.password.hash(ctx.body.password);
 
 			// Use atomic verification to prevent race conditions
@@ -963,6 +959,13 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				toOTPIdentifier("forget-password", email),
 				ctx.body.otp,
 			);
+
+			const user = await ctx.context.internalAdapter.findUserByEmail(email, {
+				includeAccounts: true,
+			});
+			if (!user) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
+			}
 
 			const account = user.accounts?.find(
 				(account) => account.providerId === "credential",
