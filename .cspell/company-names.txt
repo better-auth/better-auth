@@ -30,3 +30,5 @@ PayU
 Mikro
 anthropics
 Zitadel
+agentid
+agentmail
