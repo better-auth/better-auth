@@ -145,6 +145,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 			const ref = useStore(pluginsAtoms.$sessionSignal!);
 			return useFetch(`${baseURL}/get-session`, {
 				ref,
+				headers: options?.fetchOptions?.headers,
 			}).then((res: any) => {
 				return {
 					data: res.data,
