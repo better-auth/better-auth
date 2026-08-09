@@ -4,6 +4,7 @@
   "pages": [
     "email-password",
     "---Social Sign-On---",
+    "agentid",
     "apple",
     "atlassian",
     "cognito",

@@ -1,0 +1,161 @@
+---
+icon: authenticationAgentID
+title: AgentID
+description: AgentID provider setup and usage.
+---
+
+[AgentID](https://auth.agentid.com) is an OpenID Connect provider for AI agents,
+from AgentMail. The agent signing in is the one that completes the flow: the
+browser lands on a waiting page showing a request id, and the sign-in finishes
+when the agent that owns the inbox signs that id with a registered key. Nothing
+extra is needed on your side for that — it is simply why the authorization step
+can take a little longer than a human-driven one.
+
+<Steps>
+  <Step>
+    ### Get your AgentID credentials
+
+    Register a client at [console.agentid.com](https://console.agentid.com).
+    Add your callback URL — `http://localhost:3000/api/auth/callback/agentid`
+    for development — and copy the client id and secret. **The secret is shown
+    once.**
+
+    Leave the token endpoint authentication method on `client_secret_basic`,
+    which is the console's default and what this provider sends unless told
+    otherwise.
+
+    <Callout type="info">
+      A client id can also be an **https URL you control**, which needs no
+      registration at all. That tier is held to `openid` and `email`, and its
+      redirect URI must sit on the same origin as the client id — so it cannot
+      run on `localhost`. Registering is what makes local development possible,
+      and is the only route to `profile` and the owner scopes.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Configure the provider
+
+    Configure the `agentid` key in the `socialProviders` option of your auth
+    instance.
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+
+    export const auth = betterAuth({
+      socialProviders: {
+        agentid: {
+          clientId: process.env.AGENTID_CLIENT_ID as string, // [!code highlight]
+          clientSecret: process.env.AGENTID_CLIENT_SECRET as string, // [!code highlight]
+        },
+      },
+    })
+    ```
+  </Step>
+
+  <Step>
+    ### Sign In with AgentID
+
+    To sign in with AgentID, use the `signIn.social` function from the client.
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+
+    const authClient = createAuthClient()
+
+    const signIn = async () => {
+      const data = await authClient.signIn.social({
+        provider: "agentid"
+      })
+    }
+    ```
+
+    The browser then lands on AgentID's waiting page. Hand the request id it
+    shows to your agent; the steps it needs are at
+    [auth.agentid.com/docs/approve](https://auth.agentid.com/docs/approve). On
+    approval the browser returns to your `callbackURL` signed in, and
+    `session.user.email` is the agent's inbox address.
+  </Step>
+</Steps>
+
+### Scopes
+
+`openid` and `email` are requested by default, and are the whole of what an
+unregistered client can have. A registered client can add three more through
+`scope`:
+
+```ts title="auth.ts"
+agentid: {
+  clientId: process.env.AGENTID_CLIENT_ID as string,
+  clientSecret: process.env.AGENTID_CLIENT_SECRET as string,
+  scope: ["profile", "owner_profile", "owner_email"], // [!code highlight]
+}
+```
+
+| Scope           | What it adds                                                                       |
+| --------------- | ---------------------------------------------------------------------------------- |
+| `profile`       | The agent's display name, as `name`.                                               |
+| `owner_profile` | The name of the human who owns the organization behind the agent, as `owner_name`. |
+| `owner_email`   | That human's email, as `owner_email`.                                              |
+
+The two families fail differently, which is worth knowing before you debug one.
+Requesting an owner scope your client did not register for fails the whole
+authorization with `invalid_scope` — after the agent has already approved.
+Requesting `profile` from a client that cannot have it does not fail: the
+request is accepted and simply pays out no `name`.
+
+### The owner claims
+
+`owner_name` and `owner_email` describe the human behind the agent, and **no
+id\_token carries them** — they are served only from AgentID's `userinfo`
+endpoint. This provider fetches them for you when an owner scope is requested,
+and puts them on the profile, so `mapProfileToUser` can lift them onto your user:
+
+```ts title="auth.ts"
+agentid: {
+  clientId: process.env.AGENTID_CLIENT_ID as string,
+  clientSecret: process.env.AGENTID_CLIENT_SECRET as string,
+  scope: ["owner_profile", "owner_email"],
+  mapProfileToUser: (profile) => ({ // [!code highlight]
+    ownerName: profile.owner_name, // [!code highlight]
+    ownerEmail: profile.owner_email, // [!code highlight]
+  }), // [!code highlight]
+}
+```
+
+Add matching entries under `user.additionalFields` to store them.
+
+<Callout type="warn">
+  Requesting owner information does not guarantee it arrives. The agent's
+  signing credential has to carry the matching permission, and the organization
+  behind it needs exactly one designated owner. When a sign-in asks for it and
+  the credential does not permit it, that sign-in fails for the agent rather
+  than returning a token quietly missing the claim.
+</Callout>
+
+### Additional options
+
+* `scope`: Extra scopes to request, combined with the defaults above.
+* `tokenEndpointAuthentication`: `"basic"` or `"post"`, matching what your
+  client registered. Defaults to `"basic"`. A mismatch fails the token exchange
+  *after* the agent has approved, with
+  `client is registered for client_secret_basic`.
+* `mapProfileToUser`: Map the AgentID profile onto your user record.
+* `disableDefaultScope`: Drop `openid` and `email` from the request.
+
+### Notes
+
+* **PKCE is always sent**, and always `S256` — AgentID requires the first and
+  accepts only the second, so there is no option to disable it. The requirement
+  is not discoverable from the issuer's metadata, which advertises the method as
+  *supported* rather than *required*; a client that defaults PKCE off finds out
+  by failing, with `error=invalid_request` and
+  `code_challenge is required for this client`.
+* **`name` falls back to the inbox local part.** AgentID omits the claim for an
+  inbox with no display name set, and `user.name` is required by Better Auth's
+  schema — so without a fallback the sign-in fails on a NOT NULL constraint.
+  `support@acme.agentmail.to` becomes `support`. A `name` that AgentID does send
+  always wins.
+* **There is no refresh token.** `authorization_code` is AgentID's only grant,
+  so an expired access token cannot be renewed in place. Signing in again
+  replaces the stored tokens.
