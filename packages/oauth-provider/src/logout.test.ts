@@ -650,10 +650,9 @@ describe("oauth logout - disableJwtPlugin", async () => {
 });
 
 /**
- * The provider holds the key set that signs its own id tokens, so RP-initiated
- * logout must not reach for them over HTTP. A decoy key set is served on the
- * provider's own base URL: a self-fetch would verify against those keys instead
- * of the real ones, and the request counter would move.
+ * The provider signs its own id tokens, so RP-initiated logout must resolve the
+ * key set in process. The decoy is there to catch a self-fetch: it holds the
+ * port the base URL resolves to, and its keys verify nothing.
  *
  * @see https://github.com/better-auth/better-auth/issues/10728
  */
