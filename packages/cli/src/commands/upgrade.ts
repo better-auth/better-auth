@@ -7,9 +7,9 @@ import * as semver from "semver";
 import yoctoSpinner from "yocto-spinner";
 import * as z from "zod";
 import { detectPackageManager } from "../utils/check-package-managers";
-import { fetchLatestVersion } from "../utils/fetch-latest-version";
 import { getPackageInfo } from "../utils/get-package-info";
 import { installDependencies } from "../utils/install-dependencies";
+import { cliVersion } from "../version";
 
 function isBetterAuthPackage(name: string): boolean {
 	return name === "better-auth" || name.startsWith("@better-auth/");
@@ -18,11 +18,11 @@ function isBetterAuthPackage(name: string): boolean {
 interface UpgradeEntry {
 	name: string;
 	current: string;
-	latest: string;
+	target: string;
 	depType: "prod" | "dev";
 }
 
-async function upgradeAction(opts: unknown) {
+export async function upgradeAction(opts: unknown) {
 	const options = z
 		.object({
 			cwd: z.string(),
@@ -73,22 +73,11 @@ async function upgradeAction(opts: unknown) {
 
 	const spinner = yoctoSpinner({ text: "checking for updates..." }).start();
 
-	const results = await Promise.allSettled(
-		candidates.map(async (c) => {
-			const latest = await fetchLatestVersion(c.name);
-			return { ...c, latest };
-		}),
-	);
-
 	const upgrades: UpgradeEntry[] = [];
-	for (const result of results) {
-		if (result.status !== "fulfilled" || !result.value.latest) {
-			continue;
-		}
-		const { name, current, latest, depType } = result.value;
-		const coerced = semver.coerce(current);
-		if (coerced && semver.lt(coerced, latest)) {
-			upgrades.push({ name, current, latest, depType });
+	for (const { name, current, depType } of candidates) {
+		const currentVersion = semver.minVersion(current);
+		if (currentVersion && semver.lt(currentVersion, cliVersion)) {
+			upgrades.push({ name, current, target: cliVersion, depType });
 		}
 	}
 
@@ -102,7 +91,7 @@ async function upgradeAction(opts: unknown) {
 	console.log(`\nThe following packages can be upgraded:\n`);
 	for (const u of upgrades) {
 		console.log(
-			`  ${chalk.cyan(u.name)}  ${chalk.gray(u.current)} ${chalk.white("→")} ${chalk.green(u.latest)}`,
+			`  ${chalk.cyan(u.name)}  ${chalk.gray(u.current)} ${chalk.white("→")} ${chalk.green(u.target)}`,
 		);
 	}
 	console.log();
@@ -127,10 +116,10 @@ async function upgradeAction(opts: unknown) {
 
 	const prodUpgrades = upgrades
 		.filter((u) => u.depType === "prod")
-		.map((u) => `${u.name}@${u.latest}`);
+		.map((u) => `${u.name}@${u.target}`);
 	const devUpgrades = upgrades
 		.filter((u) => u.depType === "dev")
-		.map((u) => `${u.name}@${u.latest}`);
+		.map((u) => `${u.name}@${u.target}`);
 
 	const installSpinner = yoctoSpinner({
 		text: "installing updates...",
@@ -163,7 +152,7 @@ async function upgradeAction(opts: unknown) {
 }
 
 export const upgrade = new Command("upgrade")
-	.description("Upgrade better-auth packages to their latest versions")
+	.description("Upgrade better-auth packages to the running CLI version")
 	.option(
 		"-c, --cwd <cwd>",
 		"the working directory. defaults to the current directory.",
