@@ -231,6 +231,24 @@ const optionalQueryPlugin = {
 			},
 			async () => ({ success: true }),
 		),
+		nullableQuery: createAuthEndpoint(
+			"/test/nullable-query",
+			{
+				method: "GET",
+				query: z.object({ token: z.string().optional() }).nullable(),
+			},
+			async () => ({ success: true }),
+		),
+		composedWrapperQuery: createAuthEndpoint(
+			"/test/composed-wrapper-query",
+			{
+				method: "GET",
+				query: z.optional(
+					z.nullable(z.object({ cursor: z.string().optional() })),
+				),
+			},
+			async () => ({ success: true }),
+		),
 	},
 } satisfies BetterAuthPlugin;
 
@@ -970,6 +988,21 @@ describe("open-api", async () => {
 			schema: { type: "string" },
 		});
 		expect(getPathParameter(path, "customerType")).toMatchObject({
+			in: "query",
+		});
+	});
+
+	// The wrappers compose, and each only describes how the query object as a whole may be supplied —
+	// the parameters inside it are the same either way.
+	it.each([
+		["nullable", "/test/nullable-query", "token"],
+		["optional + nullable", "/test/composed-wrapper-query", "cursor"],
+	])("should emit query parameters for a %s query schema", async (_label, endpoint, parameterName) => {
+		const schema = await authWithOptionalQuery.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+		const path = paths[endpoint];
+		expect(path).toBeDefined();
+		expect(getPathParameter(path, parameterName)).toMatchObject({
 			in: "query",
 		});
 	});
