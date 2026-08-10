@@ -135,7 +135,7 @@ export type DeviceAuthorizationOptions = z.infer<
 >;
 
 export interface DeviceAuthorizationRequest {
-	client_id: string;
+	client_id?: string | undefined;
 	user_id?: string | undefined;
 	scope?: string | undefined;
 }

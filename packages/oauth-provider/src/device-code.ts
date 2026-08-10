@@ -81,6 +81,60 @@ function parseScopes(scope: string | null | undefined): string[] {
 	return normalized ? normalized.split(/\s+/) : [];
 }
 
+const clientAuthenticationFields = [
+	"client_secret",
+	"client_assertion",
+	"client_assertion_type",
+] as const;
+
+type ClientAuthenticationField = (typeof clientAuthenticationFields)[number];
+
+type ClientAuthenticationAttempt = {
+	detected: boolean;
+	fields: Partial<Record<ClientAuthenticationField, string>>;
+};
+
+/**
+ * Recovers OAuth authentication fields stripped by the device endpoint's
+ * protocol-specific Zod schema. This only detects and restores an attempt;
+ * extractClientCredentials remains responsible for authentication semantics.
+ */
+async function readClientAuthenticationAttempt(
+	request: Request | undefined,
+): Promise<ClientAuthenticationAttempt> {
+	const fields: Partial<Record<ClientAuthenticationField, string>> = {};
+	let detected = Boolean(request?.headers.get("authorization"));
+	if (!request) return { detected, fields };
+
+	const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+	if (contentType.includes("application/x-www-form-urlencoded")) {
+		const params = new URLSearchParams(await request.clone().text());
+		for (const field of clientAuthenticationFields) {
+			if (!params.has(field)) continue;
+			detected = true;
+			fields[field] = params.get(field) ?? "";
+		}
+	} else if (contentType.includes("application/json")) {
+		let body: unknown;
+		try {
+			body = await request.clone().json();
+		} catch {
+			return { detected, fields };
+		}
+		if (!body || typeof body !== "object" || Array.isArray(body)) {
+			return { detected, fields };
+		}
+		const objectBody = body as Record<string, unknown>;
+		for (const field of clientAuthenticationFields) {
+			if (!(field in objectBody)) continue;
+			detected = true;
+			const value = objectBody[field];
+			if (typeof value === "string") fields[field] = value;
+		}
+	}
+	return { detected, fields };
+}
+
 /**
  * Exchanges an approved RFC 8628 device code for an OAuth token set. Unlike the
  * device-authorization plugin's `/device/token` (which mints a first-party
@@ -212,6 +266,13 @@ function buildOAuthDeviceGrant() {
 			device_authorization_endpoint: `${metadataInput.ctx.context.baseURL}${DEVICE_AUTHORIZATION_PATH}`,
 		}),
 		authorizeRequest: async ({ ctx, request }) => {
+			const clientAuthentication = await readClientAuthenticationAttempt(
+				ctx.request,
+			);
+			Object.assign(
+				ctx.body as Record<string, unknown>,
+				clientAuthentication.fields,
+			);
 			const formResources = ctx.request
 				? await extractRepeatedResourceFromForm(ctx.request)
 				: undefined;
@@ -230,13 +291,6 @@ function buildOAuthDeviceGrant() {
 			}
 			const provider = getOAuthProviderPlugin(ctx.context);
 			if (!provider) return;
-			const oauthClient = await getClient(
-				ctx,
-				provider.options,
-				request.client_id,
-			);
-			// Requests from unknown ids remain in the standalone session flow.
-			if (!oauthClient) return;
 			const scopes = parseScopes(request.scope);
 			if (request.scope !== undefined) {
 				request.scope = scopes.join(" ");
@@ -247,13 +301,24 @@ function buildOAuthDeviceGrant() {
 				provider.options,
 				DEVICE_CODE_GRANT_TYPE,
 			);
+			const hasClientAuthentication = clientAuthentication.detected;
+			if (!request.client_id && !hasClientAuthentication) {
+				tokenError("BAD_REQUEST", "invalid_request", "client_id is required");
+			}
+			const oauthClient = request.client_id
+				? await getClient(ctx, provider.options, request.client_id)
+				: undefined;
+			// Requests from unknown ids remain in the standalone session flow only
+			// when the caller did not also present OAuth client credentials.
+			if (request.client_id && !oauthClient && !hasClientAuthentication) return;
 			const authenticated = await api.authenticateClient({
 				scopes,
 				requireCredentials: false,
 			});
-			if (authenticated.clientId !== request.client_id) {
-				tokenError("BAD_REQUEST", "invalid_grant", "Client ID mismatch");
+			if (request.client_id && authenticated.clientId !== request.client_id) {
+				tokenError("BAD_REQUEST", "invalid_client", "Client ID mismatch");
 			}
+			request.client_id = authenticated.clientId;
 			await resolveResourcePolicy(ctx, provider.options, {
 				resource,
 				clientId: authenticated.clientId,

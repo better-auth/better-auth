@@ -123,6 +123,30 @@ const deviceCodeBaseErrorCodes = [
 	"server_error",
 ] as const;
 
+const deviceAuthorizationBaseRequestFields = [
+	"client_id",
+	"user_id",
+	"scope",
+] as const;
+
+async function rejectDuplicateBaseRequestParameters(
+	request: Request | undefined,
+) {
+	const contentType = request?.headers.get("content-type")?.toLowerCase() ?? "";
+	if (!request || !contentType.includes("application/x-www-form-urlencoded")) {
+		return;
+	}
+
+	const params = new URLSearchParams(await request.clone().text());
+	for (const field of deviceAuthorizationBaseRequestFields) {
+		if (params.getAll(field).length < 2) continue;
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_request",
+			error_description: `${field} must not be repeated`,
+		});
+	}
+}
+
 type GrantRequestFields<Grant extends DeviceAuthorizationGrant | undefined> =
 	Grant extends DeviceAuthorizationGrant<infer RequestFields>
 		? RequestFields
@@ -174,7 +198,11 @@ export const deviceCode = <Grant extends DeviceAuthorizationGrant | undefined>(
 	};
 	const requestFields = (grant?.requestSchemaFields ??
 		{}) as GrantRequestFields<Grant>;
-	const requestSchema = deviceCodeBodySchema.extend(requestFields);
+	const requestSchema = (
+		grant
+			? deviceCodeBodySchema.extend({ client_id: z.string().optional() })
+			: deviceCodeBodySchema
+	).extend(requestFields);
 	const requestErrorCodes = [
 		...deviceCodeBaseErrorCodes,
 		...(grant?.requestErrorCodes ?? []),
@@ -195,8 +223,12 @@ export const deviceCode = <Grant extends DeviceAuthorizationGrant | undefined>(
 			cloneRequest: true,
 			body: requestSchema,
 			error: requestErrorSchema,
-			onValidationError: ({ issues }) => {
+			onValidationError: ({ issues, message }) => {
 				grant?.onRequestValidationError?.(issues);
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_request",
+					error_description: message,
+				});
 			},
 			metadata: {
 				noStore: true,
@@ -273,25 +305,51 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			},
 		},
 		async (ctx) => {
+			await rejectDuplicateBaseRequestParameters(ctx.request);
 			const request = ctx.body as DeviceAuthorizationRequest &
 				z.infer<z.ZodObject<GrantRequestFields<Grant>>>;
-			if (opts.validateClient) {
-				const isValid = await opts.validateClient(request.client_id);
-				if (!isValid) {
-					throw new APIError("BAD_REQUEST", {
-						error: "invalid_client",
-						error_description: "Invalid client ID",
-					});
-				}
+			if (request.client_id === "") {
+				request.client_id = undefined;
 			}
 
-			const grantDeviceCodeFields = await grant?.authorizeRequest({
-				ctx,
-				request,
-			});
+			let grantDeviceCodeFields: Record<string, unknown> | undefined;
+			if (grant) {
+				grantDeviceCodeFields = await grant.authorizeRequest({ ctx, request });
+			}
+			if (grantDeviceCodeFields === undefined) {
+				if (!request.client_id) {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_request",
+						error_description: "client_id is required",
+					});
+				}
+				if (!opts.validateClient) {
+					if (grant) {
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_client",
+							error_description: "Invalid client ID",
+						});
+					}
+				} else {
+					const isValid = await opts.validateClient(request.client_id);
+					if (!isValid) {
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_client",
+							error_description: "Invalid client ID",
+						});
+					}
+				}
+			}
+			const clientId = request.client_id;
+			if (!clientId) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_request",
+					error_description: "client_id is required",
+				});
+			}
 
 			if (opts.onDeviceAuthRequest) {
-				await opts.onDeviceAuthRequest(request.client_id, request.scope);
+				await opts.onDeviceAuthRequest(clientId, request.scope);
 			}
 
 			const expiresIn = ms(opts.expiresIn);
@@ -316,7 +374,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 							expiresAt,
 							status: "pending",
 							pollingInterval: ms(opts.interval),
-							clientId: request.client_id,
+							clientId,
 							scope: request.scope,
 						},
 					});

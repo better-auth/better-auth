@@ -253,6 +253,382 @@ describe("oauth-provider device-code grant", async () => {
 		});
 	}
 
+	it("accepts a confidential client authenticated with Basic without body client_id", async () => {
+		const { headers } = await signInWithTestUser();
+		const created = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_basic",
+				grant_types: [DEVICE_CODE_GRANT_TYPE],
+				scope: "openid",
+				application_type: "web",
+				redirect_uris: ["https://client.example.com/callback"],
+			},
+		});
+		if (!created?.client_id || !created.client_secret) {
+			throw new Error("confidential OAuth client was not created");
+		}
+
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/device/code",
+			{
+				method: "POST",
+				body: new URLSearchParams({ scope: "openid" }),
+				headers: {
+					...FORM_HEADERS,
+					authorization: `Basic ${Buffer.from(`${created.client_id}:${created.client_secret}`).toString("base64")}`,
+				},
+			},
+		);
+
+		expect(response.error).toBeNull();
+		expect(response.data?.device_code).toEqual(expect.any(String));
+		expect(response.data?.user_code).toEqual(expect.any(String));
+		const verification = await auth.api.deviceVerify({
+			query: { user_code: response.data?.user_code as string },
+			headers,
+		});
+		expect(verification.client_id).toBe(created.client_id);
+	});
+
+	it("accepts a confidential client authenticated with client_secret_post", async () => {
+		const { headers } = await signInWithTestUser();
+		const created = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: [DEVICE_CODE_GRANT_TYPE],
+				scope: "openid",
+				application_type: "web",
+				redirect_uris: ["https://post.example.com/callback"],
+			},
+		});
+		if (!created?.client_id || !created.client_secret) {
+			throw new Error("confidential OAuth client was not created");
+		}
+
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/device/code",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					client_id: created.client_id,
+					client_secret: created.client_secret,
+					scope: "openid",
+				}),
+				headers: FORM_HEADERS,
+			},
+		);
+
+		expect(response.error).toBeNull();
+		expect(response.data?.device_code).toEqual(expect.any(String));
+		expect(response.data?.user_code).toEqual(expect.any(String));
+		const verification = await auth.api.deviceVerify({
+			query: { user_code: response.data?.user_code as string },
+			headers,
+		});
+		expect(verification.client_id).toBe(created.client_id);
+	});
+
+	it("authenticates an assertion whose client ID is supplied intrinsically", async () => {
+		const assertionMethod = "https://example.com/device-assertion";
+		const assertionValue = "valid-device-assertion";
+		const grant = deviceCodeGrant();
+		const assertionClientId = "intrinsic-assertion-client";
+		const {
+			auth: assertionAuth,
+			client: assertionClient,
+			signInWithTestUser: signInWithAssertionUser,
+		} = await getTestInstance(
+			{
+				baseURL,
+				plugins: [
+					jwt({ jwt: { issuer: baseURL } }),
+					deviceAuthorization({ grant }),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						extensions: [
+							grant,
+							{
+								clientAuthentication: {
+									[assertionMethod]: {
+										assertionTypes: [assertionMethod],
+										authenticate: ({ assertion }) => {
+											if (assertion !== assertionValue) {
+												throw new Error("invalid assertion");
+											}
+											return { clientId: assertionClientId };
+										},
+									},
+								},
+							},
+						],
+						generateClientId: () => assertionClientId,
+						scopes: ["openid"],
+					}),
+				],
+			},
+			{
+				clientOptions: { plugins: [oauthProviderClient()] },
+			},
+		);
+		const { headers } = await signInWithAssertionUser();
+		const created = await assertionAuth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: assertionMethod,
+				grant_types: [DEVICE_CODE_GRANT_TYPE],
+				scope: "openid",
+				application_type: "native",
+			},
+		});
+		expect(created?.client_id).toBe(assertionClientId);
+
+		const response = await assertionClient.$fetch<Record<string, unknown>>(
+			"/device/code",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					client_assertion_type: assertionMethod,
+					client_assertion: assertionValue,
+					scope: "openid",
+				}),
+				headers: FORM_HEADERS,
+			},
+		);
+
+		expect(response.error).toBeNull();
+		const verification = await assertionAuth.api.deviceVerify({
+			query: { user_code: response.data?.user_code as string },
+			headers,
+		});
+		expect(verification.client_id).toBe(assertionClientId);
+	});
+
+	it("rejects an unknown client in composed mode without explicit standalone validation", async () => {
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/device/code",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					client_id: "unknown-composed-client",
+					scope: "openid",
+				}),
+				headers: FORM_HEADERS,
+			},
+		);
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as TokenErrorBody)?.error).toBe("invalid_client");
+	});
+
+	it("returns an RFC invalid_request envelope for duplicate base parameters", async () => {
+		const form = new URLSearchParams([
+			["client_id", "duplicate-parameter-client"],
+			["scope", "openid"],
+			["scope", "email"],
+		]);
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/device/code",
+			{
+				method: "POST",
+				body: form,
+				headers: FORM_HEADERS,
+			},
+		);
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as TokenErrorBody)?.error).toBe("invalid_request");
+		expect((response.error as TokenErrorBody)?.error_description).toMatch(
+			/scope/,
+		);
+	});
+
+	it("returns an RFC invalid_request envelope for malformed base parameters", async () => {
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/device/code",
+			{
+				method: "POST",
+				body: { client_id: ["malformed-client"], scope: "openid" },
+				headers: { "content-type": "application/json" },
+			},
+		);
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as TokenErrorBody)?.error).toBe("invalid_request");
+		expect((response.error as TokenErrorBody)?.error_description).toMatch(
+			/client_id/,
+		);
+	});
+
+	it("returns invalid_request when an unauthenticated request omits client_id", async () => {
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/device/code",
+			{
+				method: "POST",
+				body: new URLSearchParams({ scope: "openid" }),
+				headers: FORM_HEADERS,
+			},
+		);
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as TokenErrorBody)?.error).toBe("invalid_request");
+		expect((response.error as TokenErrorBody)?.error_description).toMatch(
+			/client_id/,
+		);
+	});
+
+	it("returns invalid_client when Basic auth and body client_id identify different clients", async () => {
+		const { headers } = await signInWithTestUser();
+		const authenticatedClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_basic",
+				grant_types: [DEVICE_CODE_GRANT_TYPE],
+				scope: "openid",
+				application_type: "web",
+				redirect_uris: ["https://authenticated.example.com/callback"],
+			},
+		});
+		if (!authenticatedClient?.client_id || !authenticatedClient.client_secret) {
+			throw new Error("authenticated OAuth client was not created");
+		}
+		const bodyClient = await createDeviceClient();
+
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/device/code",
+			{
+				method: "POST",
+				body: new URLSearchParams({ client_id: bodyClient, scope: "openid" }),
+				headers: {
+					...FORM_HEADERS,
+					authorization: `Basic ${Buffer.from(`${authenticatedClient.client_id}:${authenticatedClient.client_secret}`).toString("base64")}`,
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as TokenErrorBody)?.error).toBe("invalid_client");
+	});
+
+	it("treats an empty body client_id as omitted for authenticated requests", async () => {
+		const grant = deviceCodeGrant();
+		const validateClient = vi.fn(() => false);
+		const {
+			auth: validatedAuth,
+			client: validatedClient,
+			signInWithTestUser: signInWithValidatedUser,
+		} = await getTestInstance(
+			{
+				baseURL,
+				plugins: [
+					jwt({ jwt: { issuer: baseURL } }),
+					deviceAuthorization({ grant, validateClient }),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						extensions: [grant],
+						scopes: ["openid"],
+					}),
+				],
+			},
+			{
+				clientOptions: { plugins: [oauthProviderClient()] },
+			},
+		);
+		const { headers } = await signInWithValidatedUser();
+		const created = await validatedAuth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_basic",
+				grant_types: [DEVICE_CODE_GRANT_TYPE],
+				scope: "openid",
+				application_type: "web",
+				redirect_uris: ["https://empty-id.example.com/callback"],
+			},
+		});
+		if (!created?.client_id || !created.client_secret) {
+			throw new Error("confidential OAuth client was not created");
+		}
+
+		const response = await validatedClient.$fetch<Record<string, unknown>>(
+			"/device/code",
+			{
+				method: "POST",
+				body: new URLSearchParams({ client_id: "", scope: "openid" }),
+				headers: {
+					...FORM_HEADERS,
+					authorization: `Basic ${Buffer.from(`${created.client_id}:${created.client_secret}`).toString("base64")}`,
+				},
+			},
+		);
+
+		expect(response.error).toBeNull();
+		expect(response.data?.device_code).toEqual(expect.any(String));
+		expect(validateClient).not.toHaveBeenCalled();
+	});
+
+	it("does not route an authenticated unknown body client through standalone validation", async () => {
+		const grant = deviceCodeGrant();
+		const validateClient = vi.fn(() => true);
+		const {
+			auth: validatedAuth,
+			client: validatedClient,
+			signInWithTestUser: signInWithValidatedUser,
+		} = await getTestInstance(
+			{
+				baseURL,
+				plugins: [
+					jwt({ jwt: { issuer: baseURL } }),
+					deviceAuthorization({ grant, validateClient }),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						extensions: [grant],
+						scopes: ["openid"],
+					}),
+				],
+			},
+			{
+				clientOptions: { plugins: [oauthProviderClient()] },
+			},
+		);
+		const { headers } = await signInWithValidatedUser();
+		const created = await validatedAuth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_basic",
+				grant_types: [DEVICE_CODE_GRANT_TYPE],
+				scope: "openid",
+				application_type: "web",
+				redirect_uris: ["https://unknown-id.example.com/callback"],
+			},
+		});
+		if (!created?.client_id || !created.client_secret) {
+			throw new Error("confidential OAuth client was not created");
+		}
+
+		const response = await validatedClient.$fetch<Record<string, unknown>>(
+			"/device/code",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					client_id: "unknown-standalone-id",
+					scope: "openid",
+				}),
+				headers: {
+					...FORM_HEADERS,
+					authorization: `Basic ${Buffer.from(`${created.client_id}:${created.client_secret}`).toString("base64")}`,
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as TokenErrorBody)?.error).toBe("invalid_client");
+		expect(validateClient).not.toHaveBeenCalled();
+	});
+
 	it("advertises device_authorization_endpoint in discovery metadata", async () => {
 		const authServer =
 			(await auth.api.getOAuthServerConfig()) as unknown as Record<
@@ -433,7 +809,7 @@ describe("oauth-provider device-code grant", async () => {
 			new Request(`${baseURL}/api/auth/device/code`, {
 				method: "POST",
 				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ resource: "/api" }),
+				body: JSON.stringify({ client_id: 42, resource: "/api" }),
 			}),
 		);
 
@@ -780,24 +1156,36 @@ describe("oauth-provider device-code grant", async () => {
 	});
 
 	it("still issues a first-party session token for a non-OAuth client at /device/token", async () => {
-		// A plain device client id that is NOT a registered OAuth client keeps the
-		// original first-party device flow (session token), unaffected by the guard.
 		const firstPartyClientId = "first-party-cli";
-		const { headers } = await signInWithTestUser();
-		const { device_code, user_code } = await auth.api.deviceCode({
+		const {
+			auth: standaloneAuth,
+			client: standaloneClient,
+			signInWithTestUser: signInWithStandaloneUser,
+		} = await getTestInstance(
+			{ plugins: [deviceAuthorization()] },
+			{ clientOptions: { plugins: [deviceAuthorizationClient()] } },
+		);
+		const { headers } = await signInWithStandaloneUser();
+		const { device_code, user_code } = await standaloneAuth.api.deviceCode({
 			body: { client_id: firstPartyClientId },
 		});
-		await auth.api.deviceVerify({ query: { user_code }, headers });
-		await auth.api.deviceApprove({ body: { userCode: user_code }, headers });
-
-		const res = await client.$fetch<Record<string, unknown>>("/device/token", {
-			method: "POST",
-			body: {
-				grant_type: DEVICE_CODE_GRANT_TYPE,
-				device_code,
-				client_id: firstPartyClientId,
-			},
+		await standaloneAuth.api.deviceVerify({ query: { user_code }, headers });
+		await standaloneAuth.api.deviceApprove({
+			body: { userCode: user_code },
+			headers,
 		});
+
+		const res = await standaloneClient.$fetch<Record<string, unknown>>(
+			"/device/token",
+			{
+				method: "POST",
+				body: {
+					grant_type: DEVICE_CODE_GRANT_TYPE,
+					device_code,
+					client_id: firstPartyClientId,
+				},
+			},
+		);
 		expect(res.error).toBeNull();
 		expect(res.data?.access_token).toBeDefined();
 		expect(res.data?.token_type).toBe("Bearer");
@@ -817,7 +1205,9 @@ describe("oauth-provider device-code immutable routing", async () => {
 				generateClientId: () => firstPartyClientId,
 				scopes: ["openid"],
 			}),
-			oauthDeviceAuthorization(),
+			oauthDeviceAuthorization({
+				validateClient: (clientId) => clientId === firstPartyClientId,
+			}),
 		],
 	});
 
