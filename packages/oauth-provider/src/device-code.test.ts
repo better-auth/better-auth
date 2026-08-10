@@ -406,6 +406,221 @@ describe("oauth-provider device-code grant", async () => {
 		expect(verification.client_id).toBe(assertionClientId);
 	});
 
+	it("rejects multiple client authentication methods and repeated authentication parameters", async () => {
+		const { headers } = await signInWithTestUser();
+		const confidentialClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_basic",
+				grant_types: ["client_credentials", DEVICE_CODE_GRANT_TYPE],
+				scope: "openid",
+				application_type: "web",
+				redirect_uris: ["https://cardinality.example.com/callback"],
+			},
+		});
+		if (!confidentialClient?.client_id || !confidentialClient.client_secret) {
+			throw new Error("confidential OAuth client was not created");
+		}
+
+		const tokenResponse = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: confidentialClient.client_id,
+					client_secret: confidentialClient.client_secret,
+					scope: "openid",
+				}),
+				headers: {
+					...FORM_HEADERS,
+					authorization: `Basic ${Buffer.from(`${confidentialClient.client_id}:${confidentialClient.client_secret}`).toString("base64")}`,
+				},
+			},
+		);
+		expect(tokenResponse.error?.status).toBe(400);
+		expect((tokenResponse.error as TokenErrorBody)?.error).toBe(
+			"invalid_request",
+		);
+
+		const deviceResponse = await client.$fetch<Record<string, unknown>>(
+			"/device/code",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					client_id: confidentialClient.client_id,
+					client_secret: confidentialClient.client_secret,
+					scope: "openid",
+				}),
+				headers: {
+					...FORM_HEADERS,
+					authorization: `Basic ${Buffer.from(`${confidentialClient.client_id}:${confidentialClient.client_secret}`).toString("base64")}`,
+				},
+			},
+		);
+		expect(deviceResponse.error?.status).toBe(400);
+		expect((deviceResponse.error as TokenErrorBody)?.error).toBe(
+			"invalid_request",
+		);
+
+		const unsupportedHeaderResponse = await client.$fetch<
+			Record<string, unknown>
+		>("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: "client_credentials",
+				client_id: confidentialClient.client_id,
+				client_secret: confidentialClient.client_secret,
+				scope: "openid",
+			}),
+			headers: {
+				...FORM_HEADERS,
+				authorization: "Bearer unsupported",
+			},
+		});
+		expect(unsupportedHeaderResponse.error?.status).toBe(400);
+		expect((unsupportedHeaderResponse.error as TokenErrorBody)?.error).toBe(
+			"invalid_request",
+		);
+
+		const emptyBasicResponse = await client.$fetch<Record<string, unknown>>(
+			"/device/code",
+			{
+				method: "POST",
+				body: new URLSearchParams([
+					["client_id", confidentialClient.client_id],
+					["client_secret", ""],
+					["scope", "openid"],
+				]),
+				headers: {
+					...FORM_HEADERS,
+					authorization: `Basic ${Buffer.from(`${confidentialClient.client_id}:${confidentialClient.client_secret}`).toString("base64")}`,
+				},
+			},
+		);
+		expect(emptyBasicResponse.error).toBeNull();
+		expect(emptyBasicResponse.data?.device_code).toEqual(expect.any(String));
+
+		const postClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: [DEVICE_CODE_GRANT_TYPE],
+				scope: "openid",
+				application_type: "web",
+				redirect_uris: ["https://cardinality-post.example.com/callback"],
+			},
+		});
+		if (!postClient?.client_id || !postClient.client_secret) {
+			throw new Error("post OAuth client was not created");
+		}
+		const oneEffectiveSecretForm = new URLSearchParams([
+			["client_id", postClient.client_id],
+			["client_secret", ""],
+			["client_secret", postClient.client_secret],
+			["scope", "openid"],
+		]);
+		const oneEffectiveSecretResponse = await client.$fetch<
+			Record<string, unknown>
+		>("/device/code", {
+			method: "POST",
+			body: oneEffectiveSecretForm,
+			headers: FORM_HEADERS,
+		});
+		expect(oneEffectiveSecretResponse.error).toBeNull();
+		expect(oneEffectiveSecretResponse.data?.device_code).toEqual(
+			expect.any(String),
+		);
+
+		const publicClientId = await createDeviceClient();
+		let unsupportedHeaderChallenge: string | null = null;
+		const unsupportedHeaderPublicResponse = await client.$fetch<
+			Record<string, unknown>
+		>("/device/code", {
+			method: "POST",
+			body: new URLSearchParams({
+				client_id: publicClientId,
+				scope: "openid",
+			}),
+			headers: {
+				...FORM_HEADERS,
+				authorization: "Bearer unsupported",
+			},
+			onError: ({ response }) => {
+				unsupportedHeaderChallenge = response.headers.get("www-authenticate");
+			},
+		});
+		expect(unsupportedHeaderPublicResponse.error?.status).toBe(401);
+		expect(
+			(unsupportedHeaderPublicResponse.error as TokenErrorBody)?.error,
+		).toBe("invalid_client");
+		expect(unsupportedHeaderChallenge).toBe("Bearer");
+
+		for (const field of [
+			"client_secret",
+			"client_assertion",
+			"client_assertion_type",
+		] as const) {
+			const response = await client.$fetch<Record<string, unknown>>(
+				"/device/code",
+				{
+					method: "POST",
+					body: {
+						client_id: publicClientId,
+						scope: "openid",
+						[field]: 42,
+					},
+					headers: { "content-type": "application/json" },
+				},
+			);
+
+			expect(response.error?.status).toBe(400);
+			expect((response.error as TokenErrorBody)?.error).toBe("invalid_request");
+		}
+
+		for (const field of [
+			"client_secret",
+			"client_assertion",
+			"client_assertion_type",
+		] as const) {
+			const form = new URLSearchParams([
+				["client_id", publicClientId],
+				["scope", "openid"],
+				[field, "first"],
+				[field, "second"],
+			]);
+			const response = await client.$fetch<Record<string, unknown>>(
+				"/device/code",
+				{
+					method: "POST",
+					body: form,
+					headers: FORM_HEADERS,
+				},
+			);
+
+			expect(response.error?.status).toBe(400);
+			expect((response.error as TokenErrorBody)?.error).toBe("invalid_request");
+		}
+
+		const repeatedResourceForm = new URLSearchParams([
+			["client_id", publicClientId],
+			["scope", "openid"],
+			["resource", resource],
+			["resource", secondResource],
+		]);
+		const repeatedResourceResponse = await client.$fetch<
+			Record<string, unknown>
+		>("/device/code", {
+			method: "POST",
+			body: repeatedResourceForm,
+			headers: FORM_HEADERS,
+		});
+		expect(repeatedResourceResponse.error).toBeNull();
+		expect(repeatedResourceResponse.data?.device_code).toEqual(
+			expect.any(String),
+		);
+	});
+
 	it("rejects an unknown client in composed mode without explicit standalone validation", async () => {
 		const response = await client.$fetch<Record<string, unknown>>(
 			"/device/code",

@@ -25,6 +25,7 @@ import { ResourceUriSchema } from "./types/zod";
 import {
 	getClient,
 	getOAuthProviderPlugin,
+	parseClientAuthenticationAttempt,
 	toAudienceClaim,
 	toResourceList,
 	validateClientScopes,
@@ -79,60 +80,6 @@ function tokenError(
 function parseScopes(scope: string | null | undefined): string[] {
 	const normalized = scope?.trim();
 	return normalized ? normalized.split(/\s+/) : [];
-}
-
-const clientAuthenticationFields = [
-	"client_secret",
-	"client_assertion",
-	"client_assertion_type",
-] as const;
-
-type ClientAuthenticationField = (typeof clientAuthenticationFields)[number];
-
-type ClientAuthenticationAttempt = {
-	detected: boolean;
-	fields: Partial<Record<ClientAuthenticationField, string>>;
-};
-
-/**
- * Recovers OAuth authentication fields stripped by the device endpoint's
- * protocol-specific Zod schema. This only detects and restores an attempt;
- * extractClientCredentials remains responsible for authentication semantics.
- */
-async function readClientAuthenticationAttempt(
-	request: Request | undefined,
-): Promise<ClientAuthenticationAttempt> {
-	const fields: Partial<Record<ClientAuthenticationField, string>> = {};
-	let detected = Boolean(request?.headers.get("authorization"));
-	if (!request) return { detected, fields };
-
-	const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
-	if (contentType.includes("application/x-www-form-urlencoded")) {
-		const params = new URLSearchParams(await request.clone().text());
-		for (const field of clientAuthenticationFields) {
-			if (!params.has(field)) continue;
-			detected = true;
-			fields[field] = params.get(field) ?? "";
-		}
-	} else if (contentType.includes("application/json")) {
-		let body: unknown;
-		try {
-			body = await request.clone().json();
-		} catch {
-			return { detected, fields };
-		}
-		if (!body || typeof body !== "object" || Array.isArray(body)) {
-			return { detected, fields };
-		}
-		const objectBody = body as Record<string, unknown>;
-		for (const field of clientAuthenticationFields) {
-			if (!(field in objectBody)) continue;
-			detected = true;
-			const value = objectBody[field];
-			if (typeof value === "string") fields[field] = value;
-		}
-	}
-	return { detected, fields };
 }
 
 /**
@@ -266,8 +213,9 @@ function buildOAuthDeviceGrant() {
 			device_authorization_endpoint: `${metadataInput.ctx.context.baseURL}${DEVICE_AUTHORIZATION_PATH}`,
 		}),
 		authorizeRequest: async ({ ctx, request }) => {
-			const clientAuthentication = await readClientAuthenticationAttempt(
+			const clientAuthentication = await parseClientAuthenticationAttempt(
 				ctx.request,
+				(ctx.body ?? {}) as Record<string, unknown>,
 			);
 			Object.assign(
 				ctx.body as Record<string, unknown>,
