@@ -115,7 +115,13 @@ describe("general types", async () => {
 							{
 								method: "GET",
 							},
-							async () => "ok",
+							async (context) => {
+								expectTypeOf(context.path).toEqualTypeOf<string>();
+								expectTypeOf(context.params).toEqualTypeOf<
+									Record<string, string | undefined> | undefined
+								>();
+								return "ok";
+							},
 						),
 						testServerScoped: createAuthEndpoint(
 							"/test-server-scoped",
