@@ -215,6 +215,25 @@ const queryConstraintsPlugin = {
 	},
 } satisfies BetterAuthPlugin;
 
+const optionalQueryPlugin = {
+	id: "optional-query-test",
+	endpoints: {
+		optionalQuery: createAuthEndpoint(
+			"/test/optional-query",
+			{
+				method: "GET",
+				query: z.optional(
+					z.object({
+						referenceId: z.string().optional(),
+						customerType: z.enum(["user", "organization"]).optional(),
+					}),
+				),
+			},
+			async () => ({ success: true }),
+		),
+	},
+} satisfies BetterAuthPlugin;
+
 let defaultFactoryCallCount = 0;
 
 const defaultFactoryBodyPlugin = {
@@ -307,6 +326,9 @@ describe("open-api", async () => {
 	});
 	const { auth: authWithQueryConstraints } = await getTestInstance({
 		plugins: [openAPI(), queryConstraintsPlugin],
+	});
+	const { auth: authWithOptionalQuery } = await getTestInstance({
+		plugins: [openAPI(), optionalQueryPlugin],
 	});
 	const { auth: authWithDefaultFactoryBody } = await getTestInstance({
 		plugins: [openAPI(), defaultFactoryBodyPlugin],
@@ -927,6 +949,28 @@ describe("open-api", async () => {
 			maxLength: 12,
 			minLength: 6,
 			type: "string",
+		});
+	});
+
+	/**
+	 * A query declared as `z.optional(z.object({ ... }))` is a ZodOptional wrapping the object, so an
+	 * `instanceof z.ZodObject` check alone skipped the shape walk and the endpoint published no query
+	 * parameters at all. `@better-auth/stripe`'s `GET /subscription/list` is the real-world case.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10750
+	 */
+	it("should emit query parameters when the query schema is wrapped in z.optional()", async () => {
+		const schema = await authWithOptionalQuery.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+		const path = paths["/test/optional-query"];
+		expect(path).toBeDefined();
+
+		expect(getPathParameter(path, "referenceId")).toMatchObject({
+			in: "query",
+			schema: { type: "string" },
+		});
+		expect(getPathParameter(path, "customerType")).toMatchObject({
+			in: "query",
 		});
 	});
 

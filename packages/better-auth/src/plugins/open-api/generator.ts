@@ -153,6 +153,30 @@ function unwrapZodSchema(
 	return asZodSchema(zodType.unwrap());
 }
 
+/**
+ * Strip the wrappers that can sit between an endpoint's `query` option and the object whose shape
+ * describes its parameters.
+ *
+ * A query declared as `z.optional(z.object({ ... }))` is a ZodOptional *wrapping* a ZodObject, so an
+ * `instanceof z.ZodObject` check alone is false, the shape walk never runs, and the endpoint
+ * publishes no query parameters at all. Unwraps the same set `toOpenApiSchema` already unwraps, via
+ * the same helper.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10750
+ */
+function unwrapQuerySchema(query: unknown): unknown {
+	let current = query;
+	while (
+		current instanceof z.ZodOptional ||
+		current instanceof z.ZodDefault ||
+		current instanceof z.ZodPrefault ||
+		current instanceof z.ZodNonOptional
+	) {
+		current = unwrapZodSchema(current);
+	}
+	return current;
+}
+
 function getZodDef<T extends object>(zodType: z.ZodType<unknown>) {
 	return (zodType as z.ZodType<unknown> & ZodDef<T>)._def;
 }
@@ -215,11 +239,12 @@ function getParameters(options: EndpointOptions) {
 	if (options.metadata?.openapi?.parameters) {
 		parameters.push(...options.metadata.openapi.parameters);
 	}
+	const querySchema = unwrapQuerySchema(options.query);
 	if (
 		!options.metadata?.openapi?.parameters &&
-		options.query instanceof z.ZodObject
+		querySchema instanceof z.ZodObject
 	) {
-		Object.entries(options.query.shape).forEach(([key, value]) => {
+		Object.entries(querySchema.shape).forEach(([key, value]) => {
 			if (value instanceof z.ZodType) {
 				const parameterSchema = toOpenApiSchema(value as z.ZodType<unknown>);
 				parameters.push({
