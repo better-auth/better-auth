@@ -516,10 +516,14 @@ function basicToClientCredentials(authorization: string) {
 		const { clientId, clientSecret } = decodeBasicCredentials(authorization);
 		return { client_id: clientId, client_secret: clientSecret };
 	} catch {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "invalid authorization header format",
-			error: "invalid_client",
-		});
+		throw new APIError(
+			"UNAUTHORIZED",
+			{
+				error_description: "invalid authorization header format",
+				error: "invalid_client",
+			},
+			{ "WWW-Authenticate": "Basic" },
+		);
 	}
 }
 
@@ -571,6 +575,22 @@ export function validateClientScopes(
 	}
 }
 
+function throwInvalidClient(
+	errorDescription: string,
+	authMethod?: TokenEndpointAuthMethod,
+	status?: "BAD_REQUEST" | "UNAUTHORIZED",
+): never {
+	const attemptedBasicAuthentication = authMethod === "client_secret_basic";
+	throw new APIError(
+		status ?? (attemptedBasicAuthentication ? "UNAUTHORIZED" : "BAD_REQUEST"),
+		{
+			error_description: errorDescription,
+			error: "invalid_client",
+		},
+		attemptedBasicAuthentication ? { "WWW-Authenticate": "Basic" } : undefined,
+	);
+}
+
 /**
  * Resolves the registered client by id and authorizes it: existence, disabled
  * state, registered auth method, requested scopes, and grant type. The record is
@@ -592,16 +612,10 @@ export async function validateClientCredentials(
 ) {
 	const client = await getClient(ctx, options, clientId);
 	if (!client) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "missing client",
-			error: "invalid_client",
-		});
+		throwInvalidClient("missing client", authMethod);
 	}
 	if (client.disabled) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "client is disabled",
-			error: "invalid_client",
-		});
+		throwInvalidClient("client is disabled", authMethod);
 	}
 
 	// Enforce registered auth method for assertion/pre-verified methods.
@@ -633,19 +647,15 @@ export async function validateClientCredentials(
 	if (!preVerified) {
 		// Only token_endpoint_auth_method=none identifies a public client.
 		if (client.tokenEndpointAuthMethod !== "none" && !clientSecret) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: "client secret must be provided",
-				error: "invalid_client",
-			});
+			throwInvalidClient("client secret must be provided", authMethod);
 		}
 
 		// Secret should not be received
 		if (clientSecret && !client.clientSecret) {
-			throw new APIError("BAD_REQUEST", {
-				error_description:
-					"public client, client secret should not be received",
-				error: "invalid_client",
-			});
+			throwInvalidClient(
+				"public client, client secret should not be received",
+				authMethod,
+			);
 		}
 
 		// Compare Secrets when secret is provided
@@ -658,10 +668,7 @@ export async function validateClientCredentials(
 				clientSecret,
 			))
 		) {
-			throw new APIError("UNAUTHORIZED", {
-				error_description: "invalid client_secret",
-				error: "invalid_client",
-			});
+			throwInvalidClient("invalid client_secret", authMethod, "UNAUTHORIZED");
 		}
 	}
 

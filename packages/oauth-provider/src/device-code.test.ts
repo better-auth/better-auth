@@ -309,6 +309,47 @@ describe("oauth-provider device-code grant", async () => {
 		expect(idToken.aud).toBe(clientId);
 	});
 
+	it("returns invalid_request when device-code polling omits client_id", async () => {
+		const clientId = await createDeviceClient();
+		const deviceCode = await approvedDeviceCode(clientId);
+
+		const response = await pollToken({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: deviceCode,
+		});
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as TokenErrorBody)?.error).toBe("invalid_request");
+	});
+
+	it("returns an HTTP Basic challenge when client authentication fails", async () => {
+		const clientId = await createDeviceClient();
+		const deviceCode = await approvedDeviceCode(clientId);
+		let responseHeaders: Headers | undefined;
+
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: DEVICE_CODE_GRANT_TYPE,
+					device_code: deviceCode,
+				}),
+				headers: {
+					...FORM_HEADERS,
+					authorization: `Basic ${Buffer.from(`${clientId}:wrong-secret`).toString("base64")}`,
+				},
+				onError(context) {
+					responseHeaders = context.response.headers;
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(401);
+		expect((response.error as TokenErrorBody)?.error).toBe("invalid_client");
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10135
 	 */

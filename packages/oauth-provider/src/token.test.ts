@@ -895,6 +895,53 @@ describe("oauth token - refresh_token", async () => {
 		return tokens.data;
 	}
 
+	it("returns invalid_request when refresh_token omits client_id", async () => {
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: "not-used",
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as { error?: string })?.error).toBe(
+			"invalid_request",
+		);
+	});
+
+	it("returns invalid_request when refresh_token is omitted", async () => {
+		if (!oauthClient?.client_id || !oauthClient.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					client_id: oauthClient.client_id,
+					client_secret: oauthClient.client_secret,
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as { error?: string })?.error).toBe(
+			"invalid_request",
+		);
+	});
+
 	it("should refresh token with same scopes, opaque access token", async ({
 		expect,
 	}) => {
@@ -2072,6 +2119,104 @@ describe("oauth token - client_credentials", async () => {
 		expect(tokens.data?.scope).toBe(scopes.join(" "));
 		expect(tokens.data?.expires_in).toBe(3600);
 		expect(tokens.data?.expires_at).toBeDefined();
+	});
+
+	it("returns invalid_request when client_credentials omits client_id", async () => {
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({ grant_type: "client_credentials" }),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as { error?: string })?.error).toBe(
+			"invalid_request",
+		);
+	});
+
+	it("challenges failed client_secret_basic authentication", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		let responseHeaders: Headers | undefined;
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({ grant_type: "client_credentials" }),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					authorization: `Basic ${Buffer.from(`${oauthClient.client_id}:wrong-secret`).toString("base64")}`,
+				},
+				onError(context) {
+					responseHeaders = context.response.headers;
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(401);
+		expect((response.error as { error?: string })?.error).toBe(
+			"invalid_client",
+		);
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+	});
+
+	it("challenges client_secret_basic authentication without a secret", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		let responseHeaders: Headers | undefined;
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({ grant_type: "client_credentials" }),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					authorization: `Basic ${Buffer.from(`${oauthClient.client_id}:`).toString("base64")}`,
+				},
+				onError(context) {
+					responseHeaders = context.response.headers;
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(401);
+		expect((response.error as { error?: string })?.error).toBe(
+			"invalid_client",
+		);
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+	});
+
+	it("challenges an unknown client_secret_basic client", async () => {
+		let responseHeaders: Headers | undefined;
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({ grant_type: "client_credentials" }),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					authorization: `Basic ${Buffer.from("unknown-client:secret").toString("base64")}`,
+				},
+				onError(context) {
+					responseHeaders = context.response.headers;
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(401);
+		expect((response.error as { error?: string })?.error).toBe(
+			"invalid_client",
+		);
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
 	});
 
 	it("should match created client scopes", async ({ expect }) => {
