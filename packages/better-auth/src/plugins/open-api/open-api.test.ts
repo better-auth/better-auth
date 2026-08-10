@@ -249,6 +249,22 @@ const optionalQueryPlugin = {
 			},
 			async () => ({ success: true }),
 		),
+		readonlyQuery: createAuthEndpoint(
+			"/test/readonly-query",
+			{
+				method: "GET",
+				query: z.object({ locale: z.string().optional() }).readonly(),
+			},
+			async () => ({ success: true }),
+		),
+		catchQuery: createAuthEndpoint(
+			"/test/catch-query",
+			{
+				method: "GET",
+				query: z.object({ page: z.string().optional() }).catch({}),
+			},
+			async () => ({ success: true }),
+		),
 	},
 } satisfies BetterAuthPlugin;
 
@@ -997,6 +1013,8 @@ describe("open-api", async () => {
 	it.each([
 		["nullable", "/test/nullable-query", "token"],
 		["optional + nullable", "/test/composed-wrapper-query", "cursor"],
+		["readonly", "/test/readonly-query", "locale"],
+		["catch", "/test/catch-query", "page"],
 	])("should emit query parameters for a %s query schema", async (_label, endpoint, parameterName) => {
 		const schema = await authWithOptionalQuery.api.generateOpenAPISchema();
 		const paths = schema.paths as Record<string, Path>;

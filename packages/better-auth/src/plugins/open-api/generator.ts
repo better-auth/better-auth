@@ -163,33 +163,25 @@ function unwrapZodSchema(
  * supplied — the parameters inside it are the same either way, so every one of these unwraps to the
  * object underneath.
  *
- * Loops rather than unwrapping once, since the wrappers compose
- * (`z.optional(z.nullable(z.object({ ... })))`). `ZodCatch` and `ZodReadonly` expose their inner type
- * through `_def` rather than `unwrap()`, which is how `toOpenApiSchema` reaches them too.
+ * Loops rather than unwrapping once, since the wrappers compose — `z.optional(z.nullable(...))`, or
+ * `.optional().nonoptional()`, whose inner type is itself a wrapper.
  *
  * @see https://github.com/better-auth/better-auth/issues/10750
  */
 function unwrapQuerySchema(query: unknown): unknown {
 	let current = query;
-	while (true) {
-		if (
-			current instanceof z.ZodOptional ||
-			current instanceof z.ZodNullable ||
-			current instanceof z.ZodDefault ||
-			current instanceof z.ZodPrefault ||
-			current instanceof z.ZodNonOptional
-		) {
-			current = unwrapZodSchema(current);
-			continue;
-		}
-		if (current instanceof z.ZodCatch || current instanceof z.ZodReadonly) {
-			current = getZodDef<{ innerType: z.ZodType<unknown> }>(
-				current as z.ZodType<unknown>,
-			).innerType;
-			continue;
-		}
-		return current;
+	while (
+		current instanceof z.ZodOptional ||
+		current instanceof z.ZodNullable ||
+		current instanceof z.ZodDefault ||
+		current instanceof z.ZodPrefault ||
+		current instanceof z.ZodNonOptional ||
+		current instanceof z.ZodCatch ||
+		current instanceof z.ZodReadonly
+	) {
+		current = unwrapZodSchema(current);
 	}
+	return current;
 }
 
 function getZodDef<T extends object>(zodType: z.ZodType<unknown>) {
