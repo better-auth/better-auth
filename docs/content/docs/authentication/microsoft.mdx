@@ -98,7 +98,7 @@ When stored Microsoft ID tokens are available, verify each token and copy its `o
 
 If stored Microsoft ID tokens are not available, Better Auth's account row only has the old `sub` value and cannot derive `oid` from Better Auth data alone. Run this as a controlled migration: pause Microsoft sign-in and account linking during the cutover, or migrate from an external Microsoft Entra export before accepting production traffic on the new identifier. Otherwise, users who were not migrated can create duplicate Microsoft account rows.
 
-If you are also upgrading from a schema that still uses `accountId` or does not have `issuer`, complete the [1.7 account identity backfill](/docs/guides/1-7-upgrade-guide#account-identity-and-selection) as part of the same maintenance window.
+If you are also upgrading from a schema that still uses `accountId` or does not have `issuer`, complete the [1.7 account identity backfill](/docs/guides/1-7-upgrade-guide#account-identity-is-scoped-by-issuer) as part of the same maintenance window.
 
 If you use the Generic OAuth `microsoftEntraId` helper with custom scopes or a custom `getToken`, make sure the token exchange still returns Microsoft's `id_token`; the helper reads `oid` from that token. The helper also requires Microsoft discovery to provide the issuer and JWKS metadata used to verify ID tokens, and provider initialization fails when that metadata is unavailable.
 
