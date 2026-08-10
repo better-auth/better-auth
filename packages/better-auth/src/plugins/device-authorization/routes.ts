@@ -195,6 +195,9 @@ export const deviceCode = <Grant extends DeviceAuthorizationGrant | undefined>(
 			cloneRequest: true,
 			body: requestSchema,
 			error: requestErrorSchema,
+			onValidationError: ({ issues }) => {
+				grant?.onRequestValidationError?.(issues);
+			},
 			metadata: {
 				noStore: true,
 				allowedMediaTypes: [

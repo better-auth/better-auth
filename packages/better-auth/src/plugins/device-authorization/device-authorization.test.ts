@@ -1,9 +1,11 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { APIError } from "@better-auth/core/error";
 import type { MemoryDB } from "@better-auth/memory-adapter";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import * as z from "zod";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { DeviceAuthorizationGrant } from ".";
 import { deviceAuthorization, deviceAuthorizationOptionsSchema } from ".";
@@ -217,6 +219,43 @@ describe("client validation", async () => {
 });
 
 describe("grant request validation", () => {
+	it("delegates grant-field validation errors to the configured grant", async () => {
+		const grant = {
+			requestSchemaFields: { grant_value: z.string() },
+			requestErrorCodes: ["grant_invalid"] as const,
+			onRequestValidationError: (issues) => {
+				if (!issues.every((issue) => issue.path?.[0] === "grant_value")) {
+					return;
+				}
+				throw new APIError("BAD_REQUEST", {
+					error: "grant_invalid",
+					error_description: "Invalid grant request",
+				});
+			},
+			deviceCodeSchemaFields: {},
+			authorizeRequest: () => undefined,
+			assertSessionRedemption: () => {},
+			getVerificationContext: () => undefined,
+		} satisfies DeviceAuthorizationGrant;
+		const { auth } = await getTestInstance({
+			plugins: [deviceAuthorization({ grant })],
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/device/code", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ client_id: "client", grant_value: 42 }),
+			}),
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			error: "grant_invalid",
+			error_description: "Invalid grant request",
+		});
+	});
+
 	it("runs before the application callback", async () => {
 		const authorizeRequest = vi.fn().mockRejectedValue(new Error("rejected"));
 		const onDeviceAuthRequest = vi.fn();

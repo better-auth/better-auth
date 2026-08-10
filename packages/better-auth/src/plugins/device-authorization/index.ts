@@ -1,6 +1,7 @@
 import type {
 	BetterAuthPlugin,
 	GenericEndpointContext,
+	StandardSchemaV1,
 } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import { BetterAuthError } from "@better-auth/core/error";
@@ -151,6 +152,10 @@ export interface DeviceAuthorizationGrant<
 	requestSchemaFields: RequestFields;
 	/** Additional request errors introduced by the grant's protocol extensions. */
 	requestErrorCodes?: readonly string[];
+	/** Translate validation issues raised by the grant's request fields. */
+	onRequestValidationError?: (
+		issues: readonly StandardSchemaV1.Issue[],
+	) => void;
 	/** Database fields persisted only when this grant is configured. */
 	deviceCodeSchemaFields: Record<string, DBFieldAttribute>;
 	/** Validate a request and return the grant-owned fields to persist. */

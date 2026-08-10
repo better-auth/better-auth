@@ -392,23 +392,75 @@ describe("oauth-provider device-code grant", async () => {
 		expect(onDeviceAuthRequest).not.toHaveBeenCalled();
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/pull/10746#discussion_r3751563636
-	 */
+	it("treats an empty form resource as omitted within the OAuth flow", async () => {
+		const clientId = await createDeviceClient();
+		const form = new URLSearchParams({
+			client_id: clientId,
+			scope: "openid",
+			resource: "",
+		});
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/device/code",
+			{
+				method: "POST",
+				body: form,
+				headers: FORM_HEADERS,
+			},
+		);
+
+		expect(response.error).toBeNull();
+		const { headers } = await signInWithTestUser();
+		const verification = await auth.api.deviceVerify({
+			query: { user_code: response.data!.user_code as string },
+			headers,
+		});
+		expect(verification.resource).toBeUndefined();
+		await auth.api.deviceApprove({
+			body: { userCode: response.data!.user_code as string },
+			headers,
+		});
+
+		const token = await pollToken({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: response.data!.device_code as string,
+			client_id: clientId,
+		});
+		expect(token.error).toBeNull();
+	});
+
+	it("keeps base validation when resource and client_id are both invalid", async () => {
+		const response = await auth.handler(
+			new Request(`${baseURL}/api/auth/device/code`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ resource: "/api" }),
+			}),
+		);
+
+		expect(response.status).toBe(400);
+		const body = (await response.json()) as { error?: string };
+		expect(body.error).not.toBe("invalid_target");
+	});
+
 	it.each([
+		["malformed", "https://[invalid"],
 		["relative", "/api"],
 		["fragmented", `${resource}#fragment`],
 		["dangerous-scheme", "javascript:alert(1)"],
+		["wrong-type", 42],
 		["array-item", [resource, "/api"]],
-	])("rejects %s RFC 8707 resource indicators at the request boundary", (_label, invalidResource) => {
-		const endpoint = oauthDeviceAuthorization().endpoints.deviceCode;
+	])("returns invalid_target for %s RFC 8707 resource indicators at the HTTP boundary", async (_label, invalidResource) => {
+		const clientId = await createDeviceClient();
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/device/code",
+			{
+				method: "POST",
+				body: { client_id: clientId, resource: invalidResource },
+			},
+		);
 
-		expect(
-			endpoint.options.body?.safeParse({
-				client_id: "client",
-				resource: invalidResource,
-			}).success,
-		).toBe(false);
+		expect(response.error?.status).toBe(400);
+		expect((response.error as TokenErrorBody)?.error).toBe("invalid_target");
 	});
 
 	it("binds repeated form-encoded resources at the device endpoint", async () => {

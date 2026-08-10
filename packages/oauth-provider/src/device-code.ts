@@ -47,6 +47,7 @@ const DEVICE_AUTHORIZATION_PATH = "/device/code";
 const deviceCodeResourceSchema = z.union([
 	ResourceUriSchema,
 	z.array(ResourceUriSchema).min(1),
+	z.literal(""),
 ]);
 
 const oauthDeviceRequestFields = {
@@ -182,6 +183,18 @@ function buildOAuthDeviceGrant() {
 	return {
 		requestSchemaFields: oauthDeviceRequestFields,
 		requestErrorCodes: ["invalid_target"] as const,
+		onRequestValidationError: (issues) => {
+			if (
+				issues.length > 0 &&
+				issues.every((issue) => issue.path?.[0] === "resource")
+			) {
+				tokenError(
+					"BAD_REQUEST",
+					"invalid_target",
+					"Invalid resource indicator",
+				);
+			}
+		},
 		deviceCodeSchemaFields: {
 			resources: {
 				type: "string[]",
@@ -228,6 +241,7 @@ function buildOAuthDeviceGrant() {
 			if (request.scope !== undefined) {
 				request.scope = scopes.join(" ");
 			}
+			const resource = request.resource === "" ? undefined : request.resource;
 			const api = getOAuthProviderApi(
 				ctx,
 				provider.options,
@@ -241,13 +255,13 @@ function buildOAuthDeviceGrant() {
 				tokenError("BAD_REQUEST", "invalid_grant", "Client ID mismatch");
 			}
 			await resolveResourcePolicy(ctx, provider.options, {
-				resource: request.resource,
+				resource,
 				clientId: authenticated.clientId,
 				requestedScopes: scopes,
 			});
 			return {
 				oauthClientId: authenticated.clientId,
-				resources: toResourceList(request.resource) ?? null,
+				resources: toResourceList(resource) ?? null,
 			};
 		},
 		assertSessionRedemption: ({ deviceCode }) => {
