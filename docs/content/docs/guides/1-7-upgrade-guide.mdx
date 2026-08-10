@@ -35,20 +35,20 @@ The upgrade command handles package updates. The database needs more care becaus
 
 These features change the schema:
 
-| Feature                    | What it adds                                                                                                            | Manual preparation?       |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| Protected resources        | New resource tables and key columns                                                                                     | No                        |
-| Resource-bound tokens      | Resource columns on the token tables                                                                                    | No                        |
-| DPoP                       | A token-binding column                                                                                                  | No                        |
-| Refresh-token reuse window | A cached replay-response column on refresh tokens                                                                       | No                        |
-| Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables                                                            | No                        |
-| Back-channel logout        | Logout-URL and revoked columns                                                                                          | No                        |
-| Requested user-info claims | A requested-claims column on the token and consent tables                                                               | No                        |
-| Account identity           | An issuer column and a compound index with the existing provider-account column                                         | **Yes, backfill**         |
-| SCIM                       | Seven provisioning models, plus three optional managed-catalog models, with layouts that replace the legacy SCIM models | **Yes, reprovision**      |
-| Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                                                               | No                        |
-| Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables                                                         | **Yes, move client data** |
-| Device Authorization       | Indexes on `deviceCode` and `userCode`; the optional OAuth grant also adds `oauthClientId` and `resources`              | **Yes, MySQL/SQL Server** |
+| Feature                    | What it adds                                                                                                            | Manual preparation?                                       |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Protected resources        | New resource tables and key columns                                                                                     | No                                                        |
+| Resource-bound tokens      | Resource columns on the token tables                                                                                    | No                                                        |
+| DPoP                       | A token-binding column                                                                                                  | No                                                        |
+| Refresh-token reuse window | A cached replay-response column on refresh tokens                                                                       | No                                                        |
+| Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables                                                            | No                                                        |
+| Back-channel logout        | Logout-URL and revoked columns                                                                                          | No                                                        |
+| Requested user-info claims | A requested-claims column on the token and consent tables                                                               | No                                                        |
+| Account identity           | An issuer column and a compound index with the existing provider-account column                                         | **Yes, backfill**                                         |
+| SCIM                       | Seven provisioning models, plus three optional managed-catalog models, with layouts that replace the legacy SCIM models | **Yes, reprovision**                                      |
+| Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                                                               | No                                                        |
+| Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables                                                         | **Yes, move client data**                                 |
+| Device Authorization       | Unique indexes on `deviceCode` and `userCode`; the optional OAuth grant also adds `oauthClientId` and `resources`       | **Yes, deduplicate; MySQL/SQL Server also bound strings** |
 
 <Callout type="warn">
   Prepare account identities, OAuth clients, and SCIM data before applying the generated 1.7 schema. The CLI adds tables, columns, and indexes, but it does not choose issuers, copy OAuth clients, or convert legacy SCIM data.
@@ -600,9 +600,9 @@ A wildcard such as `/sign-in/*` also matches `/sign-in/email-otp`. If that route
 
 ## Device Authorization
 
-### Device codes are indexed and bounded
+### Device codes use unique indexes and bounded values
 
-The 1.7 schema indexes `deviceCode` and `userCode` and limits both values to 191 characters. Before applying it on MySQL or SQL Server, change both columns to bounded strings and resolve any existing values longer than 191 characters. Custom `generateDeviceCode` and `generateUserCode` functions must also stay within that limit.
+The stable 1.6 schema does not enforce uniqueness for these lookup values. The 1.7 schema creates unique indexes on `deviceCode` and `userCode`, so resolve duplicate values in both columns on every adapter before applying the migration. MySQL and SQL Server installations must also convert both columns to bounded strings and clean up values longer than 191 characters. Custom `generateDeviceCode` and `generateUserCode` functions must stay within the 191-character limit.
 
 ### OAuth device grants are opt-in
 

@@ -169,6 +169,8 @@ await auth.api.adminCreateOAuthClient({
 });
 ```
 
+Public clients use `token_endpoint_auth_method: "none"` and must send `client_id`. A confidential client using `client_secret_basic` may authenticate at `/device/code` with an `Authorization: Basic ...` header and omit the body `client_id`; `client_secret_post` sends both values in the form body.
+
 The CLI then requests a device code for the API it intends to call:
 
 ```ts title="cli.ts"
@@ -228,7 +230,7 @@ The access token is a signed JWT whose `aud` identifies `https://api.example.com
 
 ## First-party session flow
 
-The rest of this page describes the first-party path, where `/device/token` returns a Better Auth session token. This is a Better Auth-specific session-token extension, not the RFC 8628 OAuth token endpoint; clients that need an OAuth access token must use `deviceCodeGrant()` with the OAuth Provider and poll `/oauth2/token`.
+The rest of this page describes the first-party path, where `/device/token` returns a Better Auth session token. This is a Better Auth-specific session-token extension, not the RFC 8628 OAuth token endpoint; clients that need an OAuth access token must add `oauthDeviceAuthorization()` alongside OAuth Provider and poll `/oauth2/token`.
 
 ### Requesting Device Authorization
 
@@ -540,6 +542,8 @@ export default function DeviceApprovalPage() {
 
 You can validate client IDs to ensure only authorized applications can use the device flow:
 
+When the OAuth Provider integration is enabled, an unknown OAuth client ID reaches the standalone flow only when `validateClient` explicitly accepts it. Otherwise, the request returns `invalid_client`.
+
 ```ts
 deviceAuthorization({
   validateClient: async (clientId) => {
@@ -581,6 +585,8 @@ deviceAuthorization({
 ```
 
 Default user codes are case-insensitive and accept whitespace or punctuation inserted for readability when submitted to the verification, approve, or deny endpoints. Custom user codes are matched exactly when they contain characters outside the default `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` alphabet.
+
+Device-code issuance makes up to 3 attempts to overcome unique-key collisions. If all attempts collide, `/device/code` returns `server_error`.
 
 ## Error Handling
 
@@ -728,7 +734,7 @@ authenticateCLI().catch((err) => {
 
 ## Security Considerations
 
-1. **Rate Limiting**: The plugin enforces polling intervals to prevent abuse
+1. **Verification and polling limits**: `/device` is limited to 5 requests over a window equal to the configured device-code lifetime. `/device/token` keeps its own polling interval and `slow_down` behavior
 2. **Code Expiration**: Device and user codes expire after the configured time (default: 30 minutes)
 3. **Client Validation**: Always validate client IDs in production to prevent unauthorized access
 4. **HTTPS and approval UI**: Follow the [RFC 8628 TLS and user-interaction requirements](https://datatracker.ietf.org/doc/html/rfc8628#section-3.3) in production, including explicit approval or denial and [device-possession and remote-phishing guidance](https://datatracker.ietf.org/doc/html/rfc8628#section-5.4)
@@ -774,10 +780,10 @@ The plugin requires a new table to store device authorization data.
 
 Table Name: `deviceCode`
 
-`deviceCode` and `userCode` are indexed by the generated schema because the device token, verification, approval, and denial flows use them as lookup fields. Both values are limited to 191 characters so these indexes remain portable across supported databases.
+`deviceCode` and `userCode` have unique indexes because the device token, verification, approval, and denial flows use them as lookup fields. Both values are limited to 191 characters.
 
 <Callout type="warn">
-  Existing MySQL and SQL Server installations may use unbounded columns for these values. Before running the migration, convert `deviceCode` and `userCode` to strings bounded at 191 characters and resolve any longer values. The migration stops with an error when the existing columns cannot support portable indexes.
+  Before applying the migration, resolve duplicate `deviceCode` and `userCode` values on every adapter. MySQL and SQL Server installations must also convert both columns to bounded strings and clean up values longer than 191 characters.
 </Callout>
 
 export const deviceCodeTableFields = [
@@ -791,13 +797,13 @@ export const deviceCodeTableFields = [
 		name: "deviceCode",
 		type: "string",
 		description: "The device verification code",
-		isIndexed: true,
+		isUnique: true,
 	},
 	{
 		name: "userCode",
 		type: "string",
 		description: "The user-friendly code for verification",
-		isIndexed: true,
+		isUnique: true,
 	},
 	{
 		name: "userId",

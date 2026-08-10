@@ -2,9 +2,9 @@
 "@better-auth/oauth-provider": minor
 ---
 
-fix(oauth-provider): return RFC-compliant `{ error, error_description }` envelopes from validation failures
+OAuth endpoint validation failures now return RFC-compliant `{ error, error_description }` envelopes.
 
-An internal `createOAuthEndpoint` wrapper now translates zod validation failures into the envelope required by RFC 6749 §5.2, 7009 §2.2.1, 7662 §2.3, and 7591 §3.2.2. Failing issues are routed per field:
+Failing issues are routed per field:
 
 - an absent required value maps to `errorCodesByField[name].missing` or the endpoint's `defaultError`.
 - an unsupported value (unknown enum member) maps to `errorCodesByField[name].invalid` or `defaultError`.
@@ -16,3 +16,5 @@ Additional RFC compliance fixes on the same endpoints:
 
 - `/oauth2/revoke` and `/oauth2/introspect` now ignore an unknown `token_type_hint` instead of rejecting it. RFC 7009 §2.2.1 and RFC 7662 §2.1 reserve `unsupported_token_type` for the token itself, not the hint value; servers MAY ignore unrecognized hints and search across supported token types.
 - `/oauth2/authorize` error redirects now respect OIDC Core 1.0 §5 response modes. Errors for `response_type=token` or `id_token` are delivered in the URL fragment per RFC 6749 §4.2.2.1; an explicit `response_mode=query` overrides the default.
+
+Token endpoint failures now distinguish `invalid_request` for missing request fields, `invalid_client` for client-authentication failures, and `invalid_grant` for invalid or mismatched grants. When authentication is attempted with an `Authorization` header, a failed client authentication returns `401` with a `WWW-Authenticate` challenge for the attempted scheme.
