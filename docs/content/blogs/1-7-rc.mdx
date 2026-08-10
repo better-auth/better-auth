@@ -80,14 +80,14 @@ These setups were impossible, broken, or unsafe before, and work now.
 
 **Other apps logging in through you**
 
-| Setup                                          | What was blocked                        | How it works now                                                             |
-| ---------------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------- |
-| **APIs needing theft-resistant tokens**        | Only plain bearer tokens.               | Use DPoP tokens bound to the client's key.                                   |
-| **Several APIs behind one login server**       | One token could be used on any API.     | Use per-API resources, so tokens are locked to the API they were issued for. |
-| **Machine clients registering themselves**     | Registration required a logged-in user. | Use pre-shared registration tokens.                                          |
-| **MCP clients (Claude, Codex, Factory Droid)** | Their registration was rejected.        | They are accepted automatically, with Client ID Metadata Document support.   |
-| **Single sign-out across apps**                | Sign-out did not notify other apps.     | Use OIDC Back-Channel Logout.                                                |
-| **Forced re-login**                            | The request was ignored.                | `max_age` is enforced.                                                       |
+| Setup                                      | What was blocked                                               | How it works now                                                                            |
+| ------------------------------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **APIs needing theft-resistant tokens**    | Only plain bearer tokens.                                      | Use DPoP tokens bound to the client's key.                                                  |
+| **Several APIs behind one login server**   | One token could be used on any API.                            | Use per-API resources, so tokens are locked to the API they were issued for.                |
+| **Machine clients registering themselves** | Registration required a logged-in user.                        | Use pre-shared registration tokens.                                                         |
+| **URL-identified MCP clients**             | Only endpoint-based Dynamic Client Registration was available. | Compose `mcp()` with `cimd()` for Client ID Metadata Documents, or explicitly opt into DCR. |
+| **Single sign-out across apps**            | Sign-out did not notify other apps.                            | Use OIDC Back-Channel Logout.                                                               |
+| **Forced re-login**                        | The request was ignored.                                       | `max_age` is enforced.                                                                      |
 
 **Enterprise SSO**
 
