@@ -56,7 +56,7 @@ npx auth@latest init
 
 ## Upgrade
 
-The `upgrade` command updates `better-auth` and official `@better-auth/*` packages to the exact version of the CLI being run. The package specifier selects the release channel, so prerelease upgrades do not require an additional CLI option.
+The `upgrade` command updates older `better-auth` and official `@better-auth/*` dependencies to the version of the CLI being run. Dependencies at the same or a newer version are left unchanged.
 
 ```package-install title="Terminal"
 npx auth@latest upgrade

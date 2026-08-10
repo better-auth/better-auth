@@ -2,4 +2,4 @@
 "auth": patch
 ---
 
-The upgrade command now installs Better Auth packages matching the running CLI version, including prerelease versions.
+The upgrade command now targets the running CLI version, including prereleases, instead of the npm `latest` tag.
