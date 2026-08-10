@@ -13,7 +13,27 @@ describe("getChatErrorMessage", () => {
 	});
 
 	it("explains when the request was rate limited", () => {
-		expect(getChatErrorMessage(new Error("Rate limit exceeded"))).toBe(
+		const errors = [
+			"Rate limit exceeded",
+			"rate_limit_error",
+			"Too Many Requests",
+			"RESOURCE_EXCEEDED",
+			"Quota exceeded",
+			"Request failed with status 429",
+		];
+
+		for (const error of errors) {
+			expect(getChatErrorMessage(new Error(error))).toBe(
+				CHAT_RATE_LIMIT_MESSAGE,
+			);
+		}
+	});
+
+	it("preserves sanitized errors received from the stream", () => {
+		expect(getChatErrorMessage(new Error(CHAT_ERROR_MESSAGE))).toBe(
+			CHAT_ERROR_MESSAGE,
+		);
+		expect(getChatErrorMessage(new Error(CHAT_RATE_LIMIT_MESSAGE))).toBe(
 			CHAT_RATE_LIMIT_MESSAGE,
 		);
 	});
