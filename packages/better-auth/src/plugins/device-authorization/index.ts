@@ -256,6 +256,15 @@ export const deviceAuthorization = <
 			deviceApprove,
 			deviceDeny,
 		},
+		rateLimit: [
+			{
+				pathMatcher(path) {
+					return path === "/device";
+				},
+				window: ms(opts.expiresIn) / 1000,
+				max: 5,
+			},
+		],
 		$ERROR_CODES: DEVICE_AUTHORIZATION_ERROR_CODES,
 		options: { ...opts, grant },
 	} satisfies BetterAuthPlugin;

@@ -53,6 +53,85 @@ describe("device authorization plugin input validation", () => {
 	});
 });
 
+describe("user code verification rate limiting", async () => {
+	const { auth } = await getTestInstance({
+		disableTestUser: true,
+		rateLimit: {
+			enabled: true,
+		},
+		plugins: [deviceAuthorization()],
+	});
+
+	it("returns 429 after five verification guesses", async () => {
+		const responses: Response[] = [];
+		for (let attempt = 0; attempt < 6; attempt++) {
+			responses.push(
+				await auth.handler(
+					new Request(
+						`http://localhost:3000/api/auth/device?user_code=INVALID${attempt}`,
+						{
+							headers: { "x-forwarded-for": "192.0.2.42" },
+						},
+					),
+				),
+			);
+		}
+
+		expect(responses.slice(0, 5).map((response) => response.status)).toEqual([
+			400, 400, 400, 400, 400,
+		]);
+		expect(responses[5]?.status).toBe(429);
+	});
+
+	it("does not apply the verification limit to token polling", async () => {
+		const clientIP = "192.0.2.43";
+		const deviceCodeResponse = await auth.handler(
+			new Request("http://localhost:3000/api/auth/device/code", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"x-forwarded-for": clientIP,
+				},
+				body: JSON.stringify({ client_id: "test-client" }),
+			}),
+		);
+		expect(deviceCodeResponse.status).toBe(200);
+		const { device_code } = (await deviceCodeResponse.json()) as {
+			device_code: string;
+		};
+
+		for (let attempt = 0; attempt < 5; attempt++) {
+			const response = await auth.handler(
+				new Request(
+					`http://localhost:3000/api/auth/device?user_code=INVALID${attempt}`,
+					{
+						headers: { "x-forwarded-for": clientIP },
+					},
+				),
+			);
+			expect(response.status).toBe(400);
+		}
+
+		for (let poll = 0; poll < 6; poll++) {
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/device/token", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						"x-forwarded-for": clientIP,
+					},
+					body: JSON.stringify({
+						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+						device_code,
+						client_id: "test-client",
+					}),
+				}),
+			);
+			expect(response.status).not.toBe(429);
+		}
+	});
+});
+
 describe("client validation", async () => {
 	const validClients = ["valid-client-1", "valid-client-2"];
 
