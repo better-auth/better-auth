@@ -37,6 +37,7 @@ This is the biggest area of the release. The OAuth provider grows from "it issue
 * **Consistent introspection:** opaque tokens return the same claims as JWTs, and a separate API service can introspect a token issued to another client.
 * **Protocol-safe ID tokens:** custom claims can no longer overwrite reserved protocol claims such as issuer, subject, and audience.
 * **Self-service and machine clients:** a backend registers without a logged-in user using a pre-shared token, and **Client ID Metadata Documents** (`@better-auth/cimd`) let a client identify itself by a hosted URL, which is how MCP clients connect without being registered ahead of time. Real MCP clients like Claude and Codex now keep the authentication method they register with, confidential by default rather than forced to public.
+* **Device authorization for OAuth clients:** registered CLIs, smart TVs, and other limited-input clients can ask the user to approve access in a browser, then exchange the device code for scoped, resource-bound OAuth tokens.
 * **Request specific user details:** a client can ask for individual user claims through the standard `claims.userinfo` parameter, and the request becomes part of the user's consent.
 * **An extension surface:** `extendOAuthProvider` lets a companion plugin add grant types, client-authentication methods, discovery metadata, and claims without changing core.
 * **Conformance polish:** standard `{ error, error_description }` envelopes, `no-store` on credential responses, an `at_hash` claim on ID tokens, form-encoded requests, and an optional refresh-retry window for clients.
@@ -86,6 +87,7 @@ These setups were impossible, broken, or unsafe before, and work now.
 | **Several APIs behind one login server**   | One token could be used on any API.                            | Use per-API resources, so tokens are locked to the API they were issued for.                |
 | **Machine clients registering themselves** | Registration required a logged-in user.                        | Use pre-shared registration tokens.                                                         |
 | **URL-identified MCP clients**             | Only endpoint-based Dynamic Client Registration was available. | Compose `mcp()` with `cimd()` for Client ID Metadata Documents, or explicitly opt into DCR. |
+| **CLIs and other limited-input OAuth clients** | The device flow returned app sessions.                       | Compose the device grant to issue scoped, resource-bound OAuth tokens.                      |
 | **Single sign-out across apps**            | Sign-out did not notify other apps.                            | Use OIDC Back-Channel Logout.                                                               |
 | **Forced re-login**                        | The request was ignored.                                       | `max_age` is enforced.                                                                      |
 
@@ -191,7 +193,7 @@ export const auth = betterAuth({
 | Stripe org subscriptions need `organization.enabled`      | `referenceMiddleware` rejects org-scoped subscriptions unless `organization: { enabled: true }` is set in the Stripe plugin config.                  |
 | Database joins moved out of `experimental`                | Replace `experimental.joins` with `advanced.database.joins`, then regenerate Drizzle or Prisma relations.                                            |
 | Default Drizzle schema uses singular relation keys        | Regenerate and review your Drizzle schema relations.                                                                                                 |
-| Device Authorization schema changes                       | Add the nullable `resource` field, index both code columns, and keep generated codes within 191 characters.                                          |
+| Device Authorization schema and OAuth grant               | Index both code columns, keep codes within 191 characters, and add `oauthClientId` and `resources` only when enabling the OAuth device grant.        |
 | Stripe `onSubscriptionCancel` event is required           | Update the callback to expect a non-optional `event`.                                                                                                |
 | Two-factor OTP-only enablement                            | `enableTwoFactor` takes a new `method` param and returns a discriminated response. Update callers.                                                   |
 | Public export `getIp` renamed to `getIP`                  | Update imports of the IP helper.                                                                                                                     |
@@ -265,7 +267,7 @@ Before applying the 1.7 schema, complete any manual preparation for account iden
 | `@better-auth/oauth-provider`                  | Client-data preparation plus resources, DPoP, back-channel logout, `max_age`, and safer OAuth checks         |
 | MCP                                            | A package move to `@better-auth/mcp`, official v2 clients or servers, new endpoint paths, and schema changes |
 | SAML or SCIM                                   | Safer SAML and SSO checks, plus a full SCIM cutover and User and Group reprovisioning                        |
-| Device Authorization                           | A new `resource` field, indexed code columns, and 191-character code limits                                  |
+| Device Authorization                           | Indexed, bounded codes; optionally compose the OAuth grant and add `oauthClientId` and `resources`           |
 | Magic links or email OTP                       | Safer handling for accounts whose email was never confirmed                                                  |
 | Expo or React Native                           | Await cookie reads and update custom SecureStore-compatible storage implementations                          |
 | Custom adapters, storage, or rate-limit stores | New atomic methods are required                                                                              |

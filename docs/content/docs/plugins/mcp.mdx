@@ -113,24 +113,27 @@ import { deviceAuthorization, jwt } from "better-auth/plugins";
 import { deviceCodeGrant } from "@better-auth/oauth-provider";
 import { mcp } from "@better-auth/mcp";
 
+const grant = deviceCodeGrant();
+
 export const auth = betterAuth({
   plugins: [
     jwt(),
     deviceAuthorization({
       verificationUri: "/device",
+      grant,
     }),
     mcp({
       loginPage: "/sign-in",
       consentPage: "/consent",
       resource: "https://api.example.com/mcp",
       scopes: ["openid", "profile", "offline_access", "mcp:read"],
+      extensions: [grant],
     }),
-    deviceCodeGrant(),
   ],
 });
 ```
 
-`mcp()` is already the OAuth Provider, so this composition does not add a separate `oauthProvider()` plugin. MCP clients continue to use discovery and authorization code with PKCE. Your registered public CLI can request the same MCP resource through `/device/code` and poll `/oauth2/token` for an audience-bound access token.
+`mcp()` is already the OAuth Provider, so this composition does not add a separate `oauthProvider()` plugin. The same `grant` object is passed explicitly to Device Authorization and to MCP's provider extension list. MCP clients continue to use discovery and authorization code with PKCE. Your registered public CLI can request the same MCP resource through `/device/code` and poll `/oauth2/token` for an audience-bound access token.
 
 Only use the device grant in an MCP client that explicitly implements [RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628). Adding `deviceCodeGrant()` to the server does not change the standard flow chosen by existing MCP clients. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api) for client registration and token polling.
 

@@ -486,6 +486,29 @@ describe("oauth-provider extensions", async () => {
 		).toHaveLength(1);
 	});
 
+	it("restores the extension list when configuration assertion fails", () => {
+		const existingExtension = {} satisfies OAuthProviderExtension;
+		const provider = oauthProvider({
+			loginPage: "/login",
+			consentPage: "/consent",
+			extensions: [existingExtension],
+		});
+		const previousExtensions = provider.options.extensions;
+		const ctx = {
+			getPlugin: (id: string) => (id === "oauth-provider" ? provider : null),
+		} as unknown as Parameters<typeof extendOAuthProvider>[0];
+		const extension = {
+			assertConfiguration() {
+				throw new Error("invalid extension configuration");
+			},
+		} satisfies OAuthProviderExtension;
+
+		expect(() => extendOAuthProvider(ctx, extension)).toThrow(
+			"invalid extension configuration",
+		);
+		expect(provider.options.extensions).toBe(previousExtensions);
+	});
+
 	it("dispatches extension grants through shared token issuance", async () => {
 		const oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
