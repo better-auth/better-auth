@@ -18,6 +18,35 @@ import { DEVICE_AUTHORIZATION_CODE_MAX_LENGTH } from "./schema";
 
 /* cspell:disable-next-line */
 const defaultCharset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const MAX_DEVICE_CODE_GENERATION_ATTEMPTS = 3;
+
+function isUniqueConstraintError(error: unknown) {
+	if (typeof error !== "object" || error === null) return false;
+
+	const details = error as Record<string, unknown>;
+	const code = String(details.code ?? details.errcode ?? details.errno);
+	if (
+		[
+			"11000",
+			"1062",
+			"2067",
+			"23505",
+			"2601",
+			"2627",
+			"ER_DUP_ENTRY",
+			"P2002",
+			"SQLITE_CONSTRAINT_UNIQUE",
+		].includes(code)
+	) {
+		return true;
+	}
+
+	const message = details.message;
+	return (
+		typeof message === "string" &&
+		/unique(?: key)? constraint|duplicate (?:entry|key)|e11000/i.test(message)
+	);
+}
 
 function validateGeneratedCode(code: unknown, label: "device" | "user") {
 	if (typeof code !== "string") {
@@ -58,6 +87,7 @@ const deviceCodeBaseErrorCodes = [
 	"invalid_client",
 	"unauthorized_client",
 	"invalid_scope",
+	"server_error",
 ] as const;
 
 type GrantRequestFields<Grant extends DeviceAuthorizationGrant | undefined> =
@@ -228,42 +258,59 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				await opts.onDeviceAuthRequest(request.client_id, request.scope);
 			}
 
-			const deviceCode = await generateDeviceCode();
-			const userCode = await generateUserCode();
 			const expiresIn = ms(opts.expiresIn);
 			const expiresAt = new Date(Date.now() + expiresIn);
 
-			await ctx.context.adapter.create({
-				model: "deviceCode",
-				data: {
-					...grantDeviceCodeFields,
-					deviceCode,
-					userCode,
-					userId: request.user_id || null, // An empty user_id is treated as omitted, per RFC 8628 section 3.1
-					expiresAt,
-					status: "pending",
-					pollingInterval: ms(opts.interval),
-					clientId: request.client_id,
-					scope: request.scope,
-				},
-			});
+			for (
+				let attempt = 0;
+				attempt < MAX_DEVICE_CODE_GENERATION_ATTEMPTS;
+				attempt++
+			) {
+				const deviceCode = await generateDeviceCode();
+				const userCode = await generateUserCode();
 
-			const { verificationUri, verificationUriComplete } =
-				buildVerificationUris(
-					opts.verificationUri,
-					ctx.context.baseURL,
-					userCode,
-				);
+				try {
+					await ctx.context.adapter.create({
+						model: "deviceCode",
+						data: {
+							...grantDeviceCodeFields,
+							deviceCode,
+							userCode,
+							userId: request.user_id || null, // An empty user_id is treated as omitted, per RFC 8628 section 3.1
+							expiresAt,
+							status: "pending",
+							pollingInterval: ms(opts.interval),
+							clientId: request.client_id,
+							scope: request.scope,
+						},
+					});
+				} catch (error) {
+					if (!isUniqueConstraintError(error)) throw error;
+					continue;
+				}
 
-			ctx.setHeader("Cache-Control", "no-store");
-			ctx.setHeader("Pragma", "no-cache");
-			return ctx.json({
-				device_code: deviceCode,
-				user_code: userCode,
-				verification_uri: verificationUri,
-				verification_uri_complete: verificationUriComplete,
-				expires_in: Math.floor(expiresIn / 1000),
-				interval: Math.floor(ms(opts.interval) / 1000),
+				const { verificationUri, verificationUriComplete } =
+					buildVerificationUris(
+						opts.verificationUri,
+						ctx.context.baseURL,
+						userCode,
+					);
+
+				ctx.setHeader("Cache-Control", "no-store");
+				ctx.setHeader("Pragma", "no-cache");
+				return ctx.json({
+					device_code: deviceCode,
+					user_code: userCode,
+					verification_uri: verificationUri,
+					verification_uri_complete: verificationUriComplete,
+					expires_in: Math.floor(expiresIn / 1000),
+					interval: Math.floor(ms(opts.interval) / 1000),
+				});
+			}
+
+			throw new APIError("INTERNAL_SERVER_ERROR", {
+				error: "server_error",
+				error_description: "Failed to generate a unique device code",
 			});
 		},
 	);

@@ -22,10 +22,10 @@ describe("device authorization schema", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10025
 	 */
-	it("indexes device authorization lookup fields", () => {
+	it("uniquely indexes device authorization lookup fields", () => {
 		expect(schema.deviceCode.indexes).toEqual([
-			{ fields: ["deviceCode"] },
-			{ fields: ["userCode"] },
+			{ fields: ["deviceCode"], unique: true },
+			{ fields: ["userCode"], unique: true },
 		]);
 	});
 
@@ -42,6 +42,37 @@ describe("device authorization schema", () => {
 				error_description: "OAuth-only error",
 			}).success,
 		).toBe(false);
+	});
+
+	it("declares server_error for failed device-code issuance", () => {
+		const plugin = deviceAuthorization();
+		const endpoint = plugin.endpoints.deviceCode;
+
+		expect(
+			endpoint.options.error.safeParse({
+				error: "server_error",
+				error_description: "Failed to generate a unique device code",
+			}).success,
+		).toBe(true);
+		expect(endpoint.options.metadata).toMatchObject({
+			openapi: {
+				responses: {
+					400: {
+						content: {
+							"application/json": {
+								schema: {
+									properties: {
+										error: {
+											enum: expect.arrayContaining(["server_error"]),
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		});
 	});
 
 	it("rejects grant fields that redefine the base device-code schema", () => {

@@ -43,7 +43,10 @@ export const schema = {
 				required: false,
 			},
 		},
-		indexes: [{ fields: ["deviceCode"] }, { fields: ["userCode"] }],
+		indexes: [
+			{ fields: ["deviceCode"], unique: true },
+			{ fields: ["userCode"], unique: true },
+		],
 	},
 } satisfies BetterAuthPluginDBSchema;
 

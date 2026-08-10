@@ -1361,6 +1361,109 @@ describe("device authorization with custom options", async () => {
 		expect(response.user_code).toBe(customUserCode);
 	});
 
+	it("should regenerate codes when custom generators collide with active values", async () => {
+		const deviceCodes = [
+			"device-code-1",
+			"device-code-1",
+			"device-code-2",
+			"device-code-3",
+			"device-code-4",
+		];
+		const userCodes = [
+			"USERCODE1",
+			"USERCODE2",
+			"USERCODE3",
+			"USERCODE3",
+			"USERCODE4",
+		];
+
+		const { auth } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					generateDeviceCode: () => deviceCodes.shift()!,
+					generateUserCode: () => userCodes.shift()!,
+				}),
+			],
+		});
+
+		const first = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		const second = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		const third = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+
+		expect(second.device_code).toBe("device-code-2");
+		expect(second.user_code).toBe("USERCODE3");
+		expect(third.device_code).toBe("device-code-4");
+		expect(third.user_code).toBe("USERCODE4");
+		expect(second.device_code).not.toBe(first.device_code);
+		expect(second.user_code).not.toBe(first.user_code);
+		expect(third.device_code).not.toBe(first.device_code);
+		expect(third.user_code).not.toBe(first.user_code);
+		expect(third.device_code).not.toBe(second.device_code);
+		expect(third.user_code).not.toBe(second.user_code);
+	});
+
+	it("should retry Prisma-style unique constraint errors during issuance", async () => {
+		const deviceCodes = ["device-code-1", "device-code-2"];
+		const userCodes = ["USERCODE1", "USERCODE2"];
+		const { auth, db } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					generateDeviceCode: () => deviceCodes.shift()!,
+					generateUserCode: () => userCodes.shift()!,
+				}),
+			],
+		});
+
+		const first = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		vi.spyOn(db, "create").mockImplementationOnce(async () => {
+			throw Object.assign(new Error("Prisma collision"), {
+				code: "P2002",
+			});
+		});
+		const second = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+
+		expect(first.device_code).toBe("device-code-1");
+		expect(first.user_code).toBe("USERCODE1");
+		expect(second.device_code).toBe("device-code-2");
+		expect(second.user_code).toBe("USERCODE2");
+	});
+
+	it("should return a controlled server error when generators cannot produce unique codes", async () => {
+		const generateDeviceCode = vi.fn(() => "device-code");
+		const generateUserCode = vi.fn(() => "USERCODE");
+		const { auth } = await getTestInstance({
+			plugins: [deviceAuthorization({ generateDeviceCode, generateUserCode })],
+		});
+
+		await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+
+		await expect(
+			auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error: "server_error",
+				error_description: "Failed to generate a unique device code",
+			},
+		});
+
+		expect(generateDeviceCode).toHaveBeenCalledTimes(4);
+		expect(generateUserCode).toHaveBeenCalledTimes(4);
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10025
 	 */
