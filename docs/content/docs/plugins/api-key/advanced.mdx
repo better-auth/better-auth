@@ -607,15 +607,17 @@ const apiKey = await auth.api.createApiKey({
 
 ### How does it work?
 
-The rate limiting system uses a sliding window approach:
+The rate limiting system uses a per-key, first-request-anchored fixed window:
 
-1. **First Request**: When an API key is used for the first time (no previous `lastRequest`), the request is allowed and `requestCount` is set to 1.
+1. **First Request**: The first accepted request starts a window, sets `requestCount` to 1, and sets `rateLimitResetAt` to `timeWindow` milliseconds in the future.
 
-2. **Within Window**: For subsequent requests within the `timeWindow`, the `requestCount` is incremented. If `requestCount` reaches `rateLimitMax`, the request is rejected with a `RATE_LIMITED` error code.
+2. **Within Window**: Subsequent requests before `rateLimitResetAt` increment `requestCount`. Once `requestCount` reaches `rateLimitMax`, requests are rejected with a `RATE_LIMITED` error code.
 
-3. **Window Reset**: If the time since the last request exceeds the `timeWindow`, the window resets: `requestCount` is reset to 1 and `lastRequest` is updated to the current time.
+3. **Window Reset**: At or after `rateLimitResetAt`, the next accepted request starts a new window and resets `requestCount` to 1. Continuous traffic does not extend the current window.
 
-4. **Rate Limit Exceeded**: When a request is rejected due to rate limiting, the error response includes a `tryAgainIn` value (in milliseconds) indicating how long to wait before the window resets.
+4. **Rate Limit Exceeded**: A rejected response includes `tryAgainIn` in milliseconds, calculated from `rateLimitResetAt`. `lastRequest` is only the timestamp of the most recent accepted request and does not control window expiration.
+
+Fixed windows can allow bursts around a boundary, and changing `rateLimitEnabled`, `rateLimitTimeWindow`, or `rateLimitMax` clears the current window so the next accepted request starts a new one when rate limiting is enabled.
 
 **Disabling Rate Limiting**:
 
