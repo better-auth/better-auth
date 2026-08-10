@@ -15,6 +15,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { getChatErrorMessage } from "@/lib/ai-chat/error";
 import { cn } from "@/lib/utils";
 import { Markdown } from "./markdown";
 import { MessageFeedback } from "./message-feedback";
@@ -396,11 +397,20 @@ function PanelMessages({ className, ...props }: ComponentProps<"div">) {
 // ─── Panel Input ─────────────────────────────────────────────────────────────
 
 function PanelInput({ autoFocus = false }: { autoFocus?: boolean }) {
-	const { status, sendMessage, stop, setMessages, messages, regenerate } =
-		useChatContext();
+	const {
+		status,
+		error,
+		sendMessage,
+		stop,
+		setMessages,
+		messages,
+		regenerate,
+		clearError,
+	} = useChatContext();
 	const [input, setInput] = useState("");
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const isLoading = status === "streaming" || status === "submitted";
+	const hasError = error != null;
 	const inputDragRef = useRef<{ startY: number; startHeight: number } | null>(
 		null,
 	);
@@ -420,7 +430,7 @@ function PanelInput({ autoFocus = false }: { autoFocus?: boolean }) {
 
 	const onSubmit = (e?: SyntheticEvent) => {
 		e?.preventDefault();
-		if (!input.trim() || isLoading) return;
+		if (!input.trim() || isLoading || hasError) return;
 		void sendMessage({ text: input });
 		setInput("");
 		requestAnimationFrame(adjustHeight);
@@ -487,8 +497,14 @@ function PanelInput({ autoFocus = false }: { autoFocus?: boolean }) {
 									onSubmit();
 								}
 							}}
-							disabled={isLoading}
-							placeholder={isLoading ? "AI is answering..." : "Ask a question"}
+							disabled={isLoading || hasError}
+							placeholder={
+								isLoading
+									? "AI is answering..."
+									: hasError
+										? "Retry or clear the chat to continue"
+										: "Ask a question"
+							}
 							autoFocus={autoFocus}
 							rows={1}
 							style={{
@@ -525,8 +541,25 @@ function PanelInput({ autoFocus = false }: { autoFocus?: boolean }) {
 					</div>
 				</form>
 			</div>
-			<div className="flex items-center gap-1.5 p-1 empty:hidden">
-				{!isLoading &&
+			<div className="flex flex-wrap items-center gap-1.5 p-1 empty:hidden">
+				{hasError && (
+					<div
+						role="alert"
+						className="flex w-full items-center justify-between gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-2 text-xs text-destructive"
+					>
+						<span>{getChatErrorMessage(error)}</span>
+						<button
+							type="button"
+							className="flex shrink-0 items-center gap-1 font-medium hover:underline"
+							onClick={() => void regenerate()}
+						>
+							<RefreshCw className="size-3" />
+							Retry
+						</button>
+					</div>
+				)}
+				{!hasError &&
+					!isLoading &&
 					messages.length > 0 &&
 					messages.at(-1)?.role === "assistant" && (
 						<button
@@ -542,7 +575,10 @@ function PanelInput({ autoFocus = false }: { autoFocus?: boolean }) {
 					<button
 						type="button"
 						className="flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-full text-muted-foreground hover:text-foreground transition-colors"
-						onClick={() => setMessages([])}
+						onClick={() => {
+							setMessages([]);
+							clearError();
+						}}
 					>
 						Clear Chat
 					</button>
