@@ -651,12 +651,13 @@ describe("oauth logout - disableJwtPlugin", async () => {
 
 /**
  * The provider holds the key set that signs its own id tokens, so RP-initiated
- * logout must not depend on its public base URL being reachable from the server
- * itself. Nothing listens on this port: any self-fetch fails the request.
+ * logout must not reach for them over HTTP. A decoy key set is served on the
+ * provider's own base URL: a self-fetch would verify against those keys instead
+ * of the real ones, and the request counter would move.
  *
  * @see https://github.com/better-auth/better-auth/issues/10728
  */
-describe("oauth logout - unreachable base url", async () => {
+describe("oauth logout - no jwks self-fetch", async () => {
 	const port = 3006;
 	const baseUrl = `http://localhost:${port}`;
 	const rpBaseUrl = "http://localhost:5000";
@@ -690,8 +691,19 @@ describe("oauth logout - unreachable base url", async () => {
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 	let oauthClient: OAuthClient | null;
+	let decoy: Listener;
+	let decoyRequests = 0;
 
 	beforeAll(async () => {
+		decoy = await listen(
+			(_req, res) => {
+				decoyRequests++;
+				res.setHeader("content-type", "application/json");
+				res.end(JSON.stringify({ keys: [] }));
+			},
+			{ port },
+		);
+
 		oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
@@ -703,7 +715,13 @@ describe("oauth logout - unreachable base url", async () => {
 		expect(oauthClient?.client_id).toBeDefined();
 	});
 
-	it("should end the session without fetching its own jwks", async () => {
+	afterAll(async () => {
+		if (decoy) {
+			await decoy.close();
+		}
+	});
+
+	it("should end the session with the local key set", async () => {
 		const clientId = oauthClient?.client_id!;
 		const clientSecret = oauthClient?.client_secret!;
 		const codeVerifier = generateRandomString(32);
@@ -753,6 +771,7 @@ describe("oauth logout - unreachable base url", async () => {
 			},
 		});
 		expect(logoutRes.error).toBeNull();
+		expect(decoyRequests).toBe(0);
 
 		const sessionAfter = await client.getSession({
 			fetchOptions: {
