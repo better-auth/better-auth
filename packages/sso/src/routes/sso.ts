@@ -266,6 +266,14 @@ const ssoProviderBodySchema = z.object({
 				})
 				.default(true)
 				.optional(),
+			preferIdToken: z
+				.boolean({})
+				.meta({
+					description:
+						"Prefer the verified ID token over UserInfo when both are available. Recommended for Microsoft Entra. Defaults to false.",
+				})
+				.default(false)
+				.optional(),
 			mapping: z
 				.object({
 					id: z.string({}).meta({
@@ -515,6 +523,12 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 														format: "uri",
 														nullable: true,
 														description: "The JWKS endpoint URL",
+													},
+													preferIdToken: {
+														type: "boolean",
+														nullable: true,
+														description:
+															"Prefer the verified ID token over UserInfo when both are available",
 													},
 													mapping: {
 														type: "object",
@@ -799,6 +813,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 						mapping: body.oidcConfig.mapping,
 						scopes: body.oidcConfig.scopes,
 						userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
+						preferIdToken: body.oidcConfig.preferIdToken || false,
 						overrideUserInfo:
 							ctx.body.overrideUserInfo ||
 							options?.defaultOverrideUserInfo ||
@@ -822,6 +837,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					mapping: body.oidcConfig.mapping,
 					scopes: body.oidcConfig.scopes,
 					userInfoEndpoint: hydratedOIDCConfig.userInfoEndpoint,
+					preferIdToken: body.oidcConfig.preferIdToken || false,
 					overrideUserInfo:
 						ctx.body.overrideUserInfo ||
 						options?.defaultOverrideUserInfo ||
@@ -1626,7 +1642,10 @@ async function handleOIDCCallback(
 	} | null = null;
 	const mapping = config.mapping || {};
 
-	if (config.userInfoEndpoint) {
+	if (
+		config.userInfoEndpoint &&
+		!(config.preferIdToken && tokenResponse.idToken)
+	) {
 		const userInfoResponse = await betterFetch<Record<string, unknown>>(
 			config.userInfoEndpoint,
 			{

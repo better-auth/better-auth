@@ -221,6 +221,7 @@ function sanitizeProvider(
 					jwksEndpoint: oidcConfig.jwksEndpoint,
 					scopes: oidcConfig.scopes,
 					tokenEndpointAuthentication: oidcConfig.tokenEndpointAuthentication,
+					preferIdToken: oidcConfig.preferIdToken,
 				}
 			: undefined,
 		samlConfig: samlConfig
@@ -478,6 +479,7 @@ function mergeOIDCConfig(
 		tokenEndpointAuthentication:
 			updates.tokenEndpointAuthentication ??
 			current.tokenEndpointAuthentication,
+		preferIdToken: updates.preferIdToken ?? current.preferIdToken,
 	};
 }
 
