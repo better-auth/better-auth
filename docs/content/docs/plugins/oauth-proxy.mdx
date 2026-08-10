@@ -19,6 +19,7 @@ A proxy plugin that allows you to proxy OAuth requests. Useful for development a
       plugins: [
         oAuthProxy({ // [!code highlight]
           productionURL: "https://my-production-app.com", // [!code highlight]
+          secret: process.env.OAUTH_PROXY_SECRET, // [!code highlight]
         }), // [!code highlight]
       ],
       socialProviders: {
@@ -29,6 +30,8 @@ A proxy plugin that allows you to proxy OAuth requests. Useful for development a
       },
     })
     ```
+
+    Set `OAUTH_PROXY_SECRET` to the same value on all environments (production, preview, localhost).
 
     The plugin will automatically route OAuth requests through your production server.
   </Step>
@@ -62,8 +65,19 @@ A proxy plugin that allows you to proxy OAuth requests. Useful for development a
   </Step>
 </Steps>
 
-<Callout type="info">
-  All environments participating in the OAuth proxy flow must share the same encryption key. By default, the plugin uses `BETTER_AUTH_SECRET`. To avoid sharing your main secret across environments, you can provide a dedicated `secret` option (see [Options](#options)).
+<Callout type="warn">
+  **Important: Shared Secret Required**
+
+  All environments (production, preview, localhost) must use the same encryption key to communicate. Configure a dedicated `secret` in the plugin options:
+
+  ```ts title="auth.ts"
+  oAuthProxy({
+    productionURL: "https://my-production-app.com",
+    secret: process.env.OAUTH_PROXY_SECRET, // Same value on ALL environments // [!code highlight]
+  })
+  ```
+
+  If you don't configure a shared `secret`, the plugin falls back to `BETTER_AUTH_SECRET`. Since production and preview typically have different main secrets (which is correct for security), the OAuth flow will fail with a `state_mismatch` error.
 </Callout>
 
 ## How it works
@@ -100,3 +114,39 @@ The encrypted profile data is passed via URL query parameters and can only be de
 **maxAge**: Maximum age in seconds for encrypted profile payloads. Payloads older than this will be rejected to prevent replay attacks. Keep this value short (e.g., 30-60 seconds) to minimize the window for potential replay attacks while still allowing normal OAuth flows. Defaults to `60` seconds.
 
 **secret**: A dedicated secret used for encrypting and decrypting data during the OAuth proxy flow. When set, this is used **instead of** the global `BETTER_AUTH_SECRET`, limiting the blast radius if the key is shared across environments — a leaked proxy secret cannot forge sessions or decrypt other data protected by the main secret. All environments participating in the proxy flow must share the same `secret` value.
+
+## Troubleshooting
+
+### `state_mismatch` or "State not persisted correctly" error
+
+This error typically occurs when production and preview environments have **different secrets** and no shared `secret` is configured in the plugin options.
+
+**What happens:**
+
+1. Preview encrypts the OAuth state with its secret
+2. OAuth provider redirects to production
+3. Production tries to decrypt with a different secret → **fails**
+4. The regular OAuth callback runs and fails because the state cookie doesn't exist on production
+
+**Solution:** Configure a shared `secret` in the `oAuthProxy` options on **all** environments:
+
+```ts title="auth.ts"
+oAuthProxy({
+  productionURL: "https://my-production-app.com",
+  secret: process.env.OAUTH_PROXY_SECRET, // [!code highlight]
+})
+```
+
+Make sure `OAUTH_PROXY_SECRET` has the same value on production, preview, and localhost.
+
+<Callout type="info">
+  Using a dedicated proxy secret (instead of sharing `BETTER_AUTH_SECRET`) is recommended for security. If the proxy secret is compromised, attackers cannot forge sessions or access other encrypted data — they can only potentially hijack OAuth flows during the short `maxAge` window.
+</Callout>
+
+### OAuth works on production but fails on preview/localhost
+
+Ensure all of the following:
+
+1. **Shared secret** is configured (see above)
+2. **Trusted origins** include your preview/localhost URLs
+3. **Production callback URL** is registered with your OAuth provider (e.g., `https://production.com/api/auth/callback/github`)

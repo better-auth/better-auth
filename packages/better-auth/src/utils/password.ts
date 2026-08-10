@@ -8,10 +8,8 @@ export async function validatePassword(
 		userId: string;
 	},
 ) {
-	const accounts = await ctx.context.internalAdapter.findAccounts(data.userId);
-	const credentialAccount = accounts?.find(
-		(account) => account.providerId === "credential",
-	);
+	const credentialAccount =
+		await ctx.context.internalAdapter.findCredentialAccount(data.userId);
 	const currentPassword = credentialAccount?.password;
 	if (!credentialAccount || !currentPassword) {
 		return false;
@@ -24,10 +22,8 @@ export async function validatePassword(
 }
 
 export async function checkPassword(userId: string, c: GenericEndpointContext) {
-	const accounts = await c.context.internalAdapter.findAccounts(userId);
-	const credentialAccount = accounts?.find(
-		(account) => account.providerId === "credential",
-	);
+	const credentialAccount =
+		await c.context.internalAdapter.findCredentialAccount(userId);
 	const currentPassword = credentialAccount?.password;
 	const password = c.body.password;
 	if (!credentialAccount || !currentPassword || !password) {
@@ -56,10 +52,8 @@ export async function shouldRequirePassword(
 		return true;
 	}
 
-	const accounts = await ctx.context.internalAdapter.findAccounts(userId);
-	const credentialAccount = accounts?.find(
-		(account) => account.providerId === "credential" && account.password,
-	);
+	const credentialAccount =
+		await ctx.context.internalAdapter.findCredentialAccount(userId);
 
-	return Boolean(credentialAccount);
+	return Boolean(credentialAccount?.password);
 }

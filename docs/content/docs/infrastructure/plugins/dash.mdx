@@ -24,12 +24,14 @@ export const auth = betterAuth({
 
 ### DashOptions
 
-| Option             | Type     | Description                        |
-| ------------------ | -------- | ---------------------------------- |
-| `apiUrl`           | `string` | Better Auth Infrastructure API URL |
-| `kvUrl`            | `string` | KV store URL for caching           |
-| `apiKey`           | `string` | Your API key for authentication    |
-| `activityTracking` | `object` | Activity tracking configuration    |
+| Option             | Type     | Description                                                           |
+| ------------------ | -------- | --------------------------------------------------------------------- |
+| `apiUrl`           | `string` | Better Auth Infrastructure API URL                                    |
+| `kvUrl`            | `string` | KV store URL for caching                                              |
+| `apiKey`           | `string` | Your API key for authentication                                       |
+| `apiTimeout`       | `number` | Timeout in ms for infra API HTTP requests (`apiUrl`). Default: `3000` |
+| `kvTimeout`        | `number` | Timeout in ms for KV HTTP requests (`kvUrl`). Default: `1000`         |
+| `activityTracking` | `object` | Activity tracking configuration                                       |
 
 ### Activity Tracking
 

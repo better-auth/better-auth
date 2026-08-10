@@ -31,9 +31,16 @@ function shouldSkipOriginCheck(ctx: GenericEndpointContext): boolean {
 		try {
 			const basePath = new URL(ctx.context.baseURL).pathname;
 			const currentPath = normalizePathname(ctx.request.url, basePath);
-			return skipOriginCheck.some((skipPath) =>
-				currentPath.startsWith(skipPath),
-			);
+			// Match only an exact path or a slash-boundary child, so a configured
+			// skip path like "/public/data" does not also skip "/public/database"
+			// or "/public/data-delete" and silently disable origin/CSRF checks there.
+			return skipOriginCheck.some((skipPath) => {
+				const normalizedSkipPath = skipPath.replace(/\/+$/, "");
+				return (
+					currentPath === normalizedSkipPath ||
+					currentPath.startsWith(`${normalizedSkipPath}/`)
+				);
+			});
 		} catch {
 			//
 		}
@@ -79,7 +86,7 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	const newUserCallbackURL = body?.newUserCallbackURL;
 
 	const validateURL = (
-		url: string | undefined,
+		url: unknown,
 		label:
 			| "origin"
 			| "callbackURL"
@@ -89,6 +96,15 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	) => {
 		if (!url) {
 			return;
+		}
+		// These values are read from the raw body/query before endpoint schema
+		// validation. A JSON object/array body or duplicate query parameter
+		// yields a non-string here; reject it as a controlled 400 instead of
+		// letting a string method throw an uncontrolled 500. Never String()-coerce.
+		if (typeof url !== "string") {
+			throw APIError.fromStatus("BAD_REQUEST", {
+				message: `Invalid ${label}: expected a string`,
+			});
 		}
 		const isTrustedOrigin = ctx.context.isTrustedOrigin(url, {
 			allowRelativePaths: label !== "origin",
@@ -326,6 +342,14 @@ async function validateFormCsrf(ctx: GenericEndpointContext): Promise<void> {
 		return await validateOrigin(ctx, true);
 	}
 
-	// No cookies, no Fetch Metadata → fallback to old behavior (no validation)
+	// No Fetch Metadata. A present Origin/Referer is still trustworthy evidence of
+	// cross-site intent, so validate it even without cookies. Only requests that carry
+	// no origin header at all (non-browser clients like curl or server-to-server) keep
+	// the permissive fallback.
+	const originHeader = headers.get("origin") || headers.get("referer");
+	if (originHeader) {
+		return await validateOrigin(ctx, true);
+	}
+
 	return;
 }

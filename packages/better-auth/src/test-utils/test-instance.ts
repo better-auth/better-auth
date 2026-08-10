@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { randomUUID } from "node:crypto";
 import type {
 	Awaitable,
 	BetterAuthClientOptions,
@@ -42,20 +43,38 @@ export async function getTestInstance<
 				disableTestUser?: boolean;
 				testUser?: Partial<User>;
 				testWith?: "sqlite" | "postgres" | "mongodb" | "mysql";
+				transaction?: boolean;
 		  }
 		| undefined,
 ) {
 	const testWith = config?.testWith || "sqlite";
+	const postgresSchema =
+		testWith === "postgres"
+			? `ba_test_${randomUUID().replaceAll("-", "_")}`
+			: undefined;
+
+	const quotePostgresIdentifier = (identifier: string) =>
+		`"${identifier.replaceAll('"', '""')}"`;
 
 	async function getPostgres() {
 		const { Kysely, PostgresDialect } = await import("kysely");
 		const { Pool } = await import("pg");
+		const pool = new Pool({
+			connectionString: "postgres://user:password@localhost:5432/better_auth",
+			options: postgresSchema
+				? `-c search_path=${postgresSchema},public`
+				: undefined,
+		});
+		if (postgresSchema) {
+			await pool.query(
+				`CREATE SCHEMA IF NOT EXISTS ${quotePostgresIdentifier(
+					postgresSchema,
+				)}`,
+			);
+		}
 		return new Kysely({
 			dialect: new PostgresDialect({
-				pool: new Pool({
-					connectionString:
-						"postgres://user:password@localhost:5432/better_auth",
-				}),
+				pool,
 			}),
 		});
 	}
@@ -78,7 +97,12 @@ export async function getTestInstance<
 	async function mongodbClient() {
 		const { MongoClient } = await import("mongodb");
 		const dbClient = async (connectionString: string, dbName: string) => {
-			const client = new MongoClient(connectionString);
+			// Fail fast in CI/local when Mongo is unreachable instead of hanging
+			// until Vitest's default 10s testTimeout (driver default is 30s).
+			const client = new MongoClient(connectionString, {
+				serverSelectionTimeoutMS: 2000,
+				connectTimeoutMS: 2000,
+			});
 			await client.connect();
 			const db = client.db(dbName);
 			return db;
@@ -101,14 +125,22 @@ export async function getTestInstance<
 		secret: "better-auth-secret-that-is-long-enough-for-validation-test",
 		database:
 			testWith === "postgres"
-				? { db: await getPostgres(), type: "postgres" }
+				? {
+						db: await getPostgres(),
+						type: "postgres",
+						transaction: config?.transaction,
+					}
 				: testWith === "mongodb"
 					? await Promise.all([
 							mongodbClient(),
 							await import("../adapters/mongodb-adapter"),
 						]).then(([db, { mongodbAdapter }]) => mongodbAdapter(db))
 					: testWith === "mysql"
-						? { db: await getMysql(), type: "mysql" }
+						? {
+								db: await getMysql(),
+								type: "mysql",
+								transaction: config?.transaction,
+							}
 						: await getSqlite(),
 		emailAndPassword: {
 			enabled: true,
@@ -182,9 +214,19 @@ export async function getTestInstance<
 		}
 		if (testWith === "postgres") {
 			const postgres = await getPostgres();
-			await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
-				postgres,
-			);
+			if (postgresSchema) {
+				await sql
+					.raw(
+						`DROP SCHEMA IF EXISTS ${quotePostgresIdentifier(
+							postgresSchema,
+						)} CASCADE`,
+					)
+					.execute(postgres);
+			} else {
+				await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
+					postgres,
+				);
+			}
 			await postgres.destroy();
 			return;
 		}

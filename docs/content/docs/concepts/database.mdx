@@ -31,7 +31,7 @@ npx auth@latest migrate
 
 ### Generating Schema
 
-Better Auth also provides a `generate` command to generate the schema required by Better Auth. The `generate` command creates the schema required by Better Auth. If you're using a database adapter like Prisma or Drizzle, this command will generate the right schema for your ORM. If you're using the built-in Kysely adapter, it will generate an SQL file you can run directly on your database.
+Better Auth also provides a `generate` command to generate the schema required by Better Auth. If you're using a database adapter like Prisma or Drizzle, this command will generate the right schema for your ORM. If you're using the built-in Kysely adapter, it will generate an SQL file you can run directly on your database.
 
 ```package-install
 npx auth@latest generate
@@ -133,6 +133,8 @@ To use secondary storage, implement the `SecondaryStorage` interface:
 ```typescript
 interface SecondaryStorage {
   get: (key: string) => Promise<unknown>;
+  getAndDelete: (key: string) => Promise<unknown>;
+  increment: (key: string, ttl: number) => Promise<number>;
   set: (key: string, value: string, ttl?: number) => Promise<void>;
   delete: (key: string) => Promise<void>;
 }
@@ -195,11 +197,29 @@ import { betterAuth } from "better-auth";
 const redis = createClient();
 await redis.connect();
 
+const incrementScript = `
+local value = redis.call("INCR", KEYS[1])
+if value == 1 then
+  redis.call("EXPIRE", KEYS[1], ARGV[1])
+end
+return value
+`;
+
 export const auth = betterAuth({
 	// ... other options
 	secondaryStorage: {
 		get: async (key) => {
 			return await redis.get(key);
+		},
+		getAndDelete: async (key) => {
+			return await redis.getDel(key);
+		},
+		increment: async (key, ttl) => {
+			const value = await redis.eval(incrementScript, {
+				keys: [key],
+				arguments: [String(ttl)],
+			});
+			return Number(value);
 		},
 		set: async (key, value, ttl) => {
 			if (ttl) await redis.set(key, value, { EX: ttl });
@@ -422,11 +442,13 @@ export const sessionTableFields = [
 
 Table Name: `account`
 
+An account represents one authentication method linked to a user. Better Auth recognizes the provider-side identity by the unique pair of `issuer` and `accountId`, while `id` identifies the local account row. Use `id` when an account API asks for an `accountId`.
+
 export const accountTableFields = [
 	{
 		name: "id",
 		type: "string",
-		description: "Unique identifier for each account",
+		description: "Unique identifier for the local account record",
 		isPrimaryKey: true,
 	},
 	{
@@ -437,15 +459,20 @@ export const accountTableFields = [
 		references: { model: "user", field: "id", onDelete: "cascade" },
 	},
 	{
-		name: "accountId",
+		name: "issuer",
 		type: "string",
 		description:
-			"The ID of the account as provided by the SSO or equal to userId for credential accounts",
+			"The trusted authority that issued the provider account identifier",
+	},
+	{
+		name: "accountId",
+		type: "string",
+		description: "The stable account identifier within the issuer namespace",
 	},
 	{
 		name: "providerId",
 		type: "string",
-		description: "The ID of the provider",
+		description: "The provider configuration used to authenticate the account",
 	},
 	{
 		name: "accessToken",
@@ -503,6 +530,8 @@ export const accountTableFields = [
 ];
 
 <DatabaseTable name="account" fields={accountTableFields} />
+
+The database enforces a unique compound index on `issuer` and `accountId`. Providers with a trusted issuer use that authority, including the verified issuer for OpenID Connect. OAuth providers without an issuer use the synthetic `local:oauth:<encoded providerId>` namespace, with the provider ID segment percent-encoded. Credential accounts use `local:credential` and the linked user's stable `id`.
 
 ### Verification
 
@@ -606,7 +635,8 @@ To add custom fields, use the `additionalFields` property in the `user` or `sess
 * `type`: The data type of the field (e.g., "string", "number", "boolean").
 * `required`: A boolean indicating if the field is mandatory.
 * `defaultValue`: The default value for the field (note: this only applies in the JavaScript layer; in the database, the field will be optional).
-* `input`: This determines whether a value can be provided when creating a new record (default: `true`). If there are additional fields, like `role`, that should not be provided by the user during signup, you can set this to `false`.
+* `input`: Whether Better Auth accepts the field when creating or updating a record (default: `true`). For user fields, this includes values from API input and `mapProfileToUser`. Set this to `false` for server-owned fields such as `role`.
+* `returned`: Whether Better Auth includes the stored field in response bodies (default: `true`). This does not affect whether input can write the field.
 
 Here's an example of how to extend the user schema with additional fields:
 
@@ -646,7 +676,7 @@ const res = await auth.api.signUpEmail({
 });
 
 //user object
-res.user.role; // > "admin"
+res.user.role; // > "user"
 res.user.lang; // > "fr"
 ```
 
@@ -657,7 +687,16 @@ res.user.lang; // > "fr"
   client side.
 </Callout>
 
-If you're using social / OAuth providers, you may want to provide `mapProfileToUser` to map the profile data to the user object. So, you can populate additional fields from the provider's profile.
+For `user.additionalFields`, `input` and `returned` are independent:
+
+| Configuration                       | Input behavior                                                                                                                                                    | Response behavior             |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `{ input: true, returned: true }`   | API input and provider profile mapping can supply the field.                                                                                                      | The stored field is included. |
+| `{ input: true, returned: false }`  | API input and provider profile mapping can supply the field.                                                                                                      | The stored field is omitted.  |
+| `{ input: false, returned: true }`  | API input and provider profile mapping cannot supply the field. A configured `defaultValue` can initialize it; otherwise use an application-owned database write. | The stored field is included. |
+| `{ input: false, returned: false }` | API input and provider profile mapping cannot supply the field. A configured `defaultValue` can initialize it; otherwise use an application-owned database write. | The stored field is omitted.  |
+
+If you're using a social or OAuth provider, `mapProfileToUser` can populate additional fields from the provider profile when those fields allow input. The mapper runs on your server, but Better Auth still treats its return value as provider input. Fields marked `input: false` stay server-owned, provider values for those fields are ignored, and configured `defaultValue` values still apply when OAuth creates a user. See [server-owned fields and authorization claims](/docs/concepts/oauth#server-owned-fields-and-authorization-claims) for secure handling patterns.
 
 **Example: Mapping Profile to User For `firstName` and `lastName`**
 
@@ -991,14 +1030,14 @@ To add new tables and columns to your database, you have two options:
 
 Both methods ensure your database schema stays up to date with your plugins' requirements.
 
-## Experimental Joins
+## Joins
 
-Since Better-Auth version `1.4` we've introduced experimental database joins support.
+Since Better-Auth version `1.4` we've introduced database joins support.
 This allows Better-Auth to perform multiple database queries in a single request, reducing the number of database roundtrips.
 Over 50 endpoints support joins, and we're constantly adding more.
 
-Under the hood, our adapter system supports joins natively, meaning even if you don't enable experimental joins,
-it will still fallback to making multiple database queries and combining the results.
+Under the hood, our adapter system supports joins natively. When joins are disabled (the default),
+Better-Auth falls back to making multiple database queries and combining the results.
 
 To enable joins, update your auth config with the following:
 
@@ -1006,19 +1045,22 @@ To enable joins, update your auth config with the following:
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-  experimental: { joins: true }
+  advanced: {
+    database: {
+      joins: true,
+    },
+  },
 });
 ```
 
-The Better-Auth `1.4` CLI will generate DrizzleORM and PrismaORM relationships for you so if you do not have those already
-be sure to update your schema by running our migrate or generate CLI commands to be up-to-date with the latest required schema.
+Make sure your DrizzleORM or PrismaORM schema includes the necessary relationships — run our migrate or generate CLI commands to stay up-to-date.
 
-It's very important to read the documentation regarding experimental joins for your given adapter:
+Read the documentation regarding joins for your given adapter:
 
-* [DrizzleORM](/docs/adapters/drizzle#joins-experimental)
-* [PrismaORM](/docs/adapters/prisma#joins-experimental)
-* [SQLite](/docs/adapters/sqlite#joins-experimental)
-* [MySQL](/docs/adapters/mysql#joins-experimental)
-* [PostgreSQL](/docs/adapters/postgresql#joins-experimental)
-* [MSSQL](/docs/adapters/mssql#joins-experimental)
-* [MongoDB](/docs/adapters/mongo#joins-experimental)
+* [DrizzleORM](/docs/adapters/drizzle#joins)
+* [PrismaORM](/docs/adapters/prisma#joins)
+* [SQLite](/docs/adapters/sqlite#joins)
+* [MySQL](/docs/adapters/mysql#joins)
+* [PostgreSQL](/docs/adapters/postgresql#joins)
+* [MSSQL](/docs/adapters/mssql#joins)
+* [MongoDB](/docs/adapters/mongo#joins)

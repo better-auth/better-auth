@@ -41,11 +41,16 @@ export function keycloak(
 
 	return {
 		providerId: "keycloak",
+		accountIssuer: issuer,
 		discoveryUrl,
 		clientId: options.clientId,
 		clientSecret: options.clientSecret,
+		tokenEndpointAuth: options.tokenEndpointAuth,
 		scopes: options.scopes ?? defaultScopes,
 		redirectURI: options.redirectURI,
+		endSessionEndpoint: options.endSessionEndpoint,
+		postLogoutRedirectURI: options.postLogoutRedirectURI,
+		disableProviderLogout: options.disableProviderLogout,
 		pkce: options.pkce,
 		disableImplicitSignUp: options.disableImplicitSignUp,
 		disableSignUp: options.disableSignUp,

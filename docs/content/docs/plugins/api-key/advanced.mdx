@@ -154,8 +154,9 @@ const secretKey = await auth.api.createApiKey({
 ```
 
 <Callout type="warn">
-  Note that when creating a key under a specific configId,
-  the `get`, `update`, `delete` and `verify` operations must also specify the `configId` parameter.
+  `get`, `update`, and `delete` must pass the same `configId` the key was created with.
+  `verify` resolves the key's own configuration, so it only needs `configId` when a
+  configuration differs from the default in storage or hashing.
 </Callout>
 
 ### Using configId for API Key Operations
@@ -272,7 +273,7 @@ export const auth = betterAuth({
 
 ### Creating Organization-Owned Keys
 
-When creating an organization-owned API key, pass the `organizationId` instead of `userId`:
+When creating an organization-owned API key, pass the `organizationId` together with a user context. The user must be a member of the organization with permission to create API keys. That user is taken from the session (request `headers`); for a pure server call without headers, pass a `userId` in the body instead:
 
 ```ts title="create-org-api-key.ts"
 import { auth } from "@/lib/auth"
@@ -280,7 +281,8 @@ import { auth } from "@/lib/auth"
 const orgKey = await auth.api.createApiKey({
   body: {
     configId: "org-keys",
-    organizationId: "org_123", // Required for org-owned keys
+    organizationId: "org_123", // the organization that owns the key
+    userId: "user_123", // a member allowed to create keys; omit when passing session headers
   },
 });
 ```

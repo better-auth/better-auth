@@ -142,7 +142,7 @@ New features start with discussion. Open a [feature request](https://github.com/
 ### Security Reports
 
 Do not open a public issue for security vulnerabilities.
-Email [security@better-auth.com](mailto:security@better-auth.com) instead.
+Report them via [GitHub Security Advisories](https://github.com/better-auth/better-auth/security/advisories/new) instead.
 See [SECURITY.md](/SECURITY.md) for details.
 
 ## Pull Request Guidelines
@@ -223,6 +223,15 @@ it before merge.
    - Reference related issues (e.g. "Closes #1234")
    - List any potential breaking changes
    - Add screenshots for UI changes
+
+## Following Up on Closed Issues and PRs
+
+Closed issues and PRs are automatically locked after 7 days of inactivity
+and tagged with the `locked` label. This keeps follow-ups from piling up
+on stale threads, so any new context can be triaged on its own.
+
+If you're hitting a similar problem or have new information, open a new
+issue or PR and reference the locked one.
 
 ## AI Policy
 

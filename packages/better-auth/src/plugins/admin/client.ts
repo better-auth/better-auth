@@ -9,7 +9,7 @@ import { hasPermission } from "./has-permission";
 
 export * from "./error-codes";
 
-interface AdminClientOptions {
+export interface AdminClientOptions {
 	ac?: AccessControl | undefined;
 	roles?:
 		| {

@@ -1,9 +1,8 @@
 "use client";
 
 import { ArrowLeftIcon, ArrowRightIcon } from "@radix-ui/react-icons";
-import useEmblaCarousel, {
-	type UseEmblaCarouselType,
-} from "embla-carousel-react";
+import type { UseEmblaCarouselType } from "embla-carousel-react";
+import useEmblaCarousel from "embla-carousel-react";
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -261,10 +260,10 @@ const CarouselNext = ({
 CarouselNext.displayName = "CarouselNext";
 
 export {
-	type CarouselApi,
 	Carousel,
+	type CarouselApi,
 	CarouselContent,
 	CarouselItem,
-	CarouselPrevious,
 	CarouselNext,
+	CarouselPrevious,
 };

@@ -49,7 +49,7 @@ export type HostKind =
 	| "multicast"
 	/** IPv4 limited broadcast `255.255.255.255`. */
 	| "broadcast"
-	/** Other RFC 6890 special-purpose ranges (0/8, 192.0.0/24, 240/4, 2001::/32, etc.). */
+	/** Other RFC 6890 special-purpose ranges (0.0.0.0/8, 192.0.0.0/24, 192.88.99.0/24, 240.0.0.0/4, 2001::/32, etc.). */
 	| "reserved"
 	/** Cloud metadata service FQDN (e.g. `metadata.google.internal`). */
 	| "cloudMetadata"
@@ -183,6 +183,8 @@ function classifyIPv4(ip: string): HostKind {
 	if (inIPv4Range(n, ipv4ToUint32("224.0.0.0"), 4)) return "multicast";
 	if (inIPv4Range(n, ipv4ToUint32("0.0.0.0"), 8)) return "reserved";
 	if (inIPv4Range(n, ipv4ToUint32("192.0.0.0"), 24)) return "reserved";
+	// 6to4 relay anycast (RFC 7526, deprecated), not globally reachable.
+	if (inIPv4Range(n, ipv4ToUint32("192.88.99.0"), 24)) return "reserved";
 	if (inIPv4Range(n, ipv4ToUint32("240.0.0.0"), 4)) return "reserved";
 
 	return "public";
@@ -231,9 +233,15 @@ function classifyIPv6(expanded: string): HostKind {
 
 	if (firstByte === 0xff) return "multicast";
 	if (firstByte === 0xfe && (secondByte & 0xc0) === 0x80) return "linkLocal";
+	// fec0::/10 — deprecated site-local (RFC 3879), not globally reachable.
+	if (firstByte === 0xfe && (secondByte & 0xc0) === 0xc0) return "reserved";
 	if ((firstByte & 0xfe) === 0xfc) return "private";
 
 	if (expanded.startsWith("2001:0db8:")) return "documentation";
+
+	// 2001:2::/48 — Benchmarking (RFC 5180). A specific non-globally-reachable
+	// block inside the otherwise-mixed 2001::/23 protocol-assignments space.
+	if (expanded.startsWith("2001:0002:0000:")) return "benchmarking";
 
 	if (expanded.startsWith("2002:")) {
 		const embedded = extractEmbeddedIPv4(expanded, 1);
@@ -247,6 +255,10 @@ function classifyIPv6(expanded: string): HostKind {
 		return "reserved";
 	}
 
+	// 64:ff9b:1::/48 — Local-Use IPv4/IPv6 Translation (RFC 8215). Distinct from
+	// the well-known NAT64 /96 prefix above and not globally reachable.
+	if (expanded.startsWith("0064:ff9b:0001:")) return "reserved";
+
 	if (expanded.startsWith("2001:0000:")) {
 		const embedded = extractEmbeddedIPv4(expanded, 6, { xor: true });
 		if (embedded && classifyIPv4(embedded) !== "public") return "reserved";
@@ -254,6 +266,18 @@ function classifyIPv6(expanded: string): HostKind {
 	}
 
 	if (expanded.startsWith("0100:0000:0000:0000:")) return "reserved";
+
+	// 3fff::/20 — Documentation (RFC 9637). The /20 fixes the first 16 bits to
+	// `3fff` and the next nibble to 0, so only `3fff:0xxx` is in range.
+	if (expanded.startsWith("3fff:0")) return "documentation";
+
+	// 5f00::/16 — SRv6 SIDs (RFC 9602), not globally reachable.
+	if (expanded.startsWith("5f00:")) return "reserved";
+
+	// ::/96 — deprecated IPv4-compatible IPv6 (RFC 4291 §2.5.5.1). `::` and
+	// `::1` are matched above; the rest of the block embeds an IPv4 (e.g.
+	// `::127.0.0.1`) and is never a valid public target.
+	if (expanded.startsWith("0000:0000:0000:0000:0000:0000:")) return "reserved";
 
 	return "public";
 }

@@ -7,9 +7,12 @@ import {
 	jwtVerify,
 } from "jose";
 import { describe, expect, it } from "vitest";
-import { signClientAssertion } from "./client-assertion";
+import {
+	createPrivateKeyJwtClientAssertionGetter,
+	signPrivateKeyJwtClientAssertion,
+} from "./client-assertion";
 
-describe("signClientAssertion", () => {
+describe("signPrivateKeyJwtClientAssertion", () => {
 	const clientId = "test-client-id";
 	const tokenEndpoint = "https://idp.example.com/token";
 
@@ -20,7 +23,7 @@ describe("signClientAssertion", () => {
 		const privateJwk = await exportJWK(privateKey);
 		const publicJwk = await exportJWK(publicKey);
 
-		const assertion = await signClientAssertion({
+		const assertion = await signPrivateKeyJwtClientAssertion({
 			clientId,
 			tokenEndpoint,
 			privateKeyJwk: privateJwk,
@@ -48,7 +51,7 @@ describe("signClientAssertion", () => {
 		const privateJwk = await exportJWK(privateKey);
 		const publicJwk = await exportJWK(publicKey);
 
-		const assertion = await signClientAssertion({
+		const assertion = await signPrivateKeyJwtClientAssertion({
 			clientId,
 			tokenEndpoint,
 			privateKeyJwk: privateJwk,
@@ -70,7 +73,7 @@ describe("signClientAssertion", () => {
 		});
 		const privateJwk = await exportJWK(privateKey);
 
-		const assertion = await signClientAssertion({
+		const assertion = await signPrivateKeyJwtClientAssertion({
 			clientId,
 			tokenEndpoint,
 			privateKeyJwk: privateJwk,
@@ -89,12 +92,12 @@ describe("signClientAssertion", () => {
 		});
 		const privateJwk = await exportJWK(privateKey);
 
-		const a1 = await signClientAssertion({
+		const a1 = await signPrivateKeyJwtClientAssertion({
 			clientId,
 			tokenEndpoint,
 			privateKeyJwk: privateJwk,
 		});
-		const a2 = await signClientAssertion({
+		const a2 = await signPrivateKeyJwtClientAssertion({
 			clientId,
 			tokenEndpoint,
 			privateKeyJwk: privateJwk,
@@ -111,7 +114,7 @@ describe("signClientAssertion", () => {
 		});
 		const privateJwk = { ...(await exportJWK(privateKey)), kid: "jwk-kid" };
 
-		const assertion = await signClientAssertion({
+		const assertion = await signPrivateKeyJwtClientAssertion({
 			clientId,
 			tokenEndpoint,
 			privateKeyJwk: privateJwk,
@@ -127,7 +130,7 @@ describe("signClientAssertion", () => {
 		});
 		const privateJwk = { ...(await exportJWK(privateKey)), kid: "jwk-kid" };
 
-		const assertion = await signClientAssertion({
+		const assertion = await signPrivateKeyJwtClientAssertion({
 			clientId,
 			tokenEndpoint,
 			privateKeyJwk: privateJwk,
@@ -145,7 +148,7 @@ describe("signClientAssertion", () => {
 		const privateJwk = { ...(await exportJWK(privateKey)), alg: "ES256" };
 		const publicJwk = await exportJWK(publicKey);
 
-		const assertion = await signClientAssertion({
+		const assertion = await signPrivateKeyJwtClientAssertion({
 			clientId,
 			tokenEndpoint,
 			privateKeyJwk: privateJwk,
@@ -161,11 +164,121 @@ describe("signClientAssertion", () => {
 		expect(payload.iss).toBe(clientId);
 	});
 
+	it("rejects a JWK whose embedded alg is not allowed for private_key_jwt", async () => {
+		const { privateKey } = await generateKeyPair("RS256", {
+			extractable: true,
+		});
+		const privateJwk = { ...(await exportJWK(privateKey)), alg: "HS256" };
+
+		await expect(
+			signPrivateKeyJwtClientAssertion({
+				clientId,
+				tokenEndpoint,
+				privateKeyJwk: privateJwk,
+			}),
+		).rejects.toThrow(/Unsupported private_key_jwt signing algorithm: HS256/);
+	});
+
+	it("rejects a JWK whose embedded alg conflicts with the explicit algorithm", async () => {
+		const { privateKey } = await generateKeyPair("RS256", {
+			extractable: true,
+		});
+		const privateJwk = { ...(await exportJWK(privateKey)), alg: "RS256" };
+
+		await expect(
+			signPrivateKeyJwtClientAssertion({
+				clientId,
+				tokenEndpoint,
+				privateKeyJwk: privateJwk,
+				algorithm: "PS256",
+			}),
+		).rejects.toThrow(
+			/JWK alg "RS256" does not match configured algorithm "PS256"/,
+		);
+	});
+
+	it("rejects a disallowed embedded alg even when an explicit algorithm is set", async () => {
+		const { privateKey } = await generateKeyPair("RS256", {
+			extractable: true,
+		});
+		const privateJwk = { ...(await exportJWK(privateKey)), alg: "HS256" };
+
+		await expect(
+			signPrivateKeyJwtClientAssertion({
+				clientId,
+				tokenEndpoint,
+				privateKeyJwk: privateJwk,
+				algorithm: "RS256",
+			}),
+		).rejects.toThrow(/Unsupported private_key_jwt signing algorithm: HS256/);
+	});
+
+	it("rejects a disallowed explicit algorithm passed by JavaScript callers", async () => {
+		const { privateKey } = await generateKeyPair("RS256", {
+			extractable: true,
+		});
+		const privateJwk = await exportJWK(privateKey);
+
+		await expect(
+			signPrivateKeyJwtClientAssertion({
+				clientId,
+				tokenEndpoint,
+				privateKeyJwk: privateJwk,
+				// @ts-expect-error — JS callers can pass an unsupported alg string.
+				algorithm: "HS256",
+			}),
+		).rejects.toThrow(/Unsupported private_key_jwt signing algorithm: HS256/);
+	});
+
+	it("createPrivateKeyJwtClientAssertionGetter throws eagerly on misconfiguration", async () => {
+		const { privateKey } = await generateKeyPair("RS256", {
+			extractable: true,
+		});
+		const privateJwk = { ...(await exportJWK(privateKey)), alg: "HS256" };
+
+		expect(() =>
+			createPrivateKeyJwtClientAssertionGetter({
+				privateKeyJwk: privateJwk,
+			}),
+		).toThrow(/Unsupported private_key_jwt signing algorithm: HS256/);
+
+		expect(() =>
+			createPrivateKeyJwtClientAssertionGetter({ algorithm: "RS256" }),
+		).toThrow(/private_key_jwt requires either privateKeyJwk or privateKeyPem/);
+	});
+
 	it("throws when neither JWK nor PEM is provided", async () => {
 		await expect(
-			signClientAssertion({ clientId, tokenEndpoint }),
+			signPrivateKeyJwtClientAssertion({ clientId, tokenEndpoint }),
 		).rejects.toThrow(
 			"private_key_jwt requires either privateKeyJwk or privateKeyPem",
 		);
+	});
+
+	it("creates a private_key_jwt client assertion getter", async () => {
+		const { privateKey, publicKey } = await generateKeyPair("RS256", {
+			extractable: true,
+		});
+		const privateJwk = await exportJWK(privateKey);
+		const publicJwk = await exportJWK(publicKey);
+
+		const getClientAssertion = createPrivateKeyJwtClientAssertionGetter({
+			privateKeyJwk: privateJwk,
+			algorithm: "RS256",
+		});
+
+		const assertion = await getClientAssertion({
+			clientId,
+			tokenEndpoint,
+			grantType: "authorization_code",
+		});
+		const jwks = createLocalJWKSet({ keys: [publicJwk] });
+		const { payload } = await jwtVerify(assertion, jwks, {
+			algorithms: ["RS256"],
+		});
+
+		expect(payload.iss).toBe(clientId);
+		expect(payload.sub).toBe(clientId);
+		expect(payload.aud).toBe(tokenEndpoint);
 	});
 });

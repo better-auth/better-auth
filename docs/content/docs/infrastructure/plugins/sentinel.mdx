@@ -24,12 +24,14 @@ export const auth = betterAuth({
 
 ### SentinelOptions
 
-| Option     | Type              | Description                         |
-| ---------- | ----------------- | ----------------------------------- |
-| `apiUrl`   | `string`          | Better Auth Infrastructure API URL  |
-| `kvUrl`    | `string`          | KV store URL for rate limiting data |
-| `apiKey`   | `string`          | Your API key for authentication     |
-| `security` | `SecurityOptions` | Security feature configuration      |
+| Option       | Type              | Description                                                           |
+| ------------ | ----------------- | --------------------------------------------------------------------- |
+| `apiUrl`     | `string`          | Better Auth Infrastructure API URL                                    |
+| `kvUrl`      | `string`          | KV store URL for rate limiting data                                   |
+| `apiKey`     | `string`          | Your API key for authentication                                       |
+| `apiTimeout` | `number`          | Timeout in ms for Infra API HTTP requests (`apiUrl`). Default: `3000` |
+| `kvTimeout`  | `number`          | Timeout in ms for KV HTTP requests (`kvUrl`). Default: `1000`         |
+| `security`   | `SecurityOptions` | Security feature configuration                                        |
 
 ### SecurityOptions
 
@@ -340,9 +342,10 @@ export const authClient = createAuthClient({
 
 ### Configuration
 
-| Option               | Type      | Default | Description                        |
-| -------------------- | --------- | ------- | ---------------------------------- |
-| `autoSolveChallenge` | `boolean` | `true`  | Automatically solve PoW challenges |
+| Option               | Type      | Default | Description                                             |
+| -------------------- | --------- | ------- | ------------------------------------------------------- |
+| `autoSolveChallenge` | `boolean` | `true`  | Automatically solve PoW challenges                      |
+| `kvTimeout`          | `number`  | `1000`  | Timeout in ms for KV identify and related HTTP requests |
 
 ### Browser Fingerprinting
 
@@ -424,6 +427,7 @@ export const authClient = createAuthClient({
 | Option                | Type                            | Default                                                 | Description                                                                 |
 | --------------------- | ------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------- |
 | `identifyUrl`         | `string`                        | `BETTER_AUTH_KV_URL`, then `https://kv.better-auth.com` | KV identify endpoint base URL                                               |
+| `kvTimeout`           | `number`                        | `1000`                                                  | Timeout in ms for KV identify and related HTTP requests                     |
 | `autoSolveChallenge`  | `boolean`                       | `true`                                                  | On `423` with `X-PoW-Challenge`, solve and retry once with `X-PoW-Solution` |
 | `onChallengeReceived` | `(reason: string) => void`      | —                                                       | Called when a PoW challenge is received                                     |
 | `onChallengeSolved`   | `(solveTimeMs: number) => void` | —                                                       | Called after a successful solve                                             |

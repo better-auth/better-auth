@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/cimd",
-  "version": "1.7.0-beta.3",
+  "version": "1.7.0-rc.4",
   "description": "Client ID Metadata Document plugin for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -45,18 +45,29 @@
       "dev-source": "./src/index.ts",
       "types": "./dist/index.d.mts",
       "default": "./dist/index.mjs"
+    },
+    "./node": {
+      "dev-source": "./src/node.ts",
+      "types": "./dist/node.d.mts",
+      "default": "./dist/node.mjs"
     }
   },
   "typesVersions": {
     "*": {
       "*": [
         "./dist/index.d.mts"
+      ],
+      "node": [
+        "./dist/node.d.mts"
       ]
     }
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
+    "@better-auth/mcp": "workspace:*",
     "@better-auth/oauth-provider": "workspace:*",
+    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
     "better-auth": "workspace:*",
     "listhen": "^1.9.0",
     "tsdown": "catalog:"

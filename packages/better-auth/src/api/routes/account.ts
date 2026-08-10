@@ -1,24 +1,46 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { Account } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import {
+	additionalAuthorizationParamsSchema,
+	supportsIdTokenSignIn,
+	verifyProviderIdToken,
+} from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
+import { shouldBindAccountCookieToSessionUser } from "../../context/store-capabilities";
 import {
 	getAccountCookie,
 	setAccountCookie,
 } from "../../cookies/session-store";
 import { parseAccountOutput } from "../../db/schema";
+import { resolveOAuthAccountKeyForAPI } from "../../oauth2/account-key";
 import { missingEmailLogMessage } from "../../oauth2/errors";
-import { generateState } from "../../oauth2/state";
-import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
+import { applyUpdateUserInfoOnLink } from "../../oauth2/link-account";
+import { generateIdTokenNonce, generateState } from "../../oauth2/state";
+import {
+	decryptOAuthToken,
+	getOAuthCallbackPath,
+	setTokenUtil,
+} from "../../oauth2/utils";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
+	isStateful,
 	sessionMiddleware,
 } from "./session";
+
+function parseStoredScopes(scope: string | null | undefined): string[] {
+	if (!scope) return [];
+	return scope
+		.split(",")
+		.map((s) => s.trim())
+		.filter(Boolean);
+}
 
 export const listUserAccounts = createAuthEndpoint(
 	"/list-accounts",
@@ -53,6 +75,9 @@ export const listUserAccounts = createAuthEndpoint(
 												type: "string",
 												format: "date-time",
 											},
+											issuer: {
+												type: "string",
+											},
 											accountId: {
 												type: "string",
 											},
@@ -71,6 +96,7 @@ export const listUserAccounts = createAuthEndpoint(
 											"providerId",
 											"createdAt",
 											"updatedAt",
+											"issuer",
 											"accountId",
 											"userId",
 											"scopes",
@@ -94,7 +120,7 @@ export const listUserAccounts = createAuthEndpoint(
 				const { scope, ...parsed } = parseAccountOutput(c.context.options, a);
 				return {
 					...parsed,
-					scopes: scope?.split(",") || [],
+					scopes: parseStoredScopes(scope),
 				};
 			}),
 		);
@@ -129,7 +155,6 @@ export const linkSocialAccount = createAuthEndpoint(
 					nonce: z.string().optional(),
 					accessToken: z.string().optional(),
 					refreshToken: z.string().optional(),
-					scopes: z.array(z.string()).optional(),
 				})
 				.optional(),
 			/**
@@ -170,6 +195,22 @@ export const linkSocialAccount = createAuthEndpoint(
 						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
 				})
 				.optional(),
+			/**
+			 * The login hint to forward to the provider authorization endpoint.
+			 */
+			loginHint: z
+				.string()
+				.meta({
+					description:
+						"The login hint to use for the authorization code request",
+				})
+				.optional(),
+			/**
+			 * Extra query parameters to append to the provider authorization URL.
+			 * Reserved OAuth keys (state, client_id, redirect_uri, response_type,
+			 * code_challenge, code_challenge_method, nonce, scope) are rejected.
+			 */
+			additionalParams: additionalAuthorizationParamsSchema,
 			/**
 			 * Any additional data to pass through the oauth flow.
 			 */
@@ -229,7 +270,7 @@ export const linkSocialAccount = createAuthEndpoint(
 
 		// Handle ID Token flow if provided
 		if (c.body.idToken) {
-			if (!provider.verifyIdToken) {
+			if (!supportsIdTokenSignIn(provider)) {
 				c.context.logger.error(
 					"Provider does not support id token verification",
 					{
@@ -243,9 +284,9 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			const { token, nonce } = c.body.idToken;
-			const valid = await provider.verifyIdToken(token, nonce);
+			const valid = await verifyProviderIdToken(provider, token, nonce, c);
 			if (!valid) {
-				c.context.logger.error("Invalid id token", {
+				c.context.logger.warn("Invalid id token", {
 					provider: c.body.provider,
 				});
 				throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.INVALID_TOKEN);
@@ -267,8 +308,6 @@ export const linkSocialAccount = createAuthEndpoint(
 				);
 			}
 
-			const linkingUserId = String(linkingUserInfo.user.id);
-
 			if (!linkingUserInfo.user.email) {
 				c.context.logger.error(
 					missingEmailLogMessage(c.body.provider, { source: "id_token" }),
@@ -280,20 +319,54 @@ export const linkSocialAccount = createAuthEndpoint(
 				);
 			}
 
-			const existingAccounts = await c.context.internalAdapter.findAccounts(
-				session.user.id,
+			const accountKey = await resolveOAuthAccountKeyForAPI(
+				provider,
+				{
+					idToken: token,
+					accessToken: c.body.idToken.accessToken,
+					refreshToken: c.body.idToken.refreshToken,
+				},
+				linkingUserInfo.data,
 			);
 
-			const hasBeenLinked = existingAccounts.find(
-				(a) => a.providerId === provider.id && a.accountId === linkingUserId,
-			);
+			const linkedAccount =
+				await c.context.internalAdapter.findAccountByKey(accountKey);
 
-			if (hasBeenLinked) {
+			if (linkedAccount?.userId === session.user.id) {
+				const updateData = Object.fromEntries(
+					Object.entries({
+						providerId: provider.id,
+						accessToken: await setTokenUtil(
+							c.body.idToken.accessToken,
+							c.context,
+						),
+						idToken: token,
+						refreshToken: await setTokenUtil(
+							c.body.idToken.refreshToken,
+							c.context,
+						),
+					}).filter(([_, value]) => value !== undefined),
+				);
+				await c.context.internalAdapter.updateAccount(
+					linkedAccount.id,
+					updateData,
+				);
+				await applyUpdateUserInfoOnLink(
+					c,
+					session.user.id,
+					linkingUserInfo.user,
+				);
 				return c.json({
 					url: "", // this is for type inference
 					status: true,
 					redirect: false,
 				});
+			}
+			if (linkedAccount) {
+				throw APIError.from(
+					"CONFLICT",
+					BASE_ERROR_CODES.SOCIAL_ACCOUNT_ALREADY_LINKED,
+				);
 			}
 
 			const isTrustedProvider = c.context.trustedProviders.includes(
@@ -324,31 +397,25 @@ export const linkSocialAccount = createAuthEndpoint(
 				await c.context.internalAdapter.createAccount({
 					userId: session.user.id,
 					providerId: provider.id,
-					accountId: linkingUserId,
-					accessToken: c.body.idToken.accessToken,
+					...accountKey,
+					accessToken: await setTokenUtil(
+						c.body.idToken.accessToken,
+						c.context,
+					),
 					idToken: token,
-					refreshToken: c.body.idToken.refreshToken,
-					scope: c.body.idToken.scopes?.join(","),
+					refreshToken: await setTokenUtil(
+						c.body.idToken.refreshToken,
+						c.context,
+					),
 				});
-			} catch (_e: any) {
+			} catch {
 				throw APIError.from("EXPECTATION_FAILED", {
 					message: "Account not linked - unable to create account",
 					code: "LINKING_FAILED",
 				});
 			}
 
-			if (
-				c.context.options.account?.accountLinking?.updateUserInfoOnLink === true
-			) {
-				try {
-					await c.context.internalAdapter.updateUser(session.user.id, {
-						name: linkingUserInfo.user?.name,
-						image: linkingUserInfo.user?.image,
-					});
-				} catch (e: any) {
-					console.warn("Could not update user - " + e.toString());
-				}
-			}
+			await applyUpdateUserInfoOnLink(c, session.user.id, linkingUserInfo.user);
 
 			return c.json({
 				url: "", // this is for type inference
@@ -358,20 +425,24 @@ export const linkSocialAccount = createAuthEndpoint(
 		}
 
 		// Handle OAuth flow
-		const state = await generateState(
-			c,
-			{
+		const idTokenNonce = generateIdTokenNonce(provider);
+		const state = await generateState(c, {
+			link: {
 				userId: session.user.id,
 				email: session.user.email,
 			},
-			c.body.additionalData,
-		);
+			additionalData: c.body.additionalData,
+			idTokenNonce,
+		});
 
 		const url = await provider.createAuthorizationURL({
 			state: state.state,
 			codeVerifier: state.codeVerifier,
-			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
+			idTokenNonce,
+			redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
 			scopes: c.body.scopes,
+			loginHint: c.body.loginHint,
+			additionalParams: c.body.additionalParams,
 		});
 
 		if (!c.body.disableRedirect) {
@@ -389,8 +460,9 @@ export const unlinkAccount = createAuthEndpoint(
 	{
 		method: "POST",
 		body: z.object({
-			providerId: z.string(),
-			accountId: z.string().optional(),
+			accountId: z.string().meta({
+				description: "The Better Auth account ID to unlink",
+			}),
 		}),
 		use: [freshSessionMiddleware],
 		metadata: {
@@ -417,7 +489,7 @@ export const unlinkAccount = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const { providerId, accountId } = ctx.body;
+		const { accountId } = ctx.body;
 		const accounts = await ctx.context.internalAdapter.findAccounts(
 			ctx.context.session.user.id,
 		);
@@ -430,11 +502,7 @@ export const unlinkAccount = createAuthEndpoint(
 				BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
 			);
 		}
-		const accountExist = accounts.find((account) =>
-			accountId
-				? account.accountId === accountId && account.providerId === providerId
-				: account.providerId === providerId,
-		);
+		const accountExist = accounts.find((account) => account.id === accountId);
 		if (!accountExist) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
 		}
@@ -445,27 +513,256 @@ export const unlinkAccount = createAuthEndpoint(
 	},
 );
 
+/**
+ * Resolves the user id an account-token operation should act on.
+ *
+ * A caller reaching the server over HTTP (a request or session headers are
+ * present) must have a valid session, and that session's user always wins.
+ * A trusted server-side `auth.api` caller with no session may instead name a
+ * `userId` directly. Throws `UNAUTHORIZED` when an HTTP caller is
+ * unauthenticated, and `USER_ID_OR_SESSION_REQUIRED` when neither a session
+ * nor a `userId` is available.
+ *
+ * When a durable store is authoritative, bypasses the cookie cache: these
+ * routes mint or refresh provider access tokens, so a server-side session
+ * revocation must take effect immediately rather than waiting for the cached
+ * cookie to expire. DB-less deployments keep the session in the cookie itself,
+ * so the cache is left in place for them.
+ */
+async function resolveUserId(
+	ctx: GenericEndpointContext,
+	userId?: string,
+): Promise<string> {
+	const session = await getSessionFromCtx(ctx, {
+		disableCookieCache: isStateful(ctx),
+	});
+	if (!session && (ctx.request || ctx.headers)) {
+		throw ctx.error("UNAUTHORIZED");
+	}
+	const resolvedUserId = session?.user?.id || userId;
+	if (!resolvedUserId) {
+		throw APIError.from("BAD_REQUEST", {
+			message: "Either userId or session is required",
+			code: "USER_ID_OR_SESSION_REQUIRED",
+		});
+	}
+	return resolvedUserId;
+}
+
+const accountSelectionSchema = z.union([
+	z.strictObject({
+		accountId: z.string().meta({
+			description: "The Better Auth account ID",
+		}),
+		userId: z
+			.string()
+			.meta({
+				description: "The user ID associated with the account",
+			})
+			.optional(),
+	}),
+	z.strictObject({
+		useAccountCookie: z.literal(true).meta({
+			description: "Select the current OAuth account from its signed cookie",
+		}),
+		userId: z
+			.string()
+			.meta({
+				description: "The user ID associated with the account",
+			})
+			.optional(),
+	}),
+]);
+
+type AccountSelection = { accountId: string } | { useAccountCookie: true };
+
+function matchesAccountSelection(
+	ctx: GenericEndpointContext,
+	account: Account,
+	{
+		resolvedUserId,
+		selection,
+	}: {
+		resolvedUserId: string;
+		selection: AccountSelection;
+	},
+) {
+	const matchesSessionUser =
+		!shouldBindAccountCookieToSessionUser(ctx.context.options) ||
+		account.userId === resolvedUserId;
+	return (
+		matchesSessionUser &&
+		("accountId" in selection ? account.id === selection.accountId : true)
+	);
+}
+
+/**
+ * Resolves an account from exactly one explicit source.
+ *
+ * A local account ID is resolved from the database. A signed account cookie is
+ * used only when the caller explicitly selects it, which keeps stateless OAuth
+ * flows usable without letting cached cookie data satisfy a row-ID lookup.
+ */
+async function resolveUserAccount(
+	ctx: GenericEndpointContext,
+	{
+		resolvedUserId,
+		selection,
+	}: {
+		resolvedUserId: string;
+		selection: AccountSelection;
+	},
+): Promise<{ account: Account; accountCookie: Account | null }> {
+	if ("accountId" in selection) {
+		const accounts =
+			await ctx.context.internalAdapter.findAccounts(resolvedUserId);
+		const account = accounts.find(
+			(candidate) => candidate.id === selection.accountId,
+		);
+		if (account) return { account, accountCookie: null };
+	} else if (ctx.context.options.account?.storeAccountCookie) {
+		const accountCookie = await getAccountCookie(ctx);
+		if (
+			accountCookie &&
+			matchesAccountSelection(ctx, accountCookie, {
+				resolvedUserId,
+				selection,
+			})
+		) {
+			return { account: accountCookie, accountCookie };
+		}
+	}
+
+	throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
+}
+
+/**
+ * Fetches a currently-valid access token for a user's provider account,
+ * refreshing and persisting it when it is within five seconds of expiry.
+ * Shared by the `/get-access-token` endpoint and `/account-info` so both
+ * resolve and refresh tokens through one path.
+ */
+async function getValidAccessToken(
+	ctx: GenericEndpointContext,
+	{
+		resolvedUserId,
+		selection,
+		account: resolvedAccount,
+	}: {
+		resolvedUserId: string;
+		selection: AccountSelection;
+		/**
+		 * An already-resolved account. When provided, skips the cookie and
+		 * database lookup so a caller that has the account in hand does not
+		 * re-query for it.
+		 */
+		account?: Account;
+	},
+) {
+	const account =
+		resolvedAccount ??
+		(
+			await resolveUserAccount(ctx, {
+				resolvedUserId,
+				selection,
+			})
+		).account;
+	if (
+		!matchesAccountSelection(ctx, account, {
+			resolvedUserId,
+			selection,
+		})
+	) {
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
+	}
+
+	const provider = await getAwaitableValue(ctx.context.socialProviders, {
+		value: account.providerId,
+	});
+	if (!provider) {
+		throw APIError.from("BAD_REQUEST", {
+			message: `Provider ${account.providerId} is not supported.`,
+			code: "PROVIDER_NOT_SUPPORTED",
+		});
+	}
+
+	try {
+		let newTokens: OAuth2Tokens | null = null;
+		const accessTokenExpired =
+			account.accessTokenExpiresAt &&
+			new Date(account.accessTokenExpiresAt).getTime() - Date.now() < 5_000;
+		if (
+			account.refreshToken &&
+			accessTokenExpired &&
+			provider.refreshAccessToken
+		) {
+			const refreshToken = await decryptOAuthToken(
+				account.refreshToken,
+				ctx.context,
+			);
+			newTokens = await provider.refreshAccessToken(refreshToken, ctx);
+			const updatedData = {
+				accessToken: await setTokenUtil(newTokens?.accessToken, ctx.context),
+				accessTokenExpiresAt: newTokens?.accessTokenExpiresAt,
+				refreshToken: newTokens?.refreshToken
+					? await setTokenUtil(newTokens.refreshToken, ctx.context)
+					: account.refreshToken,
+				refreshTokenExpiresAt:
+					newTokens?.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt,
+				idToken: newTokens?.idToken || account.idToken,
+			};
+			let updatedAccount: Partial<Account> | null = null;
+			if (account.id) {
+				updatedAccount = await ctx.context.internalAdapter.updateAccount(
+					account.id,
+					updatedData,
+				);
+			}
+			if (ctx.context.options.account?.storeAccountCookie) {
+				await setAccountCookie(ctx, {
+					...account,
+					...(updatedAccount ?? updatedData),
+				});
+			}
+		}
+
+		const accessTokenExpiresAt = (() => {
+			if (newTokens?.accessTokenExpiresAt) {
+				if (typeof newTokens.accessTokenExpiresAt === "string") {
+					return new Date(newTokens.accessTokenExpiresAt);
+				}
+				return newTokens.accessTokenExpiresAt;
+			}
+			if (account.accessTokenExpiresAt) {
+				if (typeof account.accessTokenExpiresAt === "string") {
+					return new Date(account.accessTokenExpiresAt);
+				}
+				return account.accessTokenExpiresAt;
+			}
+			return undefined;
+		})();
+
+		return {
+			accessToken:
+				newTokens?.accessToken ??
+				(await decryptOAuthToken(account.accessToken ?? "", ctx.context)),
+			accessTokenExpiresAt,
+			scopes: parseStoredScopes(account.scope),
+			idToken: newTokens?.idToken ?? account.idToken ?? undefined,
+		};
+	} catch (_error) {
+		throw APIError.from("BAD_REQUEST", {
+			message: "Failed to get a valid access token",
+			code: "FAILED_TO_GET_ACCESS_TOKEN",
+		});
+	}
+}
+
 export const getAccessToken = createAuthEndpoint(
 	"/get-access-token",
 	{
 		method: "POST",
-		body: z.object({
-			providerId: z.string().meta({
-				description: "The provider ID for the OAuth provider",
-			}),
-			accountId: z
-				.string()
-				.meta({
-					description: "The account ID associated with the refresh token",
-				})
-				.optional(),
-			userId: z
-				.string()
-				.meta({
-					description: "The user ID associated with the account",
-				})
-				.optional(),
-		}),
+		body: accountSelectionSchema,
 		metadata: {
 			openapi: {
 				description: "Get a valid access token, doing a refresh if needed",
@@ -503,119 +800,13 @@ export const getAccessToken = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const { providerId, accountId, userId } = ctx.body || {};
-		const req = ctx.request;
-		const session = await getSessionFromCtx(ctx);
-		if (req && !session) {
-			throw ctx.error("UNAUTHORIZED");
-		}
-		const resolvedUserId = session?.user?.id || userId;
-		if (!resolvedUserId) {
-			throw ctx.error("UNAUTHORIZED");
-		}
-		const provider = await getAwaitableValue(ctx.context.socialProviders, {
-			value: providerId,
+		const { userId } = ctx.body;
+		const resolvedUserId = await resolveUserId(ctx, userId);
+		const tokens = await getValidAccessToken(ctx, {
+			resolvedUserId,
+			selection: ctx.body,
 		});
-		if (!provider) {
-			throw APIError.from("BAD_REQUEST", {
-				message: `Provider ${providerId} is not supported.`,
-				code: "PROVIDER_NOT_SUPPORTED",
-			});
-		}
-		const accountData = await getAccountCookie(ctx);
-		let account: Account | undefined = undefined;
-		if (
-			accountData &&
-			accountData.userId === resolvedUserId &&
-			providerId === accountData.providerId &&
-			(!accountId || accountData.accountId === accountId)
-		) {
-			account = accountData;
-		} else {
-			const accounts =
-				await ctx.context.internalAdapter.findAccounts(resolvedUserId);
-			account = accounts.find((acc) =>
-				accountId
-					? acc.accountId === accountId && acc.providerId === providerId
-					: acc.providerId === providerId,
-			);
-		}
-
-		if (!account) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
-		}
-
-		try {
-			let newTokens: OAuth2Tokens | null = null;
-			const accessTokenExpired =
-				account.accessTokenExpiresAt &&
-				new Date(account.accessTokenExpiresAt).getTime() - Date.now() < 5_000;
-			if (
-				account.refreshToken &&
-				accessTokenExpired &&
-				provider.refreshAccessToken
-			) {
-				const refreshToken = await decryptOAuthToken(
-					account.refreshToken,
-					ctx.context,
-				);
-				newTokens = await provider.refreshAccessToken(refreshToken);
-				const updatedData = {
-					accessToken: await setTokenUtil(newTokens?.accessToken, ctx.context),
-					accessTokenExpiresAt: newTokens?.accessTokenExpiresAt,
-					refreshToken: newTokens?.refreshToken
-						? await setTokenUtil(newTokens.refreshToken, ctx.context)
-						: account.refreshToken,
-					refreshTokenExpiresAt:
-						newTokens?.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt,
-					idToken: newTokens?.idToken || account.idToken,
-				};
-				let updatedAccount: Record<string, any> | null = null;
-				if (account.id) {
-					updatedAccount = await ctx.context.internalAdapter.updateAccount(
-						account.id,
-						updatedData,
-					);
-				}
-				if (ctx.context.options.account?.storeAccountCookie) {
-					await setAccountCookie(ctx, {
-						...account,
-						...(updatedAccount ?? updatedData),
-					});
-				}
-			}
-
-			const accessTokenExpiresAt = (() => {
-				if (newTokens?.accessTokenExpiresAt) {
-					if (typeof newTokens.accessTokenExpiresAt === "string") {
-						return new Date(newTokens.accessTokenExpiresAt);
-					}
-					return newTokens.accessTokenExpiresAt;
-				}
-				if (account.accessTokenExpiresAt) {
-					if (typeof account.accessTokenExpiresAt === "string") {
-						return new Date(account.accessTokenExpiresAt);
-					}
-					return account.accessTokenExpiresAt;
-				}
-				return undefined;
-			})();
-
-			const tokens = {
-				accessToken:
-					newTokens?.accessToken ??
-					(await decryptOAuthToken(account.accessToken ?? "", ctx.context)),
-				accessTokenExpiresAt,
-				scopes: account.scope?.split(",") ?? [],
-				idToken: newTokens?.idToken ?? account.idToken ?? undefined,
-			};
-			return ctx.json(tokens);
-		} catch (_error) {
-			throw APIError.from("BAD_REQUEST", {
-				message: "Failed to get a valid access token",
-				code: "FAILED_TO_GET_ACCESS_TOKEN",
-			});
-		}
+		return ctx.json(tokens);
 	},
 );
 
@@ -623,23 +814,7 @@ export const refreshToken = createAuthEndpoint(
 	"/refresh-token",
 	{
 		method: "POST",
-		body: z.object({
-			providerId: z.string().meta({
-				description: "The provider ID for the OAuth provider",
-			}),
-			accountId: z
-				.string()
-				.meta({
-					description: "The account ID associated with the refresh token",
-				})
-				.optional(),
-			userId: z
-				.string()
-				.meta({
-					description: "The user ID associated with the account",
-				})
-				.optional(),
-		}),
+		body: accountSelectionSchema,
 		metadata: {
 			openapi: {
 				description: "Refresh the access token using a refresh token",
@@ -684,64 +859,29 @@ export const refreshToken = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const { providerId, accountId, userId } = ctx.body;
-		const req = ctx.request;
-		const session = await getSessionFromCtx(ctx);
-		if (req && !session) {
-			throw ctx.error("UNAUTHORIZED");
-		}
-		const resolvedUserId = session?.user?.id || userId;
-		if (!resolvedUserId) {
-			throw APIError.from("BAD_REQUEST", {
-				message: `Either userId or session is required`,
-				code: "USER_ID_OR_SESSION_REQUIRED",
-			});
-		}
+		const { userId } = ctx.body;
+		const resolvedUserId = await resolveUserId(ctx, userId);
+		const { account, accountCookie } = await resolveUserAccount(ctx, {
+			resolvedUserId,
+			selection: ctx.body,
+		});
 		const provider = await getAwaitableValue(ctx.context.socialProviders, {
-			value: providerId,
+			value: account.providerId,
 		});
 		if (!provider) {
 			throw APIError.from("BAD_REQUEST", {
-				message: `Provider ${providerId} is not supported.`,
+				message: `Provider ${account.providerId} is not supported.`,
 				code: "PROVIDER_NOT_SUPPORTED",
 			});
 		}
 		if (!provider.refreshAccessToken) {
 			throw APIError.from("BAD_REQUEST", {
-				message: `Provider ${providerId} does not support token refreshing.`,
+				message: `Provider ${account.providerId} does not support token refreshing.`,
 				code: "TOKEN_REFRESH_NOT_SUPPORTED",
 			});
 		}
 
-		// Try to read refresh token from cookie first
-		let account: Account | undefined = undefined;
-		const accountData = await getAccountCookie(ctx);
-		if (
-			accountData &&
-			accountData.userId === resolvedUserId &&
-			(!providerId || providerId === accountData?.providerId)
-		) {
-			account = accountData;
-		} else {
-			const accounts =
-				await ctx.context.internalAdapter.findAccounts(resolvedUserId);
-			account = accounts.find((acc) =>
-				accountId
-					? acc.accountId === accountId && acc.providerId === providerId
-					: acc.providerId === providerId,
-			);
-		}
-
-		if (!account) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
-		}
-
-		let refreshToken: string | null | undefined = undefined;
-		if (accountData && providerId === accountData.providerId) {
-			refreshToken = accountData.refreshToken ?? undefined;
-		} else {
-			refreshToken = account.refreshToken ?? undefined;
-		}
+		const refreshToken = account.refreshToken ?? undefined;
 
 		if (!refreshToken) {
 			throw APIError.from("BAD_REQUEST", {
@@ -757,6 +897,7 @@ export const refreshToken = createAuthEndpoint(
 			);
 			const tokens: OAuth2Tokens = await provider.refreshAccessToken(
 				decryptedRefreshToken,
+				ctx,
 			);
 
 			const resolvedRefreshToken = tokens.refreshToken
@@ -764,45 +905,47 @@ export const refreshToken = createAuthEndpoint(
 				: refreshToken;
 			const resolvedRefreshTokenExpiresAt =
 				tokens.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt;
+			const updatedTokenData: Partial<Account> = {
+				accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
+				refreshToken: resolvedRefreshToken,
+				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
+				idToken: tokens.idToken || account.idToken,
+			};
+			let updatedAccount: Account | null = null;
 
 			if (account.id) {
-				const updateData = {
-					...(account || {}),
-					accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
-					refreshToken: resolvedRefreshToken,
-					accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-					refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
-					scope: tokens.scopes?.join(",") || account.scope,
-					idToken: tokens.idToken || account.idToken,
-				};
-				await ctx.context.internalAdapter.updateAccount(account.id, updateData);
+				/**
+				 * `scope` intentionally omitted. Refresh response may be narrower.
+				 *
+				 * @see {@link Account.scope}
+				 */
+				updatedAccount = await ctx.context.internalAdapter.updateAccount(
+					account.id,
+					updatedTokenData,
+				);
 			}
 
 			if (
-				accountData &&
-				providerId === accountData.providerId &&
+				accountCookie?.id === account.id &&
 				ctx.context.options.account?.storeAccountCookie
 			) {
 				const updateData = {
-					...accountData,
-					accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
-					refreshToken: resolvedRefreshToken,
-					accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-					refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
-					scope: tokens.scopes?.join(",") || accountData.scope,
-					idToken: tokens.idToken || accountData.idToken,
+					...accountCookie,
+					...(updatedAccount ?? updatedTokenData),
 				};
 				await setAccountCookie(ctx, updateData);
 			}
+			const responseScope = updatedAccount?.scope ?? account.scope;
 			return ctx.json({
 				accessToken: tokens.accessToken,
 				refreshToken: tokens.refreshToken ?? decryptedRefreshToken,
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
-				scope: tokens.scopes?.join(",") || account.scope,
+				scope: responseScope,
 				idToken: tokens.idToken || account.idToken,
 				providerId: account.providerId,
-				accountId: account.accountId,
+				accountId: account.id,
 			});
 		} catch (_error) {
 			throw APIError.from("BAD_REQUEST", {
@@ -813,23 +956,10 @@ export const refreshToken = createAuthEndpoint(
 	},
 );
 
-const accountInfoQuerySchema = z.optional(
-	z.object({
-		accountId: z
-			.string()
-			.meta({
-				description:
-					"The provider given account id for which to get the account info",
-			})
-			.optional(),
-	}),
-);
-
 export const accountInfo = createAuthEndpoint(
 	"/account-info",
 	{
 		method: "GET",
-		use: [sessionMiddleware],
 		metadata: {
 			openapi: {
 				description: "Get the account info provided by the provider",
@@ -844,14 +974,12 @@ export const accountInfo = createAuthEndpoint(
 										user: {
 											type: "object",
 											properties: {
-												id: {
-													type: "string",
-												},
 												name: {
 													type: "string",
 												},
 												email: {
 													type: "string",
+													nullable: true,
 												},
 												image: {
 													type: "string",
@@ -860,7 +988,18 @@ export const accountInfo = createAuthEndpoint(
 													type: "boolean",
 												},
 											},
-											required: ["id", "emailVerified"],
+											required: ["emailVerified"],
+										},
+										account: {
+											type: "object",
+											properties: {
+												id: { type: "string" },
+												providerId: { type: "string" },
+												issuer: { type: "string" },
+												accountId: { type: "string" },
+											},
+											required: ["id", "providerId", "issuer", "accountId"],
+											additionalProperties: false,
 										},
 										data: {
 											type: "object",
@@ -868,7 +1007,7 @@ export const accountInfo = createAuthEndpoint(
 											additionalProperties: true,
 										},
 									},
-									required: ["user", "data"],
+									required: ["user", "data", "account"],
 									additionalProperties: false,
 								},
 							},
@@ -877,49 +1016,30 @@ export const accountInfo = createAuthEndpoint(
 				},
 			},
 		},
-		query: accountInfoQuerySchema,
+		query: accountSelectionSchema,
 	},
 	async (ctx) => {
-		const providedAccountId = ctx.query?.accountId;
-		let account: Account | undefined = undefined;
-		if (!providedAccountId) {
-			if (ctx.context.options.account?.storeAccountCookie) {
-				const accountData = await getAccountCookie(ctx);
-				if (accountData) {
-					account = accountData;
-				}
-			}
-		} else {
-			const accountData =
-				await ctx.context.internalAdapter.findAccount(providedAccountId);
-			if (accountData) {
-				account = accountData;
-			}
-		}
-
-		if (!account || account.userId !== ctx.context.session.user.id) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
-		}
+		const { userId } = ctx.query;
+		const resolvedUserId = await resolveUserId(ctx, userId);
+		const { account } = await resolveUserAccount(ctx, {
+			resolvedUserId,
+			selection: ctx.query,
+		});
 
 		const provider = await getAwaitableValue(ctx.context.socialProviders, {
 			value: account.providerId,
 		});
 
 		if (!provider) {
-			throw APIError.from("INTERNAL_SERVER_ERROR", {
-				message: `Provider account provider is ${account.providerId} but it is not configured`,
+			throw APIError.from("BAD_REQUEST", {
+				message: "Account is not associated with a configured social provider.",
 				code: "PROVIDER_NOT_CONFIGURED",
 			});
 		}
-		const tokens = await getAccessToken({
-			...ctx,
-			method: "POST",
-			body: {
-				accountId: account.accountId,
-				providerId: account.providerId,
-			},
-			returnHeaders: false,
-			returnStatus: false,
+		const tokens = await getValidAccessToken(ctx, {
+			resolvedUserId,
+			selection: ctx.query,
+			account,
 		});
 		if (!tokens.accessToken) {
 			throw APIError.from("BAD_REQUEST", {
@@ -929,8 +1049,22 @@ export const accountInfo = createAuthEndpoint(
 		}
 		const info = await provider.getUserInfo({
 			...tokens,
-			accessToken: tokens.accessToken as string,
+			accessToken: tokens.accessToken,
 		});
-		return ctx.json(info);
+		if (!info) {
+			throw APIError.from(
+				"UNAUTHORIZED",
+				BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
+			);
+		}
+		return ctx.json({
+			...info,
+			account: {
+				id: account.id,
+				providerId: account.providerId,
+				issuer: account.issuer,
+				accountId: account.accountId,
+			},
+		});
 	},
 );

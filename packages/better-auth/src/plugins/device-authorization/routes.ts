@@ -7,26 +7,103 @@ import { ms } from "../../utils/time";
 import type { DeviceAuthorizationOptions } from ".";
 import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
 import type { DeviceCode } from "./schema";
+import { DEVICE_AUTHORIZATION_CODE_MAX_LENGTH } from "./schema";
 
 /* cspell:disable-next-line */
 const defaultCharset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+function validateGeneratedCode(code: unknown, label: "device" | "user") {
+	if (typeof code !== "string") {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_request",
+			error_description: `Generated ${label} code must be a string`,
+		});
+	}
+	if (Array.from(code).length > DEVICE_AUTHORIZATION_CODE_MAX_LENGTH) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_request",
+			error_description: `Generated ${label} code must be at most ${DEVICE_AUTHORIZATION_CODE_MAX_LENGTH} characters`,
+		});
+	}
+	return code;
+}
+
+function serializeResource(resource: string | string[]): string {
+	return typeof resource === "string" ? resource : JSON.stringify(resource);
+}
+
+function parseStoredResource(
+	resource: string | null | undefined,
+): string | string[] | undefined {
+	if (!resource) return undefined;
+	if (!resource.startsWith("[")) return resource;
+	try {
+		const parsed: unknown = JSON.parse(resource);
+		if (
+			Array.isArray(parsed) &&
+			parsed.every((value): value is string => typeof value === "string")
+		) {
+			return parsed;
+		}
+	} catch {
+		// Treat legacy/unrecognized stored values as a single resource string.
+	}
+	return resource;
+}
+
+async function extractFormResources(
+	request: Request | undefined,
+): Promise<string[] | undefined> {
+	const contentType = request?.headers.get("content-type")?.toLowerCase() ?? "";
+	if (!request || !contentType.includes("application/x-www-form-urlencoded")) {
+		return undefined;
+	}
+	try {
+		const params = new URLSearchParams(await request.text());
+		if (!params.has("resource")) return undefined;
+		return params.getAll("resource").filter(Boolean);
+	} catch {
+		return undefined;
+	}
+}
 
 const deviceCodeBodySchema = z.object({
 	client_id: z.string().meta({
 		description: "The client ID of the application",
 	}),
+	user_id: z
+		.string()
+		.meta({
+			description: "The user ID to which the device code should be pre-bound.",
+		})
+		.optional(),
 	scope: z
 		.string()
 		.meta({
 			description: "Space-separated list of scopes",
 		})
 		.optional(),
+	resource: z
+		.union([z.string(), z.array(z.string())])
+		.meta({
+			description:
+				"RFC 8707 resource indicator(s) to bind to this authorization request",
+		})
+		.optional(),
 });
 
 const deviceCodeErrorSchema = z.object({
-	error: z.enum(["invalid_request", "invalid_client"]).meta({
-		description: "Error code",
-	}),
+	error: z
+		.enum([
+			"invalid_request",
+			"invalid_client",
+			"unauthorized_client",
+			"invalid_scope",
+			"invalid_target",
+		])
+		.meta({
+			description: "Error code",
+		}),
 	error_description: z.string().meta({
 		description: "Detailed error description",
 	}),
@@ -34,25 +111,31 @@ const deviceCodeErrorSchema = z.object({
 
 export const deviceCode = (opts: DeviceAuthorizationOptions) => {
 	const generateDeviceCode = async () => {
-		if (opts.generateDeviceCode) {
-			return opts.generateDeviceCode();
-		}
-		return defaultGenerateDeviceCode(opts.deviceCodeLength);
+		const code = opts.generateDeviceCode
+			? await opts.generateDeviceCode()
+			: defaultGenerateDeviceCode(opts.deviceCodeLength);
+		return validateGeneratedCode(code, "device");
 	};
 
 	const generateUserCode = async () => {
-		if (opts.generateUserCode) {
-			return opts.generateUserCode();
-		}
-		return defaultGenerateUserCode(opts.userCodeLength);
+		const code = opts.generateUserCode
+			? await opts.generateUserCode()
+			: defaultGenerateUserCode(opts.userCodeLength);
+		return validateGeneratedCode(code, "user");
 	};
 	return createAuthEndpoint(
 		"/device/code",
 		{
 			method: "POST",
+			cloneRequest: true,
 			body: deviceCodeBodySchema,
 			error: deviceCodeErrorSchema,
 			metadata: {
+				noStore: true,
+				allowedMediaTypes: [
+					"application/json",
+					"application/x-www-form-urlencoded",
+				],
 				openapi: {
 					description: `Request a device and user code
 
@@ -107,7 +190,13 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 										properties: {
 											error: {
 												type: "string",
-												enum: ["invalid_request", "invalid_client"],
+												enum: [
+													"invalid_request",
+													"invalid_client",
+													"unauthorized_client",
+													"invalid_scope",
+													"invalid_target",
+												],
 											},
 											error_description: {
 												type: "string",
@@ -122,6 +211,11 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			},
 		},
 		async (ctx) => {
+			const formResources = await extractFormResources(ctx.request);
+			if (formResources) {
+				ctx.body.resource =
+					formResources.length === 1 ? formResources[0] : formResources;
+			}
 			if (opts.validateClient) {
 				const isValid = await opts.validateClient(ctx.body.client_id);
 				if (!isValid) {
@@ -133,7 +227,11 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			}
 
 			if (opts.onDeviceAuthRequest) {
-				await opts.onDeviceAuthRequest(ctx.body.client_id, ctx.body.scope);
+				await opts.onDeviceAuthRequest(
+					ctx.body.client_id,
+					ctx.body.scope,
+					ctx.body.resource,
+				);
 			}
 
 			const deviceCode = await generateDeviceCode();
@@ -146,11 +244,15 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				data: {
 					deviceCode,
 					userCode,
+					userId: ctx.body.user_id || null, // An empty user_id is treated as omitted, per RFC 8628 section 3.1
 					expiresAt,
 					status: "pending",
 					pollingInterval: ms(opts.interval),
 					clientId: ctx.body.client_id,
 					scope: ctx.body.scope,
+					resource: ctx.body.resource
+						? serializeResource(ctx.body.resource)
+						: null,
 				},
 			});
 
@@ -161,21 +263,16 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					userCode,
 				);
 
-			return ctx.json(
-				{
-					device_code: deviceCode,
-					user_code: userCode,
-					verification_uri: verificationUri,
-					verification_uri_complete: verificationUriComplete,
-					expires_in: Math.floor(expiresIn / 1000),
-					interval: Math.floor(ms(opts.interval) / 1000),
-				},
-				{
-					headers: {
-						"Cache-Control": "no-store",
-					},
-				},
-			);
+			ctx.setHeader("Cache-Control", "no-store");
+			ctx.setHeader("Pragma", "no-cache");
+			return ctx.json({
+				device_code: deviceCode,
+				user_code: userCode,
+				verification_uri: verificationUri,
+				verification_uri_complete: verificationUriComplete,
+				expires_in: Math.floor(expiresIn / 1000),
+				interval: Math.floor(ms(opts.interval) / 1000),
+			});
 		},
 	);
 };
@@ -218,6 +315,7 @@ export const deviceToken = (opts: DeviceAuthorizationOptions) =>
 			body: deviceTokenBodySchema,
 			error: deviceTokenErrorSchema,
 			metadata: {
+				noStore: true,
 				openapi: {
 					description: `Exchange device code for access token
 
@@ -395,8 +493,33 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			}
 
 			if (deviceCodeRecord.status === "approved" && deviceCodeRecord.userId) {
+				// Atomically claim the approved code as the single race gate:
+				// concurrent polls contend on this delete-and-return, and only the
+				// caller that removes the row may issue a session. Losers receive
+				// null and are rejected, so the code is redeemed at most once.
+				const claimedDeviceCode = await ctx.context.adapter.consumeOne<{
+					id: string;
+					userId?: string | undefined;
+					scope?: string | undefined;
+				}>({
+					model: "deviceCode",
+					where: [
+						{ field: "id", value: deviceCodeRecord.id },
+						{ field: "clientId", value: client_id },
+						{ field: "status", value: "approved" },
+					],
+				});
+
+				if (!claimedDeviceCode?.userId) {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_grant",
+						error_description:
+							DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE.message,
+					});
+				}
+
 				const user = await ctx.context.internalAdapter.findUserById(
-					deviceCodeRecord.userId,
+					claimedDeviceCode.userId,
 				);
 
 				if (!user) {
@@ -441,34 +564,17 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					);
 				}
 
-				// Delete the device code after successful authorization
-				await ctx.context.adapter.delete({
-					model: "deviceCode",
-					where: [
-						{
-							field: "id",
-							value: deviceCodeRecord.id,
-						},
-					],
-				});
-
 				// Return OAuth 2.0 compliant token response
-				return ctx.json(
-					{
-						access_token: session.token,
-						token_type: "Bearer",
-						expires_in: Math.floor(
-							(new Date(session.expiresAt).getTime() - Date.now()) / 1000,
-						),
-						scope: deviceCodeRecord.scope || "",
-					},
-					{
-						headers: {
-							"Cache-Control": "no-store",
-							Pragma: "no-cache",
-						},
-					},
-				);
+				ctx.setHeader("Cache-Control", "no-store");
+				ctx.setHeader("Pragma", "no-cache");
+				return ctx.json({
+					access_token: session.token,
+					token_type: "Bearer",
+					expires_in: Math.floor(
+						(new Date(session.expiresAt).getTime() - Date.now()) / 1000,
+					),
+					scope: claimedDeviceCode.scope || "",
+				});
 			}
 
 			throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -516,6 +622,24 @@ export const deviceVerify = createAuthEndpoint(
 											enum: ["pending", "approved", "denied"],
 											description: "Current status of the device authorization",
 										},
+										client_id: {
+											type: "string",
+											description:
+												"The client requesting authorization, returned only to the authenticated user who owns this request",
+										},
+										scope: {
+											type: "string",
+											description:
+												"The requested scopes, returned only to the authenticated user who owns this request",
+										},
+										resource: {
+											oneOf: [
+												{ type: "string" },
+												{ type: "array", items: { type: "string" } },
+											],
+											description:
+												"The requested resource indicators, returned only to the authenticated user who owns this request",
+										},
 									},
 								},
 							},
@@ -555,9 +679,41 @@ export const deviceVerify = createAuthEndpoint(
 			});
 		}
 
+		const session = await getSessionFromCtx(ctx);
+		if (
+			session?.user?.id &&
+			!deviceCodeRecord.userId &&
+			deviceCodeRecord.status === "pending"
+		) {
+			const claimedDeviceCodeRecord =
+				await ctx.context.adapter.incrementOne<DeviceCode>({
+					model: "deviceCode",
+					where: [
+						{ field: "id", value: deviceCodeRecord.id },
+						{ field: "status", value: "pending" },
+						{ field: "userId", operator: "eq", value: null },
+					],
+					increment: {},
+					set: { userId: session.user.id },
+				});
+			if (claimedDeviceCodeRecord) {
+				deviceCodeRecord.userId = session.user.id;
+			}
+		}
+
+		const canReviewRequest =
+			session?.user.id !== undefined &&
+			deviceCodeRecord.userId === session.user.id;
 		return ctx.json({
 			user_code: user_code,
 			status: deviceCodeRecord.status,
+			...(canReviewRequest
+				? {
+						client_id: deviceCodeRecord.clientId,
+						scope: deviceCodeRecord.scope,
+						resource: parseStoredResource(deviceCodeRecord.resource),
+					}
+				: {}),
 		});
 	},
 );
@@ -659,11 +815,15 @@ export const deviceApprove = createAuthEndpoint(
 			});
 		}
 
-		// Check if userId is set and matches the current user
-		if (
-			deviceCodeRecord.userId &&
-			deviceCodeRecord.userId !== session.user.id
-		) {
+		if (!deviceCodeRecord.userId) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_request",
+				error_description:
+					DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_NOT_CLAIMED.message,
+			});
+		}
+
+		if (deviceCodeRecord.userId !== session.user.id) {
 			throw new APIError("FORBIDDEN", {
 				error: "access_denied",
 				error_description:
@@ -788,11 +948,15 @@ export const deviceDeny = createAuthEndpoint(
 			});
 		}
 
-		// Check if userId is set and matches the current user
-		if (
-			deviceCodeRecord.userId &&
-			deviceCodeRecord.userId !== session.user.id
-		) {
+		if (!deviceCodeRecord.userId) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_request",
+				error_description:
+					DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_NOT_CLAIMED.message,
+			});
+		}
+
+		if (deviceCodeRecord.userId !== session.user.id) {
 			throw new APIError("FORBIDDEN", {
 				error: "access_denied",
 				error_description:
@@ -800,7 +964,6 @@ export const deviceDeny = createAuthEndpoint(
 			});
 		}
 
-		// Update device code with denied status and userId if not already set
 		await ctx.context.adapter.update({
 			model: "deviceCode",
 			where: [
@@ -811,7 +974,7 @@ export const deviceDeny = createAuthEndpoint(
 			],
 			update: {
 				status: "denied",
-				userId: deviceCodeRecord.userId || session.user.id,
+				userId: session.user.id,
 			},
 		});
 

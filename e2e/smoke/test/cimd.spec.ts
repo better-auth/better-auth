@@ -17,15 +17,8 @@ const PKCE_CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
 
 describe("CIMD end-to-end flow", () => {
 	it("runs the full authorize → consent → token → userinfo → refresh loop with a URL client_id", async (t) => {
-		// 1. Host the CIMD metadata document on a local HTTP server. CIMD
-		//    permits HTTP for localhost so no TLS scaffolding is required.
-		const metadataHost = createServer();
-		metadataHost.listen(0);
-		t.after(() => metadataHost.close());
-		await once(metadataHost, "listening");
-		const metadataAddr = metadataHost.address() as AddressInfo;
-		const clientMetadataUrl = `http://localhost:${metadataAddr.port}/client-metadata.json`;
-		const redirectUri = `http://localhost:${metadataAddr.port}/callback`;
+		const clientMetadataUrl = "https://cimd-smoke.test/client-metadata.json";
+		const redirectUri = "http://127.0.0.1:5199/callback";
 
 		const metadataDocument = {
 			client_id: clientMetadataUrl,
@@ -37,14 +30,22 @@ describe("CIMD end-to-end flow", () => {
 			scope: "openid profile email offline_access",
 		};
 
-		metadataHost.on("request", (req, res) => {
-			if (req.url === "/client-metadata.json") {
-				res.writeHead(200, { "content-type": "application/json" });
-				res.end(JSON.stringify(metadataDocument));
-				return;
+		let requestedMetadataResource = "";
+		const fetchClientMetadataResource = async (
+			input: RequestInfo | URL,
+		): Promise<Response> => {
+			const requestedUrl =
+				typeof input === "string"
+					? input
+					: input instanceof URL
+						? input.href
+						: input.url;
+			requestedMetadataResource = requestedUrl;
+			if (requestedUrl !== clientMetadataUrl) {
+				throw new Error(`Unexpected client metadata resource: ${requestedUrl}`);
 			}
-			res.writeHead(404).end();
-		});
+			return Response.json(metadataDocument);
+		};
 
 		// 2. Pre-reserve the auth server port so `baseURL` reflects reality.
 		const authPlaceholder = createServer();
@@ -69,9 +70,11 @@ describe("CIMD end-to-end flow", () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					scopes: ["openid", "profile", "email", "offline_access"],
-					silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 				}),
-				cimd({ refreshRate: "60m" }),
+				cimd({
+					metadataRevalidationInterval: "60m",
+					fetchClientMetadataResource,
+				}),
 			],
 		});
 
@@ -147,7 +150,7 @@ describe("CIMD end-to-end flow", () => {
 		assert.match(
 			consentRedirect,
 			/\/consent\?/,
-			`authorize should redirect to /consent, got: ${consentRedirect}`,
+			`authorize should redirect to /consent, got: ${JSON.stringify(authorizePayload)} after requesting ${requestedMetadataResource}`,
 		);
 
 		// 7. Accept consent. `oauth_query` is the literal query string from
@@ -218,7 +221,7 @@ describe("CIMD end-to-end flow", () => {
 		assert.notEqual(refreshed.access_token, tokens.access_token);
 	});
 
-	it("rejects a URL client_id that is blocked by allowFetch before any outbound fetch", async (t) => {
+	it("rejects a URL client_id blocked by the metadata URL policy before transport", async (t) => {
 		// Reserve auth port first so baseURL is accurate.
 		const placeholder = createServer();
 		placeholder.listen(0);
@@ -227,26 +230,16 @@ describe("CIMD end-to-end flow", () => {
 		const authBaseUrl = `http://localhost:${authPort}`;
 		placeholder.close();
 
-		const blockedClientUrl = "http://localhost:59999/blocked.json";
-
-		// Stand up a metadata host that would serve a valid document if the
-		// server ever reached it — the assertion is that it never does.
-		const metadataHost = createServer();
+		const blockedClientUrl = "https://blocked-cimd.test/blocked.json";
 		let fetchCount = 0;
-		metadataHost.on("request", (req, res) => {
+		const fetchClientMetadataResource = async (): Promise<Response> => {
 			fetchCount++;
-			res.writeHead(200, { "content-type": "application/json" });
-			res.end(
-				JSON.stringify({
-					client_id: blockedClientUrl,
-					redirect_uris: ["http://localhost:59999/callback"],
-					token_endpoint_auth_method: "none",
-				}),
-			);
-		});
-		metadataHost.listen(59999);
-		t.after(() => metadataHost.close());
-		await once(metadataHost, "listening");
+			return Response.json({
+				client_id: blockedClientUrl,
+				redirect_uris: ["http://127.0.0.1:59999/callback"],
+				token_endpoint_auth_method: "none",
+			});
+		};
 
 		const auth = betterAuth({
 			baseURL: authBaseUrl,
@@ -260,11 +253,11 @@ describe("CIMD end-to-end flow", () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					scopes: ["openid", "profile", "email", "offline_access"],
-					silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 				}),
 				cimd({
-					// Block any client_id whose host is `localhost:59999`.
-					allowFetch: (url) => new URL(url).host !== "localhost:59999",
+					fetchClientMetadataResource,
+					isMetadataDocumentUrlAllowed: (url) =>
+						new URL(url).hostname !== "blocked-cimd.test",
 				}),
 			],
 		});
@@ -297,7 +290,7 @@ describe("CIMD end-to-end flow", () => {
 			`${authBaseUrl}/api/auth/oauth2/authorize` +
 				`?client_id=${encodeURIComponent(blockedClientUrl)}` +
 				`&response_type=code` +
-				`&redirect_uri=${encodeURIComponent("http://localhost:59999/callback")}` +
+				`&redirect_uri=${encodeURIComponent("http://127.0.0.1:59999/callback")}` +
 				`&scope=openid` +
 				`&code_challenge=${PKCE_CHALLENGE}` +
 				`&code_challenge_method=S256`,
@@ -319,7 +312,7 @@ describe("CIMD end-to-end flow", () => {
 		assert.equal(
 			fetchCount,
 			0,
-			"metadata host should never be fetched when allowFetch rejects",
+			"metadata transport should not run when the URL policy rejects",
 		);
 	});
 });

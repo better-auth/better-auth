@@ -1,9 +1,9 @@
 ---
 title: CLI
-description: Learn about the Better Auth CLI commands for generating and migrating database schemas, initializing projects, generating secret keys, and gathering diagnostic info.
+description: Learn about the Better Auth CLI commands for generating and migrating database schemas, creating initial admins, initializing projects, generating secret keys, and gathering diagnostic info.
 ---
 
-Better Auth comes with a built-in CLI to help you manage the database schemas, initialize your project, generate a secret key for your application, and gather diagnostic information about your setup.
+Better Auth comes with a built-in CLI to help you manage the database schemas, create initial admin users, initialize your project, generate a secret key for your application, and gather diagnostic information about your setup.
 
 ## Generate
 
@@ -37,6 +37,28 @@ npx auth@latest migrate
 
   The migrate command automatically detects your configured `search_path` and creates tables in the correct schema. See the [PostgreSQL adapter documentation](/docs/adapters/postgresql#use-a-non-default-schema) for configuration details.
 </Callout>
+
+## Create Admin
+
+The `create-admin` command creates an initial admin user through your configured Better Auth instance. It requires the Admin plugin and a persistent database, and it uses the same server-side `auth.api.createUser` path as the Admin plugin so passwords are hashed and database hooks still run.
+
+```package-install title="Terminal"
+npx auth@latest create-admin --email admin@example.com --name "Admin" --role admin
+```
+
+If users already exist, the command asks for confirmation. Use `--force` or `--yes` to skip that prompt.
+
+### Options
+
+* `--email` - The email address for the admin user.
+* `--password` - The password for the admin user. If omitted, the CLI will prompt for it.
+* `--name` - The name for the admin user. Defaults to `Admin`.
+* `--role` - The role to assign. Defaults to `admin`.
+* `--data` - Additional user fields as a JSON object.
+* `--no-email-verified` - Create the admin user with an unverified email. By default, the CLI marks the admin email as verified.
+* `--config` - The path to your Better Auth config file.
+* `--force` - Create the admin user even when users already exist.
+* `--yes` - Skip the existing-users confirmation prompt.
 
 ## Init
 
@@ -104,6 +126,6 @@ npx auth@latest secret
 
 **Error: Cannot find module X**
 
-If you see this error, it means the CLI can't resolve imported modules in your Better Auth config file. We are working on a fix for many of these issues, but in the meantime, you can try the following:
+The CLI resolves most imports for you: `tsconfig.json` path aliases (including SvelteKit's `$lib`) and stubbed framework virtual modules (`$env/*`, `$app/*`, `cloudflare:workers`, Vite assets like `?raw`). For SvelteKit, run `svelte-kit sync` first so `.svelte-kit/tsconfig.json` exists.
 
-* Remove any import aliases in your config file and use relative paths instead. After running the CLI, you can revert to using aliases.
+A few module types can't load outside their bundler (e.g. `.svelte` components or `import.meta.glob`). Keep those out of your config file's import graph.

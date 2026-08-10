@@ -1,3 +1,4 @@
+import { APIError } from "@better-auth/core/error";
 import { betterFetch } from "@better-fetch/fetch";
 import { createAuthClient } from "better-auth/client";
 import { organization } from "better-auth/plugins";
@@ -48,6 +49,7 @@ describe("SSO", async () => {
 	});
 
 	server.service.on("beforeTokenSigning", (token, req) => {
+		token.payload.sub = "oauth2";
 		token.payload.email = "sso-user@localhost:8000.com";
 		token.payload.email_verified = true;
 		token.payload.name = "Test User";
@@ -98,7 +100,6 @@ describe("SSO", async () => {
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
-						id: "sub",
 						email: "email",
 						emailVerified: "email_verified",
 						name: "name",
@@ -122,7 +123,6 @@ describe("SSO", async () => {
 				discoveryEndpoint:
 					"http://localhost:8080/.well-known/openid-configuration",
 				mapping: {
-					id: "sub",
 					email: "email",
 					emailVerified: "email_verified",
 					name: "name",
@@ -131,6 +131,139 @@ describe("SSO", async () => {
 			},
 			userId: expect.any(String),
 		});
+	});
+
+	it("rejects OIDC profile mappings that attempt to replace the subject", async () => {
+		const { headers } = await signInWithTestUser();
+		const profileMappingWithSubjectOverride = {
+			id: "employee_id",
+			email: "email",
+			name: "name",
+		};
+
+		await expect(
+			auth.api.registerSSOProvider({
+				body: {
+					issuer: server.issuer.url!,
+					domain: "subject-mapping.example.com",
+					providerId: "subject-mapping",
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+						skipDiscovery: true,
+						authorizationEndpoint: `${server.issuer.url}/authorize`,
+						tokenEndpoint: `${server.issuer.url}/token`,
+						jwksEndpoint: `${server.issuer.url}/jwks`,
+						mapping: profileMappingWithSubjectOverride,
+					},
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({ status: 400 });
+	});
+
+	it("reuses one account when two provider aliases authenticate the same issuer subject", async () => {
+		const { headers: adminHeaders } = await signInWithTestUser();
+		const providerAliases = ["workforce-browser", "workforce-desktop"] as const;
+		const issuer = server.issuer.url!;
+		const accountId = "shared-workforce-subject";
+		const originalUserInfoListeners =
+			server.service.listeners("beforeUserinfo");
+		const originalTokenListeners =
+			server.service.listeners("beforeTokenSigning");
+		let profileRevision = 0;
+
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.removeAllListeners("beforeTokenSigning");
+		server.service.on("beforeUserinfo", (userInfoResponse) => {
+			profileRevision += 1;
+			userInfoResponse.body = {
+				sub: accountId,
+				employee_id: `mutable-employee-id-${profileRevision}`,
+				email: "shared-workforce@example.com",
+				name: "Shared Workforce User",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.sub = accountId;
+			token.payload.email = "shared-workforce@example.com";
+			token.payload.email_verified = true;
+			token.payload.name = "Shared Workforce User";
+		});
+
+		try {
+			for (const providerId of providerAliases) {
+				await auth.api.registerSSOProvider({
+					body: {
+						issuer,
+						domain: `${providerId}.example.com`,
+						providerId,
+						oidcConfig: {
+							clientId: "test",
+							clientSecret: "test",
+							discoveryEndpoint: `${issuer}/.well-known/openid-configuration`,
+						},
+					},
+					headers: adminHeaders,
+				});
+			}
+
+			const signInWithAlias = async (
+				providerId: (typeof providerAliases)[number],
+			) => {
+				const authorizationHeaders = new Headers();
+				const authorization = await authClient.signIn.sso({
+					providerId,
+					callbackURL: "/dashboard",
+					fetchOptions: {
+						throw: true,
+						onSuccess: cookieSetter(authorizationHeaders),
+					},
+				});
+				const callback = await simulateOAuthFlow(
+					authorization.url,
+					authorizationHeaders,
+				);
+				expect(callback.callbackURL).toContain("/dashboard");
+				const session = await authClient.getSession({
+					fetchOptions: { headers: callback.headers },
+				});
+				return { session, headers: callback.headers };
+			};
+
+			const firstSignIn = await signInWithAlias(providerAliases[0]);
+			const secondSignIn = await signInWithAlias(providerAliases[1]);
+
+			expect(secondSignIn.session.data?.user.id).toBe(
+				firstSignIn.session.data?.user.id,
+			);
+
+			const accounts = await authClient.listAccounts({
+				fetchOptions: { headers: secondSignIn.headers },
+			});
+			const matchingAccounts = accounts.data?.filter(
+				(account) =>
+					account.issuer === issuer && account.accountId === accountId,
+			);
+			expect(matchingAccounts).toEqual([
+				expect.objectContaining({
+					issuer,
+					accountId,
+					providerId: providerAliases[1],
+				}),
+			]);
+		} finally {
+			server.service.removeAllListeners("beforeUserinfo");
+			server.service.removeAllListeners("beforeTokenSigning");
+			for (const listener of originalUserInfoListeners) {
+				server.service.on("beforeUserinfo", listener);
+			}
+			for (const listener of originalTokenListeners) {
+				server.service.on("beforeTokenSigning", listener);
+			}
+		}
 	});
 
 	it("should fail to register a new SSO provider with invalid issuer", async () => {
@@ -151,9 +284,9 @@ describe("SSO", async () => {
 			});
 		} catch (e) {
 			expect(e).toMatchObject({
-				status: "BAD_REQUEST",
+				status: 400,
 				body: {
-					message: "Invalid issuer. Must be a valid URL",
+					message: "[body.issuer] Invalid URL",
 				},
 			});
 		}
@@ -255,6 +388,138 @@ describe("SSO", async () => {
 		expect(callbackURL).toContain("/dashboard");
 	});
 
+	it("should redirect with the token endpoint error description when code exchange fails", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "token-error.com",
+				providerId: "token-error-provider",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+				},
+			},
+			headers,
+		});
+
+		const tokenErrorHandler = (tokenEndpointResponse: {
+			body: Record<string, unknown>;
+			statusCode: number;
+		}) => {
+			tokenEndpointResponse.body = {
+				error: "invalid_client",
+				error_description: "client rejected by issuer",
+			};
+			tokenEndpointResponse.statusCode = 401;
+		};
+		server.service.once("beforeResponse", tokenErrorHandler);
+
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "token-error-provider",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+
+		try {
+			const { callbackURL } = await simulateOAuthFlow(res.url, signInHeaders);
+			const redirectURL = new URL(callbackURL, "http://localhost:3000");
+			expect(redirectURL.searchParams.get("error")).toBe("invalid_provider");
+			expect(redirectURL.searchParams.get("error_description")).toBe(
+				"client rejected by issuer",
+			);
+		} finally {
+			server.service.removeListener("beforeResponse", tokenErrorHandler);
+		}
+	});
+
+	it("should redirect with an encoded invalid request when callback has no code", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "missing-code.com",
+				providerId: "missing-code-provider",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+				},
+			},
+			headers,
+		});
+
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "missing-code-provider",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+
+		let callbackLocation: string | null = null;
+		await betterFetch(res.url, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				callbackLocation = context.response.headers.get("location");
+			},
+		});
+		if (!callbackLocation) throw new Error("No callback location found");
+
+		const callbackWithoutCode = new URL(callbackLocation);
+		callbackWithoutCode.searchParams.delete("code");
+
+		let redirectLocation = "";
+		await betterFetch(callbackWithoutCode.toString(), {
+			method: "GET",
+			customFetchImpl,
+			headers: signInHeaders,
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		const redirectURL = new URL(redirectLocation, "http://localhost:3000");
+		expect(redirectURL.searchParams.get("error")).toBe("invalid_request");
+		expect(redirectURL.searchParams.get("error_description")).toBe(
+			"authorization_code_not_found",
+		);
+	});
+
+	it("should forward additionalParams to the SSO authorization URL", async () => {
+		const res = await authClient.signIn.sso({
+			providerId: "test",
+			callbackURL: "/dashboard",
+			additionalParams: { domain_hint: "contoso.com" },
+			fetchOptions: { throw: true },
+		});
+		const url = new URL(res.url);
+		expect(url.searchParams.get("domain_hint")).toBe("contoso.com");
+	});
+
+	it("should reject SSO additionalParams that collide with reserved OAuth params", async () => {
+		const res = await authClient.signIn.sso({
+			providerId: "test",
+			callbackURL: "/dashboard",
+			additionalParams: { redirect_uri: "https://attacker.example/callback" },
+		});
+		expect(res.error?.status).toBe(400);
+	});
+
 	it("should hydrate authorizationEndpoint via discovery when missing from stored config", async () => {
 		const { headers } = await signInWithTestUser();
 
@@ -274,7 +539,6 @@ describe("SSO", async () => {
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
-						id: "sub",
 						email: "email",
 						emailVerified: "email_verified",
 						name: "name",
@@ -538,7 +802,6 @@ describe("SSO disable implicit sign in", async () => {
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
-						id: "sub",
 						email: "email",
 						emailVerified: "email_verified",
 						name: "name",
@@ -562,7 +825,6 @@ describe("SSO disable implicit sign in", async () => {
 				discoveryEndpoint:
 					"http://localhost:8080/.well-known/openid-configuration",
 				mapping: {
-					id: "sub",
 					email: "email",
 					emailVerified: "email_verified",
 					name: "name",
@@ -588,7 +850,10 @@ describe("SSO disable implicit sign in", async () => {
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
 		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
-		expect(callbackURL).toContain("/api/auth/error?error=signup disabled");
+		expect(callbackURL).not.toContain("error=signup disabled");
+		const url = new URL(callbackURL);
+		expect(url.pathname).toBe("/api/auth/error");
+		expect(url.searchParams.get("error")).toBe("signup disabled");
 	});
 
 	it("should create user with SSO provider when sign ups are disabled but sign up is requested", async () => {
@@ -705,7 +970,6 @@ describe("provisioning", async (ctx) => {
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
-						id: "sub",
 						email: "email",
 						emailVerified: "email_verified",
 						name: "name",
@@ -773,9 +1037,17 @@ describe("provisioning", async (ctx) => {
  */
 describe("provisionUser should only be called for new users", async () => {
 	const provisionUserFn = vi.fn();
+	const validateUserInfoFn = vi.fn();
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
 			trustedOrigins: ["http://localhost:8080"],
+			user: {
+				validateUserInfo({ source }) {
+					if (source.method === "sso-oidc") {
+						validateUserInfoFn(source);
+					}
+				},
+			},
 			plugins: [
 				sso({
 					provisionUser: provisionUserFn,
@@ -807,6 +1079,7 @@ describe("provisionUser should only be called for new users", async () => {
 			userInfoResponse.statusCode = 200;
 		});
 		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.sub = "provision-test-sub";
 			token.payload.email = "provision-test@localhost.com";
 			token.payload.email_verified = true;
 			token.payload.name = "Provision Test";
@@ -860,7 +1133,6 @@ describe("provisionUser should only be called for new users", async () => {
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
-						id: "sub",
 						email: "email",
 						emailVerified: "email_verified",
 						name: "name",
@@ -873,6 +1145,7 @@ describe("provisionUser should only be called for new users", async () => {
 		});
 
 		provisionUserFn.mockClear();
+		validateUserInfoFn.mockClear();
 
 		// First sign-in: new user -> provisionUser should be called
 		const signInHeaders1 = new Headers();
@@ -886,6 +1159,16 @@ describe("provisionUser should only be called for new users", async () => {
 		});
 		await simulateOAuthFlow(res1.url, signInHeaders1);
 		expect(provisionUserFn).toHaveBeenCalledTimes(1);
+		expect(validateUserInfoFn).toHaveBeenCalledTimes(1);
+		expect(validateUserInfoFn.mock.calls[0]?.[0]).toMatchObject({
+			action: "create-user",
+			method: "sso-oidc",
+			sso: {
+				providerId: "provision-test",
+				profile: { sub: "provision-test-sub" },
+			},
+		});
+		expect(validateUserInfoFn.mock.calls[0]?.[0].oauth).toBeUndefined();
 
 		provisionUserFn.mockClear();
 
@@ -901,6 +1184,16 @@ describe("provisionUser should only be called for new users", async () => {
 		});
 		await simulateOAuthFlow(res2.url, signInHeaders2);
 		expect(provisionUserFn).toHaveBeenCalledTimes(0);
+		expect(validateUserInfoFn).toHaveBeenCalledTimes(2);
+		expect(validateUserInfoFn.mock.calls[1]?.[0]).toMatchObject({
+			action: "sign-in",
+			method: "sso-oidc",
+			sso: {
+				providerId: "provision-test",
+				profile: { sub: "provision-test-sub" },
+			},
+		});
+		expect(validateUserInfoFn.mock.calls[1]?.[0].oauth).toBeUndefined();
 	});
 });
 
@@ -944,6 +1237,7 @@ describe("provisionUserOnEveryLogin should call provisionUser on every sign-in",
 			userInfoResponse.statusCode = 200;
 		});
 		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.sub = "provision-every-login-sub";
 			token.payload.email = "provision-every-login@localhost.com";
 			token.payload.email_verified = true;
 			token.payload.name = "Provision Every Login";
@@ -997,7 +1291,6 @@ describe("provisionUserOnEveryLogin should call provisionUser on every sign-in",
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
-						id: "sub",
 						email: "email",
 						emailVerified: "email_verified",
 						name: "name",
@@ -1076,6 +1369,7 @@ describe("SSO shared redirectURI", async () => {
 	};
 
 	const tokenHandler = (token: any) => {
+		token.payload.sub = "shared-redirect-user";
 		token.payload.email = "shared-redirect@test.com";
 		token.payload.email_verified = true;
 		token.payload.name = "Shared Redirect User";
@@ -1141,7 +1435,6 @@ describe("SSO shared redirectURI", async () => {
 					jwksEndpoint: `${server.issuer.url}/jwks`,
 					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
 					mapping: {
-						id: "sub",
 						email: "email",
 						emailVerified: "email_verified",
 						name: "name",
@@ -1242,6 +1535,22 @@ describe("OIDC SSO with defaultSSO array", async () => {
 								"http://localhost:8080/.well-known/openid-configuration",
 						},
 					},
+					{
+						domain:
+							"https://default-oidc-normalized.com/path,default-oidc-secondary.com",
+						providerId: "default-oidc-provider-normalized",
+						oidcConfig: {
+							issuer: "http://localhost:8080",
+							clientId: "normalized-client",
+							clientSecret: "normalized-secret",
+							pkce: false,
+							authorizationEndpoint: "http://localhost:8080/authorize",
+							tokenEndpoint: "http://localhost:8080/token",
+							jwksEndpoint: "http://localhost:8080/jwks",
+							discoveryEndpoint:
+								"http://localhost:8080/.well-known/openid-configuration",
+						},
+					},
 				],
 			}),
 			organization(),
@@ -1271,10 +1580,17 @@ describe("OIDC SSO with defaultSSO array", async () => {
 
 	const tokenHandler = (token: any) => {
 		const isExplicit = token.payload.aud === "explicit-client";
-		currentEmail = isExplicit
-			? "default-sso-user@default-oidc-explicit.com"
-			: "default-sso-user@default-oidc.com";
-		currentSub = isExplicit ? "explicit-sso-sub" : "default-sso-sub";
+		const isNormalized = token.payload.aud === "normalized-client";
+		currentEmail = isNormalized
+			? "default-sso-user@default-oidc-secondary.com"
+			: isExplicit
+				? "default-sso-user@default-oidc-explicit.com"
+				: "default-sso-user@default-oidc.com";
+		currentSub = isNormalized
+			? "normalized-sso-sub"
+			: isExplicit
+				? "explicit-sso-sub"
+				: "default-sso-sub";
 		token.payload.email = currentEmail;
 		token.payload.email_verified = true;
 		token.payload.name = "Default SSO User";
@@ -1367,6 +1683,36 @@ describe("OIDC SSO with defaultSSO array", async () => {
 
 		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain("/dashboard");
+	});
+
+	it("should sign in via defaultSSO OIDC using normalized domain matching", async () => {
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "someone@default-oidc-secondary.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(res.url).toContain("http://localhost:8080/authorize");
+		expect(res.url).toContain(
+			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Fdefault-oidc-provider-normalized",
+		);
+
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+			res.url,
+			headers,
+		);
+		expect(callbackURL).toContain("/dashboard");
+
+		const session = await authClient.getSession({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(session.data?.user.email).toBe(
+			"default-sso-user@default-oidc-secondary.com",
+		);
 	});
 
 	it("should sign in via defaultSSO OIDC with all endpoints explicit (no discovery needed)", async () => {
@@ -1466,6 +1812,32 @@ describe("OIDC SSO with private_key_jwt", async () => {
 		server.service.on("beforeResponse", responseHandler);
 		await server.issuer.keys.generate("RS256");
 		await server.start(8080, "localhost");
+
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			headers,
+			body: {
+				issuer: server.issuer.url!,
+				domain: "private-key-jwt.com",
+				providerId: "private-key-jwt-provider",
+				oidcConfig: {
+					clientId: "private-key-jwt-client",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					tokenEndpointAuthentication: "private_key_jwt",
+					privateKeyId: "private-key-jwt-key",
+					privateKeyAlgorithm: "RS256",
+					mapping: {
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+			},
+		});
 	});
 
 	afterAll(async () => {
@@ -1504,33 +1876,6 @@ describe("OIDC SSO with private_key_jwt", async () => {
 	it("should sign in using private_key_jwt and resolvePrivateKey", async () => {
 		capturedTokenRequest = undefined;
 		resolvePrivateKey.mockClear();
-		const { headers } = await signInWithTestUser();
-
-		await auth.api.registerSSOProvider({
-			headers,
-			body: {
-				issuer: server.issuer.url!,
-				domain: "private-key-jwt.com",
-				providerId: "private-key-jwt-provider",
-				oidcConfig: {
-					clientId: "private-key-jwt-client",
-					authorizationEndpoint: `${server.issuer.url}/authorize`,
-					tokenEndpoint: `${server.issuer.url}/token`,
-					jwksEndpoint: `${server.issuer.url}/jwks`,
-					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
-					tokenEndpointAuthentication: "private_key_jwt",
-					privateKeyId: "private-key-jwt-key",
-					privateKeyAlgorithm: "RS256",
-					mapping: {
-						id: "sub",
-						email: "email",
-						emailVerified: "email_verified",
-						name: "name",
-						image: "picture",
-					},
-				},
-			},
-		});
 
 		const signInHeaders = new Headers();
 		const res = await authClient.signIn.sso({
@@ -1592,6 +1937,25 @@ describe("OIDC SSO with private_key_jwt", async () => {
 			fetchOptions: { headers: sessionHeaders },
 		});
 		expect(session.data?.user.email).toBe("jwt-auth-user@private-key-jwt.com");
+	});
+
+	it("should redirect with no_private_key_available when resolvePrivateKey returns no key material", async () => {
+		resolvePrivateKey.mockResolvedValueOnce(
+			{} as Awaited<ReturnType<typeof resolvePrivateKey>>,
+		);
+
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "private-key-jwt-provider",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+
+		const { callbackURL } = await simulateOAuthFlow(res.url, signInHeaders);
+		expect(callbackURL).toContain("error_description=no_private_key_available");
 	});
 });
 
@@ -1722,5 +2086,585 @@ describe("SSO OIDC UserInfo endpoint sub claim mapping", async () => {
 			fetchOptions: { headers: sessionHeaders },
 		});
 		expect(session.data?.user.email).toBe("userinfo-only@test.com");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-5rr4-8452-hf4v
+	 */
+	describe("skipDiscovery SSRF protection (registerSSOProvider)", () => {
+		it("should reject registration when tokenEndpoint points to a non-publicly-routable host", async () => {
+			const { headers } = await signInWithTestUser();
+
+			await expect(
+				auth.api.registerSSOProvider({
+					body: {
+						issuer: server.issuer.url!,
+						domain: "ssrf-token.com",
+						providerId: "ssrf-token-endpoint",
+						oidcConfig: {
+							clientId: "test",
+							clientSecret: "test",
+							skipDiscovery: true,
+							authorizationEndpoint: `${server.issuer.url}/authorize`,
+							tokenEndpoint: "http://169.254.169.254/latest/meta-data/",
+							jwksEndpoint: `${server.issuer.url}/jwks`,
+						},
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: {
+					code: "discovery_private_host",
+				},
+			});
+		});
+
+		it("should reject registration when userInfoEndpoint points to a cloud metadata host", async () => {
+			const { headers } = await signInWithTestUser();
+
+			await expect(
+				auth.api.registerSSOProvider({
+					body: {
+						issuer: server.issuer.url!,
+						domain: "ssrf-userinfo.com",
+						providerId: "ssrf-userinfo-endpoint",
+						oidcConfig: {
+							clientId: "test",
+							clientSecret: "test",
+							skipDiscovery: true,
+							authorizationEndpoint: `${server.issuer.url}/authorize`,
+							tokenEndpoint: `${server.issuer.url}/token`,
+							jwksEndpoint: `${server.issuer.url}/jwks`,
+							userInfoEndpoint:
+								"http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+						},
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: {
+					code: "discovery_private_host",
+				},
+			});
+		});
+
+		it("should reject registration when jwksEndpoint points to a loopback port not in trustedOrigins", async () => {
+			const { headers } = await signInWithTestUser();
+
+			await expect(
+				auth.api.registerSSOProvider({
+					body: {
+						issuer: server.issuer.url!,
+						domain: "ssrf-jwks.com",
+						providerId: "ssrf-jwks-endpoint",
+						oidcConfig: {
+							clientId: "test",
+							clientSecret: "test",
+							skipDiscovery: true,
+							authorizationEndpoint: `${server.issuer.url}/authorize`,
+							tokenEndpoint: `${server.issuer.url}/token`,
+							jwksEndpoint: "http://localhost:6379/",
+						},
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: {
+					code: "discovery_private_host",
+				},
+			});
+		});
+
+		it("should reject registration when an endpoint is not a valid URL", async () => {
+			const { headers } = await signInWithTestUser();
+
+			await expect(
+				auth.api.registerSSOProvider({
+					body: {
+						issuer: server.issuer.url!,
+						domain: "ssrf-invalid.com",
+						providerId: "ssrf-invalid-url",
+						oidcConfig: {
+							clientId: "test",
+							clientSecret: "test",
+							skipDiscovery: true,
+							authorizationEndpoint: `${server.issuer.url}/authorize`,
+							tokenEndpoint: "not-a-url",
+							jwksEndpoint: `${server.issuer.url}/jwks`,
+						},
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				body: {
+					code: "VALIDATION_ERROR",
+				},
+			});
+		});
+
+		it("should reject registration when an endpoint uses a non-http(s) protocol", async () => {
+			const { headers } = await signInWithTestUser();
+
+			await expect(
+				auth.api.registerSSOProvider({
+					body: {
+						issuer: server.issuer.url!,
+						domain: "ssrf-protocol.com",
+						providerId: "ssrf-bad-protocol",
+						oidcConfig: {
+							clientId: "test",
+							clientSecret: "test",
+							skipDiscovery: true,
+							authorizationEndpoint: `${server.issuer.url}/authorize`,
+							tokenEndpoint: "file:///etc/passwd",
+							jwksEndpoint: `${server.issuer.url}/jwks`,
+						},
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: {
+					code: "discovery_invalid_url",
+				},
+			});
+		});
+
+		it("should accept registration when endpoints match a trustedOrigins entry", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const provider = await auth.api.registerSSOProvider({
+				body: {
+					issuer: server.issuer.url!,
+					domain: "ssrf-trusted.com",
+					providerId: "ssrf-trusted-endpoints",
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+						skipDiscovery: true,
+						authorizationEndpoint: `${server.issuer.url}/authorize`,
+						tokenEndpoint: `${server.issuer.url}/token`,
+						jwksEndpoint: `${server.issuer.url}/jwks`,
+						userInfoEndpoint: `${server.issuer.url}/userinfo`,
+					},
+				},
+				headers,
+			});
+
+			expect(provider.providerId).toBe("ssrf-trusted-endpoints");
+		});
+
+		it("should reject registration when oidcConfig endpoints point to a private host even without skipDiscovery", async () => {
+			const { headers } = await signInWithTestUser();
+
+			await expect(
+				auth.api.registerSSOProvider({
+					body: {
+						issuer: server.issuer.url!,
+						domain: "ssrf-override.com",
+						providerId: "ssrf-override-endpoint",
+						oidcConfig: {
+							clientId: "test",
+							clientSecret: "test",
+							tokenEndpoint: "http://169.254.169.254/token",
+						},
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: {
+					code: "discovery_private_host",
+				},
+			});
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-5rr4-8452-hf4v
+	 */
+	describe("OIDC endpoint SSRF protection (updateSSOProvider)", () => {
+		it("should reject update when oidcConfig contains a link-local endpoint", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const provider = await auth.api.registerSSOProvider({
+				body: {
+					issuer: server.issuer.url!,
+					domain: "ssrf-update-target.com",
+					providerId: "ssrf-update-target",
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+						skipDiscovery: true,
+						authorizationEndpoint: `${server.issuer.url}/authorize`,
+						tokenEndpoint: `${server.issuer.url}/token`,
+						jwksEndpoint: `${server.issuer.url}/jwks`,
+					},
+				},
+				headers,
+			});
+
+			await expect(
+				auth.api.updateSSOProvider({
+					body: {
+						providerId: provider.providerId,
+						oidcConfig: {
+							userInfoEndpoint:
+								"http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+						},
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: {
+					code: "discovery_private_host",
+				},
+			});
+		});
+
+		it("should reject update when oidcConfig contains an invalid URL", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const provider = await auth.api.registerSSOProvider({
+				body: {
+					issuer: server.issuer.url!,
+					domain: "ssrf-update-invalid.com",
+					providerId: "ssrf-update-invalid",
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+						skipDiscovery: true,
+						authorizationEndpoint: `${server.issuer.url}/authorize`,
+						tokenEndpoint: `${server.issuer.url}/token`,
+						jwksEndpoint: `${server.issuer.url}/jwks`,
+					},
+				},
+				headers,
+			});
+
+			await expect(
+				auth.api.updateSSOProvider({
+					body: {
+						providerId: provider.providerId,
+						oidcConfig: {
+							tokenEndpoint: "not-a-url",
+						},
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				body: {
+					code: "VALIDATION_ERROR",
+				},
+			});
+		});
+
+		it("should accept update when oidcConfig endpoints are trusted", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const provider = await auth.api.registerSSOProvider({
+				body: {
+					issuer: server.issuer.url!,
+					domain: "ssrf-update-trusted.com",
+					providerId: "ssrf-update-trusted",
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+						skipDiscovery: true,
+						authorizationEndpoint: `${server.issuer.url}/authorize`,
+						tokenEndpoint: `${server.issuer.url}/token`,
+						jwksEndpoint: `${server.issuer.url}/jwks`,
+					},
+				},
+				headers,
+			});
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: provider.providerId,
+					oidcConfig: {
+						userInfoEndpoint: `${server.issuer.url}/userinfo`,
+					},
+				},
+				headers,
+			});
+
+			expect(updated.providerId).toBe("ssrf-update-trusted");
+		});
+	});
+});
+
+describe("SSO OIDC hook rejection redirect", async () => {
+	const hookServer = new OAuth2Server();
+
+	beforeAll(async () => {
+		await hookServer.issuer.keys.generate("RS256");
+		await hookServer.start(8090, "localhost");
+	});
+
+	afterAll(async () => {
+		await hookServer.stop().catch(() => {});
+	});
+
+	hookServer.service.on("beforeUserinfo", (userInfoResponse) => {
+		userInfoResponse.body = {
+			email: "rejected@test.com",
+			name: "Rejected User",
+			sub: "rejected-sub",
+			email_verified: true,
+		};
+		userInfoResponse.statusCode = 200;
+	});
+
+	hookServer.service.on("beforeTokenSigning", (token) => {
+		token.payload.sub = "rejected-sub";
+		token.payload.email = "rejected@test.com";
+		token.payload.email_verified = true;
+	});
+
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			trustedOrigins: ["http://localhost:8090", "https://frontend.example.com"],
+			plugins: [sso()],
+			databaseHooks: {
+				session: {
+					create: {
+						before: async (session, ctx) => {
+							if (!ctx) return;
+							const user = await ctx.context.internalAdapter.findUserById(
+								session.userId,
+							);
+							if (user?.email === "rejected@test.com") {
+								throw APIError.from("FORBIDDEN", {
+									code: "HOOK_REJECTED",
+									message: "SSO hook rejected this user",
+								});
+							}
+						},
+					},
+				},
+			},
+		});
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: { customFetchImpl },
+	});
+
+	it("should redirect to cross-origin errorCallbackURL when a session hook throws APIError", async () => {
+		const { headers: adminHeaders } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: hookServer.issuer.url!,
+				domain: "hook-reject.com",
+				providerId: "hook-reject",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					authorizationEndpoint: `${hookServer.issuer.url}/authorize`,
+					tokenEndpoint: `${hookServer.issuer.url}/token`,
+					jwksEndpoint: `${hookServer.issuer.url}/jwks`,
+					discoveryEndpoint: `${hookServer.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+					},
+				},
+			},
+			headers: adminHeaders,
+		});
+
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "hook-reject",
+			callbackURL: "https://frontend.example.com/dashboard",
+			errorCallbackURL: "https://frontend.example.com/auth-error",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+
+		let location: string | null = null;
+		await betterFetch(res.url, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+
+		let callbackURL = "";
+		await betterFetch(location!, {
+			method: "GET",
+			customFetchImpl,
+			headers: signInHeaders,
+			onError(context) {
+				callbackURL = context.response.headers.get("location") || "";
+			},
+		});
+
+		const url = new URL(callbackURL);
+		expect(url.origin).toBe("https://frontend.example.com");
+		expect(url.pathname).toBe("/auth-error");
+		expect(url.searchParams.get("error")).toBe("HOOK_REJECTED");
+		expect(url.searchParams.get("error_description")).toBe(
+			"SSO hook rejected this user",
+		);
+	});
+});
+
+describe("SSO OIDC IDP-initiated bounce", async () => {
+	const { customFetchImpl } = await getTestInstance({
+		trustedOrigins: ["http://localhost:8080"],
+		plugins: [
+			sso({
+				defaultSSO: [
+					{
+						domain: "idp-initiated.com",
+						providerId: "idp-initiated",
+						oidcConfig: {
+							issuer: "http://localhost:8080",
+							clientId: "idp-initiated-client",
+							clientSecret: "idp-initiated-secret",
+							pkce: true,
+							discoveryEndpoint:
+								"http://localhost:8080/.well-known/openid-configuration",
+							allowIdpInitiated: true,
+						},
+					},
+					{
+						domain: "strict-oidc.com",
+						providerId: "strict-oidc",
+						oidcConfig: {
+							issuer: "http://localhost:8080",
+							clientId: "strict-client",
+							clientSecret: "strict-secret",
+							pkce: true,
+							discoveryEndpoint:
+								"http://localhost:8080/.well-known/openid-configuration",
+						},
+					},
+				],
+			}),
+		],
+	});
+
+	beforeAll(async () => {
+		await server.issuer.keys.generate("RS256");
+		await server.start(8080, "localhost");
+	});
+
+	afterAll(async () => {
+		await server.stop().catch(() => {});
+	});
+
+	it("should bounce a stateless OIDC callback to the provider's authorize endpoint when allowIdpInitiated is true", async () => {
+		const res = await customFetchImpl(
+			"http://localhost:3000/api/auth/sso/callback/idp-initiated?code=idp-issued-code",
+			{ method: "GET", redirect: "manual" },
+		);
+
+		expect(res.status).toBe(302);
+		const location = res.headers.get("location") || "";
+		expect(location).toContain("http://localhost:8080/authorize");
+		const url = new URL(location);
+		expect(url.searchParams.get("state")).toBeTruthy();
+		expect(url.searchParams.get("client_id")).toBe("idp-initiated-client");
+		expect(url.searchParams.get("code")).toBeNull();
+	});
+
+	it("should not bounce when the `code` parameter is empty", async () => {
+		const res = await customFetchImpl(
+			"http://localhost:3000/api/auth/sso/callback/idp-initiated?code=",
+			{ method: "GET", redirect: "manual" },
+		);
+
+		expect(res.status).toBe(302);
+		const location = res.headers.get("location") || "";
+		expect(location).not.toContain("http://localhost:8080/authorize");
+	});
+
+	it("should not bounce on an empty `state=` parameter, only on truly stateless callbacks", async () => {
+		const res = await customFetchImpl(
+			"http://localhost:3000/api/auth/sso/callback/idp-initiated?code=idp-issued-code&state=",
+			{ method: "GET", redirect: "manual" },
+		);
+
+		expect(res.status).toBe(302);
+		const location = res.headers.get("location") || "";
+		expect(location).not.toContain("http://localhost:8080/authorize");
+		expect(location).toContain("state_not_found");
+	});
+
+	it("should carry ssoProviderId in the bounced state when options.redirectURI is configured", async () => {
+		const { customFetchImpl: sharedRedirectFetch, auth: sharedRedirectAuth } =
+			await getTestInstance({
+				trustedOrigins: ["http://localhost:8080"],
+				plugins: [
+					sso({
+						redirectURI: "/sso/callback",
+						defaultSSO: [
+							{
+								domain: "idp-initiated-shared.com",
+								providerId: "idp-initiated-shared",
+								oidcConfig: {
+									issuer: "http://localhost:8080",
+									clientId: "idp-initiated-shared-client",
+									clientSecret: "idp-initiated-shared-secret",
+									pkce: true,
+									discoveryEndpoint:
+										"http://localhost:8080/.well-known/openid-configuration",
+									allowIdpInitiated: true,
+								},
+							},
+						],
+					}),
+				],
+			});
+
+		const res = await sharedRedirectFetch(
+			"http://localhost:3000/api/auth/sso/callback/idp-initiated-shared?code=idp-issued-code",
+			{ method: "GET", redirect: "manual" },
+		);
+
+		expect(res.status).toBe(302);
+		const location = res.headers.get("location") || "";
+		expect(location).toContain("http://localhost:8080/authorize");
+		const url = new URL(location);
+		expect(url.searchParams.get("redirect_uri")).toBe(
+			"http://localhost:3000/api/auth/sso/callback",
+		);
+		const stateNonce = url.searchParams.get("state");
+		expect(stateNonce).toBeTruthy();
+
+		// The shared callback resolves the provider from the server-only
+		// `serverContext` channel, so the bounce must write `ssoProviderId` there
+		// and never into the client-controlled top-level state.
+		const ctx = await sharedRedirectAuth.$context;
+		const verification = await ctx.internalAdapter.findVerificationValue(
+			stateNonce!,
+		);
+		const parsedState = JSON.parse(verification!.value);
+		expect(parsedState.serverContext?.ssoProviderReference?.providerId).toBe(
+			"idp-initiated-shared",
+		);
+		expect(parsedState.ssoProviderId).toBeUndefined();
+	});
+
+	it("should redirect to the error page for providers without the flag", async () => {
+		const res = await customFetchImpl(
+			"http://localhost:3000/api/auth/sso/callback/strict-oidc?code=idp-issued-code",
+			{ method: "GET", redirect: "manual" },
+		);
+
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toContain("state_not_found");
 	});
 });

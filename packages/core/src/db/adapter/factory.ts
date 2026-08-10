@@ -29,15 +29,15 @@ import type {
 } from "./types";
 import { withApplyDefault } from "./utils";
 
-export {
-	initGetDefaultModelName,
-	initGetDefaultFieldName,
-	initGetModelName,
-	initGetFieldName,
-	initGetFieldAttributes,
-	initGetIdField,
-};
 export * from "./types";
+export {
+	initGetDefaultFieldName,
+	initGetDefaultModelName,
+	initGetFieldAttributes,
+	initGetFieldName,
+	initGetIdField,
+	initGetModelName,
+};
 
 let debugLogs: { instance: string; args: any[] }[] = [];
 let transactionId = -1;
@@ -131,6 +131,16 @@ export const createAdapterFactory =
 						} else if (
 							method === "deleteMany" &&
 							!config.debugLogs.deleteMany
+						) {
+							return;
+						} else if (
+							method === "consumeOne" &&
+							!config.debugLogs.consumeOne
+						) {
+							return;
+						} else if (
+							method === "incrementOne" &&
+							!config.debugLogs.incrementOne
 						) {
 							return;
 						} else if (method === "count" && !config.debugLogs.count) {
@@ -415,19 +425,19 @@ export const createAdapterFactory =
 				joinConfig,
 			} of requiredModels) {
 				let joinedData = await (async () => {
-					if (options.experimental?.joins) {
-						const result = data[modelName];
-						return result;
-					} else {
-						// doesn't support joins, so fallback to handleFallbackJoin
-						const result = await handleFallbackJoin({
-							baseModel: unsafe_model,
-							baseData: transformedData,
-							joinModel: modelName,
-							specificJoinConfig: joinConfig,
-						});
-						return result;
+					if (options.advanced?.database?.joins) {
+						// Use native joined data when the adapter included the key;
+						// otherwise fall back to separate queries.
+						if (modelName in data) {
+							return data[modelName];
+						}
 					}
+					return await handleFallbackJoin({
+						baseModel: unsafe_model,
+						baseData: transformedData,
+						joinModel: modelName,
+						specificJoinConfig: joinConfig,
+					});
 				})();
 
 				// If joinedData is undefined, initialize it based on relationship type
@@ -485,6 +495,8 @@ export const createAdapterFactory =
 				| "updateMany"
 				| "delete"
 				| "deleteMany"
+				| "consumeOne"
+				| "incrementOne"
 				| "count";
 		}): W extends undefined ? undefined : CleanedWhere[] => {
 			if (!where) return undefined as any;
@@ -851,8 +863,8 @@ export const createAdapterFactory =
 			}: {
 				model: string;
 				data: T;
-				select?: string[];
-				forceAllowId?: boolean;
+				select?: string[] | undefined;
+				forceAllowId?: boolean | undefined;
 			}): Promise<R> => {
 				transactionId++;
 				const thisTransactionId = transactionId;
@@ -951,6 +963,11 @@ export const createAdapterFactory =
 					where: unsafeWhere,
 					action: "update",
 				});
+				// `update` targets a single row. Empty predicates have no
+				// target, so fail closed and leave bulk writes to `updateMany`.
+				if (where.length === 0) {
+					return null;
+				}
 				debugLog(
 					{ method: "update" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 4)}`,
@@ -1051,6 +1068,14 @@ export const createAdapterFactory =
 							update: data,
 						}),
 				);
+				if (
+					typeof updatedCount !== "number" ||
+					!Number.isFinite(updatedCount)
+				) {
+					throw new BetterAuthError(
+						`Adapter "${config.adapterId}" updateMany must return a finite number affected row count.`,
+					);
+				}
 				debugLog(
 					{ method: "updateMany" },
 					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 4)}`,
@@ -1073,8 +1098,8 @@ export const createAdapterFactory =
 			}: {
 				model: string;
 				where: Where[];
-				select?: string[];
-				join?: JoinOption;
+				select?: string[] | undefined;
+				join?: JoinOption | undefined;
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
@@ -1093,9 +1118,12 @@ export const createAdapterFactory =
 						join = result.join;
 						select = result.select;
 					}
-					// If adapter doesn't support joins and we have joins, don't pass them to the adapter
-					const experimentalJoins = options.experimental?.joins;
-					if (!experimentalJoins && join && Object.keys(join).length > 0) {
+					// If joins are disabled and we have joins, don't pass them to the adapter
+					if (
+						!options.advanced?.database?.joins &&
+						join &&
+						Object.keys(join).length > 0
+					) {
 						passJoinToAdapter = false;
 					}
 				} else {
@@ -1153,12 +1181,12 @@ export const createAdapterFactory =
 				join: unsafeJoin,
 			}: {
 				model: string;
-				where?: Where[];
-				limit?: number;
+				where?: Where[] | undefined;
+				limit?: number | undefined;
 				select?: string[] | undefined;
-				sortBy?: { field: string; direction: "asc" | "desc" };
-				offset?: number;
-				join?: JoinOption;
+				sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
+				offset?: number | undefined;
+				join?: JoinOption | undefined;
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
@@ -1181,9 +1209,12 @@ export const createAdapterFactory =
 						join = result.join;
 						select = result.select;
 					}
-					// If adapter doesn't support joins and we have joins, don't pass them to the adapter
-					const experimentalJoins = options.experimental?.joins;
-					if (!experimentalJoins && join && Object.keys(join).length > 0) {
+					// If joins are disabled and we have joins, don't pass them to the adapter
+					if (
+						!options.advanced?.database?.joins &&
+						join &&
+						Object.keys(join).length > 0
+					) {
 						passJoinToAdapter = false;
 					}
 				} else {
@@ -1312,12 +1343,173 @@ export const createAdapterFactory =
 				);
 				return res;
 			},
+			consumeOne: async <T>({
+				model: unsafeModel,
+				where: unsafeWhere,
+			}: {
+				model: string;
+				where: Where[];
+			}): Promise<T | null> => {
+				transactionId++;
+				const thisTransactionId = transactionId;
+				const model = getModelName(unsafeModel);
+				const where = transformWhereClause({
+					model: unsafeModel,
+					where: unsafeWhere,
+					action: "consumeOne",
+				});
+				unsafeModel = getDefaultModelName(unsafeModel);
+				debugLog(
+					{ method: "consumeOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
+					`${formatMethod("consumeOne")} ${formatAction("ConsumeOne")}:`,
+					{ model, where },
+				);
+
+				if (typeof adapterInstance.consumeOne !== "function") {
+					throw new BetterAuthError(
+						`Adapter "${config.adapterId}" must implement consumeOne for atomic single-use credential consumption.`,
+					);
+				}
+				const res = await withSpan(
+					`db consumeOne ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "consumeOne",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() => adapterInstance.consumeOne<T>({ model, where }),
+				);
+
+				debugLog(
+					{ method: "consumeOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
+					`${formatMethod("consumeOne")} ${formatAction("DB Result")}:`,
+					{ model, data: res },
+				);
+				let transformed: any = res;
+				if (!config.disableTransformOutput && res) {
+					transformed = await transformOutput(
+						res as Record<string, any>,
+						unsafeModel,
+						undefined,
+						undefined,
+					);
+				}
+				debugLog(
+					{ method: "consumeOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
+					`${formatMethod("consumeOne")} ${formatAction("Parsed Result")}:`,
+					{ model, data: transformed },
+				);
+				return transformed as T | null;
+			},
+			incrementOne: async <T>({
+				model: unsafeModel,
+				where: unsafeWhere,
+				increment: unsafeIncrement,
+				set: unsafeSet,
+			}: {
+				model: string;
+				where: Where[];
+				increment: Record<string, number>;
+				set?: Record<string, unknown> | undefined;
+			}): Promise<T | null> => {
+				const hasIncrement = Object.keys(unsafeIncrement).length > 0;
+				const hasSet = !!unsafeSet && Object.keys(unsafeSet).length > 0;
+				if (!hasIncrement && !hasSet) {
+					// An empty `increment` and empty `set` compiles to `UPDATE ... SET `
+					// with no assignments, which is a syntax error on kysely, drizzle, and
+					// Prisma. Fail fast with an actionable message instead.
+					throw new BetterAuthError(
+						"incrementOne requires a non-empty `increment` or `set`; both were empty.",
+					);
+				}
+				transactionId++;
+				const thisTransactionId = transactionId;
+				const model = getModelName(unsafeModel);
+				const where = transformWhereClause({
+					model: unsafeModel,
+					where: unsafeWhere,
+					action: "incrementOne",
+				});
+				unsafeModel = getDefaultModelName(unsafeModel);
+				debugLog(
+					{ method: "incrementOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`,
+					`${formatMethod("incrementOne")} ${formatAction("IncrementOne")}:`,
+					{ model, where, increment: unsafeIncrement, set: unsafeSet },
+				);
+
+				if (typeof adapterInstance.incrementOne !== "function") {
+					throw new BetterAuthError(
+						`Adapter "${config.adapterId}" must implement incrementOne for atomic guarded counter updates.`,
+					);
+				}
+				const mappedKeys = config.mapKeysTransformInput ?? {};
+				const increment: Record<string, number> = {};
+				for (const [field, delta] of Object.entries(unsafeIncrement)) {
+					increment[
+						mappedKeys[field] || getFieldName({ model: unsafeModel, field })
+					] = delta;
+				}
+				let set: Record<string, unknown> | undefined;
+				if (unsafeSet && !config.disableTransformInput) {
+					set = await transformInput(unsafeSet, unsafeModel, "update");
+				} else {
+					set = unsafeSet;
+				}
+				if (
+					Object.keys(increment).length === 0 &&
+					(!set || Object.keys(set).length === 0)
+				) {
+					throw new BetterAuthError(
+						"incrementOne resolved to an empty update: every increment/set field was unknown to the schema or transformed away.",
+					);
+				}
+				const res = await withSpan(
+					`db incrementOne ${model}`,
+					{
+						[ATTR_DB_OPERATION_NAME]: "incrementOne",
+						[ATTR_DB_COLLECTION_NAME]: model,
+					},
+					() =>
+						adapterInstance.incrementOne<T>({
+							model,
+							where,
+							increment,
+							set,
+						}),
+				);
+
+				debugLog(
+					{ method: "incrementOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`,
+					`${formatMethod("incrementOne")} ${formatAction("DB Result")}:`,
+					{ model, data: res },
+				);
+				let transformed: any = res;
+				if (!config.disableTransformOutput && res) {
+					transformed = await transformOutput(
+						res as Record<string, any>,
+						unsafeModel,
+						undefined,
+						undefined,
+					);
+				}
+				debugLog(
+					{ method: "incrementOne" },
+					`${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`,
+					`${formatMethod("incrementOne")} ${formatAction("Parsed Result")}:`,
+					{ model, data: transformed },
+				);
+				return transformed as T | null;
+			},
 			count: async ({
 				model: unsafeModel,
 				where: unsafeWhere,
 			}: {
 				model: string;
-				where?: Where[];
+				where?: Where[] | undefined;
 			}) => {
 				transactionId++;
 				const thisTransactionId = transactionId;
