@@ -49,6 +49,7 @@ These features change the schema:
 | Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                                                               | No                        |
 | Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables                                                         | **Yes, move client data** |
 | Device Authorization       | An optional `resource` column, plus indexes on `deviceCode` and `userCode`                                              | **Yes, MySQL/SQL Server** |
+| API key fixed windows      | A nullable `rateLimitResetAt` column on API keys                                                                        | No                        |
 
 <Callout type="warn">
   Prepare account identities, OAuth clients, and SCIM data before applying the generated 1.7 schema. The CLI adds tables, columns, and indexes, but it does not choose issuers, copy OAuth clients, or convert legacy SCIM data.
