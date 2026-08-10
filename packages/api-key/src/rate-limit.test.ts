@@ -77,6 +77,68 @@ describe("evaluateRateLimit", () => {
 		});
 	});
 
+	it("preserves a saturated legacy counter until its window ends", () => {
+		const now = new Date("2026-01-01T00:00:01.500Z");
+
+		const decision = evaluateRateLimit(
+			createApiKey({
+				lastRequest: new Date("2026-01-01T00:00:01.000Z"),
+				rateLimitResetAt: null,
+			}),
+			options,
+			now,
+		);
+
+		expect(decision).toMatchObject({
+			type: "deny",
+			tryAgainIn: 1_500,
+		});
+	});
+
+	it("initializes a fixed deadline without resetting a legacy counter", () => {
+		const now = new Date("2026-01-01T00:00:01.500Z");
+		const observedLastRequest = new Date("2026-01-01T00:00:01.000Z");
+
+		const decision = evaluateRateLimit(
+			createApiKey({
+				lastRequest: observedLastRequest,
+				rateLimitResetAt: null,
+				requestCount: 4,
+			}),
+			options,
+			now,
+		);
+
+		expect(decision).toEqual({
+			type: "initialize",
+			now,
+			observedLastRequest,
+			resetAt: new Date("2026-01-01T00:00:03.000Z"),
+			policy,
+		});
+	});
+
+	it("opens a new window after a legacy counter expires", () => {
+		const now = new Date("2026-01-01T00:00:03.000Z");
+
+		const decision = evaluateRateLimit(
+			createApiKey({
+				lastRequest: new Date("2026-01-01T00:00:01.000Z"),
+				rateLimitResetAt: null,
+			}),
+			options,
+			now,
+		);
+
+		expect(decision).toEqual({
+			type: "open",
+			now,
+			observedResetAt: null,
+			resetAt: new Date("2026-01-01T00:00:05.000Z"),
+			policy,
+		});
+	});
+
 	it("treats the reset deadline as the exclusive end of the window", () => {
 		const now = new Date("2026-01-01T00:00:02.000Z");
 		const observedResetAt = new Date("2026-01-01T00:00:02.000Z");

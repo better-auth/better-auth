@@ -311,6 +311,47 @@ async function consumeRateLimit(
 				});
 				return updated ?? snapshot;
 			}
+			case "initialize": {
+				const initialized = await ctx.context.adapter.incrementOne<ApiKey>({
+					model: API_KEY_TABLE_NAME,
+					where: [
+						{ field: "id", value: snapshot.id },
+						{ field: "rateLimitEnabled", value: true },
+						{
+							field: "rateLimitTimeWindow",
+							value: decision.policy.windowMs,
+						},
+						{
+							field: "rateLimitMax",
+							value: decision.policy.maxRequests,
+						},
+						{ field: "rateLimitResetAt", value: null },
+						{
+							field: "lastRequest",
+							value: decision.observedLastRequest,
+						},
+						{
+							field: "requestCount",
+							operator: "gt",
+							value: 0,
+						},
+						{
+							field: "requestCount",
+							operator: "lt",
+							value: decision.policy.maxRequests,
+						},
+					],
+					increment: { requestCount: 1 },
+					set: {
+						lastRequest: decision.now,
+						rateLimitResetAt: decision.resetAt,
+					},
+				});
+				if (initialized) {
+					return initialized;
+				}
+				break;
+			}
 			case "increment": {
 				const incremented = await ctx.context.adapter.incrementOne<ApiKey>({
 					model: API_KEY_TABLE_NAME,
@@ -504,6 +545,12 @@ function applyRateLimitToSnapshot(
 				lastRequest: decision.now,
 				rateLimitResetAt: decision.resetAt,
 				requestCount: 1,
+			};
+		case "initialize":
+			return {
+				lastRequest: decision.now,
+				rateLimitResetAt: decision.resetAt,
+				requestCount: apiKey.requestCount + 1,
 			};
 		case "increment":
 			return {

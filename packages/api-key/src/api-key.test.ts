@@ -5332,6 +5332,47 @@ describe("concurrent verification enforces atomic counters", async () => {
 			expect(stored.requestCount).toBe(2);
 		});
 
+		it("preserves a legacy counter while initializing its fixed window", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({
+				body: {
+					rateLimitEnabled: true,
+					rateLimitMax: 2,
+					rateLimitTimeWindow: 60_000,
+					userId: user.id,
+				},
+			});
+			await auth.api.verifyApiKey({ body: { key: created.key } });
+
+			const primed = await auth.api.getApiKey({
+				query: { id: created.id },
+				headers,
+			});
+			const context = await auth.$context;
+			await context.adapter.update({
+				model: "apikey",
+				where: [{ field: "id", value: created.id }],
+				update: { rateLimitResetAt: null },
+			});
+
+			gate = createArrivalGate(concurrency);
+			const results = await Promise.all(
+				Array.from({ length: concurrency }, () =>
+					auth.api.verifyApiKey({ body: { key: created.key } }),
+				),
+			);
+
+			expect(results.filter((result) => result.valid)).toHaveLength(1);
+			const stored = await auth.api.getApiKey({
+				query: { id: created.id },
+				headers,
+			});
+			expect(stored.requestCount).toBe(2);
+			expect(stored.rateLimitResetAt).toEqual(
+				new Date(primed.lastRequest!.getTime() + 60_000),
+			);
+		});
+
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/6035
 		 */

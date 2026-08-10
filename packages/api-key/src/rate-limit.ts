@@ -27,6 +27,15 @@ export type RateLimitDecision =
 			policy: FixedWindowPolicy;
 	  }
 	| {
+			/** Lazily migrates an active legacy window without resetting its counter. */
+			type: "initialize";
+			now: Date;
+			/** The legacy timestamp observed when deriving the first fixed deadline. */
+			observedLastRequest: Date;
+			resetAt: Date;
+			policy: FixedWindowPolicy;
+	  }
+	| {
 			/** Within the window and under the max: increment `requestCount` by 1. */
 			type: "increment";
 			now: Date;
@@ -74,7 +83,45 @@ export function evaluateRateLimit(
 		? new Date(apiKey.rateLimitResetAt)
 		: null;
 
-	if (observedResetAt === null || now.getTime() >= observedResetAt.getTime()) {
+	if (observedResetAt === null) {
+		const observedLastRequest = apiKey.lastRequest
+			? new Date(apiKey.lastRequest)
+			: null;
+
+		if (apiKey.requestCount > 0 && observedLastRequest) {
+			const resetAt = new Date(
+				observedLastRequest.getTime() + rateLimitTimeWindow,
+			);
+
+			if (now.getTime() < resetAt.getTime()) {
+				if (apiKey.requestCount >= rateLimitMax) {
+					return {
+						type: "deny",
+						message: ERROR_CODES.RATE_LIMIT_EXCEEDED.message,
+						tryAgainIn: resetAt.getTime() - now.getTime(),
+					};
+				}
+
+				return {
+					type: "initialize",
+					now,
+					observedLastRequest,
+					resetAt,
+					policy,
+				};
+			}
+		}
+
+		return {
+			type: "open",
+			now,
+			observedResetAt,
+			resetAt: new Date(now.getTime() + rateLimitTimeWindow),
+			policy,
+		};
+	}
+
+	if (now.getTime() >= observedResetAt.getTime()) {
 		return {
 			type: "open",
 			now,
