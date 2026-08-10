@@ -10,7 +10,7 @@ npx auth@rc upgrade
 ```
 
 <Callout type="warn">
-  The commands in this guide use the `rc` tag because 1.7 is a release candidate. The `latest` tag still resolves the 1.6 CLI until 1.7 is stable, so `auth@latest` or an untagged `auth` would generate a 1.6 schema. Upgrade `better-auth` and every `@better-auth/*` package to the `rc` version too. Once 1.7 is stable, use `@latest` or drop the tag.
+  While 1.7 is a release candidate, use the `rc` tag for the CLI and packages. Once 1.7 is stable, use `latest` or omit the tag.
 </Callout>
 
 Some areas need more care: OAuth, OpenID Connect, SAML, SCIM, two-factor authentication, MCP, custom storage, and proxy setups. Use this table to choose the sections that apply to your project.
@@ -26,52 +26,40 @@ Some areas need more care: OAuth, OpenID Connect, SAML, SCIM, two-factor authent
 | Uses SCIM                                                              | [SCIM](#scim)                                                                   |
 | Uses Stripe billing                                                    | [Stripe](#stripe)                                                               |
 | Uses two-factor auth, magic links, or email OTP                        | [Two-factor and passwordless security](#two-factor-and-passwordless-security)   |
+| Uses the Device Authorization plugin                                   | [Device Authorization](#device-authorization)                                   |
 | Uses a custom database adapter, secondary storage, or rate-limit store | [Custom adapters and storage](#custom-adapters-and-storage)                     |
 
 ## Before you upgrade
 
-The upgrade command handles package updates. The database needs more care. A few 1.7 features add or change tables, and some also need a manual data step.
-
-<Callout type="warn">
-  Run the schema migration before deploying 1.7 if any changed feature applies to your project.
-</Callout>
-
-Use the CLI migration commands:
-
-```bash title="Terminal"
-npx auth@rc generate
-npx auth@rc migrate
-```
-
-If you manage your own schema with Drizzle or Prisma, run `generate` and apply the result through your own migration tooling.
-
-The `auth` CLI now requires Node.js 22.12 or newer to run.
+The upgrade command handles package updates. The database needs more care because some 1.7 features change tables or require a manual data step. The `auth` CLI requires Node.js 22.12 or newer.
 
 These features change the schema:
 
-| Feature                    | What it adds                                                                                                            | Converts data for you?   |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| Protected resources        | New resource tables and key columns                                                                                     | Not needed (config move) |
-| Resource-bound tokens      | Resource columns on the token tables                                                                                    | Yes                      |
-| DPoP                       | A token-binding column                                                                                                  | Not needed               |
-| Refresh-token reuse window | A cached replay-response column on refresh tokens                                                                       | Not needed               |
-| Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables                                                            | Not needed               |
-| Back-channel logout        | Logout-URL and revoked columns                                                                                          | Not needed               |
-| Requested user-info claims | A requested-claims column on the token and consent tables                                                               | Not needed               |
-| Account identity           | An issuer column and a compound index with the existing provider-account column                                         | **No, backfill**         |
-| SCIM                       | Seven provisioning models, plus three optional managed-catalog models, with layouts that replace the legacy SCIM models | **No, reprovision**      |
-| Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                                                               | Not needed               |
-| Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables                                                         | **No, move client data** |
-
-Account identity, SCIM, and the provider client store require manual data steps. Plan each applicable cutover before you deploy.
-
-<Callout type="warn">
-  Do not run the generated SCIM migration over populated prerelease `scimGroup` or `scimGroupMember` tables. Follow the [SCIM cutover](#scim-requires-full-reprovisioning) before creating the new schema.
-</Callout>
+| Feature                    | What it adds                                                                                                            | Manual preparation?       |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| Protected resources        | New resource tables and key columns                                                                                     | No                        |
+| Resource-bound tokens      | Resource columns on the token tables                                                                                    | No                        |
+| DPoP                       | A token-binding column                                                                                                  | No                        |
+| Refresh-token reuse window | A cached replay-response column on refresh tokens                                                                       | No                        |
+| Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables                                                            | No                        |
+| Back-channel logout        | Logout-URL and revoked columns                                                                                          | No                        |
+| Requested user-info claims | A requested-claims column on the token and consent tables                                                               | No                        |
+| Account identity           | An issuer column and a compound index with the existing provider-account column                                         | **Yes, backfill**         |
+| SCIM                       | Seven provisioning models, plus three optional managed-catalog models, with layouts that replace the legacy SCIM models | **Yes, reprovision**      |
+| Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                                                               | No                        |
+| Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables                                                         | **Yes, move client data** |
+| Device Authorization       | Indexes on `deviceCode` and `userCode`                                                                                  | MySQL and SQL Server only |
 
 <Callout type="warn">
-  **Migrating from `oidcProvider` or the in-core MCP plugin moves client data.** `@better-auth/oauth-provider` stores registered clients in `oauthClient`, not the old `oauthApplication`, and renames the `oauthAccessToken.accessToken` column to `token`. `auth migrate` only adds tables and columns; it never renames or copies data. Copy clients with an explicit field mapping or re-register them before cutover. The old and new client tables are not column-compatible: `redirectUrls` becomes the `redirectUris` array, `metadata` becomes JSON, and fields such as `grantTypes` and `tokenEndpointAuthMethod` are new. Dynamically registered clients can re-register. Drop or rename the legacy `oauthAccessToken` table before migrating because its rows are ephemeral access tokens and the new required `token` column cannot be added to populated rows automatically.
+  Prepare account identities, OAuth clients, and SCIM data before applying the generated 1.7 schema. The CLI adds tables, columns, and indexes, but it does not choose issuers, copy OAuth clients, or convert legacy SCIM data.
 </Callout>
+
+Use this order:
+
+1. Complete the manual preparation in [Account identity](#account-identity-is-scoped-by-issuer), [OAuth client records](#migrate-oauth-client-records), [SCIM](#scim-requires-full-reprovisioning), and [Device Authorization](#device-authorization) when those sections apply.
+2. Apply the 1.7 schema. With the built-in Kysely adapter, run `npx auth@rc migrate`. With Drizzle, Prisma, or a custom schema workflow, run `npx auth@rc generate`, review the output, and apply it with your migration tooling.
+3. Deploy the 1.7 packages and configuration changes together.
+4. Complete any post-deployment work, including SCIM reprovisioning.
 
 ***
 
@@ -87,14 +75,10 @@ Better Auth now recognizes an external account by the unique pair of `issuer` an
   Use a maintenance window and stop authentication writes before changing the account schema. The generated migration cannot choose trusted issuers or resolve identity collisions for you.
 </Callout>
 
-<Callout type="warn">
-  The `1.7.0-rc.2` and `1.7.0-rc.3` prereleases temporarily used `providerAccountId`. If you deployed either prerelease, rename that physical column and any custom field mapping back to `accountId` as part of this migration. Also rename or recreate the generated compound index so its physical name uses `accountId`; leaving the prerelease index name can make schema tools attempt to create a duplicate index. Applications upgrading from Better Auth 1.6 should keep their existing `accountId` column.
-</Callout>
-
 **Backfill the account identity:**
 
 1. Back up the `account` and `user` tables, then inventory every distinct `providerId`. Include custom physical field names from `account.fields` in that inventory.
-2. Add `issuer` as nullable during the backfill. Keep the existing physical `accountId` column; only prerelease deployments that adopted `providerAccountId` need to rename it back.
+2. Add `issuer` as nullable during the backfill. Keep the existing physical `accountId` column.
 3. Populate both fields according to the account type:
 
    | Account type                     | `issuer`                                  | `accountId`                            |
@@ -129,7 +113,7 @@ Deploy only after the collision query returns no rows and the required unique in
 
 Review every custom OAuth provider's account subject. OpenID Connect discovery providers now use verified `sub`; plain OAuth providers use `id`; the previous runtime fallback between those fields is removed. Set `accountSubject` when either default is not the provider's immutable identifier. `getUserInfo().user` now contains only mutable local-user fields; keep the provider identifier in `getUserInfo().data`. `mapProfileToUser` can no longer return `id`. The `accountInfo` response exposes the selected identity as `account.accountId` instead of `user.id`.
 
-The generic `microsoftEntraId` helper now requires a concrete tenant GUID. Replace `common`, `organizations`, or `consumers` configurations with the built-in Microsoft social provider, which validates tenant claims and derives the token's actual issuer.
+Microsoft accounts now use the stable `oid` claim instead of `sub`. Before adding the compound index, replace each existing Microsoft account's `accountId` with the verified `oid` for that directory user. The generic `microsoftEntraId` helper also requires a concrete tenant GUID. Replace `common`, `organizations`, or `consumers` configurations with the built-in Microsoft social provider, which validates tenant claims and derives the token's actual issuer.
 
 ### Generic OAuth is rebuilt on the social-provider path
 
@@ -169,11 +153,9 @@ The OAuth callback redirect error value `email_doesn't_match` is renamed `email_
 
 **What to do:** if you read this error code from the callback redirect, update the string to `email_does_not_match`.
 
-### Google One Tap signs in the right person
+### Google One Tap requires a client ID
 
-One Tap now signs in the user who actually owns the Google account by validating the identity token's subject, rather than matching on email.
-
-**What to do:** nothing to configure. If you relied on email-based matching, expect One Tap to bind to the Google account subject instead.
+Set `clientId` on `oneTap()` or configure the Google social provider with a client ID. One Tap now binds accounts to the verified Google subject instead of matching by email.
 
 ### Scopes are kept across logins
 
@@ -181,7 +163,9 @@ Granted scopes used to overwrite each other. A permission granted earlier could 
 
 Better Auth now keeps the scopes already on the account across re-login and token refresh, using the existing `account.scope` field. This is a behavior fix: no schema change, no backfill, and no action for most projects.
 
-If you tracked the 1.7 prereleases, note that an early beta moved scopes into a `grantedScopes` array and a later beta reverted it. The shipped 1.7 keeps the original `account.scope` string. If you adopted the `grantedScopes` column from an early beta, drop it and restore `scope` on every schema you changed. See [Tracking prereleases](#tracking-prereleases).
+### SIWE derives identity from the signed message
+
+Remove wallet address and chain fields from `authClient.siwe.nonce()` and `authClient.siwe.getNonce()` calls. If you configure a server-side `getNonce`, return an ERC-4361 nonce containing 8 to 250 alphanumeric characters. Better Auth reads the address and chain from the signed SIWE message.
 
 ### Discovery providers verify their identity tokens
 
@@ -219,7 +203,21 @@ Passing `expo-secure-store` directly continues to work without a wrapper. A cust
 
 ## As an identity provider
 
-This covers `@better-auth/oauth-provider`. Several changes need a schema migration; run `generate` and `migrate` once after applying them.
+This covers `@better-auth/oauth-provider`.
+
+### Migrate OAuth client records
+
+If you use the 1.6 in-core `oidcProvider` or MCP plugin, copy or re-register each `oauthApplication` as an `oauthClient`. Map `redirectUrls` to `redirectUris`, convert `metadata` to JSON, and set the client's grant types and token-endpoint authentication method. Expire the old access tokens, then drop or rename the legacy `oauthAccessToken` table before creating the 1.7 token tables. The CLI does not copy these records or rename `oauthAccessToken.accessToken` to `token`.
+
+If you already use `@better-auth/oauth-provider`, migrate existing `oauthClient` rows as follows:
+
+1. Add nullable `applicationType`, `clientDiscoveryId`, and `clientCredentialsScopes` columns. Leave `clientDiscoveryId` null unless you have trusted discovery provenance for the client.
+2. Map existing `web` and `native` client types to `applicationType`. Review `user-agent-based` clients individually. Set `tokenEndpointAuthMethod` to `none` only for public clients; every other method is confidential.
+3. Set `clientCredentialsScopes` to an empty array, then assign approved machine scopes to each client that uses the `client_credentials` grant. Remove `clientCredentialGrantDefaultScopes` from the provider configuration.
+4. Remove duplicate `oauthClientResource` rows for the same `clientId` and `resourceId` before adding the compound unique index.
+5. Drop the removed `type` and `public` columns after the backfill.
+
+Replace bare JWK arrays in client configuration and registration payloads with JWK Set objects: `jwks: [key]` becomes `jwks: { keys: [key] }`. Remove the `oauthProvider.silenceWarnings` option.
 
 ### Protected resources replace the audience list
 
@@ -229,30 +227,37 @@ Audiences are now resources. Each resource can have its own token lifetime, scop
 
 * Move each entry from `validAudiences` into `resources`.
 * Link clients to specific resources through `oauthClientResource` or registration.
-* Run `generate` and `migrate` to add the new tables and columns.
 * Check your refresh-token lifetimes: the shortest applicable lifetime now wins, so a per-resource value longer than the provider default is capped at the default.
 
 **If you accept dynamically registered clients,** the resource model enforces per-client resource access by default. A dynamic client's token request can be rejected with `invalid_target`. Set `enforcePerClientResources: false` for that case, and register each client's `grant_types` explicitly, or the token endpoint rejects them with `unauthorized_client`.
+
+### Registration resources and scopes use provider policy
+
+Configure `clientRegistrationDefaultResources` and `clientRegistrationAllowedResources` before enabling Dynamic Client Registration. Existing clients that send the `resources` parameter must request only identifiers allowed by those options. Review `clientRegistrationDefaultScopes` and `clientRegistrationAllowedScopes` as the capabilities a client may request, not as user consent.
 
 ### Token target is locked to the login
 
 The API a token is for is now captured at login and locked to that grant. A later request can narrow the target API but cannot widen it. Asking for an API the login did not cover is rejected. A custom-claims callback now receives a list of resources instead of one value.
 
-**What to do:** run the migration to add the resource columns. Update custom-claims callbacks to read the resource list. Make sure clients ask only for resources their login covered.
+**What to do:** update custom-claims callbacks to read the resource list. Make sure clients ask only for resources their login covered.
 
 ### DPoP renames the token verifier
 
 The plain token-checking helper `verifyAccessToken` is renamed `verifyBearerToken` and now rejects DPoP tokens. Use the new `verifyAccessTokenRequest` on endpoints that may receive DPoP requests.
 
-**What to do:** rename `verifyAccessToken` to `verifyBearerToken`, and switch DPoP-capable endpoints to `verifyAccessTokenRequest`. Run `generate` and `migrate` to add the token-binding column. To support DPoP, configure database-backed verification storage.
+**What to do:** rename `verifyAccessToken` to `verifyBearerToken`, and switch DPoP-capable endpoints to `verifyAccessTokenRequest`. To support DPoP, configure database-backed verification storage.
 
 **Watch the proxy case.** Native DPoP checks the proof's `htu` claim against the URL the token endpoint computes for itself. Behind a TLS-terminating proxy or a custom server, that computed URL can be the internal bind address (`http://0.0.0.0:3000`) or the proxy's internal scheme and port. The client signed `htu` from your public discovery URL, so a valid proof can be rejected. Canonicalize the incoming request's scheme and host to your configured `baseURL` at the route boundary before the provider reads it.
+
+### Protected-resource scope options are renamed
+
+Rename protected-operation `scopes` to `requiredScopes` and use `challengeScopes` for the `WWW-Authenticate` hint. If application code creates scope failures directly, use `createInsufficientScopeError` and pass recognized token or scope failures to `createResourceServerChallenge`.
 
 ### Sign-out revokes session tokens
 
 When a session ends, the access tokens tied to it are now revoked. They read as inactive at introspection and userinfo. Before, they lived until they expired. Your server also sends a logout message to each app that registered a logout URL.
 
-**What to do:** run `generate` and `migrate` to add the new columns. Expect session-bound tokens to stop working at sign-out. On serverless platforms, set `advanced.backgroundTasks.handler` so sending logout messages does not slow down sign-out.
+**What to do:** expect session-bound tokens to stop working at sign-out. On serverless platforms, set `advanced.backgroundTasks.handler` so sending logout messages does not slow down sign-out.
 
 ### Custom ID-token claims cannot override protocol claims
 
@@ -350,7 +355,7 @@ The authorization and userinfo endpoints now accept form-encoded (POST) requests
 
 The OAuth provider can replay the same refresh response for duplicate refresh requests during `refreshTokenReuseInterval`. Strict refresh-token replay handling remains the default.
 
-**What to do:** set `refreshTokenReuseInterval` only if a public or native client can retry a refresh request with an old token after another local session already rotated it. MCP defaults this window to 30 seconds for native and public clients. Set `refreshTokenReuseInterval: 0` to keep strict replay handling.
+**What to do:** set `refreshTokenReuseInterval` only when a client can retry a refresh request with an old token after another local session already rotated it. OAuth Provider keeps strict replay handling at `0`; `mcp()` defaults the interval to 30 seconds for every client.
 
 ### If you extended the OAuth provider by hand
 
@@ -360,7 +365,7 @@ A contribution written in an older or hand-rolled shape can fail silently here. 
 
 ### The old `oidcProvider` plugin is removed
 
-**What to do:** replace `oidcProvider` from `better-auth/plugins` with `oauthProvider` from `@better-auth/oauth-provider`, move your config across, and run the schema migration.
+**What to do:** replace `oidcProvider` from `better-auth/plugins` with `oauthProvider` from `@better-auth/oauth-provider` and move your configuration across.
 
 ***
 
@@ -368,17 +373,20 @@ A contribution written in an older or hand-rolled shape can fail silently here. 
 
 ### MCP moves to its own package
 
-The MCP plugin moves from `better-auth` into `@better-auth/mcp`, built on the OAuth provider. This is the largest single change for existing MCP users.
+The MCP plugin moves from `better-auth` to `@better-auth/mcp` and uses `@better-auth/oauth-provider`.
 
 **What to do:**
 
-1. Install `@better-auth/mcp` and update imports: the server plugin and helpers from `@better-auth/mcp`, the client and adapters from `@better-auth/mcp/client` and `@better-auth/mcp/client/adapters`.
-2. Add the `jwt()` plugin, which is now required.
-3. Move options that were nested under `oidcConfig` up to the top level of `mcp({ ... })`, and add a resource identifier, for example `resource: "https://api.example.com/mcp"`.
-4. Rename `withMcpAuth` to `requireMcpAuth`, and `createMcpAuthClient` to `createMcpResourceClient`.
-5. Regenerate or migrate your schema.
+1. Install `@better-auth/mcp`, `@better-auth/cimd`, and the official version 2 MCP client or server package your application needs. Import MCP authorization and protected-request helpers from `@better-auth/mcp`. Replace the removed in-core client and adapters with `@modelcontextprotocol/client` or `@modelcontextprotocol/server`.
+2. Add the required `jwt()` plugin. Compose `mcp()` with `cimd({ fetchClientMetadataResource, metadataProfile: "mcp-2026-07-28" })` for client registration.
+3. Move options from `oidcConfig` to the top level of `mcp({ ... })`. Set one canonical HTTPS `resource`, such as `https://api.example.com/mcp`, and replace `resourceMetadataMappings` with that value.
+4. Rename `withMcpAuth` to `requireMcpAuth` and `mcpHandler` to `createMcpProtectedRequestHandler`. Apply the [protected-resource scope option changes](#protected-resource-scope-options-are-renamed).
+5. Use the version 2 `createMcpHandler` with `legacy: "reject"`, wrap it with `requireMcpAuth`, and expose only `POST`. Remove MCP-route `GET` and `DELETE` exports and session-store options such as `redisUrl`.
+6. Move registered clients through the [OAuth client records](#migrate-oauth-client-records) migration.
 
-The OAuth endpoints move from `/mcp/*` to `/oauth2/*`. Discovery-based MCP clients find the new locations on their own. Existing registered clients move to the shared `oauthClient` store and are not copied automatically; complete the provider-client data step in [Before you upgrade](#before-you-upgrade) before cutover. MCP also defaults `refreshTokenReuseInterval` to 30 seconds for native and public clients; set it to `0` if you want strict refresh-token replay handling.
+OAuth endpoints move from `/mcp/*` to `/oauth2/*`. Discovery-based clients find the new endpoints automatically. The MCP refresh-token reuse interval now defaults to 30 seconds for every client; set `refreshTokenReuseInterval: 0` on `mcp()` to require strict replay handling.
+
+`mcp()` no longer enables unauthenticated Dynamic Client Registration. If you deliberately support it, set both `allowDynamicClientRegistration` and `allowUnauthenticatedClientRegistration`. Otherwise, use the CIMD configuration above.
 
 ***
 
@@ -460,7 +468,7 @@ scim({
 
 ### SCIM requires full reprovisioning
 
-The new SCIM models do not read or convert the legacy SCIM tables. The prerelease and final `scimGroup` and `scimGroupMember` models also use incompatible layouts, so this change cannot use an in-place generated migration.
+The new SCIM models do not read or convert the 1.6 SCIM tables, so this change cannot use an in-place generated migration.
 
 <Callout type="warn">
   Use a maintenance window. Pause provisioning and stop every application instance that runs the old SCIM plugin before changing the schema.
@@ -468,10 +476,10 @@ The new SCIM models do not read or convert the legacy SCIM tables. The prereleas
 
 **What to do:**
 
-1. Back up every legacy SCIM table. Build a reviewed inventory of the exact `scimProvider` rows, SCIM-created `account` rows, their linked `user` rows, and any organization membership or team state created by provisioning. Use the configured providers and directory subjects to identify them. Do not classify rows by a `providerId` prefix alone: stable 1.6 could store a raw provider ID that another account source also uses, while later prereleases used a `scim:` namespace.
+1. Back up every legacy SCIM table. Build a reviewed inventory of the exact `scimProvider` rows, SCIM-created `account` rows, their linked `user` rows, and any organization membership or team state created by provisioning. Use the configured providers and directory subjects to identify them. Do not classify rows by a `providerId` prefix alone.
 2. Decide how each legacy User and account row will be handled. To retain a User, copy a stable connection-and-subject-to-`userId` mapping into application-owned storage, remove only the confirmed legacy SCIM account row, and configure `identity.resolveUser` before reprovisioning. To recreate a User, remove the confirmed SCIM account and delete the User only after proving that no other sign-in method or application data depends on it. Preserve every unrelated account and application row; Better Auth does not identify or remove legacy SCIM account rows automatically.
 3. Choose the static, application-owned runtime, or plugin-managed connection mode, and prepare new opaque connection and credential identifiers. Never import a legacy token hash, reuse a legacy raw token, or add a compatibility path that accepts the legacy bearer syntax. Static and application-owned modes use a new high-entropy secret; the managed mode issues its new secret after the managed tables exist in step 6.
-4. While the old plugin is stopped, clear its SCIM-owned resources in dependency order through the old SCIM endpoints or an operator-controlled transaction. Confirm that the legacy plugin tables are empty and that every inventoried SCIM account row has a reviewed disposition. If you adopted prerelease Group provisioning, clear `scimGroupRoleGrant`, `scimGroupRole`, `scimGroupMember`, and `scimGroup` in child-first order. Drop or rename the incompatible legacy physical tables, including `scimProvider`, only after the reviewed backup and cleanup are complete. Use the physical table names from your schema if you customized model names.
+4. While the old plugin is stopped, clear its SCIM-owned resources in dependency order through the old SCIM endpoints or an operator-controlled transaction. Confirm that the legacy plugin tables are empty and that every inventoried SCIM account row has a reviewed disposition. Drop or rename the incompatible legacy physical tables, including `scimProvider`, only after the reviewed backup and cleanup are complete. Use the physical table names from your schema if you customized model names.
 5. Enable native interactive transactions in your database adapter, then run `auth generate` or `auth migrate` to create `scimConnectionBinding`, `scimIdentityTombstone`, `scimSubject`, `scimUser`, `scimGroup`, `scimGroupMember`, and `scimProjectionGrant`. The managed mode also creates `scimManagedConnection`, `scimManagedCredential`, and `scimManagedConnectionEvent`. Cloudflare D1 cannot provide the required transaction behavior.
 6. Deploy the selected mode. For the managed mode, create the connection and issue its first credential through the trusted server API after the new schema exists. Configure the directory with the new credential, then trigger a complete User and Group provisioning cycle.
 7. Verify User linking, Group state, lifecycle, and role projection in your application, then resume provisioning.
@@ -502,9 +510,9 @@ The `event` parameter on the `onSubscriptionCancel` callback is now required.
 
 ## Behind a proxy
 
-### Forwarded headers are not trusted by default
+### Dynamic base URLs do not trust forwarded headers by default
 
-When your app reads its own address, it now uses the `Host` header and ignores forwarded headers unless you opt in.
+When `baseURL` uses `allowedHosts`, Better Auth ignores forwarded headers unless you opt in.
 
 **What to do:** if your proxy exposes the public hostname only through `x-forwarded-host`, opt in:
 
@@ -549,11 +557,13 @@ Rate-limit storage now needs a single `consume(key, rule)` method that checks an
 
 **What to do:** replace `get` and `set` in custom rate-limit storage with `consume`.
 
-### Default Drizzle schema uses singular relation keys
+### Database joins moved out of `experimental`
 
-The default Drizzle schema generator now emits singular relation keys.
+Replace `experimental: { joins: true }` with `advanced: { database: { joins: true } }`. Regenerate Drizzle or Prisma relations if you enable joins.
 
-**What to do:** regenerate your Drizzle schema and review the relation keys.
+### Drizzle relation keys are singular with `usePlural`
+
+When `usePlural: true`, the Drizzle schema generator now uses singular keys for many-to-one relations. Regenerate the schema and update code that reads the previous plural relation keys. The default `usePlural: false` configuration is unchanged.
 
 ### `getIp` is renamed `getIP`
 
@@ -570,6 +580,14 @@ The public `getIp` export is renamed `getIP`.
 Captcha rules now match full request paths or explicit wildcards, which closes a way to skip a captcha rule through partial path matching.
 
 **What to do:** replace a partial path like `/sign-in` with `/sign-in/*` or `/sign-in/**`.
+
+A wildcard such as `/sign-in/*` also matches `/sign-in/email-otp`. If that route should remain exempt, list the exact protected endpoints instead of using a wildcard.
+
+***
+
+## Device Authorization
+
+The 1.7 schema indexes `deviceCode` and `userCode` and limits both values to 191 characters. Before applying the schema on MySQL or SQL Server, change both columns to bounded strings and resolve any existing values longer than 191 characters. Custom `generateDeviceCode` and `generateUserCode` functions must also stay within that limit.
 
 ***
 
@@ -610,29 +628,14 @@ These do not need action for most setups, but they change what you see.
 
 ***
 
-## Upgrade checklist
+## Verify the upgrade
 
-Run once, after applying the changes that affect you:
+After deploying 1.7, verify the paths that your application uses:
 
-```bash title="Terminal"
-npx auth@rc generate
-npx auth@rc migrate
-```
-
-Then complete the manual data step if it applies:
-
-* **Backfill account identities:** assign every account a reviewed issuer and provider account identifier, resolve collisions, and add the compound unique index before deploying.
-* **Move provider clients:** copy or re-register clients from `oidcProvider` or the in-core MCP plugin before switching to the shared OAuth provider tables.
-* **Reprovision SCIM:** follow the [full cutover](#scim-requires-full-reprovisioning), including reviewed handling of legacy core identities, then run a complete User and Group provisioning cycle.
-
-***
-
-## Tracking prereleases
-
-If you upgraded straight from 1.6 to the final 1.7, skip this. It applies only if you adopted a 1.7 beta and followed its changes.
-
-A breaking change in one beta can be reverted in a later beta of the same line, and the reversal is a migration in the opposite direction. The clearest case is OAuth scopes: an early beta moved `account.scope` into a `grantedScopes` array, and a later beta reverted it, so the final 1.7 keeps the original `account.scope` string. If you adopted the `grantedScopes` column, drop it and restore the `scope` column on every schema you changed. When your migration tool cannot tell a rename from a drop, reconcile the column with direct SQL so you keep existing rows.
-
-An earlier 1.7 prerelease used organization-scoped SCIM providers and interim Group tables. The final SCIM schema does not convert those tables. If you adopted that prerelease, follow the same [full SCIM reprovisioning cutover](#scim-requires-full-reprovisioning) as an upgrade from 1.6.
-
-Two habits make this cheaper. Read `revert` entries in the changelog, not just `feat` and `fix`; a revert is a migration for you even though it does not announce itself as breaking. Bump only the packages that carry the change, and confirm your own plugins do not import the reverted surface before you rebuild them.
+* Sign in with email and password, each OAuth or SSO provider, and Google One Tap when configured.
+* Link, list, refresh, and unlink external accounts.
+* Exercise OAuth authorization, refresh, revocation, discovery, and protected-resource checks when you run an identity provider.
+* Connect an MCP client and complete one protected request.
+* Confirm SAML SP-initiated login and, when enabled, IdP-initiated login.
+* Confirm SCIM User linking, Group membership, lifecycle changes, and application projections before resuming provisioning.
+* Confirm proxy deployments generate public callback, issuer, discovery, and JWKS URLs.
