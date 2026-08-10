@@ -2088,6 +2088,99 @@ describe("SSO OIDC preferIdToken", async () => {
 		expect(session.data?.user.email).toBe("from-userinfo@test.com");
 		expect(session.data?.user.name).toBe("UserInfo User");
 	});
+
+	it("should fall back to UserInfo when preferIdToken is true but no ID token is returned", async () => {
+		userInfoCallCount = 0;
+		const stripIdToken = (tokenEndpointResponse: {
+			body: { id_token?: string };
+		}) => {
+			tokenEndpointResponse.body.id_token = undefined;
+		};
+		const fallbackUserinfoHandler = (userInfoResponse: {
+			body: Record<string, unknown>;
+			statusCode: number;
+		}) => {
+			userInfoCallCount += 1;
+			userInfoResponse.body = {
+				sub: "prefer-fallback-sub",
+				email: "prefer-fallback@test.com",
+				name: "Prefer Fallback User",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		};
+		preferIdTokenServer.service.removeListener(
+			"beforeUserinfo",
+			userinfoHandler,
+		);
+		preferIdTokenServer.service.on("beforeUserinfo", fallbackUserinfoHandler);
+		preferIdTokenServer.service.on("beforeResponse", stripIdToken);
+
+		try {
+			const { headers } = await signInWithTestUser();
+			await auth.api.registerSSOProvider({
+				body: {
+					issuer: preferIdTokenServer.issuer.url!,
+					domain: "prefer-id-token-fallback.com",
+					providerId: "prefer-id-token-fallback",
+					oidcConfig: {
+						clientId: "test",
+						clientSecret: "test",
+						authorizationEndpoint: `${preferIdTokenServer.issuer.url}/authorize`,
+						tokenEndpoint: `${preferIdTokenServer.issuer.url}/token`,
+						jwksEndpoint: `${preferIdTokenServer.issuer.url}/jwks`,
+						userInfoEndpoint: `${preferIdTokenServer.issuer.url}/userinfo`,
+						discoveryEndpoint: `${preferIdTokenServer.issuer.url}/.well-known/openid-configuration`,
+						preferIdToken: true,
+						mapping: {
+							id: "sub",
+							email: "email",
+							emailVerified: "email_verified",
+							name: "name",
+							image: "picture",
+						},
+					},
+				},
+				headers,
+			});
+
+			const signInHeaders = new Headers();
+			const res = await authClient.signIn.sso({
+				providerId: "prefer-id-token-fallback",
+				callbackURL: "/dashboard",
+				fetchOptions: {
+					throw: true,
+					onSuccess: cookieSetter(signInHeaders),
+				},
+			});
+
+			const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+				res.url,
+				signInHeaders,
+			);
+
+			expect(callbackURL).toContain("/dashboard");
+			expect(callbackURL).not.toContain("error=invalid_provider");
+			expect(userInfoCallCount).toBe(1);
+
+			const session = await authClient.getSession({
+				fetchOptions: { headers: sessionHeaders },
+			});
+			expect(session.data?.user.email).toBe("prefer-fallback@test.com");
+			expect(session.data?.user.name).toBe("Prefer Fallback User");
+		} finally {
+			preferIdTokenServer.service.removeListener(
+				"beforeResponse",
+				stripIdToken,
+			);
+			preferIdTokenServer.service.removeListener(
+				"beforeUserinfo",
+				fallbackUserinfoHandler,
+			);
+			preferIdTokenServer.service.on("beforeUserinfo", userinfoHandler);
+		}
+	});
 });
 
 describe("SSO OIDC hook rejection redirect", async () => {
