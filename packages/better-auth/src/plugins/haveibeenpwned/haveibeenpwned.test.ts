@@ -201,10 +201,6 @@ describe("have-i-been-pwned", async () => {
 			},
 		);
 
-		afterEach(() => {
-			vi.restoreAllMocks();
-		});
-
 		it("should reject a compromised password on /email-otp/reset-password", async () => {
 			const email = `email-otp-${Date.now()}@example.com`;
 			await client.signUp.email({
@@ -286,10 +282,6 @@ describe("have-i-been-pwned", async () => {
 			},
 		);
 
-		afterEach(() => {
-			vi.restoreAllMocks();
-		});
-
 		it("should reject a compromised password on /phone-number/reset-password", async () => {
 			const phone = `+1555${Date.now().toString().slice(-7)}`;
 			await client.phoneNumber.sendOtp({ phoneNumber: phone });
@@ -370,10 +362,6 @@ describe("have-i-been-pwned", async () => {
 			adminEmail,
 			adminPassword,
 		);
-
-		afterEach(() => {
-			vi.restoreAllMocks();
-		});
 
 		it("should reject a compromised password on /admin/create-user", async () => {
 			const breached = "breached-via-admin-create";
