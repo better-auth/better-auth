@@ -2,7 +2,7 @@
 "better-auth": minor
 ---
 
-feat(two-factor)!: add OTP-only enablement and remove `skipVerificationOnEnable`
+feat(two-factor)!: add OTP-only enablement and a discriminated response
 
 `enableTwoFactor` now accepts a `method` parameter (`"otp" | "totp"`, default `"totp"`) and returns a discriminated response with a `method` field.
 
@@ -17,7 +17,8 @@ feat(two-factor)!: add OTP-only enablement and remove `skipVerificationOnEnable`
 - Returns `{ method: "totp", totpURI, backupCodes }`.
 - Rejects with `TOTP_NOT_CONFIGURED` if `totpOptions.disable` is set.
 
+The existing `skipVerificationOnEnable` option remains supported for TOTP enrollment.
+
 ### Breaking changes
 
-- **Removed `skipVerificationOnEnable`**: use `method: "otp"` for immediate activation, or the standard TOTP verification flow.
 - **Response shape changed**: `enableTwoFactor` includes a `method` field in the response (`"otp"` or `"totp"`).

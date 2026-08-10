@@ -115,7 +115,7 @@ To enable two-factor authentication, call `twoFactor.enable`. The user must prov
 When `method` is `"totp"` (default):
 
 * Returns `{ method: "totp", totpURI, backupCodes }`. Use `totpURI` to display a QR code.
-* `twoFactorEnabled` won’t be set to `true` until the user verifies their TOTP code. See [verifying TOTP](#totp).
+* By default, `twoFactorEnabled` remains `false` until the user verifies a TOTP code. When the server plugin is configured with `skipVerificationOnEnable: true`, TOTP is enabled without enrollment-code verification. See [verifying TOTP](#totp).
 
 When `method` is `"otp"`:
 
@@ -538,6 +538,8 @@ export const twoFactorTableFields = [
 **twoFactorTable**: The name of the table that stores the two factor authentication data. Default: `twoFactor`.
 
 **issuer**: Custom issuer name for the TOTP URI. Defaults to your `appName`.
+
+**skipVerificationOnEnable**: Activate TOTP immediately without verifying an enrollment code. Defaults to `false`.
 
 **allowPasswordless**: Allow enabling and managing 2FA without a password for users that do not have a credential account. Password is still required if a credential account exists. This option does not change which sign-in methods are challenged for 2FA.
 
