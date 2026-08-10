@@ -529,7 +529,7 @@ betterAuth({
 
 Setups where the proxy rewrites the host for you, such as nginx, Vercel, Cloudflare, and Netlify, need no change.
 
-Dynamic base URLs also fail closed when a request has no usable host or its host does not match `allowedHosts`. Direct server API calls must therefore include request URL or header data that resolves to an allowed public origin. Better Auth rebuilds the base URL, trusted origins, provider URLs, and cookies for that resolved host on each request; OAuth issuer, discovery, protected-resource, and JWKS URLs follow the same request origin.
+Without `baseURL.fallback`, dynamic base URLs fail closed when a request has no usable host or its host does not match `allowedHosts`. Direct server API calls must therefore include request URL or header data that resolves to an allowed public origin, or configure a trusted fallback. Better Auth rebuilds the base URL, trusted origins, provider URLs, and cookies for the resolved origin on each request; OAuth issuer, discovery, protected-resource, and JWKS URLs follow the same request origin.
 
 ### IdP redirects and DPoP need your canonical origin
 
