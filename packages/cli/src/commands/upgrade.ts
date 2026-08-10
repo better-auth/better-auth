@@ -22,6 +22,7 @@ interface UpgradeEntry {
 	depType: "prod" | "dev";
 }
 
+/** @internal */
 export async function upgradeAction(opts: unknown) {
 	const options = z
 		.object({
