@@ -277,102 +277,132 @@ async function consumeRemaining(
 /**
  * Guarded rate-limit consumption. The common in-window path increments
  * `requestCount` only while it is below the max (compare-and-swap), so a burst
- * of concurrent verifications can never exceed the limit. Window resets and the
- * first request in a window are guarded conditional sets; a request that loses
- * every guard within an active window is rejected. Returns the updated row, or
- * the unchanged row when rate limiting does not apply.
+ * of concurrent verifications can never exceed the limit. Opening a window is
+ * guarded by the observed deadline and policy; a request that loses a guard
+ * reloads the row and evaluates the new state. Returns the updated row, or the
+ * unchanged row when rate limiting does not apply.
  */
 async function consumeRateLimit(
 	ctx: GenericEndpointContext,
 	apiKey: ApiKey,
 	opts: PredefinedApiKeyOptions,
 ): Promise<ApiKey> {
-	const decision = evaluateRateLimit(apiKey, opts);
+	let snapshot = apiKey;
 
-	if (decision.type === "deny") {
-		throw new APIError("TOO_MANY_REQUESTS", {
-			message: decision.message,
-			code: "RATE_LIMITED" as const,
-			details: { tryAgainIn: decision.tryAgainIn },
-		});
-	}
+	// Retry with the latest row when a concurrent write invalidates the CAS guards.
+	while (true) {
+		const decision = evaluateRateLimit(snapshot, opts, new Date());
 
-	if (decision.type === "skip") {
-		if (decision.lastRequest === null) {
-			return apiKey;
+		switch (decision.type) {
+			case "deny":
+				throw new APIError("TOO_MANY_REQUESTS", {
+					message: decision.message,
+					code: "RATE_LIMITED" as const,
+					details: { tryAgainIn: decision.tryAgainIn },
+				});
+			case "skip": {
+				if (decision.lastRequest === null) {
+					return snapshot;
+				}
+				const updated = await ctx.context.adapter.update<ApiKey>({
+					model: API_KEY_TABLE_NAME,
+					where: [{ field: "id", value: snapshot.id }],
+					update: { lastRequest: decision.lastRequest },
+				});
+				return updated ?? snapshot;
+			}
+			case "increment": {
+				const incremented = await ctx.context.adapter.incrementOne<ApiKey>({
+					model: API_KEY_TABLE_NAME,
+					where: [
+						{ field: "id", value: snapshot.id },
+						{ field: "rateLimitEnabled", value: true },
+						{
+							field: "rateLimitTimeWindow",
+							value: decision.policy.windowMs,
+						},
+						{
+							field: "rateLimitMax",
+							value: decision.policy.maxRequests,
+						},
+						{
+							field: "rateLimitResetAt",
+							value: decision.resetAt,
+						},
+						{
+							field: "requestCount",
+							operator: "lt",
+							value: decision.policy.maxRequests,
+						},
+					],
+					increment: { requestCount: 1 },
+					set: { lastRequest: decision.now },
+				});
+				if (incremented) {
+					return incremented;
+				}
+				break;
+			}
+			case "open": {
+				const windowGuards = decision.observedResetAt
+					? [
+							{
+								field: "rateLimitResetAt",
+								operator: "eq" as const,
+								value: decision.observedResetAt,
+							},
+							{
+								field: "rateLimitResetAt",
+								operator: "lte" as const,
+								value: decision.now,
+							},
+						]
+					: [
+							{
+								field: "rateLimitResetAt",
+								operator: "eq" as const,
+								value: null,
+							},
+						];
+
+				const opened = await ctx.context.adapter.incrementOne<ApiKey>({
+					model: API_KEY_TABLE_NAME,
+					where: [
+						{ field: "id", value: snapshot.id },
+						{ field: "rateLimitEnabled", value: true },
+						{
+							field: "rateLimitTimeWindow",
+							value: decision.policy.windowMs,
+						},
+						{
+							field: "rateLimitMax",
+							value: decision.policy.maxRequests,
+						},
+						...windowGuards,
+					],
+					increment: {},
+					set: {
+						requestCount: 1,
+						lastRequest: decision.now,
+						rateLimitResetAt: decision.resetAt,
+					},
+				});
+				if (opened) {
+					return opened;
+				}
+				break;
+			}
 		}
-		const updated = await ctx.context.adapter.update<ApiKey>({
-			model: API_KEY_TABLE_NAME,
-			where: [{ field: "id", value: apiKey.id }],
-			update: { lastRequest: decision.lastRequest },
-		});
-		return updated ?? apiKey;
-	}
 
-	if (decision.type === "increment") {
-		const incremented = await ctx.context.adapter.incrementOne<ApiKey>({
-			model: API_KEY_TABLE_NAME,
-			where: [
-				{ field: "id", value: apiKey.id },
-				{
-					field: "lastRequest",
-					operator: "gt",
-					value: decision.windowStart,
-				},
-				{
-					field: "requestCount",
-					operator: "lt",
-					value: decision.max,
-				},
-			],
-			increment: { requestCount: 1 },
-			set: { lastRequest: decision.now },
-		});
-		if (incremented) {
-			return incremented;
-		}
-		// The window rolled or the max was reached between the read and the
-		// write. Re-evaluate against the freshest row to apply the right guard.
 		const fresh = await ctx.context.adapter.findOne<ApiKey>({
 			model: API_KEY_TABLE_NAME,
-			where: [{ field: "id", value: apiKey.id }],
+			where: [{ field: "id", value: snapshot.id }],
 		});
 		if (!fresh) {
 			throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
 		}
-		return consumeRateLimit(ctx, fresh, opts);
+		snapshot = fresh;
 	}
-
-	// "start" and "reset": set the count to 1 for a fresh window, guarded so a
-	// concurrent increment in the same window cannot be silently overwritten.
-	const windowGuard =
-		decision.type === "reset"
-			? {
-					field: "lastRequest",
-					operator: "lte" as const,
-					value: decision.windowStart,
-				}
-			: { field: "lastRequest", operator: "eq" as const, value: null };
-
-	const started = await ctx.context.adapter.incrementOne<ApiKey>({
-		model: API_KEY_TABLE_NAME,
-		where: [{ field: "id", value: apiKey.id }, windowGuard],
-		increment: {},
-		set: { requestCount: 1, lastRequest: decision.now },
-	});
-	if (started) {
-		return started;
-	}
-	// Another verification already opened the window. Re-evaluate so this
-	// request consumes an increment slot instead of resetting the count.
-	const fresh = await ctx.context.adapter.findOne<ApiKey>({
-		model: API_KEY_TABLE_NAME,
-		where: [{ field: "id", value: apiKey.id }],
-	});
-	if (!fresh) {
-		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
-	}
-	return consumeRateLimit(ctx, fresh, opts);
 }
 
 /**
@@ -457,7 +487,7 @@ function applyRateLimitToSnapshot(
 	apiKey: ApiKey,
 	opts: PredefinedApiKeyOptions,
 ): Partial<ApiKey> {
-	const decision = evaluateRateLimit(apiKey, opts);
+	const decision = evaluateRateLimit(apiKey, opts, new Date());
 	switch (decision.type) {
 		case "deny":
 			throw new APIError("TOO_MANY_REQUESTS", {
@@ -469,9 +499,12 @@ function applyRateLimitToSnapshot(
 			return decision.lastRequest === null
 				? {}
 				: { lastRequest: decision.lastRequest };
-		case "start":
-		case "reset":
-			return { lastRequest: decision.now, requestCount: 1 };
+		case "open":
+			return {
+				lastRequest: decision.now,
+				rateLimitResetAt: decision.resetAt,
+				requestCount: 1,
+			};
 		case "increment":
 			return {
 				lastRequest: decision.now,

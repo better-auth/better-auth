@@ -200,6 +200,13 @@ export function updateApiKey({
 												description:
 													"The number of requests made within the rate limit time window",
 											},
+											rateLimitResetAt: {
+												type: "string",
+												format: "date-time",
+												nullable: true,
+												description:
+													"When the current rate limit window resets",
+											},
 											remaining: {
 												type: "number",
 												nullable: true,
@@ -426,6 +433,14 @@ export function updateApiKey({
 			}
 			if (rateLimitMax !== undefined) {
 				newValues.rateLimitMax = rateLimitMax;
+			}
+			if (
+				rateLimitEnabled !== undefined ||
+				rateLimitTimeWindow !== undefined ||
+				rateLimitMax !== undefined
+			) {
+				newValues.requestCount = 0;
+				newValues.rateLimitResetAt = null;
 			}
 
 			if (permissions !== undefined) {
