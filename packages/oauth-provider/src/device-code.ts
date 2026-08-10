@@ -1,21 +1,26 @@
-import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
-import { APIError, createAuthMiddleware } from "better-auth/api";
-import type { BetterAuthPlugin } from "better-auth/types";
-import { extendOAuthProvider } from "./extensions";
-import { resolveResourcePolicy } from "./resources";
+import { APIError } from "better-auth/api";
+import type { DeviceAuthorizationGrant } from "better-auth/plugins/device-authorization";
+import { redeemDeviceCode } from "better-auth/plugins/device-authorization";
+import * as z from "zod";
+import {
+	extractRepeatedResourceFromForm,
+	resolveResourcePolicy,
+} from "./resources";
 import { getOAuthProviderApi } from "./token";
 import type {
 	OAuthExtensionGrantHandlerInput,
+	OAuthProviderExtension,
 	OAuthTokenResponse,
 } from "./types";
+import { ResourceUriSchema } from "./types/zod";
 import {
 	getClient,
 	getOAuthProviderPlugin,
+	toAudienceClaim,
 	toResourceList,
 	validateClientScopes,
 } from "./utils";
-import { PACKAGE_VERSION } from "./version";
 
 /**
  * RFC 8628 device authorization grant type. A registered OAuth client polls the
@@ -31,30 +36,25 @@ export const DEVICE_CODE_GRANT_TYPE =
  */
 const DEVICE_AUTHORIZATION_PATH = "/device/code";
 
-/** Path of the first-party session token endpoint this grant guards. */
-const DEVICE_TOKEN_PATH = "/device/token";
+const deviceCodeResourceSchema = z.union([
+	ResourceUriSchema,
+	z.array(ResourceUriSchema).min(1),
+]);
 
-/** Model name of the shared device-code table owned by `device-authorization`. */
-const DEVICE_CODE_MODEL = "deviceCode";
+const deviceCodeGrantRequestFields = {
+	resource: deviceCodeResourceSchema
+		.meta({
+			description:
+				"RFC 8707 resource indicator(s) to bind to this authorization request",
+		})
+		.optional(),
+};
 
-/**
- * The subset of the `device-authorization` plugin's `deviceCode` row this grant
- * reads. Declared locally (type-only) so the oauth-provider package takes no
- * value dependency on the device-authorization plugin: at runtime the row is
- * resolved by model name through the shared adapter.
- */
-interface DeviceCodeRecord {
-	id: string;
-	deviceCode: string;
-	userId?: string | null;
-	expiresAt: Date;
-	status: string;
-	lastPolledAt?: Date | null;
-	pollingInterval?: number | null;
-	clientId?: string | null;
-	scope?: string | null;
-	resource?: string | null;
-}
+/** OAuth-owned fields added to the device authorization record. */
+type OAuthDeviceCodeFields = {
+	oauthClientId?: string | null;
+	resources?: string[] | null;
+};
 
 function tokenError(
 	status: "BAD_REQUEST" | "UNAUTHORIZED" | "INTERNAL_SERVER_ERROR",
@@ -72,50 +72,15 @@ function parseScopes(scope: string | null | undefined): string[] {
 	return normalized ? normalized.split(/\s+/) : [];
 }
 
-function parseStoredResource(
-	resource: string | null | undefined,
-): string | string[] | undefined {
-	if (!resource) return undefined;
-	if (!resource.startsWith("[")) return resource;
-	try {
-		const parsed: unknown = JSON.parse(resource);
-		if (
-			Array.isArray(parsed) &&
-			parsed.every((value): value is string => typeof value === "string")
-		) {
-			return parsed;
-		}
-	} catch {
-		// Treat legacy/unrecognized stored values as a single resource string.
-	}
-	return resource;
-}
-
-async function extractFormResources(
-	request: Request | undefined,
-): Promise<string[] | undefined> {
-	const contentType = request?.headers.get("content-type")?.toLowerCase() ?? "";
-	if (!request || !contentType.includes("application/x-www-form-urlencoded")) {
-		return undefined;
-	}
-	try {
-		const params = new URLSearchParams(await request.text());
-		if (!params.has("resource")) return undefined;
-		return params.getAll("resource").filter(Boolean);
-	} catch {
-		return undefined;
-	}
-}
-
 /**
  * Exchanges an approved RFC 8628 device code for an OAuth token set. Unlike the
  * device-authorization plugin's `/device/token` (which mints a first-party
  * session token), this issues a real OAuth token through the provider's shared
  * issuance: scoped, audience-bound, introspectable, with optional refresh and ID
- * tokens. The device-code row is owned by the device-authorization plugin; this
- * handler only reads and atomically consumes it.
+ * tokens. The device-authorization plugin owns the record and runs the shared
+ * polling and atomic-consumption state machine for this handler.
  */
-async function handleDeviceCodeGrant(
+async function exchangeOAuthDeviceCode(
 	input: OAuthExtensionGrantHandlerInput,
 ): Promise<OAuthTokenResponse> {
 	const { ctx, provider } = input;
@@ -127,151 +92,82 @@ async function handleDeviceCodeGrant(
 		tokenError("BAD_REQUEST", "invalid_request", "device_code is required");
 	}
 
-	const record = await ctx.context.adapter.findOne<DeviceCodeRecord>({
-		model: DEVICE_CODE_MODEL,
-		where: [{ field: "deviceCode", value: deviceCode }],
-	});
-	if (!record) {
-		tokenError("BAD_REQUEST", "invalid_grant", "invalid device code");
-	}
-
-	// Confirm the caller owns this device code before any work that depends on the
-	// record. Comparing the request's client_id up front returns a uniform
-	// invalid_grant instead of leaking the recorded scopes: otherwise
-	// authenticateClient validates those scopes against the caller's registered
-	// set, and a narrower-scoped client replaying a stolen device_code would get
-	// invalid_scope. The post-auth check below still covers confidential clients
-	// that send client_id only in the Authorization header.
-	if (
-		record.clientId &&
-		body?.client_id &&
-		record.clientId !== body.client_id
-	) {
-		tokenError("BAD_REQUEST", "invalid_grant", "Client ID mismatch");
-	}
-
-	// Authenticate before validating the recorded scopes. Public clients (the
-	// common device-flow shape) need only client_id; confidential clients still
-	// authenticate. The grant type is bound by the dispatcher, so a client not
-	// registered for the device-code grant is rejected here as unauthorized_client.
-	// Scope validation is intentionally deferred until ownership is confirmed so
-	// no authentication method can probe another client's requested scopes.
-	const scopes = parseScopes(record.scope);
-	const { client, confirmation } = await provider.authenticateClient({
-		requireCredentials: false,
-	});
-
-	if (record.clientId && record.clientId !== client.clientId) {
-		tokenError("BAD_REQUEST", "invalid_grant", "Client ID mismatch");
-	}
-	validateClientScopes(client, scopes);
-
-	// RFC 8628 §3.5 slow_down: reject polls faster than the advertised interval.
-	if (record.lastPolledAt && record.pollingInterval) {
-		const elapsed = Date.now() - new Date(record.lastPolledAt).getTime();
-		if (elapsed < record.pollingInterval) {
-			tokenError("BAD_REQUEST", "slow_down", "Polling too frequently");
-		}
-	}
-	await ctx.context.adapter.update({
-		model: DEVICE_CODE_MODEL,
-		where: [{ field: "id", value: record.id }],
-		update: { lastPolledAt: new Date() },
-	});
-
-	if (new Date(record.expiresAt) < new Date()) {
-		await ctx.context.adapter.delete({
-			model: DEVICE_CODE_MODEL,
-			where: [{ field: "id", value: record.id }],
-		});
-		tokenError("BAD_REQUEST", "expired_token", "Device code has expired");
-	}
-
-	if (record.status === "pending") {
-		tokenError(
-			"BAD_REQUEST",
-			"authorization_pending",
-			"Authorization request is still pending",
-		);
-	}
-
-	if (record.status === "denied") {
-		await ctx.context.adapter.delete({
-			model: DEVICE_CODE_MODEL,
-			where: [{ field: "id", value: record.id }],
-		});
-		tokenError(
-			"BAD_REQUEST",
-			"access_denied",
-			"Authorization request was denied",
-		);
-	}
-
-	if (record.status === "approved" && record.userId) {
-		const requestedResources = toResourceList(body?.resource);
-		const boundResources = toResourceList(parseStoredResource(record.resource));
-		if (requestedResources) {
-			const boundResourceSet = new Set(boundResources);
-			if (
-				!boundResources ||
-				requestedResources.some((resource) => !boundResourceSet.has(resource))
-			) {
-				tokenError(
-					"BAD_REQUEST",
-					"invalid_target",
-					"Requested resource was not authorized by the user",
-				);
+	type ClientAuthorization = Awaited<
+		ReturnType<typeof provider.authenticateClient>
+	> & { scopes: string[] };
+	const {
+		authorizationContext: { client, confirmation, scopes },
+		redemptionContext: resources,
+		user,
+	} = await redeemDeviceCode<
+		OAuthDeviceCodeFields,
+		ClientAuthorization,
+		string[] | undefined
+	>({
+		ctx,
+		deviceCode,
+		authorizeRedemption: async (record) => {
+			if (!record.oauthClientId) {
+				tokenError("BAD_REQUEST", "invalid_grant", "invalid device code");
 			}
-		}
-		const resources = requestedResources ?? boundResources;
-		// Validate the bound resource policy before the approved code is consumed.
-		// Token issuance validates it again while applying its TTL, signing, and
-		// claims policy, but an invalid request must not burn a one-time device code.
-		await resolveResourcePolicy(ctx, input.opts, {
-			resource: resources,
-			clientId: client.clientId,
-			requestedScopes: scopes,
-		});
+			// Reject mismatched body credentials before scope validation so a stolen
+			// code cannot disclose the scopes recorded for another client.
+			if (body?.client_id && record.oauthClientId !== body.client_id) {
+				tokenError("BAD_REQUEST", "invalid_grant", "Client ID mismatch");
+			}
 
-		// Atomically claim the approved code as the single race gate, mirroring the
-		// device-authorization session flow: concurrent polls contend on this
-		// delete-and-return and only the caller that removes the row issues tokens.
-		const claimed = await ctx.context.adapter.consumeOne<DeviceCodeRecord>({
-			model: DEVICE_CODE_MODEL,
-			where: [
-				{ field: "id", value: record.id },
-				{ field: "clientId", value: client.clientId },
-				{ field: "status", value: "approved" },
-			],
-		});
-		if (!claimed?.userId) {
-			tokenError("BAD_REQUEST", "invalid_grant", "invalid device code");
-		}
+			const scopes = parseScopes(record.scope);
+			const authentication = await provider.authenticateClient({
+				requireCredentials: false,
+			});
+			if (record.oauthClientId !== authentication.client.clientId) {
+				tokenError("BAD_REQUEST", "invalid_grant", "Client ID mismatch");
+			}
+			validateClientScopes(authentication.client, scopes);
+			return {
+				ownershipWhere: {
+					field: "oauthClientId",
+					value: authentication.client.clientId,
+				},
+				context: { ...authentication, scopes },
+			};
+		},
+		prepareRedemption: async (record, authorization) => {
+			const requestedResources = toResourceList(body?.resource);
+			const boundResources = record.resources ?? undefined;
+			if (requestedResources) {
+				const boundResourceSet = new Set(boundResources);
+				if (
+					!boundResources ||
+					requestedResources.some((resource) => !boundResourceSet.has(resource))
+				) {
+					tokenError(
+						"BAD_REQUEST",
+						"invalid_target",
+						"Requested resource was not authorized by the user",
+					);
+				}
+			}
+			const resources = requestedResources ?? boundResources;
+			// Validate before the atomic claim: an invalid target must not consume a
+			// one-time code that can still be exchanged with its authorized resources.
+			await resolveResourcePolicy(ctx, input.opts, {
+				resource: resources,
+				clientId: authorization.client.clientId,
+				requestedScopes: authorization.scopes,
+			});
+			return resources;
+		},
+	});
 
-		const user = await ctx.context.internalAdapter.findUserById(claimed.userId);
-		if (!user) {
-			tokenError(
-				"INTERNAL_SERVER_ERROR",
-				"server_error",
-				"User not found for approved device code",
-			);
-		}
-
-		return provider.issueTokens({
-			client,
-			scopes,
-			user,
-			resources,
-			// Forward a sender-constraint a confidential client-auth strategy proved.
-			confirmation,
-		});
-	}
-
-	tokenError(
-		"INTERNAL_SERVER_ERROR",
-		"server_error",
-		"invalid device code status",
-	);
+	return provider.issueTokens({
+		client,
+		scopes,
+		user,
+		resources,
+		// Forward a sender-constraint a confidential client-auth strategy proved.
+		confirmation,
+	});
 }
 
 /**
@@ -283,132 +179,149 @@ async function handleDeviceCodeGrant(
  * `/oauth2/token` that issues real OAuth tokens for a registered OAuth client,
  * and advertises `device_authorization_endpoint` in discovery metadata.
  *
- * First-party device login (the device-authorization plugin's own
- * `/device/token`, which mints a Better Auth session token) keeps working
- * unchanged. To stop a registered OAuth client's device code from being redeemed
- * there for a session token, a `before` hook rejects `/device/token` requests
- * whose `client_id` resolves to a registered OAuth client, directing them to
- * `/oauth2/token`.
+ * First-party device login continues to use `/device/token` for Better Auth
+ * session tokens. OAuth-owned codes persist an immutable client binding, so
+ * they can only be claimed at `/oauth2/token`, even if the client registry later
+ * changes.
  *
  * @example
  * ```ts
+ * const grant = deviceCodeGrant();
  * const auth = betterAuth({
  *   plugins: [
- *     deviceAuthorization(),
- *     oauthProvider({ ...  }),
- *     deviceCodeGrant(),
+ *     deviceAuthorization({ grant }),
+ *     oauthProvider({ extensions: [grant], ...  }),
  *   ],
  * });
  * ```
  */
-export function deviceCodeGrant(): BetterAuthPlugin {
-	return {
-		id: "oauth-provider-device-code",
-		version: PACKAGE_VERSION,
-		init: (ctx: AuthContext) => {
-			if (!ctx.getPlugin("device-authorization")) {
-				throw new BetterAuthError(
-					"deviceCodeGrant requires the device-authorization plugin.",
-				);
-			}
+export function deviceCodeGrant() {
+	const grant = {
+		requestSchemaFields: deviceCodeGrantRequestFields,
+		requestErrorCodes: ["invalid_target"] as const,
+		deviceCodeSchemaFields: {
+			resources: {
+				type: "string[]",
+				required: false,
+			},
+			oauthClientId: {
+				type: "string",
+				required: false,
+			},
+		},
+		assertConfiguration: (ctx) => {
 			const provider = ctx.getPlugin("oauth-provider");
 			if (!provider) {
 				throw new BetterAuthError(
 					"deviceCodeGrant requires the oauth-provider plugin.",
 				);
 			}
-			extendOAuthProvider(ctx, {
-				grants: {
-					[DEVICE_CODE_GRANT_TYPE]: handleDeviceCodeGrant,
-				},
-				metadata: (metadataInput) => ({
-					device_authorization_endpoint: `${metadataInput.ctx.context.baseURL}${DEVICE_AUTHORIZATION_PATH}`,
-				}),
+			if (!provider.options.extensions?.includes(grant)) {
+				throw new BetterAuthError(
+					"deviceCodeGrant must be passed to oauthProvider({ extensions: [grant] }) as well as deviceAuthorization({ grant }).",
+				);
+			}
+			const deviceAuthorizationPlugin = ctx.getPlugin("device-authorization");
+			if (deviceAuthorizationPlugin?.options.grant !== grant) {
+				throw new BetterAuthError(
+					"deviceCodeGrant must be passed to deviceAuthorization({ grant }) as well as oauthProvider({ extensions: [grant] }).",
+				);
+			}
+		},
+		grants: {
+			[DEVICE_CODE_GRANT_TYPE]: exchangeOAuthDeviceCode,
+		},
+		metadata: (metadataInput) => ({
+			device_authorization_endpoint: `${metadataInput.ctx.context.baseURL}${DEVICE_AUTHORIZATION_PATH}`,
+		}),
+		authorizeRequest: async ({ ctx, request }) => {
+			const formResources = ctx.request
+				? await extractRepeatedResourceFromForm(ctx.request)
+				: undefined;
+			if (formResources) {
+				const parsedResource = deviceCodeResourceSchema.safeParse(
+					formResources.length === 1 ? formResources[0] : formResources,
+				);
+				if (!parsedResource.success) {
+					tokenError(
+						"BAD_REQUEST",
+						"invalid_target",
+						"Invalid resource indicator",
+					);
+				}
+				request.resource = parsedResource.data;
+			}
+			const provider = getOAuthProviderPlugin(ctx.context);
+			if (!provider) return;
+			const oauthClient = await getClient(
+				ctx,
+				provider.options,
+				request.client_id,
+			);
+			// Requests from unknown ids remain in the standalone session flow.
+			if (!oauthClient) return;
+			const scopes = parseScopes(request.scope);
+			if (request.scope !== undefined) {
+				request.scope = scopes.join(" ");
+			}
+			const api = getOAuthProviderApi(
+				ctx,
+				provider.options,
+				DEVICE_CODE_GRANT_TYPE,
+			);
+			const authenticated = await api.authenticateClient({
+				scopes,
+				requireCredentials: false,
+			});
+			if (authenticated.clientId !== request.client_id) {
+				tokenError("BAD_REQUEST", "invalid_grant", "Client ID mismatch");
+			}
+			await resolveResourcePolicy(ctx, provider.options, {
+				resource: request.resource,
+				clientId: authenticated.clientId,
+				requestedScopes: scopes,
+			});
+			return {
+				oauthClientId: authenticated.clientId,
+				resources: toResourceList(request.resource) ?? null,
+			};
+		},
+		assertSessionRedemption: ({ deviceCode }) => {
+			if (typeof deviceCode.oauthClientId !== "string") return;
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_grant",
+				error_description:
+					"This device code must be exchanged at the OAuth token endpoint (/oauth2/token).",
 			});
 		},
-		hooks: {
-			before: [
-				{
-					matcher(ctx) {
-						return ctx.path === DEVICE_AUTHORIZATION_PATH;
-					},
-					handler: createAuthMiddleware(async (ctx) => {
-						const body = ctx.body as
-							| {
-									client_id?: string;
-									scope?: string;
-									resource?: string | string[];
-							  }
-							| undefined;
-						if (!body?.client_id) return;
-						const formResources = await extractFormResources(ctx.request);
-						if (formResources) {
-							body.resource =
-								formResources.length === 1 ? formResources[0] : formResources;
-						}
-						const provider = getOAuthProviderPlugin(ctx.context);
-						if (!provider) return;
-						const endpointCtx = ctx as GenericEndpointContext;
-						const oauthClient = await getClient(
-							endpointCtx,
-							provider.options,
-							body.client_id,
-						);
-						// Unknown ids belong to the device-authorization plugin's existing
-						// first-party flow. Registered OAuth clients are authenticated and
-						// authorized before their request is shown to the user.
-						if (!oauthClient) return;
-						const scopes = parseScopes(body.scope);
-						if (body.scope !== undefined) {
-							body.scope = scopes.join(" ");
-						}
-						const api = getOAuthProviderApi(
-							endpointCtx,
-							provider.options,
-							DEVICE_CODE_GRANT_TYPE,
-						);
-						const authenticated = await api.authenticateClient({
-							scopes,
-							requireCredentials: false,
-						});
-						if (authenticated.clientId !== body.client_id) {
-							tokenError("BAD_REQUEST", "invalid_grant", "Client ID mismatch");
-						}
-						await resolveResourcePolicy(endpointCtx, provider.options, {
-							resource: body.resource,
-							clientId: authenticated.clientId,
-							requestedScopes: scopes,
-						});
-					}),
-				},
-				{
-					matcher(ctx) {
-						return ctx.path === DEVICE_TOKEN_PATH;
-					},
-					handler: createAuthMiddleware(async (ctx) => {
-						const clientId = (ctx.body as { client_id?: string } | undefined)
-							?.client_id;
-						if (!clientId) return;
-						const provider = getOAuthProviderPlugin(ctx.context);
-						if (!provider) return;
-						// A device code minted for a registered OAuth client must yield an
-						// OAuth token at /oauth2/token, never a first-party session token
-						// here. Public/first-party client ids resolve to null and pass.
-						const oauthClient = await getClient(
-							ctx as GenericEndpointContext,
-							provider.options,
-							clientId,
-						);
-						if (oauthClient) {
-							throw new APIError("BAD_REQUEST", {
-								error: "invalid_grant",
-								error_description:
-									"This client is a registered OAuth client. Exchange the device code at the OAuth token endpoint (/oauth2/token).",
-							});
-						}
-					}),
-				},
-			],
+		getVerificationContext: (deviceCode) => {
+			if (typeof deviceCode.oauthClientId !== "string") return;
+			const resources = deviceCode.resources;
+			if (
+				!Array.isArray(resources) ||
+				!resources.every((resource) => typeof resource === "string")
+			) {
+				return;
+			}
+			return { resource: toAudienceClaim(resources) };
 		},
-	} satisfies BetterAuthPlugin;
+		verificationOpenAPIProperties: {
+			resource: {
+				oneOf: [
+					{ type: "string" },
+					{ type: "array", items: { type: "string" } },
+				],
+				description:
+					"The requested resource indicators, returned only to the authenticated user who owns this request",
+			},
+		},
+	} satisfies DeviceAuthorizationGrant<
+		typeof deviceCodeGrantRequestFields,
+		{ resource: string | string[] | undefined }
+	> &
+		OAuthProviderExtension;
+	return grant;
 }
+
+/** The shared Device Authorization and OAuth Provider extension contract. */
+export type DeviceCodeGrant = ReturnType<typeof deviceCodeGrant>;

@@ -1,9 +1,13 @@
+import { createAuthClient } from "better-auth/client";
+import { deviceAuthorizationClient } from "better-auth/client/plugins";
+import { openAPI } from "better-auth/plugins";
 import { deviceAuthorization } from "better-auth/plugins/device-authorization";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { decodeJwt } from "jose";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
+import type { DeviceCodeGrant } from "./device-code";
 import { DEVICE_CODE_GRANT_TYPE, deviceCodeGrant } from "./device-code";
 import { oauthProvider } from "./oauth";
 
@@ -15,26 +19,137 @@ interface TokenErrorBody {
 	error_description?: string;
 }
 
+describe("oauth-provider device-code composition", () => {
+	it("requires the shared grant in the provider extension list", async () => {
+		const grant = deviceCodeGrant();
+		await expect(
+			(async () =>
+				getTestInstance({
+					plugins: [
+						jwt(),
+						deviceAuthorization({ grant }),
+						oauthProvider({
+							loginPage: "/login",
+							consentPage: "/consent",
+						}),
+					],
+				}))(),
+		).rejects.toMatchObject({
+			message:
+				"deviceCodeGrant must be passed to oauthProvider({ extensions: [grant] }) as well as deviceAuthorization({ grant }).",
+		});
+	});
+
+	it("requires the shared grant in Device Authorization", async () => {
+		const grant = deviceCodeGrant();
+		await expect(
+			(async () =>
+				getTestInstance({
+					plugins: [
+						jwt(),
+						oauthProvider({
+							loginPage: "/login",
+							consentPage: "/consent",
+							extensions: [grant],
+						}),
+					],
+				}))(),
+		).rejects.toMatchObject({
+			message:
+				"deviceCodeGrant must be passed to deviceAuthorization({ grant }) as well as oauthProvider({ extensions: [grant] }).",
+		});
+	});
+
+	it("exposes resource only in composed client and OpenAPI contracts", async () => {
+		const standaloneClient = createAuthClient({
+			plugins: [deviceAuthorizationClient()],
+		});
+		const composedClient = createAuthClient({
+			plugins: [deviceAuthorizationClient<DeviceCodeGrant>()],
+		});
+		type StandaloneDeviceCodeInput = Parameters<
+			typeof standaloneClient.device.code
+		>[0];
+		type ComposedDeviceCodeInput = Parameters<
+			typeof composedClient.device.code
+		>[0];
+		expectTypeOf<StandaloneDeviceCodeInput>().not.toHaveProperty("resource");
+		expectTypeOf<ComposedDeviceCodeInput>()
+			.toHaveProperty("resource")
+			.toEqualTypeOf<string | string[] | undefined>();
+
+		const { auth: standaloneAuth } = await getTestInstance({
+			plugins: [deviceAuthorization(), openAPI()],
+		});
+		const grant = deviceCodeGrant();
+		const { auth: composedAuth } = await getTestInstance({
+			plugins: [
+				jwt(),
+				deviceAuthorization({ grant }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					extensions: [grant],
+				}),
+				openAPI(),
+			],
+		});
+		type RequestProperties = Record<string, Record<string, unknown>>;
+		type OpenAPIDocument = {
+			paths: Record<
+				string,
+				{
+					post?: {
+						requestBody?: {
+							content?: Record<
+								string,
+								{ schema?: { properties?: RequestProperties } }
+							>;
+						};
+					};
+				}
+			>;
+		};
+		const getRequestProperties = (document: unknown) =>
+			(document as OpenAPIDocument).paths["/device/code"]?.post?.requestBody
+				?.content?.["application/json"]?.schema?.properties ?? {};
+		const standaloneDocument = await standaloneAuth.api.generateOpenAPISchema();
+		const composedDocument = await composedAuth.api.generateOpenAPISchema();
+
+		expect(getRequestProperties(standaloneDocument)).not.toHaveProperty(
+			"resource",
+		);
+		expect(getRequestProperties(composedDocument)).toHaveProperty("resource");
+	});
+});
+
 describe("oauth-provider device-code grant", async () => {
 	const baseURL = "http://localhost:3000";
 	const resource = "https://api.example.com";
 	const secondResource = "https://files.example.com";
+	const oauthDeviceGrant = deviceCodeGrant();
+	const onDeviceAuthRequest = vi.fn();
 
 	const { auth, client, db, signInWithTestUser } = await getTestInstance(
 		{
 			baseURL,
 			plugins: [
 				jwt({ jwt: { issuer: baseURL } }),
-				deviceAuthorization({ expiresIn: "5min", interval: "2s" }),
+				deviceAuthorization({
+					expiresIn: "5min",
+					interval: "2s",
+					grant: oauthDeviceGrant,
+					onDeviceAuthRequest,
+				}),
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
+					extensions: [oauthDeviceGrant],
 					resources: [resource, secondResource],
 					enforcePerClientResources: false,
 					allowDynamicClientRegistration: true,
 					scopes: ["openid", "profile", "email", "offline_access"],
 				}),
-				deviceCodeGrant(),
 			],
 		},
 		{
@@ -45,6 +160,26 @@ describe("oauth-provider device-code grant", async () => {
 	);
 
 	const { user } = await signInWithTestUser();
+
+	it("adds OAuth fields only when the device grant is composed", () => {
+		const standaloneFields = deviceAuthorization().schema.deviceCode?.fields;
+		const oauthDeviceAuthorization = deviceAuthorization({
+			grant: deviceCodeGrant(),
+		});
+		const oauthFields = oauthDeviceAuthorization.schema.deviceCode?.fields;
+
+		expect(standaloneFields).not.toHaveProperty("resource");
+		expect(standaloneFields).not.toHaveProperty("resources");
+		expect(standaloneFields).not.toHaveProperty("oauthClientId");
+		expect(oauthFields).toHaveProperty("resources");
+		expect(oauthFields).toHaveProperty("oauthClientId");
+		expect(
+			oauthDeviceAuthorization.endpoints.deviceCode.options.error.safeParse({
+				error: "invalid_target",
+				error_description: "Unsupported resource",
+			}).success,
+		).toBe(true);
+	});
 
 	/** Registers a public OAuth client able to use the device-code grant. */
 	async function createDeviceClient(
@@ -172,16 +307,43 @@ describe("oauth-provider device-code grant", async () => {
 		expect(accessToken.scope).toBe("openid profile email");
 	});
 
-	it("validates registered client scopes before creating a device code", async () => {
+	it("rejects resources outside the provider policy", async () => {
 		const clientId = await createDeviceClient();
+		onDeviceAuthRequest.mockClear();
 
 		await expect(
 			auth.api.deviceCode({
-				body: { client_id: clientId, scope: "openid admin" },
+				body: {
+					client_id: clientId,
+					scope: "openid",
+					resource: "https://unregistered.example.com",
+				},
 			}),
 		).rejects.toMatchObject({
-			body: { error: "invalid_scope" },
+			body: { error: "invalid_target" },
 		});
+		expect(onDeviceAuthRequest).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10746#discussion_r3751563636
+	 */
+	it.each([
+		["relative", "/api"],
+		["fragmented", `${resource}#fragment`],
+		["dangerous-scheme", "javascript:alert(1)"],
+		["array-item", [resource, "/api"]],
+	])("rejects %s RFC 8707 resource indicators at the request boundary", (_label, invalidResource) => {
+		const endpoint = deviceAuthorization({
+			grant: deviceCodeGrant(),
+		}).endpoints.deviceCode;
+
+		expect(
+			endpoint.options.body?.safeParse({
+				client_id: "client",
+				resource: invalidResource,
+			}).success,
+		).toBe(false);
 	});
 
 	it("binds repeated form-encoded resources at the device endpoint", async () => {
@@ -209,6 +371,31 @@ describe("oauth-provider device-code grant", async () => {
 			headers,
 		});
 		expect(verification.resource).toEqual([resource, secondResource]);
+	});
+
+	it("validates every repeated form-encoded resource", async () => {
+		const clientId = await createDeviceClient();
+		const form = new URLSearchParams({
+			client_id: clientId,
+			scope: "openid",
+		});
+		form.append("resource", "/relative");
+		form.append("resource", resource);
+
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/device/code",
+			{
+				method: "POST",
+				body: form,
+				headers: FORM_HEADERS,
+			},
+		);
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as TokenErrorBody)?.error).toBe("invalid_target");
+		expect((response.error as TokenErrorBody)?.error_description).toBe(
+			"Invalid resource indicator",
+		);
 	});
 
 	it("rejects a resource added after approval without consuming the code", async () => {
@@ -249,6 +436,33 @@ describe("oauth-provider device-code grant", async () => {
 		});
 		expect(second.error?.status).toBe(400);
 		expect((second.error as TokenErrorBody)?.error).toBe("invalid_grant");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10746#discussion_r3751447613
+	 */
+	it("preserves an approved code when user lookup fails before OAuth issuance", async () => {
+		const clientId = await createDeviceClient();
+		const deviceCode = await approvedDeviceCode(clientId);
+		await db.update({
+			model: "deviceCode",
+			where: [{ field: "deviceCode", value: deviceCode }],
+			update: { userId: "missing-user" },
+		});
+
+		const response = await pollToken({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: deviceCode,
+			client_id: clientId,
+		});
+
+		expect(response.error?.status).toBe(500);
+		expect((response.error as TokenErrorBody)?.error).toBe("server_error");
+		const stored = await db.findOne<{ deviceCode: string }>({
+			model: "deviceCode",
+			where: [{ field: "deviceCode", value: deviceCode }],
+		});
+		expect(stored?.deviceCode).toBe(deviceCode);
 	});
 
 	it("returns authorization_pending before approval", async () => {
@@ -418,6 +632,36 @@ describe("oauth-provider device-code grant", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10135
+	 */
+	it("keeps minted OAuth codes out of the session flow after client deletion", async () => {
+		const clientId = await createDeviceClient();
+		const deviceCode = await approvedDeviceCode(clientId);
+		const context = await auth.$context;
+		await context.adapter.delete({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+		});
+
+		const res = await client.$fetch<Record<string, unknown>>("/device/token", {
+			method: "POST",
+			body: {
+				grant_type: DEVICE_CODE_GRANT_TYPE,
+				device_code: deviceCode,
+				client_id: clientId,
+			},
+		});
+		expect(res.error?.status).toBe(400);
+		expect((res.error as TokenErrorBody)?.error).toBe("invalid_grant");
+
+		const stored = await db.findOne<{ deviceCode: string }>({
+			model: "deviceCode",
+			where: [{ field: "deviceCode", value: deviceCode }],
+		});
+		expect(stored?.deviceCode).toBe(deviceCode);
+	});
+
 	it("still issues a first-party session token for a non-OAuth client at /device/token", async () => {
 		// A plain device client id that is NOT a registered OAuth client keeps the
 		// original first-party device flow (session token), unaffected by the guard.
@@ -443,22 +687,101 @@ describe("oauth-provider device-code grant", async () => {
 	});
 });
 
+describe("oauth-provider device-code immutable routing", async () => {
+	const baseURL = "http://localhost:3007";
+	const firstPartyClientId = "late-registered-oauth-client";
+	const grant = deviceCodeGrant();
+	const { auth, client, signInWithTestUser } = await getTestInstance({
+		baseURL,
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			deviceAuthorization({ grant }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				extensions: [grant],
+				generateClientId: () => firstPartyClientId,
+				scopes: ["openid"],
+			}),
+		],
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10135
+	 */
+	it("keeps a standalone code in the session flow after its client id is registered", async () => {
+		const { headers } = await signInWithTestUser();
+		const { device_code, user_code } = await auth.api.deviceCode({
+			body: { client_id: firstPartyClientId },
+		});
+		await auth.api.deviceVerify({ query: { user_code }, headers });
+		await auth.api.deviceApprove({ body: { userCode: user_code }, headers });
+
+		const registered = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "none",
+				grant_types: [DEVICE_CODE_GRANT_TYPE],
+				scope: "openid",
+				application_type: "native",
+			},
+		});
+		expect(registered?.client_id).toBe(firstPartyClientId);
+
+		const oauthExchange = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: DEVICE_CODE_GRANT_TYPE,
+					device_code,
+					client_id: firstPartyClientId,
+				}),
+				headers: FORM_HEADERS,
+			},
+		);
+		expect(oauthExchange.error?.status).toBe(400);
+		expect((oauthExchange.error as TokenErrorBody)?.error).toBe(
+			"invalid_grant",
+		);
+
+		const sessionExchange = await client.$fetch<Record<string, unknown>>(
+			"/device/token",
+			{
+				method: "POST",
+				body: {
+					grant_type: DEVICE_CODE_GRANT_TYPE,
+					device_code,
+					client_id: firstPartyClientId,
+				},
+			},
+		);
+		expect(sessionExchange.error).toBeNull();
+		expect(sessionExchange.data?.access_token).toBeDefined();
+	});
+});
+
 describe("oauth-provider device-code grant expiry", async () => {
 	const baseURL = "http://localhost:3000";
+	const oauthDeviceGrant = deviceCodeGrant();
 
 	const { auth, client, signInWithTestUser } = await getTestInstance(
 		{
 			baseURL,
 			plugins: [
 				jwt({ jwt: { issuer: baseURL } }),
-				deviceAuthorization({ expiresIn: "1s", interval: "1s" }),
+				deviceAuthorization({
+					expiresIn: "1s",
+					interval: "1s",
+					grant: oauthDeviceGrant,
+				}),
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
+					extensions: [oauthDeviceGrant],
 					allowDynamicClientRegistration: true,
 					scopes: ["openid", "profile", "email"],
 				}),
-				deviceCodeGrant(),
 			],
 		},
 		{ clientOptions: { plugins: [oauthProviderClient()] } },
@@ -505,12 +828,13 @@ describe("oauth-provider device-code grant reuse", async () => {
 		baseURL,
 		plugins: [
 			jwt({ jwt: { issuer: baseURL } }),
-			deviceAuthorization(),
+			deviceAuthorization({ grant: sharedDeviceCodeGrant }),
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
 				scopes: ["openid"],
 				extensions: [
+					sharedDeviceCodeGrant,
 					{
 						clientDiscovery: {
 							id: "device-code-reuse-test",
@@ -525,7 +849,6 @@ describe("oauth-provider device-code grant reuse", async () => {
 					},
 				],
 			}),
-			sharedDeviceCodeGrant,
 		],
 	});
 
@@ -533,13 +856,13 @@ describe("oauth-provider device-code grant reuse", async () => {
 		baseURL: "http://localhost:3001",
 		plugins: [
 			jwt({ jwt: { issuer: "http://localhost:3001" } }),
-			deviceAuthorization(),
+			deviceAuthorization({ grant: sharedDeviceCodeGrant }),
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
 				scopes: ["openid"],
+				extensions: [sharedDeviceCodeGrant],
 			}),
-			sharedDeviceCodeGrant,
 		],
 	});
 

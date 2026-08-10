@@ -1,4 +1,8 @@
-import type { GenericEndpointContext, LiteralString } from "@better-auth/core";
+import type {
+	AuthContext,
+	GenericEndpointContext,
+	LiteralString,
+} from "@better-auth/core";
 import type { JWSAlgorithms } from "better-auth/plugins";
 import type { InferOptionSchema, Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
@@ -427,6 +431,11 @@ export interface OAuthUserInfoExtensionInput {
  *   both contribute resolves to the first-registered extension.
  */
 export interface OAuthProviderExtension {
+	/**
+	 * Synchronously validate cross-plugin prerequisites after the complete Better
+	 * Auth plugin list is available. This never registers or mutates extensions.
+	 */
+	assertConfiguration?: (ctx: AuthContext) => void;
 	/**
 	 * Token grants keyed by absolute-URI `grant_type`. The token endpoint
 	 * dispatches a matching `grant_type` to the handler, which authenticates the

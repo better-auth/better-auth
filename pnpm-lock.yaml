@@ -714,6 +714,9 @@ importers:
       '@playwright/test':
         specifier: ~1.58.2
         version: 1.58.2
+      jose:
+        specifier: ^6.2.3
+        version: 6.2.3
 
   e2e/integration/solid-vinxi:
     dependencies:
