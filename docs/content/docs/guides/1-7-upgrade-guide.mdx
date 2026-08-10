@@ -113,7 +113,16 @@ Deploy only after the collision query returns no rows and the required unique in
 
 Review every custom OAuth provider's account subject. OpenID Connect discovery providers now use verified `sub`; plain OAuth providers use `id`; the previous runtime fallback between those fields is removed. Set `accountSubject` when either default is not the provider's immutable identifier. `getUserInfo().user` now contains only mutable local-user fields; keep the provider identifier in `getUserInfo().data`. `mapProfileToUser` can no longer return `id`. The `accountInfo` response exposes the selected identity as `account.accountId` instead of `user.id`.
 
-Microsoft accounts now use the stable `oid` claim instead of `sub`. Before adding the compound index, replace each existing Microsoft account's `accountId` with the verified `oid` for that directory user. The generic `microsoftEntraId` helper also requires a concrete tenant GUID. Replace `common`, `organizations`, or `consumers` configurations with the built-in Microsoft social provider, which validates tenant claims and derives the token's actual issuer.
+#### Migrate Microsoft account identifiers
+
+Microsoft accounts now use the stable directory `oid` claim instead of the pairwise, app-specific `sub` claim. Complete this during step 3 of the account identity backfill, before checking for collisions or adding the compound account index:
+
+1. Inventory rows with `providerId: "microsoft"` for the built-in provider and `providerId: "microsoft-entra-id"` for the Generic OAuth helper.
+2. Assign each row its trusted issuer as part of the account identity backfill, and replace its old `sub`-based `accountId` with the verified `oid` for that directory user.
+3. When stored Microsoft ID tokens are available, verify each token and copy its `oid` claim. `mapProfileToUser` cannot override this provider-owned account identifier.
+4. When stored ID tokens are unavailable, pause Microsoft sign-in and account linking during the cutover and obtain the mapping from a trusted Microsoft Entra export. Better Auth cannot derive `oid` from the old account row alone; accepting traffic before the migration can create duplicate accounts.
+
+If you use the Generic OAuth `microsoftEntraId` helper with custom scopes or `getToken`, ensure the token exchange still returns Microsoft's `id_token` and discovery provides the issuer and JWKS metadata needed to verify it. The helper also requires a concrete tenant GUID. Replace `common`, `organizations`, or `consumers` configurations with the built-in Microsoft social provider, which validates tenant claims and derives the token's actual issuer.
 
 ### Generic OAuth is rebuilt on the social-provider path
 
