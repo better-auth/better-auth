@@ -48,7 +48,7 @@ These features change the schema:
 | SCIM                       | Seven provisioning models, plus three optional managed-catalog models, with layouts that replace the legacy SCIM models | **Yes, reprovision**      |
 | Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                                                               | No                        |
 | Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables                                                         | **Yes, move client data** |
-| Device Authorization       | Indexes on `deviceCode` and `userCode`                                                                                  | **Yes, MySQL/SQL Server** |
+| Device Authorization       | An optional `resource` column, plus indexes on `deviceCode` and `userCode`                                              | **Yes, MySQL/SQL Server** |
 
 <Callout type="warn">
   Prepare account identities, OAuth clients, and SCIM data before applying the generated 1.7 schema. The CLI adds tables, columns, and indexes, but it does not choose issuers, copy OAuth clients, or convert legacy SCIM data.
@@ -258,6 +258,8 @@ Rename protected-operation `scopes` to `requiredScopes` and use `challengeScopes
 When a session ends, the access tokens tied to it are now revoked. They read as inactive at introspection and userinfo. Before, they lived until they expired. Your server also sends a logout message to each app that registered a logout URL.
 
 **What to do:** expect session-bound tokens to stop working at sign-out. On serverless platforms, set `advanced.backgroundTasks.handler` so sending logout messages does not slow down sign-out.
+
+If you import or retain clients with a `backchannel_logout_uri`, audit those registrations before cutover. Back-channel logout requires the JWT plugin, and every URI must be an absolute public HTTPS URL without credentials or a fragment. Private, reserved, tunneled, and cloud-metadata targets are rejected.
 
 ### Custom ID-token claims cannot override protocol claims
 
@@ -478,7 +480,7 @@ The new SCIM models do not read or convert the 1.6 SCIM tables, so this change c
 
 1. Back up every legacy SCIM table. Build a reviewed inventory of the exact `scimProvider` rows, SCIM-created `account` rows, their linked `user` rows, and any organization membership or team state created by provisioning. Use the configured providers and directory subjects to identify them. Do not classify rows by a `providerId` prefix alone.
 2. Decide how each legacy User and account row will be handled. To retain a User, copy a stable connection-and-subject-to-`userId` mapping into application-owned storage, remove only the confirmed legacy SCIM account row, and configure `identity.resolveUser` before reprovisioning. To recreate a User, remove the confirmed SCIM account and delete the User only after proving that no other sign-in method or application data depends on it. Preserve every unrelated account and application row; Better Auth does not identify or remove legacy SCIM account rows automatically.
-3. Choose the static, application-owned runtime, or plugin-managed connection mode, and prepare new opaque connection and credential identifiers. Never import a legacy token hash, reuse a legacy raw token, or add a compatibility path that accepts the legacy bearer syntax. Static and application-owned modes use a new high-entropy secret; the managed mode issues its new secret after the managed tables exist in step 6.
+3. Choose the static, application-owned runtime, or plugin-managed connection mode, and prepare new opaque connection and credential identifiers. Never import a legacy token hash, reuse a legacy raw token, or add a compatibility path that accepts the legacy bearer syntax. Static and application-owned modes use a new high-entropy secret; the managed mode issues its new secret in step 6, after step 5 creates the managed tables.
 4. While the old plugin is stopped, clear its SCIM-owned resources in dependency order through the old SCIM endpoints or an operator-controlled transaction. Confirm that the legacy plugin tables are empty and that every inventoried SCIM account row has a reviewed disposition. Drop or rename the incompatible legacy physical tables, including `scimProvider`, only after the reviewed backup and cleanup are complete. Use the physical table names from your schema if you customized model names.
 5. Enable native interactive transactions in your database adapter, then apply the 1.7 schema through the [adapter-specific workflow](#before-you-upgrade) to create `scimConnectionBinding`, `scimIdentityTombstone`, `scimSubject`, `scimUser`, `scimGroup`, `scimGroupMember`, and `scimProjectionGrant`. The managed mode also creates `scimManagedConnection`, `scimManagedCredential`, and `scimManagedConnectionEvent`. Cloudflare D1 cannot provide the required transaction behavior.
 6. Deploy the selected mode. For the managed mode, create the connection and issue its first credential through the trusted server API after the new schema exists. Configure the directory with the new credential, then trigger a complete User and Group provisioning cycle.
@@ -526,6 +528,8 @@ betterAuth({
 ```
 
 Setups where the proxy rewrites the host for you, such as nginx, Vercel, Cloudflare, and Netlify, need no change.
+
+Dynamic base URLs also fail closed when a request has no usable host or its host does not match `allowedHosts`. Direct server API calls must therefore include request URL or header data that resolves to an allowed public origin. Better Auth rebuilds the base URL, trusted origins, provider URLs, and cookies for that resolved host on each request; OAuth issuer, discovery, protected-resource, and JWKS URLs follow the same request origin.
 
 ### IdP redirects and DPoP need your canonical origin
 
@@ -587,7 +591,9 @@ A wildcard such as `/sign-in/*` also matches `/sign-in/email-otp`. If that route
 
 ## Device Authorization
 
-The 1.7 schema indexes `deviceCode` and `userCode` and limits both values to 191 characters. Before applying the schema on MySQL or SQL Server, change both columns to bounded strings and resolve any existing values longer than 191 characters. Custom `generateDeviceCode` and `generateUserCode` functions must also stay within that limit.
+The 1.7 schema adds a nullable `resource` field to `deviceCode` for resource-bound device grants. Apply the generated schema change; existing rows need no backfill.
+
+The schema also indexes `deviceCode` and `userCode` and limits both values to 191 characters. Before applying it on MySQL or SQL Server, change both columns to bounded strings and resolve any existing values longer than 191 characters. Custom `generateDeviceCode` and `generateUserCode` functions must also stay within that limit.
 
 ***
 
