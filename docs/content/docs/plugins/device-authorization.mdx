@@ -5,7 +5,7 @@ description: OAuth 2.0 Device Authorization Grant for limited-input devices
 
 `RFC 8628` `CLI` `Smart TV` `IoT`
 
-The Device Authorization plugin implements the OAuth 2.0 Device Authorization Grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)), enabling authentication for devices with limited input capabilities such as smart TVs, CLI applications, IoT devices, and gaming consoles.
+The Device Authorization plugin implements the device authorization and user-interaction portions of the OAuth 2.0 Device Authorization Grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)), enabling authentication for devices with limited input capabilities such as smart TVs, CLI applications, IoT devices, and gaming consoles. Standalone installations use Better Auth's session-token extension at `/device/token`; that endpoint is not the RFC 8628 OAuth token endpoint. To issue an OAuth access token, compose the plugin with the OAuth Provider integration described below.
 
 ## Try It Out
 
@@ -96,18 +96,33 @@ The device flow follows these steps:
 1. **Device requests codes**: The device requests a device code and user code from the authorization server
 2. **User authorizes**: The user visits a verification URL and enters the user code
 3. **Device polls for token**: The device polls the server until the user completes authorization
-4. **Access granted**: Once authorized, the device receives an access token
+4. **Access granted**: Once authorized, the device receives the session token or OAuth access token provided by the configured integration
+
+### Production security requirements
+
+RFC 8628 requires the device to make outbound HTTPS requests and the user to authenticate at the verification URI in a secure TLS-protected session. In production, serve the verification and approval UI, device-code requests, and token polling over HTTPS. Use HTTP only for explicitly local development.
+
+The approval UI is part of the security boundary. It must:
+
+* ask the user to enter the `user_code`, or, when using `verification_uri_complete` such as a QR code, ask the user to confirm that the displayed code matches the code on the device;
+* show what is being authorized: the client, requested scopes, and, when the OAuth Provider integration is enabled, the requested resource or resources;
+* require an explicit approval or denial; and
+* tell the user that they are authorizing a device in their possession and warn them not to approve unexpected requests or codes supplied through phishing messages.
+
+The IETF [Cross-Device Flows: Security Best Current Practice](https://datatracker.ietf.org/doc/draft-ietf-oauth-cross-device-security/) is currently an Internet-Draft. Treat it as evolving threat-model and mitigation guidance, not as a finalized standard or a Better Auth API contract.
 
 ## Choose the token your device needs
 
 Device authorization can finish with two different token types. Choose the token based on what the client needs to call:
 
-| Use case                                                                         | Token                     | Plugins                                                      | Token endpoint  |
-| -------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------ | --------------- |
-| Sign your own device into the same Better Auth application                       | Better Auth session token | `deviceAuthorization()`                                      | `/device/token` |
-| Let a registered CLI, TV app, or other public client call an OAuth-protected API | Scoped OAuth access token | `jwt()`, `oauthProvider()`, and `oauthDeviceAuthorization()` | `/oauth2/token` |
+| Use case                                                                         | Token                                 | Plugins                                                      | Token endpoint  |
+| -------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------ | --------------- |
+| Sign your own device into the same Better Auth application                       | Better Auth session token (extension) | `deviceAuthorization()`                                      | `/device/token` |
+| Let a registered CLI, TV app, or other public client call an OAuth-protected API | Scoped OAuth access token             | `jwt()`, `oauthProvider()`, and `oauthDeviceAuthorization()` | `/oauth2/token` |
 
-A command-line application commonly needs the second path. The CLI cannot safely keep a client secret, and it may not have a reliable redirect listener, but it still needs a user-authorized token for your API. The device grant lets the user approve the request in a browser while the CLI receives an audience-bound OAuth access token.
+A command-line application commonly needs the second path. The CLI cannot safely keep a client secret, and it may not have a reliable redirect listener, but it still needs a user-authorized token for your API. The device grant lets the user approve the request in a browser while the CLI receives an audience-bound OAuth access token. The standalone `/device/token` endpoint is a Better Auth session-token extension, not the RFC 8628 OAuth token endpoint.
+
+RFC 8628 defines an OAuth grant, not a general OIDC device-grant conformance profile. Adding the `openid` scope and configuring the OAuth Provider can enable OIDC artifacts for that provider, but the device grant itself does not claim general OIDC conformance.
 
 ### Authorize a CLI to call an API
 
@@ -213,7 +228,7 @@ The access token is a signed JWT whose `aud` identifies `https://api.example.com
 
 ## First-party session flow
 
-The rest of this page describes the first-party path, where `/device/token` returns a Better Auth session token.
+The rest of this page describes the first-party path, where `/device/token` returns a Better Auth session token. This is a Better Auth-specific session-token extension, not the RFC 8628 OAuth token endpoint; clients that need an OAuth access token must use `deviceCodeGrant()` with the OAuth Provider and poll `/oauth2/token`.
 
 ### Requesting Device Authorization
 
@@ -277,9 +292,9 @@ const data = await auth.api.deviceCode({
   Pass `user_id` from trusted server-side code. The parameter only restricts who can approve the code, so an untrusted device cannot use it to access another user's account. The protection is only meaningful when your server controls how codes are issued.
 </Callout>
 
-### Polling for Token
+### Polling for a Better Auth session token
 
-After displaying the user code, poll for the access token:
+After displaying the user code, poll for the Better Auth session token. The response's `access_token` field contains a Better Auth session token, not an RFC 8628 OAuth access token:
 
 <APIMethod path="/device/token" method="POST">
   ```ts
@@ -293,7 +308,7 @@ After displaying the user code, poll for the access token:
        */
       device_code: string;
       /**
-       * The OAuth client identifier
+       * The device client identifier
        */
       client_id: string;
   }
@@ -353,6 +368,8 @@ The user authorization flow requires two steps:
 <Callout type="warn">
   Users must be authenticated when calling `GET /device`, because the verification step binds the pending device code to that session. Only the same session can later approve or deny. If the user is not authenticated when entering the code, redirect them to the login page with a return URL and re-call `GET /device` after sign-in.
 </Callout>
+
+When the OAuth Provider integration is enabled, `GET /device` also returns the approved resource context to the authenticated user who owns the request. Show that context in the approval UI alongside the client and scopes. Standalone Device Authorization does not return an RFC 8707 `resource` field.
 
 Create a page where users can enter their code:
 
@@ -448,6 +465,7 @@ export default function DeviceApprovalPage() {
   const [request, setRequest] = useState<{
     client_id?: string;
     scope?: string;
+    resource?: string | string[];
   } | null>(null);
 
   useEffect(() => {
@@ -498,6 +516,11 @@ export default function DeviceApprovalPage() {
       <h2>Device Authorization Request</h2>
       <p>Client: {request?.client_id}</p>
       <p>Scopes: {request?.scope || "None"}</p>
+      <p>
+        Resources: {Array.isArray(request?.resource)
+          ? request.resource.join(", ")
+          : request?.resource || "None"}
+      </p>
       <p>Code: {userCode}</p>
       
       <button onClick={handleApprove} disabled={isProcessing}>
@@ -706,7 +729,7 @@ authenticateCLI().catch((err) => {
 1. **Rate Limiting**: The plugin enforces polling intervals to prevent abuse
 2. **Code Expiration**: Device and user codes expire after the configured time (default: 30 minutes)
 3. **Client Validation**: Always validate client IDs in production to prevent unauthorized access
-4. **HTTPS Only**: Always use HTTPS in production for device authorization
+4. **HTTPS and approval UI**: Follow the [RFC 8628 TLS and user-interaction requirements](https://datatracker.ietf.org/doc/html/rfc8628#section-3.3) in production, including explicit approval or denial and [device-possession and remote-phishing guidance](https://datatracker.ietf.org/doc/html/rfc8628#section-5.4)
 5. **User Code Format**: User codes use a limited character set (excluding similar-looking characters like 0/O, 1/I) to reduce typing errors
 6. **Authentication Required**: Users must be authenticated when calling `GET /device`. The verification step claims the pending device code for the calling session, and only that session can later approve or deny it
 7. **Pre-binding**: Device codes issued with `user_id` skip the claiming step and can only be approved or denied by that user. Pass `user_id` from trusted server-side code only
@@ -818,4 +841,4 @@ export const deviceCodeTableFields = [
 
 <DatabaseTable name="deviceCode" fields={deviceCodeTableFields} />
 
-`oauthDeviceAuthorization()` extends this table with optional `oauthClientId` and `resources` fields. Standalone Device Authorization installations do not add those fields and do not expose the RFC 8707 `resource` request parameter.
+`oauthDeviceAuthorization()` extends this table with optional `oauthClientId` and `resources` fields. The `resource` field on `/device/code` is the OAuth Provider integration's profile of [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707): RFC 8707 standardizes `resource` in authorization requests and access-token requests. Standalone Device Authorization installations do not add those fields and do not expose the `resource` request parameter.

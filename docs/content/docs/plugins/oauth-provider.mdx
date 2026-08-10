@@ -1,15 +1,19 @@
 ---
 title: OAuth 2.1 Provider
-description: A Better Auth plugin that enables your auth server to serve as an OAuth 2.1 provider.
+description: A Better Auth OAuth authorization-server plugin with selected OAuth 2.1 draft-aligned behavior.
 ---
 
 The **OAuth 2.1 Provider** plugin turns your Better Auth server into an OAuth authorization server. Applications can request user access through the authorization code flow, while services can use client credentials. Add the `openid` scope when clients also need OpenID Connect (OIDC) identity claims.
+
+<Callout type="info">
+  OAuth 2.1 is still an [IETF Internet-Draft](https://datatracker.ietf.org/doc/draft-ietf-oauth-v2-1/). This page documents Better Auth's current OAuth authorization-server behavior and selected draft-aligned practices; it does not claim final OAuth 2.1 compliance.
+</Callout>
 
 The default configuration chooses the safer protocol behavior, including PKCE for public clients and exact redirect URI matching. Start with [Installation](#installation), then enable only the grants and registration paths your clients use.
 
 **Key features**
 
-* **OAuth security profile:** follows [OAuth 2.1](https://oauth.net/2.1/) practices and includes the RFC 9207 `iss` parameter to prevent [authorization-server mix-up attacks](https://datatracker.ietf.org/doc/html/rfc9207).
+* **OAuth security profile:** aligns with selected practices from the current [OAuth 2.1 Internet-Draft](https://datatracker.ietf.org/doc/draft-ietf-oauth-v2-1/) and includes the RFC 9207 `iss` parameter to prevent [authorization-server mix-up attacks](https://datatracker.ietf.org/doc/html/rfc9207).
 * **OpenID Connect:** issues ID tokens, serves UserInfo, and supports [RP-initiated logout](https://openid.net/specs/openid-connect-rpinitiated-1_0.html) when clients request `openid`.
 * **Client registration:** supports administrator-managed clients, first-party trusted clients, and optional [Dynamic Client Registration](#dynamic-registration-endpoint).
 * **Public and confidential clients:** derives authentication from `token_endpoint_auth_method`; use `"none"` for clients that cannot keep a secret.
@@ -145,7 +149,7 @@ export const serverClient = createAuthClient({
 
 ## Usage
 
-The plugin operates as an OAuth 2.1 server with OIDC compatible endpoints and JWT verifiable access tokens. The following provides more detailed information about each endpoint.
+The plugin operates as an OAuth authorization server with OIDC-capable endpoints and JWT-verifiable access tokens. The following provides more detailed information about each endpoint.
 
 ### OAuth Clients
 
@@ -450,13 +454,13 @@ Note the following parameters are not yet supported:
 
 ### Authorize Endpoint
 
-An [OAuth 2.1 authorization endpoint](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-13#name-authorization-endpoint). Since many of the details are not yet fully described, parts are adapted from the legacy [OAuth 2.0 Authorization Endpoint Section](https://datatracker.ietf.org/doc/html/rfc6749#section-3.1) but always implements the [differences from OAuth 2.0](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-13#name-differences-from-oauth-20).
+An OAuth authorization endpoint aligned with selected guidance in the current [OAuth 2.1 Internet-Draft](https://datatracker.ietf.org/doc/draft-ietf-oauth-v2-1/). Since the draft is not final and many details may change, parts are adapted from the legacy [OAuth 2.0 Authorization Endpoint Section](https://datatracker.ietf.org/doc/html/rfc6749#section-3.1).
 
-The Authorization Endpoint is the entry point for initiating an OAuth 2.1 authorization flows.
+The Authorization Endpoint is the entry point for initiating an OAuth authorization flow.
 
 Important notes:
 
-* In OAuth 2.1, only `response_type: "code"` is supported.
+* This provider supports only `response_type: "code"`, consistent with the current OAuth 2.1 Internet-Draft.
 * `code_challenge_method: "plain"` will not be supported since this is a security vulnerability.
 * All authorization responses (success and error) include the `iss` parameter for issuer validation ([RFC 9207](https://datatracker.ietf.org/doc/html/rfc9207)).
 * Use the `resource` indicators to restrict tokens to a resource ([RFC 8707](https://www.rfc-editor.org/rfc/rfc8707.html)).
@@ -615,7 +619,7 @@ The cached response is stored encrypted on the consumed refresh-token row and in
 
 #### Device code grant
 
-The device authorization grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) lets limited-input clients (CLIs, smart TVs, IoT) obtain an OAuth access token. Add `oauthDeviceAuthorization()` alongside `oauthProvider()` to register the `urn:ietf:params:oauth:grant-type:device_code` token grant and advertise `device_authorization_endpoint`. The integration adds the OAuth client binding and RFC 8707 resource fields; standalone Device Authorization installations remain unchanged. The device requests codes at `/device/code`, the user approves them, and the client polls `/oauth2/token` for a first-class OAuth token. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api).
+The device authorization grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) lets limited-input clients (CLIs, smart TVs, IoT) obtain an OAuth access token. Add `oauthDeviceAuthorization()` alongside `oauthProvider()` to register the `urn:ietf:params:oauth:grant-type:device_code` token grant and advertise `device_authorization_endpoint`. The integration adds the OAuth client binding and the OAuth Provider integration's profile of RFC 8707: the `resource` parameter on `/device/code` is the same standardized parameter RFC 8707 defines for authorization requests and token requests, and the approved value is checked again at `/oauth2/token`. Standalone Device Authorization installations remain unchanged. The device requests codes at `/device/code`, the user approves them, and the client polls `/oauth2/token` for a first-class OAuth token. This is an OAuth device grant; it does not make a general OIDC device-grant conformance claim. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api).
 
 ### Consent Endpoint
 
@@ -1215,7 +1219,7 @@ By default, we support the following scopes are supported:
 * `email`: Returns email and email\_verified from UserInfo
 * `offline_access`: Returns a refresh token
 
-The scopes configuration can contain as many or as few scopes as you wish! Note that `openid` is required to be considered an OIDC server, otherwise this is a standard OAuth 2.1 server. All supported scopes must be in this array.
+The scopes configuration can contain as many or as few scopes as you wish! Note that `openid` is required to be considered an OIDC server; without it, this is an OAuth server without OIDC identity features. All supported scopes must be in this array.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -1396,11 +1400,11 @@ oauthProvider({
 
 ### PKCE Configuration
 
-PKCE (Proof Key for Code Exchange) is a security mechanism that prevents authorization code interception attacks. This plugin follows the OAuth 2.1 specification, which requires PKCE by default for all authorization code flows.
+PKCE (Proof Key for Code Exchange) is a security mechanism that prevents authorization code interception attacks. This plugin requires PKCE by default for all authorization code flows, consistent with the current OAuth 2.1 Internet-Draft and OAuth security guidance.
 
 #### Default Behavior
 
-By default, PKCE is required for all clients. This provides maximum security and follows OAuth 2.1 best practices.
+By default, PKCE is required for all clients. This provides maximum security and matches current OAuth 2.1 draft guidance.
 
 **PKCE is always required for:**
 
@@ -1459,7 +1463,7 @@ PKCE prevents authorization code interception attacks. Even for confidential cli
 
 * **Defense in depth**: Multiple security layers
 * **Protection against misconfiguration**: Accidental secret exposure
-* **Future-proof**: Aligns with OAuth 2.1 best practices
+* **Future-proof**: Aligns with current OAuth 2.1 draft guidance
 
 Only disable PKCE for confidential clients when absolutely necessary for legacy compatibility.
 
