@@ -242,6 +242,28 @@ Example of relative endpoint and issuer with base path:
   This is useful when you need to override the IdP's advertised metadata or when using incomplete mock servers.
 </Callout>
 
+#### Preferring the ID token (Microsoft Entra)
+
+By default, when a `userInfoEndpoint` is configured (including via discovery), Better Auth fetches profile claims from UserInfo. Some IdPs — notably **Microsoft Entra ID** — recommend using the ID token instead and avoiding the UserInfo call.
+
+Set `preferIdToken: true` on `oidcConfig` to opt into that behavior. When enabled and an ID token is present, Better Auth validates the ID token via JWKS and maps claims from it without calling UserInfo. Discovery may still store the IdP's `userinfo_endpoint`; the flag only changes callback preference. If no ID token is returned, Better Auth falls back to UserInfo when available.
+
+```ts title="register-entra-oidc.ts"
+await auth.api.registerSSOProvider({
+    body: {
+        providerId: "entra",
+        issuer: "https://login.microsoftonline.com/{tenant}/v2.0",
+        domain: "example.com",
+        oidcConfig: {
+            clientId: "your-client-id",
+            clientSecret: "your-client-secret",
+            preferIdToken: true,
+        },
+    },
+    headers,
+});
+```
+
 #### Trusted origins
 
 Both the discovery endpoint as well as any URL resolved through the discovery process are subject to your app's [`trustedOrigins`](/docs/reference/security#trusted-origins) configuration.

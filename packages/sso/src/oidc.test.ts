@@ -1895,6 +1895,201 @@ describe("SSO OIDC UserInfo endpoint sub claim mapping", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10739
+ */
+describe("SSO OIDC preferIdToken", async () => {
+	const preferIdTokenServer = new OAuth2Server();
+	let userInfoCallCount = 0;
+
+	const userinfoHandler = (userInfoResponse: {
+		body: Record<string, unknown>;
+		statusCode: number;
+	}) => {
+		userInfoCallCount += 1;
+		userInfoResponse.body = {
+			sub: "userinfo-sub",
+			email: "from-userinfo@test.com",
+			name: "UserInfo User",
+			picture: "https://test.com/picture.png",
+			email_verified: true,
+		};
+		userInfoResponse.statusCode = 200;
+	};
+
+	const tokenHandler = (token: { payload: Record<string, unknown> }) => {
+		token.payload.email = "from-id-token@test.com";
+		token.payload.email_verified = true;
+		token.payload.name = "ID Token User";
+		token.payload.picture = "https://test.com/picture.png";
+	};
+
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			trustedOrigins: ["http://localhost:8091"],
+			plugins: [sso(), organization()],
+		});
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: { customFetchImpl },
+	});
+
+	beforeAll(async () => {
+		await preferIdTokenServer.issuer.keys.generate("RS256");
+		preferIdTokenServer.service.on("beforeUserinfo", userinfoHandler);
+		preferIdTokenServer.service.on("beforeTokenSigning", tokenHandler);
+		await preferIdTokenServer.start(8091, "localhost");
+	});
+
+	afterAll(async () => {
+		preferIdTokenServer.service.removeListener(
+			"beforeUserinfo",
+			userinfoHandler,
+		);
+		preferIdTokenServer.service.removeListener(
+			"beforeTokenSigning",
+			tokenHandler,
+		);
+		await preferIdTokenServer.stop().catch(() => {});
+	});
+
+	async function simulateOAuthFlow(authUrl: string, headers: Headers) {
+		let location: string | null = null;
+		await betterFetch(authUrl, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+
+		if (!location) throw new Error("No redirect location found");
+		const newHeaders = new Headers();
+		let callbackURL = "";
+		await betterFetch(location, {
+			method: "GET",
+			customFetchImpl,
+			headers,
+			onError(context) {
+				callbackURL = context.response.headers.get("location") || "";
+				cookieSetter(newHeaders)(context);
+			},
+		});
+
+		return { callbackURL, headers: newHeaders };
+	}
+
+	it("should map claims from the ID token and skip UserInfo when preferIdToken is true", async () => {
+		userInfoCallCount = 0;
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: preferIdTokenServer.issuer.url!,
+				domain: "prefer-id-token.com",
+				providerId: "prefer-id-token",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					authorizationEndpoint: `${preferIdTokenServer.issuer.url}/authorize`,
+					tokenEndpoint: `${preferIdTokenServer.issuer.url}/token`,
+					jwksEndpoint: `${preferIdTokenServer.issuer.url}/jwks`,
+					userInfoEndpoint: `${preferIdTokenServer.issuer.url}/userinfo`,
+					discoveryEndpoint: `${preferIdTokenServer.issuer.url}/.well-known/openid-configuration`,
+					preferIdToken: true,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+			},
+			headers,
+		});
+
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "prefer-id-token",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+			res.url,
+			signInHeaders,
+		);
+
+		expect(callbackURL).toContain("/dashboard");
+		expect(callbackURL).not.toContain("error=invalid_provider");
+		expect(userInfoCallCount).toBe(0);
+
+		const session = await authClient.getSession({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(session.data?.user.email).toBe("from-id-token@test.com");
+		expect(session.data?.user.name).toBe("ID Token User");
+	});
+
+	it("should still prefer UserInfo by default when preferIdToken is not set", async () => {
+		userInfoCallCount = 0;
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: preferIdTokenServer.issuer.url!,
+				domain: "default-userinfo.com",
+				providerId: "default-userinfo",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					authorizationEndpoint: `${preferIdTokenServer.issuer.url}/authorize`,
+					tokenEndpoint: `${preferIdTokenServer.issuer.url}/token`,
+					jwksEndpoint: `${preferIdTokenServer.issuer.url}/jwks`,
+					userInfoEndpoint: `${preferIdTokenServer.issuer.url}/userinfo`,
+					discoveryEndpoint: `${preferIdTokenServer.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+			},
+			headers,
+		});
+
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "default-userinfo",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+			res.url,
+			signInHeaders,
+		);
+
+		expect(callbackURL).toContain("/dashboard");
+		expect(userInfoCallCount).toBe(1);
+
+		const session = await authClient.getSession({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(session.data?.user.email).toBe("from-userinfo@test.com");
+		expect(session.data?.user.name).toBe("UserInfo User");
+	});
+});
+
 describe("SSO OIDC hook rejection redirect", async () => {
 	const hookServer = new OAuth2Server();
 

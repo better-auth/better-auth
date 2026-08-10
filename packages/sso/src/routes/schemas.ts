@@ -50,6 +50,7 @@ const oidcConfigSchema = z.object({
 	scopes: z.array(z.string()).optional(),
 	pkce: z.boolean().optional(),
 	overrideUserInfo: z.boolean().optional(),
+	preferIdToken: z.boolean().optional(),
 	mapping: oidcMappingSchema,
 });
 

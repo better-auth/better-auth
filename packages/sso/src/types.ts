@@ -30,6 +30,11 @@ export interface OIDCConfig {
 	userInfoEndpoint?: string | undefined;
 	scopes?: string[] | undefined;
 	overrideUserInfo?: boolean | undefined;
+	/**
+	 * Prefer the verified ID token over UserInfo when both are available.
+	 * @default false
+	 */
+	preferIdToken?: boolean | undefined;
 	tokenEndpoint?: string | undefined;
 	tokenEndpointAuthentication?:
 		| ("client_secret_post" | "client_secret_basic")
