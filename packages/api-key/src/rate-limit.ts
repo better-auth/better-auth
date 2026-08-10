@@ -1,6 +1,10 @@
 import { API_KEY_ERROR_CODES as ERROR_CODES } from ".";
-import type { PredefinedApiKeyOptions } from "./routes";
 import type { ApiKey } from "./types";
+
+type FixedWindowPolicy = {
+	maxRequests: number;
+	windowMs: number;
+};
 
 /**
  * The atomic action the verify route must apply for the current request, derived
@@ -14,23 +18,29 @@ export type RateLimitDecision =
 			lastRequest: Date | null;
 	  }
 	| {
-			/** First request in a fresh window: set `requestCount` to 1. */
-			type: "start";
+			/** Open a window and consume its first request. */
+			type: "open";
 			now: Date;
+			/** The deadline observed when this decision was made; used as a CAS token. */
+			observedResetAt: Date | null;
+			resetAt: Date;
+			policy: FixedWindowPolicy;
 	  }
 	| {
-			/** Window elapsed: reset `requestCount` to 1, guarded on the window. */
-			type: "reset";
+			/** Lazily migrates an active legacy window without resetting its counter. */
+			type: "initialize";
 			now: Date;
-			/** `lastRequest` must still predate this instant for the reset to apply. */
-			windowStart: Date;
+			/** The legacy timestamp observed when deriving the first fixed deadline. */
+			observedLastRequest: Date;
+			resetAt: Date;
+			policy: FixedWindowPolicy;
 	  }
 	| {
 			/** Within the window and under the max: increment `requestCount` by 1. */
 			type: "increment";
 			now: Date;
-			max: number;
-			windowStart: Date;
+			resetAt: Date;
+			policy: FixedWindowPolicy;
 	  }
 	| {
 			/** Within the window and at the max: reject. */
@@ -46,10 +56,9 @@ export type RateLimitDecision =
  */
 export function evaluateRateLimit(
 	apiKey: ApiKey,
-	opts: PredefinedApiKeyOptions,
+	opts: { rateLimit: { enabled: boolean } },
+	now: Date,
 ): RateLimitDecision {
-	const now = new Date();
-	const lastRequest = apiKey.lastRequest;
 	const rateLimitTimeWindow = apiKey.rateLimitTimeWindow;
 	const rateLimitMax = apiKey.rateLimitMax;
 
@@ -66,17 +75,59 @@ export function evaluateRateLimit(
 		return { type: "skip", lastRequest: null };
 	}
 
-	if (lastRequest === null) {
-		return { type: "start", now };
+	const policy = {
+		maxRequests: rateLimitMax,
+		windowMs: rateLimitTimeWindow,
+	};
+	const observedResetAt = apiKey.rateLimitResetAt
+		? new Date(apiKey.rateLimitResetAt)
+		: null;
+
+	if (observedResetAt === null) {
+		const observedLastRequest = apiKey.lastRequest
+			? new Date(apiKey.lastRequest)
+			: null;
+
+		if (apiKey.requestCount > 0 && observedLastRequest) {
+			const resetAt = new Date(
+				observedLastRequest.getTime() + rateLimitTimeWindow,
+			);
+
+			if (now.getTime() < resetAt.getTime()) {
+				if (apiKey.requestCount >= rateLimitMax) {
+					return {
+						type: "deny",
+						message: ERROR_CODES.RATE_LIMIT_EXCEEDED.message,
+						tryAgainIn: resetAt.getTime() - now.getTime(),
+					};
+				}
+
+				return {
+					type: "initialize",
+					now,
+					observedLastRequest,
+					resetAt,
+					policy,
+				};
+			}
+		}
+
+		return {
+			type: "open",
+			now,
+			observedResetAt,
+			resetAt: new Date(now.getTime() + rateLimitTimeWindow),
+			policy,
+		};
 	}
 
-	const timeSinceLastRequest = now.getTime() - new Date(lastRequest).getTime();
-
-	if (timeSinceLastRequest > rateLimitTimeWindow) {
+	if (now.getTime() >= observedResetAt.getTime()) {
 		return {
-			type: "reset",
+			type: "open",
 			now,
-			windowStart: new Date(now.getTime() - rateLimitTimeWindow),
+			observedResetAt,
+			resetAt: new Date(now.getTime() + rateLimitTimeWindow),
+			policy,
 		};
 	}
 
@@ -84,14 +135,14 @@ export function evaluateRateLimit(
 		return {
 			type: "deny",
 			message: ERROR_CODES.RATE_LIMIT_EXCEEDED.message,
-			tryAgainIn: Math.ceil(rateLimitTimeWindow - timeSinceLastRequest),
+			tryAgainIn: observedResetAt.getTime() - now.getTime(),
 		};
 	}
 
 	return {
 		type: "increment",
 		now,
-		max: rateLimitMax,
-		windowStart: new Date(now.getTime() - rateLimitTimeWindow),
+		resetAt: observedResetAt,
+		policy,
 	};
 }

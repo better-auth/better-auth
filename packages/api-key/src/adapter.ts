@@ -152,6 +152,7 @@ function serializeApiKey(apiKey: ApiKey): string {
 		expiresAt: apiKey.expiresAt?.toISOString() ?? null,
 		lastRefillAt: apiKey.lastRefillAt?.toISOString() ?? null,
 		lastRequest: apiKey.lastRequest?.toISOString() ?? null,
+		rateLimitResetAt: apiKey.rateLimitResetAt?.toISOString() ?? null,
 	});
 }
 
@@ -172,6 +173,9 @@ function deserializeApiKey(data: unknown): ApiKey | null {
 			expiresAt: parsed.expiresAt ? new Date(parsed.expiresAt) : null,
 			lastRefillAt: parsed.lastRefillAt ? new Date(parsed.lastRefillAt) : null,
 			lastRequest: parsed.lastRequest ? new Date(parsed.lastRequest) : null,
+			rateLimitResetAt: parsed.rateLimitResetAt
+				? new Date(parsed.rateLimitResetAt)
+				: null,
 		} as ApiKey;
 	} catch {
 		return null;

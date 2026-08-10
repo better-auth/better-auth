@@ -242,6 +242,13 @@ export function createApiKey({
 												type: "number",
 												description: "Current request count in window",
 											},
+											rateLimitResetAt: {
+												type: "string",
+												format: "date-time",
+												nullable: true,
+												description:
+													"Current rate limit window reset timestamp",
+											},
 											permissions: {
 												type: "object",
 												nullable: true,
@@ -475,6 +482,7 @@ export function createApiKey({
 				referenceId: referenceId,
 				lastRefillAt: null,
 				lastRequest: null,
+				rateLimitResetAt: null,
 				metadata: null,
 				rateLimitMax: rateLimitMax ?? opts.rateLimit.maxRequests ?? null,
 				rateLimitTimeWindow:

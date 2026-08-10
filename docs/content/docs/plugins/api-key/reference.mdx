@@ -128,13 +128,13 @@ Customize the rate-limiting.
 
     `timeWindow` <span className="opacity-70">`number`</span>
 
-    The duration in milliseconds where each request is counted.
-    Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.
+    The duration of each first-request-anchored fixed window in milliseconds. A window starts with the first accepted request.
+    Once `maxRequests` is reached, requests are rejected until that window ends.
 
     `maxRequests` <span className="opacity-70">`number`</span>
 
-    Maximum amount of requests allowed within a window.
-    Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.
+    Maximum amount of requests allowed within a fixed window.
+    Once `maxRequests` is reached, requests are rejected until the current window ends.
   </Accordion>
 </Accordions>
 
@@ -525,6 +525,12 @@ export const apiKeyTableFields = [
 		type: "number",
 		description:
 			"The number of requests made within the rate limit time window.",
+		isOptional: true,
+	},
+	{
+		name: "rateLimitResetAt",
+		type: "Date",
+		description: "The date and time when the current rate limit window resets.",
 		isOptional: true,
 	},
 	{

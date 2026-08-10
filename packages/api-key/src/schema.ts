@@ -131,6 +131,14 @@ export const apiKeySchema = ({
 					defaultValue: 0,
 				},
 				/**
+				 * The date and time when the current rate limit window resets.
+				 */
+				rateLimitResetAt: {
+					type: "date",
+					required: false,
+					input: false,
+				},
+				/**
 				 * The remaining number of requests before the key is revoked.
 				 *
 				 * If this is null, then the key is not revoked.

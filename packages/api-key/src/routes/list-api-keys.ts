@@ -180,6 +180,13 @@ export function listApiKeys({
 															description:
 																"The number of requests made within the rate limit time window",
 														},
+														rateLimitResetAt: {
+															type: "string",
+															format: "date-time",
+															nullable: true,
+															description:
+																"When the current rate limit window resets",
+														},
 														remaining: {
 															type: "number",
 															nullable: true,

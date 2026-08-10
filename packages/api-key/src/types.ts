@@ -177,17 +177,20 @@ export interface ApiKeyConfigurationOptions {
 				 */
 				enabled?: boolean;
 				/**
-				 * The duration in milliseconds where each request is counted.
+				 * The duration of each first-request-anchored fixed window in
+				 * milliseconds. A window starts with the first accepted request.
 				 *
-				 * Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.
+				 * Once `maxRequests` is reached, requests are rejected until the
+				 * current window ends.
 				 *
 				 * @default 1000 * 60 * 60 * 24 // 1 day
 				 */
 				timeWindow?: number;
 				/**
-				 * Maximum amount of requests allowed within a window
+				 * Maximum amount of requests allowed within a fixed window.
 				 *
-				 * Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset.
+				 * Once `maxRequests` is reached, requests are rejected until the
+				 * current window ends.
 				 *
 				 * @default 10 // 10 requests per day
 				 */
@@ -333,6 +336,10 @@ export type ApiKey = {
 	 * The number of requests made within the rate limit time window
 	 */
 	requestCount: number;
+	/**
+	 * When the current rate limit window resets
+	 */
+	rateLimitResetAt: Date | null;
 	/**
 	 * Remaining requests (every time API key is used this should updated and should be updated on refill as well)
 	 */

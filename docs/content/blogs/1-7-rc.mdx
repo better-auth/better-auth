@@ -219,6 +219,7 @@ export const auth = betterAuth({
 | OAuth token-redemption errors use standard codes                | Authorization-code redemption failures return `400 invalid_grant` instead of `401 invalid_client` or `invalid_request`.             |
 | Sign-out runs session-delete hooks with external session stores | `session.delete` hooks now run on sign-out even with `secondaryStorage` and `preserveSessionInDatabase`.                            |
 | Two-factor invalidation failure has its own error code          | A failed two-factor challenge cleanup now returns `FAILED_TO_INVALIDATE_TWO_FACTOR_CHALLENGE`.                                      |
+| API key rate limits use fixed windows                           | Continuous traffic no longer postpones a key's rate-limit reset.                                                                    |
 
 ### New additions
 

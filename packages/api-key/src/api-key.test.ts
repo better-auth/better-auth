@@ -69,6 +69,7 @@ describe("api-key", async () => {
 		expect(apiKey.data?.rateLimitTimeWindow).toEqual(86400000);
 		expect(apiKey.data?.rateLimitMax).toEqual(10);
 		expect(apiKey.data?.requestCount).toEqual(0);
+		expect(apiKey.data?.rateLimitResetAt).toBeNull();
 		expect(apiKey.data?.remaining).toBeNull();
 		expect(apiKey.data?.lastRequest).toBeNull();
 		expect(apiKey.data?.expiresAt).toBeNull();
@@ -151,6 +152,7 @@ describe("api-key", async () => {
 		expect(apiKey.rateLimitTimeWindow).toEqual(86400000);
 		expect(apiKey.rateLimitMax).toEqual(10);
 		expect(apiKey.requestCount).toEqual(0);
+		expect(apiKey.rateLimitResetAt).toBeNull();
 		expect(apiKey.remaining).toBeNull();
 		expect(apiKey.lastRequest).toBeNull();
 		expect(apiKey.rateLimitEnabled).toBe(true);
@@ -1018,6 +1020,53 @@ describe("api-key", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/6035
+	 */
+	it("resets the rate limit window during continuous traffic", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+		const { auth: fixedWindowAuth, signInWithTestUser: signIn } =
+			await getTestInstance({
+				plugins: [
+					apiKey({
+						rateLimit: {
+							enabled: true,
+							maxRequests: 5,
+							timeWindow: 2_000,
+						},
+					}),
+				],
+			});
+		const { headers: fixedWindowHeaders, user: fixedWindowUser } =
+			await signIn();
+		const created = await fixedWindowAuth.api.createApiKey({
+			body: { userId: fixedWindowUser.id },
+		});
+
+		for (let request = 0; request < 5; request++) {
+			const response = await fixedWindowAuth.api.verifyApiKey({
+				body: { key: created.key },
+			});
+			expect(response.valid).toBe(true);
+			await vi.advanceTimersByTimeAsync(400);
+		}
+
+		const responseAfterReset = await fixedWindowAuth.api.verifyApiKey({
+			body: { key: created.key },
+		});
+		expect(responseAfterReset.valid).toBe(true);
+
+		const stored = await fixedWindowAuth.api.getApiKey({
+			query: { id: created.id },
+			headers: fixedWindowHeaders,
+		});
+		expect(stored.requestCount).toBe(1);
+		expect(stored.rateLimitResetAt).toEqual(
+			new Date("2026-01-01T00:00:04.000Z"),
+		);
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9504
 	 */
 	it("should return 429 when API key rate limit is exceeded via before hook", async () => {
@@ -1580,6 +1629,32 @@ describe("api-key", async () => {
 		});
 
 		expect(updated.lastRequest).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/6035
+	 */
+	it("should start a fresh window after updating rate limit configuration", async () => {
+		const key = await auth.api.createApiKey({
+			body: {
+				rateLimitMax: 2,
+				rateLimitTimeWindow: 60_000,
+				userId: user.id,
+			},
+		});
+		await auth.api.verifyApiKey({ body: { key: key.key } });
+
+		const updated = await auth.api.updateApiKey({
+			body: {
+				keyId: key.id,
+				rateLimitMax: 3,
+				userId: user.id,
+			},
+		});
+
+		expect(updated.requestCount).toBe(0);
+		expect(updated.rateLimitResetAt).toBeNull();
+		expect(updated.lastRequest).not.toBeNull();
 	});
 
 	it("should not auto-decrement remaining when updating API key", async () => {
@@ -3086,6 +3161,7 @@ describe("api-key", async () => {
 					referenceId: user.id,
 					lastRefillAt: null,
 					lastRequest: null,
+					rateLimitResetAt: null,
 					metadata: null,
 					rateLimitMax: null,
 					rateLimitTimeWindow: null,
@@ -3141,6 +3217,7 @@ describe("api-key", async () => {
 					referenceId: user.id,
 					lastRefillAt: null,
 					lastRequest: null,
+					rateLimitResetAt: null,
 					metadata: null,
 					rateLimitMax: null,
 					rateLimitTimeWindow: null,
@@ -3168,6 +3245,7 @@ describe("api-key", async () => {
 					referenceId: user.id,
 					lastRefillAt: null,
 					lastRequest: null,
+					rateLimitResetAt: null,
 					metadata: null,
 					rateLimitMax: null,
 					rateLimitTimeWindow: null,
@@ -3226,6 +3304,7 @@ describe("api-key", async () => {
 						referenceId: user.id,
 						lastRefillAt: null,
 						lastRequest: null,
+						rateLimitResetAt: null,
 						metadata: null,
 						rateLimitMax: null,
 						rateLimitTimeWindow: null,
@@ -3284,6 +3363,7 @@ describe("api-key", async () => {
 						referenceId: user.id,
 						lastRefillAt: null,
 						lastRequest: null,
+						rateLimitResetAt: null,
 						metadata: null,
 						rateLimitMax: null,
 						rateLimitTimeWindow: null,
@@ -4977,6 +5057,10 @@ describe("verify should not write back stale state", async () => {
 		return true;
 	};
 
+	afterEach(() => {
+		onValidate = null;
+	});
+
 	describe("database storage", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance(
 			{
@@ -5012,6 +5096,44 @@ describe("verify should not write back stale state", async () => {
 				headers,
 			});
 			expect(stored.enabled).toBe(false);
+		});
+
+		it("should open a window with a rate limit policy updated during verification", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({
+				body: {
+					rateLimitMax: 5,
+					rateLimitTimeWindow: 60_000,
+					userId: user.id,
+				},
+			});
+
+			onValidate = async () => {
+				await auth.api.updateApiKey({
+					body: {
+						keyId: created.id,
+						rateLimitMax: 2,
+						rateLimitTimeWindow: 120_000,
+						userId: user.id,
+					},
+				});
+			};
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: created.key },
+			});
+			expect(result.valid).toBe(true);
+
+			const stored = await auth.api.getApiKey({
+				query: { id: created.id },
+				headers,
+			});
+			expect(stored.rateLimitMax).toBe(2);
+			expect(stored.rateLimitTimeWindow).toBe(120_000);
+			expect(stored.requestCount).toBe(1);
+			expect(
+				stored.rateLimitResetAt!.getTime() - stored.lastRequest!.getTime(),
+			).toBe(120_000);
 		});
 	});
 
@@ -5141,6 +5263,7 @@ describe("concurrent verification enforces atomic counters", async () => {
 
 		afterEach(() => {
 			gate = null;
+			vi.useRealTimers();
 		});
 
 		it("does not let concurrent verifications drop remaining below zero", async () => {
@@ -5207,6 +5330,83 @@ describe("concurrent verification enforces atomic counters", async () => {
 				headers,
 			});
 			expect(stored.requestCount).toBe(2);
+		});
+
+		it("preserves a legacy counter while initializing its fixed window", async () => {
+			const { headers, user } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({
+				body: {
+					rateLimitEnabled: true,
+					rateLimitMax: 2,
+					rateLimitTimeWindow: 60_000,
+					userId: user.id,
+				},
+			});
+			await auth.api.verifyApiKey({ body: { key: created.key } });
+
+			const primed = await auth.api.getApiKey({
+				query: { id: created.id },
+				headers,
+			});
+			const context = await auth.$context;
+			await context.adapter.update({
+				model: "apikey",
+				where: [{ field: "id", value: created.id }],
+				update: { rateLimitResetAt: null },
+			});
+
+			gate = createArrivalGate(concurrency);
+			const results = await Promise.all(
+				Array.from({ length: concurrency }, () =>
+					auth.api.verifyApiKey({ body: { key: created.key } }),
+				),
+			);
+
+			expect(results.filter((result) => result.valid)).toHaveLength(1);
+			const stored = await auth.api.getApiKey({
+				query: { id: created.id },
+				headers,
+			});
+			expect(stored.requestCount).toBe(2);
+			expect(stored.rateLimitResetAt).toEqual(
+				new Date(primed.lastRequest!.getTime() + 60_000),
+			);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/6035
+		 */
+		it("opens only one fixed window during a concurrent reset", async () => {
+			vi.useFakeTimers();
+			vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+			const { headers, user } = await signInWithTestUser();
+			const created = await auth.api.createApiKey({
+				body: {
+					rateLimitEnabled: true,
+					rateLimitMax: 2,
+					rateLimitTimeWindow: 60_000,
+					userId: user.id,
+				},
+			});
+			await auth.api.verifyApiKey({ body: { key: created.key } });
+			await vi.advanceTimersByTimeAsync(60_000);
+
+			gate = createArrivalGate(concurrency);
+			const results = await Promise.all(
+				Array.from({ length: concurrency }, () =>
+					auth.api.verifyApiKey({ body: { key: created.key } }),
+				),
+			);
+
+			expect(results.filter((result) => result.valid)).toHaveLength(2);
+			const stored = await auth.api.getApiKey({
+				query: { id: created.id },
+				headers,
+			});
+			expect(stored.requestCount).toBe(2);
+			expect(stored.rateLimitResetAt).toEqual(
+				new Date("2026-01-01T00:02:00.000Z"),
+			);
 		});
 	});
 
