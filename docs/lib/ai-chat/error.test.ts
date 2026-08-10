@@ -18,14 +18,28 @@ describe("getChatErrorMessage", () => {
 			"rate_limit_error",
 			"Too Many Requests",
 			"RESOURCE_EXCEEDED",
+			"RESOURCE_EXHAUSTED",
 			"Quota exceeded",
+			"quota_exhausted",
 			"Request failed with status 429",
+			"HTTP 429",
 		];
 
 		for (const error of errors) {
 			expect(getChatErrorMessage(new Error(error))).toBe(
 				CHAT_RATE_LIMIT_MESSAGE,
 			);
+		}
+	});
+
+	it("does not mistake unrelated quota or numeric details for rate limits", () => {
+		const errors = [
+			"Moderation blocked due to output quota policy",
+			"Unexpected value 429 in response",
+		];
+
+		for (const error of errors) {
+			expect(getChatErrorMessage(new Error(error))).toBe(CHAT_ERROR_MESSAGE);
 		}
 	});
 
