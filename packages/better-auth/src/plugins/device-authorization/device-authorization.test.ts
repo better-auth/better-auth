@@ -332,6 +332,90 @@ describe("device authorization flow", async () => {
 	});
 
 	describe("device verification", () => {
+		it("accepts lowercase user codes for verification, approval, and denial", async () => {
+			const { headers } = await signInWithTestUser();
+			const createLowercaseUserCode = async () => {
+				const { user_code } = await auth.api.deviceCode({
+					body: { client_id: "test-client" },
+				});
+				return user_code.toLowerCase();
+			};
+
+			const verificationUserCode = await createLowercaseUserCode();
+			const verification = await auth.api.deviceVerify({
+				query: { user_code: verificationUserCode },
+				headers,
+			});
+			expect(verification.status).toBe("pending");
+
+			const approvalUserCode = await createLowercaseUserCode();
+			await auth.api.deviceVerify({
+				query: { user_code: approvalUserCode },
+				headers,
+			});
+			await expect(
+				auth.api.deviceApprove({
+					body: { userCode: approvalUserCode },
+					headers,
+				}),
+			).resolves.toMatchObject({ success: true });
+
+			const denialUserCode = await createLowercaseUserCode();
+			await auth.api.deviceVerify({
+				query: { user_code: denialUserCode },
+				headers,
+			});
+			await expect(
+				auth.api.deviceDeny({
+					body: { userCode: denialUserCode },
+					headers,
+				}),
+			).resolves.toMatchObject({ success: true });
+		});
+
+		it("ignores readability punctuation and whitespace for default user codes", async () => {
+			const { headers } = await signInWithTestUser();
+			const formatUserCode = (userCode: string) =>
+				` \t${userCode.slice(0, 2)}-${userCode.slice(2, 4)}.${userCode.slice(4)} \n`;
+			const createFormattedUserCode = async () => {
+				const { user_code } = await auth.api.deviceCode({
+					body: { client_id: "test-client" },
+				});
+				return formatUserCode(user_code);
+			};
+
+			const verificationUserCode = await createFormattedUserCode();
+			const verification = await auth.api.deviceVerify({
+				query: { user_code: verificationUserCode },
+				headers,
+			});
+			expect(verification.status).toBe("pending");
+
+			const approvalUserCode = await createFormattedUserCode();
+			await auth.api.deviceVerify({
+				query: { user_code: approvalUserCode },
+				headers,
+			});
+			await expect(
+				auth.api.deviceApprove({
+					body: { userCode: approvalUserCode },
+					headers,
+				}),
+			).resolves.toMatchObject({ success: true });
+
+			const denialUserCode = await createFormattedUserCode();
+			await auth.api.deviceVerify({
+				query: { user_code: denialUserCode },
+				headers,
+			});
+			await expect(
+				auth.api.deviceDeny({
+					body: { userCode: denialUserCode },
+					headers,
+				}),
+			).resolves.toMatchObject({ success: true });
+		});
+
 		it("only returns authorization context to the authenticated owner", async () => {
 			const { user_code } = await auth.api.deviceCode({
 				body: {
@@ -1462,6 +1546,61 @@ describe("device authorization with custom options", async () => {
 
 		expect(generateDeviceCode).toHaveBeenCalledTimes(4);
 		expect(generateUserCode).toHaveBeenCalledTimes(4);
+	});
+
+	it("preserves exact matching for custom user codes outside the default alphabet", async () => {
+		const customUserCodes = [
+			"custom/user-code_01",
+			"custom:user-code_02",
+			"custom.user-code_03",
+		];
+		let userCodeIndex = 0;
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					generateUserCode: () => customUserCodes[userCodeIndex++] ?? "unused",
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const verificationResponse = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		await expect(
+			auth.api.deviceVerify({
+				query: { user_code: verificationResponse.user_code },
+				headers,
+			}),
+		).resolves.toMatchObject({ status: "pending" });
+
+		const approvalResponse = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		await auth.api.deviceVerify({
+			query: { user_code: approvalResponse.user_code },
+			headers,
+		});
+		await expect(
+			auth.api.deviceApprove({
+				body: { userCode: approvalResponse.user_code },
+				headers,
+			}),
+		).resolves.toMatchObject({ success: true });
+
+		const denialResponse = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		await auth.api.deviceVerify({
+			query: { user_code: denialResponse.user_code },
+			headers,
+		});
+		await expect(
+			auth.api.deviceDeny({
+				body: { userCode: denialResponse.user_code },
+				headers,
+			}),
+		).resolves.toMatchObject({ success: true });
 	});
 
 	/**

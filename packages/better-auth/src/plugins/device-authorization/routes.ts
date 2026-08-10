@@ -48,6 +48,8 @@ function isUniqueConstraintError(error: unknown) {
 	);
 }
 
+const defaultUserCodePattern = new RegExp(`^[${defaultCharset}]+$`, "i");
+
 function validateGeneratedCode(code: unknown, label: "device" | "user") {
 	if (typeof code !== "string") {
 		throw new APIError("BAD_REQUEST", {
@@ -62,6 +64,37 @@ function validateGeneratedCode(code: unknown, label: "device" | "user") {
 		});
 	}
 	return code;
+}
+
+function normalizeUserCode(userCode: string) {
+	return userCode.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+}
+
+/**
+ * Preserve exact custom user codes, and normalize only default-alphabet codes.
+ */
+async function findDeviceCodeByUserCode(
+	ctx: GenericEndpointContext,
+	userCode: string,
+) {
+	const findByUserCode = (value: string) =>
+		ctx.context.adapter.findOne<DeviceCode>({
+			model: "deviceCode",
+			where: [{ field: "userCode", value }],
+		});
+
+	const exactDeviceCode = await findByUserCode(userCode);
+	if (exactDeviceCode) return exactDeviceCode;
+
+	const normalizedUserCode = normalizeUserCode(userCode);
+	if (
+		normalizedUserCode === userCode ||
+		!defaultUserCodePattern.test(normalizedUserCode)
+	) {
+		return exactDeviceCode;
+	}
+
+	return findByUserCode(normalizedUserCode);
 }
 
 const deviceCodeBodySchema = z.object({
@@ -709,17 +742,7 @@ export const deviceVerify = <
 		},
 		async (ctx) => {
 			const { user_code } = ctx.query;
-			const cleanUserCode = user_code.replace(/-/g, "");
-
-			const deviceCodeRecord = await ctx.context.adapter.findOne<DeviceCode>({
-				model: "deviceCode",
-				where: [
-					{
-						field: "userCode",
-						value: cleanUserCode,
-					},
-				],
-			});
+			const deviceCodeRecord = await findDeviceCodeByUserCode(ctx, user_code);
 
 			if (!deviceCodeRecord) {
 				throw new APIError("BAD_REQUEST", {
@@ -842,17 +865,7 @@ export const deviceApprove = createAuthEndpoint(
 		}
 
 		const { userCode } = ctx.body;
-		const cleanUserCode = userCode.replace(/-/g, "");
-
-		const deviceCodeRecord = await ctx.context.adapter.findOne<DeviceCode>({
-			model: "deviceCode",
-			where: [
-				{
-					field: "userCode",
-					value: cleanUserCode,
-				},
-			],
-		});
+		const deviceCodeRecord = await findDeviceCodeByUserCode(ctx, userCode);
 
 		if (!deviceCodeRecord) {
 			throw new APIError("BAD_REQUEST", {
@@ -975,17 +988,7 @@ export const deviceDeny = createAuthEndpoint(
 		}
 
 		const { userCode } = ctx.body;
-		const cleanUserCode = userCode.replace(/-/g, "");
-
-		const deviceCodeRecord = await ctx.context.adapter.findOne<DeviceCode>({
-			model: "deviceCode",
-			where: [
-				{
-					field: "userCode",
-					value: cleanUserCode,
-				},
-			],
-		});
+		const deviceCodeRecord = await findDeviceCodeByUserCode(ctx, userCode);
 
 		if (!deviceCodeRecord) {
 			throw new APIError("BAD_REQUEST", {

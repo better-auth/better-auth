@@ -580,6 +580,8 @@ deviceAuthorization({
 })
 ```
 
+Default user codes are case-insensitive and accept whitespace or punctuation inserted for readability when submitted to the verification, approve, or deny endpoints. Custom user codes are matched exactly when they contain characters outside the default `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` alphabet.
+
 ## Error Handling
 
 The device flow defines specific error codes:
