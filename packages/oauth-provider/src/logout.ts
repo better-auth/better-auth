@@ -2,7 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { getJwks } from "better-auth/oauth2";
 import type { Session } from "better-auth/types";
 import { APIError } from "better-call";
-import type { JWTPayload } from "jose";
+import type { JSONWebKeySet, JWTPayload } from "jose";
 import { compactVerify, createLocalJWKSet, decodeJwt } from "jose";
 import { handleRedirect } from "./authorize";
 import type { OAuthOptions, Scope } from "./types";
@@ -31,14 +31,10 @@ export async function rpInitiatedLogoutEndpoint(
 		state?: string;
 	} = ctx.query;
 
-	const baseURL = ctx.context.baseURL;
 	const jwtPlugin = opts.disableJwtPlugin
 		? undefined
 		: getJwtPlugin(ctx.context);
 	const jwtPluginOptions = jwtPlugin?.options;
-	const jwksUrl =
-		jwtPluginOptions?.jwks?.remoteUrl ??
-		`${baseURL}${jwtPluginOptions?.jwks?.jwksPath ?? "/jwks"}`;
 
 	let clientId = client_id;
 	if (!clientId) {
@@ -107,7 +103,16 @@ export async function rpInitiatedLogoutEndpoint(
 		idTokenPayload = JSON.parse(idToken);
 	} else {
 		const jwks = await getJwks(id_token_hint, {
-			jwksFetch: jwksUrl,
+			jwksFetch: jwtPluginOptions?.jwks?.remoteUrl
+				? jwtPluginOptions.jwks.remoteUrl
+				: async () => {
+						const jwksRes = await jwtPlugin?.endpoints.getJwks(ctx);
+						// @ts-expect-error response is a JSONWebKeySet but within the response field
+						return jwksRes?.response as JSONWebKeySet | undefined;
+					},
+			// The plugin instance is stable across requests, so the key set
+			// fetched by the per-request closure above is cached under it.
+			jwksCacheKey: jwtPlugin,
 		});
 
 		// compactVerify only verifies the token, not its claims (perform manually)

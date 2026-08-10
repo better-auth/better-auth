@@ -648,3 +648,117 @@ describe("oauth logout - disableJwtPlugin", async () => {
 		expect(logoutRes.error?.status).toBe(302);
 	});
 });
+
+/**
+ * The provider holds the key set that signs its own id tokens, so RP-initiated
+ * logout must not depend on its public base URL being reachable from the server
+ * itself. Nothing listens on this port: any self-fetch fails the request.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10728
+ */
+describe("oauth logout - unreachable base url", async () => {
+	const port = 3006;
+	const baseUrl = `http://localhost:${port}`;
+	const rpBaseUrl = "http://localhost:5000";
+	const state = "123";
+	const scopes = ["openid", "email", "profile", "offline_access"];
+
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: baseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+				scopes,
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: baseUrl,
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	let oauthClient: OAuthClient | null;
+
+	beforeAll(async () => {
+		oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+				enable_end_session: true,
+			},
+		});
+		expect(oauthClient?.client_id).toBeDefined();
+	});
+
+	it("should end the session without fetching its own jwks", async () => {
+		const clientId = oauthClient?.client_id!;
+		const clientSecret = oauthClient?.client_secret!;
+		const codeVerifier = generateRandomString(32);
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId,
+				clientSecret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${baseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes,
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			headers,
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain("code=");
+
+		const { body, headers: tokenHeaders } = createAuthorizationCodeRequest({
+			code: new URL(callbackRedirectUrl).searchParams.get("code")!,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId,
+				clientSecret,
+				redirectURI: redirectUri,
+			},
+		});
+		const tokens = await client.$fetch<{ id_token?: string }>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+		expect(tokens.data?.id_token).toBeDefined();
+
+		const logoutRes = await client.oauth2.endSession({
+			query: {
+				id_token_hint: tokens.data?.id_token!,
+			},
+		});
+		expect(logoutRes.error).toBeNull();
+
+		const sessionAfter = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(sessionAfter.data).toBeNull();
+	});
+});
