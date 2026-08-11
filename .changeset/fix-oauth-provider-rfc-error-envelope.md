@@ -2,23 +2,8 @@
 "@better-auth/oauth-provider": minor
 ---
 
-OAuth endpoint validation failures now return RFC-compliant `{ error, error_description }` envelopes.
+OAuth Provider endpoints now return standard OAuth `{ error, error_description }` responses for malformed requests. Token requests distinguish missing input (`invalid_request`), failed client authentication (`invalid_client`), and invalid or mismatched grants (`invalid_grant`). Failed HTTP Basic authentication also returns `401` with a `WWW-Authenticate` challenge.
 
-Failing issues are routed per field:
+Authorization errors redirect to a registered client's trusted redirect URI with `state` and `iss`. The response uses the URL fragment for implicit `token` and `id_token` responses unless the client explicitly requests query mode. Requests without a trusted redirect URI continue to use the server error page.
 
-- an absent required value maps to `errorCodesByField[name].missing` or the endpoint's `defaultError`.
-- an unsupported value (unknown enum member) maps to `errorCodesByField[name].invalid` or `defaultError`.
-- any other failure (wrong type, duplicated query params, invalid format, refinement) maps to `defaultError`, so RFC 6749 §3.1 malformed requests emit the endpoint's default code regardless of field.
-
-All six OAuth endpoints (`/oauth2/token`, `/oauth2/authorize`, `/oauth2/revoke`, `/oauth2/introspect`, `/oauth2/register`, `/oauth2/end-session`) now return RFC-compliant errors for malformed requests. `/oauth2/authorize` validation failures redirect to the relying party with `error`, `error_description`, echoed `state`, and `iss` whenever `client_id` and `redirect_uri` resolve against the registered client; requests without a trusted RP fall back to the server error page.
-
-Additional RFC compliance fixes on the same endpoints:
-
-- `/oauth2/revoke` and `/oauth2/introspect` now ignore an unknown `token_type_hint` instead of rejecting it. RFC 7009 §2.2.1 and RFC 7662 §2.1 reserve `unsupported_token_type` for the token itself, not the hint value; servers MAY ignore unrecognized hints and search across supported token types.
-- `/oauth2/authorize` error redirects now respect OIDC Core 1.0 §5 response modes. Errors for `response_type=token` or `id_token` are delivered in the URL fragment per RFC 6749 §4.2.2.1; an explicit `response_mode=query` overrides the default.
-
-Token endpoint failures now distinguish `invalid_request` for missing request fields, `invalid_client` for client-authentication failures, and `invalid_grant` for invalid or mismatched grants. When authentication is attempted with an `Authorization` header, a failed client authentication returns `401` with a `WWW-Authenticate` challenge for the attempted scheme.
-
-The token, introspection, and revocation endpoints reject repeated non-empty client identification and authentication fields with `invalid_request`. Empty occurrences are omitted regardless of their order.
-
-The OAuth Provider rejects a secret sent through a method different from the client's registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`, while failed `client_secret_basic` authentication returns `401` with a Basic challenge.
+Token, introspection, and revocation requests now treat empty credential values as omitted, reject repeated non-empty client credentials, and require confidential clients to use their registered `token_endpoint_auth_method`. Introspection and revocation requests also ignore unrecognized `token_type_hint` values instead of rejecting the request.
