@@ -168,6 +168,8 @@ export interface InternalAdapter<
 	 */
 	deleteSessions(sessionTokens: string[]): Promise<void>;
 
+	deleteOtherSessions(userId: string, exceptToken: string): Promise<void>;
+
 	findOAuthUser(
 		email: string,
 		accountId: string,
