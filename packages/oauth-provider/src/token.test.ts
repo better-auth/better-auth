@@ -2166,6 +2166,39 @@ describe("oauth token - client_credentials", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10752#pullrequestreview-4910497732
+	 */
+	it("rejects repeated non-empty form client IDs", async () => {
+		if (!oauthClient?.client_id || !oauthClient.client_secret) {
+			throw new Error("OAuth client was not created");
+		}
+
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams([
+					["grant_type", "client_credentials"],
+					["client_id", oauthClient.client_id],
+					["client_id", "duplicate-client"],
+					["scope", "read:posts"],
+				]),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					authorization: `Basic ${Buffer.from(
+						`${oauthClient.client_id}:${oauthClient.client_secret}`,
+					).toString("base64")}`,
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as { error?: string })?.error).toBe(
+			"invalid_request",
+		);
+	});
+
 	it("rejects a secret method different from the registered method", async () => {
 		if (!oauthClient?.client_id || !oauthClient.client_secret) {
 			throw Error("beforeAll not run properly");

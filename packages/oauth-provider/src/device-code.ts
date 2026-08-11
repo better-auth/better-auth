@@ -25,7 +25,7 @@ import { ResourceUriSchema } from "./types/zod";
 import {
 	getClient,
 	getOAuthProviderPlugin,
-	parseClientAuthenticationAttempt,
+	normalizeClientAuthenticationParameters,
 	toAudienceClaim,
 	toResourceList,
 	validateClientScopes,
@@ -251,14 +251,11 @@ function buildOAuthDeviceGrant() {
 			device_authorization_endpoint: `${metadataInput.ctx.context.baseURL}${DEVICE_AUTHORIZATION_PATH}`,
 		}),
 		authorizeRequest: async ({ ctx, request }) => {
-			const clientAuthentication = await parseClientAuthenticationAttempt(
-				ctx.request,
-				(ctx.body ?? {}) as Record<string, unknown>,
-			);
-			Object.assign(
-				ctx.body as Record<string, unknown>,
-				clientAuthentication.fields,
-			);
+			const { detected: hasClientAuthentication } =
+				await normalizeClientAuthenticationParameters(
+					ctx.request,
+					(ctx.body ?? {}) as Record<string, unknown>,
+				);
 			const formResources = ctx.request
 				? await extractRepeatedResourceFromForm(ctx.request)
 				: undefined;
@@ -287,7 +284,6 @@ function buildOAuthDeviceGrant() {
 				provider.options,
 				DEVICE_CODE_GRANT_TYPE,
 			);
-			const hasClientAuthentication = clientAuthentication.detected;
 			if (!request.client_id && !hasClientAuthentication) {
 				tokenError("BAD_REQUEST", "invalid_request", "client_id is required");
 			}

@@ -19,4 +19,6 @@ Additional RFC compliance fixes on the same endpoints:
 
 Token endpoint failures now distinguish `invalid_request` for missing request fields, `invalid_client` for client-authentication failures, and `invalid_grant` for invalid or mismatched grants. When authentication is attempted with an `Authorization` header, a failed client authentication returns `401` with a `WWW-Authenticate` challenge for the attempted scheme.
 
+The token, introspection, and revocation endpoints reject repeated non-empty client identification and authentication fields with `invalid_request`. Empty occurrences are omitted regardless of their order.
+
 The OAuth Provider rejects a secret sent through a method different from the client's registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`, while failed `client_secret_basic` authentication returns `401` with a Basic challenge.

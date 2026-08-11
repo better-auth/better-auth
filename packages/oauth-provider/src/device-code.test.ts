@@ -1009,6 +1009,36 @@ describe("oauth-provider device-code grant", async () => {
 		expect((response.error as TokenErrorBody)?.error).toBe("invalid_request");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10752#pullrequestreview-4910497732
+	 */
+	it("treats empty token client ID occurrences as omitted regardless of order", async () => {
+		const clientId = await createDeviceClient();
+		for (const clientIdValues of [
+			["", clientId],
+			[clientId, ""],
+		]) {
+			const deviceCode = await approvedDeviceCode(clientId);
+			const response = await client.$fetch<Record<string, unknown>>(
+				"/oauth2/token",
+				{
+					method: "POST",
+					body: new URLSearchParams([
+						["grant_type", DEVICE_CODE_GRANT_TYPE],
+						["device_code", deviceCode],
+						...clientIdValues.map(
+							(clientIdValue) => ["client_id", clientIdValue] as const,
+						),
+					]),
+					headers: FORM_HEADERS,
+				},
+			);
+
+			expect(response.error).toBeNull();
+			expect(response.data?.access_token).toEqual(expect.any(String));
+		}
+	});
+
 	it("returns an HTTP Basic challenge when client authentication fails", async () => {
 		const clientId = await createDeviceClient();
 		const deviceCode = await approvedDeviceCode(clientId);

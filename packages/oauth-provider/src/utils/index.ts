@@ -522,11 +522,6 @@ const CLIENT_AUTHENTICATION_FIELDS = [
 export type ClientAuthenticationField =
 	(typeof CLIENT_AUTHENTICATION_FIELDS)[number];
 
-export type ClientAuthenticationAttempt = {
-	detected: boolean;
-	fields: Partial<Record<ClientAuthenticationField, string>>;
-};
-
 function throwInvalidAuthenticationRequest(errorDescription: string): never {
 	throw new APIError("BAD_REQUEST", {
 		error: "invalid_request",
@@ -535,26 +530,35 @@ function throwInvalidAuthenticationRequest(errorDescription: string): never {
 }
 
 /**
- * Recovers effective client-authentication fields and enforces RFC 6749 §2.3
- * and RFC 8628 §3.1 cardinality. Empty parameter values are omitted per RFC
- * 8628 §3.1. Repeated `resource` parameters are intentionally outside this
- * parser because RFC 8707 §2 explicitly permits them.
+ * Normalizes client identification and authentication parameters while
+ * enforcing RFC 6749 §2.3 and RFC 8628 §3.1 cardinality. Empty values are
+ * omitted. Client identification remains separate from authentication-method
+ * detection so a public `client_id` does not count as an authentication attempt.
+ * Repeated `resource` parameters are intentionally outside this parser because
+ * RFC 8707 §2 explicitly permits them.
  *
- * This only detects and restores an authentication attempt. Credential and
- * assertion verification remain the responsibility of `extractClientCredentials`.
+ * Credential and assertion verification remain the responsibility of
+ * `extractClientCredentials`.
  *
  * @internal
  */
-export async function parseClientAuthenticationAttempt(
+export async function normalizeClientAuthenticationParameters(
 	request: Request | undefined,
 	body: Record<string, unknown> = {},
-): Promise<ClientAuthenticationAttempt> {
+) {
+	let clientId: string | undefined;
+	if (body.client_id !== undefined && body.client_id !== "") {
+		if (typeof body.client_id !== "string") {
+			throwInvalidAuthenticationRequest("client_id must be a string");
+		}
+		clientId = body.client_id;
+	}
 	const fields: Partial<Record<ClientAuthenticationField, string>> = {};
 	const setEffectiveField = (
 		field: ClientAuthenticationField,
 		value: unknown,
 	) => {
-		if (value === "") return;
+		if (value === undefined || value === "") return;
 		if (typeof value !== "string") {
 			throwInvalidAuthenticationRequest(`${field} must be a string`);
 		}
@@ -572,29 +576,23 @@ export async function parseClientAuthenticationAttempt(
 	if (request) {
 		const contentType =
 			request.headers.get("content-type")?.toLowerCase() ?? "";
-		let repeatedField: string | undefined;
-		try {
-			if (contentType.includes("application/x-www-form-urlencoded")) {
-				const params = new URLSearchParams(await request.clone().text());
-				for (const field of CLIENT_AUTHENTICATION_FIELDS) {
-					const values = params
-						.getAll(field)
-						.filter((value) => value.length > 0);
-					if (values.length > 1) {
-						repeatedField = field;
-						break;
-					}
-					if (values.length === 1) setEffectiveField(field, values[0]);
-				}
+		if (contentType.includes("application/x-www-form-urlencoded")) {
+			const params = new URLSearchParams(await request.clone().text());
+			const clientIds = params
+				.getAll("client_id")
+				.filter((value) => value.length > 0);
+			if (clientIds.length > 1) {
+				throwInvalidAuthenticationRequest("client_id must not be repeated");
 			}
-		} catch {
-			// The parsed endpoint body remains the best available input when the
-			// request stream has already been consumed or is malformed.
-		}
-		if (repeatedField) {
-			throwInvalidAuthenticationRequest(
-				`${repeatedField} must not be repeated`,
-			);
+			clientId = clientIds[0];
+
+			for (const field of CLIENT_AUTHENTICATION_FIELDS) {
+				const values = params.getAll(field).filter((value) => value.length > 0);
+				if (values.length > 1) {
+					throwInvalidAuthenticationRequest(`${field} must not be repeated`);
+				}
+				if (values.length === 1) setEffectiveField(field, values[0]);
+			}
 		}
 	}
 
@@ -610,10 +608,13 @@ export async function parseClientAuthenticationAttempt(
 			"A request must use only one client authentication method",
 		);
 	}
+	body.client_id = clientId;
+	for (const field of CLIENT_AUTHENTICATION_FIELDS) {
+		body[field] = fields[field];
+	}
 
 	return {
 		detected: hasAuthorizationHeader || Object.keys(fields).length > 0,
-		fields,
 	};
 }
 
@@ -863,11 +864,7 @@ export async function extractClientCredentials(
 	expectedAudience?: string,
 ): Promise<ExtractedCredentials | null> {
 	const body = { ...((ctx.body ?? {}) as Record<string, unknown>) };
-	const clientAuthentication = await parseClientAuthenticationAttempt(
-		ctx.request,
-		body,
-	);
-	Object.assign(body, clientAuthentication.fields);
+	await normalizeClientAuthenticationParameters(ctx.request, body);
 	const authorization = ctx.request?.headers.get("authorization") ?? undefined;
 
 	// 1. Check for assertion-based client authentication.

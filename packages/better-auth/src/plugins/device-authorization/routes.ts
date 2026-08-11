@@ -138,9 +138,14 @@ const deviceAuthorizationBaseRequestFields = [
 	"scope",
 ] as const;
 
-async function rejectDuplicateBaseRequestParameters(
+async function normalizeDeviceAuthorizationBaseRequestParameters(
 	request: Request | undefined,
+	body: Record<string, unknown>,
 ) {
+	for (const field of deviceAuthorizationBaseRequestFields) {
+		if (body[field] === "") body[field] = undefined;
+	}
+
 	const contentType = request?.headers.get("content-type")?.toLowerCase() ?? "";
 	if (!request || !contentType.includes("application/x-www-form-urlencoded")) {
 		return;
@@ -151,11 +156,17 @@ async function rejectDuplicateBaseRequestParameters(
 		const effectiveValues = params
 			.getAll(field)
 			.filter((value) => value.length > 0);
-		if (effectiveValues.length < 2) continue;
-		throw new APIError("BAD_REQUEST", {
-			error: "invalid_request",
-			error_description: `${field} must not be repeated`,
-		});
+		if (effectiveValues.length > 1) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_request",
+				error_description: `${field} must not be repeated`,
+			});
+		}
+		if (effectiveValues.length === 0) {
+			body[field] = undefined;
+		} else {
+			body[field] = effectiveValues[0];
+		}
 	}
 }
 
@@ -338,12 +349,12 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			},
 		},
 		async (ctx) => {
-			await rejectDuplicateBaseRequestParameters(ctx.request);
 			const request = ctx.body as DeviceAuthorizationRequest &
 				z.infer<z.ZodObject<GrantRequestFields<Grant>>>;
-			if (request.client_id === "") {
-				request.client_id = undefined;
-			}
+			await normalizeDeviceAuthorizationBaseRequestParameters(
+				ctx.request,
+				request,
+			);
 
 			const grantAuthorization = grant
 				? await grant.authorizeRequest({ ctx, request })

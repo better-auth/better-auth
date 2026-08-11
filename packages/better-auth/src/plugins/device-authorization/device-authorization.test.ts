@@ -1325,6 +1325,77 @@ describe("device authorization ownership gate", () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10752#pullrequestreview-4910497732
+	 */
+	it("omits empty form base parameters regardless of order", async () => {
+		const { auth, client, signInWithTestUser, signInWithUser } =
+			await getTestInstance(
+				{
+					plugins: [deviceAuthorization()],
+				},
+				{
+					clientOptions: {
+						plugins: [deviceAuthorizationClient()],
+					},
+				},
+			);
+		const { headers: ownerHeaders, user } = await signInWithTestUser();
+		await client.signUp.email({
+			email: ATTACKER_EMAIL,
+			password: ATTACKER_PASSWORD,
+			name: "attacker",
+		});
+		const { headers: attackerHeaders } = await signInWithUser(
+			ATTACKER_EMAIL,
+			ATTACKER_PASSWORD,
+		);
+
+		for (const emptyValueFirst of [true, false]) {
+			const form = new URLSearchParams();
+			for (const [field, value] of [
+				["client_id", "test-client"],
+				["scope", "read write"],
+				["user_id", user.id],
+			] as const) {
+				const values = emptyValueFirst ? ["", value] : [value, ""];
+				for (const fieldValue of values) form.append(field, fieldValue);
+			}
+
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/device/code", {
+					method: "POST",
+					headers: {
+						"content-type": "application/x-www-form-urlencoded",
+					},
+					body: form,
+				}),
+			);
+			expect(response.status).toBe(200);
+			const { user_code: userCode } = (await response.json()) as {
+				user_code: string;
+			};
+
+			const verification = await auth.api.deviceVerify({
+				query: { user_code: userCode },
+				headers: ownerHeaders,
+			});
+			expect(verification).toMatchObject({
+				client_id: "test-client",
+				scope: "read write",
+			});
+			await expect(
+				auth.api.deviceApprove({
+					body: { userCode },
+					headers: attackerHeaders,
+				}),
+			).rejects.toMatchObject({
+				status: "FORBIDDEN",
+				body: { error: "access_denied" },
+			});
+		}
+	});
+
 	it("allows approve when the pre-bound user matches the current user", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [
