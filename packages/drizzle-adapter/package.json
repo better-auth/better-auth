@@ -31,6 +31,7 @@
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
+    "test:v1": "vitest run --config vitest.v1.config.ts",
     "coverage": "vitest run --coverage --coverage.provider=istanbul"
   },
   "files": [
@@ -59,7 +60,9 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "catalog:",
+    "@electric-sql/pglite": "0.3.15",
     "drizzle-orm": "^0.45.2",
+    "drizzle-orm-v1": "npm:drizzle-orm@1.0.0-rc.4",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   }
