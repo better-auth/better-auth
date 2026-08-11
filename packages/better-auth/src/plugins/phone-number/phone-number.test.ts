@@ -1427,8 +1427,12 @@ describe("custom verifyOTP", async () => {
 		expect(user.data?.user.phoneNumberVerified).toBe(true);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10697
+	 */
 	it("should use custom verifyOTP when resetting the password", async () => {
 		const resetPhoneNumber = "+1222333444";
+		const newPassword = "new-password-123";
 
 		// Register the phone number so a user exists to reset the password for.
 		await client.phoneNumber.sendOtp({ phoneNumber: resetPhoneNumber });
@@ -1450,7 +1454,7 @@ describe("custom verifyOTP", async () => {
 		const res = await client.phoneNumber.resetPassword({
 			phoneNumber: resetPhoneNumber,
 			otp: "999999",
-			newPassword: "new-password-123",
+			newPassword,
 		});
 
 		expect(mockVerifyOTP).toHaveBeenCalledWith(
@@ -1461,6 +1465,14 @@ describe("custom verifyOTP", async () => {
 			expect.anything(),
 		);
 		expect(res.error).toBe(null);
+
+		// The reset must actually persist, not just return success.
+		const signInRes = await client.signIn.phoneNumber({
+			phoneNumber: resetPhoneNumber,
+			password: newPassword,
+		});
+		expect(signInRes.error).toBe(null);
+		expect(signInRes.data?.user.phoneNumber).toBe(resetPhoneNumber);
 	});
 
 	/**
