@@ -1784,6 +1784,7 @@ describe("cookie cache refreshCache", async () => {
 			context: ctx,
 			headers,
 			query: {},
+			responseHeaders: new Headers(),
 		} as unknown as GenericEndpointContext;
 
 		await runWithRequestState(new WeakMap(), async () => {
@@ -1792,7 +1793,7 @@ describe("cookie cache refreshCache", async () => {
 				expect(session?.user.email).toBe(testUser.email);
 
 				const parsed = parseSetCookieHeader(
-					endpointCtx.context.responseHeaders?.get("set-cookie") || "",
+					endpointCtx.responseHeaders.get("set-cookie") || "",
 				);
 				const forwardedSessionDataCookie = Array.from(parsed.keys()).some(
 					(name) =>

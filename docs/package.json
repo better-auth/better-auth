@@ -79,7 +79,7 @@
     "js-beautify": "^1.15.4",
     "lottie-react": "^2.4.1",
     "lucide-react": "^1.21.0",
-    "mermaid": "^11.15.0",
+    "mermaid": "^11.16.1",
     "next": "16.2.11",
     "next-mdx-remote": "^6.0.0",
     "next-themes": "^0.4.6",

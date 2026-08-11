@@ -113,6 +113,17 @@
 
 - [#9547](https://github.com/better-auth/better-auth/pull/9547) [`15bb169`](https://github.com/better-auth/better-auth/commit/15bb1690b274b9f1e2a58c5db039bd240dc5e99b) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Add a `create-admin` CLI command for creating an initial admin user through the configured Better Auth instance.
 
+## 1.6.27
+
+### Patch Changes
+
+- [#10743](https://github.com/better-auth/better-auth/pull/10743) [`b8077b7`](https://github.com/better-auth/better-auth/commit/b8077b74ef9a80a7757220b72834349bd8de05c0) Thanks [@bytaesu](https://github.com/bytaesu)! - The upgrade command now targets the running CLI version, including prereleases, instead of the npm `latest` tag.
+
+- Updated dependencies [[`2ae491e`](https://github.com/better-auth/better-auth/commit/2ae491eac3ece50839a0eb2d4f868c4deedac67b), [`90b5093`](https://github.com/better-auth/better-auth/commit/90b509344794b8064700371cbc04b985d0519839)]:
+  - @better-auth/core@1.6.27
+  - better-auth@1.6.27
+  - @better-auth/telemetry@1.6.27
+
 ## 1.6.26
 
 ### Patch Changes
