@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Spinner } from "yocto-spinner";
 import { upgradeAction } from "../src/commands/upgrade";
@@ -66,6 +67,37 @@ describe("upgradeAction", () => {
 			packageManager: "pnpm",
 			cwd: process.cwd(),
 			type: "dev",
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10760
+	 */
+	it("upgrades every package in the Changesets fixed release group", async () => {
+		const changesetConfig = JSON.parse(
+			readFileSync(
+				new URL("../../../.changeset/config.json", import.meta.url),
+				"utf8",
+			),
+		) as { fixed: string[][] };
+		const releaseTrainPackages = changesetConfig.fixed
+			.find((group) => group.includes("better-auth"))
+			?.filter((name) => name !== "auth");
+
+		expect(releaseTrainPackages).toBeDefined();
+		mockGetPackageInfo.mockReturnValue({
+			dependencies: Object.fromEntries(
+				releaseTrainPackages?.map((name) => [name, "1.6.26"]) ?? [],
+			),
+		});
+
+		await upgradeAction({ cwd: process.cwd(), yes: true });
+
+		expect(mockInstallDependencies).toHaveBeenCalledWith({
+			dependencies: releaseTrainPackages?.map((name) => `${name}@1.7.0-rc.4`),
+			packageManager: "pnpm",
+			cwd: process.cwd(),
+			type: "prod",
 		});
 	});
 
