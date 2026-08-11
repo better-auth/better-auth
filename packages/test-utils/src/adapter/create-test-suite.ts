@@ -367,9 +367,14 @@ export const createTestSuite = <
 			const cleanupCreatedRows = async () => {
 				adapter = await helpers.adapter();
 				for (const model of Object.keys(createdRows)) {
-					// Snapshot the array: the key is removed once this model's rows are
-					// processed, and the loop must keep iterating the rows it started with.
+					// Snapshot the array: this model's entry is rewritten or removed once
+					// its rows are processed, and the loop must keep iterating the rows it
+					// started with.
 					const rows = createdRows[model]!;
+					// Rows whose delete was attempted and threw. Those stay tracked so a
+					// later cleanup can retry them; every row that was deleted (or skipped
+					// because its model is gone from the schema) is forgotten.
+					const failed: any[] = [];
 					for (const row of rows) {
 						const schema = getAuthTables(helpers.getBetterAuthOptions());
 						const getDefaultModelName = initGetDefaultModelName({
@@ -389,12 +394,16 @@ export const createTestSuite = <
 								where: [{ field: "id", value: row.id }],
 							});
 						} catch {
-							// We ignore any failed attempts to delete the created rows.
+							// A failed delete must not fail a passing test, so the error is
+							// still ignored — but the row stays tracked to be retried.
+							failed.push(row);
 						}
 					}
-					// Forget this model's rows once they have been processed. Keeping them
-					// would make every later cleanup re-issue deletes for ids already handled.
-					delete createdRows[model];
+					if (failed.length > 0) {
+						createdRows[model] = failed;
+					} else {
+						delete createdRows[model];
+					}
 				}
 			};
 
