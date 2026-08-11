@@ -6,35 +6,24 @@ import prompts from "prompts";
 import * as semver from "semver";
 import yoctoSpinner from "yocto-spinner";
 import * as z from "zod";
+import changesetConfig from "../../../../.changeset/config.json" with {
+	type: "json",
+};
 import { detectPackageManager } from "../utils/check-package-managers";
 import { getPackageInfo } from "../utils/get-package-info";
 import { installDependencies } from "../utils/install-dependencies";
 import { cliVersion } from "../version";
 
-// Keep this aligned with the fixed release group in .changeset/config.json.
-const SYNCHRONIZED_BETTER_AUTH_PACKAGES = new Set([
-	"better-auth",
-	"@better-auth/api-key",
-	"@better-auth/cimd",
-	"@better-auth/core",
-	"@better-auth/drizzle-adapter",
-	"@better-auth/electron",
-	"@better-auth/expo",
-	"@better-auth/i18n",
-	"@better-auth/kysely-adapter",
-	"@better-auth/mcp",
-	"@better-auth/memory-adapter",
-	"@better-auth/mongo-adapter",
-	"@better-auth/oauth-provider",
-	"@better-auth/passkey",
-	"@better-auth/prisma-adapter",
-	"@better-auth/redis-storage",
-	"@better-auth/scim",
-	"@better-auth/sso",
-	"@better-auth/stripe",
-	"@better-auth/telemetry",
-	"@better-auth/test-utils",
-]);
+const fixedReleaseGroup = changesetConfig.fixed.find((group) =>
+	group.includes("better-auth"),
+);
+if (!fixedReleaseGroup) {
+	throw new Error("The Better Auth fixed release group is not configured.");
+}
+
+const SYNCHRONIZED_BETTER_AUTH_PACKAGES = new Set(
+	fixedReleaseGroup.filter((name) => name !== "auth"),
+);
 
 function isSynchronizedBetterAuthPackage(name: string): boolean {
 	return SYNCHRONIZED_BETTER_AUTH_PACKAGES.has(name);
