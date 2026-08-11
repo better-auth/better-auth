@@ -5,6 +5,6 @@
 
 Registered OAuth clients can now use the RFC 8628 device flow to obtain provider-managed OAuth tokens by adding `oauthDeviceAuthorization()` alongside `oauthProvider()` or `mcp()`. Clients request a code at `/device/code` and exchange it at `/oauth2/token` after the user approves it. OAuth and OpenID discovery now advertise `device_authorization_endpoint`.
 
-Device authorization requests can bind RFC 8707 resource indicators. `GET /device` now returns the requesting `client_id`, `scope`, and `resource` values to the authenticated user who owns the request, and `onDeviceAuthRequest` receives the resource as its third argument. Token requests can reuse or narrow the approved resource set, but requests that add a resource are rejected. Existing first-party device clients continue to receive Better Auth session tokens from `/device/token`.
+Device authorization requests can bind RFC 8707 resource indicators. `GET /device` now returns the requesting `client_id`, `scope`, and `resource` values to the authenticated user who owns the request. The `onDeviceAuthRequest` callback remains unchanged. It continues to receive `clientId` and `scope`. Token requests can reuse or narrow the approved resource set, but requests that add a resource are rejected. Existing first-party device clients continue to receive Better Auth session tokens from `/device/token`.
 
 When enabled, `oauthDeviceAuthorization()` adds nullable `oauthClientId` and `resources` fields to `deviceCode`. Regenerate and apply the schema after adding the integration.
