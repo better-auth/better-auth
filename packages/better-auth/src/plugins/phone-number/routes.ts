@@ -787,16 +787,11 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					);
 				}
 
-				// Clean up verification value
-				const otp =
-					await ctx.context.internalAdapter.findVerificationValue(
-						phoneResetIdentifier,
-					);
-				if (otp) {
-					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						phoneResetIdentifier,
-					);
-				}
+				// Drop any stored reset code so it cannot be replayed. This is a
+				// no-op when nothing was stored, so it needs no existence check.
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					phoneResetIdentifier,
+				);
 			} else {
 				await verifyPhoneNumberOTP(
 					ctx,
