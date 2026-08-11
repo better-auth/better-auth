@@ -210,8 +210,8 @@ describe("assignOrganizationByDomain", () => {
 		}
 		data.ssoProvider.push(
 			createProvider({
-				id: "matching-provider",
-				providerId: "matching-provider",
+				id: "zz-matching-provider",
+				providerId: "zz-matching-provider",
 				domainVerified: true,
 				organizationId: org.id,
 			}),
