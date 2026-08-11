@@ -78,7 +78,7 @@ npx auth@latest init
 
 ## Upgrade
 
-The `upgrade` command updates older `better-auth` and official `@better-auth/*` dependencies to the version of the CLI being run. Dependencies at the same or a newer version are left unchanged.
+The `upgrade` command updates older `better-auth` dependencies and official `@better-auth/*` packages that participate in the synchronized release train to the version of the CLI being run. It compares the minimum version allowed by each `package.json` specifier; specifiers whose minimum is the same or newer are left unchanged. Independently versioned packages, such as `@better-auth/utils`, are not changed.
 
 ```package-install title="Terminal"
 npx auth@latest upgrade
