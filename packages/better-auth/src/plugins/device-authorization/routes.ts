@@ -1,10 +1,17 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api/routes/session";
 import { generateRandomString } from "../../crypto";
+import type { User } from "../../types";
+import type { Where } from "../../types/adapter";
 import { ms } from "../../utils/time";
-import type { DeviceAuthorizationOptions } from ".";
+import type {
+	DeviceAuthorizationGrant,
+	DeviceAuthorizationOptions,
+	DeviceAuthorizationRequest,
+} from ".";
 import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
 import type { DeviceCode } from "./schema";
 import { DEVICE_AUTHORIZATION_CODE_MAX_LENGTH } from "./schema";
@@ -28,45 +35,6 @@ function validateGeneratedCode(code: unknown, label: "device" | "user") {
 	return code;
 }
 
-function serializeResource(resource: string | string[]): string {
-	return typeof resource === "string" ? resource : JSON.stringify(resource);
-}
-
-function parseStoredResource(
-	resource: string | null | undefined,
-): string | string[] | undefined {
-	if (!resource) return undefined;
-	if (!resource.startsWith("[")) return resource;
-	try {
-		const parsed: unknown = JSON.parse(resource);
-		if (
-			Array.isArray(parsed) &&
-			parsed.every((value): value is string => typeof value === "string")
-		) {
-			return parsed;
-		}
-	} catch {
-		// Treat legacy/unrecognized stored values as a single resource string.
-	}
-	return resource;
-}
-
-async function extractFormResources(
-	request: Request | undefined,
-): Promise<string[] | undefined> {
-	const contentType = request?.headers.get("content-type")?.toLowerCase() ?? "";
-	if (!request || !contentType.includes("application/x-www-form-urlencoded")) {
-		return undefined;
-	}
-	try {
-		const params = new URLSearchParams(await request.text());
-		if (!params.has("resource")) return undefined;
-		return params.getAll("resource").filter(Boolean);
-	} catch {
-		return undefined;
-	}
-}
-
 const deviceCodeBodySchema = z.object({
 	client_id: z.string().meta({
 		description: "The client ID of the application",
@@ -83,33 +51,51 @@ const deviceCodeBodySchema = z.object({
 			description: "Space-separated list of scopes",
 		})
 		.optional(),
-	resource: z
-		.union([z.string(), z.array(z.string())])
-		.meta({
-			description:
-				"RFC 8707 resource indicator(s) to bind to this authorization request",
-		})
-		.optional(),
 });
 
-const deviceCodeErrorSchema = z.object({
-	error: z
-		.enum([
-			"invalid_request",
-			"invalid_client",
-			"unauthorized_client",
-			"invalid_scope",
-			"invalid_target",
-		])
-		.meta({
-			description: "Error code",
-		}),
-	error_description: z.string().meta({
-		description: "Detailed error description",
-	}),
-});
+const deviceCodeBaseErrorCodes = [
+	"invalid_request",
+	"invalid_client",
+	"unauthorized_client",
+	"invalid_scope",
+] as const;
 
-export const deviceCode = (opts: DeviceAuthorizationOptions) => {
+type GrantRequestFields<Grant extends DeviceAuthorizationGrant | undefined> =
+	Grant extends DeviceAuthorizationGrant<infer RequestFields>
+		? RequestFields
+		: Record<never, never>;
+
+type GrantRequestErrorCodes<
+	Grant extends DeviceAuthorizationGrant | undefined,
+> = Grant extends {
+	requestErrorCodes: infer ErrorCodes extends readonly string[];
+}
+	? ErrorCodes
+	: readonly [];
+
+type GrantVerificationContext<
+	Grant extends DeviceAuthorizationGrant | undefined,
+> =
+	Grant extends DeviceAuthorizationGrant<
+		infer _RequestFields,
+		infer VerificationContext
+	>
+		? VerificationContext
+		: Record<never, never>;
+
+type DeviceVerificationResponse<
+	Grant extends DeviceAuthorizationGrant | undefined,
+> = {
+	user_code: string;
+	status: string;
+	client_id?: string | undefined;
+	scope?: string | undefined;
+} & Partial<GrantVerificationContext<Grant>>;
+
+export const deviceCode = <Grant extends DeviceAuthorizationGrant | undefined>(
+	opts: DeviceAuthorizationOptions,
+	grant: Grant,
+) => {
 	const generateDeviceCode = async () => {
 		const code = opts.generateDeviceCode
 			? await opts.generateDeviceCode()
@@ -123,13 +109,29 @@ export const deviceCode = (opts: DeviceAuthorizationOptions) => {
 			: defaultGenerateUserCode(opts.userCodeLength);
 		return validateGeneratedCode(code, "user");
 	};
+	const requestFields = (grant?.requestSchemaFields ??
+		{}) as GrantRequestFields<Grant>;
+	const requestSchema = deviceCodeBodySchema.extend(requestFields);
+	const requestErrorCodes = [
+		...deviceCodeBaseErrorCodes,
+		...(grant?.requestErrorCodes ?? []),
+	] as unknown as [
+		...typeof deviceCodeBaseErrorCodes,
+		...GrantRequestErrorCodes<Grant>,
+	];
+	const requestErrorSchema = z.object({
+		error: z.enum(requestErrorCodes).meta({ description: "Error code" }),
+		error_description: z
+			.string()
+			.meta({ description: "Detailed error description" }),
+	});
 	return createAuthEndpoint(
 		"/device/code",
 		{
 			method: "POST",
 			cloneRequest: true,
-			body: deviceCodeBodySchema,
-			error: deviceCodeErrorSchema,
+			body: requestSchema,
+			error: requestErrorSchema,
 			metadata: {
 				noStore: true,
 				allowedMediaTypes: [
@@ -190,13 +192,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 										properties: {
 											error: {
 												type: "string",
-												enum: [
-													"invalid_request",
-													"invalid_client",
-													"unauthorized_client",
-													"invalid_scope",
-													"invalid_target",
-												],
+												enum: requestErrorCodes,
 											},
 											error_description: {
 												type: "string",
@@ -211,13 +207,10 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			},
 		},
 		async (ctx) => {
-			const formResources = await extractFormResources(ctx.request);
-			if (formResources) {
-				ctx.body.resource =
-					formResources.length === 1 ? formResources[0] : formResources;
-			}
+			const request = ctx.body as DeviceAuthorizationRequest &
+				z.infer<z.ZodObject<GrantRequestFields<Grant>>>;
 			if (opts.validateClient) {
-				const isValid = await opts.validateClient(ctx.body.client_id);
+				const isValid = await opts.validateClient(request.client_id);
 				if (!isValid) {
 					throw new APIError("BAD_REQUEST", {
 						error: "invalid_client",
@@ -226,12 +219,13 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				}
 			}
 
+			const grantDeviceCodeFields = await grant?.authorizeRequest({
+				ctx,
+				request,
+			});
+
 			if (opts.onDeviceAuthRequest) {
-				await opts.onDeviceAuthRequest(
-					ctx.body.client_id,
-					ctx.body.scope,
-					ctx.body.resource,
-				);
+				await opts.onDeviceAuthRequest(request.client_id, request.scope);
 			}
 
 			const deviceCode = await generateDeviceCode();
@@ -242,17 +236,15 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			await ctx.context.adapter.create({
 				model: "deviceCode",
 				data: {
+					...grantDeviceCodeFields,
 					deviceCode,
 					userCode,
-					userId: ctx.body.user_id || null, // An empty user_id is treated as omitted, per RFC 8628 section 3.1
+					userId: request.user_id || null, // An empty user_id is treated as omitted, per RFC 8628 section 3.1
 					expiresAt,
 					status: "pending",
 					pollingInterval: ms(opts.interval),
-					clientId: ctx.body.client_id,
-					scope: ctx.body.scope,
-					resource: ctx.body.resource
-						? serializeResource(ctx.body.resource)
-						: null,
+					clientId: request.client_id,
+					scope: request.scope,
 				},
 			});
 
@@ -307,7 +299,172 @@ const deviceTokenErrorSchema = z.object({
 	}),
 });
 
-export const deviceToken = (opts: DeviceAuthorizationOptions) =>
+export interface DeviceCodeRedemptionAuthorization<AuthorizationContext> {
+	/** Additional ownership predicate used by the atomic claim. */
+	ownershipWhere: Where;
+	/** Issuer-specific state that survives until token issuance. */
+	context: AuthorizationContext;
+}
+
+export interface DeviceCodeRedemptionResult<
+	DeviceCodeFields extends Record<string, unknown>,
+	AuthorizationContext,
+	RedemptionContext,
+> {
+	claimedDeviceCode: DeviceCode & DeviceCodeFields & { userId: string };
+	authorizationContext: AuthorizationContext;
+	redemptionContext: RedemptionContext;
+	user: User;
+}
+
+/**
+ * Runs the RFC 8628 polling and one-time claim state machine shared by every
+ * token issuer. Issuers supply ownership checks and grant-specific validation,
+ * but cannot bypass expiry, polling, denial, or atomic consumption.
+ */
+export async function redeemDeviceCode<
+	DeviceCodeFields extends Record<string, unknown>,
+	AuthorizationContext,
+	RedemptionContext,
+>(input: {
+	ctx: GenericEndpointContext;
+	deviceCode: string;
+	authorizeRedemption: (
+		deviceCode: DeviceCode & DeviceCodeFields,
+	) =>
+		| DeviceCodeRedemptionAuthorization<AuthorizationContext>
+		| Promise<DeviceCodeRedemptionAuthorization<AuthorizationContext>>;
+	prepareRedemption: (
+		deviceCode: DeviceCode & DeviceCodeFields,
+		authorizationContext: AuthorizationContext,
+	) => RedemptionContext | Promise<RedemptionContext>;
+}): Promise<
+	DeviceCodeRedemptionResult<
+		DeviceCodeFields,
+		AuthorizationContext,
+		RedemptionContext
+	>
+> {
+	const deviceCodeRecord = await input.ctx.context.adapter.findOne<
+		DeviceCode & DeviceCodeFields
+	>({
+		model: "deviceCode",
+		where: [{ field: "deviceCode", value: input.deviceCode }],
+	});
+	if (!deviceCodeRecord) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_grant",
+			error_description:
+				DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE.message,
+		});
+	}
+
+	const authorization = await input.authorizeRedemption(deviceCodeRecord);
+	if (deviceCodeRecord.lastPolledAt && deviceCodeRecord.pollingInterval) {
+		const timeSinceLastPoll =
+			Date.now() - new Date(deviceCodeRecord.lastPolledAt).getTime();
+		if (timeSinceLastPoll < deviceCodeRecord.pollingInterval) {
+			throw new APIError("BAD_REQUEST", {
+				error: "slow_down",
+				error_description:
+					DEVICE_AUTHORIZATION_ERROR_CODES.POLLING_TOO_FREQUENTLY.message,
+			});
+		}
+	}
+
+	await input.ctx.context.adapter.update({
+		model: "deviceCode",
+		where: [{ field: "id", value: deviceCodeRecord.id }],
+		update: { lastPolledAt: new Date() },
+	});
+
+	if (deviceCodeRecord.expiresAt < new Date()) {
+		await input.ctx.context.adapter.delete({
+			model: "deviceCode",
+			where: [{ field: "id", value: deviceCodeRecord.id }],
+		});
+		throw new APIError("BAD_REQUEST", {
+			error: "expired_token",
+			error_description:
+				DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_DEVICE_CODE.message,
+		});
+	}
+
+	if (deviceCodeRecord.status === "pending") {
+		throw new APIError("BAD_REQUEST", {
+			error: "authorization_pending",
+			error_description:
+				DEVICE_AUTHORIZATION_ERROR_CODES.AUTHORIZATION_PENDING.message,
+		});
+	}
+
+	if (deviceCodeRecord.status === "denied") {
+		await input.ctx.context.adapter.delete({
+			model: "deviceCode",
+			where: [{ field: "id", value: deviceCodeRecord.id }],
+		});
+		throw new APIError("BAD_REQUEST", {
+			error: "access_denied",
+			error_description: DEVICE_AUTHORIZATION_ERROR_CODES.ACCESS_DENIED.message,
+		});
+	}
+
+	if (deviceCodeRecord.status !== "approved" || !deviceCodeRecord.userId) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "server_error",
+			error_description:
+				DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE_STATUS.message,
+		});
+	}
+
+	const redemptionContext = await input.prepareRedemption(
+		deviceCodeRecord,
+		authorization.context,
+	);
+	const user = await input.ctx.context.internalAdapter.findUserById(
+		deviceCodeRecord.userId,
+	);
+	if (!user) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "server_error",
+			error_description:
+				DEVICE_AUTHORIZATION_ERROR_CODES.USER_NOT_FOUND.message,
+		});
+	}
+	// Keep every fallible validation and lookup before this destructive claim.
+	// Credential side effects remain after it so concurrent polls cannot both
+	// issue from the same code.
+	const claimedDeviceCode = await input.ctx.context.adapter.consumeOne<
+		DeviceCode & DeviceCodeFields
+	>({
+		model: "deviceCode",
+		where: [
+			{ field: "id", value: deviceCodeRecord.id },
+			authorization.ownershipWhere,
+			{ field: "status", value: "approved" },
+		],
+	});
+	if (!claimedDeviceCode?.userId) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_grant",
+			error_description:
+				DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE.message,
+		});
+	}
+
+	return {
+		claimedDeviceCode: claimedDeviceCode as DeviceCode &
+			DeviceCodeFields & { userId: string },
+		authorizationContext: authorization.context,
+		redemptionContext,
+		user,
+	};
+}
+
+export const deviceToken = <Grant extends DeviceAuthorizationGrant | undefined>(
+	opts: DeviceAuthorizationOptions,
+	grant: Grant,
+) =>
 	createAuthEndpoint(
 		"/device/token",
 		{
@@ -382,263 +539,118 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				}
 			}
 
-			const deviceCodeRecord = await ctx.context.adapter.findOne<{
-				id: string;
-				deviceCode: string;
-				userCode: string;
-				userId?: string | undefined;
-				expiresAt: Date;
-				status: string;
-				lastPolledAt?: Date | undefined;
-				pollingInterval?: number | undefined;
-				clientId?: string | undefined;
-				scope?: string | undefined;
-			}>({
-				model: "deviceCode",
-				where: [
-					{
-						field: "deviceCode",
-						value: device_code,
-					},
-				],
-			});
-
-			if (!deviceCodeRecord) {
-				throw new APIError("BAD_REQUEST", {
-					error: "invalid_grant",
-					error_description:
-						DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE.message,
-				});
-			}
-
-			if (
-				deviceCodeRecord.clientId &&
-				deviceCodeRecord.clientId !== client_id
-			) {
-				throw new APIError("BAD_REQUEST", {
-					error: "invalid_grant",
-					error_description: "Client ID mismatch",
-				});
-			}
-
-			// Check for rate limiting
-			if (deviceCodeRecord.lastPolledAt && deviceCodeRecord.pollingInterval) {
-				const timeSinceLastPoll =
-					Date.now() - new Date(deviceCodeRecord.lastPolledAt).getTime();
-				const minInterval = deviceCodeRecord.pollingInterval;
-
-				if (timeSinceLastPoll < minInterval) {
-					throw new APIError("BAD_REQUEST", {
-						error: "slow_down",
-						error_description:
-							DEVICE_AUTHORIZATION_ERROR_CODES.POLLING_TOO_FREQUENTLY.message,
+			const { claimedDeviceCode, user } = await redeemDeviceCode({
+				ctx,
+				deviceCode: device_code,
+				authorizeRedemption: async (deviceCodeRecord) => {
+					if (
+						deviceCodeRecord.clientId &&
+						deviceCodeRecord.clientId !== client_id
+					) {
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_grant",
+							error_description: "Client ID mismatch",
+						});
+					}
+					await grant?.assertSessionRedemption({
+						ctx,
+						deviceCode: deviceCodeRecord,
 					});
-				}
-			}
-
-			// Update last polled time
-			await ctx.context.adapter.update({
-				model: "deviceCode",
-				where: [
-					{
-						field: "id",
-						value: deviceCodeRecord.id,
-					},
-				],
-				update: {
-					lastPolledAt: new Date(),
+					return {
+						ownershipWhere: { field: "clientId", value: client_id },
+						context: undefined,
+					};
 				},
+				prepareRedemption: () => undefined,
 			});
 
-			if (deviceCodeRecord.expiresAt < new Date()) {
-				await ctx.context.adapter.delete({
-					model: "deviceCode",
-					where: [
-						{
-							field: "id",
-							value: deviceCodeRecord.id,
-						},
-					],
-				});
-				throw new APIError("BAD_REQUEST", {
-					error: "expired_token",
+			const session = await ctx.context.internalAdapter.createSession(user.id);
+			if (!session) {
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					error: "server_error",
 					error_description:
-						DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_DEVICE_CODE.message,
+						DEVICE_AUTHORIZATION_ERROR_CODES.FAILED_TO_CREATE_SESSION.message,
 				});
 			}
 
-			if (deviceCodeRecord.status === "pending") {
-				throw new APIError("BAD_REQUEST", {
-					error: "authorization_pending",
-					error_description:
-						DEVICE_AUTHORIZATION_ERROR_CODES.AUTHORIZATION_PENDING.message,
-				});
-			}
-
-			if (deviceCodeRecord.status === "denied") {
-				await ctx.context.adapter.delete({
-					model: "deviceCode",
-					where: [
-						{
-							field: "id",
-							value: deviceCodeRecord.id,
-						},
-					],
-				});
-				throw new APIError("BAD_REQUEST", {
-					error: "access_denied",
-					error_description:
-						DEVICE_AUTHORIZATION_ERROR_CODES.ACCESS_DENIED.message,
-				});
-			}
-
-			if (deviceCodeRecord.status === "approved" && deviceCodeRecord.userId) {
-				// Atomically claim the approved code as the single race gate:
-				// concurrent polls contend on this delete-and-return, and only the
-				// caller that removes the row may issue a session. Losers receive
-				// null and are rejected, so the code is redeemed at most once.
-				const claimedDeviceCode = await ctx.context.adapter.consumeOne<{
-					id: string;
-					userId?: string | undefined;
-					scope?: string | undefined;
-				}>({
-					model: "deviceCode",
-					where: [
-						{ field: "id", value: deviceCodeRecord.id },
-						{ field: "clientId", value: client_id },
-						{ field: "status", value: "approved" },
-					],
-				});
-
-				if (!claimedDeviceCode?.userId) {
-					throw new APIError("BAD_REQUEST", {
-						error: "invalid_grant",
-						error_description:
-							DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE.message,
-					});
-				}
-
-				const user = await ctx.context.internalAdapter.findUserById(
-					claimedDeviceCode.userId,
-				);
-
-				if (!user) {
-					throw new APIError("INTERNAL_SERVER_ERROR", {
-						error: "server_error",
-						error_description:
-							DEVICE_AUTHORIZATION_ERROR_CODES.USER_NOT_FOUND.message,
-					});
-				}
-
-				const session = await ctx.context.internalAdapter.createSession(
-					user.id,
-				);
-
-				if (!session) {
-					throw new APIError("INTERNAL_SERVER_ERROR", {
-						error: "server_error",
-						error_description:
-							DEVICE_AUTHORIZATION_ERROR_CODES.FAILED_TO_CREATE_SESSION.message,
-					});
-				}
-
-				// Set new session context for hooks and plugins
-				// (matches setSessionCookie logic)
-				ctx.context.setNewSession({
-					session,
-					user,
-				});
-
-				// If secondary storage is enabled, store the session data in the secondary storage
-				// (matches setSessionCookie logic)
-				if (ctx.context.options.secondaryStorage) {
-					await ctx.context.secondaryStorage?.set(
-						session.token,
-						JSON.stringify({
-							user,
-							session,
-						}),
-						Math.floor(
-							(new Date(session.expiresAt).getTime() - Date.now()) / 1000,
-						),
-					);
-				}
-
-				// Return OAuth 2.0 compliant token response
-				ctx.setHeader("Cache-Control", "no-store");
-				ctx.setHeader("Pragma", "no-cache");
-				return ctx.json({
-					access_token: session.token,
-					token_type: "Bearer",
-					expires_in: Math.floor(
+			ctx.context.setNewSession({ session, user });
+			if (ctx.context.options.secondaryStorage) {
+				await ctx.context.secondaryStorage?.set(
+					session.token,
+					JSON.stringify({ user, session }),
+					Math.floor(
 						(new Date(session.expiresAt).getTime() - Date.now()) / 1000,
 					),
-					scope: claimedDeviceCode.scope || "",
-				});
+				);
 			}
 
-			throw new APIError("INTERNAL_SERVER_ERROR", {
-				error: "server_error",
-				error_description:
-					DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE_STATUS.message,
+			ctx.setHeader("Cache-Control", "no-store");
+			ctx.setHeader("Pragma", "no-cache");
+			return ctx.json({
+				access_token: session.token,
+				token_type: "Bearer",
+				expires_in: Math.floor(
+					(new Date(session.expiresAt).getTime() - Date.now()) / 1000,
+				),
+				scope: claimedDeviceCode.scope || "",
 			});
 		},
 	);
 
-export const deviceVerify = createAuthEndpoint(
-	"/device",
-	{
-		method: "GET",
-		query: z.object({
-			user_code: z.string().meta({
-				description: "The user code to verify",
+export const deviceVerify = <
+	Grant extends DeviceAuthorizationGrant | undefined,
+>(
+	grant: Grant,
+) =>
+	createAuthEndpoint(
+		"/device",
+		{
+			method: "GET",
+			query: z.object({
+				user_code: z.string().meta({
+					description: "The user code to verify",
+				}),
 			}),
-		}),
-		error: z.object({
-			error: z.enum(["invalid_request"]).meta({
-				description: "Error code",
+			error: z.object({
+				error: z.enum(["invalid_request"]).meta({
+					description: "Error code",
+				}),
+				error_description: z.string().meta({
+					description: "Detailed error description",
+				}),
 			}),
-			error_description: z.string().meta({
-				description: "Detailed error description",
-			}),
-		}),
-		metadata: {
-			openapi: {
-				description: "Verify user code and get device authorization status",
-				responses: {
-					200: {
-						description: "Device authorization status",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										user_code: {
-											type: "string",
-											description: "The user code to verify",
-										},
-										status: {
-											type: "string",
-											enum: ["pending", "approved", "denied"],
-											description: "Current status of the device authorization",
-										},
-										client_id: {
-											type: "string",
-											description:
-												"The client requesting authorization, returned only to the authenticated user who owns this request",
-										},
-										scope: {
-											type: "string",
-											description:
-												"The requested scopes, returned only to the authenticated user who owns this request",
-										},
-										resource: {
-											oneOf: [
-												{ type: "string" },
-												{ type: "array", items: { type: "string" } },
-											],
-											description:
-												"The requested resource indicators, returned only to the authenticated user who owns this request",
+			metadata: {
+				openapi: {
+					description: "Verify user code and get device authorization status",
+					responses: {
+						200: {
+							description: "Device authorization status",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											user_code: {
+												type: "string",
+												description: "The user code to verify",
+											},
+											status: {
+												type: "string",
+												enum: ["pending", "approved", "denied"],
+												description:
+													"Current status of the device authorization",
+											},
+											client_id: {
+												type: "string",
+												description:
+													"The client requesting authorization, returned only to the authenticated user who owns this request",
+											},
+											scope: {
+												type: "string",
+												description:
+													"The requested scopes, returned only to the authenticated user who owns this request",
+											},
+											...grant?.verificationOpenAPIProperties,
 										},
 									},
 								},
@@ -648,75 +660,80 @@ export const deviceVerify = createAuthEndpoint(
 				},
 			},
 		},
-	},
-	async (ctx) => {
-		const { user_code } = ctx.query;
-		const cleanUserCode = user_code.replace(/-/g, "");
+		async (ctx) => {
+			const { user_code } = ctx.query;
+			const cleanUserCode = user_code.replace(/-/g, "");
 
-		const deviceCodeRecord = await ctx.context.adapter.findOne<DeviceCode>({
-			model: "deviceCode",
-			where: [
-				{
-					field: "userCode",
-					value: cleanUserCode,
-				},
-			],
-		});
-
-		if (!deviceCodeRecord) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_request",
-				error_description:
-					DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE.message,
+			const deviceCodeRecord = await ctx.context.adapter.findOne<DeviceCode>({
+				model: "deviceCode",
+				where: [
+					{
+						field: "userCode",
+						value: cleanUserCode,
+					},
+				],
 			});
-		}
 
-		if (deviceCodeRecord.expiresAt < new Date()) {
-			throw new APIError("BAD_REQUEST", {
-				error: "expired_token",
-				error_description:
-					DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE.message,
-			});
-		}
-
-		const session = await getSessionFromCtx(ctx);
-		if (
-			session?.user?.id &&
-			!deviceCodeRecord.userId &&
-			deviceCodeRecord.status === "pending"
-		) {
-			const claimedDeviceCodeRecord =
-				await ctx.context.adapter.incrementOne<DeviceCode>({
-					model: "deviceCode",
-					where: [
-						{ field: "id", value: deviceCodeRecord.id },
-						{ field: "status", value: "pending" },
-						{ field: "userId", operator: "eq", value: null },
-					],
-					increment: {},
-					set: { userId: session.user.id },
+			if (!deviceCodeRecord) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_request",
+					error_description:
+						DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE.message,
 				});
-			if (claimedDeviceCodeRecord) {
-				deviceCodeRecord.userId = session.user.id;
 			}
-		}
 
-		const canReviewRequest =
-			session?.user.id !== undefined &&
-			deviceCodeRecord.userId === session.user.id;
-		return ctx.json({
-			user_code: user_code,
-			status: deviceCodeRecord.status,
-			...(canReviewRequest
-				? {
-						client_id: deviceCodeRecord.clientId,
-						scope: deviceCodeRecord.scope,
-						resource: parseStoredResource(deviceCodeRecord.resource),
-					}
-				: {}),
-		});
-	},
-);
+			if (deviceCodeRecord.expiresAt < new Date()) {
+				throw new APIError("BAD_REQUEST", {
+					error: "expired_token",
+					error_description:
+						DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE.message,
+				});
+			}
+
+			const session = await getSessionFromCtx(ctx);
+			if (
+				session?.user?.id &&
+				!deviceCodeRecord.userId &&
+				deviceCodeRecord.status === "pending"
+			) {
+				const claimedDeviceCodeRecord =
+					await ctx.context.adapter.incrementOne<DeviceCode>({
+						model: "deviceCode",
+						where: [
+							{ field: "id", value: deviceCodeRecord.id },
+							{ field: "status", value: "pending" },
+							{ field: "userId", operator: "eq", value: null },
+						],
+						increment: {},
+						set: { userId: session.user.id },
+					});
+				if (claimedDeviceCodeRecord) {
+					deviceCodeRecord.userId = session.user.id;
+				}
+			}
+
+			const canReviewRequest =
+				session?.user.id !== undefined &&
+				deviceCodeRecord.userId === session.user.id;
+			const grantContext = (
+				canReviewRequest
+					? grant?.getVerificationContext(deviceCodeRecord)
+					: undefined
+			) as GrantVerificationContext<Grant> | undefined;
+			const response = {
+				...(canReviewRequest ? grantContext : undefined),
+				user_code: user_code,
+				status: deviceCodeRecord.status,
+				...(canReviewRequest
+					? {
+							client_id: deviceCodeRecord.clientId,
+							scope: deviceCodeRecord.scope,
+						}
+					: {}),
+			} as DeviceVerificationResponse<Grant>;
+			return ctx.json(response);
+		},
+	);
 
 export const deviceApprove = createAuthEndpoint(
 	"/device/approve",

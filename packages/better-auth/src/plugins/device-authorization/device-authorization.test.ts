@@ -5,6 +5,7 @@ import type { MemoryDB } from "@better-auth/memory-adapter";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import type { DeviceAuthorizationGrant } from ".";
 import { deviceAuthorization, deviceAuthorizationOptionsSchema } from ".";
 import { deviceAuthorizationClient } from "./client";
 import type { DeviceCode } from "./schema";
@@ -136,8 +137,75 @@ describe("client validation", async () => {
 	});
 });
 
+describe("grant request validation", () => {
+	it("runs before the application callback", async () => {
+		const authorizeRequest = vi.fn().mockRejectedValue(new Error("rejected"));
+		const onDeviceAuthRequest = vi.fn();
+		const grant = {
+			requestSchemaFields: {},
+			deviceCodeSchemaFields: {},
+			authorizeRequest,
+			assertSessionRedemption: () => {},
+			getVerificationContext: () => undefined,
+		} satisfies DeviceAuthorizationGrant;
+		const { auth } = await getTestInstance({
+			plugins: [deviceAuthorization({ grant, onDeviceAuthRequest })],
+		});
+
+		await expect(
+			auth.api.deviceCode({ body: { client_id: "client" } }),
+		).rejects.toThrow("rejected");
+		expect(authorizeRequest).toHaveBeenCalledOnce();
+		expect(onDeviceAuthRequest).not.toHaveBeenCalled();
+	});
+});
+
+describe("grant verification context", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10746#discussion_r3760240763
+	 */
+	it("does not let grant context overwrite host-owned response fields", async () => {
+		const grant = {
+			requestSchemaFields: {},
+			deviceCodeSchemaFields: {},
+			authorizeRequest: () => undefined,
+			assertSessionRedemption: () => {},
+			getVerificationContext: () => ({
+				user_code: "grant-user-code",
+				status: "grant-status",
+				client_id: "grant-client",
+				scope: "grant-scope",
+				grant_field: "grant-value",
+			}),
+		} satisfies DeviceAuthorizationGrant;
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [deviceAuthorization({ grant })],
+		});
+		const { headers } = await signInWithTestUser();
+		const { user_code } = await auth.api.deviceCode({
+			body: {
+				client_id: "client",
+				scope: "read",
+			},
+		});
+
+		const response = await auth.api.deviceVerify({
+			query: { user_code },
+			headers,
+		});
+
+		expect(response).toMatchObject({
+			user_code,
+			status: "pending",
+			client_id: "client",
+			scope: "read",
+			grant_field: "grant-value",
+		});
+	});
+});
+
 describe("device authorization flow", async () => {
-	const { auth, client, signInWithTestUser, db } = await getTestInstance(
+	const { auth, signInWithTestUser, db } = await getTestInstance(
 		{
 			plugins: [
 				deviceAuthorization({
@@ -185,37 +253,6 @@ describe("device authorization flow", async () => {
 
 			expect(response.device_code).toBeDefined();
 			expect(response.user_code).toBeDefined();
-		});
-
-		it("should preserve repeated resources from a form request", async () => {
-			const form = new URLSearchParams({
-				client_id: "test-client",
-				scope: "read",
-			});
-			form.append("resource", "https://api.example.com");
-			form.append("resource", "https://files.example.com");
-
-			const created = await client.$fetch<Record<string, unknown>>(
-				"/device/code",
-				{
-					method: "POST",
-					body: form,
-					headers: {
-						"content-type": "application/x-www-form-urlencoded",
-					},
-				},
-			);
-			expect(created.error).toBeNull();
-
-			const { headers } = await signInWithTestUser();
-			const verification = await auth.api.deviceVerify({
-				query: { user_code: created.data!.user_code as string },
-				headers,
-			});
-			expect(verification.resource).toEqual([
-				"https://api.example.com",
-				"https://files.example.com",
-			]);
 		});
 	});
 
@@ -300,7 +337,6 @@ describe("device authorization flow", async () => {
 				body: {
 					client_id: "test-client",
 					scope: "read write",
-					resource: ["https://api.example.com", "https://files.example.com"],
 				},
 			});
 
@@ -326,10 +362,6 @@ describe("device authorization flow", async () => {
 				expect(response.status).toBe("pending");
 				expect(response.client_id).toBe("test-client");
 				expect(response.scope).toBe("read write");
-				expect(response.resource).toEqual([
-					"https://api.example.com",
-					"https://files.example.com",
-				]);
 			}
 		});
 
@@ -725,6 +757,45 @@ describe("device authorization flow", async () => {
 			});
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/pull/10746#discussion_r3751447613
+		 */
+		it("should preserve an approved code when user lookup fails before session issuance", async () => {
+			const { headers } = await signInWithTestUser();
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+
+			await auth.api.deviceVerify({ query: { user_code }, headers });
+			await auth.api.deviceApprove({
+				body: { userCode: user_code },
+				headers,
+			});
+
+			await db.update({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: device_code }],
+				update: { userId: "missing-user" },
+			});
+			await expect(
+				auth.api.deviceToken({
+					body: {
+						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+						device_code,
+						client_id: "test-client",
+					},
+				}),
+			).rejects.toMatchObject({
+				body: { error: "server_error" },
+			});
+
+			const stored = await db.findOne<DeviceCode>({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: device_code }],
+			});
+			expect(stored?.status).toBe("approved");
+		});
+
 		it("should burn an expired approved device code instead of issuing a token", async () => {
 			const { headers } = await signInWithTestUser();
 
@@ -955,7 +1026,6 @@ describe("device authorization ownership gate", () => {
 			body: {
 				client_id: "test-client",
 				scope: "read write",
-				resource: "https://api.example.com",
 			},
 		});
 

@@ -1,6 +1,6 @@
 import {
 	DEVICE_CODE_GRANT_TYPE,
-	deviceCodeGrant,
+	oauthDeviceAuthorization,
 } from "@better-auth/oauth-provider";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { createAuthClient } from "better-auth/client";
@@ -11,7 +11,6 @@ import {
 	DPOP_SIGNING_ALGORITHMS,
 	refreshAccessTokenRequest,
 } from "better-auth/oauth2";
-import { deviceAuthorization } from "better-auth/plugins/device-authorization";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
@@ -162,13 +161,12 @@ describe("mcp plugin", async () => {
 				baseURL: deviceBaseURL,
 				plugins: [
 					jwt(),
-					deviceAuthorization(),
 					mcp({
 						loginPage: "/login",
 						consentPage: "/consent",
 						resource: `${deviceBaseURL}/api/auth`,
 					}),
-					deviceCodeGrant(),
+					oauthDeviceAuthorization(),
 				],
 			});
 
