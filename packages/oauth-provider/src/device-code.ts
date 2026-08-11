@@ -196,6 +196,32 @@ function buildOAuthDeviceGrant() {
 	return {
 		requestSchemaFields: oauthDeviceRequestFields,
 		requestErrorCodes: ["invalid_target"] as const,
+		requestOpenAPIResponses: {
+			401: {
+				description: "Invalid Basic client authentication",
+				headers: {
+					"WWW-Authenticate": {
+						description: "Basic client authentication challenge",
+						schema: { type: "string", example: "Basic" },
+					},
+				},
+				content: {
+					"application/json": {
+						schema: {
+							type: "object",
+							properties: {
+								error: {
+									type: "string",
+									enum: ["invalid_client"],
+								},
+								error_description: { type: "string" },
+							},
+							required: ["error"],
+						},
+					},
+				},
+			},
+		},
 		onRequestValidationError: (issues) => {
 			if (
 				issues.length > 0 &&

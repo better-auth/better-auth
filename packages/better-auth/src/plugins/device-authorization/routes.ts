@@ -254,6 +254,7 @@ export const deviceCode = <Grant extends DeviceAuthorizationGrant | undefined>(
 
 Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#section-3.2)`,
 					responses: {
+						...grant?.requestOpenAPIResponses,
 						200: {
 							description: "Success",
 							content: {

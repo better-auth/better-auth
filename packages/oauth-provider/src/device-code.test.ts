@@ -93,7 +93,7 @@ describe("oauth-provider device-code composition", () => {
 		expect(metadata.grant_types_supported).toContain(DEVICE_CODE_GRANT_TYPE);
 	});
 
-	it("exposes resource only in composed client and OpenAPI contracts", async () => {
+	it("exposes OAuth contracts only in composed installations", async () => {
 		const standaloneClient = createAuthClient({
 			plugins: [deviceAuthorizationClient()],
 		});
@@ -109,6 +109,12 @@ describe("oauth-provider device-code composition", () => {
 		expectTypeOf<StandaloneDeviceCodeInput>().not.toHaveProperty("resource");
 		expectTypeOf<StandaloneDeviceCodeInput>().not.toHaveProperty(
 			"client_secret",
+		);
+		expectTypeOf<StandaloneDeviceCodeInput>().not.toHaveProperty(
+			"client_assertion",
+		);
+		expectTypeOf<StandaloneDeviceCodeInput>().not.toHaveProperty(
+			"client_assertion_type",
 		);
 		expectTypeOf<ComposedDeviceCodeInput>()
 			.toHaveProperty("resource")
@@ -149,13 +155,28 @@ describe("oauth-provider device-code composition", () => {
 								{ schema?: { properties?: RequestProperties } }
 							>;
 						};
+						responses?: Record<
+							string,
+							{
+								headers?: Record<string, unknown>;
+								content?: Record<
+									string,
+									{ schema?: { properties?: RequestProperties } }
+								>;
+							}
+						>;
 					};
 				}
 			>;
 		};
+		const getDeviceCodeOperation = (document: unknown) =>
+			(document as OpenAPIDocument).paths["/device/code"]?.post;
 		const getRequestProperties = (document: unknown) =>
-			(document as OpenAPIDocument).paths["/device/code"]?.post?.requestBody
-				?.content?.["application/json"]?.schema?.properties ?? {};
+			getDeviceCodeOperation(document)?.requestBody?.content?.[
+				"application/json"
+			]?.schema?.properties ?? {};
+		const getUnauthorizedResponse = (document: unknown) =>
+			getDeviceCodeOperation(document)?.responses?.["401"];
 		const standaloneDocument = await standaloneAuth.api.generateOpenAPISchema();
 		const composedDocument = await composedAuth.api.generateOpenAPISchema();
 
@@ -164,6 +185,12 @@ describe("oauth-provider device-code composition", () => {
 		);
 		expect(getRequestProperties(standaloneDocument)).not.toHaveProperty(
 			"client_secret",
+		);
+		expect(getRequestProperties(standaloneDocument)).not.toHaveProperty(
+			"client_assertion",
+		);
+		expect(getRequestProperties(standaloneDocument)).not.toHaveProperty(
+			"client_assertion_type",
 		);
 		expect(getRequestProperties(composedDocument)).toHaveProperty("resource");
 		expect(getRequestProperties(composedDocument)).toHaveProperty(
@@ -175,6 +202,25 @@ describe("oauth-provider device-code composition", () => {
 		expect(getRequestProperties(composedDocument)).toHaveProperty(
 			"client_assertion_type",
 		);
+		expect(
+			getUnauthorizedResponse(standaloneDocument)?.headers ?? {},
+		).not.toHaveProperty("WWW-Authenticate");
+		expect(getUnauthorizedResponse(composedDocument)).toMatchObject({
+			headers: {
+				"WWW-Authenticate": {
+					schema: { type: "string", example: "Basic" },
+				},
+			},
+			content: {
+				"application/json": {
+					schema: {
+						properties: {
+							error: { enum: ["invalid_client"] },
+						},
+					},
+				},
+			},
+		});
 	});
 });
 

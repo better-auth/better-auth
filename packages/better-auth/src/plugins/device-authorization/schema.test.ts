@@ -86,6 +86,23 @@ describe("device authorization schema", () => {
 		});
 	});
 
+	it("adds grant-specific responses to the device-code OpenAPI contract", () => {
+		const plugin = deviceAuthorization({
+			grant: {
+				...schemaGrant({}),
+				requestOpenAPIResponses: {
+					401: { description: "Grant authentication failed" },
+				},
+			},
+		});
+
+		expect(
+			plugin.endpoints.deviceCode.options.metadata?.openapi?.responses,
+		).toMatchObject({
+			401: { description: "Grant authentication failed" },
+		});
+	});
+
 	it("rejects grant fields that redefine the base device-code schema", () => {
 		expect(() =>
 			deviceAuthorization({

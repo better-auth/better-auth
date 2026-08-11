@@ -160,6 +160,8 @@ export interface DeviceAuthorizationGrant<
 	requestSchemaFields: RequestFields;
 	/** Additional request errors introduced by the grant's protocol extensions. */
 	requestErrorCodes?: readonly string[];
+	/** Additional OpenAPI responses introduced by the grant's request protocol. */
+	requestOpenAPIResponses?: Record<string, Record<string, unknown>>;
 	/** Translate validation issues raised by the grant's request fields. */
 	onRequestValidationError?: (
 		issues: readonly StandardSchemaV1.Issue[],
