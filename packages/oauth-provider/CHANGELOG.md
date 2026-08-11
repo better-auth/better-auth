@@ -1,5 +1,15 @@
 # @better-auth/oauth-provider
 
+## 1.7.0-rc.5
+
+### Minor Changes
+
+- [#10746](https://github.com/better-auth/better-auth/pull/10746) [`6782647`](https://github.com/better-auth/better-auth/commit/6782647d7c2d248246f9ef3980e656725c29ce64) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth device grants now use `oauthDeviceAuthorization()` alongside `oauthProvider()` or `mcp()`. This single integration replaces both the standalone `deviceCodeGrant()` plugin and the shared-grant configuration. Standalone Device Authorization no longer accepts or stores RFC 8707 resources, and `onDeviceAuthRequest` receives only `clientId` and `scope`. The OAuth integration rejects resource indicators that are not absolute, fragment-free URIs.
+
+  The OAuth integration replaces the optional `resource` column with `oauthClientId` and `resources`. Regenerate and apply the schema when using it. Before upgrading from an earlier 1.7 prerelease, let pending OAuth device codes expire or delete them because they cannot be exchanged through the new integration.
+
+- [#10703](https://github.com/better-auth/better-auth/pull/10703) [`a796214`](https://github.com/better-auth/better-auth/commit/a7962147b3a759ce6da542300e31f3b5705a63fa) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Removed the `silenceWarnings` option from the oauth-provider plugin. The plugin already serves the oauth-authorization-server and openid-configuration metadata endpoints, so the init warnings and the config flag used to silence them are no longer needed. Delete any `silenceWarnings` entries from your oauthProvider config.
+
 ## 1.7.0-rc.4
 
 ## 1.7.0-rc.3
