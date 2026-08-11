@@ -140,6 +140,14 @@ export interface DeviceAuthorizationRequest {
 	scope?: string | undefined;
 }
 
+/** The client binding and grant-owned fields produced by request authorization. */
+export interface DeviceAuthorizationGrantAuthorization {
+	/** The client identifier that owns the device code. */
+	clientId: string;
+	/** Additional grant-owned fields persisted with the device code. */
+	deviceCodeFields: Record<string, unknown>;
+}
+
 /**
  * A token grant that contributes its request state to device authorization
  * without expanding the standalone plugin's database or endpoint contracts.
@@ -158,14 +166,14 @@ export interface DeviceAuthorizationGrant<
 	) => void;
 	/** Database fields persisted only when this grant is configured. */
 	deviceCodeSchemaFields: Record<string, DBFieldAttribute>;
-	/** Validate a request and return the grant-owned fields to persist. */
+	/** Validate a request and return its client binding and fields to persist. */
 	authorizeRequest: (input: {
 		ctx: GenericEndpointContext;
 		request: DeviceAuthorizationRequest & z.infer<z.ZodObject<RequestFields>>;
 	}) =>
-		| Record<string, unknown>
+		| DeviceAuthorizationGrantAuthorization
 		| undefined
-		| Promise<Record<string, unknown> | undefined>;
+		| Promise<DeviceAuthorizationGrantAuthorization | undefined>;
 	/** Refuse the standalone session-token endpoint for grant-owned codes. */
 	assertSessionRedemption: (input: {
 		ctx: GenericEndpointContext;

@@ -107,9 +107,21 @@ describe("oauth-provider device-code composition", () => {
 			typeof composedClient.device.code
 		>[0];
 		expectTypeOf<StandaloneDeviceCodeInput>().not.toHaveProperty("resource");
+		expectTypeOf<StandaloneDeviceCodeInput>().not.toHaveProperty(
+			"client_secret",
+		);
 		expectTypeOf<ComposedDeviceCodeInput>()
 			.toHaveProperty("resource")
 			.toEqualTypeOf<string | string[] | undefined>();
+		expectTypeOf<ComposedDeviceCodeInput>()
+			.toHaveProperty("client_secret")
+			.toEqualTypeOf<string | undefined>();
+		expectTypeOf<ComposedDeviceCodeInput>()
+			.toHaveProperty("client_assertion")
+			.toEqualTypeOf<string | undefined>();
+		expectTypeOf<ComposedDeviceCodeInput>()
+			.toHaveProperty("client_assertion_type")
+			.toEqualTypeOf<string | undefined>();
 
 		const { auth: standaloneAuth } = await getTestInstance({
 			plugins: [deviceAuthorization(), openAPI()],
@@ -150,7 +162,19 @@ describe("oauth-provider device-code composition", () => {
 		expect(getRequestProperties(standaloneDocument)).not.toHaveProperty(
 			"resource",
 		);
+		expect(getRequestProperties(standaloneDocument)).not.toHaveProperty(
+			"client_secret",
+		);
 		expect(getRequestProperties(composedDocument)).toHaveProperty("resource");
+		expect(getRequestProperties(composedDocument)).toHaveProperty(
+			"client_secret",
+		);
+		expect(getRequestProperties(composedDocument)).toHaveProperty(
+			"client_assertion",
+		);
+		expect(getRequestProperties(composedDocument)).toHaveProperty(
+			"client_assertion_type",
+		);
 	});
 });
 
@@ -330,10 +354,37 @@ describe("oauth-provider device-code grant", async () => {
 		expect(verification.client_id).toBe(created.client_id);
 	});
 
+	it("accepts client_secret_post through the in-process API contract", async () => {
+		const { headers } = await signInWithTestUser();
+		const created = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: [DEVICE_CODE_GRANT_TYPE],
+				scope: "openid",
+				application_type: "web",
+				redirect_uris: ["https://post-api.example.com/callback"],
+			},
+		});
+		if (!created?.client_id || !created.client_secret) {
+			throw new Error("confidential OAuth client was not created");
+		}
+
+		const response = await auth.api.deviceCode({
+			body: {
+				client_id: created.client_id,
+				client_secret: created.client_secret,
+				scope: "openid",
+			},
+		});
+
+		expect(response.device_code).toEqual(expect.any(String));
+		expect(response.user_code).toEqual(expect.any(String));
+	});
+
 	it("authenticates an assertion whose client ID is supplied intrinsically", async () => {
 		const assertionMethod = "https://example.com/device-assertion";
 		const assertionValue = "valid-device-assertion";
-		const grant = deviceCodeGrant();
 		const assertionClientId = "intrinsic-assertion-client";
 		const {
 			auth: assertionAuth,
@@ -344,12 +395,10 @@ describe("oauth-provider device-code grant", async () => {
 				baseURL,
 				plugins: [
 					jwt({ jwt: { issuer: baseURL } }),
-					deviceAuthorization({ grant }),
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
 						extensions: [
-							grant,
 							{
 								clientAuthentication: {
 									[assertionMethod]: {
@@ -367,6 +416,7 @@ describe("oauth-provider device-code grant", async () => {
 						generateClientId: () => assertionClientId,
 						scopes: ["openid"],
 					}),
+					oauthDeviceAuthorization(),
 				],
 			},
 			{
@@ -728,7 +778,6 @@ describe("oauth-provider device-code grant", async () => {
 	});
 
 	it("treats an empty body client_id as omitted for authenticated requests", async () => {
-		const grant = deviceCodeGrant();
 		const validateClient = vi.fn(() => false);
 		const {
 			auth: validatedAuth,
@@ -739,13 +788,12 @@ describe("oauth-provider device-code grant", async () => {
 				baseURL,
 				plugins: [
 					jwt({ jwt: { issuer: baseURL } }),
-					deviceAuthorization({ grant, validateClient }),
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						extensions: [grant],
 						scopes: ["openid"],
 					}),
+					oauthDeviceAuthorization({ validateClient }),
 				],
 			},
 			{
@@ -771,7 +819,11 @@ describe("oauth-provider device-code grant", async () => {
 			"/device/code",
 			{
 				method: "POST",
-				body: new URLSearchParams({ client_id: "", scope: "openid" }),
+				body: new URLSearchParams([
+					["client_id", ""],
+					["client_id", created.client_id],
+					["scope", "openid"],
+				]),
 				headers: {
 					...FORM_HEADERS,
 					authorization: `Basic ${Buffer.from(`${created.client_id}:${created.client_secret}`).toString("base64")}`,
@@ -785,7 +837,6 @@ describe("oauth-provider device-code grant", async () => {
 	});
 
 	it("does not route an authenticated unknown body client through standalone validation", async () => {
-		const grant = deviceCodeGrant();
 		const validateClient = vi.fn(() => true);
 		const {
 			auth: validatedAuth,
@@ -796,13 +847,12 @@ describe("oauth-provider device-code grant", async () => {
 				baseURL,
 				plugins: [
 					jwt({ jwt: { issuer: baseURL } }),
-					deviceAuthorization({ grant, validateClient }),
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						extensions: [grant],
 						scopes: ["openid"],
 					}),
+					oauthDeviceAuthorization({ validateClient }),
 				],
 			},
 			{
@@ -1030,7 +1080,7 @@ describe("oauth-provider device-code grant", async () => {
 
 		expect(response.status).toBe(400);
 		const body = (await response.json()) as { error?: string };
-		expect(body.error).not.toBe("invalid_target");
+		expect(body.error).toBe("invalid_request");
 	});
 
 	it.each([

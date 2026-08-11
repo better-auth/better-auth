@@ -18,3 +18,5 @@ Additional RFC compliance fixes on the same endpoints:
 - `/oauth2/authorize` error redirects now respect OIDC Core 1.0 §5 response modes. Errors for `response_type=token` or `id_token` are delivered in the URL fragment per RFC 6749 §4.2.2.1; an explicit `response_mode=query` overrides the default.
 
 Token endpoint failures now distinguish `invalid_request` for missing request fields, `invalid_client` for client-authentication failures, and `invalid_grant` for invalid or mismatched grants. When authentication is attempted with an `Authorization` header, a failed client authentication returns `401` with a `WWW-Authenticate` challenge for the attempted scheme.
+
+The OAuth Provider rejects a secret sent through a method different from the client's registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`, while failed `client_secret_basic` authentication returns `401` with a Basic challenge.

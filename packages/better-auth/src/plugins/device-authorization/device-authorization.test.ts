@@ -1613,7 +1613,7 @@ describe("device authorization with custom options", async () => {
 	it("should retry Prisma-style unique constraint errors during issuance", async () => {
 		const deviceCodes = ["device-code-1", "device-code-2"];
 		const userCodes = ["USERCODE1", "USERCODE2"];
-		const { auth, db } = await getTestInstance({
+		const { auth } = await getTestInstance({
 			plugins: [
 				deviceAuthorization({
 					generateDeviceCode: () => deviceCodes.shift()!,
@@ -1622,22 +1622,57 @@ describe("device authorization with custom options", async () => {
 			],
 		});
 
-		const first = await auth.api.deviceCode({
-			body: { client_id: "test-client" },
+		const adapter = (await auth.$context).adapter;
+		const create = adapter.create.bind(adapter);
+		let failedDeviceCodeCreate = false;
+		vi.spyOn(adapter, "create").mockImplementation(async (input) => {
+			if (input.model === "deviceCode" && !failedDeviceCodeCreate) {
+				failedDeviceCodeCreate = true;
+				throw Object.assign(new Error("Prisma collision"), {
+					code: "P2002",
+				});
+			}
+			return create(input);
 		});
-		vi.spyOn(db, "create").mockImplementationOnce(async () => {
-			throw Object.assign(new Error("Prisma collision"), {
-				code: "P2002",
-			});
-		});
-		const second = await auth.api.deviceCode({
+		const response = await auth.api.deviceCode({
 			body: { client_id: "test-client" },
 		});
 
-		expect(first.device_code).toBe("device-code-1");
-		expect(first.user_code).toBe("USERCODE1");
-		expect(second.device_code).toBe("device-code-2");
-		expect(second.user_code).toBe("USERCODE2");
+		expect(response.device_code).toBe("device-code-2");
+		expect(response.user_code).toBe("USERCODE2");
+	});
+
+	it("should inspect every database error identifier for unique violations", async () => {
+		const deviceCodes = ["device-code-1", "device-code-2"];
+		const userCodes = ["USERCODE1", "USERCODE2"];
+		const { auth } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					generateDeviceCode: () => deviceCodes.shift()!,
+					generateUserCode: () => userCodes.shift()!,
+				}),
+			],
+		});
+
+		const adapter = (await auth.$context).adapter;
+		const create = adapter.create.bind(adapter);
+		let failedDeviceCodeCreate = false;
+		vi.spyOn(adapter, "create").mockImplementation(async (input) => {
+			if (input.model === "deviceCode" && !failedDeviceCodeCreate) {
+				failedDeviceCodeCreate = true;
+				throw Object.assign(new Error("SQL Server request failed"), {
+					code: "EREQUEST",
+					number: 2601,
+				});
+			}
+			return create(input);
+		});
+		const response = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+
+		expect(response.device_code).toBe("device-code-2");
+		expect(response.user_code).toBe("USERCODE2");
 	});
 
 	it("should return a controlled server error when generators cannot produce unique codes", async () => {
@@ -1719,6 +1754,38 @@ describe("device authorization with custom options", async () => {
 				headers,
 			}),
 		).resolves.toMatchObject({ success: true });
+	});
+
+	it("preserves custom user-code casing with case-insensitive adapters", async () => {
+		const customUserCode = "Custom/User-Code";
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({ generateUserCode: () => customUserCode }),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		await auth.api.deviceCode({ body: { client_id: "test-client" } });
+
+		const adapter = (await auth.$context).adapter;
+		const storedDeviceCode = await adapter.findOne<DeviceCode>({
+			model: "deviceCode",
+			where: [{ field: "userCode", value: customUserCode }],
+		});
+		if (!storedDeviceCode) throw new Error("device code was not stored");
+		const findOne = adapter.findOne.bind(adapter);
+		vi.spyOn(adapter, "findOne").mockImplementation(async (input) => {
+			if (input.model === "deviceCode") return storedDeviceCode;
+			return findOne(input);
+		});
+
+		await expect(
+			auth.api.deviceVerify({
+				query: { user_code: customUserCode.toLowerCase() },
+				headers,
+			}),
+		).rejects.toMatchObject({
+			body: { error: "invalid_request" },
+		});
 	});
 
 	/**

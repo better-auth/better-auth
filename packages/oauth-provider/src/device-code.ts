@@ -52,6 +52,18 @@ const deviceCodeResourceSchema = z.union([
 ]);
 
 const oauthDeviceRequestFields = {
+	client_secret: z
+		.string()
+		.meta({ description: "OAuth client secret" })
+		.optional(),
+	client_assertion: z
+		.string()
+		.meta({ description: "OAuth client assertion" })
+		.optional(),
+	client_assertion_type: z
+		.string()
+		.meta({ description: "OAuth client assertion type" })
+		.optional(),
 	resource: deviceCodeResourceSchema
 		.meta({
 			description:
@@ -266,15 +278,17 @@ function buildOAuthDeviceGrant() {
 			if (request.client_id && authenticated.clientId !== request.client_id) {
 				tokenError("BAD_REQUEST", "invalid_client", "Client ID mismatch");
 			}
-			request.client_id = authenticated.clientId;
 			await resolveResourcePolicy(ctx, provider.options, {
 				resource,
 				clientId: authenticated.clientId,
 				requestedScopes: scopes,
 			});
 			return {
-				oauthClientId: authenticated.clientId,
-				resources: toResourceList(resource) ?? null,
+				clientId: authenticated.clientId,
+				deviceCodeFields: {
+					oauthClientId: authenticated.clientId,
+					resources: toResourceList(resource) ?? null,
+				},
 			};
 		},
 		assertSessionRedemption: ({ deviceCode }) => {

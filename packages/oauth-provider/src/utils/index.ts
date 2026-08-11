@@ -573,7 +573,6 @@ export async function parseClientAuthenticationAttempt(
 		const contentType =
 			request.headers.get("content-type")?.toLowerCase() ?? "";
 		let repeatedField: string | undefined;
-		let parsedJson: Record<string, unknown> | undefined;
 		try {
 			if (contentType.includes("application/x-www-form-urlencoded")) {
 				const params = new URLSearchParams(await request.clone().text());
@@ -587,22 +586,10 @@ export async function parseClientAuthenticationAttempt(
 					}
 					if (values.length === 1) setEffectiveField(field, values[0]);
 				}
-			} else if (contentType.includes("application/json")) {
-				const parsed: unknown = await request.clone().json();
-				if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-					parsedJson = parsed as Record<string, unknown>;
-				}
 			}
 		} catch {
 			// The parsed endpoint body remains the best available input when the
 			// request stream has already been consumed or is malformed.
-		}
-		if (parsedJson) {
-			for (const field of CLIENT_AUTHENTICATION_FIELDS) {
-				if (Object.hasOwn(parsedJson, field)) {
-					setEffectiveField(field, parsedJson[field]);
-				}
-			}
 		}
 		if (repeatedField) {
 			throwInvalidAuthenticationRequest(
@@ -699,15 +686,18 @@ export function validateClientScopes(
 
 function throwInvalidClient(
 	errorDescription: string,
-	authMethod?: TokenEndpointAuthMethod,
-	status?: "BAD_REQUEST" | "UNAUTHORIZED",
-	authScheme?: string,
+	authentication?: {
+		method?: TokenEndpointAuthMethod;
+		scheme?: string;
+	},
 ): never {
-	const attemptedBasicAuthentication = authMethod === "client_secret_basic";
+	const attemptedBasicAuthentication =
+		authentication?.method === "client_secret_basic";
 	const challengeScheme =
-		authScheme ?? (attemptedBasicAuthentication ? "Basic" : undefined);
+		authentication?.scheme ??
+		(attemptedBasicAuthentication ? "Basic" : undefined);
 	throw new APIError(
-		status ?? (attemptedBasicAuthentication ? "UNAUTHORIZED" : "BAD_REQUEST"),
+		challengeScheme ? "UNAUTHORIZED" : "BAD_REQUEST",
 		{
 			error_description: errorDescription,
 			error: "invalid_client",
@@ -737,22 +727,19 @@ export async function validateClientCredentials(
 ) {
 	const client = await getClient(ctx, options, clientId);
 	if (!client) {
-		throwInvalidClient("missing client", authMethod);
+		throwInvalidClient("missing client", { method: authMethod });
 	}
 	if (client.disabled) {
-		throwInvalidClient("client is disabled", authMethod);
+		throwInvalidClient("client is disabled", { method: authMethod });
 	}
 
-	// Enforce registered auth method for assertion/pre-verified methods.
-	if (preVerified && authMethod) {
-		const registeredAuthMethod =
-			client.tokenEndpointAuthMethod ?? "client_secret_basic";
-		if (registeredAuthMethod !== authMethod) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: `client registered for ${registeredAuthMethod} cannot use ${authMethod}`,
-				error: "invalid_client",
-			});
-		}
+	const registeredAuthMethod =
+		client.tokenEndpointAuthMethod ?? "client_secret_basic";
+	if (authMethod && registeredAuthMethod !== authMethod) {
+		throwInvalidClient(
+			`client registered for ${registeredAuthMethod} cannot use ${authMethod}`,
+			{ method: authMethod },
+		);
 	}
 	if (
 		(client.tokenEndpointAuthMethod === "private_key_jwt" ||
@@ -772,14 +759,16 @@ export async function validateClientCredentials(
 	if (!preVerified) {
 		// Only token_endpoint_auth_method=none identifies a public client.
 		if (client.tokenEndpointAuthMethod !== "none" && !clientSecret) {
-			throwInvalidClient("client secret must be provided", authMethod);
+			throwInvalidClient("client secret must be provided", {
+				method: authMethod,
+			});
 		}
 
 		// Secret should not be received
 		if (clientSecret && !client.clientSecret) {
 			throwInvalidClient(
 				"public client, client secret should not be received",
-				authMethod,
+				{ method: authMethod },
 			);
 		}
 
@@ -793,7 +782,7 @@ export async function validateClientCredentials(
 				clientSecret,
 			))
 		) {
-			throwInvalidClient("invalid client_secret", authMethod, "UNAUTHORIZED");
+			throwInvalidClient("invalid client_secret", { method: authMethod });
 		}
 	}
 
@@ -938,12 +927,9 @@ export async function extractClientCredentials(
 				error_description: "Invalid authorization header format",
 			});
 		}
-		throwInvalidClient(
-			"unsupported authorization scheme",
-			undefined,
-			"UNAUTHORIZED",
-			authorizationScheme,
-		);
+		throwInvalidClient("unsupported authorization scheme", {
+			scheme: authorizationScheme,
+		});
 	}
 
 	// 2. Check for Basic auth header

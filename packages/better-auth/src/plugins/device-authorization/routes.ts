@@ -19,24 +19,32 @@ import { DEVICE_AUTHORIZATION_CODE_MAX_LENGTH } from "./schema";
 /* cspell:disable-next-line */
 const defaultCharset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const MAX_DEVICE_CODE_GENERATION_ATTEMPTS = 3;
+const UNIQUE_CONSTRAINT_ERROR_IDENTIFIERS = new Set([
+	"11000",
+	"1062",
+	"2067",
+	"23505",
+	"2601",
+	"2627",
+	"ER_DUP_ENTRY",
+	"P2002",
+	"SQLITE_CONSTRAINT_UNIQUE",
+]);
 
 function isUniqueConstraintError(error: unknown) {
 	if (typeof error !== "object" || error === null) return false;
 
 	const details = error as Record<string, unknown>;
-	const code = String(details.code ?? details.errcode ?? details.errno);
+	const identifiers = [
+		details.code,
+		details.errcode,
+		details.errno,
+		details.number,
+	];
 	if (
-		[
-			"11000",
-			"1062",
-			"2067",
-			"23505",
-			"2601",
-			"2627",
-			"ER_DUP_ENTRY",
-			"P2002",
-			"SQLITE_CONSTRAINT_UNIQUE",
-		].includes(code)
+		identifiers.some((identifier) =>
+			UNIQUE_CONSTRAINT_ERROR_IDENTIFIERS.has(String(identifier)),
+		)
 	) {
 		return true;
 	}
@@ -77,11 +85,13 @@ async function findDeviceCodeByUserCode(
 	ctx: GenericEndpointContext,
 	userCode: string,
 ) {
-	const findByUserCode = (value: string) =>
-		ctx.context.adapter.findOne<DeviceCode>({
+	const findByUserCode = async (value: string) => {
+		const deviceCode = await ctx.context.adapter.findOne<DeviceCode>({
 			model: "deviceCode",
 			where: [{ field: "userCode", value }],
 		});
+		return deviceCode?.userCode === value ? deviceCode : null;
+	};
 
 	const exactDeviceCode = await findByUserCode(userCode);
 	if (exactDeviceCode) return exactDeviceCode;
@@ -120,7 +130,6 @@ const deviceCodeBaseErrorCodes = [
 	"invalid_client",
 	"unauthorized_client",
 	"invalid_scope",
-	"server_error",
 ] as const;
 
 const deviceAuthorizationBaseRequestFields = [
@@ -139,7 +148,10 @@ async function rejectDuplicateBaseRequestParameters(
 
 	const params = new URLSearchParams(await request.clone().text());
 	for (const field of deviceAuthorizationBaseRequestFields) {
-		if (params.getAll(field).length < 2) continue;
+		const effectiveValues = params
+			.getAll(field)
+			.filter((value) => value.length > 0);
+		if (effectiveValues.length < 2) continue;
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_request",
 			error_description: `${field} must not be repeated`,
@@ -210,8 +222,9 @@ export const deviceCode = <Grant extends DeviceAuthorizationGrant | undefined>(
 		...typeof deviceCodeBaseErrorCodes,
 		...GrantRequestErrorCodes<Grant>,
 	];
+	const endpointErrorCodes = [...requestErrorCodes, "server_error"] as const;
 	const requestErrorSchema = z.object({
-		error: z.enum(requestErrorCodes).meta({ description: "Error code" }),
+		error: z.enum(endpointErrorCodes).meta({ description: "Error code" }),
 		error_description: z
 			.string()
 			.meta({ description: "Detailed error description" }),
@@ -300,6 +313,25 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 								},
 							},
 						},
+						500: {
+							description: "Server error",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											error: {
+												type: "string",
+												enum: ["server_error"],
+											},
+											error_description: {
+												type: "string",
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -312,11 +344,11 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				request.client_id = undefined;
 			}
 
-			let grantDeviceCodeFields: Record<string, unknown> | undefined;
-			if (grant) {
-				grantDeviceCodeFields = await grant.authorizeRequest({ ctx, request });
-			}
-			if (grantDeviceCodeFields === undefined) {
+			const grantAuthorization = grant
+				? await grant.authorizeRequest({ ctx, request })
+				: undefined;
+			const clientId = grantAuthorization?.clientId ?? request.client_id;
+			if (!grantAuthorization) {
 				if (!request.client_id) {
 					throw new APIError("BAD_REQUEST", {
 						error: "invalid_request",
@@ -340,7 +372,6 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					}
 				}
 			}
-			const clientId = request.client_id;
 			if (!clientId) {
 				throw new APIError("BAD_REQUEST", {
 					error: "invalid_request",
@@ -367,7 +398,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					await ctx.context.adapter.create({
 						model: "deviceCode",
 						data: {
-							...grantDeviceCodeFields,
+							...grantAuthorization?.deviceCodeFields,
 							deviceCode,
 							userCode,
 							userId: request.user_id || null, // An empty user_id is treated as omitted, per RFC 8628 section 3.1

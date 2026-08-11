@@ -314,6 +314,12 @@ Dynamic Client Registration without a logged-in user no longer forces the client
 
 **What to do:** if you relied on unauthenticated registrations being downgraded to public, register `token_endpoint_auth_method: "none"` explicitly for clients that must stay public.
 
+### Token requests use the registered client authentication method
+
+The OAuth Provider now rejects confidential-client credentials sent through a method different from the client's `token_endpoint_auth_method`. Failed body authentication returns `400 invalid_client`; failed Basic authentication returns `401 invalid_client` with a Basic challenge.
+
+**What to do:** make each client's token requests match its registered method. Better Auth's generic OAuth request helpers use body authentication by default when given a client secret, so pass `authentication: "basic"` or `tokenEndpointAuth: { method: "client_secret_basic" }` when calling a client registered with the RFC 7591 default. Register `client_secret_post` explicitly when body authentication is required.
+
 ### Registration requires reciprocal response and grant types
 
 A registered client's `response_types` and `grant_types` must now be reciprocal: a `code` response type requires the `authorization_code` grant, and a token grant requires its matching response type. Mismatched registrations are rejected.

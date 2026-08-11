@@ -63,8 +63,19 @@ describe("device authorization schema", () => {
 								schema: {
 									properties: {
 										error: {
-											enum: expect.arrayContaining(["server_error"]),
+											enum: expect.not.arrayContaining(["server_error"]),
 										},
+									},
+								},
+							},
+						},
+					},
+					500: {
+						content: {
+							"application/json": {
+								schema: {
+									properties: {
+										error: { enum: ["server_error"] },
 									},
 								},
 							},
