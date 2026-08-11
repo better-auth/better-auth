@@ -105,34 +105,31 @@ Discovery follows OAuth 2.0 Authorization Server Metadata ([RFC 8414](https://da
 
 MCP clients normally discover the authorization server from protected resource metadata, then use the authorization code flow with PKCE. Keep that flow for general MCP compatibility.
 
-If your product also ships a command-line application, the same authorization server can let the CLI authorize through a browser without opening a local callback listener. Add the Device Authorization plugin and the OAuth Provider's `deviceCodeGrant()` companion:
+If your product also ships a command-line application, the same authorization server can let the CLI authorize through a browser without opening a local callback listener. Add the OAuth Device Authorization integration:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { deviceAuthorization, jwt } from "better-auth/plugins";
-import { deviceCodeGrant } from "@better-auth/oauth-provider";
+import { jwt } from "better-auth/plugins";
+import { oauthDeviceAuthorization } from "@better-auth/oauth-provider";
 import { mcp } from "@better-auth/mcp";
 
 export const auth = betterAuth({
   plugins: [
     jwt(),
-    deviceAuthorization({
-      verificationUri: "/device",
-    }),
     mcp({
       loginPage: "/sign-in",
       consentPage: "/consent",
       resource: "https://api.example.com/mcp",
       scopes: ["openid", "profile", "offline_access", "mcp:read"],
     }),
-    deviceCodeGrant(),
+    oauthDeviceAuthorization({ verificationUri: "/device" }),
   ],
 });
 ```
 
 `mcp()` is already the OAuth Provider, so this composition does not add a separate `oauthProvider()` plugin. MCP clients continue to use discovery and authorization code with PKCE. Your registered public CLI can request the same MCP resource through `/device/code` and poll `/oauth2/token` for an audience-bound access token.
 
-Only use the device grant in an MCP client that explicitly implements [RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628). Adding `deviceCodeGrant()` to the server does not change the standard flow chosen by existing MCP clients. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api) for client registration and token polling.
+Only use the device grant in an MCP client that explicitly implements [RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628). Adding `oauthDeviceAuthorization()` to the server does not change the standard flow chosen by existing MCP clients. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api) for client registration and token polling.
 
 ### Protected Resource Metadata
 

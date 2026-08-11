@@ -102,38 +102,37 @@ The device flow follows these steps:
 
 Device authorization can finish with two different token types. Choose the token based on what the client needs to call:
 
-| Use case                                                                         | Token                     | Plugins                                                                      | Token endpoint  |
-| -------------------------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------- | --------------- |
-| Sign your own device into the same Better Auth application                       | Better Auth session token | `deviceAuthorization()`                                                      | `/device/token` |
-| Let a registered CLI, TV app, or other public client call an OAuth-protected API | Scoped OAuth access token | `jwt()`, `deviceAuthorization()`, `oauthProvider()`, and `deviceCodeGrant()` | `/oauth2/token` |
+| Use case                                                                         | Token                     | Plugins                                                      | Token endpoint  |
+| -------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------ | --------------- |
+| Sign your own device into the same Better Auth application                       | Better Auth session token | `deviceAuthorization()`                                      | `/device/token` |
+| Let a registered CLI, TV app, or other public client call an OAuth-protected API | Scoped OAuth access token | `jwt()`, `oauthProvider()`, and `oauthDeviceAuthorization()` | `/oauth2/token` |
 
 A command-line application commonly needs the second path. The CLI cannot safely keep a client secret, and it may not have a reliable redirect listener, but it still needs a user-authorized token for your API. The device grant lets the user approve the request in a browser while the CLI receives an audience-bound OAuth access token.
 
 ### Authorize a CLI to call an API
 
-Add the [JWT](/docs/plugins/jwt), Device Authorization, and [OAuth Provider](/docs/plugins/oauth-provider) plugins. `deviceCodeGrant()` connects the device verification flow to the provider's token endpoint:
+Add [JWT](/docs/plugins/jwt), [OAuth Provider](/docs/plugins/oauth-provider), and the OAuth Device Authorization integration:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { deviceAuthorization, jwt } from "better-auth/plugins";
+import { jwt } from "better-auth/plugins";
 import {
-  deviceCodeGrant,
+  oauthDeviceAuthorization,
   oauthProvider,
 } from "@better-auth/oauth-provider"; // [!code highlight]
 
 export const auth = betterAuth({
   plugins: [
     jwt(),
-    deviceAuthorization({
-      verificationUri: "/device",
-    }),
     oauthProvider({
       loginPage: "/sign-in",
       consentPage: "/consent",
       scopes: ["openid", "profile", "offline_access", "api:read"],
       resources: ["https://api.example.com"],
     }),
-    deviceCodeGrant(), // [!code highlight]
+    oauthDeviceAuthorization({ // [!code highlight]
+      verificationUri: "/device",
+    }),
   ],
 });
 ```
@@ -159,7 +158,7 @@ The CLI then requests a device code for the API it intends to call:
 
 ```ts title="cli.ts"
 import { createAuthClient } from "better-auth/client";
-import { deviceAuthorizationClient } from "better-auth/client/plugins";
+import { oauthDeviceAuthorizationClient } from "@better-auth/oauth-provider/client";
 
 const authBaseURL = "https://auth.example.com/api/auth";
 const clientId = "YOUR_CLIENT_ID";
@@ -167,7 +166,7 @@ const resource = "https://api.example.com";
 
 const authClient = createAuthClient({
   baseURL: authBaseURL,
-  plugins: [deviceAuthorizationClient()],
+  plugins: [oauthDeviceAuthorizationClient()],
 });
 
 const { data } = await authClient.device.code({
@@ -206,10 +205,10 @@ The access token is a signed JWT whose `aud` identifies `https://api.example.com
   Do not call `authClient.device.token` for this OAuth flow. That client method polls `/device/token` and returns a Better Auth session token. Registered OAuth clients must poll `/oauth2/token`.
 </Callout>
 
-`deviceCodeGrant()` registers the `urn:ietf:params:oauth:grant-type:device_code` grant and advertises `/device/code` as `device_authorization_endpoint` in provider discovery. The provider validates the registered client, scopes, and [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707) resource before creating the request. The approval page can show the client, scopes, and resource to the signed-in user.
+`oauthDeviceAuthorization()` owns the Device Authorization endpoints and registers the `urn:ietf:params:oauth:grant-type:device_code` grant with OAuth Provider. The provider validates the registered client, scopes, and [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707) resource before creating the request. The approval page can show the client, scopes, and resource to the signed-in user.
 
 <Callout type="info">
-  Both token paths can coexist. First-party device login keeps using `/device/token`. Registered OAuth clients use `/oauth2/token`; `deviceCodeGrant()` prevents their device codes from being redeemed for a Better Auth session token.
+  Both token paths can coexist. First-party device login keeps using `/device/token`. Registered OAuth clients use `/oauth2/token`; `oauthDeviceAuthorization()` prevents their device codes from being redeemed for a Better Auth session token.
 </Callout>
 
 ## First-party session flow
@@ -224,17 +223,13 @@ To initiate device authorization, call `device.code` with the client ID:
   ```ts
   type deviceCode = {
       /**
-       * The OAuth client identifier
+       * The device client identifier
        */
       client_id: string;
       /**
        * Space-separated list of requested scopes (optional)
        */
       scope?: string;
-      /**
-       * RFC 8707 resource indicator(s) to bind to this request (optional)
-       */
-      resource?: string | string[];
       /**
        * The user ID to which the device code should be pre-bound.
        * When set, only that user can approve or deny the code.
@@ -453,7 +448,6 @@ export default function DeviceApprovalPage() {
   const [request, setRequest] = useState<{
     client_id?: string;
     scope?: string;
-    resource?: string | string[];
   } | null>(null);
 
   useEffect(() => {
@@ -504,11 +498,6 @@ export default function DeviceApprovalPage() {
       <h2>Device Authorization Request</h2>
       <p>Client: {request?.client_id}</p>
       <p>Scopes: {request?.scope || "None"}</p>
-      <p>
-        Resources: {Array.isArray(request?.resource)
-          ? request.resource.join(", ")
-          : request?.resource || "None"}
-      </p>
       <p>Code: {userCode}</p>
       
       <button onClick={handleApprove} disabled={isProcessing}>
@@ -536,9 +525,9 @@ deviceAuthorization({
     return client && client.allowDeviceFlow;
   },
   
-  onDeviceAuthRequest: async (clientId, scope, resource) => {
+  onDeviceAuthRequest: async (clientId, scope) => {
     // Log device authorization requests
-    await logDeviceAuthRequest(clientId, scope, resource);
+    await logDeviceAuthRequest(clientId, scope);
   },
 })
 ```
@@ -742,7 +731,7 @@ authenticateCLI().catch((err) => {
 
 **validateClient**: Function to validate client IDs. Takes a clientId and returns boolean or `Promise<boolean>`.
 
-**onDeviceAuthRequest**: Hook called when device authorization is requested. Takes clientId, optional scope, and optional resource indicator(s).
+**onDeviceAuthRequest**: Hook called when device authorization is requested. Takes clientId and optional scope.
 
 ### Client
 
@@ -794,19 +783,13 @@ export const deviceCodeTableFields = [
 	{
 		name: "clientId",
 		type: "string",
-		description: "The OAuth client identifier",
+		description: "The device client identifier",
 		isOptional: true,
 	},
 	{
 		name: "scope",
 		type: "string",
-		description: "Requested OAuth scopes",
-		isOptional: true,
-	},
-	{
-		name: "resource",
-		type: "string",
-		description: "Requested resource indicator or serialized resource list",
+		description: "Requested scopes",
 		isOptional: true,
 	},
 	{
@@ -834,3 +817,5 @@ export const deviceCodeTableFields = [
 ];
 
 <DatabaseTable name="deviceCode" fields={deviceCodeTableFields} />
+
+`oauthDeviceAuthorization()` extends this table with optional `oauthClientId` and `resources` fields. Standalone Device Authorization installations do not add those fields and do not expose the RFC 8707 `resource` request parameter.

@@ -48,7 +48,7 @@ These features change the schema:
 | SCIM                       | Seven provisioning models, plus three optional managed-catalog models, with layouts that replace the legacy SCIM models | **Yes, reprovision**      |
 | Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                                                               | No                        |
 | Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables                                                         | **Yes, move client data** |
-| Device Authorization       | An optional `resource` column, plus indexes on `deviceCode` and `userCode`                                              | **Yes, MySQL/SQL Server** |
+| Device Authorization       | Indexes on `deviceCode` and `userCode`; the optional OAuth grant also adds `oauthClientId` and `resources`              | **Yes, MySQL/SQL Server** |
 
 <Callout type="warn">
   Prepare account identities, OAuth clients, and SCIM data before applying the generated 1.7 schema. The CLI adds tables, columns, and indexes, but it does not choose issuers, copy OAuth clients, or convert legacy SCIM data.
@@ -600,9 +600,52 @@ A wildcard such as `/sign-in/*` also matches `/sign-in/email-otp`. If that route
 
 ## Device Authorization
 
-The 1.7 schema adds a nullable `resource` field to `deviceCode` for resource-bound device grants. Apply the generated schema change; existing rows need no backfill.
+### Device codes are indexed and bounded
 
-The schema also indexes `deviceCode` and `userCode` and limits both values to 191 characters. Before applying it on MySQL or SQL Server, change both columns to bounded strings and resolve any existing values longer than 191 characters. Custom `generateDeviceCode` and `generateUserCode` functions must also stay within that limit.
+The 1.7 schema indexes `deviceCode` and `userCode` and limits both values to 191 characters. Before applying it on MySQL or SQL Server, change both columns to bounded strings and resolve any existing values longer than 191 characters. Custom `generateDeviceCode` and `generateUserCode` functions must also stay within that limit.
+
+### OAuth device grants are opt-in
+
+In 1.6, `deviceAuthorization()` signed a device into the same Better Auth application and returned a Better Auth session token from `/device/token`. That standalone flow remains available in 1.7 and does not accept RFC 8707 resource indicators or add OAuth fields to the `deviceCode` table.
+
+To let a registered CLI, TV app, or other limited-input client obtain OAuth tokens, add the OAuth Device Authorization integration alongside OAuth Provider:
+
+```ts title="auth.ts"
+import {
+  oauthDeviceAuthorization,
+  oauthProvider,
+} from "@better-auth/oauth-provider";
+import { betterAuth } from "better-auth";
+import { jwt } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  plugins: [
+    jwt(),
+    oauthProvider({
+      loginPage: "/sign-in",
+      consentPage: "/consent",
+      scopes: ["openid", "profile", "offline_access", "api:read"],
+      resources: ["https://api.example.com"],
+    }),
+    oauthDeviceAuthorization(),
+  ],
+});
+```
+
+This integration adds nullable `oauthClientId` and `resources` fields to `deviceCode`, validates the OAuth client, scopes, and resources when the code is created, advertises the device authorization endpoint in discovery, and exchanges approved codes at `/oauth2/token`. Regenerate and apply the schema when you enable it. Existing 1.6 rows need no backfill and remain on the session-token path, even if their `clientId` later matches a registered OAuth client. Allow pending 1.6 clients to finish polling `/device/token` or let their codes expire before moving those clients to the OAuth flow.
+
+The client type only exposes the RFC 8707 `resource` request field when the server uses the OAuth grant:
+
+```ts title="auth-client.ts"
+import { oauthDeviceAuthorizationClient } from "@better-auth/oauth-provider/client";
+import { createAuthClient } from "better-auth/client";
+
+export const authClient = createAuthClient({
+  plugins: [oauthDeviceAuthorizationClient()],
+});
+```
+
+See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api) for client registration, approval, and polling examples.
 
 ***
 
