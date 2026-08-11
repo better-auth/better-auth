@@ -53,6 +53,13 @@
 
 ## 1.7.0-beta.4
 
+## 1.6.27
+
+### Patch Changes
+
+- Updated dependencies [[`2ae491e`](https://github.com/better-auth/better-auth/commit/2ae491eac3ece50839a0eb2d4f868c4deedac67b)]:
+  - @better-auth/core@1.6.27
+
 ## 1.6.26
 
 ### Patch Changes

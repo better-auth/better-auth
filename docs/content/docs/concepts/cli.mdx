@@ -76,6 +76,19 @@ npx auth@latest init
 * `--database` - The database you want to use. Currently, the only supported database is `SQLite`.
 * `--package-manager` - The package manager you want to use. Currently, the only supported package managers are `npm`, `pnpm`, `yarn`, `bun` (defaults to the manager you used to initialize the CLI).
 
+## Upgrade
+
+The `upgrade` command updates older `better-auth` dependencies and official `@better-auth/*` packages that participate in the synchronized release train to the version of the CLI being run. It compares the minimum version allowed by each `package.json` specifier; specifiers whose minimum is the same or newer are left unchanged. Independently versioned packages, such as `@better-auth/utils`, are not changed.
+
+```package-install title="Terminal"
+npx auth@latest upgrade
+```
+
+### Options
+
+* `--cwd` - The project directory containing the `package.json` to update. Defaults to the current directory.
+* `--yes` - Skip the confirmation prompt and install the updates directly.
+
 ## Info
 
 The `info` command provides diagnostic information about your Better Auth setup and environment. Useful for debugging and sharing when seeking support.
