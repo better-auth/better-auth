@@ -1,5 +1,13 @@
 # @better-auth/stripe
 
+## 1.6.27
+
+### Patch Changes
+
+- Updated dependencies [[`2ae491e`](https://github.com/better-auth/better-auth/commit/2ae491eac3ece50839a0eb2d4f868c4deedac67b), [`90b5093`](https://github.com/better-auth/better-auth/commit/90b509344794b8064700371cbc04b985d0519839)]:
+  - @better-auth/core@1.6.27
+  - better-auth@1.6.27
+
 ## 1.6.26
 
 ### Patch Changes
