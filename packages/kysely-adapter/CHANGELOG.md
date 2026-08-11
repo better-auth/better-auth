@@ -1,5 +1,7 @@
 # @better-auth/kysely-adapter
 
+## 1.7.0-rc.5
+
 ## 1.7.0-rc.4
 
 ## 1.7.0-rc.3

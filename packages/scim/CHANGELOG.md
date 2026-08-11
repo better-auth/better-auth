@@ -1,5 +1,7 @@
 # @better-auth/scim
 
+## 1.7.0-rc.5
+
 ## 1.7.0-rc.4
 
 ### Minor Changes
