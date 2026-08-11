@@ -30,7 +30,11 @@ docker run --rm \
 
 It's also available via Homebrew (`brew tap mailtrap/local && brew install mailtrap-local`) and as a prebuilt binary.
 
-Since it speaks plain SMTP, any SMTP client can target it. This is one way to implement the `sendEmail` function used throughout the examples on this page:
+Since it speaks plain SMTP, any SMTP client can target it. This is one way to implement the `sendEmail` function used throughout the examples on this page, using [Nodemailer](https://nodemailer.com):
+
+```bash
+npm install nodemailer
+```
 
 ```ts title="email.ts"
 import nodemailer from 'nodemailer';
@@ -46,7 +50,7 @@ export async function sendEmail(options: {
     text: string;
 }) {
     await transporter.sendMail({
-        from: 'no-reply@example.com',
+        from: process.env.EMAIL_FROM ?? 'no-reply@example.com',
         to: options.to,
         subject: options.subject,
         text: options.text
@@ -57,7 +61,7 @@ export async function sendEmail(options: {
 Sign up in your app, then open `http://127.0.0.1:3550` to read the captured email and follow its verification link.
 
 <Callout type="warn">
-  A catcher never delivers mail, so keep it to local development. Point `SMTP_HOST` and `SMTP_PORT` at your transactional provider in staging and production.
+  A catcher never delivers mail, so keep it to local development. The transporter above is deliberately minimal: a local catcher needs no credentials or TLS. Real providers do, so in staging and production also pass `auth` with your provider's credentials, enable `secure` for the port you're connecting to, and set `EMAIL_FROM` to a sender address that provider has verified.
 </Callout>
 
 ## Email Verification
