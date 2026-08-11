@@ -160,6 +160,50 @@ describe("grant request validation", () => {
 	});
 });
 
+describe("grant verification context", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10746#discussion_r3760240763
+	 */
+	it("does not let grant context overwrite host-owned response fields", async () => {
+		const grant = {
+			requestSchemaFields: {},
+			deviceCodeSchemaFields: {},
+			authorizeRequest: () => undefined,
+			assertSessionRedemption: () => {},
+			getVerificationContext: () => ({
+				user_code: "grant-user-code",
+				status: "grant-status",
+				client_id: "grant-client",
+				scope: "grant-scope",
+				grant_field: "grant-value",
+			}),
+		} satisfies DeviceAuthorizationGrant;
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [deviceAuthorization({ grant })],
+		});
+		const { headers } = await signInWithTestUser();
+		const { user_code } = await auth.api.deviceCode({
+			body: {
+				client_id: "client",
+				scope: "read",
+			},
+		});
+
+		const response = await auth.api.deviceVerify({
+			query: { user_code },
+			headers,
+		});
+
+		expect(response).toMatchObject({
+			user_code,
+			status: "pending",
+			client_id: "client",
+			scope: "read",
+			grant_field: "grant-value",
+		});
+	});
+});
+
 describe("device authorization flow", async () => {
 	const { auth, signInWithTestUser, db } = await getTestInstance(
 		{
