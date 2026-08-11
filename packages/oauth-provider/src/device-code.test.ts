@@ -1026,9 +1026,10 @@ describe("oauth-provider device-code grant", async () => {
 					body: new URLSearchParams([
 						["grant_type", DEVICE_CODE_GRANT_TYPE],
 						["device_code", deviceCode],
-						...clientIdValues.map(
-							(clientIdValue) => ["client_id", clientIdValue] as const,
-						),
+						...clientIdValues.map((clientIdValue) => [
+							"client_id",
+							clientIdValue,
+						]),
 					]),
 					headers: FORM_HEADERS,
 				},
