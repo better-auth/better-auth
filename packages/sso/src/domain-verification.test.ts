@@ -14,6 +14,14 @@ const dnsMock = vi.hoisted(() => {
 	};
 });
 
+function createDeferred<T>() {
+	let resolve!: (value: T) => void;
+	const promise = new Promise<T>((resolvePromise) => {
+		resolve = resolvePromise;
+	});
+	return { promise, resolve };
+}
+
 vi.mock("node:dns/promises", () => {
 	return {
 		...dnsMock,
@@ -557,6 +565,151 @@ describe("Domain verification", async () => {
 			expect(dnsMock.resolveTxt).toHaveBeenCalledWith(
 				"_better-auth-token-saml-provider-1.hello.com",
 			);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-8c5h-wx78-2cfg
+		 */
+		it("rejects a stale proof after a domain update with the memory adapter", async () => {
+			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
+			const headers = await getAuthHeaders(testUser);
+			const provider = await registerSSOProvider(headers);
+
+			const dnsStarted = createDeferred<void>();
+			const dnsCompletion = createDeferred<string[][]>();
+			dnsMock.resolveTxt.mockImplementation(async () => {
+				dnsStarted.resolve();
+				return dnsCompletion.promise;
+			});
+
+			const verificationPromise = auth.api.verifyDomain({
+				body: {
+					providerId: provider.providerId,
+				},
+				headers,
+				asResponse: true,
+			});
+			await dnsStarted.promise;
+
+			const updateResponse = await auth.api.updateSSOProvider({
+				body: {
+					providerId: provider.providerId,
+					domain: "changed.example",
+				},
+				headers,
+				asResponse: true,
+			});
+			expect(updateResponse.status).toBe(200);
+
+			dnsCompletion.resolve([[provider.domainVerificationToken]]);
+			const verificationResponse = await verificationPromise;
+			expect(verificationResponse.status).toBe(409);
+			expect(await verificationResponse.json()).toEqual({
+				code: "SSO_PROVIDER_CHANGED",
+				message:
+					"SSO provider changed while domain verification was in progress. Reload the provider and try again",
+			});
+
+			const persistedProvider = await auth.api.getSSOProvider({
+				query: { providerId: provider.providerId },
+				headers,
+			});
+			expect(persistedProvider).toMatchObject({
+				domain: "changed.example",
+				domainVerified: false,
+			});
+		});
+
+		/**
+		 * `domainVerified` only joins the schema once `domainVerification` is
+		 * enabled, so providers registered before that have no stored value for the
+		 * bit. Enabling the option later must not strand them.
+		 *
+		 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-8c5h-wx78-2cfg
+		 */
+		it("verifies a provider registered before domain verification was enabled", async () => {
+			const db = {
+				user: [] as Record<string, unknown>[],
+				session: [] as Record<string, unknown>[],
+				account: [] as Record<string, unknown>[],
+				verification: [] as Record<string, unknown>[],
+				ssoProvider: [] as Record<string, unknown>[],
+			};
+			const buildAuth = (domainVerificationEnabled: boolean) =>
+				betterAuth({
+					database: memoryAdapter(db),
+					baseURL: "http://localhost:3000",
+					emailAndPassword: { enabled: true },
+					plugins: [
+						sso(
+							domainVerificationEnabled
+								? { domainVerification: { enabled: true } }
+								: {},
+						),
+					],
+				});
+			const signIn = async (
+				auth: ReturnType<typeof buildAuth>,
+				options: { register?: boolean } = {},
+			) => {
+				const client = createAuthClient({
+					baseURL: "http://localhost:3000",
+					plugins: [bearer()],
+					fetchOptions: {
+						customFetchImpl: async (url, init) =>
+							auth.handler(new Request(url, init)),
+					},
+				});
+				if (options.register) {
+					await client.signUp.email(testUser);
+				}
+				const headers = new Headers();
+				await client.signIn.email(testUser, {
+					throw: true,
+					onSuccess: setCookieToHeader(headers),
+				});
+				return headers;
+			};
+
+			const legacyAuth = buildAuth(false);
+			await legacyAuth.api.registerSSOProvider({
+				body: {
+					providerId: "pre-upgrade-provider",
+					issuer: "http://hello.com:8081",
+					domain: "http://hello.com:8081",
+					samlConfig: {
+						entryPoint: "http://idp.com:",
+						cert: "the-cert",
+						callbackUrl: "http://hello.com:8081/api/sso/saml2/callback",
+						spMetadata: {},
+					},
+				},
+				headers: await signIn(legacyAuth, { register: true }),
+			});
+			// Precondition: the column is absent, so the bit was never stored.
+			expect(db.ssoProvider[0]).not.toHaveProperty("domainVerified");
+
+			const auth = buildAuth(true);
+			const headers = await signIn(auth);
+			const { domainVerificationToken } =
+				await auth.api.requestDomainVerification({
+					body: { providerId: "pre-upgrade-provider" },
+					headers,
+				});
+			dnsMock.resolveTxt.mockResolvedValue([[domainVerificationToken]]);
+
+			const response = await auth.api.verifyDomain({
+				body: { providerId: "pre-upgrade-provider" },
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(204);
+			const persistedProvider = await auth.api.getSSOProvider({
+				query: { providerId: "pre-upgrade-provider" },
+				headers,
+			});
+			expect(persistedProvider).toMatchObject({ domainVerified: true });
 		});
 
 		it("should verify a provider domain ownership (custom token verification prefix)", async () => {
