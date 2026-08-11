@@ -82,4 +82,20 @@ describe("upgradeAction", () => {
 		expect(mockDetectPackageManager).not.toHaveBeenCalled();
 		expect(mockInstallDependencies).not.toHaveBeenCalled();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10760
+	 */
+	it("does not align independently versioned Better Auth packages", async () => {
+		mockGetPackageInfo.mockReturnValue({
+			dependencies: {
+				"@better-auth/utils": "^0.4.0",
+			},
+		});
+
+		await upgradeAction({ cwd: process.cwd(), yes: true });
+
+		expect(mockDetectPackageManager).not.toHaveBeenCalled();
+		expect(mockInstallDependencies).not.toHaveBeenCalled();
+	});
 });
