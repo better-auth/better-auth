@@ -243,7 +243,7 @@ export async function extractRepeatedResourceFromForm(
 	}
 	let text: string;
 	try {
-		text = await request.text();
+		text = await request.clone().text();
 	} catch {
 		return undefined;
 	}

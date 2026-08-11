@@ -112,6 +112,7 @@ const bootCodeFlowHarness = async (
 		headers,
 		body: {
 			redirect_uris: [redirectUri],
+			token_endpoint_auth_method: "client_secret_post",
 			scope: "openid profile email offline_access",
 			skip_consent: true,
 		},
@@ -911,6 +912,7 @@ describe("JWT access tokens emit RFC 9068 §2.2.3 `client_id` claim", () => {
 			body: {
 				scope: "read",
 				grant_types: ["client_credentials"],
+				token_endpoint_auth_method: "client_secret_basic",
 				client_credentials_scopes: ["read"],
 				redirect_uris: ["https://client.example.com/callback"],
 			},

@@ -77,6 +77,7 @@ async function bootHarness(
 			body: {
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				scope: scopes.join(" "),
 				skip_consent: true,
 				...overrides,

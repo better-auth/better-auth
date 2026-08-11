@@ -1,6 +1,7 @@
 import type {
 	BetterAuthPlugin,
 	GenericEndpointContext,
+	StandardSchemaV1,
 } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import { BetterAuthError } from "@better-auth/core/error";
@@ -134,9 +135,17 @@ export type DeviceAuthorizationOptions = z.infer<
 >;
 
 export interface DeviceAuthorizationRequest {
-	client_id: string;
+	client_id?: string | undefined;
 	user_id?: string | undefined;
 	scope?: string | undefined;
+}
+
+/** The client binding and grant-owned fields produced by request authorization. */
+export interface DeviceAuthorizationGrantAuthorization {
+	/** The client identifier that owns the device code. */
+	clientId: string;
+	/** Additional grant-owned fields persisted with the device code. */
+	deviceCodeFields: Record<string, unknown>;
 }
 
 /**
@@ -151,16 +160,22 @@ export interface DeviceAuthorizationGrant<
 	requestSchemaFields: RequestFields;
 	/** Additional request errors introduced by the grant's protocol extensions. */
 	requestErrorCodes?: readonly string[];
+	/** Additional OpenAPI responses introduced by the grant's request protocol. */
+	requestOpenAPIResponses?: Record<string, Record<string, unknown>>;
+	/** Translate validation issues raised by the grant's request fields. */
+	onRequestValidationError?: (
+		issues: readonly StandardSchemaV1.Issue[],
+	) => void;
 	/** Database fields persisted only when this grant is configured. */
 	deviceCodeSchemaFields: Record<string, DBFieldAttribute>;
-	/** Validate a request and return the grant-owned fields to persist. */
+	/** Validate a request and return its client binding and fields to persist. */
 	authorizeRequest: (input: {
 		ctx: GenericEndpointContext;
 		request: DeviceAuthorizationRequest & z.infer<z.ZodObject<RequestFields>>;
 	}) =>
-		| Record<string, unknown>
+		| DeviceAuthorizationGrantAuthorization
 		| undefined
-		| Promise<Record<string, unknown> | undefined>;
+		| Promise<DeviceAuthorizationGrantAuthorization | undefined>;
 	/** Refuse the standalone session-token endpoint for grant-owned codes. */
 	assertSessionRedemption: (input: {
 		ctx: GenericEndpointContext;
@@ -256,6 +271,15 @@ export const deviceAuthorization = <
 			deviceApprove,
 			deviceDeny,
 		},
+		rateLimit: [
+			{
+				pathMatcher(path) {
+					return path === "/device";
+				},
+				window: ms(opts.expiresIn) / 1000,
+				max: 5,
+			},
+		],
 		$ERROR_CODES: DEVICE_AUTHORIZATION_ERROR_CODES,
 		options: { ...opts, grant },
 	} satisfies BetterAuthPlugin;

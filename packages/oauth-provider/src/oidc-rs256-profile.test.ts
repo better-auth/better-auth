@@ -56,6 +56,7 @@ describe("OpenID Connect RS256 provider profile", async () => {
 			body: {
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 			},
 		});

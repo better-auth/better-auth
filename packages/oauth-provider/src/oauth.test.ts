@@ -268,6 +268,7 @@ describe("oauth", async () => {
 				],
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 			},
 		});
@@ -1130,6 +1131,7 @@ describe("oauth - prompt", async () => {
 				],
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 			},
 		});
 		expect(response?.client_id).toBeDefined();
@@ -2962,6 +2964,7 @@ describe("oauth - config", () => {
 				],
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 				client_credentials_scopes: ["m2m:read"],
 			},
@@ -3044,6 +3047,7 @@ describe("oauth - config", () => {
 				],
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 			},
 		});
@@ -3147,6 +3151,7 @@ describe("oauth - config", () => {
 				],
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 			},
 		});
@@ -3260,7 +3265,9 @@ describe("oauth - config", () => {
 				],
 				redirect_uris: [redirectUri],
 				application_type: "native",
-				token_endpoint_auth_method: publicClient ? "none" : undefined,
+				token_endpoint_auth_method: publicClient
+					? "none"
+					: "client_secret_post",
 				skip_consent: true,
 			},
 		});
@@ -3591,6 +3598,7 @@ describe("oauth - rate limiting", () => {
 				],
 				redirect_uris: ["http://localhost:5000/callback"],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				client_credentials_scopes: ["m2m:read"],
 			},
 		});
@@ -3658,6 +3666,7 @@ describe("oauth - rate limiting", () => {
 				],
 				redirect_uris: ["http://localhost:5000/callback"],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				client_credentials_scopes: ["m2m:read"],
 			},
 		});

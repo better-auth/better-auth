@@ -807,7 +807,10 @@ describe("index generation for columns added to existing tables", () => {
 									required: true,
 								},
 							},
-							indexes: [{ fields: ["deviceCode"] }, { fields: ["userCode"] }],
+							indexes: [
+								{ fields: ["deviceCode"], unique: true },
+								{ fields: ["userCode"], unique: true },
+							],
 						},
 					},
 				},
@@ -818,8 +821,8 @@ describe("index generation for columns added to existing tables", () => {
 		const sql = await migration.compileMigrations();
 
 		expect(migration.toBeAdded).toEqual([]);
-		expect(sql).toContain('create index "deviceCode_deviceCode_idx"');
-		expect(sql).toContain('create index "deviceCode_userCode_idx"');
+		expect(sql).toContain('create unique index "deviceCode_deviceCode_uidx"');
+		expect(sql).toContain('create unique index "deviceCode_userCode_uidx"');
 
 		await migration.runMigrations();
 

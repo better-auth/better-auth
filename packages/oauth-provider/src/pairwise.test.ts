@@ -64,6 +64,7 @@ describe("pairwise subject identifiers", async () => {
 			body: {
 				redirect_uris: [redirectUriA],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				scope: "openid profile email offline_access",
 				skip_consent: true,
 				subject_type: "pairwise",
@@ -76,6 +77,7 @@ describe("pairwise subject identifiers", async () => {
 			body: {
 				redirect_uris: [redirectUriB],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				scope: "openid profile email offline_access",
 				skip_consent: true,
 				subject_type: "pairwise",
@@ -88,6 +90,7 @@ describe("pairwise subject identifiers", async () => {
 			body: {
 				redirect_uris: [redirectUriPublic],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				scope: "openid profile email offline_access",
 				skip_consent: true,
 			},
@@ -99,6 +102,7 @@ describe("pairwise subject identifiers", async () => {
 			body: {
 				redirect_uris: [redirectUriSameHost],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				scope: "openid profile email offline_access",
 				skip_consent: true,
 				subject_type: "pairwise",

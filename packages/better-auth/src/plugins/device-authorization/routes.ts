@@ -18,6 +18,45 @@ import { DEVICE_AUTHORIZATION_CODE_MAX_LENGTH } from "./schema";
 
 /* cspell:disable-next-line */
 const defaultCharset = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const MAX_DEVICE_CODE_GENERATION_ATTEMPTS = 3;
+const UNIQUE_CONSTRAINT_ERROR_IDENTIFIERS = new Set([
+	"11000",
+	"1062",
+	"2067",
+	"23505",
+	"2601",
+	"2627",
+	"ER_DUP_ENTRY",
+	"P2002",
+	"SQLITE_CONSTRAINT_UNIQUE",
+]);
+
+function isUniqueConstraintError(error: unknown) {
+	if (typeof error !== "object" || error === null) return false;
+
+	const details = error as Record<string, unknown>;
+	const identifiers = [
+		details.code,
+		details.errcode,
+		details.errno,
+		details.number,
+	];
+	if (
+		identifiers.some((identifier) =>
+			UNIQUE_CONSTRAINT_ERROR_IDENTIFIERS.has(String(identifier)),
+		)
+	) {
+		return true;
+	}
+
+	const message = details.message;
+	return (
+		typeof message === "string" &&
+		/unique(?: key)? constraint|duplicate (?:entry|key)|e11000/i.test(message)
+	);
+}
+
+const defaultUserCodePattern = new RegExp(`^[${defaultCharset}]+$`, "i");
 
 function validateGeneratedCode(code: unknown, label: "device" | "user") {
 	if (typeof code !== "string") {
@@ -33,6 +72,39 @@ function validateGeneratedCode(code: unknown, label: "device" | "user") {
 		});
 	}
 	return code;
+}
+
+function normalizeUserCode(userCode: string) {
+	return userCode.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+}
+
+/**
+ * Preserve exact custom user codes, and normalize only default-alphabet codes.
+ */
+async function findDeviceCodeByUserCode(
+	ctx: GenericEndpointContext,
+	userCode: string,
+) {
+	const findByUserCode = async (value: string) => {
+		const deviceCode = await ctx.context.adapter.findOne<DeviceCode>({
+			model: "deviceCode",
+			where: [{ field: "userCode", value }],
+		});
+		return deviceCode?.userCode === value ? deviceCode : null;
+	};
+
+	const exactDeviceCode = await findByUserCode(userCode);
+	if (exactDeviceCode) return exactDeviceCode;
+
+	const normalizedUserCode = normalizeUserCode(userCode);
+	if (
+		normalizedUserCode === userCode ||
+		!defaultUserCodePattern.test(normalizedUserCode)
+	) {
+		return exactDeviceCode;
+	}
+
+	return findByUserCode(normalizedUserCode);
 }
 
 const deviceCodeBodySchema = z.object({
@@ -59,6 +131,44 @@ const deviceCodeBaseErrorCodes = [
 	"unauthorized_client",
 	"invalid_scope",
 ] as const;
+
+const deviceAuthorizationBaseRequestFields = [
+	"client_id",
+	"user_id",
+	"scope",
+] as const;
+
+async function normalizeDeviceAuthorizationBaseRequestParameters(
+	request: Request | undefined,
+	body: Record<string, unknown>,
+) {
+	for (const field of deviceAuthorizationBaseRequestFields) {
+		if (body[field] === "") body[field] = undefined;
+	}
+
+	const contentType = request?.headers.get("content-type")?.toLowerCase() ?? "";
+	if (!request || !contentType.includes("application/x-www-form-urlencoded")) {
+		return;
+	}
+
+	const params = new URLSearchParams(await request.clone().text());
+	for (const field of deviceAuthorizationBaseRequestFields) {
+		const effectiveValues = params
+			.getAll(field)
+			.filter((value) => value.length > 0);
+		if (effectiveValues.length > 1) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_request",
+				error_description: `${field} must not be repeated`,
+			});
+		}
+		if (effectiveValues.length === 0) {
+			body[field] = undefined;
+		} else {
+			body[field] = effectiveValues[0];
+		}
+	}
+}
 
 type GrantRequestFields<Grant extends DeviceAuthorizationGrant | undefined> =
 	Grant extends DeviceAuthorizationGrant<infer RequestFields>
@@ -111,7 +221,11 @@ export const deviceCode = <Grant extends DeviceAuthorizationGrant | undefined>(
 	};
 	const requestFields = (grant?.requestSchemaFields ??
 		{}) as GrantRequestFields<Grant>;
-	const requestSchema = deviceCodeBodySchema.extend(requestFields);
+	const requestSchema = (
+		grant
+			? deviceCodeBodySchema.extend({ client_id: z.string().optional() })
+			: deviceCodeBodySchema
+	).extend(requestFields);
 	const requestErrorCodes = [
 		...deviceCodeBaseErrorCodes,
 		...(grant?.requestErrorCodes ?? []),
@@ -119,8 +233,9 @@ export const deviceCode = <Grant extends DeviceAuthorizationGrant | undefined>(
 		...typeof deviceCodeBaseErrorCodes,
 		...GrantRequestErrorCodes<Grant>,
 	];
+	const endpointErrorCodes = [...requestErrorCodes, "server_error"] as const;
 	const requestErrorSchema = z.object({
-		error: z.enum(requestErrorCodes).meta({ description: "Error code" }),
+		error: z.enum(endpointErrorCodes).meta({ description: "Error code" }),
 		error_description: z
 			.string()
 			.meta({ description: "Detailed error description" }),
@@ -132,6 +247,13 @@ export const deviceCode = <Grant extends DeviceAuthorizationGrant | undefined>(
 			cloneRequest: true,
 			body: requestSchema,
 			error: requestErrorSchema,
+			onValidationError: ({ issues, message }) => {
+				grant?.onRequestValidationError?.(issues);
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_request",
+					error_description: message,
+				});
+			},
 			metadata: {
 				noStore: true,
 				allowedMediaTypes: [
@@ -143,6 +265,7 @@ export const deviceCode = <Grant extends DeviceAuthorizationGrant | undefined>(
 
 Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#section-3.2)`,
 					responses: {
+						...grant?.requestOpenAPIResponses,
 						200: {
 							description: "Success",
 							content: {
@@ -202,6 +325,25 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 								},
 							},
 						},
+						500: {
+							description: "Server error",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											error: {
+												type: "string",
+												enum: ["server_error"],
+											},
+											error_description: {
+												type: "string",
+											},
+										},
+									},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -209,61 +351,103 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 		async (ctx) => {
 			const request = ctx.body as DeviceAuthorizationRequest &
 				z.infer<z.ZodObject<GrantRequestFields<Grant>>>;
-			if (opts.validateClient) {
-				const isValid = await opts.validateClient(request.client_id);
-				if (!isValid) {
+			await normalizeDeviceAuthorizationBaseRequestParameters(
+				ctx.request,
+				request,
+			);
+
+			const grantAuthorization = grant
+				? await grant.authorizeRequest({ ctx, request })
+				: undefined;
+			const clientId = grantAuthorization?.clientId ?? request.client_id;
+			if (!grantAuthorization) {
+				if (!request.client_id) {
 					throw new APIError("BAD_REQUEST", {
-						error: "invalid_client",
-						error_description: "Invalid client ID",
+						error: "invalid_request",
+						error_description: "client_id is required",
 					});
 				}
+				if (!opts.validateClient) {
+					if (grant) {
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_client",
+							error_description: "Invalid client ID",
+						});
+					}
+				} else {
+					const isValid = await opts.validateClient(request.client_id);
+					if (!isValid) {
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_client",
+							error_description: "Invalid client ID",
+						});
+					}
+				}
 			}
-
-			const grantDeviceCodeFields = await grant?.authorizeRequest({
-				ctx,
-				request,
-			});
+			if (!clientId) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_request",
+					error_description: "client_id is required",
+				});
+			}
 
 			if (opts.onDeviceAuthRequest) {
-				await opts.onDeviceAuthRequest(request.client_id, request.scope);
+				await opts.onDeviceAuthRequest(clientId, request.scope);
 			}
 
-			const deviceCode = await generateDeviceCode();
-			const userCode = await generateUserCode();
 			const expiresIn = ms(opts.expiresIn);
 			const expiresAt = new Date(Date.now() + expiresIn);
 
-			await ctx.context.adapter.create({
-				model: "deviceCode",
-				data: {
-					...grantDeviceCodeFields,
-					deviceCode,
-					userCode,
-					userId: request.user_id || null, // An empty user_id is treated as omitted, per RFC 8628 section 3.1
-					expiresAt,
-					status: "pending",
-					pollingInterval: ms(opts.interval),
-					clientId: request.client_id,
-					scope: request.scope,
-				},
-			});
+			for (
+				let attempt = 0;
+				attempt < MAX_DEVICE_CODE_GENERATION_ATTEMPTS;
+				attempt++
+			) {
+				const deviceCode = await generateDeviceCode();
+				const userCode = await generateUserCode();
 
-			const { verificationUri, verificationUriComplete } =
-				buildVerificationUris(
-					opts.verificationUri,
-					ctx.context.baseURL,
-					userCode,
-				);
+				try {
+					await ctx.context.adapter.create({
+						model: "deviceCode",
+						data: {
+							...grantAuthorization?.deviceCodeFields,
+							deviceCode,
+							userCode,
+							userId: request.user_id || null, // An empty user_id is treated as omitted, per RFC 8628 section 3.1
+							expiresAt,
+							status: "pending",
+							pollingInterval: ms(opts.interval),
+							clientId,
+							scope: request.scope,
+						},
+					});
+				} catch (error) {
+					if (!isUniqueConstraintError(error)) throw error;
+					continue;
+				}
 
-			ctx.setHeader("Cache-Control", "no-store");
-			ctx.setHeader("Pragma", "no-cache");
-			return ctx.json({
-				device_code: deviceCode,
-				user_code: userCode,
-				verification_uri: verificationUri,
-				verification_uri_complete: verificationUriComplete,
-				expires_in: Math.floor(expiresIn / 1000),
-				interval: Math.floor(ms(opts.interval) / 1000),
+				const { verificationUri, verificationUriComplete } =
+					buildVerificationUris(
+						opts.verificationUri,
+						ctx.context.baseURL,
+						userCode,
+					);
+
+				ctx.setHeader("Cache-Control", "no-store");
+				ctx.setHeader("Pragma", "no-cache");
+				return ctx.json({
+					device_code: deviceCode,
+					user_code: userCode,
+					verification_uri: verificationUri,
+					verification_uri_complete: verificationUriComplete,
+					expires_in: Math.floor(expiresIn / 1000),
+					interval: Math.floor(ms(opts.interval) / 1000),
+				});
+			}
+
+			throw new APIError("INTERNAL_SERVER_ERROR", {
+				error: "server_error",
+				error_description: "Failed to generate a unique device code",
 			});
 		},
 	);
@@ -662,17 +846,7 @@ export const deviceVerify = <
 		},
 		async (ctx) => {
 			const { user_code } = ctx.query;
-			const cleanUserCode = user_code.replace(/-/g, "");
-
-			const deviceCodeRecord = await ctx.context.adapter.findOne<DeviceCode>({
-				model: "deviceCode",
-				where: [
-					{
-						field: "userCode",
-						value: cleanUserCode,
-					},
-				],
-			});
+			const deviceCodeRecord = await findDeviceCodeByUserCode(ctx, user_code);
 
 			if (!deviceCodeRecord) {
 				throw new APIError("BAD_REQUEST", {
@@ -795,17 +969,7 @@ export const deviceApprove = createAuthEndpoint(
 		}
 
 		const { userCode } = ctx.body;
-		const cleanUserCode = userCode.replace(/-/g, "");
-
-		const deviceCodeRecord = await ctx.context.adapter.findOne<DeviceCode>({
-			model: "deviceCode",
-			where: [
-				{
-					field: "userCode",
-					value: cleanUserCode,
-				},
-			],
-		});
+		const deviceCodeRecord = await findDeviceCodeByUserCode(ctx, userCode);
 
 		if (!deviceCodeRecord) {
 			throw new APIError("BAD_REQUEST", {
@@ -928,17 +1092,7 @@ export const deviceDeny = createAuthEndpoint(
 		}
 
 		const { userCode } = ctx.body;
-		const cleanUserCode = userCode.replace(/-/g, "");
-
-		const deviceCodeRecord = await ctx.context.adapter.findOne<DeviceCode>({
-			model: "deviceCode",
-			where: [
-				{
-					field: "userCode",
-					value: cleanUserCode,
-				},
-			],
-		});
+		const deviceCodeRecord = await findDeviceCodeByUserCode(ctx, userCode);
 
 		if (!deviceCodeRecord) {
 			throw new APIError("BAD_REQUEST", {
