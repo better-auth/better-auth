@@ -419,10 +419,7 @@ export async function checkOAuthClient(
 		// beside authorization_code and refresh_token. The document passes when
 		// at least one declared grant is mutually supported; the token endpoint
 		// still refuses any grant it has no handler for.
-		if (
-			grantTypes.length > 0 &&
-			!grantTypes.some((grantType) => supportedGrantTypes.has(grantType))
-		) {
+		if (!grantTypes.some((grantType) => supportedGrantTypes.has(grantType))) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description: `no mutually supported grant_type among ${grantTypes.join(", ")}`,
