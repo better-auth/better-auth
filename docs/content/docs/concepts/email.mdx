@@ -15,6 +15,51 @@ For example, you might consider the following email providers:
 * [SuperSend TX](https://docs.supersendtx.com/guides/better-auth)
 * [Mailtrap](https://docs.mailtrap.io/guides/integrations/better-auth)
 
+## Local Email Testing
+
+During development, you rarely want verification links and password reset tokens going out to real inboxes. A local SMTP catcher solves this: it accepts every message your app sends and shows it in a web UI instead of delivering it.
+
+[Mailtrap Local](https://github.com/mailtrap/mailtrap-local) is an MIT-licensed, single-binary catcher. It listens for SMTP on `127.0.0.1:3535` and serves the web UI on `127.0.0.1:3550`.
+
+```bash
+docker run --rm \
+  -p 3535:3535 -p 3550:3550 \
+  -v mailtrap-local:/var/lib/mailtrap-local \
+  mailtrap/mailtrap-local:latest
+```
+
+It's also available via Homebrew (`brew tap mailtrap/local && brew install mailtrap-local`) and as a prebuilt binary.
+
+Since it speaks plain SMTP, any SMTP client can target it. This is one way to implement the `sendEmail` function used throughout the examples on this page:
+
+```ts title="email.ts"
+import nodemailer from 'nodemailer';
+
+const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST ?? '127.0.0.1',
+    port: Number(process.env.SMTP_PORT ?? 3535)
+});
+
+export async function sendEmail(options: {
+    to: string;
+    subject: string;
+    text: string;
+}) {
+    await transporter.sendMail({
+        from: 'no-reply@example.com',
+        to: options.to,
+        subject: options.subject,
+        text: options.text
+    });
+}
+```
+
+Sign up in your app, then open `http://127.0.0.1:3550` to read the captured email and follow its verification link.
+
+<Callout type="warn">
+  A catcher never delivers mail, so keep it to local development. Point `SMTP_HOST` and `SMTP_PORT` at your transactional provider in staging and production.
+</Callout>
+
 ## Email Verification
 
 Email verification is a security feature that ensures users provide a valid email address. It helps prevent spam and abuse by confirming that the email address belongs to the user. In this guide, you'll get a walk through of how to implement token based email verification in your app.
