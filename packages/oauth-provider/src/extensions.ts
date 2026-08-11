@@ -233,14 +233,7 @@ export function extendOAuthProvider(
 	if (existing.includes(extension)) return;
 	const extensions = [...existing, extension];
 	validateOAuthProviderExtensions(extensions);
-	const previousExtensions = provider.options.extensions;
 	provider.options.extensions = extensions;
-	try {
-		extension.assertConfiguration?.(ctx);
-	} catch (error) {
-		provider.options.extensions = previousExtensions;
-		throw error;
-	}
 }
 
 function getExtensionGrantTypes(opts: OAuthOptions<Scope[]>): GrantType[] {

@@ -489,10 +489,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		options: opts as NoInfer<O>,
 		onRequest: handleIssuerMetadataRequest,
 		init: async (ctx) => {
-			for (const extension of opts.extensions ?? []) {
-				extension.assertConfiguration?.(ctx);
-			}
-
 			// OAuth provider performs adapter-level session lookups by id, so it
 			// currently requires DB-backed sessions whenever secondary storage is enabled.
 			if (

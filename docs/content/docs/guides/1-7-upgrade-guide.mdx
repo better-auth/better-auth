@@ -608,41 +608,40 @@ The 1.7 schema indexes `deviceCode` and `userCode` and limits both values to 191
 
 In 1.6, `deviceAuthorization()` signed a device into the same Better Auth application and returned a Better Auth session token from `/device/token`. That standalone flow remains available in 1.7 and does not accept RFC 8707 resource indicators or add OAuth fields to the `deviceCode` table.
 
-To let a registered CLI, TV app, or other limited-input client obtain OAuth tokens, create one shared grant and pass it explicitly to both plugins:
+To let a registered CLI, TV app, or other limited-input client obtain OAuth tokens, add the OAuth Device Authorization integration alongside OAuth Provider:
 
 ```ts title="auth.ts"
-import { deviceCodeGrant, oauthProvider } from "@better-auth/oauth-provider";
+import {
+  oauthDeviceAuthorization,
+  oauthProvider,
+} from "@better-auth/oauth-provider";
 import { betterAuth } from "better-auth";
-import { deviceAuthorization, jwt } from "better-auth/plugins";
-
-const grant = deviceCodeGrant();
+import { jwt } from "better-auth/plugins";
 
 export const auth = betterAuth({
   plugins: [
     jwt(),
-    deviceAuthorization({ grant }),
     oauthProvider({
       loginPage: "/sign-in",
       consentPage: "/consent",
-      extensions: [grant],
       scopes: ["openid", "profile", "offline_access", "api:read"],
       resources: ["https://api.example.com"],
     }),
+    oauthDeviceAuthorization(),
   ],
 });
 ```
 
-This composition adds nullable `oauthClientId` and `resources` fields to `deviceCode`, validates the OAuth client, scopes, and resources when the code is created, advertises the device authorization endpoint in discovery, and exchanges approved codes at `/oauth2/token`. Regenerate and apply the schema when you enable the grant. Existing 1.6 rows need no backfill and remain on the session-token path, even if their `clientId` later matches a registered OAuth client. Allow pending 1.6 clients to finish polling `/device/token` or let their codes expire before moving those clients to the OAuth flow.
+This integration adds nullable `oauthClientId` and `resources` fields to `deviceCode`, validates the OAuth client, scopes, and resources when the code is created, advertises the device authorization endpoint in discovery, and exchanges approved codes at `/oauth2/token`. Regenerate and apply the schema when you enable it. Existing 1.6 rows need no backfill and remain on the session-token path, even if their `clientId` later matches a registered OAuth client. Allow pending 1.6 clients to finish polling `/device/token` or let their codes expire before moving those clients to the OAuth flow.
 
 The client type only exposes the RFC 8707 `resource` request field when the server uses the OAuth grant:
 
 ```ts title="auth-client.ts"
-import type { DeviceCodeGrant } from "@better-auth/oauth-provider";
+import { oauthDeviceAuthorizationClient } from "@better-auth/oauth-provider/client";
 import { createAuthClient } from "better-auth/client";
-import { deviceAuthorizationClient } from "better-auth/client/plugins";
 
 export const authClient = createAuthClient({
-  plugins: [deviceAuthorizationClient<DeviceCodeGrant>()],
+  plugins: [oauthDeviceAuthorizationClient()],
 });
 ```
 

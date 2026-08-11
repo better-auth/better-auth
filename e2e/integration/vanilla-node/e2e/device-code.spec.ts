@@ -1,10 +1,9 @@
 import {
 	DEVICE_CODE_GRANT_TYPE,
-	deviceCodeGrant,
+	oauthDeviceAuthorization,
 	oauthProvider,
 } from "@better-auth/oauth-provider";
 import { expect, test } from "@playwright/test";
-import { deviceAuthorization } from "better-auth/plugins/device-authorization";
 import { jwt } from "better-auth/plugins/jwt";
 import { createLocalJWKSet, jwtVerify } from "jose";
 import { setupServer } from "./utils";
@@ -48,7 +47,6 @@ test.describe("OAuth device-code grant over HTTP", () => {
 		browser,
 	}) => {
 		const resource = "https://api.example.com";
-		const grant = deviceCodeGrant();
 		const { port, stop } = await setupServer(
 			{
 				baseURL: {
@@ -57,20 +55,18 @@ test.describe("OAuth device-code grant over HTTP", () => {
 				},
 				plugins: [
 					jwt(),
-					deviceAuthorization({
-						expiresIn: "5min",
-						interval: "1s",
-						grant,
-					}),
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						extensions: [grant],
 						allowDynamicClientRegistration: true,
 						allowUnauthenticatedClientRegistration: true,
 						resources: [resource],
 						clientRegistrationAllowedResources: [resource],
 						scopes: ["openid", "profile", "email"],
+					}),
+					oauthDeviceAuthorization({
+						expiresIn: "5min",
+						interval: "1s",
 					}),
 				],
 			},
