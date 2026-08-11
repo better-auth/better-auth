@@ -721,13 +721,13 @@ export const deviceVerify = <
 					: undefined
 			) as GrantVerificationContext<Grant> | undefined;
 			const response = {
+				...(canReviewRequest ? grantContext : undefined),
 				user_code: user_code,
 				status: deviceCodeRecord.status,
 				...(canReviewRequest
 					? {
 							client_id: deviceCodeRecord.clientId,
 							scope: deviceCodeRecord.scope,
-							...grantContext,
 						}
 					: {}),
 			} as DeviceVerificationResponse<Grant>;
