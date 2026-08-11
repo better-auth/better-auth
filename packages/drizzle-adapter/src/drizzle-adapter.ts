@@ -16,6 +16,7 @@ import {
 	count,
 	desc,
 	eq,
+	getTableName,
 	gt,
 	gte,
 	inArray,
@@ -24,6 +25,7 @@ import {
 	like,
 	lt,
 	lte,
+	mapColumnsInSQLToAlias,
 	ne,
 	notInArray,
 	or,
@@ -110,6 +112,37 @@ function readDriverRowCount(result: unknown): unknown {
 
 function hasDriverRowCount(result: unknown): boolean {
 	return readDriverRowCount(result) !== undefined;
+}
+
+/**
+ * Build the `where` for a relational (`db.query`) join from the raw `SQL`
+ * clause produced by `convertWhereClause`.
+ *
+ * Drizzle changed the relational `where` contract between majors: drizzle 0.x
+ * accepts a raw `SQL` filter, while drizzle 1.x expects an object filter DSL and
+ * rejects a raw `SQL` with `Unknown relational filter field: "decoder"` (it
+ * enumerates the `SQL` instance's own keys, the first of which is `decoder`).
+ * The non-join query builder consumes the same raw `SQL` on both majors, so on
+ * 1.x we hand the clause to the `RAW` escape hatch instead of rebuilding it.
+ *
+ * drizzle 1.x also aliases the root table inside a relational query (e.g. `d0`),
+ * so the clause — whose columns still point at the physical table — is remapped
+ * onto the aliased table that the `RAW` callback receives, otherwise Postgres
+ * reports `relation "<table>" does not exist`.
+ *
+ * The major is duck-typed from `db._` rather than a version string, matching how
+ * this adapter already distinguishes drivers (see `getAffectedRowCount`):
+ * drizzle 1.x exposes `db._.relations`, drizzle 0.x exposes `db._.fullSchema`.
+ */
+function buildRelationalWhere(db: DB, clause: (SQL | undefined)[]) {
+	const filter = clause[0];
+	if (!filter) return undefined;
+	const isDrizzleV1 = !!db._ && "relations" in db._;
+	if (!isDrizzleV1) return filter;
+	return {
+		RAW: (table: unknown) =>
+			mapColumnsInSQLToAlias(filter, getTableName(table as any)),
+	};
 }
 
 export interface DrizzleAdapterConfig {
@@ -771,7 +804,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								}
 							}
 							const query = db.query[queryModel].findFirst({
-								where: clause[0],
+								where: buildRelationalWhere(db, clause),
 								columns:
 									select?.length && select.length > 0
 										? select.reduce(
@@ -865,7 +898,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								];
 							}
 							const query = db.query[queryModel].findMany({
-								where: clause[0],
+								where: buildRelationalWhere(db, clause),
 								with: includes,
 								columns:
 									select?.length && select.length > 0

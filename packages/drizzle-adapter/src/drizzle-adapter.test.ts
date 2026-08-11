@@ -1,4 +1,5 @@
 import { is, SQL } from "drizzle-orm";
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { describe, expect, it, vi } from "vitest";
 import { drizzleAdapter } from "./drizzle-adapter";
 
@@ -509,6 +510,87 @@ describe("drizzle-adapter", () => {
 			});
 
 			expect(result).toBeNull();
+		});
+	});
+
+	describe("relational join where (experimental joins)", () => {
+		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
+		const userTable = sqliteTable("user", {
+			id: text("id").primaryKey(),
+			name: text("name"),
+			email: text("email"),
+			emailVerified: integer("emailVerified", { mode: "boolean" }),
+			image: text("image"),
+			createdAt: integer("createdAt", { mode: "timestamp" }),
+			updatedAt: integer("updatedAt", { mode: "timestamp" }),
+		});
+		const userRow = {
+			id: "123",
+			name: "Test",
+			email: "test@example.com",
+			emailVerified: false,
+			image: null,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		};
+
+		function createJoinDb(marker: "v0" | "v1") {
+			const findFirst = vi.fn().mockResolvedValue(userRow);
+			const db = {
+				// Duck-typed drizzle major: 1.x exposes `_.relations`, 0.x exposes
+				// `_.fullSchema`. buildRelationalWhere branches on this.
+				_:
+					marker === "v1"
+						? { relations: {} }
+						: { fullSchema: { user: userTable } },
+				query: { user: { findFirst } },
+			} as any;
+			const adapter = drizzleAdapter(db, {
+				provider: "sqlite",
+				schema: { user: userTable },
+			})({
+				secret: defaultSecret,
+				experimental: { joins: true },
+			});
+			return { adapter, findFirst };
+		}
+
+		/**
+		 * drizzle 1.x changed the relational (`db.query`) `where` from a raw `SQL`
+		 * (0.x) to an object filter DSL, so passing the clause built for the query
+		 * builder throws `Unknown relational filter field: "decoder"` and every
+		 * join-enabled read (e.g. `getSession`) fails. On 1.x the clause must go
+		 * through the `RAW` escape hatch, remapped onto the aliased root table.
+		 */
+		it("wraps the where in RAW on drizzle 1.x", async () => {
+			const { adapter, findFirst } = createJoinDb("v1");
+
+			await adapter.findOne({
+				model: "user",
+				where: [{ field: "id", value: "123" }],
+			});
+
+			expect(findFirst).toHaveBeenCalledTimes(1);
+			const arg = findFirst.mock.calls[0]![0];
+			expect(is(arg.where, SQL)).toBe(false);
+			expect(typeof arg.where.RAW).toBe("function");
+			// The callback receives the aliased root table and must return a SQL
+			// with its columns remapped onto that alias (no throw).
+			const remapped = arg.where.RAW(userTable);
+			expect(is(remapped, SQL)).toBe(true);
+		});
+
+		it("passes a raw SQL where on drizzle 0.x", async () => {
+			const { adapter, findFirst } = createJoinDb("v0");
+
+			await adapter.findOne({
+				model: "user",
+				where: [{ field: "id", value: "123" }],
+			});
+
+			expect(findFirst).toHaveBeenCalledTimes(1);
+			const arg = findFirst.mock.calls[0]![0];
+			expect(is(arg.where, SQL)).toBe(true);
 		});
 	});
 });
