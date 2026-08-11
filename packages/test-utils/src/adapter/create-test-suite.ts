@@ -367,7 +367,10 @@ export const createTestSuite = <
 			const cleanupCreatedRows = async () => {
 				adapter = await helpers.adapter();
 				for (const model of Object.keys(createdRows)) {
-					for (const row of createdRows[model]!) {
+					// Snapshot the array: the key is removed once this model's rows are
+					// processed, and the loop must keep iterating the rows it started with.
+					const rows = createdRows[model]!;
+					for (const row of rows) {
 						const schema = getAuthTables(helpers.getBetterAuthOptions());
 						const getDefaultModelName = initGetDefaultModelName({
 							schema,
@@ -388,10 +391,10 @@ export const createTestSuite = <
 						} catch {
 							// We ignore any failed attempts to delete the created rows.
 						}
-						if (createdRows[model]!.length === 1) {
-							delete createdRows[model];
-						}
 					}
+					// Forget this model's rows once they have been processed. Keeping them
+					// would make every later cleanup re-issue deletes for ids already handled.
+					delete createdRows[model];
 				}
 			};
 
