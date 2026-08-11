@@ -25,6 +25,7 @@ import { ResourceUriSchema } from "./types/zod";
 import {
 	getClient,
 	getOAuthProviderPlugin,
+	normalizeClientAuthenticationParameters,
 	toAudienceClaim,
 	toResourceList,
 	validateClientScopes,
@@ -47,9 +48,22 @@ const DEVICE_AUTHORIZATION_PATH = "/device/code";
 const deviceCodeResourceSchema = z.union([
 	ResourceUriSchema,
 	z.array(ResourceUriSchema).min(1),
+	z.literal(""),
 ]);
 
 const oauthDeviceRequestFields = {
+	client_secret: z
+		.string()
+		.meta({ description: "OAuth client secret" })
+		.optional(),
+	client_assertion: z
+		.string()
+		.meta({ description: "OAuth client assertion" })
+		.optional(),
+	client_assertion_type: z
+		.string()
+		.meta({ description: "OAuth client assertion type" })
+		.optional(),
 	resource: deviceCodeResourceSchema
 		.meta({
 			description:
@@ -182,6 +196,44 @@ function buildOAuthDeviceGrant() {
 	return {
 		requestSchemaFields: oauthDeviceRequestFields,
 		requestErrorCodes: ["invalid_target"] as const,
+		requestOpenAPIResponses: {
+			401: {
+				description: "Invalid Basic client authentication",
+				headers: {
+					"WWW-Authenticate": {
+						description: "Basic client authentication challenge",
+						schema: { type: "string", example: "Basic" },
+					},
+				},
+				content: {
+					"application/json": {
+						schema: {
+							type: "object",
+							properties: {
+								error: {
+									type: "string",
+									enum: ["invalid_client"],
+								},
+								error_description: { type: "string" },
+							},
+							required: ["error"],
+						},
+					},
+				},
+			},
+		},
+		onRequestValidationError: (issues) => {
+			if (
+				issues.length > 0 &&
+				issues.every((issue) => issue.path?.[0] === "resource")
+			) {
+				tokenError(
+					"BAD_REQUEST",
+					"invalid_target",
+					"Invalid resource indicator",
+				);
+			}
+		},
 		deviceCodeSchemaFields: {
 			resources: {
 				type: "string[]",
@@ -199,6 +251,11 @@ function buildOAuthDeviceGrant() {
 			device_authorization_endpoint: `${metadataInput.ctx.context.baseURL}${DEVICE_AUTHORIZATION_PATH}`,
 		}),
 		authorizeRequest: async ({ ctx, request }) => {
+			const { detected: hasClientAuthentication } =
+				await normalizeClientAuthenticationParameters(
+					ctx.request,
+					(ctx.body ?? {}) as Record<string, unknown>,
+				);
 			const formResources = ctx.request
 				? await extractRepeatedResourceFromForm(ctx.request)
 				: undefined;
@@ -217,37 +274,43 @@ function buildOAuthDeviceGrant() {
 			}
 			const provider = getOAuthProviderPlugin(ctx.context);
 			if (!provider) return;
-			const oauthClient = await getClient(
-				ctx,
-				provider.options,
-				request.client_id,
-			);
-			// Requests from unknown ids remain in the standalone session flow.
-			if (!oauthClient) return;
 			const scopes = parseScopes(request.scope);
 			if (request.scope !== undefined) {
 				request.scope = scopes.join(" ");
 			}
+			const resource = request.resource === "" ? undefined : request.resource;
 			const api = getOAuthProviderApi(
 				ctx,
 				provider.options,
 				DEVICE_CODE_GRANT_TYPE,
 			);
+			if (!request.client_id && !hasClientAuthentication) {
+				tokenError("BAD_REQUEST", "invalid_request", "client_id is required");
+			}
+			const oauthClient = request.client_id
+				? await getClient(ctx, provider.options, request.client_id)
+				: undefined;
+			// Requests from unknown ids remain in the standalone session flow only
+			// when the caller did not also present OAuth client credentials.
+			if (request.client_id && !oauthClient && !hasClientAuthentication) return;
 			const authenticated = await api.authenticateClient({
 				scopes,
 				requireCredentials: false,
 			});
-			if (authenticated.clientId !== request.client_id) {
-				tokenError("BAD_REQUEST", "invalid_grant", "Client ID mismatch");
+			if (request.client_id && authenticated.clientId !== request.client_id) {
+				tokenError("BAD_REQUEST", "invalid_client", "Client ID mismatch");
 			}
 			await resolveResourcePolicy(ctx, provider.options, {
-				resource: request.resource,
+				resource,
 				clientId: authenticated.clientId,
 				requestedScopes: scopes,
 			});
 			return {
-				oauthClientId: authenticated.clientId,
-				resources: toResourceList(request.resource) ?? null,
+				clientId: authenticated.clientId,
+				deviceCodeFields: {
+					oauthClientId: authenticated.clientId,
+					resources: toResourceList(resource) ?? null,
+				},
 			};
 		},
 		assertSessionRedemption: ({ deviceCode }) => {

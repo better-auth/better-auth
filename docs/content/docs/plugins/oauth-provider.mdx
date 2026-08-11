@@ -452,7 +452,7 @@ Note the following parameters are not yet supported:
 
 An [OAuth 2.1 authorization endpoint](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-13#name-authorization-endpoint). Since many of the details are not yet fully described, parts are adapted from the legacy [OAuth 2.0 Authorization Endpoint Section](https://datatracker.ietf.org/doc/html/rfc6749#section-3.1) but always implements the [differences from OAuth 2.0](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-13#name-differences-from-oauth-20).
 
-The Authorization Endpoint is the entry point for initiating an OAuth 2.1 authorization flows.
+The Authorization Endpoint is the entry point for initiating an OAuth 2.1 authorization flow.
 
 Important notes:
 
@@ -498,6 +498,8 @@ Important Notes:
 
 * With the JWT plugin enabled (default), sending `resource` results in a JWT access token with the selected resource in the `aud` claim.
 * With `disableJwtPlugin: true`, access tokens remain opaque. Requested resources are still bound to the token and surfaced through `/oauth2/introspect` and `customAccessTokenClaims` (via `resources`).
+
+Token endpoint errors follow the OAuth taxonomy: missing required request fields return `invalid_request`, failed client authentication returns `invalid_client`, and invalid or mismatched grants return `invalid_grant`. A confidential client must use its registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`; failed `client_secret_basic` authentication returns `401` with a Basic `WWW-Authenticate` challenge.
 
 #### DPoP sender-constrained tokens
 
@@ -616,6 +618,10 @@ The cached response is stored encrypted on the consumed refresh-token row and in
 #### Device code grant
 
 The device authorization grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) lets limited-input clients (CLIs, smart TVs, IoT) obtain an OAuth access token. Add `oauthDeviceAuthorization()` alongside `oauthProvider()` to register the `urn:ietf:params:oauth:grant-type:device_code` token grant and advertise `device_authorization_endpoint`. The integration adds the OAuth client binding and RFC 8707 resource fields; standalone Device Authorization installations remain unchanged. The device requests codes at `/device/code`, the user approves them, and the client polls `/oauth2/token` for a first-class OAuth token. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api).
+
+At `/device/code`, confidential clients authenticate with their registered method. A client using `client_secret_basic` may send an `Authorization: Basic ...` header and omit the body `client_id`; a client using `client_secret_post` sends `client_id` and `client_secret`; and a public client using `none` sends `client_id`. Empty `client_id`, `scope`, `user_id`, and authentication parameters are treated as omitted regardless of order. Repeated non-empty client identification, base request, or authentication parameters and multiple authentication methods return `invalid_request`, while repeated `resource` parameters remain supported.
+
+An unknown OAuth client ID is not silently handled as a standalone request. Standalone fallback is available only when `oauthDeviceAuthorization({ validateClient })` explicitly accepts that ID. Malformed `resource` input returns `invalid_target` only when `resource` is the failing extension field; if a base request field is also invalid, the response returns `invalid_request`.
 
 ### Consent Endpoint
 

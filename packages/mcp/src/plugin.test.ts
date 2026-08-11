@@ -605,6 +605,14 @@ describe("mcp refresh_token grant client authentication", async () => {
 		};
 	});
 
+	function createBasicAuthorizationHeader(
+		clientSecret = oauthClient.client_secret,
+	) {
+		return `Basic ${Buffer.from(
+			`${oauthClient.client_id}:${clientSecret}`,
+		).toString("base64")}`;
+	}
+
 	/** Runs the real authorize + consent + token exchange to mint a refresh token. */
 	async function mintRefreshToken(): Promise<string> {
 		const codeVerifier = generateRandomString(64);
@@ -655,6 +663,7 @@ describe("mcp refresh_token grant client authentication", async () => {
 			code,
 			codeVerifier,
 			redirectURI: redirectUri,
+			authentication: "basic",
 			options: {
 				clientId: oauthClient.client_id,
 				clientSecret: oauthClient.client_secret,
@@ -705,12 +714,13 @@ describe("mcp refresh_token grant client authentication", async () => {
 			`${authServerBaseUrl}/api/auth/oauth2/token`,
 			{
 				method: "POST",
-				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+					authorization: createBasicAuthorizationHeader("wrong-secret"),
+				},
 				body: new URLSearchParams({
 					grant_type: "refresh_token",
 					refresh_token: refreshToken,
-					client_id: oauthClient.client_id,
-					client_secret: "wrong-secret",
 				}).toString(),
 			},
 		);
@@ -723,16 +733,13 @@ describe("mcp refresh_token grant client authentication", async () => {
 
 	it("accepts refresh_token grant when client_secret comes via Authorization: Basic", async () => {
 		const refreshToken = await mintRefreshToken();
-		const basic = `Basic ${Buffer.from(
-			`${oauthClient.client_id}:${oauthClient.client_secret}`,
-		).toString("base64")}`;
 		const response = await customFetchImpl(
 			`${authServerBaseUrl}/api/auth/oauth2/token`,
 			{
 				method: "POST",
 				headers: {
 					"Content-Type": "application/x-www-form-urlencoded",
-					authorization: basic,
+					authorization: createBasicAuthorizationHeader(),
 				},
 				body: new URLSearchParams({
 					grant_type: "refresh_token",
@@ -760,12 +767,13 @@ describe("mcp refresh_token grant client authentication", async () => {
 			`${authServerBaseUrl}/api/auth/oauth2/token`,
 			{
 				method: "POST",
-				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+					authorization: createBasicAuthorizationHeader(),
+				},
 				body: new URLSearchParams({
 					grant_type: "refresh_token",
 					refresh_token: refreshToken,
-					client_id: oauthClient.client_id,
-					client_secret: oauthClient.client_secret,
 				}).toString(),
 			},
 		);
@@ -778,8 +786,9 @@ describe("mcp refresh_token grant client authentication", async () => {
 			update: { disabled: false },
 		});
 
-		// A disabled client is rejected outright (400) before token issuance.
-		expect(response.status).toBe(400);
+		// Failed HTTP Basic authentication returns its registered challenge.
+		expect(response.status).toBe(401);
+		expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
 		expect(body?.error).toBe("invalid_client");
 		expect(body?.access_token).toBeUndefined();
 	});
@@ -788,6 +797,7 @@ describe("mcp refresh_token grant client authentication", async () => {
 		const refreshToken = await mintRefreshToken();
 		const { body, headers: refreshHeaders } = await refreshAccessTokenRequest({
 			refreshToken,
+			authentication: "basic",
 			options: {
 				clientId: oauthClient.client_id,
 				clientSecret: oauthClient.client_secret,
