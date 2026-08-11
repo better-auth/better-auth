@@ -5,7 +5,7 @@ description: OAuth 2.0 Device Authorization Grant for limited-input devices
 
 `RFC 8628` `CLI` `Smart TV` `IoT`
 
-The Device Authorization plugin implements the device authorization and user-interaction portions of the OAuth 2.0 Device Authorization Grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)), enabling authentication for devices with limited input capabilities such as smart TVs, CLI applications, IoT devices, and gaming consoles. Standalone installations use Better Auth's session-token extension at `/device/token`; that endpoint is not the RFC 8628 OAuth token endpoint. To issue an OAuth access token, compose the plugin with the OAuth Provider integration described below.
+The Device Authorization plugin implements the code issuance and approval flow from the OAuth 2.0 Device Authorization Grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) for limited-input devices such as smart TVs, CLI applications, IoT devices, and gaming consoles. Use it on its own for Better Auth session tokens, or compose it with the OAuth Provider to issue OAuth access tokens.
 
 ## Try It Out
 
@@ -109,20 +109,18 @@ The approval UI is part of the security boundary. It must:
 * require an explicit approval or denial; and
 * tell the user that they are authorizing a device in their possession and warn them not to approve unexpected requests or codes supplied through phishing messages.
 
-The IETF [Cross-Device Flows: Security Best Current Practice](https://datatracker.ietf.org/doc/draft-ietf-oauth-cross-device-security/) is currently an Internet-Draft. Treat it as evolving threat-model and mitigation guidance, not as a finalized standard or a Better Auth API contract.
+For additional threat-model and mitigation guidance, see the IETF [Cross-Device Flows: Security Best Current Practice](https://datatracker.ietf.org/doc/draft-ietf-oauth-cross-device-security/).
 
 ## Choose the token your device needs
 
 Device authorization can finish with two different token types. Choose the token based on what the client needs to call:
 
-| Use case                                                                         | Token                                 | Plugins                                                      | Token endpoint  |
-| -------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------ | --------------- |
-| Sign your own device into the same Better Auth application                       | Better Auth session token (extension) | `deviceAuthorization()`                                      | `/device/token` |
-| Let a registered CLI, TV app, or other public client call an OAuth-protected API | Scoped OAuth access token             | `jwt()`, `oauthProvider()`, and `oauthDeviceAuthorization()` | `/oauth2/token` |
+| Use case                                                                         | Token                     | Plugins                                                      | Token endpoint  |
+| -------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------ | --------------- |
+| Sign your own device into the same Better Auth application                       | Better Auth session token | `deviceAuthorization()`                                      | `/device/token` |
+| Let a registered CLI, TV app, or other public client call an OAuth-protected API | Scoped OAuth access token | `jwt()`, `oauthProvider()`, and `oauthDeviceAuthorization()` | `/oauth2/token` |
 
-A command-line application commonly needs the second path. The CLI cannot safely keep a client secret, and it may not have a reliable redirect listener, but it still needs a user-authorized token for your API. The device grant lets the user approve the request in a browser while the CLI receives an audience-bound OAuth access token. The standalone `/device/token` endpoint is a Better Auth session-token extension, not the RFC 8628 OAuth token endpoint.
-
-RFC 8628 defines an OAuth grant, not a general OIDC device-grant conformance profile. Adding the `openid` scope and configuring the OAuth Provider can enable OIDC artifacts for that provider, but the device grant itself does not claim general OIDC conformance.
+A command-line application commonly needs the second path. The CLI cannot safely keep a client secret, and it may not have a reliable redirect listener, but it still needs a user-authorized token for your API. The device grant lets the user approve the request in a browser while the CLI receives an audience-bound OAuth access token.
 
 ### Authorize a CLI to call an API
 
@@ -230,7 +228,7 @@ The access token is a signed JWT whose `aud` identifies `https://api.example.com
 
 ## First-party session flow
 
-The rest of this page describes the first-party path, where `/device/token` returns a Better Auth session token. This is a Better Auth-specific session-token extension, not the RFC 8628 OAuth token endpoint; clients that need an OAuth access token must add `oauthDeviceAuthorization()` alongside OAuth Provider and poll `/oauth2/token`.
+The rest of this page describes the first-party path, where `/device/token` returns a Better Auth session token.
 
 ### Requesting Device Authorization
 
@@ -849,4 +847,4 @@ export const deviceCodeTableFields = [
 
 <DatabaseTable name="deviceCode" fields={deviceCodeTableFields} />
 
-`oauthDeviceAuthorization()` extends this table with optional `oauthClientId` and `resources` fields. The `resource` field on `/device/code` is the OAuth Provider integration's profile of [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707): RFC 8707 standardizes `resource` in authorization requests and access-token requests. Standalone Device Authorization installations do not add those fields and do not expose the `resource` request parameter.
+`oauthDeviceAuthorization()` extends this table with optional `oauthClientId` and `resources` fields. Standalone Device Authorization installations do not add those fields and do not expose the RFC 8707 `resource` request parameter.
