@@ -1,5 +1,4 @@
 import type {
-	AuthContext,
 	BetterAuthPlugin,
 	GenericEndpointContext,
 } from "@better-auth/core";
@@ -154,8 +153,6 @@ export interface DeviceAuthorizationGrant<
 	requestErrorCodes?: readonly string[];
 	/** Database fields persisted only when this grant is configured. */
 	deviceCodeSchemaFields: Record<string, DBFieldAttribute>;
-	/** Assert that the grant's token issuer was configured explicitly. */
-	assertConfiguration?: (ctx: AuthContext) => void;
 	/** Validate a request and return the grant-owned fields to persist. */
 	authorizeRequest: (input: {
 		ctx: GenericEndpointContext;
@@ -252,7 +249,6 @@ export const deviceAuthorization = <
 		id: "device-authorization",
 		version: PACKAGE_VERSION,
 		schema: mergeSchema(grantSchema, options.schema),
-		init: (ctx) => grant?.assertConfiguration?.(ctx),
 		endpoints: {
 			deviceCode: deviceCode(opts, grant),
 			deviceToken: deviceToken(opts, grant),

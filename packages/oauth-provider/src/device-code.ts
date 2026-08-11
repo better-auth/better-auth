@@ -1,8 +1,16 @@
+import type { AuthContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { APIError } from "better-auth/api";
-import type { DeviceAuthorizationGrant } from "better-auth/plugins/device-authorization";
-import { redeemDeviceCode } from "better-auth/plugins/device-authorization";
+import type {
+	DeviceAuthorizationGrant,
+	DeviceAuthorizationPluginOptions,
+} from "better-auth/plugins/device-authorization";
+import {
+	deviceAuthorization,
+	redeemDeviceCode,
+} from "better-auth/plugins/device-authorization";
 import * as z from "zod";
+import { extendOAuthProvider } from "./extensions";
 import {
 	extractRepeatedResourceFromForm,
 	resolveResourcePolicy,
@@ -41,7 +49,7 @@ const deviceCodeResourceSchema = z.union([
 	z.array(ResourceUriSchema).min(1),
 ]);
 
-const deviceCodeGrantRequestFields = {
+const oauthDeviceRequestFields = {
 	resource: deviceCodeResourceSchema
 		.meta({
 			description:
@@ -170,34 +178,9 @@ async function exchangeOAuthDeviceCode(
 	});
 }
 
-/**
- * Bridges the {@link https://datatracker.ietf.org/doc/html/rfc8628 RFC 8628}
- * device authorization grant into the OAuth Provider. Pair it with the
- * `device-authorization` plugin (which owns the `/device/code` request endpoint,
- * the user verification flow, and the `deviceCode` table) and the
- * `oauthProvider` plugin: this registers a `device_code` token grant on
- * `/oauth2/token` that issues real OAuth tokens for a registered OAuth client,
- * and advertises `device_authorization_endpoint` in discovery metadata.
- *
- * First-party device login continues to use `/device/token` for Better Auth
- * session tokens. OAuth-owned codes persist an immutable client binding, so
- * they can only be claimed at `/oauth2/token`, even if the client registry later
- * changes.
- *
- * @example
- * ```ts
- * const grant = deviceCodeGrant();
- * const auth = betterAuth({
- *   plugins: [
- *     deviceAuthorization({ grant }),
- *     oauthProvider({ extensions: [grant], ...  }),
- *   ],
- * });
- * ```
- */
-export function deviceCodeGrant() {
-	const grant = {
-		requestSchemaFields: deviceCodeGrantRequestFields,
+function buildOAuthDeviceGrant() {
+	return {
+		requestSchemaFields: oauthDeviceRequestFields,
 		requestErrorCodes: ["invalid_target"] as const,
 		deviceCodeSchemaFields: {
 			resources: {
@@ -208,25 +191,6 @@ export function deviceCodeGrant() {
 				type: "string",
 				required: false,
 			},
-		},
-		assertConfiguration: (ctx) => {
-			const provider = ctx.getPlugin("oauth-provider");
-			if (!provider) {
-				throw new BetterAuthError(
-					"deviceCodeGrant requires the oauth-provider plugin.",
-				);
-			}
-			if (!provider.options.extensions?.includes(grant)) {
-				throw new BetterAuthError(
-					"deviceCodeGrant must be passed to oauthProvider({ extensions: [grant] }) as well as deviceAuthorization({ grant }).",
-				);
-			}
-			const deviceAuthorizationPlugin = ctx.getPlugin("device-authorization");
-			if (deviceAuthorizationPlugin?.options.grant !== grant) {
-				throw new BetterAuthError(
-					"deviceCodeGrant must be passed to deviceAuthorization({ grant }) as well as oauthProvider({ extensions: [grant] }).",
-				);
-			}
 		},
 		grants: {
 			[DEVICE_CODE_GRANT_TYPE]: exchangeOAuthDeviceCode,
@@ -316,12 +280,63 @@ export function deviceCodeGrant() {
 			},
 		},
 	} satisfies DeviceAuthorizationGrant<
-		typeof deviceCodeGrantRequestFields,
+		typeof oauthDeviceRequestFields,
 		{ resource: string | string[] | undefined }
 	> &
 		OAuthProviderExtension;
-	return grant;
 }
 
-/** The shared Device Authorization and OAuth Provider extension contract. */
-export type DeviceCodeGrant = ReturnType<typeof deviceCodeGrant>;
+type OAuthDeviceGrant = ReturnType<typeof buildOAuthDeviceGrant>;
+
+/** Options for the OAuth Device Authorization integration. */
+export type OAuthDeviceAuthorizationOptions = Omit<
+	DeviceAuthorizationPluginOptions<OAuthDeviceGrant>,
+	"grant"
+>;
+
+/**
+ * Enables the {@link https://datatracker.ietf.org/doc/html/rfc8628 RFC 8628}
+ * device authorization grant for OAuth Provider. Device Authorization owns
+ * code creation and user approval; OAuth Provider owns client validation and
+ * token issuance.
+ *
+ * Pair this plugin with `oauthProvider()` or `mcp()`. First-party device login
+ * continues to use `deviceAuthorization()` and `/device/token` instead.
+ *
+ * @example
+ * ```ts
+ * const auth = betterAuth({
+ *   plugins: [
+ *     oauthProvider({ ... }),
+ *     oauthDeviceAuthorization(),
+ *   ],
+ * });
+ * ```
+ */
+export function oauthDeviceAuthorization(
+	options: OAuthDeviceAuthorizationOptions = {},
+) {
+	const grant = buildOAuthDeviceGrant();
+	const plugin = deviceAuthorization({ ...options, grant });
+
+	return {
+		...plugin,
+		init(ctx: AuthContext) {
+			const deviceAuthorizationPluginCount =
+				ctx.options.plugins?.filter(
+					(configuredPlugin) => configuredPlugin.id === "device-authorization",
+				).length ?? 0;
+			if (deviceAuthorizationPluginCount > 1) {
+				throw new BetterAuthError(
+					"oauthDeviceAuthorization() cannot be combined with another Device Authorization plugin.",
+				);
+			}
+			if (!ctx.getPlugin("oauth-provider")) {
+				throw new BetterAuthError(
+					"oauthDeviceAuthorization() requires oauthProvider() or mcp().",
+				);
+			}
+			extendOAuthProvider(ctx, grant);
+		},
+	};
+}

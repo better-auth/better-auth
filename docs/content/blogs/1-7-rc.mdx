@@ -81,15 +81,15 @@ These setups were impossible, broken, or unsafe before, and work now.
 
 **Other apps logging in through you**
 
-| Setup                                      | What was blocked                                               | How it works now                                                                            |
-| ------------------------------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| **APIs needing theft-resistant tokens**    | Only plain bearer tokens.                                      | Use DPoP tokens bound to the client's key.                                                  |
-| **Several APIs behind one login server**   | One token could be used on any API.                            | Use per-API resources, so tokens are locked to the API they were issued for.                |
-| **Machine clients registering themselves** | Registration required a logged-in user.                        | Use pre-shared registration tokens.                                                         |
-| **URL-identified MCP clients**             | Only endpoint-based Dynamic Client Registration was available. | Compose `mcp()` with `cimd()` for Client ID Metadata Documents, or explicitly opt into DCR. |
-| **CLIs and other limited-input OAuth clients** | The device flow returned app sessions.                       | Compose the device grant to issue scoped, resource-bound OAuth tokens.                      |
-| **Single sign-out across apps**            | Sign-out did not notify other apps.                            | Use OIDC Back-Channel Logout.                                                               |
-| **Forced re-login**                        | The request was ignored.                                       | `max_age` is enforced.                                                                      |
+| Setup                                          | What was blocked                                               | How it works now                                                                            |
+| ---------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **APIs needing theft-resistant tokens**        | Only plain bearer tokens.                                      | Use DPoP tokens bound to the client's key.                                                  |
+| **Several APIs behind one login server**       | One token could be used on any API.                            | Use per-API resources, so tokens are locked to the API they were issued for.                |
+| **Machine clients registering themselves**     | Registration required a logged-in user.                        | Use pre-shared registration tokens.                                                         |
+| **URL-identified MCP clients**                 | Only endpoint-based Dynamic Client Registration was available. | Compose `mcp()` with `cimd()` for Client ID Metadata Documents, or explicitly opt into DCR. |
+| **CLIs and other limited-input OAuth clients** | The device flow returned app sessions.                         | Add `oauthDeviceAuthorization()` to issue scoped, resource-bound OAuth tokens.              |
+| **Single sign-out across apps**                | Sign-out did not notify other apps.                            | Use OIDC Back-Channel Logout.                                                               |
+| **Forced re-login**                            | The request was ignored.                                       | `max_age` is enforced.                                                                      |
 
 **Enterprise SSO**
 
@@ -193,7 +193,7 @@ export const auth = betterAuth({
 | Stripe org subscriptions need `organization.enabled`      | `referenceMiddleware` rejects org-scoped subscriptions unless `organization: { enabled: true }` is set in the Stripe plugin config.                  |
 | Database joins moved out of `experimental`                | Replace `experimental.joins` with `advanced.database.joins`, then regenerate Drizzle or Prisma relations.                                            |
 | Default Drizzle schema uses singular relation keys        | Regenerate and review your Drizzle schema relations.                                                                                                 |
-| Device Authorization schema and OAuth grant               | Index both code columns, keep codes within 191 characters, and add `oauthClientId` and `resources` only when enabling the OAuth device grant.        |
+| Device Authorization schema and OAuth grant               | Index both code columns, keep codes within 191 characters, and add `oauthClientId` and `resources` only when enabling OAuth Device Authorization.    |
 | Stripe `onSubscriptionCancel` event is required           | Update the callback to expect a non-optional `event`.                                                                                                |
 | Two-factor OTP-only enablement                            | `enableTwoFactor` takes a new `method` param and returns a discriminated response. Update callers.                                                   |
 | Public export `getIp` renamed to `getIP`                  | Update imports of the IP helper.                                                                                                                     |
@@ -267,7 +267,7 @@ Before applying the 1.7 schema, complete any manual preparation for account iden
 | `@better-auth/oauth-provider`                  | Client-data preparation plus resources, DPoP, back-channel logout, `max_age`, and safer OAuth checks         |
 | MCP                                            | A package move to `@better-auth/mcp`, official v2 clients or servers, new endpoint paths, and schema changes |
 | SAML or SCIM                                   | Safer SAML and SSO checks, plus a full SCIM cutover and User and Group reprovisioning                        |
-| Device Authorization                           | Indexed, bounded codes; optionally compose the OAuth grant and add `oauthClientId` and `resources`           |
+| Device Authorization                           | Indexed, bounded codes; optionally add `oauthDeviceAuthorization()` with `oauthClientId` and `resources`     |
 | Magic links or email OTP                       | Safer handling for accounts whose email was never confirmed                                                  |
 | Expo or React Native                           | Await cookie reads and update custom SecureStore-compatible storage implementations                          |
 | Custom adapters, storage, or rate-limit stores | New atomic methods are required                                                                              |
