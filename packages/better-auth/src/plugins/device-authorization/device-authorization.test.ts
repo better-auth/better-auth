@@ -297,7 +297,9 @@ describe("grant verification context", () => {
 			}),
 		} satisfies DeviceAuthorizationGrant;
 		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [deviceAuthorization({ grant })],
+			plugins: [
+				deviceAuthorization({ grant, validateClient: async () => true }),
+			],
 		});
 		const { headers } = await signInWithTestUser();
 		const { user_code } = await auth.api.deviceCode({

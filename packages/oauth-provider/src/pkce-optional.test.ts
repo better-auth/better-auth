@@ -60,6 +60,7 @@ describe("PKCE optional - default behavior", async () => {
 			body: {
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 			},
 		});
@@ -185,6 +186,7 @@ describe("PKCE optional - per-client opt-out", async () => {
 			body: {
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 				require_pkce: false,
 			},
@@ -367,6 +369,7 @@ describe("PKCE optional - dynamic client registration policy", async () => {
 			await authorizationCodeRequest({
 				code,
 				redirectURI: redirectUri,
+				authentication: "basic",
 				options: {
 					clientId,
 					clientSecret,
@@ -451,6 +454,7 @@ describe("PKCE optional - offline_access scope", async () => {
 			body: {
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 				require_pkce: false, // Explicitly optional
 			},
@@ -656,6 +660,7 @@ describe("PKCE optional - consistency checks", async () => {
 			body: {
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 				require_pkce: false,
 			},

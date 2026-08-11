@@ -58,6 +58,7 @@ describe("oauth logout", async () => {
 			body: {
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 				enable_end_session: true,
 			},
@@ -191,6 +192,7 @@ describe("oauth logout", async () => {
 			body: {
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 			},
 		});
@@ -307,6 +309,7 @@ describe("oauth logout", async () => {
 			body: {
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				enable_end_session: true,
 				skip_consent: true,
 				post_logout_redirect_uris: [logoutRedirectUri],
@@ -421,6 +424,7 @@ describe("oauth logout - disableJwtPlugin", async () => {
 			body: {
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 				enable_end_session: true,
 			},
@@ -577,6 +581,7 @@ describe("oauth logout - disableJwtPlugin", async () => {
 			body: {
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				enable_end_session: true,
 				skip_consent: true,
 				post_logout_redirect_uris: [logoutRedirectUri],
