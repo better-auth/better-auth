@@ -678,6 +678,7 @@ describe("Domain verification", async () => {
 						entryPoint: "http://idp.com:",
 						cert: "the-cert",
 						callbackUrl: "http://hello.com:8081/api/sso/saml2/callback",
+						idpMetadata: { entityID: "http://idp.com" },
 						spMetadata: {},
 					},
 				},
