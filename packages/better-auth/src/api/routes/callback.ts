@@ -202,7 +202,7 @@ export const callbackOAuth = createAuthEndpoint(
 					Object.entries({
 						accessToken: await setTokenUtil(tokens.accessToken, c.context),
 						refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
-						idToken: tokens.idToken,
+						idToken: await setTokenUtil(tokens.idToken, c.context),
 						accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 						refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
 						scope: tokens.scopes?.join(","),
@@ -220,6 +220,7 @@ export const callbackOAuth = createAuthEndpoint(
 					...tokens,
 					accessToken: await setTokenUtil(tokens.accessToken, c.context),
 					refreshToken: await setTokenUtil(tokens.refreshToken, c.context),
+					idToken: await setTokenUtil(tokens.idToken, c.context),
 					scope: tokens.scopes?.join(","),
 				});
 				if (!newAccount) {

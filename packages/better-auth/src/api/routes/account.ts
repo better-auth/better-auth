@@ -329,9 +329,15 @@ export const linkSocialAccount = createAuthEndpoint(
 					userId: session.user.id,
 					providerId: provider.id,
 					accountId: linkingUserId,
-					accessToken: c.body.idToken.accessToken,
-					idToken: token,
-					refreshToken: c.body.idToken.refreshToken,
+					accessToken: await setTokenUtil(
+						c.body.idToken.accessToken,
+						c.context,
+					),
+					idToken: await setTokenUtil(token, c.context),
+					refreshToken: await setTokenUtil(
+						c.body.idToken.refreshToken,
+						c.context,
+					),
 					scope: c.body.idToken.scopes?.join(","),
 				});
 			} catch (_e: any) {
@@ -581,7 +587,9 @@ async function getValidAccessToken(
 					: account.refreshToken,
 				refreshTokenExpiresAt:
 					newTokens?.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt,
-				idToken: newTokens?.idToken || account.idToken,
+				idToken: newTokens?.idToken
+					? await setTokenUtil(newTokens.idToken, ctx.context)
+					: account.idToken,
 			};
 			let updatedAccount: Record<string, any> | null = null;
 			if (account.id) {
@@ -620,7 +628,11 @@ async function getValidAccessToken(
 				(await decryptOAuthToken(account.accessToken ?? "", ctx.context)),
 			accessTokenExpiresAt,
 			scopes: account.scope?.split(",") ?? [],
-			idToken: newTokens?.idToken ?? account.idToken ?? undefined,
+			idToken:
+				newTokens?.idToken ??
+				(account.idToken
+					? await decryptOAuthToken(account.idToken, ctx.context)
+					: undefined),
 		};
 	} catch (_error) {
 		throw APIError.from("BAD_REQUEST", {
@@ -839,7 +851,9 @@ export const refreshToken = createAuthEndpoint(
 					accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 					refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
 					scope: tokens.scopes?.join(",") || account.scope,
-					idToken: tokens.idToken || account.idToken,
+					idToken: tokens.idToken
+						? await setTokenUtil(tokens.idToken, ctx.context)
+						: account.idToken,
 				};
 				await ctx.context.internalAdapter.updateAccount(account.id, updateData);
 			}
@@ -855,7 +869,9 @@ export const refreshToken = createAuthEndpoint(
 					accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 					refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
 					scope: tokens.scopes?.join(",") || accountData.scope,
-					idToken: tokens.idToken || accountData.idToken,
+					idToken: tokens.idToken
+						? await setTokenUtil(tokens.idToken, ctx.context)
+						: accountData.idToken,
 				};
 				await setAccountCookie(ctx, updateData);
 			}
@@ -865,7 +881,11 @@ export const refreshToken = createAuthEndpoint(
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
 				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
 				scope: tokens.scopes?.join(",") || account.scope,
-				idToken: tokens.idToken || account.idToken,
+				idToken:
+					tokens.idToken ||
+					(account.idToken
+						? await decryptOAuthToken(account.idToken, ctx.context)
+						: account.idToken),
 				providerId: account.providerId,
 				accountId: account.accountId,
 			});

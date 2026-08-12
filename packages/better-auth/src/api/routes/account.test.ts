@@ -19,7 +19,7 @@ import {
 } from "vitest";
 import { betterAuth } from "../../auth/minimal";
 import { parseSetCookieHeader } from "../../cookies";
-import { signJWT, symmetricDecodeJWT } from "../../crypto";
+import { signJWT, symmetricDecodeJWT, symmetricDecrypt } from "../../crypto";
 import { genericOAuth } from "../../plugins/generic-oauth";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account } from "../../types";
@@ -176,6 +176,32 @@ describe("account", async () => {
 				providerId: "google",
 			});
 			expect(accessToken.data?.accessToken).toBe("test");
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10757
+	 */
+	it("should encrypt id token", async () => {
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
+		const account = await ctx.adapter.findOne<Account>({
+			model: "account",
+			where: [{ field: "providerId", value: "google" }],
+		});
+		expect(account?.idToken).toBeTruthy();
+		// the stored value must not be the raw JWT the provider issued
+		expect(account?.idToken).not.toContain(".");
+		const decrypted = await symmetricDecrypt({
+			key: ctx.secretConfig,
+			data: account!.idToken!,
+		});
+		expect(decrypted.split(".")).toHaveLength(3);
+		await runWithClient2(async () => {
+			const accessToken = await client.getAccessToken({
+				providerId: "google",
+			});
+			// callers still get the usable token back
+			expect(accessToken.data?.idToken).toBe(decrypted);
 		});
 	});
 
