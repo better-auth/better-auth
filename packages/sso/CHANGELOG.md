@@ -1,5 +1,7 @@
 # @better-auth/sso
 
+## 1.7.0-rc.5
+
 ## 1.7.0-rc.4
 
 ## 1.7.0-rc.3
@@ -159,6 +161,18 @@
   Closes [#5592](https://github.com/better-auth/better-auth/issues/5592).
   Closes [#5604](https://github.com/better-auth/better-auth/issues/5604).
   Supersedes [#4992](https://github.com/better-auth/better-auth/issues/4992) and [#5443](https://github.com/better-auth/better-auth/issues/5443).
+
+## 1.6.27
+
+### Patch Changes
+
+- [`999acbd`](https://github.com/better-auth/better-auth/commit/999acbd41d4d6bad81b24ce9edef063632ad22bf) Thanks [@bytaesu](https://github.com/bytaesu)! - Domain verification now applies only to the domains the provider held when the request started. If the provider changes while the DNS check is still running, the request returns `409` with the `SSO_PROVIDER_CHANGED` code instead of recording a result, so callers can reload the provider and retry.
+
+- [`999acbd`](https://github.com/better-auth/better-auth/commit/999acbd41d4d6bad81b24ce9edef063632ad22bf) Thanks [@bytaesu](https://github.com/bytaesu)! - Automatic organization assignment from an email domain now requires a verified provider domain and a verified stored user email, so a social sign-in no longer joins an organization whose SSO provider only claims that domain. Explicit organization-bound OIDC and SAML provisioning is unchanged.
+
+- Updated dependencies [[`2ae491e`](https://github.com/better-auth/better-auth/commit/2ae491eac3ece50839a0eb2d4f868c4deedac67b), [`90b5093`](https://github.com/better-auth/better-auth/commit/90b509344794b8064700371cbc04b985d0519839)]:
+  - @better-auth/core@1.6.27
+  - better-auth@1.6.27
 
 ## 1.6.26
 

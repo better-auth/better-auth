@@ -417,6 +417,65 @@ describe("oauth-provider extensions", async () => {
 		).toContain("client registered for client_secret_basic cannot use");
 	});
 
+	it("returns invalid_client when an extension grant omits required credentials", async () => {
+		const confidentialClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: [extensionGrant],
+				scope: "openid email vc",
+				application_type: "web",
+			},
+		});
+		const response = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: extensionGrant,
+				client_id: confidentialClient!.client_id,
+			}),
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+			},
+		});
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as { error?: string } | undefined)?.error).toBe(
+			"invalid_client",
+		);
+	});
+
+	it("challenges Basic authentication with an empty secret", async () => {
+		const confidentialClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: [extensionGrant],
+				scope: "openid email vc",
+				application_type: "web",
+			},
+		});
+		if (!confidentialClient?.client_id) {
+			throw new Error("confidential OAuth client was not created");
+		}
+
+		let responseHeaders: Headers | undefined;
+		const response = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({ grant_type: extensionGrant }),
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+				authorization: `Basic ${Buffer.from(`${confidentialClient.client_id}:`).toString("base64")}`,
+			},
+			onError(context) {
+				responseHeaders = context.response.headers;
+			},
+		});
+
+		expect(response.error?.status).toBe(401);
+		expect((response.error as { error?: string } | undefined)?.error).toBe(
+			"invalid_client",
+		);
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+	});
+
 	it("authorizes against the resolved record, not the strategy", async () => {
 		// The strategy proves a client id; the provider resolves the record. A proven
 		// id with no registered client is rejected, since a strategy cannot conjure a

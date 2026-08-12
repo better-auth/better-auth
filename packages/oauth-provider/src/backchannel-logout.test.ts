@@ -268,6 +268,7 @@ describe("oauth back-channel logout", async () => {
 			body: {
 				redirect_uris: [`${rp.url}/callback`],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 				enable_end_session: true,
 				backchannel_logout_uri: `${rp.publicUrl}/logout/backchannel`,
@@ -713,6 +714,7 @@ describe("oauth back-channel logout (jwt plugin disabled)", async () => {
 			body: {
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 				enable_end_session: true,
 			},
@@ -843,6 +845,7 @@ describe("oauth back-channel logout - secondaryStorage + preserveSessionInDataba
 			body: {
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 				enable_end_session: true,
 			},

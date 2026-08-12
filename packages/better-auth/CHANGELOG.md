@@ -1,5 +1,26 @@
 # better-auth
 
+## 1.7.0-rc.5
+
+### Minor Changes
+
+- [#10746](https://github.com/better-auth/better-auth/pull/10746) [`6782647`](https://github.com/better-auth/better-auth/commit/6782647d7c2d248246f9ef3980e656725c29ce64) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth device grants now use `oauthDeviceAuthorization()` alongside `oauthProvider()` or `mcp()`. This single integration replaces both the standalone `deviceCodeGrant()` plugin and the shared-grant configuration. Standalone Device Authorization no longer accepts or stores RFC 8707 resources, and `onDeviceAuthRequest` receives only `clientId` and `scope`. The OAuth integration rejects resource indicators that are not absolute, fragment-free URIs.
+
+  The OAuth integration replaces the optional `resource` column with `oauthClientId` and `resources`. Regenerate and apply the schema when using it. Before upgrading from an earlier 1.7 prerelease, let pending OAuth device codes expire or delete them because they cannot be exchanged through the new integration.
+
+- [#10330](https://github.com/better-auth/better-auth/pull/10330) [`081d3c3`](https://github.com/better-auth/better-auth/commit/081d3c379c720926295067d878c421b5e8684c78) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Introduces the functionality to disable `displayName` from the username plugin.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-rc.5
+  - @better-auth/drizzle-adapter@1.7.0-rc.5
+  - @better-auth/kysely-adapter@1.7.0-rc.5
+  - @better-auth/memory-adapter@1.7.0-rc.5
+  - @better-auth/mongo-adapter@1.7.0-rc.5
+  - @better-auth/prisma-adapter@1.7.0-rc.5
+  - @better-auth/telemetry@1.7.0-rc.5
+
 ## 1.7.0-rc.4
 
 ### Patch Changes
@@ -377,6 +398,23 @@
   - @better-auth/telemetry@1.7.0-beta.5
 
 ## 1.7.0-beta.4
+
+## 1.6.27
+
+### Patch Changes
+
+- [#10657](https://github.com/better-auth/better-auth/pull/10657) [`2ae491e`](https://github.com/better-auth/better-auth/commit/2ae491eac3ece50839a0eb2d4f868c4deedac67b) Thanks [@bytaesu](https://github.com/bytaesu)! - Aligned endpoint and middleware context types with runtime route parameters, and preserved response headers when resolving sessions from endpoint contexts.
+
+- [#10676](https://github.com/better-auth/better-auth/pull/10676) [`90b5093`](https://github.com/better-auth/better-auth/commit/90b509344794b8064700371cbc04b985d0519839) Thanks [@bytaesu](https://github.com/bytaesu)! - Deduplicate in-flight session requests when React retries a suspended component.
+
+- Updated dependencies [[`2ae491e`](https://github.com/better-auth/better-auth/commit/2ae491eac3ece50839a0eb2d4f868c4deedac67b)]:
+  - @better-auth/core@1.6.27
+  - @better-auth/drizzle-adapter@1.6.27
+  - @better-auth/kysely-adapter@1.6.27
+  - @better-auth/memory-adapter@1.6.27
+  - @better-auth/mongo-adapter@1.6.27
+  - @better-auth/prisma-adapter@1.6.27
+  - @better-auth/telemetry@1.6.27
 
 ## 1.6.26
 

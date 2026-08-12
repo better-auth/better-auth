@@ -92,6 +92,7 @@ describe("oauth token - authorization_code", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				token_endpoint_auth_method: "client_secret_post",
 				grant_types: [
 					"authorization_code",
 					"client_credentials",
@@ -768,6 +769,7 @@ describe("oauth token - refresh_token", async () => {
 		const response = await authorizationServer.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				token_endpoint_auth_method: "client_secret_post",
 				grant_types: [
 					"authorization_code",
 					"client_credentials",
@@ -894,6 +896,53 @@ describe("oauth token - refresh_token", async () => {
 
 		return tokens.data;
 	}
+
+	it("returns invalid_request when refresh_token omits client_id", async () => {
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: "not-used",
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as { error?: string })?.error).toBe(
+			"invalid_request",
+		);
+	});
+
+	it("returns invalid_request when refresh_token is omitted", async () => {
+		if (!oauthClient?.client_id || !oauthClient.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					client_id: oauthClient.client_id,
+					client_secret: oauthClient.client_secret,
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as { error?: string })?.error).toBe(
+			"invalid_request",
+		);
+	});
 
 	it("should refresh token with same scopes, opaque access token", async ({
 		expect,
@@ -1675,6 +1724,7 @@ describe("oauth token - refresh_token reuse interval", async () => {
 		const response = await authorizationServer.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				token_endpoint_auth_method: "client_secret_post",
 				grant_types: [
 					"authorization_code",
 					"client_credentials",
@@ -2045,6 +2095,7 @@ describe("oauth token - client_credentials", async () => {
 
 		const scopes = ["read:posts"];
 		const { body, headers } = await clientCredentialsTokenRequest({
+			authentication: "basic",
 			scope: scopes.join(" "),
 			options: {
 				clientId: oauthClient.client_id,
@@ -2074,12 +2125,235 @@ describe("oauth token - client_credentials", async () => {
 		expect(tokens.data?.expires_at).toBeDefined();
 	});
 
+	it("returns invalid_request when client_credentials omits client_id", async () => {
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({ grant_type: "client_credentials" }),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as { error?: string })?.error).toBe(
+			"invalid_request",
+		);
+	});
+
+	it("rejects repeated form client authentication fields", async () => {
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams([
+					["grant_type", "client_credentials"],
+					["client_id", "repeated-auth-client"],
+					["client_secret", "first"],
+					["client_secret", "second"],
+				]),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as { error?: string })?.error).toBe(
+			"invalid_request",
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10752#pullrequestreview-4910497732
+	 */
+	it("rejects repeated non-empty form client IDs", async () => {
+		if (!oauthClient?.client_id || !oauthClient.client_secret) {
+			throw new Error("OAuth client was not created");
+		}
+
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams([
+					["grant_type", "client_credentials"],
+					["client_id", oauthClient.client_id],
+					["client_id", "duplicate-client"],
+					["scope", "read:posts"],
+				]),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					authorization: `Basic ${Buffer.from(
+						`${oauthClient.client_id}:${oauthClient.client_secret}`,
+					).toString("base64")}`,
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as { error?: string })?.error).toBe(
+			"invalid_request",
+		);
+	});
+
+	it("rejects a secret method different from the registered method", async () => {
+		if (!oauthClient?.client_id || !oauthClient.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: oauthClient.client_id,
+					client_secret: oauthClient.client_secret,
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as { error?: string })?.error).toBe(
+			"invalid_client",
+		);
+		expect(
+			(response.error as { error_description?: string })?.error_description,
+		).toContain("registered for client_secret_basic");
+	});
+
+	it("returns 400 for failed client_secret_post authentication", async () => {
+		const postClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				token_endpoint_auth_method: "client_secret_post",
+				client_credentials_scopes: ["read:posts"],
+			},
+		});
+		if (!postClient?.client_id) {
+			throw Error("client_secret_post client was not created");
+		}
+
+		let responseHeaders: Headers | undefined;
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: postClient.client_id,
+					client_secret: "wrong-secret",
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				onError(context) {
+					responseHeaders = context.response.headers;
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as { error?: string })?.error).toBe(
+			"invalid_client",
+		);
+		expect(responseHeaders?.has("WWW-Authenticate")).toBe(false);
+	});
+
+	it("challenges failed client_secret_basic authentication", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		let responseHeaders: Headers | undefined;
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({ grant_type: "client_credentials" }),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					authorization: `Basic ${Buffer.from(`${oauthClient.client_id}:wrong-secret`).toString("base64")}`,
+				},
+				onError(context) {
+					responseHeaders = context.response.headers;
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(401);
+		expect((response.error as { error?: string })?.error).toBe(
+			"invalid_client",
+		);
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+	});
+
+	it("challenges client_secret_basic authentication without a secret", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		let responseHeaders: Headers | undefined;
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({ grant_type: "client_credentials" }),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					authorization: `Basic ${Buffer.from(`${oauthClient.client_id}:`).toString("base64")}`,
+				},
+				onError(context) {
+					responseHeaders = context.response.headers;
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(401);
+		expect((response.error as { error?: string })?.error).toBe(
+			"invalid_client",
+		);
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+	});
+
+	it("challenges an unknown client_secret_basic client", async () => {
+		let responseHeaders: Headers | undefined;
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({ grant_type: "client_credentials" }),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					authorization: `Basic ${Buffer.from("unknown-client:secret").toString("base64")}`,
+				},
+				onError(context) {
+					responseHeaders = context.response.headers;
+				},
+			},
+		);
+
+		expect(response.error?.status).toBe(401);
+		expect((response.error as { error?: string })?.error).toBe(
+			"invalid_client",
+		);
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+	});
+
 	it("should match created client scopes", async ({ expect }) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
 
 		const { body, headers } = await clientCredentialsTokenRequest({
+			authentication: "basic",
 			options: {
 				clientId: oauthClient.client_id,
 				clientSecret: oauthClient.client_secret,
@@ -2115,6 +2389,7 @@ describe("oauth token - client_credentials", async () => {
 
 		const scopes = ["read:posts"];
 		const { body, headers } = await clientCredentialsTokenRequest({
+			authentication: "basic",
 			scope: scopes.join(" "),
 			options: {
 				clientId: oauthClient.client_id,
@@ -2161,6 +2436,7 @@ describe("oauth token - client_credentials", async () => {
 		}
 
 		const { body, headers } = await clientCredentialsTokenRequest({
+			authentication: "basic",
 			scope: "delete:posts",
 			options: {
 				clientId: oauthClient.client_id,
@@ -2223,6 +2499,7 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				token_endpoint_auth_method: "client_secret_post",
 				grant_types: [
 					"authorization_code",
 					"client_credentials",
@@ -2382,6 +2659,7 @@ describe("oauth token - config", async () => {
 		const registeredClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				token_endpoint_auth_method: "client_secret_post",
 				grant_types: [
 					"authorization_code",
 					"client_credentials",
@@ -2770,6 +3048,7 @@ describe("oauth token - client secret validation", async () => {
 		const oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				token_endpoint_auth_method: "client_secret_post",
 				grant_types: [
 					"authorization_code",
 					"client_credentials",
@@ -2822,7 +3101,7 @@ describe("oauth token - client secret validation", async () => {
 				},
 			},
 		);
-		expect(responseStatus).toBe(401);
+		expect(responseStatus).toBe(400);
 		expect(tokenResponse.error).toMatchObject({
 			error: "invalid_client",
 			error_description: "invalid client_secret",
@@ -2922,6 +3201,7 @@ describe("id token claim override security", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				token_endpoint_auth_method: "client_secret_post",
 				grant_types: [
 					"authorization_code",
 					"client_credentials",
@@ -3060,6 +3340,7 @@ describe("loopback redirect URI matching", async () => {
 		const oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				token_endpoint_auth_method: "client_secret_post",
 				redirect_uris: [registeredUri],
 				application_type: "native",
 				skip_consent: true,
@@ -3115,6 +3396,7 @@ describe("loopback redirect URI matching", async () => {
 		const oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				token_endpoint_auth_method: "client_secret_post",
 				redirect_uris: [registeredUri],
 				application_type: "native",
 				skip_consent: true,
@@ -3273,6 +3555,7 @@ describe("scope preservation through authorization code flow", async () => {
 		const oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				token_endpoint_auth_method: "client_secret_post",
 				redirect_uris: [redirectUri],
 				application_type: "native",
 				skip_consent: true,
@@ -3404,6 +3687,7 @@ describe("at_hash in id tokens", async () => {
 		const code = callbackUrl.searchParams.get("code")!;
 
 		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			authentication: "basic",
 			code,
 			codeVerifier,
 			redirectURI: redirectUri,
@@ -3535,6 +3819,7 @@ describe("at_hash in id tokens", async () => {
 		});
 		const code = new URL(callbackUrl).searchParams.get("code")!;
 		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			authentication: "basic",
 			code,
 			codeVerifier,
 			redirectURI: redirectUri,
@@ -3611,6 +3896,7 @@ describe("customTokenResponseFields", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				token_endpoint_auth_method: "client_secret_post",
 				grant_types: [
 					"authorization_code",
 					"client_credentials",
@@ -3712,6 +3998,7 @@ describe("customTokenResponseFields", async () => {
 		const response = await auth2.api.adminCreateOAuthClient({
 			headers: headers2,
 			body: {
+				token_endpoint_auth_method: "client_secret_post",
 				grant_types: [
 					"authorization_code",
 					"client_credentials",
@@ -4120,6 +4407,7 @@ describe("oauth token - per-client grant_type enforcement", async () => {
 		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
 
 		const { body, headers: reqHeaders } = await authorizationCodeRequest({
+			authentication: "basic",
 			code,
 			codeVerifier,
 			redirectURI: redirectUri,
@@ -4453,6 +4741,7 @@ describe("oauth token - DPoP", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				token_endpoint_auth_method: "client_secret_post",
 				grant_types: ["authorization_code", "refresh_token"],
 				redirect_uris: [redirectUri],
 				application_type: "native",
@@ -4695,6 +4984,7 @@ describe("oauth token - DPoP", async () => {
 		const flagged = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
+				token_endpoint_auth_method: "client_secret_post",
 				grant_types: ["authorization_code"],
 				redirect_uris: [redirectUri],
 				application_type: "native",

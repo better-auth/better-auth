@@ -1053,6 +1053,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/introspect",
 				{
 					method: "POST",
+					// Credential cardinality is enforced from the raw form body.
+					cloneRequest: true,
 					body: z.object({
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
@@ -1192,6 +1194,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/revoke",
 				{
 					method: "POST",
+					// Credential cardinality is enforced from the raw form body.
+					cloneRequest: true,
 					body: z.object({
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
