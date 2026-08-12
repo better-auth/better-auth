@@ -1,6 +1,6 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
-import { atom, onMount } from "nanostores";
+import { atom, onMount, STORE_UNMOUNT_DELAY } from "nanostores";
 import type { Session, User } from "../types";
 import { isJsonEqual, withEquality } from "./equality";
 import type { AuthQueryAtom, AuthQueryState } from "./query";
@@ -77,7 +77,7 @@ export function getSessionAtom(
 ) {
 	const $signal = atom<boolean>(false);
 
-	let activeRequest: SessionRequest | undefined;
+	let sessionRequest: SessionRequest | undefined;
 
 	const refetch = (
 		queryParams?: { query?: SessionQueryParams } | undefined,
@@ -181,7 +181,7 @@ export function getSessionAtom(
 	const fetchSession = (
 		queryParams?: { query?: SessionQueryParams } | undefined,
 	): Promise<void> => {
-		activeRequest?.cancel();
+		sessionRequest?.cancel();
 		const controller = new AbortController();
 		const promise = Promise.resolve().then(() => {
 			if (controller.signal.aborted) return;
@@ -191,16 +191,18 @@ export function getSessionAtom(
 			cancel: () => controller.abort(),
 			promise,
 		};
-		activeRequest = request;
-		const clearActiveRequest = () => {
-			if (activeRequest === request) activeRequest = undefined;
+		sessionRequest = request;
+		const releaseSessionRequest = () => {
+			setTimeout(() => {
+				if (sessionRequest === request) sessionRequest = undefined;
+			}, STORE_UNMOUNT_DELAY);
 		};
-		void request.promise.then(clearActiveRequest, clearActiveRequest);
+		void request.promise.then(releaseSessionRequest, releaseSessionRequest);
 		return request.promise;
 	};
 
 	const fetchSessionOnMount = (): Promise<void> =>
-		activeRequest?.promise ?? fetchSession();
+		sessionRequest?.promise ?? fetchSession();
 
 	let broadcastSessionUpdate: (
 		trigger: "signout" | "getSession" | "updateUser",

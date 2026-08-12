@@ -541,6 +541,76 @@ describe("useAuthQuery - error handling", () => {
 		expect(observedRequests).toEqual([{ aborted: false }]);
 	});
 
+	it("should not refetch a settled session request on a Suspense retry", async () => {
+		vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+		let requestCount = 0;
+		let resolveSessionRequest: ((response: Response) => void) | undefined;
+		let resumeRender: (() => void) | undefined;
+		let suspended = true;
+		const suspendedRender = new Promise<void>((resolve) => {
+			resumeRender = () => {
+				suspended = false;
+				resolve();
+			};
+		});
+		const client = createReactAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async () => {
+					requestCount++;
+					if (requestCount > 1) {
+						return new Response(JSON.stringify({ session: null, user: null }));
+					}
+					return new Promise<Response>((resolve) => {
+						resolveSessionRequest = resolve;
+					});
+				},
+			},
+		});
+		const SessionWatcher = () => {
+			client.useSession();
+			if (suspended) throw suspendedRender;
+			return null;
+		};
+		const root = createRoot(document.createElement("div"));
+
+		await act(async () => {
+			root.render(
+				createElement(
+					Suspense,
+					{ fallback: null },
+					createElement(SessionWatcher),
+				),
+			);
+			await vi.advanceTimersByTimeAsync(0);
+		});
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(STORE_UNMOUNT_DELAY);
+		});
+
+		const settleSessionRequest = resolveSessionRequest;
+		if (!settleSessionRequest) throw new Error("Session request did not start");
+		await act(async () =>
+			settleSessionRequest(
+				new Response(JSON.stringify({ session: null, user: null })),
+			),
+		);
+		expect(client.$store.atoms.session!.value.isPending).toBe(false);
+
+		const retrySuspendedRender = resumeRender;
+		if (!retrySuspendedRender) {
+			throw new Error("Suspense retry was not scheduled");
+		}
+		await act(async () => retrySuspendedRender());
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(0);
+		});
+
+		expect(requestCount).toBe(1);
+
+		await act(async () => root.unmount());
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9613
 	 */
