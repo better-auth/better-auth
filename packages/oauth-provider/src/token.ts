@@ -22,7 +22,7 @@ import {
 } from "./authentication-context";
 import { resolveAccessTokenClaims } from "./claims";
 import { getRequestedUserInfoClaims } from "./claims-request";
-import { getDpopProofJwt, getEndpointUrl } from "./dpop";
+import { getDpopProofJwt } from "./dpop";
 import {
 	collectExtensionIdTokenClaims,
 	getExtensionGrantHandler,
@@ -817,7 +817,7 @@ async function resolveDpopTokenBinding(
 		const proof = await verifyDpopProof({
 			proofJwt: dpopProofJwt,
 			method: "POST",
-			url: getEndpointUrl(ctx, "/oauth2/token"),
+			url: `${ctx.context.baseURL.replace(/\/+$/, "")}/oauth2/token`,
 			expectedJkt,
 			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 			signingAlgorithms: opts.dpop?.signingAlgorithms,

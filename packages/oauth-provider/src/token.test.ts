@@ -4604,7 +4604,7 @@ describe("oauth token - DPoP", async () => {
 	const tokenEndpoint = `${authServerBaseUrl}/api/auth/oauth2/token`;
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
-		baseURL: authServerBaseUrl,
+		baseURL: `${authServerBaseUrl}/api/auth/`,
 		plugins: [
 			jwt({ jwt: { issuer: authServerBaseUrl } }),
 			oauthProvider({
@@ -4770,6 +4770,43 @@ describe("oauth token - DPoP", async () => {
 		expect(tokens.data?.token_type).toBe("DPoP");
 		const payload = decodeJwt(tokens.data!.access_token!);
 		expect(payload.cnf).toMatchObject({ jkt: dpopKey.jkt });
+	});
+
+	it("validates DPoP against the public token endpoint URL", async () => {
+		const dpopKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "public-endpoint-proof",
+		});
+		const { body, headers: requestHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			resource: jwtResource,
+			options: {
+				clientId: oauthClient!.client_id,
+				clientSecret: oauthClient!.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+		const headers = new Headers(requestHeaders);
+		headers.set("DPoP", proof);
+
+		const response = await customFetchImpl(
+			"http://auth-service:3000/api/auth/oauth2/token",
+			{ method: "POST", body, headers },
+		);
+		const tokens: OAuthTokenResponse = await response.json();
+
+		expect(response.status).toBe(200);
+		expect(tokens.token_type).toBe("DPoP");
 	});
 
 	it("rejects a token request without a proof when the resource requires DPoP", async () => {
