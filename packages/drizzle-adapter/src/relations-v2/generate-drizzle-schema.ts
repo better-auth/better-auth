@@ -42,7 +42,7 @@ function convertToSnakeCase(str: string, camelCase?: boolean) {
 
 /**
  * Convert a schema namespace into a valid JavaScript identifier so it can be
- * used as the `const <name>Schema = pgSchema(...)` variable name.
+ * used as the `export const <name>Schema = pgSchema(...)` variable name.
  * e.g. "my-auth" -> "myAuth", "123schema" -> "_123schema".
  */
 function toValidIdentifier(str: string): string {
@@ -100,7 +100,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		if (schemaVarName === "pgSchema") {
 			schemaVarName = "pgCustomSchema";
 		}
-		code += `\nconst ${schemaVarName} = pgSchema(${JSON.stringify(schemaName)});\n`;
+		code += `\nexport const ${schemaVarName} = pgSchema(${JSON.stringify(schemaName)});\n`;
 	}
 
 	// Table function to use: namespaced schema table for pg + schemaName,

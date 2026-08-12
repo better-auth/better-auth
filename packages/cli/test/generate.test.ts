@@ -1314,6 +1314,9 @@ model Directory_user {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10587
+	 */
 	it("should generate drizzle schema with schemaName for PostgreSQL", async () => {
 		const schema = await generateDrizzleSchema({
 			file: "test.drizzle",
@@ -1341,7 +1344,7 @@ model Directory_user {
 			"./__snapshots__/auth-schema-pg-with-schema-name.txt",
 		);
 		// Should declare the schema
-		expect(schema.code).toContain('const authSchema = pgSchema("auth")');
+		expect(schema.code).toContain('export const authSchema = pgSchema("auth")');
 		// Should use schema.table() instead of pgTable() for table definitions
 		expect(schema.code).toContain("authSchema.table");
 		// Should not use or import pgTable() when schemaName is set
@@ -1464,7 +1467,7 @@ model Directory_user {
 		});
 		// Should convert hyphenated schema name to valid identifier
 		expect(schema.code).toContain(
-			'const myauthschemaSchema = pgSchema("my-auth-schema")',
+			'export const myauthschemaSchema = pgSchema("my-auth-schema")',
 		);
 		expect(schema.code).toContain("myauthschemaSchema.table");
 	});

@@ -231,6 +231,9 @@ describe("relations-v2 schema generator", () => {
 	});
 
 	describe("schemaName (PostgreSQL namespace)", () => {
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10587
+		 */
 		test("declares a pgSchema and uses schema.table() when schemaName is set", async () => {
 			const { code = "" } = await generateDrizzleSchema({
 				options: {},
@@ -238,7 +241,7 @@ describe("relations-v2 schema generator", () => {
 				adapterConfig: { provider: "pg", schemaName: "auth" },
 			});
 
-			expect(code).toContain('const authSchema = pgSchema("auth")');
+			expect(code).toContain('export const authSchema = pgSchema("auth")');
 			expect(code).toMatch(
 				/import\s*\{[^}]*\bpgSchema\b[^}]*\}\s*from\s*["']drizzle-orm\/pg-core["']/,
 			);
@@ -282,7 +285,7 @@ describe("relations-v2 schema generator", () => {
 				adapterConfig: { provider: "pg", schemaName: "my-auth" },
 			});
 
-			expect(code).toContain('const myAuthSchema = pgSchema("my-auth")');
+			expect(code).toContain('export const myAuthSchema = pgSchema("my-auth")');
 			expect(code).toContain("myAuthSchema.table");
 			expect(typeErrors(code)).toEqual([]);
 		});
