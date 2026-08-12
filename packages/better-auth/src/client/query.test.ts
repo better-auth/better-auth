@@ -649,6 +649,54 @@ describe("useAuthQuery - error handling", () => {
 		unsubscribeSecond();
 	});
 
+	it("should retry an incomplete session refresh on remount", async () => {
+		const methods: string[] = [];
+		let resolveSessionRequest: ((response: Response) => void) | undefined;
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async (_url, init) => {
+				const method = init?.method ?? "GET";
+				methods.push(method);
+				if (methods.length === 1) {
+					return new Promise<Response>((resolve) => {
+						resolveSessionRequest = resolve;
+					});
+				}
+				if (method === "POST") throw new Error("Session refresh failed");
+				return new Response(JSON.stringify({ session: null, user: null }));
+			},
+		});
+		const { session } = getSessionAtom($fetch);
+
+		const unsubscribeFirst = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		unsubscribeFirst();
+		await vi.advanceTimersByTimeAsync(STORE_UNMOUNT_DELAY);
+
+		const settleSessionRequest = resolveSessionRequest;
+		if (!settleSessionRequest) throw new Error("Session request did not start");
+		settleSessionRequest(
+			new Response(
+				JSON.stringify({
+					needsRefresh: true,
+					session: {
+						id: "session-1",
+						expiresAt: new Date(Date.now() + 60_000),
+					},
+					user: { id: "user-1" },
+				}),
+			),
+		);
+		await vi.advanceTimersByTimeAsync(0);
+		expect(session.value.data?.session.id).toBe("session-1");
+
+		const unsubscribeSecond = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(methods).toEqual(["GET", "POST", "GET"]);
+		unsubscribeSecond();
+	});
+
 	it("should revalidate after the session signal changes", async () => {
 		let fetchCount = 0;
 		let resolveSessionRequest: ((response: Response) => void) | undefined;

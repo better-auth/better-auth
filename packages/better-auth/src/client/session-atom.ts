@@ -29,7 +29,7 @@ type SessionResponse = (
 ) &
 	Record<string, any>;
 
-type SessionFetchResult = "aborted" | "error" | "success";
+type SessionFetchResult = "aborted" | "error" | "stale" | "success";
 
 type SessionFlight = {
 	cancel: () => void;
@@ -129,6 +129,7 @@ export function getSessionAtom(
 			}
 
 			let { data, error } = normalizeSessionResponse(res);
+			let result: SessionFetchResult = "success";
 
 			if (data?.needsRefresh) {
 				try {
@@ -144,6 +145,7 @@ export function getSessionAtom(
 					if (signal.aborted) {
 						return "aborted";
 					}
+					result = "stale";
 				}
 			}
 
@@ -175,7 +177,7 @@ export function getSessionAtom(
 				isRefetching: false,
 				refetch,
 			});
-			return "success";
+			return result;
 		} catch (fetchError) {
 			if (signal.aborted) {
 				return "aborted";
