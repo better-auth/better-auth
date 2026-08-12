@@ -10,6 +10,9 @@ import type { SessionQueryParams } from "./types";
 // SSR detection
 const isServer = () => typeof window === "undefined";
 
+// Align session request reuse with the nanostores's remount lifecycle.
+const SESSION_MOUNT_DEDUPE_INTERVAL = STORE_UNMOUNT_DELAY;
+
 export type SessionAtom = AuthQueryAtom<{
 	user: User;
 	session: Session;
@@ -26,9 +29,12 @@ type SessionResponse = (
 ) &
 	Record<string, any>;
 
-type SessionRequest = {
+type SessionFetchResult = "aborted" | "error" | "success";
+
+type SessionFlight = {
 	cancel: () => void;
-	promise: Promise<void>;
+	promise: Promise<SessionFetchResult>;
+	revision: number;
 };
 
 /**
@@ -77,7 +83,13 @@ export function getSessionAtom(
 ) {
 	const $signal = atom<boolean>(false);
 
-	let sessionRequest: SessionRequest | undefined;
+	let flight: SessionFlight | undefined;
+	let freshUntil = 0;
+	let sessionRevision = 0;
+	$signal.listen(() => {
+		sessionRevision++;
+		freshUntil = 0;
+	});
 
 	const refetch = (
 		queryParams?: { query?: SessionQueryParams } | undefined,
@@ -95,7 +107,7 @@ export function getSessionAtom(
 	const executeSessionFetch = async (
 		signal: AbortSignal,
 		queryParams?: { query?: SessionQueryParams } | undefined,
-	): Promise<void> => {
+	): Promise<SessionFetchResult> => {
 		const current = session.value;
 		session.set({
 			...current,
@@ -104,7 +116,7 @@ export function getSessionAtom(
 			error: null,
 			refetch,
 		});
-		if (signal.aborted) return;
+		if (signal.aborted) return "aborted";
 
 		try {
 			const res = await $fetch<SessionResponse>("/get-session", {
@@ -113,7 +125,7 @@ export function getSessionAtom(
 				signal,
 			});
 			if (signal.aborted) {
-				return;
+				return "aborted";
 			}
 
 			let { data, error } = normalizeSessionResponse(res);
@@ -125,12 +137,12 @@ export function getSessionAtom(
 						signal,
 					});
 					if (signal.aborted) {
-						return;
+						return "aborted";
 					}
 					({ data, error } = normalizeSessionResponse(refreshRes));
 				} catch {
 					if (signal.aborted) {
-						return;
+						return "aborted";
 					}
 				}
 			}
@@ -145,7 +157,7 @@ export function getSessionAtom(
 					isRefetching: false,
 					refetch,
 				});
-				return;
+				return "error";
 			}
 
 			const sessionData = normalizeSessionData(data);
@@ -163,9 +175,10 @@ export function getSessionAtom(
 				isRefetching: false,
 				refetch,
 			});
+			return "success";
 		} catch (fetchError) {
 			if (signal.aborted) {
-				return;
+				return "aborted";
 			}
 			const latest = session.value;
 			session.set({
@@ -175,34 +188,56 @@ export function getSessionAtom(
 				isRefetching: false,
 				refetch,
 			});
+			return "error";
 		}
+	};
+
+	const getFreshUntil = (): number => {
+		const expiresAt = session.value.data?.session?.expiresAt;
+		const sessionExpiresAt =
+			expiresAt instanceof Date
+				? expiresAt.getTime()
+				: Number.POSITIVE_INFINITY;
+		return Math.min(
+			Date.now() + SESSION_MOUNT_DEDUPE_INTERVAL,
+			sessionExpiresAt,
+		);
 	};
 
 	const fetchSession = (
 		queryParams?: { query?: SessionQueryParams } | undefined,
 	): Promise<void> => {
-		sessionRequest?.cancel();
+		freshUntil = 0;
+		flight?.cancel();
 		const controller = new AbortController();
 		const promise = Promise.resolve().then(() => {
-			if (controller.signal.aborted) return;
+			if (controller.signal.aborted) return "aborted" as const;
 			return executeSessionFetch(controller.signal, queryParams);
 		});
-		const request: SessionRequest = {
+		const request: SessionFlight = {
 			cancel: () => controller.abort(),
 			promise,
+			revision: sessionRevision,
 		};
-		sessionRequest = request;
-		const releaseSessionRequest = () => {
-			setTimeout(() => {
-				if (sessionRequest === request) sessionRequest = undefined;
-			}, STORE_UNMOUNT_DELAY);
+		flight = request;
+		const settleFlight = (result: SessionFetchResult) => {
+			if (flight !== request) return;
+			flight = undefined;
+			if (result === "success" && request.revision === sessionRevision) {
+				freshUntil = getFreshUntil();
+			}
 		};
-		void request.promise.then(releaseSessionRequest, releaseSessionRequest);
-		return request.promise;
+		void request.promise.then(settleFlight, () => settleFlight("error"));
+		return request.promise.then(() => undefined);
 	};
 
-	const fetchSessionOnMount = (): Promise<void> =>
-		sessionRequest?.promise ?? fetchSession();
+	const fetchSessionOnMount = (): Promise<void> => {
+		if (flight?.revision === sessionRevision) {
+			return flight.promise.then(() => undefined);
+		}
+		if (Date.now() < freshUntil) return Promise.resolve();
+		return fetchSession();
+	};
 
 	let broadcastSessionUpdate: (
 		trigger: "signout" | "getSession" | "updateUser",

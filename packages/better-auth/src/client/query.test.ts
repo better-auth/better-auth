@@ -611,6 +611,81 @@ describe("useAuthQuery - error handling", () => {
 		await act(async () => root.unmount());
 	});
 
+	it("should retry a failed session request on remount", async () => {
+		let fetchCount = 0;
+		let resolveSessionRequest: ((response: Response) => void) | undefined;
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async () => {
+				fetchCount++;
+				if (fetchCount > 1) {
+					return new Response(JSON.stringify({ session: null, user: null }));
+				}
+				return new Promise<Response>((resolve) => {
+					resolveSessionRequest = resolve;
+				});
+			},
+		});
+		const { session } = getSessionAtom($fetch);
+
+		const unsubscribeFirst = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		unsubscribeFirst();
+		await vi.advanceTimersByTimeAsync(STORE_UNMOUNT_DELAY);
+
+		const settleSessionRequest = resolveSessionRequest;
+		if (!settleSessionRequest) throw new Error("Session request did not start");
+		settleSessionRequest(
+			new Response(JSON.stringify({ message: "Internal Server Error" }), {
+				status: 500,
+			}),
+		);
+		await Promise.resolve();
+
+		const unsubscribeSecond = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(fetchCount).toBe(2);
+		unsubscribeSecond();
+	});
+
+	it("should revalidate after the session signal changes", async () => {
+		let fetchCount = 0;
+		let resolveSessionRequest: ((response: Response) => void) | undefined;
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async () => {
+				fetchCount++;
+				if (fetchCount > 1) {
+					return new Response(JSON.stringify({ session: null, user: null }));
+				}
+				return new Promise<Response>((resolve) => {
+					resolveSessionRequest = resolve;
+				});
+			},
+		});
+		const { $sessionSignal, session } = getSessionAtom($fetch);
+
+		const unsubscribeFirst = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		unsubscribeFirst();
+		await vi.advanceTimersByTimeAsync(STORE_UNMOUNT_DELAY);
+
+		const settleSessionRequest = resolveSessionRequest;
+		if (!settleSessionRequest) throw new Error("Session request did not start");
+		settleSessionRequest(
+			new Response(JSON.stringify({ session: null, user: null })),
+		);
+		await Promise.resolve();
+		$sessionSignal.set(!$sessionSignal.get());
+
+		const unsubscribeSecond = session.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(fetchCount).toBe(2);
+		unsubscribeSecond();
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9613
 	 */
