@@ -4,8 +4,10 @@
 
 ### Breaking: SAML configuration changes
 
-**`callbackUrl` removed from `samlConfig`.**
-The ACS URL is now always derived from your `baseURL` and `providerId`. Remove `callbackUrl` from your SAML provider configuration. The post-login redirect destination is set per sign-in via `callbackURL` in `signIn.sso()`:
+**`callbackUrl` no longer configures the ACS URL.**
+The default ACS URL is derived from `baseURL` and `providerId`. Use `callbackUrl`
+as the provider-level post-auth redirect, or pass `callbackURL` to `signIn.sso()`
+for an SP-initiated request:
 
 ```ts
 await authClient.signIn.sso({
