@@ -16,7 +16,11 @@ import { parseAccountOutput } from "../../db/schema";
 import { missingEmailLogMessage } from "../../oauth2/errors";
 import { applyUpdateUserInfoOnLink } from "../../oauth2/link-account";
 import { generateState } from "../../oauth2/state";
-import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
+import {
+	decryptOAuthToken,
+	reencryptOAuthToken,
+	setTokenUtil,
+} from "../../oauth2/utils";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
@@ -589,7 +593,7 @@ async function getValidAccessToken(
 					newTokens?.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt,
 				idToken: newTokens?.idToken
 					? await setTokenUtil(newTokens.idToken, ctx.context)
-					: account.idToken,
+					: await reencryptOAuthToken(account.idToken, ctx.context),
 			};
 			let updatedAccount: Record<string, any> | null = null;
 			if (account.id) {
@@ -853,7 +857,7 @@ export const refreshToken = createAuthEndpoint(
 					scope: tokens.scopes?.join(",") || account.scope,
 					idToken: tokens.idToken
 						? await setTokenUtil(tokens.idToken, ctx.context)
-						: account.idToken,
+						: await reencryptOAuthToken(account.idToken, ctx.context),
 				};
 				await ctx.context.internalAdapter.updateAccount(account.id, updateData);
 			}
@@ -871,7 +875,7 @@ export const refreshToken = createAuthEndpoint(
 					scope: tokens.scopes?.join(",") || accountData.scope,
 					idToken: tokens.idToken
 						? await setTokenUtil(tokens.idToken, ctx.context)
-						: accountData.idToken,
+						: await reencryptOAuthToken(accountData.idToken, ctx.context),
 				};
 				await setAccountCookie(ctx, updateData);
 			}

@@ -1320,6 +1320,69 @@ describe("account", async () => {
 		expect(account?.idToken).toBe(newIdToken);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10757
+	 */
+	it("should encrypt a stored plaintext idToken on refresh when the provider returns no id_token", async () => {
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				encryptOAuthTokens: true,
+				storeAccountCookie: false,
+			},
+		});
+		const ctx = await auth.$context;
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				// the provider rotates the access token but issues no new id_token
+				return HttpResponse.json({
+					access_token: "rotated-access-token",
+					expires_in: 3600,
+				});
+			}),
+		);
+
+		const { runWithUser, user } = await signInWithTestUser();
+		// an account row written before `encryptOAuthTokens` covered idToken
+		const legacyIdToken = await signJWT(
+			{ sub: "legacy", email: "legacy@test.com" },
+			DEFAULT_SECRET,
+		);
+		await ctx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "google",
+			accountId: "legacy-plaintext-id-token",
+			accessToken: "legacy-access-token",
+			refreshToken: "legacy-refresh-token",
+			idToken: legacyIdToken,
+			accessTokenExpiresAt: new Date(Date.now() - 1000),
+		});
+
+		await runWithUser(async () => {
+			const res = await client.getAccessToken({ providerId: "google" });
+			expect(res.error).toBeFalsy();
+			expect(res.data?.accessToken).toBe("rotated-access-token");
+			// the caller still gets the readable token back
+			expect(res.data?.idToken).toBe(legacyIdToken);
+		});
+
+		const account = await ctx.adapter.findOne<Account>({
+			model: "account",
+			where: [{ field: "accountId", value: "legacy-plaintext-id-token" }],
+		});
+		expect(account?.idToken).not.toBe(legacyIdToken);
+		await expect(
+			symmetricDecrypt({ key: ctx.secretConfig, data: account!.idToken! }),
+		).resolves.toBe(legacyIdToken);
+	});
+
 	it("should persist refreshed idToken in account cookie during getAccessToken auto-refresh in stateless mode", async () => {
 		const { auth, client, cookieSetter } = await getTestInstance({
 			database: undefined,

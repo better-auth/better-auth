@@ -35,3 +35,18 @@ export function setTokenUtil(
 	}
 	return token;
 }
+
+/**
+ * Encrypt a token that was read back from the account table.
+ *
+ * Rows written before `encryptOAuthTokens` was turned on hold plaintext, so
+ * decrypting first normalizes both cases instead of double-encrypting the ones
+ * that are already ciphertext.
+ */
+export async function reencryptOAuthToken(
+	token: string | null | undefined,
+	ctx: AuthContext,
+) {
+	if (!token) return token;
+	return setTokenUtil(await decryptOAuthToken(token, ctx), ctx);
+}
