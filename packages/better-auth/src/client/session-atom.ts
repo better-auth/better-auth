@@ -29,11 +29,11 @@ type SessionResponse = (
 ) &
 	Record<string, any>;
 
-type SessionFetchResult = "aborted" | "error" | "stale" | "success";
+type SessionFetchOutcome = "aborted" | "failed" | "stale" | "fresh";
 
 type SessionFlight = {
 	cancel: () => void;
-	promise: Promise<SessionFetchResult>;
+	promise: Promise<SessionFetchOutcome>;
 	revision: number;
 };
 
@@ -107,7 +107,7 @@ export function getSessionAtom(
 	const executeSessionFetch = async (
 		signal: AbortSignal,
 		queryParams?: { query?: SessionQueryParams } | undefined,
-	): Promise<SessionFetchResult> => {
+	): Promise<SessionFetchOutcome> => {
 		const current = session.value;
 		session.set({
 			...current,
@@ -129,7 +129,7 @@ export function getSessionAtom(
 			}
 
 			let { data, error } = normalizeSessionResponse(res);
-			let result: SessionFetchResult = "success";
+			let outcome: SessionFetchOutcome = "fresh";
 
 			if (data?.needsRefresh) {
 				try {
@@ -145,7 +145,7 @@ export function getSessionAtom(
 					if (signal.aborted) {
 						return "aborted";
 					}
-					result = "stale";
+					outcome = "stale";
 				}
 			}
 
@@ -159,7 +159,7 @@ export function getSessionAtom(
 					isRefetching: false,
 					refetch,
 				});
-				return "error";
+				return "failed";
 			}
 
 			const sessionData = normalizeSessionData(data);
@@ -177,7 +177,7 @@ export function getSessionAtom(
 				isRefetching: false,
 				refetch,
 			});
-			return result;
+			return outcome;
 		} catch (fetchError) {
 			if (signal.aborted) {
 				return "aborted";
@@ -190,7 +190,7 @@ export function getSessionAtom(
 				isRefetching: false,
 				refetch,
 			});
-			return "error";
+			return "failed";
 		}
 	};
 
@@ -222,14 +222,14 @@ export function getSessionAtom(
 			revision: sessionRevision,
 		};
 		flight = request;
-		const settleFlight = (result: SessionFetchResult) => {
+		const settleFlight = (outcome: SessionFetchOutcome) => {
 			if (flight !== request) return;
 			flight = undefined;
-			if (result === "success" && request.revision === sessionRevision) {
+			if (outcome === "fresh" && request.revision === sessionRevision) {
 				freshUntil = getFreshUntil();
 			}
 		};
-		void request.promise.then(settleFlight, () => settleFlight("error"));
+		void request.promise.then(settleFlight, () => settleFlight("failed"));
 		return request.promise.then(() => undefined);
 	};
 
