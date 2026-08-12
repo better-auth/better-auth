@@ -42,7 +42,7 @@ If not explicitly set, the system will check for the environment variable `BETTE
 
 ### Dynamic Base URL
 
-Use the object form when your app can be reached through multiple domains, such as preview deployments, branch environments, or multiple production hosts. Better Auth derives the host from the incoming request, validates it against `allowedHosts`, and constructs the request-specific base URL from that match.
+Use the object form when your app can be reached through multiple domains, such as preview deployments, branch environments, or multiple production hosts. Better Auth derives the host from the `Host` header and then the request URL, validates it against `allowedHosts`, and constructs the request-specific base URL from that match. Forwarded host and protocol headers are ignored unless you explicitly set `advanced.trustedProxyHeaders: true`.
 
 ```ts
 import { betterAuth } from "better-auth";
@@ -61,8 +61,8 @@ export const auth = betterAuth({
 ```
 
 * `allowedHosts`: List of accepted host patterns. Supports exact matches (`myapp.com`), wildcards (`*.vercel.app`, `preview-*.myapp.com`), and port wildcards (`localhost:*`). Automatically added to [`trustedOrigins`](#trustedorigins) (localhost entries get both `http` and `https`)
-* `protocol`: Protocol for URL construction. `"http"`, `"https"`, or `"auto"` (default). `"auto"` derives from `x-forwarded-proto`, then request URL, then defaults to HTTPS. Also affects the cookie `Secure` flag: `"https"` → secure, `"http"` → not secure, `"auto"` or unset → `NODE_ENV === "production"`. Override with `advanced.useSecureCookies`
-* `fallback`: URL to use when the incoming host does not match. Without it, unknown hosts throw. Its origin is also added to `trustedOrigins`
+* `protocol`: Protocol for URL construction. `"http"`, `"https"`, or `"auto"` (default). `"auto"` uses `x-forwarded-proto` only when `advanced.trustedProxyHeaders` is `true`, then the request URL, then HTTP for local loopback hosts, and otherwise HTTPS. Also affects the cookie `Secure` flag: `"https"` → secure, `"http"` → not secure, `"auto"` or unset → `NODE_ENV === "production"`. Override with `advanced.useSecureCookies`
+* `fallback`: URL to use when no request host is available or the incoming host does not match. Without it, unresolved or unknown hosts throw. Its origin is also added to `trustedOrigins`
 
 <Callout type="warn">
   Use `fallback` carefully. It can hide deployment or proxy misconfiguration that would otherwise fail loudly.
