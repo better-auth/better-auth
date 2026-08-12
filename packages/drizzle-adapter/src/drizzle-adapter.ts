@@ -157,7 +157,7 @@ export interface DrizzleAdapterConfig {
 	 * Only applies to PostgreSQL. It will generate something like this:
 	 *
 	 * ```ts
-	 * const authSchema = pgSchema("auth");
+	 * export const authSchema = pgSchema("auth");
 	 *
 	 * export const user = authSchema.table("user", {...});
 	 * export const session = authSchema.table("session", {...});
