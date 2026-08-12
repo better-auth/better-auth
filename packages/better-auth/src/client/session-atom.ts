@@ -196,6 +196,7 @@ export function getSessionAtom(
 
 	const getFreshUntil = (): number => {
 		const expiresAt = session.value.data?.session?.expiresAt;
+		// Treat missing expiry as unbounded so Math.min picks the dedupe deadline.
 		const sessionExpiresAt =
 			expiresAt instanceof Date
 				? expiresAt.getTime()
