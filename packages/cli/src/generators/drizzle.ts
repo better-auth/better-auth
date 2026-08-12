@@ -66,7 +66,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		if (schemaVarName === "pgSchema") {
 			schemaVarName = "pgCustomSchema";
 		}
-		code += `\nconst ${schemaVarName} = pgSchema(${JSON.stringify(schemaName)});\n\n`;
+		code += `\nexport const ${schemaVarName} = pgSchema(${JSON.stringify(schemaName)});\n\n`;
 	}
 
 	const getModelName = initGetModelName({
