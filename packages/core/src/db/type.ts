@@ -251,7 +251,8 @@ export type DBFieldAttributeConfig = {
 	 */
 	bigint?: boolean | undefined;
 	/**
-	 * A zod schema to validate the value.
+	 * A Standard Schema to validate the value. Works with any Standard Schema
+	 * library, such as Zod, Valibot or ArkType.
 	 */
 	validator?:
 		| {
