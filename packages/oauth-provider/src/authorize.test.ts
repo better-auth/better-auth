@@ -664,6 +664,32 @@ describe("oauth authorize - ACR requests", async () => {
 				expect.any(String),
 			);
 		});
+
+		it("accepts matching value and values selectors", async () => {
+			const location = await redirectFor(undefined, {
+				essential: true,
+				value: "0",
+				values: ["0"],
+			});
+			const callbackRedirect = new URL(location);
+
+			expect(callbackRedirect.searchParams.get("error")).toBeNull();
+			expect(callbackRedirect.searchParams.get("code")).toEqual(
+				expect.any(String),
+			);
+		});
+
+		it("rejects conflicting value and values selectors", async () => {
+			const location = await redirectFor(undefined, {
+				essential: true,
+				value: "0",
+				values: ["1"],
+			});
+			const callbackRedirect = new URL(location);
+
+			expect(callbackRedirect.searchParams.get("error")).toBe("access_denied");
+			expect(callbackRedirect.searchParams.get("code")).toBeNull();
+		});
 	});
 });
 

@@ -68,13 +68,11 @@ export function canSatisfyEssentialAcrRequest(
 	const acrRequest = claimsRequest.id_token?.acr;
 	if (!acrRequest || acrRequest.essential !== true) return true;
 
-	if (typeof acrRequest.value === "string") {
-		return acrRequest.value === currentAcr;
-	}
-	if (Array.isArray(acrRequest.values)) {
-		return acrRequest.values.includes(currentAcr);
-	}
-	return acrRequest.value === undefined && acrRequest.values === undefined;
+	const valueMatches =
+		acrRequest.value === undefined || acrRequest.value === currentAcr;
+	const valuesMatch =
+		acrRequest.values === undefined || acrRequest.values.includes(currentAcr);
+	return valueMatches && valuesMatch;
 }
 
 export function filterClaimsRequestUserInfoClaims(
