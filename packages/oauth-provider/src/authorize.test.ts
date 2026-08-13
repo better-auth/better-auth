@@ -538,13 +538,17 @@ describe("oauth authorize - acr_values (OIDC Core 1.0 §3.1.2.1)", async () => {
 		});
 	});
 
-	function authorizeUrl(acrValues: string, acrClaim?: AcrClaimRequest) {
+	function authorizeUrl(
+		acrValues: string,
+		acrClaim?: AcrClaimRequest,
+		scope = "openid",
+	) {
 		if (!oauthClient?.client_id) throw new Error("beforeAll not run properly");
 		const url = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
 		url.searchParams.set("client_id", oauthClient.client_id);
 		url.searchParams.set("redirect_uri", redirectUri);
 		url.searchParams.set("response_type", "code");
-		url.searchParams.set("scope", "openid");
+		url.searchParams.set("scope", scope);
 		url.searchParams.set("state", "acr-state");
 		url.searchParams.set("code_challenge", generateRandomString(43));
 		url.searchParams.set("code_challenge_method", "S256");
@@ -558,9 +562,13 @@ describe("oauth authorize - acr_values (OIDC Core 1.0 §3.1.2.1)", async () => {
 		return url.toString();
 	}
 
-	async function redirectFor(acrValues: string, acrClaim?: AcrClaimRequest) {
+	async function redirectFor(
+		acrValues: string,
+		acrClaim?: AcrClaimRequest,
+		scope?: string,
+	) {
 		let location = "";
-		await authenticatedClient.$fetch(authorizeUrl(acrValues, acrClaim), {
+		await authenticatedClient.$fetch(authorizeUrl(acrValues, acrClaim, scope), {
 			onError(context) {
 				location = context.response.headers.get("Location") || "";
 			},
@@ -592,6 +600,20 @@ describe("oauth authorize - acr_values (OIDC Core 1.0 §3.1.2.1)", async () => {
 		expect(callbackRedirect.searchParams.get("error")).toBe("access_denied");
 		expect(callbackRedirect.searchParams.get("state")).toBe("acr-state");
 		expect(callbackRedirect.searchParams.get("code")).toBeNull();
+	});
+
+	it("ignores essential ID Token ACR claims in OAuth-only requests", async () => {
+		const location = await redirectFor(
+			"1",
+			{ essential: true, value: "1" },
+			"profile",
+		);
+		const callbackRedirect = new URL(location);
+
+		expect(callbackRedirect.searchParams.get("error")).toBeNull();
+		expect(callbackRedirect.searchParams.get("code")).toEqual(
+			expect.any(String),
+		);
 	});
 
 	it("accepts the current ACR in an essential values request", async () => {
