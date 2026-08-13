@@ -68,7 +68,7 @@ export async function parseState(c: GenericEndpointContext) {
 					: error.code;
 			redirectErrorURL = error.errorURL ?? errorURL;
 		}
-		redirectOnError(c, redirectErrorURL, code);
+		throw await redirectOnError(c, redirectErrorURL, code);
 	}
 
 	if (!parsedData.errorURL) {

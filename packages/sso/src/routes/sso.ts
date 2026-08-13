@@ -1,3 +1,5 @@
+import type { GenericEndpointContext } from "@better-auth/core";
+import { resolveErrorRedirectUrl } from "@better-auth/core/utils/error-url";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import {
@@ -62,12 +64,25 @@ import {
 } from "./helpers";
 import { hasOrgAdminRole } from "./providers";
 import {
-	buildSAMLRedirectUrl,
 	getSAMLRedirectCandidates,
 	getSafeRedirectUrl,
 	processSAMLResponse,
 } from "./saml-pipeline";
 import { samlRedirectUrlSchema } from "./schemas";
+
+async function redirectToAppError(
+	ctx: GenericEndpointContext,
+	params: { error: string; error_description?: string },
+	overrideErrorURL?: string,
+): Promise<never> {
+	const baseURL =
+		overrideErrorURL ||
+		ctx.context.options.onAPIError?.errorURL ||
+		`${ctx.context.baseURL}/error`;
+	throw ctx.redirect(
+		await resolveErrorRedirectUrl(ctx.context.options, baseURL, params),
+	);
+}
 
 const BUILT_IN_ACCOUNT_PROVIDER_IDS = [
 	"credential",
@@ -1474,14 +1489,13 @@ async function handleOIDCCallback(
 		const errorURL =
 			ctx.context.options.onAPIError?.errorURL ||
 			`${ctx.context.baseURL}/error`;
-		throw ctx.redirect(
-			buildSAMLRedirectUrl(errorURL, { error: "invalid_state" }),
-		);
+		throw await redirectToAppError(ctx, { error: "invalid_state" }, errorURL);
 	}
 	const { callbackURL, errorURL, newUserURL, requestSignUp } = stateData;
 	if (!code || error) {
-		throw ctx.redirect(
-			buildSAMLRedirectUrl(errorURL || callbackURL, {
+		throw await redirectToAppError(
+			ctx,
+			{
 				// This branch also covers a callback carrying neither a code nor an
 				// error — an aborted or malformed redirection — where the provider
 				// named nothing to report.
@@ -1489,7 +1503,8 @@ async function handleOIDCCallback(
 				error_description: error_description
 					? String(error_description)
 					: "missing_authorization_code",
-			}),
+			},
+			errorURL || callbackURL,
 		);
 	}
 	let provider: SSOProvider<SSOOptions> | null = null;
@@ -1530,11 +1545,13 @@ async function handleOIDCCallback(
 			});
 	}
 	if (!provider) {
-		throw ctx.redirect(
-			buildSAMLRedirectUrl(errorURL || callbackURL, {
+		throw await redirectToAppError(
+			ctx,
+			{
 				error: "invalid_provider",
 				error_description: "provider not found",
-			}),
+			},
+			errorURL || callbackURL,
 		);
 	}
 
@@ -1550,11 +1567,13 @@ async function handleOIDCCallback(
 	let config = provider.oidcConfig;
 
 	if (!config) {
-		throw ctx.redirect(
-			buildSAMLRedirectUrl(errorURL || callbackURL, {
+		throw await redirectToAppError(
+			ctx,
+			{
 				error: "invalid_provider",
 				error_description: "provider not found",
-			}),
+			},
+			errorURL || callbackURL,
 		);
 	}
 
@@ -1564,18 +1583,22 @@ async function handleOIDCCallback(
 		);
 	} catch (error) {
 		if (error instanceof DiscoveryError) {
-			throw ctx.redirect(
-				buildSAMLRedirectUrl(errorURL || callbackURL, {
+			throw await redirectToAppError(
+				ctx,
+				{
 					error: "discovery_failed",
 					error_description: error.message,
-				}),
+				},
+				errorURL || callbackURL,
 			);
 		}
-		throw ctx.redirect(
-			buildSAMLRedirectUrl(errorURL || callbackURL, {
+		throw await redirectToAppError(
+			ctx,
+			{
 				error: "discovery_failed",
 				error_description: "unexpected_discovery_error",
-			}),
+			},
+			errorURL || callbackURL,
 		);
 	}
 	if (!config.scopes) {
@@ -1586,11 +1609,13 @@ async function handleOIDCCallback(
 	}
 
 	if (!config.tokenEndpoint) {
-		throw ctx.redirect(
-			buildSAMLRedirectUrl(errorURL || callbackURL, {
+		throw await redirectToAppError(
+			ctx,
+			{
 				error: "invalid_provider",
 				error_description: "token_endpoint_not_found",
-			}),
+			},
+			errorURL || callbackURL,
 		);
 	}
 
@@ -1611,24 +1636,28 @@ async function handleOIDCCallback(
 			config.tokenEndpointAuthentication === "client_secret_post"
 				? "post"
 				: "basic",
-	}).catch((e) => {
+	}).catch(async (e) => {
 		ctx.context.logger.error("Error validating authorization code", e);
 		if (e instanceof BetterFetchError) {
-			throw ctx.redirect(
-				buildSAMLRedirectUrl(errorURL || callbackURL, {
+			throw await redirectToAppError(
+				ctx,
+				{
 					error: "invalid_provider",
 					error_description: e.message,
-				}),
+				},
+				errorURL || callbackURL,
 			);
 		}
 		return null;
 	});
 	if (!tokenResponse) {
-		throw ctx.redirect(
-			buildSAMLRedirectUrl(errorURL || callbackURL, {
+		throw await redirectToAppError(
+			ctx,
+			{
 				error: "invalid_provider",
 				error_description: "token_response_not_found",
-			}),
+			},
+			errorURL || callbackURL,
 		);
 	}
 	let userInfo: {
@@ -1652,14 +1681,16 @@ async function handleOIDCCallback(
 			},
 		);
 		if (userInfoResponse.error) {
-			throw ctx.redirect(
-				buildSAMLRedirectUrl(errorURL || callbackURL, {
+			throw await redirectToAppError(
+				ctx,
+				{
 					error: "invalid_provider",
 					// The fetch error carries no message on some failures; the previous
 					// template interpolated that as the literal string "undefined".
 					error_description:
 						userInfoResponse.error.message ?? "user_info_request_failed",
-				}),
+				},
+				errorURL || callbackURL,
 			);
 		}
 		const rawUserInfo = userInfoResponse.data;
@@ -1683,11 +1714,13 @@ async function handleOIDCCallback(
 	} else if (tokenResponse.idToken) {
 		const idToken = decodeJwt(tokenResponse.idToken);
 		if (!config.jwksEndpoint) {
-			throw ctx.redirect(
-				buildSAMLRedirectUrl(errorURL || callbackURL, {
+			throw await redirectToAppError(
+				ctx,
+				{
 					error: "invalid_provider",
 					error_description: "jwks_endpoint_not_found",
-				}),
+				},
+				errorURL || callbackURL,
 			);
 		}
 		const verified = await validateToken(
@@ -1702,11 +1735,13 @@ async function handleOIDCCallback(
 			return null;
 		});
 		if (!verified) {
-			throw ctx.redirect(
-				buildSAMLRedirectUrl(errorURL || callbackURL, {
+			throw await redirectToAppError(
+				ctx,
+				{
 					error: "invalid_provider",
 					error_description: "token_not_verified",
-				}),
+				},
+				errorURL || callbackURL,
 			);
 		}
 
@@ -1734,20 +1769,24 @@ async function handleOIDCCallback(
 			emailVerified?: boolean;
 		};
 	} else {
-		throw ctx.redirect(
-			buildSAMLRedirectUrl(errorURL || callbackURL, {
+		throw await redirectToAppError(
+			ctx,
+			{
 				error: "invalid_provider",
 				error_description: "user_info_endpoint_not_found",
-			}),
+			},
+			errorURL || callbackURL,
 		);
 	}
 
 	if (!userInfo.email || !userInfo.id) {
-		throw ctx.redirect(
-			buildSAMLRedirectUrl(errorURL || callbackURL, {
+		throw await redirectToAppError(
+			ctx,
+			{
 				error: "invalid_provider",
 				error_description: "missing_user_info",
-			}),
+			},
+			errorURL || callbackURL,
 		);
 	}
 	const isTrustedProvider =
@@ -1906,19 +1945,23 @@ export const callbackSSOShared = (options?: SSOOptions) => {
 				const errorURL =
 					ctx.context.options.onAPIError?.errorURL ||
 					`${ctx.context.baseURL}/error`;
-				throw ctx.redirect(
-					buildSAMLRedirectUrl(errorURL, { error: "invalid_state" }),
+				throw await redirectToAppError(
+					ctx,
+					{ error: "invalid_state" },
+					errorURL,
 				);
 			}
 
 			const providerId = stateData.ssoProviderId as string | undefined;
 			if (!providerId) {
 				const errorURL = stateData.errorURL || stateData.callbackURL;
-				throw ctx.redirect(
-					buildSAMLRedirectUrl(errorURL, {
+				throw await redirectToAppError(
+					ctx,
+					{
 						error: "invalid_state",
 						error_description: "missing_provider_id",
-					}),
+					},
+					errorURL,
 				);
 			}
 
@@ -1983,8 +2026,10 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				const session = await getSessionFromCtx(ctx);
 
 				if (!session?.session) {
-					throw ctx.redirect(
-						buildSAMLRedirectUrl(errorURL, { error: "invalid_request" }),
+					throw await redirectToAppError(
+						ctx,
+						{ error: "invalid_request" },
+						errorURL,
 					);
 				}
 
@@ -2126,11 +2171,13 @@ export const acsEndpoint = (options?: SSOOptions) => {
 							(url, settings) => ctx.context.isTrustedOrigin(url, settings),
 						);
 					}
-					throw ctx.redirect(
-						buildSAMLRedirectUrl(redirectUrl, {
+					throw await redirectToAppError(
+						ctx,
+						{
 							error: errorCode,
 							error_description: error.message,
-						}),
+						},
+						redirectUrl,
 					);
 				}
 				throw error;
@@ -2184,11 +2231,13 @@ export const sloEndpoint = (options?: SSOOptions) => {
 			);
 
 			if (!samlRequest && !samlResponse) {
-				throw ctx.redirect(
-					buildSAMLRedirectUrl(safeErrorURL, {
+				throw await redirectToAppError(
+					ctx,
+					{
 						error: "invalid_request",
 						error_description: "missing_logout_data",
-					}),
+					},
+					safeErrorURL,
 				);
 			}
 

@@ -7,10 +7,11 @@ import { getBetterAuthVersion } from "@better-auth/core/context";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
-import { BetterAuthError } from "@better-auth/core/error";
+import { APIError, BetterAuthError } from "@better-auth/core/error";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
 import type { SocialProviders } from "@better-auth/core/social-providers";
 import { socialProviders } from "@better-auth/core/social-providers";
+import { resolveErrorRedirectUrl } from "@better-auth/core/utils/error-url";
 import { generateId } from "@better-auth/core/utils/id";
 import { findInvalidTrustedProxies } from "@better-auth/core/utils/ip";
 import { createTelemetry } from "@better-auth/telemetry";
@@ -426,6 +427,16 @@ Most of the features of Better Auth will not work correctly.`,
 		},
 		getPlugin: getPluginFn,
 		hasPlugin: hasPluginFn as never,
+		async redirectToErrorPage(params, redirectOptions) {
+			const baseURL =
+				redirectOptions?.overrideErrorURL ||
+				options.onAPIError?.errorURL ||
+				`${ctx.baseURL}/error`;
+			const url = await resolveErrorRedirectUrl(options, baseURL, params);
+			const headers = new Headers();
+			headers.set("Location", url);
+			throw new APIError("FOUND", undefined, headers);
+		},
 	};
 
 	const initOrPromise = runPluginInit(ctx);

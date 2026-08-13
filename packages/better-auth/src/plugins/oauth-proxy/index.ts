@@ -205,7 +205,11 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						ctx.context.logger.error(
 							"OAuth proxy callback missing profile data",
 						);
-						throw redirectOnError(ctx, defaultErrorURL, "missing_profile");
+						throw await redirectOnError(
+							ctx,
+							defaultErrorURL,
+							"missing_profile",
+						);
 					}
 
 					// Decrypt profile payload
@@ -220,7 +224,11 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							"Failed to decrypt OAuth proxy profile",
 							e,
 						);
-						throw redirectOnError(ctx, defaultErrorURL, "invalid_profile");
+						throw await redirectOnError(
+							ctx,
+							defaultErrorURL,
+							"invalid_profile",
+						);
 					}
 
 					let payload: PassthroughPayload;
@@ -228,7 +236,11 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						payload = parseJSON<PassthroughPayload>(decryptedPayload);
 					} catch (e) {
 						ctx.context.logger.error("Failed to parse OAuth proxy payload", e);
-						throw redirectOnError(ctx, defaultErrorURL, "invalid_payload");
+						throw await redirectOnError(
+							ctx,
+							defaultErrorURL,
+							"invalid_payload",
+						);
 					}
 
 					// Validate required payload fields
@@ -240,7 +252,11 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						!payload.callbackURL
 					) {
 						ctx.context.logger.error("Failed to parse OAuth proxy payload");
-						throw redirectOnError(ctx, defaultErrorURL, "invalid_payload");
+						throw await redirectOnError(
+							ctx,
+							defaultErrorURL,
+							"invalid_payload",
+						);
 					}
 
 					const errorURL = payload.errorURL || defaultErrorURL;
@@ -252,7 +268,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						ctx.context.logger.error(
 							`OAuth proxy payload expired or invalid (age: ${age}s, maxAge: ${maxAge}s)`,
 						);
-						throw redirectOnError(ctx, errorURL, "payload_expired");
+						throw await redirectOnError(ctx, errorURL, "payload_expired");
 					}
 
 					const stateConsumed = await consumeOAuthProxyState(
@@ -260,7 +276,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						payload.state,
 					);
 					if (!stateConsumed) {
-						throw redirectOnError(ctx, errorURL, "state_mismatch");
+						throw await redirectOnError(ctx, errorURL, "state_mismatch");
 					}
 
 					let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
@@ -273,7 +289,12 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						});
 					} catch (e) {
 						if (isAPIError(e) && e.body?.code) {
-							throw redirectOnError(ctx, errorURL, e.body.code, e.body.message);
+							throw await redirectOnError(
+								ctx,
+								errorURL,
+								e.body.code,
+								e.body.message,
+							);
 						}
 						throw e;
 					}
@@ -282,7 +303,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							"OAuth proxy callback error",
 							result.error,
 						);
-						throw redirectOnError(
+						throw await redirectOnError(
 							ctx,
 							errorURL,
 							result.error.split(" ").join("_"),
@@ -292,7 +313,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						ctx.context.logger.error(
 							"OAuth proxy callback missing session data",
 						);
-						throw redirectOnError(ctx, errorURL, "user_creation_failed");
+						throw await redirectOnError(ctx, errorURL, "user_creation_failed");
 					}
 
 					await setSessionCookie(ctx, result.data);
@@ -426,18 +447,18 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							stateData.oauthState !== statePackage.state
 						) {
 							ctx.context.logger.error("OAuth proxy state binding mismatch");
-							throw redirectOnError(ctx, errorURL, "state_mismatch");
+							throw await redirectOnError(ctx, errorURL, "state_mismatch");
 						}
 
 						if (error) {
-							throw redirectOnError(ctx, errorURL, error);
+							throw await redirectOnError(ctx, errorURL, error);
 						}
 
 						if (!code) {
 							ctx.context.logger.warn(
 								"OAuth callback missing authorization code",
 							);
-							throw redirectOnError(ctx, errorURL, "no_code");
+							throw await redirectOnError(ctx, errorURL, "no_code");
 						}
 
 						// Find the OAuth provider
@@ -449,7 +470,11 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							ctx.context.logger.warn("OAuth provider not found", {
 								providerId,
 							});
-							throw redirectOnError(ctx, errorURL, "oauth_provider_not_found");
+							throw await redirectOnError(
+								ctx,
+								errorURL,
+								"oauth_provider_not_found",
+							);
 						}
 
 						// Exchange code for tokens
@@ -465,11 +490,11 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								"Failed to validate authorization code",
 								e,
 							);
-							throw redirectOnError(ctx, errorURL, "invalid_code");
+							throw await redirectOnError(ctx, errorURL, "invalid_code");
 						}
 
 						if (!tokens) {
-							throw redirectOnError(ctx, errorURL, "invalid_code");
+							throw await redirectOnError(ctx, errorURL, "invalid_code");
 						}
 
 						const parsedUserData = userData
@@ -495,12 +520,16 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 
 						if (!userInfo) {
 							ctx.context.logger.error("Unable to get user info from provider");
-							throw redirectOnError(ctx, errorURL, "unable_to_get_user_info");
+							throw await redirectOnError(
+								ctx,
+								errorURL,
+								"unable_to_get_user_info",
+							);
 						}
 
 						if (!userInfo.email) {
 							ctx.context.logger.error("Provider did not return email");
-							throw redirectOnError(ctx, errorURL, "email_not_found");
+							throw await redirectOnError(ctx, errorURL, "email_not_found");
 						}
 
 						const proxyCallbackURL = new URL(stateData.callbackURL);

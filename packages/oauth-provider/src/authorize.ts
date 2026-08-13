@@ -49,13 +49,26 @@ export function formatErrorURL(
 	state?: string,
 	iss?: string,
 ) {
-	const searchParams = new URLSearchParams({
+	const params: Record<string, string> = {
 		error,
 		error_description: description,
-	});
-	state && searchParams.append("state", state);
-	iss && searchParams.append("iss", iss);
-	return `${url}${url.includes("?") ? "&" : "?"}${searchParams.toString()}`;
+	};
+	if (state) params.state = state;
+	if (iss) params.iss = iss;
+	try {
+		const isRelativePath = url.startsWith("/") && !url.startsWith("//");
+		const parsedUrl = new URL(url, "http://better-auth.local");
+		for (const [key, value] of Object.entries(params)) {
+			parsedUrl.searchParams.set(key, value);
+		}
+		if (isRelativePath) {
+			return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`;
+		}
+		return parsedUrl.toString();
+	} catch {
+		const searchParams = new URLSearchParams(params);
+		return `${url}${url.includes("?") ? "&" : "?"}${searchParams.toString()}`;
+	}
 }
 
 export const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {

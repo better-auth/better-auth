@@ -116,4 +116,26 @@ describe("parseState error mapping", () => {
 			"/oauth-error?source=expo&error=state_mismatch",
 		);
 	});
+
+	it("redirects to exactly what errorUrlBuilder returns", async () => {
+		const { StateError } = await import("../state");
+		errorToThrow = new StateError("state_invalid", { code: "state_invalid" });
+
+		const { parseState } = await import("./state");
+		const { ctx, redirectCalls } = createMockContext("/error");
+		ctx.context.options.onAPIError = {
+			errorURL: "/error",
+			errorUrlBuilder: ({
+				error,
+				baseURL,
+			}: {
+				error: string;
+				baseURL: string;
+			}) => `${baseURL}/custom/${error}`,
+		} as (typeof ctx.context.options)["onAPIError"];
+		await parseState(ctx as unknown as GenericEndpointContext).catch(() => {});
+
+		expect(redirectCalls[0]).toBe("/error/custom/state_invalid");
+		expect(redirectCalls[0]).not.toContain("error=");
+	});
 });

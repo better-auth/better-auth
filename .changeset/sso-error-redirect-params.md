@@ -1,5 +1,8 @@
 ---
+"@better-auth/core": patch
+"better-auth": patch
 "@better-auth/sso": patch
+"@better-auth/oauth-provider": patch
 ---
 
-SSO error redirects merge their parameters into the target URL instead of concatenating them, so a callback or error URL that already carries a query keeps it, values are encoded, and a callback arriving with neither a code nor an error reports a concrete error rather than the literal `undefined`.
+Error-page redirects merge their query parameters instead of concatenating them, and `onAPIError.errorUrlBuilder` can return the final URL so apps are not forced to use the `error` key.

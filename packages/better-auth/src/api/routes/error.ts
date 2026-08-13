@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { isProduction } from "@better-auth/core/env";
+import { resolveErrorRedirectUrl } from "@better-auth/core/utils/error-url";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
 
 function sanitize(input: string): string {
@@ -419,7 +420,10 @@ export const error = createAuthEndpoint(
 			return new Response(null, {
 				status: 302,
 				headers: {
-					Location: `${errorURL}${errorURL.includes("?") ? "&" : "?"}${queryParams.toString()}`,
+					Location: await resolveErrorRedirectUrl(options, errorURL, {
+						error: safeCode,
+						error_description: unsanitizedDescription ?? undefined,
+					}),
 				},
 			});
 		}

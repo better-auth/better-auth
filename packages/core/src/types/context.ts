@@ -431,6 +431,22 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			 */
 			skipOriginCheck: boolean | string[];
 			/**
+			 * Redirect to the configured error page.
+			 *
+			 * Resolves `onAPIError.errorUrlBuilder` when set, otherwise merges
+			 * `error` / `error_description` into `errorURL` (or
+			 * `overrideErrorURL`) without clobbering existing query keys.
+			 */
+			redirectToErrorPage: (
+				params: {
+					error: string;
+					error_description?: string | undefined;
+				},
+				redirectOptions?: {
+					overrideErrorURL?: string | undefined;
+				},
+			) => Promise<never>;
+			/**
 			 * This skips the CSRF check for all requests.
 			 *
 			 * This is inferred from the `options.advanced?.

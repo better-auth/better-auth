@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
+import { mergeErrorRedirectUrl } from "@better-auth/core/utils/error-url";
 import { getSessionFromCtx } from "../../api";
 import { generateRandomString } from "../../crypto";
 import type { OAuthApplication } from "../oidc-provider/schema";
@@ -10,9 +11,14 @@ import type {
 } from "../oidc-provider/types";
 
 function redirectErrorURL(url: string, error: string, description: string) {
-	return `${url}${
-		url.includes("?") ? "&" : "?"
-	}error=${error}&error_description=${description}`;
+	return mergeErrorRedirectUrl(
+		url,
+		{
+			error,
+			error_description: description,
+		},
+		{ overwrite: true },
+	);
 }
 
 export async function authorizeMCPOAuth(
@@ -63,17 +69,14 @@ export async function authorizeMCPOAuth(
 
 	const query = ctx.query as AuthorizationQuery;
 	if (!query.client_id) {
-		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
+		throw await ctx.context.redirectToErrorPage({ error: "invalid_client" });
 	}
 
 	if (!query.response_type) {
-		throw ctx.redirect(
-			redirectErrorURL(
-				`${ctx.context.baseURL}/error`,
-				"invalid_request",
-				"response_type is required",
-			),
-		);
+		throw await ctx.context.redirectToErrorPage({
+			error: "invalid_request",
+			error_description: "response_type is required",
+		});
 	}
 
 	const client = await ctx.context.adapter
@@ -97,7 +100,7 @@ export async function authorizeMCPOAuth(
 			} as Client;
 		});
 	if (!client) {
-		throw ctx.redirect(`${ctx.context.baseURL}/error?error=invalid_client`);
+		throw await ctx.context.redirectToErrorPage({ error: "invalid_client" });
 	}
 	const redirectURI = client.redirectUrls.find(
 		(url) => url === ctx.query.redirect_uri,
@@ -112,13 +115,13 @@ export async function authorizeMCPOAuth(
 		});
 	}
 	if (client.disabled) {
-		throw ctx.redirect(`${ctx.context.baseURL}/error?error=client_disabled`);
+		throw await ctx.context.redirectToErrorPage({ error: "client_disabled" });
 	}
 
 	if (query.response_type !== "code") {
-		throw ctx.redirect(
-			`${ctx.context.baseURL}/error?error=unsupported_response_type`,
-		);
+		throw await ctx.context.redirectToErrorPage({
+			error: "unsupported_response_type",
+		});
 	}
 
 	const requestScope =

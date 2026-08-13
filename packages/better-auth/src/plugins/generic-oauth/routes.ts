@@ -299,7 +299,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				ctx.context.options.onAPIError?.errorURL ||
 				`${ctx.context.baseURL}/error`;
 			if (ctx.query.error || !ctx.query.code) {
-				redirectOnError(
+				throw await redirectOnError(
 					ctx,
 					defaultErrorURL,
 					ctx.query.error || "oAuth_code_missing",
@@ -366,13 +366,17 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 							expected: expectedIssuer,
 							received: ctx.query.iss,
 						});
-						redirectOnError(ctx, resolvedErrorURL, "issuer_mismatch");
+						throw await redirectOnError(
+							ctx,
+							resolvedErrorURL,
+							"issuer_mismatch",
+						);
 					}
 				} else if (providerConfig.requireIssuerValidation) {
 					ctx.context.logger.error("OAuth issuer parameter missing", {
 						expected: expectedIssuer,
 					});
-					redirectOnError(ctx, resolvedErrorURL, "issuer_missing");
+					throw await redirectOnError(ctx, resolvedErrorURL, "issuer_missing");
 				}
 			}
 
@@ -420,7 +424,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 					e && typeof e === "object" && "name" in e ? (e.name as string) : "",
 					e,
 				);
-				redirectOnError(
+				throw await redirectOnError(
 					ctx,
 					resolvedErrorURL,
 					"oauth_code_verification_failed",
@@ -440,7 +444,11 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 							: await getUserInfo(tokens, finalUserInfoUrl)
 					) as GenericOAuthUserInfo | null;
 					if (!userInfo) {
-						redirectOnError(ctx, resolvedErrorURL, "user_info_is_missing");
+						throw await redirectOnError(
+							ctx,
+							resolvedErrorURL,
+							"user_info_is_missing",
+						);
 					}
 					const mapUser = providerConfig.mapProfileToUser
 						? await providerConfig.mapProfileToUser(userInfo)
@@ -455,7 +463,11 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 							}),
 							userInfo,
 						);
-						redirectOnError(ctx, resolvedErrorURL, "email_is_missing");
+						throw await redirectOnError(
+							ctx,
+							resolvedErrorURL,
+							"email_is_missing",
+						);
 					}
 					const rawId = isNonEmptyOAuthId(mapUser.id)
 						? mapUser.id
@@ -473,12 +485,16 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 							"Provider did not return an account id (e.g. `sub`). Unable to sign in.",
 							userInfo,
 						);
-						redirectOnError(ctx, resolvedErrorURL, "id_is_missing");
+						throw await redirectOnError(ctx, resolvedErrorURL, "id_is_missing");
 					}
 					const name = mapUser.name ? mapUser.name : userInfo.name;
 					if (!name) {
 						ctx.context.logger.error("Unable to get user info", userInfo);
-						redirectOnError(ctx, resolvedErrorURL, "name_is_missing");
+						throw await redirectOnError(
+							ctx,
+							resolvedErrorURL,
+							"name_is_missing",
+						);
 					}
 					return {
 						...userInfo,
@@ -494,7 +510,11 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						true &&
 					link.email.toLowerCase() !== userInfo.email.toLowerCase()
 				) {
-					redirectOnError(ctx, resolvedErrorURL, "email_doesn't_match");
+					throw await redirectOnError(
+						ctx,
+						resolvedErrorURL,
+						"email_doesn't_match",
+					);
 				}
 				const existingAccount =
 					await ctx.context.internalAdapter.findAccountByProviderId(
@@ -503,7 +523,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 					);
 				if (existingAccount) {
 					if (existingAccount.userId !== link.userId) {
-						redirectOnError(
+						throw await redirectOnError(
 							ctx,
 							resolvedErrorURL,
 							"account_already_linked_to_different_user",
@@ -539,7 +559,11 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						idToken: tokens.idToken,
 					});
 					if (!newAccount) {
-						redirectOnError(ctx, resolvedErrorURL, "unable_to_link_account");
+						throw await redirectOnError(
+							ctx,
+							resolvedErrorURL,
+							"unable_to_link_account",
+						);
 					}
 				}
 
@@ -573,13 +597,18 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				});
 			} catch (e) {
 				if (isAPIError(e) && e.body?.code) {
-					redirectOnError(ctx, resolvedErrorURL, e.body.code, e.body.message);
+					throw await redirectOnError(
+						ctx,
+						resolvedErrorURL,
+						e.body.code,
+						e.body.message,
+					);
 				}
 				throw e;
 			}
 
 			if (result.error) {
-				redirectOnError(
+				throw await redirectOnError(
 					ctx,
 					resolvedErrorURL,
 					result.error.split(" ").join("_"),

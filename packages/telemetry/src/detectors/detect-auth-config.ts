@@ -152,6 +152,7 @@ export async function getTelemetryAuthConfig(
 		},
 		onAPIError: {
 			errorURL: options.onAPIError?.errorURL,
+			errorUrlBuilder: !!options.onAPIError?.errorUrlBuilder,
 			onError: !!options.onAPIError?.onError,
 			throw: options.onAPIError?.throw,
 		},

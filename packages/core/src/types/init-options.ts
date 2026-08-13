@@ -1578,12 +1578,29 @@ export type BetterAuthOptions = {
 				/**
 				 * The URL to redirect to on error
 				 *
-				 * When errorURL is provided, the error will be added to the URL as a query parameter
-				 * and the user will be redirected to the errorURL.
+				 * When errorURL is provided, `error` and `error_description` are
+				 * merged into that URL as query parameters. Existing keys are
+				 * left in place; a second `?` is never introduced.
 				 *
 				 * @default - "/api/auth/error"
 				 */
 				errorURL?: string;
+				/**
+				 * Build the final error redirect URL.
+				 *
+				 * When set, Better Auth redirects to exactly what this function
+				 * returns. It does not append `error` afterwards. Use this when
+				 * the app needs a different parameter name, i18n, a fragment, or
+				 * no error query at all.
+				 *
+				 * `baseURL` is the per-flow error URL when one was provided,
+				 * otherwise `errorURL` (or the default error page).
+				 */
+				errorUrlBuilder?: (args: {
+					error: string;
+					error_description?: string | undefined;
+					baseURL: string;
+				}) => string | Promise<string>;
 				/**
 				 * Configure the default error page provided by Better-Auth
 				 * Start your dev server and go to /api/auth/error to see the error page.

@@ -1,5 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
+import {
+	mergeErrorRedirectUrl,
+	resolveErrorRedirectUrl,
+} from "@better-auth/core/utils/error-url";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { getSessionFromCtx } from "../../api";
 import { generateRandomString } from "../../crypto";
@@ -9,20 +13,27 @@ import type { AuthorizationQuery, OIDCOptions } from "./types";
 import { parsePrompt } from "./utils/prompt";
 
 function formatErrorURL(url: string, error: string, description: string) {
-	return `${url}${
-		url.includes("?") ? "&" : "?"
-	}error=${error}&error_description=${description}`;
+	return mergeErrorRedirectUrl(
+		url,
+		{
+			error,
+			error_description: description,
+		},
+		{ overwrite: true },
+	);
 }
 
-function getErrorURL(
+async function getErrorURL(
 	ctx: GenericEndpointContext,
 	error: string,
 	description: string,
 ) {
 	const baseURL =
 		ctx.context.options.onAPIError?.errorURL || `${ctx.context.baseURL}/error`;
-	const formattedURL = formatErrorURL(baseURL, error, description);
-	return formattedURL;
+	return resolveErrorRedirectUrl(ctx.context.options, baseURL, {
+		error,
+		error_description: description,
+	});
 }
 
 export async function authorize(
@@ -116,7 +127,7 @@ export async function authorize(
 	}
 
 	if (!query.client_id) {
-		const errorURL = getErrorURL(
+		const errorURL = await getErrorURL(
 			ctx,
 			"invalid_client",
 			"client_id is required",
@@ -125,7 +136,7 @@ export async function authorize(
 	}
 
 	if (!query.response_type) {
-		const errorURL = getErrorURL(
+		const errorURL = await getErrorURL(
 			ctx,
 			"invalid_request",
 			"response_type is required",
@@ -138,7 +149,7 @@ export async function authorize(
 		options.trustedClients || [],
 	);
 	if (!client) {
-		const errorURL = getErrorURL(
+		const errorURL = await getErrorURL(
 			ctx,
 			"invalid_client",
 			"client_id is required",
@@ -158,12 +169,16 @@ export async function authorize(
 		});
 	}
 	if (client.disabled) {
-		const errorURL = getErrorURL(ctx, "client_disabled", "client is disabled");
+		const errorURL = await getErrorURL(
+			ctx,
+			"client_disabled",
+			"client is disabled",
+		);
 		throw ctx.redirect(errorURL);
 	}
 
 	if (query.response_type !== "code") {
-		const errorURL = getErrorURL(
+		const errorURL = await getErrorURL(
 			ctx,
 			"unsupported_response_type",
 			"unsupported response type",

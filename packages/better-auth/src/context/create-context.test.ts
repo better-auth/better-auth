@@ -1252,6 +1252,57 @@ describe("base context creation", () => {
 			expect(ctx.createAuthCookie).toBeDefined();
 			expect(typeof ctx.createAuthCookie).toBe("function");
 		});
+
+		it("should have redirectToErrorPage method", async () => {
+			const ctx = await initBase({});
+			expect(ctx.redirectToErrorPage).toBeDefined();
+			expect(typeof ctx.redirectToErrorPage).toBe("function");
+		});
+
+		it("merges error params into an error URL that already has a query", async () => {
+			const ctx = await initBase({
+				onAPIError: {
+					errorURL: "/error?title=Invalid%20invite",
+				},
+			});
+			try {
+				await ctx.redirectToErrorPage({
+					error: "access_denied",
+					error_description: "user said no",
+				});
+				expect.unreachable();
+			} catch (error) {
+				expect(error).toMatchObject({ status: "FOUND", statusCode: 302 });
+				const location = (error as { headers?: Headers }).headers?.get(
+					"Location",
+				);
+				expect(location).toBeDefined();
+				expect(location!.split("?").length - 1).toBe(1);
+				const parsed = new URL(location!, "http://localhost:3000");
+				expect(parsed.searchParams.get("title")).toBe("Invalid invite");
+				expect(parsed.searchParams.get("error")).toBe("access_denied");
+				expect(parsed.searchParams.get("error_description")).toBe(
+					"user said no",
+				);
+			}
+		});
+
+		it("redirects to exactly what errorUrlBuilder returns", async () => {
+			const ctx = await initBase({
+				onAPIError: {
+					errorURL: "/error",
+					errorUrlBuilder: ({ error, baseURL }) => `${baseURL}/custom/${error}`,
+				},
+			});
+			try {
+				await ctx.redirectToErrorPage({ error: "access_denied" });
+				expect.unreachable();
+			} catch (error) {
+				expect((error as { headers?: Headers }).headers?.get("Location")).toBe(
+					"/error/custom/access_denied",
+				);
+			}
+		});
 	});
 
 	describe("adapter and internal adapter", () => {

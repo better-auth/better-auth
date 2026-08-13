@@ -81,7 +81,7 @@ describe("telemetry", () => {
 						sendOnSignIn: false,
 						autoSignInAfterVerification: false,
 						expiresIn: undefined,
-						onEmailVerification: false,
+						beforeEmailVerification: false,
 						afterEmailVerification: false,
 					},
 					emailAndPassword: {
@@ -105,7 +105,7 @@ describe("telemetry", () => {
 						additionalFields: undefined,
 						changeEmail: {
 							enabled: undefined,
-							sendChangeEmailVerification: false,
+							sendChangeEmailConfirmation: false,
 						},
 					},
 					verification: {
@@ -148,7 +148,6 @@ describe("telemetry", () => {
 							additionalCookies: undefined,
 						},
 						database: {
-							useNumberId: false,
 							generateId: undefined,
 							defaultFindManyLimit: undefined,
 						},
@@ -178,6 +177,7 @@ describe("telemetry", () => {
 					},
 					onAPIError: {
 						errorURL: undefined,
+						errorUrlBuilder: false,
 						onError: false,
 						throw: undefined,
 					},

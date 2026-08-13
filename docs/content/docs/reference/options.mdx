@@ -838,6 +838,7 @@ export const auth = betterAuth({
 			console.error("Auth error:", error);
 		},
 		errorURL: "/auth/error",
+		errorUrlBuilder: ({ error, baseURL }) => `${baseURL}?code=${error}`,
 		customizeDefaultErrorPage: {
 			colors: {
 				background: "#ffffff",
@@ -876,7 +877,8 @@ export const auth = betterAuth({
 
 * `throw`: Throw an error on API error (default: `false`)
 * `onError`: Custom error handler
-* `errorURL`: URL to redirect to on error (default: `/api/auth/error`)
+* `errorURL`: URL to redirect to on error (default: `/api/auth/error`). Existing query parameters are preserved; `error` is merged in rather than concatenated with a second `?`.
+* `errorUrlBuilder`: Optional function that receives `{ error, error_description, baseURL }` and returns the **final** redirect URL. When set, Better Auth does not append `error` afterwards.
 * `customizeDefaultErrorPage`: Configure the default error page provided by Better Auth. Start your dev server and go to `/api/auth/error` to see the error page.
   * `colors`: Customize color scheme for the error page
     * `background`: Background color

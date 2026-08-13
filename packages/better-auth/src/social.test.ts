@@ -615,6 +615,142 @@ describe("Disable implicit signup", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/3875
+	 */
+	it("should merge error params into an error URL that already has a query", async () => {
+		const { client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			onAPIError: {
+				errorURL: "/error?title=Invalid%20invite",
+			},
+		});
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				error: "access_denied",
+				error_description: "user said no",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location") || "";
+				expect(location.split("?").length - 1).toBe(1);
+				const parsed = new URL(location, "http://localhost:3000");
+				expect(parsed.searchParams.get("title")).toBe("Invalid invite");
+				expect(parsed.searchParams.get("error")).toBe("access_denied");
+				expect(parsed.searchParams.get("error_description")).toBe(
+					"user said no",
+				);
+			},
+		});
+	});
+
+	it("should let errorUrlBuilder rename the query key", async () => {
+		const { client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			onAPIError: {
+				errorURL: "/error?title=Invalid%20invite",
+				errorUrlBuilder: ({ error, error_description, baseURL }) => {
+					const parsed = new URL(baseURL, "http://localhost:3000");
+					parsed.searchParams.set("code", error);
+					if (error_description) {
+						parsed.searchParams.set("reason", error_description);
+					}
+					return `${parsed.pathname}${parsed.search}`;
+				},
+			},
+		});
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				error: "access_denied",
+				error_description: "user said no",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location") || "";
+				expect(location).not.toContain("error=");
+				const parsed = new URL(location, "http://localhost:3000");
+				expect(parsed.searchParams.get("title")).toBe("Invalid invite");
+				expect(parsed.searchParams.get("code")).toBe("access_denied");
+				expect(parsed.searchParams.get("reason")).toBe("user said no");
+			},
+		});
+	});
+
+	it("should redirect to exactly what errorUrlBuilder returns", async () => {
+		const { client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			onAPIError: {
+				errorURL: "/error",
+				errorUrlBuilder: ({ error, baseURL }) => `${baseURL}/custom/${error}`,
+			},
+		});
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				error: "access_denied",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				expect(context.response.headers.get("location")).toBe(
+					"/error/custom/access_denied",
+				);
+			},
+		});
+	});
+
 	it("Should create user when implicit sign up is disabled but it is requested", async () => {
 		const { client, cookieSetter } = await getTestInstance({
 			socialProviders: {

@@ -216,10 +216,8 @@ describe("SSO", async () => {
 	});
 
 	/**
-	 * The SAML path in this plugin merges error params through
-	 * `buildSAMLRedirectUrl`. The OIDC callback concatenated `?error=` instead, so
-	 * an error URL that already carried a query got a second `?`, and values went
-	 * out unencoded.
+	 * Error-page redirects merge `error` through the shared error URL helper
+	 * so a callback or error URL that already carried a query keeps it.
 	 *
 	 * @see https://github.com/better-auth/better-auth/issues/3875
 	 */
