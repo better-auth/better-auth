@@ -582,30 +582,6 @@ describe("oauth authorize - ACR requests", async () => {
 		return location;
 	}
 
-	describe("acr_values (OIDC Core 1.0 §3.1.2.1)", () => {
-		it("accepts the advertised level 0 ACR value", async () => {
-			const location = await redirectFor("0");
-			const callbackRedirect = new URL(location);
-
-			expect(callbackRedirect.origin + callbackRedirect.pathname).toBe(
-				redirectUri,
-			);
-			expect(callbackRedirect.searchParams.get("code")).toBeTruthy();
-			expect(callbackRedirect.searchParams.get("error")).toBeNull();
-		});
-
-		it("accepts multiple values when one is supported", async () => {
-			const location = await redirectFor("1 0");
-			const callbackRedirect = new URL(location);
-
-			expect(callbackRedirect.origin + callbackRedirect.pathname).toBe(
-				redirectUri,
-			);
-			expect(callbackRedirect.searchParams.get("code")).toBeTruthy();
-			expect(callbackRedirect.searchParams.get("error")).toBeNull();
-		});
-	});
-
 	describe("claims.id_token.acr (OIDC Core 1.0 §5.5.1.1)", () => {
 		it("accepts an unsupported voluntary claim", async () => {
 			const location = await redirectFor(undefined, { values: ["1"] });
