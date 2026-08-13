@@ -163,6 +163,8 @@ export type DynamicBaseURLConfig = {
 
 	/**
 	 * Fallback URL used when no allowed request host can be resolved.
+	 * If omitted, Better Auth throws when the request host is unavailable or not
+	 * allowed.
 	 *
 	 * @example "https://myapp.com"
 	 */
