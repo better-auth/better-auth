@@ -3,7 +3,10 @@ import type {
 	SCIMManagedConnectionEvent,
 	SCIMManagedCredential,
 } from "@better-auth/scim";
-import { SCIM_MANAGED_CREATION_REQUEST_ID_CONFLICT } from "@better-auth/scim";
+import {
+	SCIM_MANAGED_CREATION_REQUEST_ID_CONFLICT,
+	SCIM_MANAGED_MAX_EVENT_LIMIT,
+} from "@better-auth/scim";
 import type { BetterAuthOptions, DBAdapter } from "better-auth";
 import { auth } from "@/lib/auth";
 import {
@@ -190,6 +193,28 @@ export function assertSCIMDemoCredentialContext(
 	}
 }
 
+export async function listAllSCIMDemoManagedConnectionEvents(input: {
+	connectionId: string;
+	provisioningDomainId: string;
+}): Promise<readonly SCIMManagedConnectionEvent[]> {
+	const events: SCIMManagedConnectionEvent[] = [];
+	let offset = 0;
+	while (true) {
+		const history = await auth.api.listSCIMManagedConnectionEvents({
+			body: {
+				connectionId: input.connectionId,
+				provisioningDomainId: input.provisioningDomainId,
+				offset,
+				limit: SCIM_MANAGED_MAX_EVENT_LIMIT,
+			},
+		});
+		events.push(...history.events);
+		offset += history.limit;
+		if (offset >= history.total) break;
+	}
+	return events;
+}
+
 export async function loadSCIMDemoManagedState(
 	organizationId: string,
 ): Promise<SCIMDemoManagedState | null> {
@@ -205,21 +230,19 @@ export async function loadSCIMDemoManagedState(
 	}
 	const connection = connections[0];
 	if (!connection) return null;
-	const [state, history] = await Promise.all([
+	const [state, events] = await Promise.all([
 		auth.api.getSCIMManagedConnection({
 			body: {
 				connectionId: connection.connectionId,
 				provisioningDomainId,
 			},
 		}),
-		auth.api.listSCIMManagedConnectionEvents({
-			body: {
-				connectionId: connection.connectionId,
-				provisioningDomainId,
-			},
+		listAllSCIMDemoManagedConnectionEvents({
+			connectionId: connection.connectionId,
+			provisioningDomainId,
 		}),
 	]);
-	return { ...state, events: history.events };
+	return { ...state, events };
 }
 
 export async function createSCIMDemoConnectionResponse<
