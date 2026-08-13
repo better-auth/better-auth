@@ -75,6 +75,9 @@ async function redirectToAppError(
 	params: { error: string; error_description?: string },
 	overrideErrorURL?: string,
 ): Promise<never> {
+	if (typeof ctx.context.redirectToErrorPage === "function") {
+		throw await ctx.context.redirectToErrorPage(params, { overrideErrorURL });
+	}
 	const baseURL =
 		overrideErrorURL ||
 		ctx.context.options.onAPIError?.errorURL ||

@@ -1,4 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import {
+	mergeRedirectQueryParams,
+	resolveErrorRedirectUrl,
+} from "@better-auth/core/utils/error-url";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { isLoopbackHost, isLoopbackIP } from "@better-auth/core/utils/host";
 import { getSessionFromCtx } from "better-auth/api";
@@ -55,20 +59,7 @@ export function formatErrorURL(
 	};
 	if (state) params.state = state;
 	if (iss) params.iss = iss;
-	try {
-		const isRelativePath = url.startsWith("/") && !url.startsWith("//");
-		const parsedUrl = new URL(url, "http://better-auth.local");
-		for (const [key, value] of Object.entries(params)) {
-			parsedUrl.searchParams.set(key, value);
-		}
-		if (isRelativePath) {
-			return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`;
-		}
-		return parsedUrl.toString();
-	} catch {
-		const searchParams = new URLSearchParams(params);
-		return `${url}${url.includes("?") ? "&" : "?"}${searchParams.toString()}`;
-	}
+	return mergeRedirectQueryParams(url, params, { overwrite: true });
 }
 
 export const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
@@ -156,15 +147,17 @@ export function getIssuer(
  * Error page url if redirect_uri has not been verified yet
  * Generates Url for custom error page
  */
-function getErrorURL(
+async function getErrorURL(
 	ctx: GenericEndpointContext,
 	error: string,
 	description: string,
 ) {
 	const baseURL =
 		ctx.context.options.onAPIError?.errorURL || `${ctx.context.baseURL}/error`;
-	const formattedURL = formatErrorURL(baseURL, error, description);
-	return formattedURL;
+	return resolveErrorRedirectUrl(ctx.context.options, baseURL, {
+		error,
+		error_description: description,
+	});
 }
 
 export type AuthorizeEndpointSettings = {
@@ -195,7 +188,11 @@ export async function authorizeEndpoint(
 		if (!opts.requestUriResolver) {
 			return handleRedirect(
 				ctx,
-				getErrorURL(ctx, "invalid_request_uri", "request_uri not supported"),
+				await getErrorURL(
+					ctx,
+					"invalid_request_uri",
+					"request_uri not supported",
+				),
 			);
 		}
 		const resolvedParams = await opts.requestUriResolver({
@@ -206,7 +203,7 @@ export async function authorizeEndpoint(
 		if (!resolvedParams) {
 			return handleRedirect(
 				ctx,
-				getErrorURL(
+				await getErrorURL(
 					ctx,
 					"invalid_request_uri",
 					"request_uri is invalid or expired",
@@ -229,14 +226,14 @@ export async function authorizeEndpoint(
 	if (!query.client_id) {
 		return handleRedirect(
 			ctx,
-			getErrorURL(ctx, "invalid_client", "client_id is required"),
+			await getErrorURL(ctx, "invalid_client", "client_id is required"),
 		);
 	}
 
 	if (!query.response_type) {
 		return handleRedirect(
 			ctx,
-			getErrorURL(ctx, "invalid_request", "response_type is required"),
+			await getErrorURL(ctx, "invalid_request", "response_type is required"),
 		);
 	}
 
@@ -247,7 +244,7 @@ export async function authorizeEndpoint(
 	if (promptSet?.has("select_account") && !opts.selectAccount?.page) {
 		return handleRedirect(
 			ctx,
-			getErrorURL(
+			await getErrorURL(
 				ctx,
 				`unsupported_prompt_select_account`,
 				"unsupported prompt type",
@@ -258,7 +255,7 @@ export async function authorizeEndpoint(
 	if (!(query.response_type === "code")) {
 		return handleRedirect(
 			ctx,
-			getErrorURL(
+			await getErrorURL(
 				ctx,
 				"unsupported_response_type",
 				"unsupported response type",
@@ -271,13 +268,13 @@ export async function authorizeEndpoint(
 	if (!client) {
 		return handleRedirect(
 			ctx,
-			getErrorURL(ctx, "invalid_client", "client_id is required"),
+			await getErrorURL(ctx, "invalid_client", "client_id is required"),
 		);
 	}
 	if (client.disabled) {
 		return handleRedirect(
 			ctx,
-			getErrorURL(ctx, "client_disabled", "client is disabled"),
+			await getErrorURL(ctx, "client_disabled", "client is disabled"),
 		);
 	}
 	// The authorize endpoint only serves the authorization_code grant; reject
@@ -285,7 +282,7 @@ export async function authorizeEndpoint(
 	if (!clientAllowsGrant(client, "authorization_code")) {
 		return handleRedirect(
 			ctx,
-			getErrorURL(
+			await getErrorURL(
 				ctx,
 				"unauthorized_client",
 				"client is not authorized to use the authorization_code grant",
@@ -315,7 +312,7 @@ export async function authorizeEndpoint(
 	if (!redirectUri || !query.redirect_uri) {
 		return handleRedirect(
 			ctx,
-			getErrorURL(ctx, "invalid_redirect", "invalid redirect uri"),
+			await getErrorURL(ctx, "invalid_redirect", "invalid redirect uri"),
 		);
 	}
 

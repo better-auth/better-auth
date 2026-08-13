@@ -54,6 +54,28 @@ describe("mergeErrorRedirectUrl", () => {
 		expect(parsed.searchParams.get("error")).toBe("access_denied");
 		expect(parsed.searchParams.get("error_description")).toBe("nope");
 	});
+
+	it("merges an explicitly empty error_description", () => {
+		const url = mergeErrorRedirectUrl("/error", {
+			error: "access_denied",
+			error_description: "",
+		});
+		expect(url).toBe("/error?error=access_denied&error_description=");
+	});
+
+	it("does not re-serialize the origin of an absolute URL", () => {
+		expect(
+			mergeErrorRedirectUrl("https://example.com", { error: "access_denied" }),
+		).toBe("https://example.com?error=access_denied");
+		expect(
+			mergeErrorRedirectUrl("https://ExAmple.com/cb", {
+				error: "access_denied",
+			}),
+		).toBe("https://ExAmple.com/cb?error=access_denied");
+		expect(
+			mergeErrorRedirectUrl("https://rp:443/x", { error: "access_denied" }),
+		).toBe("https://rp:443/x?error=access_denied");
+	});
 });
 
 describe("resolveErrorRedirectUrl", () => {

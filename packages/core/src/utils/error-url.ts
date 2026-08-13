@@ -20,6 +20,46 @@ export type MergeErrorRedirectUrlOptions = {
 	overwrite?: boolean;
 };
 
+function splitUrl(url: string): {
+	path: string;
+	query: string;
+	fragment: string;
+} {
+	const hashIndex = url.indexOf("#");
+	const urlWithoutFragment = hashIndex === -1 ? url : url.slice(0, hashIndex);
+	const fragment = hashIndex === -1 ? "" : url.slice(hashIndex);
+	const queryIndex = urlWithoutFragment.indexOf("?");
+	const path =
+		queryIndex === -1
+			? urlWithoutFragment
+			: urlWithoutFragment.slice(0, queryIndex);
+	const query =
+		queryIndex === -1 ? "" : urlWithoutFragment.slice(queryIndex + 1);
+	return { path, query, fragment };
+}
+
+/**
+ * Merge query parameters into a URL without introducing a second `?` and
+ * without re-serializing the origin (so registered `redirect_uri` text stays
+ * intact).
+ */
+export function mergeRedirectQueryParams(
+	url: string,
+	params: Record<string, string>,
+	options?: MergeErrorRedirectUrlOptions,
+): string {
+	const overwrite = options?.overwrite === true;
+	const { path, query, fragment } = splitUrl(url);
+	const searchParams = new URLSearchParams(query);
+	for (const [key, value] of Object.entries(params)) {
+		if (overwrite || !searchParams.has(key)) {
+			searchParams.set(key, value);
+		}
+	}
+	const qs = searchParams.toString();
+	return qs ? `${path}?${qs}${fragment}` : `${path}${fragment}`;
+}
+
 /**
  * Merge `error` / `error_description` into an error-page URL without introducing
  * a second `?` and without overwriting keys the app already set.
@@ -29,44 +69,11 @@ export function mergeErrorRedirectUrl(
 	params: ErrorRedirectParams,
 	options?: MergeErrorRedirectUrlOptions,
 ): string {
-	const incoming: Array<[string, string]> = [["error", params.error]];
-	if (params.error_description) {
-		incoming.push(["error_description", params.error_description]);
+	const incoming: Record<string, string> = { error: params.error };
+	if (params.error_description !== undefined) {
+		incoming.error_description = params.error_description;
 	}
-	const overwrite = options?.overwrite === true;
-
-	const apply = (searchParams: URLSearchParams) => {
-		for (const [key, value] of incoming) {
-			if (overwrite || !searchParams.has(key)) {
-				searchParams.set(key, value);
-			}
-		}
-	};
-
-	try {
-		const isRelativePath = url.startsWith("/") && !url.startsWith("//");
-		const parsedUrl = new URL(url, "http://better-auth.local");
-		apply(parsedUrl.searchParams);
-		if (isRelativePath) {
-			return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`;
-		}
-		return parsedUrl.toString();
-	} catch {
-		const hashIndex = url.indexOf("#");
-		const urlWithoutFragment = hashIndex === -1 ? url : url.slice(0, hashIndex);
-		const fragment = hashIndex === -1 ? "" : url.slice(hashIndex);
-		const queryIndex = urlWithoutFragment.indexOf("?");
-		const path =
-			queryIndex === -1
-				? urlWithoutFragment
-				: urlWithoutFragment.slice(0, queryIndex);
-		const existing = new URLSearchParams(
-			queryIndex === -1 ? "" : urlWithoutFragment.slice(queryIndex + 1),
-		);
-		apply(existing);
-		const qs = existing.toString();
-		return qs ? `${path}?${qs}${fragment}` : `${path}${fragment}`;
-	}
+	return mergeRedirectQueryParams(url, incoming, options);
 }
 
 export async function resolveErrorRedirectUrl(

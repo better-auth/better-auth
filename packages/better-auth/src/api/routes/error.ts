@@ -415,12 +415,14 @@ export const error = createAuthEndpoint(
 
 		const options = c.context.options;
 		const errorURL = options.onAPIError?.errorURL;
+		const errorUrlBuilder = options.onAPIError?.errorUrlBuilder;
 
-		if (errorURL) {
+		if (errorURL || errorUrlBuilder) {
+			const baseURL = errorURL || `${c.context.baseURL}/error`;
 			return new Response(null, {
 				status: 302,
 				headers: {
-					Location: await resolveErrorRedirectUrl(options, errorURL, {
+					Location: await resolveErrorRedirectUrl(options, baseURL, {
 						error: safeCode,
 						error_description: unsanitizedDescription ?? undefined,
 					}),

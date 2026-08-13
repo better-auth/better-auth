@@ -72,4 +72,21 @@ describe("error page custom errorURL", () => {
 			},
 		});
 	});
+
+	it("honors errorUrlBuilder even when errorURL is unset", async () => {
+		const { client } = await getTestInstance({
+			onAPIError: {
+				errorUrlBuilder: ({ error, baseURL }) => `${baseURL}/custom/${error}`,
+			},
+		});
+		await client.$fetch("/error?error=access_denied", {
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				expect(context.response.headers.get("location")).toBe(
+					"http://localhost:3000/api/auth/error/custom/access_denied",
+				);
+			},
+		});
+	});
 });
