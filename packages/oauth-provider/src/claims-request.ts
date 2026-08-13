@@ -54,6 +54,22 @@ export function getRequestedUserInfoClaims(
 	return names.filter((name) => allowed.has(name));
 }
 
+export function canSatisfyEssentialAcrRequest(
+	value: unknown,
+	currentAcr: string,
+) {
+	const acrRequest = parseClaimsRequestObject(value)?.id_token?.acr;
+	if (!acrRequest || acrRequest.essential !== true) return true;
+
+	if (typeof acrRequest.value === "string") {
+		return acrRequest.value === currentAcr;
+	}
+	if (Array.isArray(acrRequest.values)) {
+		return acrRequest.values.includes(currentAcr);
+	}
+	return true;
+}
+
 export function filterClaimsRequestUserInfoClaims(
 	value: unknown,
 	allowedUserInfoClaims: string[],

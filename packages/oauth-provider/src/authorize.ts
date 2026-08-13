@@ -5,7 +5,11 @@ import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
-import { getRequestedUserInfoClaims } from "./claims-request";
+import { LEVEL_0_ACR } from "./authentication-context";
+import {
+	canSatisfyEssentialAcrRequest,
+	getRequestedUserInfoClaims,
+} from "./claims-request";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
 import { mapIssuesToOAuthError } from "./oauth-endpoint";
@@ -509,6 +513,18 @@ export async function authorizeEndpoint(
 		return handleRedirect(
 			ctx,
 			getErrorURL(ctx, "invalid_redirect", "invalid redirect uri"),
+		);
+	}
+	if (!canSatisfyEssentialAcrRequest(query.claims, LEVEL_0_ACR)) {
+		return handleRedirect(
+			ctx,
+			formatErrorURL(
+				query.redirect_uri,
+				"access_denied",
+				"essential acr requirement cannot be met",
+				query.state,
+				getIssuer(ctx, opts),
+			),
 		);
 	}
 
