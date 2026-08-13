@@ -119,6 +119,53 @@ async function listUsers(baseURL: string, token: string): Promise<Response> {
 	});
 }
 
+async function createPaginatedManagedConnectionEventsFixture(
+	registerCleanup: (cleanup: () => void | Promise<void>) => void,
+) {
+	const instance = await createManagedInstance(registerCleanup);
+	const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1_000);
+	const created = await instance.auth.api.createSCIMManagedConnection({
+		body: {
+			creationRequestId: createCreationRequestId(),
+			provisioningDomainId: "organization-acme",
+			actorId: "admin-acme",
+			scopes: ALL_SCOPES,
+			expiresAt,
+		},
+	});
+	const connection = await instance.db.findOne<{ id: string }>({
+		model: "scimManagedConnection",
+		where: [
+			{
+				field: "connectionId",
+				value: created.connection.connectionId,
+			},
+		],
+	});
+	if (!connection) throw new Error("Expected managed connection row");
+	const createdAt = new Date("2026-01-01T00:00:00.000Z");
+	for (let sequence = 3; sequence <= 14; sequence++) {
+		await instance.db.create({
+			model: "scimManagedConnectionEvent",
+			data: {
+				connectionRecordId: connection.id,
+				eventKey: `${connection.id}:${sequence}`,
+				sequence,
+				type: "credential.rotated",
+				actorId: "admin-acme",
+				credentialId: created.credential.credentialId,
+				createdAt: new Date(createdAt.getTime() + sequence * 1_000),
+			},
+		});
+	}
+	return {
+		instance,
+		connectionId: created.connection.connectionId,
+		provisioningDomainId: "organization-acme",
+		totalEvents: 14,
+	};
+}
+
 describe("SCIM managed connections", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10475
@@ -208,6 +255,152 @@ describe("SCIM managed connections", () => {
 				`${endpointName} must not carry a routable path`,
 			).toBeFalsy();
 		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10475
+	 */
+	describe("listSCIMManagedConnectionEvents pagination", () => {
+		it("defaults to sequence desc with limit and offset metadata", async ({
+			onTestFinished,
+		}) => {
+			const { instance, connectionId, provisioningDomainId, totalEvents } =
+				await createPaginatedManagedConnectionEventsFixture(onTestFinished);
+			const firstPage = await instance.auth.api.listSCIMManagedConnectionEvents(
+				{
+					body: {
+						connectionId,
+						provisioningDomainId,
+					},
+				},
+			);
+
+			expect(firstPage).toMatchObject({
+				limit: 10,
+				offset: 0,
+				total: totalEvents,
+				sortBy: "sequence",
+				sortDirection: "desc",
+			});
+			expect(firstPage.events).toHaveLength(10);
+			expect(firstPage.events[0]?.sequence).toBe(14);
+			expect(firstPage.events.at(-1)?.sequence).toBe(5);
+			for (let index = 1; index < firstPage.events.length; index++) {
+				const previous = firstPage.events[index - 1];
+				const current = firstPage.events[index];
+				expect(previous).toBeDefined();
+				expect(current).toBeDefined();
+				expect(current?.sequence).toBeLessThan(previous?.sequence ?? 0);
+			}
+		});
+
+		it("pages managed connection events with limit and offset", async ({
+			onTestFinished,
+		}) => {
+			const { instance, connectionId, provisioningDomainId, totalEvents } =
+				await createPaginatedManagedConnectionEventsFixture(onTestFinished);
+			const secondPage =
+				await instance.auth.api.listSCIMManagedConnectionEvents({
+					body: {
+						connectionId,
+						provisioningDomainId,
+						offset: 10,
+					},
+				});
+			const customLimit =
+				await instance.auth.api.listSCIMManagedConnectionEvents({
+					body: {
+						connectionId,
+						provisioningDomainId,
+						limit: 5,
+						offset: 10,
+					},
+				});
+
+			expect(secondPage).toMatchObject({
+				limit: 10,
+				offset: 10,
+				total: totalEvents,
+			});
+			expect(secondPage.events).toHaveLength(4);
+			expect(secondPage.events.at(-1)?.sequence).toBe(1);
+			expect(customLimit).toMatchObject({
+				limit: 5,
+				offset: 10,
+				total: totalEvents,
+			});
+			expect(customLimit.events).toHaveLength(4);
+		});
+
+		it("returns an empty page when offset is beyond the total event count", async ({
+			onTestFinished,
+		}) => {
+			const { instance, connectionId, provisioningDomainId, totalEvents } =
+				await createPaginatedManagedConnectionEventsFixture(onTestFinished);
+			const beyondLastPage =
+				await instance.auth.api.listSCIMManagedConnectionEvents({
+					body: {
+						connectionId,
+						provisioningDomainId,
+						offset: 980,
+					},
+				});
+
+			expect(beyondLastPage.events).toEqual([]);
+			expect(beyondLastPage.total).toBe(totalEvents);
+		});
+
+		it("sorts managed connection events ascending by sequence", async ({
+			onTestFinished,
+		}) => {
+			const { instance, connectionId, provisioningDomainId, totalEvents } =
+				await createPaginatedManagedConnectionEventsFixture(onTestFinished);
+			const ascendingPage =
+				await instance.auth.api.listSCIMManagedConnectionEvents({
+					body: {
+						connectionId,
+						provisioningDomainId,
+						sortDirection: "asc",
+					},
+				});
+
+			expect(ascendingPage).toMatchObject({
+				limit: 10,
+				offset: 0,
+				total: totalEvents,
+				sortBy: "sequence",
+				sortDirection: "asc",
+			});
+			expect(ascendingPage.events.map((event) => event.sequence)).toEqual([
+				1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+			]);
+		});
+
+		it("sorts managed connection events by createdAt", async ({
+			onTestFinished,
+		}) => {
+			const { instance, connectionId, provisioningDomainId } =
+				await createPaginatedManagedConnectionEventsFixture(onTestFinished);
+			const createdAtPage =
+				await instance.auth.api.listSCIMManagedConnectionEvents({
+					body: {
+						connectionId,
+						provisioningDomainId,
+						sortBy: "createdAt",
+						sortDirection: "asc",
+					},
+				});
+
+			expect(createdAtPage).toMatchObject({
+				sortBy: "createdAt",
+				sortDirection: "asc",
+			});
+			for (let index = 1; index < createdAtPage.events.length; index++) {
+				const previous = createdAtPage.events[index - 1]?.createdAt.getTime();
+				const current = createdAtPage.events[index]?.createdAt.getTime();
+				expect(previous).toBeLessThanOrEqual(current ?? 0);
+			}
+		});
 	});
 
 	/**
@@ -680,10 +873,10 @@ describe("SCIM managed connections", () => {
 		expect(oldAfterRevoke.status).toBe(401);
 		expect(newAfterRevoke.status).toBe(200);
 		expect(events.events.map((event) => event.type)).toEqual([
-			"connection.created",
-			"credential.issued",
-			"credential.rotated",
 			"credential.revoked",
+			"credential.rotated",
+			"credential.issued",
+			"connection.created",
 		]);
 	});
 
@@ -750,10 +943,10 @@ describe("SCIM managed connections", () => {
 		expect(repeated.connection).toEqual(first.connection);
 		expect(rejected.status).toBe(401);
 		expect(events.events.map((event) => event.type)).toEqual([
-			"connection.created",
-			"credential.issued",
-			"connection.decommissioning",
 			"connection.decommissioned",
+			"connection.decommissioning",
+			"credential.issued",
+			"connection.created",
 		]);
 		expect(binding).toMatchObject({
 			connectionId: created.connection.connectionId,
