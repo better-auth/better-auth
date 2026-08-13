@@ -17,8 +17,8 @@ import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { base64url, decodeProtectedHeader, SignJWT } from "jose";
 import {
+	LEVEL_0_ACR,
 	stripReservedIdTokenClaims,
-	UNSPECIFIED_ACR,
 } from "./authentication-context";
 import { resolveAccessTokenClaims } from "./claims";
 import { getRequestedUserInfoClaims } from "./claims-request";
@@ -374,7 +374,7 @@ async function createIdToken(
 	const payload: JWTPayload = {
 		...ID_TOKEN_SCOPE_CLAIM_GUARDS,
 		auth_time: authTimeSec,
-		acr: UNSPECIFIED_ACR,
+		acr: LEVEL_0_ACR,
 		...customClaims,
 		at_hash: atHash,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
