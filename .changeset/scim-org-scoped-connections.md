@@ -2,10 +2,13 @@
 "@better-auth/scim": minor
 ---
 
-Runtime SCIM tokens now require `organizationId`; use `staticProviders` for app-level SCIM.
+SCIM connections are now independent of the Organization and SSO plugins. Define
+them statically, resolve them with `authentication.verifyBearerToken`, or use the
+optional `managedConnections` catalog.
 
-SCIM-managed accounts now use namespaced provider IDs (`scim:{organizationId}:{providerId}` or `scim:{providerId}` for app-level static providers). Migrate only known SCIM-managed account rows before upgrading; leave non-SCIM accounts unchanged even when they share the same provider ID.
+Legacy connection management, organization-scoped configuration, and SCIM-created
+authentication accounts are removed. Use identity and projection callbacks to
+connect SCIM resources to application users and roles.
 
-Organization-scoped `active: false` now makes a user inactive in that organization while keeping SCIM group and team associations available for reactivation. Use `DELETE` to fully deprovision organization-scoped SCIM state.
-
-`defaultSCIM` has been replaced by `staticProviders`. `linkExistingUsers.trustedDomains` has been removed; use `requireExistingOrgMembership`, `shouldLinkUser`, or explicit `true` instead.
+Legacy SCIM state is not migrated. Back it up, issue new credentials, and fully
+reprovision Users and Groups after upgrading.
