@@ -638,12 +638,11 @@ describe("oauth authorize - ACR requests", async () => {
 			expect(callbackRedirect.searchParams.get("code")).toBeNull();
 		});
 
-		it("ignores essential claims in OAuth-only requests", async () => {
-			const location = await redirectFor(
-				undefined,
-				{ essential: true, value: "1" },
-				"profile",
-			);
+		it.each([
+			{ essential: true, value: "1" },
+			{ essential: true, value: 1 },
+		])("ignores claims in OAuth-only requests", async (request) => {
+			const location = await redirectFor(undefined, request, "profile");
 			const callbackRedirect = new URL(location);
 
 			expect(callbackRedirect.searchParams.get("error")).toBeNull();

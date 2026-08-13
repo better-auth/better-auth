@@ -16,7 +16,7 @@ const idTokenClaimsRequestSchema = z
 	})
 	.catchall(claimRequestMemberSchema);
 
-const claimsRequestObjectSchema = z.looseObject({
+const oidcClaimsRequestObjectSchema = z.looseObject({
 	userinfo: z.record(z.string(), claimRequestMemberSchema).optional(),
 	id_token: idTokenClaimsRequestSchema.optional(),
 });
@@ -32,23 +32,38 @@ function parseClaimsRequestValue(value: unknown) {
 	return value;
 }
 
-function parseClaimsRequestObject(value: unknown) {
+function parseOidcClaimsRequestObject(value: unknown) {
 	const parsed = parseClaimsRequestValue(value);
-	const result = claimsRequestObjectSchema.safeParse(parsed);
+	const result = oidcClaimsRequestObjectSchema.safeParse(parsed);
 	return result.success ? result.data : undefined;
 }
 
-export const claimsRequestParameterSchema = z
-	.union([z.string(), z.record(z.string(), z.unknown())])
-	.refine((value) => parseClaimsRequestObject(value) !== undefined, {
-		error: "claims must be a valid Claims request object",
-	});
+const claimsRequestParameterValueSchema = z.union([
+	z.string(),
+	z.record(z.string(), z.unknown()),
+]);
+
+export const claimsRequestInputSchema = claimsRequestParameterValueSchema;
+
+export const claimsRequestParameterSchema =
+	claimsRequestParameterValueSchema.refine(
+		(value) => parseOidcClaimsRequestObject(value) !== undefined,
+		{
+			error: "claims must be a valid Claims request object",
+		},
+	);
+
+export function isValidOidcClaimsRequest(value: unknown) {
+	return (
+		value === undefined || parseOidcClaimsRequestObject(value) !== undefined
+	);
+}
 
 export function getRequestedUserInfoClaims(
 	value: unknown,
 	supportedClaims?: Iterable<string>,
 ) {
-	const claimsRequest = parseClaimsRequestObject(value);
+	const claimsRequest = parseOidcClaimsRequestObject(value);
 	const userInfoClaims = claimsRequest?.userinfo;
 	if (!userInfoClaims) return [];
 	// `Object.keys` over a parsed object is already unique; no duplicate filtering needed.
@@ -62,7 +77,7 @@ export function canSatisfyEssentialAcrRequest(
 	value: unknown,
 	currentAcr: string,
 ) {
-	const claimsRequest = parseClaimsRequestObject(value);
+	const claimsRequest = parseOidcClaimsRequestObject(value);
 	if (!claimsRequest) return value === undefined;
 
 	const acrRequest = claimsRequest.id_token?.acr;
@@ -79,7 +94,7 @@ export function filterClaimsRequestUserInfoClaims(
 	value: unknown,
 	allowedUserInfoClaims: string[],
 ) {
-	const claimsRequest = parseClaimsRequestObject(value);
+	const claimsRequest = parseOidcClaimsRequestObject(value);
 	if (!claimsRequest) return undefined;
 	const allowedClaimSet = new Set(allowedUserInfoClaims);
 	const userInfoClaims = Object.fromEntries(

@@ -9,6 +9,7 @@ import { LEVEL_0_ACR } from "./authentication-context";
 import {
 	canSatisfyEssentialAcrRequest,
 	getRequestedUserInfoClaims,
+	isValidOidcClaimsRequest,
 } from "./claims-request";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
@@ -540,8 +541,21 @@ export async function authorizeEndpoint(
 		requestedScopes = client.scopes ?? opts.scopes ?? [];
 		query.scope = requestedScopes.join(" ");
 	}
+	const openidRequested = requestedScopes.includes("openid");
+	if (openidRequested && !isValidOidcClaimsRequest(query.claims)) {
+		return handleRedirect(
+			ctx,
+			formatErrorURL(
+				query.redirect_uri,
+				"invalid_request",
+				"claims must be a valid Claims request object",
+				query.state,
+				getIssuer(ctx, opts),
+			),
+		);
+	}
 	if (
-		requestedScopes.includes("openid") &&
+		openidRequested &&
 		!canSatisfyEssentialAcrRequest(query.claims, LEVEL_0_ACR)
 	) {
 		return handleRedirect(
