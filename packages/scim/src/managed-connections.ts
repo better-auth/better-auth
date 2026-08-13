@@ -21,10 +21,9 @@ const SCIM_MANAGED_CREDENTIAL_ID_PREFIX = "ba_scim_credential_";
 export const SCIM_MANAGED_CREATION_REQUEST_ID_CONFLICT =
 	"SCIM_MANAGED_CREATION_REQUEST_ID_CONFLICT";
 
-export const SCIM_MANAGED_DEFAULT_EVENT_LIMIT = 10;
-export const SCIM_MANAGED_MAX_EVENT_LIMIT = 100;
-
 const SCIM_MANAGED_HASH_VERSION = "v1";
+const SCIM_MANAGED_DEFAULT_EVENT_LIMIT = 10;
+const SCIM_MANAGED_MAX_EVENT_LIMIT = 100;
 const SCIM_MANAGED_DEFAULT_MAX_ACTIVE_CREDENTIALS = 5;
 const SCIM_MANAGED_DEFAULT_LAST_USED_WRITE_INTERVAL_SECONDS = 300;
 const SCIM_MANAGED_ACTIVE_CREDENTIAL_SCAN_LIMIT = 101;
@@ -76,7 +75,6 @@ const listManagedConnectionEventsBodySchema =
 			.optional()
 			.default(SCIM_MANAGED_DEFAULT_EVENT_LIMIT),
 		offset: z.number().int().min(0).optional().default(0),
-		sortBy: z.enum(["sequence", "createdAt"]).optional().default("sequence"),
 		sortDirection: z.enum(["asc", "desc"]).optional().default("desc"),
 	});
 const rotateManagedCredentialBodySchema = z.object({
@@ -214,21 +212,6 @@ export interface SCIMManagedConnectionEvent {
 	actorId: string;
 	credentialId: string | null;
 	createdAt: Date;
-}
-
-/** Sort field for managed connection event listings. */
-export type SCIMManagedConnectionEventSortField = "sequence" | "createdAt";
-
-/** Sort direction for managed connection event listings. */
-export type SCIMManagedConnectionEventSortDirection = "asc" | "desc";
-
-/** Pagination metadata for managed connection event listings. */
-export interface SCIMManagedConnectionEventPagination {
-	limit: number;
-	offset: number;
-	total: number;
-	sortBy: SCIMManagedConnectionEventSortField;
-	sortDirection: SCIMManagedConnectionEventSortDirection;
 }
 
 interface ResolvedManagedConnectionOptions {
@@ -1094,20 +1077,19 @@ export function createSCIMManagedConnectionEndpoints(
 					ctx.body.provisioningDomainId,
 				);
 				if (!connection) throw createManagedNotFoundError();
-				const limit = ctx.body.limit;
-				const offset = ctx.body.offset;
-				const sortBy = ctx.body.sortBy;
-				const sortDirection = ctx.body.sortDirection;
 				const where = [
 					{ field: "connectionRecordId", value: connection.id },
 				] as const;
+				const limit = ctx.body.limit;
+				const offset = ctx.body.offset;
+				const sortDirection = ctx.body.sortDirection;
 				const [events, total] = await Promise.all([
 					database.findMany<ManagedConnectionEventRow>({
 						model: "scimManagedConnectionEvent",
 						where: [...where],
 						limit,
 						offset,
-						sortBy: { field: sortBy, direction: sortDirection },
+						sortBy: { field: "sequence", direction: sortDirection },
 					}),
 					database.count({
 						model: "scimManagedConnectionEvent",
@@ -1127,7 +1109,6 @@ export function createSCIMManagedConnectionEndpoints(
 					limit,
 					offset,
 					total,
-					sortBy,
 					sortDirection,
 				});
 			},
