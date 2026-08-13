@@ -67,13 +67,6 @@ function removeMaxAgeFromAuthorizationQuery(
 	return queryWithoutMaxAge;
 }
 
-function removeClaimsFromAuthorizationQuery(
-	query: OAuthAuthorizationQuery,
-): OAuthAuthorizationQuery {
-	const { claims: _claims, ...queryWithoutClaims } = query;
-	return queryWithoutClaims;
-}
-
 /**
  * Formats an error url. Per OIDC Core 1.0 §5 / RFC 6749 §4.2.2.1, errors on
  * implicit and hybrid flows are delivered in the URL fragment, not the query.
@@ -572,10 +565,6 @@ export async function authorizeEndpoint(
 				getIssuer(ctx, opts),
 			),
 		);
-	}
-	if (!openidRequested && query.claims !== undefined) {
-		query = removeClaimsFromAuthorizationQuery(query);
-		ctx.query = query;
 	}
 	if (
 		openidRequested &&
