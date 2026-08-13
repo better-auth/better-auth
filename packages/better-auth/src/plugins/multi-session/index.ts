@@ -49,7 +49,7 @@ const revokeDeviceSessionBodySchema = z.object({
 	}),
 });
 
-export const multiSession = (options?: MultiSessionConfig | undefined) => {
+const createMultiSessionPlugin = (options?: MultiSessionConfig | undefined) => {
 	const opts = {
 		maximumSessions: 5,
 		...options,
@@ -418,3 +418,14 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredMultiSessionPlugin = ReturnType<typeof createMultiSessionPlugin>;
+
+/**
+ * The multi-session plugin instance.
+ */
+export interface MultiSessionPlugin extends InferredMultiSessionPlugin {}
+
+export const multiSession = (
+	options?: MultiSessionConfig | undefined,
+): MultiSessionPlugin => createMultiSessionPlugin(options);

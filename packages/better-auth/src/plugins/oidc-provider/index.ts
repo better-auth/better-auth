@@ -294,18 +294,7 @@ const warnOidcDeprecation = deprecate(
 		"See: https://www.better-auth.com/docs/plugins/oauth-provider",
 );
 
-/**
- * OpenID Connect (OIDC) plugin for Better Auth. This plugin implements the
- * authorization code flow and the token exchange flow. It also implements the
- * userinfo endpoint.
- *
- * @deprecated Use `@better-auth/oauth-provider` instead. This plugin will be removed in the next major version.
- * @see https://www.better-auth.com/docs/plugins/oauth-provider
- *
- * @param options - The options for the OIDC plugin.
- * @returns A Better Auth plugin.
- */
-export const oidcProvider = (options: OIDCOptions) => {
+const createOIDCProviderPlugin = (options: OIDCOptions) => {
 	if (!options.__skipDeprecationWarning) {
 		warnOidcDeprecation();
 	}
@@ -1873,4 +1862,26 @@ export const oidcProvider = (options: OIDCOptions) => {
 		},
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredOIDCProviderPlugin = ReturnType<typeof createOIDCProviderPlugin>;
+
+/**
+ * The OIDC provider plugin instance.
+ */
+export interface OIDCProviderPlugin extends InferredOIDCProviderPlugin {}
+
+/**
+ * OpenID Connect (OIDC) plugin for Better Auth. This plugin implements the
+ * authorization code flow and the token exchange flow. It also implements the
+ * userinfo endpoint.
+ *
+ * @deprecated Use `@better-auth/oauth-provider` instead. This plugin will be removed in the next major version.
+ * @see https://www.better-auth.com/docs/plugins/oauth-provider
+ *
+ * @param options - The options for the OIDC plugin.
+ * @returns A Better Auth plugin.
+ */
+export const oidcProvider = (options: OIDCOptions): OIDCProviderPlugin =>
+	createOIDCProviderPlugin(options);
+
 export type * from "./types";

@@ -38,7 +38,7 @@ declare module "@better-auth/core" {
 	}
 }
 
-export const admin = <O extends AdminOptions>(options?: O | undefined) => {
+const createAdminPlugin = <O extends AdminOptions>(options?: O | undefined) => {
 	const opts = {
 		...(options || {}),
 		defaultRole: options?.defaultRole ?? "user",
@@ -169,3 +169,17 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 		options: options as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredAdminPlugin<O extends AdminOptions> = ReturnType<
+	typeof createAdminPlugin<O>
+>;
+
+/**
+ * The admin plugin instance.
+ */
+export interface AdminPlugin<O extends AdminOptions = AdminOptions>
+	extends InferredAdminPlugin<O> {}
+
+export const admin = <O extends AdminOptions>(
+	options?: O | undefined,
+): AdminPlugin<O> => createAdminPlugin(options);

@@ -58,10 +58,7 @@ export type BaseOAuthProviderOptions = Omit<
 	clientSecret: string;
 };
 
-/**
- * A generic OAuth plugin that can be used to add OAuth support to any provider
- */
-export const genericOAuth = (options: GenericOAuthOptions) => {
+const createGenericOAuthPlugin = (options: GenericOAuthOptions) => {
 	const seenIds = new Set<string>();
 	const nonUniqueIds = new Set<string>();
 
@@ -273,3 +270,17 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 		$ERROR_CODES: GENERIC_OAUTH_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredGenericOAuthPlugin = ReturnType<typeof createGenericOAuthPlugin>;
+
+/**
+ * The generic OAuth plugin instance.
+ */
+export interface GenericOAuthPlugin extends InferredGenericOAuthPlugin {}
+
+/**
+ * A generic OAuth plugin that can be used to add OAuth support to any provider
+ */
+export const genericOAuth = (
+	options: GenericOAuthOptions,
+): GenericOAuthPlugin => createGenericOAuthPlugin(options);

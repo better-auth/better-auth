@@ -39,7 +39,7 @@ const verifyJWTBodySchema = z.object({
 	issuer: z.string().optional(),
 });
 
-export const jwt = <O extends JwtOptions>(options?: O) => {
+const createJwtPlugin = <O extends JwtOptions>(options?: O) => {
 	// Remote url must be set when using signing function
 	if (options?.jwt?.sign && !options.jwks?.remoteUrl) {
 		throw new BetterAuthError(
@@ -350,5 +350,18 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 		schema: mergeSchema(schema, options?.schema),
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredJwtPlugin<O extends JwtOptions> = ReturnType<
+	typeof createJwtPlugin<O>
+>;
+
+/**
+ * The JWT plugin instance.
+ */
+export interface JwtPlugin<O extends JwtOptions = JwtOptions>
+	extends InferredJwtPlugin<O> {}
+
+export const jwt = <O extends JwtOptions>(options?: O): JwtPlugin<O> =>
+	createJwtPlugin(options);
 
 export { getJwtToken };

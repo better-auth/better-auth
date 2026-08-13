@@ -44,7 +44,7 @@ declare module "@better-auth/core" {
 		};
 	}
 }
-export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
+const createTwoFactorPlugin = <O extends TwoFactorOptions>(options?: O) => {
 	const opts = {
 		twoFactorTable: "twoFactor",
 	};
@@ -569,6 +569,20 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 		$ERROR_CODES: TWO_FACTOR_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredTwoFactorPlugin<O extends TwoFactorOptions> = ReturnType<
+	typeof createTwoFactorPlugin<O>
+>;
+
+/**
+ * The two-factor plugin instance.
+ */
+export interface TwoFactorPlugin<O extends TwoFactorOptions = TwoFactorOptions>
+	extends InferredTwoFactorPlugin<O> {}
+
+export const twoFactor = <O extends TwoFactorOptions>(
+	options?: O,
+): TwoFactorPlugin<O> => createTwoFactorPlugin(options);
 
 export * from "./client";
 export * from "./types";

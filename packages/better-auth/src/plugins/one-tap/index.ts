@@ -55,7 +55,7 @@ const oneTapCallbackBodySchema = z.object({
 		.optional(),
 });
 
-export const oneTap = (options?: OneTapOptions | undefined) =>
+const createOneTapPlugin = (options?: OneTapOptions | undefined) =>
 	({
 		id: "one-tap",
 		version: PACKAGE_VERSION,
@@ -198,3 +198,13 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 		},
 		options,
 	}) satisfies BetterAuthPlugin;
+
+type InferredOneTapPlugin = ReturnType<typeof createOneTapPlugin>;
+
+/**
+ * The One Tap plugin instance.
+ */
+export interface OneTapPlugin extends InferredOneTapPlugin {}
+
+export const oneTap = (options?: OneTapOptions | undefined): OneTapPlugin =>
+	createOneTapPlugin(options);

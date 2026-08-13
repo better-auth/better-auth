@@ -46,7 +46,10 @@ declare module "@better-auth/core" {
 	}
 }
 
-interface MCPOptions {
+/**
+ * Options for the MCP plugin.
+ */
+export interface MCPOptions {
 	loginPage: string;
 	resource?: string | undefined;
 	oidcConfig?: OIDCOptions | undefined;
@@ -179,7 +182,7 @@ const registerMcpClientBodySchema = z.object({
 
 const mcpOAuthTokenBodySchema = z.record(z.any(), z.any());
 
-export const mcp = (options: MCPOptions) => {
+const createMCPPlugin = (options: MCPOptions) => {
 	const opts = {
 		codeExpiresIn: 600,
 		defaultScope: "openid",
@@ -1055,6 +1058,15 @@ export const mcp = (options: MCPOptions) => {
 		options,
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredMCPPlugin = ReturnType<typeof createMCPPlugin>;
+
+/**
+ * The MCP plugin instance.
+ */
+export interface MCPPlugin extends InferredMCPPlugin {}
+
+export const mcp = (options: MCPOptions): MCPPlugin => createMCPPlugin(options);
 
 export const withMcpAuth = <
 	Auth extends {

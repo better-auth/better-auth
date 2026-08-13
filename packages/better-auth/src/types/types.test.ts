@@ -99,7 +99,7 @@ describe("general types", async () => {
 		expect(twoFactorPlugin).toBeDefined();
 		expect(twoFactorPlugin.id).toBe(id);
 		type TwoFactorPluginFromContext = typeof twoFactorPlugin;
-		expectTypeOf<TwoFactorPluginFromContext>().toMatchObjectType<TwoFactorPlugin>();
+		expectTypeOf<TwoFactorPluginFromContext>().toEqualTypeOf<TwoFactorPlugin>();
 		const testTypePlugin = context.getPlugin("test-type-plugin")!;
 		type PingEndpointFromPlugin = typeof testTypePlugin.endpoints.pingEndpoint;
 		expectTypeOf<PingEndpointFromPlugin>().toEqualTypeOf(pingEndpoint);

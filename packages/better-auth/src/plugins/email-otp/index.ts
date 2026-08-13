@@ -35,7 +35,7 @@ export type { EmailOTPOptions } from "./types";
 const defaultOTPGenerator = (options: EmailOTPOptions) =>
 	generateRandomString(options.otpLength ?? 6, "0-9");
 
-export const emailOTP = (options: EmailOTPOptions) => {
+const createEmailOTPPlugin = (options: EmailOTPOptions) => {
 	const opts = {
 		expiresIn: 5 * 60,
 		generateOTP: () => defaultOTPGenerator(options),
@@ -196,3 +196,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		$ERROR_CODES: EMAIL_OTP_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredEmailOTPPlugin = ReturnType<typeof createEmailOTPPlugin>;
+
+/**
+ * The email OTP plugin instance.
+ */
+export interface EmailOTPPlugin extends InferredEmailOTPPlugin {}
+
+export const emailOTP = (options: EmailOTPOptions): EmailOTPPlugin =>
+	createEmailOTPPlugin(options);

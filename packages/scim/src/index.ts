@@ -28,7 +28,7 @@ declare module "@better-auth/core" {
 	}
 }
 
-export const scim = (options?: SCIMOptions) => {
+const createSCIMPlugin = (options?: SCIMOptions) => {
 	const opts = {
 		storeSCIMToken: "plain",
 		...options,
@@ -92,5 +92,15 @@ export const scim = (options?: SCIMOptions) => {
 		options,
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredSCIMPlugin = ReturnType<typeof createSCIMPlugin>;
+
+/**
+ * The SCIM plugin instance.
+ */
+export interface SCIMPlugin extends InferredSCIMPlugin {}
+
+export const scim = (options?: SCIMOptions): SCIMPlugin =>
+	createSCIMPlugin(options);
 
 export * from "./types";

@@ -53,7 +53,7 @@ const getSiweNonceBodySchema = z
 		path: ["walletAddress"],
 	});
 
-export const siwe = (options: SIWEPluginOptions) => {
+const createSIWEPlugin = (options: SIWEPluginOptions) => {
 	const createSiweNonceEndpoint = (path: "/siwe/nonce" | "/siwe/get-nonce") =>
 		createAuthEndpoint(
 			path,
@@ -396,3 +396,13 @@ export const siwe = (options: SIWEPluginOptions) => {
 		options,
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredSIWEPlugin = ReturnType<typeof createSIWEPlugin>;
+
+/**
+ * The SIWE plugin instance.
+ */
+export interface SIWEPlugin extends InferredSIWEPlugin {}
+
+export const siwe = (options: SIWEPluginOptions): SIWEPlugin =>
+	createSIWEPlugin(options);

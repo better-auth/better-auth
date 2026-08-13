@@ -139,7 +139,7 @@ const oauthCallbackQuerySchema = z.object({
 	user: z.string().optional(),
 });
 
-export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
+const createOAuthProxyPlugin = <O extends OAuthProxyOptions>(opts?: O) => {
 	const maxAge = opts?.maxAge ?? 60; // Default 60 seconds
 	const getEncryptionKey = (
 		ctx: GenericEndpointContext,
@@ -702,3 +702,18 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 		},
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredOAuthProxyPlugin<O extends OAuthProxyOptions> = ReturnType<
+	typeof createOAuthProxyPlugin<O>
+>;
+
+/**
+ * The OAuth proxy plugin instance.
+ */
+export interface OAuthProxyPlugin<
+	O extends OAuthProxyOptions = OAuthProxyOptions,
+> extends InferredOAuthProxyPlugin<O> {}
+
+export const oAuthProxy = <O extends OAuthProxyOptions>(
+	opts?: O,
+): OAuthProxyPlugin<O> => createOAuthProxyPlugin(opts);

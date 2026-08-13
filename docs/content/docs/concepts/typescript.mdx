@@ -31,9 +31,10 @@ if you can't set `strict` to `true`, you can enable `strictNullChecks`:
 
 When `strict` is `true`, `strictNullChecks` is enabled as well. If you explicitly set `strictNullChecks` to `false`, type inference issues could occur.
 
-<Callout type="warn">
-  If you're running into issues with TypeScript inference exceeding maximum length the compiler will serialize,
-  then please make sure you're following the instructions above, as well as ensuring that both `declaration` and `composite` are not enabled.
+<Callout type="info">
+  Better Auth supports projects that enable `declaration` or `composite`. If you publish a custom plugin,
+  expose a named plugin type as shown in the <Link href="/docs/guides/your-first-plugin">plugin guide</Link>
+  so generated declarations remain portable.
 </Callout>
 
 ## Inferring Types

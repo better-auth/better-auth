@@ -126,7 +126,7 @@ export type DeviceAuthorizationOptions = z.infer<
 	typeof deviceAuthorizationOptionsSchema
 >;
 
-export const deviceAuthorization = (
+const createDeviceAuthorizationPlugin = (
 	options: Partial<DeviceAuthorizationOptions> = {},
 ) => {
 	const opts = deviceAuthorizationOptionsSchema.parse(options);
@@ -146,5 +146,19 @@ export const deviceAuthorization = (
 		options,
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredDeviceAuthorizationPlugin = ReturnType<
+	typeof createDeviceAuthorizationPlugin
+>;
+
+/**
+ * The device authorization plugin instance.
+ */
+export interface DeviceAuthorizationPlugin
+	extends InferredDeviceAuthorizationPlugin {}
+
+export const deviceAuthorization = (
+	options: Partial<DeviceAuthorizationOptions> = {},
+): DeviceAuthorizationPlugin => createDeviceAuthorizationPlugin(options);
 
 export type * from "../../utils/time";

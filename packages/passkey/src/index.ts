@@ -30,7 +30,7 @@ export { PASSKEY_ERROR_CODES } from "./error-codes";
 
 const MAX_AGE_IN_SECONDS = 60 * 5; // 5 minutes
 
-export const passkey = (options?: PasskeyOptions | undefined) => {
+const createPasskeyPlugin = (options?: PasskeyOptions | undefined) => {
 	const opts = {
 		origin: null,
 		...options,
@@ -63,5 +63,15 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 		options,
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredPasskeyPlugin = ReturnType<typeof createPasskeyPlugin>;
+
+/**
+ * The Passkey plugin instance.
+ */
+export interface PasskeyPlugin extends InferredPasskeyPlugin {}
+
+export const passkey = (options?: PasskeyOptions | undefined): PasskeyPlugin =>
+	createPasskeyPlugin(options);
 
 export type { Passkey, PasskeyOptions };

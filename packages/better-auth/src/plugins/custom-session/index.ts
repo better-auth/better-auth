@@ -33,17 +33,25 @@ export type CustomSessionPluginOptions = {
 	shouldMutateListDeviceSessionsEndpoint?: boolean | undefined;
 };
 
-export const customSession = <
-	Returns extends Record<string, any>,
+/**
+ * Transforms the default session returned by the custom session plugin.
+ */
+export type CustomSessionHandler<
+	Result extends object,
+	O extends BetterAuthOptions = BetterAuthOptions,
+> = (
+	session: {
+		user: User<O["user"], O["plugins"]>;
+		session: Session<O["session"], O["plugins"]>;
+	},
+	ctx: GenericEndpointContext,
+) => Promise<Result>;
+
+const createCustomSessionPlugin = <
+	Result extends object,
 	O extends BetterAuthOptions = BetterAuthOptions,
 >(
-	fn: (
-		session: {
-			user: User<O["user"], O["plugins"]>;
-			session: Session<O["session"], O["plugins"]>;
-		},
-		ctx: GenericEndpointContext,
-	) => Promise<Returns>,
+	fn: CustomSessionHandler<Result, O>,
 	options?: O | undefined,
 	pluginOptions?: CustomSessionPluginOptions | undefined,
 ) => {
@@ -97,7 +105,7 @@ export const customSession = <
 					},
 					requireHeaders: true,
 				},
-				async (ctx): Promise<Returns | null> => {
+				async (ctx): Promise<Result | null> => {
 					const session = await getSession()({
 						...ctx,
 						method: "GET",
@@ -110,7 +118,10 @@ export const customSession = <
 					if (!session?.response) {
 						return ctx.json(null);
 					}
-					const fnResult = await fn(session.response as any, ctx);
+					const fnResult = await fn(
+						session.response as Parameters<typeof fn>[0],
+						ctx,
+					);
 
 					for (const cookieStr of session.headers.getSetCookie()) {
 						const parsed = parseSetCookieHeader(cookieStr);
@@ -133,3 +144,26 @@ export const customSession = <
 		options: pluginOptions,
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredCustomSessionPlugin<
+	Result extends object,
+	O extends BetterAuthOptions,
+> = ReturnType<typeof createCustomSessionPlugin<Result, O>>;
+
+/**
+ * The custom session plugin instance.
+ */
+export interface CustomSessionPlugin<
+	Result extends object,
+	O extends BetterAuthOptions = BetterAuthOptions,
+> extends InferredCustomSessionPlugin<Result, O> {}
+
+export const customSession = <
+	Result extends object,
+	O extends BetterAuthOptions = BetterAuthOptions,
+>(
+	fn: CustomSessionHandler<Result, O>,
+	options?: O | undefined,
+	pluginOptions?: CustomSessionPluginOptions | undefined,
+): CustomSessionPlugin<Result, O> =>
+	createCustomSessionPlugin(fn, options, pluginOptions);

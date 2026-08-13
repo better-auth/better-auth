@@ -40,30 +40,7 @@ function parseAcceptLanguage(header: string | null): string[] {
 		.map((item) => item.locale);
 }
 
-/**
- * i18n plugin for Better Auth
- *
- * Translates error messages based on detected locale.
- *
- * @example
- * ```ts
- * import { betterAuth } from "better-auth";
- * import { i18n } from "@better-auth/i18n";
- *
- * export const auth = betterAuth({
- *   plugins: [
- *     i18n({
- *       translations: {
- *         en: { USER_NOT_FOUND: "User not found" },
- *         fr: { USER_NOT_FOUND: "Utilisateur non trouvé" },
- *       },
- *       detection: ["header", "cookie"],
- *     }),
- *   ],
- * });
- * ```
- */
-export const i18n = <Locales extends string[]>(
+const createI18nPlugin = <Locales extends string[]>(
 	options: I18nOptions<Locales>,
 ) => {
 	const availableLocales = Object.keys(options.translations);
@@ -188,5 +165,42 @@ export const i18n = <Locales extends string[]>(
 		options: opts,
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredI18nPlugin<Locales extends string[]> = ReturnType<
+	typeof createI18nPlugin<Locales>
+>;
+
+/**
+ * The internationalization plugin instance.
+ */
+export interface I18nPlugin<Locales extends string[] = string[]>
+	extends InferredI18nPlugin<Locales> {}
+
+/**
+ * i18n plugin for Better Auth
+ *
+ * Translates error messages based on detected locale.
+ *
+ * @example
+ * ```ts
+ * import { betterAuth } from "better-auth";
+ * import { i18n } from "@better-auth/i18n";
+ *
+ * export const auth = betterAuth({
+ *   plugins: [
+ *     i18n({
+ *       translations: {
+ *         en: { USER_NOT_FOUND: "User not found" },
+ *         fr: { USER_NOT_FOUND: "Utilisateur non trouvé" },
+ *       },
+ *       detection: ["header", "cookie"],
+ *     }),
+ *   ],
+ * });
+ * ```
+ */
+export const i18n = <Locales extends string[]>(
+	options: I18nOptions<Locales>,
+): I18nPlugin<Locales> => createI18nPlugin(options);
 
 export type * from "./types";

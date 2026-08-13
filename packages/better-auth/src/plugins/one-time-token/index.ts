@@ -74,7 +74,9 @@ const verifyOneTimeTokenBodySchema = z.object({
 	}),
 });
 
-export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
+const createOneTimeTokenPlugin = (
+	options?: OneTimeTokenOptions | undefined,
+) => {
 	const opts = {
 		storeToken: "plain",
 		...options,
@@ -244,3 +246,14 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 		options,
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredOneTimeTokenPlugin = ReturnType<typeof createOneTimeTokenPlugin>;
+
+/**
+ * The one-time token plugin instance.
+ */
+export interface OneTimeTokenPlugin extends InferredOneTimeTokenPlugin {}
+
+export const oneTimeToken = (
+	options?: OneTimeTokenOptions | undefined,
+): OneTimeTokenPlugin => createOneTimeTokenPlugin(options);

@@ -12,16 +12,19 @@ import type { ResourceServerMetadata } from "./types/oauth";
 import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
-type ResourceClientAuth = {
+/**
+ * An auth instance usable by the OAuth provider resource client plugin.
+ */
+export interface OAuthProviderResourceClientAuth {
 	options: {
 		baseURL?: BetterAuthOptions["baseURL"];
 		basePath?: BetterAuthOptions["basePath"];
 	};
 	$context: Promise<unknown>;
-};
+}
 
-export const oauthProviderResourceClient = <
-	T extends ResourceClientAuth | undefined = undefined,
+const createOAuthProviderResourceClient = <
+	T extends OAuthProviderResourceClientAuth | undefined = undefined,
 >(
 	auth?: T,
 ) => {
@@ -216,6 +219,24 @@ export const oauthProviderResourceClient = <
 		},
 	} satisfies BetterAuthClientPlugin;
 };
+
+type InferredOAuthProviderResourceClientPlugin<
+	T extends OAuthProviderResourceClientAuth | undefined,
+> = ReturnType<typeof createOAuthProviderResourceClient<T>>;
+
+/**
+ * The OAuth provider resource client plugin instance.
+ */
+export interface OAuthProviderResourceClientPlugin<
+	T extends OAuthProviderResourceClientAuth | undefined = undefined,
+> extends InferredOAuthProviderResourceClientPlugin<T> {}
+
+export const oauthProviderResourceClient = <
+	T extends OAuthProviderResourceClientAuth | undefined = undefined,
+>(
+	auth?: T,
+): OAuthProviderResourceClientPlugin<T> =>
+	createOAuthProviderResourceClient(auth);
 
 export interface VerifyAccessTokenRemote {
 	/** Full url of the introspect endpoint. Should end with `/oauth2/introspect` */

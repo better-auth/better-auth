@@ -121,7 +121,7 @@ const isUsernameAvailableBodySchema = z.object({
 	}),
 });
 
-export const username = (options?: UsernameOptions | undefined) => {
+const createUsernamePlugin = (options?: UsernameOptions | undefined) => {
 	const normalizer = (username: string) => {
 		if (options?.usernameNormalization === false) {
 			return username;
@@ -727,3 +727,14 @@ export const username = (options?: UsernameOptions | undefined) => {
 		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredUsernamePlugin = ReturnType<typeof createUsernamePlugin>;
+
+/**
+ * The username plugin instance.
+ */
+export interface UsernamePlugin extends InferredUsernamePlugin {}
+
+export const username = (
+	options?: UsernameOptions | undefined,
+): UsernamePlugin => createUsernamePlugin(options);
