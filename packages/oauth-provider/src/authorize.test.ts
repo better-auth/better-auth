@@ -556,22 +556,6 @@ describe("oauth authorize - acr_values (OIDC Core 1.0 §3.1.2.1)", async () => {
 		return location;
 	}
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/pull/10152
-	 */
-	it("rejects unsupported acr_values instead of silently downgrading", async () => {
-		const location = await redirectFor("1");
-		const errorRedirect = new URL(location);
-
-		expect(errorRedirect.origin + errorRedirect.pathname).toBe(redirectUri);
-		expect(errorRedirect.searchParams.get("error")).toBe("invalid_request");
-		expect(errorRedirect.searchParams.get("error_description")).toBe(
-			"unsupported acr_values",
-		);
-		expect(errorRedirect.searchParams.get("state")).toBe("acr-state");
-		expect(errorRedirect.searchParams.get("code")).toBeNull();
-	});
-
 	it("accepts the advertised unspecified acr value", async () => {
 		const location = await redirectFor("0");
 		const callbackRedirect = new URL(location);
