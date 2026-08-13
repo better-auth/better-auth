@@ -67,13 +67,6 @@ function removeMaxAgeFromAuthorizationQuery(
 	return queryWithoutMaxAge;
 }
 
-function removeClaimsFromAuthorizationQuery(
-	query: OAuthAuthorizationQuery,
-): OAuthAuthorizationQuery {
-	const { claims: _claims, ...queryWithoutClaims } = query;
-	return queryWithoutClaims;
-}
-
 /**
  * Formats an error url. Per OIDC Core 1.0 §5 / RFC 6749 §4.2.2.1, errors on
  * implicit and hybrid flows are delivered in the URL fragment, not the query.
@@ -549,6 +542,18 @@ export async function authorizeEndpoint(
 		query.scope = requestedScopes.join(" ");
 	}
 	const openidRequested = requestedScopes.includes("openid");
+	if (query.claims !== undefined && !openidRequested) {
+		return handleRedirect(
+			ctx,
+			formatErrorURL(
+				query.redirect_uri,
+				"invalid_request",
+				"openid scope must be requested when using the claims parameter",
+				query.state,
+				getIssuer(ctx, opts),
+			),
+		);
+	}
 	if (openidRequested && !isValidOidcClaimsRequest(query.claims)) {
 		return handleRedirect(
 			ctx,
@@ -560,10 +565,6 @@ export async function authorizeEndpoint(
 				getIssuer(ctx, opts),
 			),
 		);
-	}
-	if (!openidRequested && query.claims !== undefined) {
-		query = removeClaimsFromAuthorizationQuery(query);
-		ctx.query = query;
 	}
 	if (
 		openidRequested &&

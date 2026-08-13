@@ -3,10 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { sessionMiddleware } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
-import {
-	createAuthorizationURL,
-	generateCodeChallenge,
-} from "better-auth/oauth2";
+import { createAuthorizationURL } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -625,43 +622,17 @@ describe("oauth authorize - ACR requests", async () => {
 		it.each([
 			{ essential: true, value: "1" },
 			{ essential: true, value: 1 },
-		])("ignores claims in OAuth-only requests", async (request) => {
-			if (!oauthClient?.client_id || !oauthClient.client_secret) {
-				throw new Error("beforeAll not run properly");
-			}
-			const codeVerifier = generateRandomString(43);
-			const codeChallenge = await generateCodeChallenge(codeVerifier);
-			const location = await redirectFor(
-				undefined,
-				request,
-				"profile",
-				codeChallenge,
-			);
+		])("rejects claims in OAuth-only requests", async (request) => {
+			const location = await redirectFor(undefined, request, "profile");
 			const callbackRedirect = new URL(location);
-			const code = callbackRedirect.searchParams.get("code");
 
-			expect(callbackRedirect.searchParams.get("error")).toBeNull();
-			if (!code) throw new Error("authorization code not issued");
-
-			const tokenResponse = await authenticatedClient.$fetch<{
-				access_token: string;
-			}>("/oauth2/token", {
-				method: "POST",
-				body: new URLSearchParams({
-					grant_type: "authorization_code",
-					code,
-					code_verifier: codeVerifier,
-					redirect_uri: redirectUri,
-				}),
-				headers: {
-					authorization: `Basic ${Buffer.from(
-						`${oauthClient.client_id}:${oauthClient.client_secret}`,
-					).toString("base64")}`,
-				},
-			});
-
-			expect(tokenResponse.error).toBeNull();
-			expect(tokenResponse.data?.access_token).toEqual(expect.any(String));
+			expect(callbackRedirect.searchParams.get("error")).toBe(
+				"invalid_request",
+			);
+			expect(callbackRedirect.searchParams.get("error_description")).toBe(
+				"openid scope must be requested when using the claims parameter",
+			);
+			expect(callbackRedirect.searchParams.get("code")).toBeNull();
 		});
 
 		it("accepts the current ACR in an essential values request", async () => {
