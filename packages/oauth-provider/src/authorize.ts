@@ -549,6 +549,18 @@ export async function authorizeEndpoint(
 		query.scope = requestedScopes.join(" ");
 	}
 	const openidRequested = requestedScopes.includes("openid");
+	if (query.claims !== undefined && !openidRequested) {
+		return handleRedirect(
+			ctx,
+			formatErrorURL(
+				query.redirect_uri,
+				"invalid_request",
+				"openid scope must be requested when using the claims parameter",
+				query.state,
+				getIssuer(ctx, opts),
+			),
+		);
+	}
 	if (openidRequested && !isValidOidcClaimsRequest(query.claims)) {
 		return handleRedirect(
 			ctx,
