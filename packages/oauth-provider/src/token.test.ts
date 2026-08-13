@@ -4602,6 +4602,8 @@ describe("oauth token - DPoP", async () => {
 	const jwtResource = "https://dpop-api.example.com";
 	const dpopRequiredResource = "https://dpop-required.example.com";
 	const tokenEndpoint = `${authServerBaseUrl}/api/auth/oauth2/token`;
+	const internalTokenEndpoint =
+		"http://auth-service:3000/api/auth/oauth2/token";
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: `${authServerBaseUrl}/api/auth/`,
@@ -4774,39 +4776,55 @@ describe("oauth token - DPoP", async () => {
 
 	it("validates DPoP against the public token endpoint URL", async () => {
 		const dpopKey = await createDpopKey();
-		const { code, codeVerifier } = await authorizeForCode(
-			dpopKey.jkt,
-			jwtResource,
-		);
-		const proof = await createDpopProof({
-			privateKey: dpopKey.privateKey,
-			publicJwk: dpopKey.publicJwk,
-			method: "POST",
-			url: tokenEndpoint,
-			jti: "public-endpoint-proof",
-		});
-		const { body, headers: requestHeaders } = await authorizationCodeRequest({
-			code,
-			codeVerifier,
-			redirectURI: redirectUri,
-			resource: jwtResource,
-			options: {
-				clientId: oauthClient!.client_id,
-				clientSecret: oauthClient!.client_secret!,
+
+		async function requestTokenWithProofUrl(proofUrl: string, jti: string) {
+			const { code, codeVerifier } = await authorizeForCode(
+				dpopKey.jkt,
+				jwtResource,
+			);
+			const proof = await createDpopProof({
+				privateKey: dpopKey.privateKey,
+				publicJwk: dpopKey.publicJwk,
+				method: "POST",
+				url: proofUrl,
+				jti,
+			});
+			const { body, headers: requestHeaders } = await authorizationCodeRequest({
+				code,
+				codeVerifier,
 				redirectURI: redirectUri,
-			},
-		});
-		const headers = new Headers(requestHeaders);
-		headers.set("DPoP", proof);
+				resource: jwtResource,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+			});
+			const headers = new Headers(requestHeaders);
+			headers.set("DPoP", proof);
 
-		const response = await customFetchImpl(
-			"http://auth-service:3000/api/auth/oauth2/token",
-			{ method: "POST", body, headers },
+			const response = await customFetchImpl(internalTokenEndpoint, {
+				method: "POST",
+				body,
+				headers,
+			});
+			const tokens: OAuthTokenResponse = await response.json();
+			return { response, tokens };
+		}
+
+		const publicRequest = await requestTokenWithProofUrl(
+			tokenEndpoint,
+			"public-endpoint-proof",
 		);
-		const tokens: OAuthTokenResponse = await response.json();
+		expect(publicRequest.response.status).toBe(200);
+		expect(publicRequest.tokens.token_type).toBe("DPoP");
 
-		expect(response.status).toBe(200);
-		expect(tokens.token_type).toBe("DPoP");
+		const internalRequest = await requestTokenWithProofUrl(
+			internalTokenEndpoint,
+			"internal-endpoint-proof",
+		);
+		expect(internalRequest.response.status).toBe(400);
+		expect(internalRequest.tokens.error).toBe("invalid_dpop_proof");
 	});
 
 	it("rejects a token request without a proof when the resource requires DPoP", async () => {
