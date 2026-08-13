@@ -1,6 +1,6 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { PACKAGE_VERSION } from "../../version";
-import type { oidcProvider } from ".";
+import type { OIDCProviderPlugin } from ".";
 
 /**
  * @deprecated Use `@better-auth/oauth-provider` instead. This plugin will be removed in the next major version.
@@ -10,10 +10,11 @@ export const oidcClient = () => {
 	return {
 		id: "oidc-client",
 		version: PACKAGE_VERSION,
-		$InferServerPlugin: {} as ReturnType<typeof oidcProvider>,
+		$InferServerPlugin: {} as OIDCProviderPlugin,
 	} satisfies BetterAuthClientPlugin;
 };
 
 export type OidcClientPlugin = ReturnType<typeof oidcClient>;
 
+export type { OIDCProviderPlugin } from ".";
 export type * from "./types";

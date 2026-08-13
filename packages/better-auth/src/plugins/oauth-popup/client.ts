@@ -6,7 +6,7 @@ import type {
 import type { BetterFetch, BetterFetchPlugin } from "@better-fetch/fetch";
 import { getBaseURL } from "../../utils/url";
 import { PACKAGE_VERSION } from "../../version";
-import type { oauthPopup } from ".";
+import type { OAuthPopupPlugin } from ".";
 import { OAUTH_POPUP_MESSAGE_TYPE, POPUP_TOKEN_STORAGE_KEY } from "./constants";
 import { OAUTH_POPUP_ERROR_CODES } from "./error-codes";
 import type { OAuthPopupError } from "./types";
@@ -342,7 +342,7 @@ export const oauthPopupClient = () => {
 	return {
 		id: "oauth-popup",
 		version: PACKAGE_VERSION,
-		$InferServerPlugin: {} as ReturnType<typeof oauthPopup>,
+		$InferServerPlugin: {} as OAuthPopupPlugin,
 		$ERROR_CODES: OAUTH_POPUP_ERROR_CODES,
 		fetchPlugins: [popupBearerFetchPlugin],
 		getActions: (
@@ -361,5 +361,6 @@ export const oauthPopupClient = () => {
 	} satisfies BetterAuthClientPlugin;
 };
 
+export type { OAuthPopupPlugin } from ".";
 export { POPUP_TOKEN_STORAGE_KEY } from "./constants";
 export { OAUTH_POPUP_ERROR_CODES } from "./error-codes";

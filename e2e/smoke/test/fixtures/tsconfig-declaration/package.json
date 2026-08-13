@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --project tsconfig.json"
+    "typecheck": "tsc --build tsconfig.json --force"
   },
   "dependencies": {
     "@better-auth/api-key": "workspace:*",

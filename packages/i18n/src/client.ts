@@ -1,5 +1,5 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import type { i18n } from ".";
+import type { I18nPlugin } from ".";
 import { PACKAGE_VERSION } from "./version";
 
 /**
@@ -23,6 +23,8 @@ export const i18nClient = () => {
 	return {
 		id: "i18n",
 		version: PACKAGE_VERSION,
-		$InferServerPlugin: {} as ReturnType<typeof i18n>,
+		$InferServerPlugin: {} as I18nPlugin,
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type { I18nPlugin } from ".";

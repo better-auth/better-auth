@@ -3,7 +3,7 @@ import { PACKAGE_VERSION } from "../../version";
 import type { AccessControl, ArrayElement, Role } from "../access";
 import type { defaultStatements } from "./access";
 import { adminAc, userAc } from "./access";
-import type { admin } from "./admin";
+import type { AdminPlugin } from "./admin";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { hasPermission } from "./has-permission";
 
@@ -44,19 +44,17 @@ export const adminClient = <O extends AdminClientOptions>(
 	return {
 		id: "admin-client",
 		version: PACKAGE_VERSION,
-		$InferServerPlugin: {} as ReturnType<
-			typeof admin<{
-				ac: O["ac"] extends AccessControl
-					? O["ac"]
-					: AccessControl<DefaultStatements>;
-				roles: O["roles"] extends Record<string, Role>
-					? O["roles"]
-					: {
-							admin: Role;
-							user: Role;
-						};
-			}>
-		>,
+		$InferServerPlugin: {} as AdminPlugin<{
+			ac: O["ac"] extends AccessControl
+				? O["ac"]
+				: AccessControl<DefaultStatements>;
+			roles: O["roles"] extends Record<string, Role>
+				? O["roles"]
+				: {
+						admin: Role;
+						user: Role;
+					};
+		}>,
 		getActions: () => ({
 			admin: {
 				checkRolePermission: <
@@ -97,4 +95,5 @@ export const adminClient = <O extends AdminClientOptions>(
 	} satisfies BetterAuthClientPlugin;
 };
 
+export type { AdminPlugin } from "./admin";
 export type * from "./types";

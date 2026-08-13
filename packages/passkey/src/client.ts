@@ -22,7 +22,7 @@ import type {
 import { useAuthQuery } from "better-auth/client";
 import type { Session, User } from "better-auth/types";
 import { atom } from "nanostores";
-import type { passkey } from ".";
+import type { PasskeyPlugin } from ".";
 import { PASSKEY_ERROR_CODES } from "./error-codes";
 import type { Passkey } from "./types";
 import { PACKAGE_VERSION } from "./version";
@@ -307,7 +307,7 @@ export const passkeyClient = () => {
 	return {
 		id: "passkey",
 		version: PACKAGE_VERSION,
-		$InferServerPlugin: {} as ReturnType<typeof passkey>,
+		$InferServerPlugin: {} as PasskeyPlugin,
 		getActions: ($fetch, $store) =>
 			getPasskeyActions($fetch, {
 				$listPasskeys,
@@ -353,5 +353,6 @@ export const passkeyClient = () => {
 };
 
 export type * from "@simplewebauthn/server";
+export type { PasskeyPlugin } from ".";
 export * from "./error-codes";
 export type * from "./types";

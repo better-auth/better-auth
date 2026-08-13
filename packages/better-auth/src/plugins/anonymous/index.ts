@@ -356,4 +356,5 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 	} satisfies BetterAuthPlugin;
 };
 
+export type AnonymousPlugin = ReturnType<typeof anonymous>;
 export type * from "./types";

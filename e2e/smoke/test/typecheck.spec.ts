@@ -39,7 +39,6 @@ function assertPublicPluginType(
 }
 
 for (const dir of [
-	"tsconfig-composite-client",
 	"tsconfig-exact-optional-property-types",
 	"tsconfig-verbatim-module-syntax-node10",
 	"tsconfig-isolated-module-bundler",
@@ -49,6 +48,25 @@ for (const dir of [
 	});
 }
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10789
+ */
+test("emits portable client plugin types in composite declarations", () => {
+	const cwd = runTypecheckFixture("tsconfig-composite-client");
+	const declaration = readFileSync(
+		resolve(cwd, ".tsc/app/lib/auth-client.d.ts"),
+		"utf8",
+	);
+	assertPublicPluginType(
+		declaration,
+		"better-auth/client/plugins",
+		"AdminPlugin",
+	);
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10789
+ */
 test("emits portable public plugin types in declarations", () => {
 	const cwd = runTypecheckFixture("tsconfig-declaration");
 	const apiKeyDeclaration = readFileSync(
@@ -114,4 +132,43 @@ test("emits portable public plugin types in declarations", () => {
 	for (const [moduleName, pluginType] of externalPluginTypes) {
 		assertPublicPluginType(indexDeclaration, moduleName, pluginType);
 	}
+
+	const clientDeclaration = readFileSync(
+		resolve(cwd, "dist/client.d.ts"),
+		"utf8",
+	);
+	const clientPluginTypes = [
+		["better-auth/plugins", "AdminPlugin"],
+		["better-auth/plugins", "AnonymousPlugin"],
+		["better-auth/plugins", "DeviceAuthorizationPlugin"],
+		["better-auth/plugins", "EmailOTPPlugin"],
+		["better-auth/plugins", "GenericOAuthPlugin"],
+		["better-auth/plugins", "JwtPlugin"],
+		["better-auth/plugins", "MagicLinkPlugin"],
+		["better-auth/plugins", "MultiSessionPlugin"],
+		["better-auth/plugins", "OAuthPopupPlugin"],
+		["better-auth/plugins", "OIDCProviderPlugin"],
+		["better-auth/plugins", "OneTimeTokenPlugin"],
+		["better-auth/plugins", "OrganizationPlugin"],
+		["better-auth/plugins", "PhoneNumberPlugin"],
+		["better-auth/plugins", "SIWEPlugin"],
+		["better-auth/plugins", "TwoFactorPlugin"],
+		["better-auth/plugins", "UsernamePlugin"],
+		["@better-auth/api-key", "ApiKeyPlugin"],
+		["@better-auth/electron", "ElectronPlugin"],
+		["@better-auth/i18n", "I18nPlugin"],
+		["@better-auth/oauth-provider", "OAuthProviderPlugin"],
+		["@better-auth/passkey", "PasskeyPlugin"],
+		["@better-auth/scim", "SCIMPlugin"],
+		["@better-auth/sso", "SSOPlugin"],
+		["@better-auth/stripe", "StripePlugin"],
+	] as const;
+	for (const [moduleName, pluginType] of clientPluginTypes) {
+		assertPublicPluginType(clientDeclaration, moduleName, pluginType);
+	}
+	assert.doesNotMatch(
+		clientDeclaration,
+		/node_modules|\.pnpm|\/dist\/|-[A-Za-z0-9_-]{6,}\.mjs/,
+		"Client declarations should not reference installation or build internals",
+	);
 });

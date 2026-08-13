@@ -1,7 +1,7 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { isSafeUrlScheme } from "@better-auth/core/utils/url";
 import { PACKAGE_VERSION } from "../../version";
-import type { twoFactor as twoFa } from ".";
+import type { TwoFactorPlugin } from ".";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 
 export * from "./error-code";
@@ -37,7 +37,7 @@ export const twoFactorClient = (
 	return {
 		id: "two-factor",
 		version: PACKAGE_VERSION,
-		$InferServerPlugin: {} as ReturnType<typeof twoFa>,
+		$InferServerPlugin: {} as TwoFactorPlugin,
 		atomListeners: [
 			{
 				matcher: (path) => path.startsWith("/two-factor/"),
@@ -85,6 +85,7 @@ export const twoFactorClient = (
 	} satisfies BetterAuthClientPlugin;
 };
 
+export type { TwoFactorPlugin } from ".";
 export type * from "./backup-codes";
 export type * from "./otp";
 export type * from "./totp";

@@ -1,5 +1,5 @@
 import type { BetterAuthClientPlugin } from "better-auth/client";
-import type { SSOPlugin } from "./index";
+import type { SSOPlugin } from ".";
 import { PACKAGE_VERSION } from "./version";
 
 interface SSOClientOptions {
@@ -29,3 +29,5 @@ export const ssoClient = <CO extends SSOClientOptions>(
 		},
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type { SSOPlugin } from ".";

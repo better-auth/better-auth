@@ -1,6 +1,6 @@
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { BetterAuthClientPlugin } from "better-auth/types";
-import type { oauthProvider } from "./oauth";
+import type { OAuthProviderPlugin } from "./oauth";
 import { buildSignedOAuthQuery } from "./signed-query";
 import { PACKAGE_VERSION } from "./version";
 
@@ -38,6 +38,9 @@ export const oauthProviderClient = () => {
 				},
 			},
 		],
-		$InferServerPlugin: {} as ReturnType<typeof oauthProvider>,
+		$InferServerPlugin: {} as OAuthProviderPlugin,
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type { OAuthProviderPlugin } from "./oauth";
+export type { OAuthOptions, Scope } from "./types";
