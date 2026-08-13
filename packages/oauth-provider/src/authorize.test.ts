@@ -500,6 +500,12 @@ describe("oauth authorize - max_age (OIDC Core 1.0 §3.1.2.1)", async () => {
 });
 
 describe("oauth authorize - acr_values (OIDC Core 1.0 §3.1.2.1)", async () => {
+	type AcrClaimRequest = {
+		essential: true;
+		value?: string;
+		values?: string[];
+	};
+
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
@@ -532,7 +538,7 @@ describe("oauth authorize - acr_values (OIDC Core 1.0 §3.1.2.1)", async () => {
 		});
 	});
 
-	function authorizeUrl(acrValues: string) {
+	function authorizeUrl(acrValues: string, acrClaim?: AcrClaimRequest) {
 		if (!oauthClient?.client_id) throw new Error("beforeAll not run properly");
 		const url = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
 		url.searchParams.set("client_id", oauthClient.client_id);
@@ -543,12 +549,18 @@ describe("oauth authorize - acr_values (OIDC Core 1.0 §3.1.2.1)", async () => {
 		url.searchParams.set("code_challenge", generateRandomString(43));
 		url.searchParams.set("code_challenge_method", "S256");
 		url.searchParams.set("acr_values", acrValues);
+		if (acrClaim) {
+			url.searchParams.set(
+				"claims",
+				JSON.stringify({ id_token: { acr: acrClaim } }),
+			);
+		}
 		return url.toString();
 	}
 
-	async function redirectFor(acrValues: string) {
+	async function redirectFor(acrValues: string, acrClaim?: AcrClaimRequest) {
 		let location = "";
-		await authenticatedClient.$fetch(authorizeUrl(acrValues), {
+		await authenticatedClient.$fetch(authorizeUrl(acrValues, acrClaim), {
 			onError(context) {
 				location = context.response.headers.get("Location") || "";
 			},
@@ -556,7 +568,7 @@ describe("oauth authorize - acr_values (OIDC Core 1.0 §3.1.2.1)", async () => {
 		return location;
 	}
 
-	it("accepts the advertised unspecified acr value", async () => {
+	it("accepts the advertised level 0 ACR value", async () => {
 		const location = await redirectFor("0");
 		const callbackRedirect = new URL(location);
 
@@ -565,6 +577,34 @@ describe("oauth authorize - acr_values (OIDC Core 1.0 §3.1.2.1)", async () => {
 		);
 		expect(callbackRedirect.searchParams.get("code")).toBeTruthy();
 		expect(callbackRedirect.searchParams.get("error")).toBeNull();
+	});
+
+	it.each<[string, AcrClaimRequest]>([
+		["value", { essential: true, value: "1" }],
+		["values", { essential: true, values: ["1"] }],
+	])("rejects an unsupported essential ACR %s", async (_, request) => {
+		const location = await redirectFor("1", request);
+		const callbackRedirect = new URL(location);
+
+		expect(callbackRedirect.origin + callbackRedirect.pathname).toBe(
+			redirectUri,
+		);
+		expect(callbackRedirect.searchParams.get("error")).toBe("access_denied");
+		expect(callbackRedirect.searchParams.get("state")).toBe("acr-state");
+		expect(callbackRedirect.searchParams.get("code")).toBeNull();
+	});
+
+	it("accepts the current ACR in an essential values request", async () => {
+		const location = await redirectFor("1", {
+			essential: true,
+			values: ["1", "0"],
+		});
+		const callbackRedirect = new URL(location);
+
+		expect(callbackRedirect.searchParams.get("error")).toBeNull();
+		expect(callbackRedirect.searchParams.get("code")).toEqual(
+			expect.any(String),
+		);
 	});
 
 	it("accepts multiple requested acr values when one is supported", async () => {
