@@ -1,10 +1,12 @@
 import type {
+	BetterAuthClientOptions,
 	BetterAuthClientPlugin,
 	ClientFetchOption,
 	ClientStore,
 } from "@better-auth/core";
 import type { Session, User } from "@better-auth/core/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import type { BetterFetch } from "@better-fetch/fetch";
 import {
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
@@ -370,7 +372,11 @@ export const expoClient = (opts: ExpoClientOptions) => {
 	return {
 		id: "expo",
 		version: PACKAGE_VERSION,
-		getActions(_, $store) {
+		getActions(
+			_$fetch: BetterFetch,
+			$store: ClientStore,
+			_options: BetterAuthClientOptions | undefined,
+		) {
 			store = $store;
 			// Restore the last persisted session as the initial value of the session atom
 			const sessionAtom = $store.atoms.session;

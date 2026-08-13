@@ -1,8 +1,18 @@
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "better-auth/api";
+import { createAuthClient } from "better-auth/client";
 import { magicLinkClient } from "better-auth/client/plugins";
 import { magicLink, oAuthProxy } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+	afterAll,
+	beforeAll,
+	describe,
+	expect,
+	expectTypeOf,
+	it,
+	vi,
+} from "vitest";
 import { expo } from "../src";
 import { expoClient, storageAdapter } from "../src/client";
 
@@ -1540,5 +1550,32 @@ describe("expo authorization proxy", async () => {
 			"https://accounts.google.com/o/oauth2/v2/auth?client_id=x&state=abc";
 		const res = await proxy(target);
 		expect(res.headers.get("location")).toBe(target);
+	});
+});
+
+/**
+ * Declaration emit previously left `getActions`'s parameters un-annotated.
+ * With no import of `BetterFetch` in the file, emit had no name to reference
+ * and inlined `import("@better-fetch/fetch").BetterFetch` instead - a form not
+ * assignable to `BetterAuthClientPlugin`'s `getActions`, so `expoClient()`
+ * failed `createAuthClient`'s check and the client lost `getCookie` along with
+ * every other plugin's actions.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10767
+ */
+describe("expoClient types", () => {
+	const storage = {
+		getItem: () => null,
+		setItem: () => undefined,
+	};
+
+	it("should be assignable to BetterAuthClientPlugin", () => {
+		const plugin: BetterAuthClientPlugin = expoClient({ storage });
+		expect(plugin.id).toBe("expo");
+	});
+
+	it("should preserve the getCookie client action", () => {
+		const client = createAuthClient({ plugins: [expoClient({ storage })] });
+		expectTypeOf(client.getCookie).toBeFunction();
 	});
 });
