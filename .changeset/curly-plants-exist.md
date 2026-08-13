@@ -2,4 +2,5 @@
 "better-auth": minor
 ---
 
-Introduces the functionality to disable `displayName` from the username plugin.
+Allow the username plugin's separate `displayUsername` field to be omitted by
+setting `displayUsername: false` on both the server and client plugins.

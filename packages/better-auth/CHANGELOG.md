@@ -8,7 +8,7 @@
 
   The OAuth integration replaces the optional `resource` column with `oauthClientId` and `resources`. Regenerate and apply the schema when using it. Before upgrading from an earlier 1.7 prerelease, let pending OAuth device codes expire or delete them because they cannot be exchanged through the new integration.
 
-- [#10330](https://github.com/better-auth/better-auth/pull/10330) [`081d3c3`](https://github.com/better-auth/better-auth/commit/081d3c379c720926295067d878c421b5e8684c78) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Introduces the functionality to disable `displayName` from the username plugin.
+- [#10330](https://github.com/better-auth/better-auth/pull/10330) [`081d3c3`](https://github.com/better-auth/better-auth/commit/081d3c379c720926295067d878c421b5e8684c78) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Allow the username plugin's separate `displayUsername` field to be omitted by setting `displayUsername: false` on both the server and client plugins.
 
 ### Patch Changes
 
