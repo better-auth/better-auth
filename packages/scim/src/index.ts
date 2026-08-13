@@ -905,17 +905,10 @@ export type {
 export type {
 	SCIMManagedConnection,
 	SCIMManagedConnectionEvent,
-	SCIMManagedConnectionEventPagination,
-	SCIMManagedConnectionEventSortDirection,
-	SCIMManagedConnectionEventSortField,
 	SCIMManagedConnectionEventType,
 	SCIMManagedConnectionStatus,
 	SCIMManagedCredential,
 	SCIMManagedCredentialStatus,
 } from "./managed-connections";
-export {
-	SCIM_MANAGED_CREATION_REQUEST_ID_CONFLICT,
-	SCIM_MANAGED_DEFAULT_EVENT_LIMIT,
-	SCIM_MANAGED_MAX_EVENT_LIMIT,
-} from "./managed-connections";
+export { SCIM_MANAGED_CREATION_REQUEST_ID_CONFLICT } from "./managed-connections";
 export { acquireActiveSCIMUserLink };

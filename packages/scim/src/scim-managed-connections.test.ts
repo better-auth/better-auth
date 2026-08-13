@@ -260,147 +260,57 @@ describe("SCIM managed connections", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10475
 	 */
-	describe("listSCIMManagedConnectionEvents pagination", () => {
-		it("defaults to sequence desc with limit and offset metadata", async ({
-			onTestFinished,
-		}) => {
-			const { instance, connectionId, provisioningDomainId, totalEvents } =
-				await createPaginatedManagedConnectionEventsFixture(onTestFinished);
-			const firstPage = await instance.auth.api.listSCIMManagedConnectionEvents(
-				{
-					body: {
-						connectionId,
-						provisioningDomainId,
-					},
+	it("paginates managed connection events by sequence", async ({
+		onTestFinished,
+	}) => {
+		const { instance, connectionId, provisioningDomainId, totalEvents } =
+			await createPaginatedManagedConnectionEventsFixture(onTestFinished);
+		const firstPage = await instance.auth.api.listSCIMManagedConnectionEvents({
+			body: {
+				connectionId,
+				provisioningDomainId,
+			},
+		});
+		const secondPage = await instance.auth.api.listSCIMManagedConnectionEvents({
+			body: {
+				connectionId,
+				provisioningDomainId,
+				offset: 10,
+			},
+		});
+		const ascendingPage =
+			await instance.auth.api.listSCIMManagedConnectionEvents({
+				body: {
+					connectionId,
+					provisioningDomainId,
+					sortDirection: "asc",
 				},
-			);
-
-			expect(firstPage).toMatchObject({
-				limit: 10,
-				offset: 0,
-				total: totalEvents,
-				sortBy: "sequence",
-				sortDirection: "desc",
 			});
-			expect(firstPage.events).toHaveLength(10);
-			expect(firstPage.events[0]?.sequence).toBe(14);
-			expect(firstPage.events.at(-1)?.sequence).toBe(5);
-			for (let index = 1; index < firstPage.events.length; index++) {
-				const previous = firstPage.events[index - 1];
-				const current = firstPage.events[index];
-				expect(previous).toBeDefined();
-				expect(current).toBeDefined();
-				expect(current?.sequence).toBeLessThan(previous?.sequence ?? 0);
-			}
-		});
-
-		it("pages managed connection events with limit and offset", async ({
-			onTestFinished,
-		}) => {
-			const { instance, connectionId, provisioningDomainId, totalEvents } =
-				await createPaginatedManagedConnectionEventsFixture(onTestFinished);
-			const secondPage =
-				await instance.auth.api.listSCIMManagedConnectionEvents({
-					body: {
-						connectionId,
-						provisioningDomainId,
-						offset: 10,
-					},
-				});
-			const customLimit =
-				await instance.auth.api.listSCIMManagedConnectionEvents({
-					body: {
-						connectionId,
-						provisioningDomainId,
-						limit: 5,
-						offset: 10,
-					},
-				});
-
-			expect(secondPage).toMatchObject({
-				limit: 10,
-				offset: 10,
-				total: totalEvents,
+		const beyondLastPage =
+			await instance.auth.api.listSCIMManagedConnectionEvents({
+				body: {
+					connectionId,
+					provisioningDomainId,
+					offset: 980,
+				},
 			});
-			expect(secondPage.events).toHaveLength(4);
-			expect(secondPage.events.at(-1)?.sequence).toBe(1);
-			expect(customLimit).toMatchObject({
-				limit: 5,
-				offset: 10,
-				total: totalEvents,
-			});
-			expect(customLimit.events).toHaveLength(4);
+
+		expect(firstPage).toMatchObject({
+			limit: 10,
+			offset: 0,
+			total: totalEvents,
+			sortDirection: "desc",
 		});
-
-		it("returns an empty page when offset is beyond the total event count", async ({
-			onTestFinished,
-		}) => {
-			const { instance, connectionId, provisioningDomainId, totalEvents } =
-				await createPaginatedManagedConnectionEventsFixture(onTestFinished);
-			const beyondLastPage =
-				await instance.auth.api.listSCIMManagedConnectionEvents({
-					body: {
-						connectionId,
-						provisioningDomainId,
-						offset: 980,
-					},
-				});
-
-			expect(beyondLastPage.events).toEqual([]);
-			expect(beyondLastPage.total).toBe(totalEvents);
-		});
-
-		it("sorts managed connection events ascending by sequence", async ({
-			onTestFinished,
-		}) => {
-			const { instance, connectionId, provisioningDomainId, totalEvents } =
-				await createPaginatedManagedConnectionEventsFixture(onTestFinished);
-			const ascendingPage =
-				await instance.auth.api.listSCIMManagedConnectionEvents({
-					body: {
-						connectionId,
-						provisioningDomainId,
-						sortDirection: "asc",
-					},
-				});
-
-			expect(ascendingPage).toMatchObject({
-				limit: 10,
-				offset: 0,
-				total: totalEvents,
-				sortBy: "sequence",
-				sortDirection: "asc",
-			});
-			expect(ascendingPage.events.map((event) => event.sequence)).toEqual([
-				1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-			]);
-		});
-
-		it("sorts managed connection events by createdAt", async ({
-			onTestFinished,
-		}) => {
-			const { instance, connectionId, provisioningDomainId } =
-				await createPaginatedManagedConnectionEventsFixture(onTestFinished);
-			const createdAtPage =
-				await instance.auth.api.listSCIMManagedConnectionEvents({
-					body: {
-						connectionId,
-						provisioningDomainId,
-						sortBy: "createdAt",
-						sortDirection: "asc",
-					},
-				});
-
-			expect(createdAtPage).toMatchObject({
-				sortBy: "createdAt",
-				sortDirection: "asc",
-			});
-			for (let index = 1; index < createdAtPage.events.length; index++) {
-				const previous = createdAtPage.events[index - 1]?.createdAt.getTime();
-				const current = createdAtPage.events[index]?.createdAt.getTime();
-				expect(previous).toBeLessThanOrEqual(current ?? 0);
-			}
-		});
+		expect(firstPage.events.map((event) => event.sequence)).toEqual([
+			14, 13, 12, 11, 10, 9, 8, 7, 6, 5,
+		]);
+		expect(secondPage.events.map((event) => event.sequence)).toEqual([
+			4, 3, 2, 1,
+		]);
+		expect(ascendingPage.events.map((event) => event.sequence)).toEqual([
+			1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+		]);
+		expect(beyondLastPage.events).toEqual([]);
 	});
 
 	/**
