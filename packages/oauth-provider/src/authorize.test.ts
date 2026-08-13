@@ -3,7 +3,10 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { sessionMiddleware } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
-import { createAuthorizationURL } from "better-auth/oauth2";
+import {
+	createAuthorizationURL,
+	generateCodeChallenge,
+} from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -538,6 +541,7 @@ describe("oauth authorize - ACR requests", async () => {
 		acrValues: string | undefined,
 		acrClaim?: AcrClaimRequest,
 		scope = "openid",
+		codeChallenge = generateRandomString(43),
 	) {
 		if (!oauthClient?.client_id) throw new Error("beforeAll not run properly");
 		const url = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
@@ -546,7 +550,7 @@ describe("oauth authorize - ACR requests", async () => {
 		url.searchParams.set("response_type", "code");
 		url.searchParams.set("scope", scope);
 		url.searchParams.set("state", "acr-state");
-		url.searchParams.set("code_challenge", generateRandomString(43));
+		url.searchParams.set("code_challenge", codeChallenge);
 		url.searchParams.set("code_challenge_method", "S256");
 		if (acrValues !== undefined) {
 			url.searchParams.set("acr_values", acrValues);
@@ -564,13 +568,17 @@ describe("oauth authorize - ACR requests", async () => {
 		acrValues: string | undefined,
 		acrClaim?: AcrClaimRequest,
 		scope?: string,
+		codeChallenge?: string,
 	) {
 		let location = "";
-		await authenticatedClient.$fetch(authorizeUrl(acrValues, acrClaim, scope), {
-			onError(context) {
-				location = context.response.headers.get("Location") || "";
+		await authenticatedClient.$fetch(
+			authorizeUrl(acrValues, acrClaim, scope, codeChallenge),
+			{
+				onError(context) {
+					location = context.response.headers.get("Location") || "";
+				},
 			},
-		});
+		);
 		return location;
 	}
 
@@ -642,13 +650,42 @@ describe("oauth authorize - ACR requests", async () => {
 			{ essential: true, value: "1" },
 			{ essential: true, value: 1 },
 		])("ignores claims in OAuth-only requests", async (request) => {
-			const location = await redirectFor(undefined, request, "profile");
+			if (!oauthClient?.client_id || !oauthClient.client_secret) {
+				throw new Error("beforeAll not run properly");
+			}
+			const codeVerifier = generateRandomString(43);
+			const codeChallenge = await generateCodeChallenge(codeVerifier);
+			const location = await redirectFor(
+				undefined,
+				request,
+				"profile",
+				codeChallenge,
+			);
 			const callbackRedirect = new URL(location);
+			const code = callbackRedirect.searchParams.get("code");
 
 			expect(callbackRedirect.searchParams.get("error")).toBeNull();
-			expect(callbackRedirect.searchParams.get("code")).toEqual(
-				expect.any(String),
-			);
+			if (!code) throw new Error("authorization code not issued");
+
+			const tokenResponse = await authenticatedClient.$fetch<{
+				access_token: string;
+			}>("/oauth2/token", {
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "authorization_code",
+					code,
+					code_verifier: codeVerifier,
+					redirect_uri: redirectUri,
+				}),
+				headers: {
+					authorization: `Basic ${Buffer.from(
+						`${oauthClient.client_id}:${oauthClient.client_secret}`,
+					).toString("base64")}`,
+				},
+			});
+
+			expect(tokenResponse.error).toBeNull();
+			expect(tokenResponse.data?.access_token).toEqual(expect.any(String));
 		});
 
 		it("accepts the current ACR in an essential values request", async () => {

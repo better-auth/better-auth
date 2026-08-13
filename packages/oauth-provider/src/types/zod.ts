@@ -1,6 +1,9 @@
 import { SafeUrlSchema } from "@better-auth/core/utils/redirect-uri";
 import * as z from "zod";
-import { claimsRequestInputSchema } from "../claims-request";
+import {
+	claimsRequestInputSchema,
+	claimsRequestParameterSchema,
+} from "../claims-request";
 
 /**
  * Re-exported from `@better-auth/core` so every OAuth provider plugin shares one
@@ -152,6 +155,7 @@ export const authorizationQuerySchema = z
 // "malformed verification value".
 const storedAuthorizationQuerySchema = authorizationQuerySchema.extend({
 	redirect_uri: SafeUrlSchema.optional(),
+	claims: claimsRequestParameterSchema.optional(),
 });
 
 /**
