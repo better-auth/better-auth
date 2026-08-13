@@ -1721,7 +1721,7 @@ The metadata endpoint can be customized so that the publicized scopes and claims
 
 All scopes inside the advertisedMetadata section MUST be listed in `scopes` otherwise initialization will fail.
 
-Better Auth advertises `acr_values_supported: ["0"]`. In OIDC Core, `"0"` means the authentication did not meet ISO/IEC 29115 level 1. Custom ACR policies are not currently supported. Because `acr_values` is voluntary, requests for other classes continue and the ID token reports `acr: "0"`. An essential `claims.id_token.acr` request fails when its `value` or `values` does not include `"0"`.
+Better Auth advertises `acr_values_supported: ["0"]`. In OIDC Core, `"0"` means the authentication did not meet ISO/IEC 29115 level 1. Custom ACR policies are not currently supported. Because `acr_values` is voluntary, requests for other classes continue and the ID token reports `acr: "0"`. In an OpenID Connect request, an essential `claims.id_token.acr` request fails when its `value` or `values` does not include `"0"`.
 
 #### Scopes
 

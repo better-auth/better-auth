@@ -515,19 +515,6 @@ export async function authorizeEndpoint(
 			getErrorURL(ctx, "invalid_redirect", "invalid redirect uri"),
 		);
 	}
-	if (!canSatisfyEssentialAcrRequest(query.claims, LEVEL_0_ACR)) {
-		return handleRedirect(
-			ctx,
-			formatErrorURL(
-				query.redirect_uri,
-				"access_denied",
-				"essential acr requirement cannot be met",
-				query.state,
-				getIssuer(ctx, opts),
-			),
-		);
-	}
-
 	// Check for invalid scopes if requested from query
 	let requestedScopes = query.scope?.split(" ").filter((s) => s);
 	if (requestedScopes) {
@@ -552,6 +539,21 @@ export async function authorizeEndpoint(
 	if (!requestedScopes) {
 		requestedScopes = client.scopes ?? opts.scopes ?? [];
 		query.scope = requestedScopes.join(" ");
+	}
+	if (
+		requestedScopes.includes("openid") &&
+		!canSatisfyEssentialAcrRequest(query.claims, LEVEL_0_ACR)
+	) {
+		return handleRedirect(
+			ctx,
+			formatErrorURL(
+				query.redirect_uri,
+				"access_denied",
+				"essential acr requirement cannot be met",
+				query.state,
+				getIssuer(ctx, opts),
+			),
+		);
 	}
 	const requestedUserInfoClaims = getRequestedUserInfoClaims(
 		query.claims,
