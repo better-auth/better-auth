@@ -13,6 +13,7 @@ import {
 	createSCIMDemoCredentialExpiry,
 	createSCIMDemoManagementError,
 	isSCIMManagedCreationRequestConflict,
+	listAllSCIMDemoManagedConnectionEvents,
 	loadSCIMDemoManagedState,
 	SCIM_DEMO_MANAGEMENT_RESPONSE_HEADERS,
 	scimDemoManagementErrorResponse,
@@ -127,16 +128,14 @@ export async function POST(
 			}
 			throw error;
 		}
-		const history = await auth.api.listSCIMManagedConnectionEvents({
-			body: {
-				connectionId: created.connection.connectionId,
-				provisioningDomainId,
-			},
+		const events = await listAllSCIMDemoManagedConnectionEvents({
+			connectionId: created.connection.connectionId,
+			provisioningDomainId,
 		});
 		const connection = await createSCIMDemoConnectionResponse(context.adapter, {
 			connection: created.connection,
 			credentials: [created.credential],
-			events: history.events,
+			events,
 		});
 		return Response.json(
 			{
