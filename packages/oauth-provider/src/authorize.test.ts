@@ -499,7 +499,9 @@ describe("oauth authorize - max_age (OIDC Core 1.0 §3.1.2.1)", async () => {
 	});
 });
 
-describe("oauth authorize - acr_values (OIDC Core 1.0 §3.1.2.1)", async () => {
+describe("oauth authorize - ACR requests", async () => {
+	type AcrClaimRequest = Record<string, unknown>;
+
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
@@ -532,66 +534,145 @@ describe("oauth authorize - acr_values (OIDC Core 1.0 §3.1.2.1)", async () => {
 		});
 	});
 
-	function authorizeUrl(acrValues: string) {
+	function authorizeUrl(
+		acrValues: string | undefined,
+		acrClaim?: AcrClaimRequest,
+		scope = "openid",
+		codeChallenge = generateRandomString(43),
+	) {
 		if (!oauthClient?.client_id) throw new Error("beforeAll not run properly");
 		const url = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
 		url.searchParams.set("client_id", oauthClient.client_id);
 		url.searchParams.set("redirect_uri", redirectUri);
 		url.searchParams.set("response_type", "code");
-		url.searchParams.set("scope", "openid");
+		url.searchParams.set("scope", scope);
 		url.searchParams.set("state", "acr-state");
-		url.searchParams.set("code_challenge", generateRandomString(43));
+		url.searchParams.set("code_challenge", codeChallenge);
 		url.searchParams.set("code_challenge_method", "S256");
-		url.searchParams.set("acr_values", acrValues);
+		if (acrValues !== undefined) {
+			url.searchParams.set("acr_values", acrValues);
+		}
+		if (acrClaim) {
+			url.searchParams.set(
+				"claims",
+				JSON.stringify({ id_token: { acr: acrClaim } }),
+			);
+		}
 		return url.toString();
 	}
 
-	async function redirectFor(acrValues: string) {
+	async function redirectFor(
+		acrValues: string | undefined,
+		acrClaim?: AcrClaimRequest,
+		scope?: string,
+		codeChallenge?: string,
+	) {
 		let location = "";
-		await authenticatedClient.$fetch(authorizeUrl(acrValues), {
-			onError(context) {
-				location = context.response.headers.get("Location") || "";
+		await authenticatedClient.$fetch(
+			authorizeUrl(acrValues, acrClaim, scope, codeChallenge),
+			{
+				onError(context) {
+					location = context.response.headers.get("Location") || "";
+				},
 			},
-		});
+		);
 		return location;
 	}
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/pull/10152
-	 */
-	it("rejects unsupported acr_values instead of silently downgrading", async () => {
-		const location = await redirectFor("1");
-		const errorRedirect = new URL(location);
+	describe("claims.id_token.acr (OIDC Core 1.0 §5.5.1.1)", () => {
+		it("accepts an unsupported voluntary claim", async () => {
+			const location = await redirectFor(undefined, { values: ["1"] });
+			const callbackRedirect = new URL(location);
 
-		expect(errorRedirect.origin + errorRedirect.pathname).toBe(redirectUri);
-		expect(errorRedirect.searchParams.get("error")).toBe("invalid_request");
-		expect(errorRedirect.searchParams.get("error_description")).toBe(
-			"unsupported acr_values",
-		);
-		expect(errorRedirect.searchParams.get("state")).toBe("acr-state");
-		expect(errorRedirect.searchParams.get("code")).toBeNull();
-	});
+			expect(callbackRedirect.searchParams.get("error")).toBeNull();
+			expect(callbackRedirect.searchParams.get("code")).toEqual(
+				expect.any(String),
+			);
+		});
 
-	it("accepts the advertised unspecified acr value", async () => {
-		const location = await redirectFor("0");
-		const callbackRedirect = new URL(location);
+		it.each<[string, AcrClaimRequest]>([
+			["value", { essential: true, value: "1" }],
+			["values", { essential: true, values: ["1"] }],
+		])("rejects an unsupported essential %s", async (_, request) => {
+			const location = await redirectFor(undefined, request);
+			const callbackRedirect = new URL(location);
 
-		expect(callbackRedirect.origin + callbackRedirect.pathname).toBe(
-			redirectUri,
-		);
-		expect(callbackRedirect.searchParams.get("code")).toBeTruthy();
-		expect(callbackRedirect.searchParams.get("error")).toBeNull();
-	});
+			expect(callbackRedirect.origin + callbackRedirect.pathname).toBe(
+				redirectUri,
+			);
+			expect(callbackRedirect.searchParams.get("error")).toBe("access_denied");
+			expect(callbackRedirect.searchParams.get("state")).toBe("acr-state");
+			expect(callbackRedirect.searchParams.get("code")).toBeNull();
+		});
 
-	it("accepts multiple requested acr values when one is supported", async () => {
-		const location = await redirectFor("1 0");
-		const callbackRedirect = new URL(location);
+		it.each<[string, AcrClaimRequest]>([
+			["value", { essential: true, value: 1 }],
+			["values", { essential: true, values: "1" }],
+		])("rejects a malformed essential %s", async (_, request) => {
+			const location = await redirectFor(undefined, request);
+			const callbackRedirect = new URL(location);
 
-		expect(callbackRedirect.origin + callbackRedirect.pathname).toBe(
-			redirectUri,
-		);
-		expect(callbackRedirect.searchParams.get("code")).toBeTruthy();
-		expect(callbackRedirect.searchParams.get("error")).toBeNull();
+			expect(callbackRedirect.searchParams.get("error")).toBe(
+				"invalid_request",
+			);
+			expect(callbackRedirect.searchParams.get("state")).toBe("acr-state");
+			expect(callbackRedirect.searchParams.get("code")).toBeNull();
+		});
+
+		it.each([
+			{ essential: true, value: "1" },
+			{ essential: true, value: 1 },
+		])("rejects claims in OAuth-only requests", async (request) => {
+			const location = await redirectFor(undefined, request, "profile");
+			const callbackRedirect = new URL(location);
+
+			expect(callbackRedirect.searchParams.get("error")).toBe(
+				"invalid_request",
+			);
+			expect(callbackRedirect.searchParams.get("error_description")).toBe(
+				"openid scope must be requested when using the claims parameter",
+			);
+			expect(callbackRedirect.searchParams.get("code")).toBeNull();
+		});
+
+		it("accepts the current ACR in an essential values request", async () => {
+			const location = await redirectFor(undefined, {
+				essential: true,
+				values: ["1", "0"],
+			});
+			const callbackRedirect = new URL(location);
+
+			expect(callbackRedirect.searchParams.get("error")).toBeNull();
+			expect(callbackRedirect.searchParams.get("code")).toEqual(
+				expect.any(String),
+			);
+		});
+
+		it("accepts matching value and values selectors", async () => {
+			const location = await redirectFor(undefined, {
+				essential: true,
+				value: "0",
+				values: ["0"],
+			});
+			const callbackRedirect = new URL(location);
+
+			expect(callbackRedirect.searchParams.get("error")).toBeNull();
+			expect(callbackRedirect.searchParams.get("code")).toEqual(
+				expect.any(String),
+			);
+		});
+
+		it("rejects conflicting value and values selectors", async () => {
+			const location = await redirectFor(undefined, {
+				essential: true,
+				value: "0",
+				values: ["1"],
+			});
+			const callbackRedirect = new URL(location);
+
+			expect(callbackRedirect.searchParams.get("error")).toBe("access_denied");
+			expect(callbackRedirect.searchParams.get("code")).toBeNull();
+		});
 	});
 });
 

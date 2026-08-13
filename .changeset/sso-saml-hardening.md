@@ -2,7 +2,7 @@
 "@better-auth/sso": patch
 ---
 
-fix(sso): unify SAML response processing and fix provider/config bugs
+Unify SAML response processing and fix provider and configuration handling.
 
 **Bug fixes:**
 
@@ -10,12 +10,14 @@ fix(sso): unify SAML response processing and fix provider/config bugs
 - Fix `acsEndpoint` skipping DB provider lookup when `defaultSSO` is configured
 - Fix `acsEndpoint` missing encryption fields (`isAssertionEncrypted`, `encPrivateKey`), which caused silent decryption failures
 - Fix `defaultSSO` config parsing in callback path (`safeJsonParse` on already-parsed objects)
-- Fix `createSP` missing `callbackUrl` fallback to auto-generated ACS URL
+- Generate the default ACS URL from `baseURL` and `providerId`; `callbackUrl`
+  remains a post-auth redirect
 - Complete `createSP`/`createIdP` helpers with all encryption and signing fields
 
 **Behavioral changes:**
 
-- ACS error redirect query parameters now use uppercase error codes (e.g. `error=SAML_MULTIPLE_ASSERTIONS` instead of `error=multiple_assertions`). If your application parses these error codes from the redirect URL, update the expected values.
+- ACS error redirects now use the full lowercase code, such as
+  `error=saml_multiple_assertions` instead of `error=multiple_assertions`.
 - SAML provider registration now rejects configs with no usable IdP entry point (no valid `entryPoint` URL, no `idpMetadata.metadata`, and no `idpMetadata.singleSignOnService`). Previously these would register successfully but fail at sign-in.
 - `entryPoint` validation tightened from `startsWith("http")` to `new URL()` parsing, rejecting malformed URLs like `http:evil` or `http//missing-colon`.
 

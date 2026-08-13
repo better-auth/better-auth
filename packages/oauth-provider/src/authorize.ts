@@ -5,8 +5,12 @@ import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
-import { UNSPECIFIED_ACR } from "./authentication-context";
-import { getRequestedUserInfoClaims } from "./claims-request";
+import { LEVEL_0_ACR } from "./authentication-context";
+import {
+	canSatisfyEssentialAcrRequest,
+	getRequestedUserInfoClaims,
+	isValidOidcClaimsRequest,
+} from "./claims-request";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
 import { mapIssuesToOAuthError } from "./oauth-endpoint";
@@ -135,12 +139,6 @@ function getAuthorizationRequestParameters(
 			: ctx.query;
 	const parameters = isRecord(source) ? source : {};
 	return { ...parameters } as unknown as OAuthAuthorizationQuery;
-}
-
-function isAcrValuesRequestSupported(acrValues: string | undefined): boolean {
-	if (acrValues === undefined) return true;
-	const requestedAcrValues = acrValues.split(" ").filter(Boolean);
-	return requestedAcrValues.includes(UNSPECIFIED_ACR);
 }
 
 export const handleRedirect = (
@@ -443,13 +441,6 @@ export async function authorizeEndpoint(
 	}
 	query = parsedQuery.data as OAuthAuthorizationQuery;
 	ctx.query = query;
-	if (!isAcrValuesRequestSupported(query.acr_values)) {
-		return authorizeRedirectOnError(opts)({
-			error: "invalid_request",
-			error_description: "unsupported acr_values",
-			ctx,
-		});
-	}
 	await oAuthState.set({
 		query: serializeAuthorizationQuery(query).toString(),
 	});
@@ -525,7 +516,6 @@ export async function authorizeEndpoint(
 			getErrorURL(ctx, "invalid_redirect", "invalid redirect uri"),
 		);
 	}
-
 	// Check for invalid scopes if requested from query
 	let requestedScopes = query.scope?.split(" ").filter((s) => s);
 	if (requestedScopes) {
@@ -550,6 +540,46 @@ export async function authorizeEndpoint(
 	if (!requestedScopes) {
 		requestedScopes = client.scopes ?? opts.scopes ?? [];
 		query.scope = requestedScopes.join(" ");
+	}
+	const openidRequested = requestedScopes.includes("openid");
+	if (query.claims !== undefined && !openidRequested) {
+		return handleRedirect(
+			ctx,
+			formatErrorURL(
+				query.redirect_uri,
+				"invalid_request",
+				"openid scope must be requested when using the claims parameter",
+				query.state,
+				getIssuer(ctx, opts),
+			),
+		);
+	}
+	if (openidRequested && !isValidOidcClaimsRequest(query.claims)) {
+		return handleRedirect(
+			ctx,
+			formatErrorURL(
+				query.redirect_uri,
+				"invalid_request",
+				"claims must be a valid Claims request object",
+				query.state,
+				getIssuer(ctx, opts),
+			),
+		);
+	}
+	if (
+		openidRequested &&
+		!canSatisfyEssentialAcrRequest(query.claims, LEVEL_0_ACR)
+	) {
+		return handleRedirect(
+			ctx,
+			formatErrorURL(
+				query.redirect_uri,
+				"access_denied",
+				"essential acr requirement cannot be met",
+				query.state,
+				getIssuer(ctx, opts),
+			),
+		);
 	}
 	const requestedUserInfoClaims = getRequestedUserInfoClaims(
 		query.claims,
