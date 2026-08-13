@@ -499,12 +499,8 @@ describe("oauth authorize - max_age (OIDC Core 1.0 §3.1.2.1)", async () => {
 	});
 });
 
-describe("oauth authorize - acr_values (OIDC Core 1.0 §3.1.2.1)", async () => {
-	type AcrClaimRequest = {
-		essential: true;
-		value?: string;
-		values?: string[];
-	};
+describe("oauth authorize - ACR requests", async () => {
+	type AcrClaimRequest = Record<string, unknown>;
 
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
@@ -539,7 +535,7 @@ describe("oauth authorize - acr_values (OIDC Core 1.0 §3.1.2.1)", async () => {
 	});
 
 	function authorizeUrl(
-		acrValues: string,
+		acrValues: string | undefined,
 		acrClaim?: AcrClaimRequest,
 		scope = "openid",
 	) {
@@ -552,7 +548,9 @@ describe("oauth authorize - acr_values (OIDC Core 1.0 §3.1.2.1)", async () => {
 		url.searchParams.set("state", "acr-state");
 		url.searchParams.set("code_challenge", generateRandomString(43));
 		url.searchParams.set("code_challenge_method", "S256");
-		url.searchParams.set("acr_values", acrValues);
+		if (acrValues !== undefined) {
+			url.searchParams.set("acr_values", acrValues);
+		}
 		if (acrClaim) {
 			url.searchParams.set(
 				"claims",
@@ -563,7 +561,7 @@ describe("oauth authorize - acr_values (OIDC Core 1.0 §3.1.2.1)", async () => {
 	}
 
 	async function redirectFor(
-		acrValues: string,
+		acrValues: string | undefined,
 		acrClaim?: AcrClaimRequest,
 		scope?: string,
 	) {
@@ -576,68 +574,96 @@ describe("oauth authorize - acr_values (OIDC Core 1.0 §3.1.2.1)", async () => {
 		return location;
 	}
 
-	it("accepts the advertised level 0 ACR value", async () => {
-		const location = await redirectFor("0");
-		const callbackRedirect = new URL(location);
+	describe("acr_values (OIDC Core 1.0 §3.1.2.1)", () => {
+		it("accepts the advertised level 0 ACR value", async () => {
+			const location = await redirectFor("0");
+			const callbackRedirect = new URL(location);
 
-		expect(callbackRedirect.origin + callbackRedirect.pathname).toBe(
-			redirectUri,
-		);
-		expect(callbackRedirect.searchParams.get("code")).toBeTruthy();
-		expect(callbackRedirect.searchParams.get("error")).toBeNull();
-	});
-
-	it.each<[string, AcrClaimRequest]>([
-		["value", { essential: true, value: "1" }],
-		["values", { essential: true, values: ["1"] }],
-	])("rejects an unsupported essential ACR %s", async (_, request) => {
-		const location = await redirectFor("1", request);
-		const callbackRedirect = new URL(location);
-
-		expect(callbackRedirect.origin + callbackRedirect.pathname).toBe(
-			redirectUri,
-		);
-		expect(callbackRedirect.searchParams.get("error")).toBe("access_denied");
-		expect(callbackRedirect.searchParams.get("state")).toBe("acr-state");
-		expect(callbackRedirect.searchParams.get("code")).toBeNull();
-	});
-
-	it("ignores essential ID Token ACR claims in OAuth-only requests", async () => {
-		const location = await redirectFor(
-			"1",
-			{ essential: true, value: "1" },
-			"profile",
-		);
-		const callbackRedirect = new URL(location);
-
-		expect(callbackRedirect.searchParams.get("error")).toBeNull();
-		expect(callbackRedirect.searchParams.get("code")).toEqual(
-			expect.any(String),
-		);
-	});
-
-	it("accepts the current ACR in an essential values request", async () => {
-		const location = await redirectFor("1", {
-			essential: true,
-			values: ["1", "0"],
+			expect(callbackRedirect.origin + callbackRedirect.pathname).toBe(
+				redirectUri,
+			);
+			expect(callbackRedirect.searchParams.get("code")).toBeTruthy();
+			expect(callbackRedirect.searchParams.get("error")).toBeNull();
 		});
-		const callbackRedirect = new URL(location);
 
-		expect(callbackRedirect.searchParams.get("error")).toBeNull();
-		expect(callbackRedirect.searchParams.get("code")).toEqual(
-			expect.any(String),
-		);
+		it("accepts multiple values when one is supported", async () => {
+			const location = await redirectFor("1 0");
+			const callbackRedirect = new URL(location);
+
+			expect(callbackRedirect.origin + callbackRedirect.pathname).toBe(
+				redirectUri,
+			);
+			expect(callbackRedirect.searchParams.get("code")).toBeTruthy();
+			expect(callbackRedirect.searchParams.get("error")).toBeNull();
+		});
 	});
 
-	it("accepts multiple requested acr values when one is supported", async () => {
-		const location = await redirectFor("1 0");
-		const callbackRedirect = new URL(location);
+	describe("claims.id_token.acr (OIDC Core 1.0 §5.5.1.1)", () => {
+		it("accepts an unsupported voluntary claim", async () => {
+			const location = await redirectFor(undefined, { values: ["1"] });
+			const callbackRedirect = new URL(location);
 
-		expect(callbackRedirect.origin + callbackRedirect.pathname).toBe(
-			redirectUri,
-		);
-		expect(callbackRedirect.searchParams.get("code")).toBeTruthy();
-		expect(callbackRedirect.searchParams.get("error")).toBeNull();
+			expect(callbackRedirect.searchParams.get("error")).toBeNull();
+			expect(callbackRedirect.searchParams.get("code")).toEqual(
+				expect.any(String),
+			);
+		});
+
+		it.each<[string, AcrClaimRequest]>([
+			["value", { essential: true, value: "1" }],
+			["values", { essential: true, values: ["1"] }],
+		])("rejects an unsupported essential %s", async (_, request) => {
+			const location = await redirectFor(undefined, request);
+			const callbackRedirect = new URL(location);
+
+			expect(callbackRedirect.origin + callbackRedirect.pathname).toBe(
+				redirectUri,
+			);
+			expect(callbackRedirect.searchParams.get("error")).toBe("access_denied");
+			expect(callbackRedirect.searchParams.get("state")).toBe("acr-state");
+			expect(callbackRedirect.searchParams.get("code")).toBeNull();
+		});
+
+		it.each<[string, AcrClaimRequest]>([
+			["value", { essential: true, value: 1 }],
+			["values", { essential: true, values: "1" }],
+		])("rejects a malformed essential %s", async (_, request) => {
+			const location = await redirectFor(undefined, request);
+			const callbackRedirect = new URL(location);
+
+			expect(callbackRedirect.searchParams.get("error")).toBe(
+				"invalid_request",
+			);
+			expect(callbackRedirect.searchParams.get("state")).toBe("acr-state");
+			expect(callbackRedirect.searchParams.get("code")).toBeNull();
+		});
+
+		it("ignores essential claims in OAuth-only requests", async () => {
+			const location = await redirectFor(
+				undefined,
+				{ essential: true, value: "1" },
+				"profile",
+			);
+			const callbackRedirect = new URL(location);
+
+			expect(callbackRedirect.searchParams.get("error")).toBeNull();
+			expect(callbackRedirect.searchParams.get("code")).toEqual(
+				expect.any(String),
+			);
+		});
+
+		it("accepts the current ACR in an essential values request", async () => {
+			const location = await redirectFor(undefined, {
+				essential: true,
+				values: ["1", "0"],
+			});
+			const callbackRedirect = new URL(location);
+
+			expect(callbackRedirect.searchParams.get("error")).toBeNull();
+			expect(callbackRedirect.searchParams.get("code")).toEqual(
+				expect.any(String),
+			);
+		});
 	});
 });
 

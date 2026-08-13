@@ -1,16 +1,25 @@
 import * as z from "zod";
 
-const claimRequestMemberSchema = z.union([
-	z.null(),
-	z.record(z.string(), z.unknown()),
-]);
+const claimRequestMemberSchema = z.record(z.string(), z.unknown()).nullable();
 
-const claimsRequestObjectSchema = z
-	.object({
-		userinfo: z.record(z.string(), claimRequestMemberSchema).optional(),
-		id_token: z.record(z.string(), claimRequestMemberSchema).optional(),
+const acrClaimRequestMemberSchema = z
+	.looseObject({
+		essential: z.boolean().optional(),
+		value: z.string().optional(),
+		values: z.array(z.string()).optional(),
 	})
-	.passthrough();
+	.nullable();
+
+const idTokenClaimsRequestSchema = z
+	.object({
+		acr: acrClaimRequestMemberSchema.optional(),
+	})
+	.catchall(claimRequestMemberSchema);
+
+const claimsRequestObjectSchema = z.looseObject({
+	userinfo: z.record(z.string(), claimRequestMemberSchema).optional(),
+	id_token: idTokenClaimsRequestSchema.optional(),
+});
 
 function parseClaimsRequestValue(value: unknown) {
 	if (typeof value === "string") {
@@ -31,13 +40,8 @@ function parseClaimsRequestObject(value: unknown) {
 
 export const claimsRequestParameterSchema = z
 	.union([z.string(), z.record(z.string(), z.unknown())])
-	.superRefine((value, ctx) => {
-		if (!parseClaimsRequestObject(value)) {
-			ctx.addIssue({
-				code: "custom",
-				message: "claims must be a JSON object",
-			});
-		}
+	.refine((value) => parseClaimsRequestObject(value) !== undefined, {
+		error: "claims must be a valid Claims request object",
 	});
 
 export function getRequestedUserInfoClaims(
@@ -58,7 +62,10 @@ export function canSatisfyEssentialAcrRequest(
 	value: unknown,
 	currentAcr: string,
 ) {
-	const acrRequest = parseClaimsRequestObject(value)?.id_token?.acr;
+	const claimsRequest = parseClaimsRequestObject(value);
+	if (!claimsRequest) return value === undefined;
+
+	const acrRequest = claimsRequest.id_token?.acr;
 	if (!acrRequest || acrRequest.essential !== true) return true;
 
 	if (typeof acrRequest.value === "string") {
@@ -67,7 +74,7 @@ export function canSatisfyEssentialAcrRequest(
 	if (Array.isArray(acrRequest.values)) {
 		return acrRequest.values.includes(currentAcr);
 	}
-	return true;
+	return acrRequest.value === undefined && acrRequest.values === undefined;
 }
 
 export function filterClaimsRequestUserInfoClaims(

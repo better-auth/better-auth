@@ -99,7 +99,17 @@ describe("OpenID Connect RS256 provider profile", async () => {
 		);
 	});
 
-	it("issues an RS256 ID token with the current ACR for unsupported acr_values", async () => {
+	it.each<[string, Record<string, string>]>([
+		["acr_values", { acr_values: "1" }],
+		[
+			"voluntary ACR claim",
+			{
+				claims: JSON.stringify({
+					id_token: { acr: { values: ["1"] } },
+				}),
+			},
+		],
+	])("issues an RS256 ID token with the current ACR for unsupported %s", async (_, additionalParams) => {
 		if (!oauthClient?.client_id || !oauthClient.client_secret) {
 			throw new Error("beforeAll not run properly");
 		}
@@ -118,9 +128,7 @@ describe("OpenID Connect RS256 provider profile", async () => {
 			scopes,
 			codeVerifier,
 			nonce,
-			additionalParams: {
-				acr_values: "1",
-			},
+			additionalParams,
 		});
 
 		let callbackRedirectUrl = "";
