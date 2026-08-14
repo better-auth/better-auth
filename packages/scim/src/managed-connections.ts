@@ -1102,7 +1102,6 @@ export function createSCIMManagedConnectionEndpoints(
 					limit,
 					offset,
 					total,
-					sortDirection,
 				});
 			},
 		),

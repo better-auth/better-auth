@@ -299,7 +299,6 @@ describe("SCIM managed connections", () => {
 			limit: 10,
 			offset: 0,
 			total: totalEvents,
-			sortDirection: "desc",
 		});
 		expect(firstPage.events.map((event) => event.sequence)).toEqual([
 			14, 13, 12, 11, 10, 9, 8, 7, 6, 5,
