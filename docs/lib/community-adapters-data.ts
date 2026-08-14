@@ -220,4 +220,15 @@ export const communityAdapters: CommunityAdapter[] = [
 			avatar: "https://github.com/bjorntech.png",
 		},
 	},
+	{
+		name: "better-auth-azure-cosmos",
+		url: "https://github.com/9hsein5/better-auth-azure-cosmos",
+		database: "Azure Cosmos DB",
+		databaseUrl: "https://learn.microsoft.com/azure/cosmos-db/nosql/",
+		author: {
+			name: "9hsein5",
+			url: "https://github.com/9hsein5",
+			avatar: "https://github.com/9hsein5.png",
+		},
+	},
 ];

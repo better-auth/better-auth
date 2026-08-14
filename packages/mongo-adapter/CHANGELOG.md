@@ -55,6 +55,13 @@
 
 ## 1.7.0-beta.4
 
+## 1.6.28
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.28
+
 ## 1.6.27
 
 ### Patch Changes
