@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { AuthQueryAtom } from "../../../client";
 import { createAuthClient } from "../../../client";
 import { getTestInstance } from "../../../test-utils/test-instance";
@@ -285,6 +285,50 @@ describe("listMembers", async () => {
 			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION
 				.message,
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10508
+	 */
+	it("should not look up users when the filter matches zero members", async () => {
+		const spy = vi.spyOn(ctx.adapter, "findMany");
+		const members = await client.organization.listMembers({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				organizationId: org.data?.id as string,
+				filterField: "role",
+				filterValue: "nonexistent-role",
+			},
+		});
+		const models = spy.mock.calls.map(([query]) => query.model);
+		spy.mockRestore();
+
+		expect(members.data?.members).toEqual([]);
+		expect(members.data?.total).toBe(0);
+		// Guards the assertion below: if the member query were missing too, the
+		// spy would not be observing the adapter the request actually used.
+		expect(models).toContain("member");
+		// An empty `in` list renders as `IN ()`, which MSSQL rejects.
+		expect(models).not.toContain("user");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10508
+	 */
+	it("should keep the total when the offset lands past the last member", async () => {
+		const members = await client.organization.listMembers({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				organizationId: org.data?.id as string,
+				offset: 100,
+			},
+		});
+		expect(members.data?.members).toEqual([]);
+		expect(members.data?.total).toBeGreaterThan(0);
 	});
 });
 
