@@ -86,8 +86,9 @@ The `managedDirectorySync` option enables the plugin-managed mode for directory-
 
 Use this when the application wants Better Auth to manage the runtime tenant connection lifecycle for SCIM and pair it with SSO-based identity resolution. It is intended for the new 1.7 flow and complements `scim({ managedConnections })`.
 
-> \[!important]
-> Enabling `managedDirectorySync` requires the corresponding database migrations for the managed directory-sync tables. Run the migration step before using the managed runtime flow.
+<Callout type="warning">
+  Enabling `managedDirectorySync` requires the corresponding database migrations for the managed directory-sync tables. Run the migration step before using the managed runtime flow.
+</Callout>
 
 ```package-install
 npx auth migrate
