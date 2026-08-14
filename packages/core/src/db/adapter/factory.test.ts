@@ -309,3 +309,30 @@ describe("createAdapterFactory where value coercion", () => {
 		]);
 	});
 });
+
+describe("createAdapterFactory join clause", () => {
+	it("ignores references to models outside the better-auth schema when joining", async () => {
+		const adapter = createTestAdapter({
+			adapter: createCustomAdapter({ findOne: async () => null }),
+			options: {
+				user: {
+					additionalFields: {
+						roleId: {
+							type: "string",
+							required: false,
+							references: { model: "roles", field: "id" },
+						},
+					},
+				},
+			},
+		});
+
+		await expect(
+			adapter.findOne({
+				model: "session",
+				where: [{ field: "token", value: "t" }],
+				join: { user: true },
+			}),
+		).resolves.toBeNull();
+	});
+});
