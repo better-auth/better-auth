@@ -14,6 +14,7 @@ import {
 	decodeProtectedHeader,
 	jwtVerify,
 } from "jose";
+import { getIssuer } from "../authorize";
 import { validatePublicClientJwks } from "../client-jwks";
 import { getClientDiscoveries } from "../extensions";
 import type {
@@ -447,8 +448,9 @@ export async function consumeClientAssertion(
 /**
  * Verifies a client assertion JWT for `private_key_jwt` authentication.
  *
- * Validates: signature, iss=client_id, sub=client_id, aud=token_endpoint,
- * exp, assertion max lifetime, jti uniqueness (replay prevention).
+ * Validates: signature, iss=client_id, sub=client_id, aud=the endpoint serving
+ * the assertion or the normalized OP issuer, exp, assertion max lifetime,
+ * jti uniqueness (replay prevention).
  */
 export async function verifyClientAssertion(
 	ctx: GenericEndpointContext,
@@ -533,11 +535,14 @@ export async function verifyClientAssertion(
 
 	// Fetch JWKS and verify signature + claims
 	const jwks = await fetchClientJwks(ctx, opts, client);
-	const audience = expectedAudience ?? `${ctx.context.baseURL}/oauth2/token`;
+	const endpointAudience =
+		expectedAudience ?? `${ctx.context.baseURL}/oauth2/token`;
+	const issuerAudience = getIssuer(ctx, opts);
+	const acceptedAudiences = [...new Set([endpointAudience, issuerAudience])];
 	const verifyOpts = {
 		issuer: clientId,
 		subject: clientId,
-		audience,
+		audience: acceptedAudiences,
 		algorithms: ALGORITHMS_LIST,
 	};
 
@@ -588,6 +593,15 @@ export async function verifyClientAssertion(
 		}
 	}
 
+	const assertionAudiences = Array.isArray(payload.aud)
+		? payload.aud
+		: [payload.aud];
+	// jwtVerify already matched the payload against this same audience set.
+	const acceptedAudience = assertionAudiences.find(
+		(value): value is string =>
+			typeof value === "string" && acceptedAudiences.includes(value),
+	)!;
+
 	// Audience, lifetime, and jti single-use replay protection, shared with
 	// extension client-auth methods through `consumeClientAssertion` so both
 	// paths enforce RFC 7523 §3 identically. jose already matched `aud` via
@@ -596,7 +610,7 @@ export async function verifyClientAssertion(
 	await consumeClientAssertion(ctx, opts, {
 		namespace: `private_key_jwt:${clientId}`,
 		payload,
-		expectedAudience: audience,
+		expectedAudience: acceptedAudience,
 	});
 
 	return { clientId };

@@ -578,14 +578,14 @@ grant_type=authorization_code
 
 The assertion JWT must contain:
 
-| Claim | Requirement                                                            |
-| ----- | ---------------------------------------------------------------------- |
-| `iss` | Must be the `client_id`                                                |
-| `sub` | Must be the `client_id`                                                |
-| `aud` | Must be the token endpoint URL                                         |
-| `exp` | Required, must not exceed `assertionMaxLifetime` from now              |
-| `jti` | Required, must be unique (single-use)                                  |
-| `iat` | Optional, but if present must not be older than `assertionMaxLifetime` |
+| Claim | Requirement                                                                                                                                                        |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `iss` | Must be the `client_id`                                                                                                                                            |
+| `sub` | Must be the `client_id`                                                                                                                                            |
+| `aud` | Must contain either the URL of the endpoint receiving the assertion or the OpenID Provider issuer. Use a string or an array containing at least one accepted value |
+| `exp` | Required, must not exceed `assertionMaxLifetime` from now                                                                                                          |
+| `jti` | Required, must be unique (single-use)                                                                                                                              |
+| `iat` | Optional, but if present must not be older than `assertionMaxLifetime`                                                                                             |
 
 Supported signing algorithms: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `ES512`, `EdDSA`.
 
