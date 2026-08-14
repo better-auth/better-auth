@@ -507,6 +507,116 @@ export async function getStoredToken(
 // one or more SP. Match liberally so requests using `basic` or extra
 // spaces aren't rejected before reaching the spec-correct decoder.
 const BASIC_SCHEME_PREFIX = /^Basic +/i;
+const AUTH_SCHEME_TOKEN = /^([!#$%&'*+\-.^_`|~0-9A-Za-z]+)(?=\s|$)/;
+
+function parseAuthorizationScheme(authorization: string) {
+	return authorization.match(AUTH_SCHEME_TOKEN)?.[1];
+}
+
+const CLIENT_AUTHENTICATION_FIELDS = [
+	"client_secret",
+	"client_assertion",
+	"client_assertion_type",
+] as const;
+
+export type ClientAuthenticationField =
+	(typeof CLIENT_AUTHENTICATION_FIELDS)[number];
+
+function throwInvalidAuthenticationRequest(errorDescription: string): never {
+	throw new APIError("BAD_REQUEST", {
+		error: "invalid_request",
+		error_description: errorDescription,
+	});
+}
+
+/**
+ * Normalizes client identification and authentication parameters while
+ * enforcing RFC 6749 §2.3 and RFC 8628 §3.1 cardinality. Empty values are
+ * omitted. Client identification remains separate from authentication-method
+ * detection so a public `client_id` does not count as an authentication attempt.
+ * Repeated `resource` parameters are intentionally outside this parser because
+ * RFC 8707 §2 explicitly permits them.
+ *
+ * Credential and assertion verification remain the responsibility of
+ * `extractClientCredentials`.
+ *
+ * @internal
+ */
+export async function normalizeClientAuthenticationParameters(
+	request: Request | undefined,
+	body: Record<string, unknown> = {},
+) {
+	let clientId: string | undefined;
+	if (body.client_id !== undefined && body.client_id !== "") {
+		if (typeof body.client_id !== "string") {
+			throwInvalidAuthenticationRequest("client_id must be a string");
+		}
+		clientId = body.client_id;
+	}
+	const fields: Partial<Record<ClientAuthenticationField, string>> = {};
+	const setEffectiveField = (
+		field: ClientAuthenticationField,
+		value: unknown,
+	) => {
+		if (value === undefined || value === "") return;
+		if (typeof value !== "string") {
+			throwInvalidAuthenticationRequest(`${field} must be a string`);
+		}
+		fields[field] = value;
+	};
+	for (const field of CLIENT_AUTHENTICATION_FIELDS) {
+		if (Object.hasOwn(body, field)) {
+			setEffectiveField(field, body[field]);
+		}
+	}
+
+	const authorization = request?.headers.get("authorization");
+	const hasAuthorizationHeader = Boolean(authorization);
+
+	if (request) {
+		const contentType =
+			request.headers.get("content-type")?.toLowerCase() ?? "";
+		if (contentType.includes("application/x-www-form-urlencoded")) {
+			const params = new URLSearchParams(await request.clone().text());
+			const clientIds = params
+				.getAll("client_id")
+				.filter((value) => value.length > 0);
+			if (clientIds.length > 1) {
+				throwInvalidAuthenticationRequest("client_id must not be repeated");
+			}
+			clientId = clientIds[0];
+
+			for (const field of CLIENT_AUTHENTICATION_FIELDS) {
+				const values = params.getAll(field).filter((value) => value.length > 0);
+				if (values.length > 1) {
+					throwInvalidAuthenticationRequest(`${field} must not be repeated`);
+				}
+				if (values.length === 1) setEffectiveField(field, values[0]);
+			}
+		}
+	}
+
+	const hasClientSecret = fields.client_secret !== undefined;
+	const hasClientAssertion =
+		fields.client_assertion !== undefined ||
+		fields.client_assertion_type !== undefined;
+	if (
+		(hasAuthorizationHeader && (hasClientSecret || hasClientAssertion)) ||
+		(hasClientSecret && hasClientAssertion)
+	) {
+		throwInvalidAuthenticationRequest(
+			"A request must use only one client authentication method",
+		);
+	}
+	body.client_id = clientId;
+	for (const field of CLIENT_AUTHENTICATION_FIELDS) {
+		body[field] = fields[field];
+	}
+
+	return {
+		detected: hasAuthorizationHeader || Object.keys(fields).length > 0,
+	};
+}
 
 function basicToClientCredentials(authorization: string) {
 	if (!BASIC_SCHEME_PREFIX.test(authorization)) {
@@ -516,10 +626,14 @@ function basicToClientCredentials(authorization: string) {
 		const { clientId, clientSecret } = decodeBasicCredentials(authorization);
 		return { client_id: clientId, client_secret: clientSecret };
 	} catch {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "invalid authorization header format",
-			error: "invalid_client",
-		});
+		throw new APIError(
+			"UNAUTHORIZED",
+			{
+				error_description: "invalid authorization header format",
+				error: "invalid_client",
+			},
+			{ "WWW-Authenticate": "Basic" },
+		);
 	}
 }
 
@@ -571,6 +685,28 @@ export function validateClientScopes(
 	}
 }
 
+function throwInvalidClient(
+	errorDescription: string,
+	authentication?: {
+		method?: TokenEndpointAuthMethod;
+		scheme?: string;
+	},
+): never {
+	const attemptedBasicAuthentication =
+		authentication?.method === "client_secret_basic";
+	const challengeScheme =
+		authentication?.scheme ??
+		(attemptedBasicAuthentication ? "Basic" : undefined);
+	throw new APIError(
+		challengeScheme ? "UNAUTHORIZED" : "BAD_REQUEST",
+		{
+			error_description: errorDescription,
+			error: "invalid_client",
+		},
+		challengeScheme ? { "WWW-Authenticate": challengeScheme } : undefined,
+	);
+}
+
 /**
  * Resolves the registered client by id and authorizes it: existence, disabled
  * state, registered auth method, requested scopes, and grant type. The record is
@@ -592,28 +728,19 @@ export async function validateClientCredentials(
 ) {
 	const client = await getClient(ctx, options, clientId);
 	if (!client) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "missing client",
-			error: "invalid_client",
-		});
+		throwInvalidClient("missing client", { method: authMethod });
 	}
 	if (client.disabled) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "client is disabled",
-			error: "invalid_client",
-		});
+		throwInvalidClient("client is disabled", { method: authMethod });
 	}
 
-	// Enforce registered auth method for assertion/pre-verified methods.
-	if (preVerified && authMethod) {
-		const registeredAuthMethod =
-			client.tokenEndpointAuthMethod ?? "client_secret_basic";
-		if (registeredAuthMethod !== authMethod) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: `client registered for ${registeredAuthMethod} cannot use ${authMethod}`,
-				error: "invalid_client",
-			});
-		}
+	const registeredAuthMethod =
+		client.tokenEndpointAuthMethod ?? "client_secret_basic";
+	if (authMethod && registeredAuthMethod !== authMethod) {
+		throwInvalidClient(
+			`client registered for ${registeredAuthMethod} cannot use ${authMethod}`,
+			{ method: authMethod },
+		);
 	}
 	if (
 		(client.tokenEndpointAuthMethod === "private_key_jwt" ||
@@ -633,19 +760,17 @@ export async function validateClientCredentials(
 	if (!preVerified) {
 		// Only token_endpoint_auth_method=none identifies a public client.
 		if (client.tokenEndpointAuthMethod !== "none" && !clientSecret) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: "client secret must be provided",
-				error: "invalid_client",
+			throwInvalidClient("client secret must be provided", {
+				method: authMethod,
 			});
 		}
 
 		// Secret should not be received
 		if (clientSecret && !client.clientSecret) {
-			throw new APIError("BAD_REQUEST", {
-				error_description:
-					"public client, client secret should not be received",
-				error: "invalid_client",
-			});
+			throwInvalidClient(
+				"public client, client secret should not be received",
+				{ method: authMethod },
+			);
 		}
 
 		// Compare Secrets when secret is provided
@@ -658,10 +783,7 @@ export async function validateClientCredentials(
 				clientSecret,
 			))
 		) {
-			throw new APIError("UNAUTHORIZED", {
-				error_description: "invalid client_secret",
-				error: "invalid_client",
-			});
+			throwInvalidClient("invalid client_secret", { method: authMethod });
 		}
 	}
 
@@ -741,7 +863,8 @@ export async function extractClientCredentials(
 	opts: OAuthOptions<Scope[]>,
 	expectedAudience?: string,
 ): Promise<ExtractedCredentials | null> {
-	const body = (ctx.body ?? {}) as Record<string, unknown>;
+	const body = { ...((ctx.body ?? {}) as Record<string, unknown>) };
+	await normalizeClientAuthenticationParameters(ctx.request, body);
 	const authorization = ctx.request?.headers.get("authorization") ?? undefined;
 
 	// 1. Check for assertion-based client authentication.
@@ -750,16 +873,6 @@ export async function extractClientCredentials(
 			throw new APIError("BAD_REQUEST", {
 				error_description:
 					"client_assertion and client_assertion_type must both be provided",
-				error: "invalid_client",
-			});
-		}
-		if (
-			body.client_secret ||
-			(authorization && BASIC_SCHEME_PREFIX.test(authorization))
-		) {
-			throw new APIError("BAD_REQUEST", {
-				error_description:
-					"client_assertion cannot be combined with client_secret or Basic auth",
 				error: "invalid_client",
 			});
 		}
@@ -801,6 +914,19 @@ export async function extractClientCredentials(
 			method: "private_key_jwt",
 			clientId: result.clientId,
 		};
+	}
+
+	if (authorization && !BASIC_SCHEME_PREFIX.test(authorization)) {
+		const authorizationScheme = parseAuthorizationScheme(authorization);
+		if (!authorizationScheme) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_request",
+				error_description: "Invalid authorization header format",
+			});
+		}
+		throwInvalidClient("unsupported authorization scheme", {
+			scheme: authorizationScheme,
+		});
 	}
 
 	// 2. Check for Basic auth header

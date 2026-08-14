@@ -2,4 +2,7 @@
 "better-auth": patch
 ---
 
-`npx auth migrate` no longer aborts when adding a column to an existing table. A required column with a default value, or a unique column, now migrates on SQLite and on populated Postgres and MySQL databases. Upgrading a database that already has organization teams previously failed on the new `team.memberCount` and `teamMember.membershipKey` columns.
+`npx auth migrate` can now add required columns with static defaults and nullable
+unique columns to existing SQLite, PostgreSQL, and MySQL tables. Required unique
+columns still need distinct values to be backfilled manually before applying the
+unique constraint.

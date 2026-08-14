@@ -225,10 +225,6 @@ describe("oauth-provider extensions", async () => {
 					sub: "malicious-custom-sub", // re-pinned by the endpoint
 					email_verified: true, // first-party override of a base claim
 				}),
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			extensionPlugin,
 		],
@@ -419,6 +415,65 @@ describe("oauth-provider extensions", async () => {
 			(response.error as { error_description?: string } | undefined)
 				?.error_description,
 		).toContain("client registered for client_secret_basic cannot use");
+	});
+
+	it("returns invalid_client when an extension grant omits required credentials", async () => {
+		const confidentialClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: [extensionGrant],
+				scope: "openid email vc",
+				application_type: "web",
+			},
+		});
+		const response = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: extensionGrant,
+				client_id: confidentialClient!.client_id,
+			}),
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+			},
+		});
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as { error?: string } | undefined)?.error).toBe(
+			"invalid_client",
+		);
+	});
+
+	it("challenges Basic authentication with an empty secret", async () => {
+		const confidentialClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: [extensionGrant],
+				scope: "openid email vc",
+				application_type: "web",
+			},
+		});
+		if (!confidentialClient?.client_id) {
+			throw new Error("confidential OAuth client was not created");
+		}
+
+		let responseHeaders: Headers | undefined;
+		const response = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({ grant_type: extensionGrant }),
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+				authorization: `Basic ${Buffer.from(`${confidentialClient.client_id}:`).toString("base64")}`,
+			},
+			onError(context) {
+				responseHeaders = context.response.headers;
+			},
+		});
+
+		expect(response.error?.status).toBe(401);
+		expect((response.error as { error?: string } | undefined)?.error).toBe(
+			"invalid_client",
+		);
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
 	});
 
 	it("authorizes against the resolved record, not the strategy", async () => {
@@ -675,10 +730,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					invalidExtensionPlugin,
 				],
@@ -717,10 +768,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					invalidExtensionPlugin,
 				],
@@ -761,10 +808,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					invalidExtensionPlugin,
 				],
@@ -805,10 +848,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					invalidExtensionPlugin,
 				],
@@ -842,10 +881,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					makeExtensionPlugin("ext-a"),
 					makeExtensionPlugin("ext-b"),
@@ -883,10 +918,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					makeAuthExtensionPlugin("auth-ext-a", "urn:better-auth:test:a"),
 					makeAuthExtensionPlugin("auth-ext-b", "urn:better-auth:test:b"),
@@ -924,10 +955,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					makeAssertionExtensionPlugin("assert-ext-a", "method_a_jwt"),
 					makeAssertionExtensionPlugin("assert-ext-b", "method_b_jwt"),
@@ -959,10 +986,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					makeDiscoveryExtensionPlugin("discovery-ext-a"),
 					makeDiscoveryExtensionPlugin("discovery-ext-b"),
@@ -988,10 +1011,6 @@ describe("oauth-provider extensions", async () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 				makeMetadataExtensionPlugin("meta-ext-a", "first"),
 				makeMetadataExtensionPlugin("meta-ext-b", "second"),

@@ -87,7 +87,7 @@ describe("sign-out", async () => {
 			userId: user.id,
 			providerId: baseOAuthConfig.providerId,
 			issuer: "local:oauth:oidc-provider",
-			providerAccountId: "oauth-user",
+			accountId: "oauth-user",
 			idToken: "id-token",
 		});
 		return {
@@ -251,7 +251,7 @@ describe("sign-out", async () => {
 			userId: user.id,
 			providerId: baseOAuthConfig.providerId,
 			issuer: "local:oauth:oidc-provider",
-			providerAccountId: "oauth-user",
+			accountId: "oauth-user",
 			idToken: "id-token-first",
 			updatedAt: new Date("2026-01-01T00:00:00.000Z"),
 		});
@@ -259,7 +259,7 @@ describe("sign-out", async () => {
 			userId: user.id,
 			providerId: secondProviderConfig.providerId,
 			issuer: "local:oauth:second-provider",
-			providerAccountId: "oauth-user-2",
+			accountId: "oauth-user-2",
 			idToken: "id-token-second",
 			updatedAt: new Date("2026-01-02T00:00:00.000Z"),
 		});

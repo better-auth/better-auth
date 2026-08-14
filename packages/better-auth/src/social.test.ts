@@ -2010,7 +2010,7 @@ describe("Vercel Provider", async () => {
 		);
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]?.providerId).toBe("vercel");
-		expect(accounts[0]?.providerAccountId).toBe("vercel_user_123");
+		expect(accounts[0]?.accountId).toBe("vercel_user_123");
 	});
 
 	it("should use preferred_username as fallback for name", async () => {
@@ -2408,8 +2408,7 @@ describe("Microsoft Provider", async () => {
 			session.data!.user.id,
 		);
 		expect(
-			accounts.find((account) => account.providerId === "microsoft")
-				?.providerAccountId,
+			accounts.find((account) => account.providerId === "microsoft")?.accountId,
 		).toBe("ms-oid-456");
 	});
 
@@ -2480,8 +2479,7 @@ describe("Microsoft Provider", async () => {
 		const ctx = await auth.$context;
 		const accounts = await ctx.internalAdapter.findAccounts(data.user.id);
 		expect(
-			accounts.find((account) => account.providerId === "microsoft")
-				?.providerAccountId,
+			accounts.find((account) => account.providerId === "microsoft")?.accountId,
 		).toBe("ms-oid-789");
 	});
 
@@ -2868,7 +2866,7 @@ describe("Railway Provider", async () => {
 		);
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]?.providerId).toBe("railway");
-		expect(accounts[0]?.providerAccountId).toBe("user_railway_123");
+		expect(accounts[0]?.accountId).toBe("user_railway_123");
 	});
 });
 

@@ -1,10 +1,13 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { APIError } from "@better-auth/core/error";
 import type { MemoryDB } from "@better-auth/memory-adapter";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import * as z from "zod";
 import { getTestInstance } from "../../test-utils/test-instance";
+import type { DeviceAuthorizationGrant } from ".";
 import { deviceAuthorization, deviceAuthorizationOptionsSchema } from ".";
 import { deviceAuthorizationClient } from "./client";
 import type { DeviceCode } from "./schema";
@@ -49,6 +52,85 @@ describe("device authorization plugin input validation", () => {
 		expect(() =>
 			deviceAuthorizationOptionsSchema.parse({ userCodeLength: 192 }),
 		).toThrow();
+	});
+});
+
+describe("user code verification rate limiting", async () => {
+	const { auth } = await getTestInstance({
+		disableTestUser: true,
+		rateLimit: {
+			enabled: true,
+		},
+		plugins: [deviceAuthorization()],
+	});
+
+	it("returns 429 after five verification guesses", async () => {
+		const responses: Response[] = [];
+		for (let attempt = 0; attempt < 6; attempt++) {
+			responses.push(
+				await auth.handler(
+					new Request(
+						`http://localhost:3000/api/auth/device?user_code=INVALID${attempt}`,
+						{
+							headers: { "x-forwarded-for": "192.0.2.42" },
+						},
+					),
+				),
+			);
+		}
+
+		expect(responses.slice(0, 5).map((response) => response.status)).toEqual([
+			400, 400, 400, 400, 400,
+		]);
+		expect(responses[5]?.status).toBe(429);
+	});
+
+	it("does not apply the verification limit to token polling", async () => {
+		const clientIP = "192.0.2.43";
+		const deviceCodeResponse = await auth.handler(
+			new Request("http://localhost:3000/api/auth/device/code", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"x-forwarded-for": clientIP,
+				},
+				body: JSON.stringify({ client_id: "test-client" }),
+			}),
+		);
+		expect(deviceCodeResponse.status).toBe(200);
+		const { device_code } = (await deviceCodeResponse.json()) as {
+			device_code: string;
+		};
+
+		for (let attempt = 0; attempt < 5; attempt++) {
+			const response = await auth.handler(
+				new Request(
+					`http://localhost:3000/api/auth/device?user_code=INVALID${attempt}`,
+					{
+						headers: { "x-forwarded-for": clientIP },
+					},
+				),
+			);
+			expect(response.status).toBe(400);
+		}
+
+		for (let poll = 0; poll < 6; poll++) {
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/device/token", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						"x-forwarded-for": clientIP,
+					},
+					body: JSON.stringify({
+						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+						device_code,
+						client_id: "test-client",
+					}),
+				}),
+			);
+			expect(response.status).not.toBe(429);
+		}
 	});
 });
 
@@ -136,8 +218,114 @@ describe("client validation", async () => {
 	});
 });
 
+describe("grant request validation", () => {
+	it("delegates grant-field validation errors to the configured grant", async () => {
+		const grant = {
+			requestSchemaFields: { grant_value: z.string() },
+			requestErrorCodes: ["grant_invalid"] as const,
+			onRequestValidationError: (issues) => {
+				if (!issues.every((issue) => issue.path?.[0] === "grant_value")) {
+					return;
+				}
+				throw new APIError("BAD_REQUEST", {
+					error: "grant_invalid",
+					error_description: "Invalid grant request",
+				});
+			},
+			deviceCodeSchemaFields: {},
+			authorizeRequest: () => undefined,
+			assertSessionRedemption: () => {},
+			getVerificationContext: () => undefined,
+		} satisfies DeviceAuthorizationGrant;
+		const { auth } = await getTestInstance({
+			plugins: [deviceAuthorization({ grant })],
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/device/code", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ client_id: "client", grant_value: 42 }),
+			}),
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			error: "grant_invalid",
+			error_description: "Invalid grant request",
+		});
+	});
+
+	it("runs before the application callback", async () => {
+		const authorizeRequest = vi.fn().mockRejectedValue(new Error("rejected"));
+		const onDeviceAuthRequest = vi.fn();
+		const grant = {
+			requestSchemaFields: {},
+			deviceCodeSchemaFields: {},
+			authorizeRequest,
+			assertSessionRedemption: () => {},
+			getVerificationContext: () => undefined,
+		} satisfies DeviceAuthorizationGrant;
+		const { auth } = await getTestInstance({
+			plugins: [deviceAuthorization({ grant, onDeviceAuthRequest })],
+		});
+
+		await expect(
+			auth.api.deviceCode({ body: { client_id: "client" } }),
+		).rejects.toThrow("rejected");
+		expect(authorizeRequest).toHaveBeenCalledOnce();
+		expect(onDeviceAuthRequest).not.toHaveBeenCalled();
+	});
+});
+
+describe("grant verification context", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10746#discussion_r3760240763
+	 */
+	it("does not let grant context overwrite host-owned response fields", async () => {
+		const grant = {
+			requestSchemaFields: {},
+			deviceCodeSchemaFields: {},
+			authorizeRequest: () => undefined,
+			assertSessionRedemption: () => {},
+			getVerificationContext: () => ({
+				user_code: "grant-user-code",
+				status: "grant-status",
+				client_id: "grant-client",
+				scope: "grant-scope",
+				grant_field: "grant-value",
+			}),
+		} satisfies DeviceAuthorizationGrant;
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({ grant, validateClient: async () => true }),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const { user_code } = await auth.api.deviceCode({
+			body: {
+				client_id: "client",
+				scope: "read",
+			},
+		});
+
+		const response = await auth.api.deviceVerify({
+			query: { user_code },
+			headers,
+		});
+
+		expect(response).toMatchObject({
+			user_code,
+			status: "pending",
+			client_id: "client",
+			scope: "read",
+			grant_field: "grant-value",
+		});
+	});
+});
+
 describe("device authorization flow", async () => {
-	const { auth, client, signInWithTestUser, db } = await getTestInstance(
+	const { auth, signInWithTestUser, db } = await getTestInstance(
 		{
 			plugins: [
 				deviceAuthorization({
@@ -185,37 +373,6 @@ describe("device authorization flow", async () => {
 
 			expect(response.device_code).toBeDefined();
 			expect(response.user_code).toBeDefined();
-		});
-
-		it("should preserve repeated resources from a form request", async () => {
-			const form = new URLSearchParams({
-				client_id: "test-client",
-				scope: "read",
-			});
-			form.append("resource", "https://api.example.com");
-			form.append("resource", "https://files.example.com");
-
-			const created = await client.$fetch<Record<string, unknown>>(
-				"/device/code",
-				{
-					method: "POST",
-					body: form,
-					headers: {
-						"content-type": "application/x-www-form-urlencoded",
-					},
-				},
-			);
-			expect(created.error).toBeNull();
-
-			const { headers } = await signInWithTestUser();
-			const verification = await auth.api.deviceVerify({
-				query: { user_code: created.data!.user_code as string },
-				headers,
-			});
-			expect(verification.resource).toEqual([
-				"https://api.example.com",
-				"https://files.example.com",
-			]);
 		});
 	});
 
@@ -295,12 +452,95 @@ describe("device authorization flow", async () => {
 	});
 
 	describe("device verification", () => {
+		it("accepts lowercase user codes for verification, approval, and denial", async () => {
+			const { headers } = await signInWithTestUser();
+			const createLowercaseUserCode = async () => {
+				const { user_code } = await auth.api.deviceCode({
+					body: { client_id: "test-client" },
+				});
+				return user_code.toLowerCase();
+			};
+
+			const verificationUserCode = await createLowercaseUserCode();
+			const verification = await auth.api.deviceVerify({
+				query: { user_code: verificationUserCode },
+				headers,
+			});
+			expect(verification.status).toBe("pending");
+
+			const approvalUserCode = await createLowercaseUserCode();
+			await auth.api.deviceVerify({
+				query: { user_code: approvalUserCode },
+				headers,
+			});
+			await expect(
+				auth.api.deviceApprove({
+					body: { userCode: approvalUserCode },
+					headers,
+				}),
+			).resolves.toMatchObject({ success: true });
+
+			const denialUserCode = await createLowercaseUserCode();
+			await auth.api.deviceVerify({
+				query: { user_code: denialUserCode },
+				headers,
+			});
+			await expect(
+				auth.api.deviceDeny({
+					body: { userCode: denialUserCode },
+					headers,
+				}),
+			).resolves.toMatchObject({ success: true });
+		});
+
+		it("ignores readability punctuation and whitespace for default user codes", async () => {
+			const { headers } = await signInWithTestUser();
+			const formatUserCode = (userCode: string) =>
+				` \t${userCode.slice(0, 2)}-${userCode.slice(2, 4)}.${userCode.slice(4)} \n`;
+			const createFormattedUserCode = async () => {
+				const { user_code } = await auth.api.deviceCode({
+					body: { client_id: "test-client" },
+				});
+				return formatUserCode(user_code);
+			};
+
+			const verificationUserCode = await createFormattedUserCode();
+			const verification = await auth.api.deviceVerify({
+				query: { user_code: verificationUserCode },
+				headers,
+			});
+			expect(verification.status).toBe("pending");
+
+			const approvalUserCode = await createFormattedUserCode();
+			await auth.api.deviceVerify({
+				query: { user_code: approvalUserCode },
+				headers,
+			});
+			await expect(
+				auth.api.deviceApprove({
+					body: { userCode: approvalUserCode },
+					headers,
+				}),
+			).resolves.toMatchObject({ success: true });
+
+			const denialUserCode = await createFormattedUserCode();
+			await auth.api.deviceVerify({
+				query: { user_code: denialUserCode },
+				headers,
+			});
+			await expect(
+				auth.api.deviceDeny({
+					body: { userCode: denialUserCode },
+					headers,
+				}),
+			).resolves.toMatchObject({ success: true });
+		});
+
 		it("only returns authorization context to the authenticated owner", async () => {
 			const { user_code } = await auth.api.deviceCode({
 				body: {
 					client_id: "test-client",
 					scope: "read write",
-					resource: ["https://api.example.com", "https://files.example.com"],
 				},
 			});
 
@@ -326,10 +566,6 @@ describe("device authorization flow", async () => {
 				expect(response.status).toBe("pending");
 				expect(response.client_id).toBe("test-client");
 				expect(response.scope).toBe("read write");
-				expect(response.resource).toEqual([
-					"https://api.example.com",
-					"https://files.example.com",
-				]);
 			}
 		});
 
@@ -725,6 +961,45 @@ describe("device authorization flow", async () => {
 			});
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/pull/10746#discussion_r3751447613
+		 */
+		it("should preserve an approved code when user lookup fails before session issuance", async () => {
+			const { headers } = await signInWithTestUser();
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+
+			await auth.api.deviceVerify({ query: { user_code }, headers });
+			await auth.api.deviceApprove({
+				body: { userCode: user_code },
+				headers,
+			});
+
+			await db.update({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: device_code }],
+				update: { userId: "missing-user" },
+			});
+			await expect(
+				auth.api.deviceToken({
+					body: {
+						grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+						device_code,
+						client_id: "test-client",
+					},
+				}),
+			).rejects.toMatchObject({
+				body: { error: "server_error" },
+			});
+
+			const stored = await db.findOne<DeviceCode>({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: device_code }],
+			});
+			expect(stored?.status).toBe("approved");
+		});
+
 		it("should burn an expired approved device code instead of issuing a token", async () => {
 			const { headers } = await signInWithTestUser();
 
@@ -955,7 +1230,6 @@ describe("device authorization ownership gate", () => {
 			body: {
 				client_id: "test-client",
 				scope: "read write",
-				resource: "https://api.example.com",
 			},
 		});
 
@@ -1049,6 +1323,77 @@ describe("device authorization ownership gate", () => {
 			status: "FORBIDDEN",
 			body: { error: "access_denied" },
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10752#pullrequestreview-4910497732
+	 */
+	it("omits empty form base parameters regardless of order", async () => {
+		const { auth, client, signInWithTestUser, signInWithUser } =
+			await getTestInstance(
+				{
+					plugins: [deviceAuthorization()],
+				},
+				{
+					clientOptions: {
+						plugins: [deviceAuthorizationClient()],
+					},
+				},
+			);
+		const { headers: ownerHeaders, user } = await signInWithTestUser();
+		await client.signUp.email({
+			email: ATTACKER_EMAIL,
+			password: ATTACKER_PASSWORD,
+			name: "attacker",
+		});
+		const { headers: attackerHeaders } = await signInWithUser(
+			ATTACKER_EMAIL,
+			ATTACKER_PASSWORD,
+		);
+
+		for (const emptyValueFirst of [true, false]) {
+			const form = new URLSearchParams();
+			for (const [field, value] of [
+				["client_id", "test-client"],
+				["scope", "read write"],
+				["user_id", user.id],
+			] as const) {
+				const values = emptyValueFirst ? ["", value] : [value, ""];
+				for (const fieldValue of values) form.append(field, fieldValue);
+			}
+
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/device/code", {
+					method: "POST",
+					headers: {
+						"content-type": "application/x-www-form-urlencoded",
+					},
+					body: form,
+				}),
+			);
+			expect(response.status).toBe(200);
+			const { user_code: userCode } = (await response.json()) as {
+				user_code: string;
+			};
+
+			const verification = await auth.api.deviceVerify({
+				query: { user_code: userCode },
+				headers: ownerHeaders,
+			});
+			expect(verification).toMatchObject({
+				client_id: "test-client",
+				scope: "read write",
+			});
+			await expect(
+				auth.api.deviceApprove({
+					body: { userCode },
+					headers: attackerHeaders,
+				}),
+			).rejects.toMatchObject({
+				status: "FORBIDDEN",
+				body: { error: "access_denied" },
+			});
+		}
 	});
 
 	it("allows approve when the pre-bound user matches the current user", async () => {
@@ -1289,6 +1634,231 @@ describe("device authorization with custom options", async () => {
 		});
 		expect(response.device_code).toBe(customDeviceCode);
 		expect(response.user_code).toBe(customUserCode);
+	});
+
+	it("should regenerate codes when custom generators collide with active values", async () => {
+		const deviceCodes = [
+			"device-code-1",
+			"device-code-1",
+			"device-code-2",
+			"device-code-3",
+			"device-code-4",
+		];
+		const userCodes = [
+			"USERCODE1",
+			"USERCODE2",
+			"USERCODE3",
+			"USERCODE3",
+			"USERCODE4",
+		];
+
+		const { auth } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					generateDeviceCode: () => deviceCodes.shift()!,
+					generateUserCode: () => userCodes.shift()!,
+				}),
+			],
+		});
+
+		const first = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		const second = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		const third = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+
+		expect(second.device_code).toBe("device-code-2");
+		expect(second.user_code).toBe("USERCODE3");
+		expect(third.device_code).toBe("device-code-4");
+		expect(third.user_code).toBe("USERCODE4");
+		expect(second.device_code).not.toBe(first.device_code);
+		expect(second.user_code).not.toBe(first.user_code);
+		expect(third.device_code).not.toBe(first.device_code);
+		expect(third.user_code).not.toBe(first.user_code);
+		expect(third.device_code).not.toBe(second.device_code);
+		expect(third.user_code).not.toBe(second.user_code);
+	});
+
+	it("should retry Prisma-style unique constraint errors during issuance", async () => {
+		const deviceCodes = ["device-code-1", "device-code-2"];
+		const userCodes = ["USERCODE1", "USERCODE2"];
+		const { auth } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					generateDeviceCode: () => deviceCodes.shift()!,
+					generateUserCode: () => userCodes.shift()!,
+				}),
+			],
+		});
+
+		const adapter = (await auth.$context).adapter;
+		const create = adapter.create.bind(adapter);
+		let failedDeviceCodeCreate = false;
+		vi.spyOn(adapter, "create").mockImplementation(async (input) => {
+			if (input.model === "deviceCode" && !failedDeviceCodeCreate) {
+				failedDeviceCodeCreate = true;
+				throw Object.assign(new Error("Prisma collision"), {
+					code: "P2002",
+				});
+			}
+			return create(input);
+		});
+		const response = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+
+		expect(response.device_code).toBe("device-code-2");
+		expect(response.user_code).toBe("USERCODE2");
+	});
+
+	it("should inspect every database error identifier for unique violations", async () => {
+		const deviceCodes = ["device-code-1", "device-code-2"];
+		const userCodes = ["USERCODE1", "USERCODE2"];
+		const { auth } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					generateDeviceCode: () => deviceCodes.shift()!,
+					generateUserCode: () => userCodes.shift()!,
+				}),
+			],
+		});
+
+		const adapter = (await auth.$context).adapter;
+		const create = adapter.create.bind(adapter);
+		let failedDeviceCodeCreate = false;
+		vi.spyOn(adapter, "create").mockImplementation(async (input) => {
+			if (input.model === "deviceCode" && !failedDeviceCodeCreate) {
+				failedDeviceCodeCreate = true;
+				throw Object.assign(new Error("SQL Server request failed"), {
+					code: "EREQUEST",
+					number: 2601,
+				});
+			}
+			return create(input);
+		});
+		const response = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+
+		expect(response.device_code).toBe("device-code-2");
+		expect(response.user_code).toBe("USERCODE2");
+	});
+
+	it("should return a controlled server error when generators cannot produce unique codes", async () => {
+		const generateDeviceCode = vi.fn(() => "device-code");
+		const generateUserCode = vi.fn(() => "USERCODE");
+		const { auth } = await getTestInstance({
+			plugins: [deviceAuthorization({ generateDeviceCode, generateUserCode })],
+		});
+
+		await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+
+		await expect(
+			auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error: "server_error",
+				error_description: "Failed to generate a unique device code",
+			},
+		});
+
+		expect(generateDeviceCode).toHaveBeenCalledTimes(4);
+		expect(generateUserCode).toHaveBeenCalledTimes(4);
+	});
+
+	it("preserves exact matching for custom user codes outside the default alphabet", async () => {
+		const customUserCodes = [
+			"custom/user-code_01",
+			"custom:user-code_02",
+			"custom.user-code_03",
+		];
+		let userCodeIndex = 0;
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					generateUserCode: () => customUserCodes[userCodeIndex++] ?? "unused",
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const verificationResponse = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		await expect(
+			auth.api.deviceVerify({
+				query: { user_code: verificationResponse.user_code },
+				headers,
+			}),
+		).resolves.toMatchObject({ status: "pending" });
+
+		const approvalResponse = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		await auth.api.deviceVerify({
+			query: { user_code: approvalResponse.user_code },
+			headers,
+		});
+		await expect(
+			auth.api.deviceApprove({
+				body: { userCode: approvalResponse.user_code },
+				headers,
+			}),
+		).resolves.toMatchObject({ success: true });
+
+		const denialResponse = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		await auth.api.deviceVerify({
+			query: { user_code: denialResponse.user_code },
+			headers,
+		});
+		await expect(
+			auth.api.deviceDeny({
+				body: { userCode: denialResponse.user_code },
+				headers,
+			}),
+		).resolves.toMatchObject({ success: true });
+	});
+
+	it("preserves custom user-code casing with case-insensitive adapters", async () => {
+		const customUserCode = "Custom/User-Code";
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({ generateUserCode: () => customUserCode }),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		await auth.api.deviceCode({ body: { client_id: "test-client" } });
+
+		const adapter = (await auth.$context).adapter;
+		const storedDeviceCode = await adapter.findOne<DeviceCode>({
+			model: "deviceCode",
+			where: [{ field: "userCode", value: customUserCode }],
+		});
+		if (!storedDeviceCode) throw new Error("device code was not stored");
+		const findOne = adapter.findOne.bind(adapter);
+		vi.spyOn(adapter, "findOne").mockImplementation(async (input) => {
+			if (input.model === "deviceCode") return storedDeviceCode;
+			return findOne(input);
+		});
+
+		await expect(
+			auth.api.deviceVerify({
+				query: { user_code: customUserCode.toLowerCase() },
+				headers,
+			}),
+		).rejects.toMatchObject({
+			body: { error: "invalid_request" },
+		});
 	});
 
 	/**

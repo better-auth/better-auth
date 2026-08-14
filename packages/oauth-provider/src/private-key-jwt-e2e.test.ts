@@ -44,10 +44,6 @@ describe("private_key_jwt e2e", async () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					assertionMaxLifetime: 300,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		},

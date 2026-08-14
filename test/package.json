@@ -12,7 +12,7 @@
     "@better-auth/core": "workspace:*",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
-    "undici": "^7.24.0",
+    "undici": "^7.29.0",
     "vitest": "catalog:vitest"
   }
 }

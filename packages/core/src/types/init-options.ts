@@ -146,7 +146,8 @@ export type DynamicBaseURLConfig = {
 	/**
 	 * List of allowed hostnames. Supports wildcard patterns.
 	 *
-	 * The derived host from the request will be validated against this list.
+	 * `x-forwarded-host` is used only when `advanced.trustedProxyHeaders` is
+	 * enabled.
 	 * Uses the same wildcard matching as `trustedOrigins`.
 	 *
 	 * @example
@@ -161,8 +162,9 @@ export type DynamicBaseURLConfig = {
 	allowedHosts: string[];
 
 	/**
-	 * Fallback URL to use if the derived host doesn't match any allowed host.
-	 * If not set, Better Auth will throw an error when the host doesn't match.
+	 * Fallback URL used when no allowed request host can be resolved.
+	 * If omitted, Better Auth throws when the request host is unavailable or not
+	 * allowed.
 	 *
 	 * @example "https://myapp.com"
 	 */
@@ -172,7 +174,7 @@ export type DynamicBaseURLConfig = {
 	 * Protocol to use when constructing the URL.
 	 * - `"https"`: Always use HTTPS (recommended for production)
 	 * - `"http"`: Always use HTTP (for local development)
-	 * - `"auto"`: Derive from `x-forwarded-proto` header or default to HTTPS
+	 * - `"auto"`: Trust `x-forwarded-proto` only when proxy headers are enabled
 	 *
 	 * @default "auto"
 	 */
@@ -1089,20 +1091,6 @@ export type BetterAuthOptions = {
 					 * @default "compact"
 					 */
 					strategy?: "compact" | "jwt" | "jwe";
-					/**
-					 * JWT-specific configuration for `strategy: "jwt"`.
-					 */
-					jwt?: {
-						/**
-						 * Which signing key is used for cookie-cache JWTs.
-						 *
-						 * - `"secret"`: uses the Better Auth secret with HS256.
-						 * - `"jwt-plugin"`: uses the installed `jwt()` plugin's asymmetric signing keys.
-						 *
-						 * @default "secret"
-						 */
-						signingKey?: "secret" | "jwt-plugin";
-					};
 					/**
 					 * Controls stateless cookie cache refresh behavior.
 					 *

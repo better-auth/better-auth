@@ -28,11 +28,6 @@ const providerId = "test";
 const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 const state = "123";
 
-const silenceWarnings = {
-	oauthAuthServerConfig: true,
-	openidConfig: true,
-} as const;
-
 const introspectHeaders = {
 	accept: "application/json",
 	"content-type": "application/x-www-form-urlencoded",
@@ -52,7 +47,6 @@ async function bootHarness(
 	const opts = {
 		loginPage: "/login",
 		consentPage: "/consent",
-		silenceWarnings,
 		enforcePerClientResources: false,
 		scopes,
 		...config,
@@ -83,6 +77,7 @@ async function bootHarness(
 			body: {
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				scope: scopes.join(" "),
 				skip_consent: true,
 				...overrides,

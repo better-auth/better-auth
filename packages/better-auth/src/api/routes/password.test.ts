@@ -164,7 +164,7 @@ describe("forgot password", async () => {
 		expect(updatedAccounts[0]).toMatchObject({
 			providerId: "credential",
 			issuer: "local:credential",
-			providerAccountId: userId,
+			accountId: userId,
 		});
 		const newUpdatedAt = updatedAccounts[0]!.updatedAt;
 

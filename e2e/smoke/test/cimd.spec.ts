@@ -70,7 +70,6 @@ describe("CIMD end-to-end flow", () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					scopes: ["openid", "profile", "email", "offline_access"],
-					silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 				}),
 				cimd({
 					metadataRevalidationInterval: "60m",
@@ -254,7 +253,6 @@ describe("CIMD end-to-end flow", () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					scopes: ["openid", "profile", "email", "offline_access"],
-					silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 				}),
 				cimd({
 					fetchClientMetadataResource,

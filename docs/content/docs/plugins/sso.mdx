@@ -346,14 +346,18 @@ If the Identity Provider is misconfigured or unreachable, registration will fail
 * Discovery errors are structured and well-defined
 * Public-client IdPs or mock servers may require overriding `tokenEndpointAuthentication`
 
-### Resolve OIDC Users
+### Resolve SSO Users
 
-Use `resolveUser` when an OIDC identity must be mapped to an existing Better Auth user instead of relying on email matching. The resolver runs on every OIDC sign-in. It is not used for SAML callbacks.
+Use `resolveUser` when an OIDC or SAML identity must be mapped to an existing Better Auth user instead of relying on email matching. The resolver runs on every SSO sign-in after the protocol identity has been verified.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 import { sso } from "@better-auth/sso";
-import { findProvisionedUserBySubject } from "@/lib/provisioning";
+import {
+    findProvisionedUserByAccountKey,
+    validateOIDCClaims,
+    validateSAMLAttributes,
+} from "@/lib/provisioning";
 
 const auth = betterAuth({
     plugins: [
@@ -363,10 +367,16 @@ const auth = betterAuth({
                     return { action: "continue" };
                 }
 
-                const provisionedUser = await findProvisionedUserBySubject({
+                if (input.protocol === "oidc") {
+                    await validateOIDCClaims(input.verifiedIdTokenClaims);
+                } else {
+                    await validateSAMLAttributes(input.providerAttributes);
+                }
+
+                const provisionedUser = await findProvisionedUserByAccountKey({
                     providerId: input.providerId,
                     issuer: input.accountKey.issuer,
-                    subject: input.accountKey.providerAccountId,
+                    subject: input.accountKey.accountId,
                     database: context.database,
                 });
 
@@ -388,17 +398,19 @@ const auth = betterAuth({
 });
 ```
 
-`accountKey.issuer` and `accountKey.providerAccountId` come from the validated ID Token's exact `iss` and `sub` claims. Subject matching is case-sensitive. `providerUser` contains normalized profile fields, while `providerClaims` contains the protocol-accepted raw claims used for that profile. Do not treat every profile field or raw claim as having the same verification guarantees as the issuer and subject; apply any application-specific validation before using them for authorization.
+For OIDC, `accountKey.issuer` and `accountKey.accountId` come from the validated ID Token's exact `iss` and `sub` claims. `verifiedIdTokenClaims` contains the complete verified ID Token payload, while `providerClaims` contains the protocol-accepted raw claims used for the profile. For SAML, the account key is the verified IdP entity ID and signed `NameID`; `providerAttributes` contains the verified assertion attributes without coercing multi-valued attributes into scalars. Subject and `NameID` matching is case-sensitive.
 
-`findProvisionedUserBySubject` is application-owned in this example. It should resolve the exact provider, issuer, and subject tuple through the transaction-scoped `database` adapter. Do not fall back to matching an email address when the exact provisioned subject is absent.
+`providerUser` contains normalized profile fields for either protocol. Profile fields, OIDC UserInfo claims, and SAML attributes may still require application-specific validation before they are used for authorization. `providerReference` is an opaque reference to the provider configuration accepted for this authentication flow. It detects provider replacement or authentication-configuration changes during the flow; do not persist it as a tenant or user binding.
+
+`findProvisionedUserByAccountKey` is application-owned in this example. It should resolve the exact provider, issuer, and subject tuple through the transaction-scoped `database` adapter. Do not fall back to matching an email address when the exact provisioned subject is absent.
 
 The resolver returns one of three decisions:
 
 * `{ action: "continue" }` continues the normal SSO sign-in behavior.
-* `{ action: "link", userId, profile }` links the exact OIDC account to that user. Use `profile: "preserve"` to keep the local profile or `profile: "update"` to update it from the provider profile.
+* `{ action: "link", userId, profile }` links the exact SSO account to that user. Use `profile: "preserve"` to keep the local profile or `profile: "update"` to update it from the provider profile.
 * `{ action: "reject", code, message? }` rejects the sign-in with an application-defined error.
 
-The callback receives the active transaction adapter as `context.database`. Keep resolver work database-local and idempotent because a fresh SSO authentication attempt may invoke it again; an already consumed OIDC callback is not replayed. Better Auth requires native database transactions and transaction async-context support before calling the resolver. If secondary storage is configured, set `session.storeSessionInDatabase: true` and leave `session.preserveSessionInDatabase` unset or `false` so the database remains the session fallback.
+The callback receives the active transaction adapter as `context.database`. Keep resolver work database-local and idempotent because a fresh SSO authentication attempt may invoke it again; an already consumed OIDC callback or SAML assertion is not replayed. Better Auth requires native database transactions and transaction async-context support before calling the resolver. If secondary storage is configured, set `session.storeSessionInDatabase: true` and leave `session.preserveSessionInDatabase` unset or `false` so the database remains the session fallback.
 
 Database writes made through the transaction adapter during resolution, account linking, profile updates, and database session creation commit or roll back together. Network calls and other external side effects performed by the resolver or database hooks cannot be rolled back. Account and session cookies are published only after commit. Secondary-storage session mirroring and other deferred hooks run after commit; failures are logged without undoing the committed database session or suppressing its cookies.
 
@@ -407,6 +419,15 @@ Database writes made through the transaction adapter during resolution, account 
 To register a SAML provider, use the `registerSSOProvider` endpoint with SAML configuration details. The provider will act as a Service Provider (SP) and integrate with your Identity Provider (IdP).
 
 Better Auth identifies a SAML account by the IdP entity ID and the signed `NameID`. The `issuer` field identifies your service provider, while the IdP entity ID comes from `idpMetadata.metadata` or an explicit `idpMetadata.entityID` in a manual configuration. Attribute mappings can populate profile fields, but they cannot replace the signed `NameID` account subject.
+
+Applications that need to pin the IdP authority while storing a SAML connection can derive it through the same metadata parser used by SAML authentication:
+
+```ts title="saml-authority.ts"
+import { deriveSAMLIdentityProviderEntityID } from "@better-auth/sso";
+
+const identityProviderEntityID =
+    deriveSAMLIdentityProviderEntityID(samlConfig);
+```
 
 <Tabs items={["client", "server"]}>
   <Tab value="client">
@@ -851,7 +872,17 @@ await auth.api.registerSSOProvider({
 });
 ```
 
-Now when users from `acmecorp.com` sign in through this provider, they'll automatically be added to the "Acme Corp" organization with the appropriate role.
+Users who sign in through this provider are automatically added to the "Acme
+Corp" organization because the provider is explicitly linked to that
+organization. Domain-derived assignment from another sign-in method requires
+domain verification, a verified stored user email, and one unambiguous
+organization match.
+
+<Callout type="info">
+  Automatic SSO provisioning does not accept or cancel pending invitations. An
+  invited user must complete the existing invitation flow before Better Auth
+  creates an automatic membership for the same organization.
+</Callout>
 
 #### Self-Service SSO Dashboard
 
@@ -1067,6 +1098,8 @@ samlConfig: {
 Both `samlConfig.cert` and `samlConfig.idpMetadata.cert` accept either a single PEM string or an array. When both are set, `idpMetadata.cert` wins.
 
 If your IdP publishes a metadata XML document, pass it as `idpMetadata.metadata` instead and leave `cert` unset. The certificates come from the document and rotation happens when the IdP republishes it. If a config supplies neither `cert` nor `idpMetadata.metadata`, registration fails with `CERT_SOURCE_MISSING`, since samlify has nothing to verify SAML responses against.
+
+Applications can use `guardProviderMutation` to coordinate SSO changes with a paired directory-sync control plane. IdP entity IDs, endpoints, signing certificates, SP entity IDs, NameID formats, POST assertion-consumer URLs, and assertion-signing policy are authentication-boundary changes. If the guard blocks authentication-boundary changes while a directory is paired, unpair the directory, update the IdP trust configuration, and then re-pair it. OIDC client-secret rotation and SAML SP private-key rotation do not change the authentication boundary.
 
 ### SAML Attribute Mapping
 
@@ -1314,7 +1347,7 @@ Better Auth enforces size limits on SAML payloads to protect against denial-of-s
 | Option            | Default | Description                         |
 | ----------------- | ------- | ----------------------------------- |
 | `maxResponseSize` | 256KB   | Maximum SAML response size in bytes |
-| `maxMetadataSize` | 100KB   | Maximum IdP metadata size in bytes  |
+| `maxMetadataSize` | 100KB   | Maximum IdP or SP metadata size     |
 
 #### Customizing Limits
 
@@ -1374,10 +1407,15 @@ The provider ID is stored in the OAuth state so the callback can identify which 
 
 ## Domain verification
 
-Domain verification allows your application to automatically trust a new SSO provider
-by automatically validating ownership via the associated domain.
+Domain verification allows your application to trust a new SSO provider after
+validating ownership of every associated domain.
 
 When a provider's domain is verified, it is also trusted for **automatic account linking**. This means that if a user signs in with an SSO provider (OIDC or SAML) and an existing account with the same email exists, the accounts will be linked automatically — as long as the user's email domain matches the provider's verified domain.
+
+Domain verification is also required for automatic organization assignment
+after a user signs in through another identity provider, such as a social
+provider. Better Auth uses the stored user's verified email and assigns an
+organization only when the verified domain maps to exactly one.
 
 <Tabs items={["client", "server"]}>
   <Tab value="client">
@@ -1430,6 +1468,13 @@ Once enabled, make sure you migrate the database schema (again).
 
 See the [Schema](#if-you-have-enabled-domain-verification) section to add the fields manually.
 
+<Callout type="info">
+  With domain verification disabled, Better Auth does not create organization
+  memberships from email-domain matches. Signing in through a provider that is
+  explicitly linked to an organization still provisions normally, and
+  `signIn.sso` still resolves providers by email or domain.
+</Callout>
+
 ### Verify your domain
 
 When domain verification is enabled, every new SSO provider will be untrusted at first.
@@ -1470,6 +1515,8 @@ To verify your ownership over a domain, follow these steps:
 Once you have configured your domain, you can use your `auth` instance to submit a validation request.
 This request will either result in a rejection (could not prove your ownership over the domain)
 or if the verification is successful, your SSO provider domain will be marked as verified.
+
+Verification applies to the provider's exact domain configuration when the request starts. If the provider is updated or deleted while DNS verification is in progress, the request returns a `409` response with the `SSO_PROVIDER_CHANGED` code. Reload the provider, confirm its current domains, and retry verification. Request a new token first if the current provider does not have an active verification token.
 
 <APIMethod path="/sso/verify-domain" method="POST" requireSession>
   ```ts
@@ -1836,7 +1883,7 @@ export const ssoOptionsType = {
 				default: 262144,
 			},
 			maxMetadataSize: {
-				description: "Maximum allowed size for IdP metadata XML in bytes.",
+				description: "Maximum allowed size for IdP or SP metadata XML in bytes.",
 				type: "number",
 				default: 102400,
 			},

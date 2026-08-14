@@ -171,7 +171,14 @@ describe("SCIM resource create uniqueness races", () => {
 					emailValueIndex: "|ada@example.com|",
 					displayName: "Concurrent User",
 					formattedName: "Concurrent User",
-					serializedEmails: "[]",
+					serializedEmails: JSON.stringify([
+						{ value: "ada@example.com", primary: true },
+					]),
+					serializedAttributes: JSON.stringify({
+						schemas: [USER_SCHEMA],
+						name: { formatted: "Concurrent User" },
+						emails: [{ value: "ada@example.com", primary: true }],
+					}),
 					active: true,
 					orderKey: "concurrent-user-order",
 					createdAt: now,

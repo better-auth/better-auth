@@ -1,5 +1,17 @@
 # @better-auth/kysely-adapter
 
+## 1.7.0-rc.5
+
+## 1.7.0-rc.4
+
+## 1.7.0-rc.3
+
+### Minor Changes
+
+- [#10622](https://github.com/better-auth/better-auth/pull/10622) [`ecd83da`](https://github.com/better-auth/better-auth/commit/ecd83daa01ec482d31667019737cb6697f03da0b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Raw database instances (better-sqlite3, `node:sqlite`, `bun:sqlite`, `mysql2`, `pg`) passed directly as `database` now get native adapter transactions automatically, matching the behavior of the explicit `{ db }`/`{ dialect }` config shapes. This unblocks plugins that require native transactions (such as `@better-auth/scim`) when the database is provided in the quickstart `database: new Database(...)` shape.
+
+  Cloudflare D1 still reports no native transaction support, since D1 has no interactive transactions.
+
 ## 1.7.0-rc.2
 
 ### Patch Changes
@@ -48,6 +60,27 @@
   - @better-auth/core@1.7.0-beta.5
 
 ## 1.7.0-beta.4
+
+## 1.6.27
+
+### Patch Changes
+
+- Updated dependencies [[`2ae491e`](https://github.com/better-auth/better-auth/commit/2ae491eac3ece50839a0eb2d4f868c4deedac67b)]:
+  - @better-auth/core@1.6.27
+
+## 1.6.26
+
+### Patch Changes
+
+- Updated dependencies [[`a30e274`](https://github.com/better-auth/better-auth/commit/a30e274b5daed6057086d76b91d17abfa02196d7)]:
+  - @better-auth/core@1.6.26
+
+## 1.6.25
+
+### Patch Changes
+
+- Updated dependencies [[`0ffd1fb`](https://github.com/better-auth/better-auth/commit/0ffd1fb28d44a8266d62791cd4c97e263444d03b)]:
+  - @better-auth/core@1.6.25
 
 ## 1.6.24
 

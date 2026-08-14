@@ -22,7 +22,6 @@ describe("oauth credential responses carry no-store", async () => {
 					action === "create" ||
 					action === "configure-client-credentials-scopes",
 				allowDynamicClientRegistration: true,
-				silenceWarnings: { oauthAuthServerConfig: true, openidConfig: true },
 			}),
 		],
 	});
@@ -43,6 +42,7 @@ describe("oauth credential responses carry no-store", async () => {
 				grant_types: ["client_credentials"],
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 				client_credentials_scopes: ["m2m:read"],
 			},

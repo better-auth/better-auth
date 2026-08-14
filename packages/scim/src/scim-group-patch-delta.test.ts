@@ -147,7 +147,7 @@ function createMutationOrderMemoryAdapter(
 }
 
 describe("SCIM incremental Group PATCH", () => {
-	it("returns 204 and reconciles only the membership delta", async () => {
+	it("returns the updated resource and reconciles only the membership delta", async () => {
 		const data = {
 			user: [] as User[],
 			session: [] as { id: string }[],
@@ -241,9 +241,14 @@ describe("SCIM incremental Group PATCH", () => {
 		const addedSource = data.scimUser.find((source) => source.id === added.id);
 		if (!addedSource) throw new Error("Expected the added SCIM User");
 
-		expect(response.status).toBe(204);
+		expect(response.status).toBe(200);
 		expect(response.headers.get("location")).toContain(`/Groups/${group.id}`);
-		expect(await response.text()).toBe("");
+		expect(await response.json()).toMatchObject({
+			id: group.id,
+			members: expect.arrayContaining([
+				expect.objectContaining({ value: added.id }),
+			]),
+		});
 		expect(reconciledUserIds).toEqual([addedSource.userId]);
 		expect(
 			data.scimGroupMember.filter(

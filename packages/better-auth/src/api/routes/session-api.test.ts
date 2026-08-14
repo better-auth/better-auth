@@ -941,12 +941,9 @@ describe("cookie cache with JWT strategy backed by JWKS", async () => {
 				enabled: true,
 				strategy: "jwt",
 				refreshCache: false,
-				jwt: {
-					signingKey: "jwt-plugin",
-				},
 			},
 		},
-		plugins: [jwt()],
+		plugins: [jwt({ sessionCookieCache: true })],
 	});
 	const ctx = await auth.$context;
 
@@ -1128,6 +1125,74 @@ describe("cookie cache with JWT strategy backed by JWKS", async () => {
 		expect(res.data?.user.email).toBe(testUser.email);
 	});
 
+	it("should reject a secret-signed cookie cache and fall back to the database", async () => {
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const cookies = parseCookies(headers.get("cookie") || "");
+		const token = cookies.get("better-auth.session_data");
+		const sessionCookie = cookies.get("better-auth.session_token");
+		if (!token || !sessionCookie) {
+			throw new Error("Session cookies not found");
+		}
+
+		const jwks = await auth.api.getJwks();
+		const localJwks = createLocalJWKSet(jwks);
+		const verified = await jwtVerify(token, localJwks, {
+			audience: COOKIE_CACHE_JWT_AUDIENCE,
+		});
+		const verifiedPayload = verified.payload as {
+			session: Record<string, unknown>;
+			user: Record<string, unknown>;
+		};
+
+		const secretSignedToken = await signJWT(
+			{
+				session: verifiedPayload.session,
+				user: verifiedPayload.user,
+				updatedAt: Date.now(),
+				version: "1",
+			},
+			ctx.secret,
+		);
+
+		headers.set(
+			"cookie",
+			`better-auth.session_data=${secretSignedToken}; better-auth.session_token=${sessionCookie}`,
+		);
+
+		let replacedCookieCache: string | undefined;
+		const res = await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					replacedCookieCache = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					).get("better-auth.session_data")?.value;
+				},
+			},
+		});
+
+		expect(res.data?.user.email).toBe(testUser.email);
+		expect(res.data?.session.token).toBe(verifiedPayload.session.token);
+		if (!replacedCookieCache) {
+			throw new Error("Cookie cache was not replaced");
+		}
+		expect(replacedCookieCache).not.toBe(secretSignedToken);
+		expect(decodeProtectedHeader(replacedCookieCache).typ).toBe(
+			COOKIE_CACHE_JWT_TYPE,
+		);
+	});
+
 	it("should verify existing cookie-cache JWTs across JWKS rotation grace period", async () => {
 		vi.useFakeTimers();
 
@@ -1136,13 +1201,11 @@ describe("cookie cache with JWT strategy backed by JWKS", async () => {
 				cookieCache: {
 					enabled: true,
 					strategy: "jwt",
-					jwt: {
-						signingKey: "jwt-plugin",
-					},
 				},
 			},
 			plugins: [
 				jwt({
+					sessionCookieCache: true,
 					jwks: {
 						rotationInterval: 1,
 						gracePeriod: 60,
@@ -1721,6 +1784,7 @@ describe("cookie cache refreshCache", async () => {
 			context: ctx,
 			headers,
 			query: {},
+			responseHeaders: new Headers(),
 		} as unknown as GenericEndpointContext;
 
 		await runWithRequestState(new WeakMap(), async () => {
@@ -1729,7 +1793,7 @@ describe("cookie cache refreshCache", async () => {
 				expect(session?.user.email).toBe(testUser.email);
 
 				const parsed = parseSetCookieHeader(
-					endpointCtx.context.responseHeaders?.get("set-cookie") || "",
+					endpointCtx.responseHeaders.get("set-cookie") || "",
 				);
 				const forwardedSessionDataCookie = Array.from(parsed.keys()).some(
 					(name) =>

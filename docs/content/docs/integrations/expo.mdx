@@ -427,7 +427,7 @@ To make authenticated requests to your server that require the user's session, y
 import { authClient } from "@/lib/auth-client";
 
 const makeAuthenticatedRequest = async () => {
-  const cookies = authClient.getCookie(); // [!code highlight]
+  const cookies = await authClient.getCookie(); // [!code highlight]
   const headers = {
     "Cookie": cookies, // [!code highlight]
   };
@@ -456,9 +456,9 @@ export function TRPCProvider(props: { children: React.ReactNode }) {
       links: [
         httpBatchLink({
           //...your other options
-          headers() {
+          async headers() {
             const headers = new Map<string, string>(); // [!code highlight]
-            const cookies = authClient.getCookie(); // [!code highlight]
+            const cookies = await authClient.getCookie(); // [!code highlight]
             if (cookies) { // [!code highlight]
               headers.set("Cookie", cookies); // [!code highlight]
             } // [!code highlight]
@@ -483,18 +483,18 @@ export function TRPCProvider(props: { children: React.ReactNode }) {
 
 ### Expo Client
 
-**storage**: the storage mechanism used to cache the session data and cookies.
+**storage**: the SecureStore-compatible storage used to cache session data and cookies.
 
 ```ts title="lib/auth-client.ts"
 import { createAuthClient } from "better-auth/react";
 import { expoClient } from "@better-auth/expo/client";
-import SecureStorage from "expo-secure-store";
+import * as SecureStore from "expo-secure-store";
 
 const authClient = createAuthClient({
     baseURL: "http://localhost:8081",
     plugins: [
         expoClient({
-            storage: SecureStorage,
+            storage: SecureStore,
             // ...
         })
     ],

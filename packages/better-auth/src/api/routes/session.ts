@@ -7,14 +7,11 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
-import { safeJSONParse } from "@better-auth/core/utils/json";
-import { base64Url } from "@better-auth/utils/base64";
-import { binary } from "@better-auth/utils/binary";
-import { createHMAC } from "@better-auth/utils/hmac";
 
 import * as z from "zod";
 import { hasServerSessionStore } from "../../context/store-capabilities";
 import {
+	decodeCookieCache,
 	deleteSessionCookie,
 	expireCookie,
 	getChunkedCookie,
@@ -22,12 +19,7 @@ import {
 	setSessionCookie,
 } from "../../cookies";
 import { getSessionQuerySchema } from "../../cookies/session-store";
-import { symmetricDecodeJWT, verifyJWT as verifySecretJWT } from "../../crypto";
 import { parseSessionOutput, parseUserOutput } from "../../db";
-import {
-	getCookieCacheJwtSigningKey,
-	verifyCookieCacheJWT,
-} from "../../plugins/jwt/cookie-cache";
 import type { Prettify, Session, User } from "../../types";
 import { getDate } from "../../utils/date";
 import { isAPIError } from "../../utils/is-api-error";
@@ -105,126 +97,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					ctx.context.authCookies.sessionData.name,
 				);
 
-				let sessionDataPayload: {
-					session: {
-						session: Session;
-						user: User;
-						updatedAt: number;
-						version?: string;
-					};
-					expiresAt: number;
-				} | null = null;
-
-				if (sessionDataCookie) {
-					const strategy =
-						ctx.context.options.session?.cookieCache?.strategy || "compact";
-					const jwtSigningKey = getCookieCacheJwtSigningKey(
-						ctx.context.options,
-					);
-
-					if (strategy === "jwe") {
-						// Decode JWE (encrypted)
-						const payload = await symmetricDecodeJWT<{
-							session: Session;
-							user: User;
-							updatedAt: number;
-							version?: string;
-							exp?: number;
-						}>(
-							sessionDataCookie,
-							ctx.context.secretConfig,
-							"better-auth-session",
-						);
-
-						if (payload && payload.session && payload.user) {
-							sessionDataPayload = {
-								session: {
-									session: payload.session,
-									user: payload.user,
-									updatedAt: payload.updatedAt,
-									version: payload.version,
-								},
-								expiresAt: payload.exp ? payload.exp * 1000 : Date.now(),
-							};
-						} else {
-							// Decryption failed, expire the invalid cookie and fall through
-							// to session_token DB validation. This handles scenarios like
-							// cross-subdomain cookie migrations where stale cookies may be present.
-							expireCookie(ctx, ctx.context.authCookies.sessionData);
-						}
-					} else if (strategy === "jwt") {
-						const payload =
-							jwtSigningKey === "jwt-plugin"
-								? await verifyCookieCacheJWT<{
-										session: Session;
-										user: User;
-										updatedAt: number;
-										version?: string;
-										exp?: number;
-									}>(ctx, sessionDataCookie)
-								: await verifySecretJWT<{
-										session: Session;
-										user: User;
-										updatedAt: number;
-										version?: string;
-										exp?: number;
-									}>(sessionDataCookie, ctx.context.secret);
-
-						if (payload && payload.session && payload.user) {
-							sessionDataPayload = {
-								session: {
-									session: payload.session,
-									user: payload.user,
-									updatedAt: payload.updatedAt,
-									version: payload.version,
-								},
-								expiresAt: payload.exp ? payload.exp * 1000 : Date.now(),
-							};
-						} else {
-							// Verification failed, expire the invalid cookie and fall through
-							// to session_token DB validation. This handles scenarios like
-							// cross-subdomain cookie migrations where stale cookies may be present.
-							expireCookie(ctx, ctx.context.authCookies.sessionData);
-						}
-					} else {
-						// Decode compact format (or legacy base64-hmac)
-						const parsed = safeJSONParse<{
-							session: {
-								session: Session;
-								user: User;
-								updatedAt: number;
-								version?: string;
-							};
-							signature: string;
-							expiresAt: number;
-						}>(binary.decode(base64Url.decode(sessionDataCookie)));
-
-						if (parsed) {
-							const isValid = await createHMAC(
-								"SHA-256",
-								"base64urlnopad",
-							).verify(
-								ctx.context.secret,
-								JSON.stringify({
-									...parsed.session,
-									expiresAt: parsed.expiresAt,
-								}),
-								parsed.signature,
-							);
-							if (isValid) {
-								sessionDataPayload = parsed;
-							} else {
-								// HMAC verification failed, expire the invalid cookie and fall through
-								// to session_token DB validation. This handles scenarios like
-								// cross-subdomain cookie migrations where stale cookies may be present.
-								expireCookie(ctx, ctx.context.authCookies.sessionData);
-							}
-						} else {
-							// Parsing failed, expire the invalid cookie and fall through to
-							// session_token DB validation like the signed-token strategies.
-							expireCookie(ctx, ctx.context.authCookies.sessionData);
-						}
-					}
+				const sessionDataPayload = sessionDataCookie
+					? await decodeCookieCache(ctx, sessionDataCookie)
+					: null;
+				if (sessionDataCookie && !sessionDataPayload) {
+					expireCookie(ctx, ctx.context.authCookies.sessionData);
 				}
 
 				const dontRememberMe = await ctx.getSignedCookie(
@@ -613,12 +490,10 @@ export const getSessionFromCtx = async <
 			if (lowerKey === "cache-control" || lowerKey === "pragma") {
 				return;
 			}
-			if (!ctx.context.responseHeaders) {
-				ctx.context.responseHeaders = new Headers({ [key]: value });
-			} else if (lowerKey === "set-cookie") {
-				ctx.context.responseHeaders.append(key, value);
+			if (lowerKey === "set-cookie") {
+				ctx.responseHeaders.append(key, value);
 			} else {
-				ctx.context.responseHeaders.set(key, value);
+				ctx.responseHeaders.set(key, value);
 			}
 		});
 	}

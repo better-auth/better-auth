@@ -1859,7 +1859,7 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 		const accountsB = await ctx.adapter.findMany<{
 			providerId: string;
 			issuer: string;
-			providerAccountId: string;
+			accountId: string;
 			userId: string;
 		}>({
 			model: "account",
@@ -1869,7 +1869,7 @@ describe("oauth2 - link-social uses issuer-scoped account lookup", async () => {
 		const githubAccount = accountsB.find((a) => a.providerId === "github");
 		expect(githubAccount).toBeTruthy();
 		expect(githubAccount?.issuer).toBe("local:oauth:github");
-		expect(githubAccount?.providerAccountId).toBe(SHARED_ACCOUNT_ID);
+		expect(githubAccount?.accountId).toBe(SHARED_ACCOUNT_ID);
 		expect(githubAccount?.userId).toBe(userBId);
 
 		// User A's Google account must remain untouched
@@ -1907,7 +1907,7 @@ describe("oauth2 - orphaned account identity", () => {
 		});
 		const ctx = await auth.$context;
 		const email = "orphaned-account@example.com";
-		const providerAccountId = "orphaned-google-subject";
+		const accountId = "orphaned-google-subject";
 		const { data } = await client.signUp.email({
 			email,
 			password: "password123",
@@ -1921,7 +1921,7 @@ describe("oauth2 - orphaned account identity", () => {
 				data: {
 					providerId: "google",
 					issuer: "https://accounts.google.com",
-					providerAccountId,
+					accountId,
 					userId: "missing-account-owner",
 					createdAt: new Date(),
 					updatedAt: new Date(),
@@ -1939,7 +1939,7 @@ describe("oauth2 - orphaned account identity", () => {
 					name: "Existing User",
 					picture: "https://example.com/photo.jpg",
 					exp: 1234567890,
-					sub: providerAccountId,
+					sub: accountId,
 					iat: 1234567890,
 					aud: "test",
 					azp: "test",
@@ -2051,16 +2051,16 @@ describe("oauth2 - providers without email", async () => {
 		 * @see https://github.com/better-auth/better-auth/issues/9454
 		 */
 		it("uses the verified raw profile subject instead of a mapped id", async () => {
-			const providerAccountId = "920138789012345000";
+			const accountId = "920138789012345000";
 			const email = "mapped-id@example.com";
-			mockDiscordToken(providerAccountId, "mapped-id", email);
+			mockDiscordToken(accountId, "mapped-id", email);
 			const discordProvider = ctx.socialProviders.find(
 				(provider) => provider.id === "discord",
 			)!;
 			const providerInfo = await discordProvider.getUserInfo({
 				accessToken: discordTokenResponse.access_token,
 			});
-			expect(providerInfo?.data).toMatchObject({ id: providerAccountId });
+			expect(providerInfo?.data).toMatchObject({ id: accountId });
 			expect(providerInfo?.user).toMatchObject({
 				id: "mapped-profile-id",
 			});
@@ -2095,7 +2095,7 @@ describe("oauth2 - providers without email", async () => {
 			});
 			expect(accountSubject).toHaveBeenCalledWith(
 				expect.objectContaining({
-					profile: expect.objectContaining({ id: providerAccountId }),
+					profile: expect.objectContaining({ id: accountId }),
 				}),
 			);
 			const session = await client.getSession({
@@ -2104,12 +2104,12 @@ describe("oauth2 - providers without email", async () => {
 			expect(session.data?.user.email).toBe(email);
 
 			const account = await ctx.adapter.findOne<{
-				providerAccountId: string;
+				accountId: string;
 				providerId: string;
 			}>({
 				model: "account",
 				where: [
-					{ field: "providerAccountId", value: providerAccountId },
+					{ field: "accountId", value: accountId },
 					{ field: "providerId", value: "discord" },
 				],
 			});
@@ -2173,14 +2173,14 @@ describe("oauth2 - providers without email", async () => {
 
 			const accounts = await ctx.adapter.findMany<{
 				providerId: string;
-				providerAccountId: string;
+				accountId: string;
 			}>({
 				model: "account",
 				where: [{ field: "userId", value: user!.id }],
 			});
 			const discordAccount = accounts.find((a) => a.providerId === "discord");
 			expect(discordAccount).toBeTruthy();
-			expect(discordAccount?.providerAccountId).toBe(discordId);
+			expect(discordAccount?.accountId).toBe(discordId);
 		});
 	});
 

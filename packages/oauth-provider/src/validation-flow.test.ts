@@ -11,15 +11,10 @@ import {
 } from "./resources";
 import type { OAuthClientResource, OAuthOptions, Scope } from "./types";
 
-const silenceWarnings = {
-	oauthAuthServerConfig: true,
-	openidConfig: true,
-} as const;
 const bootProvider = async (options: Partial<OAuthOptions<Scope[]>> = {}) => {
 	const opts = {
 		loginPage: "/login",
 		consentPage: "/consent",
-		silenceWarnings,
 		enforcePerClientResources: false,
 		...options,
 	} as OAuthOptions<Scope[]>;

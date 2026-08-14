@@ -42,12 +42,11 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
-			resource: {
-				type: "string",
-				required: false,
-			},
 		},
-		indexes: [{ fields: ["deviceCode"] }, { fields: ["userCode"] }],
+		indexes: [
+			{ fields: ["deviceCode"], unique: true },
+			{ fields: ["userCode"], unique: true },
+		],
 	},
 } satisfies BetterAuthPluginDBSchema;
 
@@ -62,7 +61,6 @@ const deviceCode = z.object({
 	pollingInterval: z.number().optional(),
 	clientId: z.string().optional(),
 	scope: z.string().optional(),
-	resource: z.string().optional(),
 });
 
 export type DeviceCode = z.infer<typeof deviceCode>;

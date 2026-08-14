@@ -31,10 +31,6 @@ describe("oauth introspect", async () => {
 				consentPage: "/consent",
 				resources: [validResource],
 				enforcePerClientResources: false,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -148,6 +144,7 @@ describe("oauth introspect", async () => {
 			body: {
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				scope: "openid profile email offline_access",
 				skip_consent: true,
 			},
@@ -649,10 +646,6 @@ describe("oauth introspect - config", async () => {
 						clientPrivileges: ({ action }) =>
 							action === "create" ||
 							action === "configure-client-credentials-scopes",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 						...opts?.oauthProviderConfig,
 					}),
 					...(opts?.oauthProviderConfig?.disableJwtPlugin
@@ -685,6 +678,7 @@ describe("oauth introspect - config", async () => {
 					"client_credentials",
 					"refresh_token",
 				],
+				token_endpoint_auth_method: "client_secret_post",
 				redirect_uris: [redirectUri],
 				application_type: "native",
 				skip_consent: true,
@@ -1064,10 +1058,6 @@ describe("oauth introspect - rejects non-OAuth same-issuer JWTs", async () => {
 				consentPage: "/consent",
 				resources: [authServerBaseUrl],
 				enforcePerClientResources: false,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -1090,6 +1080,7 @@ describe("oauth introspect - rejects non-OAuth same-issuer JWTs", async () => {
 			body: {
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				scope: "openid profile email offline_access",
 				skip_consent: true,
 			},

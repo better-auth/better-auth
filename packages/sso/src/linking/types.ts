@@ -1,7 +1,7 @@
 export interface NormalizedSSOProfile {
 	providerType: "saml" | "oidc";
 	providerId: string;
-	providerAccountId: string;
+	accountId: string;
 	email: string;
 	emailVerified: boolean;
 	name?: string;

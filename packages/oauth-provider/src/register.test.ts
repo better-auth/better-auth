@@ -32,10 +32,6 @@ describe("oauth register", async () => {
 				clientRegistrationAllowedResources: [
 					"https://api.example.com/dcr-dedupe",
 				],
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 				scopes: [
 					"openid",
 					"profile",
@@ -142,10 +138,6 @@ describe("oauth register", async () => {
 					scopes: ["openid", "read", "write", "admin"],
 					clientRegistrationDefaultScopes: ["openid", "read", "read"],
 					clientRegistrationAllowedScopes: ["write", "read"],
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -389,10 +381,6 @@ describe("oauth register", async () => {
 						allowDynamicClientRegistration: true,
 						resources: [identifier],
 						clientRegistrationAllowedResources: [identifier],
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					jwt(),
 				],
@@ -644,10 +632,6 @@ describe("oauth register - disableJwtPlugin", async () => {
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
 				disableJwtPlugin: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -678,10 +662,6 @@ describe("oauth register - unauthenticated", async () => {
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
 				allowUnauthenticatedClientRegistration: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -814,10 +794,6 @@ describe("oauth register - unauthenticated DCR full flow", async () => {
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
 				allowUnauthenticatedClientRegistration: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -941,10 +917,6 @@ describe("oauth register - organization", async () => {
 						(session?.activeOrganizationId as string | undefined) ?? undefined
 					);
 				},
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],
@@ -1009,10 +981,6 @@ describe("oauth register - skip_consent blocked", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],
@@ -1066,10 +1034,6 @@ describe("oauth register - protected dynamic registration", async () => {
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
 				validateInitialAccessToken,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -1210,10 +1174,6 @@ describe("oauth register - protected dynamic registration", async () => {
 						loginPage: "/login",
 						consentPage: "/consent",
 						allowDynamicClientRegistration: true,
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			});
@@ -1320,10 +1280,6 @@ describe("oauth register - protected dynamic registration", async () => {
 					consentPage: "/consent",
 					allowDynamicClientRegistration: true,
 					validateInitialAccessToken: () => ({}),
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -1362,10 +1318,6 @@ describe("oauth register - protected dynamic registration", async () => {
 					allowDynamicClientRegistration: true,
 					validateInitialAccessToken: () => {
 						throw new Error("validator failure");
-					},
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
 					},
 				}),
 			],
@@ -1412,10 +1364,6 @@ describe("oauth register - protected dynamic registration", async () => {
 							error_description: "tenant suspended",
 						});
 					},
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -1458,10 +1406,6 @@ describe("oauth register - protected dynamic registration", async () => {
 					consentPage: "/consent",
 					allowDynamicClientRegistration: true,
 					validateInitialAccessToken: sessionValidator,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -1510,10 +1454,6 @@ describe("oauth register - protected dynamic registration", async () => {
 					consentPage: "/consent",
 					allowDynamicClientRegistration: true,
 					validateInitialAccessToken: bearerValidator,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -1589,10 +1529,6 @@ describe("oauth register - application_type", async () => {
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
 				allowUnauthenticatedClientRegistration: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});

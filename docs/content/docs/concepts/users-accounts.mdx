@@ -400,7 +400,7 @@ export const auth = betterAuth({
 
 Better Auth supports multiple authentication methods through providers such as email and password, Google, or an enterprise identity provider. Each method linked to a user is stored as an account.
 
-An account has a local record ID and a provider identity. `id` identifies the Better Auth account record and is the value to pass as `accountId` to account-management APIs. The pair of `issuer` and `providerAccountId` identifies the external account: `issuer` names the trusted authority, and `providerAccountId` is the stable identifier that authority assigned. The `providerId` identifies the provider configuration Better Auth uses for protocol operations.
+An account has a local record ID and a provider identity. `id` identifies the Better Auth account record and is the value to pass as `accountId` to account-management APIs. The pair of `issuer` and `accountId` identifies the external account: `issuer` names the trusted authority, and `accountId` is the stable identifier that authority assigned. The `providerId` identifies the provider configuration Better Auth uses for protocol operations.
 
 OAuth providers without a trusted issuer use `local:oauth:<encoded providerId>` as their account namespace, with the provider ID segment percent-encoded. Credential accounts use `local:credential`; do not use that credential namespace for an OAuth provider.
 

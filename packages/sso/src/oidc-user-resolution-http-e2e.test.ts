@@ -245,10 +245,19 @@ describe("SSO OIDC user resolution HTTP", () => {
 			providerId: "workforce",
 			accountKey: {
 				issuer: identityProvider.issuer.url,
-				providerAccountId: subject,
+				accountId: subject,
 			},
 			providerUser: { email: firstProviderEmail },
 			providerClaims: { sub: subject },
+			verifiedIdTokenClaims: {
+				iss: identityProvider.issuer.url,
+				sub: subject,
+			},
+			providerReference: {
+				providerId: "workforce",
+				source: { type: "configured" },
+				authenticationConfigurationFingerprint: expect.any(String),
+			},
 		});
 		expect(databases).toHaveLength(2);
 		expect(validationActions).toEqual(["link-account", "sign-in"]);
@@ -271,7 +280,7 @@ describe("SSO OIDC user resolution HTTP", () => {
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]).toMatchObject({
 			issuer: identityProvider.issuer.url,
-			providerAccountId: subject,
+			accountId: subject,
 			providerId: "workforce",
 			userId: selectedUser.id,
 		});
@@ -418,7 +427,7 @@ describe("SSO OIDC user resolution HTTP", () => {
 		});
 		await context.internalAdapter.createAccount({
 			issuer: identityProvider.issuer.url!,
-			providerAccountId: subject,
+			accountId: subject,
 			providerId: "workforce",
 			userId: owner.id,
 		});
@@ -580,9 +589,9 @@ describe("SSO OIDC user resolution HTTP", () => {
 			model: "account",
 			where: [],
 		});
-		expect(
-			accounts.map(({ providerAccountId }) => providerAccountId).sort(),
-		).toEqual(["CaseSensitiveSubject", "casesensitivesubject"].sort());
+		expect(accounts.map(({ accountId }) => accountId).sort()).toEqual(
+			["CaseSensitiveSubject", "casesensitivesubject"].sort(),
+		);
 	});
 
 	it("rejects a persisted provider replacement between token exchange and finalization", async ({

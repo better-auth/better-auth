@@ -74,12 +74,13 @@ describe("SCIM discovery", () => {
 
 		expect(schemas).toMatchObject({
 			schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
-			totalResults: 2,
+			totalResults: 3,
 			startIndex: 1,
-			itemsPerPage: 2,
+			itemsPerPage: 3,
 		});
 		expect(schemas.Resources.map((schema) => schema.id)).toEqual([
 			"urn:ietf:params:scim:schemas:core:2.0:User",
+			"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
 			"urn:ietf:params:scim:schemas:core:2.0:Group",
 		]);
 		expect(resourceTypes).toMatchObject({
@@ -89,16 +90,26 @@ describe("SCIM discovery", () => {
 			itemsPerPage: 2,
 		});
 		expect(
-			resourceTypes.Resources.map(({ id, endpoint, schema }) => ({
-				id,
-				endpoint,
-				schema,
+			resourceTypes.Resources.map((resourceType) => ({
+				id: resourceType.id,
+				endpoint: resourceType.endpoint,
+				schema: resourceType.schema,
+				...("schemaExtensions" in resourceType
+					? { schemaExtensions: resourceType.schemaExtensions }
+					: {}),
 			})),
 		).toEqual([
 			{
 				id: "User",
 				endpoint: "/Users",
 				schema: "urn:ietf:params:scim:schemas:core:2.0:User",
+				schemaExtensions: [
+					{
+						schema:
+							"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+						required: false,
+					},
+				],
 			},
 			{
 				id: "Group",

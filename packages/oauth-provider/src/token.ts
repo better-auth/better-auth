@@ -17,8 +17,8 @@ import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { base64url, decodeProtectedHeader, SignJWT } from "jose";
 import {
+	LEVEL_0_ACR,
 	stripReservedIdTokenClaims,
-	UNSPECIFIED_ACR,
 } from "./authentication-context";
 import { resolveAccessTokenClaims } from "./claims";
 import { getRequestedUserInfoClaims } from "./claims-request";
@@ -165,7 +165,7 @@ export function getOAuthProviderApi(
 			if (!clientId) {
 				throw new APIError("BAD_REQUEST", {
 					error_description: "Missing required client_id",
-					error: "invalid_grant",
+					error: "invalid_request",
 				});
 			}
 			if (
@@ -175,7 +175,7 @@ export function getOAuthProviderApi(
 			) {
 				throw new APIError("BAD_REQUEST", {
 					error_description: "Missing required client credentials",
-					error: "invalid_grant",
+					error: "invalid_client",
 				});
 			}
 			const client = await validateClientCredentials(
@@ -374,7 +374,7 @@ async function createIdToken(
 	const payload: JWTPayload = {
 		...ID_TOKEN_SCOPE_CLAIM_GUARDS,
 		auth_time: authTimeSec,
-		acr: UNSPECIFIED_ACR,
+		acr: LEVEL_0_ACR,
 		...customClaims,
 		at_hash: atHash,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
@@ -1715,7 +1715,7 @@ async function handleClientCredentialsGrant(
 	if (!client_id) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "Missing required client_id",
-			error: "invalid_grant",
+			error: "invalid_request",
 		});
 	}
 
@@ -1809,7 +1809,7 @@ async function handleRefreshTokenGrant(
 	if (!client_id) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "Missing required client_id",
-			error: "invalid_grant",
+			error: "invalid_request",
 		});
 	}
 
@@ -1817,7 +1817,7 @@ async function handleRefreshTokenGrant(
 		throw new APIError("BAD_REQUEST", {
 			error_description:
 				"Missing a required refresh_token for refresh_token grant",
-			error: "invalid_grant",
+			error: "invalid_request",
 		});
 	}
 	const decodedRefresh = await decodeRefreshToken(opts, refresh_token);

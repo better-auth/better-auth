@@ -23,10 +23,6 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -113,6 +109,33 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 	function postJson(path: string, body: Record<string, unknown>) {
 		return captureJsonResponse(path, { method: "POST", body });
 	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10752#pullrequestreview-4910497732
+	 */
+	it.each([
+		"/oauth2/introspect",
+		"/oauth2/revoke",
+	])("%s rejects repeated form client authentication fields", async (path) => {
+		if (!oauthClient?.client_id || !oauthClient.client_secret) {
+			throw new Error("OAuth client was not created");
+		}
+		const { status, body } = await captureJsonResponse(path, {
+			method: "POST",
+			body: new URLSearchParams([
+				["client_id", oauthClient.client_id],
+				["client_secret", oauthClient.client_secret],
+				["client_secret", "duplicate-secret"],
+				["token", "opaque-token"],
+			]),
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+			},
+		});
+
+		expect(status).toBe(400);
+		expect(body?.error).toBe("invalid_request");
+	});
 
 	describe("oauth2Token (JSON delivery)", () => {
 		it("missing grant_type → invalid_request", async () => {

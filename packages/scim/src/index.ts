@@ -2,10 +2,12 @@ import type { BetterAuthPlugin, Status } from "better-auth";
 import { BetterAuthError } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { statusCodes } from "better-call";
+import { normalizeSCIMUserEntraCompatibilityRequestBody } from "./active-normalization";
 import type { SCIMOptions } from "./configuration";
 import {
 	areValidSCIMScopes,
 	createSCIMConnectionMiddleware,
+	isValidSCIMConnectionIdentifier,
 	isValidSCIMCredentialId,
 } from "./connection-authentication";
 import { createDecommissionSCIMConnectionEndpoint } from "./connection-decommission";
@@ -24,10 +26,17 @@ import {
 	patchSCIMGroup,
 	replaceSCIMGroup,
 } from "./group-provisioning";
+import { normalizeMicrosoftEntraGroupSchema } from "./group-schemas";
 import {
 	acquireActiveSCIMUserLink,
 	createSCIMIdentityCoordinator,
 } from "./identity";
+import {
+	createSCIMManagedConnectionEndpoints,
+	managedSCIMSchema,
+	resolveManagedConnectionOptions,
+	SCIM_MANAGED_CONNECTION_ID_PREFIX,
+} from "./managed-connections";
 import {
 	createReconcileSCIMProjectionEndpoint,
 	createSCIMProjectionCoordinator,
@@ -83,7 +92,7 @@ function isAPIErrorLike(value: unknown): value is APIErrorLike {
 function createSCIMErrorResponse(
 	status: "BAD_REQUEST" | "UNSUPPORTED_MEDIA_TYPE",
 	detail: string,
-	scimType?: "invalidSyntax",
+	scimType?: "invalidSyntax" | "invalidValue",
 ) {
 	const error = createSCIMError(status, {
 		detail,
@@ -104,35 +113,77 @@ declare module "@better-auth/core" {
 }
 
 function validateConnections(options: SCIMOptions): void {
-	if (options.connections.length === 0) {
+	const authenticationProvided = options.authentication !== undefined;
+	const managedConnectionsProvided = options.managedConnections !== undefined;
+	const hasBearerTokenVerifier =
+		typeof options.authentication?.verifyBearerToken === "function";
+	if (authenticationProvided && !hasBearerTokenVerifier) {
 		throw new BetterAuthError(
-			"The scim plugin requires at least one provisioning connection.",
+			"SCIM authentication requires a callable verifyBearerToken.",
+		);
+	}
+	if (managedConnectionsProvided) {
+		if (
+			typeof options.managedConnections?.credentialHashSecret !== "string" ||
+			options.managedConnections.credentialHashSecret.length < 32
+		) {
+			throw new BetterAuthError(
+				"SCIM managed credentialHashSecret must contain at least 32 characters.",
+			);
+		}
+		const maxActiveCredentials =
+			options.managedConnections.maxActiveCredentials ?? 5;
+		if (
+			!Number.isInteger(maxActiveCredentials) ||
+			maxActiveCredentials < 1 ||
+			maxActiveCredentials > 100
+		) {
+			throw new BetterAuthError(
+				"SCIM managed maxActiveCredentials must be an integer between 1 and 100.",
+			);
+		}
+		const lastUsedWriteIntervalSeconds =
+			options.managedConnections.lastUsedWriteIntervalSeconds ?? 300;
+		if (
+			!Number.isInteger(lastUsedWriteIntervalSeconds) ||
+			lastUsedWriteIntervalSeconds < 0
+		) {
+			throw new BetterAuthError(
+				"SCIM managed lastUsedWriteIntervalSeconds must be a non-negative integer.",
+			);
+		}
+	}
+	if (
+		options.connections.length === 0 &&
+		!hasBearerTokenVerifier &&
+		!managedConnectionsProvided
+	) {
+		throw new BetterAuthError(
+			"The scim plugin requires a provisioning connection, bearer token verifier, or managed connection catalog.",
 		);
 	}
 
 	const connectionIds = new Set<string>();
 	const bearerTokens = new Set<string>();
 	for (const connection of options.connections) {
-		if (
-			!connection.id.trim() ||
-			connection.id !== connection.id.trim() ||
-			connection.id.length > 255
-		) {
+		if (!isValidSCIMConnectionIdentifier(connection.id)) {
 			throw new BetterAuthError(
 				"SCIM connection ids must be trimmed and contain between 1 and 255 characters.",
 			);
 		}
-		if (connection.credentials.length === 0 && !options.authentication) {
+		if (connection.id.startsWith(SCIM_MANAGED_CONNECTION_ID_PREFIX)) {
+			throw new BetterAuthError(
+				`Static SCIM connection ids cannot use the reserved "${SCIM_MANAGED_CONNECTION_ID_PREFIX}" prefix.`,
+			);
+		}
+		if (connection.credentials.length === 0 && !hasBearerTokenVerifier) {
 			throw new BetterAuthError(
 				"SCIM connections require a static credential or bearer token verifier.",
 			);
 		}
 		if (
 			connection.provisioningDomainId !== undefined &&
-			(!connection.provisioningDomainId.trim() ||
-				connection.provisioningDomainId !==
-					connection.provisioningDomainId.trim() ||
-				connection.provisioningDomainId.length > 255)
+			!isValidSCIMConnectionIdentifier(connection.provisioningDomainId)
 		) {
 			throw new BetterAuthError(
 				"SCIM provisioning domain ids must be trimmed and contain between 1 and 255 characters.",
@@ -194,6 +245,13 @@ function createSCIMPlugin(options: SCIMOptions) {
 	const connectionMiddleware = createSCIMConnectionMiddleware(options);
 	const identity = createSCIMIdentityCoordinator(options);
 	const projection = createSCIMProjectionCoordinator(options);
+	const managedConnectionEndpoints = createSCIMManagedConnectionEndpoints(
+		options.managedConnections
+			? resolveManagedConnectionOptions(options.managedConnections)
+			: undefined,
+		projection,
+		identity,
+	);
 
 	return {
 		id: "scim",
@@ -228,8 +286,9 @@ function createSCIMPlugin(options: SCIMOptions) {
 					),
 				};
 			}
+			let body: unknown;
 			try {
-				JSON.parse(await request.clone().text());
+				body = JSON.parse(await request.clone().text());
 			} catch {
 				return {
 					response: createSCIMErrorResponse(
@@ -239,8 +298,57 @@ function createSCIMPlugin(options: SCIMOptions) {
 					),
 				};
 			}
+			const isUserMutation =
+				/\/scim\/v2\/Users(?:\/[^/]+)?$/.test(path) &&
+				((request.method === "POST" && path.endsWith("/Users")) ||
+					(["PUT", "PATCH"].includes(request.method) &&
+						!path.endsWith("/Users")));
+			const isGroupCreate =
+				request.method === "POST" && /\/scim\/v2\/Groups$/.test(path);
+			const isGroupMutation =
+				/\/scim\/v2\/Groups(?:\/[^/]+)?$/.test(path) &&
+				(isGroupCreate ||
+					(["PUT", "PATCH"].includes(request.method) &&
+						!path.endsWith("/Groups")));
+			let normalizedBody = body;
+			if (isGroupMutation) {
+				const groupNormalization = normalizeMicrosoftEntraGroupSchema(
+					normalizedBody,
+					isGroupCreate &&
+						options.compatibility?.microsoftEntra?.acceptLegacyGroupSchema ===
+							true,
+				);
+				if (!groupNormalization.ok) {
+					return {
+						response: createSCIMErrorResponse(
+							"BAD_REQUEST",
+							groupNormalization.detail,
+							"invalidValue",
+						),
+					};
+				}
+				normalizedBody = groupNormalization.body;
+			}
+			if (isUserMutation) {
+				normalizedBody = normalizeSCIMUserEntraCompatibilityRequestBody(
+					request.method,
+					normalizedBody,
+				);
+			}
+			if (normalizedBody === body) return;
+			const headers = new Headers(request.headers);
+			headers.delete("content-length");
+			return {
+				request: new Request(request.url, {
+					method: request.method,
+					headers,
+					body: JSON.stringify(normalizedBody),
+					signal: request.signal,
+				}),
+			};
 		},
 		endpoints: {
+			...managedConnectionEndpoints,
 			decommissionSCIMConnection: createDecommissionSCIMConnectionEndpoint(
 				projection,
 				identity,
@@ -320,6 +428,7 @@ function createSCIMPlugin(options: SCIMOptions) {
 			],
 		},
 		schema: {
+			...(options.managedConnections ? managedSCIMSchema : {}),
 			scimConnectionBinding: {
 				fields: {
 					connectionId: {
@@ -528,6 +637,11 @@ function createSCIMPlugin(options: SCIMOptions) {
 					serializedEmails: {
 						type: "string",
 						required: true,
+						returned: false,
+					},
+					serializedAttributes: {
+						type: "string",
+						required: false,
 						returned: false,
 					},
 					externalId: {
@@ -740,14 +854,24 @@ export type {
 	SCIMAuthenticationOptions,
 	SCIMAuthorizationSource,
 	SCIMBearerCredentialOptions,
+	SCIMBearerTokenVerification,
+	SCIMBearerTokenVerificationContext,
 	SCIMBearerTokenVerificationInput,
-	SCIMBearerTokenVerificationResult,
+	SCIMCanonicalAddress,
 	SCIMCanonicalEmail,
+	SCIMCanonicalEntitlement,
+	SCIMCanonicalManager,
 	SCIMCanonicalName,
+	SCIMCanonicalPhoneNumber,
+	SCIMCanonicalRole,
 	SCIMCanonicalUser,
+	SCIMCompatibilityOptions,
+	SCIMConnection,
 	SCIMConnectionDecommissionStatus,
 	SCIMConnectionOptions,
+	SCIMDeclaredConnectionVerificationResult,
 	SCIMEmail,
+	SCIMEnterpriseUser,
 	SCIMGroupAuthorizationSource,
 	SCIMIdentity,
 	SCIMIdentityResolution,
@@ -755,6 +879,9 @@ export type {
 	SCIMIdentityResolutionInput,
 	SCIMIdentitySource,
 	SCIMIdentityState,
+	SCIMManagedBearerPrincipal,
+	SCIMManagedConnectionOptions,
+	SCIMMicrosoftEntraCompatibilityOptions,
 	SCIMName,
 	SCIMOAuthBearerPrincipal,
 	SCIMOptions,
@@ -762,6 +889,7 @@ export type {
 	SCIMProjectedRoleGrant,
 	SCIMProjectedUserState,
 	SCIMProjection,
+	SCIMResolvedConnectionVerificationResult,
 	SCIMRoleExistenceInput,
 	SCIMRoleMappingInput,
 	SCIMRoleProjection,
@@ -769,10 +897,18 @@ export type {
 	SCIMStaticBearerPrincipal,
 	SCIMTransactionContext,
 } from "./configuration";
-
 export type {
 	SCIMActiveUserLink,
 	SCIMActiveUserLinkContext,
 	SCIMUserExternalIdReference,
 } from "./identity";
+export type {
+	SCIMManagedConnection,
+	SCIMManagedConnectionEvent,
+	SCIMManagedConnectionEventType,
+	SCIMManagedConnectionStatus,
+	SCIMManagedCredential,
+	SCIMManagedCredentialStatus,
+} from "./managed-connections";
+export { SCIM_MANAGED_CREATION_REQUEST_ID_CONFLICT } from "./managed-connections";
 export { acquireActiveSCIMUserLink };

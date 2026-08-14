@@ -1,5 +1,81 @@
 # better-auth
 
+## 1.7.0-rc.5
+
+### Minor Changes
+
+- [#10746](https://github.com/better-auth/better-auth/pull/10746) [`6782647`](https://github.com/better-auth/better-auth/commit/6782647d7c2d248246f9ef3980e656725c29ce64) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth device grants now use `oauthDeviceAuthorization()` alongside `oauthProvider()` or `mcp()`. This single integration replaces both the standalone `deviceCodeGrant()` plugin and the shared-grant configuration. Standalone Device Authorization no longer accepts or stores RFC 8707 resources, and `onDeviceAuthRequest` receives only `clientId` and `scope`. The OAuth integration rejects resource indicators that are not absolute, fragment-free URIs.
+
+  The OAuth integration replaces the optional `resource` column with `oauthClientId` and `resources`. Regenerate and apply the schema when using it. Before upgrading from an earlier 1.7 prerelease, let pending OAuth device codes expire or delete them because they cannot be exchanged through the new integration.
+
+- [#10330](https://github.com/better-auth/better-auth/pull/10330) [`081d3c3`](https://github.com/better-auth/better-auth/commit/081d3c379c720926295067d878c421b5e8684c78) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Allow the username plugin's separate `displayUsername` field to be omitted by setting `displayUsername: false` on both the server and client plugins.
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-rc.5
+  - @better-auth/drizzle-adapter@1.7.0-rc.5
+  - @better-auth/kysely-adapter@1.7.0-rc.5
+  - @better-auth/memory-adapter@1.7.0-rc.5
+  - @better-auth/mongo-adapter@1.7.0-rc.5
+  - @better-auth/prisma-adapter@1.7.0-rc.5
+  - @better-auth/telemetry@1.7.0-rc.5
+
+## 1.7.0-rc.4
+
+### Patch Changes
+
+- [#10676](https://github.com/better-auth/better-auth/pull/10676) [`90b5093`](https://github.com/better-auth/better-auth/commit/90b509344794b8064700371cbc04b985d0519839) Thanks [@bytaesu](https://github.com/bytaesu)! - Deduplicate in-flight session requests when React retries a suspended component.
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-rc.4
+  - @better-auth/drizzle-adapter@1.7.0-rc.4
+  - @better-auth/kysely-adapter@1.7.0-rc.4
+  - @better-auth/memory-adapter@1.7.0-rc.4
+  - @better-auth/mongo-adapter@1.7.0-rc.4
+  - @better-auth/prisma-adapter@1.7.0-rc.4
+  - @better-auth/telemetry@1.7.0-rc.4
+
+## 1.7.0-rc.3
+
+### Minor Changes
+
+- [#10059](https://github.com/better-auth/better-auth/pull/10059) [`49b5cf6`](https://github.com/better-auth/better-auth/commit/49b5cf650e1264ecc4c917ca193ea05c3b58a3b9) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Device Authorization now creates database indexes for device and user code lookups. Codes longer than 191 characters are rejected. Existing MySQL and SQL Server installations must convert these columns to bounded strings and resolve oversized values before running the migration.
+
+- [#9368](https://github.com/better-auth/better-auth/pull/9368) [`430c895`](https://github.com/better-auth/better-auth/commit/430c89549060ef6bd477ed2510650b9e49bba560) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Generic OAuth users can now sign out from the configured OpenID provider when they call `authClient.signOut()`. When a provider exposes a discovered or configured logout endpoint, Better Auth redirects to it and includes the stored `id_token_hint` when available. Pass `callbackURL` or configure `postLogoutRedirectURI` for the return flow, with optional `state`, or set `disableRedirect` to handle the returned `url` yourself. When multiple linked providers support logout, Better Auth selects the most recently updated account. Set `disableProviderLogout: true` to keep sign-out local.
+
+- [#10577](https://github.com/better-auth/better-auth/pull/10577) [`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - MCP clients that hit a scope wall now learn exactly which scopes to ask for. Missing protected scopes produce a `403` with an RFC 6750 `insufficient_scope` `WWW-Authenticate` challenge that names every missing scope. Clients can union those scopes into one authorization request instead of opening one browser redirect per scope.
+  - Configure protected scopes with `requiredScopes` through `RequireMcpAuthOptions` or the matching `createMcpProtectedRequestHandler` verifier option. Exact membership remains the default; `isScopeSatisfied` can define hierarchical policies.
+  - Use `createInsufficientScopeError` when an operation determines its required scopes dynamically. `createResourceServerChallenge` converts that signal and recognized token failures into safe RFC 6750 challenges.
+  - Use `challengeScopes` only as the unauthenticated challenge hint.
+
+  Handler-produced responses, ordinary permission denials, configuration failures, and unrelated thrown values keep their original status and identity.
+
+- [#10204](https://github.com/better-auth/better-auth/pull/10204) [`0683a5f`](https://github.com/better-auth/better-auth/commit/0683a5f36befb45ade3866c7f8057791eadeee59) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Microsoft sign-in now identifies Entra accounts with the stable `oid` claim in both the built-in `microsoft` provider and the Generic OAuth `microsoftEntraId` helper. Tokens without a valid `oid` are rejected, and the Generic OAuth helper refuses to initialize unless Microsoft discovery provides ID-token verification metadata. Existing Microsoft account rows created from `sub` must be migrated before upgrading.
+
+- [#10135](https://github.com/better-auth/better-auth/pull/10135) [`f68044d`](https://github.com/better-auth/better-auth/commit/f68044dcfbd9fb83763249ed9509cfacbcce47be) Thanks [@brentmitchell25](https://github.com/brentmitchell25)! - Registered OAuth clients can now use the RFC 8628 device flow to obtain provider-managed OAuth tokens. Add `deviceCodeGrant()` alongside `deviceAuthorization()` and `oauthProvider()`; clients request a code at `/device/code` and exchange it at `/oauth2/token` after the user approves it. OAuth and OpenID discovery now advertise `device_authorization_endpoint`.
+
+  Device authorization requests can bind RFC 8707 resource indicators. `GET /device` now returns the requesting `client_id`, `scope`, and `resource` values to the authenticated user who owns the request, and `onDeviceAuthRequest` receives the resource as its third argument. Token requests can reuse or narrow the approved resource set, but requests that add a resource are rejected. Existing first-party device clients continue to receive Better Auth session tokens from `/device/token`.
+
+  The `deviceCode` table adds an optional `resource` field. Run `npx @better-auth/cli generate` and apply the migration before deploying this update.
+
+### Patch Changes
+
+- [#10622](https://github.com/better-auth/better-auth/pull/10622) [`ecd83da`](https://github.com/better-auth/better-auth/commit/ecd83daa01ec482d31667019737cb6697f03da0b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Sign-up no longer deadlocks when session cookie caching uses the JWT strategy on a single-connection SQLite database with native transactions enabled. JWKS key lookups and creation now resolve the transaction-scoped adapter instead of always querying the root connection, so minting a signing key during sign-up joins the surrounding transaction instead of racing it for the only available connection. On multi-connection databases (Postgres, MySQL) this also fixes a silent atomicity gap where a JWKS key created mid-transaction could commit independently of the transaction it was minted in.
+
+- [#10505](https://github.com/better-auth/better-auth/pull/10505) [`d701f90`](https://github.com/better-auth/better-auth/commit/d701f90e6f81ede26209a50a5100bd9914a7ad5a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - One Tap, Electron, and Expo client plugins now compose with `createAuthClient` without TypeScript errors, and the resulting client preserves each plugin's inferred actions.
+
+- [#10621](https://github.com/better-auth/better-auth/pull/10621) [`59c4c83`](https://github.com/better-auth/better-auth/commit/59c4c832fc4eed813e98b5b2c45a91cf2d4ad9e7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Allow test instances to enable native database transactions for postgres and mysql.
+
+- Updated dependencies [[`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71), [`430c895`](https://github.com/better-auth/better-auth/commit/430c89549060ef6bd477ed2510650b9e49bba560), [`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71), [`ecd83da`](https://github.com/better-auth/better-auth/commit/ecd83daa01ec482d31667019737cb6697f03da0b), [`0683a5f`](https://github.com/better-auth/better-auth/commit/0683a5f36befb45ade3866c7f8057791eadeee59), [`d701f90`](https://github.com/better-auth/better-auth/commit/d701f90e6f81ede26209a50a5100bd9914a7ad5a)]:
+  - @better-auth/core@1.7.0-rc.3
+  - @better-auth/kysely-adapter@1.7.0-rc.3
+  - @better-auth/drizzle-adapter@1.7.0-rc.3
+  - @better-auth/memory-adapter@1.7.0-rc.3
+  - @better-auth/mongo-adapter@1.7.0-rc.3
+  - @better-auth/prisma-adapter@1.7.0-rc.3
+  - @better-auth/telemetry@1.7.0-rc.3
+
 ## 1.7.0-rc.2
 
 ### Minor Changes
@@ -322,6 +398,75 @@
   - @better-auth/telemetry@1.7.0-beta.5
 
 ## 1.7.0-beta.4
+
+## 1.6.27
+
+### Patch Changes
+
+- [#10657](https://github.com/better-auth/better-auth/pull/10657) [`2ae491e`](https://github.com/better-auth/better-auth/commit/2ae491eac3ece50839a0eb2d4f868c4deedac67b) Thanks [@bytaesu](https://github.com/bytaesu)! - Aligned endpoint and middleware context types with runtime route parameters, and preserved response headers when resolving sessions from endpoint contexts.
+
+- [#10676](https://github.com/better-auth/better-auth/pull/10676) [`90b5093`](https://github.com/better-auth/better-auth/commit/90b509344794b8064700371cbc04b985d0519839) Thanks [@bytaesu](https://github.com/bytaesu)! - Deduplicate in-flight session requests when React retries a suspended component.
+
+- Updated dependencies [[`2ae491e`](https://github.com/better-auth/better-auth/commit/2ae491eac3ece50839a0eb2d4f868c4deedac67b)]:
+  - @better-auth/core@1.6.27
+  - @better-auth/drizzle-adapter@1.6.27
+  - @better-auth/kysely-adapter@1.6.27
+  - @better-auth/memory-adapter@1.6.27
+  - @better-auth/mongo-adapter@1.6.27
+  - @better-auth/prisma-adapter@1.6.27
+  - @better-auth/telemetry@1.6.27
+
+## 1.6.26
+
+### Patch Changes
+
+- [#10619](https://github.com/better-auth/better-auth/pull/10619) [`9ede805`](https://github.com/better-auth/better-auth/commit/9ede8059b56e1415c1e8cfdd93ff72691b848bbf) Thanks [@jeroenvandermerwe](https://github.com/jeroenvandermerwe)! - Ensure database rate-limit cleanup completes when no background task handler is configured.
+
+- [#10608](https://github.com/better-auth/better-auth/pull/10608) [`5a811f1`](https://github.com/better-auth/better-auth/commit/5a811f1b4314b8bcf6f21c0b72de5cb67d552d97) Thanks [@bytaesu](https://github.com/bytaesu)! - Pass the email verification type to custom OTP generators after email sign-up.
+
+- [#10605](https://github.com/better-auth/better-auth/pull/10605) [`d8327f1`](https://github.com/better-auth/better-auth/commit/d8327f1fea92243b6fea1b0ab183e2a989792c0c) Thanks [@XXMOHAMED012](https://github.com/XXMOHAMED012)! - The email OTP verification check no longer reveals whether an email is registered before the OTP itself is verified.
+
+- [#10513](https://github.com/better-auth/better-auth/pull/10513) [`e2c73fb`](https://github.com/better-auth/better-auth/commit/e2c73fbec87f5e19f6a2b5ac371bc5bba9bd49ff) Thanks [@mrosberghaus](https://github.com/mrosberghaus)! - Fix `jwtClient()` collapsing `createAuthClient` type inference when combined with other client plugins such as `inferAdditionalFields`. Additional user fields (for example on `updateUser`) are preserved again.
+
+- [#10635](https://github.com/better-auth/better-auth/pull/10635) [`af50c45`](https://github.com/better-auth/better-auth/commit/af50c45553a62cfb6cdcdede86828731ca00c22c) Thanks [@krish-vachhani](https://github.com/krish-vachhani)! - Fix `oneTapClient()` collapsing `createAuthClient` type inference when combined with other client plugins. The `oneTap` action is available on the client again.
+
+- [#10633](https://github.com/better-auth/better-auth/pull/10633) [`701cd43`](https://github.com/better-auth/better-auth/commit/701cd43babac52784d855291a6adc0cf3fba7970) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Minting or reading a JWKS signing key inside an active database transaction now uses the transaction-scoped adapter instead of the root connection. On a single-connection SQLite database with native transactions enabled, this no longer deadlocks, and on Postgres and MySQL the key commits with the surrounding transaction instead of independently of it.
+
+- [#10599](https://github.com/better-auth/better-auth/pull/10599) [`e7b0eba`](https://github.com/better-auth/better-auth/commit/e7b0eba327e050f50764802e21484c6cabb56600) Thanks [@bytaesu](https://github.com/bytaesu)! - Preserve Apple user data from `form_post` callbacks when using `oAuthProxy`.
+
+- [#10552](https://github.com/better-auth/better-auth/pull/10552) [`2b4a14f`](https://github.com/better-auth/better-auth/commit/2b4a14f180ed2eeb9692d6933064b001f66ec52c) Thanks [@bytaesu](https://github.com/bytaesu)! - Allow users to retry email OTP password resets after entering an invalid password.
+
+- [#10467](https://github.com/better-auth/better-auth/pull/10467) [`7552a3b`](https://github.com/better-auth/better-auth/commit/7552a3b563fe1ae922fb65db12d005c38a12614d) Thanks [@jlucaso1](https://github.com/jlucaso1)! - Improve `nextCookies` performance in instrumented Next.js applications.
+
+- [#10580](https://github.com/better-auth/better-auth/pull/10580) [`ea38fca`](https://github.com/better-auth/better-auth/commit/ea38fcac7435137604e9b3ba2fe149a1848d0eeb) Thanks [@Emmaccen](https://github.com/Emmaccen)! - Skip invalid secondary-storage session entries without discarding other valid sessions.
+
+- [#10520](https://github.com/better-auth/better-auth/pull/10520) [`a03e4c1`](https://github.com/better-auth/better-auth/commit/a03e4c18677e2dc01a9b47b2a8017b92dbf9ece7) Thanks [@bytaesu](https://github.com/bytaesu)! - Ensure deleting a user also removes their sessions from secondary storage.
+
+- Updated dependencies [[`a30e274`](https://github.com/better-auth/better-auth/commit/a30e274b5daed6057086d76b91d17abfa02196d7)]:
+  - @better-auth/core@1.6.26
+  - @better-auth/drizzle-adapter@1.6.26
+  - @better-auth/kysely-adapter@1.6.26
+  - @better-auth/memory-adapter@1.6.26
+  - @better-auth/mongo-adapter@1.6.26
+  - @better-auth/prisma-adapter@1.6.26
+  - @better-auth/telemetry@1.6.26
+
+## 1.6.25
+
+### Patch Changes
+
+- [#10479](https://github.com/better-auth/better-auth/pull/10479) [`5124c34`](https://github.com/better-auth/better-auth/commit/5124c3487903e96223bb3f54347724bb0204bb95) Thanks [@krish-vachhani](https://github.com/krish-vachhani)! - Prevent Google One Tap from creating new users when sign-up is disabled for the Google provider.
+
+- [#10444](https://github.com/better-auth/better-auth/pull/10444) [`7439359`](https://github.com/better-auth/better-auth/commit/743935991f9991e8243d6c3d14773b9cfca462e8) Thanks [@birkskyum](https://github.com/birkskyum)! - Expose the real `$fetch` instance and `$store` atoms from the Solid client instead of resolving them as dynamic API routes.
+
+- Updated dependencies [[`0ffd1fb`](https://github.com/better-auth/better-auth/commit/0ffd1fb28d44a8266d62791cd4c97e263444d03b)]:
+  - @better-auth/core@1.6.25
+  - @better-auth/drizzle-adapter@1.6.25
+  - @better-auth/kysely-adapter@1.6.25
+  - @better-auth/memory-adapter@1.6.25
+  - @better-auth/mongo-adapter@1.6.25
+  - @better-auth/prisma-adapter@1.6.25
+  - @better-auth/telemetry@1.6.25
 
 ## 1.6.24
 

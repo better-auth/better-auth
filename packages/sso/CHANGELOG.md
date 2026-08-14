@@ -1,5 +1,27 @@
 # @better-auth/sso
 
+## 1.7.0-rc.5
+
+## 1.7.0-rc.4
+
+## 1.7.0-rc.3
+
+### Minor Changes
+
+- [#10621](https://github.com/better-auth/better-auth/pull/10621) [`59c4c83`](https://github.com/better-auth/better-auth/commit/59c4c832fc4eed813e98b5b2c45a91cf2d4ad9e7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Extend `resolveUser` to SAML sign-ins. The callback now receives a discriminated `protocol` field: OIDC input keeps `verifiedIdTokenClaims` and `providerClaims`, while SAML input carries the verified assertion's `providerAttributes`. Both variants include a `providerReference`, an opaque reference to the accepted provider configuration that detects provider replacement or configuration changes mid-flow.
+
+  Add `guardProviderMutation`, a callback that authorizes updates and deletions of a persisted SSO provider before Better Auth applies them.
+
+### Patch Changes
+
+- [#10621](https://github.com/better-auth/better-auth/pull/10621) [`59c4c83`](https://github.com/better-auth/better-auth/commit/59c4c832fc4eed813e98b5b2c45a91cf2d4ad9e7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Verify SAML assertion signatures directly instead of trusting an already-parsed response, and enforce a signing policy and size limit on SP metadata the same way IdP metadata is already enforced. `wantAssertionsSigned` now controls whether the SP requires signed assertions instead of signed response messages, matching how IdPs sign SAML responses in practice.
+
+  A SAML callback that supplies RelayState now validates it unconditionally; a malformed or expired value is rejected even when `enableInResponseToValidation` is disabled. Service Provider metadata with an ACS location containing a URL fragment is rejected.
+
+  Redact provider claims and resolver-thrown errors from log output on SAML and OIDC resolution failures.
+
+- [#10592](https://github.com/better-auth/better-auth/pull/10592) [`26b1949`](https://github.com/better-auth/better-auth/commit/26b194960fe539d2189cb1b7554c16d9f5318906) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Allow SSO provider registration to reuse a SCIM connection ID. SCIM connections no longer participate in the authentication provider namespace.
+
 ## 1.7.0-rc.2
 
 ### Minor Changes
@@ -139,6 +161,34 @@
   Closes [#5592](https://github.com/better-auth/better-auth/issues/5592).
   Closes [#5604](https://github.com/better-auth/better-auth/issues/5604).
   Supersedes [#4992](https://github.com/better-auth/better-auth/issues/4992) and [#5443](https://github.com/better-auth/better-auth/issues/5443).
+
+## 1.6.27
+
+### Patch Changes
+
+- [`999acbd`](https://github.com/better-auth/better-auth/commit/999acbd41d4d6bad81b24ce9edef063632ad22bf) Thanks [@bytaesu](https://github.com/bytaesu)! - Domain verification now applies only to the domains the provider held when the request started. If the provider changes while the DNS check is still running, the request returns `409` with the `SSO_PROVIDER_CHANGED` code instead of recording a result, so callers can reload the provider and retry.
+
+- [`999acbd`](https://github.com/better-auth/better-auth/commit/999acbd41d4d6bad81b24ce9edef063632ad22bf) Thanks [@bytaesu](https://github.com/bytaesu)! - Automatic organization assignment from an email domain now requires a verified provider domain and a verified stored user email, so a social sign-in no longer joins an organization whose SSO provider only claims that domain. Explicit organization-bound OIDC and SAML provisioning is unchanged.
+
+- Updated dependencies [[`2ae491e`](https://github.com/better-auth/better-auth/commit/2ae491eac3ece50839a0eb2d4f868c4deedac67b), [`90b5093`](https://github.com/better-auth/better-auth/commit/90b509344794b8064700371cbc04b985d0519839)]:
+  - @better-auth/core@1.6.27
+  - better-auth@1.6.27
+
+## 1.6.26
+
+### Patch Changes
+
+- Updated dependencies [[`9ede805`](https://github.com/better-auth/better-auth/commit/9ede8059b56e1415c1e8cfdd93ff72691b848bbf), [`5a811f1`](https://github.com/better-auth/better-auth/commit/5a811f1b4314b8bcf6f21c0b72de5cb67d552d97), [`d8327f1`](https://github.com/better-auth/better-auth/commit/d8327f1fea92243b6fea1b0ab183e2a989792c0c), [`e2c73fb`](https://github.com/better-auth/better-auth/commit/e2c73fbec87f5e19f6a2b5ac371bc5bba9bd49ff), [`af50c45`](https://github.com/better-auth/better-auth/commit/af50c45553a62cfb6cdcdede86828731ca00c22c), [`701cd43`](https://github.com/better-auth/better-auth/commit/701cd43babac52784d855291a6adc0cf3fba7970), [`a30e274`](https://github.com/better-auth/better-auth/commit/a30e274b5daed6057086d76b91d17abfa02196d7), [`e7b0eba`](https://github.com/better-auth/better-auth/commit/e7b0eba327e050f50764802e21484c6cabb56600), [`2b4a14f`](https://github.com/better-auth/better-auth/commit/2b4a14f180ed2eeb9692d6933064b001f66ec52c), [`7552a3b`](https://github.com/better-auth/better-auth/commit/7552a3b563fe1ae922fb65db12d005c38a12614d), [`ea38fca`](https://github.com/better-auth/better-auth/commit/ea38fcac7435137604e9b3ba2fe149a1848d0eeb), [`a03e4c1`](https://github.com/better-auth/better-auth/commit/a03e4c18677e2dc01a9b47b2a8017b92dbf9ece7)]:
+  - better-auth@1.6.26
+  - @better-auth/core@1.6.26
+
+## 1.6.25
+
+### Patch Changes
+
+- Updated dependencies [[`5124c34`](https://github.com/better-auth/better-auth/commit/5124c3487903e96223bb3f54347724bb0204bb95), [`0ffd1fb`](https://github.com/better-auth/better-auth/commit/0ffd1fb28d44a8266d62791cd4c97e263444d03b), [`7439359`](https://github.com/better-auth/better-auth/commit/743935991f9991e8243d6c3d14773b9cfca462e8)]:
+  - better-auth@1.6.25
+  - @better-auth/core@1.6.25
 
 ## 1.6.24
 

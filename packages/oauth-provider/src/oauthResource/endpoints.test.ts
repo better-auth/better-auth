@@ -16,11 +16,6 @@ import type {
 	Scope,
 } from "../types";
 
-const silenceWarnings = {
-	oauthAuthServerConfig: true,
-	openidConfig: true,
-} as const;
-
 beforeEach(() => {
 	vi.spyOn(logger, "warn").mockImplementation(() => undefined);
 	vi.spyOn(logger, "info").mockImplementation(() => undefined);
@@ -34,7 +29,6 @@ const boot = async (options: Partial<OAuthOptions<Scope[]>> = {}) => {
 	const opts = {
 		loginPage: "/login",
 		consentPage: "/consent",
-		silenceWarnings,
 		...options,
 	} as OAuthOptions<Scope[]>;
 	const instance = await getTestInstance({

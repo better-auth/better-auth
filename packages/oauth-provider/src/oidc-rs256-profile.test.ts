@@ -38,10 +38,6 @@ describe("OpenID Connect RS256 provider profile", async () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -60,6 +56,7 @@ describe("OpenID Connect RS256 provider profile", async () => {
 			body: {
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 			},
 		});
@@ -102,7 +99,17 @@ describe("OpenID Connect RS256 provider profile", async () => {
 		);
 	});
 
-	it("issues an RS256 ID token through the authorization-code flow", async () => {
+	it.each<[string, Record<string, string>]>([
+		["acr_values", { acr_values: "1" }],
+		[
+			"voluntary ACR claim",
+			{
+				claims: JSON.stringify({
+					id_token: { acr: { values: ["1"] } },
+				}),
+			},
+		],
+	])("issues an RS256 ID token with the current ACR for unsupported %s", async (_, additionalParams) => {
 		if (!oauthClient?.client_id || !oauthClient.client_secret) {
 			throw new Error("beforeAll not run properly");
 		}
@@ -121,6 +128,7 @@ describe("OpenID Connect RS256 provider profile", async () => {
 			scopes,
 			codeVerifier,
 			nonce,
+			additionalParams,
 		});
 
 		let callbackRedirectUrl = "";

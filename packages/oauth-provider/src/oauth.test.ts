@@ -76,10 +76,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -96,10 +92,6 @@ describe("oauth - init", () => {
 						loginPage: "/login",
 						consentPage: "/consent",
 						disableJwtPlugin: true,
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -114,10 +106,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -133,10 +121,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -157,10 +141,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -181,10 +161,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -203,10 +179,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -225,10 +197,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -253,10 +221,6 @@ describe("oauth", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -304,6 +268,7 @@ describe("oauth", async () => {
 				],
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 			},
 		});
@@ -1065,10 +1030,6 @@ describe("oauth - prompt", async () => {
 						return isUserRegistered ? false : "/setup";
 					},
 				},
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 				scopes,
 				selectAccount: {
 					page: "/select-account",
@@ -1170,6 +1131,7 @@ describe("oauth - prompt", async () => {
 				],
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 			},
 		});
 		expect(response?.client_id).toBeDefined();
@@ -2971,10 +2933,6 @@ describe("oauth - config", () => {
 						clientPrivileges: ({ action }) =>
 							action === "create" ||
 							action === "configure-client-credentials-scopes",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			});
@@ -3006,6 +2964,7 @@ describe("oauth - config", () => {
 				],
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 				client_credentials_scopes: ["m2m:read"],
 			},
@@ -3060,10 +3019,6 @@ describe("oauth - config", () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					storeClientSecret,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 				jwt(),
 			],
@@ -3092,6 +3047,7 @@ describe("oauth - config", () => {
 				],
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 			},
 		});
@@ -3168,10 +3124,6 @@ describe("oauth - config", () => {
 					consentPage: "/consent",
 					storeClientSecret,
 					disableJwtPlugin: true,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -3199,6 +3151,7 @@ describe("oauth - config", () => {
 				],
 				redirect_uris: [redirectUri],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 			},
 		});
@@ -3285,10 +3238,6 @@ describe("oauth - config", () => {
 					disableJwtPlugin: disableJwtPlugin,
 					resources: resource ? [validResource] : undefined,
 					enforcePerClientResources: false,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 				...(disableJwtPlugin ? [] : [jwt()]),
 			],
@@ -3316,7 +3265,9 @@ describe("oauth - config", () => {
 				],
 				redirect_uris: [redirectUri],
 				application_type: "native",
-				token_endpoint_auth_method: publicClient ? "none" : undefined,
+				token_endpoint_auth_method: publicClient
+					? "none"
+					: "client_secret_post",
 				skip_consent: true,
 			},
 		});
@@ -3486,10 +3437,6 @@ describe("oauth - rate limiting", () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -3548,10 +3495,6 @@ describe("oauth - rate limiting", () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 					rateLimit: {
 						token: { window: 1, max: 4 },
 						introspect: { window: 1, max: 50 },
@@ -3591,10 +3534,6 @@ describe("oauth - rate limiting", () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 					rateLimit: {
 						token: false,
 						introspect: false,
@@ -3640,10 +3579,6 @@ describe("oauth - rate limiting", () => {
 						clientPrivileges: ({ action }) =>
 							action === "create" ||
 							action === "configure-client-credentials-scopes",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 						rateLimit: {
 							token: { window: 60, max: 3 },
 						},
@@ -3663,6 +3598,7 @@ describe("oauth - rate limiting", () => {
 				],
 				redirect_uris: ["http://localhost:5000/callback"],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				client_credentials_scopes: ["m2m:read"],
 			},
 		});
@@ -3711,10 +3647,6 @@ describe("oauth - rate limiting", () => {
 						clientPrivileges: ({ action }) =>
 							action === "create" ||
 							action === "configure-client-credentials-scopes",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 						rateLimit: {
 							token: false, // Disable rate limiting for token endpoint
 						},
@@ -3734,6 +3666,7 @@ describe("oauth - rate limiting", () => {
 				],
 				redirect_uris: ["http://localhost:5000/callback"],
 				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				client_credentials_scopes: ["m2m:read"],
 			},
 		});

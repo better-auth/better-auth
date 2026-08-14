@@ -307,7 +307,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
       userId: string;
       providerId: string;
       issuer: string;
-      providerAccountId: string;
+      accountId: string;
       password: string | null;
       createdAt: string | null;
       updatedAt: string | null;
@@ -748,7 +748,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
                 userId: user.id,
                 providerId: 'credential',
                 issuer: 'local:credential',
-                providerAccountId: user.id,
+                accountId: user.id,
                 password: user.encrypted_password || null,
                 createdAt: user.created_at,
                 updatedAt: user.updated_at,
@@ -761,7 +761,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
                 userId: user.id,
                 providerId: identity.provider,
                 issuer: getAccountIssuer(identity.provider),
-                providerAccountId: identity.identity_data?.sub || identity.provider_id,
+                accountId: identity.identity_data?.sub || identity.provider_id,
                 password: null,
                 createdAt: identity.created_at ?? user.created_at,
                 updatedAt: identity.updated_at ?? user.updated_at,
@@ -791,7 +791,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
                 acc.userId,
                 acc.providerId,
                 acc.issuer,
-                acc.providerAccountId,
+                acc.accountId,
                 acc.password,
                 acc.createdAt,
                 acc.updatedAt,
@@ -800,7 +800,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
             await toDB.query(
               `
-              INSERT INTO "account" ("id", "userId", "providerId", "issuer", "providerAccountId", "password", "createdAt", "updatedAt")
+              INSERT INTO "account" ("id", "userId", "providerId", "issuer", "accountId", "password", "createdAt", "updatedAt")
               VALUES ${accountPlaceholders.join(', ')}
               ON CONFLICT ("id") DO NOTHING
             `,
@@ -1360,7 +1360,7 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
             'legacy-identity-id',
             {
               issuer: 'https://idp.example.com/metadata',
-              providerAccountId: 'signed-name-id',
+              accountId: 'signed-name-id',
             },
           ],
         ]),
@@ -1394,7 +1394,7 @@ If you're using Supabase's Enterprise SSO (SAML), follow these additional steps 
           userId: user.id, // [!code highlight]
           providerId: `sso-${supabaseProviderId}`, // Matches the migrated provider ID // [!code highlight]
           issuer: accountIdentity.issuer, // IdP metadata entity ID // [!code highlight]
-          providerAccountId: accountIdentity.providerAccountId, // Signed NameID // [!code highlight]
+          accountId: accountIdentity.accountId, // Signed NameID // [!code highlight]
           password: null, // [!code highlight]
           createdAt: identity.created_at ?? user.created_at, // [!code highlight]
           updatedAt: identity.updated_at ?? user.updated_at, // [!code highlight]

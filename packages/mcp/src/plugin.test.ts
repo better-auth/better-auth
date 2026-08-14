@@ -1,6 +1,6 @@
 import {
 	DEVICE_CODE_GRANT_TYPE,
-	deviceCodeGrant,
+	oauthDeviceAuthorization,
 } from "@better-auth/oauth-provider";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { createAuthClient } from "better-auth/client";
@@ -11,7 +11,6 @@ import {
 	DPOP_SIGNING_ALGORITHMS,
 	refreshAccessTokenRequest,
 } from "better-auth/oauth2";
-import { deviceAuthorization } from "better-auth/plugins/device-authorization";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
@@ -26,10 +25,6 @@ describe("mcp plugin", async () => {
 		loginPage: "/login",
 		consentPage: "/consent",
 		resource: baseURL,
-		silenceWarnings: {
-			oauthAuthServerConfig: true,
-			openidConfig: true,
-		},
 	});
 
 	// No custom jwt.issuer here, so discovery documents are served under the
@@ -92,10 +87,6 @@ describe("mcp plugin", async () => {
 							resource: explicitResource,
 							allowDynamicClientRegistration: true,
 							allowUnauthenticatedClientRegistration: true,
-							silenceWarnings: {
-								oauthAuthServerConfig: true,
-								openidConfig: true,
-							},
 						}),
 					],
 				});
@@ -170,17 +161,12 @@ describe("mcp plugin", async () => {
 				baseURL: deviceBaseURL,
 				plugins: [
 					jwt(),
-					deviceAuthorization(),
 					mcp({
 						loginPage: "/login",
 						consentPage: "/consent",
 						resource: `${deviceBaseURL}/api/auth`,
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
-					deviceCodeGrant(),
+					oauthDeviceAuthorization(),
 				],
 			});
 
@@ -239,10 +225,6 @@ describe("mcp plugin", async () => {
 						consentPage: "/consent",
 						resource: resourceBaseURL,
 						scopes: ["openid", "offline_access", "mcp:read"],
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			});
@@ -589,10 +571,6 @@ describe("mcp refresh_token grant client authentication", async () => {
 				resource: `${authServerBaseUrl}/api/auth`,
 				allowDynamicClientRegistration: true,
 				allowUnauthenticatedClientRegistration: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -626,6 +604,14 @@ describe("mcp refresh_token grant client authentication", async () => {
 			client_secret: created.data.client_secret,
 		};
 	});
+
+	function createBasicAuthorizationHeader(
+		clientSecret = oauthClient.client_secret,
+	) {
+		return `Basic ${Buffer.from(
+			`${oauthClient.client_id}:${clientSecret}`,
+		).toString("base64")}`;
+	}
 
 	/** Runs the real authorize + consent + token exchange to mint a refresh token. */
 	async function mintRefreshToken(): Promise<string> {
@@ -677,6 +663,7 @@ describe("mcp refresh_token grant client authentication", async () => {
 			code,
 			codeVerifier,
 			redirectURI: redirectUri,
+			authentication: "basic",
 			options: {
 				clientId: oauthClient.client_id,
 				clientSecret: oauthClient.client_secret,
@@ -727,12 +714,13 @@ describe("mcp refresh_token grant client authentication", async () => {
 			`${authServerBaseUrl}/api/auth/oauth2/token`,
 			{
 				method: "POST",
-				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+					authorization: createBasicAuthorizationHeader("wrong-secret"),
+				},
 				body: new URLSearchParams({
 					grant_type: "refresh_token",
 					refresh_token: refreshToken,
-					client_id: oauthClient.client_id,
-					client_secret: "wrong-secret",
 				}).toString(),
 			},
 		);
@@ -745,16 +733,13 @@ describe("mcp refresh_token grant client authentication", async () => {
 
 	it("accepts refresh_token grant when client_secret comes via Authorization: Basic", async () => {
 		const refreshToken = await mintRefreshToken();
-		const basic = `Basic ${Buffer.from(
-			`${oauthClient.client_id}:${oauthClient.client_secret}`,
-		).toString("base64")}`;
 		const response = await customFetchImpl(
 			`${authServerBaseUrl}/api/auth/oauth2/token`,
 			{
 				method: "POST",
 				headers: {
 					"Content-Type": "application/x-www-form-urlencoded",
-					authorization: basic,
+					authorization: createBasicAuthorizationHeader(),
 				},
 				body: new URLSearchParams({
 					grant_type: "refresh_token",
@@ -782,12 +767,13 @@ describe("mcp refresh_token grant client authentication", async () => {
 			`${authServerBaseUrl}/api/auth/oauth2/token`,
 			{
 				method: "POST",
-				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+					authorization: createBasicAuthorizationHeader(),
+				},
 				body: new URLSearchParams({
 					grant_type: "refresh_token",
 					refresh_token: refreshToken,
-					client_id: oauthClient.client_id,
-					client_secret: oauthClient.client_secret,
 				}).toString(),
 			},
 		);
@@ -800,8 +786,9 @@ describe("mcp refresh_token grant client authentication", async () => {
 			update: { disabled: false },
 		});
 
-		// A disabled client is rejected outright (400) before token issuance.
-		expect(response.status).toBe(400);
+		// Failed HTTP Basic authentication returns its registered challenge.
+		expect(response.status).toBe(401);
+		expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
 		expect(body?.error).toBe("invalid_client");
 		expect(body?.access_token).toBeUndefined();
 	});
@@ -810,6 +797,7 @@ describe("mcp refresh_token grant client authentication", async () => {
 		const refreshToken = await mintRefreshToken();
 		const { body, headers: refreshHeaders } = await refreshAccessTokenRequest({
 			refreshToken,
+			authentication: "basic",
 			options: {
 				clientId: oauthClient.client_id,
 				clientSecret: oauthClient.client_secret,

@@ -56,7 +56,7 @@ export const custom_account = pgTable(
       .default(sql`pg_catalog.gen_random_uuid()`)
       .primaryKey(),
     issuer: text("issuer").notNull(),
-    providerAccountId: text("provider_account_id").notNull(),
+    accountId: text("account_id").notNull(),
     providerId: text("provider_id").notNull(),
     userId: uuid("user_id")
       .notNull()
@@ -74,9 +74,9 @@ export const custom_account = pgTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("custom_account_issuer_providerAccountId_uidx").on(
+    uniqueIndex("custom_account_issuer_accountId_uidx").on(
       table.issuer,
-      table.providerAccountId,
+      table.accountId,
     ),
     index("custom_account_userId_idx").on(table.userId),
   ],

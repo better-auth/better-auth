@@ -553,7 +553,7 @@ describe("oauth-proxy", async () => {
 				account: {
 					providerId: string;
 					issuer: string;
-					providerAccountId: string;
+					accountId: string;
 					accessToken?: string;
 					refreshToken?: string;
 				};
@@ -567,7 +567,7 @@ describe("oauth-proxy", async () => {
 			expect(payload.account).toBeDefined();
 			expect(payload.account.providerId).toBe("google");
 			expect(payload.account.issuer).toBe("https://accounts.google.com");
-			expect(payload.account.providerAccountId).toBe("1234567890");
+			expect(payload.account.accountId).toBe("1234567890");
 			expect(payload.state).toBeDefined();
 			expect(payload.timestamp).toBeDefined();
 		});
@@ -837,7 +837,7 @@ describe("oauth-proxy", async () => {
 				account: {
 					providerId: "google",
 					issuer: "https://accounts.google.com",
-					providerAccountId: "123",
+					accountId: "123",
 					accessToken: "test",
 				},
 				state: "test-state",
@@ -889,7 +889,7 @@ describe("oauth-proxy", async () => {
 				account: {
 					providerId: "google",
 					issuer: "https://accounts.google.com",
-					providerAccountId: "123",
+					accountId: "123",
 					accessToken: "test",
 				},
 				state: "test-state",
@@ -1015,7 +1015,7 @@ describe("oauth-proxy", async () => {
 				account: {
 					providerId: "google",
 					issuer: "https://accounts.google.com",
-					providerAccountId: "123",
+					accountId: "123",
 					accessToken: "test",
 				},
 				state: "test-state",
@@ -1043,7 +1043,7 @@ describe("oauth-proxy", async () => {
 				account: {
 					providerId: "google",
 					issuer: "https://accounts.google.com",
-					providerAccountId: "123",
+					accountId: "123",
 					accessToken: "test",
 				},
 				state: "test-state",
@@ -1077,7 +1077,7 @@ describe("oauth-proxy", async () => {
 				account: {
 					providerId: "google",
 					issuer: "https://accounts.google.com",
-					providerAccountId: "123",
+					accountId: "123",
 					accessToken: "test",
 				},
 				state: "test-state",
@@ -1214,7 +1214,7 @@ describe("oauth-proxy", async () => {
 				expect.objectContaining({
 					providerId: "google",
 					issuer: "https://accounts.google.com",
-					providerAccountId: "1234567890",
+					accountId: "1234567890",
 				}),
 			);
 		});
@@ -1262,7 +1262,7 @@ describe("oauth-proxy", async () => {
 				account: {
 					providerId: "google",
 					issuer: "https://accounts.google.com",
-					providerAccountId: "google-user-id",
+					accountId: "google-user-id",
 					accessToken: "test123",
 				},
 				state: "test-state",
@@ -1430,7 +1430,7 @@ describe("oauth-proxy", async () => {
 				account: {
 					providerId: "google",
 					issuer: "https://accounts.google.com",
-					providerAccountId: "123",
+					accountId: "123",
 					accessToken: "test",
 				},
 				state: "non-existent-state-id",
@@ -1836,6 +1836,100 @@ describe("oauth-proxy", async () => {
 				expect(location).toContain("profile");
 			},
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10598
+	 */
+	it("should preserve Apple user data from a form_post callback", async () => {
+		const appleIdToken = await signJWT(
+			{
+				sub: "apple-user-id",
+				email: "jane@privaterelay.appleid.com",
+				email_verified: true,
+				is_private_email: true,
+				real_user_status: 2,
+			},
+			DEFAULT_SECRET,
+		);
+		server.use(
+			http.post("https://appleid.apple.com/auth/token", () =>
+				HttpResponse.json({
+					access_token: "apple-access-token",
+					id_token: appleIdToken,
+					token_type: "Bearer",
+					expires_in: 3600,
+				}),
+			),
+		);
+
+		const { client, auth } = await getTestInstance({
+			database: undefined,
+			plugins: [
+				oAuthProxy({
+					currentURL: "http://preview-localhost:3000",
+				}),
+			],
+			socialProviders: {
+				apple: {
+					clientId: "test-apple-client",
+					clientSecret: "test-apple-secret",
+				},
+			},
+		});
+
+		const res = await client.signIn.social(
+			{
+				provider: "apple",
+				callbackURL: "/dashboard",
+			},
+			{
+				throw: true,
+			},
+		);
+		const encryptedState = new URL(res.url!).searchParams.get("state");
+		expect(encryptedState).toBeTruthy();
+
+		const userData = JSON.stringify({
+			name: {
+				firstName: "Jane",
+				lastName: "Doe",
+			},
+			email: "jane@privaterelay.appleid.com",
+		});
+		let encryptedProfile: string | null = null;
+
+		await client.$fetch("/callback/apple", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/x-www-form-urlencoded",
+			},
+			body: new URLSearchParams({
+				code: "apple-test-code",
+				state: encryptedState!,
+				id_token: appleIdToken,
+				user: userData,
+			}).toString(),
+			onError(context) {
+				const location = context.response.headers.get("location");
+				expect(location).toBeTruthy();
+				encryptedProfile = new URL(location!).searchParams.get("profile");
+			},
+		});
+
+		expect(encryptedProfile).toBeTruthy();
+		const { secret } = await auth.$context;
+		const decrypted = await symmetricDecrypt({
+			key: secret,
+			data: encryptedProfile!,
+		});
+		const payload = parseJSON<{
+			userInfo: {
+				name: string;
+			};
+		}>(decrypted);
+
+		expect(payload.userInfo.name).toBe("Jane Doe");
 	});
 });
 

@@ -1,5 +1,40 @@
 # @better-auth/scim
 
+## 1.7.0-rc.5
+
+## 1.7.0-rc.4
+
+### Minor Changes
+
+- [#10682](https://github.com/better-auth/better-auth/pull/10682) [`8b96573`](https://github.com/better-auth/better-auth/commit/8b96573d78b8d114b83d2484ba94bb1f608e15e0) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SCIM PATCH operations that target filtered multi-valued attributes (`phoneNumbers`, `addresses`, `roles`, `entitlements`, `emails`) now create the value when the filter matches nothing instead of rejecting the request with a `noTarget` error. Microsoft Entra ID sends these operations for attributes that are not populated yet, and the rejection also discarded every other operation bundled in the same PATCH request.
+
+## 1.7.0-rc.3
+
+### Minor Changes
+
+- [#10592](https://github.com/better-auth/better-auth/pull/10592) [`26b1949`](https://github.com/better-auth/better-auth/commit/26b194960fe539d2189cb1b7554c16d9f5318906) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Allow SCIM bearer verification to resolve application-owned connections at request time. Dynamic connections use the same scope enforcement, immutable provisioning-domain binding, decommissioning, and request fencing as code-defined connections, while an empty static connection list is supported when a verifier is configured.
+
+- [#10620](https://github.com/better-auth/better-auth/pull/10620) [`b7683b8`](https://github.com/better-auth/better-auth/commit/b7683b82be4048263c667d97004a47701d58793a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add the standard Enterprise User extension (`employeeNumber`, `costCenter`, `organization`, `division`, `department`, `manager`) and the classic `title`, `userType`, `preferredLanguage`, `locale`, `timezone`, `phoneNumbers`, `addresses`, `roles`, and `entitlements` User attributes, plus `name.middleName`, `name.honorificPrefix`, and `name.honorificSuffix`. All are readable, filterable by `type` or `primary`, and writable through PATCH, including the classic Microsoft Entra `manager` path aliases.
+
+  Add `compatibility.microsoftEntra.acceptLegacyGroupSchema` to accept Microsoft Entra's legacy, attribute-less Group schema marker on `POST /Groups` without storing or returning it.
+
+  Microsoft Entra interoperability fixes:
+  - A bare `attributes`/`excludedAttributes` name for an Enterprise User sub-attribute (for example `?attributes=manager`) no longer drops the whole extension from the response.
+  - Multi-op PATCH paths filtered by `[primary eq true]` (or `[primary eq "true"]`) with a sub-attribute target now work on `emails`, `phoneNumbers`, `addresses`, `roles`, and `entitlements`.
+  - A single-element array wrapping a scalar PATCH replace value is unwrapped instead of rejected, on User scalars, Enterprise User fields, and Group `displayName` and `externalId`.
+  - Removing the last sub-attribute of a complex attribute (for example `manager.value`) clears the emptied Enterprise User extension instead of leaving it declared.
+  - Replacing `manager` with an empty string clears it, matching how Microsoft Entra removes a manager.
+  - A PATCH with an empty `Operations` array is a valid no-op instead of an error, for both Users and Groups.
+  - `PATCH /Users/:id` and `PATCH /Groups/:id` return `200 OK` with the updated resource instead of `204 No Content`.
+
+- [#10592](https://github.com/better-auth/better-auth/pull/10592) [`26b1949`](https://github.com/better-auth/better-auth/commit/26b194960fe539d2189cb1b7554c16d9f5318906) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add an optional SCIM-owned connection and credential catalog. Configure `managedConnections` to let trusted server code create runtime tenant connections and issue, rotate, and revoke their bearer credentials through server-only `auth.api` methods, without a code-defined connection or an application-owned verifier.
+
+### Patch Changes
+
+- [#10620](https://github.com/better-auth/better-auth/pull/10620) [`b7683b8`](https://github.com/better-auth/better-auth/commit/b7683b82be4048263c667d97004a47701d58793a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Accept exact case-insensitive string Boolean values for SCIM User `active` and the `primary` sub-attribute of `emails`, `phoneNumbers`, `addresses`, `roles`, and `entitlements` at the HTTP ingress for Microsoft Entra interoperability.
+
+- [#10592](https://github.com/better-auth/better-auth/pull/10592) [`26b1949`](https://github.com/better-auth/better-auth/commit/26b194960fe539d2189cb1b7554c16d9f5318906) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Allow trusted server code to retain a terminal connection binding before a dynamic SCIM connection's first authenticated request by supplying its provisioning domain during decommissioning.
+
 ## 1.7.0-rc.2
 
 ### Minor Changes
@@ -91,6 +126,30 @@
   This release is breaking. It removes the `providerOwnership` option, and owner binding can no longer be disabled. The `scimProvider.userId` column is now a permanent part of the schema, so run a migration after upgrading with `npx auth migrate` or `npx auth generate`.
 
   Connections created before this release carry no owner. Access now fails closed, so those connections are no longer reachable through the management endpoints, including token regeneration. Reclaim them at the database level: delete `scimProvider` rows that have neither `organizationId` nor `userId`, or set `userId` to the intended owner, then regenerate tokens as needed. Organization-scoped connections are not affected.
+
+## 1.6.27
+
+### Patch Changes
+
+- Updated dependencies [[`2ae491e`](https://github.com/better-auth/better-auth/commit/2ae491eac3ece50839a0eb2d4f868c4deedac67b), [`90b5093`](https://github.com/better-auth/better-auth/commit/90b509344794b8064700371cbc04b985d0519839)]:
+  - @better-auth/core@1.6.27
+  - better-auth@1.6.27
+
+## 1.6.26
+
+### Patch Changes
+
+- Updated dependencies [[`9ede805`](https://github.com/better-auth/better-auth/commit/9ede8059b56e1415c1e8cfdd93ff72691b848bbf), [`5a811f1`](https://github.com/better-auth/better-auth/commit/5a811f1b4314b8bcf6f21c0b72de5cb67d552d97), [`d8327f1`](https://github.com/better-auth/better-auth/commit/d8327f1fea92243b6fea1b0ab183e2a989792c0c), [`e2c73fb`](https://github.com/better-auth/better-auth/commit/e2c73fbec87f5e19f6a2b5ac371bc5bba9bd49ff), [`af50c45`](https://github.com/better-auth/better-auth/commit/af50c45553a62cfb6cdcdede86828731ca00c22c), [`701cd43`](https://github.com/better-auth/better-auth/commit/701cd43babac52784d855291a6adc0cf3fba7970), [`a30e274`](https://github.com/better-auth/better-auth/commit/a30e274b5daed6057086d76b91d17abfa02196d7), [`e7b0eba`](https://github.com/better-auth/better-auth/commit/e7b0eba327e050f50764802e21484c6cabb56600), [`2b4a14f`](https://github.com/better-auth/better-auth/commit/2b4a14f180ed2eeb9692d6933064b001f66ec52c), [`7552a3b`](https://github.com/better-auth/better-auth/commit/7552a3b563fe1ae922fb65db12d005c38a12614d), [`ea38fca`](https://github.com/better-auth/better-auth/commit/ea38fcac7435137604e9b3ba2fe149a1848d0eeb), [`a03e4c1`](https://github.com/better-auth/better-auth/commit/a03e4c18677e2dc01a9b47b2a8017b92dbf9ece7)]:
+  - better-auth@1.6.26
+  - @better-auth/core@1.6.26
+
+## 1.6.25
+
+### Patch Changes
+
+- Updated dependencies [[`5124c34`](https://github.com/better-auth/better-auth/commit/5124c3487903e96223bb3f54347724bb0204bb95), [`0ffd1fb`](https://github.com/better-auth/better-auth/commit/0ffd1fb28d44a8266d62791cd4c97e263444d03b), [`7439359`](https://github.com/better-auth/better-auth/commit/743935991f9991e8243d6c3d14773b9cfca462e8)]:
+  - better-auth@1.6.25
+  - @better-auth/core@1.6.25
 
 ## 1.6.24
 
