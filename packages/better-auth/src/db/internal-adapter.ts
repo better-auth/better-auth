@@ -810,12 +810,9 @@ export const createInternalAdapter = (
 		},
 		deleteSessions: async (sessionTokens: string[]) => {
 			if (secondaryStorage) {
-				for (const sessionToken of sessionTokens) {
-					const session = await secondaryStorage.get(sessionToken);
-					if (session) {
-						await secondaryStorage.delete(sessionToken);
-					}
-				}
+				await Promise.all(
+					sessionTokens.map((token) => secondaryStorage.delete(token)),
+				);
 			}
 			if (databaseStoresSessions && !preservesDatabaseSessions) {
 				await deleteManyWithHooks(
