@@ -1,5 +1,20 @@
 # better-auth
 
+## 1.6.29
+
+### Patch Changes
+
+- [#10805](https://github.com/better-auth/better-auth/pull/10805) [`e6e1b4e`](https://github.com/better-auth/better-auth/commit/e6e1b4e8146a84d2a2c5fe2c497c81d03dfc2ad3) Thanks [@Emmaccen](https://github.com/Emmaccen)! - Speed up batch session revocation when secondary storage is enabled by deleting sessions in parallel.
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.29
+  - @better-auth/drizzle-adapter@1.6.29
+  - @better-auth/kysely-adapter@1.6.29
+  - @better-auth/memory-adapter@1.6.29
+  - @better-auth/mongo-adapter@1.6.29
+  - @better-auth/prisma-adapter@1.6.29
+  - @better-auth/telemetry@1.6.29
+
 ## 1.6.28
 
 ### Patch Changes
