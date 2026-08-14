@@ -77,7 +77,7 @@ export function getPageTree(): Root {
 				type: "folder",
 				root: true,
 				name: "Examples",
-				description: "exmaples and guides.",
+				description: "examples and guides.",
 				children: examples.map(contentToPageTree),
 			},
 		],
