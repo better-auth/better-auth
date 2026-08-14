@@ -1,5 +1,7 @@
 # @better-auth/mongo-adapter
 
+## 1.7.0-rc.6
+
 ## 1.7.0-rc.5
 
 ## 1.7.0-rc.4

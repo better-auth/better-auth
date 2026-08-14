@@ -1,5 +1,22 @@
 # better-auth
 
+## 1.7.0-rc.6
+
+### Patch Changes
+
+- [#10769](https://github.com/better-auth/better-auth/pull/10769) [`773de54`](https://github.com/better-auth/better-auth/commit/773de54b18c0e920a3542bdecaf8b42fffc0dc4b) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent duplicate session requests during transient remounts while ensuring incomplete refreshes are revalidated.
+
+- [#10794](https://github.com/better-auth/better-auth/pull/10794) [`2ad2928`](https://github.com/better-auth/better-auth/commit/2ad2928f967afa9f9858caecd01466ecb8686982) Thanks [@bytaesu](https://github.com/bytaesu)! - Restore client plugin declaration compatibility for downstream TypeScript consumers.
+
+- Updated dependencies [[`692b22c`](https://github.com/better-auth/better-auth/commit/692b22c517011444f812fe21c206e399e35e8417)]:
+  - @better-auth/drizzle-adapter@1.7.0-rc.6
+  - @better-auth/core@1.7.0-rc.6
+  - @better-auth/kysely-adapter@1.7.0-rc.6
+  - @better-auth/memory-adapter@1.7.0-rc.6
+  - @better-auth/mongo-adapter@1.7.0-rc.6
+  - @better-auth/prisma-adapter@1.7.0-rc.6
+  - @better-auth/telemetry@1.7.0-rc.6
+
 ## 1.7.0-rc.5
 
 ### Minor Changes
