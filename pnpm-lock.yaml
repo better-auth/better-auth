@@ -1015,6 +1015,9 @@ importers:
       solid-js:
         specifier: ^1.9.11
         version: 1.9.11
+      solid-js-v2:
+        specifier: npm:solid-js@^2.0.0-rc.0
+        version: solid-js@2.0.0-rc.0
       tsdown:
         specifier: 'catalog:'
         version: 0.21.10(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(typescript@6.0.3)
@@ -6250,6 +6253,9 @@ packages:
     resolution: {integrity: sha512-WOpgg9a9T638cR+5FGbFi/IV4l2FpmBs1GpIMSPa0Ce9vyJN7Wts+X2PqMf9IYn0zUj2MlSJtm1gp7/HI/n5TQ==}
     peerDependencies:
       solid-js: ^1.8.6
+
+  '@solidjs/signals@2.0.0-rc.0':
+    resolution: {integrity: sha512-oKZSfvsCcKw1uJjOGbUkJ+OqlhXLHtZ+rShSyu9KH0lUH7UUwfMfsKeh81JPiQxDDg4YLhEwI38hg0JkwzTdvA==}
 
   '@solidjs/start@1.3.2':
     resolution: {integrity: sha512-tasDl3utVbtP0rr4InB3ntBIFV2upvEiFrOOCkRrAA3yBfjx9elpxnc94sJQXo65PNYdAAAkPIC6h93vLrtwHg==}
@@ -12604,6 +12610,9 @@ packages:
 
   solid-js@1.9.11:
     resolution: {integrity: sha512-WEJtcc5mkh/BnHA6Yrg4whlF8g6QwpmXXRg4P2ztPmcKeHHlH4+djYecBLhSpecZY2RRECXYUwIc/C2r3yzQ4Q==}
+
+  solid-js@2.0.0-rc.0:
+    resolution: {integrity: sha512-3enTJ71VL69nM5p/it2InVBDBt316Cqfij+F0S7VuHZLITc8YV7Rvavjoy52nAKKxYWXM+BcXh2K7KcLTf1zdQ==}
 
   solid-refresh@0.6.3:
     resolution: {integrity: sha512-F3aPsX6hVw9ttm5LYlth8Q15x6MlI/J3Dn+o3EQyRTtTxidepSTwAYdozt01/YA+7ObcciagGEyXIopGZzQtbA==}
@@ -19396,6 +19405,8 @@ snapshots:
   '@solidjs/router@0.15.4(solid-js@1.9.11)':
     dependencies:
       solid-js: 1.9.11
+
+  '@solidjs/signals@2.0.0-rc.0': {}
 
   '@solidjs/start@1.3.2(solid-js@1.9.11)(vinxi@0.5.11(fda321adb0ec1a60575cb6b8181efeb3))(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.2)(tsx@4.22.4)(yaml@2.9.0))':
     dependencies:
@@ -27442,6 +27453,13 @@ snapshots:
       csstype: 3.2.3
       seroval: 1.5.4
       seroval-plugins: 1.5.0(seroval@1.5.4)
+
+  solid-js@2.0.0-rc.0:
+    dependencies:
+      '@solidjs/signals': 2.0.0-rc.0
+      csstype: 3.2.3
+      seroval: 1.5.4
+      seroval-plugins: 1.5.4(seroval@1.5.4)
 
   solid-refresh@0.6.3(solid-js@1.9.11):
     dependencies:
