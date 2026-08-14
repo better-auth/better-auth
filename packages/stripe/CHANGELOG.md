@@ -1,5 +1,7 @@
 # @better-auth/stripe
 
+## 1.7.0-rc.6
+
 ## 1.7.0-rc.5
 
 ## 1.7.0-rc.4

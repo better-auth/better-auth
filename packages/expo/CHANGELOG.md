@@ -1,5 +1,11 @@
 # @better-auth/expo
 
+## 1.7.0-rc.6
+
+### Patch Changes
+
+- [#10794](https://github.com/better-auth/better-auth/pull/10794) [`2ad2928`](https://github.com/better-auth/better-auth/commit/2ad2928f967afa9f9858caecd01466ecb8686982) Thanks [@bytaesu](https://github.com/bytaesu)! - Restore client plugin declaration compatibility for downstream TypeScript consumers.
+
 ## 1.7.0-rc.5
 
 ## 1.7.0-rc.4

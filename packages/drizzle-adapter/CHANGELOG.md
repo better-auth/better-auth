@@ -1,5 +1,11 @@
 # @better-auth/drizzle-adapter
 
+## 1.7.0-rc.6
+
+### Patch Changes
+
+- [#10770](https://github.com/better-auth/better-auth/pull/10770) [`692b22c`](https://github.com/better-auth/better-auth/commit/692b22c517011444f812fe21c206e399e35e8417) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Export the generated `pgSchema` binding so drizzle-kit can emit `CREATE SCHEMA` for custom PostgreSQL namespaces.
+
 ## 1.7.0-rc.5
 
 ## 1.7.0-rc.4
