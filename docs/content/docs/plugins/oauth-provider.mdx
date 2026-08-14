@@ -714,11 +714,13 @@ Because a JWT `access_token` cannot be revoked individually, plan for it:
 
 ### End Session Endpoint
 
-[RP-initiated](https://openid.net/specs/openid-connect-rpinitiated-1_0.html)-compliant Logout
+[OpenID Connect RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html) lets a relying party ask the provider to end a user's session.
 
-This endpoint allows specified trusted clients to logout remotely.
+The endpoint is available to clients registered with `enable_end_session: true`. It accepts logout parameters in a `GET` query or an `application/x-www-form-urlencoded` `POST` body. Better Auth's generated client sends the same parameters as JSON. A verified `id_token_hint` can end its referenced session immediately. Without a valid hint, Better Auth asks the user to confirm before ending the current session. The same confirmation is required when the hint refers to a different session than the browser session.
 
-To allow rp-initiated logout, a trusted client must specifically be created to perform session logout.
+Better Auth redirects after logout only when `post_logout_redirect_uri` exactly matches a registered URI. It adds `state` only to that verified redirect. An unregistered or query-modified URI does not cause a redirect. Browser navigation receives confirmation, success, and error pages as HTML. API callers receive the protocol response.
+
+Enable this endpoint only for clients you trust:
 
 ```ts title="admin-create-oauth.ts"
 import { auth } from "@/lib/auth"
@@ -732,9 +734,7 @@ await auth.api.adminCreateOAuthClient({
 });
 ```
 
-<Callout type="info">
-  If `disableJwtPlugin: true`, public clients will never be able to logout using this endpoint since no `id_token` is sent.
-</Callout>
+Better Auth protects confirmation with origin and CSRF checks plus a short-lived, signed cookie. When a current session exists, the cookie is tied to it. Successful browser logout returns a logged-out page. Session deletion continues through the normal hooks, including Back-Channel Logout delivery to registered relying parties.
 
 ### Back-Channel Logout
 
