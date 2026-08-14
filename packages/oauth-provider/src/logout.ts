@@ -1,5 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
+import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
+import { deleteSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { getJwks } from "better-auth/oauth2";
 import { resolveSigningKey, signJWT } from "better-auth/plugins";
@@ -7,7 +9,8 @@ import type { Session } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 import { compactVerify, createLocalJWKSet, decodeJwt } from "jose";
-import { handleRedirect } from "./authorize";
+import type { OAuthRedirectResult } from "./authorize";
+import { getIssuer, handleRedirect } from "./authorize";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import {
 	decryptStoredClientSecret,
@@ -325,10 +328,555 @@ async function deliverBackchannelLogoutTokens(
 
 export { applyBackchannelLogoutPlan, prepareBackchannelLogoutPlan };
 
+const LOGOUT_CONFIRMATION_TTL_SECONDS = 5 * 60;
+const LOGOUT_CONFIRMATION_COOKIE_SUFFIX = ".oauth_logout_confirmation";
+
+type RPInitiatedLogoutRequest = {
+	id_token_hint?: string;
+	client_id?: string;
+	post_logout_redirect_uri?: string;
+	state?: string;
+};
+
+type CurrentBrowserSession = {
+	session: Session;
+};
+
+type LogoutConfirmationState = {
+	sessionId?: string;
+	clientId?: string;
+	postLogoutRedirectUri?: string;
+	state?: string;
+	redirectInvalid?: boolean;
+	expiresAt: number;
+};
+
+type LogoutConfirmationContext = Omit<
+	LogoutConfirmationState,
+	"sessionId" | "expiresAt"
+>;
+
+function escapeHtml(value: string): string {
+	return value.replace(/[&<>"']/g, (character) => {
+		switch (character) {
+			case "&":
+				return "&amp;";
+			case "<":
+				return "&lt;";
+			case ">":
+				return "&gt;";
+			case '"':
+				return "&quot;";
+			case "'":
+				return "&#39;";
+			default:
+				return character;
+		}
+	});
+}
+
+function isBrowserNavigation(ctx: GenericEndpointContext): boolean {
+	const headers = ctx.request?.headers ?? ctx.headers;
+	if (!headers || isBrowserFetchRequest(headers)) return false;
+	const accept = headers.get("accept") ?? "";
+	return (
+		headers.get("sec-fetch-mode") === "navigate" ||
+		accept.includes("text/html") ||
+		accept.includes("application/xhtml+xml")
+	);
+}
+
+function logoutPage(title: string, body: string, status = 200): Response {
+	return new Response(
+		`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head><body>${body}</body></html>`,
+		{
+			status,
+			headers: {
+				"cache-control": "no-store",
+				"content-security-policy":
+					"default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+				"content-type": "text/html; charset=utf-8",
+				pragma: "no-cache",
+				"x-content-type-options": "nosniff",
+			},
+		},
+	);
+}
+
+function logoutConfirmationPath(ctx: GenericEndpointContext): string {
+	return `${ctx.context.baseURL.replace(/\/$/, "")}/oauth2/end-session/confirm`;
+}
+
+function logoutConfirmationCookiePath(ctx: GenericEndpointContext): string {
+	try {
+		const url = new URL(logoutConfirmationPath(ctx));
+		return url.pathname;
+	} catch {
+		return "/oauth2/end-session/confirm";
+	}
+}
+
+function logoutConfirmationPage(ctx: GenericEndpointContext): Response {
+	const action = logoutConfirmationPath(ctx);
+	return logoutPage(
+		"Confirm logout",
+		`<main><h1>Confirm logout</h1><p>Do you want to log out of this account?</p><form method="post" data-oidc-logout-confirmation action="${escapeHtml(action)}"><button type="submit" name="action" value="confirm">Confirm logout</button></form></main>`,
+	);
+}
+
+function logoutSuccessPage(note?: string): Response {
+	const message = note ? `Logged out. ${escapeHtml(note)}` : "Logged out.";
+	return logoutPage(
+		"Logged out",
+		`<main><p data-oidc-logout-state="logged-out">${message}</p></main>`,
+	);
+}
+
+function logoutErrorPage(description: string, status: number): Response {
+	return logoutPage(
+		"Logout error",
+		`<main><h1>Logout error</h1><p data-oidc-logout-state="error">${escapeHtml(description)}</p></main>`,
+		status,
+	);
+}
+
+function logoutProtocolError(
+	ctx: GenericEndpointContext,
+	status: "BAD_REQUEST" | "UNAUTHORIZED" | "INTERNAL_SERVER_ERROR",
+	error: string,
+	description: string,
+): Response {
+	if (isBrowserNavigation(ctx)) {
+		const statusCode =
+			status === "BAD_REQUEST" ? 400 : status === "UNAUTHORIZED" ? 401 : 500;
+		return logoutErrorPage(description, statusCode);
+	}
+	throw new APIError(status, {
+		error,
+		error_description: description,
+	});
+}
+
+function logoutConfirmationCookieName(ctx: GenericEndpointContext): string {
+	return `${ctx.context.authCookies.sessionToken.name}${LOGOUT_CONFIRMATION_COOKIE_SUFFIX}`;
+}
+
+function logoutConfirmationCookieOptions(
+	ctx: GenericEndpointContext,
+	maxAge: number,
+) {
+	return {
+		...ctx.context.authCookies.sessionToken.attributes,
+		httpOnly: true,
+		maxAge,
+		path: logoutConfirmationCookiePath(ctx),
+		sameSite: "lax" as const,
+	};
+}
+
+async function setLogoutConfirmationState(
+	ctx: GenericEndpointContext,
+	sessionId?: string,
+	confirmation: LogoutConfirmationContext = {},
+): Promise<void> {
+	const state: LogoutConfirmationState = {
+		...(sessionId ? { sessionId } : {}),
+		...confirmation,
+		expiresAt: Date.now() + LOGOUT_CONFIRMATION_TTL_SECONDS * 1000,
+	};
+	await ctx.setSignedCookie(
+		logoutConfirmationCookieName(ctx),
+		JSON.stringify(state),
+		ctx.context.secret,
+		logoutConfirmationCookieOptions(ctx, LOGOUT_CONFIRMATION_TTL_SECONDS),
+	);
+}
+
+async function getLogoutConfirmationState(
+	ctx: GenericEndpointContext,
+): Promise<LogoutConfirmationState | null> {
+	const value = await ctx.getSignedCookie(
+		logoutConfirmationCookieName(ctx),
+		ctx.context.secret,
+	);
+	if (typeof value !== "string") return null;
+
+	try {
+		const parsed: unknown = JSON.parse(value);
+		if (typeof parsed !== "object" || parsed === null) return null;
+		const record = parsed as Record<string, unknown>;
+		if (
+			(record.sessionId !== undefined &&
+				(typeof record.sessionId !== "string" ||
+					record.sessionId.length === 0)) ||
+			(record.clientId !== undefined &&
+				(typeof record.clientId !== "string" ||
+					record.clientId.length === 0)) ||
+			(record.postLogoutRedirectUri !== undefined &&
+				(typeof record.postLogoutRedirectUri !== "string" ||
+					record.postLogoutRedirectUri.length === 0)) ||
+			(record.state !== undefined && typeof record.state !== "string") ||
+			(record.redirectInvalid !== undefined &&
+				typeof record.redirectInvalid !== "boolean") ||
+			(record.postLogoutRedirectUri !== undefined &&
+				record.clientId === undefined) ||
+			typeof record.expiresAt !== "number" ||
+			!Number.isFinite(record.expiresAt)
+		) {
+			return null;
+		}
+		return {
+			...(typeof record.sessionId === "string"
+				? { sessionId: record.sessionId }
+				: {}),
+			...(typeof record.clientId === "string"
+				? { clientId: record.clientId }
+				: {}),
+			...(typeof record.postLogoutRedirectUri === "string"
+				? { postLogoutRedirectUri: record.postLogoutRedirectUri }
+				: {}),
+			...(typeof record.state === "string" ? { state: record.state } : {}),
+			...(typeof record.redirectInvalid === "boolean"
+				? { redirectInvalid: record.redirectInvalid }
+				: {}),
+			expiresAt: record.expiresAt,
+		};
+	} catch {
+		return null;
+	}
+}
+
+function clearLogoutConfirmationState(ctx: GenericEndpointContext): void {
+	ctx.setCookie(
+		logoutConfirmationCookieName(ctx),
+		"",
+		logoutConfirmationCookieOptions(ctx, 0),
+	);
+}
+
+async function getCurrentBrowserSession(
+	ctx: GenericEndpointContext,
+): Promise<CurrentBrowserSession | null> {
+	const token = await ctx.getSignedCookie(
+		ctx.context.authCookies.sessionToken.name,
+		ctx.context.secret,
+	);
+	if (typeof token !== "string" || token.length === 0) return null;
+
+	try {
+		const result = await ctx.context.internalAdapter.findSession(token);
+		return result ? { session: result.session } : null;
+	} catch (error) {
+		ctx.context.logger.error(
+			"Failed to read the current logout session",
+			error,
+		);
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "server_error",
+			error_description: "Unable to read the current session",
+		});
+	}
+}
+
+async function findHintedSession(
+	ctx: GenericEndpointContext,
+	sessionId: string,
+): Promise<Session | null> {
+	try {
+		return await ctx.context.adapter.findOne<Session>({
+			model: "session",
+			where: [{ field: "id", value: sessionId }],
+		});
+	} catch (error) {
+		ctx.context.logger.error("Failed to read the hinted logout session", error);
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "server_error",
+			error_description: "Unable to read the hinted session",
+		});
+	}
+}
+
+async function deleteLogoutSession(
+	ctx: GenericEndpointContext,
+	session: Session,
+): Promise<void> {
+	if (typeof session.token !== "string" || session.token.length === 0) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "server_error",
+			error_description: "Unable to complete logout",
+		});
+	}
+	try {
+		await ctx.context.internalAdapter.deleteSession(session.token);
+	} catch (error) {
+		ctx.context.logger.error("Failed to delete the logout session", error);
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "server_error",
+			error_description: "Unable to complete logout",
+		});
+	}
+}
+
+async function getLogoutClient(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	clientId: string,
+): Promise<SchemaClient<Scope[]> | null> {
+	try {
+		return await getClient(ctx, opts, clientId);
+	} catch (error) {
+		ctx.context.logger.error("Failed to resolve the logout client", error);
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "server_error",
+			error_description: "Unable to resolve the logout client",
+		});
+	}
+}
+
+function normalizeLogoutAudiences(value: unknown): string[] {
+	const values = Array.isArray(value) ? value : [value];
+	return values.filter(
+		(candidate): candidate is string => typeof candidate === "string",
+	);
+}
+
+function getHintClientId(payload: JWTPayload): string | null {
+	if (typeof payload.aud === "string" && payload.aud.length > 0) {
+		return payload.aud;
+	}
+	if (typeof payload.azp === "string" && payload.azp.length > 0) {
+		return payload.azp;
+	}
+	const audiences = normalizeLogoutAudiences(payload.aud);
+	return audiences.length === 1 ? audiences[0]! : null;
+}
+
+async function resolveHintClient(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	hint: string,
+	clientId?: string,
+): Promise<SchemaClient<Scope[]> | null> {
+	if (clientId) return getLogoutClient(ctx, opts, clientId);
+
+	let decoded: JWTPayload;
+	try {
+		decoded = decodeJwt(hint);
+	} catch {
+		return null;
+	}
+	// The hint is unverified at this point. Resolve at most one client before
+	// signature verification so an attacker cannot amplify database lookups
+	// with a large audience array. Multi-audience ID Tokens identify the
+	// authorized party through azp.
+	const candidate = getHintClientId(decoded);
+	return candidate ? getLogoutClient(ctx, opts, candidate) : null;
+}
+
+async function verifyLogoutHint(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	hint: string,
+	client: SchemaClient<Scope[]>,
+): Promise<JWTPayload | null> {
+	try {
+		let payload: JWTPayload;
+		if (opts.disableJwtPlugin) {
+			if (!client.clientSecret) return null;
+			const secret = await decryptStoredClientSecret(
+				ctx,
+				opts.storeClientSecret,
+				client.clientSecret,
+			);
+			const { payload: verifiedPayload } = await compactVerify(
+				hint,
+				new TextEncoder().encode(secret),
+			);
+			payload = JSON.parse(
+				new TextDecoder().decode(verifiedPayload),
+			) as JWTPayload;
+		} else {
+			const jwtPluginOptions = getJwtPlugin(ctx.context).options;
+			const jwksUrl =
+				jwtPluginOptions?.jwks?.remoteUrl ??
+				`${ctx.context.baseURL}${jwtPluginOptions?.jwks?.jwksPath ?? "/jwks"}`;
+			const jwks = await getJwks(hint, { jwksFetch: jwksUrl });
+			const { payload: verifiedPayload } = await compactVerify(
+				hint,
+				createLocalJWKSet(jwks),
+			);
+			payload = JSON.parse(
+				new TextDecoder().decode(verifiedPayload),
+			) as JWTPayload;
+		}
+
+		if (payload.iss !== getIssuer(ctx, opts)) return null;
+		if (!normalizeLogoutAudiences(payload.aud).includes(client.clientId)) {
+			return null;
+		}
+		if (
+			typeof payload.sid !== "string" ||
+			payload.sid.length === 0 ||
+			typeof payload.sub !== "string" ||
+			payload.sub.length === 0
+		) {
+			return null;
+		}
+		return payload;
+	} catch {
+		return null;
+	}
+}
+
+function getRegisteredLogoutRedirect(
+	client: SchemaClient<Scope[]>,
+	requestedURI?: string,
+	state?: string,
+): { uri?: string; invalid: boolean } {
+	if (!requestedURI) return { invalid: false };
+	if (!client.postLogoutRedirectUris?.includes(requestedURI)) {
+		return { invalid: true };
+	}
+	if (!state) return { uri: requestedURI, invalid: false };
+	try {
+		const redirectURI = new URL(requestedURI);
+		redirectURI.searchParams.set("state", state);
+		return { uri: redirectURI.toString(), invalid: false };
+	} catch {
+		return { invalid: true };
+	}
+}
+
+function getLogoutConfirmationContext(
+	client: SchemaClient<Scope[]>,
+	request: RPInitiatedLogoutRequest,
+): LogoutConfirmationContext {
+	if (!request.post_logout_redirect_uri) return {};
+	const redirect = getRegisteredLogoutRedirect(
+		client,
+		request.post_logout_redirect_uri,
+		request.state,
+	);
+	if (redirect.invalid) return { redirectInvalid: true };
+	return {
+		clientId: client.clientId,
+		postLogoutRedirectUri: request.post_logout_redirect_uri,
+		...(request.state !== undefined ? { state: request.state } : {}),
+	};
+}
+
+async function getConfirmedLogoutRedirect(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	state: LogoutConfirmationState,
+): Promise<{ uri?: string; invalid: boolean }> {
+	if (state.redirectInvalid) return { invalid: true };
+	if (!state.clientId || !state.postLogoutRedirectUri) {
+		return { invalid: false };
+	}
+	const client = await getLogoutClient(ctx, opts, state.clientId);
+	if (!client || client.disabled || !client.enableEndSession) {
+		return { invalid: true };
+	}
+	return getRegisteredLogoutRedirect(
+		client,
+		state.postLogoutRedirectUri,
+		state.state,
+	);
+}
+
+async function confirmationRequired(
+	ctx: GenericEndpointContext,
+	currentSession: CurrentBrowserSession | null,
+	confirmation: LogoutConfirmationContext = {},
+): Promise<Response> {
+	if (!currentSession) {
+		if (isBrowserNavigation(ctx)) {
+			await setLogoutConfirmationState(ctx, undefined, confirmation);
+			return logoutConfirmationPage(ctx);
+		}
+		return logoutProtocolError(
+			ctx,
+			"BAD_REQUEST",
+			"invalid_request",
+			"No active session is available for logout",
+		);
+	}
+	if (!isBrowserNavigation(ctx)) {
+		return logoutProtocolError(
+			ctx,
+			"BAD_REQUEST",
+			"invalid_request",
+			"User confirmation is required to complete logout",
+		);
+	}
+	await setLogoutConfirmationState(
+		ctx,
+		currentSession.session.id,
+		confirmation,
+	);
+	return logoutConfirmationPage(ctx);
+}
+
+async function completeConfirmedLogout(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+): Promise<OAuthRedirectResult | Response | null> {
+	const state = await getLogoutConfirmationState(ctx);
+	const currentSession = await getCurrentBrowserSession(ctx);
+	if (!state || state.expiresAt <= Date.now()) {
+		return logoutProtocolError(
+			ctx,
+			"BAD_REQUEST",
+			"invalid_request",
+			"The logout confirmation is invalid or expired",
+		);
+	}
+	const redirect = await getConfirmedLogoutRedirect(ctx, opts, state);
+	if (!currentSession) {
+		clearLogoutConfirmationState(ctx);
+		if (redirect.uri) return handleRedirect(ctx, redirect.uri);
+		return isBrowserNavigation(ctx)
+			? logoutSuccessPage(
+					redirect.invalid
+						? "The requested post-logout redirect was not registered."
+						: undefined,
+				)
+			: logoutProtocolError(
+					ctx,
+					"BAD_REQUEST",
+					"invalid_request",
+					"No active session is available for logout",
+				);
+	}
+	if (state.sessionId && state.sessionId !== currentSession.session.id) {
+		return logoutProtocolError(
+			ctx,
+			"BAD_REQUEST",
+			"invalid_request",
+			"The logout confirmation is invalid or expired",
+		);
+	}
+
+	await deleteLogoutSession(ctx, currentSession.session);
+	deleteSessionCookie(ctx);
+	clearLogoutConfirmationState(ctx);
+	if (redirect.uri) return handleRedirect(ctx, redirect.uri);
+	return isBrowserNavigation(ctx)
+		? logoutSuccessPage(
+				redirect.invalid
+					? "The requested post-logout redirect was not registered."
+					: undefined,
+			)
+		: null;
+}
+
 /**
  * RP-Initiated Logout (OIDC RP-Initiated Logout 1.0). The RP presents a signed
  * `id_token_hint`; after verification, the OP terminates the matching session
- * and optionally redirects to `post_logout_redirect_uri`.
+ * and optionally redirects to `post_logout_redirect_uri`. Requests without a
+ * usable hint, and hints that do not identify the current browser session, use
+ * a signed, short-lived OP confirmation state before terminating that session.
  *
  * Session termination goes through `internalAdapter.deleteSession`, which fires
  * `session.delete.after` so the hook drives revocation and back-channel
@@ -340,166 +888,146 @@ export async function rpInitiatedLogoutEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	const {
-		id_token_hint,
-		client_id,
-		post_logout_redirect_uri,
-		state,
-	}: {
-		// id_token_hint is RECOMMENDED by spec; required here to prevent DoS
-		id_token_hint: string;
-		client_id?: string;
-		post_logout_redirect_uri?: string;
-		state?: string;
-	} = ctx.query;
+	const query = (ctx.query ?? {}) as RPInitiatedLogoutRequest;
+	const body = (ctx.body ?? {}) as RPInitiatedLogoutRequest;
+	const request: RPInitiatedLogoutRequest = { ...query, ...body };
 
-	const baseURL = ctx.context.baseURL;
-	const jwtPlugin = opts.disableJwtPlugin
-		? undefined
-		: getJwtPlugin(ctx.context);
-	const jwtPluginOptions = jwtPlugin?.options;
-	const jwksUrl =
-		jwtPluginOptions?.jwks?.remoteUrl ??
-		`${baseURL}${jwtPluginOptions?.jwks?.jwksPath ?? "/jwks"}`;
+	const currentSession = await getCurrentBrowserSession(ctx);
+	const hasHint = request.id_token_hint !== undefined;
 
-	let clientId = client_id;
-	if (!clientId) {
-		let decoded: JWTPayload;
-		try {
-			decoded = decodeJwt(id_token_hint);
-		} catch (_e) {
-			throw new APIError("UNAUTHORIZED", {
-				error_description: "invalid id token",
-				error: "invalid_token",
-			});
+	if (!hasHint) {
+		let confirmation: LogoutConfirmationContext = {};
+		if (request.client_id) {
+			const client = await getLogoutClient(ctx, opts, request.client_id);
+			if (!client) {
+				return logoutProtocolError(
+					ctx,
+					"BAD_REQUEST",
+					"invalid_client",
+					"The logout client does not exist",
+				);
+			}
+			if (client.disabled) {
+				return logoutProtocolError(
+					ctx,
+					"BAD_REQUEST",
+					"invalid_client",
+					"The logout client is disabled",
+				);
+			}
+			if (!client.enableEndSession) {
+				return logoutProtocolError(
+					ctx,
+					"UNAUTHORIZED",
+					"invalid_client",
+					"The client is not allowed to initiate logout",
+				);
+			}
+			confirmation = getLogoutConfirmationContext(client, request);
 		}
-		clientId = decoded?.aud as string | undefined;
-		if (!clientId) {
-			throw new APIError("INTERNAL_SERVER_ERROR", {
-				error_description: "id token missing audience",
-				error: "invalid_request",
-			});
-		}
+		return confirmationRequired(ctx, currentSession, confirmation);
 	}
 
-	const client = await getClient(ctx, opts, clientId);
+	const client = await resolveHintClient(
+		ctx,
+		opts,
+		request.id_token_hint!,
+		request.client_id,
+	);
 	if (!client) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "client doesn't exist",
-			error: "invalid_client",
-		});
+		if (currentSession && isBrowserNavigation(ctx)) {
+			return confirmationRequired(ctx, currentSession);
+		}
+		return logoutProtocolError(
+			ctx,
+			"BAD_REQUEST",
+			"invalid_client",
+			"The logout client does not exist",
+		);
 	}
 	if (client.disabled) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "client is disabled",
-			error: "invalid_client",
-		});
+		return logoutProtocolError(
+			ctx,
+			"BAD_REQUEST",
+			"invalid_client",
+			"The logout client is disabled",
+		);
 	}
 	if (!client.enableEndSession) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "client unable to logout",
-			error: "invalid_client",
-		});
-	}
-
-	let idTokenPayload: JWTPayload | undefined;
-	if (opts.disableJwtPlugin) {
-		const clientSecret = client.clientSecret;
-		if (!clientSecret) {
-			throw new APIError("UNAUTHORIZED", {
-				error_description: "missing required credentials",
-				error: "invalid_client",
-			});
-		}
-
-		const secret = await decryptStoredClientSecret(
+		return logoutProtocolError(
 			ctx,
-			opts.storeClientSecret,
-			clientSecret,
+			"UNAUTHORIZED",
+			"invalid_client",
+			"The client is not allowed to initiate logout",
 		);
-		const key = new TextEncoder().encode(secret);
-
-		const { payload } = await compactVerify(id_token_hint, key);
-		idTokenPayload = JSON.parse(new TextDecoder().decode(payload));
-	} else {
-		const jwks = await getJwks(id_token_hint, { jwksFetch: jwksUrl });
-		const { payload } = await compactVerify(
-			id_token_hint,
-			createLocalJWKSet(jwks),
-		);
-		idTokenPayload = JSON.parse(new TextDecoder().decode(payload));
 	}
 
+	const idTokenPayload = await verifyLogoutHint(
+		ctx,
+		opts,
+		request.id_token_hint!,
+		client,
+	);
 	if (!idTokenPayload) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			error_description: "missing payload",
-			error: "invalid_request",
-		});
-	}
-
-	const issuer = jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL;
-	if (issuer !== idTokenPayload.iss) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			error_description: "invalid issuer",
-			error: "invalid_request",
-		});
-	}
-
-	const idTokenAudience =
-		typeof idTokenPayload.aud === "string"
-			? [idTokenPayload.aud]
-			: idTokenPayload.aud;
-	if (!idTokenAudience) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			error_description: "id token missing audience",
-			error: "invalid_request",
-		});
-	}
-	if (client_id && !idTokenAudience.includes(client_id)) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "audience mismatch",
-			error: "invalid_request",
-		});
-	}
-
-	const sessionId = idTokenPayload.sid as string | undefined;
-	if (!sessionId) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			error_description: "id token missing session",
-			error: "invalid_request",
-		});
-	}
-
-	try {
-		const session = await ctx.context.adapter.findOne<Session>({
-			model: "session",
-			where: [{ field: "id", value: sessionId }],
-		});
-		if (session?.token) {
-			// internalAdapter.deleteSession fires `session.delete.before`, which
-			// runs revocation and back-channel dispatch for every RP on this
-			// session.
-			await ctx.context.internalAdapter.deleteSession(session.token);
-		} else if (session) {
-			// A persisted session always carries a token; this only guards a
-			// corrupted row by removing it directly (best effort).
-			await ctx.context.adapter.delete<Session>({
-				model: "session",
-				where: [{ field: "id", value: session.id }],
-			});
+		if (currentSession && isBrowserNavigation(ctx)) {
+			return confirmationRequired(
+				ctx,
+				currentSession,
+				request.client_id ? getLogoutConfirmationContext(client, request) : {},
+			);
 		}
-	} catch {
-		// Session already gone; nothing further to do.
+		return logoutProtocolError(
+			ctx,
+			"UNAUTHORIZED",
+			"invalid_token",
+			"The id_token_hint is invalid",
+		);
 	}
 
-	if (post_logout_redirect_uri) {
-		const registeredUris = client.postLogoutRedirectUris;
-		if (registeredUris?.includes(post_logout_redirect_uri)) {
-			const redirectUri = new URL(post_logout_redirect_uri);
-			if (state) {
-				redirectUri.searchParams.set("state", state);
-			}
-			return handleRedirect(ctx, redirectUri.toString());
-		}
+	const sessionId = idTokenPayload.sid as string;
+	const hintedSession = await findHintedSession(ctx, sessionId);
+	const matchesCurrentSession = currentSession?.session.id === sessionId;
+	if (currentSession && !matchesCurrentSession) {
+		return confirmationRequired(
+			ctx,
+			currentSession,
+			getLogoutConfirmationContext(client, request),
+		);
 	}
+
+	const redirect = getRegisteredLogoutRedirect(
+		client,
+		request.post_logout_redirect_uri,
+		request.state,
+	);
+	const sessionToDelete =
+		hintedSession ?? (matchesCurrentSession ? currentSession?.session : null);
+	if (sessionToDelete) {
+		// internalAdapter.deleteSession triggers the normal before/after session
+		// hooks, including revocation and back-channel dispatch for every RP.
+		await deleteLogoutSession(ctx, sessionToDelete);
+	}
+	if (matchesCurrentSession) deleteSessionCookie(ctx);
+	clearLogoutConfirmationState(ctx);
+
+	if (redirect.uri) return handleRedirect(ctx, redirect.uri);
+	return isBrowserNavigation(ctx)
+		? logoutSuccessPage(
+				redirect.invalid
+					? "The requested post-logout redirect was not registered."
+					: undefined,
+			)
+		: null;
+}
+
+/**
+ * Completes the browser confirmation flow for RP-Initiated Logout. This route
+ * is intentionally scoped to HTTP delivery so it does not become a generated
+ * client action; the signed cookie is the only confirmation context it accepts.
+ */
+export async function rpInitiatedLogoutConfirmationEndpoint(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+) {
+	return completeConfirmedLogout(ctx, opts);
 }

@@ -270,6 +270,14 @@ When a session ends, the access tokens tied to it are now revoked. They read as 
 
 If you import or retain clients with a `backchannel_logout_uri`, audit those registrations before cutover. Back-channel logout requires the JWT plugin, and every URI must be an absolute public HTTPS URL without credentials or a fragment. Private, reserved, tunneled, and cloud-metadata targets are rejected.
 
+### RP-Initiated Logout can require browser confirmation
+
+In 1.6, `/oauth2/end-session` accepted only `GET` requests and rejected requests without an `id_token_hint`. In 1.7, the endpoint also accepts form-encoded `POST` requests. For browser navigation without a valid hint, Better Auth asks the user to confirm before ending the current session. The same browser confirmation is required when the hint refers to a different session than the browser session. API calls receive a protocol error when confirmation is required.
+
+The confirmation flow preserves the existing redirect rule: `post_logout_redirect_uri` must exactly match a registered URI. Better Auth adds `state` only to that verified redirect.
+
+**What to do:** if your browser flow expected a missing or invalid hint to fail immediately, update its flow and tests to handle the confirmation page. Standard clients that send a valid hint do not need changes. Enable `enable_end_session` only for trusted clients, and register every allowed post-logout redirect URI exactly.
+
 ### Custom ID-token claims cannot override protocol claims
 
 Your custom ID-token claims can no longer set protocol claims that the standard reserves for the server: issuer, subject, audience, expiry, nonce, session binding, `auth_time`, `acr`, `amr`, and `azp`. Your own namespaced claims still appear. ID tokens also report `acr: "0"` rather than a vendor-specific value.

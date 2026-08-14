@@ -479,7 +479,7 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 	});
 
 	describe("oauth2EndSession (JSON delivery)", () => {
-		it("missing id_token_hint → invalid_request with envelope", async () => {
+		it("missing id_token_hint → controlled invalid_request with envelope", async () => {
 			const { status, body } = await captureJsonResponse(
 				"/oauth2/end-session",
 				{ method: "GET" },
@@ -487,7 +487,7 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 			expect(status).toBe(400);
 			expect(body).toEqual({
 				error: "invalid_request",
-				error_description: "id_token_hint is required",
+				error_description: "User confirmation is required to complete logout",
 			});
 		});
 	});
