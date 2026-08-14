@@ -1,14 +1,12 @@
 // @vitest-environment happy-dom
 
 import { atom, cleanStores, onMount } from "nanostores";
-import type { Accessor } from "solid-js-v2";
-import { createEffect, createRoot, flush } from "solid-js-v2";
+import type { Accessor } from "solid-js";
+import { createEffect, createRoot } from "solid-js";
 import { describe, expect, it, vi } from "vitest";
 import { useStore } from "./solid-store";
 
-vi.mock("solid-js", async () => import("solid-js-v2"));
-
-describe("useStore with Solid 2", () => {
+describe("useStore with Solid 1", () => {
 	it("tracks nanostore updates and releases the subscription", () => {
 		const store = atom(0);
 		const cleanup = vi.fn();
@@ -27,33 +25,11 @@ describe("useStore with Solid 2", () => {
 		expect(value?.()).toBe(1);
 
 		store.set(2);
-		flush();
 		expect(value?.()).toBe(2);
 
 		dispose?.();
 		cleanStores(store);
 		expect(cleanup).toHaveBeenCalledOnce();
-	});
-
-	it("preserves function-valued stores", () => {
-		const initialValue = () => 1;
-		const nextValue = () => 2;
-		const store = atom(initialValue);
-
-		let value: Accessor<typeof initialValue> | undefined;
-		let dispose: (() => void) | undefined;
-		createRoot((rootDispose) => {
-			dispose = rootDispose;
-			value = useStore(store);
-		});
-
-		expect(value?.()).toBe(initialValue);
-
-		store.set(nextValue);
-		flush();
-		expect(value?.()).toBe(nextValue);
-
-		dispose?.();
 	});
 
 	it("reactively propagates nested object updates", () => {
@@ -68,15 +44,11 @@ describe("useStore with Solid 2", () => {
 		createRoot((rootDispose) => {
 			dispose = rootDispose;
 			const value = useStore(store);
-			createEffect(
-				() => value().user.name,
-				(name) => {
-					observedNames.push(name);
-				},
-			);
+			createEffect(() => {
+				observedNames.push(value().user.name);
+			});
 		});
 
-		flush();
 		expect(observedNames).toEqual(["Ada"]);
 
 		store.set({
@@ -85,8 +57,6 @@ describe("useStore with Solid 2", () => {
 			},
 		});
 
-		expect(observedNames).toEqual(["Ada"]);
-		flush();
 		expect(observedNames).toEqual(["Ada", "Grace"]);
 
 		dispose?.();

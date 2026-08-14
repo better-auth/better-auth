@@ -16,6 +16,9 @@ export function useStore<
 	// https://github.com/nanostores/solid/issues/19
 	const unbindActivation = store.listen(() => {});
 
+	// Solid 1 and 2 expose their store APIs from incompatible module paths, so
+	// use their shared signal API. This intentionally invalidates the accessor
+	// for every Nanostore update instead of reconciling nested properties.
 	const [state, setState] = createSignal({
 		value: store.get(),
 	});
