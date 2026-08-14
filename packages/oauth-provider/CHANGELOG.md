@@ -1,5 +1,13 @@
 # @better-auth/oauth-provider
 
+## 1.7.0-rc.6
+
+### Patch Changes
+
+- [#10811](https://github.com/better-auth/better-auth/pull/10811) [`801968e`](https://github.com/better-auth/better-auth/commit/801968e354067869318718f4766d7011c0218a86) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `private_key_jwt` client assertions can use either the receiving endpoint URL or the OpenID Provider issuer as `aud`. The claim may be a string or an array containing at least one accepted value. This rule applies to token, introspection, and revocation requests.
+
+- [#10812](https://github.com/better-auth/better-auth/pull/10812) [`f451d1c`](https://github.com/better-auth/better-auth/commit/f451d1c7589ddb4d2995fa54aee9375472ebea33) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The RP-Initiated Logout endpoint continues to accept `GET` and now accepts form-encoded `POST` requests. It also supports the JSON bodies sent by Better Auth's generated client. After explicit confirmation, browser users can log out without an `id_token_hint`. They receive clear confirmation, success, or error pages. Invalid ID token hints fail safely, and logout redirects require an exact registered `post_logout_redirect_uri`.
+
 ## 1.7.0-rc.5
 
 ### Minor Changes
