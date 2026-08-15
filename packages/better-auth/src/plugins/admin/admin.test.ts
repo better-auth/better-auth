@@ -682,6 +682,47 @@ describe("Admin plugin", async () => {
 		expect(res.data?.user).toBeDefined();
 	});
 
+	it("should clear the expired expiration when banning again without a duration", async () => {
+		const created = await client.admin.createUser(
+			{
+				name: "Reban User",
+				email: "reban@email.com",
+				password: "test",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		const userId = created.data?.user.id || "";
+		await client.admin.banUser(
+			{
+				userId,
+				banExpiresIn: 60 * 60,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(60 * 60 * 2 * 1000);
+		const res = await client.admin.banUser(
+			{
+				userId,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.user?.banned).toBe(true);
+		expect(res.data?.user?.banExpires).toBeNull();
+		const signIn = await client.signIn.email({
+			email: "reban@email.com",
+			password: "test",
+		});
+		expect(signIn.error?.status).toBe(403);
+	});
+
 	it("should allow to unban user", async () => {
 		const res = await client.admin.unbanUser(
 			{
