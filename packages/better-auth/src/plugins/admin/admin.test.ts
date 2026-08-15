@@ -19,7 +19,6 @@ import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { createAccessControl } from "../access";
-import { bearer } from "../bearer";
 import { admin } from "./admin";
 import { ADMIN_ERROR_CODES, adminClient } from "./client";
 import type { UserWithRole } from "./types";
@@ -85,7 +84,6 @@ describe("Admin plugin", async () => {
 				admin({
 					bannedUserMessage: "Custom banned user message",
 				}),
-				bearer(),
 			],
 			databaseHooks: {
 				user: {
