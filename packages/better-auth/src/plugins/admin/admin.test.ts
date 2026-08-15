@@ -862,7 +862,6 @@ describe("Admin plugin", async () => {
 				clientOptions: {
 					plugins: [adminClient()],
 				},
-				disableBearer: true,
 				testUser: {
 					name: "Cookie Admin",
 					email: "cookie-admin@mail.com",
