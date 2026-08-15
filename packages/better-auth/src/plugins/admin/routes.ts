@@ -1101,6 +1101,16 @@ export const impersonateUser = (opts: AdminOptions) =>
 				}
 			}
 
+			const authorizationHeader =
+				ctx.request?.headers.get("authorization") ||
+				ctx.headers?.get("authorization");
+			if (authorizationHeader?.trim().toLowerCase().startsWith("bearer ")) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ADMIN_ERROR_CODES.YOU_CANNOT_IMPERSONATE_WITH_BEARER,
+				);
+			}
+
 			const session = await ctx.context.internalAdapter.createSession(
 				targetUser.id,
 				true,

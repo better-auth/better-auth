@@ -16,6 +16,7 @@ import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { createAccessControl } from "../access";
+import { bearer } from "../bearer";
 import { admin } from "./admin";
 import { ADMIN_ERROR_CODES, adminClient } from "./client";
 import type { UserWithRole } from "./types";
@@ -73,12 +74,14 @@ describe("Admin plugin", async () => {
 		signInWithUser,
 		cookieSetter,
 		customFetchImpl,
+		testUser,
 	} = await getTestInstance(
 		{
 			plugins: [
 				admin({
 					bannedUserMessage: "Custom banned user message",
 				}),
+				bearer(),
 			],
 			databaseHooks: {
 				user: {
@@ -699,6 +702,57 @@ describe("Admin plugin", async () => {
 	};
 
 	const impersonateHeaders = new Headers();
+	it("should reject bearer-authenticated impersonation", async () => {
+		const target = await client.admin.createUser(
+			{
+				name: "Bearer Impersonation Target",
+				email: "bearer-impersonation-target@mail.com",
+				password: "password",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		let bearerToken = "";
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: (ctx) => {
+					bearerToken = ctx.response.headers.get("set-auth-token") || "";
+				},
+			},
+		);
+
+		const res = await client.admin.impersonateUser(
+			{
+				userId: target.data?.user.id || "",
+			},
+			{
+				headers: new Headers({
+					authorization: `Bearer ${bearerToken}`,
+				}),
+			},
+		);
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe(
+			ADMIN_ERROR_CODES.YOU_CANNOT_IMPERSONATE_WITH_BEARER.code,
+		);
+		const sessions = await client.admin.listUserSessions(
+			{
+				userId: target.data?.user.id || "",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(sessions.data?.sessions).toHaveLength(0);
+	});
+
 	it("should allow admins to impersonate user", async () => {
 		const userToImpersonate = await client.signUp.email(data);
 		const session = await client.getSession({
