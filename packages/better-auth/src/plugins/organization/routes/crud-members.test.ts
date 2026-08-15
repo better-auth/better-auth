@@ -292,26 +292,29 @@ describe("listMembers", async () => {
 	 */
 	it("should not look up users when the filter matches zero members", async () => {
 		const spy = vi.spyOn(ctx.adapter, "findMany");
-		const members = await client.organization.listMembers({
-			fetchOptions: {
-				headers,
-			},
-			query: {
-				organizationId: org.data?.id as string,
-				filterField: "role",
-				filterValue: "nonexistent-role",
-			},
-		});
-		const models = spy.mock.calls.map(([query]) => query.model);
-		spy.mockRestore();
+		try {
+			const members = await client.organization.listMembers({
+				fetchOptions: {
+					headers,
+				},
+				query: {
+					organizationId: org.data?.id as string,
+					filterField: "role",
+					filterValue: "nonexistent-role",
+				},
+			});
+			const models = spy.mock.calls.map(([query]) => query.model);
 
-		expect(members.data?.members).toEqual([]);
-		expect(members.data?.total).toBe(0);
-		// Guards the assertion below: if the member query were missing too, the
-		// spy would not be observing the adapter the request actually used.
-		expect(models).toContain("member");
-		// An empty `in` list renders as `IN ()`, which MSSQL rejects.
-		expect(models).not.toContain("user");
+			expect(members.data?.members).toEqual([]);
+			expect(members.data?.total).toBe(0);
+			// Guards the assertion below: if the member query were missing too, the
+			// spy would not be observing the adapter the request actually used.
+			expect(models).toContain("member");
+			// An empty `in` list renders as `IN ()`, which MSSQL rejects.
+			expect(models).not.toContain("user");
+		} finally {
+			spy.mockRestore();
+		}
 	});
 
 	/**
