@@ -1950,6 +1950,53 @@ describe("internal adapter test", async () => {
 			expect(results.filter((r) => r === false)).toHaveLength(1);
 		});
 
+		/**
+		 * The reservation id is derived from the identifier, but under
+		 * `generateId: "uuid"` the adapter dropped it for a random UUID because it
+		 * was not UUID shaped, so every replay created a new row and won.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/10624
+		 */
+		it("returns false the second time when ids are uuids", async () => {
+			const adapter = await makeAdapter({
+				advanced: { database: { generateId: "uuid" } },
+			});
+
+			const first = await adapter.reserveVerificationValue({
+				identifier: "reserve:uuid-once",
+				value: "jti-uuid",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			expect(first).toBe(true);
+
+			const second = await adapter.reserveVerificationValue({
+				identifier: "reserve:uuid-once",
+				value: "jti-uuid-replay",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			expect(second).toBe(false);
+		});
+
+		/**
+		 * A numeric id cannot hold a hash, so a reservation can never be keyed
+		 * deterministically here. Fail loudly instead of always returning true.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/10624
+		 */
+		it("throws when ids are database generated numbers", async () => {
+			const adapter = await makeAdapter({
+				advanced: { database: { generateId: "serial" } },
+			});
+
+			await expect(
+				adapter.reserveVerificationValue({
+					identifier: "reserve:serial",
+					value: "jti-serial",
+					expiresAt: new Date(Date.now() + 60_000),
+				}),
+			).rejects.toThrow(/serial/);
+		});
+
 		it("reserves independently across different identifiers", async () => {
 			const adapter = await makeAdapter();
 
