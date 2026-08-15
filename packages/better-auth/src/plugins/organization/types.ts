@@ -339,6 +339,9 @@ export interface OrganizationOptions {
 					fields?: {
 						[key in keyof Omit<TeamMember, "id">]?: string;
 					};
+					additionalFields?: {
+						[key in string]: DBFieldAttribute;
+					};
 				};
 				organizationRole?: {
 					modelName?: string;
@@ -742,6 +745,12 @@ export interface OrganizationOptions {
 
 				/**
 				 * A callback that runs before a member is added to a team
+				 *
+				 * You can return a `data` object to override the default data.
+				 * `teamId`, `userId` and `createdAt` are always set by the plugin and
+				 * cannot be overridden.
+				 *
+				 * @see https://github.com/better-auth/better-auth/issues/10707
 				 */
 				beforeAddTeamMember?: (data: {
 					teamMember: {
