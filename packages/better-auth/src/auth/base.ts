@@ -42,13 +42,18 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 					resolveDynamicTrustedProxyHeaders(ctx.options),
 				);
 			} else {
-				handlerCtx = ctx;
-				// Static config with no baseURL: memoize on the shared ctx from
-				// the first request. A concurrent-first-requests race is
-				// harmless since both writes resolve to the same value. Cloning
-				// via `Object.create` (as the dynamic branch does) would break
-				// downstream references that depend on `ctx.options` being
-				// mutated in place.
+				// Resolve request-derived state on a per-request clone so it never
+				// mutates the shared context. This isolates a request-dependent
+				// `trustedOrigins`/`trustedProviders` callback from concurrent
+				// requests, and (for the no-baseURL case) stops the first request's
+				// host from being memoized onto the shared context, where it would
+				// be reused for every later request's token links.
+				handlerCtx = Object.create(
+					Object.getPrototypeOf(ctx),
+					Object.getOwnPropertyDescriptors(ctx),
+				) as AuthContext;
+
+				let trustOptions = ctx.options;
 				if (!ctx.options.baseURL) {
 					const baseURL = getBaseURL(
 						undefined,
@@ -57,21 +62,25 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 						undefined,
 						ctx.options.advanced?.trustedProxyHeaders,
 					);
-					if (baseURL) {
-						ctx.baseURL = baseURL;
-						ctx.options.baseURL = getOrigin(ctx.baseURL) || undefined;
-					} else {
+					if (!baseURL) {
 						throw new BetterAuthError(
 							"Could not get base URL from request. Please provide a valid base URL.",
 						);
 					}
+					handlerCtx.baseURL = baseURL;
+					handlerCtx.options = {
+						...ctx.options,
+						baseURL: getOrigin(baseURL) || undefined,
+					};
+					trustOptions = handlerCtx.options;
 				}
+
 				handlerCtx.trustedOrigins = await getTrustedOrigins(
-					ctx.options,
+					trustOptions,
 					request,
 				);
 				handlerCtx.trustedProviders = await getTrustedProviders(
-					ctx.options,
+					trustOptions,
 					request,
 				);
 			}

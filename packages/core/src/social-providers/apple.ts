@@ -10,6 +10,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import type { GenericEndpointContext } from "../types";
 export interface AppleProfile {
 	/**
 	 * The subject registered claim identifies the principal that’s the subject
@@ -77,12 +78,30 @@ export interface AppleOptions extends ProviderOptions<AppleProfile> {
 	audience?: (string | string[]) | undefined;
 }
 
+async function sha256Hex(value: string) {
+	const data = new TextEncoder().encode(value);
+	const digest = await crypto.subtle.digest("SHA-256", data);
+	return Array.from(new Uint8Array(digest))
+		.map((byte) => byte.toString(16).padStart(2, "0"))
+		.join("");
+}
+
+async function nonceMatches(jwtNonce: unknown, nonce: string) {
+	if (typeof jwtNonce !== "string") {
+		return false;
+	}
+	if (jwtNonce === nonce) {
+		return true;
+	}
+	return jwtNonce === (await sha256Hex(nonce));
+}
+
 export const apple = (options: AppleOptions) => {
 	const tokenEndpoint = "https://appleid.apple.com/auth/token";
 	return {
 		id: "apple",
 		name: "Apple",
-		async createAuthorizationURL({ state, scopes, redirectURI }) {
+		async createAuthorizationURL({ state, scopes, redirectURI, codeVerifier }) {
 			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
 				logger.error(
 					"Client ID and client secret are required for Apple. Make sure to provide them in the options.",
@@ -99,6 +118,7 @@ export const apple = (options: AppleOptions) => {
 				scopes: _scope,
 				state,
 				redirectURI,
+				codeVerifier,
 				responseMode: "form_post",
 				responseType: "code id_token",
 			});
@@ -113,12 +133,16 @@ export const apple = (options: AppleOptions) => {
 				tokenEndpoint,
 			});
 		},
-		async verifyIdToken(token, nonce) {
+		async verifyIdToken(
+			token: string,
+			nonce?: string,
+			ctx?: GenericEndpointContext,
+		) {
 			if (options.disableIdTokenSignIn) {
 				return false;
 			}
 			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
+				return options.verifyIdToken(token, nonce, ctx);
 			}
 			try {
 				const decodedHeader = decodeProtectedHeader(token);
@@ -141,7 +165,7 @@ export const apple = (options: AppleOptions) => {
 						jwtClaims[field] = Boolean(jwtClaims[field]);
 					}
 				});
-				if (nonce && jwtClaims.nonce !== nonce) {
+				if (nonce && !(await nonceMatches(jwtClaims.nonce, nonce))) {
 					return false;
 				}
 				return !!jwtClaims;

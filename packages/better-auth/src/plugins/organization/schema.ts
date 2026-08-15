@@ -199,6 +199,7 @@ interface SessionDefaultFields {
 	activeOrganizationId: {
 		type: "string";
 		required: false;
+		input: false;
 	};
 }
 
@@ -278,6 +279,7 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 								activeTeamId: {
 									type: "string";
 									required: false;
+									input: false;
 								};
 							}
 						: {});

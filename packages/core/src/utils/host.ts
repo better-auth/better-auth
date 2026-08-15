@@ -235,6 +235,10 @@ function classifyIPv6(expanded: string): HostKind {
 
 	if (expanded.startsWith("2001:0db8:")) return "documentation";
 
+	// 2001:2::/48 — Benchmarking (RFC 5180). A specific non-globally-reachable
+	// block inside the otherwise-mixed 2001::/23 protocol-assignments space.
+	if (expanded.startsWith("2001:0002:0000:")) return "benchmarking";
+
 	if (expanded.startsWith("2002:")) {
 		const embedded = extractEmbeddedIPv4(expanded, 1);
 		if (embedded && classifyIPv4(embedded) !== "public") return "reserved";
@@ -247,6 +251,10 @@ function classifyIPv6(expanded: string): HostKind {
 		return "reserved";
 	}
 
+	// 64:ff9b:1::/48 — Local-Use IPv4/IPv6 Translation (RFC 8215). Distinct from
+	// the well-known NAT64 /96 prefix above and not globally reachable.
+	if (expanded.startsWith("0064:ff9b:0001:")) return "reserved";
+
 	if (expanded.startsWith("2001:0000:")) {
 		const embedded = extractEmbeddedIPv4(expanded, 6, { xor: true });
 		if (embedded && classifyIPv4(embedded) !== "public") return "reserved";
@@ -254,6 +262,13 @@ function classifyIPv6(expanded: string): HostKind {
 	}
 
 	if (expanded.startsWith("0100:0000:0000:0000:")) return "reserved";
+
+	// 3fff::/20 — Documentation (RFC 9637). The /20 fixes the first 16 bits to
+	// `3fff` and the next nibble to 0, so only `3fff:0xxx` is in range.
+	if (expanded.startsWith("3fff:0")) return "documentation";
+
+	// 5f00::/16 — SRv6 SIDs (RFC 9602), not globally reachable.
+	if (expanded.startsWith("5f00:")) return "reserved";
 
 	return "public";
 }

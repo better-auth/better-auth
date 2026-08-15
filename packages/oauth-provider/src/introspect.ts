@@ -59,6 +59,9 @@ async function validateJwtAccessToken(
 						// @ts-expect-error response is a JSONWebKeySet but within the response field
 						return jwksRes?.response as JSONWebKeySet | undefined;
 					},
+			// The plugin instance is stable across requests, so the key set
+			// fetched by the per-request closure above is cached under it.
+			jwksCacheKey: jwtPlugin,
 			verifyOptions: {
 				audience: opts.validAudiences ?? ctx.context.baseURL,
 				issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
@@ -87,19 +90,29 @@ async function validateJwtAccessToken(
 		throw new Error(error as unknown as string);
 	}
 
-	let client: SchemaClient<Scope[]> | null | undefined;
-	if (jwtPayload.azp) {
-		client = await getClient(ctx, opts, jwtPayload.azp);
-		if (!client || client?.disabled) {
-			return {
-				active: false,
-			};
-		}
-		if (clientId && jwtPayload.azp !== clientId) {
-			return {
-				active: false,
-			};
-		}
+	// An OAuth access token issued by this provider always carries an `azp`
+	// (authorized party = client) claim, stamped by `createJwtAccessToken`. The
+	// JWT plugin shares the same issuer, audience, and signing keys, so a plain
+	// session JWT (e.g. from its `/token` endpoint) can otherwise satisfy the
+	// signature/issuer/audience checks above. Such a token was never issued
+	// through the OAuth token endpoint and has no client or consent binding, so
+	// it must not be reported as an active access token. Require `azp` and a
+	// matching, enabled client before considering the token active.
+	if (!jwtPayload.azp) {
+		return {
+			active: false,
+		};
+	}
+	const client = await getClient(ctx, opts, jwtPayload.azp);
+	if (!client || client?.disabled) {
+		return {
+			active: false,
+		};
+	}
+	if (clientId && jwtPayload.azp !== clientId) {
+		return {
+			active: false,
+		};
 	}
 
 	// Validate JWT against its session if it exists
@@ -121,9 +134,7 @@ async function validateJwtAccessToken(
 
 	// Return the JWT payload in introspection format
 	// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
-	if (jwtPayload.azp) {
-		jwtPayload.client_id = jwtPayload.azp;
-	}
+	jwtPayload.client_id = jwtPayload.azp;
 	jwtPayload.active = true;
 	return jwtPayload;
 }

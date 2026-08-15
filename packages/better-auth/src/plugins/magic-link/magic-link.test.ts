@@ -265,6 +265,75 @@ describe("magic link", async () => {
 		expect(updatedUser?.user.emailVerified).toBe(true);
 	});
 
+	it("should clear an unverified account's password when verify adopts it", async () => {
+		// An account created with a password but never email-verified must not keep
+		// that password once magic-link verification proves control of the mailbox.
+		const email = "unverified-pw-user@email.com";
+		const existingPassword = "existing-password-123";
+		let magicLinkEmail: VerificationEmail = { email: "", token: "", url: "" };
+
+		const {
+			auth,
+			customFetchImpl: testFetchImpl,
+			sessionSetter: testSessionSetter,
+		} = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						magicLinkEmail = data;
+					},
+				}),
+			],
+		});
+
+		const testClient = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: { customFetchImpl: testFetchImpl },
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		const internalAdapter = (await auth.$context).internalAdapter;
+
+		const created = await auth.api.signUpEmail({
+			body: { email, name: "Test User", password: existingPassword },
+		});
+		const userId = created.user!.id;
+		expect(created.user?.emailVerified).toBe(false);
+
+		// Precondition: the password is blocked behind the verification gate.
+		await expect(
+			auth.api.signInEmail({ body: { email, password: existingPassword } }),
+		).rejects.toThrow();
+
+		await testClient.signIn.magicLink({ email });
+		const headers = new Headers();
+		const response = await testClient.magicLink.verify({
+			query: {
+				token: new URL(magicLinkEmail.url).searchParams.get("token") || "",
+			},
+			fetchOptions: { onSuccess: testSessionSetter(headers) },
+		});
+
+		// The owner is signed in and the account is verified.
+		expect(response.data?.user.emailVerified).toBe(true);
+		const session = await testClient.getSession({ fetchOptions: { headers } });
+		expect(session.data?.user.emailVerified).toBe(true);
+
+		// The credential is gone, so the password no longer works.
+		const accounts = await internalAdapter.findAccounts(userId);
+		expect(
+			accounts.find((account) => account.providerId === "credential"),
+		).toBeUndefined();
+		await expect(
+			auth.api.signInEmail({ body: { email, password: existingPassword } }),
+		).rejects.toThrow();
+	});
+
 	it("should use custom generateToken function", async () => {
 		const customGenerateToken = vi.fn(() => "custom_token");
 
@@ -706,5 +775,86 @@ describe("magic link single-use semantics", async () => {
 			.map((r) => r.data?.token)
 			.filter((t): t is string => typeof t === "string" && t.length > 0);
 		expect(sessionTokens).toHaveLength(1);
+	});
+});
+
+/**
+ * The built-in `/sign-in/email` and `/sign-up/email` routes force-validate the
+ * request `Origin` even on cookieless requests (via `formCsrfMiddleware`). The
+ * magic-link send endpoint must match that behavior so a cookieless cross-origin
+ * POST cannot trigger an outbound magic-link email to an arbitrary address.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10304
+ */
+describe("magic link send origin/CSRF protection", async () => {
+	const sendMagicLink = vi.fn(async () => {});
+	const { auth, testUser } = await getTestInstance({
+		trustedOrigins: ["http://localhost:3000"],
+		advanced: {
+			disableCSRFCheck: false,
+			disableOriginCheck: false,
+		},
+		plugins: [
+			magicLink({
+				sendMagicLink,
+			}),
+		],
+	});
+
+	it("should block cross-site navigation to the send endpoint (no cookies)", async () => {
+		sendMagicLink.mockClear();
+		const maliciousRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/magic-link",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Sec-Fetch-Site": "cross-site",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "https://evil.com",
+				},
+				body: JSON.stringify({ email: "attacker@evil.com" }),
+			},
+		);
+
+		const response = await auth.handler(maliciousRequest);
+		expect(response.status).toBe(403);
+		expect(sendMagicLink).not.toHaveBeenCalled();
+	});
+
+	it("should reject a cookieless cross-origin POST to the send endpoint", async () => {
+		sendMagicLink.mockClear();
+		const maliciousRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/magic-link",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: "https://evil.com",
+				},
+				body: JSON.stringify({ email: "attacker@evil.com" }),
+			},
+		);
+
+		const response = await auth.handler(maliciousRequest);
+		expect(response.status).toBe(403);
+		expect(sendMagicLink).not.toHaveBeenCalled();
+	});
+
+	it("should still allow a cookieless request with no Origin (server-to-server)", async () => {
+		sendMagicLink.mockClear();
+		const legitimateRequest = new Request(
+			"http://localhost:3000/api/auth/sign-in/magic-link",
+			{
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ email: testUser.email }),
+			},
+		);
+
+		const response = await auth.handler(legitimateRequest);
+		expect(response.status).toBe(200);
+		expect(sendMagicLink).toHaveBeenCalledTimes(1);
 	});
 });

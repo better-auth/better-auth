@@ -10,6 +10,7 @@ import { parseUserOutput } from "../../db/schema";
 import { missingEmailLogMessage } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { generateState } from "../../utils";
+import { safeCloneRequest } from "../../utils/request";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
@@ -265,9 +266,9 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					);
 				}
 				const { token, nonce } = c.body.idToken;
-				const valid = await provider.verifyIdToken(token, nonce);
+				const valid = await provider.verifyIdToken(token, nonce, c);
 				if (!valid) {
-					c.context.logger.error("Invalid id token", {
+					c.context.logger.warn("Invalid id token", {
 						provider: c.body.provider,
 					});
 					throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.INVALID_TOKEN);
@@ -492,7 +493,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				// Hash password to prevent timing attacks from revealing valid email addresses
 				// By hashing passwords for invalid emails, we ensure consistent response times
 				await ctx.context.password.hash(password);
-				ctx.context.logger.error("User not found", { email });
+				ctx.context.logger.warn("User not found");
 				throw APIError.from(
 					"UNAUTHORIZED",
 					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
@@ -504,7 +505,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			);
 			if (!credentialAccount) {
 				await ctx.context.password.hash(password);
-				ctx.context.logger.error("Credential account not found", { email });
+				ctx.context.logger.warn("Credential account not found");
 				throw APIError.from(
 					"UNAUTHORIZED",
 					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
@@ -513,7 +514,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			const currentPassword = credentialAccount?.password;
 			if (!currentPassword) {
 				await ctx.context.password.hash(password);
-				ctx.context.logger.error("Password not found", { email });
+				ctx.context.logger.warn("Password not found");
 				throw APIError.from(
 					"UNAUTHORIZED",
 					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
@@ -524,7 +525,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				password,
 			});
 			if (!validPassword) {
-				ctx.context.logger.error("Invalid password");
+				ctx.context.logger.warn("Invalid password");
 				throw APIError.from(
 					"UNAUTHORIZED",
 					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
@@ -557,7 +558,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 								url,
 								token,
 							},
-							ctx.request?.clone(),
+							safeCloneRequest(ctx.request),
 						),
 					);
 				}

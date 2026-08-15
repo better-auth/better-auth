@@ -8,7 +8,6 @@
     "url": "git+https://github.com/better-auth/better-auth.git"
   },
   "scripts": {
-    "prepare": "lefthook install --reset-hooks-path",
     "build": "turbo build --filter=./packages/*",
     "dev": "turbo dev --filter=./packages/* --filter=!./packages/cli",
     "clean": "turbo clean --filter=./packages/* && rm -rf node_modules",
@@ -18,7 +17,7 @@
     "lint": "biome check . --error-on-warnings",
     "lint:dependencies": "knip && knip --production",
     "lint:fix": "biome check . --fix --unsafe",
-    "lint:spell": "cspell . --color",
+    "lint:spell": "git ls-files | cspell --file-list stdin --color",
     "lint:types": "turbo lint:types --filter=./packages/*",
     "lint:packages": "turbo lint:package --filter=./packages/*",
     "changeset": "changeset",
@@ -48,9 +47,9 @@
     "cspell": "^9.7.0",
     "knip": "^5.85.0",
     "lefthook": "^2.1.4",
-    "nyc": "^17.1.0",
+    "nyc": "^18.0.0",
     "publint": "^0.3.17",
-    "turbo": "^2.9.3",
+    "turbo": "^2.9.14",
     "typescript": "catalog:",
     "vitest": "catalog:vitest"
   }

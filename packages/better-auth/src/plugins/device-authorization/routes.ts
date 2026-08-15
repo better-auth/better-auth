@@ -15,6 +15,12 @@ const deviceCodeBodySchema = z.object({
 	client_id: z.string().meta({
 		description: "The client ID of the application",
 	}),
+	user_id: z
+		.string()
+		.meta({
+			description: "The user ID to which the device code should be pre-bound.",
+		})
+		.optional(),
 	scope: z
 		.string()
 		.meta({
@@ -146,7 +152,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				data: {
 					deviceCode,
 					userCode,
-					userId: null,
+					userId: ctx.body.user_id || null, // An empty user_id is treated as omitted, per RFC 8628 section 3.1
 					expiresAt,
 					status: "pending",
 					pollingInterval: ms(opts.interval),
@@ -396,8 +402,32 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			}
 
 			if (deviceCodeRecord.status === "approved" && deviceCodeRecord.userId) {
+				// Atomically claim the approved code as the single race gate:
+				// concurrent polls contend on this delete-and-return, and only the
+				// caller that removes the row may issue a session. Losers receive
+				// null and are rejected, so the code is redeemed at most once.
+				const claimedDeviceCode = await ctx.context.adapter.consumeOne<{
+					id: string;
+					userId?: string | undefined;
+					scope?: string | undefined;
+				}>({
+					model: "deviceCode",
+					where: [
+						{ field: "deviceCode", value: device_code },
+						{ field: "status", value: "approved" },
+					],
+				});
+
+				if (!claimedDeviceCode?.userId) {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_grant",
+						error_description:
+							DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE.message,
+					});
+				}
+
 				const user = await ctx.context.internalAdapter.findUserById(
-					deviceCodeRecord.userId,
+					claimedDeviceCode.userId,
 				);
 
 				if (!user) {
@@ -442,17 +472,6 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					);
 				}
 
-				// Delete the device code after successful authorization
-				await ctx.context.adapter.delete({
-					model: "deviceCode",
-					where: [
-						{
-							field: "id",
-							value: deviceCodeRecord.id,
-						},
-					],
-				});
-
 				// Return OAuth 2.0 compliant token response
 				return ctx.json(
 					{
@@ -461,7 +480,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 						expires_in: Math.floor(
 							(new Date(session.expiresAt).getTime() - Date.now()) / 1000,
 						),
-						scope: deviceCodeRecord.scope || "",
+						scope: claimedDeviceCode.scope || "",
 					},
 					{
 						headers: {
@@ -563,14 +582,15 @@ export const deviceVerify = createAuthEndpoint(
 			deviceCodeRecord.status === "pending"
 		) {
 			const claimedDeviceCodeRecord =
-				await ctx.context.adapter.update<DeviceCode>({
+				await ctx.context.adapter.incrementOne<DeviceCode>({
 					model: "deviceCode",
 					where: [
 						{ field: "id", value: deviceCodeRecord.id },
 						{ field: "status", value: "pending" },
 						{ field: "userId", operator: "eq", value: null },
 					],
-					update: { userId: session.user.id },
+					increment: {},
+					set: { userId: session.user.id },
 				});
 			if (claimedDeviceCodeRecord) {
 				deviceCodeRecord.userId = session.user.id;

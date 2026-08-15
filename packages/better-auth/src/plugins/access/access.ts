@@ -11,6 +11,98 @@ export type AuthorizeResponse =
 	| { success: false; error: string }
 	| { success: true; error?: never | undefined };
 
+type Connector = "OR" | "AND";
+
+type NormalizedActionRequest = {
+	actions: unknown[];
+	connector: Connector;
+};
+
+function unknownResourceResponse(requestedResource: string): AuthorizeResponse {
+	return {
+		success: false,
+		error: `You are not allowed to access resource: ${requestedResource}`,
+	};
+}
+
+function unauthorizedResourceResponse(
+	requestedResource: string,
+): AuthorizeResponse {
+	return {
+		success: false,
+		error: `unauthorized to access resource "${requestedResource}"`,
+	};
+}
+
+function normalizeConnector(connector: unknown): Connector {
+	return connector === "OR" ? "OR" : "AND";
+}
+
+function isActionList(actions: unknown): actions is unknown[] {
+	return Array.isArray(actions);
+}
+
+function normalizeActionRequest(
+	requestedActions: unknown,
+): NormalizedActionRequest {
+	if (isActionList(requestedActions)) {
+		return {
+			actions: requestedActions,
+			connector: "AND",
+		};
+	}
+
+	if (!requestedActions || typeof requestedActions !== "object") {
+		throw new BetterAuthError("Invalid access control request");
+	}
+
+	const { actions, connector } = requestedActions as {
+		actions?: unknown;
+		connector?: unknown;
+	};
+
+	if (!isActionList(actions)) {
+		return {
+			actions: [],
+			connector: normalizeConnector(connector),
+		};
+	}
+
+	return {
+		actions,
+		connector: normalizeConnector(connector),
+	};
+}
+
+function hasAllowedAction(
+	allowedActions: readonly string[],
+	requestedAction: unknown,
+) {
+	return (
+		typeof requestedAction === "string" &&
+		allowedActions.includes(requestedAction)
+	);
+}
+
+function isResourceAuthorized(
+	allowedActions: readonly string[],
+	{ actions, connector }: NormalizedActionRequest,
+) {
+	if (actions.length === 0) {
+		return false;
+	}
+
+	if (connector === "OR") {
+		return actions.some((requestedAction) =>
+			hasAllowedAction(allowedActions, requestedAction),
+		);
+	}
+
+	return actions.every((requestedAction) =>
+		hasAllowedAction(allowedActions, requestedAction),
+	);
+}
+
 export function role<
 	const TRoleStatements extends Statements,
 	TAuthorizeStatements extends Statements = TRoleStatements,
@@ -22,64 +114,36 @@ export function role<
 			request: RoleAuthorizeRequest<TAuthorizeStatements>,
 			connector: "OR" | "AND" = "AND",
 		): AuthorizeResponse {
-			let success = false;
+			let hasAuthorizedResource = false;
 			for (const [requestedResource, requestedActions] of Object.entries(
 				request,
 			)) {
 				const allowedActions = statements[requestedResource];
 				if (!allowedActions) {
 					if (connector === "AND") {
-						return {
-							success: false,
-							error: `You are not allowed to access resource: ${requestedResource}`,
-						};
+						return unknownResourceResponse(requestedResource);
 					}
-					success = false;
 					continue;
 				}
-				if (Array.isArray(requestedActions)) {
-					success =
-						requestedActions.length > 0 &&
-						(requestedActions as string[]).every((requestedAction) =>
-							allowedActions.includes(requestedAction),
-						);
-				} else {
-					if (typeof requestedActions === "object") {
-						const actions = requestedActions as {
-							actions: string[];
-							connector: "OR" | "AND";
-						};
-						if (
-							!Array.isArray(actions.actions) ||
-							actions.actions.length === 0
-						) {
-							success = false;
-						} else if (actions.connector === "OR") {
-							success = actions.actions.some((requestedAction) =>
-								allowedActions.includes(requestedAction),
-							);
-						} else {
-							success = actions.actions.every((requestedAction) =>
-								allowedActions.includes(requestedAction),
-							);
-						}
-					} else {
-						throw new BetterAuthError("Invalid access control request");
-					}
+
+				const isAuthorized = isResourceAuthorized(
+					allowedActions,
+					normalizeActionRequest(requestedActions),
+				);
+				if (isAuthorized) {
+					hasAuthorizedResource = true;
 				}
-				if (success && connector === "OR") {
-					return { success };
+
+				if (isAuthorized && connector === "OR") {
+					return { success: true };
 				}
-				if (!success && connector === "AND") {
-					return {
-						success: false,
-						error: `unauthorized to access resource "${requestedResource}"`,
-					};
+				if (!isAuthorized && connector === "AND") {
+					return unauthorizedResourceResponse(requestedResource);
 				}
 			}
-			if (success) {
+			if (hasAuthorizedResource) {
 				return {
-					success,
+					success: true,
 				};
 			}
 			return {

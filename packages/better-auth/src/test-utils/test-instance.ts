@@ -96,7 +96,12 @@ export async function getTestInstance<
 	async function mongodbClient() {
 		const { MongoClient } = await import("mongodb");
 		const dbClient = async (connectionString: string, dbName: string) => {
-			const client = new MongoClient(connectionString);
+			// Fail fast in CI/local when Mongo is unreachable instead of hanging
+			// until Vitest's default 10s testTimeout (driver default is 30s).
+			const client = new MongoClient(connectionString, {
+				serverSelectionTimeoutMS: 2000,
+				connectTimeoutMS: 2000,
+			});
 			await client.connect();
 			const db = client.db(dbName);
 			return db;

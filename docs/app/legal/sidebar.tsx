@@ -13,6 +13,10 @@ const legalPages = [
 		name: "Terms of Service",
 		href: "/legal/terms",
 	},
+	{
+		name: "Data Processing Addendum",
+		href: "/legal/dpa",
+	},
 ];
 
 export function LegalSidebar() {

@@ -33,6 +33,7 @@ services:
       interval: 1s
       timeout: 5s
       retries: 10
+      start_period: 10s
 
   redis:
     image: redis:latest
@@ -147,7 +148,7 @@ services:
     image: mcr.microsoft.com/mssql/server:latest
     container_name: mssql
     environment:
-      SA_PASSWORD: "Password123!"
+      MSSQL_SA_PASSWORD: "Password123!"
       ACCEPT_EULA: "Y"
     ports:
       - "1433:1433"

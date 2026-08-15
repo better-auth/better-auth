@@ -137,6 +137,7 @@ Better Auth provides pre-configured helper functions for popular OAuth providers
 * **Okta** - `okta(options)`
 * **Slack** - `slack(options)`
 * **Patreon** - `patreon(options)`
+* **Yandex** - `yandex(options)`
 
 ### Example: Using Pre-configured Providers
 
@@ -155,6 +156,7 @@ import {
 	okta,
 	slack,
 	patreon,
+	yandex,
 } from 'better-auth/plugins';
 
 export const auth = betterAuth({
@@ -209,6 +211,10 @@ export const auth = betterAuth({
 					clientId: process.env.PATREON_CLIENT_ID,
 					clientSecret: process.env.PATREON_CLIENT_SECRET,
 				}),
+				yandex({
+					clientId: process.env.YANDEX_CLIENT_ID,
+					clientSecret: process.env.YANDEX_CLIENT_SECRET,
+				}),
 			],
 		}),
 	],
@@ -225,6 +231,7 @@ Each provider helper accepts common OAuth options (extending `BaseOAuthProviderO
 * **Okta**: Requires `issuer` (e.g., `https://dev-xxxxx.okta.com/oauth2/default`)
 * **Slack**: No additional required fields
 * **Patreon**: No additional required fields
+* **Yandex**: No additional required fields
 
 All providers support the same optional fields:
 
@@ -260,6 +267,7 @@ interface GenericOAuthConfig {
   prompt?: string;
   pkce?: boolean;
   accessType?: string;
+  accessTokenExpiresIn?: number;
   getUserInfo?: (tokens: OAuth2Tokens) => Promise<User | null>;
 }
 ```
@@ -297,6 +305,8 @@ interface GenericOAuthConfig {
 **pkce**: (Optional) If true, enables PKCE (Proof Key for Code Exchange) for enhanced security. Defaults to `false`.
 
 **accessType**: (Optional) The access type for the authorization request. Use `"offline"` to request a refresh token.
+
+**accessTokenExpiresIn**: (Optional) Fallback access-token lifetime in seconds, used only when the provider's token response omits `expires_in`. Without a known expiry, `getAccessToken` cannot tell the token has expired and never refreshes it. Set this to the token's lifetime so the expiry is tracked and the token is refreshed when needed. Leave unset if the provider returns `expires_in`.
 
 **getToken**: (Optional) A custom function to exchange authorization code for tokens. If provided, this function will be used instead of the default token exchange logic. This is useful for providers with non-standard token endpoints that use GET requests or custom parameters.
 

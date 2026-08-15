@@ -669,9 +669,12 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		 */
 		checkOrganizationSlug: checkOrganizationSlug(opts),
 		/**
-		 * ### Endpoint
+		 * Add a member to an organization directly, bypassing the invitation flow.
 		 *
-		 * POST `/organization/add-member`
+		 * **Server-only:** callable as `auth.api.addMember` from trusted server
+		 * code. It is not registered as an HTTP route and has no client method, so
+		 * it runs no session or permission check of its own; the caller is
+		 * responsible for authorizing the request.
 		 *
 		 * ### API Methods
 		 *
@@ -1221,6 +1224,7 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 					activeOrganizationId: {
 						type: "string",
 						required: false,
+						input: false,
 						fieldName: opts.schema?.session?.fields?.activeOrganizationId,
 					},
 					...(teamSupport
@@ -1228,6 +1232,7 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 								activeTeamId: {
 									type: "string",
 									required: false,
+									input: false,
 									fieldName: opts.schema?.session?.fields?.activeTeamId,
 								},
 							}
@@ -1239,16 +1244,19 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 							activeTeamId: {
 								type: "string";
 								required: false;
+								input: false;
 							};
 							activeOrganizationId: {
 								type: "string";
 								required: false;
+								input: false;
 							};
 						}
 					: {
 							activeOrganizationId: {
 								type: "string";
 								required: false;
+								input: false;
 							};
 						},
 			},

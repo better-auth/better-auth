@@ -980,6 +980,7 @@ describe("oidc", async () => {
 		it("should logout successfully without parameters", async ({ expect }) => {
 			const response = await serverClient.$fetch("/oauth2/endsession", {
 				method: "GET",
+				headers: { "Sec-Fetch-Site": "same-origin" },
 			});
 			expect(response.data).toMatchObject({
 				success: true,
@@ -995,6 +996,7 @@ describe("oidc", async () => {
 				`/oauth2/endsession?client_id=${application.clientId}&post_logout_redirect_uri=${encodeURIComponent(application.redirectUrls[0]!)}&state=test-state`,
 				{
 					method: "GET",
+					headers: { "Sec-Fetch-Site": "same-origin" },
 					onError(context) {
 						redirectLocation = context.response.headers.get("Location") || "";
 					},
@@ -1050,6 +1052,7 @@ describe("oidc", async () => {
 		it("should support POST method", async ({ expect }) => {
 			const response = await serverClient.$fetch("/oauth2/endsession", {
 				method: "POST",
+				headers: { "Sec-Fetch-Site": "same-origin" },
 			});
 			expect(response.data).toMatchObject({
 				success: true,
@@ -2186,5 +2189,80 @@ describe("oidc-provider discovery metadata and PKCE gate (security)", () => {
 			codeChallengeMethod?: string;
 		};
 		expect(storedValue.codeChallengeMethod).toBe("plain");
+	});
+});
+
+describe("oidc end session cross-site protection (security)", async () => {
+	const { auth, signInWithTestUser, db } = await getTestInstance({
+		baseURL: "http://localhost:3000",
+		plugins: [oidcProvider({ loginPage: "/login" })],
+	});
+	const { user, headers } = await signInWithTestUser();
+	const cookie = headers.get("cookie") ?? "";
+
+	async function seedAccessToken() {
+		await db.create({
+			model: "oauthApplication",
+			data: {
+				clientId: "endsession-csrf-client",
+				clientSecret: "endsession-csrf-secret",
+				type: "web",
+				name: "Endsession CSRF Client",
+				redirectUrls: "http://localhost/callback",
+				disabled: false,
+				metadata: null,
+				icon: null,
+				userId: null,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		await db.create({
+			model: "oauthAccessToken",
+			data: {
+				accessToken: "endsession-csrf-access",
+				refreshToken: "endsession-csrf-refresh",
+				accessTokenExpiresAt: new Date(Date.now() + 3600 * 1000),
+				refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+				clientId: "endsession-csrf-client",
+				userId: user.id,
+				scopes: "openid",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+	}
+
+	it("rejects a cross-site GET logout carrying only a session cookie", async () => {
+		await seedAccessToken();
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/oauth2/endsession", {
+				method: "GET",
+				headers: { cookie, "Sec-Fetch-Site": "cross-site" },
+			}),
+		);
+		expect(response.status).toBe(403);
+
+		// A blocked logout must leave the session and OAuth tokens intact.
+		const session = await auth.api.getSession({
+			headers: new Headers({ cookie }),
+		});
+		expect(session?.user.id).toBe(user.id);
+		const tokenRow = await db.findOne({
+			model: "oauthAccessToken",
+			where: [{ field: "accessToken", value: "endsession-csrf-access" }],
+		});
+		expect(tokenRow).not.toBeNull();
+	});
+
+	it("allows a same-site cookie-only logout", async () => {
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/oauth2/endsession", {
+				method: "GET",
+				headers: { cookie, "Sec-Fetch-Site": "same-origin" },
+			}),
+		);
+		expect(response.status).toBe(200);
 	});
 });

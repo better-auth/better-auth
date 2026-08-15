@@ -10,5 +10,7 @@ export const TWO_FACTOR_ERROR_CODES = defineErrorCodes({
 	INVALID_CODE: "Invalid code",
 	TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE:
 		"Too many attempts. Please request a new code.",
+	ACCOUNT_TEMPORARILY_LOCKED:
+		"Too many failed verification attempts. Your account is temporarily locked. Please try again later.",
 	INVALID_TWO_FACTOR_COOKIE: "Invalid two factor cookie",
 });

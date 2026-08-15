@@ -101,6 +101,32 @@ export interface BetterAuthRateLimitStorage {
 		value: RateLimit,
 		update?: boolean | undefined,
 	) => Promise<void>;
+	/**
+	 * Atomically records one request against `key` within the `window`
+	 * (in seconds) and reports whether it is allowed.
+	 *
+	 * When `allowed` is true the request was counted within the active window;
+	 * when `allowed` is false the limit was already reached and `retryAfter` is
+	 * the number of seconds until the window frees up. Whether the window slides
+	 * or is fixed depends on the backing storage: the database backend resets
+	 * once the window elapses, while secondary storage uses a fixed time-to-live
+	 * set when the window first opens.
+	 *
+	 * Performing the check and the increment in a single step closes the
+	 * concurrent-bypass gap of the separate `get`/`set` path: N simultaneous
+	 * requests can no longer all pass a stale read before any increment lands.
+	 *
+	 * Optional for backwards compatibility. A storage without it falls back to
+	 * the legacy non-atomic `get`/`set` path, which is best-effort under
+	 * concurrency.
+	 *
+	 * TODO(rate-limit-consume-required): make this the sole required member on
+	 * `next`, dropping `get`/`set` and the non-atomic fallback.
+	 */
+	consume?: (
+		key: string,
+		rule: { window: number; max: number },
+	) => Promise<{ allowed: boolean; retryAfter: number | null }>;
 }
 
 export type BetterAuthRateLimitRule = {
@@ -197,7 +223,7 @@ export type BetterAuthAdvancedOptions = {
 				 * @example ["x-client-ip", "x-forwarded-for", "cf-connecting-ip"]
 				 *
 				 * @default
-				 * @link https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/utils/get-request-ip.ts#L8
+				 * @link https://github.com/better-auth/better-auth/blob/main/packages/core/src/utils/ip.ts
 				 */
 				ipAddressHeaders?: string[];
 				/**
@@ -214,6 +240,21 @@ export type BetterAuthAdvancedOptions = {
 				 * @default 64
 				 */
 				ipv6Subnet?: number;
+				/**
+				 * Trusted reverse-proxy IPs or CIDR ranges. When set, a forwarded IP
+				 * chain is walked right to left, trusted hops are skipped, and the
+				 * first untrusted address is the client IP. Unset trusts only
+				 * single-value IP headers. Use the actual address or subnet of your
+				 * proxies, not a broad private range that also covers clients.
+				 *
+				 * This only interprets the forwarded header chain and cannot verify
+				 * the direct sender. It is safe only when your origin is reachable
+				 * through these proxies and clients cannot set forwarded headers
+				 * directly.
+				 *
+				 * @example ["192.0.2.10", "10.0.0.0/24"]
+				 */
+				trustedProxies?: string[];
 		  }
 		| undefined;
 	/**
@@ -1093,7 +1134,11 @@ export type BetterAuthOptions = {
 					 */
 					allowUnlinkingAll?: boolean;
 					/**
-					 * If enabled (true), this will update the user information based on the newly linked account
+					 * When enabled, linking an account copies the provider's profile onto
+					 * the local user, matching the fields persisted on sign-up (`name`,
+					 * `image`, and any `mapProfileToUser` fields). The local `email` and
+					 * `emailVerified` are never changed, so a link cannot rebind the
+					 * account's identity.
 					 *
 					 * @default false
 					 */
@@ -1126,13 +1171,17 @@ export type BetterAuthOptions = {
 				 * - "cookie": Store state in an encrypted cookie (stateless)
 				 * - "database": Store state in the database
 				 *
-				 * @default "cookie"
+				 * @default "database" when `database` or `secondaryStorage` is configured, "cookie" otherwise
 				 */
 				storeStateStrategy?: "database" | "cookie";
 				/**
-				 * Store account data after oauth flow on a cookie
+				 * Store provider account data after an OAuth flow in an encrypted
+				 * cookie. This includes OAuth token material such as access tokens,
+				 * refresh tokens, ID tokens, scopes, and token expiry.
 				 *
-				 * This is useful for database-less flow
+				 * This is useful for database-less flows, but large provider tokens can
+				 * still hit browser or proxy cookie/header limits even though Better Auth
+				 * chunks oversized account cookies.
 				 *
 				 * @default false
 				 *

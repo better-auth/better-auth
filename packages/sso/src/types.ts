@@ -43,6 +43,12 @@ export interface SAMLConfig {
 	entryPoint: string;
 	cert: string;
 	callbackUrl: string;
+	/**
+	 * Fallback absolute URL or same-origin relative path for IdP-initiated SAML
+	 * responses when `RelayState` does not contain a safe callback, including
+	 * validation error redirects.
+	 */
+	idpInitiatedCallbackUrl?: string | undefined;
 	audience?: string | undefined;
 	idpMetadata?:
 		| {
@@ -97,7 +103,10 @@ export interface AuthnRequestRecord {
 
 /** Session data stored during SAML login for Single Logout */
 export interface SAMLSessionRecord {
+	/** Session row id, used to key the by-id lookup index. */
 	sessionId: string;
+	/** Session token, used to revoke the session during Single Logout. */
+	sessionToken: string;
 	providerId: string;
 	nameID: string;
 	sessionIndex?: string;
@@ -423,6 +432,12 @@ export interface SSOOptions {
 		 * @default false
 		 */
 		wantLogoutResponseSigned?: boolean;
+		/**
+		 * Fallback absolute URL or same-origin relative path for IdP-initiated SAML
+		 * responses when `RelayState` does not contain a safe callback, including
+		 * validation error redirects.
+		 */
+		idpInitiatedCallbackUrl?: string | undefined;
 	};
 }
 

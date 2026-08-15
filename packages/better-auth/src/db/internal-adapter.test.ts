@@ -721,12 +721,18 @@ describe("internal adapter test", async () => {
 			accountId: "test-account-id-1",
 		});
 
-		let foundAccount = await internalAdapter.findAccount(account.accountId);
+		let foundAccount = await internalAdapter.findAccountByProviderId(
+			account.accountId,
+			"test-provider",
+		);
 		expect(foundAccount).toBeDefined();
 
 		await internalAdapter.deleteAccount(account.id);
 
-		foundAccount = await internalAdapter.findAccount(account.accountId);
+		foundAccount = await internalAdapter.findAccountByProviderId(
+			account.accountId,
+			"test-provider",
+		);
 		expect(foundAccount).toBeNull();
 	});
 
@@ -933,52 +939,57 @@ describe("internal adapter test", async () => {
 		expect(sessions.length).toBe(0);
 	});
 
-	it("findSessions should skip corrupt sessions without blanking the list", async () => {
-		const testMap = new Map<string, string>();
-
-		const testOpts = {
+	it.each([
+		{
+			caseName: "malformed JSON sessions",
+			storedValue: "invalid-json{{{",
+		},
+		{
+			caseName: "JSON null sessions",
+			storedValue: "null",
+		},
+	])("findSessions skips $caseName without discarding valid sessions", async ({
+		storedValue,
+	}) => {
+		const secondaryStorageValues = new Map<string, string>();
+		const options = {
 			database: new DatabaseSync(":memory:"),
 			secondaryStorage: {
 				set(key: string, value: string, ttl?: number) {
-					testMap.set(key, value);
+					secondaryStorageValues.set(key, value);
 				},
 				get(key: string) {
-					return testMap.get(key) || null;
+					return secondaryStorageValues.get(key) || null;
 				},
 				delete(key: string) {
-					testMap.delete(key);
+					secondaryStorageValues.delete(key);
 				},
 			},
 		} satisfies BetterAuthOptions;
 
-		(await getMigrations(testOpts)).runMigrations();
+		(await getMigrations(options)).runMigrations();
 
-		const testCtx = await init(testOpts);
-		const testInternalAdapter = testCtx.internalAdapter;
-
-		const user = await testInternalAdapter.createUser({
+		const { internalAdapter } = await init(options);
+		const user = await internalAdapter.createUser({
 			name: "test-user-find",
 			email: "test-find@email.com",
 		});
+		const session1 = await internalAdapter.createSession(user.id);
+		const session2 = await internalAdapter.createSession(user.id);
+		const session3 = await internalAdapter.createSession(user.id);
 
-		// Create 3 sessions
-		const session1 = await testInternalAdapter.createSession(user.id);
-		const session2 = await testInternalAdapter.createSession(user.id);
-		const session3 = await testInternalAdapter.createSession(user.id);
+		secondaryStorageValues.set(session2.token, storedValue);
 
-		// Corrupt session2 data
-		testMap.set(session2.token, "invalid-json{{{");
-
-		// findSessions should still return session1 and session3
-		const sessions = await testInternalAdapter.findSessions([
+		const sessions = await internalAdapter.findSessions([
 			session1.token,
 			session2.token,
 			session3.token,
 		]);
-		expect(sessions.length).toBe(2);
-		expect(sessions.map((s) => s.session.token).sort()).toEqual(
-			[session1.token, session3.token].sort(),
-		);
+
+		expect(sessions.map(({ session }) => session.token)).toEqual([
+			session1.token,
+			session3.token,
+		]);
 	});
 
 	it("should update session and active-sessions list in secondary storage", async () => {
@@ -1834,6 +1845,127 @@ describe("internal adapter test", async () => {
 			expect(results.filter((r) => r !== null)).toHaveLength(1);
 			expect(results.find((r) => r !== null)?.value).toBe("fallback-user");
 			expect(store.has("verification:consume:secondary-fallback")).toBe(false);
+		});
+
+		it("warns once when secondary storage cannot consume atomically", async () => {
+			const store = new Map<string, string>();
+			const logs: { level: string; message: string }[] = [];
+			const adapter = await makeAdapter({
+				logger: {
+					log: (level, message) => {
+						logs.push({ level, message });
+					},
+				},
+				verification: { storeInDatabase: false },
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, value);
+					},
+					get(key) {
+						return store.get(key) ?? null;
+					},
+					delete(key) {
+						store.delete(key);
+					},
+				},
+			});
+
+			for (const id of ["consume:warn-1", "consume:warn-2"]) {
+				await adapter.createVerificationValue({
+					identifier: id,
+					value: "user",
+					expiresAt: new Date(Date.now() + 60_000),
+				});
+				await adapter.consumeVerificationValue(id);
+			}
+
+			const warnings = logs.filter(
+				(l) => l.level === "warn" && l.message.includes("getAndDelete"),
+			);
+			expect(warnings).toHaveLength(1);
+		});
+	});
+
+	describe("reserveVerificationValue", () => {
+		async function makeAdapter(overrides?: Partial<BetterAuthOptions>) {
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				...overrides,
+			} satisfies BetterAuthOptions;
+			(await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+			return ctx.internalAdapter;
+		}
+
+		it("returns true the first time and the row is findable", async () => {
+			const adapter = await makeAdapter();
+
+			const reserved = await adapter.reserveVerificationValue({
+				identifier: "reserve:fresh",
+				value: "jti-1",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			expect(reserved).toBe(true);
+
+			const found = await adapter.findVerificationValue("reserve:fresh");
+			expect(found).not.toBeNull();
+			expect(found!.value).toBe("jti-1");
+		});
+
+		it("returns false the second time for the same identifier", async () => {
+			const adapter = await makeAdapter();
+
+			const first = await adapter.reserveVerificationValue({
+				identifier: "reserve:once",
+				value: "jti-2",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			expect(first).toBe(true);
+
+			const second = await adapter.reserveVerificationValue({
+				identifier: "reserve:once",
+				value: "jti-2-replay",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			expect(second).toBe(false);
+		});
+
+		it("yields exactly one winner under concurrent reserve", async () => {
+			const adapter = await makeAdapter();
+
+			const results = await Promise.all([
+				adapter.reserveVerificationValue({
+					identifier: "reserve:race",
+					value: "jti-3",
+					expiresAt: new Date(Date.now() + 60_000),
+				}),
+				adapter.reserveVerificationValue({
+					identifier: "reserve:race",
+					value: "jti-3",
+					expiresAt: new Date(Date.now() + 60_000),
+				}),
+			]);
+
+			expect(results.filter((r) => r === true)).toHaveLength(1);
+			expect(results.filter((r) => r === false)).toHaveLength(1);
+		});
+
+		it("reserves independently across different identifiers", async () => {
+			const adapter = await makeAdapter();
+
+			const first = await adapter.reserveVerificationValue({
+				identifier: "reserve:independent-a",
+				value: "jti-a",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+			const second = await adapter.reserveVerificationValue({
+				identifier: "reserve:independent-b",
+				value: "jti-b",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			expect(first).toBe(true);
+			expect(second).toBe(true);
 		});
 	});
 });

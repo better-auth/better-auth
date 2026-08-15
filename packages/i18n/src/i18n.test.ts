@@ -267,7 +267,7 @@ describe("i18n plugin", async () => {
 	});
 
 	describe("defaultLocale validation", () => {
-		it("should use first available locale when defaultLocale not provided and 'en' not available", async () => {
+		it("should use default 'en' locale when defaultLocale not provided and 'en' not available on translations", async () => {
 			const translationsWithoutEn = {
 				fr: {
 					USER_NOT_FOUND: "Utilisateur non trouvé",
@@ -289,7 +289,8 @@ describe("i18n plugin", async () => {
 				],
 			});
 
-			// Should fall back to first available locale (fr in this case)
+			// Should keep the original built-in English message because the
+			// default locale resolves to "en" and no translations.en is provided.
 			const response = await authWithoutEn.api.signInEmail({
 				body: {
 					email: "nonexistent@example.com",
@@ -300,7 +301,7 @@ describe("i18n plugin", async () => {
 			});
 
 			const body = await response.json();
-			expect(body.message).toBe("Email ou mot de passe invalide");
+			expect(body.message).toBe("Invalid email or password");
 		});
 
 		it("should use specified defaultLocale when it exists in translations", async () => {

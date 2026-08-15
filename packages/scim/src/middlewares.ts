@@ -1,5 +1,6 @@
 import { base64Url } from "@better-auth/utils/base64";
 import { createAuthMiddleware } from "better-auth/api";
+import { constantTimeEqual } from "better-auth/crypto";
 import { SCIMAPIError } from "./scim-error";
 import { verifySCIMToken } from "./scim-tokens";
 import type { SCIMOptions, SCIMProvider } from "./types";
@@ -47,7 +48,7 @@ export const authMiddlewareFactory = (opts: SCIMOptions) =>
 			}) ?? null;
 
 		if (scimProvider) {
-			if (scimProvider.scimToken === scimToken) {
+			if (constantTimeEqual(scimProvider.scimToken, scimToken)) {
 				return { authSCIMToken: scimProvider.scimToken, scimProvider };
 			} else {
 				throw new SCIMAPIError("UNAUTHORIZED", {

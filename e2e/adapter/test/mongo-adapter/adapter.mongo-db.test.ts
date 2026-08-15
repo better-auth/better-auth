@@ -19,7 +19,10 @@ const dbClient = async (connectionString: string, dbName: string) => {
 	return { db, client };
 };
 
-const { db } = await dbClient("mongodb://127.0.0.1:27017", "better-auth");
+const { db, client } = await dbClient(
+	"mongodb://127.0.0.1:27017",
+	"better-auth",
+);
 
 const updateObjectIdTestSuite = createTestSuite(
 	"update-object-id",
@@ -90,6 +93,9 @@ const { execute } = await testAdapter({
 		// numberIdTestSuite(), // no support
 	],
 	customIdGenerator: () => new ObjectId().toHexString(),
+	async onFinish() {
+		await client.close();
+	},
 });
 
 execute();

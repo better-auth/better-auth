@@ -3,16 +3,37 @@ import type { Account } from "@better-auth/core/db";
 import type { InternalLogger } from "@better-auth/core/env";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { CookieOptions } from "better-call";
+import { serializeCookie } from "better-call";
 import * as z from "zod";
 import { symmetricDecodeJWT, symmetricEncodeJWT } from "../crypto";
 import { parseCookies } from "./cookie-utils";
 
-// Cookie size constants based on browser limits
-const ALLOWED_COOKIE_SIZE = 4096;
-// Estimated size of an empty cookie with all attributes
-// (name, path, domain, secure, httpOnly, sameSite, expires/maxAge)
-const ESTIMATED_EMPTY_COOKIE_SIZE = 200;
-const CHUNK_SIZE = ALLOWED_COOKIE_SIZE - ESTIMATED_EMPTY_COOKIE_SIZE;
+/**
+ * Per-cookie byte ceiling.
+ * Safari's ~4093 floor is the lowest among browsers.
+ * Kept a little under it for attributes added after sizing.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6265#section-6.1
+ * @see https://github.com/dotnet/aspnetcore/blob/aa5493528640932601bb82ef3295e4d8ca7e11c5/src/Shared/ChunkingCookieManager/ChunkingCookieManager.cs#L40
+ */
+const MAX_COOKIE_SIZE = 4050;
+
+/**
+ * Max chunks per cookie.
+ * A larger value does not belong in a cookie.
+ */
+const MAX_COOKIE_CHUNKS = 100;
+
+/**
+ * Largest value that keeps the serialized cookie within {@link MAX_COOKIE_SIZE},
+ * measured with the real `serializeCookie` writer so it stays in sync with the
+ * wire. Non-positive when the name and attributes alone overflow.
+ */
+function getMaxCookieValueSize(name: string, options: CookieOptions): number {
+	// serializeCookie mutates options (e.g. forces `secure`), so copy them.
+	const overhead = serializeCookie(name, "", { ...options }).length;
+	return MAX_COOKIE_SIZE - overhead;
+}
 
 interface Cookie {
 	name: string;
@@ -21,16 +42,6 @@ interface Cookie {
 }
 
 type Chunks = Record<string, string>;
-
-/**
- * Extract the chunk index from a cookie name
- */
-function getChunkIndex(cookieName: string): number {
-	const parts = cookieName.split(".");
-	const lastPart = parts[parts.length - 1];
-	const index = parseInt(lastPart || "0", 10);
-	return isNaN(index) ? 0 : index;
-}
 
 /**
  * Read all existing chunks from cookies
@@ -52,19 +63,6 @@ function readExistingChunks(
 }
 
 /**
- * Get the full session data by joining all chunks
- */
-function joinChunks(chunks: Chunks): string {
-	const sortedKeys = Object.keys(chunks).sort((a, b) => {
-		const aIndex = getChunkIndex(a);
-		const bIndex = getChunkIndex(b);
-		return aIndex - bIndex;
-	});
-
-	return sortedKeys.map((key) => chunks[key]).join("");
-}
-
-/**
  * Split a cookie value into chunks if needed
  */
 function chunkCookie(
@@ -73,28 +71,44 @@ function chunkCookie(
 	chunks: Chunks,
 	logger: InternalLogger,
 ): Cookie[] {
-	const chunkCount = Math.ceil(cookie.value.length / CHUNK_SIZE);
+	// Size against the worst-case chunk name (highest index). A bare single
+	// cookie only has more room.
+	const chunkSize = getMaxCookieValueSize(
+		`${cookie.name}.${MAX_COOKIE_CHUNKS - 1}`,
+		cookie.attributes,
+	);
 
-	if (chunkCount === 1) {
+	// No room for a value at all: fall into the skip branch below.
+	const chunkCount =
+		chunkSize > 0 ? Math.ceil(cookie.value.length / chunkSize) : Infinity;
+
+	if (chunkCount <= 1) {
 		chunks[cookie.name] = cookie.value;
 		return [cookie];
+	}
+
+	if (chunkCount > MAX_COOKIE_CHUNKS) {
+		// Skip the cache and fall back to the DB. The caller still expires stale chunks.
+		logger.warn(
+			`${storeName} cookie is too large to store even after chunking, so the cache was skipped. Reduce the cached data or use a database session.`,
+		);
+		return [];
 	}
 
 	const cookies: Cookie[] = [];
 	for (let i = 0; i < chunkCount; i++) {
 		const name = `${cookie.name}.${i}`;
-		const start = i * CHUNK_SIZE;
-		const value = cookie.value.substring(start, start + CHUNK_SIZE);
+		const start = i * chunkSize;
+		const value = cookie.value.substring(start, start + chunkSize);
 		cookies.push({ ...cookie, name, value });
 		chunks[name] = value;
 	}
 
 	logger.debug(`CHUNKING_${storeName.toUpperCase()}_COOKIE`, {
-		message: `${storeName} cookie exceeds allowed ${ALLOWED_COOKIE_SIZE} bytes.`,
-		emptyCookieSize: ESTIMATED_EMPTY_COOKIE_SIZE,
+		message: `${storeName} cookie exceeds the ${MAX_COOKIE_SIZE} byte limit and was split into ${chunkCount} chunks.`,
 		valueSize: cookie.value.length,
 		chunkCount,
-		chunks: cookies.map((c) => c.value.length + ESTIMATED_EMPTY_COOKIE_SIZE),
+		chunkSizes: cookies.map((c) => c.value.length),
 	});
 
 	return cookies;
@@ -119,10 +133,9 @@ function getCleanCookies(
 }
 
 /**
- * Create a session store for handling cookie chunking.
- * When session data exceeds 4KB, it automatically splits it into multiple cookies.
+ * Store that splits a cookie into numbered chunks when its serialized form
+ * would exceed the per-cookie byte limit, expiring stale chunks as needed.
  *
- * Based on next-auth's SessionStore implementation.
  * @see https://github.com/nextauthjs/next-auth/blob/27b2519b84b8eb9cf053775dea29d577d2aa0098/packages/next-auth/src/core/lib/cookie.ts
  */
 const storeFactory =
@@ -135,34 +148,18 @@ const storeFactory =
 		const chunks = readExistingChunks(cookieName, ctx);
 		const logger = ctx.context.logger;
 
+		// Expiry cookies for all current chunks. chunk() and clean() both start here.
+		const expireExistingChunks = (): Record<string, Cookie> => {
+			const expired = getCleanCookies(chunks, cookieOptions);
+			for (const name in chunks) {
+				delete chunks[name];
+			}
+			return expired;
+		};
+
 		return {
-			/**
-			 * Get the full session data by joining all chunks
-			 */
-			getValue(): string {
-				return joinChunks(chunks);
-			},
-
-			/**
-			 * Check if there are existing chunks
-			 */
-			hasChunks(): boolean {
-				return Object.keys(chunks).length > 0;
-			},
-
-			/**
-			 * Chunk a cookie value and return all cookies to set (including cleanup cookies)
-			 */
 			chunk(value: string, options?: Partial<CookieOptions>): Cookie[] {
-				// Start by cleaning all existing chunks
-				const cleanedChunks = getCleanCookies(chunks, cookieOptions);
-				// Clear the chunks object
-				for (const name in chunks) {
-					delete chunks[name];
-				}
-				const cookies: Record<string, Cookie> = cleanedChunks;
-
-				// Create new chunks
+				const cookies = expireExistingChunks();
 				const chunked = chunkCookie(
 					storeName,
 					{
@@ -173,30 +170,16 @@ const storeFactory =
 					chunks,
 					logger,
 				);
-
-				// Update with new chunks
 				for (const chunk of chunked) {
 					cookies[chunk.name] = chunk;
 				}
-
 				return Object.values(cookies);
 			},
 
-			/**
-			 * Get cookies to clean up all chunks
-			 */
 			clean(): Cookie[] {
-				const cleanedChunks = getCleanCookies(chunks, cookieOptions);
-				// Clear the chunks object
-				for (const name in chunks) {
-					delete chunks[name];
-				}
-				return Object.values(cleanedChunks);
+				return Object.values(expireExistingChunks());
 			},
 
-			/**
-			 * Set all cookies in the context
-			 */
 			setCookies(cookies: Cookie[]): void {
 				for (const cookie of cookies) {
 					ctx.setCookie(cookie.name, cookie.value, cookie.attributes);
@@ -259,19 +242,8 @@ export async function setAccountCookie(
 		options.maxAge,
 	);
 
-	if (data.length > ALLOWED_COOKIE_SIZE) {
-		const accountStore = createAccountStore(accountDataCookie.name, options, c);
-
-		const cookies = accountStore.chunk(data, options);
-		accountStore.setCookies(cookies);
-	} else {
-		const accountStore = createAccountStore(accountDataCookie.name, options, c);
-		if (accountStore.hasChunks()) {
-			const cleanCookies = accountStore.clean();
-			accountStore.setCookies(cleanCookies);
-		}
-		c.setCookie(accountDataCookie.name, data, options);
-	}
+	const accountStore = createAccountStore(accountDataCookie.name, options, c);
+	accountStore.setCookies(accountStore.chunk(data, options));
 }
 
 export async function getAccountCookie(c: GenericEndpointContext) {

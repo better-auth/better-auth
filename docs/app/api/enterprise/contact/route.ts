@@ -32,6 +32,11 @@ function escapeHtml(text: string): string {
 	return text.replace(/[&<>"']/g, (m) => map[m] ?? m);
 }
 
+function getFirstName(fullName: string): string {
+	const firstName = fullName.trim().split(/\s+/)[0];
+	return firstName || "there";
+}
+
 export async function POST(request: Request) {
 	let body: unknown;
 	try {
@@ -97,11 +102,14 @@ export async function POST(request: Request) {
 		}
 
 		const resend = new Resend(resendApiKey);
-		const { error } = await resend.emails.send({
-			from: "Enterprise Support <enterprise@better-auth.com>",
-			to: toEmail,
-			subject: `Enterprise Inquiry from ${fullName}`,
-			html: `
+		const firstName = getFirstName(fullName);
+
+		const [internalResult, acknowledgementResult] = await Promise.all([
+			resend.emails.send({
+				from: "Enterprise Support <enterprise@better-auth.com>",
+				to: toEmail,
+				subject: `Enterprise Inquiry from ${fullName}`,
+				html: `
 					<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
 						<h2 style="color: #18181b;">Enterprise Inquiry</h2>
 						<div style="background: #f4f4f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
@@ -118,12 +126,40 @@ export async function POST(request: Request) {
 						</p>
 					</div>
 				`,
-		});
-		if (error) {
-			console.error("Resend email failed", error);
+			}),
+			resend.emails.send({
+				from: "Ravi <ravi@better-auth.com>",
+				to: email,
+				cc: toEmail,
+				subject: "Re: Enterprise Inquiry",
+				text: `Hi ${firstName},
+
+Thanks for reaching out. We've received your inquiry and someone from our team will follow up shortly.
+
+In the meantime, if there are any timelines, technical requirements, or procurement details we should be aware of, feel free to reply here.
+
+Best,
+Ravi`,
+			}),
+		]);
+
+		if (internalResult.error) {
+			console.error(
+				"Resend internal email failed (email=%s)",
+				email,
+				internalResult.error,
+			);
 			return NextResponse.json(
 				{ message: "Something went wrong. Please try again." },
 				{ status: 500 },
+			);
+		}
+
+		if (acknowledgementResult.error) {
+			console.error(
+				"Resend acknowledgement email failed (email=%s)",
+				email,
+				acknowledgementResult.error,
 			);
 		}
 

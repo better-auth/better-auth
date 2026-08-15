@@ -49,6 +49,9 @@ async function revokeJwtAccessToken(
 						// @ts-expect-error response is a JSONWebKeySet but within the response field
 						return jwksRes?.response as JSONWebKeySet | undefined;
 					},
+			// The plugin instance is stable across requests, so the key set
+			// fetched by the per-request closure above is cached under it.
+			jwksCacheKey: jwtPlugin,
 			verifyOptions: {
 				audience: opts.validAudiences ?? ctx.context.baseURL,
 				issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
@@ -173,7 +176,7 @@ async function revokeRefreshToken(
 	// Atomic compare-and-swap. If a concurrent rotation already revoked
 	// (and re-minted) this row, fail closed and tear down the whole family
 	// so the rotation's offspring cannot be used either.
-	const won = await ctx.context.adapter.update<{ id: string }>({
+	const won = await ctx.context.adapter.incrementOne<{ id: string }>({
 		model: "oauthRefreshToken",
 		where: [
 			{
@@ -186,7 +189,8 @@ async function revokeRefreshToken(
 				value: null,
 			},
 		],
-		update: {
+		increment: {},
+		set: {
 			revoked: new Date(iat * 1000),
 		},
 	});

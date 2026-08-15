@@ -288,7 +288,15 @@ export function createApiKey({
 
 			const opts = resolveConfiguration(ctx.context, configurations, configId);
 			const keyGenerator = opts.customKeyGenerator || defaultKeyGenerator;
-			const session = await getSessionFromCtx(ctx);
+			// Creating an API key mints a long-lived credential, so resolve the
+			// session from the authoritative store rather than the signed
+			// cookie-cache snapshot. A revoked session — including the
+			// session deletion performed when a user is banned — would
+			// otherwise still be accepted within the cookie-cache window,
+			// letting it mint a fresh key that outlives the revoked session.
+			const session = await getSessionFromCtx(ctx, {
+				disableCookieCache: true,
+			});
 			const isClientRequest = ctx.request || ctx.headers;
 
 			// if this endpoint was being called from the client,

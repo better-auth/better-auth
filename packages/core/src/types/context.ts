@@ -158,7 +158,15 @@ export interface InternalAdapter<
 	 */
 	deleteAccount(id: string): Promise<void>;
 
-	deleteSessions(userIdOrSessionTokens: string | string[]): Promise<void>;
+	/**
+	 * Delete every session belonging to a user.
+	 */
+	deleteUserSessions(userId: string): Promise<void>;
+
+	/**
+	 * Delete sessions by their session tokens.
+	 */
+	deleteSessions(sessionTokens: string[]): Promise<void>;
 
 	findOAuthUser(
 		email: string,
@@ -196,8 +204,6 @@ export interface InternalAdapter<
 
 	findAccounts(userId: string): Promise<Account[]>;
 
-	findAccount(accountId: string): Promise<Account | null>;
-
 	findAccountByProviderId(
 		accountId: string,
 		providerId: string,
@@ -230,6 +236,23 @@ export interface InternalAdapter<
 	 * pair at single-use credential consumption sites.
 	 */
 	consumeVerificationValue(identifier: string): Promise<Verification | null>;
+
+	/**
+	 * First-writer-wins create keyed by a deterministic primary key derived from
+	 * `identifier`. Returns `true` when this caller created the row and `false`
+	 * when a row for the same identifier already existed.
+	 *
+	 * The dual of `consumeVerificationValue`: reserve races to create a marker
+	 * exactly once, where consume races to delete one exactly once. Use it for
+	 * replay tombstones (a SAML assertion id, a JWT `jti`) where the first caller
+	 * wins. The database path is atomic via the primary key; the
+	 * secondary-storage-only path is best-effort under concurrency.
+	 */
+	reserveVerificationValue(data: {
+		identifier: string;
+		value: string;
+		expiresAt: Date;
+	}): Promise<boolean>;
 
 	updateVerificationByIdentifier(
 		identifier: string,
@@ -321,7 +344,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				 * - "cookie": Store state in an encrypted cookie (stateless)
 				 * - "database": Store state in the database
 				 *
-				 * @default "cookie"
+				 * @default "database" when `database` or `secondaryStorage` is configured, "cookie" otherwise
 				 */
 				storeStateStrategy: "database" | "cookie";
 			};

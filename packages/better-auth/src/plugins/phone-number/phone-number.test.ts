@@ -479,6 +479,120 @@ describe("verify phone-number", async () => {
 	});
 });
 
+describe("verify phone-number race condition protection", async () => {
+	let otp = "";
+
+	const { client, auth } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+					allowedAttempts: 3,
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+	const authCtx = await auth.$context;
+
+	it("should allow exactly one success when the same code is verified concurrently", async () => {
+		const phoneNumber = "+251900000001";
+		await client.phoneNumber.sendOtp({ phoneNumber });
+
+		// Force both verifications to read the live OTP row before either
+		// consumes it. Without an atomic consume gate, both would read a valid
+		// code and both would mint a session; the gate must let only one win.
+		const originalFind = authCtx.internalAdapter.findVerificationValue;
+		let entered = 0;
+		let releaseBarrier!: () => void;
+		const barrier = new Promise<void>((resolve) => {
+			releaseBarrier = resolve;
+		});
+		authCtx.internalAdapter.findVerificationValue = (async (
+			identifier: string,
+			...rest: unknown[]
+		) => {
+			const result = await (
+				originalFind as (...args: unknown[]) => Promise<unknown>
+			)(identifier, ...rest);
+			if (identifier === phoneNumber) {
+				entered++;
+				if (entered >= 2) releaseBarrier();
+				await barrier;
+			}
+			return result;
+		}) as typeof authCtx.internalAdapter.findVerificationValue;
+
+		try {
+			const results = await Promise.all([
+				client.phoneNumber.verify({ phoneNumber, code: otp }),
+				client.phoneNumber.verify({ phoneNumber, code: otp }),
+			]);
+
+			const successes = results.filter((r) => r.data?.status === true);
+			const failures = results.filter((r) => r.error);
+			expect(successes).toHaveLength(1);
+			expect(failures).toHaveLength(1);
+			// The loser must be cleanly rejected by the OTP gate, not fail by
+			// accident downstream after both consumed the same code.
+			expect(failures[0]!.error?.status).toBe(400);
+			expect(failures[0]!.error?.message).toBe("Invalid OTP");
+		} finally {
+			authCtx.internalAdapter.findVerificationValue = originalFind;
+		}
+
+		const verificationValue =
+			await authCtx.internalAdapter.findVerificationValue(phoneNumber);
+		expect(verificationValue).toBeNull();
+	});
+
+	it("should increment the stored attempt counter by exactly one per wrong code", async () => {
+		const phoneNumber = "+251900000002";
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		const correctCode = otp;
+
+		for (let expectedAttempts = 1; expectedAttempts <= 2; expectedAttempts++) {
+			const res = await client.phoneNumber.verify({
+				phoneNumber,
+				code: "000000",
+			});
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.message).toBe("Invalid OTP");
+
+			const stored =
+				await authCtx.internalAdapter.findVerificationValue(phoneNumber);
+			expect(stored).not.toBeNull();
+			const [storedValue, attempts] = stored!.value.split(":");
+			// The original code survives each wrong attempt so the user can
+			// still redeem it, and the counter advances by exactly one.
+			expect(storedValue).toBe(correctCode);
+			expect(attempts).toBe(String(expectedAttempts));
+		}
+
+		const res = await client.phoneNumber.verify({
+			phoneNumber,
+			code: correctCode,
+		});
+		expect(res.error).toBe(null);
+		expect(res.data?.status).toBe(true);
+
+		const consumed =
+			await authCtx.internalAdapter.findVerificationValue(phoneNumber);
+		expect(consumed).toBeNull();
+	});
+});
+
 describe("reset password flow attempts", async () => {
 	let otp = "";
 	let resetOtp = "";

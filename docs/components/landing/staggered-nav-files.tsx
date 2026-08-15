@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getVersionFromPathname, versionedDocsHref } from "@/lib/docs-versions";
 import { cn } from "@/lib/utils";
+import { Icons } from "../icons";
 import { BetterAuthWordmark } from "../icons/logo";
 import { contents } from "../sidebar-content";
 import {
@@ -43,6 +44,7 @@ interface ProductItem {
 	tagline: string;
 	description: string;
 	href: string;
+	activatesTab?: boolean;
 	Icon: React.ComponentType<{ className?: string }>;
 	Pattern?: React.FC<{ className?: string }>;
 	patternClassName?: string;
@@ -92,22 +94,6 @@ const CommunityIcon: React.FC<{ className?: string }> = ({ className }) => (
 		<path
 			fill="currentColor"
 			d="M10 3a2 2 0 1 0 0 4a2 2 0 0 0 0-4M7 5a3 3 0 1 1 6 0a3 3 0 0 1-6 0M5.053 9.996q-.051.244-.051.504v.545l-2.631.705a.5.5 0 0 0-.354.612l.647 2.415A3 3 0 0 0 5.98 16.97c.23.31.495.594.789.843l-.171.05a4 4 0 0 1-4.9-2.828l-.647-2.415a1.5 1.5 0 0 1 1.061-1.837zm9.949 1.049V10.5q-.001-.26-.05-.504l2.94.788a1.5 1.5 0 0 1 1.06 1.837l-.647 2.415a4 4 0 0 1-5.07 2.778q.443-.376.789-.843a3 3 0 0 0 3.315-2.194l.648-2.415a.5.5 0 0 0-.354-.612zM15 6.5a1.5 1.5 0 1 1 3 0a1.5 1.5 0 0 1-3 0M16.5 4a2.5 2.5 0 1 0 0 5a2.5 2.5 0 0 0 0-5m-13 1a1.5 1.5 0 1 0 0 3a1.5 1.5 0 0 0 0-3M1 6.5a2.5 2.5 0 1 1 5 0a2.5 2.5 0 0 1-5 0M7.5 9A1.5 1.5 0 0 0 6 10.5V14a4 4 0 0 0 8 0v-3.5A1.5 1.5 0 0 0 12.5 9zM7 10.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 .5.5V14a3 3 0 1 1-6 0z"
-		/>
-	</svg>
-);
-
-const CareersIcon: React.FC<{ className?: string }> = ({ className }) => (
-	<svg
-		xmlns="http://www.w3.org/2000/svg"
-		width="1em"
-		height="1em"
-		viewBox="0 0 24 24"
-		className={className}
-		aria-hidden="true"
-	>
-		<path
-			fill="currentColor"
-			d="M3.212 20.423q-.085.039-.186.038t-.187-.03q-.127-.064-.175-.188t-.023-.231q.013-.193.175-.321q.163-.13.396-.177q.315-.277.75-.304q.434-.027.848.002q.342.023.564-.02t.403-.28q.189-.368.215-.78q.027-.413.08-.836q.051-.5.233-.936t.607-.696q.315-.277.753-.304q.437-.027.85.002q.343.023.572-.02t.41-.28q.188-.368.205-.78t.07-.836q.051-.5.233-.936t.607-.696q.315-.277.753-.295t.85.012q.343.023.572-.029t.41-.29q.188-.368.208-.78t.072-.836q.052-.5.243-.936q.192-.437.617-.696q.315-.277.753-.295t.85.012q.343.023.572-.029t.41-.29q.188-.368.208-.78t.072-.836q.052-.5.243-.927q.192-.427.617-.705q.315-.277.753-.298q.437-.02.85.009l.717-.021q.345-.01.607-.138q.146-.033.252.072q.105.104.119.25q-.014.193-.176.325t-.395.18q-.316.276-.753.303q-.438.027-.851-.002q-.343-.023-.571.029q-.23.052-.41.29q-.188.368-.209.78t-.072.836q-.052.5-.243.937q-.191.436-.616.696q-.316.277-.75.294q-.435.017-.848-.012q-.343-.023-.565.029t-.403.29q-.188.368-.215.78t-.08.836q-.051.494-.223.934q-.172.439-.597.699q-.335.277-.77.297q-.434.02-.847-.009q-.324-.023-.565.045q-.242.069-.403.288q-.17.348-.206.76t-.088.836q-.052.5-.237.937q-.184.436-.61.696q-.315.277-.759.306t-.858.001q-.323-.023-.552.026q-.229.05-.41.288q-.169.348-.198.76t-.082.836q-.052.5-.243.937q-.192.436-.617.696q-.315.277-.75.306q-.434.03-.848.001q-.323-.023-.606-.005q-.284.017-.523.209M6 10q-1.652 0-2.826-1.174T2 6q0-1.677 1.174-2.839T6 2q1.677 0 2.839 1.162T10 6q0 1.652-1.161 2.826T6 10m0-1q1.275 0 2.138-.875T9 6q0-1.275-.862-2.137T6 3q-1.25 0-2.125.863T3 6q0 1.25.875 2.125T6 9m10.616 13q-.672 0-1.144-.472T15 20.385v-3.77q0-.67.472-1.143q.472-.472 1.144-.472h3.769q.67 0 1.143.472q.472.472.472 1.144v3.769q0 .67-.472 1.143q-.472.472-1.143.472zm0-1h3.769q.269 0 .442-.173t.173-.442v-3.77q0-.269-.173-.442T20.385 16h-3.77q-.269 0-.442.173t-.173.443v3.768q0 .27.173.443t.443.173M6 6"
 		/>
 	</svg>
 );
@@ -250,54 +236,6 @@ const VerticalLinesPattern: React.FC<{ className?: string }> = ({
 	);
 };
 
-const _CareersPattern: React.FC<{ className?: string }> = ({ className }) => {
-	const cols = 80;
-	const rows = 48;
-	const cell = 2;
-	const gap = 1;
-	const stride = cell + gap;
-	const width = cols * stride;
-	const height = rows * stride;
-	const rects: React.ReactElement[] = [];
-	for (let r = 0; r < rows; r++) {
-		for (let c = 0; c < cols; c++) {
-			const nx = c / (cols - 1);
-			const ny = r / (rows - 1);
-			// Diagonal gradient from top-right (dense) to bottom-left (sparse).
-			// t = 0 at top-right, t = 1 at bottom-left, iso-lines run diagonally.
-			const t = (1 - nx + ny) / 2;
-			const density = 1 - t * 0.95;
-			// Deterministic pseudo-random hash per cell.
-			const seed = (c * 1664525 + r * 1013904223) ^ ((c + 17) * (r + 31));
-			const rand = ((seed >>> 0) % 10000) / 10000;
-			if (rand < density) {
-				rects.push(
-					<rect
-						key={`${c}-${r}`}
-						x={c * stride}
-						y={r * stride}
-						width={cell}
-						height={cell}
-					/>,
-				);
-			}
-		}
-	}
-	return (
-		<svg
-			width="100%"
-			height="100%"
-			viewBox={`0 0 ${width} ${height}`}
-			preserveAspectRatio="none"
-			fill="currentColor"
-			className={className}
-			aria-hidden="true"
-		>
-			{rects}
-		</svg>
-	);
-};
-
 const products: ProductItem[] = [
 	{
 		title: "Framework",
@@ -305,6 +243,7 @@ const products: ProductItem[] = [
 		description:
 			"The TypeScript auth library. Plugins, adapters, and 20+ social providers.",
 		href: "/docs/introduction",
+		activatesTab: false,
 		Icon: FrameworkLogoIcon,
 		Pattern: VerticalLinesPattern,
 		patternClassName:
@@ -316,6 +255,7 @@ const products: ProductItem[] = [
 		description:
 			"Dashboard, audit logs, security detection, SSO, and abuse protection.",
 		href: "/pricing",
+		activatesTab: true,
 		Icon: InfraLogoIcon,
 		Pattern: VerticalLinesPattern,
 		patternClassName:
@@ -354,7 +294,6 @@ interface LinkResource {
 
 const linkResources: LinkResource[] = [
 	{ title: "Community", href: "/community", Icon: CommunityIcon },
-	{ title: "Careers", href: "/careers", Icon: CareersIcon },
 	{ title: "Brand", href: "/brand", Icon: Palette },
 	{ title: "Legal", href: "/legal", Icon: Scale },
 ];
@@ -439,6 +378,11 @@ export function StaggeredNavFiles() {
 	);
 	const isDocs = pathname.startsWith("/docs");
 	const isPricingPage = pathname === "/pricing";
+	const isProductsPage = products.some(
+		(p) =>
+			p.activatesTab &&
+			(pathname === p.href || pathname.startsWith(`${p.href}/`)),
+	);
 	const isResourcePage = resourceFiles.some((r) => {
 		const matchPath = r.path || r.href;
 		return pathname === matchPath || pathname.startsWith(`${matchPath}/`);
@@ -447,6 +391,7 @@ export function StaggeredNavFiles() {
 		isActive("/") ||
 		isDocs ||
 		isPricingPage ||
+		isProductsPage ||
 		isResourcePage ||
 		isActive("/enterprise");
 	const isNarrowLeft = isDocs;
@@ -652,16 +597,20 @@ export function StaggeredNavFiles() {
 					>
 						<div
 							className={`group/tab flex items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full cursor-pointer border-r ${tabDividerClass} transition-colors duration-150 ${
-								productsOpen
-									? "bg-foreground/[0.04]"
-									: "hover:bg-foreground/[0.03]"
+								isProductsPage
+									? `bg-background border-b-2 ${activeTabBorderClass}`
+									: productsOpen
+										? "bg-foreground/4"
+										: "hover:bg-foreground/3"
 							}`}
 						>
 							<span
 								className={`font-mono text-xs uppercase tracking-wider transition-colors duration-150 whitespace-nowrap ${
-									productsOpen
-										? "text-foreground/80"
-										: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
+									isProductsPage
+										? "text-foreground"
+										: productsOpen
+											? "text-foreground/80"
+											: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
 								}`}
 							>
 								products
@@ -849,7 +798,7 @@ export function StaggeredNavFiles() {
 											</Link>
 										))}
 									</div>
-									<div className="grid grid-cols-4 divide-x divide-foreground/[0.06] border-t border-foreground/[0.06]">
+									<div className="grid grid-cols-3 divide-x divide-foreground/[0.06] border-t border-foreground/[0.06]">
 										{linkResources.map((r) => (
 											<Link
 												key={r.title}
@@ -950,21 +899,7 @@ export function StaggeredNavFiles() {
 											className="flex items-center justify-center p-1 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="npm"
 										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="14"
-												height="14"
-												viewBox="0 0 128 128"
-											>
-												<path
-													fill="#cb3837"
-													d="M0 7.062C0 3.225 3.225 0 7.062 0h113.88c3.838 0 7.063 3.225 7.063 7.062v113.88c0 3.838-3.225 7.063-7.063 7.063H7.062c-3.837 0-7.062-3.225-7.062-7.063zm23.69 97.518h40.395l.05-58.532h19.494l-.05 58.581h19.543l.05-78.075l-78.075-.1l-.1 78.126z"
-												/>
-												<path
-													fill="#fff"
-													d="M25.105 65.52V26.512H40.96c8.72 0 26.274.034 39.008.075l23.153.075v77.866H83.645v-58.54H64.057v58.54H25.105z"
-												/>
-											</svg>
+											<Icons.npm className="size-3.5" />
 										</a>
 									</div>
 								</motion.div>

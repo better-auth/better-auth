@@ -48,10 +48,14 @@ export interface PrismaConfig {
 
 interface PrismaClient {}
 
+// Prisma raises `P2025` for every "record not found" surface area we care
+// about (`update`, `delete`, and `incrementOne`) with the actual cause
+// distinguishable via `meta.cause` (e.g. "Record to update not found." vs
+// "Record to delete does not exist."). Match on the code alone: any other
+// failure (constraint, connection, permission) must propagate so the caller
+// sees a real error rather than a silent `null`/no-op.
 function isPrismaNotFoundError(e: any): boolean {
-	return (
-		e?.code === "P2025" || e?.meta?.cause === "Record to delete does not exist."
-	);
+	return e?.code === "P2025";
 }
 
 type PrismaClientInternal = {
@@ -550,10 +554,25 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						action: "update",
 					});
 
-					return await db[model]!.update({
-						where: whereClause,
-						data: update,
-					});
+					// `prisma.model.update` requires a WhereUniqueInput but still
+					// applies any non-unique predicates as guards before mutating
+					// the row. When those guards exclude the row (e.g. a CAS like
+					// `WHERE id = ? AND revoked IS NULL` losing the race, or the
+					// row simply not existing) Prisma raises P2025 rather than
+					// silently returning the row. Surface that as `null` so every
+					// adapter — Kysely's RETURNING/OUTPUT paths, this one, the
+					// in-memory adapter — agree on the "guarded update matched no
+					// row" signal. `incrementOne` and `delete` already convert
+					// P2025 the same way.
+					try {
+						return await db[model]!.update({
+							where: whereClause,
+							data: update,
+						});
+					} catch (e: any) {
+						if (isPrismaNotFoundError(e)) return null;
+						throw e;
+					}
 				},
 				async updateMany({ model, where, update }) {
 					if (!db[model]) {
@@ -602,9 +621,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							where: whereClause,
 						});
 					} catch (e: any) {
+						// Deletes are idempotent: a missing row (P2025) is a no-op.
+						// Any other failure (constraint, connection, permission) is a
+						// real error and must propagate rather than report success.
 						if (isPrismaNotFoundError(e)) return;
-						// otherwise if it's an unknown error, we want to just log it for debugging.
-						console.log(e);
+						throw e;
 					}
 				},
 				async deleteMany({ model, where }) {
@@ -685,6 +706,87 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					return inTransaction || typeof db.$transaction !== "function"
 						? claimFromTransaction(db)
 						: db.$transaction(claimFromTransaction);
+				},
+				async incrementOne({ model, where, increment, set }) {
+					if (!db[model]) {
+						throw new BetterAuthError(
+							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+						);
+					}
+
+					// Prisma applies `{ [field]: { increment: delta } }` server-side, so
+					// the read of the current value and the write of `value + delta`
+					// happen in a single statement. The contract mutates at most one
+					// row, so we resolve a single target id and key the write on it the
+					// same way `consumeOne` does, never `updateMany`.
+					const data: Record<string, unknown> = { ...(set ?? {}) };
+					for (const [field, delta] of Object.entries(increment)) {
+						data[field] = { increment: delta };
+					}
+
+					// `prisma.model.update` requires a WhereUniqueInput and returns the
+					// mutated row. When the caller keys on the primary key we update in a
+					// single round trip; otherwise we resolve the target id inside a
+					// transaction and update by id. Either way the original guard stays in
+					// the where, so a racer that invalidated it (e.g. remaining dropped to
+					// 0) yields P2025 and we report no mutation.
+					const hasIdField = where?.some((w) => w.field === "id");
+					if (hasIdField) {
+						const whereClause = convertWhereClause({
+							model,
+							where,
+							action: "update",
+						});
+						try {
+							const row = await db[model]!.update({
+								where: whereClause,
+								data,
+							});
+							return (row as any) ?? null;
+						} catch (e: any) {
+							if (isPrismaNotFoundError(e)) return null;
+							throw e;
+						}
+					}
+
+					const findWhere = convertWhereClause({
+						model,
+						where,
+						action: "findOne",
+					});
+					const mutateInTransaction = async (tx: PrismaClient) => {
+						const target = await (tx as any)[model].findFirst({
+							where: findWhere,
+						});
+						if (!target) return null;
+						try {
+							const row = await (tx as any)[model].update({
+								where: convertWhereClause({
+									model,
+									where: [
+										...where,
+										{
+											field: "id",
+											value: (target as any).id,
+											operator: "eq",
+											connector: "AND",
+											mode: "sensitive",
+										},
+									],
+									action: "update",
+								}),
+								data,
+							});
+							return (row as any) ?? null;
+						} catch (e: any) {
+							if (isPrismaNotFoundError(e)) return null;
+							throw e;
+						}
+					};
+
+					return inTransaction || typeof db.$transaction !== "function"
+						? mutateInTransaction(db)
+						: db.$transaction(mutateInTransaction);
 				},
 				options: config,
 			};

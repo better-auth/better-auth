@@ -21,7 +21,6 @@ import {
 	DividerText,
 	Endpoint,
 	ForkButton,
-	GenerateAppleJwt,
 	GenerateSecret,
 } from "@/components/docs/mdx-components";
 import { Callout } from "@/components/ui/callout";
@@ -89,9 +88,8 @@ export default async function Page({
 				<div className="flex flex-wrap items-center gap-2 not-prose lg:shrink-0">
 					<LLMCopyButton rawUrl={`${rawBase}/${page.path}`} />
 					<ViewOptions
-						markdownUrl={`${page.url}.mdx`}
+						markdownUrl={`/llms.txt${page.url}.md`}
 						githubUrl={`${githubBase}/${page.path}`}
-						rawMdUrl={`/llms.txt${page.url}.md`}
 					/>
 				</div>
 			</div>
@@ -115,7 +113,6 @@ export default async function Page({
 						AddToCursor,
 						Features,
 						Endpoint,
-						GenerateAppleJwt,
 						GenerateSecret,
 						DividerText,
 						Callout: ({
@@ -131,6 +128,27 @@ export default async function Page({
 								{children}
 							</Callout>
 						),
+						HeaderLabel: ({
+							children,
+							variant = "default",
+						}: {
+							children: React.ReactNode;
+							variant?: "default" | "info" | "warning";
+						}) => {
+							const colors = {
+								default: "text-neutral-600 dark:text-neutral-300",
+								info: "text-blue-500 dark:text-blue-400",
+								warning: "text-amber-600 dark:text-amber-400",
+							};
+							return (
+								<span
+									data-header-label="true"
+									className={`text-[11px] font-semibold tracking-wide not-prose block select-none ${colors[variant]}`}
+								>
+									{children}
+								</span>
+							);
+						},
 						iframe: (props: React.ComponentProps<"iframe">) => (
 							<iframe
 								title="Embedded content"

@@ -14,6 +14,14 @@ const dnsMock = vi.hoisted(() => {
 	};
 });
 
+function createDeferred<T>() {
+	let resolve!: (value: T) => void;
+	const promise = new Promise<T>((resolvePromise) => {
+		resolve = resolvePromise;
+	});
+	return { promise, resolve };
+}
+
 vi.mock("node:dns/promises", () => {
 	return {
 		...dnsMock,
@@ -151,6 +159,7 @@ describe("Domain verification", async () => {
 
 	afterEach(() => {
 		vi.useRealTimers();
+		dnsMock.resolveTxt.mockReset();
 	});
 
 	describe("POST /sso/request-domain-verification", () => {
@@ -180,7 +189,6 @@ describe("Domain verification", async () => {
 			expect(response.status).toBe(404);
 			expect(await response.json()).toEqual({
 				message: "Provider not found",
-				code: "PROVIDER_NOT_FOUND",
 			});
 		});
 
@@ -227,9 +235,7 @@ describe("Domain verification", async () => {
 
 			expect(response.status).toBe(403);
 			expect(await response.json()).toEqual({
-				message:
-					"User must be owner of or belong to the SSO provider organization",
-				code: "INSUFICCIENT_ACCESS",
+				message: "You don't have access to this provider",
 			});
 		});
 
@@ -262,9 +268,7 @@ describe("Domain verification", async () => {
 
 			expect(response.status).toBe(403);
 			expect(await response.json()).toEqual({
-				message:
-					"User must be owner of or belong to the SSO provider organization",
-				code: "INSUFICCIENT_ACCESS",
+				message: "You don't have access to this provider",
 			});
 		});
 
@@ -282,6 +286,43 @@ describe("Domain verification", async () => {
 					providerId: provider.providerId,
 				},
 				headers: newHeaders,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(201);
+			expect(await response.json()).toMatchObject({
+				domainVerificationToken: expect.any(String),
+			});
+		});
+
+		it("allows a non-creator org admin to request verification for an org-owned provider", async () => {
+			const { auth, getAuthHeaders, registerSSOProvider, createOrganization } =
+				createTestAuth();
+			const ownerHeaders = await getAuthHeaders(testUser);
+			const org = await createOrganization("org-with-admin", ownerHeaders);
+
+			// The org owner registers the provider; a different org admin who did
+			// not create it must still be able to verify its domain.
+			const provider = await registerSSOProvider(ownerHeaders, org?.id);
+
+			const adminHeaders = await getAuthHeaders({
+				name: "Org Admin",
+				email: "org-admin@test.com",
+				password: "password",
+			});
+			const adminSession = await auth.api.getSession({ headers: adminHeaders });
+			await auth.api.addMember({
+				body: {
+					userId: adminSession!.user.id,
+					role: "admin",
+					organizationId: org!.id,
+				},
+				headers: ownerHeaders,
+			});
+
+			const response = await auth.api.requestDomainVerification({
+				body: { providerId: provider.providerId },
+				headers: adminHeaders,
 				asResponse: true,
 			});
 
@@ -356,7 +397,6 @@ describe("Domain verification", async () => {
 			expect(response.status).toBe(404);
 			expect(await response.json()).toEqual({
 				message: "Provider not found",
-				code: "PROVIDER_NOT_FOUND",
 			});
 		});
 
@@ -404,7 +444,36 @@ describe("Domain verification", async () => {
 
 			expect(response.status).toBe(502);
 			expect(await response.json()).toEqual({
-				message: "Unable to verify domain ownership. Try again later",
+				message:
+					"Unable to verify domain ownership for hello.com. Try again later",
+				code: "DOMAIN_VERIFICATION_FAILED",
+			});
+		});
+
+		it("should return bad gateway when the TXT record only contains the verification token as a substring", async () => {
+			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
+			const headers = await getAuthHeaders(testUser);
+			const provider = await registerSSOProvider(headers);
+
+			dnsMock.resolveTxt.mockResolvedValue([
+				[`prefix-${provider.domainVerificationToken}-suffix`],
+				[
+					`_better-auth-token-saml-provider-1=${provider.domainVerificationToken}-suffix`,
+				],
+			]);
+
+			const response = await auth.api.verifyDomain({
+				body: {
+					providerId: provider.providerId,
+				},
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(502);
+			expect(await response.json()).toEqual({
+				message:
+					"Unable to verify domain ownership for hello.com. Try again later",
 				code: "DOMAIN_VERIFICATION_FAILED",
 			});
 		});
@@ -429,9 +498,7 @@ describe("Domain verification", async () => {
 
 			expect(response.status).toBe(403);
 			expect(await response.json()).toEqual({
-				message:
-					"User must be owner of or belong to the SSO provider organization",
-				code: "INSUFICCIENT_ACCESS",
+				message: "You don't have access to this provider",
 			});
 		});
 
@@ -462,9 +529,7 @@ describe("Domain verification", async () => {
 
 			expect(response.status).toBe(403);
 			expect(await response.json()).toEqual({
-				message:
-					"User must be owner of or belong to the SSO provider organization",
-				code: "INSUFICCIENT_ACCESS",
+				message: "You don't have access to this provider",
 			});
 		});
 
@@ -483,7 +548,8 @@ describe("Domain verification", async () => {
 					"v=spf1 ip4:50.242.118.232/29 include:_spf.google.com include:mail.zendesk.com ~all",
 				],
 				[
-					`_better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
+					"_better-auth-token-saml-provider-1=",
+					provider.domainVerificationToken,
 				],
 			]);
 
@@ -499,6 +565,151 @@ describe("Domain verification", async () => {
 			expect(dnsMock.resolveTxt).toHaveBeenCalledWith(
 				"_better-auth-token-saml-provider-1.hello.com",
 			);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-8c5h-wx78-2cfg
+		 */
+		it("rejects a stale proof after a domain update with the memory adapter", async () => {
+			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
+			const headers = await getAuthHeaders(testUser);
+			const provider = await registerSSOProvider(headers);
+
+			const dnsStarted = createDeferred<void>();
+			const dnsCompletion = createDeferred<string[][]>();
+			dnsMock.resolveTxt.mockImplementation(async () => {
+				dnsStarted.resolve();
+				return dnsCompletion.promise;
+			});
+
+			const verificationPromise = auth.api.verifyDomain({
+				body: {
+					providerId: provider.providerId,
+				},
+				headers,
+				asResponse: true,
+			});
+			await dnsStarted.promise;
+
+			const updateResponse = await auth.api.updateSSOProvider({
+				body: {
+					providerId: provider.providerId,
+					domain: "changed.example",
+				},
+				headers,
+				asResponse: true,
+			});
+			expect(updateResponse.status).toBe(200);
+
+			dnsCompletion.resolve([[provider.domainVerificationToken]]);
+			const verificationResponse = await verificationPromise;
+			expect(verificationResponse.status).toBe(409);
+			expect(await verificationResponse.json()).toEqual({
+				code: "SSO_PROVIDER_CHANGED",
+				message:
+					"SSO provider changed while domain verification was in progress. Reload the provider and try again",
+			});
+
+			const persistedProvider = await auth.api.getSSOProvider({
+				query: { providerId: provider.providerId },
+				headers,
+			});
+			expect(persistedProvider).toMatchObject({
+				domain: "changed.example",
+				domainVerified: false,
+			});
+		});
+
+		/**
+		 * `domainVerified` only joins the schema once `domainVerification` is
+		 * enabled, so providers registered before that have no stored value for the
+		 * bit. Enabling the option later must not strand them.
+		 *
+		 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-8c5h-wx78-2cfg
+		 */
+		it("verifies a provider registered before domain verification was enabled", async () => {
+			const db = {
+				user: [] as Record<string, unknown>[],
+				session: [] as Record<string, unknown>[],
+				account: [] as Record<string, unknown>[],
+				verification: [] as Record<string, unknown>[],
+				ssoProvider: [] as Record<string, unknown>[],
+			};
+			const buildAuth = (domainVerificationEnabled: boolean) =>
+				betterAuth({
+					database: memoryAdapter(db),
+					baseURL: "http://localhost:3000",
+					emailAndPassword: { enabled: true },
+					plugins: [
+						sso(
+							domainVerificationEnabled
+								? { domainVerification: { enabled: true } }
+								: {},
+						),
+					],
+				});
+			const signIn = async (
+				auth: ReturnType<typeof buildAuth>,
+				options: { register?: boolean } = {},
+			) => {
+				const client = createAuthClient({
+					baseURL: "http://localhost:3000",
+					plugins: [bearer()],
+					fetchOptions: {
+						customFetchImpl: async (url, init) =>
+							auth.handler(new Request(url, init)),
+					},
+				});
+				if (options.register) {
+					await client.signUp.email(testUser);
+				}
+				const headers = new Headers();
+				await client.signIn.email(testUser, {
+					throw: true,
+					onSuccess: setCookieToHeader(headers),
+				});
+				return headers;
+			};
+
+			const legacyAuth = buildAuth(false);
+			await legacyAuth.api.registerSSOProvider({
+				body: {
+					providerId: "pre-upgrade-provider",
+					issuer: "http://hello.com:8081",
+					domain: "http://hello.com:8081",
+					samlConfig: {
+						entryPoint: "http://idp.com:",
+						cert: "the-cert",
+						callbackUrl: "http://hello.com:8081/api/sso/saml2/callback",
+						spMetadata: {},
+					},
+				},
+				headers: await signIn(legacyAuth, { register: true }),
+			});
+			// Precondition: the column is absent, so the bit was never stored.
+			expect(db.ssoProvider[0]).not.toHaveProperty("domainVerified");
+
+			const auth = buildAuth(true);
+			const headers = await signIn(auth);
+			const { domainVerificationToken } =
+				await auth.api.requestDomainVerification({
+					body: { providerId: "pre-upgrade-provider" },
+					headers,
+				});
+			dnsMock.resolveTxt.mockResolvedValue([[domainVerificationToken]]);
+
+			const response = await auth.api.verifyDomain({
+				body: { providerId: "pre-upgrade-provider" },
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(204);
+			const persistedProvider = await auth.api.getSSOProvider({
+				query: { providerId: "pre-upgrade-provider" },
+				headers,
+			});
+			expect(persistedProvider).toMatchObject({ domainVerified: true });
 		});
 
 		it("should verify a provider domain ownership (custom token verification prefix)", async () => {
@@ -647,6 +858,108 @@ describe("Domain verification", async () => {
 				message: "Domain has already been verified",
 				code: "DOMAIN_VERIFIED",
 			});
+		});
+
+		it("does not verify a URL-like multi-domain provider unless every later-accepted domain is owned", async () => {
+			const { auth, getAuthHeaders } = createTestAuth();
+			const headers = await getAuthHeaders(testUser);
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "multi-domain-provider",
+					issuer: "https://idp.example.com",
+					// The URL-like first entry exercises the shared normalization used
+					// by both verification and later domain matching.
+					domain: "https://attacker.com/path,victim.com",
+					samlConfig: {
+						entryPoint: "http://idp.com:",
+						cert: "the-cert",
+						callbackUrl: "http://hello.com:8081/api/sso/saml2/callback",
+						spMetadata: {},
+					},
+				},
+				headers,
+			});
+
+			const requestResponse = await auth.api.requestDomainVerification({
+				body: { providerId: "multi-domain-provider" },
+				headers,
+				asResponse: true,
+			});
+			const { domainVerificationToken } = await requestResponse.json();
+
+			// Only attacker.com publishes the verifying record; victim.com does not.
+			dnsMock.resolveTxt.mockImplementation(async (name: string) => {
+				if (name === "_better-auth-token-multi-domain-provider.attacker.com") {
+					return [
+						[
+							`_better-auth-token-multi-domain-provider=${domainVerificationToken}`,
+						],
+					];
+				}
+				return [];
+			});
+
+			const verifyResponse = await auth.api.verifyDomain({
+				body: { providerId: "multi-domain-provider" },
+				headers,
+				asResponse: true,
+			});
+
+			// victim.com ownership was never proven, so the provider must not verify.
+			expect(verifyResponse.status).toBe(502);
+			expect(await verifyResponse.json()).toEqual({
+				message:
+					"Unable to verify domain ownership for victim.com. Try again later",
+				code: "DOMAIN_VERIFICATION_FAILED",
+			});
+			expect(dnsMock.resolveTxt).toHaveBeenCalledWith(
+				"_better-auth-token-multi-domain-provider.victim.com",
+			);
+		});
+
+		it("verifies a multi-domain provider when every listed domain is owned", async () => {
+			const { auth, getAuthHeaders } = createTestAuth();
+			const headers = await getAuthHeaders(testUser);
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "owned-multi-domain",
+					issuer: "https://idp.company.example",
+					domain: "company.com,subsidiary.com",
+					samlConfig: {
+						entryPoint: "http://idp.com:",
+						cert: "the-cert",
+						callbackUrl: "http://hello.com:8081/api/sso/saml2/callback",
+						spMetadata: {},
+					},
+				},
+				headers,
+			});
+
+			const requestResponse = await auth.api.requestDomainVerification({
+				body: { providerId: "owned-multi-domain" },
+				headers,
+				asResponse: true,
+			});
+			const { domainVerificationToken } = await requestResponse.json();
+
+			// Both listed domains publish the verifying record.
+			dnsMock.resolveTxt.mockResolvedValue([[domainVerificationToken]]);
+
+			const verifyResponse = await auth.api.verifyDomain({
+				body: { providerId: "owned-multi-domain" },
+				headers,
+				asResponse: true,
+			});
+
+			expect(verifyResponse.status).toBe(204);
+			expect(dnsMock.resolveTxt).toHaveBeenCalledWith(
+				"_better-auth-token-owned-multi-domain.company.com",
+			);
+			expect(dnsMock.resolveTxt).toHaveBeenCalledWith(
+				"_better-auth-token-owned-multi-domain.subsidiary.com",
+			);
 		});
 	});
 

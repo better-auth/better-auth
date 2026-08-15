@@ -2,12 +2,13 @@ import type { ClientFetchOption } from "@better-auth/core";
 import type { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
 import type { PreinitializedWritableAtom } from "nanostores";
 import { atom, onMount } from "nanostores";
+import { isJsonEqual, withEquality } from "./equality";
 import type { SessionQueryParams } from "./types";
 
 // SSR detection
 const isServer = () => typeof window === "undefined";
 
-export type AuthQueryAtom<T> = PreinitializedWritableAtom<{
+export type AuthQueryState<T> = {
 	data: null | T;
 	error: null | BetterFetchError;
 	isPending: boolean;
@@ -15,7 +16,22 @@ export type AuthQueryAtom<T> = PreinitializedWritableAtom<{
 	refetch: (
 		queryParams?: { query?: SessionQueryParams } | undefined,
 	) => Promise<void>;
-}>;
+};
+
+export type AuthQueryAtom<T> = PreinitializedWritableAtom<AuthQueryState<T>>;
+
+function isAuthQueryStateEqual<T>(
+	a: AuthQueryState<T>,
+	b: AuthQueryState<T>,
+): boolean {
+	return (
+		isJsonEqual(a.data, b.data) &&
+		a.error === b.error &&
+		a.isPending === b.isPending &&
+		a.isRefetching === b.isRefetching &&
+		a.refetch === b.refetch
+	);
+}
 
 export const useAuthQuery = <T>(
 	initializedAtom:
@@ -41,6 +57,7 @@ export const useAuthQuery = <T>(
 		isRefetching: false,
 		refetch: (queryParams) => fn(queryParams),
 	});
+	withEquality(value, isAuthQueryStateEqual);
 
 	const fn = async (
 		queryParams?: { query?: SessionQueryParams } | undefined,
@@ -62,8 +79,15 @@ export const useAuthQuery = <T>(
 					...queryParams?.query,
 				},
 				async onSuccess(context) {
+					const current = value.get();
+					const stableData =
+						current.data != null &&
+						context.data != null &&
+						isJsonEqual(current.data, context.data)
+							? current.data
+							: context.data;
 					value.set({
-						data: context.data,
+						data: stableData,
 						error: null,
 						isPending: false,
 						isRefetching: false,
@@ -120,33 +144,54 @@ export const useAuthQuery = <T>(
 	initializedAtom = Array.isArray(initializedAtom)
 		? initializedAtom
 		: [initializedAtom];
-	let isInitialized = false;
+	let isMountFetchPending = false;
+	let isMounted = false;
+	let shouldRefetchAfterPending = false;
 
-	for (const initAtom of initializedAtom) {
-		initAtom.subscribe(async () => {
-			if (isServer()) {
-				// On server, don't trigger fetch
-				return;
-			}
-			if (isInitialized) {
-				await fn();
-			} else {
-				onMount(value, () => {
-					const timeoutId = setTimeout(async () => {
-						if (!isInitialized) {
-							// Must set to `true` immediately; see https://github.com/better-auth/better-auth/issues/9077
-							isInitialized = true;
-							await fn();
-						}
-					}, 0);
-					return () => {
-						value.off();
-						initAtom.off();
-						clearTimeout(timeoutId);
-					};
-				});
-			}
+	const fetchOnMount = () => {
+		if (isMountFetchPending) {
+			shouldRefetchAfterPending = true;
+			return;
+		}
+		isMountFetchPending = true;
+		void fn().finally(() => {
+			isMountFetchPending = false;
+			const shouldRefetch = shouldRefetchAfterPending && isMounted;
+			shouldRefetchAfterPending = false;
+			if (shouldRefetch) fetchOnMount();
 		});
-	}
+	};
+
+	onMount(value, () => {
+		if (isServer()) {
+			// On server, don't trigger fetch
+			return;
+		}
+
+		isMounted = true;
+		let isInitialized = false;
+		let timeoutId: ReturnType<typeof setTimeout>;
+		const cleanups = initializedAtom.map((initAtom) =>
+			initAtom.listen(() => {
+				if (isInitialized) {
+					void fn();
+				} else {
+					isInitialized = true;
+					clearTimeout(timeoutId);
+					fetchOnMount();
+				}
+			}),
+		);
+		timeoutId = setTimeout(() => {
+			isInitialized = true;
+			fetchOnMount();
+		}, 0);
+
+		return () => {
+			isMounted = false;
+			for (const cleanup of cleanups) cleanup();
+			clearTimeout(timeoutId);
+		};
+	});
 	return value;
 };

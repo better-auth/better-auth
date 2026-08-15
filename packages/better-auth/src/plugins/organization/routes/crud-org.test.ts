@@ -550,3 +550,52 @@ describe("organization hooks", async () => {
 		expect(internalOrg?.name).toBe("Internal Org");
 	});
 });
+
+describe("updateOrganization", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [organization()],
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9829
+	 */
+	it("should clear the logo when passing null", async () => {
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "Logo Org",
+				slug: "logo-org",
+				logo: "https://example.com/logo.png",
+			},
+			headers,
+		});
+		expect(org?.logo).toBe("https://example.com/logo.png");
+
+		const updated = await auth.api.updateOrganization({
+			body: {
+				organizationId: org!.id,
+				data: {
+					logo: null,
+				},
+			},
+			headers,
+		});
+		expect(updated?.logo).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9829
+	 */
+	it("should accept a null logo on create", async () => {
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "Null Logo Org",
+				slug: "null-logo-org",
+				logo: null,
+			},
+			headers,
+		});
+		expect(org?.logo).toBeNull();
+	});
+});

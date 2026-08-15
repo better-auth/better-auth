@@ -50,7 +50,7 @@ export const scim = (options?: SCIMOptions) => {
 			getSCIMProviderConnection: getSCIMProviderConnection(opts),
 			deleteSCIMProviderConnection: deleteSCIMProviderConnection(opts),
 			getSCIMUser: getSCIMUser(authMiddleware),
-			createSCIMUser: createSCIMUser(authMiddleware),
+			createSCIMUser: createSCIMUser(authMiddleware, opts),
 			patchSCIMUser: patchSCIMUser(authMiddleware),
 			deleteSCIMUser: deleteSCIMUser(authMiddleware),
 			updateSCIMUser: updateSCIMUser(authMiddleware),

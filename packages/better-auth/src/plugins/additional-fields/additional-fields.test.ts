@@ -1,4 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
+import { betterAuth } from "../../auth/full";
 import { createAuthClient } from "../../client";
 import { createAuthClient as createReactAuthClient } from "../../client/react";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -191,6 +192,48 @@ describe("additionalFields", async () => {
 			};
 			session: Session;
 		} | null>;
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9770
+	 */
+	it("should infer session additional fields on updateSession", () => {
+		const auth = betterAuth({
+			session: {
+				additionalFields: {
+					color: {
+						type: "string",
+						required: false,
+					},
+					internalNote: {
+						type: "string",
+						input: false,
+						required: false,
+					},
+				},
+			},
+		});
+		const client = createAuthClient({
+			plugins: [inferAdditionalFields<typeof auth>()],
+		});
+
+		type UpdateSessionBody = NonNullable<
+			Parameters<typeof client.updateSession>[0]
+		>;
+
+		const body = {
+			color: "blue",
+		} satisfies UpdateSessionBody;
+		expect(body.color).toBe("blue");
+		expectTypeOf<UpdateSessionBody>().toMatchTypeOf<{
+			color?: string | null | undefined;
+		}>();
+
+		const blockedBody = {
+			// @ts-expect-error input: false fields must not be client-updateable.
+			internalNote: "hidden",
+		} satisfies UpdateSessionBody;
+		void blockedBody;
 	});
 
 	it("should infer it on the client without direct import", async () => {

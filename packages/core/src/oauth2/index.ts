@@ -16,6 +16,7 @@ export {
 	refreshAccessTokenRequest,
 } from "./refresh-access-token";
 export {
+	applyDefaultAccessTokenExpiry,
 	generateCodeChallenge,
 	getOAuth2Tokens,
 	getPrimaryClientId,

@@ -3,6 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { OAuth2Tokens, OAuth2UserInfo } from "@better-auth/core/oauth2";
 import {
+	applyDefaultAccessTokenExpiry,
 	createAuthorizationURL,
 	validateAuthorizationCode,
 } from "@better-auth/core/oauth2";
@@ -11,14 +12,30 @@ import { decodeJwt } from "jose";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
-import { missingEmailLogMessage } from "../../oauth2/errors";
-import { handleOAuthUserInfo } from "../../oauth2/link-account";
+import { missingEmailLogMessage, redirectOnError } from "../../oauth2/errors";
+import {
+	applyUpdateUserInfoOnLink,
+	handleOAuthUserInfo,
+} from "../../oauth2/link-account";
 import { generateState, parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
 import type { User } from "../../types";
 import { HIDE_METADATA } from "../../utils";
+import { isAPIError } from "../../utils/is-api-error";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 import type { GenericOAuthOptions } from "./types";
+
+export type GenericOAuthUserInfo = Omit<OAuth2UserInfo, "id"> & {
+	id?: string | number | null | undefined;
+	sub?: string | number | null | undefined;
+	[key: string]: unknown;
+};
+
+function isNonEmptyOAuthId(
+	id: string | number | null | undefined,
+): id is string | number {
+	return id !== undefined && id !== null && id !== "";
+}
 
 const signInWithOAuth2BodySchema = z.object({
 	providerId: z.string().meta({
@@ -282,8 +299,11 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				ctx.context.options.onAPIError?.errorURL ||
 				`${ctx.context.baseURL}/error`;
 			if (ctx.query.error || !ctx.query.code) {
-				throw ctx.redirect(
-					`${defaultErrorURL}?error=${encodeURIComponent(ctx.query.error || "oAuth_code_missing")}&error_description=${encodeURIComponent(ctx.query.error_description || "")}`,
+				redirectOnError(
+					ctx,
+					defaultErrorURL,
+					ctx.query.error || "oAuth_code_missing",
+					ctx.query.error_description || undefined,
 				);
 			}
 			const providerId = ctx.params?.providerId;
@@ -315,18 +335,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 			} = parsedState;
 			const code = ctx.query.code;
 
-			function redirectOnError(error: string) {
-				const defaultErrorURL =
-					ctx.context.options.onAPIError?.errorURL ||
-					`${ctx.context.baseURL}/error`;
-				let url = errorURL || defaultErrorURL;
-				if (url.includes("?")) {
-					url = `${url}&error=${encodeURIComponent(error)}`;
-				} else {
-					url = `${url}?error=${encodeURIComponent(error)}`;
-				}
-				throw ctx.redirect(url);
-			}
+			const resolvedErrorURL = errorURL || defaultErrorURL;
 
 			let finalTokenUrl = providerConfig.tokenUrl;
 			let finalUserInfoUrl = providerConfig.userInfoUrl;
@@ -357,13 +366,13 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 							expected: expectedIssuer,
 							received: ctx.query.iss,
 						});
-						return redirectOnError("issuer_mismatch");
+						redirectOnError(ctx, resolvedErrorURL, "issuer_mismatch");
 					}
 				} else if (providerConfig.requireIssuerValidation) {
 					ctx.context.logger.error("OAuth issuer parameter missing", {
 						expected: expectedIssuer,
 					});
-					return redirectOnError("issuer_missing");
+					redirectOnError(ctx, resolvedErrorURL, "issuer_missing");
 				}
 			}
 
@@ -402,12 +411,20 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						additionalParams,
 					});
 				}
+				tokens = applyDefaultAccessTokenExpiry(
+					tokens,
+					providerConfig.accessTokenExpiresIn,
+				);
 			} catch (e) {
 				ctx.context.logger.error(
 					e && typeof e === "object" && "name" in e ? (e.name as string) : "",
 					e,
 				);
-				throw redirectOnError("oauth_code_verification_failed");
+				redirectOnError(
+					ctx,
+					resolvedErrorURL,
+					"oauth_code_verification_failed",
+				);
 			}
 			if (!tokens) {
 				throw APIError.from(
@@ -421,9 +438,9 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						providerConfig.getUserInfo
 							? await providerConfig.getUserInfo(tokens)
 							: await getUserInfo(tokens, finalUserInfoUrl)
-					) as OAuth2UserInfo | null;
+					) as GenericOAuthUserInfo | null;
 					if (!userInfo) {
-						throw redirectOnError("user_info_is_missing");
+						redirectOnError(ctx, resolvedErrorURL, "user_info_is_missing");
 					}
 					const mapUser = providerConfig.mapProfileToUser
 						? await providerConfig.mapProfileToUser(userInfo)
@@ -438,13 +455,30 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 							}),
 							userInfo,
 						);
-						throw redirectOnError("email_is_missing");
+						redirectOnError(ctx, resolvedErrorURL, "email_is_missing");
 					}
-					const id = mapUser.id ? String(mapUser.id) : String(userInfo.id);
+					const rawId = isNonEmptyOAuthId(mapUser.id)
+						? mapUser.id
+						: isNonEmptyOAuthId(userInfo.id)
+							? userInfo.id
+							: isNonEmptyOAuthId(userInfo.sub)
+								? userInfo.sub
+								: undefined;
+					const id = rawId !== undefined ? String(rawId) : "";
+					// A provider must return a stable account id (e.g. `sub`).
+					// Without one, every account would be stored under the same
+					// empty id, letting different users resolve to the same account.
+					if (!id) {
+						ctx.context.logger.error(
+							"Provider did not return an account id (e.g. `sub`). Unable to sign in.",
+							userInfo,
+						);
+						redirectOnError(ctx, resolvedErrorURL, "id_is_missing");
+					}
 					const name = mapUser.name ? mapUser.name : userInfo.name;
 					if (!name) {
 						ctx.context.logger.error("Unable to get user info", userInfo);
-						throw redirectOnError("name_is_missing");
+						redirectOnError(ctx, resolvedErrorURL, "name_is_missing");
 					}
 					return {
 						...userInfo,
@@ -460,7 +494,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						true &&
 					link.email.toLowerCase() !== userInfo.email.toLowerCase()
 				) {
-					return redirectOnError("email_doesn't_match");
+					redirectOnError(ctx, resolvedErrorURL, "email_doesn't_match");
 				}
 				const existingAccount =
 					await ctx.context.internalAdapter.findAccountByProviderId(
@@ -469,7 +503,11 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 					);
 				if (existingAccount) {
 					if (existingAccount.userId !== link.userId) {
-						return redirectOnError("account_already_linked_to_different_user");
+						redirectOnError(
+							ctx,
+							resolvedErrorURL,
+							"account_already_linked_to_different_user",
+						);
 					}
 					const updateData = Object.fromEntries(
 						Object.entries({
@@ -501,9 +539,12 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						idToken: tokens.idToken,
 					});
 					if (!newAccount) {
-						return redirectOnError("unable_to_link_account");
+						redirectOnError(ctx, resolvedErrorURL, "unable_to_link_account");
 					}
 				}
+
+				await applyUpdateUserInfoOnLink(ctx, link.userId, userInfo);
+
 				let toRedirectTo: string;
 				try {
 					const url = callbackURL;
@@ -514,23 +555,35 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				throw ctx.redirect(toRedirectTo);
 			}
 
-			const result = await handleOAuthUserInfo(ctx, {
-				userInfo,
-				account: {
-					providerId: providerConfig.providerId,
-					accountId: userInfo.id,
-					...tokens,
-					scope: tokens.scopes?.join(","),
-				},
-				callbackURL: callbackURL,
-				disableSignUp:
-					(providerConfig.disableImplicitSignUp && !requestSignUp) ||
-					providerConfig.disableSignUp,
-				overrideUserInfo: providerConfig.overrideUserInfo,
-			});
+			let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
+			try {
+				result = await handleOAuthUserInfo(ctx, {
+					userInfo,
+					account: {
+						providerId: providerConfig.providerId,
+						accountId: userInfo.id,
+						...tokens,
+						scope: tokens.scopes?.join(","),
+					},
+					callbackURL: callbackURL,
+					disableSignUp:
+						(providerConfig.disableImplicitSignUp && !requestSignUp) ||
+						providerConfig.disableSignUp,
+					overrideUserInfo: providerConfig.overrideUserInfo,
+				});
+			} catch (e) {
+				if (isAPIError(e) && e.body?.code) {
+					redirectOnError(ctx, resolvedErrorURL, e.body.code, e.body.message);
+				}
+				throw e;
+			}
 
 			if (result.error) {
-				return redirectOnError(result.error.split(" ").join("_"));
+				redirectOnError(
+					ctx,
+					resolvedErrorURL,
+					result.error.split(" ").join("_"),
+				);
 			}
 			const { session, user } = result.data!;
 			await setSessionCookie(ctx, {
@@ -737,7 +790,7 @@ export const oAuth2LinkAccount = (options: GenericOAuthOptions) =>
 export async function getUserInfo(
 	tokens: OAuth2Tokens,
 	finalUserInfoUrl: string | undefined,
-): Promise<OAuth2UserInfo | null> {
+): Promise<GenericOAuthUserInfo | null> {
 	if (tokens.idToken) {
 		const decoded = decodeJwt(tokens.idToken) as {
 			sub: string;
@@ -763,8 +816,9 @@ export async function getUserInfo(
 	}
 
 	const userInfo = await betterFetch<{
+		id?: string | number | null | undefined;
 		email: string;
-		sub?: string | undefined;
+		sub?: string | null | undefined;
 		name: string;
 		email_verified: boolean;
 		picture: string;
@@ -774,12 +828,25 @@ export async function getUserInfo(
 			Authorization: `Bearer ${tokens.accessToken}`,
 		},
 	});
+	const profile = userInfo.data;
+	if (!profile) {
+		return null;
+	}
+	const { id: profileId, ...profileFields } = profile;
+	// Non-empty `id` wins over `sub` to keep stored account ids stable. OIDC
+	// UserInfo responses must include `sub`; generic OAuth profiles may omit it
+	// and let `mapProfileToUser` derive the account id from another field.
+	const subjectId = isNonEmptyOAuthId(profileId)
+		? profileId
+		: isNonEmptyOAuthId(profile.sub)
+			? profile.sub
+			: undefined;
 	return {
-		id: userInfo.data?.sub ?? "",
-		emailVerified: userInfo.data?.email_verified ?? false,
-		email: userInfo.data?.email,
-		image: userInfo.data?.picture,
-		name: userInfo.data?.name,
-		...userInfo.data,
+		...profileFields,
+		...(subjectId !== undefined ? { id: subjectId } : {}),
+		email: profile?.email,
+		emailVerified: profile?.email_verified ?? false,
+		image: profile?.picture,
+		name: profile?.name,
 	};
 }

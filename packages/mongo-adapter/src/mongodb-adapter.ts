@@ -638,6 +638,27 @@ export const mongodbAdapter = (
 					});
 					return ((doc as any)?.value as any) ?? null;
 				},
+				async incrementOne({ model, where, increment, set }) {
+					const clause = convertWhereClause({ where, model });
+					// Only include operators that carry fields. An empty `$inc: {}`
+					// errors on MongoDB server < 5.0, and a set-only guarded
+					// transition passes an empty `increment`.
+					const update: { $inc?: Record<string, number>; $set?: any } = {};
+					if (Object.keys(increment).length > 0) {
+						update.$inc = increment;
+					}
+					if (set && Object.keys(set).length > 0) {
+						update.$set = set;
+					}
+					const res = await db
+						.collection(model)
+						.findOneAndUpdate(clause, update, {
+							session,
+							returnDocument: "after",
+							includeResultMetadata: true,
+						});
+					return ((res as any)?.value as any) ?? null;
+				},
 			};
 		};
 

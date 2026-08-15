@@ -54,6 +54,19 @@ npx auth@latest init
 * `--database` - The database you want to use. Currently, the only supported database is `SQLite`.
 * `--package-manager` - The package manager you want to use. Currently, the only supported package managers are `npm`, `pnpm`, `yarn`, `bun` (defaults to the manager you used to initialize the CLI).
 
+## Upgrade
+
+The `upgrade` command updates older `better-auth` and official `@better-auth/*` dependencies to the version of the CLI being run. Dependencies at the same or a newer version are left unchanged.
+
+```package-install title="Terminal"
+npx auth@latest upgrade
+```
+
+### Options
+
+* `--cwd` - The project directory containing the `package.json` to update. Defaults to the current directory.
+* `--yes` - Skip the confirmation prompt and install the updates directly.
+
 ## Info
 
 The `info` command provides diagnostic information about your Better Auth setup and environment. Useful for debugging and sharing when seeking support.
@@ -104,6 +117,6 @@ npx auth@latest secret
 
 **Error: Cannot find module X**
 
-If you see this error, it means the CLI can't resolve imported modules in your Better Auth config file. We are working on a fix for many of these issues, but in the meantime, you can try the following:
+The CLI resolves most imports for you: `tsconfig.json` path aliases (including SvelteKit's `$lib`) and stubbed framework virtual modules (`$env/*`, `$app/*`, `cloudflare:workers`, Vite assets like `?raw`). For SvelteKit, run `svelte-kit sync` first so `.svelte-kit/tsconfig.json` exists.
 
-* Remove any import aliases in your config file and use relative paths instead. After running the CLI, you can revert to using aliases.
+A few module types can't load outside their bundler (e.g. `.svelte` components or `import.meta.glob`). Keep those out of your config file's import graph.

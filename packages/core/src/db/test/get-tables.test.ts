@@ -113,4 +113,83 @@ describe("getAuthTables", () => {
 
 		expect(tables.verification).toBeDefined();
 	});
+
+	it("should propagate disableMigration from a plugin schema onto the table", () => {
+		const tables = getAuthTables({
+			plugins: [
+				{
+					id: "test",
+					schema: {
+						skipped: {
+							fields: { name: { type: "string" } },
+							disableMigration: true,
+						},
+						kept: {
+							fields: { name: { type: "string" } },
+						},
+					},
+				},
+			],
+		});
+
+		expect(tables.skipped!.disableMigrations).toBe(true);
+		expect(tables.kept!.disableMigrations).toBeUndefined();
+	});
+
+	it("should keep disableMigration when plugins accumulate the same table key", () => {
+		const tables = getAuthTables({
+			plugins: [
+				{
+					id: "a",
+					schema: {
+						shared: {
+							fields: { a: { type: "string" } },
+							disableMigration: true,
+						},
+					},
+				},
+				{
+					id: "b",
+					schema: {
+						shared: {
+							fields: { b: { type: "string" } },
+						},
+					},
+				},
+			],
+		});
+
+		expect(tables.shared!.disableMigrations).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8111
+	 */
+	describe("user.modelName collision with account schema key", () => {
+		it("should point session.userId at the user table when user.modelName='account' and account.modelName='identity'", () => {
+			const tables = getAuthTables({
+				user: { modelName: "account" },
+				account: { modelName: "identity" },
+			});
+
+			const sessionUserIdRef = tables.session!.fields.userId!.references;
+			expect(sessionUserIdRef).toBeDefined();
+			expect(tables[sessionUserIdRef!.model]).toBeDefined();
+			expect(tables[sessionUserIdRef!.model]!.modelName).toBe("account");
+			expect(tables[sessionUserIdRef!.model]!.fields.email).toBeDefined();
+		});
+
+		it("should point account.userId at the user table when user.modelName='account' and account.modelName='identity'", () => {
+			const tables = getAuthTables({
+				user: { modelName: "account" },
+				account: { modelName: "identity" },
+			});
+
+			const accountUserIdRef = tables.account!.fields.userId!.references;
+			expect(accountUserIdRef).toBeDefined();
+			expect(tables[accountUserIdRef!.model]).toBeDefined();
+			expect(tables[accountUserIdRef!.model]!.modelName).toBe("account");
+			expect(tables[accountUserIdRef!.model]!.fields.email).toBeDefined();
+		});
+	});
 });

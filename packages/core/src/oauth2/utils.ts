@@ -29,6 +29,25 @@ export function getOAuth2Tokens(data: Record<string, any>): OAuth2Tokens {
 }
 
 /**
+ * Fill in `accessTokenExpiresAt` from the provider's configured
+ * `accessTokenExpiresIn` when the token response omitted `expires_in`. Without a
+ * known expiry, `getAccessToken` cannot tell the token is expired and never
+ * refreshes it. No-op when the provider already supplied an expiry or no
+ * fallback is configured.
+ */
+export function applyDefaultAccessTokenExpiry(
+	tokens: OAuth2Tokens,
+	accessTokenExpiresIn: number | undefined,
+): OAuth2Tokens {
+	if (!tokens.accessTokenExpiresAt && accessTokenExpiresIn) {
+		tokens.accessTokenExpiresAt = new Date(
+			Date.now() + accessTokenExpiresIn * 1000,
+		);
+	}
+	return tokens;
+}
+
+/**
  * Return the provider's primary Client ID: the single string, or the entry at
  * array index 0 for the cross-platform form used by ID token audience
  * verification. Index 0 is the designated primary and pairs with

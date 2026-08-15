@@ -5,6 +5,8 @@ unban
 siwe
 scim
 aaguid
+aaguids
+Nord
 unionid
 appleid
 ciam
