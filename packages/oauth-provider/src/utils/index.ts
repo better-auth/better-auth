@@ -11,7 +11,7 @@ import {
 import type { jwt } from "better-auth/plugins";
 import { APIError } from "better-call";
 import type { oauthProvider } from "../oauth";
-import { canonicalizeOAuthQueryParams } from "../signed-query";
+import { canonicalizeOAuthQueryParams, toBase64Url } from "../signed-query";
 import type {
 	GrantType,
 	OAuthOptions,
@@ -157,10 +157,12 @@ export async function verifyOAuthQueryParams(
 		canonicalizeOAuthQueryParams(queryParams).toString(),
 		secret,
 	);
+	// Compare in base64url so signatures issued before this alphabet change keep
+	// verifying, and so a `sig` that went through a url decode still matches.
 	return (
 		sigs.length === 1 &&
 		!!sig &&
-		constantTimeEqual(sig, verifySig) &&
+		constantTimeEqual(toBase64Url(sig), toBase64Url(verifySig)) &&
 		new Date(exp * 1000) >= new Date()
 	);
 }
