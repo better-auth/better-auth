@@ -41,6 +41,7 @@ export async function getTestInstance<
 				clientOptions?: C;
 				port?: number;
 				disableTestUser?: boolean;
+				disableBearer?: boolean;
 				testUser?: Partial<User>;
 				testWith?: "sqlite" | "postgres" | "mongodb" | "mysql";
 		  }
@@ -151,7 +152,10 @@ export async function getTestInstance<
 		baseURL: "http://localhost:" + (config?.port || 3000),
 		...opts,
 		...options,
-		plugins: [bearer(), ...(options?.plugins || [])],
+		plugins: [
+			...(config?.disableBearer ? [] : [bearer()]),
+			...(options?.plugins || []),
+		],
 	} as unknown as O);
 
 	const testUser = {

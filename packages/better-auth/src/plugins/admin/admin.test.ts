@@ -850,6 +850,52 @@ describe("Admin plugin", async () => {
 		expect(sessions.data?.sessions).toHaveLength(0);
 	});
 
+	it("should allow cookie-authenticated impersonation with an invalid bearer header", async () => {
+		const {
+			client: cookieOnlyClient,
+			signInWithTestUser: signInCookieOnlyTestUser,
+		} = await getTestInstance(
+			{
+				plugins: [admin({ defaultRole: "admin" })],
+			},
+			{
+				clientOptions: {
+					plugins: [adminClient()],
+				},
+				disableBearer: true,
+				testUser: {
+					name: "Cookie Admin",
+					email: "cookie-admin@mail.com",
+				},
+			},
+		);
+		const { headers: cookieHeaders } = await signInCookieOnlyTestUser();
+		const target = await cookieOnlyClient.admin.createUser(
+			{
+				name: "Invalid Bearer Header Target",
+				email: "invalid-bearer-header-target@mail.com",
+				password: "password",
+				role: "user",
+			},
+			{
+				headers: cookieHeaders,
+			},
+		);
+		const headers = new Headers(cookieHeaders);
+		headers.set("authorization", "Bearer invalid.token");
+
+		const res = await cookieOnlyClient.admin.impersonateUser(
+			{
+				userId: target.data?.user.id || "",
+			},
+			{
+				headers,
+			},
+		);
+		expect(res.data?.session).toBeDefined();
+		expect(res.data?.user?.id).toBe(target.data?.user.id);
+	});
+
 	it("should allow admins to impersonate user", async () => {
 		const userToImpersonate = await client.signUp.email(data);
 		const session = await client.getSession({

@@ -16,6 +16,7 @@ import {
 import { parseSessionOutput, parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
 import type { AccessControl, ArrayElement } from "../access";
+import { getBearerAuthenticated } from "../bearer/state";
 import type { defaultStatements } from "./access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { hasPermission } from "./has-permission";
@@ -1269,10 +1270,7 @@ export const impersonateUser = (opts: AdminOptions) =>
 				}
 			}
 
-			const authorizationHeader =
-				ctx.request?.headers.get("authorization") ||
-				ctx.headers?.get("authorization");
-			if (authorizationHeader?.trim().toLowerCase().startsWith("bearer ")) {
+			if (await getBearerAuthenticated()) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ADMIN_ERROR_CODES.YOU_CANNOT_IMPERSONATE_WITH_BEARER,
