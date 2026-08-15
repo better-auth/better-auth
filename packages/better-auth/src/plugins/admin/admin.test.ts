@@ -682,6 +682,9 @@ describe("Admin plugin", async () => {
 		expect(res.data?.user).toBeDefined();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10820
+	 */
 	it("should clear the expired expiration when banning again without a duration", async () => {
 		const created = await client.admin.createUser(
 			{
