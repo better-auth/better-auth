@@ -1146,7 +1146,7 @@ export const banUser = (opts: AdminOptions) =>
 						? getDate(ctx.body.banExpiresIn, "sec")
 						: opts?.defaultBanExpiresIn
 							? getDate(opts.defaultBanExpiresIn, "sec")
-							: undefined,
+							: null,
 					updatedAt: new Date(),
 				},
 			);
