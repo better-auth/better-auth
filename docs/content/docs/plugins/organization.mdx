@@ -819,10 +819,11 @@ const auth = betterAuth({
     organization({
       disableOrganizationDeletion: true, //to disable it altogether
       organizationHooks: {
-        beforeDeleteOrganization: async (data, request) => {
+        beforeDeleteOrganization: async (data, ctx) => {
           // a callback to run before deleting org
+          // `ctx` is the endpoint context (e.g. `ctx?.request`)
         },
-        afterDeleteOrganization: async (data, request) => {
+        afterDeleteOrganization: async (data, ctx) => {
           // a callback to run after deleting org
         },
       },

@@ -8,6 +8,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import { defu } from "defu";
 import * as z from "zod";
 import { originCheck } from "../../api";
@@ -108,6 +109,21 @@ type PassthroughPayload = {
 	timestamp: number;
 };
 
+const consumeOAuthProxyState = async (
+	ctx: GenericEndpointContext,
+	state: string,
+) => {
+	try {
+		await parseGenericState(ctx, state, {
+			skipStateCookieCheck: true,
+		});
+		return true;
+	} catch (e) {
+		ctx.context.logger.warn("OAuth proxy state missing or invalid", e);
+		return false;
+	}
+};
+
 const oauthProxyQuerySchema = z.object({
 	callbackURL: z.string().meta({
 		description: "The URL to redirect to after the proxy",
@@ -120,6 +136,7 @@ const oauthProxyQuerySchema = z.object({
 const oauthCallbackQuerySchema = z.object({
 	code: z.string().optional(),
 	error: z.string().optional(),
+	user: z.string().optional(),
 });
 
 export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
@@ -219,6 +236,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						typeof payload.timestamp !== "number" ||
 						!payload.userInfo ||
 						!payload.account ||
+						!payload.state ||
 						!payload.callbackURL
 					) {
 						ctx.context.logger.error("Failed to parse OAuth proxy payload");
@@ -237,13 +255,12 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						throw redirectOnError(ctx, errorURL, "payload_expired");
 					}
 
-					// Clean up OAuth state
-					try {
-						await parseGenericState(ctx, payload.state, {
-							skipStateCookieCheck: true,
-						});
-					} catch (e) {
-						ctx.context.logger.warn("Failed to clean up OAuth state", e);
+					const stateConsumed = await consumeOAuthProxyState(
+						ctx,
+						payload.state,
+					);
+					if (!stateConsumed) {
+						throw redirectOnError(ctx, errorURL, "state_mismatch");
 					}
 
 					let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
@@ -381,7 +398,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							);
 							return;
 						}
-						const { code, error } = query.data;
+						const { code, error, user: userData } = query.data;
 
 						// Decrypt state to get codeVerifier and callbackURL
 						let stateData: StateData;
@@ -455,8 +472,25 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							throw redirectOnError(ctx, errorURL, "invalid_code");
 						}
 
+						const parsedUserData = userData
+							? safeJSONParse<{
+									name?: {
+										firstName?: string;
+										lastName?: string;
+									};
+									email?: string;
+								}>(userData)
+							: null;
+
 						// Get user info from provider
-						const userInfoResult = await provider.getUserInfo(tokens);
+						const userInfoResult = await provider.getUserInfo({
+							...tokens,
+							/**
+							 * The user object from the provider
+							 * This is only available for some providers like Apple
+							 */
+							user: parsedUserData ?? undefined,
+						});
 						const userInfo = userInfoResult?.user;
 
 						if (!userInfo) {

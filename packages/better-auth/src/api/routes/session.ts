@@ -72,6 +72,9 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			session: Session<Option["session"], Option["plugins"]>;
 			user: User<Option["user"], Option["plugins"]>;
 		} | null> => {
+			ctx.setHeader("cache-control", "no-store");
+			ctx.setHeader("pragma", "no-cache");
+
 			const deferSessionRefresh =
 				ctx.context.options.session?.deferSessionRefresh;
 			const isPostRequest = ctx.method === "POST";
@@ -584,12 +587,16 @@ export const getSessionFromCtx = async <
 	}
 	if (session.headers) {
 		session.headers.forEach((value, key) => {
-			if (!ctx.context.responseHeaders) {
-				ctx.context.responseHeaders = new Headers({ [key]: value });
-			} else if (key.toLowerCase() === "set-cookie") {
-				ctx.context.responseHeaders.append(key, value);
+			const lowerKey = key.toLowerCase();
+			// /get-session response cache headers must not leak onto endpoints
+			// that resolve the session via getSessionFromCtx.
+			if (lowerKey === "cache-control" || lowerKey === "pragma") {
+				return;
+			}
+			if (lowerKey === "set-cookie") {
+				ctx.responseHeaders.append(key, value);
 			} else {
-				ctx.context.responseHeaders.set(key, value);
+				ctx.responseHeaders.set(key, value);
 			}
 		});
 	}
@@ -598,6 +605,27 @@ export const getSessionFromCtx = async <
 		session: S & Session;
 		user: U & User;
 	} | null;
+};
+
+/**
+ * Reads the session from the source that can authorize sensitive work.
+ *
+ * Stateful deployments must re-read the server-side session store because an
+ * earlier hook may have populated `ctx.context.session` from cookie cache.
+ * Stateless deployments keep the signed cookie as the session record.
+ */
+export const getAuthoritativeSessionFromCtx = async <
+	U extends Record<string, any> = Record<string, any>,
+	S extends Record<string, any> = Record<string, any>,
+>(
+	ctx: GenericEndpointContext,
+) => {
+	if (!isStateful(ctx)) {
+		return getSessionFromCtx<U, S>(ctx);
+	}
+
+	ctx.context.session = null;
+	return getSessionFromCtx<U, S>(ctx, { disableCookieCache: true });
 };
 
 /**
@@ -617,12 +645,11 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 });
 
 /**
- * This middleware forces the endpoint to require a valid session and ignores cookie cache.
+ * This middleware forces the endpoint to require a valid authoritative session.
  * This should be used for sensitive operations like password changes, account deletion, etc.
- * to ensure that revoked sessions cannot be used even if they're still cached in cookies.
  */
 export const sensitiveSessionMiddleware = createAuthMiddleware(async (ctx) => {
-	const session = await getSessionFromCtx(ctx, { disableCookieCache: true });
+	const session = await getAuthoritativeSessionFromCtx(ctx);
 	if (!session?.session) {
 		throw APIError.from("UNAUTHORIZED", {
 			message: "Unauthorized",

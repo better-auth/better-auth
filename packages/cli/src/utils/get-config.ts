@@ -300,13 +300,85 @@ const isDefaultExport = (
 		"options" in object
 	);
 };
+
+/** Strips a source extension so paths can be compared regardless of `.ts`/`.js`/etc. */
+function withoutSourceExtension(filePath: string): string {
+	const ext = path.extname(filePath);
+	return SOURCE_EXTENSIONS_SET.has(ext)
+		? filePath.slice(0, -ext.length)
+		: filePath;
+}
+
+/**
+ * Detects the specific first-run failure where a config file imports the
+ * very file `auth generate --output <path>` is about to create (e.g. the
+ * Convex integration guide's `auth.ts` template does `import schema from
+ * "./schema"` before `schema.ts` has ever been generated).
+ *
+ * Deliberately narrow: only relative specifiers (`./`, `../`) are considered
+ * — a bare package name that happens to share a name with the output file
+ * must still fail normally — and the resolved specifier must point at
+ * exactly the resolved `outputPath`, so unrelated missing imports are never
+ * swallowed.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10136
+ */
+function resolvesMissingOutputModule(
+	error: unknown,
+	configFilePath: string,
+	/** Already resolved against the effective `cwd` — see `resolvedOutputPath` in `getConfig`. */
+	resolvedOutputPath: string,
+): boolean {
+	if (
+		!error ||
+		typeof error !== "object" ||
+		(error as { code?: unknown }).code !== "MODULE_NOT_FOUND"
+	) {
+		return false;
+	}
+	const message =
+		"message" in error && typeof error.message === "string"
+			? error.message
+			: "";
+	const match = message.match(/Cannot find module ['"](\.\.?\/[^'"]+)['"]/);
+	const specifier = match?.[1];
+	if (!specifier) return false;
+
+	const requireStack =
+		"requireStack" in error && Array.isArray(error.requireStack)
+			? (error.requireStack as unknown[])
+			: [];
+	// requireStack[0] is the file that directly required the missing
+	// specifier. Falling back to configFilePath only matters when jiti
+	// omits requireStack; if the failing import is transitive (config ->
+	// helper -> ./schema) this fallback resolves against the wrong
+	// directory, but the exact-match check below still guards against a
+	// false positive in that case.
+	const importedFrom =
+		typeof requireStack[0] === "string" ? requireStack[0] : configFilePath;
+
+	const resolvedImport = path.resolve(path.dirname(importedFrom), specifier);
+	return (
+		withoutSourceExtension(resolvedImport) ===
+		withoutSourceExtension(resolvedOutputPath)
+	);
+}
+
 export async function getConfig({
 	cwd,
 	configPath,
+	outputPath,
 	shouldThrowOnError = false,
 }: {
 	cwd: string;
 	configPath?: string;
+	/**
+	 * The path `auth generate --output` will write the generated schema to.
+	 * When provided, a config file that imports this not-yet-existing file
+	 * (first-run Convex-style circular import, see #10136) is recovered by
+	 * stubbing an empty placeholder before loading, instead of failing.
+	 */
+	outputPath?: string;
 	shouldThrowOnError?: boolean;
 }) {
 	try {
@@ -314,23 +386,63 @@ export async function getConfig({
 		if (configPath) {
 			let resolvedPath: string = path.join(cwd, configPath);
 			if (existsSync(configPath)) resolvedPath = configPath; // If the configPath is a file, use it as is, as it means the path wasn't relative.
-			const { config } = await loadConfig<
-				| {
-						auth: {
+			// Resolved against the same `cwd` generate.ts resolves `--output`
+			// against (`path.resolve(cwd, options.output)`), not process.cwd() —
+			// otherwise the placeholder existence-check and write below silently
+			// target the wrong directory whenever `cwd` differs from the
+			// process's actual working directory.
+			// @see https://github.com/better-auth/better-auth/pull/10302
+			const resolvedOutputPath = outputPath
+				? path.resolve(cwd, outputPath)
+				: undefined;
+			const loadOnce = () =>
+				loadConfig<
+					| {
+							auth: {
+								options: BetterAuthOptions;
+							};
+					  }
+					| {
 							options: BetterAuthOptions;
-						};
-				  }
-				| {
-						options: BetterAuthOptions;
-				  }
-			>({
-				configFile: resolvedPath,
-				dotenv: {
-					fileName: [".env", ".env.local"],
-				},
-				jitiOptions: jitiOptions(cwd),
-				cwd,
-			});
+					  }
+				>({
+					configFile: resolvedPath,
+					dotenv: {
+						fileName: [".env", ".env.local"],
+					},
+					jitiOptions: jitiOptions(cwd),
+					cwd,
+				});
+			let loaded: Awaited<ReturnType<typeof loadOnce>>;
+			try {
+				loaded = await loadOnce();
+			} catch (e) {
+				if (
+					resolvedOutputPath &&
+					!existsSync(resolvedOutputPath) &&
+					resolvesMissingOutputModule(e, resolvedPath, resolvedOutputPath)
+				) {
+					await fs.promises.mkdir(path.dirname(resolvedOutputPath), {
+						recursive: true,
+					});
+					await fs.promises.writeFile(resolvedOutputPath, "");
+					try {
+						loaded = await loadOnce();
+					} catch (retryError) {
+						// The retry failed for an unrelated reason — clean up the
+						// placeholder we just created so it isn't left behind. Safe to
+						// remove unconditionally: the `!existsSync` check above already
+						// proved this file didn't exist before we created it.
+						await fs.promises
+							.rm(resolvedOutputPath, { force: true })
+							.catch(() => {});
+						throw retryError;
+					}
+				} else {
+					throw e;
+				}
+			}
+			const { config } = loaded;
 			if (!("auth" in config) && !isDefaultExport(config)) {
 				if (shouldThrowOnError) {
 					throw new Error(

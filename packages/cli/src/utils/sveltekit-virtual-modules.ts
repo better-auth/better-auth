@@ -20,6 +20,11 @@
  * modules the real files depend on are not, which is why we stub `$app/*`
  * directly rather than resolving SvelteKit's on-disk files.
  *
+ * The one exception is `$app/env/{private,public}` (explicit environment
+ * variables): their exports are arbitrary names declared in the project's
+ * `src/env.ts`, so they cannot be enumerated. They are stubbed with a Proxy
+ * default export instead — see `createExplicitEnvModule`.
+ *
  * The authoritative export surfaces this mirrors:
  *
  * @see https://github.com/sveltejs/kit/tree/main/packages/kit/src/runtime/app
@@ -44,6 +49,20 @@ export function addSvelteKitVirtualModules(aliases: Record<string, string>) {
 	aliases["$env/static/public"] = createStubModule(
 		createStaticEnvModule(filterPublicEnv("PUBLIC_", "")),
 	);
+
+	// `$app/env/{private,public}` are the explicit-environment-variables form
+	// (SvelteKit 2.63+, opt-in via `experimental.explicitEnvironmentVariables`).
+	// Unlike `$env/*`, their exports are *arbitrary* names declared in the
+	// project's `src/env.ts`, and the public/private split comes from each var's
+	// `public: true` config flag rather than a prefix. Since the CLI does not
+	// parse `src/env.ts`, the names cannot be enumerated; a Proxy default export
+	// resolves any imported name to its `process.env` value instead. Both
+	// specifiers share one body: the keys are disjoint by config, so exposing
+	// the whole env to each is harmless and the values do not affect schema
+	// generation (same rationale as the inert `$app/*` stubs below).
+	const explicitEnvStub = createStubModule(createExplicitEnvModule());
+	aliases["$app/env/private"] = explicitEnvStub;
+	aliases["$app/env/public"] = explicitEnvStub;
 
 	for (const [id, body] of Object.entries(appModuleStubs)) {
 		aliases[id] = createStubModule(body);
@@ -168,6 +187,32 @@ export const env = new Proxy(
     ownKeys: () => Object.keys(process.env).filter(keep),
     getOwnPropertyDescriptor: (_, key) =>
       keep(key) && key in process.env
+        ? { value: process.env[key], enumerable: true, configurable: true }
+        : undefined,
+  },
+);`;
+}
+
+/**
+ * Body for the explicit `$app/env/{private,public}` modules. Their exports are
+ * named after the vars declared in `src/env.ts`, which the CLI cannot know, so
+ * unlike the other stubs this cannot enumerate them. A Proxy exported as the
+ * *default* sidesteps that: jiti compiles `import { FOO } from "..."` to a
+ * member access on the (interop) default, which the Proxy answers from
+ * process.env. No prefix filtering — the public/private split is a `src/env.ts`
+ * config concern that does not affect schema generation.
+ */
+function createExplicitEnvModule() {
+	return `
+export default new Proxy(
+  {},
+  {
+    get: (_, key) =>
+      typeof key === "string" ? process.env[key] : undefined,
+    has: (_, key) => typeof key === "string" && key in process.env,
+    ownKeys: () => Object.keys(process.env),
+    getOwnPropertyDescriptor: (_, key) =>
+      typeof key === "string" && key in process.env
         ? { value: process.env[key], enumerable: true, configurable: true }
         : undefined,
   },

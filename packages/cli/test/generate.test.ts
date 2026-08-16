@@ -427,6 +427,78 @@ describe("generate", async () => {
 		expect(schema.code).not.toMatch(/explicitOptional:.*\.notNull\(\)/);
 	});
 
+	it("should escape string default values so the generated schema stays valid TypeScript", async () => {
+		const pluginWithQuotedDefault = (): BetterAuthPlugin => ({
+			id: "quoted-default-test",
+			schema: {
+				testTable: {
+					fields: {
+						greeting: {
+							type: "string",
+							defaultValue: 'say "hi"\\done',
+						},
+					},
+				},
+			},
+		});
+
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "pg",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				plugins: [pluginWithQuotedDefault()],
+			} as BetterAuthOptions,
+		});
+
+		// Quotes and backslashes must be escaped so the default is a valid
+		// literal. The raw interpolation would emit `.default("say "hi"\done")`
+		// and break the generated schema file.
+		expect(schema.code).toContain(String.raw`.default('say "hi"\\done')`);
+	});
+
+	it("should not emit duplicate unique indexes for unique indexed fields", async () => {
+		const pluginWithUniqueIndexedField = (): BetterAuthPlugin => ({
+			id: "unique-index-test",
+			schema: {
+				testTable: {
+					fields: {
+						slug: {
+							type: "string",
+							index: true,
+							unique: true,
+						},
+					},
+				},
+			},
+		});
+
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "pg",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				plugins: [pluginWithUniqueIndexedField()],
+			} as BetterAuthOptions,
+		});
+
+		expect(schema.code).toContain('slug: text("slug").notNull().unique()');
+		expect(schema.code).not.toContain("uniqueIndex");
+		expect(schema.code).not.toContain("slug_uidx");
+	});
+
 	it("should treat fields with omitted required as non-optional in prisma schema", async () => {
 		const originalCwd = process.cwd();
 		const tmpDir = fs.mkdtempSync(
@@ -543,6 +615,171 @@ describe("generate", async () => {
 		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-duplicate-relations.txt",
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8849
+	 */
+	it("should disambiguate duplicate relations when usePlural is enabled", async () => {
+		const database = drizzleAdapter(
+			{},
+			{
+				provider: "sqlite",
+				schema: {},
+				usePlural: true,
+			},
+		);
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: database({} as BetterAuthOptions),
+			options: {
+				database,
+				plugins: [testPlugin()],
+			},
+		});
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/auth-schema-drizzle-use-plural-duplicate-relations.txt",
+		);
+	});
+
+	it("should emit one() for unique reverse relations", async () => {
+		const uniqueProfilePlugin = (): BetterAuthPlugin => ({
+			id: "unique-profile",
+			schema: {
+				profile: {
+					fields: {
+						userId: {
+							type: "string",
+							required: true,
+							unique: true,
+							references: {
+								model: "user",
+								field: "id",
+								onDelete: "cascade",
+							},
+						},
+					},
+				},
+			},
+		});
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: drizzleAdapter(
+				{},
+				{
+					provider: "sqlite",
+					schema: {},
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: drizzleAdapter(
+					{},
+					{
+						provider: "sqlite",
+						schema: {},
+					},
+				),
+				plugins: [uniqueProfilePlugin()],
+			},
+		});
+		expect(schema.code).toContain("profile: one(profile)");
+		expect(schema.code).not.toMatch(/profile:\s*many\(profile\)/);
+	});
+
+	it("should avoid colliding one-side relation keys after Id stripping", async () => {
+		const collidingFkPlugin = (
+			fieldOrder: "owner-first" | "ownerId-first",
+		): BetterAuthPlugin => ({
+			id: "colliding-fk",
+			schema: {
+				project: {
+					fields:
+						fieldOrder === "owner-first"
+							? {
+									owner: {
+										type: "string",
+										required: false,
+										references: {
+											model: "user",
+											field: "id",
+											onDelete: "set null",
+										},
+									},
+									ownerId: {
+										type: "string",
+										required: false,
+										references: {
+											model: "user",
+											field: "id",
+											onDelete: "set null",
+										},
+									},
+								}
+							: {
+									ownerId: {
+										type: "string",
+										required: false,
+										references: {
+											model: "user",
+											field: "id",
+											onDelete: "set null",
+										},
+									},
+									owner: {
+										type: "string",
+										required: false,
+										references: {
+											model: "user",
+											field: "id",
+											onDelete: "set null",
+										},
+									},
+								},
+				},
+			},
+		});
+
+		for (const fieldOrder of ["owner-first", "ownerId-first"] as const) {
+			const schema = await generateDrizzleSchema({
+				file: "test.drizzle",
+				adapter: drizzleAdapter(
+					{},
+					{
+						provider: "sqlite",
+						schema: {},
+					},
+				)({} as BetterAuthOptions),
+				options: {
+					database: drizzleAdapter(
+						{},
+						{
+							provider: "sqlite",
+							schema: {},
+						},
+					),
+					plugins: [collidingFkPlugin(fieldOrder)],
+				},
+			});
+			expect(schema.code).toBeTruthy();
+			expect(schema.code).toContain('relationName: "project_owner"');
+			expect(schema.code).toContain('relationName: "project_ownerId"');
+			const projectRelations = schema.code!.match(
+				/export const projectRelations = relations\([\s\S]*?\n\}\)\);/,
+			)?.[0];
+			expect(projectRelations).toBeTruthy();
+			const oneKeys = [
+				...projectRelations!.matchAll(/^\s+(\w+):\s+one\(user,/gm),
+			].map((match) => match[1]);
+			expect(oneKeys).toHaveLength(2);
+			expect(new Set(oneKeys).size).toBe(2);
+			if (fieldOrder === "owner-first") {
+				expect(oneKeys).toEqual(expect.arrayContaining(["owner", "ownerId"]));
+			} else {
+				// ownerId is stripped to `owner` first, so the later `owner`
+				// field needs a unique fallback key.
+				expect(oneKeys).toEqual(expect.arrayContaining(["owner", "owner_2"]));
+			}
+		}
 	});
 
 	// Plugin that tests multiple relations to different models (should be combined)
@@ -1683,5 +1920,59 @@ describe("--dialect flag support", () => {
 		expect(schema.code).toBeDefined();
 		expect(schema.code).toContain('provider = "mysql"');
 		expect(schema.fileName).toBe("test.prisma");
+	});
+
+	const pluginWithDisabledMigration = (): BetterAuthPlugin => ({
+		id: "disabled-migration-test",
+		schema: {
+			emittedTable: {
+				fields: {
+					name: { type: "string", required: true },
+				},
+			},
+			skippedTable: {
+				fields: {
+					name: { type: "string", required: true },
+				},
+				disableMigration: true,
+			},
+		},
+	});
+
+	it("should not emit drizzle tables with disableMigration", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "pg",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				plugins: [pluginWithDisabledMigration()],
+			} as BetterAuthOptions,
+		});
+
+		expect(schema.code).toContain("emittedTable");
+		expect(schema.code).not.toContain("skippedTable");
+	});
+
+	it("should not emit prisma models with disableMigration", async () => {
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: prismaAdapter(
+				{},
+				{ provider: "postgresql" },
+			)({} as BetterAuthOptions),
+			options: {
+				database: prismaAdapter({}, { provider: "postgresql" }),
+				plugins: [pluginWithDisabledMigration()],
+			},
+		});
+
+		expect(schema.code).toContain("EmittedTable");
+		expect(schema.code).not.toContain("SkippedTable");
 	});
 });

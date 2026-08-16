@@ -10,6 +10,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import type { GenericEndpointContext } from "../types";
 export interface AppleProfile {
 	/**
 	 * The subject registered claim identifies the principal that’s the subject
@@ -100,7 +101,7 @@ export const apple = (options: AppleOptions) => {
 	return {
 		id: "apple",
 		name: "Apple",
-		async createAuthorizationURL({ state, scopes, redirectURI }) {
+		async createAuthorizationURL({ state, scopes, redirectURI, codeVerifier }) {
 			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
 				logger.error(
 					"Client ID and client secret are required for Apple. Make sure to provide them in the options.",
@@ -117,6 +118,7 @@ export const apple = (options: AppleOptions) => {
 				scopes: _scope,
 				state,
 				redirectURI,
+				codeVerifier,
 				responseMode: "form_post",
 				responseType: "code id_token",
 			});
@@ -131,12 +133,16 @@ export const apple = (options: AppleOptions) => {
 				tokenEndpoint,
 			});
 		},
-		async verifyIdToken(token, nonce) {
+		async verifyIdToken(
+			token: string,
+			nonce?: string,
+			ctx?: GenericEndpointContext,
+		) {
 			if (options.disableIdTokenSignIn) {
 				return false;
 			}
 			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
+				return options.verifyIdToken(token, nonce, ctx);
 			}
 			try {
 				const decodedHeader = decodeProtectedHeader(token);

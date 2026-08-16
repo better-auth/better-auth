@@ -4,7 +4,7 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
 import type { OrganizationOptions } from "better-auth/plugins";
-import { bearer, organization } from "better-auth/plugins";
+import { bearer, genericOAuth, organization } from "better-auth/plugins";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
 import { scimClient } from "./client";
@@ -229,7 +229,7 @@ describe("SCIM provider management", () => {
 				await expect(generateSCIMToken(reserved)).rejects.toThrowError(
 					expect.objectContaining({
 						message:
-							"Provider id collides with a built-in account provider and cannot be used for SCIM",
+							"Provider id collides with another account provider and cannot be used for SCIM",
 					}),
 				);
 			}
@@ -302,10 +302,202 @@ describe("SCIM provider management", () => {
 				).rejects.toThrowError(
 					expect.objectContaining({
 						message:
-							"Provider id collides with a built-in account provider and cannot be used for SCIM",
+							"Provider id collides with another account provider and cannot be used for SCIM",
 					}),
 				);
 			}
+		});
+
+		it("rejects providerId values that collide with configured generic OAuth providers", async () => {
+			const data = {
+				user: [],
+				session: [],
+				verification: [],
+				account: [],
+				ssoProvider: [],
+				scimProvider: [],
+				organization: [],
+				member: [],
+			};
+			const memory = memoryAdapter(data);
+			const auth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: { enabled: true },
+				plugins: [
+					scim(),
+					genericOAuth({
+						config: [
+							{
+								providerId: "generic-provider",
+								clientId: "generic-client-id",
+								clientSecret: "generic-client-secret",
+								authorizationUrl: "https://idp.example.com/auth",
+								tokenUrl: "https://idp.example.com/token",
+								userInfoUrl: "https://idp.example.com/userinfo",
+							},
+						],
+					}),
+				],
+			});
+			const authClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [bearer(), scimClient()],
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						auth.handler(new Request(url, init)),
+				},
+			});
+			const headers = new Headers();
+			await authClient.signUp.email({
+				email: "generic@email.com",
+				password: "password",
+				name: "Generic User",
+			});
+			await authClient.signIn.email(
+				{ email: "generic@email.com", password: "password" },
+				{ throw: true, onSuccess: setCookieToHeader(headers) },
+			);
+
+			await expect(
+				auth.api.generateSCIMToken({
+					body: { providerId: "generic-provider" },
+					headers,
+				}),
+			).rejects.toThrowError(
+				expect.objectContaining({
+					message:
+						"Provider id collides with another account provider and cannot be used for SCIM",
+				}),
+			);
+		});
+
+		it("rejects providerId values that collide with SSO providers", async () => {
+			const { auth, getAuthCookieHeaders } = createTestInstance();
+			const headers = await getAuthCookieHeaders();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "sso-provider",
+					issuer: "https://idp.example.com",
+					domain: "example.com",
+					samlConfig: {
+						entryPoint: "https://idp.example.com/sso",
+						cert: "test-cert",
+						callbackUrl: "http://localhost:3000/api/sso/callback",
+						spMetadata: {},
+					},
+				},
+				headers,
+			});
+
+			await expect(
+				auth.api.generateSCIMToken({
+					body: { providerId: "sso-provider" },
+					headers,
+				}),
+			).rejects.toThrowError(
+				expect.objectContaining({
+					message:
+						"Provider id collides with another account provider and cannot be used for SCIM",
+				}),
+			);
+		});
+
+		it("prevents SSO provider registration with an existing SCIM providerId", async () => {
+			const { auth, getAuthCookieHeaders } = createTestInstance();
+			const headers = await getAuthCookieHeaders();
+
+			await auth.api.generateSCIMToken({
+				body: { providerId: "scim-provider" },
+				headers,
+			});
+
+			const response = await auth.api.registerSSOProvider({
+				body: {
+					providerId: "scim-provider",
+					issuer: "https://idp.example.com",
+					domain: "example.com",
+					samlConfig: {
+						entryPoint: "https://idp.example.com/sso",
+						cert: "test-cert",
+						callbackUrl: "http://localhost:3000/api/sso/callback",
+						spMetadata: {},
+					},
+				},
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(422);
+		});
+
+		it("rejects providerId values that collide with default SSO providers", async () => {
+			const data = {
+				user: [],
+				session: [],
+				verification: [],
+				account: [],
+				ssoProvider: [],
+				scimProvider: [],
+				organization: [],
+				member: [],
+			};
+			const memory = memoryAdapter(data);
+			const auth = betterAuth({
+				database: memory,
+				baseURL: "http://localhost:3000",
+				emailAndPassword: { enabled: true },
+				plugins: [
+					sso({
+						defaultSSO: [
+							{
+								domain: "example.com",
+								providerId: "default-sso-provider",
+								samlConfig: {
+									issuer: "https://idp.example.com",
+									entryPoint: "https://idp.example.com/sso",
+									cert: "test-cert",
+									callbackUrl: "http://localhost:3000/api/sso/callback",
+									spMetadata: {},
+								},
+							},
+						],
+					}),
+					scim(),
+					organization(),
+				],
+			});
+			const authClient = createAuthClient({
+				baseURL: "http://localhost:3000",
+				plugins: [bearer(), scimClient()],
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						auth.handler(new Request(url, init)),
+				},
+			});
+			const headers = new Headers();
+			await authClient.signUp.email({
+				email: "default-sso@email.com",
+				password: "password",
+				name: "Default SSO User",
+			});
+			await authClient.signIn.email(
+				{ email: "default-sso@email.com", password: "password" },
+				{ throw: true, onSuccess: setCookieToHeader(headers) },
+			);
+
+			await expect(
+				auth.api.generateSCIMToken({
+					body: { providerId: "default-sso-provider" },
+					headers,
+				}),
+			).rejects.toThrowError(
+				expect.objectContaining({
+					message:
+						"Provider id collides with another account provider and cannot be used for SCIM",
+				}),
+			);
 		});
 
 		it("should generate a new scim token (client)", async () => {
@@ -481,6 +673,9 @@ describe("SCIM provider management", () => {
 			const [secret, ...rest] = Buffer.from(response.scimToken, "base64url")
 				.toString()
 				.split(":");
+			if (!secret) {
+				throw new Error("Expected SCIM token to include a secret");
+			}
 			// Tamper the secret while preserving its length, so verification cannot
 			// short-circuit on a length mismatch and must reject the value itself
 			// through the constant-time comparison.

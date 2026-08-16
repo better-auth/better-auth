@@ -434,8 +434,14 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		where?: Where[] | undefined;
 	}) => Promise<number>;
 	/**
-	 * ⚠︎ Update may not return the updated data
-	 * if multiple where clauses are provided
+	 * Update a single row matching the where clause.
+	 *
+	 * Returns the updated row, or `null` when no row matched. Empty `where`
+	 * clauses return `null`; use `updateMany` for intentional bulk updates.
+	 *
+	 * This is not the race-safe primitive for guarded state transitions. Use
+	 * `incrementOne` when the predicate is both selector and guard, and use
+	 * `consumeOne` for single-use destructive reads.
 	 */
 	update: <T>(data: {
 		model: string;

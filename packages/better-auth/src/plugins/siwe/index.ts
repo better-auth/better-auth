@@ -288,9 +288,23 @@ export const siwe = (options: SIWEPluginOptions) => {
 						if (!user) {
 							const domain =
 								options.emailDomainName ?? getOrigin(ctx.context.baseURL);
-							// Use checksummed address for email generation
-							const userEmail =
-								!isAnon && email ? email : `${walletAddress}@${domain}`;
+							const normalizedEmail = email?.toLowerCase();
+							// SIWE proves wallet control, not email ownership: bind the caller
+							// email only when unclaimed, else keep the wallet-derived address.
+							// Silent fallback (no distinct error) avoids an enumeration oracle.
+							// FIXME(siwe-contact-ownership): non-breaking floor; the durable fix
+							// drops the `email` body field and attaches a verified email via a
+							// separate authenticated link flow. Land on `next` after main->next sync.
+							let userEmail = `${walletAddress}@${domain}`;
+							if (!isAnon && normalizedEmail) {
+								const existingUser =
+									await ctx.context.internalAdapter.findUserByEmail(
+										normalizedEmail,
+									);
+								if (!existingUser) {
+									userEmail = normalizedEmail;
+								}
+							}
 							const { name, avatar } =
 								(await options.ensLookup?.({ walletAddress })) ?? {};
 

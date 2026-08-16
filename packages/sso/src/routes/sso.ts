@@ -61,7 +61,22 @@ import {
 	findSAMLProvider,
 } from "./helpers";
 import { hasOrgAdminRole } from "./providers";
-import { getSafeRedirectUrl, processSAMLResponse } from "./saml-pipeline";
+import {
+	buildSAMLRedirectUrl,
+	getSAMLRedirectCandidates,
+	getSafeRedirectUrl,
+	processSAMLResponse,
+} from "./saml-pipeline";
+import { samlRedirectUrlSchema } from "./schemas";
+
+const BUILT_IN_ACCOUNT_PROVIDER_IDS = [
+	"credential",
+	"email-otp",
+	"magic-link",
+	"phone-number",
+	"anonymous",
+	"siwe",
+] as const;
 
 /**
  * Builds the OIDC redirect URI. Uses the shared `redirectURI` option
@@ -291,6 +306,12 @@ const ssoProviderBodySchema = z.object({
 			callbackUrl: z.string({}).meta({
 				description: "The callback URL of the provider",
 			}),
+			idpInitiatedCallbackUrl: samlRedirectUrlSchema
+				.meta({
+					description:
+						"Fallback absolute URL or same-origin relative path for IdP-initiated SAML responses when RelayState does not contain a safe callback, including validation errors",
+				})
+				.optional(),
 			audience: z.string().optional(),
 			idpMetadata: z
 				.object({
@@ -659,16 +680,19 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				}
 			}
 
-			// SSO provider ids share the account-linking provider namespace with
-			// social/OAuth providers. Reject ids that collide with a configured
-			// social provider, a trusted provider, or a reserved built-in id so a
-			// user-registered SSO provider can't be confused with one of them.
+			// SSO provider ids currently share the account-linking provider namespace.
+			// Reject collisions so a user-registered SSO provider cannot be confused
+			// with another account-producing provider.
+			// TODO(next): replace providerId account-link ownership with immutable
+			// SSO provider instance ids, then remove this cross-plugin slug coupling.
 			// Trust for SSO providers is established separately via
 			// verified domain ownership, never by this shared namespace.
 			const reservedProviderIds = new Set<string>([
-				"credential",
+				...BUILT_IN_ACCOUNT_PROVIDER_IDS,
+				...Object.keys(ctx.context.options.socialProviders ?? {}),
 				...ctx.context.socialProviders.map((p) => p.id),
 				...ctx.context.trustedProviders,
+				...(options?.defaultSSO?.map((p) => p.providerId) ?? []),
 			]);
 			if (reservedProviderIds.has(body.providerId)) {
 				ctx.context.logger.warn(
@@ -678,6 +702,24 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					message:
 						"This providerId is reserved and cannot be used for an SSO provider",
 				});
+			}
+
+			if (ctx.context.hasPlugin("scim")) {
+				const existingSCIMProvider = await ctx.context.adapter.findOne<{
+					id: string;
+				}>({
+					model: "scimProvider",
+					where: [{ field: "providerId", value: body.providerId }],
+				});
+				if (existingSCIMProvider) {
+					ctx.context.logger.warn(
+						`SSO provider registration rejected for SCIM providerId: ${body.providerId}`,
+					);
+					throw new APIError("UNPROCESSABLE_ENTITY", {
+						message:
+							"This providerId is already used by a SCIM provider and cannot be used for an SSO provider",
+					});
+				}
 			}
 
 			const existingProvider = await ctx.context.adapter.findOne({
@@ -833,6 +875,8 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 								entryPoint: body.samlConfig.entryPoint,
 								cert: body.samlConfig.cert,
 								callbackUrl: body.samlConfig.callbackUrl,
+								idpInitiatedCallbackUrl:
+									body.samlConfig.idpInitiatedCallbackUrl,
 								audience: body.samlConfig.audience,
 								idpMetadata: body.samlConfig.idpMetadata,
 								spMetadata: body.samlConfig.spMetadata,
@@ -1099,7 +1143,8 @@ export const signInSSO = (options?: SSOOptions) => {
 							(defaultProvider) => defaultProvider.providerId === providerId,
 						)
 					: options.defaultSSO.find(
-							(defaultProvider) => defaultProvider.domain === domain,
+							(defaultProvider) =>
+								domain && domainMatches(domain, defaultProvider.domain),
 						);
 
 				if (matchingDefault) {
@@ -1915,7 +1960,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 				const relayState = ctx.query?.RelayState as string | undefined;
 				const safeRedirectUrl = getSafeRedirectUrl(
-					relayState,
+					[relayState],
 					currentCallbackPath,
 					appOrigin,
 					(url, settings) => ctx.context.isTrustedOrigin(url, settings),
@@ -1980,6 +2025,10 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			const { providerId } = ctx.params;
 			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`;
 			const appOrigin = new URL(ctx.context.baseURL).origin;
+			// TODO(next): preserve this ordered fallback and pipeline-resolved error
+			// redirect handoff when reconciling next's ACS handler. Signed RelayState
+			// is consumed during parsing and must not be parsed again or used as a URL.
+			let resolvedErrorRedirectUrl: string | undefined;
 
 			try {
 				const safeRedirectUrl = await processSAMLResponse(
@@ -1989,6 +2038,9 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						RelayState: ctx.body.RelayState,
 						providerId,
 						currentCallbackPath,
+						onErrorRedirectResolved: (url) => {
+							resolvedErrorRedirectUrl = url;
+						},
 					},
 					options,
 				);
@@ -2017,14 +2069,38 @@ export const acsEndpoint = (options?: SSOOptions) => {
 							: internalCode === "SAML_NO_ASSERTION"
 								? "no_assertion"
 								: internalCode.toLowerCase() || "saml_error";
-					const redirectUrl = getSafeRedirectUrl(
-						ctx.body.RelayState || undefined,
-						currentCallbackPath,
-						appOrigin,
-						(url, settings) => ctx.context.isTrustedOrigin(url, settings),
-					);
+					let redirectUrl = resolvedErrorRedirectUrl;
+					if (!redirectUrl) {
+						let parsedSamlConfig: SAMLConfig | undefined;
+						try {
+							const provider = await findSAMLProvider(
+								providerId,
+								options,
+								ctx.context.adapter,
+							);
+							parsedSamlConfig = provider?.samlConfig;
+						} catch (providerLookupError) {
+							ctx.context.logger.warn(
+								"Failed to resolve SAML provider for error redirect",
+								{ providerId, error: providerLookupError },
+							);
+						}
+						redirectUrl = getSafeRedirectUrl(
+							getSAMLRedirectCandidates(
+								ctx.body.RelayState,
+								parsedSamlConfig,
+								options?.saml,
+							),
+							currentCallbackPath,
+							appOrigin,
+							(url, settings) => ctx.context.isTrustedOrigin(url, settings),
+						);
+					}
 					throw ctx.redirect(
-						`${redirectUrl}${redirectUrl.includes("?") ? "&" : "?"}error=${encodeURIComponent(errorCode)}&error_description=${encodeURIComponent(error.message)}`,
+						buildSAMLRedirectUrl(redirectUrl, {
+							error: errorCode,
+							error_description: error.message,
+						}),
 					);
 				}
 				throw error;
@@ -2071,7 +2147,7 @@ export const sloEndpoint = (options?: SSOOptions) => {
 			const relayState = ctx.body?.RelayState || ctx.query?.RelayState;
 			const appOrigin = new URL(ctx.context.baseURL).origin;
 			const safeErrorURL = getSafeRedirectUrl(
-				relayState,
+				[relayState],
 				`${appOrigin}/sso/saml2/sp/slo/${providerId}`,
 				appOrigin,
 				(url, settings) => ctx.context.isTrustedOrigin(url, settings),
@@ -2179,7 +2255,7 @@ async function handleLogoutResponse(
 
 	const appOrigin = new URL(ctx.context.baseURL).origin;
 	const safeRedirectUrl = getSafeRedirectUrl(
-		relayState,
+		[relayState],
 		`${appOrigin}/sso/saml2/sp/slo/${providerId}`,
 		appOrigin,
 		(url, settings) => ctx.context.isTrustedOrigin(url, settings),

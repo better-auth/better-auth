@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Footer from "@/components/landing/footer";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
+import { SignatureMark } from "@/components/landing/signature-mark";
 import { createMetadata } from "@/lib/metadata";
 import { ChangelogContent } from "./changelog-content";
 
@@ -113,6 +114,9 @@ export default async function ChangelogPage() {
 			{/* Left panel — sticky */}
 			<div className="hidden lg:block relative w-full lg:w-[30%] lg:h-dvh shrink-0 border-b lg:border-b-0 lg:border-r border-foreground/[0.06] overflow-clip px-5 sm:px-6 lg:px-10 lg:sticky lg:top-0">
 				<HalftoneBackground />
+				<div className="absolute left-10 right-6 bottom-4 z-[3]">
+					<SignatureMark compact />
+				</div>
 				<div className="relative w-full pt-6 md:pt-10 pb-6 lg:pb-0 flex flex-col justify-center lg:h-full">
 					<div className="space-y-1">
 						<div className="flex items-center gap-1.5">
@@ -213,7 +217,9 @@ export default async function ChangelogPage() {
 
 				<ChangelogContent messages={messages ?? []} />
 
-				<Footer />
+				<div className="lg:hidden">
+					<Footer />
+				</div>
 			</div>
 		</div>
 	);

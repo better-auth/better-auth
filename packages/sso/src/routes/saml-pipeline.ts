@@ -8,10 +8,18 @@ import type { FlowResult } from "samlify/types/src/flow";
 
 import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
-import { validateSAMLAlgorithms, validateSingleAssertion } from "../saml";
+import {
+	getSAMLPostAssertionConsumerServiceUrls,
+	hasSAMLEncryptedAssertion,
+	SAML_HTTP_POST_BINDING,
+	validateSAMLAlgorithms,
+	validateSAMLResponseBinding,
+	validateSingleAssertion,
+} from "../saml";
 import type { SAMLConditions } from "../saml/timestamp";
 import { validateSAMLTimestamp } from "../saml/timestamp";
 import { parseRelayState } from "../saml-state";
+import { saml } from "../samlify";
 import type {
 	AuthnRequestRecord,
 	SAMLAssertionExtract,
@@ -21,6 +29,7 @@ import type {
 	SSOProvider,
 } from "../types";
 import {
+	isSafeSAMLRedirectPath,
 	parseProviderEmailVerified,
 	safeJsonParse,
 	validateEmailDomain,
@@ -29,58 +38,164 @@ import { createIdP, createSP, findSAMLProvider } from "./helpers";
 
 type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
 
-/**
- * Validates and returns a safe redirect URL.
- * - Prevents open redirect attacks by validating against trusted origins
- * - Prevents redirect loops by checking if URL points to callback route
- * - Falls back to appOrigin if URL is invalid or unsafe
- */
-export function getSafeRedirectUrl(
-	url: string | undefined,
-	callbackPath: string,
-	appOrigin: string,
-	isTrustedOrigin: (
-		url: string,
-		settings?: { allowRelativePaths: boolean },
-	) => boolean,
-): string {
-	if (!url) {
-		return appOrigin;
-	}
+type IsTrustedOrigin = (
+	url: string,
+	settings?: { allowRelativePaths: boolean },
+) => boolean;
 
-	if (url.startsWith("/") && !url.startsWith("//")) {
+function getSafeRedirectCandidate(
+	url: string | undefined,
+	callbackPathname: string,
+	appOrigin: string,
+	isTrustedOrigin: IsTrustedOrigin,
+): string | undefined {
+	if (!url) return;
+
+	if (url.startsWith("/")) {
+		if (!isSafeSAMLRedirectPath(url)) return;
 		try {
 			const absoluteUrl = new URL(url, appOrigin);
-			if (absoluteUrl.origin !== appOrigin) {
-				return appOrigin;
+			if (
+				absoluteUrl.origin !== appOrigin ||
+				absoluteUrl.pathname === callbackPathname
+			) {
+				return;
 			}
-			const callbackPathname = new URL(callbackPath).pathname;
-			if (absoluteUrl.pathname === callbackPathname) {
-				return appOrigin;
-			}
+			return url;
 		} catch {
-			return appOrigin;
+			return;
 		}
-		return url;
 	}
 
-	if (!isTrustedOrigin(url, { allowRelativePaths: false })) {
-		return appOrigin;
-	}
-
+	let absoluteUrl: URL;
 	try {
-		const callbackPathname = new URL(callbackPath).pathname;
-		const urlPathname = new URL(url).pathname;
-		if (urlPathname === callbackPathname) {
-			return appOrigin;
-		}
+		absoluteUrl = new URL(url);
 	} catch {
-		if (url === callbackPath || url.startsWith(`${callbackPath}?`)) {
-			return appOrigin;
-		}
+		return;
+	}
+
+	if (
+		absoluteUrl.origin !== appOrigin &&
+		!isTrustedOrigin(url, { allowRelativePaths: false })
+	) {
+		return;
+	}
+
+	// TODO(next): retain this origin-qualified loop check when reconciling
+	// next's redirect helper. A trusted frontend can share the ACS pathname
+	// without routing back to this handler.
+	if (
+		absoluteUrl.origin === appOrigin &&
+		absoluteUrl.pathname === callbackPathname
+	) {
+		return;
 	}
 
 	return url;
+}
+
+/**
+ * Returns the first safe redirect URL from an ordered list of candidates.
+ * - Prevents open redirect attacks by validating against trusted origins
+ * - Prevents redirect loops by checking if URL points to callback route
+ * - Tries the next candidate when a URL is invalid or unsafe
+ * - Falls back to appOrigin when no candidate is safe
+ */
+export function getSafeRedirectUrl(
+	candidates: readonly (string | undefined)[],
+	callbackPath: string,
+	appOrigin: string,
+	isTrustedOrigin: IsTrustedOrigin,
+): string {
+	const callbackPathname = new URL(callbackPath).pathname;
+	for (const candidate of candidates) {
+		const safeCandidate = getSafeRedirectCandidate(
+			candidate,
+			callbackPathname,
+			appOrigin,
+			isTrustedOrigin,
+		);
+		if (safeCandidate) return safeCandidate;
+	}
+
+	return appOrigin;
+}
+
+export function buildSAMLRedirectUrl(
+	url: string,
+	params: Record<string, string>,
+): string {
+	const searchParams = new URLSearchParams(params);
+	try {
+		const isRelativePath = url.startsWith("/") && !url.startsWith("//");
+		const parsedUrl = new URL(url, "http://better-auth.local");
+		for (const [key, value] of searchParams) {
+			parsedUrl.searchParams.set(key, value);
+		}
+		if (isRelativePath) {
+			return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`;
+		}
+		return parsedUrl.toString();
+	} catch {
+		const hashIndex = url.indexOf("#");
+		const urlWithoutFragment = hashIndex === -1 ? url : url.slice(0, hashIndex);
+		const fragment = hashIndex === -1 ? "" : url.slice(hashIndex);
+		const separator = urlWithoutFragment.includes("?") ? "&" : "?";
+		return `${urlWithoutFragment}${separator}${searchParams.toString()}${fragment}`;
+	}
+}
+
+export function getSAMLRedirectCandidates(
+	relayStateCallbackUrl: string | undefined,
+	samlConfig: SAMLConfig | undefined,
+	samlOptions: SSOOptions["saml"] | undefined,
+): readonly (string | undefined)[] {
+	return [
+		relayStateCallbackUrl,
+		samlConfig?.idpInitiatedCallbackUrl,
+		samlOptions?.idpInitiatedCallbackUrl,
+		samlConfig?.callbackUrl,
+	];
+}
+
+function toArray<T>(value: T | T[] | undefined): T[] {
+	if (Array.isArray(value)) {
+		return value;
+	}
+	return value ? [value] : [];
+}
+
+function getExpectedSAMLRecipients(
+	config: SAMLConfig,
+	baseURL: string,
+	providerId: string,
+	currentCallbackPath: string,
+	assertionConsumerServiceUrl: string | string[] | undefined,
+): string[] {
+	const configuredPostAssertionConsumerServiceUrls =
+		getSAMLPostAssertionConsumerServiceUrls(config.spMetadata?.metadata);
+
+	return [
+		currentCallbackPath,
+		`${baseURL}/sso/saml2/sp/acs/${providerId}`,
+		...configuredPostAssertionConsumerServiceUrls,
+		...toArray(assertionConsumerServiceUrl),
+	];
+}
+
+async function getSAMLResponseBindingContent(
+	sp: ReturnType<typeof createSP>,
+	samlContent: string,
+): Promise<string> {
+	if (!hasSAMLEncryptedAssertion(samlContent)) {
+		return samlContent;
+	}
+
+	const [decryptedContent] = await saml.SamlLib.decryptAssertion(
+		sp,
+		samlContent,
+	);
+	return decryptedContent;
 }
 
 /**
@@ -116,6 +231,8 @@ export interface SAMLResponseParams {
 	RelayState?: string;
 	providerId: string;
 	currentCallbackPath: string;
+	/** Receives the safe error destination after redirect context is resolved. */
+	onErrorRedirectResolved?: (url: string) => void;
 }
 
 /**
@@ -197,13 +314,27 @@ export async function processSAMLResponse(
 	});
 	const idp = createIdP(parsedSamlConfig);
 
+	const redirectCandidates = getSAMLRedirectCandidates(
+		relayState?.callbackURL,
+		parsedSamlConfig,
+		options?.saml,
+	);
+
 	const samlRedirectUrl = getSafeRedirectUrl(
-		relayState?.callbackURL || parsedSamlConfig.callbackUrl,
-		params.currentCallbackPath,
+		redirectCandidates,
+		currentCallbackPath,
 		appOrigin,
 		(url: string, settings?: { allowRelativePaths: boolean }) =>
 			ctx.context.isTrustedOrigin(url, settings),
 	);
+	const samlErrorRedirectUrl = getSafeRedirectUrl(
+		[relayState?.errorURL, samlRedirectUrl],
+		currentCallbackPath,
+		appOrigin,
+		(url: string, settings?: { allowRelativePaths: boolean }) =>
+			ctx.context.isTrustedOrigin(url, settings),
+	);
+	params.onErrorRedirectResolved?.(samlErrorRedirectUrl);
 
 	// 8. Single assertion validation
 	// Throws APIError directly (not redirect) since this is a structural issue
@@ -235,6 +366,7 @@ export async function processSAMLResponse(
 	}
 
 	const { extract } = parsedResponse!;
+	const samlContent = parsedResponse.samlContent;
 
 	// 10. Algorithm validation
 	validateSAMLAlgorithms(parsedResponse, options?.saml?.algorithms);
@@ -245,6 +377,58 @@ export async function processSAMLResponse(
 		requireTimestamps: options?.saml?.requireTimestamps,
 		logger: ctx.context.logger,
 	});
+
+	// 11b. Response binding validation
+	const expectedAudiences = [
+		sp.entityMeta.getEntityID(),
+		parsedSamlConfig.audience,
+	];
+	const assertionConsumerServiceUrl = sp.entityMeta.getAssertionConsumerService(
+		SAML_HTTP_POST_BINDING,
+	);
+	const expectedRecipients = getExpectedSAMLRecipients(
+		parsedSamlConfig,
+		ctx.context.baseURL,
+		providerId,
+		currentCallbackPath,
+		assertionConsumerServiceUrl,
+	);
+	let samlBindingContent: string;
+	try {
+		samlBindingContent = await getSAMLResponseBindingContent(sp, samlContent);
+		validateSAMLResponseBinding(samlBindingContent, {
+			expectedAudiences,
+			expectedRecipients,
+		});
+	} catch (error) {
+		if (isAPIError(error)) {
+			ctx.context.logger.error("SAML response binding validation failed", {
+				providerId,
+				code: error.body?.code,
+				expectedAudiences: expectedAudiences.filter(Boolean),
+				expectedRecipients: expectedRecipients.filter(Boolean),
+			});
+			throw ctx.redirect(
+				buildSAMLRedirectUrl(samlErrorRedirectUrl, {
+					error: "invalid_saml_response",
+					error_description:
+						error.body?.message || error.message || "Invalid SAML response",
+				}),
+			);
+		}
+		ctx.context.logger.error("SAML response binding validation failed", {
+			providerId,
+			error,
+			expectedAudiences: expectedAudiences.filter(Boolean),
+			expectedRecipients: expectedRecipients.filter(Boolean),
+		});
+		throw ctx.redirect(
+			buildSAMLRedirectUrl(samlErrorRedirectUrl, {
+				error: "invalid_saml_response",
+				error_description: "SAML response binding could not be validated",
+			}),
+		);
+	}
 
 	// 12. InResponseTo validation
 	const inResponseTo = (extract as SAMLAssertionExtract).inResponseTo as
@@ -281,7 +465,10 @@ export async function processSAMLResponse(
 					{ inResponseTo, providerId },
 				);
 				throw ctx.redirect(
-					`${samlRedirectUrl}?error=invalid_saml_response&error_description=Unknown+or+expired+request+ID`,
+					buildSAMLRedirectUrl(samlErrorRedirectUrl, {
+						error: "invalid_saml_response",
+						error_description: "Unknown or expired request ID",
+					}),
 				);
 			}
 
@@ -295,7 +482,10 @@ export async function processSAMLResponse(
 					},
 				);
 				throw ctx.redirect(
-					`${samlRedirectUrl}?error=invalid_saml_response&error_description=Provider+mismatch`,
+					buildSAMLRedirectUrl(samlErrorRedirectUrl, {
+						error: "invalid_saml_response",
+						error_description: "Provider mismatch",
+					}),
 				);
 			}
 		} else if (!allowIdpInitiated) {
@@ -304,7 +494,10 @@ export async function processSAMLResponse(
 				{ providerId },
 			);
 			throw ctx.redirect(
-				`${samlRedirectUrl}?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed`,
+				buildSAMLRedirectUrl(samlErrorRedirectUrl, {
+					error: "unsolicited_response",
+					error_description: "IdP-initiated SSO not allowed",
+				}),
 			);
 		}
 	}
@@ -314,8 +507,7 @@ export async function processSAMLResponse(
 	// and proceeds, every later caller (including a concurrent submission) finds
 	// the row already present and is rejected. The deterministic primary key is
 	// the gate, so no separate find/expiry check is needed.
-	const samlContent = (parsedResponse as any).samlContent as string | undefined;
-	const assertionId = samlContent ? extractAssertionId(samlContent) : null;
+	const assertionId = extractAssertionId(samlBindingContent);
 
 	if (assertionId) {
 		const issuer = idp.entityMeta.getEntityID();
@@ -348,7 +540,10 @@ export async function processSAMLResponse(
 				{ assertionId, issuer, providerId },
 			);
 			throw ctx.redirect(
-				`${samlRedirectUrl}?error=replay_detected&error_description=SAML+assertion+has+already+been+used`,
+				buildSAMLRedirectUrl(samlErrorRedirectUrl, {
+					error: "replay_detected",
+					error_description: "SAML assertion has already been used",
+				}),
 			);
 		}
 	} else {
@@ -418,15 +613,10 @@ export async function processSAMLResponse(
 		!!(provider as { domainVerified?: boolean }).domainVerified &&
 		validateEmailDomain(userInfo.email as string, provider.domain);
 
-	// TODO: split callbackUrl into separate ACS URL and post-auth redirect
-	// fields. Currently callbackUrl serves both purposes, which means
-	// IdP-initiated flows (no RelayState) fall back to either a URL that may be
-	// the ACS endpoint (blocked by loop protection) or baseURL.
-	const callbackUrl =
-		relayState?.callbackURL ||
-		parsedSamlConfig.callbackUrl ||
-		ctx.context.baseURL;
-	const errorUrl = relayState?.errorURL || samlRedirectUrl;
+	const callbackUrl = redirectCandidates.some(Boolean)
+		? samlRedirectUrl
+		: ctx.context.baseURL;
+	const errorUrl = samlErrorRedirectUrl;
 
 	let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 	try {
@@ -450,17 +640,21 @@ export async function processSAMLResponse(
 		});
 	} catch (e) {
 		if (isAPIError(e) && e.body?.code) {
-			const params = new URLSearchParams({ error: e.body.code });
-			if (e.body.message) params.set("error_description", e.body.message);
-			const sep = errorUrl.includes("?") ? "&" : "?";
-			throw ctx.redirect(`${errorUrl}${sep}${params.toString()}`);
+			throw ctx.redirect(
+				buildSAMLRedirectUrl(errorUrl, {
+					error: e.body.code,
+					...(e.body.message ? { error_description: e.body.message } : {}),
+				}),
+			);
 		}
 		throw e;
 	}
 
 	if (result.error) {
 		throw ctx.redirect(
-			`${callbackUrl}?error=${result.error.split(" ").join("_")}`,
+			buildSAMLRedirectUrl(callbackUrl, {
+				error: result.error.split(" ").join("_"),
+			}),
 		);
 	}
 
@@ -531,12 +725,6 @@ export async function processSAMLResponse(
 			);
 	}
 
-	// 20. Compute safe redirect URL
-	return getSafeRedirectUrl(
-		relayState?.callbackURL || parsedSamlConfig.callbackUrl,
-		currentCallbackPath,
-		appOrigin,
-		(url: string, settings?: { allowRelativePaths: boolean }) =>
-			ctx.context.isTrustedOrigin(url, settings),
-	);
+	// 20. Return precomputed safe redirect URL
+	return samlRedirectUrl;
 }

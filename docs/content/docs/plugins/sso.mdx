@@ -192,7 +192,7 @@ This allows most endpoint-related fields in `oidcConfig` to be **optional** — 
        */
       issuer: string = "https://your-org.okta.com"
       /**
-       * Email domain for this provider
+       * Bare email domain, or comma-separated bare email domains, for this provider
        */
       domain: string = "yourcompany.com"
       /**
@@ -786,7 +786,17 @@ await auth.api.registerSSOProvider({
 });
 ```
 
-Now when users from `acmecorp.com` sign in through this provider, they'll automatically be added to the "Acme Corp" organization with the appropriate role.
+Users who sign in through this provider are automatically added to the "Acme
+Corp" organization because the provider is explicitly linked to that
+organization. Domain-derived assignment from another sign-in method requires
+domain verification, a verified stored user email, and one unambiguous
+organization match.
+
+<Callout type="info">
+  Automatic SSO provisioning does not accept or cancel pending invitations. An
+  invited user must complete the existing invitation flow before Better Auth
+  creates an automatic membership for the same organization.
+</Callout>
 
 #### Self-Service SSO Dashboard
 
@@ -1287,10 +1297,15 @@ The provider ID is stored in the OAuth state so the callback can identify which 
 
 ## Domain verification
 
-Domain verification allows your application to automatically trust a new SSO provider
-by automatically validating ownership via the associated domain.
+Domain verification allows your application to trust a new SSO provider after
+validating ownership of every associated domain.
 
 When a provider's domain is verified, it is also trusted for **automatic account linking**. This means that if a user signs in with an SSO provider (OIDC or SAML) and an existing account with the same email exists, the accounts will be linked automatically — as long as the user's email domain matches the provider's verified domain.
+
+Domain verification is also required for automatic organization assignment
+after a user signs in through another identity provider, such as a social
+provider. Better Auth uses the stored user's verified email and assigns an
+organization only when the verified domain maps to exactly one.
 
 <Tabs items={["client", "server"]}>
   <Tab value="client">
@@ -1343,10 +1358,17 @@ Once enabled, make sure you migrate the database schema (again).
 
 See the [Schema](#if-you-have-enabled-domain-verification) section to add the fields manually.
 
+<Callout type="info">
+  With domain verification disabled, Better Auth does not create organization
+  memberships from email-domain matches. Signing in through a provider that is
+  explicitly linked to an organization still provisions normally, and
+  `signIn.sso` still resolves providers by email or domain.
+</Callout>
+
 ### Verify your domain
 
 When domain verification is enabled, every new SSO provider will be untrusted at first.
-This means that new sign-ups or sign-ins will be allowed until the domain ownership has been verified.
+This means that new sign-ups or sign-ins will not be allowed until domain ownership has been verified.
 
 To verify your ownership over a domain, follow these steps:
 
@@ -1366,6 +1388,8 @@ To verify your ownership over a domain, follow these steps:
     * **Host:** `_better-auth-token-{your-provider-id}` (**Note:** An underscore is automatically prepended to follow DNS infrastructure subdomain conventions. The `better-auth-token` part can be customized through the `domainVerification.tokenPrefix` option)
     * **Value:** The verification token you were given.
 
+    If the SSO provider lists multiple comma-separated domains, add this `TXT` record under every listed domain. For example, a provider with `domain: "company.com,subsidiary.com"` must publish the record for both `company.com` and `subsidiary.com`.
+
     **Save the record and wait for it to propagate.** This can take up to 48 hours, but it's usually much faster.
   </Step>
 
@@ -1381,6 +1405,8 @@ To verify your ownership over a domain, follow these steps:
 Once you have configured your domain, you can use your `auth` instance to submit a validation request.
 This request will either result in a rejection (could not prove your ownership over the domain)
 or if the verification is successful, your SSO provider domain will be marked as verified.
+
+Verification applies to the provider's exact domain configuration when the request starts. If the provider is updated or deleted while DNS verification is in progress, the request returns a `409` response with the `SSO_PROVIDER_CHANGED` code. Reload the provider, confirm its current domains, and retry verification. Request a new token first if the current provider does not have an active verification token.
 
 <APIMethod path="/sso/verify-domain" method="POST" requireSession>
   ```ts
@@ -1428,6 +1454,8 @@ The SAML callback endpoint (`/api/auth/sso/saml2/callback/{providerId}`) handles
 
 **Important**: `callbackUrl` in your SAML configuration is used as the Assertion Consumer Service (ACS) URL. Set it to the SAML callback route for your provider (e.g., `https://yourapp.com/api/auth/sso/saml2/sp/acs/my-provider`). If omitted, Better Auth derives it automatically from your `baseURL` and `providerId`.
 
+Your IdP must include an `AudienceRestriction` for this SP. The accepted audience is the SP entity ID, or the explicit `audience` value in `samlConfig` when you need to match an IdP-specific SP identifier. Better Auth also checks bearer `Recipient` and response `Destination` values against this provider's ACS endpoints.
+
 The post-login redirect destination is controlled by the `callbackURL` parameter in the client-side `signIn.sso()` call:
 
 ```ts
@@ -1436,6 +1464,8 @@ await authClient.signIn.sso({
   callbackURL: "/dashboard", // Where the user lands after SSO
 });
 ```
+
+For unsolicited **IdP-initiated** flows where `signIn.sso()` is not used (and therefore no client-side `callbackURL` is set), configure `idpInitiatedCallbackUrl` in the provider's `samlConfig` or in the global `saml` plugin options. The provider setting takes precedence over the global setting, and the same fallback applies to validation error redirects. Better Auth-generated `RelayState` success and error callbacks retain higher priority. If neither fallback is configured, the existing redirect behavior is preserved.
 
 The callback route supports both GET and POST methods automatically, so you don't need to create any additional route handlers in your framework.
 
@@ -1521,10 +1551,10 @@ Better Auth supports **IdP-initiated SSO flows**, where users access your applic
 3. Better Auth processes the assertion, creates a session, and redirects to your application
 4. Browser follows the redirect with a GET request (handled automatically)
 
-**No additional configuration required** - the callback route automatically handles both GET and POST requests.
+No additional route handler is required. The callback route automatically handles both GET and POST requests.
 
 <Callout type="warn">
-  IdP-initiated flows do not carry a RelayState, so the post-login redirect falls back to your application's base URL. To control where users land after SP-initiated SSO, pass the destination via `callbackURL` in the `signIn.sso()` call.
+  IdP-initiated flows do not carry a Better Auth-generated RelayState containing a client-side callback URL, so the redirect falls back to the Better Auth base URL. In split-origin setups (where the app frontend is on a different origin than the Better Auth server), this lands on the auth server origin and can result in a 404. Configure `idpInitiatedCallbackUrl` globally under the `saml` plugin options or per provider under `samlConfig` (e.g., `https://app.example.com/dashboard`) to return successful sign-ins and validation errors to the frontend.
 </Callout>
 
 <Callout type="info">
@@ -1628,7 +1658,7 @@ export const ssoOptionsType = {
 			type: "object",
 			properties: {
 				domain: {
-					description: "The domain to match for this default provider.",
+					description: "The bare email domain, or comma-separated bare email domains, to match for this default provider.",
 					type: "string",
 					required: true,
 				},

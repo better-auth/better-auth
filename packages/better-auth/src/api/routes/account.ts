@@ -247,7 +247,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			const { token, nonce } = c.body.idToken;
-			const valid = await provider.verifyIdToken(token, nonce);
+			const valid = await provider.verifyIdToken(token, nonce, c);
 			if (!valid) {
 				c.context.logger.warn("Invalid id token", {
 					provider: c.body.provider,

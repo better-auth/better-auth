@@ -2,11 +2,10 @@ import type {
 	AuthContext,
 	BetterAuthRateLimitStorage,
 } from "@better-auth/core";
-import { createRateLimitKey } from "@better-auth/core/utils/ip";
+import { createRateLimitKey, getIp } from "@better-auth/core/utils/ip";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { normalizePathname } from "@better-auth/core/utils/url";
 import type { RateLimit } from "../../types";
-import { getIp } from "../../utils/get-request-ip";
 import { wildcardMatch } from "../../utils/wildcard";
 
 interface MemoryRateLimitEntry {
@@ -181,7 +180,7 @@ function createDatabaseStorageWrapper(
 				set: { count: 1, lastRequest: now },
 			});
 			if (reset) {
-				deleteExpiredRows(now);
+				await deleteExpiredRows(now);
 				return { allowed: true, retryAfter: null };
 			}
 			return consume(key, rule);
@@ -222,13 +221,13 @@ function createDatabaseStorageWrapper(
 
 	// Best-effort sweep of clearly-expired rows to bound table growth. A failure
 	// here never blocks the request.
-	const deleteExpiredRows = (now: number) => {
+	const deleteExpiredRows = async (now: number) => {
 		const longestWindow = Math.max(
 			ctx.rateLimit.window,
 			...getDefaultSpecialRules().map((r) => r.window),
 		);
 		const cutoff = now - longestWindow * 1000;
-		ctx.runInBackground(
+		await ctx.runInBackgroundOrAwait(
 			db
 				.deleteMany({
 					model,
@@ -384,7 +383,8 @@ async function resolveRateLimitConfig(req: Request, ctx: AuthContext) {
 		ctx.logger.warn(
 			"Rate limiting could not determine a client IP and is falling back to a " +
 				"single shared per-path bucket. Ensure your runtime forwards a trusted " +
-				"client IP header and configure `advanced.ipAddress.ipAddressHeaders` if needed.",
+				"client IP header, then set `advanced.ipAddress.ipAddressHeaders` or " +
+				"`advanced.ipAddress.trustedProxies` so the address can be resolved.",
 		);
 		ipWarningLogged = true;
 	}

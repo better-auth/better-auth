@@ -12,9 +12,18 @@ import {
 import { parseUserOutput } from "../../../db/schema";
 import { PACKAGE_VERSION } from "../../../version";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
-import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
+import type {
+	TwoFactorProvider,
+	TwoFactorTable,
+	UserWithTwoFactor,
+} from "../types";
 import { defaultKeyHasher } from "../utils";
-import { verifyTwoFactor } from "../verify-two-factor";
+import {
+	assertTwoFactorNotLocked,
+	recordTwoFactorFailure,
+	resetTwoFactorFailures,
+	verifyTwoFactor,
+} from "../verify-two-factor";
 
 export interface OTPOptions {
 	/**
@@ -306,6 +315,25 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 		},
 		async (ctx) => {
 			const { session, key, valid, invalid } = await verifyTwoFactor(ctx);
+			const isSignIn = !session.session;
+			const twoFactorTable = "twoFactor";
+			// Account-level lockout shares one counter across all factors, so OTP
+			// failures count toward and are blocked by the same lock as TOTP and
+			// backup codes. Fail closed on a sign-in if the record is missing.
+			let twoFactor: TwoFactorTable | null = null;
+			if (isSignIn) {
+				twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
+					model: twoFactorTable,
+					where: [{ field: "userId", value: session.user.id }],
+				});
+				if (!twoFactor) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						TWO_FACTOR_ERROR_CODES.TWO_FACTOR_NOT_ENABLED,
+					);
+				}
+				await assertTwoFactorNotLocked(ctx, twoFactorTable, twoFactor);
+			}
 			// Consume the OTP row atomically as the race gate. The first concurrent
 			// submission wins the row; every other racer receives null and is
 			// rejected, so a burst of guesses cannot all read the same attempt
@@ -342,6 +370,9 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				new TextEncoder().encode(inputValue),
 			);
 			if (isCodeValid) {
+				if (twoFactor) {
+					await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
+				}
 				// Leave the row consumed: a valid OTP is single-use.
 				if (!session.user.twoFactorEnabled) {
 					if (!session.session) {
@@ -384,6 +415,9 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				identifier: `2fa-otp-${key}`,
 				expiresAt: consumed.expiresAt,
 			});
+			if (twoFactor) {
+				await recordTwoFactorFailure(ctx, twoFactorTable, twoFactor);
+			}
 			return invalid("INVALID_CODE");
 		},
 	);

@@ -6,6 +6,73 @@ import { getTestInstance } from "../../test-utils/test-instance";
  * @see https://github.com/better-auth/better-auth/issues/8969
  */
 describe("Email Verification - Request body consumption bug", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10335
+	 */
+	it("should not fail sign-up when callback request cloning throws", async () => {
+		const originalClone = Request.prototype.clone;
+		const mockSendEmail = vi.fn();
+		let cloneCalls = 0;
+
+		const cloneSpy = vi
+			.spyOn(Request.prototype, "clone")
+			.mockImplementation(function (this: Request) {
+				cloneCalls += 1;
+				if (cloneCalls > 1) {
+					throw new TypeError("unusable");
+				}
+				return originalClone.call(this);
+			});
+
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+				},
+				emailVerification: {
+					sendOnSignUp: true,
+					async sendVerificationEmail({ user }, request) {
+						mockSendEmail(
+							user.email,
+							request?.method,
+							request?.url,
+							await request?.text(),
+						);
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		try {
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-up/email", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({
+						name: "Test User",
+						email: "clone-throws@example.com",
+						password: "password123",
+					}),
+				}),
+			);
+
+			expect(response.status).toBe(200);
+			expect(mockSendEmail).toHaveBeenCalledWith(
+				"clone-throws@example.com",
+				"POST",
+				"http://localhost:3000/api/auth/sign-up/email",
+				"",
+			);
+		} finally {
+			cloneSpy.mockRestore();
+		}
+	});
+
 	it("should not throw 'body already consumed' error when sendVerificationEmail callback reads the request", async () => {
 		const mockSendEmail = vi.fn();
 		let requestBodyReadError: Error | null = null;

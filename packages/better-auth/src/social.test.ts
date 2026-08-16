@@ -1512,6 +1512,138 @@ describe("Apple Provider", async () => {
 		expect(data.user.email).toBe("noname-user@privaterelay.appleid.com");
 		expect(data.user.name).toBe("");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/1214
+	 */
+	it("should pass request ctx to verifyIdToken for id-token sign-in", async () => {
+		const appleProfile = {
+			sub: "001341.example.ctx-signin",
+			email: "ctx-signin@privaterelay.appleid.com",
+			email_verified: true,
+			is_private_email: true,
+			real_user_status: 2,
+		};
+		const idToken = await signJWT(appleProfile, DEFAULT_SECRET);
+		let seenPlatform: string | null | undefined;
+
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					apple: {
+						clientId: "test-apple-client",
+						clientSecret: "test-apple-secret",
+						verifyIdToken: async (_token, _nonce, ctx) => {
+							seenPlatform = ctx?.headers?.get("x-platform") ?? null;
+							return seenPlatform === "ios";
+						},
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const rejected = await client.signIn.social({
+			provider: "apple",
+			idToken: { token: idToken },
+			fetchOptions: {
+				headers: {
+					"x-platform": "android",
+				},
+			},
+		});
+		expect(seenPlatform).toBe("android");
+		expect(rejected.error?.status).toBe(401);
+
+		const accepted = await client.signIn.social({
+			provider: "apple",
+			idToken: { token: idToken },
+			fetchOptions: {
+				headers: {
+					"x-platform": "ios",
+				},
+			},
+		});
+		expect(seenPlatform).toBe("ios");
+		expect(accepted.data).toBeDefined();
+		expect(accepted.data!.redirect).toBe(false);
+		const data = accepted.data as { user: { email: string } };
+		expect(data.user.email).toBe("ctx-signin@privaterelay.appleid.com");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/1214
+ */
+describe("verifyIdToken request ctx — account linking", async () => {
+	it("should pass request ctx to verifyIdToken for id-token account linking", async () => {
+		const googleProfile = {
+			email: "test@test.com",
+			email_verified: true,
+			name: "Ctx Link",
+			picture: "https://example.com/picture.png",
+			exp: 1234567890,
+			sub: "ctx-link-google-sub",
+			iat: 1234567890,
+			aud: "test",
+			azp: "test",
+			nbf: 1234567890,
+			iss: "test",
+			locale: "en",
+			jti: "ctx-link",
+			given_name: "Ctx",
+			family_name: "Link",
+		};
+		const idToken = await signJWT(googleProfile, DEFAULT_SECRET);
+		let seenPlatform: string | null | undefined;
+
+		const { client, signInWithTestUser } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					verifyIdToken: async (_token, _nonce, ctx) => {
+						seenPlatform = ctx?.headers?.get("x-platform") ?? null;
+						return seenPlatform === "ios";
+					},
+				},
+			},
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async (headers) => {
+			headers.set("x-platform", "android");
+			const rejected = await client.linkSocial(
+				{
+					provider: "google",
+					idToken: { token: idToken },
+				},
+				{ headers },
+			);
+			expect(seenPlatform).toBe("android");
+			expect(rejected.error?.status).toBe(401);
+
+			headers.set("x-platform", "ios");
+			const accepted = await client.linkSocial(
+				{
+					provider: "google",
+					idToken: { token: idToken },
+				},
+				{ headers },
+			);
+			expect(seenPlatform).toBe("ios");
+			expect(accepted.error).toBeNull();
+
+			const accounts = await client.listAccounts({
+				fetchOptions: { headers },
+			});
+			expect(
+				accounts.data?.some((account) => account.providerId === "google"),
+			).toBe(true);
+		});
+	});
 });
 
 describe("Vercel Provider", async () => {

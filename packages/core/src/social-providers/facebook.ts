@@ -9,6 +9,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import type { GenericEndpointContext } from "../types";
 export interface FacebookProfile {
 	id: string;
 	name: string;
@@ -130,13 +131,17 @@ export const facebook = (options: FacebookOptions) => {
 				tokenEndpoint: "https://graph.facebook.com/v24.0/oauth/access_token",
 			});
 		},
-		async verifyIdToken(token, nonce) {
+		async verifyIdToken(
+			token: string,
+			nonce?: string,
+			ctx?: GenericEndpointContext,
+		) {
 			if (options.disableIdTokenSignIn) {
 				return false;
 			}
 
 			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce);
+				return options.verifyIdToken(token, nonce, ctx);
 			}
 
 			/* limited login */
