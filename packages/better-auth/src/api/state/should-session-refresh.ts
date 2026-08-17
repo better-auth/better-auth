@@ -1,4 +1,7 @@
-import { defineRequestState } from "@better-auth/core/context";
+import {
+	defineRequestState,
+	type RequestState,
+} from "@better-auth/core/context";
 
 /**
  * State for skipping session refresh
@@ -8,7 +11,16 @@ import { defineRequestState } from "@better-auth/core/context";
  * potential inconsistencies between the session data in the database and the session
  * data stored in cookies.
  */
-const { get: getShouldSkipSessionRefresh, set: setShouldSkipSessionRefresh } =
-	defineRequestState<boolean | null>(() => false);
+let state: RequestState<boolean | null> | undefined;
+
+function getShouldSkipSessionRefreshState() {
+	state ??= defineRequestState<boolean | null>(() => false);
+	return state;
+}
+
+const getShouldSkipSessionRefresh = () =>
+	getShouldSkipSessionRefreshState().get();
+const setShouldSkipSessionRefresh = (value: boolean | null) =>
+	getShouldSkipSessionRefreshState().set(value);
 
 export { getShouldSkipSessionRefresh, setShouldSkipSessionRefresh };
