@@ -97,7 +97,7 @@ describe("agentid.getUserInfo", () => {
 	it("builds the user from the id_token", async () => {
 		const res = await agentid(OPEN_CLIENT).getUserInfo({
 			idToken: idToken({ ...baseClaims, name: "Acme Support" }),
-		} as any);
+		});
 
 		expect(res?.user).toMatchObject({
 			id: SUB,
@@ -113,7 +113,7 @@ describe("agentid.getUserInfo", () => {
 		// change here.
 		const res = await agentid(OPEN_CLIENT).getUserInfo({
 			idToken: idToken({ ...baseClaims, name: "Acme Support" }),
-		} as any);
+		});
 
 		expect(res?.user.name).toBe("Acme Support");
 	});
@@ -124,7 +124,7 @@ describe("agentid.getUserInfo", () => {
 		// than an OAuth one.
 		const res = await agentid(OPEN_CLIENT).getUserInfo({
 			idToken: idToken(baseClaims),
-		} as any);
+		});
 
 		expect(res?.user.name).toBe("support");
 	});
@@ -132,7 +132,7 @@ describe("agentid.getUserInfo", () => {
 	it("falls back for an empty-string name too", async () => {
 		const res = await agentid(OPEN_CLIENT).getUserInfo({
 			idToken: idToken({ ...baseClaims, name: "" }),
-		} as any);
+		});
 
 		expect(res?.user.name).toBe("support");
 	});
@@ -141,7 +141,7 @@ describe("agentid.getUserInfo", () => {
 		const { email_verified: _, ...withoutVerified } = baseClaims;
 		const res = await agentid(OPEN_CLIENT).getUserInfo({
 			idToken: idToken(withoutVerified),
-		} as any);
+		});
 
 		expect(res?.user.emailVerified).toBe(false);
 	});
@@ -150,7 +150,7 @@ describe("agentid.getUserInfo", () => {
 		await agentid(OPEN_CLIENT).getUserInfo({
 			idToken: idToken(baseClaims),
 			accessToken: "access-token",
-		} as any);
+		});
 
 		expect(mockedBetterFetch).not.toHaveBeenCalled();
 	});
@@ -169,7 +169,7 @@ describe("agentid.getUserInfo", () => {
 		}).getUserInfo({
 			idToken: idToken(baseClaims),
 			accessToken: "access-token",
-		} as any);
+		});
 
 		expect(mockedBetterFetch).toHaveBeenCalledOnce();
 		expect(res?.data.owner_name).toBe("Maya Chen");
@@ -192,7 +192,7 @@ describe("agentid.getUserInfo", () => {
 		}).getUserInfo({
 			idToken: idToken(baseClaims),
 			accessToken: "access-token",
-		} as any);
+		});
 
 		expect(res?.user.id).toBe(SUB);
 		expect(res?.data.owner_name).toBeUndefined();
@@ -209,7 +209,7 @@ describe("agentid.getUserInfo", () => {
 		}).getUserInfo({
 			idToken: idToken(baseClaims),
 			accessToken: "access-token",
-		} as any);
+		});
 
 		expect(res?.user.id).toBe(SUB);
 		expect(res?.data.owner_email).toBeUndefined();
@@ -218,7 +218,7 @@ describe("agentid.getUserInfo", () => {
 	it("returns null rather than throwing on a malformed id_token", async () => {
 		const res = await agentid(OPEN_CLIENT).getUserInfo({
 			idToken: "not-a-jwt",
-		} as any);
+		});
 
 		expect(res).toBeNull();
 	});
@@ -234,7 +234,7 @@ describe("agentid.getUserInfo", () => {
 		}).getUserInfo({
 			idToken: idToken(baseClaims),
 			accessToken: "access-token",
-		} as any);
+		});
 
 		expect((res?.user as Record<string, unknown>).ownerEmail).toBe(
 			"maya@acme.com",
