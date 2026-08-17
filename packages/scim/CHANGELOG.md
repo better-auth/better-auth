@@ -37,24 +37,6 @@
 
 - [#10592](https://github.com/better-auth/better-auth/pull/10592) [`26b1949`](https://github.com/better-auth/better-auth/commit/26b194960fe539d2189cb1b7554c16d9f5318906) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add an optional SCIM-owned connection and credential catalog. Configure `managedConnections` to let trusted server code create runtime tenant connections and issue, rotate, and revoke their bearer credentials through server-only `auth.api` methods, without a code-defined connection or an application-owned verifier.
 
-- [#10249](https://github.com/better-auth/better-auth/pull/10249) [`dfecb48`](https://github.com/better-auth/better-auth/commit/dfecb481fa0453c65cdc582adbaf3b69329a6580) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SCIM connections are now independent of the Organization and SSO plugins. Define
-  them statically, resolve them with `authentication.verifyBearerToken`, or use the
-  optional `managedConnections` catalog.
-
-  Legacy connection management, organization-scoped configuration, and SCIM-created
-  authentication accounts are removed. Use identity and projection callbacks to
-  connect SCIM resources to application users and roles.
-
-  Legacy SCIM state is not migrated. Back it up, issue new credentials, and fully
-  reprovision Users and Groups after upgrading.
-
-- [#9840](https://github.com/better-auth/better-auth/pull/9840) [`a8ea86e`](https://github.com/better-auth/better-auth/commit/a8ea86e25e4f4e9aa98530b9f53cc73cf2fc8cfd) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Remove the legacy user-session connection management endpoints and
-  `providerOwnership`. Applications now authorize their own SCIM administration
-  workflows instead of relying on Better Auth user ownership.
-
-  Legacy `scimProvider` rows and credentials are not migrated. Follow the 1.7 SCIM
-  upgrade guide, issue new credentials, and fully reprovision Users and Groups.
-
 ### Patch Changes
 
 - [#10620](https://github.com/better-auth/better-auth/pull/10620) [`b7683b8`](https://github.com/better-auth/better-auth/commit/b7683b82be4048263c667d97004a47701d58793a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Accept exact case-insensitive string Boolean values for SCIM User `active` and the `primary` sub-attribute of `emails`, `phoneNumbers`, `addresses`, `roles`, and `entitlements` at the HTTP ingress for Microsoft Entra interoperability.
