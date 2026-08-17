@@ -8,7 +8,6 @@
     "hono": "^4.12.34"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.21.3",
     "drizzle-kit": "^0.31.10",
     "vitest": "catalog:vitest",
     "wrangler": "4.123.0"

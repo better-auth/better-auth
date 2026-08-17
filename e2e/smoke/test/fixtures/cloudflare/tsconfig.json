@@ -5,7 +5,6 @@
     "module": "esnext",
     "outDir": "./dist",
     "moduleResolution": "bundler",
-    "types": ["@cloudflare/vitest-pool-workers/types"],
     "noEmit": true,
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true,
