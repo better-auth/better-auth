@@ -1,7 +1,6 @@
 import type { Store, StoreValue } from "nanostores";
 import type { Accessor } from "solid-js";
-import { onCleanup } from "solid-js";
-import { createStore, reconcile } from "solid-js/store";
+import { createSignal, onCleanup } from "solid-js";
 
 /**
  * Subscribes to store changes and gets store’s value.
@@ -17,12 +16,15 @@ export function useStore<
 	// https://github.com/nanostores/solid/issues/19
 	const unbindActivation = store.listen(() => {});
 
-	const [state, setState] = createStore({
+	// Solid 1 and 2 expose their store APIs from incompatible module paths, so
+	// use their shared signal API. This intentionally invalidates the accessor
+	// for every Nanostore update instead of reconciling nested properties.
+	const [state, setState] = createSignal({
 		value: store.get(),
 	});
 
-	const unsubscribe = store.subscribe((newValue) => {
-		setState("value", reconcile(newValue));
+	const unsubscribe = store.listen((newValue) => {
+		setState({ value: newValue });
 	});
 
 	onCleanup(() => unsubscribe());
@@ -30,5 +32,5 @@ export function useStore<
 	// Remove temporary listener now that there is already a proper subscriber.
 	unbindActivation();
 
-	return () => state.value;
+	return () => state().value;
 }
