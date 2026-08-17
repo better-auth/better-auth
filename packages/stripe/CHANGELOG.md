@@ -4,8 +4,6 @@
 
 ### Minor Changes
 
-- [#9359](https://github.com/better-auth/better-auth/pull/9359) [`a9d48c9`](https://github.com/better-auth/better-auth/commit/a9d48c993de0fc2b9ba5829c9cb985716ce00c45) Thanks [@bytaesu](https://github.com/bytaesu)! - `onSubscriptionCancel` callback `event` is no longer marked optional, consistent with all other subscription lifecycle callbacks. The only call site always provides an event, so the optional marker was inaccurate.
-
 - [#9531](https://github.com/better-auth/better-auth/pull/9531) [`75ca6a4`](https://github.com/better-auth/better-auth/commit/75ca6a458547b5c0d60fe9ac86afaf71fc80ba3d) Thanks [@bytaesu](https://github.com/bytaesu)! - The `onSubscriptionCancel` callback's `event` parameter is now required, consistent with the other subscription lifecycle callbacks. Update your callback to declare `event` as a required parameter and remove any `undefined` guards around it.
 
 ### Patch Changes
