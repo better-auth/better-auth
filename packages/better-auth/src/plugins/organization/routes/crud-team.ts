@@ -1148,6 +1148,8 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
+			let additionalData: Record<string, any> = {};
+
 			// Run beforeAddTeamMember hook
 			if (options?.organizationHooks?.beforeAddTeamMember) {
 				const response = await options?.organizationHooks.beforeAddTeamMember({
@@ -1160,7 +1162,10 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 					organization,
 				});
 				if (response && typeof response === "object" && "data" in response) {
-					// Allow the hook to modify the data
+					additionalData = {
+						...additionalData,
+						...response.data,
+					};
 				}
 			}
 
@@ -1179,6 +1184,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 					teamId: ctx.body.teamId,
 					userId: ctx.body.userId,
 					maximumMembersPerTeam,
+					additionalData,
 				});
 				if (result.status === "limitReached") {
 					throw APIError.from(
@@ -1191,6 +1197,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 				teamMember = await adapter.findOrCreateTeamMember({
 					teamId: ctx.body.teamId,
 					userId: ctx.body.userId,
+					additionalData,
 				});
 			}
 

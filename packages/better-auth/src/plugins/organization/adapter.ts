@@ -897,6 +897,8 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		findOrCreateTeamMember: async (data: {
 			teamId: string;
 			userId: string;
+			// This represents the additionalFields for the team member
+			additionalData?: Record<string, any>;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const member = await adapter.findOne<TeamMember>({
@@ -918,6 +920,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			return await adapter.create<Omit<TeamMember, "id">, TeamMember>({
 				model: "teamMember",
 				data: {
+					...data.additionalData,
 					teamId: data.teamId,
 					userId: data.userId,
 					createdAt: new Date(),
@@ -940,6 +943,8 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			teamId: string;
 			userId: string;
 			maximumMembersPerTeam: number;
+			// This represents the additionalFields for the team member
+			additionalData?: Record<string, any>;
 		}): Promise<
 			{ status: "added"; member: TeamMember } | { status: "limitReached" }
 		> => {
@@ -966,6 +971,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					{
 						model: "teamMember",
 						data: {
+							...data.additionalData,
 							teamId: data.teamId,
 							userId: data.userId,
 							createdAt: new Date(),

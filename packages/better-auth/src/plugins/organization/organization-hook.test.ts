@@ -316,3 +316,81 @@ describe("organization creation in database hooks", async () => {
 		expect((org as any)?.name).toBe("Before-After Org");
 	});
 });
+
+describe("team member hooks", async () => {
+	const { auth, db, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				teams: {
+					enabled: true,
+				},
+				schema: {
+					teamMember: {
+						additionalFields: {
+							position: {
+								type: "string",
+								required: false,
+							},
+						},
+					},
+				},
+				organizationHooks: {
+					beforeAddTeamMember: async () => {
+						return {
+							data: {
+								position: "lead",
+							},
+						};
+					},
+				},
+			}),
+		],
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10707
+	 */
+	it("should persist the data returned by beforeAddTeamMember", async () => {
+		const { headers } = await signInWithTestUser();
+
+		const org = await auth.api.createOrganization({
+			headers,
+			body: {
+				name: "Hook Org",
+				slug: "hook-org",
+			},
+		});
+		expect(org).not.toBeNull();
+
+		const team = await auth.api.createTeam({
+			headers,
+			body: {
+				name: "Hook Team",
+				organizationId: org!.id,
+			},
+		});
+
+		const teamMember = await auth.api.addTeamMember({
+			headers,
+			body: {
+				teamId: team.id,
+				userId: org!.members[0]!.userId,
+			},
+		});
+
+		const stored = await db.findOne({
+			model: "teamMember",
+			where: [
+				{
+					field: "id",
+					value: teamMember.id,
+				},
+			],
+		});
+
+		expect((stored as any)?.position).toBe("lead");
+		// the hook must not be able to overwrite the identity columns
+		expect((stored as any)?.teamId).toBe(team.id);
+		expect((stored as any)?.userId).toBe(org!.members[0]!.userId);
+	});
+});
