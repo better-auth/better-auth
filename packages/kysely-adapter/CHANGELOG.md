@@ -12,10 +12,6 @@
 
 - [#10377](https://github.com/better-auth/better-auth/pull/10377) [`e4818b5`](https://github.com/better-auth/better-auth/commit/e4818b545984dce99e3c798ead5691c5bf775a70) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Fix SQLite dialect bundles with Kysely 0.29 by using locally mirrored migration-table constants.
 
-- [#9165](https://github.com/better-auth/better-auth/pull/9165) [`39d6af2`](https://github.com/better-auth/better-auth/commit/39d6af2a392dc41018a036d1d909dc48c09749c9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - chore(adapters): require patched `drizzle-orm` and `kysely` peer versions
-
-  Narrows the `drizzle-orm` peer to `^0.45.2` and the `kysely` peer to `^0.28.14`. Both new ranges track the minor line that carries the vulnerability fix and nothing newer, so the adapters only advertise support for versions that have actually been tested against. Consumers on older ORM releases see an install-time warning and can upgrade alongside the adapter; the peer is marked optional, so installs do not hard-fail.
-
 ## 1.7.0-rc.6
 
 ## 1.7.0-rc.5

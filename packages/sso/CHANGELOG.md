@@ -84,19 +84,7 @@
 
   Servers verify JWT client assertions signed with asymmetric keys, and clients can use the same token endpoint authentication contract for authorization code, refresh, and client credentials token requests.
 
-- [#9055](https://github.com/better-auth/better-auth/pull/9055) [`b790144`](https://github.com/better-auth/better-auth/commit/b790144a2e969f1f423c1226147edfb4e69664d1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(sso)!: harden SAML response validation (InResponseTo, Audience, SessionIndex)
-
-  ### Breaking Changes
-  - **`allowIdpInitiated` now defaults to `false`** — IdP-initiated SSO (unsolicited SAML responses) is disabled by default. Set `saml.allowIdpInitiated: true` to restore the previous behavior. This aligns with the SAML2Int interoperability profile which recommends against IdP-initiated SSO due to its susceptibility to injection attacks.
-
-  ### Bug Fixes
-  - **InResponseTo validation was completely non-functional** — The code read `extract.inResponseTo` (always `undefined`) instead of samlify's actual path `extract.response.inResponseTo`. SP-initiated InResponseTo validation now works as intended in both ACS handlers.
-  - **Audience Restriction was never validated** — SAML assertions issued for a different service provider were accepted without checking the `<AudienceRestriction>` element. Audience is now validated against the configured `samlConfig.audience` value per SAML 2.0 Core §2.5.1.
-  - **SessionIndex stored as object instead of string** — samlify returns `sessionIndex` from login responses as `{ authnInstant, sessionNotOnOrAfter, sessionIndex }`, but the code stored the whole object. SLO session-index comparisons always failed silently. The correct inner `sessionIndex` string is now extracted.
-
-  ### Improvements
-  - Extracted shared `validateInResponseTo()` and `validateAudience()` into `packages/sso/src/saml/response-validation.ts`, eliminating ~160 lines of duplicated validation logic between the two ACS handlers.
-  - Fixed `SAMLAssertionExtract` type to match samlify's actual extractor output shape.
+- [#9055](https://github.com/better-auth/better-auth/pull/9055) [`b790144`](https://github.com/better-auth/better-auth/commit/b790144a2e969f1f423c1226147edfb4e69664d1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - IdP-initiated SSO now defaults to disabled; set `saml.allowIdpInitiated: true` to opt in. SP-initiated flows now validate `InResponseTo` correctly, and SAML Single Logout stores and compares the actual `SessionIndex` string.
 
 - [#10473](https://github.com/better-auth/better-auth/pull/10473) [`ed61b47`](https://github.com/better-auth/better-auth/commit/ed61b4798e0ccedadc3b0c0e0a2d08b5d4b7ed5a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add transactional OIDC user resolution so applications can link verified issuer and subject pairs to exact existing users while preserving or updating the local profile.
 
@@ -164,27 +152,6 @@
   The callback receives the mapped `user` plus a `source` describing the `action` (`create-user`, `link-account`, or `sign-in`), the `method`, and provider metadata: `source.oauth` for OAuth providers and `source.sso` for OIDC/SAML SSO providers. Return `{ error, errorDescription }` to reject: browser flows redirect to the error URL and programmatic flows return a `403`.
 
 - [#10072](https://github.com/better-auth/better-auth/pull/10072) [`4475f4a`](https://github.com/better-auth/better-auth/commit/4475f4a39b654f2ab7da90abd9222748ba51e3fe) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OIDC SSO now works on Cloudflare Workers when discovery is enabled. Redirecting OIDC discovery, token, userinfo, and JWKS endpoints are rejected with a clear configuration error; configure the final endpoint URL instead.
-
-- [#9097](https://github.com/better-auth/better-auth/pull/9097) [`52c4751`](https://github.com/better-auth/better-auth/commit/52c47517a21600d40a3e82c427409083b4a0a9ec) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Unify SAML response processing and fix provider and configuration handling.
-
-  **Bug fixes:**
-  - Fix SP metadata endpoint using internal row ID instead of `providerId` in ACS URL
-  - Fix `acsEndpoint` skipping DB provider lookup when `defaultSSO` is configured
-  - Fix `acsEndpoint` missing encryption fields (`isAssertionEncrypted`, `encPrivateKey`), which caused silent decryption failures
-  - Fix `defaultSSO` config parsing in callback path (`safeJsonParse` on already-parsed objects)
-  - Generate the default ACS URL from `baseURL` and `providerId`; `callbackUrl`
-    remains a post-auth redirect
-  - Complete `createSP`/`createIdP` helpers with all encryption and signing fields
-
-  **Behavioral changes:**
-  - ACS error redirects now use the full lowercase code, such as
-    `error=saml_multiple_assertions` instead of `error=multiple_assertions`.
-  - SAML provider registration now rejects configs with no usable IdP entry point (no valid `entryPoint` URL, no `idpMetadata.metadata`, and no `idpMetadata.singleSignOnService`). Previously these would register successfully but fail at sign-in.
-  - `entryPoint` validation tightened from `startsWith("http")` to `new URL()` parsing, rejecting malformed URLs like `http:evil` or `http//missing-colon`.
-
-  **Refactoring (no API changes):**
-  - Extract shared `processSAMLResponse` pipeline to eliminate ~500 lines of duplicated logic between `callbackSSOSAML` and `acsEndpoint`
-  - Move `validateSAMLTimestamp` to `saml/timestamp.ts` (re-exported from original location for compatibility)
 
 - [#10621](https://github.com/better-auth/better-auth/pull/10621) [`59c4c83`](https://github.com/better-auth/better-auth/commit/59c4c832fc4eed813e98b5b2c45a91cf2d4ad9e7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Verify SAML assertion signatures directly instead of trusting an already-parsed response, and enforce a signing policy and size limit on SP metadata the same way IdP metadata is already enforced. `wantAssertionsSigned` now controls whether the SP requires signed assertions instead of signed response messages, matching how IdPs sign SAML responses in practice.
 
