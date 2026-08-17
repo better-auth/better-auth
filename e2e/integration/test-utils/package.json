@@ -7,6 +7,5 @@
   "private": true,
   "devDependencies": {
     "terminate": "^2.8.0"
-  },
-  "version": null
+  }
 }
