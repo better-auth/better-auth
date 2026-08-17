@@ -1,5 +1,12 @@
 # @better-auth/redis-storage
 
+## 1.6.30
+
+### Patch Changes
+
+- Updated dependencies [[`07c1718`](https://github.com/better-auth/better-auth/commit/07c17189f58502bf038e5f22766f8a99df60ac99)]:
+  - @better-auth/core@1.6.30
+
 ## 1.6.29
 
 ### Patch Changes
