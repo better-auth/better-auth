@@ -350,6 +350,7 @@ async function createRefreshToken(
 		scopes,
 		createdAt: new Date(iat * 1000),
 		expiresAt: new Date(exp * 1000),
+		revoked: null,
 	};
 
 	// Initial issuance (no rotation): single insert.
