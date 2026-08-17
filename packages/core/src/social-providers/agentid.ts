@@ -18,8 +18,6 @@ const JWKS_URL = `${ISSUER}/v0/jwks.json`;
 
 const ID_TOKEN_ALG = "ES256";
 
-const OWNER_SCOPES = ["owner_profile", "owner_email"];
-
 /** AgentID profile claims. */
 export interface AgentIdProfile {
 	sub: string;
@@ -64,6 +62,22 @@ export const agentid = (options: AgentIdOptions) => {
 
 	let jwks: ReturnType<typeof createRemoteJWKSet> | undefined;
 	const getJwks = () => (jwks ??= createRemoteJWKSet(new URL(JWKS_URL)));
+	const verifyAgentIdToken = async (token: string, nonce?: string) => {
+		try {
+			const { payload } = await jwtVerify(token, getJwks(), {
+				issuer: ISSUER,
+				audience: options.clientId,
+				algorithms: [ID_TOKEN_ALG],
+			});
+			if (nonce && payload.nonce !== nonce) {
+				return false;
+			}
+			return true;
+		} catch (error) {
+			logger.error("Failed to verify AgentID ID token:", error);
+			return false;
+		}
+	};
 
 	return {
 		id: "agentid",
@@ -77,16 +91,18 @@ export const agentid = (options: AgentIdOptions) => {
 				throw new Error("CLIENT_ID_REQUIRED");
 			}
 
-			const _scopes = options.disableDefaultScope ? [] : ["openid", "email"];
-			if (options.scope) _scopes.push(...options.scope);
-			if (scopes) _scopes.push(...scopes);
+			const requestedScopes = new Set(
+				options.disableDefaultScope ? [] : ["openid", "email"],
+			);
+			for (const scope of options.scope ?? []) requestedScopes.add(scope);
+			for (const scope of scopes ?? []) requestedScopes.add(scope);
 
 			return createAuthorizationURL({
 				id: "agentid",
 				options,
 				authorizationEndpoint:
 					options.authorizationEndpoint ?? AUTHORIZATION_ENDPOINT,
-				scopes: _scopes,
+				scopes: [...requestedScopes],
 				state,
 				codeVerifier,
 				redirectURI,
@@ -94,7 +110,7 @@ export const agentid = (options: AgentIdOptions) => {
 		},
 
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
-			return validateAuthorizationCode({
+			const tokens = await validateAuthorizationCode({
 				code,
 				codeVerifier,
 				redirectURI,
@@ -105,6 +121,13 @@ export const agentid = (options: AgentIdOptions) => {
 					? (options.tokenEndpointAuthentication ?? "basic")
 					: "post",
 			});
+			if (
+				!tokens.idToken ||
+				!(await verifyAgentIdToken(tokens.idToken, undefined))
+			) {
+				return null;
+			}
+			return tokens;
 		},
 
 		async verifyIdToken(token, nonce, ctx?: GenericEndpointContext) {
@@ -114,20 +137,7 @@ export const agentid = (options: AgentIdOptions) => {
 			if (options.verifyIdToken) {
 				return options.verifyIdToken(token, nonce, ctx);
 			}
-			try {
-				const { payload } = await jwtVerify(token, getJwks(), {
-					issuer: ISSUER,
-					audience: options.clientId,
-					algorithms: [ID_TOKEN_ALG],
-				});
-				if (nonce && payload.nonce !== nonce) {
-					return false;
-				}
-				return true;
-			} catch (error) {
-				logger.error("Failed to verify AgentID ID token:", error);
-				return false;
-			}
+			return verifyAgentIdToken(token, nonce);
 		},
 
 		async getUserInfo(token) {
@@ -149,14 +159,7 @@ export const agentid = (options: AgentIdOptions) => {
 				return null;
 			}
 
-			const requestedScopes = [
-				...(options.scope ?? []),
-				...(token.scopes ?? []),
-			];
-			if (
-				token.accessToken &&
-				OWNER_SCOPES.some((scope) => requestedScopes.includes(scope))
-			) {
+			if (token.accessToken) {
 				try {
 					const { data: userinfo } = await betterFetch<AgentIdProfile>(
 						USERINFO_ENDPOINT,
