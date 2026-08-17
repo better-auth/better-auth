@@ -6,12 +6,10 @@ description: Upgrade Better Auth from 1.6 to 1.7, including Expo, OAuth, OpenID 
 Most Better Auth 1.7 changes are additive. Most projects start with one command:
 
 ```package-install
-npx auth@rc upgrade
+npx auth upgrade
 ```
 
-<Callout type="warn">
-  While 1.7 is a release candidate, use the `rc` tag for the CLI and packages. Once 1.7 is stable, use `latest` or omit the tag.
-</Callout>
+Upgrade `better-auth` and every `@better-auth/*` package together so the CLI and the library stay on 1.7.
 
 Some areas need more care: OAuth, OpenID Connect, SAML, SCIM, two-factor authentication, MCP, custom storage, and proxy setups. Use this table to choose the sections that apply to your project.
 
@@ -57,7 +55,7 @@ These features change the schema:
 Use this order:
 
 1. Complete the manual preparation in [Account identity](#account-identity-is-scoped-by-issuer), [OAuth client records](#migrate-oauth-client-records), [SCIM](#scim-requires-full-reprovisioning), and [Device Authorization](#device-authorization) when those sections apply.
-2. Apply the 1.7 schema. With the built-in Kysely adapter, run `npx auth@rc migrate`. With Drizzle, Prisma, or a custom schema workflow, run `npx auth@rc generate`, review the output, and apply it with your migration tooling.
+2. Apply the 1.7 schema. With the built-in Kysely adapter, run `npx auth migrate`. With Drizzle, Prisma, or a custom schema workflow, run `npx auth generate`, review the output, and apply it with your migration tooling.
 3. Deploy the 1.7 packages and configuration changes together.
 4. Complete any post-deployment work, including SCIM reprovisioning.
 
