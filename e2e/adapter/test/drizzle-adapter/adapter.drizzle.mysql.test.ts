@@ -1,4 +1,3 @@
-import { execSync } from "node:child_process";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { testAdapter } from "@better-auth/test-utils/adapter";
 import { drizzle } from "drizzle-orm/mysql2";
@@ -14,6 +13,7 @@ import {
 	uuidTestSuite,
 } from "../adapter-factory";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
+import { pushDrizzleSchema } from "./push-drizzle-schema";
 
 const mysqlDB = createPool({
 	uri: "mysql://user:password@localhost:3306/better_auth",
@@ -40,16 +40,13 @@ const { execute } = await testAdapter({
 			"mysql",
 		);
 
-		const command = `npx drizzle-kit push --dialect=mysql --schema=${fileName}.ts --url=mysql://user:password@localhost:3306/better_auth`;
-		console.log(`Running: ${command}`);
 		console.log(`Options:`, betterAuthOptions);
 		try {
-			// wait for the above console.log to be printed
-			await new Promise((resolve) => setTimeout(resolve, 10));
-			execSync(command, {
-				cwd: import.meta.dirname,
-				stdio: "inherit",
-			});
+			await pushDrizzleSchema(
+				"mysql",
+				`${fileName}.ts`,
+				"mysql://user:password@localhost:3306/better_auth",
+			);
 		} catch (error) {
 			console.error("Failed to push drizzle schema (mysql):", error);
 			throw error;
