@@ -5,14 +5,33 @@ const MetadataFieldSupportOpenAPISchema = {
 			type: "boolean",
 		},
 	},
+	required: ["supported"] as string[],
 };
 
 export const ServiceProviderOpenAPISchema = {
 	type: "object",
 	properties: {
+		id: {
+			type: "string",
+		},
 		patch: MetadataFieldSupportOpenAPISchema,
-		bulk: MetadataFieldSupportOpenAPISchema,
-		filter: MetadataFieldSupportOpenAPISchema,
+		bulk: {
+			type: "object",
+			properties: {
+				supported: { type: "boolean" },
+				maxOperations: { type: "integer" },
+				maxPayloadSize: { type: "integer" },
+			},
+			required: ["supported", "maxOperations", "maxPayloadSize"] as string[],
+		},
+		filter: {
+			type: "object",
+			properties: {
+				supported: { type: "boolean" },
+				maxResults: { type: "integer" },
+			},
+			required: ["supported", "maxResults"] as string[],
+		},
 		changePassword: MetadataFieldSupportOpenAPISchema,
 		sort: MetadataFieldSupportOpenAPISchema,
 		etag: MetadataFieldSupportOpenAPISchema,
@@ -51,9 +70,25 @@ export const ServiceProviderOpenAPISchema = {
 				resourceType: {
 					type: "string",
 				},
+				location: {
+					type: "string",
+				},
 			},
+			required: ["resourceType", "location"] as string[],
 		},
 	},
+	required: [
+		"id",
+		"patch",
+		"bulk",
+		"filter",
+		"changePassword",
+		"sort",
+		"etag",
+		"authenticationSchemes",
+		"schemas",
+		"meta",
+	] as string[],
 } as const;
 
 export const ResourceTypeOpenAPISchema = {
