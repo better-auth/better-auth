@@ -1060,7 +1060,7 @@ describe("Enum field support in Drizzle schemas", () => {
 		});
 		expect(schema.code).toContain("mysqlEnum");
 		expect(schema.code).toContain(
-			'status: mysqlEnum(["active", "inactive", "pending"])',
+			'status: mysqlEnum("status", ["active", "inactive", "pending"])',
 		);
 		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-mysql-enum.txt",
@@ -1088,12 +1088,60 @@ describe("Enum field support in Drizzle schemas", () => {
 				},
 			} as BetterAuthOptions,
 		});
-		expect(schema.code).toContain("text({ enum: [");
 		expect(schema.code).toContain(
-			'priority: text({ enum: ["high", "medium", "low"] })',
+			'priority: text("priority", { enum: ["high", "medium", "low"] })',
 		);
 		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-sqlite-enum.txt",
+		);
+	});
+
+	it("should generate snake_case column names for multi-word enum fields", async () => {
+		const sqliteSchema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "sqlite",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						userRole: {
+							type: ["admin", "user"],
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(sqliteSchema.code).toContain(
+			'userRole: text("user_role", { enum: ["admin", "user"] })',
+		);
+		const mysqlSchema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "mysql",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						userRole: {
+							type: ["admin", "user"],
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+		expect(mysqlSchema.code).toContain(
+			'userRole: mysqlEnum("user_role", ["admin", "user"])',
 		);
 	});
 
