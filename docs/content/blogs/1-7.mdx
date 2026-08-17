@@ -14,7 +14,7 @@ We're excited to announce Better Auth 1.7 🎉
 
 Better Auth 1.7 is one of our largest releases. It brings major improvements across OAuth and OpenID Connect, enterprise identity, MCP authorization, and device access.
 
-If other applications sign in through your app, the OAuth provider now supports stronger tokens, explicit rules for protected APIs, more client authentication methods, and broader OpenID conformance. If your customers provision employees through SCIM, 1.7 adds Groups, role projections, richer employee profiles, and an exact connection to SSO. MCP clients and limited-input devices can also request standards-based OAuth access.
+If other applications sign in through your app, the OAuth provider now supports stronger tokens, explicit rules for protected APIs, more client authentication methods, and broader OpenID conformance. If your customers provision employees through SCIM, 1.7 adds Groups, role projections, richer employee profiles, and an optional bridge to SSO. MCP clients and limited-input devices can also request standards-based OAuth access.
 
 We introduced the first part of this work in the [1.7 release candidate](/blog/1-7-rc). Some improvements require migration work, especially for OAuth Provider, MCP, SSO, SAML, SCIM, account identities, and custom storage. The highlights below explain what each area gains. Follow the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide) for the migration steps.
 
@@ -34,7 +34,7 @@ The main additions are:
 
 * **Explicit rules for each API:** protected APIs can now have their own permissions, token lifetime, claims, and signing policy. Better Auth enforces which API a token was issued for (RFC 8707).
 * **Tokens that are harder to steal:** DPoP ties a token to the client that requested it. Copying the token alone is not enough to use it (RFC 9449).
-* **Sign out everywhere:** a user can sign out from one app, while Better Auth tells the other connected apps to end their sessions too.
+* **Back-channel logout:** clients that register a logout URL can be notified when the user's provider session ends.
 * **Enforced recent login:** OpenID's `max_age` now works as intended, so an app can require a recent login before a sensitive action.
 * **More ways for clients to prove who they are:** clients can use shared secrets or signed keys. Keys can also rotate without replacing the whole client.
 * **Stronger client registration:** dynamic registration adds better admission rules and support for initial access tokens. MCP clients can instead identify themselves with a document hosted on their own website.
@@ -103,7 +103,7 @@ The rebuilt service includes:
 
 #### Self-service connections at runtime
 
-Better Auth 1.6 already supported creating and rotating connections at runtime. Version 1.7 adds 2 more choices: applications can resolve connections from their own catalog, or use a richer managed catalog built into the SCIM plugin.
+Better Auth 1.7 replaces the legacy runtime management endpoints with 2 application-controlled options: resolve connections from your own catalog, or use the managed catalog built into the SCIM plugin.
 
 The managed catalog supports several credentials per connection, with their own permissions and expiry dates. It can rotate and revoke credentials, record who made each change, and retire a connection safely. New secrets are returned only when they are created or rotated, while Better Auth stores protected digests instead of plaintext values.
 
@@ -148,7 +148,7 @@ With an exact mapping configured, SCIM and the paired login provider can point t
 
 ### More providers and better login flows
 
-Better Auth as an OAuth client also received a large update. Custom providers now use the common social sign-in client path instead of separate generic OAuth client setup. PKCE is on by default, and providers configured through discovery get stronger identity-token and nonce checks.
+Better Auth as an OAuth client also received a large update. Generic OAuth providers now use the common social sign-in client path instead of a separate client plugin. PKCE is on by default, and providers configured through discovery get stronger identity-token and nonce checks.
 
 You can also change provider options for one sign-in. This supports choosing an Amazon Cognito provider, giving Microsoft Entra ID a domain hint, or asking Google for offline access. Entra ID and custom providers can use signed keys instead of shared secrets. Providers such as Auth0 and Zitadel can receive the extra information they need when a token refreshes, without sending the user through login again.
 
@@ -199,6 +199,7 @@ The table below shows where to start. The [1.7 upgrade guide](/docs/guides/1-7-u
 | SAML or SSO                                    | Review saved account identities, provider settings, certificates, and callback URLs                    |
 | SCIM                                           | Stop provisioning, replace the old setup, create new credentials, then send all Users and Groups again |
 | Expo or React Native                           | Await cookie reads and update custom secure-storage implementations                                    |
+| Two-factor authentication                      | Review OTP and TOTP enrollment and handle the new `enableTwoFactor` response shape                     |
 | Magic links or email OTP                       | Review the new cleanup behavior for accounts whose mailbox was not confirmed                           |
 | Custom adapters, storage, or rate-limit stores | Add the new methods for safe one-time actions and counters before deploying                            |
 | Custom proxy or TLS termination                | Confirm that Better Auth knows the public URL of your application                                      |
@@ -214,8 +215,6 @@ npx auth upgrade
 ```
 
 Then run `npx auth generate` or `npx auth migrate` for schema changes. Do not treat the generated migration as the full upgrade: account identity, OAuth clients, MCP, and SCIM need reviewed manual data steps. The [upgrade guide](/docs/guides/1-7-upgrade-guide) walks through each one.
-
-If you adopted a 1.7 beta or release candidate, also read the [release candidate post](/blog/1-7-rc). Some intermediate schemas and APIs changed again before the stable release, especially for SCIM, MCP, CIMD, OAuth clients, and account identity.
 
 ***
 
