@@ -1434,7 +1434,11 @@ export const createInternalAdapter = (
 						value: data.value,
 						expiresAt: data.expiresAt,
 					}),
-					getTTLSeconds(data.expiresAt),
+					// A sub-second remaining lifetime floors to 0, which secondary
+					// storage implementations read as "no expiry" and would persist
+					// the reservation forever. Keep the tombstone alive for the rest
+					// of its (sub-second) window instead of leaking it.
+					Math.max(getTTLSeconds(data.expiresAt), 1),
 				);
 				return true;
 			}
