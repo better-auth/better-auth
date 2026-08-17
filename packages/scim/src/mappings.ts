@@ -16,14 +16,30 @@ const getFormattedName = (name: SCIMName) => {
 	return name.familyName ?? "";
 };
 
-export const getUserFullName = (email: string, name?: SCIMName) => {
+export const getUserFullName = (
+	email: string,
+	name?: SCIMName,
+	displayName?: string,
+) => {
 	if (name) {
 		const formatted = name.formatted?.trim() ?? "";
 		if (formatted.length > 0) {
 			return formatted;
 		}
 
-		return getFormattedName(name) || email;
+		const combined = getFormattedName(name);
+		if (combined) {
+			return combined;
+		}
+	}
+
+	// `displayName` mirrors the same underlying field as `name.formatted`
+	// (see `createUserResource`'s `displayName: user.name`), so a client that
+	// writes `displayName` without a structured `name` still resolves to a
+	// real name instead of falling straight through to the email.
+	const trimmedDisplayName = displayName?.trim() ?? "";
+	if (trimmedDisplayName.length > 0) {
+		return trimmedDisplayName;
 	}
 
 	return email;

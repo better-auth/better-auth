@@ -306,6 +306,49 @@ describe("SCIM", () => {
 		it.for([
 			"replace",
 			"add",
+		])("should update the name via /displayName with %s", async (op) => {
+			const { auth, getSCIMToken } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			const user = await auth.api.createSCIMUser({
+				body: {
+					userName: "displayname-patch-test-user",
+					name: {
+						formatted: "Original Name",
+					},
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			await auth.api.patchSCIMUser({
+				params: { userId: user.id },
+				body: {
+					schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+					Operations: [{ op: op, path: "/displayName", value: "Updated Name" }],
+				},
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			const updatedUser = await auth.api.getSCIMUser({
+				params: { userId: user.id },
+				headers: {
+					authorization: `Bearer ${scimToken}`,
+				},
+			});
+
+			expect(updatedUser).toMatchObject({
+				displayName: "Updated Name",
+				name: { formatted: "Updated Name" },
+			});
+		});
+
+		it.for([
+			"replace",
+			"add",
 		])("should %s nested object values with path prefix", async (op) => {
 			const { auth, getSCIMToken } = createTestInstance();
 			const scimToken = await getSCIMToken();
