@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
 const repoDir = fileURLToPath(new URL("../../..", import.meta.url));
+const cloudflareSmokeTimeout = 5 * 60_000;
 
 const assertContentDoesNotInclude = (
 	fileName: string,
@@ -25,13 +26,13 @@ describe("(cloudflare) simple server", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9983
 	 */
-	it("check repo", async (t) => {
-		const cp = spawn("pnpm", ["run", "check"], {
+	it("builds and runs the Worker", async (t) => {
+		const cp = spawn("pnpm", ["run", "e2e:smoke"], {
 			cwd: join(fixturesDir, "cloudflare"),
 			stdio: "pipe",
+			timeout: cloudflareSmokeTimeout,
+			killSignal: "SIGKILL",
 		});
-		let stdout = "";
-		let stderr = "";
 
 		t.after(() => {
 			if (cp.exitCode === null) {
@@ -40,35 +41,30 @@ describe("(cloudflare) simple server", () => {
 		});
 
 		const unexpectedWarnings = new Set(["node:sqlite", "node:async_hooks"]);
-		const exitMarker = "exiting now.";
+		let output = "";
 
 		cp.stdout.on("data", (data) => {
-			const text = data.toString();
-			stdout += text;
-			console.log(text);
-			assertContentDoesNotInclude("stdout", stdout, unexpectedWarnings);
+			const chunk = data.toString();
+			output += chunk;
+			console.log(chunk);
 		});
 
 		cp.stderr.on("data", (data) => {
-			const text = data.toString();
-			stderr += text;
-			console.error(text);
-			assertContentDoesNotInclude("stderr", stderr, unexpectedWarnings);
+			const chunk = data.toString();
+			output += chunk;
+			console.error(chunk);
 		});
 
 		const exitCode = await new Promise<number | null>((resolve, reject) => {
-			cp.on("error", reject);
-			cp.on("close", resolve);
+			cp.once("error", reject);
+			cp.once("close", resolve);
 		});
 		assert.equal(
 			exitCode,
 			0,
-			`Cloudflare fixture check failed.\n\nstdout:\n${stdout}\n\nstderr:\n${stderr}`,
+			`Cloudflare smoke test exited with ${exitCode ?? cp.signalCode}.\n${output}`,
 		);
-		assert(
-			stdout.includes(exitMarker),
-			`Cloudflare fixture check exited before Wrangler completed.\n\nstdout:\n${stdout}\n\nstderr:\n${stderr}`,
-		);
+		assertContentDoesNotInclude("output", output, unexpectedWarnings);
 
 		const indexJs = await fs.readFile(
 			join(fixturesDir, "cloudflare", "dist", "index.js"),

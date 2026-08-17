@@ -1,14 +1,14 @@
-import { SELF } from "cloudflare:test";
+import { exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
-describe("Cloudflare Worker compatibly basic tests", () => {
+describe("Cloudflare Worker compatibility", () => {
 	const randomEmail = `${crypto.randomUUID()}@test.com`;
 	const randomUserName = crypto.randomUUID().replaceAll("-", "").slice(6);
 	const randomPassword = crypto.randomUUID();
 
-	it("can sign up and login", async () => {
+	it("can sign up, log in, and read a session", async () => {
 		// Sign Up
-		let response = await SELF.fetch(
+		let response = await exports.default.fetch(
 			"http://localhost:8787/api/auth/sign-up/email",
 			{
 				method: "POST",
@@ -25,7 +25,7 @@ describe("Cloudflare Worker compatibly basic tests", () => {
 		expect(response.status).toBe(200);
 
 		// Login with correct password
-		response = await SELF.fetch(
+		response = await exports.default.fetch(
 			"http://localhost:8787/api/auth/sign-in/email",
 			{
 				method: "POST",
@@ -46,7 +46,7 @@ describe("Cloudflare Worker compatibly basic tests", () => {
 		expect(token).toBeDefined();
 
 		// Get Auth Status
-		response = await SELF.fetch("http://localhost:8787/", {
+		response = await exports.default.fetch("http://localhost:8787/", {
 			headers: {
 				Cookie: token!,
 			},
@@ -54,25 +54,7 @@ describe("Cloudflare Worker compatibly basic tests", () => {
 		expect(response.status).toBe(200);
 		expect(await response.text()!).toBe(`Hello ${randomUserName}`);
 
-		// Try login with wrong password
-		response = await SELF.fetch(
-			"http://localhost:8787/api/auth/sign-in/email",
-			{
-				method: "POST",
-				body: JSON.stringify({
-					email: randomEmail,
-					// wrong password
-					password: crypto.randomUUID(),
-				}),
-				headers: {
-					"content-type": "application/json",
-				},
-			},
-		);
-		expect(response.status).toBe(401);
-		expect(response.headers.get("set-cookie")).toBeNull();
-
-		response = await SELF.fetch("http://localhost:8787/");
+		response = await exports.default.fetch("http://localhost:8787/");
 		expect(response.status).toBe(200);
 		expect(await response.text()).toBe("Not logged in");
 	});

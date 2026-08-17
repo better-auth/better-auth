@@ -5,10 +5,6 @@ import { jwt } from "better-auth/plugins/jwt";
 import { Hono } from "hono";
 import { createDrizzle } from "./db";
 
-interface CloudflareBindings {
-	DB: D1Database;
-}
-
 const createAuth = (env: CloudflareBindings) =>
 	betterAuth({
 		baseURL: "http://localhost:4000",
