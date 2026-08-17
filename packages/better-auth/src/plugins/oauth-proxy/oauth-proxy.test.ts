@@ -14,6 +14,8 @@ import { parseJSON } from "../../client/parser";
 import { signJWT, symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
+import { anonymous } from "../anonymous";
+import { anonymousClient } from "../anonymous/client";
 import { oAuthProxy } from ".";
 
 let testIdToken: string;
@@ -674,6 +676,94 @@ describe("oauth-proxy", async () => {
 				previewUsersAfter[0]!.id,
 			);
 			expect(previewSessions.length).toBe(1);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10562
+		 */
+		it("should link an anonymous account after an OAuth proxy callback", async () => {
+			const production = await getTestInstance(
+				{
+					baseURL: "http://localhost:3000",
+					plugins: [oAuthProxy()],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+			const onLinkAccount = vi.fn();
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					plugins: [
+						anonymous({ onLinkAccount }),
+						oAuthProxy({
+							productionURL: "http://localhost:3000",
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					clientOptions: {
+						plugins: [anonymousClient()],
+					},
+					disableTestUser: true,
+				},
+			);
+			const headers = new Headers();
+
+			await preview.client.signIn.anonymous({
+				fetchOptions: {
+					onSuccess: preview.sessionSetter(headers),
+				},
+			});
+			const response = await preview.client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					headers,
+					onSuccess: preview.cookieSetter(headers),
+					throw: true,
+				},
+			);
+			const state = new URL(response.url!).searchParams.get("state");
+
+			let encryptedProfile: string | null = null;
+			let callbackURL: string | null = null;
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${state}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						if (location?.includes("profile=")) {
+							const url = new URL(location);
+							encryptedProfile = url.searchParams.get("profile");
+							callbackURL = url.searchParams.get("callbackURL");
+						}
+					},
+				},
+			);
+
+			expect(encryptedProfile).toBeTruthy();
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL!)}&profile=${encodeURIComponent(encryptedProfile!)}`,
+				{
+					headers,
+				},
+			);
+
+			expect(onLinkAccount).toHaveBeenCalledTimes(1);
 		});
 
 		it("should forward result.error verbatim instead of collapsing to user_creation_failed", async () => {
