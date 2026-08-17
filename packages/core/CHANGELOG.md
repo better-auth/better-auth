@@ -1,5 +1,11 @@
 # @better-auth/core
 
+## 1.6.30
+
+### Patch Changes
+
+- [#10833](https://github.com/better-auth/better-auth/pull/10833) [`07c1718`](https://github.com/better-auth/better-auth/commit/07c17189f58502bf038e5f22766f8a99df60ac99) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent concurrent cold-start requests from intermittently losing authentication or transaction context.
+
 ## 1.6.29
 
 ## 1.6.28
