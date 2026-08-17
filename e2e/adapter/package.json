@@ -17,5 +17,6 @@
   "dependencies": {
     "deepmerge": "^4.3.1",
     "kysely": "catalog:"
-  }
+  },
+  "version": null
 }

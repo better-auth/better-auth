@@ -1,5 +1,11 @@
 # @better-auth/i18n
 
+## 1.7.0
+
+### Minor Changes
+
+- [#9157](https://github.com/better-auth/better-auth/pull/9157) [`30a1fb9`](https://github.com/better-auth/better-auth/commit/30a1fb9c05f26abec19ab73bf9dd63d8ca707593) Thanks [@sovetski](https://github.com/sovetski)! - feat(i18n): add built-in translations for 22 languages
+
 ## 1.7.0-rc.6
 
 ## 1.7.0-rc.5

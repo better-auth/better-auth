@@ -1,5 +1,72 @@
 # @better-auth/scim
 
+## 1.7.0
+
+### Minor Changes
+
+- [#10474](https://github.com/better-auth/better-auth/pull/10474) [`dec763e`](https://github.com/better-auth/better-auth/commit/dec763ef2c5af1217888a4d7f3e8b6815cd0df52) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `acquireActiveSCIMUserLink` for transaction-safe authentication of provisioned users. The helper maps an exact SCIM connection ID and `externalId` to an active Better Auth User while fencing concurrent subject changes, deactivation, deletion, and connection decommissioning.
+
+  Compose the helper with SSO `resolveUser` to link the provisioned User without matching by email or `userName`.
+
+- [#10390](https://github.com/better-auth/better-auth/pull/10390) [`0de88f5`](https://github.com/better-auth/better-auth/commit/0de88f5e61d96f460e02b8a526e58acb16455d15) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SCIM connections can now provision Users, Groups, and direct memberships into application-defined provisioning domains without the organization or SSO plugins. Applications can map Group membership to validated custom roles through projections. The service also supports SCIM 2.0 discovery, filtering, pagination, response attribute selection, atomic PATCH operations, and common request patterns used by Microsoft Entra ID and Okta.
+
+  This replaces the previous SCIM configuration, client APIs, database schema, and organization-backed Group model. Existing SCIM installations cannot migrate provisioning state in place. Follow the SCIM cutover in the 1.7 upgrade guide, including full directory reprovisioning, before resuming traffic.
+
+  Deferred database side effects now run only after a successful transaction. A rolled-back User update no longer refreshes its cached profile, and a rolled-back bulk session revocation no longer invalidates sessions.
+
+- [#10592](https://github.com/better-auth/better-auth/pull/10592) [`26b1949`](https://github.com/better-auth/better-auth/commit/26b194960fe539d2189cb1b7554c16d9f5318906) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Allow SCIM bearer verification to resolve application-owned connections at request time. Dynamic connections use the same scope enforcement, immutable provisioning-domain binding, decommissioning, and request fencing as code-defined connections, while an empty static connection list is supported when a verifier is configured.
+
+- [#10620](https://github.com/better-auth/better-auth/pull/10620) [`b7683b8`](https://github.com/better-auth/better-auth/commit/b7683b82be4048263c667d97004a47701d58793a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add the standard Enterprise User extension (`employeeNumber`, `costCenter`, `organization`, `division`, `department`, `manager`) and the classic `title`, `userType`, `preferredLanguage`, `locale`, `timezone`, `phoneNumbers`, `addresses`, `roles`, and `entitlements` User attributes, plus `name.middleName`, `name.honorificPrefix`, and `name.honorificSuffix`. All are readable, filterable by `type` or `primary`, and writable through PATCH, including the classic Microsoft Entra `manager` path aliases.
+
+  Add `compatibility.microsoftEntra.acceptLegacyGroupSchema` to accept Microsoft Entra's legacy, attribute-less Group schema marker on `POST /Groups` without storing or returning it.
+
+  Microsoft Entra interoperability fixes:
+  - A bare `attributes`/`excludedAttributes` name for an Enterprise User sub-attribute (for example `?attributes=manager`) no longer drops the whole extension from the response.
+  - Multi-op PATCH paths filtered by `[primary eq true]` (or `[primary eq "true"]`) with a sub-attribute target now work on `emails`, `phoneNumbers`, `addresses`, `roles`, and `entitlements`.
+  - A single-element array wrapping a scalar PATCH replace value is unwrapped instead of rejected, on User scalars, Enterprise User fields, and Group `displayName` and `externalId`.
+  - Removing the last sub-attribute of a complex attribute (for example `manager.value`) clears the emptied Enterprise User extension instead of leaving it declared.
+  - Replacing `manager` with an empty string clears it, matching how Microsoft Entra removes a manager.
+  - A PATCH with an empty `Operations` array is a valid no-op instead of an error, for both Users and Groups.
+  - `PATCH /Users/:id` and `PATCH /Groups/:id` return `200 OK` with the updated resource instead of `204 No Content`.
+
+- [#10682](https://github.com/better-auth/better-auth/pull/10682) [`8b96573`](https://github.com/better-auth/better-auth/commit/8b96573d78b8d114b83d2484ba94bb1f608e15e0) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SCIM PATCH operations that target filtered multi-valued attributes (`phoneNumbers`, `addresses`, `roles`, `entitlements`, `emails`) now create the value when the filter matches nothing instead of rejecting the request with a `noTarget` error. Microsoft Entra ID sends these operations for attributes that are not populated yet, and the rejection also discarded every other operation bundled in the same PATCH request.
+
+- [#10018](https://github.com/better-auth/better-auth/pull/10018) [`445b034`](https://github.com/better-auth/better-auth/commit/445b0343ec4d5ba819e29e9ef585cc6662f1d0a1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add durable SCIM Group resources with connection-scoped membership, projection
+  callbacks, metadata, and Group lifecycle endpoints. Groups belong to SCIM
+  connections rather than Better Auth Organizations.
+
+- [#10592](https://github.com/better-auth/better-auth/pull/10592) [`26b1949`](https://github.com/better-auth/better-auth/commit/26b194960fe539d2189cb1b7554c16d9f5318906) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add an optional SCIM-owned connection and credential catalog. Configure `managedConnections` to let trusted server code create runtime tenant connections and issue, rotate, and revoke their bearer credentials through server-only `auth.api` methods, without a code-defined connection or an application-owned verifier.
+
+- [#10249](https://github.com/better-auth/better-auth/pull/10249) [`dfecb48`](https://github.com/better-auth/better-auth/commit/dfecb481fa0453c65cdc582adbaf3b69329a6580) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SCIM connections are now independent of the Organization and SSO plugins. Define
+  them statically, resolve them with `authentication.verifyBearerToken`, or use the
+  optional `managedConnections` catalog.
+
+  Legacy connection management, organization-scoped configuration, and SCIM-created
+  authentication accounts are removed. Use identity and projection callbacks to
+  connect SCIM resources to application users and roles.
+
+  Legacy SCIM state is not migrated. Back it up, issue new credentials, and fully
+  reprovision Users and Groups after upgrading.
+
+- [#9840](https://github.com/better-auth/better-auth/pull/9840) [`a8ea86e`](https://github.com/better-auth/better-auth/commit/a8ea86e25e4f4e9aa98530b9f53cc73cf2fc8cfd) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Remove the legacy user-session connection management endpoints and
+  `providerOwnership`. Applications now authorize their own SCIM administration
+  workflows instead of relying on Better Auth user ownership.
+
+  Legacy `scimProvider` rows and credentials are not migrated. Follow the 1.7 SCIM
+  upgrade guide, issue new credentials, and fully reprovision Users and Groups.
+
+### Patch Changes
+
+- [#10620](https://github.com/better-auth/better-auth/pull/10620) [`b7683b8`](https://github.com/better-auth/better-auth/commit/b7683b82be4048263c667d97004a47701d58793a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Accept exact case-insensitive string Boolean values for SCIM User `active` and the `primary` sub-attribute of `emails`, `phoneNumbers`, `addresses`, `roles`, and `entitlements` at the HTTP ingress for Microsoft Entra interoperability.
+
+- [#10592](https://github.com/better-auth/better-auth/pull/10592) [`26b1949`](https://github.com/better-auth/better-auth/commit/26b194960fe539d2189cb1b7554c16d9f5318906) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Allow trusted server code to retain a terminal connection binding before a dynamic SCIM connection's first authenticated request by supplying its provisioning domain during decommissioning.
+
+- [#9864](https://github.com/better-auth/better-auth/pull/9864) [`41cca60`](https://github.com/better-auth/better-auth/commit/41cca606d14e7b8a1d16da662d644ca39fe4281f) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Add a `user.validateUserInfo` provisioning gate that lets applications reject an identity before a user is created or a new account is linked. It runs once at the creation step for every method that provisions a user (OAuth, SSO/SAML, email/password, magic link, email OTP, anonymous, SIWE, phone number, admin-created users, and SCIM), including stateless setups with no persistent database.
+
+  It also re-runs when an existing OAuth or SSO user signs in again (`source.action` is `"sign-in"`), where it receives the fresh provider email and profile so a domain or org policy can reject a user whose provider identity moved out of bounds. Non-provider returning sign-ins are not re-validated.
+
+  The callback receives the mapped `user` plus a `source` describing the `action` (`create-user`, `link-account`, or `sign-in`), the `method`, and provider metadata: `source.oauth` for OAuth providers and `source.sso` for OIDC/SAML SSO providers. Return `{ error, errorDescription }` to reject: browser flows redirect to the error URL and programmatic flows return a `403`.
+
 ## 1.7.0-rc.6
 
 ## 1.7.0-rc.5

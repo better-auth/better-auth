@@ -1,5 +1,210 @@
 # @better-auth/sso
 
+## 1.7.0
+
+### Minor Changes
+
+- [#8805](https://github.com/better-auth/better-auth/pull/8805) [`602ec40`](https://github.com/better-auth/better-auth/commit/602ec40293dc141eab134ddb53ab34b44e11d103) Thanks [@OscarCornish](https://github.com/OscarCornish)! - **Rolling certificate rotation**
+
+  SAML signing certificates now accept an array of PEM strings, so administrators can publish a new IdP cert alongside the old one and complete the rotation without forcing every active session to re-authenticate. Responses signed by any listed cert are accepted.
+
+  ```ts
+  samlConfig: {
+      idpMetadata: {
+          cert: [currentPem, nextPem],
+      },
+  }
+  ```
+
+  Both `samlConfig.cert` and `samlConfig.idpMetadata.cert` accept either a single PEM string or an array. When both are set, `idpMetadata.cert` wins.
+
+  **Breaking: response shape**
+
+  The management endpoints (`getSSOProvider`, `listSSOProviders`, `updateSSOProvider`) now return `samlConfig.certificate` as an array of parsed certificates in every case, even when a single cert is configured. The field is absent only when certs live inside `idpMetadata.metadata`. Update consumers to read an array; no more `Array.isArray` branching.
+
+  **Validation**
+
+  Registration now rejects SAML configs that supply no signing-cert source. samlify needs either an `idpMetadata.metadata` XML document (which embeds the certs) or an explicit PEM under `cert` or `idpMetadata.cert`. Configs missing both fail with `CERT_SOURCE_MISSING`.
+
+  **Fix**
+
+  SAML Single Logout could fail to decrypt encrypted `LogoutResponse` payloads because the IdP entity was constructed without `privateKey`, `encPrivateKey`, or `encPrivateKeyPass` on that code path. All three are now applied on every IdP construction.
+
+- [#10403](https://github.com/better-auth/better-auth/pull/10403) [`dbd302e`](https://github.com/better-auth/better-auth/commit/dbd302e422c66620cde391f6a80ab90ee34182f9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Scope account identity by trusted issuer instead of provider configuration. Accounts now use the unique `(issuer, accountId)` key, so aliases for one OpenID Connect issuer deduplicate one external identity while equal subjects from different issuers remain separate. This identity deduplication does not introduce independent grant or provider lifecycle records for aliases.
+
+  This release requires `Account.issuer` but preserves `Account.accountId` as the provider-assigned account identifier. Account-specific APIs select the local `Account.id` through the `accountId` request property; token and provider-profile APIs can instead select the signed account cookie with `useAccountCookie: true`. Credential accounts use `local:credential` and the linked user's stable `id` as their provider identity.
+
+  OAuth provider identity now comes from raw verified profiles. OpenID Connect discovery uses `sub`, plain OAuth uses `id`, and providers can declare `accountSubject` for another immutable field; Better Auth no longer switches between `sub` and `id` at runtime. `getUserInfo().user` no longer carries provider identity, and `mapProfileToUser` cannot return `id`. Read the selected identity from `accountInfo.account.accountId` instead of `accountInfo.user.id`. The generic `microsoftEntraId` helper now requires a concrete tenant GUID; use the built-in Microsoft provider for multi-tenant authorities.
+
+  SSO account subjects are now protocol-defined. OIDC uses the verified `sub` claim, and SAML uses the signed `NameID`; `mapping.id` is removed from both configurations. A manual SAML configuration without metadata XML must set `idpMetadata.entityID`, because `samlConfig.issuer` identifies the service provider and no longer acts as the IdP identity.
+
+  Apply the reviewed account-identity backfill in the Better Auth 1.7 upgrade guide before deploying. The generated schema migration cannot assign trusted issuers or resolve existing identity collisions automatically.
+
+- [#9305](https://github.com/better-auth/better-auth/pull/9305) [`e7eb45b`](https://github.com/better-auth/better-auth/commit/e7eb45b065903f5fccddae491696cb069814a3c8) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - feat(oauth): per-request `additionalParams` and `loginHint` parity across `signIn.social`, `linkSocial`, and `signIn.sso`
+
+  Unified escape hatch for customizing the provider authorization URL on a per-request basis. Previously, dynamic parameters like Google's `access_type=offline` / `prompt=consent`, Cognito's `identity_provider=Google`, or Microsoft's `domain_hint` could only be set as static server configuration.
+
+  ### New capabilities
+  - `signIn.social`, `linkSocial`, and `signIn.sso` accept `additionalParams: Record<string, string>`. Values are appended to the authorization URL as query parameters.
+  - `linkSocial` also accepts `loginHint`, matching the surface of `signIn.social` and `signIn.sso`.
+  - `OAuthProvider.createAuthorizationURL` gains `additionalParams` in its input contract; every built-in provider forwards it to the shared helper.
+  - Generic-OAuth providers merge call-time `additionalParams` with the config-level `authorizationUrlParams`; call-time wins on key collision.
+  - Cognito exposes a typed `identityProvider?: string` config option that maps to the `identity_provider` query parameter, avoiding magic strings.
+
+  ### Security
+  - The shared `createAuthorizationURL` helper silently drops any caller-supplied key in `RESERVED_AUTHORIZATION_PARAMS` (`state`, `client_id`, `redirect_uri`, `response_type`, `code_challenge`, `code_challenge_method`, `nonce`, `scope`). The request-body Zod schema rejects the same keys with 400, so misuse is visible at the edge rather than silently overriding security-critical parameters. `nonce` is reserved so a caller cannot replace the OIDC nonce Better Auth generates when binding a discovery provider's `id_token` to the authorization request.
+  - Providers that use non-standard client identifiers (`wechat` → `appid`, `tiktok` → `client_key`) additionally filter those keys so a caller cannot swap the configured OAuth app.
+  - Provider protocol constants that are required for the integration to function (`atlassian` → `audience`, `notion` → `owner`) are merged last so caller-supplied `additionalParams` cannot override them. Configured defaults that represent operator intent (e.g. Google `include_granted_scopes`, Cognito `identityProvider`) remain caller-overridable.
+  - `signIn.sso` rejects `additionalParams` with 400 when the resolved provider is SAML; the SAML AuthnRequest is signed and cannot carry caller-supplied query parameters, so silently dropping them would mislead integrators.
+
+  ### OpenAPI
+  - Added `ZodRecord` handling to the OpenAPI generator so `z.record()` fields emit `type: object` with typed `additionalProperties`. Incidentally fixes a long-standing bug where `additionalData` was rendered as `type: string`.
+
+  ### Refactors
+  - `discord`, `roblox`, `zoom`, and `slack` providers now delegate to the shared `createAuthorizationURL` helper and inherit its RFC behavior and reserved-key guard.
+  - `tiktok` and `wechat` keep their manual URL construction (non-standard OAuth2 parameter names and URL fragment requirements) but thread `additionalParams` with the same reserved-key filter.
+
+  Closes [#2351](https://github.com/better-auth/better-auth/issues/2351).
+  Closes [#5441](https://github.com/better-auth/better-auth/issues/5441).
+  Closes [#5592](https://github.com/better-auth/better-auth/issues/5592).
+  Closes [#5604](https://github.com/better-auth/better-auth/issues/5604).
+  Supersedes [#4992](https://github.com/better-auth/better-auth/issues/4992) and [#5443](https://github.com/better-auth/better-auth/issues/5443).
+
+- [#8836](https://github.com/better-auth/better-auth/pull/8836) [`93d3871`](https://github.com/better-auth/better-auth/commit/93d3871bd2f7c2fdd423c4c88a22a50b6333e656) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add client authentication configuration for token endpoint requests across the stack, including `private_key_jwt` (RFC 7523).
+
+  Generic OAuth providers now accept `tokenEndpointAuth` for token endpoint client authentication. Use `tokenEndpointAuth: { method: "private_key_jwt", getClientAssertion }` for JWT client assertions, `{ method: "none" }` for public clients, and `{ method: "client_secret_basic" }` or `{ method: "client_secret_post" }` with `clientSecret` for explicit secret-based client authentication. The existing `authentication: "basic" | "post"` option remains available for secret-based token requests.
+
+  Use `createPrivateKeyJwtClientAssertionGetter()` to sign RFC 7523 assertions from a private key. The assertion getter receives `{ clientId, tokenEndpoint, grantType }`, so integrations do not duplicate client ID or token endpoint values inside assertion helpers. Core OAuth2 now exports private-key JWT-specific helpers and types: `signPrivateKeyJwtClientAssertion`, `createPrivateKeyJwtClientAssertionGetter`, `PrivateKeyJwtSigningAlgorithm`, and `PRIVATE_KEY_JWT_SIGNING_ALGORITHMS`.
+
+  Token endpoint client authentication parameters are derived from `clientId`, `clientSecret`, and `tokenEndpointAuth`. Configured token endpoint authentication requires `clientId`; secret-based token endpoint authentication also requires `clientSecret`. Custom token parameters are for provider-specific fields and do not replace the configured client authentication values.
+
+  `refreshAccessToken()` now forwards `resource` values to refresh-token requests, so RFC 8707 resource indicators work through both the high-level refresh helper and `refreshAccessTokenRequest()`.
+
+  The synchronous OAuth2 request builders `createAuthorizationCodeRequest`, `createRefreshAccessTokenRequest`, and `createClientCredentialsTokenRequest` have been removed. Use the async `authorizationCodeRequest`, `refreshAccessTokenRequest`, and `clientCredentialsTokenRequest` helpers instead.
+
+  Servers verify JWT client assertions signed with asymmetric keys, and clients can use the same token endpoint authentication contract for authorization code, refresh, and client credentials token requests.
+
+- [#9055](https://github.com/better-auth/better-auth/pull/9055) [`b790144`](https://github.com/better-auth/better-auth/commit/b790144a2e969f1f423c1226147edfb4e69664d1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(sso)!: harden SAML response validation (InResponseTo, Audience, SessionIndex)
+
+  ### Breaking Changes
+  - **`allowIdpInitiated` now defaults to `false`** — IdP-initiated SSO (unsolicited SAML responses) is disabled by default. Set `saml.allowIdpInitiated: true` to restore the previous behavior. This aligns with the SAML2Int interoperability profile which recommends against IdP-initiated SSO due to its susceptibility to injection attacks.
+
+  ### Bug Fixes
+  - **InResponseTo validation was completely non-functional** — The code read `extract.inResponseTo` (always `undefined`) instead of samlify's actual path `extract.response.inResponseTo`. SP-initiated InResponseTo validation now works as intended in both ACS handlers.
+  - **Audience Restriction was never validated** — SAML assertions issued for a different service provider were accepted without checking the `<AudienceRestriction>` element. Audience is now validated against the configured `samlConfig.audience` value per SAML 2.0 Core §2.5.1.
+  - **SessionIndex stored as object instead of string** — samlify returns `sessionIndex` from login responses as `{ authnInstant, sessionNotOnOrAfter, sessionIndex }`, but the code stored the whole object. SLO session-index comparisons always failed silently. The correct inner `sessionIndex` string is now extracted.
+
+  ### Improvements
+  - Extracted shared `validateInResponseTo()` and `validateAudience()` into `packages/sso/src/saml/response-validation.ts`, eliminating ~160 lines of duplicated validation logic between the two ACS handlers.
+  - Fixed `SAMLAssertionExtract` type to match samlify's actual extractor output shape.
+
+- [#10473](https://github.com/better-auth/better-auth/pull/10473) [`ed61b47`](https://github.com/better-auth/better-auth/commit/ed61b4798e0ccedadc3b0c0e0a2d08b5d4b7ed5a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add transactional OIDC user resolution so applications can link verified issuer and subject pairs to exact existing users while preserving or updating the local profile.
+
+- [#9445](https://github.com/better-auth/better-auth/pull/9445) [`48070ad`](https://github.com/better-auth/better-auth/commit/48070ada8baf9f29dba4424099d34a98ea59b3d9) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Add `schema.ssoProvider.additionalFields` support for storing and returning custom SSO provider fields.
+
+- [#9117](https://github.com/better-auth/better-auth/pull/9117) [`b70f025`](https://github.com/better-auth/better-auth/commit/b70f025bfaad38c229305a25e87e08bc176f9503) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - ### Breaking: SAML configuration changes
+
+  **`callbackUrl` no longer configures the ACS URL.**
+  The default ACS URL is derived from `baseURL` and `providerId`. Use `callbackUrl`
+  as the provider-level post-auth redirect, or pass `callbackURL` to `signIn.sso()`
+  for an SP-initiated request:
+
+  ```ts
+  await authClient.signIn.sso({
+    providerId: "my-provider",
+    callbackURL: "/dashboard",
+  });
+  ```
+
+  **`/sso/saml2/callback/:providerId` endpoint removed.**
+  Update your IdP's ACS URL to `/sso/saml2/sp/acs/:providerId`. This endpoint handles both GET and POST requests.
+
+  **`spMetadata` is now optional.**
+  You no longer need to pass `spMetadata: {}` when registering a provider. SP metadata is auto-generated from your configuration.
+
+  **Removed unused fields from `SAMLConfig`:**
+  `decryptionPvk`, `additionalParams`, `idpMetadata.entityURL`, `idpMetadata.redirectURL`. These were stored but never read. Remove them from your configuration if present.
+
+  ### Bug fixes
+  - Fix SLO SessionIndex matching: LogoutRequests with a SessionIndex were silently failing to delete the correct session.
+  - Audience validation now defaults to the SP entity ID when `audience` is not configured, per SAML Core section 2.5.1.
+  - Restore `AllowCreate` in AuthnRequests, required by IdPs that use JIT provisioning.
+  - SP metadata endpoint now reflects actual SP capabilities (encryption, signing, SLO).
+
+- [#10621](https://github.com/better-auth/better-auth/pull/10621) [`59c4c83`](https://github.com/better-auth/better-auth/commit/59c4c832fc4eed813e98b5b2c45a91cf2d4ad9e7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Extend `resolveUser` to SAML sign-ins. The callback now receives a discriminated `protocol` field: OIDC input keeps `verifiedIdTokenClaims` and `providerClaims`, while SAML input carries the verified assertion's `providerAttributes`. Both variants include a `providerReference`, an opaque reference to the accepted provider configuration that detects provider replacement or configuration changes mid-flow.
+
+  Add `guardProviderMutation`, a callback that authorizes updates and deletions of a persisted SSO provider before Better Auth applies them.
+
+### Patch Changes
+
+- [#9930](https://github.com/better-auth/better-auth/pull/9930) [`0cbaf81`](https://github.com/better-auth/better-auth/commit/0cbaf81bed9dec4c56880ee78a532262386e1ec5) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Anonymous account linking now works after social and generic OAuth sign-in in Expo and other in-app browsers, where the OAuth callback returns without the session cookie. `onLinkAccount` fires and the anonymous user is migrated; before, it was silently skipped.
+
+  Plugins can now carry server-trusted data across an OAuth redirect with the new `addOAuthServerContext` API, read back on the callback via `getOAuthState().serverContext`. Unlike `additionalData`, it cannot be set from the request body, so it is the right place for values the server must trust.
+
+  For `@better-auth/oauth-provider`, the post-login authorization query now travels through that server-only channel, so it can no longer be injected through `additionalData`.
+
+- [#9301](https://github.com/better-auth/better-auth/pull/9301) [`03e6c94`](https://github.com/better-auth/better-auth/commit/03e6c94e965a7e87c1d44074b8e90257cb1f1cd2) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `allowIdpInitiated` to `GenericOAuthConfig` and SSO `OIDCConfig` to support providers that initiate OAuth without a `state` parameter (e.g. Clever). When enabled, stateless callbacks restart the OAuth flow server-side with fresh state and PKCE, preserving CSRF protection. Also hardens `parseState` against undefined request bodies on GET callbacks.
+
+- [#9657](https://github.com/better-auth/better-auth/pull/9657) [`1e5b808`](https://github.com/better-auth/better-auth/commit/1e5b80847208cf839c9d45363ca19b8eab41c68a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Harden `private_key_jwt` and token endpoint client authentication, and add the helpers that make the fix structural.
+
+  `@better-auth/core/oauth2` now exposes `encodeBasicCredentials` and `decodeBasicCredentials`, a round-trip-tested pair that follows RFC 6749 §2.3.1 (`application/x-www-form-urlencoded` each value, split on the first `:` only). The decoder accepts the scheme case-insensitively and tolerates one or more spaces before the credentials per RFC 7235 §2.1. `client_secret_basic` on the client side and the Better Auth OAuth provider on the server side both go through these helpers, so credentials containing reserved characters round-trip cleanly across the stack and headers like `basic xxx` or `Basic  xxx` are accepted.
+
+  `createPrivateKeyJwtClientAssertionGetter` validates options eagerly. Unsupported algorithms (`HS256`, `none`), a JWK with no key material, and disagreement between an explicit `algorithm` and the JWK-embedded `alg` all throw at construction rather than on the first token request. `signPrivateKeyJwtClientAssertion` enforces the same checks for direct callers. **Breaking:** configurations that paired an unsupported JWK `alg` with a different explicit `algorithm` used to silently sign with the explicit option; they now fail at construction.
+
+  **Breaking:** `@better-auth/oauth-provider` accepts client `jwks` metadata only as an RFC 7517 JWK Set object with a non-empty `keys` array. Replace `jwks: [key]` with `jwks: { keys: [key] }` in DCR payloads, administrative and user client creation, Client ID Metadata Documents, test fixtures, and generated client code. Remotely fetched `jwks_uri` responses must use the same object shape. EC keys must use P-256, P-384, or P-521; OKP keys must use Ed25519. When a key declares `alg`, it must be a supported `private_key_jwt` algorithm that matches the key type and curve; omit `alg` when the client chooses the algorithm in its assertion header. OAuth client rows previously written through `oauthToSchema` are already stored as JWK Set objects, so this is a request, configuration, and type migration rather than another database rewrite; audit rows written outside Better Auth separately.
+
+  The SSO `private_key_jwt` flow redirects with `error_description=no_private_key_available` when a `resolvePrivateKey` callback returns no `privateKeyJwk` or `privateKeyPem`. The redirect path previously short-circuited only when the resolver was absent entirely; an empty resolver return fell through into an internal signing error.
+
+  `better-auth/test` adds `getHttpTestInstance`, a counterpart to `getTestInstance` that binds a real HTTP listener on an OS-assigned port and constructs the auth instance against the discovered URL. It removes the temp-server-then-rebind race that test files have been individually copy-pasting.
+
+- [#9864](https://github.com/better-auth/better-auth/pull/9864) [`41cca60`](https://github.com/better-auth/better-auth/commit/41cca606d14e7b8a1d16da662d644ca39fe4281f) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Add a `user.validateUserInfo` provisioning gate that lets applications reject an identity before a user is created or a new account is linked. It runs once at the creation step for every method that provisions a user (OAuth, SSO/SAML, email/password, magic link, email OTP, anonymous, SIWE, phone number, admin-created users, and SCIM), including stateless setups with no persistent database.
+
+  It also re-runs when an existing OAuth or SSO user signs in again (`source.action` is `"sign-in"`), where it receives the fresh provider email and profile so a domain or org policy can reject a user whose provider identity moved out of bounds. Non-provider returning sign-ins are not re-validated.
+
+  The callback receives the mapped `user` plus a `source` describing the `action` (`create-user`, `link-account`, or `sign-in`), the `method`, and provider metadata: `source.oauth` for OAuth providers and `source.sso` for OIDC/SAML SSO providers. Return `{ error, errorDescription }` to reject: browser flows redirect to the error URL and programmatic flows return a `403`.
+
+- [#10072](https://github.com/better-auth/better-auth/pull/10072) [`4475f4a`](https://github.com/better-auth/better-auth/commit/4475f4a39b654f2ab7da90abd9222748ba51e3fe) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OIDC SSO now works on Cloudflare Workers when discovery is enabled. Redirecting OIDC discovery, token, userinfo, and JWKS endpoints are rejected with a clear configuration error; configure the final endpoint URL instead.
+
+- [#9097](https://github.com/better-auth/better-auth/pull/9097) [`52c4751`](https://github.com/better-auth/better-auth/commit/52c47517a21600d40a3e82c427409083b4a0a9ec) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Unify SAML response processing and fix provider and configuration handling.
+
+  **Bug fixes:**
+  - Fix SP metadata endpoint using internal row ID instead of `providerId` in ACS URL
+  - Fix `acsEndpoint` skipping DB provider lookup when `defaultSSO` is configured
+  - Fix `acsEndpoint` missing encryption fields (`isAssertionEncrypted`, `encPrivateKey`), which caused silent decryption failures
+  - Fix `defaultSSO` config parsing in callback path (`safeJsonParse` on already-parsed objects)
+  - Generate the default ACS URL from `baseURL` and `providerId`; `callbackUrl`
+    remains a post-auth redirect
+  - Complete `createSP`/`createIdP` helpers with all encryption and signing fields
+
+  **Behavioral changes:**
+  - ACS error redirects now use the full lowercase code, such as
+    `error=saml_multiple_assertions` instead of `error=multiple_assertions`.
+  - SAML provider registration now rejects configs with no usable IdP entry point (no valid `entryPoint` URL, no `idpMetadata.metadata`, and no `idpMetadata.singleSignOnService`). Previously these would register successfully but fail at sign-in.
+  - `entryPoint` validation tightened from `startsWith("http")` to `new URL()` parsing, rejecting malformed URLs like `http:evil` or `http//missing-colon`.
+
+  **Refactoring (no API changes):**
+  - Extract shared `processSAMLResponse` pipeline to eliminate ~500 lines of duplicated logic between `callbackSSOSAML` and `acsEndpoint`
+  - Move `validateSAMLTimestamp` to `saml/timestamp.ts` (re-exported from original location for compatibility)
+
+- [#10621](https://github.com/better-auth/better-auth/pull/10621) [`59c4c83`](https://github.com/better-auth/better-auth/commit/59c4c832fc4eed813e98b5b2c45a91cf2d4ad9e7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Verify SAML assertion signatures directly instead of trusting an already-parsed response, and enforce a signing policy and size limit on SP metadata the same way IdP metadata is already enforced. `wantAssertionsSigned` now controls whether the SP requires signed assertions instead of signed response messages, matching how IdPs sign SAML responses in practice.
+
+  A SAML callback that supplies RelayState now validates it unconditionally; a malformed or expired value is rejected even when `enableInResponseToValidation` is disabled. Service Provider metadata with an ACS location containing a URL fragment is rejected.
+
+  Redact provider claims and resolver-thrown errors from log output on SAML and OIDC resolution failures.
+
+- [#10592](https://github.com/better-auth/better-auth/pull/10592) [`26b1949`](https://github.com/better-auth/better-auth/commit/26b194960fe539d2189cb1b7554c16d9f5318906) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Allow SSO provider registration to reuse a SCIM connection ID. SCIM connections no longer participate in the authentication provider namespace.
+
+- [#9121](https://github.com/better-auth/better-auth/pull/9121) [`9603043`](https://github.com/better-auth/better-auth/commit/960304354aebab2f03c0fadd0d7bfd02febfd246) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - ### Security: upgrade samlify to 2.12.0
+
+  Upgrades the SAML XML processing library from 2.10.2 to 2.12.0:
+  - **XPath injection protection**: all XPath expressions now use value escaping instead of string interpolation
+  - **XXE prevention**: the XML parser defaults to strict mode that rejects entity references
+  - **Dependency reduction**: removes `node-forge`, `pako`, `uuid`, and `camelcase` in favor of Node built-ins
+
+  PEM keys and certificates with leading whitespace are now normalized automatically before being passed to samlify. This prevents `DECODER routines::unsupported` errors when keys are copied from indented config files or environment variables.
+
+  Requires Node 20+.
+
 ## 1.7.0-rc.6
 
 ## 1.7.0-rc.5

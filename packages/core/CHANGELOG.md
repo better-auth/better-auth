@@ -1,5 +1,190 @@
 # @better-auth/core
 
+## 1.7.0
+
+### Minor Changes
+
+- [#10577](https://github.com/better-auth/better-auth/pull/10577) [`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Client ID Metadata Documents now follow shared-cache freshness rules and fail closed when freshness is ambiguous. The plugin prefers `s-maxage` over `max-age` and `Expires`, honors `s-maxage=0`, conditionally revalidates with ETag or Last-Modified, and treats invalid or duplicate freshness directives as immediately stale. Concurrent refreshes converge on one client-resource link instead of failing on its unique constraint.
+
+  Shared OAuth metadata validation now rejects a blank `client_name` without trimming a valid display name. Native private-use redirects require the RFC 8252 single-slash form, such as `com.example.app:/callback`. Native HTTP redirects accept only exact `localhost`, `127.0.0.1`, or `[::1]` hosts; other `127.0.0.0/8` addresses and localhost subdomains are rejected.
+
+  CIMD now bounds metadata request amplification through `metadataFetchPolicy`: same-client fetches coalesce, per-client pacing and global/per-origin concurrency reject immediately, and rolling 60-second budgets cap unique-client sprays. HTTP `no-store`, `private`, and `Vary: *` behavior is unchanged and never feeds metadata or validators into the governor.
+
+  Node.js deployments can import `fetchClientMetadataResource` from `@better-auth/cimd/node`. The transport resolves once, rejects any non-public DNS answer, pins the approved connection without using the global HTTPS pool, preserves Host and TLS certificate identity, and returns redirects and response bodies without buffering. Other runtimes remain responsible for providing an equivalent secure transport.
+
+  Unknown draft-02 metadata members are now ignored and never persisted. Recognized secrets, privilege fields, and server controls remain fatal, while generic internal aliases and nonstandard client-credentials authority spellings are stripped.
+
+- [#10402](https://github.com/better-auth/better-auth/pull/10402) [`763a267`](https://github.com/better-auth/better-auth/commit/763a2671c5372d88c291881977c8a1c2e29034b1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Plugin database schemas can now define named or generated table-level indexes across multiple fields. SQL migrations and generated Drizzle or Prisma schemas resolve configured table and column names consistently, while the MongoDB adapter creates the same indexes before the first index-enforcing write.
+
+- [#9948](https://github.com/better-auth/better-auth/pull/9948) [`3d04fab`](https://github.com/better-auth/better-auth/commit/3d04fababbf3efd4c46a4012f46ed9397715c2e3) Thanks [@yordis](https://github.com/yordis)! - feat(generic-oauth): add `refreshTokenParams` config to forward extra params on token refresh
+
+  Multi-tenant OIDC providers (Zitadel multi-org, Auth0 with `audience`) need to send extra body params on the refresh call to rescope tokens without a full authorization redirect. The generic-oauth plugin now accepts a `refreshTokenParams` option (object or sync/async function) that is merged into the refresh request body, with `grant_type` and `refresh_token` protected from override. The function form receives request metadata for the request that triggered the refresh, so request-scoped data (headers, cookies) is available without out-of-band state like AsyncLocalStorage.
+
+  `UpstreamProvider.refreshAccessToken` now accepts an optional second `ctx` argument; the change is backwards compatible because existing implementations that take only `refreshToken` remain valid. See [#7554](https://github.com/better-auth/better-auth/issues/7554).
+
+- [#9368](https://github.com/better-auth/better-auth/pull/9368) [`430c895`](https://github.com/better-auth/better-auth/commit/430c89549060ef6bd477ed2510650b9e49bba560) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Generic OAuth users can now sign out from the configured OpenID provider when they call `authClient.signOut()`. When a provider exposes a discovered or configured logout endpoint, Better Auth redirects to it and includes the stored `id_token_hint` when available. Pass `callbackURL` or configure `postLogoutRedirectURI` for the return flow, with optional `state`, or set `disableRedirect` to handle the returned `url` yourself. When multiple linked providers support logout, Better Auth selects the most recently updated account. Set `disableProviderLogout: true` to keep sign-out local.
+
+- [#10577](https://github.com/better-auth/better-auth/pull/10577) [`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - MCP clients that hit a scope wall now learn exactly which scopes to ask for. Missing protected scopes produce a `403` with an RFC 6750 `insufficient_scope` `WWW-Authenticate` challenge that names every missing scope. Clients can union those scopes into one authorization request instead of opening one browser redirect per scope.
+  - Configure protected scopes with `requiredScopes` through `RequireMcpAuthOptions` or the matching `createMcpProtectedRequestHandler` verifier option. Exact membership remains the default; `isScopeSatisfied` can define hierarchical policies.
+  - Use `createInsufficientScopeError` when an operation determines its required scopes dynamically. `createResourceServerChallenge` converts that signal and recognized token failures into safe RFC 6750 challenges.
+  - Use `challengeScopes` only as the unauthenticated challenge hint.
+
+  Handler-produced responses, ordinary permission denials, configuration failures, and unrelated thrown values keep their original status and identity.
+
+- [#10403](https://github.com/better-auth/better-auth/pull/10403) [`dbd302e`](https://github.com/better-auth/better-auth/commit/dbd302e422c66620cde391f6a80ab90ee34182f9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Scope account identity by trusted issuer instead of provider configuration. Accounts now use the unique `(issuer, accountId)` key, so aliases for one OpenID Connect issuer deduplicate one external identity while equal subjects from different issuers remain separate. This identity deduplication does not introduce independent grant or provider lifecycle records for aliases.
+
+  This release requires `Account.issuer` but preserves `Account.accountId` as the provider-assigned account identifier. Account-specific APIs select the local `Account.id` through the `accountId` request property; token and provider-profile APIs can instead select the signed account cookie with `useAccountCookie: true`. Credential accounts use `local:credential` and the linked user's stable `id` as their provider identity.
+
+  OAuth provider identity now comes from raw verified profiles. OpenID Connect discovery uses `sub`, plain OAuth uses `id`, and providers can declare `accountSubject` for another immutable field; Better Auth no longer switches between `sub` and `id` at runtime. `getUserInfo().user` no longer carries provider identity, and `mapProfileToUser` cannot return `id`. Read the selected identity from `accountInfo.account.accountId` instead of `accountInfo.user.id`. The generic `microsoftEntraId` helper now requires a concrete tenant GUID; use the built-in Microsoft provider for multi-tenant authorities.
+
+  SSO account subjects are now protocol-defined. OIDC uses the verified `sub` claim, and SAML uses the signed `NameID`; `mapping.id` is removed from both configurations. A manual SAML configuration without metadata XML must set `idpMetadata.entityID`, because `samlConfig.issuer` identifies the service provider and no longer acts as the IdP identity.
+
+  Apply the reviewed account-identity backfill in the Better Auth 1.7 upgrade guide before deploying. The generated schema migration cannot assign trusted issuers or resolve existing identity collisions automatically.
+
+- [#10359](https://github.com/better-auth/better-auth/pull/10359) [`8784c1c`](https://github.com/better-auth/better-auth/commit/8784c1c1f4301acf96d980e5bf81ff56435e2545) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Database joins have moved out of `experimental` into a stable option at `advanced.database.joins` (default: `false`).
+
+  If you previously set `experimental: { joins: true }`, update your config to:
+
+  ```ts
+  advanced: {
+    database: {
+      joins: true,
+    },
+  }
+  ```
+
+  Adapters that support native joins use them when enabled. If an adapter cannot return joined data for a query, Better Auth falls back to additional queries and combines the results. Drizzle and Prisma users should ensure their schema includes the required relations (`npx auth@latest generate`).
+
+- [#10204](https://github.com/better-auth/better-auth/pull/10204) [`0683a5f`](https://github.com/better-auth/better-auth/commit/0683a5f36befb45ade3866c7f8057791eadeee59) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Microsoft sign-in now identifies Entra accounts with the stable `oid` claim in both the built-in `microsoft` provider and the Generic OAuth `microsoftEntraId` helper. Tokens without a valid `oid` are rejected, and the Generic OAuth helper refuses to initialize unless Microsoft discovery provides ID-token verification metadata. Existing Microsoft account rows created from `sub` must be migrated before upgrading.
+
+- [#9305](https://github.com/better-auth/better-auth/pull/9305) [`e7eb45b`](https://github.com/better-auth/better-auth/commit/e7eb45b065903f5fccddae491696cb069814a3c8) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - feat(oauth): per-request `additionalParams` and `loginHint` parity across `signIn.social`, `linkSocial`, and `signIn.sso`
+
+  Unified escape hatch for customizing the provider authorization URL on a per-request basis. Previously, dynamic parameters like Google's `access_type=offline` / `prompt=consent`, Cognito's `identity_provider=Google`, or Microsoft's `domain_hint` could only be set as static server configuration.
+
+  ### New capabilities
+  - `signIn.social`, `linkSocial`, and `signIn.sso` accept `additionalParams: Record<string, string>`. Values are appended to the authorization URL as query parameters.
+  - `linkSocial` also accepts `loginHint`, matching the surface of `signIn.social` and `signIn.sso`.
+  - `OAuthProvider.createAuthorizationURL` gains `additionalParams` in its input contract; every built-in provider forwards it to the shared helper.
+  - Generic-OAuth providers merge call-time `additionalParams` with the config-level `authorizationUrlParams`; call-time wins on key collision.
+  - Cognito exposes a typed `identityProvider?: string` config option that maps to the `identity_provider` query parameter, avoiding magic strings.
+
+  ### Security
+  - The shared `createAuthorizationURL` helper silently drops any caller-supplied key in `RESERVED_AUTHORIZATION_PARAMS` (`state`, `client_id`, `redirect_uri`, `response_type`, `code_challenge`, `code_challenge_method`, `nonce`, `scope`). The request-body Zod schema rejects the same keys with 400, so misuse is visible at the edge rather than silently overriding security-critical parameters. `nonce` is reserved so a caller cannot replace the OIDC nonce Better Auth generates when binding a discovery provider's `id_token` to the authorization request.
+  - Providers that use non-standard client identifiers (`wechat` → `appid`, `tiktok` → `client_key`) additionally filter those keys so a caller cannot swap the configured OAuth app.
+  - Provider protocol constants that are required for the integration to function (`atlassian` → `audience`, `notion` → `owner`) are merged last so caller-supplied `additionalParams` cannot override them. Configured defaults that represent operator intent (e.g. Google `include_granted_scopes`, Cognito `identityProvider`) remain caller-overridable.
+  - `signIn.sso` rejects `additionalParams` with 400 when the resolved provider is SAML; the SAML AuthnRequest is signed and cannot carry caller-supplied query parameters, so silently dropping them would mislead integrators.
+
+  ### OpenAPI
+  - Added `ZodRecord` handling to the OpenAPI generator so `z.record()` fields emit `type: object` with typed `additionalProperties`. Incidentally fixes a long-standing bug where `additionalData` was rendered as `type: string`.
+
+  ### Refactors
+  - `discord`, `roblox`, `zoom`, and `slack` providers now delegate to the shared `createAuthorizationURL` helper and inherit its RFC behavior and reserved-key guard.
+  - `tiktok` and `wechat` keep their manual URL construction (non-standard OAuth2 parameter names and URL fragment requirements) but thread `additionalParams` with the same reserved-key filter.
+
+  Closes [#2351](https://github.com/better-auth/better-auth/issues/2351).
+  Closes [#5441](https://github.com/better-auth/better-auth/issues/5441).
+  Closes [#5592](https://github.com/better-auth/better-auth/issues/5592).
+  Closes [#5604](https://github.com/better-auth/better-auth/issues/5604).
+  Supersedes [#4992](https://github.com/better-auth/better-auth/issues/4992) and [#5443](https://github.com/better-auth/better-auth/issues/5443).
+
+- [#10127](https://github.com/better-auth/better-auth/pull/10127) [`7c7313c`](https://github.com/better-auth/better-auth/commit/7c7313c8189baabd11a2ecb681bd2b16eb40fa4d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth sign-in, account linking, callback, and proxy flows now build `redirect_uri` from the current request base URL when `baseURL.allowedHosts` is configured. Built-in social providers and generic OAuth providers now use the resolved request host for redirects in multi-host deployments.
+
+  Custom `OAuthProvider` implementations can omit `callbackPath` when using the shared `/callback/<provider-id>` route. Set `callbackPath` only for custom callback routes.
+
+- [#10039](https://github.com/better-auth/better-auth/pull/10039) [`aedcb97`](https://github.com/better-auth/better-auth/commit/aedcb974f055c3514fe0464dc53d71d45a8a1725) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - feat(oauth-provider)!: DPoP-bound access tokens (RFC 9449)
+
+  OAuth provider integrations can issue and verify DPoP sender-constrained tokens. Clients request them with `dpop_bound_access_tokens` at registration, `dpop_jkt` on the authorization request, or by targeting a resource configured with `dpopBoundAccessTokensRequired`. Issued tokens carry `cnf.jkt`, return `token_type: "DPoP"`, and stay bound through refresh-token rotation, introspection, and userinfo.
+
+  Resource servers verify DPoP requests with `verifyAccessTokenRequest`, which checks the `Authorization: DPoP` scheme, the proof, the request target, the access-token hash, and proof replay. The MCP package advertises DPoP in protected resource metadata and verifies DPoP-bound requests. Proof replay is rejected through the database-backed verification store, so anti-replay holds across instances. `verifyAccessTokenRequest` and `requireMcpAuth` use that store by default; build one with `createDpopReplayStore(internalAdapter)` or pass a custom `dpop.replayStore`. This needs database-backed verification storage: a secondary-storage-only deployment rejects DPoP requests rather than skipping replay protection.
+
+  Breaking: the raw-token verifier `verifyAccessToken` is renamed to `verifyBearerToken`, both in `better-auth/oauth2` and as the `oauthProviderResourceClient` action, and it rejects DPoP-bound tokens. Use `verifyAccessTokenRequest` on any endpoint that may receive them. The resource-request input type is renamed from `AccessTokenRequestInput` to `ResourceRequestInput`, and the DPoP algorithm option is `signingAlgorithms` everywhere.
+
+  Run a schema migration for the DPoP token-binding fields: the `confirmation` column on the access-token and refresh-token tables. DPoP-bound clients also gain `dpopBoundAccessTokens` and resources `dpopBoundAccessTokensRequired`. No dedicated replay table is added; proof replay reuses the verification store.
+
+- [#9828](https://github.com/better-auth/better-auth/pull/9828) [`4f53b61`](https://github.com/better-auth/better-auth/commit/4f53b61f49b470a40ccab18fe1fe4d80f225905f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Verify social-provider id_tokens with a single shared verifier.
+
+  Client-submitted id_token sign-in (`signIn.social({ idToken })` and account linking) is verified by one function instead of a per-provider `verifyIdToken` method. Each provider declares an `idToken` config with a JWKS source, issuer, and audience, and the core verifier runs the signature, issuer, audience, and nonce checks. A provider that declares no config rejects the client id_token path.
+
+  PayPal previously accepted any decodable id_token without verifying its signature. PayPal derives identity from the access token, so it now declares no `idToken` config, and the client id_token path returns `ID_TOKEN_NOT_SUPPORTED`. PayPal sign-in through the redirect flow is unchanged.
+
+  Custom providers that implement `UpstreamProvider` directly replace the removed `verifyIdToken` method with an `idToken` config:
+
+  ```ts
+  idToken: {
+  	jwks: createRemoteJWKSet(new URL("https://issuer.example/.well-known/jwks.json")),
+  	issuer: "https://issuer.example",
+  	audience: clientId,
+  },
+  ```
+
+  For verification that cannot use a local JWKS, pass `idToken: { verify: async (token, nonce) => boolean }`. The `verifyIdToken` and `disableIdTokenSignIn` provider options are unchanged.
+
+- [#10065](https://github.com/better-auth/better-auth/pull/10065) [`2196ea6`](https://github.com/better-auth/better-auth/commit/2196ea65e724830d9f1066c6593210579de586b9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth and device-authorization responses that carry credentials now consistently send `Cache-Control: no-store` and `Pragma: no-cache`, so proxies, CDNs, and browsers never cache them. This covers the token, introspection, and userinfo endpoints, dynamic and admin client registration, client secret rotation, and the device code and device token responses, including the error responses from those endpoints.
+
+  Endpoints declare this with `metadata: { noStore: true }`, and the header set is exported from `@better-auth/core` as `NO_STORE_HEADERS` for responses built by hand.
+
+- [#9929](https://github.com/better-auth/better-auth/pull/9929) [`91f235f`](https://github.com/better-auth/better-auth/commit/91f235f8604cd432749adf18c7bd7d658aa1519b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `requireEmailVerification` to OAuth provider options, for built-in social providers and the Generic OAuth plugin. When a provider reports an unverified email, the user and account are still created or linked, but no session is issued: the OAuth callback redirects with `?error=email_not_verified`, and ID token and One Tap sign-in return `403` `EMAIL_NOT_VERIFIED`. Verification emails follow the existing `emailVerification.sendOnSignUp` / `sendOnSignIn` settings.
+
+  It is opt-in per provider and does not inherit `emailAndPassword.requireEmailVerification`, so existing social logins keep working. The gate checks the local user's verification state, so a user verified through another method keeps access. Only enable it for providers that report a trustworthy `email_verified` signal.
+
+- [#8931](https://github.com/better-auth/better-auth/pull/8931) [`34558bc`](https://github.com/better-auth/better-auth/commit/34558bc52b0e043021a1072f78de5f5439ae1734) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Add opt-in JWKS-backed asymmetric JWT support for `session_data` cookie cache tokens, so services can verify cookie-cache JWTs with public keys instead of shared secrets. Enable it with `jwt({ sessionCookieCache: true })` alongside `session.cookieCache.strategy = "jwt"`.
+
+- [#9657](https://github.com/better-auth/better-auth/pull/9657) [`1e5b808`](https://github.com/better-auth/better-auth/commit/1e5b80847208cf839c9d45363ca19b8eab41c68a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Harden `private_key_jwt` and token endpoint client authentication, and add the helpers that make the fix structural.
+
+  `@better-auth/core/oauth2` now exposes `encodeBasicCredentials` and `decodeBasicCredentials`, a round-trip-tested pair that follows RFC 6749 §2.3.1 (`application/x-www-form-urlencoded` each value, split on the first `:` only). The decoder accepts the scheme case-insensitively and tolerates one or more spaces before the credentials per RFC 7235 §2.1. `client_secret_basic` on the client side and the Better Auth OAuth provider on the server side both go through these helpers, so credentials containing reserved characters round-trip cleanly across the stack and headers like `basic xxx` or `Basic  xxx` are accepted.
+
+  `createPrivateKeyJwtClientAssertionGetter` validates options eagerly. Unsupported algorithms (`HS256`, `none`), a JWK with no key material, and disagreement between an explicit `algorithm` and the JWK-embedded `alg` all throw at construction rather than on the first token request. `signPrivateKeyJwtClientAssertion` enforces the same checks for direct callers. **Breaking:** configurations that paired an unsupported JWK `alg` with a different explicit `algorithm` used to silently sign with the explicit option; they now fail at construction.
+
+  **Breaking:** `@better-auth/oauth-provider` accepts client `jwks` metadata only as an RFC 7517 JWK Set object with a non-empty `keys` array. Replace `jwks: [key]` with `jwks: { keys: [key] }` in DCR payloads, administrative and user client creation, Client ID Metadata Documents, test fixtures, and generated client code. Remotely fetched `jwks_uri` responses must use the same object shape. EC keys must use P-256, P-384, or P-521; OKP keys must use Ed25519. When a key declares `alg`, it must be a supported `private_key_jwt` algorithm that matches the key type and curve; omit `alg` when the client chooses the algorithm in its assertion header. OAuth client rows previously written through `oauthToSchema` are already stored as JWK Set objects, so this is a request, configuration, and type migration rather than another database rewrite; audit rows written outside Better Auth separately.
+
+  The SSO `private_key_jwt` flow redirects with `error_description=no_private_key_available` when a `resolvePrivateKey` callback returns no `privateKeyJwk` or `privateKeyPem`. The redirect path previously short-circuited only when the resolver was absent entirely; an empty resolver return fell through into an internal signing error.
+
+  `better-auth/test` adds `getHttpTestInstance`, a counterpart to `getTestInstance` that binds a real HTTP listener on an OS-assigned port and constructs the auth instance against the discovered URL. It removes the temp-server-then-rebind race that test files have been individually copy-pasting.
+
+- [#8836](https://github.com/better-auth/better-auth/pull/8836) [`93d3871`](https://github.com/better-auth/better-auth/commit/93d3871bd2f7c2fdd423c4c88a22a50b6333e656) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add client authentication configuration for token endpoint requests across the stack, including `private_key_jwt` (RFC 7523).
+
+  Generic OAuth providers now accept `tokenEndpointAuth` for token endpoint client authentication. Use `tokenEndpointAuth: { method: "private_key_jwt", getClientAssertion }` for JWT client assertions, `{ method: "none" }` for public clients, and `{ method: "client_secret_basic" }` or `{ method: "client_secret_post" }` with `clientSecret` for explicit secret-based client authentication. The existing `authentication: "basic" | "post"` option remains available for secret-based token requests.
+
+  Use `createPrivateKeyJwtClientAssertionGetter()` to sign RFC 7523 assertions from a private key. The assertion getter receives `{ clientId, tokenEndpoint, grantType }`, so integrations do not duplicate client ID or token endpoint values inside assertion helpers. Core OAuth2 now exports private-key JWT-specific helpers and types: `signPrivateKeyJwtClientAssertion`, `createPrivateKeyJwtClientAssertionGetter`, `PrivateKeyJwtSigningAlgorithm`, and `PRIVATE_KEY_JWT_SIGNING_ALGORITHMS`.
+
+  Token endpoint client authentication parameters are derived from `clientId`, `clientSecret`, and `tokenEndpointAuth`. Configured token endpoint authentication requires `clientId`; secret-based token endpoint authentication also requires `clientSecret`. Custom token parameters are for provider-specific fields and do not replace the configured client authentication values.
+
+  `refreshAccessToken()` now forwards `resource` values to refresh-token requests, so RFC 8707 resource indicators work through both the high-level refresh helper and `refreshAccessTokenRequest()`.
+
+  The synchronous OAuth2 request builders `createAuthorizationCodeRequest`, `createRefreshAccessTokenRequest`, and `createClientCredentialsTokenRequest` have been removed. Use the async `authorizationCodeRequest`, `refreshAccessTokenRequest`, and `clientCredentialsTokenRequest` helpers instead.
+
+  Servers verify JWT client assertions signed with asymmetric keys, and clients can use the same token endpoint authentication contract for authorization code, refresh, and client credentials token requests.
+
+- [#10473](https://github.com/better-auth/better-auth/pull/10473) [`ed61b47`](https://github.com/better-auth/better-auth/commit/ed61b4798e0ccedadc3b0c0e0a2d08b5d4b7ed5a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add transactional OIDC user resolution so applications can link verified issuer and subject pairs to exact existing users while preserving or updating the local profile.
+
+- [#9864](https://github.com/better-auth/better-auth/pull/9864) [`41cca60`](https://github.com/better-auth/better-auth/commit/41cca606d14e7b8a1d16da662d644ca39fe4281f) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Add a `user.validateUserInfo` provisioning gate that lets applications reject an identity before a user is created or a new account is linked. It runs once at the creation step for every method that provisions a user (OAuth, SSO/SAML, email/password, magic link, email OTP, anonymous, SIWE, phone number, admin-created users, and SCIM), including stateless setups with no persistent database.
+
+  It also re-runs when an existing OAuth or SSO user signs in again (`source.action` is `"sign-in"`), where it receives the fresh provider email and profile so a domain or org policy can reject a user whose provider identity moved out of bounds. Non-provider returning sign-ins are not re-validated.
+
+  The callback receives the mapped `user` plus a `source` describing the `action` (`create-user`, `link-account`, or `sign-in`), the `method`, and provider metadata: `source.oauth` for OAuth providers and `source.sso` for OIDC/SAML SSO providers. Return `{ error, errorDescription }` to reject: browser flows redirect to the error URL and programmatic flows return a `403`.
+
+### Patch Changes
+
+- [#10126](https://github.com/better-auth/better-auth/pull/10126) [`de8394d`](https://github.com/better-auth/better-auth/commit/de8394de207bae2fe9d0b8d7e901a196c1dc08d0) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Harden the host classifier (`@better-auth/core/utils/host`) against three non-public address forms it previously reported as public: deprecated IPv4-compatible IPv6 (`::w.x.y.z`, RFC 4291 §2.5.5.1, e.g. `[::127.0.0.1]` which `URL` normalizes to `[::7f00:1]`), the 6to4 relay anycast prefix `192.88.99.0/24` (RFC 7526), and deprecated site-local `fec0::/10` (RFC 3879). SSRF gates built on `isPublicRoutableHost` / `classifyHost` (`jwks_uri` validation, SSO OIDC discovery, CIMD metadata fetches) now reject these.
+
+- [#9898](https://github.com/better-auth/better-auth/pull/9898) [`7fe0e2b`](https://github.com/better-auth/better-auth/commit/7fe0e2b165c17207a43863b0f1c12c401976d6b2) Thanks [@ItalyPaleAle](https://github.com/ItalyPaleAle)! - Add `clientAssertion` support to the Microsoft Entra ID social provider.
+
+- [#9301](https://github.com/better-auth/better-auth/pull/9301) [`03e6c94`](https://github.com/better-auth/better-auth/commit/03e6c94e965a7e87c1d44074b8e90257cb1f1cd2) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `allowIdpInitiated` to `GenericOAuthConfig` and SSO `OIDCConfig` to support providers that initiate OAuth without a `state` parameter (e.g. Clever). When enabled, stateless callbacks restart the OAuth flow server-side with fresh state and PKCE, preserving CSRF protection. Also hardens `parseState` against undefined request bodies on GET callbacks.
+
+- [#10128](https://github.com/better-auth/better-auth/pull/10128) [`97903c9`](https://github.com/better-auth/better-auth/commit/97903c9cca47f5fa62cf1d2ab86f6228db04aff0) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Preserve previously granted OAuth scopes across sign-in re-authentication and refresh-token requests. `account.scope` now accumulates monotonically: newly granted scopes are merged in only when added via `linkSocial`, and providers returning a narrower scope claim than the user has granted no longer shrink the stored value.
+
+- [#9845](https://github.com/better-auth/better-auth/pull/9845) [`13abc79`](https://github.com/better-auth/better-auth/commit/13abc7922b47f800da59ca212d364a64feeec91f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Harden redirect-URI validation across the OAuth provider plugins. `isSafeUrlScheme` and `SafeUrlSchema` no longer call `URL.canParse`, which is absent on some supported runtimes and could throw or silently disable the dangerous-scheme check. They now parse with a `try`/`catch` fallback. `SafeUrlSchema` also rejects redirect URIs that contain a fragment component, per RFC 6749 §3.1.2.
+
+- [#10390](https://github.com/better-auth/better-auth/pull/10390) [`0de88f5`](https://github.com/better-auth/better-auth/commit/0de88f5e61d96f460e02b8a526e58acb16455d15) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SCIM connections can now provision Users, Groups, and direct memberships into application-defined provisioning domains without the organization or SSO plugins. Applications can map Group membership to validated custom roles through projections. The service also supports SCIM 2.0 discovery, filtering, pagination, response attribute selection, atomic PATCH operations, and common request patterns used by Microsoft Entra ID and Okta.
+
+  This replaces the previous SCIM configuration, client APIs, database schema, and organization-backed Group model. Existing SCIM installations cannot migrate provisioning state in place. Follow the SCIM cutover in the 1.7 upgrade guide, including full directory reprovisioning, before resuming traffic.
+
+  Deferred database side effects now run only after a successful transaction. A rolled-back User update no longer refreshes its cached profile, and a rolled-back bulk session revocation no longer invalidates sessions.
+
+- [#10129](https://github.com/better-auth/better-auth/pull/10129) [`3a79aff`](https://github.com/better-auth/better-auth/commit/3a79aff58ed82e45caf04c2ee4acaf0f4d09a86c) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `includeGrantedScopes` option to the Google provider. Set to `false` to omit `include_granted_scopes=true` from the authorization URL by default so each OAuth flow requests only its own scopes instead of accumulating prior grants. Defaults to `true`, preserving current behavior; call-time `additionalParams` still wins for single-flow overrides.
+
+- [#10505](https://github.com/better-auth/better-auth/pull/10505) [`d701f90`](https://github.com/better-auth/better-auth/commit/d701f90e6f81ede26209a50a5100bd9914a7ad5a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - One Tap, Electron, and Expo client plugins now compose with `createAuthClient` without TypeScript errors, and the resulting client preserves each plugin's inferred actions.
+
 ## 1.7.0-rc.6
 
 ## 1.7.0-rc.5

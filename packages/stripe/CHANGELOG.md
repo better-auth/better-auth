@@ -1,5 +1,19 @@
 # @better-auth/stripe
 
+## 1.7.0
+
+### Minor Changes
+
+- [#9359](https://github.com/better-auth/better-auth/pull/9359) [`a9d48c9`](https://github.com/better-auth/better-auth/commit/a9d48c993de0fc2b9ba5829c9cb985716ce00c45) Thanks [@bytaesu](https://github.com/bytaesu)! - `onSubscriptionCancel` callback `event` is no longer marked optional, consistent with all other subscription lifecycle callbacks. The only call site always provides an event, so the optional marker was inaccurate.
+
+- [#9531](https://github.com/better-auth/better-auth/pull/9531) [`75ca6a4`](https://github.com/better-auth/better-auth/commit/75ca6a458547b5c0d60fe9ac86afaf71fc80ba3d) Thanks [@bytaesu](https://github.com/bytaesu)! - The `onSubscriptionCancel` callback's `event` parameter is now required, consistent with the other subscription lifecycle callbacks. Update your callback to declare `event` as a required parameter and remove any `undefined` guards around it.
+
+### Patch Changes
+
+- [#9164](https://github.com/better-auth/better-auth/pull/9164) [`390a031`](https://github.com/better-auth/better-auth/commit/390a03190c988776e53c5e64cf6c2f60db1c5415) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(stripe): drop unsafe keys when merging user-supplied metadata
+
+  The Stripe plugin previously merged `ctx.body.metadata` through `defu`, which was vulnerable to prototype pollution when attacker-controlled `__proto__` keys reached the second argument. Since Stripe metadata is a flat `Record<string, string>`, the deep-merge was never exercised on that path. The merge now ignores `__proto__`, `constructor`, and `prototype`, so the user-controlled surface no longer depends on `defu`. The remaining `defu` call sites (deep-merging developer-supplied `CustomerCreateParams`) also receive the patched range.
+
 ## 1.7.0-rc.6
 
 ## 1.7.0-rc.5

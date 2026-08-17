@@ -1,5 +1,48 @@
 # @better-auth/cimd
 
+## 1.7.0
+
+### Minor Changes
+
+- [#10577](https://github.com/better-auth/better-auth/pull/10577) [`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth clients now store `applicationType` and expose it as `application_type` in OAuth metadata. `tokenEndpointAuthMethod` alone determines authentication: `"none"` is public, and every other method is confidential. The legacy `type` and `public` fields are removed.
+
+  `OAuthClient` no longer has a catch-all string index. Model custom wire extensions explicitly with a named intersection such as `OAuthClient & YourExtensionMetadata`; legacy `type` and `public` fields no longer type-check as unknown baggage.
+  - Dynamic, administrative, and user-managed registrations default an omitted `application_type` to `web`. Client ID Metadata Documents preserve an omitted value as `null`.
+  - Web redirects require HTTPS on a non-loopback host. Native redirects accept claimed HTTPS URLs, exact HTTP loopback hosts, or reverse-domain private-use schemes.
+  - Registration resource options control resource links. `mcp()` contributes its protected resource by default, so standards-based clients no longer need a `resources` extension.
+  - `mcp()` no longer enables unauthenticated Dynamic Client Registration. Compose `mcp()` with `cimd()` for Client ID Metadata Documents, or enable both DCR flags explicitly.
+
+  This release requires a database migration. Add `applicationType` and nullable `clientDiscoveryId`; map old `web` and `native` values directly, map `user-agent-based` to `NULL` for manual reclassification, and never derive it from `public`. Set `clientDiscoveryId` only from known discovery provenance, never by inspecting an HTTPS client ID. Deduplicate existing `(clientId, resourceId)` links before adding the new compound unique index, then drop the legacy columns. Deployments with custom schema mappings must apply this backfill manually.
+
+  Machine-to-machine scope authority is now stored separately in nullable `oauthClient.clientCredentialsScopes`. Missing, `NULL`, and empty values deny `client_credentials` token issuance. Only the administrative create and update endpoints expose `client_credentials_scopes`, and assigning a non-empty value requires `clientPrivileges` to approve the new `configure-client-credentials-scopes` action. DCR, CIMD, and user-managed registration cannot assign this field; CIMD refresh preserves an existing administrator-owned value. Remove `clientCredentialGrantDefaultScopes`, backfill every existing client to `[]`, configure `[]` as the default for new rows, then explicitly assign every approved machine scope after auditing the client.
+
+- [#10577](https://github.com/better-auth/better-auth/pull/10577) [`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Client ID Metadata Documents now follow shared-cache freshness rules and fail closed when freshness is ambiguous. The plugin prefers `s-maxage` over `max-age` and `Expires`, honors `s-maxage=0`, conditionally revalidates with ETag or Last-Modified, and treats invalid or duplicate freshness directives as immediately stale. Concurrent refreshes converge on one client-resource link instead of failing on its unique constraint.
+
+  Shared OAuth metadata validation now rejects a blank `client_name` without trimming a valid display name. Native private-use redirects require the RFC 8252 single-slash form, such as `com.example.app:/callback`. Native HTTP redirects accept only exact `localhost`, `127.0.0.1`, or `[::1]` hosts; other `127.0.0.0/8` addresses and localhost subdomains are rejected.
+
+  CIMD now bounds metadata request amplification through `metadataFetchPolicy`: same-client fetches coalesce, per-client pacing and global/per-origin concurrency reject immediately, and rolling 60-second budgets cap unique-client sprays. HTTP `no-store`, `private`, and `Vary: *` behavior is unchanged and never feeds metadata or validators into the governor.
+
+  Node.js deployments can import `fetchClientMetadataResource` from `@better-auth/cimd/node`. The transport resolves once, rejects any non-public DNS answer, pins the approved connection without using the global HTTPS pool, preserves Host and TLS certificate identity, and returns redirects and response bodies without buffering. Other runtimes remain responsible for providing an equivalent secure transport.
+
+  Unknown draft-02 metadata members are now ignored and never persisted. Recognized secrets, privilege fields, and server controls remain fatal, while generic internal aliases and nonstandard client-credentials authority spellings are stripped.
+
+- [#9159](https://github.com/better-auth/better-auth/pull/9159) [`cd8313b`](https://github.com/better-auth/better-auth/commit/cd8313ba003a8b3c46b11fefeae9a53305908cc3) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `@better-auth/cimd` for [Client ID Metadata Document draft-02](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02). An exact HTTPS metadata-document URL becomes the OAuth `client_id`, and OAuth discovery advertises support when the plugin is installed. The explicit `metadataProfile: "mcp-2026-07-28"` mode applies the draft-00 metadata requirements pinned by MCP 2026-07-28.
+  - Validate the complete shared OAuth client metadata schema. Generic draft-02 clients may omit `client_name` and `redirect_uris` and may use any grant supported by the OAuth Provider; the MCP profile requires `client_id`, `client_name`, and `redirect_uris`.
+  - Reject client secrets, private JWK material, back-channel logout metadata, server-owned fields, unsafe metadata URLs, non-JSON responses, oversized documents, redirects, and private or reserved network targets. Loopback Client Identifier URLs are no longer supported.
+  - Validate registered, discovered, and remotely fetched client JWKS through one public-asymmetric-key boundary. RFC 7517 JWK Sets must use `{ "keys": [...] }`; replace the removed bare-array form `jwks: [key]` with `jwks: { keys: [key] }`. Empty, malformed, symmetric, private, and unsupported key sets fail before they can enter a provider-scoped cache. EC keys must use P-256, P-384, or P-521; OKP keys must use Ed25519. A declared `alg` must match the key type and curve. Existing OAuth client rows written through `oauthToSchema` are already normalized, so no database rewrite is required unless rows were written outside Better Auth.
+  - Require `fetchClientMetadataResource` as the deployment-owned transport for both metadata documents and discovery-owned `jwks_uri` resources. It must resolve once, reject RFC 6890 special-use addresses, pin the approved address for the connection, and refuse redirects. `isMetadataDocumentUrlAllowed` remains available for additional application policy.
+  - Cache only valid successful metadata with bounded storage, HTTP shared-cache freshness rules, ETag and Last-Modified conditional revalidation, and fail-closed refresh behavior. `Cache-Control: private` and `Vary: *` are noncacheable, and an unconditional `304` is rejected.
+  - Persist `oauthClient.clientDiscoveryId` as nullable discovery provenance. Discovery IDs are globally unique, and an owned client fails closed when its matching discovery is unavailable. Only that discovery may refresh the client or provide transport for its metadata-owned resources, so managed and DCR HTTPS client IDs cannot be taken over.
+  - Preserve custom model names, resource links, and administrator-controlled client flags when clients are created or refreshed. Refresh notifications now receive `previousClient`.
+
+  OAuth Provider also exposes `clientDiscovery` for custom verified client-resolution plugins. A discovery may provide `fetchClientMetadataResource`, and its stable `id` is persisted as client provenance.
+
+  Prerelease adopters must rename `createCimdResolver` or `cimdClientDiscovery` to `createCimdClientDiscovery`, `ClientIdMetadataDocumentResult` to `CimdMetadataValidationResult`, `ValidateCimdMetadataOptions` to `CimdMetadataValidationOptions`, `isUrlClientId` to `isCimdClientIdUrlCandidate`, and `MetadataDocumentFetch` to `ClientMetadataResourceFetch`. Rename `refreshRate` to `metadataRevalidationInterval`; there is no compatibility fallback. Numeric revalidation and `minimumFetchInterval` values are seconds.
+
+  Lifecycle callbacks now receive named `CimdClientCreatedEvent` and `CimdClientRefreshedEvent` values. Read validated metadata from `clientMetadataDocument` instead of `metadata`, and the endpoint context from `context` instead of `ctx`. `CimdOptions` is now required because `fetchClientMetadataResource` is mandatory. Remove the prerelease `allowFetch`, `fetchMetadataDocument`, and `allowLoopback` options.
+
+  When adopting CIMD, remove `allowUnauthenticatedClientRegistration` unless the authorization server deliberately supports Dynamic Client Registration as a separate fallback.
+
 ## 1.7.0-rc.6
 
 ## 1.7.0-rc.5

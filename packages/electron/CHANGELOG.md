@@ -1,5 +1,33 @@
 # @better-auth/electron
 
+## 1.7.0
+
+### Minor Changes
+
+- [#9645](https://github.com/better-auth/better-auth/pull/9645) [`e014029`](https://github.com/better-auth/better-auth/commit/e0140297a59ddb59cccbcb4ba46c513de8cb86a7) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Harden the Electron OAuth flow and tighten custom-scheme trusted-origin matching.
+
+  The Electron sign-in flow now mandates PKCE S256. Plain PKCE is rejected: the `code_challenge_method` parameter is gone and every authorization code is verified by hashing the verifier with SHA-256. The server no longer trusts an `electron-origin` header to set the request Origin. The Electron client now sends a real `Origin` (for example `myapp:/`), so upgrade the `@better-auth/electron` client and server together and make sure your app's scheme is in `trustedOrigins`. The unused `disableOriginOverride` option is removed.
+
+  Custom-scheme entries in `trustedOrigins` now match by scheme and authority instead of string prefix. A host-less entry such as `myapp://` or `exp://` still trusts every host of that scheme, but a host-bearing entry such as `myapp://callback` matches that host exactly, so it is no longer satisfied by `myapp://callback.attacker.tld`.
+
+- [#9069](https://github.com/better-auth/better-auth/pull/9069) [`c7d2253`](https://github.com/better-auth/better-auth/commit/c7d22539ec4f7322d9625ae2953d397c3863d097) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Rewrite the generic OAuth plugin as a first-class social provider with OAuth 2.1 security defaults. Providers now use `signIn.social` + `callback/:id` instead of dedicated plugin endpoints, with PKCE required by default (OAuth 2.1), RFC 9207 issuer validation, OIDC auto-discovery with `openid` scope injection, and typed provider IDs.
+
+  **Breaking changes:**
+  - `signIn.oauth2({ providerId })` replaced by `signIn.social({ provider })`
+  - `oauth2.link()` replaced by `linkSocial()`
+  - Callback URL changed from `/api/auth/oauth2/callback/:id` to `/api/auth/callback/:id`
+  - `genericOAuthClient()` removed; generic OAuth providers now use the standard social client APIs
+  - `pkce` defaults to `true` (was `false`); set `pkce: false` for providers that reject PKCE
+  - `authorizationUrlParams` and `tokenUrlParams` only accept `Record<string, string>`
+  - `issuer` and `requireIssuerValidation` config fields removed; issuer validation is automatic via OIDC discovery
+  - `mapProfileToUser` profile typed as `OAuth2UserInfo & Record<string, unknown>`
+
+### Patch Changes
+
+- [#10505](https://github.com/better-auth/better-auth/pull/10505) [`d701f90`](https://github.com/better-auth/better-auth/commit/d701f90e6f81ede26209a50a5100bd9914a7ad5a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - One Tap, Electron, and Expo client plugins now compose with `createAuthClient` without TypeScript errors, and the resulting client preserves each plugin's inferred actions.
+
+- [#10794](https://github.com/better-auth/better-auth/pull/10794) [`2ad2928`](https://github.com/better-auth/better-auth/commit/2ad2928f967afa9f9858caecd01466ecb8686982) Thanks [@bytaesu](https://github.com/bytaesu)! - Restore client plugin declaration compatibility for downstream TypeScript consumers.
+
 ## 1.7.0-rc.6
 
 ### Patch Changes
