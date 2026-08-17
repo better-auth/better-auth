@@ -63,9 +63,12 @@ export interface AnonymousOptions {
 	 * A custom random email generation function.
 	 * Useful when you want to specify a temporary email in a different format from the default.
 	 * You are responsible for ensuring the email is unique to avoid conflicts.
+	 * @param options.name - The name of the anonymous user.
 	 * @returns The email address for the anonymous user.
 	 */
-	generateRandomEmail?: (() => Awaitable<string>) | undefined;
+	generateRandomEmail?:
+		| ((options: { name: string }) => Awaitable<string>)
+		| undefined;
 	/**
 	 * Custom schema for the anonymous plugin
 	 */

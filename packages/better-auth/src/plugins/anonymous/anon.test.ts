@@ -294,6 +294,36 @@ describe("anonymous", async () => {
 		expect(res.data?.user.email).toMatch(/^async-[a-f0-9-]+@example\.com$/);
 	});
 
+	it("should work with generateRandomEmail using name", async () => {
+		const testHeaders = new Headers();
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [
+					anonymous({
+						generateName() {
+							return "Captain Anonymous";
+						},
+						async generateRandomEmail({ name }) {
+							const alias = name.replace(" ", "-").toLowerCase();
+							return `${alias}@example.com`;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
+		const res = await client.signIn.anonymous({
+			fetchOptions: {
+				onSuccess: sessionSetter(testHeaders),
+			},
+		});
+		expect(res.data?.user.email).toMatch(/^captain-anonymous@example\.com$/);
+	});
+
 	it("should throw error if generateRandomEmail returns invalid email", async () => {
 		const testHeaders = new Headers();
 		const { client, sessionSetter } = await getTestInstance(
