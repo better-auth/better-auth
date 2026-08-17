@@ -253,6 +253,22 @@
 
   Migration: run the schema migration (`npx @better-auth/cli migrate`, or `generate` if you manage the schema yourself) to add the new resource columns.
 
+## 1.6.30
+
+### Patch Changes
+
+- Updated dependencies [[`07c1718`](https://github.com/better-auth/better-auth/commit/07c17189f58502bf038e5f22766f8a99df60ac99)]:
+  - @better-auth/core@1.6.30
+  - better-auth@1.6.30
+
+## 1.6.29
+
+### Patch Changes
+
+- Updated dependencies [[`e6e1b4e`](https://github.com/better-auth/better-auth/commit/e6e1b4e8146a84d2a2c5fe2c497c81d03dfc2ad3)]:
+  - better-auth@1.6.29
+  - @better-auth/core@1.6.29
+
 ## 1.6.28
 
 ### Patch Changes

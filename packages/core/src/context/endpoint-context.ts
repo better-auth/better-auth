@@ -12,11 +12,13 @@ export type AuthEndpointContext = Partial<
 
 const ensureAsyncStorage = async () => {
 	const betterAuthGlobal = __getBetterAuthGlobal();
-	if (!betterAuthGlobal.context.endpointContextAsyncStorage) {
-		const AsyncLocalStorage = await getAsyncLocalStorage();
-		betterAuthGlobal.context.endpointContextAsyncStorage =
-			new AsyncLocalStorage<AuthEndpointContext>();
+	const existing = betterAuthGlobal.context.endpointContextAsyncStorage;
+	if (existing) {
+		return existing as AsyncLocalStorage<AuthEndpointContext>;
 	}
+	const AsyncLocalStorage = await getAsyncLocalStorage();
+	betterAuthGlobal.context.endpointContextAsyncStorage ??=
+		new AsyncLocalStorage<AuthEndpointContext>();
 	return betterAuthGlobal.context
 		.endpointContextAsyncStorage as AsyncLocalStorage<AuthEndpointContext>;
 };
