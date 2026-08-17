@@ -453,7 +453,7 @@ describe("oauth introspect", async () => {
 		expect(introspection.data?.sid).toBeUndefined();
 	});
 
-	it("should pass jwt access_token introspection with logged out user", async () => {
+	it("should reject jwt access_token introspection with logged out user", async () => {
 		const { headers: testHeaders } = await signInWithTestUser();
 		const tokens = await getTokens(
 			undefined,
@@ -481,16 +481,54 @@ describe("oauth introspect", async () => {
 				},
 			},
 		);
-		expect(introspection.data).toMatchObject({
-			active: true,
-			client_id: oauthClient?.client_id,
-			scope: "openid profile email offline_access",
-			sub: expect.any(String),
-			iss: authServerBaseUrl,
-			exp: expect.any(Number),
-			iat: expect.any(Number),
+		expect(introspection.data?.active).toBe(false);
+	});
+
+	it("should reject jwt access_token introspection with expired session", async () => {
+		const { headers: testHeaders } = await signInWithTestUser();
+		const tokens = await getTokens(
+			undefined,
+			{
+				resource: validAudience,
+			},
+			testHeaders,
+		);
+		const currentSession = await auth.api.getSession({
+			headers: testHeaders,
 		});
-		expect(introspection.data?.sid).toBeUndefined();
+		const sessionId = currentSession?.session.id;
+		if (!sessionId) {
+			throw new Error("Expected signed-in user to have a session");
+		}
+		const ctx = await auth.$context;
+		await ctx.adapter.update({
+			model: "session",
+			where: [
+				{
+					field: "id",
+					value: sessionId,
+				},
+			],
+			update: {
+				expiresAt: new Date(Date.now() - 1000),
+			},
+		});
+
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(introspection.data?.active).toBe(false);
 	});
 
 	it("should pass refresh_token introspection with logged out user", async () => {
