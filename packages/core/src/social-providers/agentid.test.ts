@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { JWK } from "jose";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
@@ -10,6 +12,9 @@ import { agentid } from "./agentid";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
 
+const ISSUER = "https://auth.agentid.com";
+const TEST_TOKEN_ENDPOINT = "https://tokens.example.com";
+const KID = "agentid-test-key";
 const OPEN_CLIENT = { clientId: "https://example.com" };
 const REGISTERED = {
 	clientId: "5e050dea-00dd-48da-a6d5-241722e1b398",
@@ -17,6 +22,75 @@ const REGISTERED = {
 };
 
 const SUB = "a91f2c8e43";
+
+async function createSignedAgentIdToken({
+	issuer = ISSUER,
+	audience = OPEN_CLIENT.clientId,
+	nonce,
+	algorithm = "ES256",
+}: {
+	issuer?: string;
+	audience?: string;
+	nonce?: string;
+	algorithm?: "ES256" | "RS256";
+} = {}) {
+	const { publicKey, privateKey } = await generateKeyPair(algorithm, {
+		extractable: true,
+	});
+	const publicJWK = await exportJWK(publicKey);
+	publicJWK.kid = KID;
+	publicJWK.alg = algorithm;
+	publicJWK.use = "sig";
+
+	const token = await new SignJWT({
+		sub: SUB,
+		email: "support@acme.agentmail.to",
+		email_verified: true,
+		...(nonce ? { nonce } : {}),
+	})
+		.setProtectedHeader({ alg: algorithm, kid: KID })
+		.setIssuer(issuer)
+		.setAudience(audience)
+		.setIssuedAt()
+		.setExpirationTime("1h")
+		.sign(privateKey);
+
+	return { publicJWK, token };
+}
+
+function jsonResponse(data: unknown) {
+	return new Response(JSON.stringify(data), {
+		status: 200,
+		headers: { "content-type": "application/json" },
+	});
+}
+
+function mockJwks(publicJWK: JWK) {
+	vi.stubGlobal(
+		"fetch",
+		vi.fn().mockResolvedValue(jsonResponse({ keys: [publicJWK] })),
+	);
+}
+
+function mockTokenExchange(idToken: string, publicJWK: JWK) {
+	mockedBetterFetch.mockResolvedValueOnce({
+		data: {
+			access_token: "access-token",
+			id_token: idToken,
+			token_type: "Bearer",
+		},
+		error: null,
+	} as Awaited<ReturnType<typeof betterFetch>>);
+	vi.stubGlobal(
+		"fetch",
+		vi.fn().mockResolvedValue(jsonResponse({ keys: [publicJWK] })),
+	);
+}
+
+afterEach(() => {
+	mockedBetterFetch.mockReset();
+	vi.unstubAllGlobals();
+});
 
 /** An unsigned JWT; `getUserInfo` decodes rather than verifies. */
 function idToken(claims: Record<string, unknown>) {
@@ -83,6 +157,120 @@ describe("agentid.createAuthorizationURL", () => {
 			"openid email profile owner_email",
 		);
 	});
+
+	it("deduplicates configured and request-time scopes", async () => {
+		const url = await agentid({
+			...REGISTERED,
+			scope: ["openid", "owner_email"],
+		}).createAuthorizationURL({
+			state: "state",
+			codeVerifier: "verifier",
+			redirectURI: "https://example.com/callback",
+			scopes: ["email", "owner_email"],
+		});
+		expect(url.searchParams.get("scope")).toBe("openid email owner_email");
+	});
+});
+
+describe("agentid.validateAuthorizationCode", () => {
+	it("accepts a code exchange with a valid ID token", async () => {
+		const { publicJWK, token } = await createSignedAgentIdToken();
+		mockTokenExchange(token, publicJWK);
+
+		const tokens = await agentid({
+			...OPEN_CLIENT,
+			tokenEndpoint: TEST_TOKEN_ENDPOINT,
+		}).validateAuthorizationCode({
+			code: "code",
+			codeVerifier: "verifier",
+			redirectURI: "https://example.com/callback",
+		});
+
+		expect(tokens?.idToken).toBe(token);
+	});
+
+	it("rejects a code exchange with an invalid ID token", async () => {
+		const { publicJWK, token } = await createSignedAgentIdToken({
+			audience: "another-client",
+		});
+		mockTokenExchange(token, publicJWK);
+
+		const tokens = await agentid({
+			...OPEN_CLIENT,
+			tokenEndpoint: TEST_TOKEN_ENDPOINT,
+		}).validateAuthorizationCode({
+			code: "code",
+			codeVerifier: "verifier",
+			redirectURI: "https://example.com/callback",
+		});
+
+		expect(tokens).toBeNull();
+	});
+});
+
+describe("agentid.verifyIdToken", () => {
+	it("accepts a valid ES256 token", async () => {
+		const { publicJWK, token } = await createSignedAgentIdToken();
+		mockJwks(publicJWK);
+
+		await expect(
+			agentid(OPEN_CLIENT).verifyIdToken(token, undefined),
+		).resolves.toBe(true);
+	});
+
+	it("rejects a token with an invalid signature", async () => {
+		const { token } = await createSignedAgentIdToken();
+		const { publicJWK } = await createSignedAgentIdToken();
+		mockJwks(publicJWK);
+
+		await expect(
+			agentid(OPEN_CLIENT).verifyIdToken(token, undefined),
+		).resolves.toBe(false);
+	});
+
+	it("rejects a token from another issuer", async () => {
+		const { publicJWK, token } = await createSignedAgentIdToken({
+			issuer: "https://issuer.example.com",
+		});
+		mockJwks(publicJWK);
+
+		await expect(
+			agentid(OPEN_CLIENT).verifyIdToken(token, undefined),
+		).resolves.toBe(false);
+	});
+
+	it("rejects a token for another audience", async () => {
+		const { publicJWK, token } = await createSignedAgentIdToken({
+			audience: "another-client",
+		});
+		mockJwks(publicJWK);
+
+		await expect(
+			agentid(OPEN_CLIENT).verifyIdToken(token, undefined),
+		).resolves.toBe(false);
+	});
+
+	it("rejects a token signed with another algorithm", async () => {
+		const { publicJWK, token } = await createSignedAgentIdToken({
+			algorithm: "RS256",
+		});
+		mockJwks(publicJWK);
+
+		await expect(
+			agentid(OPEN_CLIENT).verifyIdToken(token, undefined),
+		).resolves.toBe(false);
+	});
+
+	it("rejects a token with a different nonce", async () => {
+		const { publicJWK, token } = await createSignedAgentIdToken({
+			nonce: "expected-nonce",
+		});
+		mockJwks(publicJWK);
+
+		await expect(
+			agentid(OPEN_CLIENT).verifyIdToken(token, "different-nonce"),
+		).resolves.toBe(false);
+	});
 });
 
 describe("agentid.getUserInfo", () => {
@@ -136,16 +324,15 @@ describe("agentid.getUserInfo", () => {
 		expect(res?.user.emailVerified).toBe(false);
 	});
 
-	it("does not call UserInfo when no owner scope was requested", async () => {
+	it("does not call UserInfo without an access token", async () => {
 		await agentid(OPEN_CLIENT).getUserInfo({
 			idToken: idToken(baseClaims),
-			accessToken: "access-token",
 		});
 
 		expect(mockedBetterFetch).not.toHaveBeenCalled();
 	});
 
-	it("fetches owner claims from UserInfo", async () => {
+	it("fetches owner claims when the token response omits request-time scopes", async () => {
 		mockedBetterFetch.mockResolvedValue(
 			userinfoResponse({
 				sub: SUB,
@@ -153,10 +340,7 @@ describe("agentid.getUserInfo", () => {
 				owner_email: "maya@acme.com",
 			}),
 		);
-		const res = await agentid({
-			...REGISTERED,
-			scope: ["owner_profile", "owner_email"],
-		}).getUserInfo({
+		const res = await agentid(REGISTERED).getUserInfo({
 			idToken: idToken(baseClaims),
 			accessToken: "access-token",
 		});
