@@ -206,6 +206,46 @@ describe("agentid.validateAuthorizationCode", () => {
 
 		expect(tokens).toBeNull();
 	});
+
+	it("uses a configured ID token verifier for the code exchange", async () => {
+		const { publicJWK, token } = await createSignedAgentIdToken({
+			audience: "custom-audience",
+		});
+		mockTokenExchange(token, publicJWK);
+		const verifyIdToken = vi.fn().mockResolvedValue(true);
+
+		const tokens = await agentid({
+			...OPEN_CLIENT,
+			tokenEndpoint: TEST_TOKEN_ENDPOINT,
+			verifyIdToken,
+		}).validateAuthorizationCode({
+			code: "code",
+			codeVerifier: "verifier",
+			redirectURI: "https://example.com/callback",
+		});
+
+		expect(tokens?.idToken).toBe(token);
+		expect(verifyIdToken).toHaveBeenCalledWith(token, undefined, undefined);
+	});
+
+	it("rejects the code exchange when a configured verifier rejects it", async () => {
+		const { publicJWK, token } = await createSignedAgentIdToken();
+		mockTokenExchange(token, publicJWK);
+		const verifyIdToken = vi.fn().mockResolvedValue(false);
+
+		const tokens = await agentid({
+			...OPEN_CLIENT,
+			tokenEndpoint: TEST_TOKEN_ENDPOINT,
+			verifyIdToken,
+		}).validateAuthorizationCode({
+			code: "code",
+			codeVerifier: "verifier",
+			redirectURI: "https://example.com/callback",
+		});
+
+		expect(tokens).toBeNull();
+		expect(verifyIdToken).toHaveBeenCalledWith(token, undefined, undefined);
+	});
 });
 
 describe("agentid.verifyIdToken", () => {
