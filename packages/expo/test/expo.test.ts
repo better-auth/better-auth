@@ -131,6 +131,139 @@ describe("expo", async () => {
 		);
 	});
 
+	it("should preserve deep-link rewriting when rewriteCallbackToDeepLink is true", async () => {
+		const storage = new Map<string, string>();
+		const { auth, client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+				plugins: [expo(), oAuthProxy()],
+				trustedOrigins: ["better-auth://"],
+			},
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem: (key) => storage.get(key) || null,
+								setItem: async (key, value) => storage.set(key, value),
+							},
+							rewriteCallbackToDeepLink: true,
+						}),
+					],
+				},
+			},
+		);
+		fn.mockClear();
+		const { data: res } = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+		});
+		const stateId = res?.url?.split("state=")[1]!.split("&")[0];
+		const ctx = await auth.$context;
+		if (!stateId) {
+			throw new Error("State ID not found");
+		}
+		const state = await ctx.internalAdapter.findVerificationValue(stateId);
+		const callbackURL = JSON.parse(state?.value || "{}").callbackURL;
+		expect(callbackURL).toBe("better-auth:///dashboard");
+		expect(fn).toHaveBeenCalledWith(
+			expect.stringContaining("accounts.google"),
+			"better-auth:///dashboard",
+			undefined,
+		);
+	});
+
+	it("should not rewrite absolute callback URLs when rewriteCallbackToDeepLink is false", async () => {
+		const storage = new Map<string, string>();
+		const { auth, client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+				plugins: [expo(), oAuthProxy()],
+				trustedOrigins: ["better-auth://"],
+			},
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem: (key) => storage.get(key) || null,
+								setItem: async (key, value) => storage.set(key, value),
+							},
+							rewriteCallbackToDeepLink: false,
+						}),
+					],
+				},
+			},
+		);
+		fn.mockClear();
+		const { data: res } = await client.signIn.social({
+			provider: "google",
+			callbackURL: "https://myapp.example.com/dashboard",
+		});
+		const stateId = res?.url?.split("state=")[1]!.split("&")[0];
+		const ctx = await auth.$context;
+		if (!stateId) {
+			throw new Error("State ID not found");
+		}
+		const state = await ctx.internalAdapter.findVerificationValue(stateId);
+		const callbackURL = JSON.parse(state?.value || "{}").callbackURL;
+		expect(callbackURL).toBe("https://myapp.example.com/dashboard");
+		expect(fn).toHaveBeenCalledWith(
+			expect.stringContaining("accounts.google"),
+			"https://myapp.example.com/dashboard",
+			undefined,
+		);
+	});
+
+	it("should reject relative callback URLs when rewriteCallbackToDeepLink is false", async () => {
+		const storage = new Map<string, string>();
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+				plugins: [expo(), oAuthProxy()],
+				trustedOrigins: ["better-auth://"],
+			},
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							storage: {
+								getItem: (key) => storage.get(key) || null,
+								setItem: async (key, value) => storage.set(key, value),
+							},
+							rewriteCallbackToDeepLink: false,
+						}),
+					],
+				},
+			},
+		);
+		fn.mockClear();
+		await expect(
+			client.signIn.social({
+				provider: "google",
+				callbackURL: "/dashboard",
+			}),
+		).rejects.toThrow(
+			'Relative callbackURL values are not supported when "rewriteCallbackToDeepLink" is false.',
+		);
+		expect(fn).not.toHaveBeenCalled();
+	});
+
 	it("should pass webBrowserOptions to openAuthSessionAsync", async () => {
 		const { client } = await getTestInstance(
 			{
@@ -367,6 +500,43 @@ describe("expo", async () => {
 		});
 		expect(origin).toBe("better-auth://");
 		expect(originalOrigin).toBeNull();
+	});
+
+	it("should use the provided origin for expo-origin header", async () => {
+		let expoOrigin = null;
+		let origin = null;
+		const storage = new Map<string, string>();
+		const { client, testUser } = await getTestInstance(
+			{
+				hooks: {
+					before: createAuthMiddleware(async (ctx) => {
+						expoOrigin = ctx.request?.headers.get("expo-origin");
+						origin = ctx.request?.headers.get("origin");
+					}),
+				},
+				plugins: [expo()],
+			},
+			{
+				clientOptions: {
+					plugins: [
+						expoClient({
+							origin: "https://myapp.example.com",
+							storage: {
+								getItem: (key) => storage.get(key) || null,
+								setItem: async (key, value) => storage.set(key, value),
+							},
+						}),
+					],
+				},
+			},
+		);
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			callbackURL: "http://localhost:3000/callback",
+		});
+		expect(expoOrigin).toBe("https://myapp.example.com");
+		expect(origin).toBe("https://myapp.example.com");
 	});
 
 	/**
