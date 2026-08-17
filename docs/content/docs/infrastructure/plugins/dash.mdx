@@ -70,9 +70,9 @@ This opt-in control plane is for the SCIM 1.7 plugin-managed runtime flow. In Be
 
 * static code-defined connections
 * application-owned runtime verification
-* plugin-managed runtime connections via `managedDirectorySync`
+* plugin-managed runtime connections via `managedConnections`
 
-The `managedDirectorySync` option enables the plugin-managed mode for directory-sync provisioning. It creates the reserved schema and APIs needed to manage directory connections and paired SSO state.
+The `managedDirectorySync` option enables the plugin-managed mode for directory-sync provisioning in `dash`. It creates the reserved schema and APIs needed to manage directory connections and paired SSO state.
 
 #### Managed directory sync options
 
@@ -112,7 +112,7 @@ Stores the managed directory's organization, SCIM connection, SSO pairing, lifec
 | `provisioningDomainId`  | `string`  | Required, unique              | SCIM provisioning domain.                        |
 | `activeOrganizationKey` | `string`  | Required, unique, hidden      | Active organization key for reconciliation.      |
 | `connectionId`          | `string`  | Optional, unique              | Managed SCIM connection identifier.              |
-| `creationRequestId`     | `string`  | Required, unique, hidden      | Idempotent creation correlation value.           |
+| `creationRequestId`     | `string`  | Required, unique, hidden      | Immutable ownership correlation value.           |
 | `status`                | `string`  | Required                      | Current directory lifecycle status.              |
 | `revision`              | `number`  | Required, default `0`, hidden | Mutation revision used for concurrency control.  |
 | `createdAt`             | `date`    | Required                      | Creation timestamp.                              |
