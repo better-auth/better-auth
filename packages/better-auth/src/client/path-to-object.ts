@@ -150,6 +150,96 @@ export type InferCtx<
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
 
+type InferClientResponseData<
+	R,
+	COpts extends BetterAuthClientOptions,
+	Path extends string,
+	Metadata,
+> = Metadata extends {
+	CUSTOM_SESSION: boolean;
+}
+	? MergeCustomSessionWithInferred<NonNullable<Awaited<R>>, COpts>
+	: Path extends "/get-session"
+		? {
+				user: InferUserFromClient<COpts>;
+				session: InferSessionFromClient<COpts>;
+			} | null
+		: RefineAuthResponse<NonNullable<Awaited<R>>, COpts>;
+
+type InferClientResponseError<Options extends { error?: unknown }> =
+	Options["error"] extends StandardSchemaV1
+		? NonNullable<Options["error"]["~standard"]["types"]>["output"]
+		: {
+				code?: string | undefined;
+				message?: string | undefined;
+			};
+
+type DefaultClientThrow<COpts extends BetterAuthClientOptions> =
+	COpts["fetchOptions"] extends { throw: true } ? true : false;
+
+type InferClientMethodArgs<
+	C extends InputContext<any, any>,
+	COpts extends BetterAuthClientOptions,
+	Path extends string,
+	FetchOptions extends ClientFetchOption,
+> =
+	HasRequiredKeys<InferCtx<C, FetchOptions>> extends true
+		? [
+				Prettify<
+					Path extends `/sign-up/email`
+						? InferSignUpEmailCtx<COpts, FetchOptions>
+						: InferCtx<C, FetchOptions>
+				>,
+				FetchOptions?,
+			]
+		: [
+				Prettify<
+					Path extends `/update-user`
+						? InferUserUpdateCtx<COpts, FetchOptions>
+						: Path extends `/update-session`
+							? InferSessionUpdateCtx<COpts, FetchOptions>
+							: InferCtx<C, FetchOptions>
+				>?,
+				FetchOptions?,
+			];
+
+/**
+ * Client endpoint method. The non-generic overload is last so `ReturnType<>`
+ * resolves to a concrete response instead of `any`.
+ */
+type InferClientMethod<
+	C extends InputContext<any, any>,
+	R,
+	COpts extends BetterAuthClientOptions,
+	Path extends string,
+	Options extends { error?: unknown; metadata?: unknown },
+> = {
+	<
+		FetchOptions extends ClientFetchOption<
+			Partial<C["body"]> & Record<string, any>,
+			Partial<C["query"]> & Record<string, any>,
+			C["params"]
+		>,
+	>(
+		...data: InferClientMethodArgs<C, COpts, Path, FetchOptions>
+	): Promise<
+		BetterFetchResponse<
+			InferClientResponseData<R, COpts, Path, Options["metadata"]>,
+			InferClientResponseError<Options>,
+			FetchOptions["throw"] extends true ? true : DefaultClientThrow<COpts>
+		>
+	>;
+	(
+		...data: InferClientMethodArgs<C, COpts, Path, ClientFetchOption>
+	): Promise<
+		BetterFetchResponse<
+			InferClientResponseData<R, COpts, Path, Options["metadata"]>,
+			InferClientResponseError<Options>,
+			DefaultClientThrow<COpts>
+		>
+	>;
+};
+
 export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 	API extends Record<string, infer T>
 		? T extends Endpoint
@@ -171,65 +261,7 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 						T["path"],
 						T extends (ctx: infer C) => infer R
 							? C extends InputContext<any, any>
-								? <
-										FetchOptions extends ClientFetchOption<
-											Partial<C["body"]> & Record<string, any>,
-											Partial<C["query"]> & Record<string, any>,
-											C["params"]
-										>,
-									>(
-										...data: HasRequiredKeys<
-											InferCtx<C, FetchOptions>
-										> extends true
-											? [
-													Prettify<
-														T["path"] extends `/sign-up/email`
-															? InferSignUpEmailCtx<COpts, FetchOptions>
-															: InferCtx<C, FetchOptions>
-													>,
-													FetchOptions?,
-												]
-											: [
-													Prettify<
-														T["path"] extends `/update-user`
-															? InferUserUpdateCtx<COpts, FetchOptions>
-															: T["path"] extends `/update-session`
-																? InferSessionUpdateCtx<COpts, FetchOptions>
-																: InferCtx<C, FetchOptions>
-													>?,
-													FetchOptions?,
-												]
-									) => Promise<
-										BetterFetchResponse<
-											T["options"]["metadata"] extends {
-												CUSTOM_SESSION: boolean;
-											}
-												? MergeCustomSessionWithInferred<
-														NonNullable<Awaited<R>>,
-														COpts
-													>
-												: T["path"] extends "/get-session"
-													? {
-															user: InferUserFromClient<COpts>;
-															session: InferSessionFromClient<COpts>;
-														} | null
-													: RefineAuthResponse<NonNullable<Awaited<R>>, COpts>,
-											T["options"]["error"] extends StandardSchemaV1
-												? // InferOutput
-													NonNullable<
-														T["options"]["error"]["~standard"]["types"]
-													>["output"]
-												: {
-														code?: string | undefined;
-														message?: string | undefined;
-													},
-											FetchOptions["throw"] extends true
-												? true
-												: COpts["fetchOptions"] extends { throw: true }
-													? true
-													: false
-										>
-									>
+								? InferClientMethod<C, R, COpts, T["path"], T["options"]>
 								: never
 							: never
 					>

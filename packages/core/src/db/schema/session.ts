@@ -21,7 +21,10 @@ export type BaseSession = z.infer<typeof sessionSchema>;
  */
 export type Session<
 	DBOptions extends BetterAuthOptions["session"] = BetterAuthOptions["session"],
-	Plugins extends BetterAuthOptions["plugins"] = BetterAuthOptions["plugins"],
+	Plugins extends
+		| BetterAuthOptions["plugins"]
+		| readonly unknown[]
+		| undefined = BetterAuthOptions["plugins"],
 > = Prettify<
 	z.infer<typeof sessionSchema> &
 		InferDBFieldsFromOptions<DBOptions> &

@@ -45,7 +45,7 @@ describe("oidc scope consent", async () => {
 	let auth: Auth<ReturnType<typeof authConfig>>;
 
 	beforeEach(async () => {
-		auth = betterAuth(authConfig());
+		auth = betterAuth(authConfig()) as Auth<ReturnType<typeof authConfig>>;
 		const handler = toNodeHandler(auth);
 		server = https.createServer(options, (req, res) => {
 			requests.push(req);

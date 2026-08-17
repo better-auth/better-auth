@@ -3,6 +3,8 @@ import type {
 	Awaitable,
 	BetterAuthOptions,
 	BetterAuthPlugin,
+	BetterAuthPluginRegistry,
+	BetterAuthPluginRegistryIdentifier,
 } from "@better-auth/core";
 import type { InternalLogger } from "@better-auth/core/env";
 import { logger } from "@better-auth/core/env";
@@ -182,16 +184,23 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 			};
 		}, {}) ?? {};
 
+	type StaticEndpoints<T> = T extends { endpoints: infer E } ? E : {};
+
+	type ResolvedPluginEndpoints<T> = T extends BetterAuthPlugin
+		? T["id"] extends infer ID extends BetterAuthPluginRegistryIdentifier
+			? BetterAuthPluginRegistry<
+					Option,
+					T extends { options: infer PO } ? PO : never
+				>[ID] extends { resolvedEndpoints: infer R }
+				? [R] extends [never]
+					? StaticEndpoints<T>
+					: R
+				: StaticEndpoints<T>
+			: StaticEndpoints<T>
+		: {};
+
 	type PluginEndpoint = UnionToIntersection<
-		Option["plugins"] extends Array<infer T>
-			? T extends BetterAuthPlugin
-				? T extends {
-						endpoints: infer E;
-					}
-					? E
-					: {}
-				: {}
-			: {}
+		Option["plugins"] extends Array<infer T> ? ResolvedPluginEndpoints<T> : {}
 	>;
 
 	const middlewares =

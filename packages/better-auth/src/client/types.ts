@@ -1,6 +1,9 @@
 import type {
 	BetterAuthClientOptions,
 	BetterAuthClientPlugin,
+	BetterAuthOptions,
+	BetterAuthPluginRegistry,
+	BetterAuthPluginRegistryIdentifier,
 	ClientAtomListener,
 	ClientStore,
 } from "@better-auth/core";
@@ -24,27 +27,83 @@ type ClientPluginError<K extends string = string> = {
 	message: string;
 };
 
-type InferPluginEndpoints<Plugins> =
+type StaticServerPluginEndpoints<Plug> = Plug extends {
+	endpoints?: infer Endpoints;
+}
+	? Endpoints extends Record<string, unknown>
+		? Endpoints
+		: {}
+	: {};
+
+/**
+ * Prefer an explicit `$InferAuth` (auth instance or options). Otherwise synthesize
+ * enough auth options from client plugins (e.g. `inferAdditionalFields<typeof auth>()`)
+ * so registry `resolvedEndpoints` can rebuild endpoint return types.
+ */
+type InferAuthOptionsForClient<O extends BetterAuthClientOptions> = O extends {
+	$InferAuth: infer A;
+}
+	? A extends { options: infer Opt extends BetterAuthOptions }
+		? Opt
+		: A extends BetterAuthOptions
+			? A
+			: SynthesizeAuthOptionsFromClientPlugins<O>
+	: SynthesizeAuthOptionsFromClientPlugins<O>;
+
+type MergedUserFieldsFromClientPlugins<Plugins> =
 	Plugins extends Array<infer Pl>
 		? UnionToIntersection<
 				Pl extends {
-					$InferServerPlugin?: infer Plug;
+					$InferServerPlugin?: {
+						schema?: {
+							user?: {
+								fields?: infer F;
+							};
+						};
+					};
 				}
-					? Plug extends {
-							endpoints?: infer Endpoints;
-						}
-						? Endpoints extends Record<string, unknown>
-							? Endpoints
-							: {}
+					? F extends Record<string, unknown>
+						? F
 						: {}
 					: {}
 			>
 		: {};
 
+type SynthesizeAuthOptionsFromClientPlugins<O extends BetterAuthClientOptions> =
+	{
+		user: {
+			additionalFields: MergedUserFieldsFromClientPlugins<O["plugins"]>;
+		};
+	};
+
+type ResolvedClientPluginEndpoints<
+	O extends BetterAuthClientOptions,
+	Pl,
+> = Pl extends {
+	$InferServerPlugin?: infer Plug;
+}
+	? Plug extends {
+			id: infer ID extends BetterAuthPluginRegistryIdentifier;
+		}
+		? BetterAuthPluginRegistry<
+				InferAuthOptionsForClient<O>,
+				Plug extends { options: infer PO } ? PO : never
+			>[ID] extends { resolvedEndpoints: infer R }
+			? [R] extends [never]
+				? StaticServerPluginEndpoints<Plug>
+				: R
+			: StaticServerPluginEndpoints<Plug>
+		: StaticServerPluginEndpoints<Plug>
+	: {};
+
+type InferPluginEndpoints<O extends BetterAuthClientOptions> =
+	O["plugins"] extends Array<infer Pl>
+		? UnionToIntersection<ResolvedClientPluginEndpoints<O, Pl>>
+		: {};
+
 export type InferClientAPI<O extends BetterAuthClientOptions> = InferRoutes<
 	O["plugins"] extends Array<any>
-		? Omit<Auth["api"], keyof InferPluginEndpoints<O["plugins"]>> &
-				InferPluginEndpoints<O["plugins"]>
+		? Omit<Auth["api"], keyof InferPluginEndpoints<O>> & InferPluginEndpoints<O>
 		: Auth["api"],
 	O
 >;
@@ -61,7 +120,9 @@ export type InferActions<O extends BetterAuthClientOptions> =
 					: {}
 			>
 		: {}) &
-		//infer routes from auth config
+		// Infer routes from `$InferAuth` only when it exposes top-level `plugins`
+		// (raw options). Auth instances use InferClientAPI + client plugins instead;
+		// resolving both would intersect duplicate generic methods into `any`.
 		InferRoutes<
 			O["$InferAuth"] extends {
 				plugins: infer Plugins;

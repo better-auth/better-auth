@@ -651,7 +651,7 @@ export const createTestSuite = <
 								return adapter;
 							},
 						} as BetterAuthOptions);
-						return auth;
+						return auth as Auth;
 					},
 					log: helpers.log,
 					generate: generateModel,

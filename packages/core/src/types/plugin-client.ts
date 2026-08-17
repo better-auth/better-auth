@@ -87,7 +87,12 @@ export interface BetterAuthClientOptions {
 	baseURL?: string | undefined;
 	basePath?: string | undefined;
 	disableDefaultFetchPlugins?: boolean | undefined;
-	$InferAuth?: BetterAuthOptions | undefined;
+	$InferAuth?:
+		| BetterAuthOptions
+		| {
+				options: BetterAuthOptions;
+		  }
+		| undefined;
 	sessionOptions?: RevalidateOptions | undefined;
 }
 
