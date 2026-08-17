@@ -18,7 +18,7 @@ const REGISTERED = {
 
 const SUB = "a91f2c8e43";
 
-/** An unsigned JWT — `getUserInfo` decodes rather than verifies. */
+/** An unsigned JWT; `getUserInfo` decodes rather than verifies. */
 function idToken(claims: Record<string, unknown>) {
 	const part = (value: unknown) =>
 		Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -42,9 +42,7 @@ function userinfoResponse(profile: Record<string, unknown>) {
 }
 
 describe("agentid.createAuthorizationURL", () => {
-	it("always sends PKCE, which AgentID requires, and only S256", async () => {
-		// There is no option to turn this off, because there is no configuration
-		// in which omitting it works: AgentID refuses the authorization request.
+	it("always sends S256 PKCE", async () => {
 		const url = await agentid(OPEN_CLIENT).createAuthorizationURL({
 			state: "state",
 			codeVerifier: "verifier",
@@ -54,9 +52,7 @@ describe("agentid.createAuthorizationURL", () => {
 		expect(url.searchParams.get("code_challenge")).toBeTruthy();
 	});
 
-	it("sends PKCE for a registered client too", async () => {
-		// Confidential clients are not exempt — a client secret authenticates the
-		// client, PKCE binds the code, and AgentID asks for both.
+	it("sends S256 PKCE for a registered client", async () => {
 		const url = await agentid(REGISTERED).createAuthorizationURL({
 			state: "state",
 			codeVerifier: "verifier",
@@ -65,7 +61,7 @@ describe("agentid.createAuthorizationURL", () => {
 		expect(url.searchParams.get("code_challenge_method")).toBe("S256");
 	});
 
-	it("defaults to the pair an unregistered client is entitled to", async () => {
+	it("defaults to openid and email scopes", async () => {
 		const url = await agentid(OPEN_CLIENT).createAuthorizationURL({
 			state: "state",
 			codeVerifier: "verifier",
@@ -74,7 +70,7 @@ describe("agentid.createAuthorizationURL", () => {
 		expect(url.searchParams.get("scope")).toBe("openid email");
 	});
 
-	it("carries the extra scopes a registered client asks for", async () => {
+	it("includes configured scopes", async () => {
 		const url = await agentid({
 			...REGISTERED,
 			scope: ["profile", "owner_email"],
@@ -94,7 +90,7 @@ describe("agentid.getUserInfo", () => {
 		mockedBetterFetch.mockReset();
 	});
 
-	it("builds the user from the id_token", async () => {
+	it("builds the user from the ID token", async () => {
 		const res = await agentid(OPEN_CLIENT).getUserInfo({
 			idToken: idToken({ ...baseClaims, name: "Acme Support" }),
 		});
@@ -107,10 +103,7 @@ describe("agentid.getUserInfo", () => {
 		});
 	});
 
-	it("prefers a name AgentID sent over the fallback", async () => {
-		// The fallback is a floor, not an override — once the issuer serves a
-		// name to a tier it did not before, that name has to win without any
-		// change here.
+	it("prefers the ID token name over the fallback", async () => {
 		const res = await agentid(OPEN_CLIENT).getUserInfo({
 			idToken: idToken({ ...baseClaims, name: "Acme Support" }),
 		});
@@ -119,9 +112,6 @@ describe("agentid.getUserInfo", () => {
 	});
 
 	it("falls back to the inbox local part when AgentID sends none", async () => {
-		// `user.name` is required by the schema, so without this substitution the
-		// sign-in dies on a NOT NULL constraint — a raw database error rather
-		// than an OAuth one.
 		const res = await agentid(OPEN_CLIENT).getUserInfo({
 			idToken: idToken(baseClaims),
 		});
@@ -146,7 +136,7 @@ describe("agentid.getUserInfo", () => {
 		expect(res?.user.emailVerified).toBe(false);
 	});
 
-	it("does not call userinfo when no owner scope was requested", async () => {
+	it("does not call UserInfo when no owner scope was requested", async () => {
 		await agentid(OPEN_CLIENT).getUserInfo({
 			idToken: idToken(baseClaims),
 			accessToken: "access-token",
@@ -155,7 +145,7 @@ describe("agentid.getUserInfo", () => {
 		expect(mockedBetterFetch).not.toHaveBeenCalled();
 	});
 
-	it("merges the owner claims, which no id_token can carry", async () => {
+	it("fetches owner claims from UserInfo", async () => {
 		mockedBetterFetch.mockResolvedValue(
 			userinfoResponse({
 				sub: SUB,
@@ -176,9 +166,8 @@ describe("agentid.getUserInfo", () => {
 		expect(res?.data.owner_email).toBe("maya@acme.com");
 	});
 
-	it("discards a userinfo response for a different subject", async () => {
-		// OIDC Core § 5.3.2. Otherwise a substituted access token attaches
-		// another subject's owner identity to this signed-in user.
+	it("ignores UserInfo with a different subject", async () => {
+		// OIDC Core §5.3.2 prevents access-token substitution here.
 		mockedBetterFetch.mockResolvedValue(
 			userinfoResponse({
 				sub: "someone-else",
@@ -199,9 +188,7 @@ describe("agentid.getUserInfo", () => {
 		expect(res?.data.owner_email).toBeUndefined();
 	});
 
-	it("still signs in when userinfo is unreachable", async () => {
-		// The agent has already approved by this point; an owner claim that did
-		// not arrive is not worth the session.
+	it("continues sign-in when UserInfo is unavailable", async () => {
 		mockedBetterFetch.mockRejectedValue(new Error("socket hang up"));
 		const res = await agentid({
 			...REGISTERED,
@@ -215,7 +202,7 @@ describe("agentid.getUserInfo", () => {
 		expect(res?.data.owner_email).toBeUndefined();
 	});
 
-	it("returns null rather than throwing on a malformed id_token", async () => {
+	it("returns null for a malformed ID token", async () => {
 		const res = await agentid(OPEN_CLIENT).getUserInfo({
 			idToken: "not-a-jwt",
 		});
@@ -223,7 +210,7 @@ describe("agentid.getUserInfo", () => {
 		expect(res).toBeNull();
 	});
 
-	it("lets mapProfileToUser lift the owner claims onto the user", async () => {
+	it("maps owner claims with mapProfileToUser", async () => {
 		mockedBetterFetch.mockResolvedValue(
 			userinfoResponse({ sub: SUB, owner_email: "maya@acme.com" }),
 		);
