@@ -411,7 +411,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		updateOrganization: async (
 			organizationId: string,
-			data: Partial<OrganizationInput>,
+			data: Partial<Omit<OrganizationInput, "slug">> & { slug?: string | null },
 		): Promise<InferOrganization<O> | null> => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const organization = await adapter.update<InferOrganization<O, false>>({
