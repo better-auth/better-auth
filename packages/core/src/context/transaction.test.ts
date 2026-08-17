@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 import type { DBAdapter, DBTransactionAdapter } from "../db/adapter";
+import { __getBetterAuthGlobal } from "./global";
 import {
 	getCurrentAdapter,
 	queueAfterTransactionHook,
@@ -80,5 +81,54 @@ describe("runWithTransaction", () => {
 		expect(getTransactionCalls()).toBe(1);
 		expect(hookRunsInsideTransaction).toBe(0);
 		expect(hookRuns).toBe(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10832
+	 */
+	it("preserves each transaction adapter across concurrent first calls", async () => {
+		vi.resetModules();
+		const globalContext = __getBetterAuthGlobal().context;
+		const previousStorageDescriptor = Object.getOwnPropertyDescriptor(
+			globalContext,
+			"adapterAsyncStorage",
+		);
+		onTestFinished(() => {
+			if (previousStorageDescriptor) {
+				Object.defineProperty(
+					globalContext,
+					"adapterAsyncStorage",
+					previousStorageDescriptor,
+				);
+			} else {
+				Reflect.deleteProperty(globalContext, "adapterAsyncStorage");
+			}
+		});
+		Reflect.deleteProperty(globalContext, "adapterAsyncStorage");
+		const mod = await import("./transaction");
+		const harnesses = Array.from({ length: 32 }, () => {
+			const transactionAdapter = {} as DBTransactionAdapter;
+			const adapter = {
+				transaction: async <R>(
+					callback: (trx: DBTransactionAdapter) => Promise<R>,
+				) => callback(transactionAdapter),
+			} as DBAdapter;
+			return { adapter, transactionAdapter };
+		});
+
+		const currentAdapters = await Promise.all(
+			harnesses.map(({ adapter }) =>
+				mod.runWithTransaction(adapter, async () => {
+					await Promise.resolve();
+					return mod.getCurrentAdapter(adapter);
+				}),
+			),
+		);
+
+		const transactionAdapterCount = currentAdapters.filter(
+			(currentAdapter, index) =>
+				currentAdapter === harnesses[index]?.transactionAdapter,
+		).length;
+		expect(transactionAdapterCount).toBe(harnesses.length);
 	});
 });
