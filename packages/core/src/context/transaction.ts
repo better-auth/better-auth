@@ -1,4 +1,4 @@
-import type { AsyncLocalStorage } from "node:async_hooks";
+import type { AsyncLocalStorage } from "@better-auth/core/async_hooks";
 import { getAsyncLocalStorage } from "@better-auth/core/async_hooks";
 import type { DBAdapter, DBTransactionAdapter } from "../db/adapter";
 import type { BetterAuthOptions } from "../types";
@@ -14,10 +14,12 @@ type HookContext = {
 
 const ensureAsyncStorage = async () => {
 	const betterAuthGlobal = __getBetterAuthGlobal();
-	if (!betterAuthGlobal.context.adapterAsyncStorage) {
-		const AsyncLocalStorage = await getAsyncLocalStorage();
-		betterAuthGlobal.context.adapterAsyncStorage = new AsyncLocalStorage();
+	const existing = betterAuthGlobal.context.adapterAsyncStorage;
+	if (existing) {
+		return existing as AsyncLocalStorage<HookContext>;
 	}
+	const AsyncLocalStorage = await getAsyncLocalStorage();
+	betterAuthGlobal.context.adapterAsyncStorage ??= new AsyncLocalStorage();
 	return betterAuthGlobal.context
 		.adapterAsyncStorage as AsyncLocalStorage<HookContext>;
 };
