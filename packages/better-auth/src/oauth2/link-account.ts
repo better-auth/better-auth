@@ -95,7 +95,7 @@ export async function handleOAuthUserInfo(
 					userId: dbUser.user.id,
 					accessToken: await setTokenUtil(account.accessToken, c.context),
 					refreshToken: await setTokenUtil(account.refreshToken, c.context),
-					idToken: account.idToken,
+					idToken: await setTokenUtil(account.idToken, c.context),
 					accessTokenExpiresAt: account.accessTokenExpiresAt,
 					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 					scope: account.scope,
@@ -129,7 +129,7 @@ export async function handleOAuthUserInfo(
 				c.context.options.account?.updateAccountOnSignIn !== false
 					? Object.fromEntries(
 							Object.entries({
-								idToken: account.idToken,
+								idToken: await setTokenUtil(account.idToken, c.context),
 								accessToken: await setTokenUtil(account.accessToken, c.context),
 								refreshToken: await setTokenUtil(
 									account.refreshToken,
@@ -217,7 +217,7 @@ export async function handleOAuthUserInfo(
 			const accountData = {
 				accessToken: await setTokenUtil(account.accessToken, c.context),
 				refreshToken: await setTokenUtil(account.refreshToken, c.context),
-				idToken: account.idToken,
+				idToken: await setTokenUtil(account.idToken, c.context),
 				accessTokenExpiresAt: account.accessTokenExpiresAt,
 				refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 				scope: account.scope,

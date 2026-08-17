@@ -512,7 +512,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 					const updateData = Object.fromEntries(
 						Object.entries({
 							accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
-							idToken: tokens.idToken,
+							idToken: await setTokenUtil(tokens.idToken, ctx.context),
 							refreshToken: await setTokenUtil(
 								tokens.refreshToken,
 								ctx.context,
@@ -536,7 +536,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
 						scope: tokens.scopes?.join(","),
 						refreshToken: await setTokenUtil(tokens.refreshToken, ctx.context),
-						idToken: tokens.idToken,
+						idToken: await setTokenUtil(tokens.idToken, ctx.context),
 					});
 					if (!newAccount) {
 						redirectOnError(ctx, resolvedErrorURL, "unable_to_link_account");
