@@ -10,6 +10,7 @@ import {
 } from "@better-auth/core/context";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { getIp } from "@better-auth/core/utils/ip";
 import { safeJSONParse } from "@better-auth/core/utils/json";
@@ -33,6 +34,56 @@ function getTTLSeconds(expiresAt: Date | number, now = Date.now()): number {
 	const expiresMs =
 		typeof expiresAt === "number" ? expiresAt : expiresAt.getTime();
 	return Math.max(Math.floor((expiresMs - now) / 1000), 0);
+}
+
+/**
+ * Formats the first 16 bytes of a digest as an RFC 4122 name-based UUID, so a
+ * deterministic id is still accepted where the id column holds UUIDs.
+ */
+function formatDigestAsUUID(digest: Uint8Array): string {
+	const bytes = digest.slice(0, 16);
+	// Only the version nibble (5, name-based, the closest match for a digest of
+	// a name) and the two variant bits are rewritten, so the id stays a
+	// function of the identifier.
+	bytes[6] = (bytes[6]! & 0x0f) | 0x50;
+	bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+	const hex = Array.from(bytes, (byte) =>
+		byte.toString(16).padStart(2, "0"),
+	).join("");
+	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/**
+ * Derives the deterministic primary key that makes a reservation
+ * first-writer-wins: the same identifier always maps to the same row, so a
+ * replay collides with the row the first caller wrote.
+ *
+ * The digest is always `SHA-256` of `reserve:<identifier>`; only the encoding
+ * follows the configured id strategy. Under `generateId: "uuid"` the adapter
+ * throws away any id that is not UUID shaped and puts a random one in its
+ * place, which would let every replay win, so the digest is formatted as a
+ * UUID there. Every other strategy keeps the base64url key.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10624
+ */
+export async function getReservationId(
+	identifier: string,
+	options: Pick<BetterAuthOptions, "advanced">,
+): Promise<string> {
+	const generateId = options.advanced?.database?.generateId;
+	if (generateId === "serial") {
+		throw new BetterAuthError(
+			'Reservations are not supported with `advanced.database.generateId: "serial"`, because a database generated number cannot hold the deterministic id a reservation is keyed by.',
+		);
+	}
+	const digest = new Uint8Array(
+		await createHash("SHA-256").digest(
+			new TextEncoder().encode("reserve:" + identifier),
+		),
+	);
+	return generateId === "uuid"
+		? formatDigestAsUUID(digest)
+		: base64Url.encode(digest, { padding: false });
 }
 
 export const createInternalAdapter = (
@@ -1380,7 +1431,8 @@ export const createInternalAdapter = (
 		 * already taken.
 		 *
 		 * The `verification.identifier` column is non-unique, so uniqueness comes
-		 * from a deterministic primary key (`SHA-256` of `reserve:<identifier>`).
+		 * from a deterministic primary key (`SHA-256` of `reserve:<identifier>`,
+		 * encoded to fit the configured id strategy, see `getReservationId`).
 		 * The database path is atomic: the primary key turns the INSERT into the
 		 * first-writer-wins gate, and a duplicate is detected portably by
 		 * re-reading the row rather than matching adapter-specific errors. The
@@ -1397,14 +1449,7 @@ export const createInternalAdapter = (
 			value: string;
 			expiresAt: Date;
 		}): Promise<boolean> => {
-			const reservationId = base64Url.encode(
-				new Uint8Array(
-					await createHash("SHA-256").digest(
-						new TextEncoder().encode("reserve:" + data.identifier),
-					),
-				),
-				{ padding: false },
-			);
+			const reservationId = await getReservationId(data.identifier, options);
 			const storageOption = getStorageOption(
 				data.identifier,
 				options.verification?.storeIdentifier,
