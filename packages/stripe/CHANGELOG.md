@@ -6,8 +6,6 @@
 
 - [#9531](https://github.com/better-auth/better-auth/pull/9531) [`75ca6a4`](https://github.com/better-auth/better-auth/commit/75ca6a458547b5c0d60fe9ac86afaf71fc80ba3d) Thanks [@bytaesu](https://github.com/bytaesu)! - The `onSubscriptionCancel` callback's `event` parameter is now required, consistent with the other subscription lifecycle callbacks. Update your callback to declare `event` as a required parameter and remove any `undefined` guards around it.
 
-### Patch Changes
-
 ## 1.7.0-rc.6
 
 ## 1.7.0-rc.5
