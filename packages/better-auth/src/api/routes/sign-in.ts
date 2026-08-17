@@ -311,6 +311,15 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						providerId: provider.id,
 						accountId: String(userInfo.user.id),
 						accessToken: c.body.idToken.accessToken,
+						idToken: token,
+						refreshToken: c.body.idToken.refreshToken,
+						...(c.body.idToken.expiresAt != null
+							? {
+									accessTokenExpiresAt: new Date(
+										c.body.idToken.expiresAt * 1000,
+									),
+								}
+							: {}),
 					},
 					callbackURL: c.body.callbackURL,
 					disableSignUp:
