@@ -55,10 +55,6 @@
 
   This adds a `requestedUserInfoClaims` column to the OAuth access-token, refresh-token, and consent tables. Run your database migrations after upgrading.
 
-- [#9123](https://github.com/better-auth/better-auth/pull/9123) [`e2e25a4`](https://github.com/better-auth/better-auth/commit/e2e25a49545f3e386cfcc4e86b33c1796a1430b1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Dynamic client registration now preserves confidential client authentication methods for unauthenticated registrations instead of converting them to public clients. Requests that omit `token_endpoint_auth_method` receive the RFC 7591 default `client_secret_basic` method and a one-time `client_secret`; requests that explicitly use `token_endpoint_auth_method: "none"` still create public clients.
-
-  Registered client `jwks` metadata can now be used with secret-based clients and is returned as a JWKS document (`{ "keys": [...] }`). Inline JWKS metadata must contain public asymmetric keys.
-
 - [#10146](https://github.com/better-auth/better-auth/pull/10146) [`a8200b2`](https://github.com/better-auth/better-auth/commit/a8200b297c4092cb51397a9285ef4d1f024dea75) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth Provider now lets servers set `clientRegistrationRequirePKCE: false` to allow confidential clients created through Dynamic Client Registration to complete authorization-code flows without PKCE. Public clients and authorization requests with `offline_access` still require PKCE.
 
 - [#9277](https://github.com/better-auth/better-auth/pull/9277) [`5c6de4e`](https://github.com/better-auth/better-auth/commit/5c6de4ed265e7aa30e7e42a0e493386cf3ad6c96) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth Provider endpoints now return standard OAuth `{ error, error_description }` responses for malformed requests. Token requests distinguish missing input (`invalid_request`), failed client authentication (`invalid_client`), and invalid or mismatched grants (`invalid_grant`). Failed HTTP Basic authentication also returns `401` with a `WWW-Authenticate` challenge.
@@ -227,25 +223,11 @@
 
 - [#10150](https://github.com/better-auth/better-auth/pull/10150) [`508d8d6`](https://github.com/better-auth/better-auth/commit/508d8d6f06488d33a44d11059c873fcb8721d7a1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth Provider authorization-code replay now returns `invalid_grant` with a `400` token response and revokes previously issued opaque tokens from that authorization code.
 
-- [#9131](https://github.com/better-auth/better-auth/pull/9131) [`5142e9c`](https://github.com/better-auth/better-auth/commit/5142e9cec55825eb14da0f14022ae02d3c9dfd45) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Dynamic `baseURL` configurations now resolve consistently for direct server API calls and OAuth or MCP discovery:
-  - Fail with a clear `APIError` when no base URL can be resolved or the request host violates `allowedHosts`.
-  - Apply `advanced.trustedProxyHeaders` before trusting forwarded host and protocol values, and refresh request-dependent trusted origins, trusted providers, and cookies for each direct call.
-  - Infer HTTP for loopback development hosts when only headers are available, while rejecting request-like objects without usable URL and header data.
-  - Generate OAuth issuer, discovery, protected-resource, and JWKS URLs from the current request host.
-  - Make `requireMcpAuth` use the resolved Better Auth URL for its default issuer, resource, and JWKS URL. Resource servers with fully dynamic hosts can use `createMcpProtectedRequestHandler` with explicit verification options.
-  - Preserve metadata response headers supplied as `Headers`, tuple arrays, or records.
-
 - [#10065](https://github.com/better-auth/better-auth/pull/10065) [`2196ea6`](https://github.com/better-auth/better-auth/commit/2196ea65e724830d9f1066c6593210579de586b9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth and device-authorization responses that carry credentials now consistently send `Cache-Control: no-store` and `Pragma: no-cache`, so proxies, CDNs, and browsers never cache them. This covers the token, introspection, and userinfo endpoints, dynamic and admin client registration, client secret rotation, and the device code and device token responses, including the error responses from those endpoints.
 
   Endpoints declare this with `metadata: { noStore: true }`, and the header set is exported from `@better-auth/core` as `NO_STORE_HEADERS` for responses built by hand.
 
 - [#10159](https://github.com/better-auth/better-auth/pull/10159) [`7d1288e`](https://github.com/better-auth/better-auth/commit/7d1288e7c56a2385713cbcc232a376a7fe228be4) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `redirect_uri` is enforced conditionally at the OAuth token endpoint: required and matched only when the authorization request included one (RFC 6749 §4.1.3), so an authorization code issued without a `redirect_uri` can be exchanged without one. A `redirect_uri` that does not match the code's bound value now returns `invalid_grant` instead of `invalid_request` (RFC 6749 §5.2).
-
-- [#9118](https://github.com/better-auth/better-auth/pull/9118) [`314e06f`](https://github.com/better-auth/better-auth/commit/314e06f0fd84ac90b55b5430624a74c5a8d62bfd) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - feat(oauth-provider): add `customTokenResponseFields` callback and Zod validation for authorization codes
-
-  Add `customTokenResponseFields` callback to `OAuthOptions` for injecting custom fields into token endpoint responses across all grant types. Standard OAuth fields (`access_token`, `token_type`, etc.) cannot be overridden. Follows the same pattern as `customAccessTokenClaims` and `customIdTokenClaims`.
-
-  Authorization code verification values are now validated with a Zod schema at deserialization, consistently returning `invalid_verification` errors for malformed or corrupted values instead of potential 500s.
 
 - [#10152](https://github.com/better-auth/better-auth/pull/10152) [`d368217`](https://github.com/better-auth/better-auth/commit/d368217efc1265996460d96c539b2ca669e33d49) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Keeps `profile` and `email` scope claims on the OIDC UserInfo response instead of adding them to authorization-code ID tokens by default.
 
@@ -268,8 +250,6 @@
 - [#10154](https://github.com/better-auth/better-auth/pull/10154) [`6f9a188`](https://github.com/better-auth/better-auth/commit/6f9a188bbb2665e56be1f1fb566eb1f5f919e1c8) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Refresh-token requests now return `invalid_grant` with an `invalid refresh token` description when a client tries to use a refresh token issued to another OAuth client.
 
 - [#10812](https://github.com/better-auth/better-auth/pull/10812) [`f451d1c`](https://github.com/better-auth/better-auth/commit/f451d1c7589ddb4d2995fa54aee9375472ebea33) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The RP-Initiated Logout endpoint continues to accept `GET` and now accepts form-encoded `POST` requests. It also supports the JSON bodies sent by Better Auth's generated client. After explicit confirmation, browser users can log out without an `id_token_hint`. They receive clear confirmation, success, or error pages. Invalid ID token hints fail safely, and logout redirects require an exact registered `post_logout_redirect_uri`.
-
-- [#9845](https://github.com/better-auth/better-auth/pull/9845) [`13abc79`](https://github.com/better-auth/better-auth/commit/13abc7922b47f800da59ca212d364a64feeec91f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Harden redirect-URI validation across the OAuth provider plugins. `isSafeUrlScheme` and `SafeUrlSchema` no longer call `URL.canParse`, which is absent on some supported runtimes and could throw or silently disable the dangerous-scheme check. They now parse with a `try`/`catch` fallback. `SafeUrlSchema` also rejects redirect URIs that contain a fragment component, per RFC 6749 §3.1.2.
 
 - [#10472](https://github.com/better-auth/better-auth/pull/10472) [`69acb7a`](https://github.com/better-auth/better-auth/commit/69acb7a3db3cd148a9cd1db5063dbdc69909165a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Revoke session-bound OAuth tokens and deliver back-channel logout only after the related session deletion succeeds.
 

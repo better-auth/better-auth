@@ -153,27 +153,6 @@
 
 - [#10072](https://github.com/better-auth/better-auth/pull/10072) [`4475f4a`](https://github.com/better-auth/better-auth/commit/4475f4a39b654f2ab7da90abd9222748ba51e3fe) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OIDC SSO now works on Cloudflare Workers when discovery is enabled. Redirecting OIDC discovery, token, userinfo, and JWKS endpoints are rejected with a clear configuration error; configure the final endpoint URL instead.
 
-- [#9097](https://github.com/better-auth/better-auth/pull/9097) [`52c4751`](https://github.com/better-auth/better-auth/commit/52c47517a21600d40a3e82c427409083b4a0a9ec) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Unify SAML response processing and fix provider and configuration handling.
-
-  **Bug fixes:**
-  - Fix SP metadata endpoint using internal row ID instead of `providerId` in ACS URL
-  - Fix `acsEndpoint` skipping DB provider lookup when `defaultSSO` is configured
-  - Fix `acsEndpoint` missing encryption fields (`isAssertionEncrypted`, `encPrivateKey`), which caused silent decryption failures
-  - Fix `defaultSSO` config parsing in callback path (`safeJsonParse` on already-parsed objects)
-  - Generate the default ACS URL from `baseURL` and `providerId`; `callbackUrl`
-    remains a post-auth redirect
-  - Complete `createSP`/`createIdP` helpers with all encryption and signing fields
-
-  **Behavioral changes:**
-  - ACS error redirects now use the full lowercase code, such as
-    `error=saml_multiple_assertions` instead of `error=multiple_assertions`.
-  - SAML provider registration now rejects configs with no usable IdP entry point (no valid `entryPoint` URL, no `idpMetadata.metadata`, and no `idpMetadata.singleSignOnService`). Previously these would register successfully but fail at sign-in.
-  - `entryPoint` validation tightened from `startsWith("http")` to `new URL()` parsing, rejecting malformed URLs like `http:evil` or `http//missing-colon`.
-
-  **Refactoring (no API changes):**
-  - Extract shared `processSAMLResponse` pipeline to eliminate ~500 lines of duplicated logic between `callbackSSOSAML` and `acsEndpoint`
-  - Move `validateSAMLTimestamp` to `saml/timestamp.ts` (re-exported from original location for compatibility)
-
 - [#10621](https://github.com/better-auth/better-auth/pull/10621) [`59c4c83`](https://github.com/better-auth/better-auth/commit/59c4c832fc4eed813e98b5b2c45a91cf2d4ad9e7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Verify SAML assertion signatures directly instead of trusting an already-parsed response, and enforce a signing policy and size limit on SP metadata the same way IdP metadata is already enforced. `wantAssertionsSigned` now controls whether the SP requires signed assertions instead of signed response messages, matching how IdPs sign SAML responses in practice.
 
   A SAML callback that supplies RelayState now validates it unconditionally; a malformed or expired value is rejected even when `enableInResponseToValidation` is disabled. Service Provider metadata with an ACS location containing a URL fragment is rejected.

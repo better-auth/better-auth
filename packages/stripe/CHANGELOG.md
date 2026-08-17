@@ -8,10 +8,6 @@
 
 ### Patch Changes
 
-- [#9164](https://github.com/better-auth/better-auth/pull/9164) [`390a031`](https://github.com/better-auth/better-auth/commit/390a03190c988776e53c5e64cf6c2f60db1c5415) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(stripe): drop unsafe keys when merging user-supplied metadata
-
-  The Stripe plugin previously merged `ctx.body.metadata` through `defu`, which was vulnerable to prototype pollution when attacker-controlled `__proto__` keys reached the second argument. Since Stripe metadata is a flat `Record<string, string>`, the deep-merge was never exercised on that path. The merge now ignores `__proto__`, `constructor`, and `prototype`, so the user-controlled surface no longer depends on `defu`. The remaining `defu` call sites (deep-merging developer-supplied `CustomerCreateParams`) also receive the patched range.
-
 ## 1.7.0-rc.6
 
 ## 1.7.0-rc.5
