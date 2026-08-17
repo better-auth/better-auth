@@ -78,6 +78,15 @@ export const agentid = (options: AgentIdOptions) => {
 			return false;
 		}
 	};
+	const verifyToken = (
+		token: string,
+		nonce?: string,
+		ctx?: GenericEndpointContext,
+	) => {
+		return options.verifyIdToken
+			? options.verifyIdToken(token, nonce, ctx)
+			: verifyAgentIdToken(token, nonce);
+	};
 
 	return {
 		id: "agentid",
@@ -123,7 +132,7 @@ export const agentid = (options: AgentIdOptions) => {
 			});
 			if (
 				!tokens.idToken ||
-				!(await verifyAgentIdToken(tokens.idToken, undefined))
+				!(await verifyToken(tokens.idToken, undefined, undefined))
 			) {
 				return null;
 			}
@@ -134,10 +143,7 @@ export const agentid = (options: AgentIdOptions) => {
 			if (options.disableIdTokenSignIn) {
 				return false;
 			}
-			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce, ctx);
-			}
-			return verifyAgentIdToken(token, nonce);
+			return verifyToken(token, nonce, ctx);
 		},
 
 		async getUserInfo(token) {
