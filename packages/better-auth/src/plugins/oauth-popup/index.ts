@@ -261,13 +261,7 @@ const oauthPopupStart = createAuthEndpoint(
 	},
 );
 
-/**
- * Server plugin for popup-based OAuth. `signIn.popup` navigates the popup to
- * `/oauth-popup/start`; on the OAuth callback this plugin swaps the redirect for
- * a page that posts the session token (or error) back to the opener. Pair with
- * the `bearer` plugin and `oauthPopupClient`.
- */
-export const oauthPopup = () => {
+const createOAuthPopupPlugin = () => {
 	return {
 		id: "oauth-popup",
 		version: PACKAGE_VERSION,
@@ -361,6 +355,21 @@ export const oauthPopup = () => {
 		},
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredOAuthPopupPlugin = ReturnType<typeof createOAuthPopupPlugin>;
+
+/**
+ * The OAuth popup plugin instance.
+ */
+export interface OAuthPopupPlugin extends InferredOAuthPopupPlugin {}
+
+/**
+ * Server plugin for popup-based OAuth. `signIn.popup` navigates the popup to
+ * `/oauth-popup/start`; on the OAuth callback this plugin swaps the redirect for
+ * a page that posts the session token (or error) back to the opener. Pair with
+ * the `bearer` plugin and `oauthPopupClient`.
+ */
+export const oauthPopup = (): OAuthPopupPlugin => createOAuthPopupPlugin();
 
 export {
 	OAUTH_POPUP_DATA_ELEMENT_ID,

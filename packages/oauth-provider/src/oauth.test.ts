@@ -1906,6 +1906,9 @@ describe("oauth - prompt", async () => {
 				onSuccess: cookieSetter(headers),
 			},
 		);
+		if (!data.url) {
+			throw new Error("missing authorization URL");
+		}
 
 		let selectAccountRedirectUri = "";
 		await serverClient.$fetch(data.url, {

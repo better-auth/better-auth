@@ -1,13 +1,13 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { PACKAGE_VERSION } from "../../version";
-import type { oneTimeToken } from "./index";
+import type { OneTimeTokenPlugin } from ".";
 
 export const oneTimeTokenClient = () => {
 	return {
 		id: "one-time-token",
 		version: PACKAGE_VERSION,
-		$InferServerPlugin: {} as ReturnType<typeof oneTimeToken>,
+		$InferServerPlugin: {} as OneTimeTokenPlugin,
 	} satisfies BetterAuthClientPlugin;
 };
 
-export type { OneTimeTokenOptions } from "./index";
+export type { OneTimeTokenOptions, OneTimeTokenPlugin } from ".";

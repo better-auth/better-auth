@@ -1,6 +1,6 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { PACKAGE_VERSION } from "../../version";
-import type { emailOTP } from ".";
+import type { EmailOTPPlugin } from ".";
 import { EMAIL_OTP_ERROR_CODES } from "./error-codes";
 
 export * from "./error-codes";
@@ -9,7 +9,7 @@ export const emailOTPClient = () => {
 	return {
 		id: "email-otp",
 		version: PACKAGE_VERSION,
-		$InferServerPlugin: {} as ReturnType<typeof emailOTP>,
+		$InferServerPlugin: {} as EmailOTPPlugin,
 		atomListeners: [
 			{
 				matcher: (path) =>
@@ -22,3 +22,5 @@ export const emailOTPClient = () => {
 		$ERROR_CODES: EMAIL_OTP_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type { EmailOTPPlugin } from ".";

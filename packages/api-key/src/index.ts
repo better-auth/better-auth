@@ -38,11 +38,13 @@ export { API_KEY_ERROR_CODES } from "./error-codes";
 
 export const API_KEY_TABLE_NAME = "apikey";
 
-export function apiKey(
-	_configurations?:
-		| (ApiKeyConfigurationOptions & ApiKeyOptions)
-		| ApiKeyConfigurationOptions[]
-		| undefined,
+type ApiKeyConfigurationInput =
+	| (ApiKeyConfigurationOptions & ApiKeyOptions)
+	| ApiKeyConfigurationOptions[]
+	| undefined;
+
+function createApiKeyPlugin(
+	_configurations?: ApiKeyConfigurationInput,
 	_options?: ApiKeyOptions | undefined,
 ) {
 	if (Array.isArray(_configurations) && _configurations.length > 0) {
@@ -382,6 +384,20 @@ export function apiKey(
 		},
 		schema,
 	} satisfies BetterAuthPlugin;
+}
+
+type InferredApiKeyPlugin = ReturnType<typeof createApiKeyPlugin>;
+
+/**
+ * The API Key plugin instance.
+ */
+export interface ApiKeyPlugin extends InferredApiKeyPlugin {}
+
+export function apiKey(
+	_configurations?: ApiKeyConfigurationInput,
+	_options?: ApiKeyOptions | undefined,
+): ApiKeyPlugin {
+	return createApiKeyPlugin(_configurations, _options);
 }
 
 export type * from "./types";

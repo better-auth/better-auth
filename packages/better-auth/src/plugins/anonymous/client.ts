@@ -1,13 +1,13 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { PACKAGE_VERSION } from "../../version";
-import type { anonymous } from ".";
+import type { AnonymousPlugin } from ".";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 
 export const anonymousClient = () => {
 	return {
 		id: "anonymous",
 		version: PACKAGE_VERSION,
-		$InferServerPlugin: {} as ReturnType<typeof anonymous>,
+		$InferServerPlugin: {} as AnonymousPlugin,
 		pathMethods: {
 			"/sign-in/anonymous": "POST",
 			"/delete-anonymous-user": "POST",
@@ -22,6 +22,7 @@ export const anonymousClient = () => {
 	} satisfies BetterAuthClientPlugin;
 };
 
+export type { AnonymousPlugin } from ".";
 export * from "./error-codes";
 export type * from "./schema";
 export type * from "./types";

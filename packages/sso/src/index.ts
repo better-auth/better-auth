@@ -112,14 +112,28 @@ type SSOEndpoints<O extends SSOOptions> = {
 	deleteSSOProvider: ReturnType<typeof deleteSSOProvider>;
 };
 
-export type SSOPlugin<O extends SSOOptions> = {
+/**
+ * The SSO plugin instance.
+ */
+export interface SSOPlugin<O extends SSOOptions> {
 	id: "sso";
 	version: string;
 	endpoints: SSOEndpoints<O> &
 		(O extends { domainVerification: { enabled: true } }
 			? DomainVerificationEndpoints
 			: {});
-};
+	options: NoInfer<O>;
+}
+
+/**
+ * The SSO plugin instance with domain verification enabled.
+ */
+export interface SSODomainVerificationPlugin<
+	O extends SSOOptions & { domainVerification?: { enabled: true } },
+> extends SSOPlugin<O> {
+	endpoints: SSOEndpoints<O> & DomainVerificationEndpoints;
+	schema: NonNullable<BetterAuthPlugin["schema"]>;
+}
 
 /**
  * SAML endpoint paths that should skip origin check validation.
@@ -136,25 +150,18 @@ export function sso<
 	O extends SSOOptions & {
 		domainVerification?: { enabled: true };
 	},
->(
-	options?: O | undefined,
-): {
-	id: "sso";
-	version: string;
-	endpoints: SSOEndpoints<O> & DomainVerificationEndpoints;
-	schema: NonNullable<BetterAuthPlugin["schema"]>;
-	options: NoInfer<O>;
-};
+>(options?: O | undefined): SSODomainVerificationPlugin<O>;
 export function sso<O extends SSOOptions>(
 	options?: O | undefined,
-): {
-	id: "sso";
-	version: string;
-	endpoints: SSOEndpoints<O>;
-	options: NoInfer<O>;
-};
+): SSOPlugin<O>;
 
 export function sso<O extends SSOOptions>(
+	options?: O | undefined,
+): BetterAuthPlugin {
+	return createSSOPlugin(options);
+}
+
+function createSSOPlugin<O extends SSOOptions>(
 	options?: O | undefined,
 ): BetterAuthPlugin {
 	const optionsWithStore = options as O;

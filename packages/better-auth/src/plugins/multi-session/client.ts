@@ -1,6 +1,6 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { PACKAGE_VERSION } from "../../version";
-import type { multiSession } from ".";
+import type { MultiSessionPlugin } from ".";
 import { MULTI_SESSION_ERROR_CODES } from "./error-codes";
 
 export * from "./error-codes";
@@ -9,7 +9,7 @@ export const multiSessionClient = () => {
 	return {
 		id: "multi-session",
 		version: PACKAGE_VERSION,
-		$InferServerPlugin: {} as ReturnType<typeof multiSession>,
+		$InferServerPlugin: {} as MultiSessionPlugin,
 		atomListeners: [
 			{
 				matcher(path) {
@@ -22,4 +22,4 @@ export const multiSessionClient = () => {
 	} satisfies BetterAuthClientPlugin;
 };
 
-export type { MultiSessionConfig } from "./index";
+export type { MultiSessionConfig, MultiSessionPlugin } from ".";

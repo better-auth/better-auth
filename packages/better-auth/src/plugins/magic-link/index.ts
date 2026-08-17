@@ -157,7 +157,7 @@ const magicLinkVerifyQuerySchema = z.object({
 		})
 		.optional(),
 });
-export const magicLink = (options: MagicLinkOptions) => {
+const createMagicLinkPlugin = (options: MagicLinkOptions) => {
 	const opts = {
 		storeToken: "plain",
 		allowedAttempts: 1,
@@ -456,3 +456,13 @@ export const magicLink = (options: MagicLinkOptions) => {
 		options,
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredMagicLinkPlugin = ReturnType<typeof createMagicLinkPlugin>;
+
+/**
+ * The magic link plugin instance.
+ */
+export interface MagicLinkPlugin extends InferredMagicLinkPlugin {}
+
+export const magicLink = (options: MagicLinkOptions): MagicLinkPlugin =>
+	createMagicLinkPlugin(options);

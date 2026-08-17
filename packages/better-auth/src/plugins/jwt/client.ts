@@ -7,7 +7,7 @@ import type {
 import type { BetterFetch } from "@better-fetch/fetch";
 import type { JSONWebKeySet } from "jose";
 import { PACKAGE_VERSION } from "../../version";
-import type { jwt } from "./index";
+import type { JwtPlugin } from ".";
 
 interface JwtClientOptions {
 	jwks?: {
@@ -27,7 +27,7 @@ export const jwtClient = (options?: JwtClientOptions) => {
 	return {
 		id: "better-auth-client",
 		version: PACKAGE_VERSION,
-		$InferServerPlugin: {} as ReturnType<typeof jwt>,
+		$InferServerPlugin: {} as JwtPlugin,
 		pathMethods: {
 			[jwksPath]: "GET",
 		},
@@ -46,4 +46,5 @@ export const jwtClient = (options?: JwtClientOptions) => {
 	} satisfies BetterAuthClientPlugin;
 };
 
+export type { JwtPlugin } from ".";
 export type * from "./types";

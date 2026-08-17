@@ -9,16 +9,31 @@ import {
 	bearer,
 	customSession,
 	deviceAuthorization,
+	emailOTP,
+	genericOAuth,
+	jwt,
 	lastLoginMethod,
+	magicLink,
+	mcp,
 	multiSession,
 	oAuthProxy,
+	oauthPopup,
+	oidcProvider,
 	oneTap,
+	oneTimeToken,
 	openAPI,
 	organization,
+	phoneNumber,
+	siwe,
 	twoFactor,
+	username,
 } from "better-auth/plugins";
 import { Stripe } from "stripe";
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10556
+ * @see https://github.com/better-auth/better-auth/issues/10789
+ */
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	plugins: [
@@ -31,9 +46,28 @@ export const auth = betterAuth({
 		/* cspell:disable-next-line */
 		admin({ adminUserIds: ["EXD5zjob2SD6CBWcEQ6OpLRHcyoUbnaB"] }),
 		multiSession(),
+		emailOTP({ async sendVerificationOTP() {} }),
+		genericOAuth({ config: [] }),
+		jwt(),
+		magicLink({ async sendMagicLink() {} }),
+		mcp({ loginPage: "/login" }),
+		oauthPopup(),
 		oAuthProxy(),
+		oidcProvider({ loginPage: "/login" }),
 		nextCookies(),
 		oneTap(),
+		oneTimeToken(),
+		phoneNumber({ async sendOTP() {} }),
+		siwe({
+			domain: "localhost",
+			async getNonce() {
+				return "nonce";
+			},
+			async verifyMessage() {
+				return true;
+			},
+		}),
+		username(),
 		customSession(async (session) => {
 			return {
 				...session,

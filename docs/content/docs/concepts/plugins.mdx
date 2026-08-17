@@ -74,16 +74,27 @@ Both server and client plugins can use the same `id`.
 ```ts title="plugin.ts"
 import type { BetterAuthPlugin } from "better-auth";
 
-export const myPlugin = () => {
+const createMyPlugin = () => {
     return {
         id: "my-plugin",
     } satisfies BetterAuthPlugin
 }
+
+type InferredMyPlugin = ReturnType<typeof createMyPlugin>;
+
+/**
+ * The plugin instance.
+ */
+export interface MyPlugin extends InferredMyPlugin {}
+
+export const myPlugin = (): MyPlugin => createMyPlugin();
 ```
 
 <Callout>
   You don't have to make the plugin a function, but it's recommended to do so. This way, you can pass options to the plugin and it's consistent with the built-in plugins.
 </Callout>
+
+Using an internal factory with a named public interface preserves exact inference while keeping generated declarations portable for consumers of published plugins.
 
 ### Endpoints
 

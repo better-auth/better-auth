@@ -28,7 +28,7 @@ declare module "@better-auth/core" {
 	}
 }
 
-export const electron = (options?: ElectronOptions | undefined) => {
+const createElectronPlugin = (options?: ElectronOptions | undefined) => {
 	const opts = {
 		codeExpiresIn: 300, // 5 minutes
 		redirectCookieExpiresIn: 120, // 2 minutes
@@ -236,5 +236,16 @@ export const electron = (options?: ElectronOptions | undefined) => {
 		$ERROR_CODES: ELECTRON_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredElectronPlugin = ReturnType<typeof createElectronPlugin>;
+
+/**
+ * The Electron plugin instance.
+ */
+export interface ElectronPlugin extends InferredElectronPlugin {}
+
+export const electron = (
+	options?: ElectronOptions | undefined,
+): ElectronPlugin => createElectronPlugin(options);
 
 export type * from "./types";

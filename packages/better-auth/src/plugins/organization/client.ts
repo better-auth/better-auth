@@ -331,4 +331,5 @@ export const inferOrgAdditionalFields = <
 	return {} as undefined extends S ? Schema : S;
 };
 
+export type { OrganizationPlugin } from "./organization";
 export type * from "./schema";

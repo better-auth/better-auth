@@ -19,7 +19,7 @@ declare module "@better-auth/core" {
 	}
 }
 
-export const expo = (options?: ExpoOptions | undefined) => {
+const createExpoPlugin = (options?: ExpoOptions | undefined) => {
 	return {
 		id: "expo",
 		version: PACKAGE_VERSION,
@@ -111,3 +111,13 @@ export const expo = (options?: ExpoOptions | undefined) => {
 		options,
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredExpoPlugin = ReturnType<typeof createExpoPlugin>;
+
+/**
+ * The Expo plugin instance.
+ */
+export interface ExpoPlugin extends InferredExpoPlugin {}
+
+export const expo = (options?: ExpoOptions | undefined): ExpoPlugin =>
+	createExpoPlugin(options);

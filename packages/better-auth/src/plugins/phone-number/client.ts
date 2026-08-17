@@ -1,6 +1,6 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { PACKAGE_VERSION } from "../../version";
-import type { phoneNumber } from ".";
+import type { PhoneNumberPlugin } from ".";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
 
 export * from "./error-codes";
@@ -9,7 +9,7 @@ export const phoneNumberClient = () => {
 	return {
 		id: "phoneNumber",
 		version: PACKAGE_VERSION,
-		$InferServerPlugin: {} as ReturnType<typeof phoneNumber>,
+		$InferServerPlugin: {} as PhoneNumberPlugin,
 		atomListeners: [
 			{
 				matcher(path) {
@@ -26,4 +26,5 @@ export const phoneNumberClient = () => {
 	} satisfies BetterAuthClientPlugin;
 };
 
+export type { PhoneNumberPlugin } from ".";
 export type * from "./types";

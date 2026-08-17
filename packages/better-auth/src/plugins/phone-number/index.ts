@@ -25,7 +25,7 @@ declare module "@better-auth/core" {
 	}
 }
 
-export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
+const createPhoneNumberPlugin = (options?: PhoneNumberOptions | undefined) => {
 	const opts = {
 		expiresIn: options?.expiresIn || 300,
 		otpLength: options?.otpLength || 6,
@@ -109,3 +109,14 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 		$ERROR_CODES: PHONE_NUMBER_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredPhoneNumberPlugin = ReturnType<typeof createPhoneNumberPlugin>;
+
+/**
+ * The phone number plugin instance.
+ */
+export interface PhoneNumberPlugin extends InferredPhoneNumberPlugin {}
+
+export const phoneNumber = (
+	options?: PhoneNumberOptions | undefined,
+): PhoneNumberPlugin => createPhoneNumberPlugin(options);

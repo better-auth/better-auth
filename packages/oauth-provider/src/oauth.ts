@@ -61,14 +61,9 @@ export const oAuthState = defineRequestState<{
 } | null>(() => null);
 export const getOAuthProviderState = oAuthState.get;
 
-/**
- * oAuth 2.1 provider plugin for Better Auth.
- *
- * @see https://better-auth.com/docs/plugins/oauth-provider
- * @param options - The options for the oAuth Provider plugin.
- * @returns A Better Auth plugin.
- */
-export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
+const createOAuthProviderPlugin = <O extends OAuthOptions<Scope[]>>(
+	options: O,
+) => {
 	let clientRegistrationAllowedScopes = options.clientRegistrationAllowedScopes;
 	if (options.clientRegistrationDefaultScopes) {
 		const _allowedScopes = clientRegistrationAllowedScopes
@@ -1553,3 +1548,25 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		],
 	} satisfies BetterAuthPlugin;
 };
+
+type InferredOAuthProviderPlugin<O extends OAuthOptions<Scope[]>> = ReturnType<
+	typeof createOAuthProviderPlugin<O>
+>;
+
+/**
+ * The OAuth provider plugin instance.
+ */
+export interface OAuthProviderPlugin<
+	O extends OAuthOptions<Scope[]> = OAuthOptions<Scope[]>,
+> extends InferredOAuthProviderPlugin<O> {}
+
+/**
+ * oAuth 2.1 provider plugin for Better Auth.
+ *
+ * @see https://better-auth.com/docs/plugins/oauth-provider
+ * @param options - The options for the oAuth Provider plugin.
+ * @returns A Better Auth plugin.
+ */
+export const oauthProvider = <O extends OAuthOptions<Scope[]>>(
+	options: O,
+): OAuthProviderPlugin<O> => createOAuthProviderPlugin(options);

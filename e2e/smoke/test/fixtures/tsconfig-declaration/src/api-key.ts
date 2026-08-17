@@ -3,10 +3,13 @@ import { betterAuth } from "better-auth";
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/9757
+ * @see https://github.com/better-auth/better-auth/issues/10710
  *
- * Declaration emit must not produce TS4023 for MiddlewareOptions
- * when using the api-key plugin.
+ * Declaration emit must use the public ApiKeyPlugin type instead of
+ * leaking transitive endpoint schema types.
  */
-export const auth = betterAuth({
-	plugins: [apiKey()],
-});
+export function initAuth() {
+	return betterAuth({
+		plugins: [apiKey()],
+	});
+}

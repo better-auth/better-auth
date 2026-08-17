@@ -42,15 +42,26 @@ In this guide, we’ll walk you through the steps of creating your first Better 
     This will be what we will later add to our plugin list in the `auth.ts` file.
 
     ```ts title="index.ts"
-    import { createAuthClient } from "better-auth/client";
     import type { BetterAuthPlugin } from "better-auth";
 
-    export const birthdayPlugin = () =>
+    const createBirthdayPlugin = () =>
       ({
         id: "birthdayPlugin",
       } satisfies BetterAuthPlugin);
 
+    type InferredBirthdayPlugin = ReturnType<typeof createBirthdayPlugin>;
+
+    /**
+     * The birthday plugin instance.
+     */
+    export interface BirthdayPlugin extends InferredBirthdayPlugin {}
+
+    export const birthdayPlugin = (): BirthdayPlugin =>
+      createBirthdayPlugin();
     ```
+
+    The internal factory preserves the plugin's exact inferred type, while the exported interface gives TypeScript
+    a stable public name to use when another package generates declarations.
 
     Although this does nothing, you have technically just made yourself your first plugin, congratulations! 🎉
   </Step>
@@ -68,7 +79,7 @@ In this guide, we’ll walk you through the steps of creating your first Better 
 
     ```ts title="index.ts"
     //...
-    export const birthdayPlugin = () =>
+    const createBirthdayPlugin = () =>
       ({
         id: "birthdayPlugin",
         schema: {// [!code highlight]
@@ -95,7 +106,7 @@ In this guide, we’ll walk you through the steps of creating your first Better 
     To do this, we’ll utilize <Link href="/docs/concepts/plugins#hooks">Hooks</Link>, which allows us to run code `before` or `after` an action is performed.
 
     ```ts title="index.ts"
-    export const birthdayPlugin = () => ({
+    const createBirthdayPlugin = () => ({
         //...
         // In our case, we want to write authorization logic,
         // meaning we want to intercept it `before` hand.
@@ -175,14 +186,12 @@ In this guide, we’ll walk you through the steps of creating your first Better 
 
     ```ts title="client.ts"
     import type { BetterAuthClientPlugin } from "better-auth/client";
-    import type { birthdayPlugin } from "./index"; // make sure to import the server plugin as a type // [!code highlight]
-
-    type BirthdayPlugin = typeof birthdayPlugin;
+    import type { BirthdayPlugin } from "./index"; // [!code highlight]
 
     export const birthdayClientPlugin = () => {
       return {
         id: "birthdayPlugin",
-        $InferServerPlugin: {} as ReturnType<BirthdayPlugin>,
+        $InferServerPlugin: {} as BirthdayPlugin,
       } satisfies BetterAuthClientPlugin;
     };
     ```

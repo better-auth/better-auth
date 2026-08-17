@@ -1,6 +1,6 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
 import { parseCookies } from "better-auth/cookies";
-import type { electron } from "./index";
+import type { ElectronPlugin } from ".";
 import type { ElectronProxyClientOptions } from "./types/client";
 import { parseProtocolScheme } from "./utils";
 import { PACKAGE_VERSION } from "./version";
@@ -87,6 +87,8 @@ export const electronProxyClient = (options: ElectronProxyClientOptions) => {
 		pathMethods: {
 			"/electron/transfer-user": "POST",
 		},
-		$InferServerPlugin: {} as ReturnType<typeof electron>,
+		$InferServerPlugin: {} as ElectronPlugin,
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type { ElectronPlugin } from ".";
