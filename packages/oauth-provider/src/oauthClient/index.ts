@@ -232,7 +232,7 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			method: "POST",
 			use: [sessionMiddleware],
 			body: z.object({
-				redirect_uris: z.array(SafeUrlSchema).min(1),
+				redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 				scope: z.string().optional(),
 				client_name: z.string().optional(),
 				client_uri: z.string().optional(),
