@@ -1,4 +1,3 @@
-import { execSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
@@ -19,6 +18,7 @@ import {
 	generateDrizzleSchema,
 	resetGenerationCount,
 } from "./generate-schema";
+import { pushDrizzleSchema } from "./push-drizzle-schema";
 
 const dbFilePath = path.join(import.meta.dirname, "test.db");
 let sqliteDB = new Database(dbFilePath);
@@ -47,16 +47,9 @@ const { execute } = await testAdapter({
 			"sqlite",
 		);
 
-		const command = `npx drizzle-kit push --dialect=sqlite --schema=${fileName}.ts --url=./test.db`;
-		console.log(`Running: ${command}`);
 		console.log(`Options:`, betterAuthOptions);
 		try {
-			// wait for the above console.log to be printed
-			await new Promise((resolve) => setTimeout(resolve, 10));
-			execSync(command, {
-				cwd: import.meta.dirname,
-				stdio: "inherit",
-			});
+			await pushDrizzleSchema("sqlite", `${fileName}.ts`, "./test.db");
 		} catch (error) {
 			console.error("Failed to push drizzle schema (sqlite):", error);
 			throw error;
