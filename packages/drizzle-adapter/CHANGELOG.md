@@ -1,5 +1,37 @@
 # @better-auth/drizzle-adapter
 
+## 1.7.0
+
+### Minor Changes
+
+- [#10402](https://github.com/better-auth/better-auth/pull/10402) [`763a267`](https://github.com/better-auth/better-auth/commit/763a2671c5372d88c291881977c8a1c2e29034b1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Plugin database schemas can now define named or generated table-level indexes across multiple fields. SQL migrations and generated Drizzle or Prisma schemas resolve configured table and column names consistently, while the MongoDB adapter creates the same indexes before the first index-enforcing write.
+
+- [#7169](https://github.com/better-auth/better-auth/pull/7169) [`5d38b13`](https://github.com/better-auth/better-auth/commit/5d38b138c3c73eb06fe247ef6631c66e86ccc92b) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Add a `schemaName` option to the Drizzle Relations v2 adapter config. When set on PostgreSQL, schema generation now emits a `pgSchema("...")` namespace and uses namespaced table definitions (for example, `authSchema.user(...)`), matching the v1 CLI generator behavior.
+
+- [#9489](https://github.com/better-auth/better-auth/pull/9489) [`ea06c5a`](https://github.com/better-auth/better-auth/commit/ea06c5a71f448dfc600f1c2f7b0de732730c79cd) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Add a new `@better-auth/drizzle-adapter/relations-v2` entry point for projects using Drizzle Relations v2. The schema generator now emits relations using `defineRelationsPart` so the generated auth schema can be merged alongside your app's relations without changing your database structure.
+
+- [#10359](https://github.com/better-auth/better-auth/pull/10359) [`8784c1c`](https://github.com/better-auth/better-auth/commit/8784c1c1f4301acf96d980e5bf81ff56435e2545) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Database joins have moved out of `experimental` into a stable option at `advanced.database.joins` (default: `false`).
+
+  If you previously set `experimental: { joins: true }`, update your config to:
+
+  ```ts
+  advanced: {
+    database: {
+      joins: true,
+    },
+  }
+  ```
+
+  Adapters that support native joins use them when enabled. If an adapter cannot return joined data for a query, Better Auth falls back to additional queries and combines the results. Drizzle and Prisma users should ensure their schema includes the required relations (`npx auth@latest generate`).
+
+### Patch Changes
+
+- [#10770](https://github.com/better-auth/better-auth/pull/10770) [`692b22c`](https://github.com/better-auth/better-auth/commit/692b22c517011444f812fe21c206e399e35e8417) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Export the generated `pgSchema` binding so drizzle-kit can emit `CREATE SCHEMA` for custom PostgreSQL namespaces.
+
+- [#9165](https://github.com/better-auth/better-auth/pull/9165) [`39d6af2`](https://github.com/better-auth/better-auth/commit/39d6af2a392dc41018a036d1d909dc48c09749c9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - chore(adapters): require patched `drizzle-orm` and `kysely` peer versions
+
+  Narrows the `drizzle-orm` peer to `^0.45.2` and the `kysely` peer to `^0.28.14`. Both new ranges track the minor line that carries the vulnerability fix and nothing newer, so the adapters only advertise support for versions that have actually been tested against. Consumers on older ORM releases see an install-time warning and can upgrade alongside the adapter; the peer is marked optional, so installs do not hard-fail.
+
 ## 1.7.0-rc.6
 
 ### Patch Changes

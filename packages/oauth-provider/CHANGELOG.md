@@ -1,5 +1,287 @@
 # @better-auth/oauth-provider
 
+## 1.7.0
+
+### Minor Changes
+
+- [#10577](https://github.com/better-auth/better-auth/pull/10577) [`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth clients now store `applicationType` and expose it as `application_type` in OAuth metadata. `tokenEndpointAuthMethod` alone determines authentication: `"none"` is public, and every other method is confidential. The legacy `type` and `public` fields are removed.
+
+  `OAuthClient` no longer has a catch-all string index. Model custom wire extensions explicitly with a named intersection such as `OAuthClient & YourExtensionMetadata`; legacy `type` and `public` fields no longer type-check as unknown baggage.
+  - Dynamic, administrative, and user-managed registrations default an omitted `application_type` to `web`. Client ID Metadata Documents preserve an omitted value as `null`.
+  - Web redirects require HTTPS on a non-loopback host. Native redirects accept claimed HTTPS URLs, exact HTTP loopback hosts, or reverse-domain private-use schemes.
+  - Registration resource options control resource links. `mcp()` contributes its protected resource by default, so standards-based clients no longer need a `resources` extension.
+  - `mcp()` no longer enables unauthenticated Dynamic Client Registration. Compose `mcp()` with `cimd()` for Client ID Metadata Documents, or enable both DCR flags explicitly.
+
+  This release requires a database migration. Add `applicationType` and nullable `clientDiscoveryId`; map old `web` and `native` values directly, map `user-agent-based` to `NULL` for manual reclassification, and never derive it from `public`. Set `clientDiscoveryId` only from known discovery provenance, never by inspecting an HTTPS client ID. Deduplicate existing `(clientId, resourceId)` links before adding the new compound unique index, then drop the legacy columns. Deployments with custom schema mappings must apply this backfill manually.
+
+  Machine-to-machine scope authority is now stored separately in nullable `oauthClient.clientCredentialsScopes`. Missing, `NULL`, and empty values deny `client_credentials` token issuance. Only the administrative create and update endpoints expose `client_credentials_scopes`, and assigning a non-empty value requires `clientPrivileges` to approve the new `configure-client-credentials-scopes` action. DCR, CIMD, and user-managed registration cannot assign this field; CIMD refresh preserves an existing administrator-owned value. Remove `clientCredentialGrantDefaultScopes`, backfill every existing client to `[]`, configure `[]` as the default for new rows, then explicitly assign every approved machine scope after auditing the client.
+
+- [#10577](https://github.com/better-auth/better-auth/pull/10577) [`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Client ID Metadata Documents now follow shared-cache freshness rules and fail closed when freshness is ambiguous. The plugin prefers `s-maxage` over `max-age` and `Expires`, honors `s-maxage=0`, conditionally revalidates with ETag or Last-Modified, and treats invalid or duplicate freshness directives as immediately stale. Concurrent refreshes converge on one client-resource link instead of failing on its unique constraint.
+
+  Shared OAuth metadata validation now rejects a blank `client_name` without trimming a valid display name. Native private-use redirects require the RFC 8252 single-slash form, such as `com.example.app:/callback`. Native HTTP redirects accept only exact `localhost`, `127.0.0.1`, or `[::1]` hosts; other `127.0.0.0/8` addresses and localhost subdomains are rejected.
+
+  CIMD now bounds metadata request amplification through `metadataFetchPolicy`: same-client fetches coalesce, per-client pacing and global/per-origin concurrency reject immediately, and rolling 60-second budgets cap unique-client sprays. HTTP `no-store`, `private`, and `Vary: *` behavior is unchanged and never feeds metadata or validators into the governor.
+
+  Node.js deployments can import `fetchClientMetadataResource` from `@better-auth/cimd/node`. The transport resolves once, rejects any non-public DNS answer, pins the approved connection without using the global HTTPS pool, preserves Host and TLS certificate identity, and returns redirects and response bodies without buffering. Other runtimes remain responsible for providing an equivalent secure transport.
+
+  Unknown draft-02 metadata members are now ignored and never persisted. Recognized secrets, privilege fields, and server controls remain fatal, while generic internal aliases and nonstandard client-credentials authority spellings are stripped.
+
+- [#9159](https://github.com/better-auth/better-auth/pull/9159) [`cd8313b`](https://github.com/better-auth/better-auth/commit/cd8313ba003a8b3c46b11fefeae9a53305908cc3) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `@better-auth/cimd` for [Client ID Metadata Document draft-02](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document-02). An exact HTTPS metadata-document URL becomes the OAuth `client_id`, and OAuth discovery advertises support when the plugin is installed. The explicit `metadataProfile: "mcp-2026-07-28"` mode applies the draft-00 metadata requirements pinned by MCP 2026-07-28.
+  - Validate the complete shared OAuth client metadata schema. Generic draft-02 clients may omit `client_name` and `redirect_uris` and may use any grant supported by the OAuth Provider; the MCP profile requires `client_id`, `client_name`, and `redirect_uris`.
+  - Reject client secrets, private JWK material, back-channel logout metadata, server-owned fields, unsafe metadata URLs, non-JSON responses, oversized documents, redirects, and private or reserved network targets. Loopback Client Identifier URLs are no longer supported.
+  - Validate registered, discovered, and remotely fetched client JWKS through one public-asymmetric-key boundary. RFC 7517 JWK Sets must use `{ "keys": [...] }`; replace the removed bare-array form `jwks: [key]` with `jwks: { keys: [key] }`. Empty, malformed, symmetric, private, and unsupported key sets fail before they can enter a provider-scoped cache. EC keys must use P-256, P-384, or P-521; OKP keys must use Ed25519. A declared `alg` must match the key type and curve. Existing OAuth client rows written through `oauthToSchema` are already normalized, so no database rewrite is required unless rows were written outside Better Auth.
+  - Require `fetchClientMetadataResource` as the deployment-owned transport for both metadata documents and discovery-owned `jwks_uri` resources. It must resolve once, reject RFC 6890 special-use addresses, pin the approved address for the connection, and refuse redirects. `isMetadataDocumentUrlAllowed` remains available for additional application policy.
+  - Cache only valid successful metadata with bounded storage, HTTP shared-cache freshness rules, ETag and Last-Modified conditional revalidation, and fail-closed refresh behavior. `Cache-Control: private` and `Vary: *` are noncacheable, and an unconditional `304` is rejected.
+  - Persist `oauthClient.clientDiscoveryId` as nullable discovery provenance. Discovery IDs are globally unique, and an owned client fails closed when its matching discovery is unavailable. Only that discovery may refresh the client or provide transport for its metadata-owned resources, so managed and DCR HTTPS client IDs cannot be taken over.
+  - Preserve custom model names, resource links, and administrator-controlled client flags when clients are created or refreshed. Refresh notifications now receive `previousClient`.
+
+  OAuth Provider also exposes `clientDiscovery` for custom verified client-resolution plugins. A discovery may provide `fetchClientMetadataResource`, and its stable `id` is persisted as client provenance.
+
+  Prerelease adopters must rename `createCimdResolver` or `cimdClientDiscovery` to `createCimdClientDiscovery`, `ClientIdMetadataDocumentResult` to `CimdMetadataValidationResult`, `ValidateCimdMetadataOptions` to `CimdMetadataValidationOptions`, `isUrlClientId` to `isCimdClientIdUrlCandidate`, and `MetadataDocumentFetch` to `ClientMetadataResourceFetch`. Rename `refreshRate` to `metadataRevalidationInterval`; there is no compatibility fallback. Numeric revalidation and `minimumFetchInterval` values are seconds.
+
+  Lifecycle callbacks now receive named `CimdClientCreatedEvent` and `CimdClientRefreshedEvent` values. Read validated metadata from `clientMetadataDocument` instead of `metadata`, and the endpoint context from `context` instead of `ctx`. `CimdOptions` is now required because `fetchClientMetadataResource` is mandatory. Remove the prerelease `allowFetch`, `fetchMetadataDocument`, and `allowLoopback` options.
+
+  When adopting CIMD, remove `allowUnauthenticatedClientRegistration` unless the authorization server deliberately supports Dynamic Client Registration as a separate fallback.
+
+- [#10746](https://github.com/better-auth/better-auth/pull/10746) [`6782647`](https://github.com/better-auth/better-auth/commit/6782647d7c2d248246f9ef3980e656725c29ce64) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth device grants now use `oauthDeviceAuthorization()` alongside `oauthProvider()` or `mcp()`. This single integration replaces both the standalone `deviceCodeGrant()` plugin and the shared-grant configuration. Standalone Device Authorization no longer accepts or stores RFC 8707 resources, and `onDeviceAuthRequest` receives only `clientId` and `scope`. The OAuth integration rejects resource indicators that are not absolute, fragment-free URIs.
+
+  The OAuth integration replaces the optional `resource` column with `oauthClientId` and `resources`. Regenerate and apply the schema when using it. Before upgrading from an earlier 1.7 prerelease, let pending OAuth device codes expire or delete them because they cannot be exchanged through the new integration.
+
+- [#10156](https://github.com/better-auth/better-auth/pull/10156) [`e3125e8`](https://github.com/better-auth/better-auth/commit/e3125e872d40cdd6588cbcb65d8ca0d640bae15b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The OIDC provider now honors the `claims.userinfo` authorization request parameter. A client can ask for individual standard claims, and the UserInfo endpoint returns the ones it can supply in addition to the scope-granted claims. The requested claims become part of the user's consent, and `claims_parameter_supported` is advertised in discovery.
+
+  Authorization requests that use the `claims` parameter without requesting the `openid` scope are rejected.
+
+  A claim requested through `claims.userinfo` is honored for opaque access tokens. With a JWT access token, UserInfo returns only the claims the granted scopes cover, so request the backing scope when a client needs a specific claim.
+
+  This adds a `requestedUserInfoClaims` column to the OAuth access-token, refresh-token, and consent tables. Run your database migrations after upgrading.
+
+- [#9123](https://github.com/better-auth/better-auth/pull/9123) [`e2e25a4`](https://github.com/better-auth/better-auth/commit/e2e25a49545f3e386cfcc4e86b33c1796a1430b1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Dynamic client registration now preserves confidential client authentication methods for unauthenticated registrations instead of converting them to public clients. Requests that omit `token_endpoint_auth_method` receive the RFC 7591 default `client_secret_basic` method and a one-time `client_secret`; requests that explicitly use `token_endpoint_auth_method: "none"` still create public clients.
+
+  Registered client `jwks` metadata can now be used with secret-based clients and is returned as a JWKS document (`{ "keys": [...] }`). Inline JWKS metadata must contain public asymmetric keys.
+
+- [#10146](https://github.com/better-auth/better-auth/pull/10146) [`a8200b2`](https://github.com/better-auth/better-auth/commit/a8200b297c4092cb51397a9285ef4d1f024dea75) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth Provider now lets servers set `clientRegistrationRequirePKCE: false` to allow confidential clients created through Dynamic Client Registration to complete authorization-code flows without PKCE. Public clients and authorization requests with `offline_access` still require PKCE.
+
+- [#9277](https://github.com/better-auth/better-auth/pull/9277) [`5c6de4e`](https://github.com/better-auth/better-auth/commit/5c6de4ed265e7aa30e7e42a0e493386cf3ad6c96) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth Provider endpoints now return standard OAuth `{ error, error_description }` responses for malformed requests. Token requests distinguish missing input (`invalid_request`), failed client authentication (`invalid_client`), and invalid or mismatched grants (`invalid_grant`). Failed HTTP Basic authentication also returns `401` with a `WWW-Authenticate` challenge.
+
+  Authorization errors redirect to a registered client's trusted redirect URI with `state` and `iss`. The response uses the URL fragment for implicit `token` and `id_token` responses unless the client explicitly requests query mode. Requests without a trusted redirect URI continue to use the server error page.
+
+  Token, introspection, and revocation requests now treat empty credential values as omitted, reject repeated non-empty client credentials, and require confidential clients to use their registered `token_endpoint_auth_method`. Introspection and revocation requests also ignore unrecognized `token_type_hint` values instead of rejecting the request.
+
+- [#9836](https://github.com/better-auth/better-auth/pull/9836) [`b4b0867`](https://github.com/better-auth/better-auth/commit/b4b086722c2da179f885ad2680e10ed3410ad849) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Bind OAuth 2.0 resource indicators (RFC 8707) to the authorization grant. The requested `resource` values were previously read from the token request and checked only against the server-wide `validAudiences` allowlist. A client could therefore obtain an access token for any allow-listed resource, regardless of what the authorization covered. The provider now captures `resource` at `/authorize`, records it on the grant, and lets the token and refresh endpoints narrow it without widening it. Refresh tokens retain the resources of the original grant (RFC 8707 §2.2), and `/oauth2/introspect` reports the token's `aud`.
+
+  Breaking change: when the authorization includes a `resource`, the token and refresh requests may only narrow it. A request for a resource the authorization did not cover returns `invalid_target`. The `customAccessTokenClaims` callback now receives a `resources` array in place of the `resource` string.
+
+  Migration: run the schema migration (`npx @better-auth/cli migrate`, or `generate` if you manage the schema yourself) to add the new resource columns.
+
+- [#9069](https://github.com/better-auth/better-auth/pull/9069) [`c7d2253`](https://github.com/better-auth/better-auth/commit/c7d22539ec4f7322d9625ae2953d397c3863d097) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Rewrite the generic OAuth plugin as a first-class social provider with OAuth 2.1 security defaults. Providers now use `signIn.social` + `callback/:id` instead of dedicated plugin endpoints, with PKCE required by default (OAuth 2.1), RFC 9207 issuer validation, OIDC auto-discovery with `openid` scope injection, and typed provider IDs.
+
+  **Breaking changes:**
+  - `signIn.oauth2({ providerId })` replaced by `signIn.social({ provider })`
+  - `oauth2.link()` replaced by `linkSocial()`
+  - Callback URL changed from `/api/auth/oauth2/callback/:id` to `/api/auth/callback/:id`
+  - `genericOAuthClient()` removed; generic OAuth providers now use the standard social client APIs
+  - `pkce` defaults to `true` (was `false`); set `pkce: false` for providers that reject PKCE
+  - `authorizationUrlParams` and `tokenUrlParams` only accept `Record<string, string>`
+  - `issuer` and `requireIssuerValidation` config fields removed; issuer validation is automatic via OIDC discovery
+  - `mapProfileToUser` profile typed as `OAuth2UserInfo & Record<string, unknown>`
+
+- [#10140](https://github.com/better-auth/better-auth/pull/10140) [`335cda7`](https://github.com/better-auth/better-auth/commit/335cda702ef8e2aecad4b26a427f16953e3aabd2) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - ID tokens now use `acr: "0"`, indicating that authentication did not meet
+  ISO/IEC 29115 level 1, and OpenID discovery advertises only `"0"`. Because
+  `acr_values` is voluntary, requests for other classes continue instead of
+  failing. Essential `claims.id_token.acr` requests in OpenID Connect flows still
+  fail when their required `value` or `values` cannot be met.
+
+  `customIdTokenClaims`, extension ID-token claims, and per-issuance `idTokenClaims` can no longer set OIDC/JWT protocol claims such as issuer, subject, audience, token lifetime, nonce, session or hash binding, `auth_time`, `acr`, `amr`, or `azp`. Namespaced custom claims still appear in ID tokens.
+
+- [#10577](https://github.com/better-auth/better-auth/pull/10577) [`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - MCP clients that hit a scope wall now learn exactly which scopes to ask for. Missing protected scopes produce a `403` with an RFC 6750 `insufficient_scope` `WWW-Authenticate` challenge that names every missing scope. Clients can union those scopes into one authorization request instead of opening one browser redirect per scope.
+  - Configure protected scopes with `requiredScopes` through `RequireMcpAuthOptions` or the matching `createMcpProtectedRequestHandler` verifier option. Exact membership remains the default; `isScopeSatisfied` can define hierarchical policies.
+  - Use `createInsufficientScopeError` when an operation determines its required scopes dynamically. `createResourceServerChallenge` converts that signal and recognized token failures into safe RFC 6750 challenges.
+  - Use `challengeScopes` only as the unauthenticated challenge hint.
+
+  Handler-produced responses, ordinary permission denials, configuration failures, and unrelated thrown values keep their original status and identity.
+
+- [#9992](https://github.com/better-auth/better-auth/pull/9992) [`e53582c`](https://github.com/better-auth/better-auth/commit/e53582ce55a0ddbca62f52efeb3459523816f222) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The MCP plugin moves out of `better-auth` into its own package, `@better-auth/mcp`, built on `@better-auth/oauth-provider`. Import the authorization plugin and protected-request helpers from the package root. The in-core MCP client (`createMcpAuthClient` and its adapters) is removed; MCP protocol and transport clients come from the official version 2 `@modelcontextprotocol/client` and `@modelcontextprotocol/server` packages. The OAuth endpoints move from `/mcp/*` to `/oauth2/*`, with discovery at `/.well-known/oauth-authorization-server` and protected resource metadata at `/.well-known/oauth-protected-resource`. Discovery-based MCP clients pick up the new locations on their own.
+
+  The shared-auth route helper is renamed from `withMcpAuth` to `requireMcpAuth`. The standalone protected-resource factory is renamed from `mcpHandler` to `createMcpProtectedRequestHandler`; pass one flat `McpProtectedRequestHandlerOptions` object with `issuer`, a single `audience`, optional `jwtVerifyOptions`, token-verification fields, and challenge fields. Its callback receives `accessTokenClaims`. `requireMcpAuth` verifies the access token against the published JWKS, validates DPoP proofs for DPoP-bound tokens, and passes the verified access-token claims to your handler.
+
+  `createInsufficientScopeError` now validates a custom description against the RFC 6750 `error_description` character set when the error is constructed. Invalid descriptions throw `TypeError("invalid error_description")` before an error can reach resource-challenge serialization.
+
+  MCP 2026-07-28 uses a stateless request and response transport. Serve MCP routes with version 2 of `@modelcontextprotocol/server`, configure `createMcpHandler` with `legacy: "reject"`, wrap it with `requireMcpAuth`, and export only `POST`. Remove MCP-route `GET` and `DELETE` exports and session-store options such as `redisUrl`. OAuth clients, consent, authorization codes, refresh tokens, and security records remain durable authorization state.
+
+  To migrate, install `@better-auth/mcp`, `@better-auth/cimd`, and the official version 2 MCP client or server package needed by your application; add the `jwt()` plugin, which is now required for token signing; and move options that were nested under `oidcConfig` to flat options on `mcp({ ... })`. The database models change: `oauthApplication` becomes `oauthClient`, with new `oauthRefreshToken` and `oauthClientAssertion` tables. Regenerate or migrate your schema with `npx auth migrate` or `npx auth generate`.
+
+- [#10045](https://github.com/better-auth/better-auth/pull/10045) [`2fd3d58`](https://github.com/better-auth/better-auth/commit/2fd3d5850006d164317d4f53a81ac95f2d1f549a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `/oauth2/introspect` now returns the same claims for opaque and JWT access tokens, and lets a resource server introspect a token meant for it.
+
+  Introspecting an opaque token now returns the claims a JWT would carry for the same grant: your `customAccessTokenClaims` and any per-resource `customClaims`. Opaque tokens used to return a smaller set. The server owns the reserved claim names (`iss`, `sub`, `aud`, `scope`, `auth_time`, and similar); if a `customAccessTokenClaims` callback returns one, it is now dropped instead of overwriting the server's value.
+
+  An opaque token's claims are recomputed on every introspection, so the response shows current state. Deleting its resource now makes it report `{ active: false }`, the same as a JWT. Disabling a resource keeps existing tokens valid until they expire. A JWT, by contrast, always reflects what was signed when it was issued.
+
+  A resource server can now introspect a token issued to a different client. This is the usual setup: a frontend holds the token and a separate API validates it. The API must be registered as a resource and linked to the client. Any other authenticated client still gets `{ active: false }`, and a refresh token can only be introspected by the client that requested it.
+
+- [#10039](https://github.com/better-auth/better-auth/pull/10039) [`aedcb97`](https://github.com/better-auth/better-auth/commit/aedcb974f055c3514fe0464dc53d71d45a8a1725) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - feat(oauth-provider)!: DPoP-bound access tokens (RFC 9449)
+
+  OAuth provider integrations can issue and verify DPoP sender-constrained tokens. Clients request them with `dpop_bound_access_tokens` at registration, `dpop_jkt` on the authorization request, or by targeting a resource configured with `dpopBoundAccessTokensRequired`. Issued tokens carry `cnf.jkt`, return `token_type: "DPoP"`, and stay bound through refresh-token rotation, introspection, and userinfo.
+
+  Resource servers verify DPoP requests with `verifyAccessTokenRequest`, which checks the `Authorization: DPoP` scheme, the proof, the request target, the access-token hash, and proof replay. The MCP package advertises DPoP in protected resource metadata and verifies DPoP-bound requests. Proof replay is rejected through the database-backed verification store, so anti-replay holds across instances. `verifyAccessTokenRequest` and `requireMcpAuth` use that store by default; build one with `createDpopReplayStore(internalAdapter)` or pass a custom `dpop.replayStore`. This needs database-backed verification storage: a secondary-storage-only deployment rejects DPoP requests rather than skipping replay protection.
+
+  Breaking: the raw-token verifier `verifyAccessToken` is renamed to `verifyBearerToken`, both in `better-auth/oauth2` and as the `oauthProviderResourceClient` action, and it rejects DPoP-bound tokens. Use `verifyAccessTokenRequest` on any endpoint that may receive them. The resource-request input type is renamed from `AccessTokenRequestInput` to `ResourceRequestInput`, and the DPoP algorithm option is `signingAlgorithms` everywhere.
+
+  Run a schema migration for the DPoP token-binding fields: the `confirmation` column on the access-token and refresh-token tables. DPoP-bound clients also gain `dpopBoundAccessTokens` and resources `dpopBoundAccessTokensRequired`. No dedicated replay table is added; proof replay reuses the verification store.
+
+- [#9079](https://github.com/better-auth/better-auth/pull/9079) [`6f2948e`](https://github.com/better-auth/better-auth/commit/6f2948e87bb5fa14bd2174a91f7143e1eced1b87) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - feat(oauth-provider): compute `at_hash` in ID tokens per OIDC Core §3.1.3.6
+
+  ID tokens issued alongside an access token now include the `at_hash` claim, which cryptographically binds the two tokens to prevent token substitution attacks. The hash algorithm is selected based on the actual signing key's algorithm (EdDSA/Ed25519 uses SHA-512, RS/ES/PS384 uses SHA-384, RS/ES/PS512 uses SHA-512, all others use SHA-256).
+
+  A new `resolveSigningKey()` export is available from `better-auth/plugins` to resolve the current JWKS signing key (including its algorithm). When using a custom `jwt.sign` callback, the signed ID token's header is validated against the declared algorithm to prevent `at_hash` mismatches.
+
+- [#9304](https://github.com/better-auth/better-auth/pull/9304) [`e0d2b9e`](https://github.com/better-auth/better-auth/commit/e0d2b9eb9b4a515e1b73be71e1e3681faaa9b55f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Propagate sign-out to every connected app and cut off API access immediately, via OIDC Back-Channel Logout 1.0.
+
+  When a user's session ends at the OP (sign-out, `/oauth2/end-session`, admin revoke, ban), `@better-auth/oauth-provider` now notifies every Relying Party that holds tokens for that session. The user's API access is cut off right away, instead of access tokens staying usable until their own TTL. Each client opts in by registering a `backchannel_logout_uri` (and optionally `backchannel_logout_session_required`) via DCR or the admin client-create endpoint. The provider signs a `logout+jwt` Logout Token per client and POSTs it to that client in parallel, with a short per-RP timeout.
+
+  **Breaking change.** Introspection of an opaque or JWT access token whose bound session has ended now returns `{ active: false }`, and `/oauth2/userinfo` rejects it with `invalid_token`. Previously the token stayed active until its own TTL. If you relied on access tokens outliving the user's session, that no longer holds.
+
+  Refresh tokens without `offline_access` are revoked on session end; `offline_access` refresh tokens are preserved so long-lived API access can survive the browser session (OIDC Back-Channel Logout 1.0 §2.7). Access-token invalidation on session end is an additional OP hardening choice beyond §2.7, enforced by session liveness, so it holds even when the JWT plugin is disabled.
+
+  Delivery runs through the host's background task handler when one is configured (Vercel `waitUntil`, Cloudflare `ctx.waitUntil`); without a handler it completes inline so notifications are not lost on request teardown. Configure `advanced.backgroundTasks.handler` on serverless runtimes to keep sign-out fast.
+
+  Discovery at `/.well-known/openid-configuration` and `/.well-known/oauth-authorization-server` advertises `backchannel_logout_supported: true` and `backchannel_logout_session_supported: true` when the JWT plugin is enabled. Every registered `backchannel_logout_uri` must be a credential-free public HTTPS URL without a fragment; loopback HTTP is rejected for both public and confidential clients. CIMD documents cannot register back-channel logout metadata. The SSRF host guard, which blocks private, reserved, tunneled, and cloud-metadata hosts, also covers a `private_key_jwt` client's `jwks_uri`.
+
+  Schema changes on `@better-auth/oauth-provider`:
+  - `oauthClient.backchannelLogoutUri: string | null`
+  - `oauthClient.backchannelLogoutSessionRequired: boolean`
+  - `oauthAccessToken.revoked: Date | null`
+
+  `better-auth`'s `signJWT` gains an optional `header` argument, forwarded to custom remote signers. JWT profiles that need an explicit media type, such as `typ: "logout+jwt"`, can now set it without reaching for the low-level signing primitives.
+
+- [#10135](https://github.com/better-auth/better-auth/pull/10135) [`f68044d`](https://github.com/better-auth/better-auth/commit/f68044dcfbd9fb83763249ed9509cfacbcce47be) Thanks [@brentmitchell25](https://github.com/brentmitchell25)! - Registered OAuth clients can now use the RFC 8628 device flow to obtain OAuth access tokens. Add `oauthDeviceAuthorization()` alongside `oauthProvider()` or `mcp()`, request a code at `/device/code`, and exchange it at `/oauth2/token` after the user approves it. OAuth and OpenID discovery advertise the `device_authorization_endpoint`.
+
+  Device authorization requests can bind RFC 8707 resource indicators. `GET /device` returns the requested client, scopes, and resources to the authenticated user who owns the request. Token requests can reuse or narrow the approved resources, but cannot add new ones. Existing first-party device clients continue to receive Better Auth session tokens from `/device/token`.
+
+  Enabling `oauthDeviceAuthorization()` adds nullable `oauthClientId` and `resources` fields to `deviceCode`. Regenerate and apply the database schema after adding the integration.
+
+  Confidential clients authenticate at `/device/code` with their registered method, while public clients send `client_id`. Empty `client_id`, `scope`, `user_id`, and authentication values are treated as omitted; multiple non-empty values for any of these parameters return `invalid_request`, while multiple `resource` values remain supported. Unknown OAuth client IDs enter the standalone device flow only when `oauthDeviceAuthorization({ validateClient })` accepts them.
+
+- [#10030](https://github.com/better-auth/better-auth/pull/10030) [`050ef2d`](https://github.com/better-auth/better-auth/commit/050ef2dfcf22429135b49804de195f945f59f3c1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add an OAuth Provider extension surface so companion plugins can register token grants, assertion-based client authentication methods, additive discovery metadata, access-token/ID-token/UserInfo claim contributors, and client-id discovery sources without changing provider core for each OAuth RFC. Register through `extendOAuthProvider(ctx, extension)` in a plugin `init()` hook.
+
+  Contributions are guarded: grant types, auth methods, and assertion types must be disjoint across extensions; metadata and claims are additive and never override authorization-server core. Assertion-based client authentication methods can reuse the exported `consumeClientAssertion` helper for the RFC 7523 audience, lifetime, and `jti` replay checks. A client authentication strategy proves only which client id the caller controls. The authorization server resolves and authorizes the client record itself, bound to the grant being issued, so a strategy cannot influence a client's grants, scopes, or enabled state, and a handler cannot authorize one grant while minting another.
+
+  Plugins reach provider capabilities through one surface. A grant handler receives a `provider` (resolve a client, issue tokens, hash or look up a token, verify a token), and a plugin's own endpoints obtain the same object with `getOAuthProviderApi(ctx, opts, grantType?)`. An issued token can be sender-constrained by passing a `confirmation` (RFC 7800 `cnf`) to `issueTokens` or returning it from a client-authentication strategy; the authorization server owns `cnf`, so a claim contributor cannot set it.
+
+  Client-id discovery is contributed through this surface: a plugin that resolves clients from an external source registers it with `extendOAuthProvider(ctx, { clientDiscovery })`, or composes one directly via `oauthProvider({ extensions: [{ clientDiscovery }] })`.
+
+- [#9936](https://github.com/better-auth/better-auth/pull/9936) [`0e1770a`](https://github.com/better-auth/better-auth/commit/0e1770ac7563a27b1daab96d5d571657b3a45f75) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `max_age` is now enforced. When a client requests `max_age` and the user authenticated longer ago than that window, the provider sends them back to log in, and the resulting ID token's `auth_time` reflects the fresh login. Previously `max_age` was accepted but ignored, so flows that relied on it being a no-op will now prompt the user to log in again.
+
+- [#10703](https://github.com/better-auth/better-auth/pull/10703) [`a796214`](https://github.com/better-auth/better-auth/commit/a7962147b3a759ce6da542300e31f3b5705a63fa) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Removed the `silenceWarnings` option from the oauth-provider plugin. The plugin already serves the oauth-authorization-server and openid-configuration metadata endpoints, so the init warnings and the config flag used to silence them are no longer needed. Delete any `silenceWarnings` entries from your oauthProvider config.
+
+- [#9648](https://github.com/better-auth/better-auth/pull/9648) [`d2a79ba`](https://github.com/better-auth/better-auth/commit/d2a79bae79b88e2b28cb678f5eefd9759239b627) Thanks [@brentmitchell25](https://github.com/brentmitchell25)! - OAuth provider now models protected resources explicitly. Configure them with `resources` or create them through the `oauthResource` admin API. Each resource can define token TTLs, allowed scopes, custom JWT claims, and JWT signing pins.
+
+  `validAudiences` is removed. Move each existing resource identifier into `resources`; link clients that should be limited to specific resources through `oauthClientResource` or Dynamic Client Registration `resources`.
+
+  Access-token issuance now applies resource policy to the requested RFC 8707 `resource` values. The OAuth provider narrows scopes to resource allowlists, uses the shortest configured TTL, strips reserved RFC 9068 claim names from custom claims, emits `jti`, and keeps repeated `resource` form parameters.
+
+  Refresh-token TTLs now use the shortest applicable lifetime. Deployments with a per-resource `refreshTokenTtl` longer than `refreshTokenExpiresIn` will see refresh tokens expire at the provider default instead of the longer resource value.
+
+  JWT signing can now honor per-resource pins. `signJWT()` accepts `signingKeyId` and `signingAlgorithm`; JWKS adapters expose `getKeyById()` and `getLatestKeyByAlg()`. The `jwks` table adds nullable `alg` and `crv` columns, and `keyPairConfigs` can provision multiple algorithms in one keyring.
+
+  After upgrading, run `npx @better-auth/cli generate` and apply the migration before deploying. The migration adds `oauthResource`, `oauthClientResource`, and the new `jwks` columns. Without it, resources using `signingAlgorithm` cannot find matching keys.
+
+  Resource servers should publish RFC 9728 protected-resource metadata at their own origin. The OAuth provider exposes challenge helpers that point clients at that metadata.
+
+  `@better-auth/mcp` now requires an explicit `resource` option. The plugin stores that identifier as an OAuth resource, publishes RFC 9728 protected-resource metadata for it, and binds issued access tokens to that resource. Existing `mcp({ loginPage, consentPage })` setups should add a protected MCP resource identifier, for example `resource: "https://api.example.com/mcp"`.
+
+- [#9970](https://github.com/better-auth/better-auth/pull/9970) [`3e852a2`](https://github.com/better-auth/better-auth/commit/3e852a26500446b2c4ad608933c71b616ceddba5) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Revoking a JWT access token that still verifies for this server now returns `400 unsupported_token_type` at `/oauth2/revoke` instead of a misleading `200`. A JWT is self-contained and is never stored, so the server cannot revoke it; the previous success response implied otherwise while the token kept working until expiry. An already-expired JWT or a JWT with an audience rejected by the OAuth resource model fails verification and still returns a successful `200` no-op.
+
+  To cut off access for a JWT access token, end the session (sign-out, admin revoke, or back-channel logout), which marks `sid`-bound tokens inactive at introspection and userinfo, or rely on a short token lifetime. Opaque and refresh token revocation are unchanged.
+
+- [#8836](https://github.com/better-auth/better-auth/pull/8836) [`93d3871`](https://github.com/better-auth/better-auth/commit/93d3871bd2f7c2fdd423c4c88a22a50b6333e656) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add client authentication configuration for token endpoint requests across the stack, including `private_key_jwt` (RFC 7523).
+
+  Generic OAuth providers now accept `tokenEndpointAuth` for token endpoint client authentication. Use `tokenEndpointAuth: { method: "private_key_jwt", getClientAssertion }` for JWT client assertions, `{ method: "none" }` for public clients, and `{ method: "client_secret_basic" }` or `{ method: "client_secret_post" }` with `clientSecret` for explicit secret-based client authentication. The existing `authentication: "basic" | "post"` option remains available for secret-based token requests.
+
+  Use `createPrivateKeyJwtClientAssertionGetter()` to sign RFC 7523 assertions from a private key. The assertion getter receives `{ clientId, tokenEndpoint, grantType }`, so integrations do not duplicate client ID or token endpoint values inside assertion helpers. Core OAuth2 now exports private-key JWT-specific helpers and types: `signPrivateKeyJwtClientAssertion`, `createPrivateKeyJwtClientAssertionGetter`, `PrivateKeyJwtSigningAlgorithm`, and `PRIVATE_KEY_JWT_SIGNING_ALGORITHMS`.
+
+  Token endpoint client authentication parameters are derived from `clientId`, `clientSecret`, and `tokenEndpointAuth`. Configured token endpoint authentication requires `clientId`; secret-based token endpoint authentication also requires `clientSecret`. Custom token parameters are for provider-specific fields and do not replace the configured client authentication values.
+
+  `refreshAccessToken()` now forwards `resource` values to refresh-token requests, so RFC 8707 resource indicators work through both the high-level refresh helper and `refreshAccessTokenRequest()`.
+
+  The synchronous OAuth2 request builders `createAuthorizationCodeRequest`, `createRefreshAccessTokenRequest`, and `createClientCredentialsTokenRequest` have been removed. Use the async `authorizationCodeRequest`, `refreshAccessTokenRequest`, and `clientCredentialsTokenRequest` helpers instead.
+
+  Servers verify JWT client assertions signed with asymmetric keys, and clients can use the same token endpoint authentication contract for authorization code, refresh, and client credentials token requests.
+
+- [#10037](https://github.com/better-auth/better-auth/pull/10037) [`0143d69`](https://github.com/better-auth/better-auth/commit/0143d69195870ea6550a40add8618361dbbc3b8f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Machine clients can now register without a user session. Send an RFC 7591 initial access token in the `Authorization: Bearer` header to `POST /oauth2/register`, and validate it with the new `validateInitialAccessToken` option. This provisions public or confidential clients directly, each optionally tagged with an owner `referenceId`.
+
+  The client-creation endpoints now return `201 Created` for a newly created client. They previously responded `200 OK`.
+
+- [#10145](https://github.com/better-auth/better-auth/pull/10145) [`5838df2`](https://github.com/better-auth/better-auth/commit/5838df2f4146433164ca16ffdba2d196a4f8ff51) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth Provider can now replay the same refresh-token response for duplicate refresh requests during a configured `refreshTokenReuseInterval`. OAuth Provider keeps strict replay handling by default; set this option to opt into the overlap window.
+
+  The MCP plugin defaults that interval to 30 seconds for every configured client. A retried refresh can recover the response produced when another request rotated the token. OAuth Provider remains strict by default; set `refreshTokenReuseInterval: 0` on `mcp()` to disable the overlap window.
+
+### Patch Changes
+
+- [#9930](https://github.com/better-auth/better-auth/pull/9930) [`0cbaf81`](https://github.com/better-auth/better-auth/commit/0cbaf81bed9dec4c56880ee78a532262386e1ec5) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Anonymous account linking now works after social and generic OAuth sign-in in Expo and other in-app browsers, where the OAuth callback returns without the session cookie. `onLinkAccount` fires and the anonymous user is migrated; before, it was silently skipped.
+
+  Plugins can now carry server-trusted data across an OAuth redirect with the new `addOAuthServerContext` API, read back on the callback via `getOAuthState().serverContext`. Unlike `additionalData`, it cannot be set from the request body, so it is the right place for values the server must trust.
+
+  For `@better-auth/oauth-provider`, the post-login authorization query now travels through that server-only channel, so it can no longer be injected through `additionalData`.
+
+- [#10149](https://github.com/better-auth/better-auth/pull/10149) [`132e293`](https://github.com/better-auth/better-auth/commit/132e293d7a82db30d7d1a63fb32c28df863204ae) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth Provider authorization requests that omit `response_type` now return `invalid_request` to the verified client redirect URI instead of falling back to the provider error page.
+
+- [#10151](https://github.com/better-auth/better-auth/pull/10151) [`267229b`](https://github.com/better-auth/better-auth/commit/267229bd24d5f918ac4c9c7eca7507e8c603e310) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Adds form-encoded POST support to the OIDC authorization endpoint and explicitly rejects unsupported OpenID Connect request objects with standard `request_not_supported` and `request_uri_not_supported` errors.
+
+- [#10113](https://github.com/better-auth/better-auth/pull/10113) [`4fe730a`](https://github.com/better-auth/better-auth/commit/4fe730a9c12f2ff68ca84523817b550adc7b2982) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth Provider claim contributors registered through `extendOAuthProvider` now receive the issuing session id. A `claims.idToken` or `claims.accessToken` contributor reads it from `input.sessionId` to derive per-session claims on the `authorization_code` and `refresh_token` grants. It is undefined where there is no session, such as `client_credentials`, opaque-token introspection, or a session that was deleted.
+
+- [#10150](https://github.com/better-auth/better-auth/pull/10150) [`508d8d6`](https://github.com/better-auth/better-auth/commit/508d8d6f06488d33a44d11059c873fcb8721d7a1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth Provider authorization-code replay now returns `invalid_grant` with a `400` token response and revokes previously issued opaque tokens from that authorization code.
+
+- [#9131](https://github.com/better-auth/better-auth/pull/9131) [`5142e9c`](https://github.com/better-auth/better-auth/commit/5142e9cec55825eb14da0f14022ae02d3c9dfd45) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Dynamic `baseURL` configurations now resolve consistently for direct server API calls and OAuth or MCP discovery:
+  - Fail with a clear `APIError` when no base URL can be resolved or the request host violates `allowedHosts`.
+  - Apply `advanced.trustedProxyHeaders` before trusting forwarded host and protocol values, and refresh request-dependent trusted origins, trusted providers, and cookies for each direct call.
+  - Infer HTTP for loopback development hosts when only headers are available, while rejecting request-like objects without usable URL and header data.
+  - Generate OAuth issuer, discovery, protected-resource, and JWKS URLs from the current request host.
+  - Make `requireMcpAuth` use the resolved Better Auth URL for its default issuer, resource, and JWKS URL. Resource servers with fully dynamic hosts can use `createMcpProtectedRequestHandler` with explicit verification options.
+  - Preserve metadata response headers supplied as `Headers`, tuple arrays, or records.
+
+- [#10065](https://github.com/better-auth/better-auth/pull/10065) [`2196ea6`](https://github.com/better-auth/better-auth/commit/2196ea65e724830d9f1066c6593210579de586b9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth and device-authorization responses that carry credentials now consistently send `Cache-Control: no-store` and `Pragma: no-cache`, so proxies, CDNs, and browsers never cache them. This covers the token, introspection, and userinfo endpoints, dynamic and admin client registration, client secret rotation, and the device code and device token responses, including the error responses from those endpoints.
+
+  Endpoints declare this with `metadata: { noStore: true }`, and the header set is exported from `@better-auth/core` as `NO_STORE_HEADERS` for responses built by hand.
+
+- [#10159](https://github.com/better-auth/better-auth/pull/10159) [`7d1288e`](https://github.com/better-auth/better-auth/commit/7d1288e7c56a2385713cbcc232a376a7fe228be4) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `redirect_uri` is enforced conditionally at the OAuth token endpoint: required and matched only when the authorization request included one (RFC 6749 §4.1.3), so an authorization code issued without a `redirect_uri` can be exchanged without one. A `redirect_uri` that does not match the code's bound value now returns `invalid_grant` instead of `invalid_request` (RFC 6749 §5.2).
+
+- [#9118](https://github.com/better-auth/better-auth/pull/9118) [`314e06f`](https://github.com/better-auth/better-auth/commit/314e06f0fd84ac90b55b5430624a74c5a8d62bfd) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - feat(oauth-provider): add `customTokenResponseFields` callback and Zod validation for authorization codes
+
+  Add `customTokenResponseFields` callback to `OAuthOptions` for injecting custom fields into token endpoint responses across all grant types. Standard OAuth fields (`access_token`, `token_type`, etc.) cannot be overridden. Follows the same pattern as `customAccessTokenClaims` and `customIdTokenClaims`.
+
+  Authorization code verification values are now validated with a Zod schema at deserialization, consistently returning `invalid_verification` errors for malformed or corrupted values instead of potential 500s.
+
+- [#10152](https://github.com/better-auth/better-auth/pull/10152) [`d368217`](https://github.com/better-auth/better-auth/commit/d368217efc1265996460d96c539b2ca669e33d49) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Keeps `profile` and `email` scope claims on the OIDC UserInfo response instead of adding them to authorization-code ID tokens by default, advertises `acr_values_supported: ["0"]`, and rejects unsupported
+  `acr_values` authorization requests instead of silently downgrading them.
+
+- [#10153](https://github.com/better-auth/better-auth/pull/10153) [`dd42701`](https://github.com/better-auth/better-auth/commit/dd42701af4b8aa56287c6890a8217a270249571f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Allows confidential OIDC clients that have opted out of PKCE to request `offline_access` when the authorization request includes both `openid` and `nonce`.
+
+- [#9657](https://github.com/better-auth/better-auth/pull/9657) [`1e5b808`](https://github.com/better-auth/better-auth/commit/1e5b80847208cf839c9d45363ca19b8eab41c68a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Harden `private_key_jwt` and token endpoint client authentication, and add the helpers that make the fix structural.
+
+  `@better-auth/core/oauth2` now exposes `encodeBasicCredentials` and `decodeBasicCredentials`, a round-trip-tested pair that follows RFC 6749 §2.3.1 (`application/x-www-form-urlencoded` each value, split on the first `:` only). The decoder accepts the scheme case-insensitively and tolerates one or more spaces before the credentials per RFC 7235 §2.1. `client_secret_basic` on the client side and the Better Auth OAuth provider on the server side both go through these helpers, so credentials containing reserved characters round-trip cleanly across the stack and headers like `basic xxx` or `Basic  xxx` are accepted.
+
+  `createPrivateKeyJwtClientAssertionGetter` validates options eagerly. Unsupported algorithms (`HS256`, `none`), a JWK with no key material, and disagreement between an explicit `algorithm` and the JWK-embedded `alg` all throw at construction rather than on the first token request. `signPrivateKeyJwtClientAssertion` enforces the same checks for direct callers. **Breaking:** configurations that paired an unsupported JWK `alg` with a different explicit `algorithm` used to silently sign with the explicit option; they now fail at construction.
+
+  **Breaking:** `@better-auth/oauth-provider` accepts client `jwks` metadata only as an RFC 7517 JWK Set object with a non-empty `keys` array. Replace `jwks: [key]` with `jwks: { keys: [key] }` in DCR payloads, administrative and user client creation, Client ID Metadata Documents, test fixtures, and generated client code. Remotely fetched `jwks_uri` responses must use the same object shape. EC keys must use P-256, P-384, or P-521; OKP keys must use Ed25519. When a key declares `alg`, it must be a supported `private_key_jwt` algorithm that matches the key type and curve; omit `alg` when the client chooses the algorithm in its assertion header. OAuth client rows previously written through `oauthToSchema` are already stored as JWK Set objects, so this is a request, configuration, and type migration rather than another database rewrite; audit rows written outside Better Auth separately.
+
+  The SSO `private_key_jwt` flow redirects with `error_description=no_private_key_available` when a `resolvePrivateKey` callback returns no `privateKeyJwk` or `privateKeyPem`. The redirect path previously short-circuited only when the resolver was absent entirely; an empty resolver return fell through into an internal signing error.
+
+  `better-auth/test` adds `getHttpTestInstance`, a counterpart to `getTestInstance` that binds a real HTTP listener on an OS-assigned port and constructs the auth instance against the discovered URL. It removes the temp-server-then-rebind race that test files have been individually copy-pasting.
+
+- [#10811](https://github.com/better-auth/better-auth/pull/10811) [`801968e`](https://github.com/better-auth/better-auth/commit/801968e354067869318718f4766d7011c0218a86) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `private_key_jwt` client assertions can use either the receiving endpoint URL or the OpenID Provider issuer as `aud`. The claim may be a string or an array containing at least one accepted value. This rule applies to token, introspection, and revocation requests.
+
+- [#10154](https://github.com/better-auth/better-auth/pull/10154) [`6f9a188`](https://github.com/better-auth/better-auth/commit/6f9a188bbb2665e56be1f1fb566eb1f5f919e1c8) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Refresh-token requests now return `invalid_grant` with an `invalid refresh token` description when a client tries to use a refresh token issued to another OAuth client.
+
+- [#10812](https://github.com/better-auth/better-auth/pull/10812) [`f451d1c`](https://github.com/better-auth/better-auth/commit/f451d1c7589ddb4d2995fa54aee9375472ebea33) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The RP-Initiated Logout endpoint continues to accept `GET` and now accepts form-encoded `POST` requests. It also supports the JSON bodies sent by Better Auth's generated client. After explicit confirmation, browser users can log out without an `id_token_hint`. They receive clear confirmation, success, or error pages. Invalid ID token hints fail safely, and logout redirects require an exact registered `post_logout_redirect_uri`.
+
+- [#9845](https://github.com/better-auth/better-auth/pull/9845) [`13abc79`](https://github.com/better-auth/better-auth/commit/13abc7922b47f800da59ca212d364a64feeec91f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Harden redirect-URI validation across the OAuth provider plugins. `isSafeUrlScheme` and `SafeUrlSchema` no longer call `URL.canParse`, which is absent on some supported runtimes and could throw or silently disable the dangerous-scheme check. They now parse with a `try`/`catch` fallback. `SafeUrlSchema` also rejects redirect URIs that contain a fragment component, per RFC 6749 §3.1.2.
+
+- [#10472](https://github.com/better-auth/better-auth/pull/10472) [`69acb7a`](https://github.com/better-auth/better-auth/commit/69acb7a3db3cd148a9cd1db5063dbdc69909165a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Revoke session-bound OAuth tokens and deliver back-channel logout only after the related session deletion succeeds.
+
+- [#10155](https://github.com/better-auth/better-auth/pull/10155) [`5ac6249`](https://github.com/better-auth/better-auth/commit/5ac62493ef7296b4ac89359d257a0a99305ac189) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OIDC UserInfo `POST` requests now accept bearer access tokens in an `application/x-www-form-urlencoded` request body. Requests that send bearer tokens in both the Authorization header and form body now return `invalid_request`.
+
+- [#10068](https://github.com/better-auth/better-auth/pull/10068) [`6d97c47`](https://github.com/better-auth/better-auth/commit/6d97c4754c80010524b922c39b28a7afd4012457) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `/oauth2/userinfo` now returns a `401 invalid_token` response with a `WWW-Authenticate` challenge when an access token is invalid, expired, revoked, or unknown. `/oauth2/introspect` still reports those tokens as inactive.
+
 ## 1.7.0-rc.6
 
 ### Patch Changes
