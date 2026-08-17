@@ -342,6 +342,17 @@ const verifyPhoneNumberBodySchema = z
 					"Check if there is a session and update the phone number. Eg: true",
 			})
 			.optional(),
+		/**
+		 * If this is false, the session will not be remembered
+		 * @default true
+		 */
+		rememberMe: z
+			.boolean()
+			.meta({
+				description:
+					"If this is false, the session will not be remembered. Default is `true`.",
+			})
+			.optional(),
 	})
 	.and(z.record(z.string(), z.any()));
 
@@ -564,6 +575,7 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 						code,
 						disableSession,
 						updatePhoneNumber,
+						rememberMe,
 						...rest
 					} = ctx.body;
 					const additionalFields = parseUserInput(
@@ -615,8 +627,10 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			);
 
 			if (!ctx.body.disableSession) {
+				const dontRememberMe = ctx.body.rememberMe === false;
 				const session = await ctx.context.internalAdapter.createSession(
 					user.id,
+					dontRememberMe,
 				);
 				if (!session) {
 					throw APIError.from(
@@ -624,10 +638,14 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 					);
 				}
-				await setSessionCookie(ctx, {
-					session,
-					user,
-				});
+				await setSessionCookie(
+					ctx,
+					{
+						session,
+						user,
+					},
+					dontRememberMe,
+				);
 				return ctx.json({
 					status: true,
 					token: session.token,
