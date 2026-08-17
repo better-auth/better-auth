@@ -85,13 +85,9 @@
   - `issuer` and `requireIssuerValidation` config fields removed; issuer validation is automatic via OIDC discovery
   - `mapProfileToUser` profile typed as `OAuth2UserInfo & Record<string, unknown>`
 
-- [#10140](https://github.com/better-auth/better-auth/pull/10140) [`335cda7`](https://github.com/better-auth/better-auth/commit/335cda702ef8e2aecad4b26a427f16953e3aabd2) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - ID tokens now use `acr: "0"`, indicating that authentication did not meet
-  ISO/IEC 29115 level 1, and OpenID discovery advertises only `"0"`. Because
-  `acr_values` is voluntary, requests for other classes continue instead of
-  failing. Essential `claims.id_token.acr` requests in OpenID Connect flows still
-  fail when their required `value` or `values` cannot be met.
+- [#10140](https://github.com/better-auth/better-auth/pull/10140) [`335cda7`](https://github.com/better-auth/better-auth/commit/335cda702ef8e2aecad4b26a427f16953e3aabd2) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `customIdTokenClaims`, extension ID-token claims, and per-issuance `idTokenClaims` can no longer set OIDC/JWT protocol claims such as issuer, subject, audience, token lifetime, nonce, session or hash binding, `auth_time`, `acr`, `amr`, or `azp`. Namespaced custom claims still appear in ID tokens.
 
-  `customIdTokenClaims`, extension ID-token claims, and per-issuance `idTokenClaims` can no longer set OIDC/JWT protocol claims such as issuer, subject, audience, token lifetime, nonce, session or hash binding, `auth_time`, `acr`, `amr`, or `azp`. Namespaced custom claims still appear in ID tokens.
+- [#10790](https://github.com/better-auth/better-auth/pull/10790) [`a966815`](https://github.com/better-auth/better-auth/commit/a966815b134cbfda0565724cd533f584347443cf) Thanks [@bytaesu](https://github.com/bytaesu)! - ID tokens now use `acr: "0"`, indicating that authentication did not meet ISO/IEC 29115 level 1, and OpenID discovery advertises only `"0"`. Because `acr_values` is voluntary, requests for other classes continue instead of failing. Essential `claims.id_token.acr` requests in OpenID Connect flows still fail when their required `value` or `values` cannot be met.
 
 - [#10577](https://github.com/better-auth/better-auth/pull/10577) [`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - MCP clients that hit a scope wall now learn exactly which scopes to ask for. Missing protected scopes produce a `403` with an RFC 6750 `insufficient_scope` `WWW-Authenticate` challenge that names every missing scope. Clients can union those scopes into one authorization request instead of opening one browser redirect per scope.
   - Configure protected scopes with `requiredScopes` through `RequireMcpAuthOptions` or the matching `createMcpProtectedRequestHandler` verifier option. Exact membership remains the default; `isScopeSatisfied` can define hierarchical policies.
@@ -251,8 +247,7 @@
 
   Authorization code verification values are now validated with a Zod schema at deserialization, consistently returning `invalid_verification` errors for malformed or corrupted values instead of potential 500s.
 
-- [#10152](https://github.com/better-auth/better-auth/pull/10152) [`d368217`](https://github.com/better-auth/better-auth/commit/d368217efc1265996460d96c539b2ca669e33d49) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Keeps `profile` and `email` scope claims on the OIDC UserInfo response instead of adding them to authorization-code ID tokens by default, advertises `acr_values_supported: ["0"]`, and rejects unsupported
-  `acr_values` authorization requests instead of silently downgrading them.
+- [#10152](https://github.com/better-auth/better-auth/pull/10152) [`d368217`](https://github.com/better-auth/better-auth/commit/d368217efc1265996460d96c539b2ca669e33d49) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Keeps `profile` and `email` scope claims on the OIDC UserInfo response instead of adding them to authorization-code ID tokens by default.
 
 - [#10153](https://github.com/better-auth/better-auth/pull/10153) [`dd42701`](https://github.com/better-auth/better-auth/commit/dd42701af4b8aa56287c6890a8217a270249571f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Allows confidential OIDC clients that have opted out of PKCE to request `offline_access` when the authorization request includes both `openid` and `nonce`.
 
