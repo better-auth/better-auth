@@ -10,13 +10,13 @@ tags: ["1.7", "OAuth", "OpenID Connect", "MCP", "SSO", "SCIM", "security"]
 
 # Better Auth 1.7: OAuth, SSO, and Provisioning Come Together
 
-Better Auth 1.7 is a minor version by number, but it is one of the largest expansions of what you can build with Better Auth.
+We're excited to announce Better Auth 1.7 🎉
 
-The existing OAuth and OpenID Connect provider can now protect APIs with stronger tokens and support more kinds of clients. MCP gains its own package, clearer resource protection, and support for the latest authorization profile. SCIM keeps its User lifecycle features and adds Groups, direct memberships, role projections, and stronger connection management. A new OAuth device grant lets command-line tools, TVs, and other devices ask for API access through a browser.
+Better Auth 1.7 is one of our largest releases. It brings major improvements across OAuth and OpenID Connect, enterprise identity, MCP authorization, and device access.
 
-This release also brings the OAuth, SSO, and provisioning paths closer together. Applications can now explicitly connect a provisioned SCIM identity to a verified OpenID or SAML identity without relying on email matching.
+If other applications sign in through your app, the OAuth provider now supports stronger tokens, explicit rules for protected APIs, more client authentication methods, and broader OpenID conformance. If your customers provision employees through SCIM, 1.7 adds Groups, role projections, richer employee profiles, and an exact connection to SSO. MCP clients and limited-input devices can also request standards-based OAuth access.
 
-We introduced the first set of changes in the [1.7 release candidate](/blog/1-7-rc), and the release continued to grow through the candidate cycle. This post covers the final highlights. For every migration step, use the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide).
+We introduced the first part of this work in the [1.7 release candidate](/blog/1-7-rc). Some improvements require migration work, especially for OAuth Provider, MCP, SSO, SAML, SCIM, account identities, and custom storage. The highlights below explain what each area gains. Follow the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide) for the migration steps.
 
 ***
 
