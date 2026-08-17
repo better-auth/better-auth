@@ -8,45 +8,45 @@ import { fileURLToPath } from "node:url";
 const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
 
 describe("(cloudflare) simple server", () => {
-	it("check repo", async (t) => {
-		const cp = spawn("npm", ["run", "check"], {
+	it("builds and runs the Worker", async (t) => {
+		const cp = spawn("pnpm", ["run", "e2e:smoke"], {
 			cwd: join(fixturesDir, "cloudflare"),
 			stdio: "pipe",
 		});
 
 		t.after(() => {
-			cp.kill("SIGINT");
+			if (cp.exitCode === null) {
+				cp.kill("SIGINT");
+			}
 		});
 
 		const unexpectedWarnings = new Set(["node:sqlite", "node:async_hooks"]);
+		let output = "";
 
 		cp.stdout.on("data", (data) => {
-			console.log(data.toString());
-			for (const str of unexpectedWarnings) {
-				assert(
-					!data.toString().includes(str),
-					`Output should not contain "${str}"`,
-				);
-			}
+			const chunk = data.toString();
+			output += chunk;
+			console.log(chunk);
 		});
 
 		cp.stderr.on("data", (data) => {
-			console.error(data.toString());
-			for (const str of unexpectedWarnings) {
-				assert(
-					!data.toString().includes(str),
-					`Error output should not contain "${str}"`,
-				);
-			}
+			const chunk = data.toString();
+			output += chunk;
+			console.error(chunk);
 		});
 
-		await new Promise<void>((resolve) => {
-			cp.stdout.on("data", (data) => {
-				if (data.toString().includes("exiting now.")) {
-					resolve();
-				}
-			});
+		const exitCode = await new Promise<number | null>((resolve, reject) => {
+			cp.once("error", reject);
+			cp.once("close", resolve);
 		});
+		assert.equal(exitCode, 0, output);
+
+		for (const warning of unexpectedWarnings) {
+			assert(
+				!output.includes(warning),
+				`Output should not contain "${warning}"`,
+			);
+		}
 
 		const indexJs = await fs.readFile(
 			join(fixturesDir, "cloudflare", "dist", "index.js"),
