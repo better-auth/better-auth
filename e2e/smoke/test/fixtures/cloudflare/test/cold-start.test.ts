@@ -18,7 +18,7 @@ afterAll(async () => {
  */
 it("preserves async contexts across concurrent first calls in the Workers runtime", async () => {
 	const response = await server.fetch(
-		"http://localhost:8787/async-context/concurrency",
+		"http://localhost:8787/_test/async-context/concurrency",
 	);
 	expect(response.status).toBe(200);
 	const body: unknown = await response.json();

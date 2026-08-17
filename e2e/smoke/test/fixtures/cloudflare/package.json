@@ -5,11 +5,9 @@
     "@better-auth/core": "workspace:*",
     "@better-auth/sso": "workspace:*",
     "better-auth": "workspace:*",
-    "drizzle-orm": "^0.45.2",
     "hono": "^4.12.34"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.31.10",
     "vitest": "catalog:vitest",
     "wrangler": "4.123.0"
   },
@@ -17,7 +15,6 @@
     "check": "wrangler types --check --env-interface CloudflareBindings && tsc && wrangler build",
     "e2e:smoke": "pnpm run check && vitest run",
     "dev": "wrangler dev",
-    "migrate:local": "wrangler d1 migrations apply db --local",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
     "typecheck:consumer": "tsc --noEmit --project tsconfig.json"
   }

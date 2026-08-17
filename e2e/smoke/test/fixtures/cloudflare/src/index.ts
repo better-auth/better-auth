@@ -9,37 +9,28 @@ import type {
 	DBAdapter,
 	DBTransactionAdapter,
 } from "@better-auth/core/db/adapter";
-import { sso } from "@better-auth/sso";
-import { betterAuth } from "better-auth";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { jwt } from "better-auth/plugins/jwt";
+import { getMigrations } from "better-auth/db/migration";
 import { Hono } from "hono";
-import { createDrizzle } from "./db";
+import { auth } from "./auth";
 
-const createAuth = (env: CloudflareBindings) =>
-	betterAuth({
-		baseURL: "http://localhost:4000",
-		database: drizzleAdapter(createDrizzle(env.DB), { provider: "sqlite" }),
-		emailAndPassword: {
-			enabled: true,
-		},
-		logger: {
-			level: "debug",
-		},
-		plugins: [jwt(), sso()],
+const app = new Hono();
+
+app.all("/api/auth/*", (c) => auth.handler(c.req.raw));
+
+app.get("/_test/session", async (c) => {
+	const session = await auth.api.getSession({
+		headers: c.req.raw.headers,
 	});
+	return c.json(session);
+});
 
-type Auth = ReturnType<typeof createAuth>;
+app.post("/_test/migrate", async (c) => {
+	const { runMigrations } = await getMigrations(auth.options);
+	await runMigrations();
+	return c.body(null, 204);
+});
 
-const app = new Hono<{
-	Bindings: CloudflareBindings;
-	Variables: {
-		auth: Auth;
-	};
-}>();
-
-// Keep this before the auth middleware to test first-time async context initialization.
-app.get("/async-context/concurrency", async (c) => {
+app.get("/_test/async-context/concurrency", async (c) => {
 	const contexts = Array.from(
 		{ length: 32 },
 		() => ({}) as AuthEndpointContext,
@@ -84,22 +75,6 @@ app.get("/async-context/concurrency", async (c) => {
 		).length,
 		total: contexts.length,
 	});
-});
-
-app.use("*", async (c, next) => {
-	const auth = createAuth(c.env);
-	c.set("auth", auth);
-	await next();
-});
-
-app.on(["POST", "GET"], "/api/auth/*", (c) => c.var.auth.handler(c.req.raw));
-
-app.get("/", async (c) => {
-	const session = await c.var.auth.api.getSession({
-		headers: c.req.raw.headers,
-	});
-	if (session) return c.text("Hello " + session.user.name);
-	return c.text("Not logged in");
 });
 
 export default app satisfies ExportedHandler<CloudflareBindings>;
