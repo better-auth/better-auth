@@ -145,8 +145,9 @@ services:
       - mysql-prisma_data:/var/lib/mysql
 
   mssql:
-    image: mcr.microsoft.com/mssql/server:latest
+    image: mcr.microsoft.com/mssql/server:2025-latest
     container_name: mssql
+    restart: "${MSSQL_RESTART_POLICY:-no}"
     environment:
       MSSQL_SA_PASSWORD: "Password123!"
       ACCEPT_EULA: "Y"
