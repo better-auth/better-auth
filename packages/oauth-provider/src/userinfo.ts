@@ -8,7 +8,7 @@ import {
 	parseAccessTokenAuthorization,
 } from "better-auth/oauth2";
 import type { User } from "better-auth/types";
-import { getDpopProofJwt, getEndpointUrl } from "./dpop";
+import { getDpopProofJwt } from "./dpop";
 import {
 	collectExtensionUserInfoClaims,
 	hasUserInfoClaimExtension,
@@ -143,7 +143,7 @@ export async function userInfoEndpoint(
 			authorization: accessTokenAuthorization,
 			proofJwt: getDpopProofJwt(ctx),
 			method: ctx.request?.method ?? "GET",
-			url: getEndpointUrl(ctx, "/oauth2/userinfo"),
+			url: `${ctx.context.baseURL.replace(/\/+$/, "")}/oauth2/userinfo`,
 			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 			signingAlgorithms: opts.dpop?.signingAlgorithms,
 			replayStore: createDpopReplayStore(ctx.context.internalAdapter),

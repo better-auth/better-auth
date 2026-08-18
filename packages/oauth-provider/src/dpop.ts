@@ -5,10 +5,3 @@ export function getDpopProofJwt(
 ): string | undefined {
 	return ctx.headers?.get("dpop") ?? undefined;
 }
-
-export function getEndpointUrl(
-	ctx: Pick<GenericEndpointContext, "context"> & { request?: Request },
-	path: string,
-): string {
-	return ctx.request?.url ?? `${ctx.context.baseURL}${path}`;
-}
