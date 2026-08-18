@@ -88,7 +88,7 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
 
 * **`provider` (required)**: your captcha provider.
 * **`secretKey` (required)**: your provider's secret key used for the server-side validation.
-* `endpoints` (optional): replaces the default array of paths where captcha verification is enforced. If set, only the specified paths will be protected. Default is `["/sign-up/email", "/sign-in/email", "/request-password-reset"]`.
+* `endpoints` (optional): replaces the default array of paths where captcha verification is enforced. If set, only the specified paths will be protected. Paths match exactly unless they include wildcards, such as `/sign-in/*` for one segment or `/sign-in/**` for nested routes. Default is `["/sign-up/email", "/sign-in/email", "/request-password-reset"]`.
 * `minScore` (optional - only *Google ReCAPTCHA v3*): minimum score threshold. Default is `0.5`.
 * `siteKey` (optional - only *hCaptcha* and *CaptchaFox*): prevents tokens issued on one sitekey from being redeemed elsewhere.
 * `siteVerifyURLOverride` (optional): overrides endpoint URL for the captcha verification request.

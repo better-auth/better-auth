@@ -122,11 +122,14 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: pnpm build
-
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Build package declarations
+        run: pnpm build
+
+      - name: Typecheck workspace consumers
+        run: pnpm typecheck:consumers
 
       - name: Typecheck dist declarations
         run: pnpm typecheck:dist

@@ -50,11 +50,15 @@ jobs:
           cache: pnpm
 
       - name: Install workspace dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build workspace packages
         run: pnpm build
 
       - name: Install demo dependencies
         working-directory: demo/${{ matrix.demo }}
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck demo
+        working-directory: demo/${{ matrix.demo }}
+        run: pnpm typecheck
