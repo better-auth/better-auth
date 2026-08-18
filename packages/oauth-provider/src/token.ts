@@ -61,6 +61,7 @@ import {
 	isPKCERequired,
 	normalizeTimestampValue,
 	parseClientMetadata,
+	presentationSubjectClaim,
 	resolveSessionAuthTime,
 	resolveSubjectIdentifier,
 	storeToken,
@@ -249,6 +250,14 @@ async function createJwtAccessToken(
 		 * contributor cannot forge it.
 		 */
 		confirmation?: Confirmation;
+		/**
+		 * Presentation subject resolved once by {@link createUserTokens} — the
+		 * same value the client receives as the id token `sub`. A JWT access
+		 * token is stateless, so `getSubject` cannot be re-run against the grant
+		 * later; carrying the already-resolved subject is what lets `/userinfo`
+		 * and `/introspect` present it.
+		 */
+		presentationSub?: string;
 	},
 ) {
 	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
@@ -270,6 +279,10 @@ async function createJwtAccessToken(
 			// client_credentials, no resource owner participates, so the client is
 			// the subject represented to the resource server.
 			sub: subject,
+			// AS-owned like every claim below: `resolveAccessTokenClaims` reserves
+			// the name, so a contributor cannot plant a carrier the presentation
+			// layer would then trust as a subject.
+			...presentationSubjectClaim(opts, overrides?.presentationSub),
 			aud: toAudienceClaim(audienceClaim),
 			// RFC 9068 §2.2.3: `client_id` MUST be present in JWT access tokens.
 			// Distinct from `azp` (authorized party — OIDC), kept for back-compat
@@ -333,10 +346,18 @@ async function createIdToken(
 	authTime?: Date,
 	accessToken?: string,
 	extraClaims?: Record<string, unknown>,
+	/**
+	 * Presentation subject resolved once by {@link createUserTokens}, so the id
+	 * token `sub`, the access token's carrier claim, `/userinfo`, and
+	 * `/introspect` are guaranteed to be the same value rather than four
+	 * independent `getSubject` invocations that could disagree.
+	 */
+	resolvedSubject?: string,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
-	const resolvedSub = await resolveSubjectIdentifier(user.id, client, opts);
+	const resolvedSub =
+		resolvedSubject ?? (await resolveSubjectIdentifier(user.id, client, opts));
 	const authTimeSec =
 		authTime != null ? Math.floor(authTime.getTime() / 1000) : undefined;
 
@@ -1200,6 +1221,14 @@ async function createUserTokens(
 		existingRefreshToken?.requestedUserInfoClaims ??
 		[];
 
+	// The subject presented to the client, resolved once here and reused by the
+	// id token and the JWT access token's carrier claim. Resolving per surface
+	// would invoke `getSubject` several times per request and let a
+	// non-deterministic hook return different subjects on the same grant.
+	const presentationSub = user
+		? await resolveSubjectIdentifier(user.id, client, opts, referenceId)
+		: undefined;
+
 	// Refresh token may need to be created beforehand for id field
 	const earlyRefreshToken =
 		isRefreshToken && user && !isJwtAccessToken
@@ -1262,6 +1291,7 @@ async function createUserTokens(
 						signingKeyId: grantIssuance.signingKeyId,
 						accessTokenClaims,
 						confirmation,
+						presentationSub,
 					},
 				)
 			: createOpaqueAccessToken(
@@ -1320,6 +1350,7 @@ async function createUserTokens(
 				authTime,
 				accessToken,
 				additionalIdTokenClaims,
+				presentationSub,
 			)
 		: undefined;
 

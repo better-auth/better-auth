@@ -1818,6 +1818,48 @@ JWT access tokens always use the real user ID as `sub`, since resource servers m
   * Rotating `pairwiseSecret` will change all pairwise `sub` values, breaking existing RP sessions. Treat this secret as permanent once set.
 </Callout>
 
+### Custom Subject Identifiers
+
+By default the OIDC `sub` is the Better Auth `user.id`. A multi-tenant issuer often needs a per-(user, workspace) `sub` instead, so a relying party sees one identity per workspace membership while the human keeps a single login and session. Use `getSubject` for that.
+
+```ts title="auth.ts"
+oauthProvider({
+  postLogin: {
+    page: "/select-organization",
+    shouldRedirect: async () => true,
+    // Persisted with the grant, the access token, and the refresh token
+    consentReferenceId: ({ session }) => { // [!code highlight]
+      const organizationId = session.activeOrganizationId;
+      return typeof organizationId === "string" ? organizationId : undefined;
+    },
+  },
+  getSubject: ({ userId, referenceId }) => referenceId ?? userId, // [!code highlight]
+})
+```
+
+`referenceId` is whatever `postLogin.consentReferenceId` produced for that grant. Flows with no consent reference — `client_credentials`, for example — never invoke the hook at all.
+
+The resolved subject appears in:
+
+* `id_token`
+* `/oauth2/userinfo` response
+* Token introspection (`/oauth2/introspect`), including introspection of a refresh token
+* The back-channel Logout Token, so a relying party can match the session it was given
+
+Because one login session can hold grants for several workspaces on the same client, back-channel logout sends one Logout Token per workspace subject rather than a single token for the user.
+
+`getSubject` returns the *base* subject, so pairwise hashing still applies on top when the client sets `subject_type: "pairwise"`. Composing the two gives a subject that is both workspace-scoped and unlinkable across relying parties.
+
+<Callout type="warn">
+  A JWT access token's own `sub` stays the raw `user.id`, because `/userinfo` uses it to look up the user. A relying party that validates JWT access tokens statelessly reads that raw, cross-workspace id.
+
+  Issue **opaque** access tokens to relying parties that must not see it — introspection returns the resolved subject and never exposes the reference. Reserve JWT access tokens for first-party use.
+</Callout>
+
+<Callout>
+  `getSubject` must be deterministic for a given `(userId, client, referenceId)` and must return a stable, non-empty string. Returning an empty or blank string is rejected, and a thrown error propagates: either one fails the token, `/userinfo`, and `/introspect` request rather than falling back to another identity.
+</Callout>
+
 ### MCP
 
 Use the [`@better-auth/mcp` plugin](/docs/plugins/mcp) when an MCP server is one of your protected resources. It builds on this OAuth Provider and adds MCP defaults, RFC 9728 protected resource metadata, and route helpers that return the authorization challenge MCP clients expect.

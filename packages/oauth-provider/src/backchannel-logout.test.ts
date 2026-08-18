@@ -915,3 +915,188 @@ describe("oauth back-channel logout - secondaryStorage + preserveSessionInDataba
 		for (const t of after) expect(t.revoked).toBeInstanceOf(Date);
 	});
 });
+
+describe("oauth back-channel logout - custom subject (getSubject)", async () => {
+	const port = 3031;
+	const baseUrl = `http://localhost:${port}`;
+	const state = "123";
+	const scopes = ["openid", "email", "profile", "offline_access"];
+	let currentReferenceId: string | undefined;
+
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: baseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				scopes,
+				postLogin: {
+					page: "/post-login",
+					shouldRedirect: async () => false,
+					consentReferenceId: async () => currentReferenceId,
+				},
+				getSubject: ({ userId, referenceId }) =>
+					referenceId ? `mem-${referenceId}` : userId,
+			}),
+			jwt(),
+		],
+	});
+	let { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: baseUrl,
+		fetchOptions: { customFetchImpl },
+	});
+	let server: Listener;
+	let rp: Awaited<ReturnType<typeof startMockRp>>;
+
+	beforeAll(async () => {
+		server = await listen(toNodeHandler(auth.handler), { port });
+	});
+	afterAll(async () => {
+		if (server) await server.close();
+	});
+	beforeEach(async () => {
+		rp = await startMockRp();
+		const networkFetch = globalThis.fetch.bind(globalThis);
+		vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+			const requestedUrl =
+				typeof input === "string"
+					? input
+					: input instanceof URL
+						? input.href
+						: input.url;
+			if (requestedUrl.startsWith(rp.publicUrl)) {
+				return networkFetch(
+					`${rp.url}${requestedUrl.slice(rp.publicUrl.length)}`,
+					init,
+				);
+			}
+			return networkFetch(input, init);
+		});
+		const signed = await signInWithTestUser();
+		headers = signed.headers;
+	});
+	afterEach(async () => {
+		vi.unstubAllGlobals();
+		await rp.close();
+	});
+
+	async function issueTokens() {
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [`${rp.url}/callback`],
+				application_type: "native",
+				skip_consent: true,
+				enable_end_session: true,
+				backchannel_logout_uri: `${rp.publicUrl}/logout/backchannel`,
+			},
+		});
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw new Error("client registration failed");
+		}
+		const redirectUri = `${rp.url}/callback`;
+		const codeVerifier = generateRandomString(32);
+		const authUrl = await createAuthorizationURL({
+			id: "test",
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${baseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes,
+			codeVerifier,
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			headers,
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		if (!code) {
+			throw new Error(`no authorization code in ${callbackRedirectUrl}`);
+		}
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		} satisfies MakeRequired<
+			Parameters<typeof authorizationCodeRequest>[0],
+			"code"
+		>);
+		const tokens = await client.$fetch<{
+			access_token: string;
+			id_token: string;
+		}>("/oauth2/token", { method: "POST", body, headers: tokenHeaders });
+		return { oauthClient, tokens: tokens.data! };
+	}
+
+	async function waitForDispatches(min = 1, timeoutMs = 2_000) {
+		const start = Date.now();
+		while (rp.received.length < min) {
+			if (Date.now() - start > timeoutMs) {
+				throw new Error(
+					`Timed out waiting for ${min} logout dispatches; received ${rp.received.length}`,
+				);
+			}
+			await new Promise((r) => setTimeout(r, 25));
+		}
+	}
+
+	async function logoutTokenSubs() {
+		const { keys } = await auth.api.getJwks();
+		const jwks = createLocalJWKSet({ keys: keys as any });
+		return Promise.all(
+			rp.received.map(
+				async (received) =>
+					(await jwtVerify(received.logoutToken!, jwks)).payload.sub,
+			),
+		);
+	}
+
+	it("signs the logout token with the workspace sub the RP saw in its id token", async () => {
+		currentReferenceId = "AAA";
+		const { tokens } = await issueTokens();
+
+		const [, idTokenPayloadB64] = tokens.id_token.split(".");
+		const idTokenPayload = JSON.parse(
+			Buffer.from(idTokenPayloadB64!, "base64url").toString("utf8"),
+		);
+		expect(idTokenPayload.sub).toBe("mem-AAA");
+
+		await client.signOut({ fetchOptions: { headers } });
+		await waitForDispatches();
+
+		// Resolving without the grant's referenceId would send the raw user id
+		// here, and the RP would keep the workspace session logged in.
+		const [sub] = await logoutTokenSubs();
+		expect(sub).toBe("mem-AAA");
+		expect(sub).toBe(idTokenPayload.sub);
+	});
+
+	it("sends one logout token per workspace when a session holds two grants", async () => {
+		currentReferenceId = "AAA";
+		await issueTokens();
+		currentReferenceId = "BBB";
+		await issueTokens();
+
+		await client.signOut({ fetchOptions: { headers } });
+		await waitForDispatches(2);
+
+		expect(new Set(await logoutTokenSubs())).toEqual(
+			new Set(["mem-AAA", "mem-BBB"]),
+		);
+	});
+});
