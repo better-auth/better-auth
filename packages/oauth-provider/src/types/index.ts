@@ -243,7 +243,10 @@ export interface OAuthProviderApi {
 	 * or none). For assertion-based methods, the RFC 7523 audience is bound to the
 	 * endpoint serving the request, so an assertion cannot be replayed across
 	 * endpoints. Returns the authenticated client, plus any `confirmation` an
-	 * assertion strategy proved.
+	 * assertion strategy proved. A companion endpoint that accepts
+	 * `application/x-www-form-urlencoded` must set `cloneRequest: true` in its
+	 * endpoint options because client authentication re-reads the raw form body
+	 * to enforce credential cardinality and reject mixed authentication methods.
 	 */
 	authenticateClient: (
 		request?: OAuthClientAuthenticationRequest,
