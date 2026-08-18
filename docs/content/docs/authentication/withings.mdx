@@ -1,0 +1,90 @@
+---
+title: Withings
+description: Withings provider setup and usage.
+---
+
+<Steps>
+  <Step>
+    ### Get your Withings Credentials
+
+    To use Withings sign in, you need a client ID and client secret. You can get them by creating an application in the [Withings Developer dashboard](https://developer.withings.com/).
+
+    Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/withings` for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
+  </Step>
+
+  <Step>
+    ### Configure the provider
+
+    To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+
+    export const auth = betterAuth({
+        socialProviders: {
+            withings: { // [!code highlight]
+                clientId: process.env.WITHINGS_CLIENT_ID as string, // [!code highlight]
+                clientSecret: process.env.WITHINGS_CLIENT_SECRET as string, // [!code highlight]
+            }, // [!code highlight]
+        }
+    })
+    ```
+  </Step>
+
+  <Step>
+    ### Sign In with Withings
+
+    To sign in with Withings, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+
+    * `provider`: The provider to use. It should be set to `withings`.
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+    const authClient =  createAuthClient()
+
+    const signIn = async () => {
+        const data = await authClient.signIn.social({
+            provider: "withings"
+        })
+    }
+    ```
+  </Step>
+</Steps>
+
+## Additional options
+
+### Scopes
+
+Withings uses comma-delimited scopes and requires at least `user.info`. By default, Better Auth requests `user.info`. You can request additional scopes such as `user.metrics`, `user.activity`, or `user.sleepevents`.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    socialProviders: {
+        withings: {
+            clientId: process.env.WITHINGS_CLIENT_ID as string,
+            clientSecret: process.env.WITHINGS_CLIENT_SECRET as string,
+            scope: ["user.metrics", "user.activity"], // [!code highlight]
+        },
+    }
+})
+```
+
+### Email handling
+
+Withings does not return an email address (or a name). Because Better Auth requires an email to complete sign in, a stable, non-routable placeholder email is generated in the form `<userid>@withings.invalid`. If you collect a real email through another channel, provide it via `mapProfileToUser`:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    socialProviders: {
+        withings: {
+            clientId: process.env.WITHINGS_CLIENT_ID as string,
+            clientSecret: process.env.WITHINGS_CLIENT_SECRET as string,
+            mapProfileToUser: (profile) => { // [!code highlight]
+                return { // [!code highlight]
+                    email: `${profile.userid}@example.com`, // [!code highlight]
+                }; // [!code highlight]
+            }, // [!code highlight]
+        },
+    }
+})
+```
