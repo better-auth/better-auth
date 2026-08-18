@@ -90,7 +90,16 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	} = getClientConfig(options);
 	const resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
-		resolvedHooks[getAtomKey(key)] = () => useStore(value);
+		// The octane compiler wraps every custom-hook call site
+		// (`client.useX(...)`) in `withSlot(sym, hook, ...args, sym)`, appending a
+		// per-call-site Symbol as the hook's trailing argument. Accept it and
+		// forward it to `useStore` so each generated hook keeps a distinct slot;
+		// `useStore` then derives stable child slots for its internal
+		// `useRef`/`useCallback`/`useSyncExternalStore` via `subSlot(slot, …)`.
+		// Without forwarding, `useStore` runs with `slot === undefined` and its
+		// three internal base hooks collapse onto one shared hook-cell.
+		resolvedHooks[getAtomKey(key)] = (slot?: symbol) =>
+			useStore(value, undefined, slot);
 	}
 
 	const routes = {

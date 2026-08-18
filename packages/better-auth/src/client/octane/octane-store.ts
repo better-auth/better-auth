@@ -83,15 +83,17 @@ type StoreWithKeys = Parameters<typeof listenKeys>[0];
 export function useStore<SomeStore extends Store>(
 	store: SomeStore,
 	options: UseStoreOptions<SomeStore> = {},
-): StoreValue<SomeStore> {
 	// The octane compiler appends a per-call-site Symbol slot as the LAST
-	// argument of every `use*` call, so a call that omits `options` reaches us
-	// as `useStore(store, sym)`. With `options` declared before `slot`, the
-	// slot lands in `options`; a Symbol is truthy, so the default `= {}` would
-	// keep it and `slot` would stay `undefined`, collapsing `useRef` and
-	// `useCallback` onto one hook slot. Strip the compiler slot before
-	// destructuring — a Symbol is never a valid `UseStoreOptions` value.
-	let slot: symbol | undefined;
+	// argument of every `use*` call. Declaring `slot` as an explicit trailing
+	// parameter captures it for the options-bearing case
+	// (`useStore(store, opts, sym)`); the `typeof options === "symbol"`
+	// reassignment below captures it for the no-options case
+	// (`useStore(store, sym)`), where the compiler slot lands in `options`.
+	// Without this parameter the option-bearing call's trailing Symbol would be
+	// silently dropped, collapsing `useRef`/`useCallback`/`useSyncExternalStore`
+	// onto one shared hook-cell.
+	slot?: symbol,
+): StoreValue<SomeStore> {
 	if (typeof options === "symbol") {
 		slot = options;
 		options = {} as UseStoreOptions<SomeStore>;
@@ -101,7 +103,7 @@ export function useStore<SomeStore extends Store>(
 
 	const snapshotRef = useRef<StoreValue<SomeStore>>(
 		store.get(),
-		subSlot(slot as symbol | undefined, "ref"),
+		subSlot(slot, "ref"),
 	);
 	snapshotRef.current = store.get();
 
@@ -120,7 +122,7 @@ export function useStore<SomeStore extends Store>(
 		// octane's `useCallback` expects `any[] | null` deps, mirroring React's
 		// `DependencyList`; cast at the boundary to keep our public type `unknown[]`.
 		deps as any[],
-		subSlot(slot as symbol | undefined, "subscribe"),
+		subSlot(slot, "subscribe"),
 	);
 
 	const get = () => snapshotRef.current as StoreValue<SomeStore>;
@@ -129,6 +131,6 @@ export function useStore<SomeStore extends Store>(
 		subscribe,
 		get,
 		get,
-		subSlot(slot as symbol | undefined, "external-store"),
+		subSlot(slot, "external-store"),
 	);
 }

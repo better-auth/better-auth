@@ -331,7 +331,7 @@
       "react": [
         "./dist/client/react/index.d.mts"
       ],
-        "octane": [
+      "octane": [
         "./dist/client/octane/index.d.mts"
       ],
       "vue": [
@@ -516,7 +516,7 @@
     "msw": "^2.14.6",
     "next": "^16.2.11",
     "oauth2-mock-server": "^9.0.0",
-    "octane":"^0.1.38",
+    "octane": "^0.1.38",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "solid-js": "^1.9.11",
@@ -532,7 +532,7 @@
     "@sveltejs/kit": "^2.0.0",
     "@tanstack/react-start": "^1.0.0",
     "@tanstack/solid-start": "^1.0.0",
-    "@octanejs/tanstack-start":"^0.1.27",
+    "@octanejs/tanstack-start": "^0.1.27",
     "better-sqlite3": "^12.0.0",
     "drizzle-kit": ">=0.31.4 || >=1.0.0-beta.1",
     "drizzle-orm": "^0.45.2 || >=1.0.0-rc.1 <2.0.0",
@@ -565,13 +565,13 @@
     "@tanstack/solid-start": {
       "optional": true
     },
-    "@octanejs/tanstack-start":{
+    "@octanejs/tanstack-start": {
       "optional": true
     },
     "next": {
       "optional": true
     },
-    "octane":{
+    "octane": {
       "optional": true
     },
     "react": {
