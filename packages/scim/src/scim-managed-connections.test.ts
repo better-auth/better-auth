@@ -119,6 +119,53 @@ async function listUsers(baseURL: string, token: string): Promise<Response> {
 	});
 }
 
+async function createPaginatedManagedConnectionEventsFixture(
+	registerCleanup: (cleanup: () => void | Promise<void>) => void,
+) {
+	const instance = await createManagedInstance(registerCleanup);
+	const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1_000);
+	const created = await instance.auth.api.createSCIMManagedConnection({
+		body: {
+			creationRequestId: createCreationRequestId(),
+			provisioningDomainId: "organization-acme",
+			actorId: "admin-acme",
+			scopes: ALL_SCOPES,
+			expiresAt,
+		},
+	});
+	const connection = await instance.db.findOne<{ id: string }>({
+		model: "scimManagedConnection",
+		where: [
+			{
+				field: "connectionId",
+				value: created.connection.connectionId,
+			},
+		],
+	});
+	if (!connection) throw new Error("Expected managed connection row");
+	const createdAt = new Date("2026-01-01T00:00:00.000Z");
+	for (let sequence = 3; sequence <= 14; sequence++) {
+		await instance.db.create({
+			model: "scimManagedConnectionEvent",
+			data: {
+				connectionRecordId: connection.id,
+				eventKey: `${connection.id}:${sequence}`,
+				sequence,
+				type: "credential.rotated",
+				actorId: "admin-acme",
+				credentialId: created.credential.credentialId,
+				createdAt: new Date(createdAt.getTime() + sequence * 1_000),
+			},
+		});
+	}
+	return {
+		instance,
+		connectionId: created.connection.connectionId,
+		provisioningDomainId: "organization-acme",
+		totalEvents: 14,
+	};
+}
+
 describe("SCIM managed connections", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10475
@@ -208,6 +255,61 @@ describe("SCIM managed connections", () => {
 				`${endpointName} must not carry a routable path`,
 			).toBeFalsy();
 		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10475
+	 */
+	it("paginates managed connection events by sequence", async ({
+		onTestFinished,
+	}) => {
+		const { instance, connectionId, provisioningDomainId, totalEvents } =
+			await createPaginatedManagedConnectionEventsFixture(onTestFinished);
+		const firstPage = await instance.auth.api.listSCIMManagedConnectionEvents({
+			body: {
+				connectionId,
+				provisioningDomainId,
+			},
+		});
+		const secondPage = await instance.auth.api.listSCIMManagedConnectionEvents({
+			body: {
+				connectionId,
+				provisioningDomainId,
+				offset: 10,
+			},
+		});
+		const ascendingPage =
+			await instance.auth.api.listSCIMManagedConnectionEvents({
+				body: {
+					connectionId,
+					provisioningDomainId,
+					sortDirection: "asc",
+				},
+			});
+		const beyondLastPage =
+			await instance.auth.api.listSCIMManagedConnectionEvents({
+				body: {
+					connectionId,
+					provisioningDomainId,
+					offset: 980,
+				},
+			});
+
+		expect(firstPage).toMatchObject({
+			limit: 10,
+			offset: 0,
+			total: totalEvents,
+		});
+		expect(firstPage.events.map((event) => event.sequence)).toEqual([
+			14, 13, 12, 11, 10, 9, 8, 7, 6, 5,
+		]);
+		expect(secondPage.events.map((event) => event.sequence)).toEqual([
+			4, 3, 2, 1,
+		]);
+		expect(ascendingPage.events.map((event) => event.sequence)).toEqual([
+			1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+		]);
+		expect(beyondLastPage.events).toEqual([]);
 	});
 
 	/**
@@ -680,10 +782,10 @@ describe("SCIM managed connections", () => {
 		expect(oldAfterRevoke.status).toBe(401);
 		expect(newAfterRevoke.status).toBe(200);
 		expect(events.events.map((event) => event.type)).toEqual([
-			"connection.created",
-			"credential.issued",
-			"credential.rotated",
 			"credential.revoked",
+			"credential.rotated",
+			"credential.issued",
+			"connection.created",
 		]);
 	});
 
@@ -750,10 +852,10 @@ describe("SCIM managed connections", () => {
 		expect(repeated.connection).toEqual(first.connection);
 		expect(rejected.status).toBe(401);
 		expect(events.events.map((event) => event.type)).toEqual([
-			"connection.created",
-			"credential.issued",
-			"connection.decommissioning",
 			"connection.decommissioned",
+			"connection.decommissioning",
+			"credential.issued",
+			"connection.created",
 		]);
 		expect(binding).toMatchObject({
 			connectionId: created.connection.connectionId,
