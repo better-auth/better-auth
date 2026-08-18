@@ -10,7 +10,6 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
-import type { GenericEndpointContext } from "../types";
 
 export interface GoogleProfile {
 	aud: string;
@@ -58,9 +57,33 @@ export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
 	 * rejected when the claim is missing or does not satisfy this restriction.
 	 */
 	hd?: string | undefined;
+	/**
+	 * Whether to send `include_granted_scopes=true` to Google's authorization
+	 * endpoint, which lets new access tokens cover scopes from prior grants
+	 * in addition to the ones requested for this flow. Set to `false` when
+	 * each OAuth flow should request only its own scopes.
+	 *
+	 * Defaults to `true`.
+	 *
+	 * @see https://developers.google.com/identity/protocols/oauth2/web-server#incrementalAuth
+	 */
+	includeGrantedScopes?: boolean | undefined;
 }
 
 const GOOGLE_ID_TOKEN_MAX_AGE = "1h";
+const GOOGLE_ID_TOKEN_ALGORITHM = "RS256";
+type GoogleIdTokenAlgorithm = typeof GOOGLE_ID_TOKEN_ALGORITHM;
+const GOOGLE_ID_TOKEN_ALGORITHMS: GoogleIdTokenAlgorithm[] = [
+	GOOGLE_ID_TOKEN_ALGORITHM,
+];
+
+function isGoogleIdTokenAlgorithm(
+	algorithm: unknown,
+): algorithm is GoogleIdTokenAlgorithm {
+	return GOOGLE_ID_TOKEN_ALGORITHMS.includes(
+		algorithm as GoogleIdTokenAlgorithm,
+	);
+}
 
 export interface VerifyGoogleIdTokenOptions {
 	token: string;
@@ -78,22 +101,30 @@ export const verifyGoogleIdToken = async ({
 	nonce,
 }: VerifyGoogleIdTokenOptions): Promise<JWTPayload | null> => {
 	try {
-		const { kid, alg: jwtAlg } = decodeProtectedHeader(token);
-		if (!kid || !jwtAlg) return null;
+		const { kid, alg } = decodeProtectedHeader(token);
+		if (!isGoogleIdTokenAlgorithm(alg)) return null;
 
-		const publicKey = await getGooglePublicKey(kid);
-		const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
-			algorithms: [jwtAlg],
-			issuer: ["https://accounts.google.com", "accounts.google.com"],
-			audience,
-			maxTokenAge: GOOGLE_ID_TOKEN_MAX_AGE,
-		});
+		const publicKeys = await getGooglePublicKeys(kid);
+		for (const publicKey of publicKeys) {
+			try {
+				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
+					algorithms: GOOGLE_ID_TOKEN_ALGORITHMS,
+					issuer: ["https://accounts.google.com", "accounts.google.com"],
+					audience,
+					maxTokenAge: GOOGLE_ID_TOKEN_MAX_AGE,
+				});
 
-		if (nonce && jwtClaims.nonce !== nonce) {
-			return null;
+				if (nonce && jwtClaims.nonce !== nonce) {
+					return null;
+				}
+
+				return jwtClaims;
+			} catch {
+				continue;
+			}
 		}
 
-		return jwtClaims;
+		return null;
 	} catch {
 		return null;
 	}
@@ -119,6 +150,8 @@ export const google = (options: GoogleOptions) => {
 	return {
 		id: "google",
 		name: "Google",
+		accountSubject: ({ profile }) => profile.sub,
+		accountIssuer: "https://accounts.google.com",
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -126,6 +159,7 @@ export const google = (options: GoogleOptions) => {
 			redirectURI,
 			loginHint,
 			display,
+			additionalParams,
 		}) {
 			if (!getPrimaryClientId(options.clientId) || !options.clientSecret) {
 				logger.error(
@@ -155,7 +189,10 @@ export const google = (options: GoogleOptions) => {
 				loginHint,
 				hd: options.hd,
 				additionalParams: {
-					include_granted_scopes: "true",
+					...(options.includeGrantedScopes === false
+						? {}
+						: { include_granted_scopes: "true" }),
+					...(additionalParams ?? {}),
 				},
 			});
 			return url;
@@ -182,28 +219,20 @@ export const google = (options: GoogleOptions) => {
 						tokenEndpoint: "https://oauth2.googleapis.com/token",
 					});
 				},
-		async verifyIdToken(
-			token: string,
-			nonce?: string,
-			ctx?: GenericEndpointContext,
-		) {
-			if (options.disableIdTokenSignIn) {
-				return false;
-			}
-			if (options.verifyIdToken) {
-				return options.verifyIdToken(token, nonce, ctx);
-			}
-
-			const jwtClaims = await verifyGoogleIdToken({
-				token,
-				audience: options.clientId,
-				nonce,
-			});
-			if (!jwtClaims) {
-				return false;
-			}
-
-			return isGoogleHostedDomainAllowed(options.hd, jwtClaims.hd);
+		idToken: {
+			// https://developers.google.com/identity/sign-in/web/backend-auth#verify-the-integrity-of-the-id-token
+			jwks: (header) => getGooglePublicKey(header.kid!),
+			issuer: ["https://accounts.google.com", "accounts.google.com"],
+			audience: options.clientId,
+			maxTokenAge: GOOGLE_ID_TOKEN_MAX_AGE,
+			// Google's `hd` authorization parameter is only a UI hint and can be
+			// removed or changed by the user. When a hosted domain is configured,
+			// the `hd` claim in the verified id token is the authoritative value
+			// and must satisfy the configured restriction, otherwise accounts
+			// outside the workspace domain would be accepted on the id_token path.
+			verifyClaims: options.hd
+				? (claims) => isGoogleHostedDomainAllowed(options.hd, claims.hd)
+				: undefined,
 		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
@@ -227,7 +256,6 @@ export const google = (options: GoogleOptions) => {
 			const userMap = await options.mapProfileToUser?.(user);
 			return {
 				user: {
-					id: user.sub,
 					name: user.name,
 					email: user.email,
 					image: user.picture,
@@ -242,10 +270,18 @@ export const google = (options: GoogleOptions) => {
 };
 
 export const getGooglePublicKey = async (kid: string) => {
+	const [publicKey] = await getGooglePublicKeys(kid);
+	if (!publicKey) {
+		throw new Error(`JWK with kid ${kid} not found`);
+	}
+	return publicKey;
+};
+
+const getGooglePublicKeys = async (kid?: string) => {
 	const { data } = await betterFetch<{
 		keys: Array<{
 			kid: string;
-			alg: string;
+			alg?: string;
 			kty: string;
 			use: string;
 			n: string;
@@ -259,10 +295,12 @@ export const getGooglePublicKey = async (kid: string) => {
 		});
 	}
 
-	const jwk = data.keys.find((key) => key.kid === kid);
-	if (!jwk) {
+	const jwks = kid ? data.keys.filter((key) => key.kid === kid) : data.keys;
+	if (!jwks.length) {
 		throw new Error(`JWK with kid ${kid} not found`);
 	}
 
-	return await importJWK(jwk, jwk.alg);
+	return Promise.all(
+		jwks.map((jwk) => importJWK(jwk, GOOGLE_ID_TOKEN_ALGORITHM)),
+	);
 };

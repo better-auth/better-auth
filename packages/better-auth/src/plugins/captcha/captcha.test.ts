@@ -634,6 +634,178 @@ describe("captcha", async () => {
 				code: "MISSING_RESPONSE",
 			});
 		});
+
+		it("should still apply captcha when a protected pathname contains duplicate slashes", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+					}),
+				],
+			});
+
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-in//email", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						email: "test@test.com",
+						password: "test123456",
+					}),
+				}),
+			);
+
+			expect(res.status).toBe(400);
+			expect(await res.json()).toMatchObject({
+				code: "MISSING_RESPONSE",
+			});
+		});
+
+		it("should still apply captcha when a protected pathname has a trailing slash", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+					}),
+				],
+			});
+
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-in/email/", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						email: "test@test.com",
+						password: "test123456",
+					}),
+				}),
+			);
+
+			expect(res.status).toBe(400);
+			expect(await res.json()).toMatchObject({
+				code: "MISSING_RESPONSE",
+			});
+		});
+
+		it("should not treat partial endpoint paths as matches", async () => {
+			const { client } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+						endpoints: ["/sign-in"],
+					}),
+				],
+			});
+
+			const res = await client.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+			});
+
+			expect(res.error).toBeNull();
+			expect(res.data?.user?.email).toBe("test@test.com");
+		});
+
+		it("should not apply captcha to sub-routes of default protected endpoints", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+					}),
+				],
+			});
+
+			const res = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sign-in/email/extra-segment",
+					{
+						method: "POST",
+						headers: { "content-type": "application/json" },
+						body: JSON.stringify({}),
+					},
+				),
+			);
+
+			expect(res.status).not.toBe(400);
+		});
+	});
+
+	describe("wildcard endpoints", () => {
+		it("should apply captcha to single-segment wildcard matches", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+						endpoints: ["/sign-in/*"],
+					}),
+				],
+			});
+
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-in/email-otp", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({}),
+				}),
+			);
+
+			expect(res.status).toBe(400);
+			expect(await res.json()).toMatchObject({
+				code: "MISSING_RESPONSE",
+			});
+		});
+
+		it("should not match nested routes with a single-segment wildcard", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+						endpoints: ["/sign-in/*"],
+					}),
+				],
+			});
+
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-in/social/google", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({}),
+				}),
+			);
+
+			expect(res.status).not.toBe(400);
+		});
+
+		it("should apply captcha to nested routes with a multi-segment wildcard", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+						endpoints: ["/sign-in/**"],
+					}),
+				],
+			});
+
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-in/social/google", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({}),
+				}),
+			);
+
+			expect(res.status).toBe(400);
+			expect(await res.json()).toMatchObject({
+				code: "MISSING_RESPONSE",
+			});
+		});
 	});
 
 	describe("action and hostname binding", async () => {

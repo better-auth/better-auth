@@ -1,11 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	assertEndpointResolvesPublic,
-	assertOIDCEndpointsResolvePublic,
+	assertServerFetchedOIDCEndpointsAllowed,
 	computeDiscoveryUrl,
 	discoverOIDCConfig,
 	ensureRuntimeDiscovery,
 	fetchDiscoveryDocument,
+	fetchOIDCEndpointResponse,
 	needsRuntimeDiscovery,
 	normalizeDiscoveryUrls,
 	normalizeUrl,
@@ -24,6 +25,16 @@ const { lookupMock } = vi.hoisted(() => ({ lookupMock: vi.fn() }));
 vi.mock("node:dns/promises", () => ({ lookup: lookupMock }));
 
 import { betterFetch } from "@better-fetch/fetch";
+
+beforeEach(() => {
+	vi.mocked(betterFetch).mockReset();
+	lookupMock.mockReset();
+	lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+});
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+});
 
 /**
  * Mock OIDC Discovery Document
@@ -312,21 +323,21 @@ describe("OIDC Discovery", () => {
 			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_post");
 		});
 
-		it("should default to client_secret_basic when only unsupported methods are advertised", () => {
+		it("should select private_key_jwt when it is the only supported method", () => {
 			const doc = createMockDiscoveryDocument({
 				token_endpoint_auth_methods_supported: ["private_key_jwt"],
 			});
-			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_basic");
+			expect(selectTokenEndpointAuthMethod(doc)).toBe("private_key_jwt");
 		});
 
-		it("should default to client_secret_basic for tls_client_auth only", () => {
+		it("should select private_key_jwt when only tls_client_auth and private_key_jwt are supported", () => {
 			const doc = createMockDiscoveryDocument({
 				token_endpoint_auth_methods_supported: [
 					"tls_client_auth",
 					"private_key_jwt",
 				],
 			});
-			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_basic");
+			expect(selectTokenEndpointAuthMethod(doc)).toBe("private_key_jwt");
 		});
 
 		it("should default to client_secret_basic if not specified in discovery", () => {
@@ -339,6 +350,28 @@ describe("OIDC Discovery", () => {
 		it("should default to client_secret_basic for empty array", () => {
 			const doc = createMockDiscoveryDocument({
 				token_endpoint_auth_methods_supported: [],
+			});
+			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_basic");
+		});
+
+		it("should preserve explicit private_key_jwt when passed as existing", () => {
+			const doc = createMockDiscoveryDocument({
+				token_endpoint_auth_methods_supported: [
+					"private_key_jwt",
+					"client_secret_basic",
+				],
+			});
+			expect(selectTokenEndpointAuthMethod(doc, "private_key_jwt")).toBe(
+				"private_key_jwt",
+			);
+		});
+
+		it("should prefer client_secret_basic over private_key_jwt when both are supported", () => {
+			const doc = createMockDiscoveryDocument({
+				token_endpoint_auth_methods_supported: [
+					"private_key_jwt",
+					"client_secret_basic",
+				],
 			});
 			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_basic");
 		});
@@ -1038,13 +1071,29 @@ describe("OIDC Discovery", () => {
 					authorization_endpoint: `${issuer}/authorize`,
 					token_endpoint: `${issuer}/token`,
 					jwks_uri: `${issuer}/jwks`,
-					token_endpoint_auth_methods_supported: ["private_key_jwt"],
+					token_endpoint_auth_methods_supported: ["tls_client_auth"],
 				},
 				error: null,
 			});
 
 			const result = await discoverOIDCConfig({ issuer, isTrustedOrigin });
 			expect(result.tokenEndpointAuthentication).toBe("client_secret_basic");
+		});
+
+		it("should select private_key_jwt from discovery when it is the only supported method", async () => {
+			mockBetterFetch.mockResolvedValueOnce({
+				data: {
+					issuer,
+					authorization_endpoint: `${issuer}/authorize`,
+					token_endpoint: `${issuer}/token`,
+					jwks_uri: `${issuer}/jwks`,
+					token_endpoint_auth_methods_supported: ["private_key_jwt"],
+				},
+				error: null,
+			});
+
+			const result = await discoverOIDCConfig({ issuer, isTrustedOrigin });
+			expect(result.tokenEndpointAuthentication).toBe("private_key_jwt");
 		});
 
 		it("should fill missing fields from discovery when existing config is partial", async () => {
@@ -1347,10 +1396,10 @@ describe("resolved-address guard", () => {
 		});
 	});
 
-	describe("assertOIDCEndpointsResolvePublic", () => {
+	describe("assertServerFetchedOIDCEndpointsAllowed", () => {
 		it("checks token, userinfo, and jwks endpoints", async () => {
 			lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
-			await assertOIDCEndpointsResolvePublic(
+			await assertServerFetchedOIDCEndpointsAllowed(
 				{
 					tokenEndpoint: "https://idp.example.com/token",
 					userInfoEndpoint: "https://idp.example.com/userinfo",
@@ -1364,7 +1413,7 @@ describe("resolved-address guard", () => {
 		it("rejects when the userinfo endpoint resolves internally", async () => {
 			lookupMock.mockResolvedValue([{ address: "10.1.2.3", family: 4 }]);
 			await expect(
-				assertOIDCEndpointsResolvePublic(
+				assertServerFetchedOIDCEndpointsAllowed(
 					{ userInfoEndpoint: "https://idp.internal.example/userinfo" },
 					notTrusted,
 				),
@@ -1375,7 +1424,7 @@ describe("resolved-address guard", () => {
 
 		it("rejects a syntactically-private endpoint before any DNS lookup", async () => {
 			await expect(
-				assertOIDCEndpointsResolvePublic(
+				assertServerFetchedOIDCEndpointsAllowed(
 					{ tokenEndpoint: "https://169.254.169.254/token" },
 					notTrusted,
 				),
@@ -1395,10 +1444,62 @@ describe("fetchDiscoveryDocument redirect handling", () => {
 		});
 		await fetchDiscoveryDocument(
 			"https://idp.example.com/.well-known/openid-configuration",
+			undefined,
+			() => true,
 		);
 		expect(betterFetch).toHaveBeenCalledWith(
 			"https://idp.example.com/.well-known/openid-configuration",
-			expect.objectContaining({ redirect: "error" }),
+			expect.objectContaining({ redirect: "manual" }),
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10052
+	 */
+	it("rejects redirect responses after using manual redirect mode", async () => {
+		vi.mocked(betterFetch).mockResolvedValueOnce({
+			data: null,
+			error: { status: 302, statusText: "Found", message: "Found" },
+		});
+		await expect(
+			fetchDiscoveryDocument(
+				"https://idp.example.com/.well-known/openid-configuration",
+				undefined,
+				() => true,
+			),
+		).rejects.toThrow(
+			expect.objectContaining({
+				code: "oidc_endpoint_redirect",
+			}),
+		);
+	});
+});
+
+describe("fetchOIDCEndpointResponse redirect handling", () => {
+	it("uses manual redirect mode and rejects redirect responses", async () => {
+		const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+			new Response(null, {
+				status: 302,
+				headers: { location: "https://idp.example.com/final-jwks" },
+			}),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(
+			fetchOIDCEndpointResponse(
+				"jwksEndpoint",
+				"https://idp.example.com/jwks",
+				{ method: "GET" },
+				() => true,
+			),
+		).rejects.toThrow(
+			expect.objectContaining({
+				code: "oidc_endpoint_redirect",
+			}),
+		);
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://idp.example.com/jwks",
+			expect.objectContaining({ redirect: "manual" }),
 		);
 	});
 });

@@ -6,6 +6,7 @@ import {
 } from "@better-auth/core/context";
 import type { MemoryDB } from "@better-auth/memory-adapter";
 import { memoryAdapter } from "@better-auth/memory-adapter";
+import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
 import {
 	afterEach,
 	beforeEach,
@@ -17,6 +18,7 @@ import {
 } from "vitest";
 import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { signJWT, verifyJWT } from "../../crypto";
+import { jwt } from "../../plugins";
 import { admin } from "../../plugins/admin";
 import { organization } from "../../plugins/organization";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -26,6 +28,9 @@ import {
 	getAuthoritativeSessionFromCtx,
 	getSessionFromCtx,
 } from "./session";
+
+const COOKIE_CACHE_JWT_TYPE = "better-auth.session-cache+jwt";
+const COOKIE_CACHE_JWT_AUDIENCE = "better-auth:session-cache";
 
 describe("session", async () => {
 	const { client, testUser, sessionSetter, cookieSetter, auth } =
@@ -548,6 +553,16 @@ describe("session storage", async () => {
 			get(key) {
 				return store.get(key) || null;
 			},
+			getAndDelete(key) {
+				const value = store.get(key) || null;
+				store.delete(key);
+				return value;
+			},
+			increment(key) {
+				const count = Number(store.get(key) ?? 0) + 1;
+				store.set(key, String(count));
+				return count;
+			},
 			delete(key) {
 				store.delete(key);
 			},
@@ -909,6 +924,331 @@ describe("cookie cache with JWT strategy", async () => {
 			expect(result.data).not.toBeNull();
 			expect(result.data?.user.email).toBe(testUser.email);
 		});
+	});
+});
+
+describe("cookie cache with JWT strategy backed by JWKS", async () => {
+	const { auth, client, testUser, cookieSetter } = await getTestInstance({
+		session: {
+			additionalFields: {
+				sensitiveData: {
+					type: "string",
+					returned: false,
+					defaultValue: "sensitive-data",
+				},
+			},
+			cookieCache: {
+				enabled: true,
+				strategy: "jwt",
+				refreshCache: false,
+			},
+		},
+		plugins: [jwt({ sessionCookieCache: true })],
+	});
+	const ctx = await auth.$context;
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	const fn = vi.spyOn(ctx.adapter, "findOne");
+
+	it("should cache cookies with JWKS-backed JWT strategy", async () => {
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		expect(fn).toHaveBeenCalledTimes(1);
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const token = parseCookies(headers.get("cookie") || "").get(
+			"better-auth.session_data",
+		);
+		if (!token) {
+			throw new Error("JWT not found");
+		}
+
+		const protectedHeader = decodeProtectedHeader(token);
+		expect(protectedHeader.kid).toEqual(expect.any(String));
+		expect(protectedHeader.typ).toBe(COOKIE_CACHE_JWT_TYPE);
+
+		const jwks = await auth.api.getJwks();
+		const localJwks = createLocalJWKSet(jwks);
+		const verified = await jwtVerify(token, localJwks, {
+			audience: COOKIE_CACHE_JWT_AUDIENCE,
+		});
+
+		expect(verified.payload.session).toBeDefined();
+		expect(verified.payload.iss).toEqual(expect.any(String));
+		expect(verified.payload.aud).toBe(COOKIE_CACHE_JWT_AUDIENCE);
+		expect(verified.payload.sub).toBe(session.data?.user.id);
+		expect(verified.payload.sid).toBe(session.data?.session.token);
+		expect(session.data?.session).not.toHaveProperty("sensitiveData");
+		expect(session.data).not.toBeNull();
+		expect(fn).toHaveBeenCalledTimes(1);
+	});
+
+	it("should ignore a JWKS cookie cache from a different session token", async () => {
+		const firstHeaders = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(firstHeaders),
+			},
+		);
+		const firstSession = await client.getSession({
+			fetchOptions: {
+				headers: firstHeaders,
+			},
+		});
+
+		const secondHeaders = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(secondHeaders),
+			},
+		);
+		const secondSession = await client.getSession({
+			fetchOptions: {
+				headers: secondHeaders,
+			},
+		});
+
+		const firstCookieCache = parseCookies(firstHeaders.get("cookie") || "").get(
+			"better-auth.session_data",
+		);
+		const secondSessionCookie = parseCookies(
+			secondHeaders.get("cookie") || "",
+		).get("better-auth.session_token");
+		if (!firstCookieCache || !secondSessionCookie || !secondSession.data) {
+			throw new Error("Expected both session cookies to be present");
+		}
+
+		const mixedHeaders = new Headers();
+		mixedHeaders.set(
+			"cookie",
+			`better-auth.session_data=${firstCookieCache}; better-auth.session_token=${secondSessionCookie}`,
+		);
+
+		const mixedSession = await client.getSession({
+			fetchOptions: {
+				headers: mixedHeaders,
+			},
+		});
+
+		expect(mixedSession.data?.session.token).toBe(
+			secondSession.data.session.token,
+		);
+		expect(mixedSession.data?.session.token).not.toBe(
+			firstSession.data?.session.token,
+		);
+	});
+
+	it("should not allow tampering with the cookie in JWKS mode", async () => {
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const token = parseCookies(headers.get("cookie") || "").get(
+			"better-auth.session_data",
+		);
+		if (!token) {
+			throw new Error("JWT not found");
+		}
+
+		const jwks = await auth.api.getJwks();
+		const localJwks = createLocalJWKSet(jwks);
+		const verified = await jwtVerify(token, localJwks, {
+			audience: COOKIE_CACHE_JWT_AUDIENCE,
+		});
+		const verifiedPayload = verified.payload as {
+			session: Record<string, any>;
+			user: Record<string, any>;
+		};
+
+		const tamperedToken = await signJWT(
+			{
+				session: verifiedPayload.session,
+				user: {
+					...verifiedPayload.user,
+					id: "tampered-id",
+				},
+			},
+			"tampered-secret",
+		);
+
+		const sessionCookie = parseCookies(headers.get("cookie") || "").get(
+			"better-auth.session_token",
+		);
+		if (!sessionCookie) {
+			throw new Error("Session cookie not found");
+		}
+
+		headers.set(
+			"cookie",
+			`better-auth.session_data=${tamperedToken}; better-auth.session_token=${sessionCookie}`,
+		);
+		const res = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(res.data).not.toBeNull();
+		expect(res.data?.user.id).not.toBe("tampered-id");
+		expect(res.data?.user.email).toBe(testUser.email);
+	});
+
+	it("should reject a secret-signed cookie cache and fall back to the database", async () => {
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const cookies = parseCookies(headers.get("cookie") || "");
+		const token = cookies.get("better-auth.session_data");
+		const sessionCookie = cookies.get("better-auth.session_token");
+		if (!token || !sessionCookie) {
+			throw new Error("Session cookies not found");
+		}
+
+		const jwks = await auth.api.getJwks();
+		const localJwks = createLocalJWKSet(jwks);
+		const verified = await jwtVerify(token, localJwks, {
+			audience: COOKIE_CACHE_JWT_AUDIENCE,
+		});
+		const verifiedPayload = verified.payload as {
+			session: Record<string, unknown>;
+			user: Record<string, unknown>;
+		};
+
+		const secretSignedToken = await signJWT(
+			{
+				session: verifiedPayload.session,
+				user: verifiedPayload.user,
+				updatedAt: Date.now(),
+				version: "1",
+			},
+			ctx.secret,
+		);
+
+		headers.set(
+			"cookie",
+			`better-auth.session_data=${secretSignedToken}; better-auth.session_token=${sessionCookie}`,
+		);
+
+		let replacedCookieCache: string | undefined;
+		const res = await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					replacedCookieCache = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					).get("better-auth.session_data")?.value;
+				},
+			},
+		});
+
+		expect(res.data?.user.email).toBe(testUser.email);
+		expect(res.data?.session.token).toBe(verifiedPayload.session.token);
+		if (!replacedCookieCache) {
+			throw new Error("Cookie cache was not replaced");
+		}
+		expect(replacedCookieCache).not.toBe(secretSignedToken);
+		expect(decodeProtectedHeader(replacedCookieCache).typ).toBe(
+			COOKIE_CACHE_JWT_TYPE,
+		);
+	});
+
+	it("should verify existing cookie-cache JWTs across JWKS rotation grace period", async () => {
+		vi.useFakeTimers();
+
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwt",
+				},
+			},
+			plugins: [
+				jwt({
+					sessionCookieCache: true,
+					jwks: {
+						rotationInterval: 1,
+						gracePeriod: 60,
+					},
+				}),
+			],
+		});
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const originalToken = parseCookies(headers.get("cookie") || "").get(
+			"better-auth.session_data",
+		);
+		if (!originalToken) {
+			throw new Error("JWT not found");
+		}
+
+		await vi.advanceTimersByTimeAsync(1_100);
+		await auth.api.signJWT({
+			body: {
+				payload: {
+					sub: "rotated-user",
+				},
+			},
+		});
+
+		const jwks = await auth.api.getJwks();
+		expect(jwks.keys.length).toBeGreaterThan(1);
+
+		const localJwks = createLocalJWKSet(jwks);
+		const verified = await jwtVerify(originalToken, localJwks, {
+			audience: COOKIE_CACHE_JWT_AUDIENCE,
+		});
+		expect(verified.payload.session).toBeDefined();
 	});
 });
 

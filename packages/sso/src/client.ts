@@ -1,4 +1,5 @@
 import type { BetterAuthClientPlugin } from "better-auth/client";
+import type { DBFieldAttribute } from "better-auth/db";
 import type { SSOPlugin } from "./index";
 import { PACKAGE_VERSION } from "./version";
 
@@ -6,6 +7,15 @@ interface SSOClientOptions {
 	domainVerification?:
 		| {
 				enabled: boolean;
+		  }
+		| undefined;
+	schema?:
+		| {
+				ssoProvider?: {
+					additionalFields?: {
+						[key: string]: DBFieldAttribute;
+					};
+				};
 		  }
 		| undefined;
 }
@@ -22,6 +32,7 @@ export const ssoClient = <CO extends SSOClientOptions>(
 					? true
 					: false;
 			};
+			schema: CO["schema"];
 		}>,
 		pathMethods: {
 			"/sso/providers": "GET",

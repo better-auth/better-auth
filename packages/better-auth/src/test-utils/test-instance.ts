@@ -43,6 +43,7 @@ export async function getTestInstance<
 				disableTestUser?: boolean;
 				testUser?: Partial<User>;
 				testWith?: "sqlite" | "postgres" | "mongodb" | "mysql";
+				transaction?: boolean;
 		  }
 		| undefined,
 ) {
@@ -124,14 +125,22 @@ export async function getTestInstance<
 		secret: "better-auth-secret-that-is-long-enough-for-validation-test",
 		database:
 			testWith === "postgres"
-				? { db: await getPostgres(), type: "postgres" }
+				? {
+						db: await getPostgres(),
+						type: "postgres",
+						transaction: config?.transaction,
+					}
 				: testWith === "mongodb"
 					? await Promise.all([
 							mongodbClient(),
 							await import("../adapters/mongodb-adapter"),
 						]).then(([db, { mongodbAdapter }]) => mongodbAdapter(db))
 					: testWith === "mysql"
-						? { db: await getMysql(), type: "mysql" }
+						? {
+								db: await getMysql(),
+								type: "mysql",
+								transaction: config?.transaction,
+							}
 						: await getSqlite(),
 		emailAndPassword: {
 			enabled: true,

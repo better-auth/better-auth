@@ -14,6 +14,25 @@ import type { AuthContext } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 
 /**
+ * Response headers that forbid any intermediary (proxy, CDN, browser) from
+ * caching a response body. Credential-bearing responses (access/refresh tokens,
+ * ID tokens, client secrets, device codes) must carry them.
+ *
+ * Set `metadata: { noStore: true }` on an endpoint and {@link createAuthEndpoint}
+ * applies these to the responses its handler produces: the success body and any
+ * error the handler throws. A request rejected by schema or media-type
+ * validation before the handler runs is not covered, and carries no credentials
+ * to protect. Spread them into a hand-built `Response` or `APIError`'s headers
+ * for the rare endpoint that constructs its own response.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6749#section-5.1
+ */
+export const NO_STORE_HEADERS = {
+	"Cache-Control": "no-store",
+	Pragma: "no-cache",
+} as const;
+
+/**
  * Better-call's createEndpoint re-throws APIError without exposing the headers
  * accumulated on ctx.responseHeaders (e.g. Set-Cookie from deleteSessionCookie
  * before throw). Attach them to the error via kAPIErrorHeaderSymbol — matching
@@ -78,8 +97,18 @@ function wrapEndpointHandler<
 	R,
 >(
 	handler: AuthEndpointHandler<Path, Options, R>,
+	options: Options,
 ): AuthEndpointHandler<Path, Options, R> {
+	const noStore =
+		(options as { metadata?: { noStore?: boolean } }).metadata?.noStore ===
+		true;
+
 	return async (context) => {
+		if (noStore) {
+			for (const [name, value] of Object.entries(NO_STORE_HEADERS)) {
+				context.setHeader(name, value);
+			}
+		}
 		try {
 			return await runWithEndpointContext(context, () => handler(context));
 		} catch (error) {
@@ -126,12 +155,15 @@ export function createAuthEndpoint<
 		return createEndpointWithAuthContext(
 			path,
 			options,
-			wrapEndpointHandler(handler),
+			wrapEndpointHandler(handler, options),
 		);
 	}
 
 	const [options, handler] = args;
-	return createEndpointWithAuthContext(options, wrapEndpointHandler(handler));
+	return createEndpointWithAuthContext(
+		options,
+		wrapEndpointHandler(handler, options),
+	);
 }
 
 /**

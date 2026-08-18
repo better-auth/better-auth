@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { createLocalAccountIssuer } from "@better-auth/core/db";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { deprecate } from "@better-auth/core/utils/deprecate";
 import * as z from "zod";
@@ -662,13 +663,16 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					rest,
 					"create",
 				);
-				const newUser = await ctx.context.internalAdapter.createUser({
-					...additionalFields,
-					email,
-					emailVerified: true,
-					name: name || "",
-					image,
-				});
+				const newUser = await ctx.context.internalAdapter.createUser(
+					{
+						...additionalFields,
+						email,
+						emailVerified: true,
+						name: name || "",
+						image,
+					},
+					{ method: "email-otp" },
+				);
 				const session = await ctx.context.internalAdapter.createSession(
 					newUser.id,
 				);
@@ -682,23 +686,28 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 			}
 
-			if (!user.user.emailVerified) {
-				await revokeUnprovenAccountAccess(ctx, user.user.id);
-				await ctx.context.internalAdapter.updateUser(user.user.id, {
-					emailVerified: true,
-				});
+			let verifiedUser = user.user;
+			if (!verifiedUser.emailVerified) {
+				const promotedUser = await revokeUnprovenAccountAccess(
+					ctx,
+					verifiedUser.id,
+				);
+				if (!promotedUser) {
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+				}
+				verifiedUser = promotedUser;
 			}
 
 			const session = await ctx.context.internalAdapter.createSession(
-				user.user.id,
+				verifiedUser.id,
 			);
 			await setSessionCookie(ctx, {
 				session,
-				user: user.user,
+				user: verifiedUser,
 			});
 			return ctx.json({
 				token: session.token,
-				user: parseUserOutput(ctx.context.options, user.user),
+				user: parseUserOutput(ctx.context.options, verifiedUser),
 			});
 		},
 	);
@@ -954,20 +963,19 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				ctx.body.otp,
 			);
 
-			const user = await ctx.context.internalAdapter.findUserByEmail(email, {
-				includeAccounts: true,
-			});
+			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 			const passwordHash = await ctx.context.password.hash(ctx.body.password);
-			const account = user.accounts?.find(
-				(account) => account.providerId === "credential",
+			const account = await ctx.context.internalAdapter.findCredentialAccount(
+				user.user.id,
 			);
 			if (!account) {
 				await ctx.context.internalAdapter.createAccount({
 					userId: user.user.id,
 					providerId: "credential",
+					issuer: createLocalAccountIssuer("credential"),
 					accountId: user.user.id,
 					password: passwordHash,
 				});

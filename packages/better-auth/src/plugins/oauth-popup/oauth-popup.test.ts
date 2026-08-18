@@ -2,12 +2,10 @@ import { createHash } from "node:crypto";
 import { betterFetch } from "@better-fetch/fetch";
 import { OAuth2Server } from "oauth2-mock-server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
 import { genericOAuth } from "../generic-oauth";
-import { genericOAuthClient } from "../generic-oauth/client";
 import {
 	OAUTH_POPUP_COMPLETE_SCRIPT,
 	OAUTH_POPUP_DATA_ELEMENT_ID,
@@ -65,12 +63,6 @@ describe("oauth popup server flow", async () => {
 			oauthPopup(),
 			bearer(),
 		],
-	});
-
-	const authClient = createAuthClient({
-		plugins: [genericOAuthClient()],
-		baseURL: popupOrigin,
-		fetchOptions: { customFetchImpl },
 	});
 
 	beforeAll(async () => {
@@ -161,14 +153,26 @@ describe("oauth popup server flow", async () => {
 
 	it("keeps the redirect when it is not a popup flow", async () => {
 		const signInHeaders = new Headers();
-		const signInRes = await authClient.signIn.oauth2({
-			providerId,
-			callbackURL: `${popupOrigin}/dashboard`,
-			fetchOptions: { onSuccess: cookieSetter(signInHeaders) },
+		const signInRes = await customFetchImpl(
+			`${popupOrigin}/api/auth/sign-in/social`,
+			{
+				method: "POST",
+				body: JSON.stringify({
+					provider: providerId,
+					callbackURL: `${popupOrigin}/dashboard`,
+					disableRedirect: true,
+				}),
+				headers: { "content-type": "application/json" },
+				redirect: "manual",
+			},
+		);
+		cookieSetter(signInHeaders)({
+			response: signInRes,
 		});
+		const signInBody = (await signInRes.json()) as { url?: string };
 
 		let location = "";
-		await betterFetch(signInRes.data?.url || "", {
+		await betterFetch(signInBody.url || "", {
 			method: "GET",
 			redirect: "manual",
 			onError(context) {
@@ -199,7 +203,7 @@ describe("oauth popup server flow", async () => {
 		).searchParams.get("state");
 
 		const callbackRes = await customFetchImpl(
-			`${popupOrigin}/api/auth/oauth2/callback/${providerId}?state=${state}&error=access_denied`,
+			`${popupOrigin}/api/auth/callback/${providerId}?state=${state}&error=access_denied`,
 			{ method: "GET", headers: cookies, redirect: "manual" },
 		);
 

@@ -59,6 +59,10 @@
       "inputs": ["dist/**", "package.json"],
       "outputs": []
     },
+    "typecheck:consumer": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
     "test": {
       "dependsOn": ["^build", "build"],
       "inputs": [

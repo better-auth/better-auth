@@ -9,8 +9,9 @@ import { detectEnvironment, detectRuntime } from "./detectors/detect-runtime";
 import { detectSystemInfo } from "./detectors/detect-system-info";
 import { getProjectId } from "./project-id";
 import type { TelemetryContext, TelemetryEvent } from "./types";
-export { getTelemetryAuthConfig };
+
 export type { TelemetryEvent } from "./types";
+export { getTelemetryAuthConfig };
 
 const noop: (event: TelemetryEvent) => Promise<void> = async function noop() {};
 

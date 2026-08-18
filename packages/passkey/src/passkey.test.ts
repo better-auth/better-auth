@@ -1,5 +1,6 @@
 import { APIError } from "@better-auth/core/error";
 import type { Verification } from "better-auth";
+import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { getTestInstance } from "better-auth/test";
 import {
@@ -123,6 +124,161 @@ describe("passkey", async () => {
 		expect(options).toHaveProperty("rp");
 		expect(options).toHaveProperty("user");
 		expect(options).toHaveProperty("pubKeyCredParams");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9866
+	 */
+	it("should create a session after pre-auth passkey registration", async () => {
+		let userId = "";
+		const {
+			auth: preAuth,
+			client: preAuthClient,
+			cookieSetter,
+		} = await getTestInstance({
+			database: memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+				passkey: [],
+			}),
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: "pending-passkey-registration",
+							name: "passkey-first@example.com",
+						}),
+						afterVerification: async ({ ctx }) => {
+							const user = await ctx.context.internalAdapter.createUser(
+								{
+									name: "Passkey First",
+									email: "passkey-first@example.com",
+								},
+								{ method: "test" },
+							);
+							userId = user.id;
+							return { userId };
+						},
+					},
+				}),
+			],
+		});
+		const headers = new Headers({ origin: "http://localhost:3000" });
+		const setCookie = cookieSetter(headers);
+
+		await preAuthClient.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			onResponse: setCookie,
+		});
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+
+		const result = await preAuth.api.verifyPasskeyRegistration({
+			headers,
+			body: {
+				response: mockRegistrationResponse,
+				createSession: true,
+			},
+			returnHeaders: true,
+		});
+
+		expect(result.response).toMatchObject({
+			credentialID: mockRegistrationVerification.registrationInfo.credential.id,
+			session: { userId },
+			user: { id: userId },
+		});
+		expect(result.headers.get("set-cookie")).toContain(
+			"better-auth.session_token=",
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9866
+	 */
+	it("should roll back passkey persistence when session creation fails", async () => {
+		let userId = "";
+		const {
+			auth: preAuth,
+			client: preAuthClient,
+			cookieSetter,
+		} = await getTestInstance({
+			database: memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+				passkey: [],
+			}),
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: "pending-failed-registration",
+							name: "failed-session@example.com",
+						}),
+						afterVerification: async ({ ctx }) => {
+							const user = await ctx.context.internalAdapter.createUser(
+								{
+									name: "Failed Session",
+									email: "failed-session@example.com",
+								},
+								{ method: "test" },
+							);
+							userId = user.id;
+							return { userId };
+						},
+					},
+				}),
+			],
+		});
+		const headers = new Headers({ origin: "http://localhost:3000" });
+		const setCookie = cookieSetter(headers);
+
+		await preAuthClient.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			onResponse: setCookie,
+		});
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+		const context = await preAuth.$context;
+		const createSession = vi
+			.spyOn(context.internalAdapter, "createSession")
+			.mockResolvedValueOnce(null as never);
+
+		try {
+			await expect(
+				preAuth.api.verifyPasskeyRegistration({
+					headers,
+					body: {
+						response: mockRegistrationResponse,
+						createSession: true,
+					},
+				}),
+			).rejects.toMatchObject({
+				status: "INTERNAL_SERVER_ERROR",
+				body: { code: "UNABLE_TO_CREATE_SESSION" },
+			});
+		} finally {
+			createSession.mockRestore();
+		}
+
+		const passkeys = await context.adapter.findMany<Passkey>({
+			model: "passkey",
+			where: [
+				{
+					field: "credentialID",
+					value: mockRegistrationVerification.registrationInfo.credential.id,
+				},
+			],
+		});
+		expect(passkeys).toHaveLength(0);
+		expect(await context.internalAdapter.findUserById(userId)).toBeNull();
 	});
 
 	it("should require resolveUser when session is not available", async () => {

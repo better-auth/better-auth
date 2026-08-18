@@ -12,7 +12,9 @@ import {
 	classifyHost,
 	isPublicRoutableHost,
 } from "@better-auth/core/utils/host";
+import type { BetterFetchOption } from "@better-fetch/fetch";
 import { betterFetch } from "@better-fetch/fetch";
+import { createRemoteJWKSet, customFetch, jwtVerify } from "jose";
 import type { OIDCConfig } from "../types";
 import type {
 	DiscoverOIDCConfigParams,
@@ -23,6 +25,20 @@ import { DiscoveryError, REQUIRED_DISCOVERY_FIELDS } from "./types";
 
 /** Default timeout for discovery requests (10 seconds) */
 const DEFAULT_DISCOVERY_TIMEOUT = 10000;
+
+type OIDCEndpointName =
+	| "discoveryEndpoint"
+	| "tokenEndpoint"
+	| "userInfoEndpoint"
+	| "jwksEndpoint";
+
+type OIDCConfigEndpointName = OIDCEndpointName | "authorizationEndpoint";
+
+type OIDCEndpointFetchOptions = Omit<BetterFetchOption, "redirect">;
+
+function isHttpRedirectStatus(status: number): boolean {
+	return status >= 300 && status < 400;
+}
 
 /**
  * Main entry point: Discover and hydrate OIDC configuration from an issuer.
@@ -57,7 +73,11 @@ export async function discoverOIDCConfig(
 
 	validateDiscoveryUrl(discoveryUrl, params.isTrustedOrigin);
 
-	const discoveryDoc = await fetchDiscoveryDocument(discoveryUrl, timeout);
+	const discoveryDoc = await fetchDiscoveryDocument(
+		discoveryUrl,
+		timeout,
+		params.isTrustedOrigin,
+	);
 
 	validateDiscoveryDocument(discoveryDoc, issuer);
 
@@ -151,8 +171,8 @@ export function validateDiscoveryUrl(
  * @throws DiscoveryError(discovery_invalid_url)  — malformed URL or non-http(s) scheme
  * @throws DiscoveryError(discovery_private_host) — host is not publicly routable and not allowlisted
  */
-function validateSkipDiscoveryEndpoint(
-	name: string,
+function validateOIDCEndpointUrl(
+	name: OIDCConfigEndpointName,
 	endpoint: string,
 	isTrustedOrigin: (url: string) => boolean,
 ): void {
@@ -169,14 +189,14 @@ function validateSkipDiscoveryEndpoint(
 /**
  * Validate every present OIDC endpoint URL in a registration or update body.
  *
- * Each provided URL is checked with {@link validateSkipDiscoveryEndpoint}.
+ * Each provided URL is checked with {@link validateOIDCEndpointUrl}.
  * Omitted (undefined / null / empty) fields are skipped.
  *
  * @param config - OIDC endpoint URLs from the request body
  * @param isTrustedOrigin - Predicate matching the configured `trustedOrigins`
  * @throws DiscoveryError on the first invalid endpoint
  */
-export function validateSkipDiscoveryEndpoints(
+export function validateOIDCEndpointUrls(
 	config: {
 		authorizationEndpoint?: string | null;
 		tokenEndpoint?: string | null;
@@ -186,7 +206,7 @@ export function validateSkipDiscoveryEndpoints(
 	},
 	isTrustedOrigin: (url: string) => boolean,
 ): void {
-	const fields: Array<[string, string | null | undefined]> = [
+	const fields: Array<[OIDCConfigEndpointName, string | null | undefined]> = [
 		["authorizationEndpoint", config.authorizationEndpoint],
 		["tokenEndpoint", config.tokenEndpoint],
 		["userInfoEndpoint", config.userInfoEndpoint],
@@ -194,7 +214,7 @@ export function validateSkipDiscoveryEndpoints(
 		["discoveryEndpoint", config.discoveryEndpoint],
 	];
 	for (const [name, url] of fields) {
-		if (url) validateSkipDiscoveryEndpoint(name, url, isTrustedOrigin);
+		if (url) validateOIDCEndpointUrl(name, url, isTrustedOrigin);
 	}
 }
 
@@ -202,7 +222,7 @@ export function validateSkipDiscoveryEndpoints(
  * Re-validate an endpoint by resolving its hostname and rejecting any resolved
  * address that is not publicly routable.
  *
- * {@link validateSkipDiscoveryEndpoint} only classifies the literal hostname, so
+ * {@link validateOIDCEndpointUrl} only classifies the literal hostname, so
  * a host like `idp.example` whose DNS record points at `127.0.0.1`,
  * `169.254.169.254`, or an RFC 1918 address passes that check unchanged. This
  * function closes that gap by performing the same RFC 6890 classification on the
@@ -225,13 +245,13 @@ export function validateSkipDiscoveryEndpoints(
  * @throws DiscoveryError(discovery_private_host) if any resolved address is not public
  */
 export async function assertEndpointResolvesPublic(
-	name: string,
+	name: OIDCEndpointName,
 	endpoint: string,
 	isTrustedOrigin: (url: string) => boolean,
 ): Promise<void> {
 	const parsed = parseURL(name, endpoint);
 
-	// Operator opt-in for internal IdPs (mirrors validateSkipDiscoveryEndpoint).
+	// Operator opt-in for internal IdPs (mirrors validateOIDCEndpointUrl).
 	if (isTrustedOrigin(parsed.toString())) return;
 
 	const host = parsed.hostname;
@@ -266,13 +286,23 @@ export async function assertEndpointResolvesPublic(
 }
 
 /**
- * Re-validate, at fetch time, every OIDC endpoint that is fetched server-side
- * (token, userinfo, jwks). Runs the synchronous host classification plus the
- * best-effort DNS resolution check. `authorizationEndpoint` is intentionally
- * excluded — it is a browser redirect target, not a server-side fetch, so these
- * checks don't apply to it.
+ * Validate an OIDC endpoint immediately before a server-side fetch.
  */
-export async function assertOIDCEndpointsResolvePublic(
+export async function assertOIDCEndpointAllowed(
+	name: OIDCEndpointName,
+	endpoint: string,
+	isTrustedOrigin: (url: string) => boolean,
+): Promise<void> {
+	validateOIDCEndpointUrl(name, endpoint, isTrustedOrigin);
+	await assertEndpointResolvesPublic(name, endpoint, isTrustedOrigin);
+}
+
+/**
+ * Re-validate, at fetch time, every OIDC endpoint that is fetched server-side
+ * (token, userinfo, jwks). `authorizationEndpoint` is intentionally excluded
+ * because it is a browser redirect target, not a server-side fetch.
+ */
+export async function assertServerFetchedOIDCEndpointsAllowed(
 	config: {
 		tokenEndpoint?: string | null;
 		userInfoEndpoint?: string | null;
@@ -280,16 +310,138 @@ export async function assertOIDCEndpointsResolvePublic(
 	},
 	isTrustedOrigin: (url: string) => boolean,
 ): Promise<void> {
-	const fields: Array<[string, string | null | undefined]> = [
+	const fields: Array<[OIDCEndpointName, string | null | undefined]> = [
 		["tokenEndpoint", config.tokenEndpoint],
 		["userInfoEndpoint", config.userInfoEndpoint],
 		["jwksEndpoint", config.jwksEndpoint],
 	];
 	for (const [name, url] of fields) {
 		if (!url) continue;
-		validateSkipDiscoveryEndpoint(name, url, isTrustedOrigin);
-		await assertEndpointResolvesPublic(name, url, isTrustedOrigin);
+		await assertOIDCEndpointAllowed(name, url, isTrustedOrigin);
 	}
+}
+
+/**
+ * Convert an explicit HTTP redirect response into the OIDC configuration error
+ * used by all server-side endpoint fetches.
+ */
+function throwRedirectError(
+	name: OIDCEndpointName,
+	endpoint: string,
+	status: number,
+	location: string | null,
+): never {
+	throw new DiscoveryError(
+		"oidc_endpoint_redirect",
+		`The ${name} (${endpoint}) returned an HTTP ${status} redirect. Configure the final OIDC endpoint URL instead of a redirecting URL.`,
+		{ endpoint: name, url: endpoint, status, location },
+	);
+}
+
+/**
+ * Fetch a configured OIDC endpoint without following redirects.
+ *
+ * Every server-side OIDC request goes through this helper so private-host
+ * checks and redirect handling stay consistent across discovery, token, and
+ * userinfo calls.
+ */
+export async function fetchOIDCEndpoint<T>(
+	name: OIDCEndpointName,
+	endpoint: string,
+	options: OIDCEndpointFetchOptions,
+	isTrustedOrigin: (url: string) => boolean,
+) {
+	await assertOIDCEndpointAllowed(name, endpoint, isTrustedOrigin);
+
+	let redirectLocation: string | null = null;
+	const { onError, ...fetchOptions } = options;
+	const response = await betterFetch<T>(endpoint, {
+		...fetchOptions,
+		redirect: "manual",
+		onError: async (context) => {
+			if (isHttpRedirectStatus(context.response.status)) {
+				redirectLocation = context.response.headers.get("location");
+			}
+			await onError?.(context);
+		},
+	});
+
+	if (response.error && isHttpRedirectStatus(response.error.status)) {
+		throwRedirectError(name, endpoint, response.error.status, redirectLocation);
+	}
+
+	return response;
+}
+
+/**
+ * Native-fetch variant for libraries that require a `fetch` implementation,
+ * such as jose's remote JWKS loader.
+ */
+export async function fetchOIDCEndpointResponse(
+	name: OIDCEndpointName,
+	endpoint: string,
+	init: RequestInit,
+	isTrustedOrigin: (url: string) => boolean,
+): Promise<Response> {
+	await assertOIDCEndpointAllowed(name, endpoint, isTrustedOrigin);
+
+	const response = await fetch(endpoint, {
+		...init,
+		redirect: "manual",
+	});
+
+	if (isHttpRedirectStatus(response.status)) {
+		throwRedirectError(
+			name,
+			endpoint,
+			response.status,
+			response.headers.get("location"),
+		);
+	}
+
+	return response;
+}
+
+/** Enforces the OpenID Connect authorized-party rules for ID Tokens. */
+export function assertOIDCAuthorizedParty(
+	payload: { aud?: string | readonly string[] | undefined; azp?: unknown },
+	clientId: string,
+): void {
+	const hasMultipleAudiences =
+		Array.isArray(payload.aud) && payload.aud.length > 1;
+	if (
+		(hasMultipleAudiences && payload.azp === undefined) ||
+		(payload.azp !== undefined && payload.azp !== clientId)
+	) {
+		throw new Error("OIDC ID token authorized party does not match the client");
+	}
+}
+
+/**
+ * Validate an OIDC ID token using the same endpoint fetch policy as the rest of
+ * the SSO OIDC flow.
+ */
+export async function validateOIDCIdToken(
+	token: string,
+	jwksEndpoint: string,
+	options: {
+		audience?: string | string[];
+		issuer?: string | string[];
+	},
+	isTrustedOrigin: (url: string) => boolean,
+) {
+	const jwks = createRemoteJWKSet(new URL(jwksEndpoint), {
+		[customFetch]: (url, init) =>
+			fetchOIDCEndpointResponse("jwksEndpoint", url, init, isTrustedOrigin),
+	});
+	const verified = await jwtVerify(token, jwks, {
+		audience: options.audience,
+		issuer: options.issuer,
+	});
+	if (typeof options.audience === "string") {
+		assertOIDCAuthorizedParty(verified.payload, options.audience);
+	}
+	return verified;
 }
 
 /**
@@ -303,17 +455,18 @@ export async function assertOIDCEndpointsResolvePublic(
 export async function fetchDiscoveryDocument(
 	url: string,
 	timeout: number = DEFAULT_DISCOVERY_TIMEOUT,
+	isTrustedOrigin: (url: string) => boolean = () => false,
 ): Promise<OIDCDiscoveryDocument> {
 	try {
-		const response = await betterFetch<OIDCDiscoveryDocument>(url, {
-			method: "GET",
-			timeout,
-			// Never auto-follow redirects on this server-side fetch. A redirect
-			// Location is not re-validated against the private-host checks, so a
-			// redirect could send the fetch to an internal/loopback/metadata
-			// address. Reject redirects outright.
-			redirect: "error",
-		});
+		const response = await fetchOIDCEndpoint<OIDCDiscoveryDocument>(
+			"discoveryEndpoint",
+			url,
+			{
+				method: "GET",
+				timeout,
+			},
+			isTrustedOrigin,
+		);
 
 		if (response.error) {
 			const { status } = response.error;
@@ -621,8 +774,11 @@ function parseURL(name: string, endpoint: string, base?: string) {
  */
 export function selectTokenEndpointAuthMethod(
 	doc: OIDCDiscoveryDocument,
-	existing?: "client_secret_basic" | "client_secret_post",
-): "client_secret_basic" | "client_secret_post" {
+	existing?: "client_secret_basic" | "client_secret_post" | "private_key_jwt",
+): "client_secret_basic" | "client_secret_post" | "private_key_jwt" {
+	if (existing === "private_key_jwt") {
+		return existing;
+	}
 	if (existing) {
 		return existing;
 	}
@@ -639,6 +795,13 @@ export function selectTokenEndpointAuthMethod(
 
 	if (supported.includes("client_secret_post")) {
 		return "client_secret_post";
+	}
+
+	// If only private_key_jwt is advertised, select it so the config
+	// accurately reflects what the IdP requires. The caller must still
+	// provide key material (resolvePrivateKey or defaultSSO inline key).
+	if (supported.includes("private_key_jwt")) {
+		return "private_key_jwt";
 	}
 
 	return "client_secret_basic";
@@ -696,6 +859,6 @@ export async function ensureRuntimeDiscovery(
 			jwksEndpoint: hydrated.jwksEndpoint,
 		};
 	}
-	await assertOIDCEndpointsResolvePublic(resolved, isTrustedOrigin);
+	await assertServerFetchedOIDCEndpointsAllowed(resolved, isTrustedOrigin);
 	return resolved;
 }

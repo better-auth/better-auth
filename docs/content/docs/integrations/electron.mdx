@@ -292,7 +292,6 @@ function SignIn({
     client_id?: string | undefined;
     state?: string | undefined;
     code_challenge?: string | undefined;
-    code_challenge_method?: string | undefined;
   }>;
 }) {
   const query = use(searchParams);
@@ -598,18 +597,6 @@ Make sure this matches the clientID provided to both the proxy and electron clie
 ```ts title="web/auth.ts"
 electron({
   clientID: "electron",
-});
-```
-
-#### `disableOriginOverride?`
-
-Override the origin for Electron API routes. (defaults to `false`)
-
-Enable this if you're facing cors origin issues with Electron API routes.
-
-```ts title="web/auth.ts"
-electron({
-  disableOriginOverride: true,
 });
 ```
 

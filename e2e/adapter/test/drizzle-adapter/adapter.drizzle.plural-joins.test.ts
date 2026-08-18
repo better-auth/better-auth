@@ -50,6 +50,7 @@ const sessions = sqliteTable("session", {
 
 const accounts = sqliteTable("account", {
 	id: text("id").primaryKey(),
+	issuer: text("issuer").notNull(),
 	accountId: text("accountId").notNull(),
 	providerId: text("providerId").notNull(),
 	userId: text("userId")
@@ -117,7 +118,7 @@ const adapterSchema = {
 
 // ── Tests ──
 
-describe("drizzle adapter: singular config.schema keys with plural db.query keys + experimental.joins", () => {
+describe("drizzle adapter: singular config.schema keys with plural db.query keys + joins", () => {
 	let sqliteDb: InstanceType<typeof Database>;
 	let db: ReturnType<typeof drizzle>;
 
@@ -145,6 +146,7 @@ describe("drizzle adapter: singular config.schema keys with plural db.query keys
 			);
 			CREATE TABLE account (
 				id TEXT PRIMARY KEY,
+				issuer TEXT NOT NULL,
 				accountId TEXT NOT NULL,
 				providerId TEXT NOT NULL,
 				userId TEXT NOT NULL REFERENCES user(id),
@@ -184,7 +186,7 @@ describe("drizzle adapter: singular config.schema keys with plural db.query keys
 		});
 
 		const adapter = adapterFactory({
-			experimental: { joins: true },
+			advanced: { database: { joins: true } },
 		});
 
 		const now = new Date();
@@ -238,7 +240,7 @@ describe("drizzle adapter: singular config.schema keys with plural db.query keys
 		});
 
 		const adapter = adapterFactory({
-			experimental: { joins: true },
+			advanced: { database: { joins: true } },
 		});
 
 		// findMany with join — exercises the findMany join path

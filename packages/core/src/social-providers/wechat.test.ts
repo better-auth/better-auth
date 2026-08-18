@@ -43,7 +43,15 @@ describe("wechat.getUserInfo (no provider email)", () => {
 
 		expect(res?.user.email).toBe("union-abc@wechat.invalid");
 		expect(res?.user.emailVerified).toBe(false);
-		expect(res?.user.id).toBe("union-abc");
+		expect(res?.user).not.toHaveProperty("id");
+		expect(typeof provider.accountSubject).toBe("function");
+		if (typeof provider.accountSubject !== "function" || !res) return;
+		expect(
+			await provider.accountSubject({
+				tokens: { accessToken: "access-token" },
+				profile: res.data,
+			}),
+		).toBe("union-abc");
 	});
 
 	it("falls back to openid for the placeholder when unionid is absent", async () => {

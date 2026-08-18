@@ -406,15 +406,16 @@ export {
 	type AuthMiddleware,
 	createAuthEndpoint,
 	createAuthMiddleware,
+	NO_STORE_HEADERS,
 	optionsMiddleware,
 } from "@better-auth/core/api";
 export { APIError } from "@better-auth/core/error";
-export { getIp } from "@better-auth/core/utils/ip";
+export { getIP } from "@better-auth/core/utils/ip";
 export { isAPIError } from "../utils/is-api-error";
 export { type DispatchContext, dispatchAuthEndpoint } from "./dispatch";
 export * from "./middlewares";
 export * from "./routes";
-export { getOAuthState } from "./state/oauth";
+export { addOAuthServerContext, getOAuthState } from "./state/oauth";
 export {
 	getShouldSkipSessionRefresh,
 	setShouldSkipSessionRefresh,

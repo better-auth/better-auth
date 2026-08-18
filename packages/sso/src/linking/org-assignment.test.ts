@@ -189,6 +189,47 @@ describe("assignOrganizationByDomain", () => {
 		expect(members[0]?.organizationId).toBe(org.id);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10760
+	 */
+	it("should find a matching verified provider beyond the default adapter page", async () => {
+		const { data, createContext } = createTestContext();
+
+		const org = createOrg();
+		data.organization.push(org);
+		for (let index = 0; index < 100; index++) {
+			data.ssoProvider.push(
+				createProvider({
+					id: `unrelated-provider-${index}`,
+					providerId: `unrelated-provider-${index}`,
+					domain: `unrelated-${index}.example`,
+					domainVerified: true,
+					organizationId: null,
+				}),
+			);
+		}
+		data.ssoProvider.push(
+			createProvider({
+				id: "zz-matching-provider",
+				providerId: "zz-matching-provider",
+				domainVerified: true,
+				organizationId: org.id,
+			}),
+		);
+
+		const user = createUser();
+		data.user.push(user);
+
+		const ctx = (await createContext()) as GenericEndpointContext;
+		await assignOrganizationByDomain(ctx, {
+			user,
+			domainVerification: { enabled: true },
+		});
+
+		expect(data.member).toHaveLength(1);
+		expect(data.member[0]?.organizationId).toBe(org.id);
+	});
+
 	it("should NOT assign user when the email domain is malformed", async () => {
 		const { data, createContext } = createTestContext();
 
@@ -562,6 +603,42 @@ describe("assignOrganizationByDomain", () => {
 
 		expect(data.member).toHaveLength(0);
 		expect(data.invitation).toEqual([invitation]);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10760
+	 */
+	it("should ignore an expired pending invitation", async () => {
+		const { data, createContext } = createTestContext();
+
+		const org = createOrg();
+		const user = createUser();
+		data.organization.push(org);
+		data.user.push(user);
+		data.ssoProvider.push(
+			createProvider({
+				domainVerified: true,
+				organizationId: org.id,
+			}),
+		);
+		data.invitation.push({
+			id: "expired-invitation",
+			email: user.email,
+			organizationId: org.id,
+			inviterId: "inviter-1",
+			role: "admin",
+			status: "pending",
+			expiresAt: new Date(Date.now() - 60_000),
+		});
+
+		const ctx = (await createContext()) as GenericEndpointContext;
+		await assignOrganizationByDomain(ctx, {
+			user,
+			domainVerification: { enabled: true },
+		});
+
+		expect(data.member).toHaveLength(1);
+		expect(data.member[0]?.organizationId).toBe(org.id);
 	});
 
 	it("should surface adapter failures instead of treating them as ineligibility", async () => {

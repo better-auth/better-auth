@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
 	getSignedQueryIssuedAt,
+	isSessionFreshForSignedQuery,
+	removeMaxAgeFromQuery,
 	removePromptFromQuery,
 	searchParamsToQuery,
 	signedQueryIssuedAtParam,
@@ -110,6 +112,27 @@ describe("removePromptFromQuery", () => {
 	});
 });
 
+describe("removeMaxAgeFromQuery", () => {
+	it("removes max_age and preserves other params", () => {
+		const params = new URLSearchParams(
+			"client_id=abc&max_age=0&prompt=login&scope=openid",
+		);
+		const result = searchParamsToQuery(removeMaxAgeFromQuery(params));
+
+		expect(result.max_age).toBeUndefined();
+		expect(result.client_id).toBe("abc");
+		expect(result.prompt).toBe("login");
+		expect(result.scope).toBe("openid");
+	});
+
+	it("does not mutate the original query", () => {
+		const params = new URLSearchParams("client_id=abc&max_age=0");
+		removeMaxAgeFromQuery(params);
+
+		expect(params.get("max_age")).toBe("0");
+	});
+});
+
 describe("getSignedQueryIssuedAt", () => {
 	it("reads the signed query issue time when present", () => {
 		const issuedAt = 1777026004123;
@@ -139,5 +162,36 @@ describe("getSignedQueryIssuedAt", () => {
 		});
 
 		expect(getSignedQueryIssuedAt(params.toString())).toBeNull();
+	});
+});
+
+describe("isSessionFreshForSignedQuery", () => {
+	it("accepts a session created at or after the signed query issue time", () => {
+		const issuedAt = new Date("2026-06-08T12:00:00.000Z");
+
+		expect(isSessionFreshForSignedQuery(issuedAt, issuedAt)).toBe(true);
+		expect(
+			isSessionFreshForSignedQuery(
+				new Date("2026-06-08T12:00:00.001Z"),
+				issuedAt,
+			),
+		).toBe(true);
+	});
+
+	it("rejects a session that predates the signed query issue time", () => {
+		expect(
+			isSessionFreshForSignedQuery(
+				new Date("2026-06-08T11:59:59.999Z"),
+				new Date("2026-06-08T12:00:00.000Z"),
+			),
+		).toBe(false);
+	});
+
+	it("rejects missing or invalid timestamps", () => {
+		const issuedAt = new Date("2026-06-08T12:00:00.000Z");
+
+		expect(isSessionFreshForSignedQuery(undefined, issuedAt)).toBe(false);
+		expect(isSessionFreshForSignedQuery("not-a-date", issuedAt)).toBe(false);
+		expect(isSessionFreshForSignedQuery(issuedAt, undefined)).toBe(false);
 	});
 });

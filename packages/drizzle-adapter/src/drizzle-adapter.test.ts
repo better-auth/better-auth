@@ -1,4 +1,4 @@
-import { is, SQL } from "drizzle-orm";
+import { is, Param, SQL } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import { drizzleAdapter } from "./drizzle-adapter";
 
@@ -282,6 +282,30 @@ describe("drizzle-adapter", () => {
 
 			expect(count).toBe(expected);
 		});
+
+		it.each([
+			{ provider: "sqlite" as const, result: { changes: Number.NaN } },
+			{ provider: "pg" as const, result: { rowCount: "2" } },
+			{ provider: "mysql" as const, result: [{ affectedRows: Infinity }] },
+		])("throws for invalid affected-row counts from $provider", async ({
+			provider,
+			result,
+		}) => {
+			const db = createUpdateDb(result);
+			const adapter = drizzleAdapter(db, { provider })({
+				secret: defaultSecret,
+			});
+
+			await expect(
+				adapter.updateMany({
+					model: "user",
+					where: [{ field: "emailVerified", value: false }],
+					update: { emailVerified: true },
+				}),
+			).rejects.toThrow(
+				"Drizzle adapter updateMany returned an invalid affected row count",
+			);
+		});
 	});
 
 	describe("consumeOne affected-row count", () => {
@@ -437,10 +461,13 @@ describe("drizzle-adapter", () => {
 			expect(is(expr, SQL)).toBe(true);
 			const chunks = (expr as SQL).queryChunks;
 			// The compiled expression embeds the target column, a " + " separator,
-			// and the raw delta operand, proving the update is `attempts + 3`.
+			// and a parameterized delta operand, proving the update is
+			// `attempts + 3` without relying on raw primitive SQL chunks.
 			expect(chunks).toContainEqual(userTable.attempts);
 			expect(chunks).toContainEqual({ value: [" + "] });
-			expect(chunks).toContain(3);
+			expect(
+				chunks.some((chunk) => is(chunk, Param) && chunk.value === 3),
+			).toBe(true);
 			// The guard runs on the SELECT that picks one id (one predicate here);
 			// the UPDATE is pinned to that single id, not the raw guard clause.
 			expect(calls.selectGuard).toHaveLength(1);

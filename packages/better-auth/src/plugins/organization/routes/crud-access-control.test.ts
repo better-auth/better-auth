@@ -176,6 +176,55 @@ describe("dynamic access control", async () => {
 		role: "member",
 	});
 
+	it("does not reveal dynamic role existence to members without update permission", async () => {
+		const { member: targetMember } = await createUser({
+			role: "member",
+		});
+		const roleName = `hidden-role-${crypto.randomUUID()}`;
+		const createdRole = await authClient.organization.createRole(
+			{
+				role: roleName,
+				permission: {
+					project: ["read"],
+				},
+				additionalFields: {
+					color: "#ff0000",
+				},
+			},
+			{
+				headers,
+			},
+		);
+		expect(createdRole.error).toBeNull();
+
+		const existingRoleAttempt = await authClient.organization.updateMemberRole(
+			{
+				memberId: targetMember.id,
+				role: roleName,
+			},
+			{
+				headers: normalHeaders,
+			},
+		);
+		const missingRoleAttempt = await authClient.organization.updateMemberRole(
+			{
+				memberId: targetMember.id,
+				role: `missing-role-${crypto.randomUUID()}`,
+			},
+			{
+				headers: normalHeaders,
+			},
+		);
+
+		expect(existingRoleAttempt.error?.status).toBe(403);
+		expect(missingRoleAttempt.error?.status).toBe(403);
+		expect(existingRoleAttempt.error?.message).toBe(
+			missingRoleAttempt.error?.message,
+		);
+		expect(existingRoleAttempt.data).toBeNull();
+		expect(missingRoleAttempt.data).toBeNull();
+	});
+
 	/**
 	 * The following test will:
 	 * - Creation of a new role
