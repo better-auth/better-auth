@@ -399,6 +399,7 @@ export const sessionTableFields = [
 		type: "string",
 		description: "The ID of the user",
 		isForeignKey: true,
+		isIndexed: true,
 		references: { model: "user", field: "id", onDelete: "cascade" },
 	},
 	{
@@ -456,6 +457,7 @@ export const accountTableFields = [
 		type: "string",
 		description: "The ID of the user",
 		isForeignKey: true,
+		isIndexed: true,
 		references: { model: "user", field: "id", onDelete: "cascade" },
 	},
 	{
@@ -548,6 +550,7 @@ export const verificationTableFields = [
 		name: "identifier",
 		type: "string",
 		description: "The identifier for the verification request",
+		isIndexed: true,
 	},
 	{
 		name: "value",
