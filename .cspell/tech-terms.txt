@@ -39,6 +39,7 @@ rxvt
 gitea
 MMDD
 ABCDEFGHJKLMNPQRSTUVWXYZ23456789
+nextjs
 setex
 dyld
 nsis
