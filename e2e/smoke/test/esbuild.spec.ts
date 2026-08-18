@@ -99,9 +99,11 @@ it("build organization plugin without zod locales", async () => {
 	});
 	const outputFile = join(esbuildDir, "dist", "organization.js");
 	const outputContent = await readFile(outputFile, "utf-8");
-	assert.ok(
-		!outputContent.includes("zod/v4/locales/ar.js"),
-		"Built output should not contain zod locales",
+	const locales = outputContent.match(/zod\/v4\/locales\/[\w-]+\.js/g) ?? [];
+	assert.deepStrictEqual(
+		[...new Set(locales)],
+		["zod/v4/locales/en.js"],
+		"Built output should only contain the default zod locale",
 	);
 });
 
