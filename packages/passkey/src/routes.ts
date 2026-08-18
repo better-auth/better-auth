@@ -1,5 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { base64 } from "@better-auth/utils/base64";
 import type {
@@ -21,6 +25,7 @@ import {
 } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
+import type { OpenAPIParameter } from "better-call";
 import * as z from "zod";
 import { PASSKEY_ERROR_CODES } from "./error-codes";
 import type {
@@ -120,6 +125,41 @@ const generatePasskeyQuerySchema = z
 	})
 	.optional();
 
+const generatePasskeyRegistrationOptionsOpenAPIParameters: OpenAPIParameter[] =
+	[
+		{
+			name: "authenticatorAttachment",
+			in: "query",
+			required: false,
+			description: `Type of authenticator to use for registration.
+                          "platform" for device-specific authenticators,
+                          "cross-platform" for authenticators that can be used across devices.`,
+			schema: {
+				type: "string",
+				enum: ["platform", "cross-platform"],
+			},
+		},
+		{
+			name: "name",
+			in: "query",
+			required: false,
+			description: `Optional custom name for the passkey.
+                          This can help identify the passkey when managing multiple credentials.`,
+			schema: {
+				type: "string",
+			},
+		},
+		{
+			name: "context",
+			in: "query",
+			required: false,
+			description: "Optional context for passkey-first registration flows.",
+			schema: {
+				type: "string",
+			},
+		},
+	];
+
 export const generatePasskeyRegistrationOptions = (
 	opts: RequiredPassKeyOptions,
 	{ maxAgeInSeconds }: { maxAgeInSeconds: number },
@@ -135,39 +175,7 @@ export const generatePasskeyRegistrationOptions = (
 				openapi: {
 					operationId: "generatePasskeyRegistrationOptions",
 					description: "Generate registration options for a new passkey",
-					parameters: [
-						{
-							name: "authenticatorAttachment",
-							in: "query",
-							required: false,
-							description: `Type of authenticator to use for registration.
-                          "platform" for device-specific authenticators,
-                          "cross-platform" for authenticators that can be used across devices.`,
-							schema: {
-								type: "string",
-							},
-						},
-						{
-							name: "name",
-							in: "query",
-							required: false,
-							description: `Optional custom name for the passkey.
-                          This can help identify the passkey when managing multiple credentials.`,
-							schema: {
-								type: "string",
-							},
-						},
-						{
-							name: "context",
-							in: "query",
-							required: false,
-							description:
-								"Optional context for passkey-first registration flows.",
-							schema: {
-								type: "string",
-							},
-						},
-					],
+					parameters: generatePasskeyRegistrationOptionsOpenAPIParameters,
 					responses: {
 						200: {
 							description: "Success",
@@ -531,7 +539,27 @@ const verifyPasskeyRegistrationBodySchema = z.object({
 			description: "Name of the passkey",
 		})
 		.optional(),
+	createSession: z
+		.boolean()
+		.meta({
+			description: "Create a session after registering the passkey",
+		})
+		.optional(),
 });
+
+const passkeyRegistrationResponseSchema = {
+	type: "object",
+	allOf: [
+		{ $ref: "#/components/schemas/Passkey" },
+		{
+			type: "object",
+			properties: {
+				session: { $ref: "#/components/schemas/Session" },
+				user: { $ref: "#/components/schemas/User" },
+			},
+		},
+	],
+} as const;
 
 export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 	const requireSession = options.registration?.requireSession ?? true;
@@ -550,9 +578,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 							description: "Success",
 							content: {
 								"application/json": {
-									schema: {
-										$ref: "#/components/schemas/Passkey",
-									},
+									schema: passkeyRegistrationResponseSchema,
 								},
 							},
 						},
@@ -602,10 +628,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 				userData,
 				context,
 			} = JSON.parse(data.value) as StoredChallengeValue;
-			// A challenge minted before this marker existed has no `type`; accept it
-			// so in-flight verifications survive an upgrade. Only reject a challenge
-			// explicitly tagged for the other ceremony.
-			if (ceremony !== undefined && ceremony !== "registration") {
+			if (ceremony !== "registration") {
 				throw APIError.from(
 					"BAD_REQUEST",
 					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
@@ -643,67 +666,116 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 				}
 				const { aaguid, credentialDeviceType, credentialBackedUp, credential } =
 					registrationInfo;
-				const resolvedUser: PasskeyRegistrationUser = {
-					id: userData.id,
-					name: userData.name || userData.id,
-					displayName: userData.displayName,
-				};
-				let targetUserId = resolvedUser.id;
-				let resolvedName = ctx.body.name || undefined;
-				if (options.registration?.afterVerification) {
-					const result = await options.registration.afterVerification({
-						ctx,
-						verification,
-						user: resolvedUser,
-						clientData: resp,
-						context,
+				const persistRegistration = async () => {
+					const resolvedUser: PasskeyRegistrationUser = {
+						id: userData.id,
+						name: userData.name || userData.id,
+						displayName: userData.displayName,
+					};
+					let targetUserId = resolvedUser.id;
+					let resolvedName = ctx.body.name || undefined;
+					if (options.registration?.afterVerification) {
+						const result = await options.registration.afterVerification({
+							ctx,
+							verification,
+							user: resolvedUser,
+							clientData: resp,
+							context,
+						});
+						if (result?.userId) {
+							if (typeof result.userId !== "string" || !result.userId) {
+								throw APIError.from(
+									"BAD_REQUEST",
+									PASSKEY_ERROR_CODES.RESOLVED_USER_INVALID,
+								);
+							}
+							if (session?.user?.id && result.userId !== session.user.id) {
+								throw APIError.from(
+									"UNAUTHORIZED",
+									PASSKEY_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
+								);
+							}
+							targetUserId = result.userId;
+						}
+						if (!resolvedName) {
+							resolvedName = result?.name?.trim() || undefined;
+						}
+					}
+					if (!targetUserId) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							PASSKEY_ERROR_CODES.RESOLVED_USER_INVALID,
+						);
+					}
+
+					const user = ctx.body.createSession
+						? await ctx.context.internalAdapter.findUserById(targetUserId)
+						: null;
+					if (ctx.body.createSession && !user) {
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							PASSKEY_ERROR_CODES.USER_NOT_FOUND,
+						);
+					}
+
+					const pubKey = base64.encode(credential.publicKey);
+					const adapter = await getCurrentAdapter(ctx.context.adapter);
+					const passkey = await adapter.create<Omit<Passkey, "id">, Passkey>({
+						model: "passkey",
+						data: {
+							name: resolvedName,
+							userId: targetUserId,
+							credentialID: credential.id,
+							publicKey: pubKey,
+							counter: credential.counter,
+							deviceType: credentialDeviceType,
+							transports: resp.response.transports?.join(",") ?? "",
+							backedUp: credentialBackedUp,
+							createdAt: new Date(),
+							aaguid,
+						},
 					});
-					if (result?.userId) {
-						if (typeof result.userId !== "string" || !result.userId) {
-							throw APIError.from(
-								"BAD_REQUEST",
-								PASSKEY_ERROR_CODES.RESOLVED_USER_INVALID,
-							);
-						}
-						if (session?.user?.id && result.userId !== session.user.id) {
-							throw APIError.from(
-								"UNAUTHORIZED",
-								PASSKEY_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
-							);
-						}
-						targetUserId = result.userId;
+					if (!user) {
+						return { passkey };
 					}
-					if (!resolvedName) {
-						resolvedName = result?.name?.trim() || undefined;
+
+					const createdSession =
+						await ctx.context.internalAdapter.createSession(
+							targetUserId,
+							undefined,
+							undefined,
+							undefined,
+							{ deferSecondaryStorageWrites: true },
+						);
+					if (!createdSession) {
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							PASSKEY_ERROR_CODES.UNABLE_TO_CREATE_SESSION,
+						);
 					}
-				}
-				if (!targetUserId) {
-					throw APIError.from(
-						"BAD_REQUEST",
-						PASSKEY_ERROR_CODES.RESOLVED_USER_INVALID,
+					return { passkey, session: createdSession, user };
+				};
+				const registration = ctx.body.createSession
+					? await runWithTransaction(ctx.context.adapter, persistRegistration)
+					: await persistRegistration();
+
+				if (registration.session && registration.user) {
+					await setSessionCookie(ctx, {
+						session: registration.session,
+						user: registration.user,
+					});
+					return ctx.json(
+						{
+							...registration.passkey,
+							session: registration.session,
+							user: registration.user,
+						},
+						{
+							status: 200,
+						},
 					);
 				}
-				const pubKey = base64.encode(credential.publicKey);
-				const newPasskey: Omit<Passkey, "id"> = {
-					name: resolvedName,
-					userId: targetUserId,
-					credentialID: credential.id,
-					publicKey: pubKey,
-					counter: credential.counter,
-					deviceType: credentialDeviceType,
-					transports: resp.response.transports?.join(",") ?? "",
-					backedUp: credentialBackedUp,
-					createdAt: new Date(),
-					aaguid: aaguid,
-				};
-				const newPasskeyRes = await ctx.context.adapter.create<
-					Omit<Passkey, "id">,
-					Passkey
-				>({
-					model: "passkey",
-					data: newPasskey,
-				});
-				return ctx.json(newPasskeyRes, {
+				return ctx.json(registration.passkey, {
 					status: 200,
 				});
 			} catch (e) {
@@ -795,10 +867,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 			const { type: ceremony, expectedChallenge } = JSON.parse(
 				data.value,
 			) as StoredChallengeValue;
-			// A challenge minted before this marker existed has no `type`; accept it
-			// so in-flight verifications survive an upgrade. Only reject a challenge
-			// explicitly tagged for the other ceremony.
-			if (ceremony !== undefined && ceremony !== "authentication") {
+			if (ceremony !== "authentication") {
 				throw APIError.from(
 					"BAD_REQUEST",
 					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,

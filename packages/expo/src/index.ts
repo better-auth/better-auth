@@ -64,7 +64,6 @@ export const expo = (options?: ExpoOptions | undefined) => {
 					matcher(context) {
 						return !!(
 							context.path?.startsWith("/callback") ||
-							context.path?.startsWith("/oauth2/callback") ||
 							context.path?.startsWith("/magic-link/verify") ||
 							context.path?.startsWith("/verify-email")
 						);

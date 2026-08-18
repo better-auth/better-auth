@@ -27,6 +27,8 @@ Razorpay
 razorpay
 payu
 PayU
+contoso
+Contoso
 Mikro
 anthropics
 Zitadel

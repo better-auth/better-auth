@@ -125,6 +125,10 @@ To sign in a user with username, you can use the `signIn.username` function prov
 
 To update the username of a user, you can use the `updateUser` function provided by the client.
 
+<Callout type="info">
+  If `immutableUsername` is enabled, users can set their username during sign-up or later if they do not already have a username, but they cannot change it after it has been set.
+</Callout>
+
 <APIMethod path="/update-user" method="POST">
   ```ts
   type updateUser = {
@@ -319,6 +323,66 @@ const auth = betterAuth({
 })
 ```
 
+### Disable Display Username
+
+By default, the plugin adds a separate `displayUsername` field to the user table to store the non-normalized username. If your app doesn't need it, set `displayUsername` to `false`. When disabled:
+
+* the `displayUsername` field is not added to the user schema (no extra column or migration)
+* `displayUsername` is never written during sign-up or update
+* the inferred user/session types exclude `displayUsername`
+* username normalization continues to work as usual
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+    },
+    plugins: [
+        username({
+            displayUsername: false
+        })
+    ]
+})
+```
+
+Pass the same option to the client plugin so client-side inferred types match the server:
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { usernameClient } from "better-auth/client/plugins"
+
+const authClient = createAuthClient({
+    plugins: [
+        usernameClient({ displayUsername: false })
+    ]
+})
+```
+
+### Immutable Username
+
+By default, users can update their username. Set `immutableUsername` to `true` to prevent users from changing their username after it has been set.
+
+Users can still set a username during sign-up, or on a later profile update if they haven't already picked a username. Updating other profile fields remains allowed.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { username } from "better-auth/plugins"
+
+const auth = betterAuth({
+    emailAndPassword: {
+        enabled: true,
+    },
+    plugins: [
+        username({
+            immutableUsername: true
+        })
+    ]
+})
+```
+
 ### Disable Is Username Available
 
 By default, the plugin exposes an endpoint `/is-username-available` to check if a username is available. You can disable this endpoint by providing `disabledPaths` option to the better-auth configuration. This is useful if you want to protect usernames from being enumerated.
@@ -340,7 +404,7 @@ const auth = betterAuth({
 
 ## Schema
 
-The plugin requires 2 fields to be added to the user table:
+The plugin requires 2 fields to be added to the user table (the `displayUsername` field is omitted when [`displayUsername: false`](#disable-display-username) is set):
 
 export const usernameUserTableFields = [
 	{

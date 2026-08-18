@@ -1,5 +1,7 @@
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { deviceAuthorizationClient } from "better-auth/client/plugins";
 import type { BetterAuthClientPlugin } from "better-auth/types";
+import type { oauthDeviceAuthorization } from "./device-code";
 import type { oauthProvider } from "./oauth";
 import { buildSignedOAuthQuery } from "./signed-query";
 import { PACKAGE_VERSION } from "./version";
@@ -39,5 +41,13 @@ export const oauthProviderClient = () => {
 			},
 		],
 		$InferServerPlugin: {} as ReturnType<typeof oauthProvider>,
+	} satisfies BetterAuthClientPlugin;
+};
+
+/** Client plugin for {@link oauthDeviceAuthorization}. */
+export const oauthDeviceAuthorizationClient = () => {
+	return {
+		...deviceAuthorizationClient(),
+		$InferServerPlugin: {} as ReturnType<typeof oauthDeviceAuthorization>,
 	} satisfies BetterAuthClientPlugin;
 };

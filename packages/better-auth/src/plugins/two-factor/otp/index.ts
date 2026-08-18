@@ -319,20 +319,18 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			const twoFactorTable = "twoFactor";
 			// Account-level lockout shares one counter across all factors, so OTP
 			// failures count toward and are blocked by the same lock as TOTP and
-			// backup codes. Fail closed on a sign-in if the record is missing.
+			// backup codes whenever the account has a twoFactor row. OTP-only
+			// accounts can be enabled without a TOTP/backup-code row; those accounts
+			// still use the per-challenge OTP attempt cap below.
 			let twoFactor: TwoFactorTable | null = null;
 			if (isSignIn) {
 				twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 					model: twoFactorTable,
 					where: [{ field: "userId", value: session.user.id }],
 				});
-				if (!twoFactor) {
-					throw APIError.from(
-						"BAD_REQUEST",
-						TWO_FACTOR_ERROR_CODES.TWO_FACTOR_NOT_ENABLED,
-					);
+				if (twoFactor) {
+					await assertTwoFactorNotLocked(ctx, twoFactorTable, twoFactor);
 				}
-				await assertTwoFactorNotLocked(ctx, twoFactorTable, twoFactor);
 			}
 			// Consume the OTP row atomically as the race gate. The first concurrent
 			// submission wins the row; every other racer receives null and is
