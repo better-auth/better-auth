@@ -1,14 +1,34 @@
 import { getMigrations } from "better-auth/db/migration";
 import type { SchemaGenerator } from "./types";
 
+function commentBanner(unsafeChanges: string[]): string {
+	const rule = `-- ${"-".repeat(77)}`;
+	const lines = [
+		rule,
+		"-- DO NOT RUN THIS SCRIPT AS IT IS.",
+		"-- Applying it to a populated database corrupts the rows it touches:",
+	];
+	for (const change of unsafeChanges) {
+		lines.push("--", `-- ${change}`);
+	}
+	lines.push(rule, "");
+	return lines.join("\n");
+}
+
 export const generateKyselySchema: SchemaGenerator = async ({
 	options,
 	file,
 }) => {
-	const { compileMigrations } = await getMigrations(options);
+	const { compileMigrations, unsafeChanges } = await getMigrations(options, {
+		throwOnUnsafe: false,
+	});
 	const migrations = await compileMigrations();
+	const code = migrations.trim() === ";" ? "" : migrations;
 	return {
-		code: migrations.trim() === ";" ? "" : migrations,
+		code: unsafeChanges.length
+			? `${commentBanner(unsafeChanges)}${code}`
+			: code,
+		unsafeChanges,
 		fileName:
 			file ||
 			`./better-auth_migrations/${new Date()

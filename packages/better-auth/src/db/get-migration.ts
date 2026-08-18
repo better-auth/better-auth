@@ -464,6 +464,58 @@ function assertExistingTableIndexFits({
 	}
 }
 
+const columnBackfillGuideUrl =
+	"https://better-auth.com/docs/guides/1-7-upgrade-guide#account-identity-is-scoped-by-issuer";
+
+/**
+ * Thrown when {@link getMigrations} refuses to add a required column with no
+ * default value to a populated table. Distinct from the plain
+ * {@link BetterAuthError} thrown for index-definition conflicts, so callers
+ * can tell the two apart without matching on message text.
+ */
+export class UnsafeMigrationError extends BetterAuthError {}
+
+function hasTimestampColumnDefault(
+	field: DBFieldAttribute,
+	dbType: KyselyDatabaseType,
+) {
+	return (
+		field.type === "date" &&
+		typeof field.defaultValue === "function" &&
+		(dbType === "postgres" || dbType === "mysql" || dbType === "mssql")
+	);
+}
+
+// A required column added to a populated table needs a SQL default, or the NOT
+// NULL add fails. Nullable unique columns are excluded: NULL is their only
+// unique-safe backfill. A required unique column keeps its default; on a table
+// with more than one row the unique index then rejects the shared backfill,
+// which no generated migration can avoid.
+function hasStaticColumnDefault(field: DBFieldAttribute) {
+	return (
+		!(field.unique && field.required === false) &&
+		(field.type === "string" ||
+			field.type === "number" ||
+			field.type === "boolean") &&
+		field.defaultValue !== undefined &&
+		field.defaultValue !== null &&
+		typeof field.defaultValue !== "function"
+	);
+}
+
+async function tableHasRows(
+	db: Kysely<Record<string, Record<string, unknown>>>,
+	dbType: KyselyDatabaseType,
+	table: string,
+) {
+	const probe = db.selectFrom(table).select(sql`1`.as("present"));
+	const rows = await (dbType === "mssql"
+		? probe.top(1)
+		: probe.limit(1)
+	).execute();
+	return rows.length > 0;
+}
+
 export function matchType(
 	columnDataType: string,
 	fieldType: DBFieldType,
@@ -524,9 +576,38 @@ async function getMssqlSchema(db: Kysely<unknown>): Promise<string> {
 	}
 }
 
-export async function getMigrations(config: BetterAuthOptions) {
+/**
+ * Build the migration plan that `auth migrate` executes and `auth generate`
+ * prints for the Kysely adapter.
+ *
+ * Adding a required column without a default to a populated table is refused:
+ * existing rows have no value to backfill. `throwOnUnsafe` picks how that
+ * refusal is delivered: executing callers get an {@link UnsafeMigrationError},
+ * read-only callers get the plan plus the same message in `unsafeChanges`.
+ *
+ * @throws {UnsafeMigrationError} when a required column cannot be migrated
+ * safely and `throwOnUnsafe` is left on.
+ * @throws {BetterAuthError} when an index definition conflicts with an
+ * existing or already-planned index.
+ */
+export async function getMigrations(
+	config: BetterAuthOptions,
+	{ throwOnUnsafe = true }: { throwOnUnsafe?: boolean } = {},
+) {
 	const betterAuthSchema = getSchema(config);
+	const authTables = getAuthTables(config);
+	const accountIssuer = authTables.account && {
+		table: authTables.account.modelName,
+		column: authTables.account.fields.issuer?.fieldName || "issuer",
+	};
+	const isAccountIssuerColumn = (table: string, column: string) =>
+		table === accountIssuer?.table && column === accountIssuer.column;
 	const logger = createLogger(config.logger);
+	const unsafeChanges: string[] = [];
+	const reportUnsafeChange = (message: string) => {
+		if (throwOnUnsafe) throw new UnsafeMigrationError(message);
+		unsafeChanges.push(message);
+	};
 
 	let { kysely: db, databaseType: dbType } = await createKyselyAdapter(config);
 
@@ -739,6 +820,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 				continue;
 			}
 
+			if (field.required !== false && column.isNullable) {
+				logger.warn(
+					`Column "${fieldName}" on table "${key}" stays nullable while the schema declares the field required, so existing rows can still hold null. Backfill every row for this column and enforce NOT NULL to remove the drift.`,
+				);
+			}
+
 			if (matchType(column.dataType, field.type, dbType)) {
 				continue;
 			} else {
@@ -888,11 +975,11 @@ export async function getMigrations(config: BetterAuthOptions) {
 		return typeMap[type][provider];
 	}
 	const getModelName = initGetModelName({
-		schema: getAuthTables(config),
+		schema: authTables,
 		usePlural: false,
 	});
 	const getFieldName = initGetFieldName({
-		schema: getAuthTables(config),
+		schema: authTables,
 		usePlural: false,
 	});
 
@@ -925,8 +1012,30 @@ export async function getMigrations(config: BetterAuthOptions) {
 	};
 
 	if (toBeAdded.length) {
+		const populatedTables = new Map<string, boolean>();
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
+				const timestampDefault = hasTimestampColumnDefault(field, dbType);
+				const staticDefault = hasStaticColumnDefault(field);
+				if (field.required !== false && !timestampDefault && !staticDefault) {
+					let populated = populatedTables.get(table.table);
+					if (populated === undefined) {
+						populated = await tableHasRows(db, dbType, table.table);
+						populatedTables.set(table.table, populated);
+					}
+					if (populated) {
+						const textDetail =
+							field.type === "string"
+								? " For a text column, every existing row ends up with the same empty string."
+								: "";
+						const guideLink = isAccountIssuerColumn(table.table, fieldName)
+							? ` See ${columnBackfillGuideUrl}`
+							: "";
+						reportUnsafeChange(
+							`Cannot add required column "${fieldName}" to populated table "${table.table}": the schema declares no default value, so existing rows have no value to backfill. MySQL accepts this statement instead of rejecting it and fills every existing row with an implicit default for the column type, reporting a successful migration over corrupted data.${textDetail} Add the column as nullable, backfill a correct value for every row, then make it NOT NULL.${guideLink}`,
+						);
+					}
+				}
 				const type = getType(
 					field,
 					fieldName,
@@ -980,31 +1089,13 @@ export async function getMigrations(config: BetterAuthOptions) {
 							)
 							.onDelete(field.references.onDelete || "cascade");
 					}
-					if (
-						field.type === "date" &&
-						typeof field.defaultValue === "function" &&
-						(dbType === "postgres" || dbType === "mysql" || dbType === "mssql")
-					) {
+					if (timestampDefault) {
 						if (dbType === "mysql") {
 							col = col.defaultTo(sql`CURRENT_TIMESTAMP(3)`);
 						} else {
 							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
 						}
-					} else if (
-						!(field.unique && field.required === false) &&
-						(field.type === "string" ||
-							field.type === "number" ||
-							field.type === "boolean") &&
-						field.defaultValue !== undefined &&
-						field.defaultValue !== null &&
-						typeof field.defaultValue !== "function"
-					) {
-						// A required column added to a populated table needs a SQL
-						// default, or the NOT NULL add fails. Nullable unique columns
-						// are excluded: NULL is their only unique-safe backfill. A
-						// required unique column keeps its default; on a table with
-						// more than one row the unique index then rejects the shared
-						// backfill, which no generated migration can avoid.
+					} else if (staticDefault) {
 						// Booleans map to 1/0 on engines without a native boolean type.
 						col = col.defaultTo(
 							typeof field.defaultValue === "boolean" &&
@@ -1129,6 +1220,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 		toBeCreated,
 		toBeAdded,
 		toBeAddedIndexes,
+		unsafeChanges,
 		runMigrations,
 		compileMigrations,
 	};

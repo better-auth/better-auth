@@ -70,7 +70,29 @@ This covers email and password, social login, the generic OAuth plugin, One Tap,
 Better Auth now recognizes an external account by the unique pair of `issuer` and `accountId`. The `providerId` remains the local provider configuration, while `account.id` identifies the Better Auth account row and `account.accountId` remains the stable identifier assigned by the provider. The account schema adds the required `issuer` field and creates a unique compound index across both identity fields without renaming `accountId`.
 
 <Callout type="warn">
-  Use a maintenance window and stop authentication writes before changing the account schema. The generated migration cannot choose trusted issuers or resolve identity collisions for you.
+  Use a maintenance window and stop authentication writes, including background jobs and admin APIs that insert into `account` directly, before changing the account schema. The generated migration cannot choose trusted issuers or resolve identity collisions for you.
+</Callout>
+
+<Callout type="warn">
+  If you already ran `auth migrate` against MySQL before this backfill, check for corruption first. Adding a required column with no default fails safely on SQLite, Postgres, and SQL Server, but MySQL's default `sql_mode` silently accepts it and backfills every existing row's `issuer` with an empty string instead of raising an error.
+
+  ```sql title="MySQL corruption check"
+  SELECT COUNT(*) FROM account WHERE issuer = '';
+  ```
+
+  A nonzero count means the database needs repair, not just backfill: drop the compound unique index before re-backfilling, since it was built over the corrupted empty-string values and throws duplicate-key errors as rows resolve to the same real issuer. MySQL has no `DROP INDEX IF EXISTS` for tables, and the index may not exist yet if index creation never ran, so check first.
+
+  ```sql title="Drop the compound index if it exists (MySQL)"
+  SHOW INDEX FROM account WHERE Key_name = 'account_issuer_accountId_uidx';
+  -- Run the DROP INDEX below only if the query above returned a row.
+  DROP INDEX account_issuer_accountId_uidx ON account;
+  ```
+
+  Recreate it once every row has a correct value, as part of step 5 below.
+
+  ```sql title="Recreate the compound index (MySQL)"
+  CREATE UNIQUE INDEX account_issuer_accountId_uidx ON account (issuer, accountId);
+  ```
 </Callout>
 
 **Backfill the account identity:**
@@ -79,13 +101,15 @@ Better Auth now recognizes an external account by the unique pair of `issuer` an
 2. Add `issuer` as nullable during the backfill. Keep the existing physical `accountId` column.
 3. Populate both fields according to the account type:
 
-   | Account type                     | `issuer`                                  | `accountId`                            |
-   | -------------------------------- | ----------------------------------------- | -------------------------------------- |
-   | Credential                       | `local:credential`                        | Stable `id` from the linked `user` row |
-   | Provider with an issuer          | Exact trusted issuer used by the provider | Existing provider account identifier   |
-   | OAuth provider without an issuer | `local:oauth:<encoded providerId>`        | Existing provider account identifier   |
+   | Account type                          | `issuer`                                  | `accountId`                            |
+   | -------------------------------------- | ------------------------------------------ | ---------------------------------------- |
+   | Credential                             | `local:credential`                        | Stable `id` from the linked `user` row |
+   | SIWE wallet, `providerId` `siwe`       | `local:siwe`                              | Existing `<address>:<chainId>` value   |
+   | Google One Tap, `providerId` `google`  | `https://accounts.google.com`             | Existing Google `sub`                  |
+   | Provider with an issuer                | Exact trusted issuer used by the provider | Existing provider account identifier   |
+   | OAuth provider without an issuer       | `local:oauth:<encoded providerId>`        | Existing provider account identifier   |
 
-   The synthetic issuer percent-encodes its provider ID segment exactly as `encodeURIComponent(providerId)`; for example, `local:oauth:github` and `local:oauth:team%2Fgithub`. Build an explicit `providerId`-to-issuer map for your deployment. Multiple provider configurations that represent the same OpenID Connect authority must use the same issuer. Do not derive an issuer from email, display name, an unverified request value, or a mutable authorization endpoint.
+   The synthetic issuer percent-encodes its provider ID segment exactly as `encodeURIComponent(providerId)`; for example, `local:oauth:github` and `local:oauth:team%2Fgithub`. Build an explicit `providerId`-to-issuer map for your deployment. Multiple provider configurations that represent the same OpenID Connect authority must use the same issuer. Do not derive an issuer from email, display name, an unverified request value, or a mutable authorization endpoint. SIWE and Google One Tap are not OAuth providers, so the synthetic `local:oauth:` namespace never applies to them.
 4. Find collisions before creating the unique index. Adapt this query to your physical table and field names:
 
    ```sql title="Identity collision check"
@@ -97,7 +121,32 @@ Better Auth now recognizes an external account by the unique pair of `issuer` an
    ```
 
    If duplicate rows belong to one user, choose the account record to keep and reconcile its provider configuration, tokens, scopes, and timestamps before deleting the others. If a key belongs to multiple users, stop the migration and establish the owner from trusted provider data. Never merge users by matching email alone.
-5. Confirm that every row has both identity fields, make `issuer` non-nullable, and add the unique compound index on `issuer` and `accountId`.
+5. Confirm that every row has both identity fields, then make `issuer` non-nullable and add the unique compound index on `issuer` and `accountId`. `auth migrate` never emits a statement that makes an existing nullable column non-nullable; run this DDL yourself.
+
+   ```sql title="Postgres"
+   ALTER TABLE account ALTER COLUMN issuer SET NOT NULL;
+   CREATE UNIQUE INDEX account_issuer_accountId_uidx ON account (issuer, accountId);
+   ```
+
+   ```sql title="MySQL"
+   ALTER TABLE account MODIFY COLUMN issuer VARCHAR(255) NOT NULL;
+   CREATE UNIQUE INDEX account_issuer_accountId_uidx ON account (issuer, accountId);
+   ```
+
+   ```sql title="SQL Server"
+   ALTER TABLE account ALTER COLUMN issuer VARCHAR(255) NOT NULL;
+   CREATE UNIQUE INDEX account_issuer_accountId_uidx ON account (issuer, accountId);
+   ```
+
+   SQLite has no `ALTER COLUMN` that can add a `NOT NULL` constraint, so rebuild the table instead: create a replacement with the constraint, copy every row across, drop the original, rename the replacement, then recreate every index and foreign key the original table had.
+
+   ```sql title="SQLite table rebuild"
+   CREATE TABLE account_new (/* same columns as account, with issuer TEXT NOT NULL */);
+   INSERT INTO account_new SELECT * FROM account;
+   DROP TABLE account;
+   ALTER TABLE account_new RENAME TO account;
+   CREATE UNIQUE INDEX account_issuer_accountId_uidx ON account (issuer, accountId);
+   ```
 6. Update custom adapters, database hooks, and generated schemas to include `issuer`. Credential accounts keep the linked user's stable `id` as `accountId`; email remains a mutable sign-in identifier and does not change the account key.
 
 Account-specific APIs now use explicit, strongly typed selectors. Read `id` from `listAccounts`, then pass it as `accountId` to `unlinkAccount`. For `getAccessToken`, `refreshToken`, and `accountInfo`, choose exactly one of these request shapes:

@@ -200,6 +200,21 @@ async function generateAction(opts: any) {
 	});
 
 	spinner.stop();
+	if (schema.unsafeChanges?.length) {
+		console.warn(
+			chalk.red.bold(
+				`⚠ ${schema.unsafeChanges.length} ${schema.unsafeChanges.length === 1 ? "change in this schema corrupts" : "changes in this schema corrupt"} a populated database.`,
+			),
+		);
+		for (const change of schema.unsafeChanges) {
+			console.warn(chalk.red(`-> ${change}`));
+		}
+		console.warn(
+			chalk.red.bold(
+				"The generated script carries the same warning. Fix the reported columns before you run it.",
+			),
+		);
+	}
 	if (!schema.code) {
 		await removeGeneratedStub();
 		console.log("Your schema is already up to date.");
