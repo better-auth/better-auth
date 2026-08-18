@@ -1,4 +1,5 @@
 import { is, Param, SQL } from "drizzle-orm";
+import { pgTable, text } from "drizzle-orm/pg-core";
 import { describe, expect, it, vi } from "vitest";
 import { drizzleAdapter } from "./drizzle-adapter";
 
@@ -203,6 +204,32 @@ describe("drizzle-adapter", () => {
 					data: { name: "Test", email: "test@example.com" },
 				}),
 			).rejects.toThrow(/Schema not found/);
+		});
+	});
+
+	describe("where field validation", () => {
+		it("rejects a missing field in multiple AND conditions before querying", async () => {
+			const account = pgTable("account", {
+				accountId: text("account_id").notNull(),
+			});
+			const select = vi.fn();
+			const adapter = drizzleAdapter(
+				{ _: { fullSchema: { account } }, select },
+				{ provider: "pg", schema: { account } },
+			)({ secret: "test-secret-that-is-at-least-32-chars-long!!" });
+
+			await expect(
+				adapter.findOne({
+					model: "account",
+					where: [
+						{ field: "issuer", value: "https://issuer.example" },
+						{ field: "accountId", value: "subject" },
+					],
+				}),
+			).rejects.toThrow(
+				'The field "issuer" does not exist in the schema for the model "account"',
+			);
+			expect(select).not.toHaveBeenCalled();
 		});
 	});
 
