@@ -150,6 +150,38 @@ describe("Node CIMD metadata transport", () => {
 		expect(pinnedAddress).toBe("93.184.216.34");
 	});
 
+	it("answers an all-addresses lookup with the pinned address list", async () => {
+		// Since Node 20, `net.autoSelectFamily` defaults to true and the socket
+		// asks the lookup override with `all: true`, expecting an address list.
+		// The legacy three-argument answer fails every connection with
+		// ERR_INVALID_IP_ADDRESS before it opens.
+		mocks.lookup.mockResolvedValue([
+			{ address: "93.184.216.34", family: 4 },
+			{ address: "2606:2800:220:1:248:1893:25c8:1946", family: 6 },
+		]);
+		mockHttpsResponse({ body: "ok" });
+
+		await fetchClientMetadataResource(
+			"https://client.example.com/client.json",
+		);
+
+		const options = mocks.request.mock.calls[0]?.[1] as {
+			lookup: (
+				hostname: string,
+				options: { all?: boolean },
+				callback: (
+					error: Error | null,
+					addresses: { address: string; family: number }[],
+				) => void,
+			) => void;
+		};
+		const answered = vi.fn();
+		options.lookup("client.example.com", { all: true }, answered);
+		expect(answered).toHaveBeenCalledWith(null, [
+			{ address: "93.184.216.34", family: 4 },
+		]);
+	});
+
 	it("returns redirect responses without following them", async () => {
 		mocks.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
 		mockHttpsResponse({
