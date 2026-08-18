@@ -1,0 +1,194 @@
+---
+title: Refreshable Session
+description: Add rotating refresh tokens to short-lived Better Auth sessions for browsers and native apps.
+---
+
+The refreshable session plugin adds rotating refresh credentials for selected native clients without changing existing Better Auth browser sessions. A native client's Better Auth session acts as a short-lived access credential, while a longer-lived, single-use refresh token can create a replacement session without asking the user to sign in again.
+
+This plugin is useful for native apps that may remain closed longer than the access-session lifetime. Browser refresh cookies are also available as an explicit opt-in feature.
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Install the plugin
+
+    ```package-install
+    @better-auth/refreshable-session
+    ```
+  </Step>
+
+  <Step>
+    ### Add the server plugin
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { refreshableSession } from "@better-auth/refreshable-session"
+
+    export const auth = betterAuth({
+      // Keep the web-session configuration your application already uses.
+      session: {
+        expiresIn: 60 * 60 * 24 * 30,
+        updateAge: 60 * 60 * 24,
+      },
+      plugins: [
+        refreshableSession({
+          refreshTokenReuseInterval: 30,
+          nativeClients: [
+            {
+              clientId: "ios-dashboard",
+              accessTokenExpiresIn: 60 * 30,
+              refreshTokenExpiresIn: 60 * 60 * 24 * 90,
+              accessTokenHeader: "x-ios-session-token",
+              refreshTokenHeader: "x-ios-refresh-token",
+            },
+          ],
+        }),
+      ],
+    })
+    ```
+
+    Only requests that identify an allowlisted native client receive refresh credentials and the client's configured access-session lifetime. Browser sign-ins continue using the existing Better Auth configuration.
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the `refreshableSession` table.
+
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```bash
+        npx auth migrate
+        ```
+      </Tab>
+
+      <Tab value="generate">
+        ```bash
+        npx auth generate
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step>
+    ### Add the JavaScript client plugin
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+    import { refreshableSessionClient } from "@better-auth/refreshable-session/client"
+
+    export const authClient = createAuthClient({
+      plugins: [refreshableSessionClient()],
+    })
+    ```
+
+    Native Swift, Kotlin, and other non-JavaScript clients can call the same HTTP endpoints directly.
+  </Step>
+</Steps>
+
+## Existing web applications
+
+Browser support is disabled by default. The plugin does not issue a browser refresh cookie, shorten browser sessions, or override `session.disableSessionRefresh`. Existing dashboards continue using Better Auth's normal cookies and sliding-session behavior.
+
+## Optional browser refresh
+
+Enable browser refresh explicitly when you want a longer inactivity fallback for web applications:
+
+```ts title="auth.ts"
+refreshableSession({
+  browser: {
+    enabled: true,
+    refreshTokenExpiresIn: 60 * 60 * 24 * 90,
+  },
+  nativeClients: [
+    // ...
+  ],
+})
+```
+
+After sign-in, the plugin adds a signed, HTTP-only refresh cookie. If the Better Auth session cookie is missing or its database session has expired, `GET /get-session` rotates the refresh token, creates a replacement session, sets both replacement cookies, and then returns the session.
+
+Better Auth's normal sliding session refresh remains unchanged unless you explicitly set `browser.disableSessionRefresh`. Set it to `true` only when you want every browser session to behave as a strict short-lived access credential. That stricter mode may require protected dashboard requests to handle `401`, call `getSession`, and retry once.
+
+Browser refresh credentials can also be rotated or revoked explicitly:
+
+```ts
+await authClient.refreshSession({})
+await authClient.revokeRefreshSession({})
+```
+
+Signing out revokes the complete refresh-token family and clears the browser credentials.
+
+<Callout type="info">
+  A browser or app cannot slide a credential while it is closed. A refresh token instead survives the access-session expiry. On the next request, it creates a new session as long as the device was not inactive longer than its configured `refreshTokenExpiresIn`.
+</Callout>
+
+## Native app flow
+
+The `clientId` is a public allowlist identifier, not a client secret. Send it when a native sign-in endpoint creates a session. This is what opts that session into the native access/refresh lifecycle:
+
+```http
+POST /api/auth/sign-in/email
+x-better-auth-client-id: ios-dashboard
+content-type: application/json
+```
+
+The response exposes three headers:
+
+* `set-auth-token`: the signed, short-lived session credential
+* `set-refresh-token`: the rotating refresh credential
+* `set-auth-token-expires-at`: the session expiry time in ISO 8601 format
+
+Store the refresh token in Keychain, Keystore, or the platform's equivalent secure storage. Use the configured access header for authenticated Better Auth requests:
+
+```http
+GET /api/auth/get-session
+x-ios-session-token: <set-auth-token value>
+```
+
+When the access credential expires, or just before its reported expiry, call:
+
+```http
+POST /api/auth/refresh-session
+content-type: application/json
+
+{
+  "clientId": "ios-dashboard",
+  "refreshToken": "<stored refresh token>"
+}
+```
+
+Replace both stored credentials from the response headers before retrying the original request once. The default 30-second reuse interval returns the exact same replacement pair when a response is lost and the app retries the old token. Reuse after that interval revokes the entire token family.
+
+Native `get-session` requests do not slide the access-session expiry, even when the web application keeps Better Auth's normal sliding behavior. This gives native and browser sessions independent lifetimes on the same Better Auth instance.
+
+For sign-out, either call `POST /revoke-refresh-session` with the same JSON body or send the configured refresh header to Better Auth's normal sign-out endpoint.
+
+## Security model
+
+Refresh tokens are random opaque values and only their hashes are stored. Each successful refresh rotates both the refresh token and the Better Auth session. The replacement pair is encrypted temporarily so a network retry can be handled during `refreshTokenReuseInterval`; replay outside that window revokes the family and its active sessions.
+
+The original authentication time is preserved on replacement sessions. This prevents refresh from being mistaken for a recent password, passkey, or multi-factor authentication event.
+
+Use a durable database and an adapter with transaction support. Rotation also uses an atomic compare-and-set so concurrent requests cannot independently spend the same token.
+
+Setting `rememberMe: false` skips refresh-token issuance. Revoking a user session or signing out does not leave an independently usable refresh family.
+
+## Options
+
+`refreshTokenExpiresIn`
+
+: Default sliding refresh-token inactivity lifetime in seconds. Defaults to 30 days. Native clients and browser options can override it.
+
+`refreshTokenReuseInterval`
+
+: Retry grace period in seconds for a just-rotated token. Defaults to 30 seconds. Set to `0` for immediate reuse detection.
+
+`nativeClients`
+
+: Allowlisted native client IDs. Each client can configure `accessTokenExpiresIn`, `refreshTokenExpiresIn`, and its access/sign-out request header names. Native access sessions default to 15 minutes.
+
+`browser`
+
+: Optional browser refresh support. It is disabled by default. Browser configuration includes `refreshTokenExpiresIn`, `disableSessionRefresh`, `cookieName`, and `cookieAttributes`. The refresh cookie is always HTTP-only.

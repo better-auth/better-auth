@@ -13,6 +13,7 @@
     "siwe",
     "generic-oauth",
     "multi-session",
+    "refreshable-session",
     "last-login-method",
     "admin",
     "organization",
