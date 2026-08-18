@@ -1,0 +1,106 @@
+---
+title: Threads
+description: Threads provider setup and usage.
+---
+
+<Steps>
+  <Step>
+    ### Get your Threads Credentials
+
+    To use Threads sign-in, you need a client ID and client secret. You can get them from the [Meta for Developers](https://developers.facebook.com/apps) portal by creating an app and adding the **Threads API** use case.
+
+    Follow these steps:
+
+    1. Create an app in the Meta for Developers portal
+    2. Add the **Threads API** use case and configure the required permissions (`threads_basic` is enabled by default)
+    3. Add your redirect URI under the Threads API settings
+    4. Note your Threads App ID (client ID) and Threads App Secret (client secret)
+
+    <Callout type="info">
+      * Threads does not allow `localhost` or plain HTTP redirect URIs. Use a public HTTPS domain, including for local testing (a tunnelling tool such as [NGROK](https://ngrok.com/) works well).
+      * Set the redirect URI to `https://your-domain.com/api/auth/callback/threads`. For local development, use your HTTPS tunnel URL. If you change the base path of the auth routes, update the redirect URI accordingly.
+    </Callout>
+
+    <Callout type="info">
+      The `threads_basic` scope does not return an email address. Better Auth therefore synthesizes a stable placeholder email of the form `<threads-user-id>@threads.invalid`. It is keyed on the immutable Threads user id (never the handle, which can change) and uses the reserved `.invalid` TLD ([RFC 2606](https://datatracker.ietf.org/doc/html/rfc2606)) so it can never route real mail. To store a real email instead, provide `mapProfileToUser` (see below).
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Configure the provider
+
+    To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+
+    export const auth = betterAuth({
+        socialProviders: {
+            threads: { // [!code highlight]
+                clientId: process.env.THREADS_CLIENT_ID as string, // [!code highlight]
+                clientSecret: process.env.THREADS_CLIENT_SECRET as string, // [!code highlight]
+            }, // [!code highlight]
+        },
+    })
+    ```
+
+    <Callout type="info">
+      Threads issues a short-lived access token from the OAuth exchange and requires it to be swapped for a long-lived (60-day) token. Better Auth performs this exchange automatically and stores the long-lived token, so you do not need to handle it yourself. Long-lived tokens are refreshed by presenting themselves, which the provider also handles.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Sign In with Threads
+
+    To sign in with Threads, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+
+    * `provider`: The provider to use. It should be set to `threads`.
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+    const authClient =  createAuthClient()
+
+    const signIn = async () => {
+        const data = await authClient.signIn.social({
+            provider: "threads"
+        })
+    }
+    ```
+  </Step>
+</Steps>
+
+## Additional Scopes
+
+The default scope is `threads_basic`. To request additional Threads permissions (for example, to publish content), pass them via `scope`:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    socialProviders: {
+        threads: {
+            clientId: process.env.THREADS_CLIENT_ID as string,
+            clientSecret: process.env.THREADS_CLIENT_SECRET as string,
+            scope: ["threads_content_publish"], // [!code highlight]
+        },
+    },
+})
+```
+
+## Custom user mapping
+
+Because the `threads_basic` scope returns no email, you may want to map the profile onto your user differently, for example to supply a real email collected elsewhere or to store the Threads id on your user. Use `mapProfileToUser`:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    socialProviders: {
+        threads: {
+            clientId: process.env.THREADS_CLIENT_ID as string,
+            clientSecret: process.env.THREADS_CLIENT_SECRET as string,
+            mapProfileToUser: (profile) => { // [!code highlight]
+                return { // [!code highlight]
+                    threadsId: profile.id, // [!code highlight]
+                }; // [!code highlight]
+            }, // [!code highlight]
+        },
+    },
+})
+```
