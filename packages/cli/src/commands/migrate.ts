@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { BetterAuthError } from "@better-auth/core/error";
 import {
 	createTelemetry,
 	getTelemetryAuthConfig,
@@ -102,8 +103,30 @@ export async function migrateAction(opts: any) {
 
 	const spinner = yoctoSpinner({ text: "preparing migration..." }).start();
 
-	const { toBeAdded, toBeAddedIndexes, toBeCreated, runMigrations } =
-		await getMigrations(config);
+	let plan: Awaited<ReturnType<typeof getMigrations>>;
+	try {
+		plan = await getMigrations(config);
+	} catch (error) {
+		spinner.stop();
+		if (!(error instanceof BetterAuthError)) throw error;
+		console.error(chalk.red("The migration was refused, and nothing ran."));
+		console.error(error.message);
+		console.error(
+			`Run ${chalk.yellow("npx auth@latest generate")} to read the statements without executing them.`,
+		);
+		try {
+			const telemetry = await createTelemetry(config);
+			await telemetry.publish({
+				type: "cli_migrate",
+				payload: {
+					outcome: "unsafe_change",
+					config: await getTelemetryAuthConfig(config),
+				},
+			});
+		} catch {}
+		process.exit(1);
+	}
+	const { toBeAdded, toBeAddedIndexes, toBeCreated, runMigrations } = plan;
 
 	if (!toBeAdded.length && !toBeAddedIndexes.length && !toBeCreated.length) {
 		spinner.stop();
