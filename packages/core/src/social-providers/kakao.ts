@@ -106,7 +106,8 @@ export const kakao = (options: KakaoOptions) => {
 	return {
 		id: "kakao",
 		name: "Kakao",
-		createAuthorizationURL({ state, scopes, redirectURI }) {
+		accountSubject: ({ profile }) => profile.id,
+		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["account_email", "profile_image", "profile_nickname"];
@@ -119,6 +120,7 @@ export const kakao = (options: KakaoOptions) => {
 				scopes: _scopes,
 				state,
 				redirectURI,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
@@ -161,7 +163,6 @@ export const kakao = (options: KakaoOptions) => {
 			const account = profile.kakao_account || {};
 			const kakaoProfile = account.profile || {};
 			const user = {
-				id: String(profile.id),
 				name: kakaoProfile.nickname || account.name || "",
 				email: account.email,
 				image:

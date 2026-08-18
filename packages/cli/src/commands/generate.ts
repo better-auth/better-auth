@@ -79,6 +79,40 @@ function createMockAdapter(adapterId: string, dialect?: string): DBAdapter {
 	};
 }
 
+function getDefaultSchemaOutputFileName(adapterId: string, now = new Date()) {
+	if (adapterId === "prisma") {
+		return "schema.prisma";
+	}
+	if (adapterId === "kysely") {
+		return `${now.toISOString().replace(/:/g, "-")}.sql`;
+	}
+	return "auth-schema.ts";
+}
+
+async function resolveSchemaOutputPath({
+	cwd,
+	output,
+	adapterId,
+	now = new Date(),
+}: {
+	cwd: string;
+	output: string | undefined;
+	adapterId: string;
+	now?: Date | undefined;
+}) {
+	if (!output) return output;
+	const resolvedOutput = path.resolve(cwd, output);
+	try {
+		const stat = await fs.stat(resolvedOutput);
+		if (stat.isDirectory()) {
+			return path.join(output, getDefaultSchemaOutputFileName(adapterId, now));
+		}
+	} catch {
+		// path doesn't exist yet — treat as a file path, which is fine
+	}
+	return output;
+}
+
 async function generateAction(opts: any) {
 	const options = z
 		.object({
@@ -98,42 +132,33 @@ async function generateAction(opts: any) {
 		process.exit(1);
 	}
 
-	// If --output points to an existing directory, treat it as the output
-	// directory and append the default filename instead of writing to the
-	// directory path itself (which causes EISDIR).
+	let outputIsDirectory = false;
 	if (options.output) {
-		const resolvedOutput = path.resolve(cwd, options.output);
 		try {
-			const stat = await fs.stat(resolvedOutput);
-			if (stat.isDirectory()) {
-				options.output = path.join(options.output, "auth-schema.ts");
-			}
+			outputIsDirectory = (
+				await fs.stat(path.resolve(cwd, options.output))
+			).isDirectory();
 		} catch {
-			// path doesn't exist yet — treat as a file path, which is fine
+			// A path that does not exist yet is an output file.
 		}
 	}
-
-	// Always resolve --output against the CLI `--cwd`, never process.cwd().
-	// getConfig stubs against this same path; the final write and abort
-	// cleanup must target it too.
-	const resolvedOutputPath = options.output
-		? path.resolve(cwd, options.output)
+	const configOutputPath =
+		options.output && !outputIsDirectory ? options.output : undefined;
+	const resolvedConfigOutputPath = configOutputPath
+		? path.resolve(cwd, configOutputPath)
 		: undefined;
-	const outputExistedBefore = resolvedOutputPath
-		? existsSync(resolvedOutputPath)
+	const outputExistedBefore = resolvedConfigOutputPath
+		? existsSync(resolvedConfigOutputPath)
 		: true;
 	const removeGeneratedStub = async () => {
-		if (!resolvedOutputPath || outputExistedBefore) return;
-		await fs.rm(resolvedOutputPath, { force: true }).catch(() => {});
+		if (!resolvedConfigOutputPath || outputExistedBefore) return;
+		await fs.rm(resolvedConfigOutputPath, { force: true }).catch(() => {});
 	};
 
 	const config = await getConfig({
 		cwd,
 		configPath: options.config,
-		// Recovers from first-run templates (e.g. the Convex integration guide)
-		// whose config imports the schema file this command is about to
-		// generate. @see https://github.com/better-auth/better-auth/issues/10136
-		outputPath: options.output,
+		outputPath: configOutputPath,
 	});
 	if (!config) {
 		await removeGeneratedStub();
@@ -142,6 +167,7 @@ async function generateAction(opts: any) {
 		);
 		return;
 	}
+	await removeGeneratedStub();
 
 	let adapter: DBAdapter;
 	if (options.adapter) {
@@ -155,6 +181,15 @@ async function generateAction(opts: any) {
 			process.exit(1);
 		});
 	}
+
+	options.output = await resolveSchemaOutputPath({
+		cwd,
+		output: options.output,
+		adapterId: adapter.id,
+	});
+	const resolvedOutputPath = options.output
+		? path.resolve(cwd, options.output)
+		: undefined;
 
 	const spinner = yoctoSpinner({ text: "preparing schema..." }).start();
 

@@ -6,13 +6,27 @@ import prompts from "prompts";
 import * as semver from "semver";
 import yoctoSpinner from "yocto-spinner";
 import * as z from "zod";
+import changesetConfig from "../../../../.changeset/config.json" with {
+	type: "json",
+};
 import { detectPackageManager } from "../utils/check-package-managers";
 import { getPackageInfo } from "../utils/get-package-info";
 import { installDependencies } from "../utils/install-dependencies";
 import { cliVersion } from "../version";
 
-function isBetterAuthPackage(name: string): boolean {
-	return name === "better-auth" || name.startsWith("@better-auth/");
+const fixedReleaseGroup = changesetConfig.fixed.find((group) =>
+	group.includes("better-auth"),
+);
+if (!fixedReleaseGroup) {
+	throw new Error("The Better Auth fixed release group is not configured.");
+}
+
+const SYNCHRONIZED_BETTER_AUTH_PACKAGES = new Set(
+	fixedReleaseGroup.filter((name) => name !== "auth"),
+);
+
+function isSynchronizedBetterAuthPackage(name: string): boolean {
+	return SYNCHRONIZED_BETTER_AUTH_PACKAGES.has(name);
 }
 
 interface UpgradeEntry {
@@ -57,12 +71,18 @@ export async function upgradeAction(opts: unknown) {
 	}[] = [];
 
 	for (const [name, version] of Object.entries(deps) as [string, string][]) {
-		if (isBetterAuthPackage(name) && !version.startsWith("workspace:")) {
+		if (
+			isSynchronizedBetterAuthPackage(name) &&
+			!version.startsWith("workspace:")
+		) {
 			candidates.push({ name, current: version, depType: "prod" });
 		}
 	}
 	for (const [name, version] of Object.entries(devDeps) as [string, string][]) {
-		if (isBetterAuthPackage(name) && !version.startsWith("workspace:")) {
+		if (
+			isSynchronizedBetterAuthPackage(name) &&
+			!version.startsWith("workspace:")
+		) {
 			candidates.push({ name, current: version, depType: "dev" });
 		}
 	}

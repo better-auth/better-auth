@@ -25,7 +25,8 @@ export const reddit = (options: RedditOptions) => {
 	return {
 		id: "reddit",
 		name: "Reddit",
-		createAuthorizationURL({ state, scopes, redirectURI }) {
+		accountSubject: ({ profile }) => profile.id,
+		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope ? [] : ["identity"];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
@@ -37,6 +38,7 @@ export const reddit = (options: RedditOptions) => {
 				state,
 				redirectURI,
 				duration: options.duration,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
@@ -111,7 +113,6 @@ export const reddit = (options: RedditOptions) => {
 			const email = userMap?.email || `${profile.id}@reddit.invalid`;
 			return {
 				user: {
-					id: profile.id,
 					name: profile.name,
 					image: profile.icon_img?.split("?")[0]!,
 					...userMap,

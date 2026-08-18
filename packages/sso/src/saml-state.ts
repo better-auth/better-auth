@@ -2,6 +2,8 @@ import type { GenericEndpointContext, StateData } from "better-auth";
 import { generateGenericState, parseGenericState } from "better-auth";
 import { APIError } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
+import type { SSOProviderReference } from "./provider-reference";
+import { SSO_PROVIDER_STATE_KEY } from "./provider-reference";
 
 export async function generateRelayState(
 	c: GenericEndpointContext,
@@ -11,7 +13,7 @@ export async function generateRelayState(
 				userId: string;
 		  }
 		| undefined,
-	additionalData: Record<string, any> | false | undefined,
+	providerReference?: SSOProviderReference,
 ) {
 	const callbackURL = c.body.callbackURL;
 	if (!callbackURL) {
@@ -22,7 +24,6 @@ export async function generateRelayState(
 
 	const codeVerifier = generateRandomString(128);
 	const stateData: StateData = {
-		...(additionalData ? additionalData : {}),
 		callbackURL,
 		codeVerifier,
 		errorURL: c.body.errorCallbackURL,
@@ -33,6 +34,9 @@ export async function generateRelayState(
 		 */
 		expiresAt: Date.now() + 10 * 60 * 1000,
 		requestSignUp: c.body.requestSignUp,
+		serverContext: providerReference
+			? { [SSO_PROVIDER_STATE_KEY]: providerReference }
+			: undefined,
 	};
 
 	try {

@@ -102,9 +102,10 @@ export async function migrateAction(opts: any) {
 
 	const spinner = yoctoSpinner({ text: "preparing migration..." }).start();
 
-	const { toBeAdded, toBeCreated, runMigrations } = await getMigrations(config);
+	const { toBeAdded, toBeAddedIndexes, toBeCreated, runMigrations } =
+		await getMigrations(config);
 
-	if (!toBeAdded.length && !toBeCreated.length) {
+	if (!toBeAdded.length && !toBeAddedIndexes.length && !toBeCreated.length) {
 		spinner.stop();
 		console.log("🚀 No migrations needed.");
 		try {
@@ -129,6 +130,17 @@ export async function migrateAction(opts: any) {
 			chalk.magenta(Object.keys(table.fields).join(", ")),
 			chalk.white("fields on"),
 			chalk.yellow(`${table.table}`),
+			chalk.white("table."),
+		);
+	}
+	for (const { index, table } of toBeAddedIndexes) {
+		console.log(
+			"->",
+			chalk.magenta(index.columns.join(", ")),
+			chalk.white(
+				index.unique ? "fields in a unique index on" : "fields indexed on",
+			),
+			chalk.yellow(table),
 			chalk.white("table."),
 		);
 	}

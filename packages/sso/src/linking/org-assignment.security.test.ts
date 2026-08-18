@@ -201,8 +201,8 @@ function findMembership(
  */
 describe("SSO verified-domain organization assignment", () => {
 	it("does not auto-join a social-login user through an unverified SSO domain claim", async () => {
-		mockGoogleToken(await createGoogleIdToken(true, "disabled-verification"));
-		const instance = await createInstance();
+		mockGoogleToken(await createGoogleIdToken(true, "unverified-domain"));
+		const instance = await createInstance({ enabled: true });
 		const target = await registerOrganizationProvider(instance, {
 			domainVerified: false,
 		});
