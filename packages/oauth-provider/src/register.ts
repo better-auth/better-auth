@@ -410,15 +410,9 @@ export async function checkOAuthClient(
 	// Validate correlation between grant_types and response_types
 	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
 	if (isClientMetadataDocument) {
-		// One Client ID Metadata Document serves every authorization server the
-		// client talks to, so it declares the union of the client's grants
-		// across all of them. Rejecting the document over a grant this server
-		// does not offer makes any multi-capability client unregistrable —
-		// Claude's hosted document declares
-		// urn:ietf:params:oauth:grant-type:jwt-bearer for its enterprise flow
-		// beside authorization_code and refresh_token. The document passes when
-		// at least one declared grant is mutually supported; the token endpoint
-		// still refuses any grant it has no handler for.
+		// One metadata document serves every authorization server the client talks
+		// to, so it declares a grant union; require one mutual grant and let the
+		// token endpoint refuse the rest.
 		if (!grantTypes.some((grantType) => supportedGrantTypes.has(grantType))) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
