@@ -1,12 +1,11 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { BetterAuthError } from "@better-auth/core/error";
 import {
 	createTelemetry,
 	getTelemetryAuthConfig,
 } from "@better-auth/telemetry";
 import { getAdapter } from "better-auth/db/adapter";
-import { getMigrations } from "better-auth/db/migration";
+import { getMigrations, UnsafeMigrationError } from "better-auth/db/migration";
 import chalk from "chalk";
 import { Command } from "commander";
 import prompts from "prompts";
@@ -108,7 +107,7 @@ export async function migrateAction(opts: any) {
 		plan = await getMigrations(config);
 	} catch (error) {
 		spinner.stop();
-		if (!(error instanceof BetterAuthError)) throw error;
+		if (!(error instanceof UnsafeMigrationError)) throw error;
 		console.error(chalk.red("The migration was refused, and nothing ran."));
 		console.error(error.message);
 		console.error(

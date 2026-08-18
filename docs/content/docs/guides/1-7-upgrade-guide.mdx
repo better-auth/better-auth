@@ -80,9 +80,11 @@ Better Auth now recognizes an external account by the unique pair of `issuer` an
   SELECT COUNT(*) FROM account WHERE issuer = '';
   ```
 
-  A nonzero count means the database needs repair, not just backfill: drop the compound unique index before re-backfilling, since it was built over the corrupted empty-string values and throws duplicate-key errors as rows resolve to the same real issuer.
+  A nonzero count means the database needs repair, not just backfill: drop the compound unique index before re-backfilling, since it was built over the corrupted empty-string values and throws duplicate-key errors as rows resolve to the same real issuer. MySQL has no `DROP INDEX IF EXISTS` for tables, and the index may not exist yet if index creation never ran, so check first.
 
-  ```sql title="Drop the compound index (MySQL)"
+  ```sql title="Drop the compound index if it exists (MySQL)"
+  SHOW INDEX FROM account WHERE Key_name = 'account_issuer_accountId_uidx';
+  -- Run the DROP INDEX below only if the query above returned a row.
   DROP INDEX account_issuer_accountId_uidx ON account;
   ```
 

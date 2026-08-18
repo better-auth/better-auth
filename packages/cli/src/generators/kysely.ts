@@ -2,7 +2,7 @@ import { getMigrations } from "better-auth/db/migration";
 import type { SchemaGenerator } from "./types";
 
 function commentBanner(unsafeChanges: string[]): string {
-	const rule = `--${"-".repeat(78)}`;
+	const rule = `-- ${"-".repeat(77)}`;
 	const lines = [
 		rule,
 		"-- DO NOT RUN THIS SCRIPT AS IT IS.",

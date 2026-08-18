@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import Database from "better-sqlite3";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { cliPath } from "./utils";
 
 const execFileAsync = promisify(execFile);
@@ -81,8 +81,17 @@ export const auth = betterAuth({
 	database.exec(
 		`INSERT INTO "account" ("id", "accountId", "providerId", "userId", "createdAt", "updatedAt") VALUES ('a1', 'g-1', 'google', 'u1', '2020-01-01', '2020-01-01')`,
 	);
-	return { cwd, database };
+	database.close();
+	return { cwd };
 }
+
+beforeAll(() => {
+	if (!fs.existsSync(cliPath)) {
+		throw new Error(
+			`CLI binary not found at "${cliPath}". Run "pnpm --filter auth build" before running this test.`,
+		);
+	}
+});
 
 afterEach(() => {
 	for (const cwd of projects.splice(0)) {

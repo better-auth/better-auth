@@ -467,6 +467,14 @@ function assertExistingTableIndexFits({
 const columnBackfillGuideUrl =
 	"https://better-auth.com/docs/guides/1-7-upgrade-guide#account-identity-is-scoped-by-issuer";
 
+/**
+ * Thrown when {@link getMigrations} refuses to add a required column with no
+ * default value to a populated table. Distinct from the plain
+ * {@link BetterAuthError} thrown for index-definition conflicts, so callers
+ * can tell the two apart without matching on message text.
+ */
+export class UnsafeMigrationError extends BetterAuthError {}
+
 function hasTimestampColumnDefault(
 	field: DBFieldAttribute,
 	dbType: KyselyDatabaseType,
@@ -574,11 +582,13 @@ async function getMssqlSchema(db: Kysely<unknown>): Promise<string> {
  *
  * Adding a required column without a default to a populated table is refused:
  * existing rows have no value to backfill. `throwOnUnsafe` picks how that
- * refusal is delivered: executing callers get a {@link BetterAuthError},
+ * refusal is delivered: executing callers get an {@link UnsafeMigrationError},
  * read-only callers get the plan plus the same message in `unsafeChanges`.
  *
- * @throws {BetterAuthError} when a required column cannot be migrated safely
- * and `throwOnUnsafe` is left on.
+ * @throws {UnsafeMigrationError} when a required column cannot be migrated
+ * safely and `throwOnUnsafe` is left on.
+ * @throws {BetterAuthError} when an index definition conflicts with an
+ * existing or already-planned index.
  */
 export async function getMigrations(
 	config: BetterAuthOptions,
@@ -595,7 +605,7 @@ export async function getMigrations(
 	const logger = createLogger(config.logger);
 	const unsafeChanges: string[] = [];
 	const reportUnsafeChange = (message: string) => {
-		if (throwOnUnsafe) throw new BetterAuthError(message);
+		if (throwOnUnsafe) throw new UnsafeMigrationError(message);
 		unsafeChanges.push(message);
 	};
 
@@ -814,7 +824,6 @@ export async function getMigrations(
 				logger.warn(
 					`Column "${fieldName}" on table "${key}" stays nullable while the schema declares the field required, so existing rows can still hold null. Backfill every row for this column and enforce NOT NULL to remove the drift.`,
 				);
-				continue;
 			}
 
 			if (matchType(column.dataType, field.type, dbType)) {
@@ -1017,7 +1026,7 @@ export async function getMigrations(
 					if (populated) {
 						const textDetail =
 							field.type === "string"
-								? " For a text column that value is the empty string, so every existing row ends up sharing one identity."
+								? " For a text column, every existing row ends up with the same empty string."
 								: "";
 						const guideLink = isAccountIssuerColumn(table.table, fieldName)
 							? ` See ${columnBackfillGuideUrl}`

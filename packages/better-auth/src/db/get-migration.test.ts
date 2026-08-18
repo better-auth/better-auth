@@ -3,7 +3,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { describe, expect, it } from "vitest";
 import { organization } from "../plugins/organization";
-import { getMigrations } from "./get-migration";
+import { getMigrations, UnsafeMigrationError } from "./get-migration";
 
 // A 1.6-shape team/teamMember schema: the 1.7 `memberCount` and `membershipKey`
 // columns are missing, so getMigrations must ADD them to a populated table.
@@ -171,6 +171,34 @@ describe("get-migration: compound indexes on SQLite", () => {
 		).rejects.toThrow(
 			'Database index name "directoryUser_subject_idx" is already reserved by field-level index metadata on table "directoryUser".',
 		);
+	});
+
+	/**
+	 * An index-definition conflict is a plain `BetterAuthError`, never the
+	 * `UnsafeMigrationError` the CLI narrows its catch on. Callers that only
+	 * check `instanceof UnsafeMigrationError` must let this rethrow instead
+	 * of treating it as the populated-table column refusal.
+	 */
+	it("does not classify an index-definition conflict as UnsafeMigrationError", async () => {
+		const error = await getMigrations({
+			database: new DatabaseSync(":memory:"),
+			plugins: [
+				{
+					id: "directory",
+					schema: {
+						directoryUser: {
+							fields: {
+								subject: { type: "string", index: true },
+							},
+							indexes: [{ fields: ["subject"] }],
+						},
+					},
+				},
+			],
+		}).catch((caught: unknown) => caught);
+
+		expect(error).toBeInstanceOf(BetterAuthError);
+		expect(error).not.toBeInstanceOf(UnsafeMigrationError);
 	});
 
 	it("enforces a compound unique index with configured table and field names", async () => {
@@ -538,6 +566,7 @@ describe("get-migration: unsafe schema changes on populated tables", () => {
 		);
 
 		expect(failure).toBeInstanceOf(BetterAuthError);
+		expect(failure).toBeInstanceOf(UnsafeMigrationError);
 		expect(String(failure)).toContain(
 			'Cannot add required column "connectionIssuer" to populated table "directoryUser"',
 		);
@@ -695,6 +724,46 @@ describe("get-migration: nullable columns for required fields", () => {
 		expect(
 			warnings.some((warning) =>
 				warning.includes('Column "issuer" on table "account"'),
+			),
+		).toBe(true);
+	});
+
+	it("warns about both nullable drift and a type mismatch on the same column", async () => {
+		const db = new DatabaseSync(":memory:");
+		db.exec(
+			`CREATE TABLE "directoryUser" (
+				"id" text primary key not null,
+				"seatCount" text
+			)`,
+		);
+		db.exec(`INSERT INTO "directoryUser" ("id") VALUES ('du1')`);
+		const warnings: string[] = [];
+
+		await getMigrations({
+			database: db,
+			logger: warnLogger(warnings),
+			plugins: [
+				{
+					id: "directory",
+					schema: {
+						directoryUser: {
+							fields: { seatCount: { type: "number", required: true } },
+						},
+					},
+				},
+			],
+		});
+
+		expect(
+			warnings.some((warning) =>
+				warning.includes('Column "seatCount" on table "directoryUser"'),
+			),
+		).toBe(true);
+		expect(
+			warnings.some((warning) =>
+				warning.includes(
+					"Field seatCount in table directoryUser has a different type in the database",
+				),
 			),
 		).toBe(true);
 	});
