@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "./.tmp/prisma-client-base/client";
 import type { Dialect } from "./constants";
 import { DATABASE_URLS } from "./constants";
 

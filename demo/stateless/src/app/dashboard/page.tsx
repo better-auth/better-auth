@@ -39,7 +39,9 @@ export default function Dashboard() {
 
 	const testAccountData = () => {
 		startTransition(async () => {
-			const { data, error } = await authClient.accountInfo();
+			const { data, error } = await authClient.accountInfo({
+				query: { useAccountCookie: true },
+			});
 			if (data) {
 				setAccountData(data.user);
 			}

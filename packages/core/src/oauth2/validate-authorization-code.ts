@@ -1,4 +1,3 @@
-import { base64 } from "@better-auth/utils/base64";
 import { createRemoteJWKSet, customFetch, jwtVerify } from "jose";
 import type { AwaitableFunction } from "../types";
 import type { ProviderOptions } from "./index";
@@ -6,8 +5,42 @@ import { getOAuth2Tokens } from "./index";
 import {
 	assertResponseNotRedirect,
 	fetchRefusingRedirects,
-	NO_FOLLOW_REDIRECT,
+	noFollowRedirect,
 } from "./reject-redirects";
+import type {
+	TokenEndpointAuth,
+	TokenEndpointSecretAuthentication,
+} from "./token-endpoint-auth";
+import { applyTokenEndpointAuth } from "./token-endpoint-auth";
+
+interface AuthorizationCodeRequestInput {
+	code: string;
+	redirectURI: string;
+	options: AwaitableFunction<Partial<ProviderOptions>>;
+	codeVerifier?: string | undefined;
+	deviceId?: string | undefined;
+	authentication?: TokenEndpointSecretAuthentication | undefined;
+	tokenEndpointAuth?: TokenEndpointAuth | undefined;
+	tokenEndpoint?: string | undefined;
+	headers?: Record<string, string> | undefined;
+	additionalParams?: Record<string, string> | undefined;
+	resource?: (string | string[]) | undefined;
+}
+
+interface AuthorizationCodeRequestBaseInput {
+	code: string;
+	redirectURI: string;
+	options: Partial<ProviderOptions>;
+	codeVerifier?: string | undefined;
+	deviceId?: string | undefined;
+	headers?: Record<string, string> | undefined;
+	additionalParams?: Record<string, string> | undefined;
+	resource?: (string | string[]) | undefined;
+}
+
+interface ValidateAuthorizationCodeInput extends AuthorizationCodeRequestInput {
+	tokenEndpoint: string;
+}
 
 export async function authorizationCodeRequest({
 	code,
@@ -15,61 +48,50 @@ export async function authorizationCodeRequest({
 	redirectURI,
 	options,
 	authentication,
+	tokenEndpointAuth,
+	tokenEndpoint,
 	deviceId,
 	headers,
 	additionalParams = {},
 	resource,
-}: {
-	code: string;
-	redirectURI: string;
-	options: AwaitableFunction<Partial<ProviderOptions>>;
-	codeVerifier?: string | undefined;
-	deviceId?: string | undefined;
-	authentication?: ("basic" | "post") | undefined;
-	headers?: Record<string, string> | undefined;
-	additionalParams?: Record<string, string> | undefined;
-	resource?: (string | string[]) | undefined;
-}) {
+}: AuthorizationCodeRequestInput) {
 	options = typeof options === "function" ? await options() : options;
-	return createAuthorizationCodeRequest({
+	const request = buildAuthorizationCodeRequest({
 		code,
 		codeVerifier,
 		redirectURI,
 		options,
-		authentication,
 		deviceId,
 		headers,
 		additionalParams,
 		resource,
 	});
+
+	await applyTokenEndpointAuth({
+		body: request.body,
+		headers: request.headers,
+		options,
+		tokenEndpoint: tokenEndpoint ?? "",
+		grantType: "authorization_code",
+		tokenEndpointAuth,
+		authentication,
+	});
+
+	return request;
 }
 
-/**
- * @deprecated use async'd authorizationCodeRequest instead
- */
-export function createAuthorizationCodeRequest({
+function buildAuthorizationCodeRequest({
 	code,
 	codeVerifier,
 	redirectURI,
 	options,
-	authentication,
 	deviceId,
 	headers,
 	additionalParams = {},
 	resource,
-}: {
-	code: string;
-	redirectURI: string;
-	options: Partial<ProviderOptions>;
-	codeVerifier?: string | undefined;
-	deviceId?: string | undefined;
-	authentication?: ("basic" | "post") | undefined;
-	headers?: Record<string, string> | undefined;
-	additionalParams?: Record<string, string> | undefined;
-	resource?: (string | string[]) | undefined;
-}) {
+}: AuthorizationCodeRequestBaseInput) {
 	const body = new URLSearchParams();
-	const requestHeaders: Record<string, any> = {
+	const requestHeaders: Record<string, string> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
 		...headers,
@@ -90,26 +112,6 @@ export function createAuthorizationCodeRequest({
 			}
 		}
 	}
-	// Use standard Base64 encoding for HTTP Basic Auth (OAuth2 spec, RFC 7617)
-	// Fixes compatibility with providers like Notion, Twitter, etc.
-	if (authentication === "basic") {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
-		const encodedCredentials = base64.encode(
-			`${primaryClientId}:${options.clientSecret ?? ""}`,
-		);
-		requestHeaders["authorization"] = `Basic ${encodedCredentials}`;
-	} else {
-		const primaryClientId = Array.isArray(options.clientId)
-			? options.clientId[0]
-			: options.clientId;
-		body.set("client_id", primaryClientId);
-		if (options.clientSecret) {
-			body.set("client_secret", options.clientSecret);
-		}
-	}
-
 	for (const [key, value] of Object.entries(additionalParams)) {
 		if (!body.has(key)) body.append(key, value);
 	}
@@ -127,28 +129,20 @@ export async function validateAuthorizationCode({
 	options,
 	tokenEndpoint,
 	authentication,
+	tokenEndpointAuth,
 	deviceId,
 	headers,
 	additionalParams = {},
 	resource,
-}: {
-	code: string;
-	redirectURI: string;
-	options: AwaitableFunction<Partial<ProviderOptions>>;
-	codeVerifier?: string | undefined;
-	deviceId?: string | undefined;
-	tokenEndpoint: string;
-	authentication?: ("basic" | "post") | undefined;
-	headers?: Record<string, string> | undefined;
-	additionalParams?: Record<string, string> | undefined;
-	resource?: (string | string[]) | undefined;
-}) {
+}: ValidateAuthorizationCodeInput) {
 	const { body, headers: requestHeaders } = await authorizationCodeRequest({
 		code,
 		codeVerifier,
 		redirectURI,
 		options,
 		authentication,
+		tokenEndpointAuth,
+		tokenEndpoint,
 		deviceId,
 		headers,
 		additionalParams,
@@ -177,7 +171,7 @@ export async function validateToken(
 ) {
 	const jwks = createRemoteJWKSet(new URL(jwksEndpoint), {
 		[customFetch]: async (url, init) => {
-			const response = await fetch(url, { ...init, ...NO_FOLLOW_REDIRECT });
+			const response = await fetch(url, { ...init, ...noFollowRedirect });
 			assertResponseNotRedirect(String(url), response);
 			return response;
 		},
