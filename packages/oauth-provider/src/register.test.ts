@@ -512,6 +512,84 @@ describe("oauth register", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10660
+	 */
+	describe("client metadata document grant intersection", () => {
+		it("keeps a client metadata document whose grants intersect the supported set", async () => {
+			await expect(
+				checkOAuthClient(
+					{
+						client_id: "https://client.example.com/oauth/client-metadata",
+						client_name: "Claude",
+						redirect_uris: ["https://client.example.com/api/auth_callback"],
+						grant_types: [
+							"authorization_code",
+							"refresh_token",
+							"urn:ietf:params:oauth:grant-type:jwt-bearer",
+						],
+						response_types: ["code"],
+						token_endpoint_auth_method: "none",
+					},
+					{
+						loginPage: "/login",
+						consentPage: "/consent",
+					},
+					{ registrationSource: "clientMetadataDocument" },
+				),
+			).resolves.toBeUndefined();
+		});
+
+		it("rejects a client metadata document sharing no grant with the server", async () => {
+			await expect(
+				checkOAuthClient(
+					{
+						client_id: "https://client.example.com/oauth/client-metadata",
+						client_name: "Assertion Only",
+						redirect_uris: [],
+						grant_types: ["urn:ietf:params:oauth:grant-type:jwt-bearer"],
+						response_types: [],
+						token_endpoint_auth_method: "none",
+					},
+					{
+						loginPage: "/login",
+						consentPage: "/consent",
+					},
+					{ registrationSource: "clientMetadataDocument" },
+				),
+			).rejects.toMatchObject({
+				body: {
+					error_description: expect.stringContaining("no mutually supported"),
+				},
+			});
+		});
+
+		it("still rejects a dynamic registration declaring an unsupported grant", async () => {
+			await expect(
+				checkOAuthClient(
+					{
+						client_id: "dcr-client",
+						redirect_uris: [redirectUri],
+						grant_types: [
+							"authorization_code",
+							"urn:ietf:params:oauth:grant-type:jwt-bearer",
+						],
+						response_types: ["code"],
+					},
+					{
+						loginPage: "/login",
+						consentPage: "/consent",
+					},
+					{ registrationSource: "dynamic" },
+				),
+			).rejects.toMatchObject({
+				body: {
+					error_description: expect.stringContaining("unsupported grant_type"),
+				},
+			});
+		});
+	});
+
 	it("rejects a bare JWK array through managed registration", async () => {
 		await expect(
 			auth.api.adminCreateOAuthClient({
