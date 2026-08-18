@@ -5,6 +5,14 @@ yocto
 numberid
 dbgenerated
 dflt
+seqno
+attnum
+attrelid
+indisunique
+indisvalid
+indexrelid
+indnkeyatts
+ordinality
 undim
 timestamptz
 nvarchar

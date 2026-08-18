@@ -13,7 +13,12 @@ import {
 } from "@better-auth/core/db/internal";
 import { createLogger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
-import type { KyselyDatabaseType } from "@better-auth/kysely-adapter";
+import type {
+	DatabaseIndexColumnMetadata,
+	DatabaseIndexIntrospector,
+	DatabaseIndexMetadata,
+	KyselyDatabaseType,
+} from "@better-auth/kysely-adapter";
 import { createKyselyAdapter } from "@better-auth/kysely-adapter";
 import type {
 	AlterTableColumnAlteringBuilder,
@@ -25,8 +30,6 @@ import type {
 } from "kysely";
 import { sql } from "kysely";
 import { getSchema } from "./get-schema";
-
-// cspell:ignore attnum attrelid indisunique indisvalid indexrelid indnkeyatts ordinality seqno
 
 const postgresMap = {
 	string: ["character varying", "varchar", "text", "uuid"],
@@ -168,11 +171,46 @@ function databaseValueIsTrue(value: boolean | number | string | undefined) {
 	return value === "1" || value?.toLowerCase() === "true" || value === "t";
 }
 
-async function getDatabaseIndexes(
+function toDatabaseIndexMap(indexes: readonly DatabaseIndexMetadata[]) {
+	return new Map<string, DatabaseIndexDefinition>(
+		indexes.map((index) => {
+			const columns = [...index.columns].sort(
+				(left, right) => left.position - right.position,
+			);
+			return [
+				createDatabaseIndexKey(index.table, index.name),
+				{
+					columns: columns.flatMap((column) =>
+						column.name === null ? [] : [column.name],
+					),
+					name: index.name,
+					table: index.table,
+					unique: index.unique,
+					validFullColumns:
+						index.valid &&
+						!index.partial &&
+						columns.length > 0 &&
+						columns.every(
+							(column) => column.name !== null && column.fullLength,
+						),
+				},
+			] as const;
+		}),
+	);
+}
+
+async function getDatabaseIndexMap(
 	db: Kysely<unknown>,
 	dbType: KyselyDatabaseType,
 	schemaName: string,
+	tableNames: readonly string[],
+	introspectIndexes: DatabaseIndexIntrospector | undefined,
 ) {
+	if (introspectIndexes) {
+		const indexes = await introspectIndexes(tableNames);
+		return toDatabaseIndexMap(indexes);
+	}
+
 	let rows: readonly DatabaseIndexRow[];
 	if (dbType === "sqlite") {
 		rows = (
@@ -263,16 +301,7 @@ async function getDatabaseIndexes(
 		).rows;
 	}
 
-	const indexRows = new Map<
-		string,
-		{
-			columns: { name: string; position: number }[];
-			name: string;
-			table: string;
-			unique: boolean;
-			validFullColumns: boolean;
-		}
-	>();
+	const indexMetadata = new Map<string, DatabaseIndexMetadata>();
 	for (const row of rows) {
 		const table =
 			row.tableName ??
@@ -301,44 +330,41 @@ async function getDatabaseIndexes(
 				row.seqno ??
 				0,
 		);
-		const index = indexRows.get(key) ?? {
-			columns: [],
-			name,
-			table,
-			unique,
-			validFullColumns: true,
-		};
-		if (column) {
-			index.columns.push({ name: column, position });
-		} else {
-			index.validFullColumns = false;
-		}
-		if (
-			databaseValueIsTrue(row.isPartial) ||
-			databaseValueIsTrue(row.isDisabled) ||
-			databaseValueIsTrue(row.isHypothetical) ||
-			(row.isValid !== undefined && !databaseValueIsTrue(row.isValid)) ||
-			(row.prefixLength !== undefined && row.prefixLength !== null)
-		) {
-			index.validFullColumns = false;
-		}
-		indexRows.set(key, index);
+		const indexColumn = {
+			fullLength:
+				column !== undefined &&
+				column !== null &&
+				(row.prefixLength === undefined || row.prefixLength === null),
+			name: column ?? null,
+			position,
+		} satisfies DatabaseIndexColumnMetadata;
+		const partial = databaseValueIsTrue(row.isPartial);
+		const valid =
+			!databaseValueIsTrue(row.isDisabled) &&
+			!databaseValueIsTrue(row.isHypothetical) &&
+			(row.isValid === undefined || databaseValueIsTrue(row.isValid));
+		const existing = indexMetadata.get(key);
+		indexMetadata.set(
+			key,
+			existing
+				? {
+						...existing,
+						columns: [...existing.columns, indexColumn],
+						partial: existing.partial || partial,
+						valid: existing.valid && valid,
+					}
+				: {
+						columns: [indexColumn],
+						name,
+						partial,
+						table,
+						unique,
+						valid,
+					},
+		);
 	}
 
-	return new Map<string, DatabaseIndexDefinition>(
-		[...indexRows].map(([key, index]) => [
-			key,
-			{
-				columns: index.columns
-					.sort((left, right) => left.position - right.position)
-					.map((column) => column.name),
-				name: index.name,
-				table: index.table,
-				unique: index.unique,
-				validFullColumns: index.validFullColumns,
-			},
-		]),
-	);
+	return toDatabaseIndexMap([...indexMetadata.values()]);
 }
 
 async function getDatabaseColumnBounds(
@@ -609,7 +635,11 @@ export async function getMigrations(
 		unsafeChanges.push(message);
 	};
 
-	let { kysely: db, databaseType: dbType } = await createKyselyAdapter(config);
+	let {
+		kysely: db,
+		databaseType: dbType,
+		introspectIndexes,
+	} = await createKyselyAdapter(config);
 
 	if (!dbType) {
 		logger.warn(
@@ -662,7 +692,13 @@ export async function getMigrations(
 	}
 
 	const allTableMetadata = await db.introspection.getTables();
-	const databaseIndexes = await getDatabaseIndexes(db, dbType, currentSchema);
+	const databaseIndexMap = await getDatabaseIndexMap(
+		db,
+		dbType,
+		currentSchema,
+		allTableMetadata.map((table) => table.name),
+		introspectIndexes,
+	);
 	const databaseColumnBounds = await getDatabaseColumnBounds(
 		db,
 		dbType,
@@ -733,7 +769,7 @@ export async function getMigrations(
 		for (const index of value.indexes ?? []) {
 			const name = index.name;
 			const indexKey = createDatabaseIndexKey(key, name);
-			const existingIndex = databaseIndexes.get(indexKey);
+			const existingIndex = databaseIndexMap.get(indexKey);
 			if (existingIndex) {
 				if (!databaseIndexMatches(existingIndex, index)) {
 					throw new BetterAuthError(
@@ -743,7 +779,7 @@ export async function getMigrations(
 				continue;
 			}
 			if (dbType === "sqlite" || dbType === "postgres") {
-				const indexOnAnotherTable = [...databaseIndexes.values()].find(
+				const indexOnAnotherTable = [...databaseIndexMap.values()].find(
 					(databaseIndex) =>
 						getPortableDatabaseIdentifierKey(databaseIndex.name) ===
 							getPortableDatabaseIdentifierKey(name) &&
