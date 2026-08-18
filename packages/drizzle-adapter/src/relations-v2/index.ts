@@ -336,13 +336,53 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				return null;
 			}
 			/**
-			 * Mirror the schema generator's relation-key naming. One-to-one keeps
-			 * the singular model name. One-to-many is pluralized unless the model
+			 * The model name without the `usePlural` suffix, honoring a custom
+			 * `modelName`. Mirrors the generator's singular model name.
+			 */
+			function getSingularModelName(model: string) {
+				const defaultModelName = getDefaultModelName(model);
+				return baSchema[defaultModelName]?.modelName ?? defaultModelName;
+			}
+
+			/**
+			 * Whether the foreign key backing this join lives on the base model
+			 * rather than the joined model. Mirrors the adapter factory, which
+			 * prefers a foreign key on the joined model when both directions exist.
+			 */
+			function isForeignKeyOnBaseModel(baseModel: string, joinModel: string) {
+				const baseModelName = getDefaultModelName(baseModel);
+				const joinFields =
+					baSchema[getDefaultModelName(joinModel)]?.fields ?? {};
+				for (const field of Object.values(joinFields)) {
+					if (
+						field.references &&
+						getDefaultModelName(field.references.model) === baseModelName
+					) {
+						return false;
+					}
+				}
+				return true;
+			}
+
+			/**
+			 * Mirror the schema generator's relation-key naming. A relation backed
+			 * by a foreign key on the base model is keyed by the singular model
+			 * name, even under `usePlural`. Every other relation is keyed by the
+			 * schema export name, which one-to-many pluralizes unless the name
 			 * already ends in "s" or `usePlural` keeps the schema keys as-is.
 			 */
-			function getJoinRelationKey(model: string, isUnique: boolean) {
-				if (isUnique || config.usePlural || model.endsWith("s")) return model;
-				return `${model}s`;
+			function getJoinRelationKey(
+				baseModel: string,
+				joinModel: string,
+				isUnique: boolean,
+			) {
+				if (isUnique) {
+					return isForeignKeyOnBaseModel(baseModel, joinModel)
+						? getSingularModelName(joinModel)
+						: joinModel;
+				}
+				if (config.usePlural || joinModel.endsWith("s")) return joinModel;
+				return `${joinModel}s`;
 			}
 			const withReturning = async (
 				model: string,
@@ -705,20 +745,27 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| Record<string, { limit: number } | boolean>
 								| undefined;
 
-							const pluralJoinResults: { key: string; target: string }[] = [];
+							// The generated relation key does not always match the model
+							// name Better Auth expects back, so rename those results.
+							const renamedJoinResults: { key: string; target: string }[] = [];
 							includes = {};
 							const joinEntries = Object.entries(join);
-							for (const [model, joinAttr] of joinEntries) {
+							for (const [joinModel, joinAttr] of joinEntries) {
 								const limit =
 									joinAttr.limit ??
 									options.advanced?.database?.defaultFindManyLimit ??
 									100;
 								const isUnique = joinAttr.relation === "one-to-one";
-								const relationKey = getJoinRelationKey(model, isUnique);
+								const relationKey = getJoinRelationKey(
+									model,
+									joinModel,
+									isUnique,
+								);
 								includes[relationKey] = isUnique ? true : { limit };
-								if (!isUnique) {
-									pluralJoinResults.push({ key: relationKey, target: model });
-								}
+								renamedJoinResults.push({
+									key: relationKey,
+									target: joinModel,
+								});
 							}
 							const clause = convertNewWhereClause(where, model);
 							const query = db.query[queryModel].findFirst({
@@ -738,7 +785,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							const res = await query;
 
 							if (res) {
-								for (const { key, target } of pluralJoinResults) {
+								for (const { key, target } of renamedJoinResults) {
 									if (key === target) continue;
 									res[target] = res[key];
 									delete res[key];
@@ -785,19 +832,27 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| Record<string, { limit: number; offset?: number } | boolean>
 								| undefined;
 
-							const pluralJoinResults: { key: string; target: string }[] = [];
+							// The generated relation key does not always match the model
+							// name Better Auth expects back, so rename those results.
+							const renamedJoinResults: { key: string; target: string }[] = [];
 							includes = {};
 							const joinEntries = Object.entries(join);
-							for (const [model, joinAttr] of joinEntries) {
+							for (const [joinModel, joinAttr] of joinEntries) {
 								const isUnique = joinAttr.relation === "one-to-one";
 								const limit =
 									joinAttr.limit ??
 									options.advanced?.database?.defaultFindManyLimit ??
 									100;
-								const relationKey = getJoinRelationKey(model, isUnique);
+								const relationKey = getJoinRelationKey(
+									model,
+									joinModel,
+									isUnique,
+								);
 								includes[relationKey] = isUnique ? true : { limit };
-								if (!isUnique)
-									pluralJoinResults.push({ key: relationKey, target: model });
+								renamedJoinResults.push({
+									key: relationKey,
+									target: joinModel,
+								});
 							}
 							let orderBy: Record<string, "asc" | "desc"> | undefined =
 								undefined;
@@ -828,7 +883,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							const res = await query;
 							if (res) {
 								for (const item of res) {
-									for (const { key, target } of pluralJoinResults) {
+									for (const { key, target } of renamedJoinResults) {
 										if (key === target) continue;
 										item[target] = item[key];
 										delete item[key];
