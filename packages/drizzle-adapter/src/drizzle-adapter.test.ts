@@ -1,5 +1,11 @@
-import { is, Param, SQL } from "drizzle-orm";
-import { pgTable, text } from "drizzle-orm/pg-core";
+import { is, Param, SQL, sql } from "drizzle-orm";
+import {
+	boolean,
+	integer,
+	pgTable,
+	text,
+	timestamp,
+} from "drizzle-orm/pg-core";
 import { describe, expect, it, vi } from "vitest";
 import { drizzleAdapter } from "./drizzle-adapter";
 
@@ -231,19 +237,46 @@ describe("drizzle-adapter", () => {
 			);
 			expect(select).not.toHaveBeenCalled();
 		});
+
+		it("rejects inherited field names before querying", async () => {
+			const account = pgTable("account", {
+				accountId: text("account_id").notNull(),
+			});
+			const select = vi.fn();
+			const adapter = drizzleAdapter(
+				{ _: { fullSchema: { account } }, select },
+				{ provider: "pg", schema: { account } },
+			)({
+				secret: "test-secret-that-is-at-least-32-chars-long!!",
+				account: { fields: { issuer: "constructor" } },
+			});
+
+			await expect(
+				adapter.findOne({
+					model: "account",
+					where: [
+						{ field: "issuer", value: "https://issuer.example" },
+						{ field: "accountId", value: "subject" },
+					],
+				}),
+			).rejects.toThrow(
+				'The field "constructor" does not exist in the schema for the model "account"',
+			);
+			expect(select).not.toHaveBeenCalled();
+		});
 	});
 
 	describe("updateMany affected-row count", () => {
 		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
-		const userTable = {
-			id: { name: "id" },
-			name: { name: "name" },
-			email: { name: "email" },
-			emailVerified: { name: "emailVerified" },
-			image: { name: "image" },
-			createdAt: { name: "createdAt" },
-			updatedAt: { name: "updatedAt" },
-		};
+		const userTable = pgTable("user", {
+			id: text("id"),
+			name: text("name"),
+			email: text("email"),
+			emailVerified: boolean("emailVerified"),
+			image: text("image"),
+			createdAt: timestamp("createdAt"),
+			updatedAt: timestamp("updatedAt"),
+		});
 
 		/**
 		 * Builds a mock db whose `update().set().where()` chain resolves to the
@@ -337,14 +370,14 @@ describe("drizzle-adapter", () => {
 
 	describe("consumeOne affected-row count", () => {
 		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
-		const verificationTable = {
-			id: { name: "id" },
-			identifier: { name: "identifier" },
-			value: { name: "value" },
-			expiresAt: { name: "expiresAt" },
-			createdAt: { name: "createdAt" },
-			updatedAt: { name: "updatedAt" },
-		};
+		const verificationTable = pgTable("verification", {
+			id: text("id"),
+			identifier: text("identifier"),
+			value: text("value"),
+			expiresAt: timestamp("expiresAt"),
+			createdAt: timestamp("createdAt"),
+			updatedAt: timestamp("updatedAt"),
+		});
 		const verificationRow = {
 			id: "verification-1",
 			identifier: "reset-password:token",
@@ -408,18 +441,16 @@ describe("drizzle-adapter", () => {
 
 	describe("incrementOne", () => {
 		const defaultSecret = "test-secret-that-is-at-least-32-chars-long!!";
-		// `attempts` is a plain numeric column the increment targets; the rest
-		// mirror the default user table so the factory's schema validation passes.
-		const userTable = {
-			id: { name: "id" },
-			name: { name: "name" },
-			email: { name: "email" },
-			emailVerified: { name: "emailVerified" },
-			image: { name: "image" },
-			attempts: { name: "attempts" },
-			createdAt: { name: "createdAt" },
-			updatedAt: { name: "updatedAt" },
-		};
+		const userTable = pgTable("user", {
+			id: text("id"),
+			name: text("name"),
+			email: text("email"),
+			emailVerified: boolean("emailVerified"),
+			image: text("image"),
+			attempts: integer("attempts"),
+			createdAt: timestamp("createdAt"),
+			updatedAt: timestamp("updatedAt"),
+		});
 
 		/**
 		 * Builds a mock db that mirrors the adapter's single-row update: a
@@ -444,7 +475,7 @@ describe("drizzle-adapter", () => {
 				calls.set = payload;
 				return { where: updateWhere };
 			});
-			const targetIds = { __subquery: true };
+			const targetIds = sql`select id from user`;
 			const selectLimit = vi.fn().mockReturnValue(targetIds);
 			const selectWhere = vi.fn((...args: unknown[]) => {
 				calls.selectGuard = args;

@@ -13,12 +13,14 @@ import type { SQL } from "drizzle-orm";
 import {
 	and,
 	asc,
+	Column,
 	count,
 	desc,
 	eq,
 	gt,
 	gte,
 	inArray,
+	is,
 	isNotNull,
 	isNull,
 	like,
@@ -345,7 +347,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				const schemaModel = getSchema(model);
 				const resolveFieldName = (where: Where) => {
 					const field = getFieldName({ model, field: where.field });
-					if (!schemaModel[field]) {
+					if (!is(schemaModel[field], Column)) {
 						throw new BetterAuthError(
 							`The field "${where.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
 						);
