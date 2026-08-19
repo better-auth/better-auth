@@ -30,6 +30,8 @@ const OAUTH_CLIENT_RECORD_FIELDS = {
 	postLogoutRedirectUris: true,
 	backchannelLogoutUri: true,
 	backchannelLogoutSessionRequired: true,
+	frontchannelLogoutUri: true,
+	frontchannelLogoutSessionRequired: true,
 	tokenEndpointAuthMethod: true,
 	grantTypes: true,
 	responseTypes: true,

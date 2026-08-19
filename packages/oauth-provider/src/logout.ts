@@ -32,6 +32,11 @@ const LOGOUT_TOKEN_LIFETIME_SECONDS = 120;
 // window is enough.
 const BACKCHANNEL_DISPATCH_TIMEOUT_MS = 5_000;
 
+// OIDC Front-Channel Logout 1.0 gives no normative timeout for the iframe
+// fan-out; 3 seconds keeps a hung RP iframe from stalling the user-facing
+// redirect while still letting typical logout endpoints complete.
+const FRONTCHANNEL_IFRAME_TIMEOUT_MS = 3_000;
+
 interface TokenRow {
 	id: string;
 	clientId: string;
@@ -327,6 +332,147 @@ async function deliverBackchannelLogoutTokens(
 }
 
 export { applyBackchannelLogoutPlan, prepareBackchannelLogoutPlan };
+
+/**
+ * Enumerates clients holding tokens on the session being terminated that have
+ * registered a `frontchannel_logout_uri`, and builds the iframe URL for each.
+ * Must run before the session row is deleted: token rows reference the session
+ * with `onDelete: "set null"`, so the linkage disappears with the row.
+ *
+ * Per OIDC Front-Channel Logout 1.0 §2, when a client registered
+ * `frontchannel_logout_session_required: true` the OP appends `iss` and `sid`
+ * query parameters (if either is included, both MUST be).
+ *
+ * Returns `null` when no client opted in, so the endpoint keeps its
+ * pre-existing redirect behavior. Enumeration failures are logged and treated
+ * as "no targets" — front-channel notification is best-effort and must not
+ * block the user-facing logout.
+ */
+async function planFrontchannelLogout(
+	ctx: GenericEndpointContext,
+	input: { sessionId: string; issuer: string },
+): Promise<string[] | null> {
+	const logger = ctx.context.logger;
+	try {
+		const adapter = await getCurrentAdapter(ctx.context.adapter);
+		const where = [{ field: "sessionId", value: input.sessionId }];
+
+		const [accessTokens, refreshTokens] = await Promise.all([
+			adapter.findMany<TokenRow>({
+				model: "oauthAccessToken",
+				where,
+			}),
+			adapter.findMany<TokenRow>({
+				model: "oauthRefreshToken",
+				where,
+			}),
+		]);
+
+		const affectedClientIds = new Set<string>();
+		for (const t of accessTokens) affectedClientIds.add(t.clientId);
+		for (const t of refreshTokens) affectedClientIds.add(t.clientId);
+		if (affectedClientIds.size === 0) return null;
+
+		const clients = await adapter.findMany<SchemaClient<Scope[]>>({
+			model: "oauthClient",
+			where: [
+				{
+					field: "clientId",
+					operator: "in",
+					value: Array.from(affectedClientIds),
+				},
+			],
+		});
+
+		const urls = clients
+			.filter((c) => Boolean(c.frontchannelLogoutUri) && !c.disabled)
+			.map((client) => {
+				const url = new URL(client.frontchannelLogoutUri!);
+				if (client.frontchannelLogoutSessionRequired) {
+					url.searchParams.set("iss", input.issuer);
+					url.searchParams.set("sid", input.sessionId);
+				}
+				return url.toString();
+			});
+		return urls.length > 0 ? urls : null;
+	} catch (error) {
+		logger.error("front-channel logout enumeration failed", error);
+		return null;
+	}
+}
+
+/**
+ * Renders the OIDC Front-Channel Logout 1.0 §3 logout page: one hidden iframe
+ * per front-channel RP, plus an inline script that redirects to the validated
+ * `post_logout_redirect_uri` once every iframe has settled (or after
+ * `FRONTCHANNEL_IFRAME_TIMEOUT_MS`, so a hung RP cannot stall the user). The
+ * iframes are plain HTML and fire without JavaScript; a meta-refresh covers
+ * the redirect when scripting is disabled.
+ */
+function renderFrontchannelLogoutPage(input: {
+	urls: string[];
+	redirectUri?: string;
+}): Response {
+	const iframes = input.urls
+		.map(
+			(url) =>
+				`<iframe src="${escapeHtml(url)}" width="0" height="0" style="display:none" aria-hidden="true"></iframe>`,
+		)
+		.join("\n\t\t");
+	// `<` is additionally escaped so the URL can never break out of the inline
+	// <script> context (e.g. via a crafted `</script>` path segment).
+	const redirectTo = input.redirectUri
+		? JSON.stringify(input.redirectUri).replaceAll("<", "\\u003c")
+		: "null";
+	const metaRefresh = input.redirectUri
+		? `\n\t\t<meta http-equiv="refresh" content="${Math.ceil(FRONTCHANNEL_IFRAME_TIMEOUT_MS / 1000) + 2};url=${escapeHtml(input.redirectUri)}">`
+		: "";
+	const html = `<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="robots" content="noindex">${metaRefresh}
+		<title>Signing out</title>
+	</head>
+	<body>
+		<p>Signing out&hellip;</p>
+		${iframes}
+		<script>
+			(function () {
+				var redirectTo = ${redirectTo};
+				var frames = document.querySelectorAll("iframe");
+				var pending = frames.length;
+				var finished = false;
+				function finish() {
+					if (finished) return;
+					finished = true;
+					if (redirectTo) window.location.replace(redirectTo);
+				}
+				function settle() {
+					pending -= 1;
+					if (pending <= 0) finish();
+				}
+				for (var i = 0; i < frames.length; i++) {
+					frames[i].addEventListener("load", settle);
+					frames[i].addEventListener("error", settle);
+				}
+				setTimeout(finish, ${FRONTCHANNEL_IFRAME_TIMEOUT_MS});
+			})();
+		</script>
+	</body>
+</html>`;
+	return new Response(html, {
+		headers: {
+			"Content-Type": "text/html; charset=utf-8",
+			// Per-session content; also keeps id_token_hint-bearing URLs out of
+			// shared caches.
+			"Cache-Control": "no-store",
+			// The page embeds RP iframes; never leak the id_token_hint-bearing
+			// page URL to them via Referer.
+			"Referrer-Policy": "no-referrer",
+		},
+	});
+}
 
 const LOGOUT_CONFIRMATION_TTL_SECONDS = 5 * 60;
 const LOGOUT_CONFIRMATION_COOKIE_SUFFIX = ".oauth_logout_confirmation";
@@ -858,9 +1004,26 @@ async function completeConfirmedLogout(
 		);
 	}
 
+	// Enumerate front-channel RPs before the session row goes away: token rows
+	// reference it with `onDelete: "set null"`, so the linkage is lost with it.
+	const frontchannelUrls = isBrowserNavigation(ctx)
+		? await planFrontchannelLogout(ctx, {
+				sessionId: currentSession.session.id,
+				issuer: getIssuer(ctx, opts),
+			})
+		: null;
+
 	await deleteLogoutSession(ctx, currentSession.session);
 	deleteSessionCookie(ctx);
 	clearLogoutConfirmationState(ctx);
+	if (frontchannelUrls) {
+		// Spec §3: the session is already terminated; render one hidden iframe
+		// per RP and redirect (when validated) after they settle.
+		return renderFrontchannelLogoutPage({
+			urls: frontchannelUrls,
+			redirectUri: redirect.uri,
+		});
+	}
 	if (redirect.uri) return handleRedirect(ctx, redirect.uri);
 	return isBrowserNavigation(ctx)
 		? logoutSuccessPage(
@@ -1002,6 +1165,14 @@ export async function rpInitiatedLogoutEndpoint(
 	);
 	const sessionToDelete =
 		hintedSession ?? (matchesCurrentSession ? currentSession?.session : null);
+	// Same ordering constraint as the confirmed path: enumerate before delete.
+	const frontchannelUrls =
+		sessionToDelete && isBrowserNavigation(ctx)
+			? await planFrontchannelLogout(ctx, {
+					sessionId: sessionToDelete.id,
+					issuer: getIssuer(ctx, opts),
+				})
+			: null;
 	if (sessionToDelete) {
 		// internalAdapter.deleteSession triggers the normal before/after session
 		// hooks, including revocation and back-channel dispatch for every RP.
@@ -1010,6 +1181,12 @@ export async function rpInitiatedLogoutEndpoint(
 	if (matchesCurrentSession) deleteSessionCookie(ctx);
 	clearLogoutConfirmationState(ctx);
 
+	if (frontchannelUrls) {
+		return renderFrontchannelLogoutPage({
+			urls: frontchannelUrls,
+			redirectUri: redirect.uri,
+		});
+	}
 	if (redirect.uri) return handleRedirect(ctx, redirect.uri);
 	return isBrowserNavigation(ctx)
 		? logoutSuccessPage(
