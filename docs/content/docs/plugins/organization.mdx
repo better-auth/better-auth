@@ -395,6 +395,18 @@ export const auth = betterAuth({
   plugins: [
     organization({
       teams: { enabled: true },
+      schema: {
+        teamMember: {
+          additionalFields: {
+            // `beforeAddTeamMember` below returns this field. Hook data is
+            // only persisted for fields declared here.
+            organizationId: {
+              type: "string",
+              required: false,
+            },
+          },
+        },
+      },
       organizationHooks: {
         // Before creating a team
         beforeCreateTeam: async ({ team, user, organization }) => {
