@@ -808,9 +808,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 													},
 													url: {
 														type: "string",
-														format: "uri",
+														format: "uri-reference",
 														description:
-															"The URI to redirect to, either with an authorization code or an error",
+															"The URI to redirect to, either with an authorization code or an error. May be absolute or a server-relative page path.",
 													},
 												},
 												required: ["redirect", "url"],
@@ -851,7 +851,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							description: "Continues OAuth2 authorization flow",
 							responses: {
 								"200": {
-									description: "Consent processed successfully",
+									description: "Authorization flow continued successfully",
 									content: {
 										"application/json": {
 											schema: {
@@ -864,9 +864,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 													},
 													url: {
 														type: "string",
-														format: "uri",
+														format: "uri-reference",
 														description:
-															"The URI to redirect to, either with an authorization code or an error",
+															"The URI to redirect to, either with an authorization code or an error. May be absolute or a server-relative page path.",
 													},
 												},
 												required: ["redirect", "url"],
