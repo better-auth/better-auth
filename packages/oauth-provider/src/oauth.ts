@@ -801,14 +801,19 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 											schema: {
 												type: "object",
 												properties: {
-													redirect_uri: {
+													redirect: {
+														type: "boolean",
+														description:
+															"Always true. Indicates the caller should redirect to `url`.",
+													},
+													url: {
 														type: "string",
 														format: "uri",
 														description:
 															"The URI to redirect to, either with an authorization code or an error",
 													},
 												},
-												required: ["redirect_uri"],
+												required: ["redirect", "url"],
 											},
 										},
 									},
@@ -852,14 +857,19 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 											schema: {
 												type: "object",
 												properties: {
-													redirect_uri: {
+													redirect: {
+														type: "boolean",
+														description:
+															"Always true. Indicates the caller should redirect to `url`.",
+													},
+													url: {
 														type: "string",
 														format: "uri",
 														description:
 															"The URI to redirect to, either with an authorization code or an error",
 													},
 												},
-												required: ["redirect_uri"],
+												required: ["redirect", "url"],
 											},
 										},
 									},
