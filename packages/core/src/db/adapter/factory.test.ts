@@ -333,4 +333,124 @@ describe("createAdapterFactory where value coercion", () => {
 			],
 		]);
 	});
+
+	function createSerialIdAdapter({
+		seenWhere,
+		seenCreateData,
+	}: {
+		seenWhere: CleanedWhere[][];
+		seenCreateData: Record<string, unknown>[];
+	}) {
+		return createAdapterFactory({
+			config: {
+				adapterId: "test-adapter",
+				adapterName: "Test Adapter",
+			},
+			adapter: () =>
+				createCustomAdapter({
+					findMany: async <T>(
+						params: Parameters<CustomAdapter["findMany"]>[0],
+					) => {
+						if (params.where) {
+							seenWhere.push(params.where);
+						}
+						return [] as T[];
+					},
+					create: async <T>(params: Parameters<CustomAdapter["create"]>[0]) => {
+						seenCreateData.push(params.data);
+						return params.data as T;
+					},
+				}),
+		})({
+			advanced: { database: { generateId: "serial" } },
+		});
+	}
+
+	/**
+	 * A non-numeric value on an id field used to be coerced with a bare
+	 * `Number()`, so it reached the driver as `NaN` and surfaced as an opaque
+	 * driver-level validation error.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10773
+	 */
+	it("rejects non-numeric id values instead of passing NaN to the adapter", async () => {
+		const seenWhere: CleanedWhere[][] = [];
+		const seenCreateData: Record<string, unknown>[] = [];
+		const adapter = createSerialIdAdapter({ seenWhere, seenCreateData });
+
+		await expect(
+			adapter.findMany({
+				model: "user",
+				where: [{ field: "id", operator: "eq", value: "agent-host-xyz" }],
+			}),
+		).rejects.toThrow(/numeric id/);
+
+		await expect(
+			adapter.findMany({
+				model: "session",
+				where: [{ field: "userId", operator: "eq", value: "agent-host-xyz" }],
+			}),
+		).rejects.toThrow(/numeric id/);
+
+		await expect(
+			adapter.findMany({
+				model: "user",
+				where: [
+					{ field: "id", operator: "in", value: ["1", "agent-host-xyz"] },
+				],
+			}),
+		).rejects.toThrow(/numeric id/);
+
+		// `Number("")` and `Number(" ")` are `0`, which no serial column ever holds.
+		await expect(
+			adapter.findMany({
+				model: "user",
+				where: [{ field: "id", operator: "eq", value: " " }],
+			}),
+		).rejects.toThrow(/numeric id/);
+
+		// the write path coerces id-referencing fields with the same bare `Number()`
+		await expect(
+			adapter.create({
+				model: "session",
+				data: { userId: "agent-host-xyz", token: "token" },
+			}),
+		).rejects.toThrow(/numeric id/);
+
+		expect(seenWhere).toEqual([]);
+		expect(seenCreateData).toEqual([]);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10773
+	 */
+	it("still coerces valid numeric ids and leaves null id filters alone", async () => {
+		const seenWhere: CleanedWhere[][] = [];
+		const seenCreateData: Record<string, unknown>[] = [];
+		const adapter = createSerialIdAdapter({ seenWhere, seenCreateData });
+
+		await adapter.findMany({
+			model: "user",
+			where: [{ field: "id", operator: "eq", value: "42" }],
+		});
+		await adapter.findMany({
+			model: "session",
+			where: [{ field: "userId", operator: "in", value: ["1", "2"] }],
+		});
+		await adapter.findMany({
+			model: "session",
+			where: [{ field: "userId", operator: "eq", value: null }],
+		});
+		await adapter.create({
+			model: "session",
+			data: { userId: "7", token: "token" },
+		});
+
+		expect(seenWhere.map((where) => where[0]!.value)).toEqual([
+			42,
+			[1, 2],
+			null,
+		]);
+		expect(seenCreateData[0]!.userId).toBe(7);
+	});
 });
