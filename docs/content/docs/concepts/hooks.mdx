@@ -259,8 +259,8 @@ You can access the `secret` for your auth instance on `ctx.context.secret`
 
 The password object provider `hash` and `verify`
 
-* `ctx.context.password.hash`: let's you hash a given password.
-* `ctx.context.password.verify`: let's you verify given `password` and a `hash`.
+* `ctx.context.password.hash`: lets you hash a given password.
+* `ctx.context.password.verify`: lets you verify given `password` and a `hash`. It can return `true`, `false` or `"success-rehash-needed"` if the password is valid but the hash needs to be updated.
 
 #### Adapter
 
