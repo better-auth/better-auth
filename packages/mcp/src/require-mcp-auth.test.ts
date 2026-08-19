@@ -1,3 +1,4 @@
+import type { AuthContext } from "@better-auth/core";
 import { createInsufficientScopeError } from "better-auth/oauth2";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
@@ -361,6 +362,105 @@ describe("requireMcpAuth", () => {
 		expect(response.status).toBe(401);
 		expect(response.headers.get("WWW-Authenticate")).toBe(
 			`Bearer resource_metadata="https://app.example.com/.well-known/oauth-protected-resource/api/auth", scope="mcp:read mcp:write"`,
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10888
+	 */
+	it("resolves the JWKS in-process through the JWT plugin instead of self-fetching", async () => {
+		verifyAccessTokenRequest.mockResolvedValue({
+			sub: "user-1",
+		} satisfies JWTPayload);
+		const keySet = { keys: [{ kty: "RSA", kid: "in-process-key" }] };
+		const getJwks = vi.fn().mockResolvedValue({ response: keySet });
+		const jwtPlugin = { options: {}, endpoints: { getJwks } };
+		const auth = {
+			options: { baseURL: "https://app.example.com" },
+			$context: Promise.resolve({
+				baseURL: "https://app.example.com/api/auth",
+				internalAdapter: internalAdapterStub,
+				getPlugin: ((id: string) =>
+					id === "jwt" ? jwtPlugin : null) as AuthContext["getPlugin"],
+			}),
+		};
+
+		const response = await requireMcpAuth(auth, async () =>
+			Response.json({ ok: true }),
+		)(
+			new Request("https://app.example.com/mcp", {
+				headers: { Authorization: "Bearer access-token" },
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		const verificationOptions = verifyAccessTokenRequest.mock.calls[0]![1];
+		expect(verificationOptions.jwksUrl).toBeTypeOf("function");
+		expect(verificationOptions.jwksCacheKey).toBe(jwtPlugin);
+		await expect(verificationOptions.jwksUrl()).resolves.toEqual(keySet);
+		expect(getJwks).toHaveBeenCalledOnce();
+	});
+
+	it("uses the JWT plugin's configured remote JWKS URL instead of the in-process source", async () => {
+		verifyAccessTokenRequest.mockResolvedValue({
+			sub: "user-1",
+		} satisfies JWTPayload);
+		const jwtPlugin = {
+			options: { jwks: { remoteUrl: "https://keys.example.com/jwks" } },
+			endpoints: { getJwks: vi.fn() },
+		};
+		const auth = {
+			options: { baseURL: "https://app.example.com" },
+			$context: Promise.resolve({
+				baseURL: "https://app.example.com/api/auth",
+				internalAdapter: internalAdapterStub,
+				getPlugin: ((id: string) =>
+					id === "jwt" ? jwtPlugin : null) as AuthContext["getPlugin"],
+			}),
+		};
+
+		await requireMcpAuth(auth, async () => Response.json({ ok: true }))(
+			new Request("https://app.example.com/mcp", {
+				headers: { Authorization: "Bearer access-token" },
+			}),
+		);
+
+		expect(verifyAccessTokenRequest).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({
+				jwksUrl: "https://keys.example.com/jwks",
+			}),
+		);
+	});
+
+	it("prefers an explicit jwksUrl override over in-process resolution", async () => {
+		verifyAccessTokenRequest.mockResolvedValue({
+			sub: "user-1",
+		} satisfies JWTPayload);
+		const jwtPlugin = { options: {}, endpoints: { getJwks: vi.fn() } };
+		const auth = {
+			options: { baseURL: "https://app.example.com" },
+			$context: Promise.resolve({
+				baseURL: "https://app.example.com/api/auth",
+				internalAdapter: internalAdapterStub,
+				getPlugin: ((id: string) =>
+					id === "jwt" ? jwtPlugin : null) as AuthContext["getPlugin"],
+			}),
+		};
+
+		await requireMcpAuth(auth, async () => Response.json({ ok: true }), {
+			jwksUrl: "https://other.example.com/jwks",
+		})(
+			new Request("https://app.example.com/mcp", {
+				headers: { Authorization: "Bearer access-token" },
+			}),
+		);
+
+		expect(verifyAccessTokenRequest).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({
+				jwksUrl: "https://other.example.com/jwks",
+			}),
 		);
 	});
 
