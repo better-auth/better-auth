@@ -464,6 +464,11 @@ export const auth = betterAuth({
           // receive it; and because adding a member is find-or-create, the
           // data is applied on insert only, not when the membership already
           // exists.
+          //
+          // Because of the first limit, declare `teamMember` additional
+          // fields as optional or give them a `defaultValue`. A field marked
+          // `required: true` with no default becomes a NOT NULL column that
+          // the other three paths cannot populate.
           return {
             data: {
               organizationId: organization.id,
