@@ -23,15 +23,15 @@ export interface DocsVersion {
 
 export const docsVersions: DocsVersion[] = [
 	{
-		label: "v1.7 (Beta)",
-		version: "1.7",
+		label: "v1.8 (Beta)",
+		version: "1.8",
 		branch: "next",
 		slug: "beta",
 		badge: null,
 	},
 	{
-		label: "v1.6 (Latest)",
-		version: "1.6",
+		label: "v1.7 (Latest)",
+		version: "1.7",
 		branch: "main",
 		slug: null,
 		badge: null,

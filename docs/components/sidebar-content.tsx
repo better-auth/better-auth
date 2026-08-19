@@ -1507,6 +1507,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				href: "/docs/integrations/tanstack",
 			},
 			{
+				title: "Waku",
+				icon: Icons.react,
+				href: "/docs/integrations/waku",
+			},
+			{
 				group: true,
 				title: "Backend",
 				href: "",
@@ -1902,6 +1907,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				),
 			},
 			{
+				title: "CIMD",
+				href: "/docs/plugins/cimd",
+				icon: () => <FileBoxIcon className="size-4" />,
+			},
+			{
 				title: "SSO",
 				icon: () => (
 					<svg
@@ -1938,6 +1948,18 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 					</svg>
 				),
 				href: "/docs/plugins/scim",
+				subpages: [
+					{
+						title: "Groups and custom roles",
+						href: "/docs/plugins/scim/groups-and-roles",
+						icon: () => <Users2 className="size-4" />,
+					},
+					{
+						title: "Reference",
+						href: "/docs/plugins/scim/reference",
+						icon: () => <Book className="size-4" />,
+					},
+				],
 			},
 			{
 				title: "Utility",

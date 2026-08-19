@@ -13,12 +13,14 @@ import type { SQL } from "drizzle-orm";
 import {
 	and,
 	asc,
+	Column,
 	count,
 	desc,
 	eq,
 	gt,
 	gte,
 	inArray,
+	is,
 	isNotNull,
 	isNull,
 	like,
@@ -343,18 +345,22 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			};
 			function convertWhereClause(where: Where[], model: string) {
 				const schemaModel = getSchema(model);
+				const resolveFieldName = (where: Where) => {
+					const field = getFieldName({ model, field: where.field });
+					if (!is(schemaModel[field], Column)) {
+						throw new BetterAuthError(
+							`The field "${where.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
+						);
+					}
+					return field;
+				};
 				if (!where) return [];
 				if (where.length === 1) {
 					const w = where[0];
 					if (!w) {
 						return [];
 					}
-					const field = getFieldName({ model, field: w.field });
-					if (!schemaModel[field]) {
-						throw new BetterAuthError(
-							`The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
-						);
-					}
+					const field = resolveFieldName(w);
 					const mode = w.mode ?? "sensitive";
 					const isInsensitive =
 						mode === "insensitive" &&
@@ -468,7 +474,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 
 				const andClause = and(
 					...andGroup.map((w) => {
-						const field = getFieldName({ model, field: w.field });
+						const field = resolveFieldName(w);
 						const mode = w.mode ?? "sensitive";
 						const isInsensitive =
 							mode === "insensitive" &&
@@ -571,12 +577,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				);
 				const orClause = or(
 					...orGroup.map((w) => {
-						const field = getFieldName({ model, field: w.field });
-						if (!schemaModel[field]) {
-							throw new BetterAuthError(
-								`The field "${w.field}" does not exist in the schema for the model "${model}". Please update your schema.`,
-							);
-						}
+						const field = resolveFieldName(w);
 						const mode = w.mode ?? "sensitive";
 						const isInsensitive =
 							mode === "insensitive" &&
