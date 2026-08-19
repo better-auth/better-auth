@@ -132,8 +132,7 @@ export const requireMcpAuth = <
 				const jwksRes = await jwtPlugin.endpoints.getJwks({
 					context: context as unknown as AuthContext,
 				});
-				// @ts-expect-error response is a JSONWebKeySet but within the response field
-				return jwksRes?.response as JSONWebKeySet | undefined;
+				return jwksRes as JSONWebKeySet | undefined;
 			};
 			jwksCacheKey = jwtPlugin;
 		} else {

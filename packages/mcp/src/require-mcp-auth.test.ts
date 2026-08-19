@@ -1,5 +1,7 @@
 import type { AuthContext } from "@better-auth/core";
 import { createInsufficientScopeError } from "better-auth/oauth2";
+import { jwt } from "better-auth/plugins";
+import { getTestInstance } from "better-auth/test";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -373,7 +375,7 @@ describe("requireMcpAuth", () => {
 			sub: "user-1",
 		} satisfies JWTPayload);
 		const keySet = { keys: [{ kty: "RSA", kid: "in-process-key" }] };
-		const getJwks = vi.fn().mockResolvedValue({ response: keySet });
+		const getJwks = vi.fn().mockResolvedValue(keySet);
 		const jwtPlugin = { options: {}, endpoints: { getJwks } };
 		const auth = {
 			options: { baseURL: "https://app.example.com" },
@@ -399,6 +401,32 @@ describe("requireMcpAuth", () => {
 		expect(verificationOptions.jwksCacheKey).toBe(jwtPlugin);
 		await expect(verificationOptions.jwksUrl()).resolves.toEqual(keySet);
 		expect(getJwks).toHaveBeenCalledOnce();
+	});
+
+	it("resolves a real key set from a live auth instance in-process", async () => {
+		// Guards the resolver against drift in the direct endpoint invocation's
+		// return shape, which a hand-written plugin stub cannot catch.
+		verifyAccessTokenRequest.mockResolvedValue({
+			sub: "user-1",
+		} satisfies JWTPayload);
+		const instance = await getTestInstance({
+			baseURL: "https://app.example.com",
+			plugins: [jwt()],
+		});
+
+		await requireMcpAuth(instance.auth, async () =>
+			Response.json({ ok: true }),
+		)(
+			new Request("https://app.example.com/mcp", {
+				headers: { Authorization: "Bearer access-token" },
+			}),
+		);
+
+		const verificationOptions = verifyAccessTokenRequest.mock.calls[0]![1];
+		expect(verificationOptions.jwksUrl).toBeTypeOf("function");
+		const keySet = await verificationOptions.jwksUrl();
+		expect(Array.isArray(keySet?.keys)).toBe(true);
+		expect(keySet.keys.length).toBeGreaterThan(0);
 	});
 
 	it("uses the JWT plugin's configured remote JWKS URL instead of the in-process source", async () => {
