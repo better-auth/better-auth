@@ -452,6 +452,23 @@ export const auth = betterAuth({
           if (memberCount >= 10) {
             throw new Error("Team is full");
           }
+
+          // Optionally return data to store on the team member row. The fields
+          // must be declared under `schema.teamMember.additionalFields`.
+          // `teamId`, `userId` and `createdAt` stay authoritative and cannot
+          // be overridden here.
+          //
+          // Two limits worth knowing: this hook only runs on the
+          // `addTeamMember` endpoint, so team members created by
+          // `createOrganization`, `addMember` or `acceptInvitation` do not
+          // receive it; and because adding a member is find-or-create, the
+          // data is applied on insert only, not when the membership already
+          // exists.
+          return {
+            data: {
+              organizationId: organization.id,
+            },
+          };
         },
 
         afterAddTeamMember: async ({
@@ -2477,7 +2494,7 @@ const auth = betterAuth({
 
 #### Additional Fields
 
-Starting with [Better Auth v1.3](https://github.com/better-auth/better-auth/releases/tag/v1.3.0), you can easily add custom fields to the `organization`, `invitation`, `member`, and `team` tables.
+Starting with [Better Auth v1.3](https://github.com/better-auth/better-auth/releases/tag/v1.3.0), you can easily add custom fields to the `organization`, `invitation`, `member`, `team`, and `teamMember` tables.
 
 When you add extra fields to a model, the relevant API endpoints will automatically accept and return these new properties. For instance, if you add a custom field to the `organization` table, the `createOrganization` endpoint will include this field in its request and response payloads as needed.
 
