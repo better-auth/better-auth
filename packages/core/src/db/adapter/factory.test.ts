@@ -439,6 +439,18 @@ describe("createAdapterFactory where value coercion", () => {
 		});
 		await adapter.findMany({
 			model: "session",
+			where: [
+				{
+					field: "userId",
+					operator: "in",
+					// `Where["value"]` does not admit null elements, but runtime
+					// callers still reach this branch with one.
+					value: ["1", null] as unknown as string[],
+				},
+			],
+		});
+		await adapter.findMany({
+			model: "session",
 			where: [{ field: "userId", operator: "eq", value: null }],
 		});
 		await adapter.create({
@@ -449,6 +461,7 @@ describe("createAdapterFactory where value coercion", () => {
 		expect(seenWhere.map((where) => where[0]!.value)).toEqual([
 			42,
 			[1, 2],
+			[1, null],
 			null,
 		]);
 		expect(seenCreateData[0]!.userId).toBe(7);

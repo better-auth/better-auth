@@ -573,7 +573,9 @@ export const createAdapterFactory =
 					if (useNumberId) {
 						if (Array.isArray(value)) {
 							newValue = value.map((v) =>
-								toNumberId(v, defaultModelName, defaultFieldName),
+								v === null || v === undefined
+									? v
+									: toNumberId(v, defaultModelName, defaultFieldName),
 							);
 						} else if (value !== null) {
 							newValue = toNumberId(value, defaultModelName, defaultFieldName);
