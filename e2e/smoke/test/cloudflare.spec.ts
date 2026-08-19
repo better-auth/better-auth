@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+import { terminate } from "@better-auth-test/test-utils/playwright";
 
 const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
 const repoDir = fileURLToPath(new URL("../../..", import.meta.url));
@@ -30,15 +31,19 @@ describe("(cloudflare) simple server", () => {
 		const cp = spawn("pnpm", ["run", "e2e:smoke"], {
 			cwd: join(fixturesDir, "cloudflare"),
 			stdio: "pipe",
-			timeout: cloudflareSmokeTimeout,
-			killSignal: "SIGKILL",
 		});
 
-		t.after(() => {
-			if (cp.exitCode === null) {
-				cp.kill("SIGINT");
+		const stopProcessTree = async () => {
+			if (
+				cp.pid === undefined ||
+				cp.exitCode !== null ||
+				cp.signalCode !== null
+			) {
+				return;
 			}
-		});
+			await terminate(cp.pid);
+		};
+		t.after(stopProcessTree);
 
 		const unexpectedWarnings = new Set(["node:sqlite", "node:async_hooks"]);
 		let output = "";
@@ -56,8 +61,29 @@ describe("(cloudflare) simple server", () => {
 		});
 
 		const exitCode = await new Promise<number | null>((resolve, reject) => {
-			cp.once("error", reject);
-			cp.once("close", resolve);
+			let timedOut = false;
+			const timer = setTimeout(() => {
+				timedOut = true;
+				void stopProcessTree().then(
+					() =>
+						reject(
+							new Error(
+								`Cloudflare smoke test timed out after ${cloudflareSmokeTimeout}ms.\n${output}`,
+							),
+						),
+					reject,
+				);
+			}, cloudflareSmokeTimeout);
+			cp.once("error", (error) => {
+				if (timedOut) return;
+				clearTimeout(timer);
+				reject(error);
+			});
+			cp.once("close", (code) => {
+				if (timedOut) return;
+				clearTimeout(timer);
+				resolve(code);
+			});
 		});
 		assert.equal(
 			exitCode,
