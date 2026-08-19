@@ -373,6 +373,8 @@ async function verifyAccessTokenPayload(
 				} else if (error instanceof joseErrors.JWTExpired) {
 					throw new APIError("UNAUTHORIZED", {
 						message: "token expired",
+						error: "invalid_token",
+						error_description: "token expired",
 					});
 				} else if (error instanceof joseErrors.JOSEError) {
 					if (isJoseInfrastructureError(error)) {
@@ -380,6 +382,8 @@ async function verifyAccessTokenPayload(
 					}
 					throw new APIError("UNAUTHORIZED", {
 						message: "invalid access token",
+						error: "invalid_token",
+						error_description: "invalid access token",
 					});
 				} else {
 					throw error;
@@ -421,6 +425,8 @@ async function verifyAccessTokenPayload(
 		if (!introspect.active)
 			throw new APIError("UNAUTHORIZED", {
 				message: "token inactive",
+				error: "invalid_token",
+				error_description: "token inactive",
 			});
 		// Verifies payload using verify options (token valid through introspect).
 		// Audience is enforced by default: when `verifyOptions.audience` is set
@@ -448,6 +454,8 @@ async function verifyAccessTokenPayload(
 	if (!payload)
 		throw new APIError("UNAUTHORIZED", {
 			message: `no token payload`,
+			error: "invalid_token",
+			error_description: `no token payload`,
 		});
 
 	const grantedScopes = parseGrantedScopes(payload.scope);
@@ -629,12 +637,11 @@ export async function verifyAccessTokenRequest(
 	}
 	// RFC 6750 §2.1 / RFC 9449 §7.1: an access token is presented with the
 	// `Bearer` or `DPoP` scheme. Reject a scheme-less or unknown-scheme value
-	// rather than accept a bare token.
+	// rather than accept a bare token. RFC 6750 §3.1 counts an unsupported
+	// scheme as a request lacking authentication information rather than a
+	// failed token, so it carries no error code.
 	if (authorization.scheme === "Unknown") {
-		throwDpopUnauthorized(
-			"authorization scheme must be Bearer or DPoP",
-			"invalid_token",
-		);
+		throwDpopUnauthorized("authorization scheme must be Bearer or DPoP");
 	}
 
 	const payload = await verifyAccessTokenPayload(authorization.token, opts);
