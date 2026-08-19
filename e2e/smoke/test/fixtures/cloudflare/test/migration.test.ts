@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
 import { createTestHarness } from "wrangler";
 
 const server = createTestHarness({
@@ -7,6 +7,10 @@ const server = createTestHarness({
 
 beforeAll(async () => {
 	await server.listen();
+});
+
+afterEach(({ task }) => {
+	if (task.result?.state === "fail") server.debug();
 });
 
 afterAll(async () => {
@@ -23,7 +27,6 @@ it("runs built-in migrations repeatedly on D1", async () => {
 			method: "POST",
 		},
 	);
-	if (!firstResponse.ok) server.debug();
 	expect(firstResponse.status).toBe(204);
 
 	const secondResponse = await server.fetch(
@@ -32,6 +35,5 @@ it("runs built-in migrations repeatedly on D1", async () => {
 			method: "POST",
 		},
 	);
-	if (!secondResponse.ok) server.debug();
 	expect(secondResponse.status).toBe(204);
 });

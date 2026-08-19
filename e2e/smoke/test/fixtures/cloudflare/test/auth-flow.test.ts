@@ -24,7 +24,8 @@ beforeEach(async () => {
 	expect(response.status).toBe(204);
 });
 
-afterEach(async () => {
+afterEach(async ({ task }) => {
+	if (task.result?.state === "fail") server.debug();
 	await server.reset();
 });
 

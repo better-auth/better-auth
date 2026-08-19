@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
 import { createTestHarness } from "wrangler";
 
 const server = createTestHarness({
@@ -7,6 +7,10 @@ const server = createTestHarness({
 
 beforeAll(async () => {
 	await server.listen();
+});
+
+afterEach(({ task }) => {
+	if (task.result?.state === "fail") server.debug();
 });
 
 afterAll(async () => {
