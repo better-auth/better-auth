@@ -8,6 +8,7 @@
   [![npm](https://img.shields.io/npm/dm/better-auth?style=flat&colorA=000000&colorB=000000)](https://npm.chart.dev/better-auth?primary=neutral&gray=neutral&theme=dark)
   [![npm version](https://img.shields.io/npm/v/better-auth.svg?style=flat&colorA=000000&colorB=000000)](https://www.npmjs.com/package/better-auth)
   [![GitHub stars](https://img.shields.io/github/stars/better-auth/better-auth?style=flat&colorA=000000&colorB=000000)](https://github.com/better-auth/better-auth/stargazers)
+[![inspect.software](https://raw.githubusercontent.com/inspect-software/badges/main/v1/b/better-auth/better-auth.svg)](https://inspect.software/software/better-auth/better-auth)
 
   <p>
     <a href="https://discord.gg/better-auth">Discord</a>
