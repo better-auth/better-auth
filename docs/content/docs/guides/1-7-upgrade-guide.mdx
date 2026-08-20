@@ -91,6 +91,27 @@ Better Auth now recognizes an external account by the unique pair of `issuer` an
 
 `auth migrate apply` performs this backfill for the adapters it supports, deriving each provider's issuer from your configuration and asking for the ones it cannot derive. Follow the steps below when you use another adapter, or when the CLI reports a collision only you can resolve.
 
+#### Preserve 1.6 provider-scoped account identity
+
+Better Auth 1.6 recognized an external account by `providerId` and `accountId`. If another system depends on that namespace, configure the compatibility strategy before running `auth migrate plan` or `auth migrate apply`, then deploy the same option with 1.7:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  account: {
+    identityStrategy: "provider-id",
+  },
+  // ...
+});
+```
+
+This option keeps the required 1.7 `issuer` column and compound index, but stores `local:oauth:<encoded providerId>` as the issuer for external accounts. Credential and SIWE accounts keep their existing local namespaces. Better Auth still performs each provider's normal token and profile verification before accepting the account subject; the option changes only the namespace used to recognize and persist that account.
+
+Keep this option identical on every instance that reads or writes the database. Under this strategy, renaming a provider changes its account namespace, and two provider aliases for the same OpenID Connect issuer remain separate identities, matching the provider-scoped behavior of 1.6.
+
+Do not enable this option after completing an issuer-scoped 1.7 migration. The guided migration reports a blocker if an account already stores a different issuer rather than silently re-keying it. Leave the default `"issuer"` strategy in place for an already migrated database; changing its identity strategy requires a separate, reviewed account re-key migration.
+
 <Callout type="warn">
   Use a maintenance window and stop authentication writes, including background jobs and admin APIs that insert into `account` directly, before changing the account schema. The generated migration cannot choose trusted issuers or resolve identity collisions for you.
 </Callout>
@@ -131,7 +152,7 @@ Better Auth now recognizes an external account by the unique pair of `issuer` an
    | Provider with an issuer               | Exact trusted issuer used by the provider | Existing provider account identifier   |
    | OAuth provider without an issuer      | `local:oauth:<encoded providerId>`        | Existing provider account identifier   |
 
-   The synthetic issuer percent-encodes its provider ID segment exactly as `encodeURIComponent(providerId)`; for example, `local:oauth:github` and `local:oauth:team%2Fgithub`. Build an explicit `providerId`-to-issuer map for your deployment. Multiple provider configurations that represent the same OpenID Connect authority must use the same issuer. Do not derive an issuer from email, display name, an unverified request value, or a mutable authorization endpoint. SIWE and Google One Tap are not OAuth providers, so the synthetic `local:oauth:` namespace never applies to them.
+   The synthetic issuer percent-encodes its provider ID segment exactly as `encodeURIComponent(providerId)`; for example, `local:oauth:github` and `local:oauth:team%2Fgithub`. Build an explicit `providerId`-to-issuer map for your deployment. Multiple provider configurations that represent the same OpenID Connect authority must use the same issuer. Do not derive an issuer from email, display name, an unverified request value, or a mutable authorization endpoint. SIWE and Google One Tap are not OAuth providers, so the synthetic `local:oauth:` namespace never applies to them under the default identity strategy. With `account.identityStrategy: "provider-id"`, use the synthetic external namespace for Google One Tap and every other external provider as described above.
 4. Find collisions before creating the unique index. Adapt this query to your physical table and field names:
 
    ```sql title="Identity collision check"

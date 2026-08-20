@@ -1,5 +1,9 @@
 import type { BetterAuthOptions } from "@better-auth/core";
-import { createLocalAccountIssuer, getAuthTables } from "@better-auth/core/db";
+import {
+	createLocalAccountIssuer,
+	createOAuthAccountIssuer,
+	getAuthTables,
+} from "@better-auth/core/db";
 import { getDatabaseIndexStringLength } from "@better-auth/core/db/internal";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
@@ -296,6 +300,13 @@ type ProviderIssuerResolution =
 
 type ProviderIssuerEntry = readonly [string, ProviderIssuerResolution];
 
+function createProviderScopedMigrationIssuer(providerId: string): string {
+	if (providerId === "credential" || providerId === "siwe") {
+		return createLocalAccountIssuer(providerId);
+	}
+	return createOAuthAccountIssuer(providerId);
+}
+
 export interface ConfiguredAccountIssuers {
 	/** Issuer the 1.7 runtime establishes for each configured provider. */
 	issuers: Record<string, string>;
@@ -387,6 +398,10 @@ export async function resolveConfiguredIssuers(
 	};
 	const unresolvedProviders: Record<string, UnresolvedIssuerReason> = {};
 	for (const [providerId, resolution] of resolutions) {
+		if (config.account?.identityStrategy === "provider-id") {
+			issuers[providerId] = createProviderScopedMigrationIssuer(providerId);
+			continue;
+		}
 		if ("issuer" in resolution) {
 			issuers[providerId] = resolution.issuer;
 			continue;
@@ -1704,6 +1719,8 @@ async function inspectAccountIdentityFrom16(
 		accountTableMetadata.columns.map((column) => column.name),
 	);
 	if (!existingColumns.has(accountIdColumn)) return undefined;
+	const usesProviderScopedIdentity =
+		config.account?.identityStrategy === "provider-id";
 
 	const { accountIssuers, unresolvedProviders } =
 		await resolveMigrationAccountIssuers(
@@ -1723,6 +1740,12 @@ async function inspectAccountIdentityFrom16(
 	const populatedProviders: Record<string, number> = {};
 	for (const row of providerInventory.rows) {
 		populatedProviders[row.providerId] = toSafeRowCount(row.count);
+	}
+	if (usesProviderScopedIdentity) {
+		for (const providerId of Object.keys(populatedProviders)) {
+			accountIssuers[providerId] =
+				createProviderScopedMigrationIssuer(providerId);
+		}
 	}
 	const missingIssuerProviders = Object.keys(populatedProviders)
 		.filter(
@@ -1759,11 +1782,31 @@ async function inspectAccountIdentityFrom16(
 	const projectedIdentities = new Set<string>();
 	const reportedCollisions = new Set<string>();
 	for (const account of accountIdentities.rows) {
-		const issuer =
-			readStoredIssuer(account.issuer) ??
-			(unresolvedProviders[account.providerId] === "dynamic-issuer"
-				? accountIssuerByAccountId[account.id]
-				: accountIssuers[account.providerId]);
+		const storedIssuer = readStoredIssuer(account.issuer);
+		const configuredIssuer = accountIssuers[account.providerId];
+		if (
+			usesProviderScopedIdentity &&
+			storedIssuer &&
+			configuredIssuer &&
+			storedIssuer !== configuredIssuer
+		) {
+			reportMigrationDecisionBlocker(blockers, {
+				accountId: account.id,
+				code: "account-issuer-conflict",
+				requestedIssuer: configuredIssuer,
+				storedIssuer,
+				table: accountTable,
+			});
+		}
+		let issuer = storedIssuer;
+		if (usesProviderScopedIdentity) {
+			issuer = configuredIssuer ?? storedIssuer;
+		} else if (!issuer) {
+			issuer =
+				unresolvedProviders[account.providerId] === "dynamic-issuer"
+					? accountIssuerByAccountId[account.id]
+					: configuredIssuer;
+		}
 		if (issuer === null || issuer === undefined) continue;
 		const identityKey = JSON.stringify([issuer, account.providerAccountId]);
 		if (projectedIdentities.has(identityKey)) {

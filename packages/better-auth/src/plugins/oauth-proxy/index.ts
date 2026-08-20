@@ -520,6 +520,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								provider,
 								tokens,
 								userInfoResult.data,
+								ctx.context.options.account?.identityStrategy,
 							);
 						} catch (error) {
 							ctx.context.logger.error(
