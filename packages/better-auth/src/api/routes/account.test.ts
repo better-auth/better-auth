@@ -2912,6 +2912,28 @@ describe("account resolution in stateless mode", async () => {
 		expect(info.data).toMatchObject({ accessTokenSeen: "idp-access-token" });
 	});
 
+	it("resolves accountInfo from a serialized useAccountCookie query parameter", async () => {
+		const auth = makeStatelessAuth();
+		const { jar } = await signIn(auth);
+
+		const response = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/account-info?useAccountCookie=true",
+				{ headers: requestHeaders(jar) },
+			),
+		);
+
+		expect(response.status).toBe(200);
+
+		const rejected = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/account-info?useAccountCookie=false",
+				{ headers: requestHeaders(jar) },
+			),
+		);
+		expect(rejected.status).toBe(400);
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9978
 	 */
