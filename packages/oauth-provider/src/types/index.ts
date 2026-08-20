@@ -1548,8 +1548,8 @@ export interface OAuthResource {
 	signingAlgorithm?: JWSAlgorithms | null;
 	signingKeyId?: string | null;
 	/**
-	 * When non-null, requested scopes must intersect this set or the request is
-	 * rejected with `invalid_scope`.
+	 * When non-empty, requested scopes must intersect this set or the request
+	 * is rejected with `invalid_scope`. Empty means no restriction.
 	 */
 	allowedScopes?: string[] | null;
 	/**
