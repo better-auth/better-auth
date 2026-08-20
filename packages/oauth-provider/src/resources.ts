@@ -740,7 +740,8 @@ export function collectResourceInputs(
 /**
  * Builds the row payload sent to the adapter for a seed insert. All policy
  * columns default to `null` (= inherit plugin default at issuance time)
- * when the input doesn't specify a value.
+ * when the input doesn't specify a value, except `allowedScopes`, which
+ * defaults to `[]` since a scalar list cannot hold null.
  */
 function buildSeedRow(input: OAuthResourceInput, now: Date) {
 	return {
@@ -765,7 +766,7 @@ function buildSeedRow(input: OAuthResourceInput, now: Date) {
  * Builds the partial update payload when re-seeding an existing row.
  *
  * - `overwrite` mode replaces every policy column with the input value
- *   (omitted fields fall back to `null` to clear stale state).
+ *   (omitted fields are cleared: `null`, or `[]` for `allowedScopes`).
  * - `merge` mode updates only fields present in the input — admin edits to
  *   other fields are preserved.
  */

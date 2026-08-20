@@ -3,3 +3,5 @@
 ---
 
 Fix a crash on startup when a resource is configured without `allowedScopes` and the Prisma adapter is used. Seeding wrote a null the adapter cannot store in a scalar list column, so init failed before the resource row existed. A resource with no allowlist now stores an empty list and still accepts every requested scope.
+
+An empty `allowedScopes` therefore means "no allowlist" rather than "reject every scope". Set `disabled` on a resource you no longer want tokens issued for.

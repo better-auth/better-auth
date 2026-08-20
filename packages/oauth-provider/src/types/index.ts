@@ -1549,7 +1549,9 @@ export interface OAuthResource {
 	signingKeyId?: string | null;
 	/**
 	 * When non-empty, requested scopes must intersect this set or the request
-	 * is rejected with `invalid_scope`. Empty means no restriction.
+	 * is rejected with `invalid_scope`. Empty (`[]` or `null`) applies no
+	 * restriction rather than inheriting a plugin default; use `disabled` to
+	 * stop issuance.
 	 */
 	allowedScopes?: string[] | null;
 	/**
