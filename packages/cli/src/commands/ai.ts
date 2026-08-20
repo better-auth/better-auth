@@ -622,7 +622,7 @@ function showServerOutro() {
 		chalk.cyan("     https://www.better-auth.com/docs/concepts/database\n"),
 	);
 	console.log(chalk.white("  3. Run database migrations:"));
-	console.log(chalk.cyan("     npx auth migrate\n"));
+	console.log(chalk.cyan("     npx auth migrate apply\n"));
 	console.log(
 		chalk.white("  4. Expose the discovery endpoint at your app root:"),
 	);

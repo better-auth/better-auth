@@ -79,10 +79,14 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@better-auth/oauth-provider": "workspace:*",
     "@better-auth/passkey": "workspace:*",
+    "@better-auth/scim": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "@types/prompts": "^2.4.9",
     "@types/semver": "^7.7.1",
+    "better-auth-1-6-30": "npm:better-auth@1.6.30",
+    "better-auth-scim-1-6-30": "npm:@better-auth/scim@1.6.30",
     "better-sqlite3": "^12.11.1",
     "memfs": "^4.56.10",
     "tsdown": "catalog:",
