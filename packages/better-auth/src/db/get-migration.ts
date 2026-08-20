@@ -266,7 +266,8 @@ async function getDatabaseIndexMap(
 					column_name AS columnName,
 					non_unique AS nonUnique,
 					seq_in_index AS columnPosition,
-					sub_part AS prefixLength
+					sub_part AS prefixLength,
+					COALESCE(LOWER(comment) = 'disabled', FALSE) AS isDisabled
 				FROM information_schema.statistics
 				WHERE table_schema = DATABASE()
 			`.execute(db)
