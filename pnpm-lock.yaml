@@ -890,6 +890,9 @@ importers:
 
   e2e/smoke/test/fixtures/tsconfig-exact-optional-property-types:
     dependencies:
+      '@better-auth/oauth-provider':
+        specifier: workspace:*
+        version: link:../../../../../packages/oauth-provider
       '@better-auth/passkey':
         specifier: workspace:*
         version: link:../../../../../packages/passkey
