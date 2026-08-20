@@ -56,9 +56,13 @@ export type AuthClient<Option extends BetterAuthClientOptions> =
 	UnionToIntersection<InferResolvedHooks<Option>> &
 		InferClientAPI<Option> &
 		InferActions<Option> & {
-			hydrateSession: (
-				session: NonNullable<ClientSession<Option>> | null,
-			) => void;
+			/**
+			 * Method syntax on purpose: TypeScript checks method parameters
+			 * loosely, so a client with more plugins stays assignable to a
+			 * client type declaring fewer. An arrow-function property here
+			 * breaks that (see #10897).
+			 */
+			hydrateSession(session: NonNullable<ClientSession<Option>> | null): void;
 			useSession: Atom<{
 				data: ClientSession<Option>;
 				error: BetterFetchError | null;

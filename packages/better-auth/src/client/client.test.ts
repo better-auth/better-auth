@@ -17,6 +17,7 @@ import {
 	organizationClient,
 	twoFactorClient,
 } from "./plugins";
+import type { ReactAuthClient } from "./react";
 import { createAuthClient as createReactClient } from "./react";
 import { createAuthClient as createSolidClient } from "./solid";
 import { createAuthClient as createSvelteClient } from "./svelte";
@@ -419,6 +420,19 @@ describe("run time proxy", async () => {
 });
 
 describe("type", () => {
+	it("keeps a client with more plugins assignable to a client type with fewer plugins", () => {
+		// Regression for #10897: hydrateSession as an arrow-function property
+		// made this check contravariant, so any plugin that widens the session
+		// (admin adds user.banned) broke the assignment.
+		type EmailOtpClient = ReactAuthClient<{
+			plugins: [ReturnType<typeof emailOTPClient>];
+		}>;
+		const client = createReactClient({
+			plugins: [emailOTPClient(), adminClient()],
+		});
+		expectTypeOf(client).toMatchTypeOf<EmailOtpClient>();
+	});
+
 	it("should not infer non-action endpoints", () => {
 		const client = createReactClient({
 			plugins: [testClientPlugin()],
