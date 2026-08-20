@@ -12,17 +12,20 @@ import { createTestHarness } from "wrangler";
 const server = createTestHarness({
 	workers: [{ configPath: "./wrangler.json" }],
 });
-const worker = server.getWorker("cloudflare");
 
 beforeAll(async () => {
 	await server.listen();
 });
 
 beforeEach(async () => {
-	await worker.applyD1Migrations("DB");
+	const response = await server.fetch("http://localhost:8787/_test/migrate", {
+		method: "POST",
+	});
+	expect(response.status).toBe(204);
 });
 
-afterEach(async () => {
+afterEach(async ({ task }) => {
+	if (task.result?.state === "fail") server.debug();
 	await server.reset();
 });
 
@@ -128,11 +131,15 @@ describe("email and password authentication", () => {
 		const token = signInResponse.headers.get("set-cookie")?.split(";")[0];
 		expect(token).toBeDefined();
 
-		const sessionResponse = await server.fetch("http://localhost:8787/", {
-			headers: { Cookie: token ?? "" },
-		});
+		const sessionResponse = await server.fetch(
+			"http://localhost:8787/_test/session",
+			{
+				headers: { Cookie: token ?? "" },
+			},
+		);
 		expect(sessionResponse.status).toBe(200);
-		expect(await sessionResponse.text()).toBe(`Hello ${name}`);
+		const body: unknown = await sessionResponse.json();
+		expect(body).toMatchObject({ user: { email, name } });
 	});
 
 	it("rejects an invalid password without setting a session cookie", async () => {
@@ -178,8 +185,8 @@ describe("email and password authentication", () => {
 	});
 
 	it("returns no session without a session cookie", async () => {
-		const response = await server.fetch("http://localhost:8787");
+		const response = await server.fetch("http://localhost:8787/_test/session");
 		expect(response.status).toBe(200);
-		expect(await response.text()).toBe("Not logged in");
+		expect(await response.json()).toBeNull();
 	});
 });

@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "compatibility_date": "2025-04-01",
+  "compatibility_date": "2026-08-17",
   "main": "src/index.ts",
   "name": "cloudflare",
   "upload_source_maps": true,
@@ -9,8 +9,7 @@
     {
       "binding": "DB",
       "database_id": "REPLACE_ME",
-      "database_name": "db",
-      "migrations_dir": "./drizzle"
+      "database_name": "db"
     }
   ],
   "observability": {
