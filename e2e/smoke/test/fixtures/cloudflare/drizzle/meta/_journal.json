@@ -8,6 +8,20 @@
       "when": 1768234754154,
       "tag": "0000_lively_paladin",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787015962432,
+      "tag": "0001_account-issuer",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787016193793,
+      "tag": "0002_jwks-algorithm",
+      "breakpoints": true
     }
   ]
 }
