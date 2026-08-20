@@ -15,7 +15,7 @@ import type {
 	IsSignal,
 	SessionQueryParams,
 } from "../types";
-import { useStore } from "./react-store";
+import { useStore } from "./octane-store";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
