@@ -7,6 +7,7 @@
     "better-auth": "workspace:*"
   },
   "devDependencies": {
+    "@better-auth-test/test-utils": "workspace:*",
     "@better-auth/cimd": "workspace:*",
     "@better-auth/core": "workspace:*",
     "@better-auth/oauth-provider": "workspace:*",
