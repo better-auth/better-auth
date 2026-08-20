@@ -617,7 +617,8 @@
   "octane": {
     "hookSlots": {
       "manual": [
-        "./src/client/octane/octane-store.ts"
+        "./src/client/octane/octane-store.ts",
+        "./dist/client/octane/octane-store.mjs"
       ]
     }
   }
