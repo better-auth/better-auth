@@ -1659,14 +1659,18 @@ export async function migrateFrom16(
 			options,
 			database,
 		);
+		const checkpointedReleaseData = await renameLegacyTables(
+			config,
+			releaseData,
+			database,
+		);
 		const retiredScimIdentities = await retireScimAccountsFrom16(
 			config,
 			options,
-			releaseData,
+			checkpointedReleaseData,
 			currentScimAccounts,
 			database,
 		);
-		await renameLegacyTables(config, releaseData, database);
 		const migration = await getMigrationsWithDatabase(
 			config,
 			{ legacyTableNames: options.legacyTableNames },
@@ -1676,7 +1680,7 @@ export async function migrateFrom16(
 		const oauthProvider = await migrateOAuthProviderDataFrom16(
 			config,
 			options,
-			releaseData,
+			checkpointedReleaseData,
 			oauthProviderPlan,
 			database,
 		);
@@ -1711,7 +1715,10 @@ export async function migrateFrom16(
 		return providers;
 	}, {});
 	const accounts = {
-		migrated: migratedAccounts.migrated - retiredScimIdentities.length,
+		migrated: Object.values(accountProviders).reduce(
+			(total, count) => total + count,
+			0,
+		),
 		providers: accountProviders,
 	};
 	const scim = summarizeScimMigration(releaseData, retiredScimIdentities);
