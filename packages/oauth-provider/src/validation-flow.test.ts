@@ -298,6 +298,31 @@ describe("resolveResourcePolicy — entity path", () => {
 		expect(policy.audienceClaim).toBe(id);
 	});
 
+	/**
+	 * A Prisma scalar list column cannot hold null, so a resource seeded
+	 * without an allowlist reads back as `[]`. That must stay "no
+	 * restriction" rather than refusing every scope.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10867
+	 */
+	it("treats an empty allowedScopes as 'no restriction'", async () => {
+		const id = "https://api.example.com/empty-allowlist";
+		const { ctx, opts } = await bootProvider({
+			resources: [id],
+		});
+		await ctx.adapter.update({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: id }],
+			update: { allowedScopes: [] },
+		});
+		const policy = await resolveResourcePolicy(fakeEndpointCtx(ctx), opts, {
+			resource: id,
+			clientId: "client-x",
+			requestedScopes: ["read", "write", "anything"],
+		});
+		expect(policy.effectiveScopes).toEqual(["read", "write", "anything"]);
+	});
+
 	it("returns single-resource signing config", async () => {
 		const id = "https://api.example.com/signed";
 		const { ctx, opts } = await bootProvider({
