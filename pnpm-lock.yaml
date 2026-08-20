@@ -807,6 +807,9 @@ importers:
 
   e2e/smoke/test/fixtures/cloudflare:
     dependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../../../../../packages/core
       '@better-auth/sso':
         specifier: workspace:*
         version: link:../../../../../packages/sso

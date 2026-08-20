@@ -1,3 +1,14 @@
+import type { AuthEndpointContext } from "@better-auth/core/context";
+import {
+	getCurrentAdapter,
+	getCurrentAuthContext,
+	runWithEndpointContext,
+	runWithTransaction,
+} from "@better-auth/core/context";
+import type {
+	DBAdapter,
+	DBTransactionAdapter,
+} from "@better-auth/core/db/adapter";
 import { sso } from "@better-auth/sso";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -26,6 +37,54 @@ const app = new Hono<{
 		auth: Auth;
 	};
 }>();
+
+// Keep this before the auth middleware to test first-time async context initialization.
+app.get("/async-context/concurrency", async (c) => {
+	const contexts = Array.from(
+		{ length: 32 },
+		() => ({}) as AuthEndpointContext,
+	);
+	const currentContexts = await Promise.allSettled(
+		contexts.map((context) =>
+			runWithEndpointContext(context, async () => {
+				await Promise.resolve();
+				return getCurrentAuthContext();
+			}),
+		),
+	);
+
+	const adapters = Array.from({ length: 32 }, () => {
+		const transactionAdapter = {} as DBTransactionAdapter;
+		const adapter = {
+			transaction: async <R>(
+				callback: (trx: DBTransactionAdapter) => Promise<R>,
+			) => callback(transactionAdapter),
+		} as DBAdapter;
+		return { adapter, transactionAdapter };
+	});
+	const currentAdapters = await Promise.allSettled(
+		adapters.map(({ adapter }) =>
+			runWithTransaction(adapter, async () => {
+				await Promise.resolve();
+				return getCurrentAdapter(adapter);
+			}),
+		),
+	);
+
+	return c.json({
+		endpointContextMatches: currentContexts.filter(
+			(currentContext, index) =>
+				currentContext.status === "fulfilled" &&
+				currentContext.value === contexts[index],
+		).length,
+		transactionAdapterMatches: currentAdapters.filter(
+			(currentAdapter, index) =>
+				currentAdapter.status === "fulfilled" &&
+				currentAdapter.value === adapters[index]?.transactionAdapter,
+		).length,
+		total: contexts.length,
+	});
+});
 
 app.use("*", async (c, next) => {
 	const auth = createAuth(c.env);
