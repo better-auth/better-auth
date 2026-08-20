@@ -1031,6 +1031,14 @@ export async function renameLegacyTables(
 			}
 		}
 	}
+	const renamed = (table: LegacyTableState | undefined) =>
+		table ? { ...table, sourceTableNeedsRename: false } : undefined;
+	return {
+		oauthAccessToken: renamed(state.oauthAccessToken),
+		oauthApplication: renamed(state.oauthApplication),
+		oauthConsent: renamed(state.oauthConsent),
+		scimProvider: renamed(state.scimProvider),
+	} satisfies LegacyReleaseDataState;
 }
 
 function splitLegacyList(value: string, separator: "," | " ") {
@@ -1792,7 +1800,10 @@ async function accountIndexExists({
 				? await sql<{ name: string }>`
 					SELECT indexname AS "name"
 					FROM pg_indexes
-					WHERE tablename = ${accountTable} AND indexname = ${indexName}
+					WHERE
+						schemaname = current_schema() AND
+						tablename = ${accountTable} AND
+						indexname = ${indexName}
 				`.execute(kysely)
 				: databaseType === "mssql"
 					? await sql<{ name: string }>`
@@ -1899,10 +1910,12 @@ export async function migrateAccountIdentityFrom16(
 			kysely,
 		}))
 	) {
-		await kysely.schema
-			.dropIndex(identityIndex.name)
-			.on(accountTable)
-			.execute();
+		const dropIndex = kysely.schema.dropIndex(identityIndex.name);
+		if (databaseType === "mysql" || databaseType === "mssql") {
+			await dropIndex.on(accountTable).execute();
+		} else {
+			await dropIndex.execute();
+		}
 	}
 
 	for (const [providerId, issuer] of Object.entries(accountIssuers)) {

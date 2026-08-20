@@ -11,7 +11,14 @@ import {
 	organization as organization1630,
 } from "better-auth-1-6-30/plugins";
 import { scim as scim1630 } from "better-auth-scim-1-6-30";
-import { Kysely, MssqlDialect, PostgresDialect, sql } from "kysely";
+import type { KyselyPlugin } from "kysely";
+import {
+	Kysely,
+	MssqlDialect,
+	MysqlDialect,
+	PostgresDialect,
+	sql,
+} from "kysely";
 import type { RowDataPacket } from "mysql2/promise";
 import { createPool } from "mysql2/promise";
 import { Pool } from "pg";
@@ -94,6 +101,92 @@ function createMssqlDatabase(database: string) {
 				},
 			},
 		}),
+	});
+}
+
+async function seedPublishedScimAccount({
+	accountIdField,
+	database,
+	emailDomain,
+}: {
+	accountIdField?: string | undefined;
+	database: MigrationDatabase;
+	emailDomain: string;
+}) {
+	const auth1630 = betterAuth1630({
+		account: accountIdField
+			? { fields: { accountId: accountIdField } }
+			: undefined,
+		baseURL: "http://localhost:3000",
+		database,
+		emailAndPassword: { enabled: true },
+		plugins: [scim1630()],
+	});
+	await (await getMigrations1630(auth1630.options)).runMigrations();
+	const administrator = await auth1630.api.signUpEmail({
+		body: {
+			email: `scim-admin@${emailDomain}`,
+			name: "SCIM Administrator",
+			password: "correct-horse-battery-staple",
+		},
+	});
+	const administratorSignIn = await auth1630.api.signInEmail({
+		body: {
+			email: `scim-admin@${emailDomain}`,
+			password: "correct-horse-battery-staple",
+		},
+		returnHeaders: true,
+	});
+	const administratorCookie = administratorSignIn.headers.getSetCookie()[0];
+	if (!administratorCookie) {
+		throw new Error("Expected the 1.6.30 administrator session cookie");
+	}
+	const generated = await auth1630.api.generateSCIMToken({
+		body: { providerId: "workforce" },
+		headers: { cookie: administratorCookie },
+	});
+	const provisionedUser = await auth1630.api.createSCIMUser({
+		body: {
+			name: { formatted: "Ada Provisioned" },
+			userName: `ada-provisioned@${emailDomain}`,
+		},
+		headers: { authorization: `Bearer ${generated.scimToken}` },
+	});
+	const sourceContext = await auth1630.$context;
+	const legacyScimAccount = await sourceContext.adapter.findOne<{
+		id: string;
+		userId: string;
+	}>({
+		model: "account",
+		where: [{ field: "providerId", value: "workforce" }],
+	});
+	if (!legacyScimAccount) {
+		throw new Error("Expected the 1.6.30 SCIM authentication account");
+	}
+	return { administrator, legacyScimAccount, provisionedUser };
+}
+
+function createCurrentScimPlugin(userId: string) {
+	return scim({
+		connections: [
+			{
+				credentials: [
+					{
+						id: "workforce-1-7-token",
+						token: "workforce-1-7-token",
+						type: "bearer",
+					},
+				],
+				id: "workforce",
+			},
+		],
+		identity: {
+			resolveUser: () => ({
+				action: "link",
+				profile: "preserve",
+				userId,
+			}),
+		},
 	});
 }
 
@@ -843,6 +936,77 @@ it("repairs a MySQL account table an earlier migration filled with empty issuers
 	}
 });
 
+it("ignores a matching account index outside the active PostgreSQL schema", {
+	timeout: 60_000,
+}, async () => {
+	const databaseName = createDatabaseName().replace(
+		"postgres",
+		"postgres_index_schema",
+	);
+	const adminPool = new Pool({
+		connectionString: "postgres://user:password@localhost:5433/postgres",
+	});
+	await adminPool.query(`CREATE DATABASE "${databaseName}"`);
+	const pool = new Pool({
+		connectionString: `postgres://user:password@localhost:5433/${databaseName}`,
+	});
+
+	try {
+		const auth1630 = betterAuth1630({
+			baseURL: "http://localhost:3000",
+			database: pool,
+			emailAndPassword: { enabled: true },
+		});
+		await (await getMigrations1630(auth1630.options)).runMigrations();
+		await auth1630.api.signUpEmail({
+			body: {
+				email: "schema-index@postgres.example.com",
+				name: "Schema Index",
+				password: "correct-horse-battery-staple",
+			},
+		});
+		await pool.query(`
+			ALTER TABLE "account"
+			ADD COLUMN "issuer" text NOT NULL DEFAULT '';
+			ALTER TABLE "account" ALTER COLUMN "issuer" DROP DEFAULT;
+			CREATE SCHEMA "migration_shadow";
+			CREATE TABLE "migration_shadow"."account" (
+				"issuer" text NOT NULL,
+				"accountId" text NOT NULL
+			);
+			CREATE UNIQUE INDEX "account_issuer_accountId_uidx"
+			ON "migration_shadow"."account" ("issuer", "accountId");
+		`);
+
+		const auth17 = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: pool,
+			emailAndPassword: { enabled: true },
+		});
+		await expect(migrateFrom16(auth17.options, {})).resolves.toMatchObject({
+			accounts: { migrated: 1, providers: { credential: 1 } },
+		});
+		await pool.query(`UPDATE "account" SET "issuer" = ''`);
+		await expect(migrateFrom16(auth17.options, {})).resolves.toMatchObject({
+			accounts: { migrated: 1, providers: { credential: 1 } },
+		});
+		const indexes = await pool.query<{ schemaname: string }>(`
+			SELECT schemaname
+			FROM pg_indexes
+			WHERE indexname = 'account_issuer_accountId_uidx'
+			ORDER BY schemaname
+		`);
+		expect(indexes.rows).toEqual([
+			{ schemaname: "migration_shadow" },
+			{ schemaname: "public" },
+		]);
+	} finally {
+		await pool.end();
+		await adminPool.query(`DROP DATABASE "${databaseName}"`);
+		await adminPool.end();
+	}
+});
+
 it("migrates users created by published 1.6.30 and authenticates them through 1.7 on SQL Server", {
 	timeout: 60_000,
 }, async () => {
@@ -852,7 +1016,11 @@ it("migrates users created by published 1.6.30 and authenticates them through 1.
 	const database = createMssqlDatabase(databaseName);
 
 	try {
-		const databaseOptions = { db: database, type: "mssql" as const };
+		const databaseOptions = {
+			db: database,
+			transaction: true,
+			type: "mssql" as const,
+		};
 		await exerciseAccountAndOrganizationMigration({
 			database: databaseOptions,
 			emailDomain: "mssql.example.com",
@@ -1023,7 +1191,7 @@ it("migrates a published 1.6.30 OAuth client and consent while revoking old toke
 
 	try {
 		await exerciseOAuthProviderMigration({
-			database: { db: database, type: "mssql" },
+			database: { db: database, transaction: true, type: "mssql" },
 			emailDomain: "oauth-mssql.example.com",
 			nameSuffix: "SQL Server",
 			configurePublishedPlugin(plugin) {
@@ -1073,62 +1241,12 @@ it("retires published 1.6.30 SCIM credentials with a custom account ID column an
 	});
 
 	try {
-		const auth1630 = betterAuth1630({
-			account: {
-				fields: {
-					accountId: "externalAccountId",
-				},
-			},
-			baseURL: "http://localhost:3000",
-			database: pool,
-			emailAndPassword: {
-				enabled: true,
-			},
-			plugins: [scim1630()],
-		});
-		await (await getMigrations1630(auth1630.options)).runMigrations();
-		const administrator = await auth1630.api.signUpEmail({
-			body: {
-				email: "scim-admin@postgres.example.com",
-				name: "SCIM Administrator",
-				password: "correct-horse-battery-staple",
-			},
-		});
-		const administratorSignIn = await auth1630.api.signInEmail({
-			body: {
-				email: "scim-admin@postgres.example.com",
-				password: "correct-horse-battery-staple",
-			},
-			returnHeaders: true,
-		});
-		const administratorCookie = administratorSignIn.headers.getSetCookie()[0];
-		if (!administratorCookie) {
-			throw new Error("Expected the 1.6.30 administrator session cookie");
-		}
-		const generated = await auth1630.api.generateSCIMToken({
-			body: { providerId: "workforce" },
-			headers: { cookie: administratorCookie },
-		});
-		const provisioned1630 = await auth1630.api.createSCIMUser({
-			body: {
-				name: { formatted: "Ada Provisioned" },
-				userName: "ada-provisioned@postgres.example.com",
-			},
-			headers: {
-				authorization: `Bearer ${generated.scimToken}`,
-			},
-		});
-		const sourceContext = await auth1630.$context;
-		const legacyScimAccount = await sourceContext.adapter.findOne<{
-			id: string;
-			userId: string;
-		}>({
-			model: "account",
-			where: [{ field: "providerId", value: "workforce" }],
-		});
-		if (!legacyScimAccount) {
-			throw new Error("Expected the 1.6.30 SCIM authentication account");
-		}
+		const { administrator, legacyScimAccount, provisionedUser } =
+			await seedPublishedScimAccount({
+				accountIdField: "externalAccountId",
+				database: pool,
+				emailDomain: "postgres.example.com",
+			});
 
 		const auth17 = betterAuth({
 			account: {
@@ -1145,29 +1263,7 @@ it("retires published 1.6.30 SCIM credentials with a custom account ID column an
 			emailAndPassword: {
 				enabled: true,
 			},
-			plugins: [
-				scim({
-					connections: [
-						{
-							credentials: [
-								{
-									id: "workforce-1-7-token",
-									token: "workforce-1-7-token",
-									type: "bearer",
-								},
-							],
-							id: "workforce",
-						},
-					],
-					identity: {
-						resolveUser: () => ({
-							action: "link",
-							profile: "preserve",
-							userId: legacyScimAccount.userId,
-						}),
-					},
-				}),
-			],
+			plugins: [createCurrentScimPlugin(legacyScimAccount.userId)],
 		});
 		await expect(
 			migrateFrom16(auth17.options, {
@@ -1267,12 +1363,116 @@ it("retires published 1.6.30 SCIM credentials with a custom account ID column an
 				legacyScimAccount.userId,
 			),
 		).toMatchObject({
-			id: provisioned1630.id,
+			id: provisionedUser.id,
 		});
 		expect(administrator.user.id).not.toBe(legacyScimAccount.userId);
 	} finally {
 		await currentDatabase.destroy();
 		await adminPool.query(`DROP DATABASE "${databaseName}"`);
+		await adminPool.end();
+	}
+});
+
+it("checkpoints MySQL legacy tables before retiring SCIM accounts", {
+	timeout: 60_000,
+}, async () => {
+	const databaseName = createDatabaseName().replace("postgres", "scim_mysql");
+	const adminPool = createPool({
+		uri: "mysql://root:root_password@localhost:3307/mysql",
+	});
+	await adminPool.query(`CREATE DATABASE \`${databaseName}\``);
+	const pool = createPool({
+		timezone: "Z",
+		uri: `mysql://root:root_password@localhost:3307/${databaseName}`,
+	});
+	let shouldInterruptAccountDeletion = true;
+	const accountDeletionQueries = new Set<string>();
+	const interruptAccountDeletion = {
+		transformQuery({ node, queryId }) {
+			if (
+				shouldInterruptAccountDeletion &&
+				node.kind === "RawNode" &&
+				/DELETE\s+FROM/i.test(node.sqlFragments.join(" "))
+			) {
+				accountDeletionQueries.add(queryId.queryId);
+			}
+			return node;
+		},
+		async transformResult({ queryId, result }) {
+			if (accountDeletionQueries.delete(queryId.queryId)) {
+				shouldInterruptAccountDeletion = false;
+				throw new Error("forced SCIM account retirement interruption");
+			}
+			return result;
+		},
+	} satisfies KyselyPlugin;
+	const currentDatabase = new Kysely<unknown>({
+		dialect: new MysqlDialect(pool),
+		plugins: [interruptAccountDeletion],
+	});
+
+	try {
+		const { legacyScimAccount } = await seedPublishedScimAccount({
+			database: pool,
+			emailDomain: "mysql.example.com",
+		});
+
+		const auth17 = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: { db: currentDatabase, transaction: true, type: "mysql" },
+			emailAndPassword: { enabled: true },
+			plugins: [createCurrentScimPlugin(legacyScimAccount.userId)],
+		});
+		const options = {
+			accountIssuers: {
+				workforce: "local:retired-scim:workforce",
+			},
+			scim: {
+				accountIdsToRetire: [legacyScimAccount.id],
+				providers: "reprovision" as const,
+			},
+		};
+		await expect(migrateFrom16(auth17.options, options)).rejects.toThrow(
+			"forced SCIM account retirement interruption",
+		);
+
+		const [legacyTables] = await pool.query<RowDataPacket[]>(`
+			SELECT TABLE_NAME AS name
+			FROM information_schema.tables
+			WHERE
+				TABLE_SCHEMA = DATABASE() AND
+				TABLE_NAME IN (
+					'scimProvider',
+					'scimProvider__better_auth_1_6'
+				)
+			ORDER BY TABLE_NAME
+		`);
+		expect(legacyTables.map(({ name }) => name)).toEqual([
+			"scimProvider__better_auth_1_6",
+		]);
+		const [remainingAccounts] = await pool.query<RowDataPacket[]>(
+			"SELECT COUNT(*) AS count FROM `account` WHERE `id` = ?",
+			[legacyScimAccount.id],
+		);
+		expect(Number(remainingAccounts[0]?.count)).toBe(0);
+
+		const migration = await migrateFrom16(auth17.options, options);
+		expect(migration).toMatchObject({
+			accounts: { migrated: 0, providers: {} },
+			scim: {
+				identities: [],
+				reprovisionRequired: true,
+				retiredProviders: 1,
+			},
+		});
+		const [retiredAccounts] = await pool.query<RowDataPacket[]>(
+			"SELECT COUNT(*) AS count FROM `account` WHERE `id` = ?",
+			[legacyScimAccount.id],
+		);
+		expect(Number(retiredAccounts[0]?.count)).toBe(0);
+	} finally {
+		await currentDatabase.destroy();
+		await adminPool.query(`DROP DATABASE \`${databaseName}\``);
 		await adminPool.end();
 	}
 });
