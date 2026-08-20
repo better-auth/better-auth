@@ -1550,8 +1550,7 @@ export interface OAuthResource {
 	/**
 	 * When non-empty, requested scopes must intersect this set or the request
 	 * is rejected with `invalid_scope`. Empty (`[]` or `null`) applies no
-	 * restriction rather than inheriting a plugin default; use `disabled` to
-	 * stop issuance.
+	 * restriction; use `disabled` to stop issuance.
 	 */
 	allowedScopes?: string[] | null;
 	/**
