@@ -48,40 +48,50 @@ describe("(cloudflare) simple server", () => {
 		const unexpectedWarnings = new Set(["node:sqlite", "node:async_hooks"]);
 		let output = "";
 
-		cp.stdout.on("data", (data) => {
-			const chunk = data.toString();
-			output += chunk;
-			console.log(chunk);
-		});
-
-		cp.stderr.on("data", (data) => {
-			const chunk = data.toString();
-			output += chunk;
-			console.error(chunk);
-		});
-
 		const exitCode = await new Promise<number | null>((resolve, reject) => {
-			let timedOut = false;
-			const timer = setTimeout(() => {
-				timedOut = true;
-				void stopProcessTree().then(
-					() =>
-						reject(
-							new Error(
-								`Cloudflare smoke test timed out after ${cloudflareSmokeTimeout}ms.\n${output}`,
-							),
-						),
-					reject,
+			let settled = false;
+			let timer: ReturnType<typeof setTimeout> | undefined;
+			const clearTimer = () => {
+				if (timer !== undefined) clearTimeout(timer);
+			};
+			const fail = (error: Error) => {
+				if (settled) return;
+				settled = true;
+				clearTimer();
+				void stopProcessTree().then(() => reject(error), reject);
+			};
+			const recordOutput = (data: Buffer, write: (chunk: string) => void) => {
+				const chunk = data.toString();
+				output += chunk;
+				write(chunk);
+				const unexpectedWarning = [...unexpectedWarnings].find((warning) =>
+					output.includes(warning),
 				);
-			}, cloudflareSmokeTimeout);
-			cp.once("error", (error) => {
-				if (timedOut) return;
-				clearTimeout(timer);
-				reject(error);
-			});
+				if (unexpectedWarning) {
+					fail(
+						new Error(
+							`Cloudflare smoke test emitted unexpected warning "${unexpectedWarning}".\n${output}`,
+						),
+					);
+				}
+			};
+
+			cp.stdout.on("data", (data: Buffer) => recordOutput(data, console.log));
+			cp.stderr.on("data", (data: Buffer) => recordOutput(data, console.error));
+			timer = setTimeout(
+				() =>
+					fail(
+						new Error(
+							`Cloudflare smoke test timed out after ${cloudflareSmokeTimeout}ms.\n${output}`,
+						),
+					),
+				cloudflareSmokeTimeout,
+			);
+			cp.once("error", fail);
 			cp.once("close", (code) => {
-				if (timedOut) return;
-				clearTimeout(timer);
+				if (settled) return;
+				settled = true;
+				clearTimer();
 				resolve(code);
 			});
 		});
