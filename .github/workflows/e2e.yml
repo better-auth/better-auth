@@ -243,7 +243,9 @@ jobs:
             echo "Container startup failed; resetting and retrying once."
             docker compose ps --all || true
             docker compose logs --no-color "${compose_services[@]}" || true
-            docker compose down --volumes --remove-orphans
+            if ! docker compose down --volumes --remove-orphans; then
+              echo "::warning::Container cleanup failed; retrying startup with remaining resources."
+            fi
           done
 
       - name: Adapter Integration
