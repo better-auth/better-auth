@@ -109,10 +109,11 @@ describe("auth migrate: refusing a destructive column add", () => {
 
 		expect(exitCode).toBe(1);
 		expect(output).toContain(
-			'Cannot add required column "issuer" to populated table "account"',
+			"Migration blocked. No database changes were applied.",
 		);
+		expect(output).toContain("[issuer-required]");
 		expect(output).toContain(
-			"https://better-auth.com/docs/guides/1-7-upgrade-guide#account-identity-is-scoped-by-issuer",
+			"https://better-auth.com/docs/guides/1-7-upgrade-guide",
 		);
 		expect(output).not.toContain("triggerUncaughtException");
 		expect(output).not.toContain("node:internal");

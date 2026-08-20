@@ -22,6 +22,19 @@ export function toOAuthProfileRecord(profile: object): Record<string, unknown> {
 }
 
 /**
+ * Resolves the issuer a provider establishes for every account it
+ * authenticates, or `undefined` when the issuer comes from the provider
+ * response and is only known during an authentication.
+ */
+export function resolveStaticOAuthAccountIssuer<Profile extends object>(
+	provider: Pick<OAuthProvider<Profile>, "accountIssuer" | "id">,
+): string | undefined {
+	const accountIssuer = provider.accountIssuer;
+	if (typeof accountIssuer === "function") return undefined;
+	return accountIssuer ?? createOAuthAccountIssuer(provider.id);
+}
+
+/**
  * Resolves the stable account key established by an OAuth provider response.
  */
 export async function resolveOAuthAccountKey<Profile extends object>(
@@ -48,11 +61,9 @@ export async function resolveOAuthAccountKey<Profile extends object>(
 	const issuer =
 		identityStrategy === "provider-id"
 			? createOAuthAccountIssuer(provider.id)
-			: accountIssuer === undefined
-				? createOAuthAccountIssuer(provider.id)
-				: typeof accountIssuer === "function"
-					? await accountIssuer(accountKeyContext)
-					: accountIssuer;
+			: typeof accountIssuer === "function"
+				? await accountIssuer(accountKeyContext)
+				: resolveStaticOAuthAccountIssuer(provider);
 	if (
 		typeof issuer !== "string" ||
 		issuer.trim().length === 0 ||
