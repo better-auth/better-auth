@@ -31,38 +31,21 @@ afterAll(async () => {
 	}
 });
 
+const TEST_PASSWORD_HASH_PREFIX = "$test$sha256$";
+
 /**
- * A fast password hasher for tests.
- *
- * The production hasher is scrypt, which is slow on purpose. That cost buys
- * security against an attacker with the password table, and no fixture test
- * asserts on the hash format. A salted SHA-256 pair satisfies the same
- * assertions at a small fraction of the cost.
- *
- * The tests that cover the production hasher import `../crypto/password`
- * directly, so they do not use this fixture and keep their coverage.
- *
- * This is a fallback only. A caller that supplies `emailAndPassword.password`
- * keeps its own implementation.
+ * Intentionally fast for tests
  */
+function createTestPasswordHash(password: string) {
+	return `${TEST_PASSWORD_HASH_PREFIX}${createHash("sha256")
+		.update(password.normalize("NFKC"))
+		.digest("hex")}`;
+}
+
 const testPassword = {
-	hash: async (password: string) => {
-		const salt = randomUUID();
-		const digest = createHash("sha256")
-			.update(`${salt}:${password}`)
-			.digest("hex");
-		return `${salt}:${digest}`;
-	},
-	verify: async ({ hash, password }: { hash: string; password: string }) => {
-		const [salt, digest] = hash.split(":");
-		if (!salt || !digest) {
-			return false;
-		}
-		const expected = createHash("sha256")
-			.update(`${salt}:${password}`)
-			.digest("hex");
-		return expected === digest;
-	},
+	hash: async (password: string) => createTestPasswordHash(password),
+	verify: async ({ hash, password }: { hash: string; password: string }) =>
+		hash === createTestPasswordHash(password),
 };
 
 export async function getTestInstance<
