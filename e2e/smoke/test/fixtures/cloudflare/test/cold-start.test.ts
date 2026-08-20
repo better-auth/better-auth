@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
 import { createTestHarness } from "wrangler";
 
 const server = createTestHarness({
@@ -7,6 +7,10 @@ const server = createTestHarness({
 
 beforeAll(async () => {
 	await server.listen();
+});
+
+afterEach(({ task }) => {
+	if (task.result?.state === "fail") server.debug();
 });
 
 afterAll(async () => {
@@ -18,7 +22,7 @@ afterAll(async () => {
  */
 it("preserves async contexts across concurrent first calls in the Workers runtime", async () => {
 	const response = await server.fetch(
-		"http://localhost:8787/async-context/concurrency",
+		"http://localhost:8787/_test/async-context/concurrency",
 	);
 	expect(response.status).toBe(200);
 	const body: unknown = await response.json();
