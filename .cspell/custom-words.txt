@@ -27,3 +27,4 @@ rethrowing
 dedupe
 misrouting
 unpair
+unconfigured

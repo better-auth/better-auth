@@ -42,20 +42,40 @@ These features change the schema:
 | Authorization-code replay  | An indexed `authorizationCodeId` column on both token tables                                                            | No                                                        |
 | Back-channel logout        | Logout-URL and revoked columns                                                                                          | No                                                        |
 | Requested user-info claims | A requested-claims column on the token and consent tables                                                               | No                                                        |
-| Account identity           | An issuer column and a compound index with the existing provider-account column                                         | **Yes, backfill**                                         |
-| SCIM                       | Seven provisioning models, plus three optional managed-catalog models, with layouts that replace the legacy SCIM models | **Yes, reprovision**                                      |
+| Account identity           | An issuer column and a compound index with the existing `accountId` column                                              | **Yes, guided or manual backfill**                        |
+| SCIM                       | Seven provisioning models, plus three optional managed-catalog models, with layouts that replace the legacy SCIM models | **Yes, retire, then reprovision**                         |
 | Organization team counters | `team.memberCount` and `teamMember.membershipKey` columns                                                               | No                                                        |
-| Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables                                                         | **Yes, move client data**                                 |
+| Provider client store      | `oauthApplication` becomes `oauthClient`, plus new token tables                                                         | **Yes, guided or manual client move**                     |
 | Device Authorization       | Unique indexes on `deviceCode` and `userCode`; the optional OAuth grant also adds `oauthClientId` and `resources`       | **Yes, deduplicate; MySQL/SQL Server also bound strings** |
 
 <Callout type="warn">
-  Prepare account identities, OAuth clients, and SCIM data before applying the generated 1.7 schema. The CLI adds tables, columns, and indexes, but it does not choose issuers, copy OAuth clients, or convert legacy SCIM data.
+  Never apply a generated 1.7 schema over populated 1.6 account, OAuth provider, or SCIM tables. A plain schema migration adds tables, columns, and indexes; it cannot choose issuers, copy OAuth clients, or convert legacy SCIM data.
 </Callout>
 
-Use this order:
+### Migrate from 1.6 to 1.7
+
+`auth migrate` recognizes 1.6 data and switches to a guided migration that changes data and schema together. It covers the built-in PostgreSQL, MySQL, SQLite, and SQL Server configurations, plus SQL-backed Drizzle and Prisma adapters. Back up the database, stop authentication writes, and run:
+
+```bash title="Terminal"
+npx auth migrate plan
+npx auth migrate apply
+```
+
+`migrate plan` only reads the database. It prints the adapter and dialect it detected, the changes it would make, and every blocker it found, each with a stable code and the section of this guide that resolves it. `migrate apply` derives what it can from your configuration, asks about the decisions it cannot make, saves the reviewed answers to `better-auth-migration.json`, and lists every irreversible action before it writes anything. A blocked run leaves the database unchanged.
+
+Pass the saved file positionally to review or apply the same decisions in another environment:
+
+```bash title="Terminal"
+npx auth migrate plan better-auth-migration.json
+npx auth migrate apply better-auth-migration.json --yes
+```
+
+With Drizzle or Prisma, run `npx auth generate` first and point the adapter at the generated 1.7 schema, but do not apply that schema to the database: the CLI migrates the 1.6 data and schema together. For a Drizzle SQLite or PostgreSQL migration, set the adapter's `transaction` option to `true` so the release migration can run atomically. Record the cutover in your ORM migration history afterwards, so a later deployment does not apply the same changes twice.
+
+An adapter with no SQL migration connection needs the manual path instead:
 
 1. Complete the manual preparation in [Account identity](#account-identity-is-scoped-by-issuer), [OAuth client records](#migrate-oauth-client-records), [SCIM](#scim-requires-full-reprovisioning), and [Device Authorization](#device-authorization) when those sections apply.
-2. Apply the 1.7 schema. With the built-in Kysely adapter, run `npx auth migrate`. With Drizzle, Prisma, or a custom schema workflow, run `npx auth generate`, review the output, and apply it with your migration tooling.
+2. Apply the 1.7 schema with `npx auth generate` and your own migration tooling.
 3. Deploy the 1.7 packages and configuration changes together.
 4. Complete any post-deployment work, including SCIM reprovisioning.
 
@@ -68,6 +88,8 @@ This covers email and password, social login, the generic OAuth plugin, One Tap,
 ### Account identity is scoped by issuer
 
 Better Auth now recognizes an external account by the unique pair of `issuer` and `accountId`. The `providerId` remains the local provider configuration, while `account.id` identifies the Better Auth account row and `account.accountId` remains the stable identifier assigned by the provider. The account schema adds the required `issuer` field and creates a unique compound index across both identity fields without renaming `accountId`.
+
+`auth migrate apply` performs this backfill for the adapters it supports, deriving each provider's issuer from your configuration and asking for the ones it cannot derive. Follow the steps below when you use another adapter, or when the CLI reports a collision only you can resolve.
 
 <Callout type="warn">
   Use a maintenance window and stop authentication writes, including background jobs and admin APIs that insert into `account` directly, before changing the account schema. The generated migration cannot choose trusted issuers or resolve identity collisions for you.
@@ -102,12 +124,12 @@ Better Auth now recognizes an external account by the unique pair of `issuer` an
 3. Populate both fields according to the account type:
 
    | Account type                          | `issuer`                                  | `accountId`                            |
-   | -------------------------------------- | ------------------------------------------ | ---------------------------------------- |
-   | Credential                             | `local:credential`                        | Stable `id` from the linked `user` row |
-   | SIWE wallet, `providerId` `siwe`       | `local:siwe`                              | Existing `<address>:<chainId>` value   |
-   | Google One Tap, `providerId` `google`  | `https://accounts.google.com`             | Existing Google `sub`                  |
-   | Provider with an issuer                | Exact trusted issuer used by the provider | Existing provider account identifier   |
-   | OAuth provider without an issuer       | `local:oauth:<encoded providerId>`        | Existing provider account identifier   |
+   | ------------------------------------- | ----------------------------------------- | -------------------------------------- |
+   | Credential                            | `local:credential`                        | Stable `id` from the linked `user` row |
+   | SIWE wallet, `providerId` `siwe`      | `local:siwe`                              | Existing `<address>:<chainId>` value   |
+   | Google One Tap, `providerId` `google` | `https://accounts.google.com`             | Existing Google `sub`                  |
+   | Provider with an issuer               | Exact trusted issuer used by the provider | Existing provider account identifier   |
+   | OAuth provider without an issuer      | `local:oauth:<encoded providerId>`        | Existing provider account identifier   |
 
    The synthetic issuer percent-encodes its provider ID segment exactly as `encodeURIComponent(providerId)`; for example, `local:oauth:github` and `local:oauth:team%2Fgithub`. Build an explicit `providerId`-to-issuer map for your deployment. Multiple provider configurations that represent the same OpenID Connect authority must use the same issuer. Do not derive an issuer from email, display name, an unverified request value, or a mutable authorization endpoint. SIWE and Google One Tap are not OAuth providers, so the synthetic `local:oauth:` namespace never applies to them.
 4. Find collisions before creating the unique index. Adapt this query to your physical table and field names:
@@ -121,7 +143,7 @@ Better Auth now recognizes an external account by the unique pair of `issuer` an
    ```
 
    If duplicate rows belong to one user, choose the account record to keep and reconcile its provider configuration, tokens, scopes, and timestamps before deleting the others. If a key belongs to multiple users, stop the migration and establish the owner from trusted provider data. Never merge users by matching email alone.
-5. Confirm that every row has both identity fields, then make `issuer` non-nullable and add the unique compound index on `issuer` and `accountId`. `auth migrate` never emits a statement that makes an existing nullable column non-nullable; run this DDL yourself.
+5. Confirm that every row has both identity fields, then make `issuer` non-nullable and add the unique compound index on `issuer` and `accountId`. A generated schema migration never emits a statement that makes an existing nullable column non-nullable; run this DDL yourself.
 
    ```sql title="Postgres"
    ALTER TABLE account ALTER COLUMN issuer SET NOT NULL;
@@ -263,7 +285,9 @@ This covers `@better-auth/oauth-provider`.
 
 ### Migrate OAuth client records
 
-If you use the 1.6 in-core `oidcProvider` or MCP plugin, copy or re-register each `oauthApplication` as an `oauthClient`. Map `redirectUrls` to `redirectUris`, convert `metadata` to JSON, and set the client's grant types and token-endpoint authentication method. Expire the old access tokens, then drop or rename the legacy `oauthAccessToken` table before creating the 1.7 token tables. The CLI does not copy these records or rename `oauthAccessToken.accessToken` to `token`.
+`auth migrate apply` moves these records for the adapters it supports, asking how the 1.6 client secrets are stored and whether stored consents move or users grant them again. Follow the steps below when you use another adapter.
+
+If you use the 1.6 in-core `oidcProvider` or MCP plugin, copy or re-register each `oauthApplication` as an `oauthClient`. Map `redirectUrls` to `redirectUris`, convert `metadata` to JSON, and set the client's grant types and token-endpoint authentication method. Expire the old access tokens, then drop or rename the legacy `oauthAccessToken` table before creating the 1.7 token tables.
 
 If you already use `@better-auth/oauth-provider`, migrate existing `oauthClient` rows as follows:
 
@@ -540,7 +564,7 @@ scim({
 
 ### SCIM requires full reprovisioning
 
-The new SCIM models do not read or convert the 1.6 SCIM tables, so this change cannot use an in-place generated migration.
+The new SCIM models do not read or convert the 1.6 SCIM tables, so provisioned state cannot carry over. `auth migrate apply` retires the legacy providers and their accounts once you confirm the exact inventory, but every directory user must still be provisioned again afterwards.
 
 <Callout type="warn">
   Use a maintenance window. Pause provisioning and stop every application instance that runs the old SCIM plugin before changing the schema.

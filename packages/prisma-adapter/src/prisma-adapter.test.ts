@@ -32,6 +32,116 @@ describe("prisma-adapter", () => {
 		expect(adapter).toBeDefined();
 	});
 
+	it("exposes a parameterized migration connection", async () => {
+		const queryRaw = vi
+			.fn()
+			.mockResolvedValue([{ providerId: "credential", count: 2 }]);
+		const executeRaw = vi.fn().mockResolvedValue(2);
+		const adapter = createTestAdapter({
+			$executeRawUnsafe: executeRaw,
+			$queryRawUnsafe: queryRaw,
+			$transaction: vi.fn(),
+		});
+		const migrationConnection =
+			adapter.options?.adapterConfig.migrationConnection;
+
+		expect(migrationConnection?.dialect).toBe("sqlite");
+		await expect(
+			migrationConnection?.execute({
+				parameters: ["credential"],
+				sql: "SELECT providerId, COUNT(*) AS count FROM account WHERE providerId = ?",
+			}),
+		).resolves.toEqual({
+			rows: [{ providerId: "credential", count: 2 }],
+		});
+		await expect(
+			migrationConnection?.execute({
+				parameters: ["issuer"],
+				sql: "UPDATE account SET issuer = ?",
+			}),
+		).resolves.toEqual({
+			numAffectedRows: 2n,
+			rows: [],
+		});
+		expect(queryRaw).toHaveBeenCalledWith(
+			"SELECT providerId, COUNT(*) AS count FROM account WHERE providerId = ?",
+			"credential",
+		);
+		expect(executeRaw).toHaveBeenCalledWith(
+			"UPDATE account SET issuer = ?",
+			"issuer",
+		);
+	});
+
+	it("uses Prisma's transaction-scoped client for migration queries", async () => {
+		const rootExecuteRaw = vi.fn();
+		const transactionExecuteRaw = vi.fn().mockResolvedValue(1);
+		const transactionClient = {
+			$executeRawUnsafe: transactionExecuteRaw,
+			$queryRawUnsafe: vi.fn(),
+		};
+		const transaction = vi
+			.fn()
+			.mockImplementation(async (callback) => callback(transactionClient));
+		const adapter = createTestAdapter({
+			$executeRawUnsafe: rootExecuteRaw,
+			$queryRawUnsafe: vi.fn(),
+			$transaction: transaction,
+		});
+		const migrationConnection =
+			adapter.options?.adapterConfig.migrationConnection;
+
+		await migrationConnection?.transaction?.(async (connection) => {
+			await connection.execute({
+				parameters: ["local:credential"],
+				sql: "UPDATE account SET issuer = ?",
+			});
+		});
+
+		expect(transaction).toHaveBeenCalledWith(expect.any(Function), {
+			maxWait: 60_000,
+			timeout: 600_000,
+		});
+		expect(transactionExecuteRaw).toHaveBeenCalledWith(
+			"UPDATE account SET issuer = ?",
+			"local:credential",
+		);
+		expect(rootExecuteRaw).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10575#pullrequestreview-4970996114
+	 */
+	it("passes migration transaction timeouts to Prisma", async () => {
+		const transactionClient = {
+			$executeRawUnsafe: vi.fn(),
+			$queryRawUnsafe: vi.fn(),
+		};
+		const transaction = vi
+			.fn()
+			.mockImplementation(async (callback) => callback(transactionClient));
+		const adapter = prismaAdapter(
+			{
+				$executeRawUnsafe: vi.fn(),
+				$queryRawUnsafe: vi.fn(),
+				$transaction: transaction,
+			} as never,
+			{
+				migrationTransaction: { maxWait: 12_000, timeout: 420_000 },
+				provider: "sqlite",
+			},
+		)({} as BetterAuthOptions);
+
+		await adapter.options?.adapterConfig.migrationConnection?.transaction?.(
+			async () => undefined,
+		);
+
+		expect(transaction).toHaveBeenCalledWith(expect.any(Function), {
+			maxWait: 12_000,
+			timeout: 420_000,
+		});
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8365
 	 */

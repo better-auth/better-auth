@@ -1,0 +1,67 @@
+import { DatabaseSync } from "node:sqlite";
+import type { BetterAuthOptions } from "@better-auth/core";
+import { describe, expect, it } from "vitest";
+import type {
+	LegacyReleaseDataState,
+	MigrateFrom16Options,
+} from "./release-migration";
+import {
+	inspectScimAccountsFrom16,
+	retireScimAccountsFrom16,
+} from "./release-migration";
+
+describe("1.6 SCIM account retirement", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10575
+	 */
+	it("revalidates the reviewed inventory immediately before deleting accounts", async () => {
+		const database = new DatabaseSync(":memory:");
+		database.exec(`
+			CREATE TABLE "scimProvider" (
+				"id" text primary key not null,
+				"providerId" text not null
+			);
+			CREATE TABLE "account" (
+				"id" text primary key not null,
+				"accountId" text not null,
+				"providerId" text not null,
+				"userId" text not null
+			);
+			INSERT INTO "scimProvider" ("id", "providerId")
+			VALUES ('sp1', 'workforce');
+			INSERT INTO "account" ("id", "accountId", "providerId", "userId")
+			VALUES ('a1', 'ada@example.com', 'workforce', 'u1');
+		`);
+		const config: BetterAuthOptions = { database };
+		const options: MigrateFrom16Options = {
+			scim: {
+				accountIdsToRetire: ["a1"],
+				providers: "reprovision",
+			},
+		};
+		const state: LegacyReleaseDataState = {
+			scimProvider: {
+				backupTable: "scimProvider__better_auth_1_6",
+				rowCount: 1,
+				sourceTable: "scimProvider",
+				sourceTableNeedsRename: true,
+			},
+		};
+		const inspectedAccounts = await inspectScimAccountsFrom16(
+			config,
+			options,
+			state,
+		);
+		database.exec(`
+			INSERT INTO "account" ("id", "accountId", "providerId", "userId")
+			VALUES ('a2', 'grace@example.com', 'workforce', 'u2');
+		`);
+
+		await expect(
+			retireScimAccountsFrom16(config, options, state, inspectedAccounts),
+		).rejects.toThrow("Missing: a2");
+		expect(
+			database.prepare(`SELECT COUNT(*) AS "count" FROM "account"`).get(),
+		).toEqual({ count: 2 });
+	});
+});
