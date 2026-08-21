@@ -323,6 +323,10 @@ phoneNumber({
 </Callout>
 
 <Callout type="warn">
+  Pick the mode against your threat model. A phone OTP is short — six digits by default, roughly 20 bits — and `"hashed"` uses a plain SHA-256 with no salt and no secret key, so anyone holding a database dump can enumerate the entire code space offline in negligible time. Treat `"hashed"` as protection against incidental exposure such as logs, screenshots, or a casually browsed backup, not against an attacker who already has your data. Use `"encrypted"`, which keys the value to your server `secret`, when the threat model is a database compromise in which that secret is not also exposed. A longer `otpLength` raises the cost of enumeration but does not change the shape of the problem.
+</Callout>
+
+<Callout type="warn">
   Stored OTPs do not record which mode produced them, so verification always applies whichever mode is currently configured. Changing `storeOTP` therefore invalidates any OTP issued under the previous mode. Those codes are rejected until they expire (`expiresIn`, five minutes by default) and the user simply requests a new one, so the safest time to change this option is during a deployment where a short window of failed verifications is acceptable.
 </Callout>
 
