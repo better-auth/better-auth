@@ -322,6 +322,10 @@ phoneNumber({
   Note: This will not affect the OTP sent to the user. It only affects the stored OTP value. The storage backend itself is controlled by the global [`verification`](/docs/reference/options#verification) config, so if you configure `secondaryStorage`, these verification records can live there instead of the database.
 </Callout>
 
+<Callout type="warn">
+  Stored OTPs do not record which mode produced them, so verification always applies whichever mode is currently configured. Changing `storeOTP` therefore invalidates any OTP issued under the previous mode. Those codes are rejected until they expire (`expiresIn`, five minutes by default) and the user simply requests a new one, so the safest time to change this option is during a deployment where a short window of failed verifications is acceptable.
+</Callout>
+
 Alternatively, you can pass a custom encryptor or hasher to control how the stored OTP value is persisted.
 
 **Custom encryptor**
