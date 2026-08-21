@@ -1351,14 +1351,15 @@ export async function migrateOAuthProviderDataFrom16(
 	};
 }
 
-export async function inspectScimAccountsFrom16(
+async function readScimAccountsFrom16(
 	config: BetterAuthOptions,
-	options: MigrateFrom16Options,
 	state: LegacyReleaseDataState,
-	blockers?: MigrationDecisionBlocker[],
 	migrationDatabase?: MigrationDatabase,
-): Promise<LegacyScimAccountRecord[]> {
-	if (!state.scimProvider || !options.scim) return [];
+): Promise<{
+	accounts: LegacyScimAccountRecord[];
+	accountTable: string;
+}> {
+	if (!state.scimProvider) return { accounts: [], accountTable: "account" };
 	const { kysely } = migrationDatabase ?? (await getMigrationDatabase(config));
 	const providerTable = state.scimProvider.sourceTableNeedsRename
 		? state.scimProvider.sourceTable
@@ -1369,7 +1370,7 @@ export async function inspectScimAccountsFrom16(
 	`.execute(kysely);
 	const providerIds = new Set(providers.rows.map((row) => row.providerId));
 	const accountSchema = getAuthTables(config).account;
-	if (!accountSchema) return [];
+	if (!accountSchema) return { accounts: [], accountTable: "account" };
 	const accountTable = accountSchema.modelName || "account";
 	const idColumn = accountSchema.fields.id?.fieldName || "id";
 	const accountIdColumn =
@@ -1380,7 +1381,7 @@ export async function inspectScimAccountsFrom16(
 	const accountTableMetadata = (await kysely.introspection.getTables()).find(
 		(table) => table.name === accountTable,
 	);
-	if (!accountTableMetadata) return [];
+	if (!accountTableMetadata) return { accounts: [], accountTable };
 	const accounts =
 		providerIds.size === 0
 			? []
@@ -1395,6 +1396,22 @@ export async function inspectScimAccountsFrom16(
 						WHERE ${sql.ref(providerIdColumn)} IN (${sql.join([...providerIds])})
 					`.execute(kysely)
 				).rows;
+	return { accounts: [...accounts], accountTable };
+}
+
+export async function inspectScimAccountsFrom16(
+	config: BetterAuthOptions,
+	options: MigrateFrom16Options,
+	state: LegacyReleaseDataState,
+	blockers?: MigrationDecisionBlocker[],
+	migrationDatabase?: MigrationDatabase,
+): Promise<LegacyScimAccountRecord[]> {
+	if (!state.scimProvider || !options.scim) return [];
+	const { accounts, accountTable } = await readScimAccountsFrom16(
+		config,
+		state,
+		migrationDatabase,
+	);
 	const requestedAccountIds = new Set(options.scim.accountIdsToRetire);
 	const activeAccountIds = new Set(accounts.map((account) => account.id));
 	const missingAccountIds = accounts
@@ -1477,6 +1494,19 @@ export async function retireScimAccountsFrom16(
 		DELETE FROM ${sql.table(accountTable)}
 		WHERE ${sql.ref(idColumn)} IN (${sql.join(accounts.map((account) => account.id))})
 	`.execute(kysely);
+	const { accounts: remainingAccounts } = await readScimAccountsFrom16(
+		config,
+		state,
+		migrationDatabase,
+	);
+	if (remainingAccounts.length > 0) {
+		reportMigrationDecisionBlocker(undefined, {
+			code: "scim-inventory-mismatch",
+			missingAccountIds: remainingAccounts.map((account) => account.id).sort(),
+			table: accountTable,
+			unknownAccountIds: [],
+		});
+	}
 	return accounts.map(({ providerAccountId, providerId, userId }) => ({
 		providerAccountId,
 		providerId,

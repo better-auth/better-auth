@@ -5,6 +5,7 @@ import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { scim } from "@better-auth/scim";
 import { betterAuth } from "better-auth";
+import * as releaseMigration from "better-auth/db/migration";
 import {
 	getMigrations,
 	validateMigrationFrom16,
@@ -21,6 +22,7 @@ import Database from "better-sqlite3";
 import prompts from "prompts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMigrateCommand, migrateAction } from "../src/commands/migrate";
+import { createMigrationPlan } from "../src/commands/migration-plan";
 import * as config from "../src/utils/get-config";
 
 vi.mock("prompts", () => ({
@@ -302,6 +304,28 @@ describe("inspect a migration without applying it", () => {
 				)
 				.get(),
 		).toEqual({ count: 0 });
+	});
+});
+
+describe("migration plan status", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10575#discussion_r3830648973
+	 */
+	it("reports pending release work when the schema is already current", () => {
+		const plan = createMigrationPlan({
+			hasChanges: false,
+			migrationBlockers: [],
+			migrationTarget: { adapter: "kysely", dialect: "sqlite" },
+			releaseMigration: {
+				actions: ["write the 1.7 account identity"],
+				id: "1.6-to-1.7",
+			},
+			toBeAdded: [],
+			toBeAddedIndexes: [],
+			toBeCreated: [],
+		});
+
+		expect(plan.status).toBe("ready");
 	});
 });
 
@@ -807,6 +831,45 @@ describe("migrate command modes", () => {
 				)
 				.get(),
 		).toBeUndefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10575#discussion_r3830648963
+	 */
+	it("reports release inspection failures as a blocked JSON plan", async () => {
+		const db = new Database(":memory:");
+		const auth = betterAuth({ database: db });
+		vi.spyOn(config, "getConfig").mockImplementation(async () => auth.options);
+		vi.spyOn(
+			releaseMigration,
+			"inspectLegacyReleaseDataFrom16",
+		).mockRejectedValueOnce(new Error("legacy data is unreadable"));
+		const migrationFile = await writeMigrationDecisions({
+			formatVersion: 1,
+			migration: "1.6-to-1.7",
+		});
+		const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
+
+		await expect(
+			migrateAction({
+				cwd: process.cwd(),
+				migrationFile,
+				mode: "plan",
+				outputFormat: "json",
+			}),
+		).resolves.toBeUndefined();
+
+		expect(process.exitCode).toBe(1);
+		expect(JSON.parse(String(consoleLog.mock.calls[0]?.[0]))).toMatchObject({
+			blockers: [
+				{
+					code: "release-migration-error",
+					message: "legacy data is unreadable",
+				},
+			],
+			status: "blocked",
+		});
+		process.exitCode = undefined;
 	});
 
 	it("rejects interactive JSON application before inspecting the database", async () => {

@@ -36,6 +36,7 @@ import {
 } from "./migration-interview";
 import type {
 	MigrationPlan,
+	ReleaseMigrationErrorBlocker,
 	ReleaseMigrationPlanBlocker,
 } from "./migration-plan";
 import {
@@ -44,6 +45,15 @@ import {
 	UPGRADE_GUIDE_URL,
 } from "./migration-plan";
 
+function createReleaseMigrationErrorBlocker(
+	error: unknown,
+): ReleaseMigrationErrorBlocker {
+	return {
+		code: "release-migration-error",
+		message: error instanceof Error ? error.message : String(error),
+	};
+}
+
 async function collectReleaseMigrationBlockers(
 	config: BetterAuthOptions,
 	options: ReleaseMigrationOptions,
@@ -51,12 +61,29 @@ async function collectReleaseMigrationBlockers(
 	try {
 		return await validateMigrationFrom16(config, options);
 	} catch (error) {
-		return [
-			{
-				code: "release-migration-error",
-				message: error instanceof Error ? error.message : String(error),
-			},
-		];
+		return [createReleaseMigrationErrorBlocker(error)];
+	}
+}
+
+async function inspectReleaseMigrationState(
+	config: BetterAuthOptions,
+	options: ReleaseMigrationOptions,
+	blockers: ReleaseMigrationPlanBlocker[],
+) {
+	try {
+		return await inspectLegacyReleaseDataFrom16(config, options, []);
+	} catch (error) {
+		const blocker = createReleaseMigrationErrorBlocker(error);
+		if (
+			!blockers.some(
+				(candidate) =>
+					candidate.code === blocker.code &&
+					candidate.message === blocker.message,
+			)
+		) {
+			blockers.push(blocker);
+		}
+		return undefined;
 	}
 }
 
@@ -266,7 +293,11 @@ export async function migrateAction(opts: unknown) {
 		? await collectReleaseMigrationBlockers(config, releaseMigrationOptions)
 		: [];
 	let legacyReleaseState = releaseMigration
-		? await inspectLegacyReleaseDataFrom16(config, releaseMigrationOptions, [])
+		? await inspectReleaseMigrationState(
+				config,
+				releaseMigrationOptions,
+				releaseMigrationBlockers,
+			)
 		: undefined;
 	const buildMigrationPlan = () =>
 		createMigrationPlan({
@@ -344,10 +375,10 @@ export async function migrateAction(opts: unknown) {
 			config,
 			releaseMigrationOptions,
 		);
-		legacyReleaseState = await inspectLegacyReleaseDataFrom16(
+		legacyReleaseState = await inspectReleaseMigrationState(
 			config,
 			releaseMigrationOptions,
-			[],
+			releaseMigrationBlockers,
 		);
 		migrationPlan = buildMigrationPlan();
 	}
