@@ -1494,6 +1494,9 @@ export async function retireScimAccountsFrom16(
 		DELETE FROM ${sql.table(accountTable)}
 		WHERE ${sql.ref(idColumn)} IN (${sql.join(accounts.map((account) => account.id))})
 	`.execute(kysely);
+	// The upgrade requires a maintenance window with every SCIM and account
+	// writer stopped. Recheck here so an in-flight write that crossed the
+	// shutdown boundary blocks the migration before it can continue.
 	const { accounts: remainingAccounts } = await readScimAccountsFrom16(
 		config,
 		state,
