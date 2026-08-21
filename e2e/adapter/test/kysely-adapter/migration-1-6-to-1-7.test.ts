@@ -1326,6 +1326,7 @@ it("retires published 1.6.30 SCIM credentials with a custom account ID column an
 				fields: {
 					accountId: "externalAccountId",
 				},
+				identityStrategy: "issuer",
 			},
 			baseURL: "http://localhost:3000",
 			database: {
@@ -1503,6 +1504,7 @@ it("checkpoints MySQL legacy tables and rolls back interrupted SCIM retirement",
 			},
 		};
 		const auth17 = betterAuth({
+			account: { identityStrategy: "issuer" },
 			baseURL: "http://localhost:3000",
 			database: { db: currentDatabase, transaction: true, type: "mysql" },
 			emailAndPassword: { enabled: true },
