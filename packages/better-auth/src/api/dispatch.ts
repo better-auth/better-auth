@@ -8,6 +8,7 @@ import {
 	ATTR_HOOK_TYPE,
 	ATTR_HTTP_ROUTE,
 	ATTR_OPERATION_ID,
+	getOpenTelemetryAPI,
 	withSpan,
 } from "@better-auth/core/instrumentation";
 import type { Endpoint, EndpointContext, InputContext } from "better-call";
@@ -15,6 +16,7 @@ import { kAPIErrorHeaderSymbol, toResponse } from "better-call";
 import { createDefu } from "defu";
 import { isAPIError } from "../utils/is-api-error";
 import { isRequestLike } from "../utils/url";
+import { isHttpRootSpan } from "./http-root-span";
 
 /**
  * Input accepted by {@link dispatchAuthEndpoint}. `context` must already be a
@@ -345,6 +347,15 @@ export async function dispatchAuthEndpoint(
 		path: endpoint.path,
 		headers: input.headers ? new Headers(input.headers) : undefined,
 	};
+
+	const { trace } = getOpenTelemetryAPI();
+	const parentSpan = trace.getActiveSpan?.();
+	// Only rename the provisional root HTTP span owned by the router handler.
+	// Direct `auth.api.*` calls may run under a caller-owned active span.
+	if (isHttpRootSpan(parentSpan)) {
+		parentSpan.updateName(`${methodName} ${route}`);
+		parentSpan.setAttribute(ATTR_HTTP_ROUTE, route);
+	}
 
 	return withSpan(
 		`${methodName} ${route}`,
