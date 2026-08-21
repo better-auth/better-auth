@@ -117,6 +117,12 @@ export type MigrationDecisionBlocker =
 			table: string;
 	  }
 	| {
+			accountCount: number;
+			code: "account-identity-strategy-required";
+			providerIds: string[];
+			table: string;
+	  }
+	| {
 			accountId: string;
 			code: "account-issuer-conflict";
 			requestedIssuer: string;
@@ -228,6 +234,8 @@ export function describeMigrationDecisionBlocker(
 	switch (blocker.code) {
 		case "account-identity-collision":
 			return `The 1.6 account migration found duplicate issuer and provider-account identities: issuer "${blocker.issuer}" with provider account id "${blocker.providerAccountId}".`;
+		case "account-identity-strategy-required":
+			return `The 1.6 account migration found external accounts that still need an issuer backfill for providers ${blocker.providerIds.map((providerId) => `"${providerId}"`).join(", ")}, but account.identityStrategy is not set. Set it to "provider-id" to preserve 1.6 identity semantics, or explicitly set it to "issuer" to adopt issuer-scoped identity.`;
 		case "account-issuer-conflict":
 			return `Account "${blocker.accountId}" already stores issuer "${blocker.storedIssuer}", which conflicts with the reviewed issuer "${blocker.requestedIssuer}".`;
 		case "account-issuer-decision-required":
@@ -1719,6 +1727,35 @@ async function inspectAccountIdentityFrom16(
 		accountTableMetadata.columns.map((column) => column.name),
 	);
 	if (!existingColumns.has(accountIdColumn)) return undefined;
+	const accountIdentities = await sql<LegacyAccountIdentityRow>`
+		SELECT
+			${sql.ref(idColumn)} AS "id",
+			${sql.ref(accountIdColumn)} AS "providerAccountId",
+			${existingColumns.has(issuerColumn) ? sql.ref(issuerColumn) : sql`NULL`} AS "issuer",
+			${sql.ref(providerIdColumn)} AS "providerId"
+		FROM ${sql.table(accountTable)}
+	`.execute(kysely);
+	if (config.account?.identityStrategy === undefined) {
+		const externalAccountsWithoutIssuer = accountIdentities.rows.filter(
+			(account) =>
+				account.providerId !== "credential" &&
+				account.providerId !== "siwe" &&
+				!readStoredIssuer(account.issuer),
+		);
+		if (externalAccountsWithoutIssuer.length > 0) {
+			reportMigrationDecisionBlocker(blockers, {
+				accountCount: externalAccountsWithoutIssuer.length,
+				code: "account-identity-strategy-required",
+				providerIds: [
+					...new Set(
+						externalAccountsWithoutIssuer.map((account) => account.providerId),
+					),
+				].sort(),
+				table: accountTable,
+			});
+			return undefined;
+		}
+	}
 	const usesProviderScopedIdentity =
 		config.account?.identityStrategy === "provider-id";
 
@@ -1764,14 +1801,6 @@ async function inspectAccountIdentityFrom16(
 		});
 	}
 
-	const accountIdentities = await sql<LegacyAccountIdentityRow>`
-		SELECT
-			${sql.ref(idColumn)} AS "id",
-			${sql.ref(accountIdColumn)} AS "providerAccountId",
-			${existingColumns.has(issuerColumn) ? sql.ref(issuerColumn) : sql`NULL`} AS "issuer",
-			${sql.ref(providerIdColumn)} AS "providerId"
-		FROM ${sql.table(accountTable)}
-	`.execute(kysely);
 	const accountIssuerByAccountId = resolveDynamicAccountIssuers({
 		accounts: accountIdentities.rows,
 		blockers,

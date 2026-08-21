@@ -4,4 +4,4 @@
 "better-auth": patch
 ---
 
-Add an opt-in provider-scoped account identity strategy for applications migrating from Better Auth 1.6. The guided migration and 1.7 runtime can now keep external accounts keyed by their existing `providerId` and `accountId` semantics while retaining the required issuer column and compound identity index.
+Add a provider-scoped account identity strategy for applications migrating from Better Auth 1.6. The guided migration now requires an explicit strategy when external accounts need an issuer backfill and recommends `"provider-id"`, which keeps their existing `providerId` and `accountId` semantics while retaining the required issuer column and compound identity index.

@@ -1085,6 +1085,7 @@ describe("get-migration: 1.6 release preflight", () => {
 		);
 		createLegacyConsentTable(db, "oauthConsent");
 		const config: BetterAuthOptions = {
+			account: { identityStrategy: "issuer" },
 			database: db,
 			plugins: [consentPlugin],
 		};
@@ -1282,6 +1283,7 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		const db = new DatabaseSync(":memory:");
 		createLegacyAccountTable(db);
 		const config: BetterAuthOptions = {
+			account: { identityStrategy: "issuer" },
 			database: db,
 			socialProviders: socialConfig,
 		};
@@ -1324,6 +1326,33 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 				providerId: "google",
 			},
 		]);
+	});
+
+	it("requires an identity strategy before migrating external 1.6 accounts", async () => {
+		const db = new DatabaseSync(":memory:");
+		createLegacyAccountTable(db);
+		const config: BetterAuthOptions = {
+			database: db,
+			socialProviders: socialConfig,
+		};
+
+		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([
+			{
+				accountCount: 2,
+				code: "account-identity-strategy-required",
+				providerIds: ["github", "google"],
+				table: "account",
+			},
+		]);
+		await expect(migrateFrom16(config, {})).rejects.toThrow(
+			'The 1.6 account migration found external accounts that still need an issuer backfill for providers "github", "google", but account.identityStrategy is not set. Set it to "provider-id" to preserve 1.6 identity semantics, or explicitly set it to "issuer" to adopt issuer-scoped identity.',
+		);
+		expect(
+			db
+				.prepare(`PRAGMA table_info("account")`)
+				.all()
+				.map((column) => (column as { name: string }).name),
+		).not.toContain("issuer");
 	});
 
 	it("preserves provider-scoped account identities when migrating from 1.6", async () => {
@@ -1395,6 +1424,7 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		const db = new DatabaseSync(":memory:");
 		createLegacyAccountTable(db);
 		const config: BetterAuthOptions = {
+			account: { identityStrategy: "issuer" },
 			database: db,
 			socialProviders: socialConfig,
 		};
@@ -1431,6 +1461,7 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 			 VALUES ('a1', '8f3c', 'microsoft', 'u1', '2020-01-01', '2020-01-01')`,
 		);
 		const config: BetterAuthOptions = {
+			account: { identityStrategy: "issuer" },
 			database: db,
 			socialProviders: {
 				microsoft: {
@@ -1506,6 +1537,7 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 				('a2', 'subject-2', 'microsoft', 'u2', '2020-01-01', '2020-01-01')`,
 		);
 		const config: BetterAuthOptions = {
+			account: { identityStrategy: "issuer" },
 			database: db,
 			socialProviders: {
 				microsoft: {
@@ -1595,6 +1627,7 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 				('a2', '108451', '', 'google', 'u2', '2020-01-01', '2020-01-01')`,
 		);
 		const config: BetterAuthOptions = {
+			account: { identityStrategy: "issuer" },
 			database: db,
 			socialProviders: socialConfig,
 		};
@@ -1732,6 +1765,7 @@ describe("get-migration: 1.6 account issuer resolution", () => {
 		const db = new DatabaseSync(":memory:");
 		createLegacyAccountTable(db);
 		const config: BetterAuthOptions = {
+			account: { identityStrategy: "issuer" },
 			database: db,
 			socialProviders: {
 				github: { ...socialConfig.github, enabled: false },
@@ -1781,6 +1815,7 @@ describe("get-migration: 1.6 plugin provider issuer resolution", () => {
 			{ accountId: "9c11", id: "a2", providerId: "intranet" },
 		]);
 		const config: BetterAuthOptions = {
+			account: { identityStrategy: "issuer" },
 			database: db,
 			plugins: [
 				genericOAuth({
@@ -1844,6 +1879,7 @@ describe("get-migration: 1.6 plugin provider issuer resolution", () => {
 			{ accountId: "9c11", id: "a1", providerId: "intranet" },
 		]);
 		const config: BetterAuthOptions = {
+			account: { identityStrategy: "issuer" },
 			database: db,
 			plugins: [
 				genericOAuth({
@@ -1880,6 +1916,7 @@ describe("get-migration: 1.6 plugin provider issuer resolution", () => {
 			{ accountId: "9c11", id: "a1", providerId: "workforce" },
 		]);
 		const config: BetterAuthOptions = {
+			account: { identityStrategy: "issuer" },
 			database: db,
 			plugins: [
 				genericOAuth({
@@ -1921,6 +1958,7 @@ describe("get-migration: 1.6 plugin provider issuer resolution", () => {
 			{ accountId: "9c11", id: "a1", providerId: "workforce" },
 		]);
 		const config: BetterAuthOptions = {
+			account: { identityStrategy: "issuer" },
 			database: db,
 			plugins: [
 				genericOAuth({

@@ -160,7 +160,10 @@ describe("auth migrate: refusing a destructive column add", () => {
 		expect(output).toContain(
 			"Migration blocked. No database changes were applied.",
 		);
-		expect(output).toContain("[issuer-required]");
+		expect(output).toContain("[account-identity-strategy-required]");
+		expect(output).toContain(
+			'Set account.identityStrategy to "provider-id" in your Better Auth configuration to preserve 1.6 account identity (recommended)',
+		);
 		expect(output).toContain(
 			"https://better-auth.com/docs/guides/1-7-upgrade-guide",
 		);

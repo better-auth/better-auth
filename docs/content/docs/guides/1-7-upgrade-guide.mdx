@@ -56,6 +56,8 @@ These features change the schema:
 
 `auth migrate` recognizes 1.6 data and switches to a guided migration that changes data and schema together. It covers the built-in PostgreSQL, MySQL, SQLite, and SQL Server configurations, plus SQL-backed Drizzle and Prisma adapters. Back up the database, stop authentication writes, and run:
 
+If the 1.6 database contains external accounts, first set `account.identityStrategy` explicitly. Use `"provider-id"` to preserve 1.6 account identity, which is the recommended migration path. Set `"issuer"` only when you intend to adopt issuer-scoped identity and have audited every integration that depends on account identity. The migration blocks before writing when external accounts need a backfill and this option is omitted.
+
 ```bash title="Terminal"
 npx auth migrate plan
 npx auth migrate apply
@@ -93,7 +95,7 @@ Better Auth now recognizes an external account by the unique pair of `issuer` an
 
 #### Preserve 1.6 provider-scoped account identity
 
-Better Auth 1.6 recognized an external account by `providerId` and `accountId`. If another system depends on that namespace, configure the compatibility strategy before running `auth migrate plan` or `auth migrate apply`, then deploy the same option with 1.7:
+Better Auth 1.6 recognized an external account by `providerId` and `accountId`, so the compatibility-preserving migration path uses `"provider-id"`. The guided migration recommends this strategy and requires an explicit choice when populated external accounts still need an issuer backfill. Configure it before running `auth migrate plan` or `auth migrate apply`, then deploy the same option with 1.7:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -110,7 +112,9 @@ This option keeps the required 1.7 `issuer` column and compound index, but store
 
 Keep this option identical on every instance that reads or writes the database. Under this strategy, renaming a provider changes its account namespace, and two provider aliases for the same OpenID Connect issuer remain separate identities, matching the provider-scoped behavior of 1.6.
 
-Do not enable this option after completing an issuer-scoped 1.7 migration. The guided migration reports a blocker if an account already stores a different issuer rather than silently re-keying it. Leave the default `"issuer"` strategy in place for an already migrated database; changing its identity strategy requires a separate, reviewed account re-key migration.
+Set `account.identityStrategy` to `"issuer"` before migration only when you deliberately want the 1.7 identity behavior. This can merge provider aliases that share an issuer and changes the namespace observed by systems that use the 1.6 `providerId` and `accountId` pair.
+
+Fresh 1.7 applications still default to `"issuer"`. Do not enable `"provider-id"` after completing an issuer-scoped 1.7 migration. The guided migration reports a blocker if an account already stores a different issuer rather than silently re-keying it. Leave the `"issuer"` strategy in place for an already migrated database; changing its identity strategy requires a separate, reviewed account re-key migration.
 
 <Callout type="warn">
   Use a maintenance window and stop authentication writes, including background jobs and admin APIs that insert into `account` directly, before changing the account schema. The generated migration cannot choose trusted issuers or resolve identity collisions for you.

@@ -1163,9 +1163,10 @@ export type BetterAuthOptions = {
 				 * account ID when recognizing an external account.
 				 *
 				 * `"issuer"` uses the authority verified by the provider, or the
-				 * provider's synthetic issuer when it has no issuer of its own. Use
-				 * `"provider-id"` to preserve the provider-scoped identity behavior of
-				 * Better Auth 1.6 through migration and at runtime.
+				 * provider's synthetic issuer when it has no issuer of its own. The guided
+				 * 1.6 migration requires an explicit strategy for populated external
+				 * accounts and recommends `"provider-id"` to preserve their provider-scoped
+				 * identity through migration and at runtime.
 				 *
 				 * @default "issuer"
 				 */
