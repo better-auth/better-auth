@@ -308,6 +308,49 @@ A function that sends the OTP code to the user's phone number. It takes the phon
 
 The time in seconds after which the OTP code expires. Default is `300` seconds.
 
+### `storeOTP`
+
+The method used to transform the OTP before it is stored by Better Auth's verification layer, whether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
+
+```ts title="auth.ts"
+phoneNumber({
+    storeOTP: "hashed",
+})
+```
+
+<Callout>
+  Note: This will not affect the OTP sent to the user. It only affects the stored OTP value. The storage backend itself is controlled by the global [`verification`](/docs/reference/options#verification) config, so if you configure `secondaryStorage`, these verification records can live there instead of the database.
+</Callout>
+
+Alternatively, you can pass a custom encryptor or hasher to control how the stored OTP value is persisted.
+
+**Custom encryptor**
+
+```ts title="auth.ts"
+phoneNumber({
+    storeOTP: {
+        encrypt: async (otp) => {
+            return myCustomEncryptor(otp);
+        },
+        decrypt: async (otp) => {
+            return myCustomDecryptor(otp);
+        },
+    }
+})
+```
+
+**Custom hasher**
+
+```ts title="auth.ts"
+phoneNumber({
+    storeOTP: {
+        hash: async (otp) => {
+            return myCustomHasher(otp);
+        },
+    }
+})
+```
+
 ### `callbackOnVerification`
 
 A function that is called after the phone number is verified. It takes the phone number and the user object as the first argument and a request object as the second argument.
