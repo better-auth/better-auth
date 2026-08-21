@@ -151,6 +151,7 @@ it("guides a populated 1.6.30 PostgreSQL database through the CLI decisions file
 			`${JSON.stringify(
 				{
 					formatVersion: 1,
+					migration: "1.6-to-1.7",
 					oauth: {
 						clientSecrets: { source: "plain", target: "hashed" },
 						consents: "migrate",
