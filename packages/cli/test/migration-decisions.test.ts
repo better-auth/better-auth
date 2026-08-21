@@ -3,7 +3,42 @@ import os from "node:os";
 import path from "node:path";
 import { expect, it } from "vitest";
 import type { MigrationDecisions } from "../src/commands/migration-decisions";
-import { writeMigrationDecisions } from "../src/commands/migration-decisions";
+import {
+	loadMigrationDecisions,
+	writeMigrationDecisions,
+} from "../src/commands/migration-decisions";
+
+it("rejects decisions that do not identify the release migration", async () => {
+	const directory = await fs.mkdtemp(
+		path.join(os.tmpdir(), "better-auth-migration-decisions-"),
+	);
+	const filePath = path.join(directory, "better-auth-migration.json");
+	await fs.writeFile(filePath, JSON.stringify({ formatVersion: 1 }), "utf8");
+
+	try {
+		await expect(loadMigrationDecisions(filePath)).rejects.toThrow("migration");
+	} finally {
+		await fs.rm(directory, { recursive: true });
+	}
+});
+
+it("rejects decisions for a different release migration", async () => {
+	const directory = await fs.mkdtemp(
+		path.join(os.tmpdir(), "better-auth-migration-decisions-"),
+	);
+	const filePath = path.join(directory, "better-auth-migration.json");
+	await fs.writeFile(
+		filePath,
+		JSON.stringify({ formatVersion: 1, migration: "1.7-to-1.8" }),
+		"utf8",
+	);
+
+	try {
+		await expect(loadMigrationDecisions(filePath)).rejects.toThrow("migration");
+	} finally {
+		await fs.rm(directory, { recursive: true });
+	}
+});
 
 it("preserves an existing migration decisions file with different content", async () => {
 	const directory = await fs.mkdtemp(
@@ -11,7 +46,11 @@ it("preserves an existing migration decisions file with different content", asyn
 	);
 	const filePath = path.join(directory, "better-auth-migration.json");
 	const existing = `${JSON.stringify(
-		{ formatVersion: 1, issuers: { github: "local:oauth:github" } },
+		{
+			formatVersion: 1,
+			migration: "1.6-to-1.7",
+			issuers: { github: "local:oauth:github" },
+		},
 		null,
 		2,
 	)}\n`;
@@ -21,6 +60,7 @@ it("preserves an existing migration decisions file with different content", asyn
 		await expect(
 			writeMigrationDecisions(filePath, {
 				formatVersion: 1,
+				migration: "1.6-to-1.7",
 				issuers: { github: "https://github.com" },
 			} satisfies MigrationDecisions),
 		).rejects.toThrow(
@@ -39,6 +79,7 @@ it("reuses an identical migration decisions file", async () => {
 	const filePath = path.join(directory, "better-auth-migration.json");
 	const decisions = {
 		formatVersion: 1,
+		migration: "1.6-to-1.7",
 		issuers: { github: "local:oauth:github" },
 	} satisfies MigrationDecisions;
 
@@ -61,10 +102,12 @@ it("allows only one of two different concurrent decisions to claim a path", asyn
 	const filePath = path.join(directory, "better-auth-migration.json");
 	const left = {
 		formatVersion: 1,
+		migration: "1.6-to-1.7",
 		issuers: { github: "local:oauth:github" },
 	} satisfies MigrationDecisions;
 	const right = {
 		formatVersion: 1,
+		migration: "1.6-to-1.7",
 		issuers: { github: "https://github.com" },
 	} satisfies MigrationDecisions;
 

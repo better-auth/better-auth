@@ -26,6 +26,7 @@ import type {
 import {
 	loadMigrationDecisions,
 	MIGRATION_DECISIONS_FILE,
+	RELEASE_MIGRATION_ID,
 	toReleaseMigrationOptions,
 } from "./migration-decisions";
 import {
@@ -154,6 +155,12 @@ function printHumanMigrationPlan(
 	console.log(
 		`Blockers: ${migrationPlan.blockers.map(({ code }) => code).join(", ") || "none"}`,
 	);
+	if (migrationPlan.releaseMigration) {
+		console.log(`Release migration: ${migrationPlan.releaseMigration.id}`);
+		for (const action of migrationPlan.releaseMigration.actions) {
+			console.log("->", action);
+		}
+	}
 	console.log("Plan complete. No database changes were applied.");
 }
 
@@ -258,11 +265,23 @@ export async function migrateAction(opts: unknown) {
 	let releaseMigrationBlockers: ReleaseMigrationPlanBlocker[] = releaseMigration
 		? await collectReleaseMigrationBlockers(config, releaseMigrationOptions)
 		: [];
+	let legacyReleaseState = releaseMigration
+		? await inspectLegacyReleaseDataFrom16(config, releaseMigrationOptions, [])
+		: undefined;
 	const buildMigrationPlan = () =>
 		createMigrationPlan({
 			hasChanges,
 			migrationBlockers: effectiveMigrationBlockers,
 			migrationTarget,
+			releaseMigration: legacyReleaseState
+				? {
+						actions: describeIrreversibleReleaseActions(
+							legacyReleaseState,
+							decisions,
+						),
+						id: RELEASE_MIGRATION_ID,
+					}
+				: undefined,
 			releaseMigrationBlockers,
 			toBeAdded,
 			toBeAddedIndexes,
@@ -289,14 +308,6 @@ export async function migrateAction(opts: unknown) {
 		return;
 	}
 
-	let legacyReleaseState =
-		releaseMigration && !options.approved
-			? await inspectLegacyReleaseDataFrom16(
-					config,
-					releaseMigrationOptions,
-					[],
-				)
-			: undefined;
 	if (
 		legacyReleaseState &&
 		!options.migrationFile &&
