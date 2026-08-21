@@ -6,10 +6,14 @@ import * as z from "zod";
 /** File name the guided 1.6 migration reads and writes its reviewed decisions from. */
 export const MIGRATION_DECISIONS_FILE = "better-auth-migration.json";
 
+/** Release transition authorized by the current decisions artifact. */
+export const RELEASE_MIGRATION_ID = "1.6-to-1.7" as const;
+
 export type ReleaseMigrationOptions = Parameters<typeof migrateFrom16>[1];
 
 const migrationDecisionsSchema = z.strictObject({
 	formatVersion: z.literal(1),
+	migration: z.literal(RELEASE_MIGRATION_ID),
 	accountIssuers: z.record(z.string().min(1), z.string().min(1)).optional(),
 	issuers: z.record(z.string().min(1), z.string().min(1)).optional(),
 	legacyTableNames: z
@@ -38,7 +42,7 @@ const migrationDecisionsSchema = z.strictObject({
 		.optional(),
 });
 
-/** Reviewed answers to the 1.6 release decisions a database cannot resolve on its own. */
+/** Reviewed answers to the identified release migration decisions. */
 export type MigrationDecisions = z.infer<typeof migrationDecisionsSchema>;
 
 /**
