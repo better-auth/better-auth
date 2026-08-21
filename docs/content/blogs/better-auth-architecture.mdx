@@ -1,0 +1,156 @@
+---
+title: "Inside Better Auth: A Deep Dive into Our Architecture"
+description: "Explore the architectural decisions behind Better Auth, from our Better Call-powered API layer to the universal database adapter system and composable plugin architecture."
+date: 2026-06-10
+author:
+  name: "Better Auth Team"
+  avatar: ""
+image: "/blogs/architecture-deep-dive.png"
+tags: ["architecture", "better-call", "adapters", "plugins", "deep-dive"]
+---
+
+# Exploring Better Auth's Architecture
+
+When we set out to build Better Auth, we committed to a constraint that shaped every decision afterward: authentication should work the same way regardless of the framework, the database, or the runtime it lives in. That constraint sounds simple, but it forces you to think carefully about where abstractions belong. In this post, we want to walk through the architecture that emerged from that thinking and explain why we built it the way we did.
+
+***
+
+## Better Call: Type-Safe API Routing
+
+At the heart of Better Auth's API layer is [Better Call](https://github.com/better-auth/better-call), a minimal, type-safe HTTP router we created specifically for Better Auth's needs.
+
+The problem we faced was that a library cannot assume a framework. Our endpoints need to run inside Next.js, SvelteKit, Hono, Express, and anything
+else that speaks HTTP. The only stable contract shared by all of them is the web standard: a function that takes a `Request` and returns a `Response`.
+So rather than writing adapters for every framework's routing conventions, we built our routing layer on that universal contract and let frameworks mount it however they like.
+
+Better Call gives us three things we consider essential. First, strict type safety: every endpoint is defined with its request schema, and the handler
+receives a fully typed context where the body, headers, and auth context are correctly inferred. TypeScript catches mistakes at compile time rather than in production.
+Second, clean middleware composition, so cross-cutting concerns stay out of endpoint logic. Third, the endpoint definitions are introspectable,
+which is how we generate OpenAPI documentation without maintaining too much of it by hand.
+
+Every endpoint you interact with, from `/sign-in/email` to `/two-factor/verify`, is powered by Better Call under the hood.
+
+### The Router as a Composition Point
+
+When you call `betterAuth()`, we collect endpoints from core and from every installed plugin and wire them into a single router.
+The interesting part is not the wiring itself but what the router makes possible: it is the central composition point where plugins and core meet.
+
+Because everything flows through one router, we can offer interception at multiple levels of granularity. Hooks fire before any routing happens,
+which lets plugins transform requests or short-circuit them entirely. Path-scoped middlewares handle concerns like rate limiting on sensitive routes.
+Before and after hooks let plugins wrap specific endpoint executions to modify behavior or responses. Each level exists because plugins need different degrees of control,
+and pushing all interception into one mechanism would force awkward workarounds.
+
+### Observability Built In
+
+The same hook system powers our observability story. Every endpoint execution, middleware call, and hook invocation emits OpenTelemetry spans automatically.
+When you register a TracerProvider in your application, Better Auth starts emitting spans for operations like sign-in, database queries, and hook executions.
+This falls out of the architecture naturally: because all execution flows through well-defined seams, instrumenting those seams instruments everything.
+
+***
+
+## The Universal Adapter System
+
+One of Better Auth's most consequential decisions is that we do not own your database. You can use Prisma, Drizzle, Kysely, MongoDB, or a custom adapter, and everything works the same.
+The challenge is that databases disagree about almost everything: how IDs are generated, whether JSON is a native type, whether dates are objects or strings, whether transactions exist.
+Our answer is a layered adapter architecture that isolates each kind of disagreement in its own layer.
+
+### The Three Layers
+
+At the bottom is the **Custom Adapter** layer. This is what adapter authors implement: a minimal interface that maps directly to database operations like `create`, `find`, `update`, and `delete`.
+We kept it intentionally small because different databases have wildly different APIs, and every abstraction we impose at this level is one more thing an adapter author has to translate.
+The less we ask for, the easier it is to support a new database correctly.
+
+The middle layer is the **DB Adapter Factory**, and it carries most of the conceptual weight. The factory wraps any Custom Adapter and handles all the translation work:
+converting between JavaScript types and database-specific types, generating IDs, mapping between Better Auth field names and database column names, and wrapping operations in transactions
+when the database supports them. The key idea is that adapters declare capabilities rather than implement behavior. An adapter tells the factory whether its database has native JSON columns,
+supports Date objects, or names its primary key differently, and the factory adjusts accordingly. This inversion means the hard normalization logic is written once, in core, instead of being
+reimplemented and subtly diverging across every adapter.
+
+At the top is the **Internal Adapter** layer. This is where database operations become authentication operations: creating users, finding sessions, linking accounts.
+The rest of Better Auth never thinks in terms of rows and columns; it thinks in terms of these domain operations. That separation matters because authentication logic like OAuth
+account linking or session lifecycle management is genuinely complex, and we want it expressed exactly once, above the storage details rather than entangled with them.
+
+### Secondary Storage
+
+The Internal Adapter layer is also where we resolve a tension every auth system faces: sessions are both durable records and hot-path lookups. Your primary database gives you
+durability and queryability, but validating a session on every request is a latency-sensitive operation that wants an in-memory store.
+
+Rather than make you choose, we let you configure a secondary key-value store like Redis, and the Internal Adapter routes operations transparently. Session reads check the fast store
+first and fall back to the database. Session writes go to both with appropriate expiry. Because this logic lives in the Internal Adapter, nothing above it needs to know secondary storage exists,
+and nothing below it needs to coordinate two stores.
+
+### Database Hooks
+
+Both adapter layers support hooks that intercept database operations before or after any create, update, or delete. This is the escape hatch for concerns we cannot predict:
+validation rules specific to your domain, syncing to external systems, audit logging. We would rather give you a well-defined seam than have you fork an adapter.
+
+***
+
+## The Plugin Architecture
+
+Authentication is not one feature; it is a family of loosely related features that different applications combine differently. Two-factor authentication, organizations,
+magic links, passkeys: forcing all of these into core would bloat every installation, but leaving them out would make the library incomplete. Our plugin system is how we resolve that tension.
+The goal is that plugins feel like natural extensions of the core system rather than bolted-on additions, which means they need access to the same primitives core uses.
+
+### What Plugins Can Do
+
+A plugin implements the `BetterAuthPlugin` interface, and each of its capabilities corresponds to a dimension along which authentication features actually vary.
+
+Plugins can extend the schema, because most auth features need to persist something. The two-factor plugin adds a flag to the user table and a new table for TOTP secrets and backup codes.
+At initialization, all plugin schemas are merged with the core schema, and that merged schema drives type inference, migrations, and adapter configuration. There is one schema, and everyone agrees on it.
+
+Plugins can add API endpoints, because most auth features need new operations. These endpoints are defined with the same Better Call primitives as core endpoints,
+so they get the same type safety, middleware support, and OpenAPI generation. A plugin endpoint is indistinguishable from a core endpoint, by design.
+
+Plugins can register path-scoped middlewares and hook into the request lifecycle at every level the router exposes. This is the same interception machinery described earlier,
+and it is deliberately not a separate, weaker API for plugins. Core has no privileged access.
+
+### How Plugins Compose
+
+The hook system is how plugins modify core behavior without patching code, and the two-factor plugin is our favorite illustration.
+
+When a user with two-factor enabled signs in, the core sign-in endpoint runs normally and creates a session. The two-factor plugin has registered an after hook matching sign-in paths.
+That hook checks whether the user has two-factor enabled, and if so it intercepts the response: it revokes the session that was just created, issues a verification token for the two-factor flow, and returns a response telling the client that verification is required. Once the user completes verification, a new session is created and sign-in completes.
+
+Notice what this pattern buys us. The core sign-in endpoint knows nothing about two-factor authentication. The plugin never modifies core code; it observes and rewrites outcomes at
+a well-defined seam. Multiple plugins can hook the same endpoints and execute in a defined order, which is what lets independently authored features coexist on the same flows.
+
+***
+
+## The Initialization Flow
+
+Initialization is where all of these systems get assembled, and the ordering reflects their dependencies.
+
+Your options are merged with defaults and validated; in production we check that you are not running with a weak or default secret. The database layer is resolved next,
+wrapping whatever you provided into the normalized adapter interface, because nearly everything downstream needs it. Then each plugin's `init` hook runs with the auth context,
+giving plugins a chance to modify configuration before anything is finalized. Schemas are merged, endpoint conflicts are checked, and the router is built from all the collected endpoints,
+middlewares, and hooks.
+
+What comes out the other end is deliberately boring: a standard Request to Response function. That is the entire integration surface with your framework, and keeping it that small
+is what keeps Better Auth framework-agnostic.
+
+### Request Flow
+
+At runtime, every request flows through the same pipeline: request hooks, rate limiting, routing, middleware, before hooks, the endpoint handler, after hooks, response hooks.
+The pipeline is fixed, but every stage is a point where plugins or your own code can participate.
+
+This is the through-line of the whole architecture. We keep the core pipeline simple and invariant, and we make the seams between stages rich and well-defined. Flexibility lives
+at the seams, not in the core.
+
+***
+
+## Built to Evolve
+
+The architecture we've described gives us room to evolve without breaking existing users. The adapter system means new databases can be supported without changes to core.
+The plugin system means new authentication methods can be added without bloating the base package. And Better Call's design means we can optimize the hot path while keeping the API stable.
+
+If you're interested in building plugins or adapters, check out our [contributing guide](https://github.com/better-auth/better-auth/blob/main/CONTRIBUTING.md).
+We'd love to see what you create.
+
+***
+
+## Learn More
+
+* [Database Adapters Documentation](/docs/concepts/database)
+* [Plugin Development Guide](/docs/concepts/plugins)
+* [Better Call on GitHub](https://github.com/bekacru/better-call)
