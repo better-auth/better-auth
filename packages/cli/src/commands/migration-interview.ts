@@ -12,6 +12,7 @@ import type {
 } from "./migration-decisions";
 import {
 	MIGRATION_DECISIONS_FILE,
+	RELEASE_MIGRATION_ID,
 	writeMigrationDecisions,
 } from "./migration-decisions";
 import type {
@@ -235,7 +236,7 @@ export async function interviewMigrationDecisions({
 			"1.7 matches an account by its issuer, so an issuer that differs from the one a later sign-in establishes never matches that account again.",
 		);
 	}
-	const issuers: Record<string, string> = {};
+	const issuers: Record<string, string> = { ...configured.issuers };
 	for (const blocker of issuerBlockers) {
 		const answers: Record<string, unknown> = await prompts({
 			type: "text",
@@ -342,7 +343,10 @@ export async function interviewMigrationDecisions({
 		scim = { retireAccountIds: [...retireAccountIds] };
 	}
 
-	const decisions: MigrationDecisions = { formatVersion: 1 };
+	const decisions: MigrationDecisions = {
+		formatVersion: 1,
+		migration: RELEASE_MIGRATION_ID,
+	};
 	if (Object.keys(accountIssuers).length > 0) {
 		decisions.accountIssuers = accountIssuers;
 	}

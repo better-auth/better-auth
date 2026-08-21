@@ -7,16 +7,7 @@ Better Auth supports a wide range of database dialects out of the box thanks to 
 
 Any dialect supported by Kysely can be utilized with Better Auth, including capabilities for generating and migrating database schemas through the <Link href="/docs/concepts/cli">CLI</Link>.
 
-Pass a dialect together with its SQL type so migrations know which syntax to emit:
-
-```ts title="auth.ts"
-export const auth = betterAuth({
-  database: {
-    dialect,
-    type: "postgres"
-  }
-});
-```
+When using the CLI with a custom dialect, set `database.type` alongside `database.dialect` so migrations emit SQL for the correct database.
 
 ## Core Dialects
 

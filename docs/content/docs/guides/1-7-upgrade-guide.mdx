@@ -61,7 +61,7 @@ npx auth migrate plan
 npx auth migrate apply
 ```
 
-`migrate plan` only reads the database. It prints the adapter and dialect it detected, the changes it would make, and every blocker it found, each with a stable code and the section of this guide that resolves it. `migrate apply` derives what it can from your configuration, asks about the decisions it cannot make, saves the reviewed answers to `better-auth-migration.json`, and lists every irreversible action before it writes anything. A blocked run leaves the database unchanged.
+`migrate plan` only reads the database. It prints the adapter and dialect it detected, the schema changes it would make, every irreversible release action, and every blocker it found. Each blocker has a stable code and links to the section of this guide that resolves it. `migrate apply` derives what it can from your configuration, asks about the decisions it cannot make, and saves the reviewed answers to `better-auth-migration.json`. The file identifies the `1.6-to-1.7` transition and records the effective issuers from your configuration, so applying it under a changed configuration produces a blocker instead of silently changing account identity. A blocked run leaves the database unchanged.
 
 Pass the saved file positionally to review or apply the same decisions in another environment:
 

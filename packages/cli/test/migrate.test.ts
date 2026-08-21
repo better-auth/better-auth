@@ -450,6 +450,11 @@ describe("migrate published 1.6.30 account data", () => {
 
 		expect(processExit).not.toHaveBeenCalled();
 		expect(consoleLog).toHaveBeenCalledWith("Blockers: none");
+		expect(consoleLog).toHaveBeenCalledWith("Release migration: 1.6-to-1.7");
+		expect(consoleLog).toHaveBeenCalledWith(
+			"->",
+			"write the 1.7 account identity onto every existing account row",
+		);
 		expect(consoleLog).toHaveBeenCalledWith(
 			"Plan complete. No database changes were applied.",
 		);
@@ -473,11 +478,18 @@ describe("migrate published 1.6.30 account data", () => {
 		const jsonPlan = JSON.parse(String(consoleLog.mock.calls[0]?.[0])) as {
 			blockers: Array<Record<string, unknown>>;
 			formatVersion: number;
+			releaseMigration: { actions: string[]; id: string };
 			status: string;
 		};
 		expect(jsonPlan).toMatchObject({
 			blockers: [],
 			formatVersion: 1,
+			releaseMigration: {
+				actions: [
+					"write the 1.7 account identity onto every existing account row",
+				],
+				id: "1.6-to-1.7",
+			},
 			status: "ready",
 		});
 
@@ -839,6 +851,7 @@ describe("migrate command modes", () => {
 	] as const)("passes the positional migration file to migrate %s", async (mode) => {
 		const migrationFile = await writeMigrationDecisions({
 			formatVersion: 2,
+			migration: "1.6-to-1.7",
 		});
 		const getConfig = vi.spyOn(config, "getConfig");
 		const consoleError = vi
@@ -907,6 +920,7 @@ describe("plan every unresolved 1.6.30 release decision", () => {
 		const { scimAccountId } = await createReleaseDecisionFixture(db);
 		const plan = await writeMigrationDecisions({
 			formatVersion: 1,
+			migration: "1.6-to-1.7",
 			scim: { retireAccountIds: [] },
 		});
 		const processExit = vi
@@ -1028,6 +1042,7 @@ describe("plan every unresolved 1.6.30 release decision", () => {
 			await createReleaseDecisionFixture(db);
 		const plan = await writeMigrationDecisions({
 			formatVersion: 1,
+			migration: "1.6-to-1.7",
 			issuers: { "workforce-fixture": "local:retired-scim:workforce-fixture" },
 			oauth: {
 				clientSecrets: { source: "plain", target: "hashed" },
@@ -1105,6 +1120,7 @@ describe("plan every unresolved 1.6.30 release decision", () => {
 			.get(registeredClientId) as { clientSecret: string };
 		const plan = await writeMigrationDecisions({
 			formatVersion: 1,
+			migration: "1.6-to-1.7",
 			issuers: { "workforce-fixture": "local:retired-scim:workforce-fixture" },
 			oauth: {
 				clientSecrets: { source: "hashed", target: "hashed" },
@@ -1142,6 +1158,7 @@ describe("plan every unresolved 1.6.30 release decision", () => {
 			.get(registeredClientId) as { clientSecret: string };
 		const plan = await writeMigrationDecisions({
 			formatVersion: 1,
+			migration: "1.6-to-1.7",
 			issuers: { "workforce-fixture": "local:retired-scim:workforce-fixture" },
 			oauth: {
 				clientSecrets: { source: "encrypted", target: "encrypted" },
@@ -1172,6 +1189,7 @@ describe("plan every unresolved 1.6.30 release decision", () => {
 		await createResolvableAccountFixture(db);
 		const plan = await writeMigrationDecisions({
 			formatVersion: 1,
+			migration: "1.6-to-1.7",
 			issuers: { credential: "https://credential.example" },
 		});
 		const processExit = vi
@@ -1215,6 +1233,7 @@ describe("plan every unresolved 1.6.30 release decision", () => {
 		await createReleaseDecisionFixture(db);
 		const plan = await writeMigrationDecisions({
 			formatVersion: 2,
+			migration: "1.6-to-1.7",
 			retireScim: true,
 		});
 		const processExit = vi
@@ -1372,7 +1391,11 @@ describe("interview the unresolved 1.6.30 release decisions", () => {
 		);
 		expect(await readRecordedDecisions(cwd)).toEqual({
 			formatVersion: 1,
-			issuers: { "workforce-fixture": "local:retired-scim:workforce-fixture" },
+			migration: "1.6-to-1.7",
+			issuers: {
+				credential: "local:credential",
+				"workforce-fixture": "local:retired-scim:workforce-fixture",
+			},
 			oauth: {
 				clientSecrets: { source: "plain", target: "hashed" },
 				consents: "reauthorize",
@@ -1421,7 +1444,11 @@ describe("interview the unresolved 1.6.30 release decisions", () => {
 		);
 		expect(await readRecordedDecisions(cwd)).toEqual({
 			formatVersion: 1,
-			issuers: { "workforce-fixture": "local:retired-scim:workforce-fixture" },
+			migration: "1.6-to-1.7",
+			issuers: {
+				credential: "local:credential",
+				"workforce-fixture": "local:retired-scim:workforce-fixture",
+			},
 			oauth: {
 				clientSecrets: { source: "plain", target: "hashed" },
 				consents: "migrate",
@@ -1448,6 +1475,7 @@ describe("interview the unresolved 1.6.30 release decisions", () => {
 		const cwd = await createInterviewDirectory();
 		const existingDecisions = {
 			formatVersion: 1,
+			migration: "1.6-to-1.7",
 			issuers: { github: "https://github.com" },
 		};
 		await fs.writeFile(
@@ -1889,6 +1917,7 @@ describe("migrate a customized 1.6.30 table name", () => {
 		await createRenamedLegacyClientFixture(db);
 		const plan = await writeMigrationDecisions({
 			formatVersion: 1,
+			migration: "1.6-to-1.7",
 			legacyTableNames: { oauthApplication: "legacyOAuthApplication" },
 			oauth: {
 				clientSecrets: { source: "plain", target: "hashed" },
@@ -1951,6 +1980,8 @@ describe("migrate a customized 1.6.30 table name", () => {
 		);
 		expect(await readRecordedDecisions(cwd)).toEqual({
 			formatVersion: 1,
+			issuers: { credential: "local:credential" },
+			migration: "1.6-to-1.7",
 			legacyTableNames: { oauthApplication: "legacyOAuthApplication" },
 			oauth: {
 				clientSecrets: { source: "plain", target: "hashed" },
@@ -1992,6 +2023,8 @@ describe("migrate a customized 1.6.30 table name", () => {
 		expect(prompts).toHaveBeenCalledTimes(2);
 		expect(await readRecordedDecisions(cwd)).toEqual({
 			formatVersion: 1,
+			issuers: { credential: "local:credential" },
+			migration: "1.6-to-1.7",
 			legacyTableNames: { oauthApplication: null },
 		});
 		expect(consoleLog).toHaveBeenCalledWith(

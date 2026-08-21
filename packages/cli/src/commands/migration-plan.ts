@@ -4,6 +4,7 @@ import type {
 	MigrationDecisionBlocker,
 } from "better-auth/db/migration";
 import { describeMigrationDecisionBlocker } from "better-auth/db/migration";
+import type { RELEASE_MIGRATION_ID } from "./migration-decisions";
 import { MIGRATION_DECISIONS_FILE } from "./migration-decisions";
 
 type MigrationInspection = Awaited<ReturnType<typeof getMigrations>>;
@@ -21,6 +22,7 @@ interface CreateMigrationPlanInput
 		| "toBeCreated"
 	> {
 	hasChanges: boolean;
+	releaseMigration?: ReleaseMigrationPlan | undefined;
 	releaseMigrationBlockers?: ReleaseMigrationPlanBlocker[] | undefined;
 }
 
@@ -59,11 +61,17 @@ export interface MigrationPlan {
 		createTables: Array<{ columns: string[]; table: string }>;
 	};
 	formatVersion: 1;
+	releaseMigration?: ReleaseMigrationPlan;
 	status: "blocked" | "ready" | "up-to-date";
 	target: {
 		adapter: string;
 		dialect: "mssql" | "mysql" | "postgres" | "sqlite";
 	};
+}
+
+export interface ReleaseMigrationPlan {
+	actions: string[];
+	id: typeof RELEASE_MIGRATION_ID;
 }
 
 /** One actionable sentence naming the blocked table and the work it needs. */
@@ -187,6 +195,7 @@ export function createMigrationPlan({
 	hasChanges,
 	migrationBlockers,
 	migrationTarget,
+	releaseMigration,
 	releaseMigrationBlockers = [],
 	toBeAdded,
 	toBeAddedIndexes,
@@ -227,6 +236,7 @@ export function createMigrationPlan({
 				}))
 				.sort((left, right) => left.table.localeCompare(right.table)),
 		},
+		...(releaseMigration ? { releaseMigration } : {}),
 		blockers: blockers
 			.map((blocker) => {
 				if (
