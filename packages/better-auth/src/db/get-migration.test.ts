@@ -1873,6 +1873,72 @@ describe("get-migration: 1.6 plugin provider issuer resolution", () => {
 		]);
 	});
 
+	it("treats generic OAuth providers with reserved local IDs as external", async () => {
+		const db = new DatabaseSync(":memory:");
+		createPluginAccountTable(db, [
+			{ accountId: "external-1", id: "a1", providerId: "credential" },
+			{ accountId: "external-2", id: "a2", providerId: "siwe" },
+		]);
+		const externalProviders = genericOAuth({
+			config: [
+				{
+					authorizationUrl: "https://credential.example.com/authorize",
+					clientId: "credential-client",
+					clientSecret: "credential-secret",
+					providerId: "credential",
+					tokenUrl: "https://credential.example.com/token",
+				},
+				{
+					authorizationUrl: "https://siwe.example.com/authorize",
+					clientId: "siwe-client",
+					clientSecret: "siwe-secret",
+					providerId: "siwe",
+					tokenUrl: "https://siwe.example.com/token",
+				},
+			],
+		});
+		const configWithoutStrategy: BetterAuthOptions = {
+			database: db,
+			plugins: [externalProviders],
+		};
+
+		await expect(
+			validateMigrationFrom16(configWithoutStrategy, {}),
+		).resolves.toEqual([
+			{
+				accountCount: 2,
+				code: "account-identity-strategy-required",
+				providerIds: ["credential", "siwe"],
+				table: "account",
+			},
+		]);
+
+		const config: BetterAuthOptions = {
+			...configWithoutStrategy,
+			account: { identityStrategy: "provider-id" },
+		};
+		await expect(resolveConfiguredIssuers(config)).resolves.toEqual({
+			issuers: {
+				credential: "local:oauth:credential",
+				siwe: "local:oauth:siwe",
+			},
+			unresolvedProviders: {},
+		});
+		await expect(validateMigrationFrom16(config, {})).resolves.toEqual([]);
+
+		await migrateFrom16(config, {});
+		expect(
+			db
+				.prepare(
+					`SELECT "providerId", "issuer" FROM "account" ORDER BY "providerId"`,
+				)
+				.all(),
+		).toEqual([
+			{ issuer: "local:oauth:credential", providerId: "credential" },
+			{ issuer: "local:oauth:siwe", providerId: "siwe" },
+		]);
+	});
+
 	it("refuses an issuer that contradicts a generic OAuth provider", async () => {
 		const db = new DatabaseSync(":memory:");
 		createPluginAccountTable(db, [

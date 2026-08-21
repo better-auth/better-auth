@@ -112,7 +112,7 @@ This option keeps the required 1.7 `issuer` column and compound index, but store
 
 Keep this option identical on every instance that reads or writes the database. Under this strategy, renaming a provider changes its account namespace, and two provider aliases for the same OpenID Connect issuer remain separate identities, matching the provider-scoped behavior of 1.6.
 
-Set `account.identityStrategy` to `"issuer"` before migration only when you deliberately want the 1.7 identity behavior. This can merge provider aliases that share an issuer and changes the namespace observed by systems that use the 1.6 `providerId` and `accountId` pair.
+Set `account.identityStrategy` to `"issuer"` before migration only when you deliberately want the 1.7 identity behavior. This can merge provider aliases that share an issuer and change the namespace observed by systems that use the 1.6 `providerId` and `accountId` pair.
 
 Fresh 1.7 applications still default to `"issuer"`. Do not enable `"provider-id"` after completing an issuer-scoped 1.7 migration. The guided migration reports a blocker if an account already stores a different issuer rather than silently re-keying it. Leave the `"issuer"` strategy in place for an already migrated database; changing its identity strategy requires a separate, reviewed account re-key migration.
 
@@ -148,15 +148,16 @@ Fresh 1.7 applications still default to `"issuer"`. Do not enable `"provider-id"
 2. Add `issuer` as nullable during the backfill. Keep the existing physical `accountId` column.
 3. Populate both fields according to the account type:
 
-   | Account type                          | `issuer`                                  | `accountId`                            |
-   | ------------------------------------- | ----------------------------------------- | -------------------------------------- |
-   | Credential                            | `local:credential`                        | Stable `id` from the linked `user` row |
-   | SIWE wallet, `providerId` `siwe`      | `local:siwe`                              | Existing `<address>:<chainId>` value   |
-   | Google One Tap, `providerId` `google` | `https://accounts.google.com`             | Existing Google `sub`                  |
-   | Provider with an issuer               | Exact trusted issuer used by the provider | Existing provider account identifier   |
-   | OAuth provider without an issuer      | `local:oauth:<encoded providerId>`        | Existing provider account identifier   |
+   | Account type                          | Identity strategy | `issuer`                                  | `accountId`                            |
+   | ------------------------------------- | ----------------- | ----------------------------------------- | -------------------------------------- |
+   | Email/password credential             | Either            | `local:credential`                        | Stable `id` from the linked `user` row |
+   | SIWE wallet, `providerId` `siwe`      | Either            | `local:siwe`                              | Existing `<address>:<chainId>` value   |
+   | Any external provider                 | `provider-id`     | `local:oauth:<encoded providerId>`        | Existing provider account identifier   |
+   | Google One Tap, `providerId` `google` | `issuer`          | `https://accounts.google.com`             | Existing Google `sub`                  |
+   | Provider with an issuer               | `issuer`          | Exact trusted issuer used by the provider | Existing provider account identifier   |
+   | OAuth provider without an issuer      | `issuer`          | `local:oauth:<encoded providerId>`        | Existing provider account identifier   |
 
-   The synthetic issuer percent-encodes its provider ID segment exactly as `encodeURIComponent(providerId)`; for example, `local:oauth:github` and `local:oauth:team%2Fgithub`. Build an explicit `providerId`-to-issuer map for your deployment. Multiple provider configurations that represent the same OpenID Connect authority must use the same issuer. Do not derive an issuer from email, display name, an unverified request value, or a mutable authorization endpoint. SIWE and Google One Tap are not OAuth providers, so the synthetic `local:oauth:` namespace never applies to them under the default identity strategy. With `account.identityStrategy: "provider-id"`, use the synthetic external namespace for Google One Tap and every other external provider as described above.
+   The synthetic issuer percent-encodes its provider ID segment exactly as `encodeURIComponent(providerId)`; for example, `local:oauth:github` and `local:oauth:team%2Fgithub`. Build an explicit `providerId`-to-issuer map for your deployment. Under the `"issuer"` strategy, multiple provider configurations that represent the same OpenID Connect authority must use the same issuer. Do not derive an issuer from email, display name, an unverified request value, or a mutable authorization endpoint.
 4. Find collisions before creating the unique index. Adapt this query to your physical table and field names:
 
    ```sql title="Identity collision check"
