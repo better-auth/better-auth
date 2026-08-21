@@ -1382,20 +1382,22 @@ async function readScimAccountsFrom16(
 		(table) => table.name === accountTable,
 	);
 	if (!accountTableMetadata) return { accounts: [], accountTable };
-	const accounts =
-		providerIds.size === 0
-			? []
-			: (
-					await sql<LegacyScimAccountRecord>`
-						SELECT
-							${sql.ref(idColumn)} AS "id",
-							${sql.ref(accountIdColumn)} AS "providerAccountId",
-							${sql.ref(providerIdColumn)} AS "providerId",
-							${sql.ref(userIdColumn)} AS "userId"
-						FROM ${sql.table(accountTable)}
-						WHERE ${sql.ref(providerIdColumn)} IN (${sql.join([...providerIds])})
-					`.execute(kysely)
-				).rows;
+	if (providerIds.size === 0) return { accounts: [], accountTable };
+	const accountQuery = sql<LegacyScimAccountRecord>`
+		SELECT
+			${sql.ref(idColumn)} AS "id",
+			${sql.ref(accountIdColumn)} AS "providerAccountId",
+			${sql.ref(providerIdColumn)} AS "providerId",
+			${sql.ref(userIdColumn)} AS "userId"
+		FROM ${sql.table(accountTable)}
+		WHERE ${sql.ref(providerIdColumn)} IN (${sql.join([...providerIds])})
+	`;
+	const lockedAccountQuery =
+		migrationDatabase?.databaseType === "mysql" &&
+		migrationDatabase.inTransaction
+			? sql<LegacyScimAccountRecord>`${accountQuery} FOR UPDATE`
+			: accountQuery;
+	const accounts = (await lockedAccountQuery.execute(kysely)).rows;
 	return { accounts: [...accounts], accountTable };
 }
 
@@ -1467,12 +1469,13 @@ export async function retireScimAccountsFrom16(
 	migrationDatabase?: MigrationDatabase,
 ): Promise<LegacyScimAccountRow[]> {
 	if (!state.scimProvider || !options.scim) return [];
+	const database = migrationDatabase ?? (await getMigrationDatabase(config));
 	const accounts = await inspectScimAccountsFrom16(
 		config,
 		options,
 		state,
 		undefined,
-		migrationDatabase,
+		database,
 	);
 	const freshAccountIds = new Set(accounts.map((account) => account.id));
 	if (
@@ -1485,7 +1488,17 @@ export async function retireScimAccountsFrom16(
 		);
 	}
 	if (accounts.length === 0) return [];
-	const { kysely } = migrationDatabase ?? (await getMigrationDatabase(config));
+	if (database.databaseType === "mysql" && !database.inTransaction) {
+		if (!database.transaction) {
+			throw new BetterAuthError(
+				`The ${database.adapterId} adapter must expose a transaction-scoped migration connection before Better Auth can safely retire populated 1.6 SCIM accounts on MySQL.`,
+			);
+		}
+		return database.transaction((transaction) =>
+			retireScimAccountsFrom16(config, options, state, accounts, transaction),
+		);
+	}
+	const { kysely } = database;
 	const accountSchema = getAuthTables(config).account;
 	if (!accountSchema) return [];
 	const accountTable = accountSchema.modelName || "account";
@@ -1500,7 +1513,7 @@ export async function retireScimAccountsFrom16(
 	const { accounts: remainingAccounts } = await readScimAccountsFrom16(
 		config,
 		state,
-		migrationDatabase,
+		database,
 	);
 	if (remainingAccounts.length > 0) {
 		reportMigrationDecisionBlocker(undefined, {

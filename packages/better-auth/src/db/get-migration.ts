@@ -1631,8 +1631,21 @@ export async function migrateFrom16(
 		options,
 		releaseData,
 	);
-	await inspectScimAccountsFrom16(config, options, releaseData);
+	const inspectedScimAccounts = await inspectScimAccountsFrom16(
+		config,
+		options,
+		releaseData,
+	);
 	const migrationDatabase = await getMigrationDatabase(config);
+	if (
+		migrationDatabase.databaseType === "mysql" &&
+		inspectedScimAccounts.length > 0 &&
+		!migrationDatabase.transaction
+	) {
+		throw new BetterAuthError(
+			`The ${migrationDatabase.adapterId} adapter must expose a transaction-scoped migration connection before Better Auth can safely retire populated 1.6 SCIM accounts on MySQL.`,
+		);
+	}
 	const initialMigration = await getMigrationsWithDatabase(
 		config,
 		{

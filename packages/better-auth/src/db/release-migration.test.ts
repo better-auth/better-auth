@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import type { BetterAuthOptions } from "@better-auth/core";
 import { describe, expect, it } from "vitest";
+import { getMigrationDatabase } from "./migration-database";
 import type {
 	LegacyReleaseDataState,
 	MigrateFrom16Options,
@@ -47,6 +48,32 @@ function createScimRetirementFixture() {
 }
 
 describe("1.6 SCIM account retirement", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10575#discussion_r3831145554
+	 */
+	it("requires a transaction before deleting MySQL SCIM accounts", async () => {
+		const { config, database, options, state } = createScimRetirementFixture();
+		const migrationDatabase = await getMigrationDatabase(config);
+		const inspectedAccounts = await inspectScimAccountsFrom16(
+			config,
+			options,
+			state,
+		);
+
+		await expect(
+			retireScimAccountsFrom16(config, options, state, inspectedAccounts, {
+				...migrationDatabase,
+				databaseType: "mysql",
+				transaction: undefined,
+			}),
+		).rejects.toThrow(
+			"must expose a transaction-scoped migration connection before Better Auth can safely retire populated 1.6 SCIM accounts on MySQL",
+		);
+		expect(
+			database.prepare(`SELECT "id" FROM "account" ORDER BY "id"`).all(),
+		).toEqual([{ id: "a1" }]);
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10575
 	 */

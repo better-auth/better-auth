@@ -70,7 +70,7 @@ npx auth migrate plan better-auth-migration.json
 npx auth migrate apply better-auth-migration.json --yes
 ```
 
-With Drizzle or Prisma, run `npx auth generate` first and point the adapter at the generated 1.7 schema, but do not apply that schema to the database: the CLI migrates the 1.6 data and schema together. For a Drizzle SQLite or PostgreSQL migration, set the adapter's `transaction` option to `true` so the release migration can run atomically. Record the cutover in your ORM migration history afterwards, so a later deployment does not apply the same changes twice.
+With Drizzle or Prisma, run `npx auth generate` first and point the adapter at the generated 1.7 schema, but do not apply that schema to the database: the CLI migrates the 1.6 data and schema together. For a Drizzle SQLite or PostgreSQL migration, set the adapter's `transaction` option to `true` so the release migration can run atomically. MySQL databases with populated legacy SCIM accounts also require a transaction-capable migration connection so account retirement can roll back independently of MySQL's non-transactional schema changes. Record the cutover in your ORM migration history afterwards, so a later deployment does not apply the same changes twice.
 
 An adapter with no SQL migration connection needs the manual path instead:
 

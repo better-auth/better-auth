@@ -1373,7 +1373,10 @@ it("retires published 1.6.30 SCIM credentials with a custom account ID column an
 	}
 });
 
-it("checkpoints MySQL legacy tables before retiring SCIM accounts", {
+/**
+ * @see https://github.com/better-auth/better-auth/pull/10575#discussion_r3831145554
+ */
+it("checkpoints MySQL legacy tables and rolls back interrupted SCIM retirement", {
 	timeout: 60_000,
 }, async () => {
 	const databaseName = createDatabaseName().replace("postgres", "scim_mysql");
@@ -1417,12 +1420,6 @@ it("checkpoints MySQL legacy tables before retiring SCIM accounts", {
 			emailDomain: "mysql.example.com",
 		});
 
-		const auth17 = betterAuth({
-			baseURL: "http://localhost:3000",
-			database: { db: currentDatabase, transaction: true, type: "mysql" },
-			emailAndPassword: { enabled: true },
-			plugins: [createCurrentScimPlugin(legacyScimAccount.userId)],
-		});
 		const options = {
 			accountIssuers: {
 				workforce: "local:retired-scim:workforce",
@@ -1432,6 +1429,12 @@ it("checkpoints MySQL legacy tables before retiring SCIM accounts", {
 				providers: "reprovision" as const,
 			},
 		};
+		const auth17 = betterAuth({
+			baseURL: "http://localhost:3000",
+			database: { db: currentDatabase, transaction: true, type: "mysql" },
+			emailAndPassword: { enabled: true },
+			plugins: [createCurrentScimPlugin(legacyScimAccount.userId)],
+		});
 		await expect(migrateFrom16(auth17.options, options)).rejects.toThrow(
 			"forced SCIM account retirement interruption",
 		);
@@ -1454,13 +1457,18 @@ it("checkpoints MySQL legacy tables before retiring SCIM accounts", {
 			"SELECT COUNT(*) AS count FROM `account` WHERE `id` = ?",
 			[legacyScimAccount.id],
 		);
-		expect(Number(remainingAccounts[0]?.count)).toBe(0);
+		expect(Number(remainingAccounts[0]?.count)).toBe(1);
 
 		const migration = await migrateFrom16(auth17.options, options);
 		expect(migration).toMatchObject({
 			accounts: { migrated: 0, providers: {} },
 			scim: {
-				identities: [],
+				identities: [
+					{
+						providerId: "workforce",
+						userId: legacyScimAccount.userId,
+					},
+				],
 				reprovisionRequired: true,
 				retiredProviders: 1,
 			},
