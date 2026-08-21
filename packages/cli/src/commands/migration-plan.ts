@@ -211,7 +211,7 @@ export function createMigrationPlan({
 		status:
 			blockers.length > 0
 				? ("blocked" as const)
-				: hasChanges
+				: hasChanges || releaseMigration
 					? ("ready" as const)
 					: ("up-to-date" as const),
 		changes: {
