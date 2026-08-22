@@ -13,6 +13,13 @@ export const initGetModelName = ({
 		usePlural,
 	});
 	/**
+	 * Appends the plural `s` unless the name already ends in one, so models
+	 * like `jwks` don't become `jwkss`. Mirrors the trailing-s stripping in
+	 * `getDefaultModelName`, which resolves physical names back the same way.
+	 */
+	const toPlural = (name: string) => (name.endsWith("s") ? name : `${name}s`);
+
+	/**
 	 * Users can overwrite the default model of some tables. This function helps find the correct model name.
 	 * Furthermore, if the user passes `usePlural` as true in their adapter config,
 	 * then we should return the model name ending with an `s`.
@@ -26,11 +33,11 @@ export const initGetModelName = ({
 
 		if (useCustomModelName) {
 			return usePlural
-				? `${schema[defaultModelKey]!.modelName}s`
+				? toPlural(schema[defaultModelKey]!.modelName)
 				: schema[defaultModelKey]!.modelName;
 		}
 
-		return usePlural ? `${model}s` : model;
+		return usePlural ? toPlural(model) : model;
 	};
 	return getModelName;
 };
