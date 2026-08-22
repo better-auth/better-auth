@@ -192,6 +192,31 @@ export const createAdapterFactory =
 			customIdGenerator: config.customIdGenerator,
 		});
 
+		/**
+		 * Coerce a value that targets a numeric (`serial`) id column.
+		 *
+		 * A bare `Number()` turns any non-numeric input into `NaN`, which is then
+		 * forwarded to the driver and surfaces as an opaque driver-level validation
+		 * error. Fail here instead, where the offending model and field are known.
+		 */
+		const toNumberId = (
+			value: unknown,
+			model: string,
+			field: string,
+		): number => {
+			// `Number("")` and `Number(" ")` are `0`, which no serial column holds.
+			const parsed =
+				typeof value === "string" && value.trim() === ""
+					? Number.NaN
+					: Number(value);
+			if (!Number.isInteger(parsed)) {
+				throw new BetterAuthError(
+					`[${config.adapterName}] Expected a numeric id for "${model}.${field}" because "advanced.database.generateId" is set to "serial", but received ${JSON.stringify(value)}.`,
+				);
+			}
+			return parsed;
+		};
+
 		const transformInput = async (
 			data: Record<string, any>,
 			defaultModelName: string,
@@ -253,9 +278,13 @@ export const createAdapterFactory =
 
 				if (fieldAttributes!.references?.field === "id" && useNumberId) {
 					if (Array.isArray(newValue)) {
-						newValue = newValue.map((x) => (x !== null ? Number(x) : null));
-					} else {
-						newValue = newValue !== null ? Number(newValue) : null;
+						newValue = newValue.map((x) =>
+							x === null || x === undefined
+								? x
+								: toNumberId(x, defaultModelName, field),
+						);
+					} else if (newValue !== null && newValue !== undefined) {
+						newValue = toNumberId(newValue, defaultModelName, field);
 					}
 				} else if (
 					config.supportsJSON === false &&
@@ -543,9 +572,13 @@ export const createAdapterFactory =
 				) {
 					if (useNumberId) {
 						if (Array.isArray(value)) {
-							newValue = value.map(Number);
-						} else {
-							newValue = Number(value);
+							newValue = value.map((v) =>
+								v === null || v === undefined
+									? v
+									: toNumberId(v, defaultModelName, defaultFieldName),
+							);
+						} else if (value !== null) {
+							newValue = toNumberId(value, defaultModelName, defaultFieldName);
 						}
 					}
 				}
