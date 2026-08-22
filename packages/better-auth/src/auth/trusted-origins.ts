@@ -81,7 +81,7 @@ export const matchesOriginPattern = (
 		if (settings?.allowRelativePaths) {
 			return (
 				url.startsWith("/") &&
-				/^\/(?!\/|\\|%2f|%5c)[\w\-.\+/@]*(?:\?[\w\-.\+/=&%@]*)?$/.test(url)
+				/^\/(?!\/|\\|%2f|%5c)[\w\-.\+/@~]*(?:\?[\w\-.\+/=&%@~]*)?$/.test(url)
 			);
 		}
 
