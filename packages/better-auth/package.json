@@ -96,6 +96,11 @@
       "types": "./dist/client/react/index.d.mts",
       "default": "./dist/client/react/index.mjs"
     },
+    "./octane": {
+      "dev-source": "./src/client/octane/index.ts",
+      "types": "./dist/client/octane/index.d.mts",
+      "default": "./dist/client/octane/index.mjs"
+    },
     "./solid": {
       "dev-source": "./src/client/solid/index.ts",
       "types": "./dist/client/solid/index.d.mts",
@@ -326,6 +331,9 @@
       "react": [
         "./dist/client/react/index.d.mts"
       ],
+      "octane": [
+        "./dist/client/octane/index.d.mts"
+      ],
       "vue": [
         "./dist/client/vue/index.d.mts"
       ],
@@ -508,6 +516,7 @@
     "msw": "^2.14.6",
     "next": "^16.2.11",
     "oauth2-mock-server": "^9.0.0",
+    "octane": "^0.1.38",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "solid-js": "^1.9.11",
@@ -523,6 +532,7 @@
     "@sveltejs/kit": "^2.0.0",
     "@tanstack/react-start": "^1.0.0",
     "@tanstack/solid-start": "^1.0.0",
+    "@octanejs/tanstack-start": "^0.1.27",
     "better-sqlite3": "^12.0.0",
     "drizzle-kit": ">=0.31.4 || >=1.0.0-beta.1",
     "drizzle-orm": "^0.45.2 || >=1.0.0-rc.1 <2.0.0",
@@ -536,7 +546,8 @@
     "solid-js": "^1.0.0",
     "svelte": "^4.0.0 || ^5.0.0",
     "vitest": "^2.0.0 || ^3.0.0 || ^4.0.0",
-    "vue": "^3.0.0"
+    "vue": "^3.0.0",
+    "octane": "^0.1.38"
   },
   "peerDependenciesMeta": {
     "@lynx-js/react": {
@@ -554,7 +565,13 @@
     "@tanstack/solid-start": {
       "optional": true
     },
+    "@octanejs/tanstack-start": {
+      "optional": true
+    },
     "next": {
+      "optional": true
+    },
+    "octane": {
       "optional": true
     },
     "react": {
@@ -595,6 +612,14 @@
     },
     "vitest": {
       "optional": true
+    }
+  },
+  "octane": {
+    "hookSlots": {
+      "manual": [
+        "./src/client/octane/octane-store.ts",
+        "./dist/client/octane/octane-store.mjs"
+      ]
     }
   }
 }
