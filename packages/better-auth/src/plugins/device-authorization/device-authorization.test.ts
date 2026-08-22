@@ -25,6 +25,14 @@ describe("device authorization plugin input validation", () => {
 		`);
 	});
 
+	it("should allow omitting schema", () => {
+		expect(() =>
+			deviceAuthorization({
+				verificationUri: "/device",
+			}),
+		).not.toThrow();
+	});
+
 	it("should validate custom options", async () => {
 		const options = deviceAuthorizationOptionsSchema.parse({
 			expiresIn: "1m",
