@@ -15,6 +15,7 @@ import {
 } from "vitest";
 import { createAuthMiddleware, getSessionFromCtx } from "../../api";
 import { createAuthClient } from "../../client";
+import { parseSetCookieHeader } from "../../cookies";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
@@ -1182,6 +1183,53 @@ describe("Admin plugin", async () => {
 			},
 		});
 		expect(afterStopImpersonationRes.data?.users.length).toBeGreaterThan(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/2183
+	 */
+	it("should keep the admin session cookie persistent across repeated impersonations", async () => {
+		const { headers } = await signInWithTestUser();
+		const userToImpersonate = await client.signUp.email({
+			email: "impersonate-repeated@mail.com",
+			password: "password",
+			name: "Impersonate Repeated",
+		});
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: new Headers({
+					Authorization: `Bearer ${userToImpersonate.data?.token}`,
+				}),
+			},
+		});
+		const userId = session.data?.user.id || "";
+
+		let sessionTokenMaxAge: string | number | undefined;
+		for (let round = 0; round < 2; round++) {
+			await client.admin.impersonateUser(
+				{ userId },
+				{
+					headers,
+					onSuccess: (ctx) => {
+						cookieSetter(headers)(ctx);
+					},
+				},
+			);
+			await client.admin.stopImpersonating(
+				{},
+				{
+					headers,
+					onSuccess: (ctx) => {
+						sessionTokenMaxAge = parseSetCookieHeader(
+							ctx.response.headers.get("Set-Cookie") || "",
+						).get("better-auth.session_token")?.["max-age"];
+						cookieSetter(headers)(ctx);
+					},
+				},
+			);
+		}
+
+		expect(sessionTokenMaxAge).toBeDefined();
 	});
 
 	it("should allow admin to revoke user session", async () => {
