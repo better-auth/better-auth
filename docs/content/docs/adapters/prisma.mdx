@@ -15,6 +15,12 @@ To use the Prisma adapter, you need to install the `@better-auth/prisma-adapter`
 @better-auth/prisma-adapter
 ```
 
+Prisma 7 with PostgreSQL requires the PostgreSQL driver adapter:
+
+```package-install
+@prisma/adapter-pg
+```
+
 ## Example Usage
 
 You can use the Prisma adapter to connect to your database as follows.
@@ -23,12 +29,14 @@ You can use the Prisma adapter to connect to your database as follows.
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
 
-const prisma = new PrismaClient();
+const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+const prisma = new PrismaClient({ adapter });
 
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
-    provider: "sqlite",
+    provider: "postgresql",
   }),
 });
 ```
