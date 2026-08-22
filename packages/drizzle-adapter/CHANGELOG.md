@@ -1,5 +1,11 @@
 # @better-auth/drizzle-adapter
 
+## 1.7.2
+
+### Patch Changes
+
+- [#10859](https://github.com/better-auth/better-auth/pull/10859) [`ea77118`](https://github.com/better-auth/better-auth/commit/ea77118d4e00f69ddffed4fb42dfedc08594ea9e) Thanks [@bytaesu](https://github.com/bytaesu)! - Reject missing Drizzle schema fields before building compound `where` clauses, preventing malformed SQL when an application schema is out of date.
+
 ## 1.7.1
 
 ## 1.7.0

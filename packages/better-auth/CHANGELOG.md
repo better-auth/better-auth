@@ -1,5 +1,28 @@
 # better-auth
 
+## 1.7.2
+
+### Patch Changes
+
+- [#10875](https://github.com/better-auth/better-auth/pull/10875) [`d5d889b`](https://github.com/better-auth/better-auth/commit/d5d889bfd8708601d8f27526d35fb9568450b51e) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix programmatic migrations failing on Cloudflare D1 while preserving existing-index validation across supported databases.
+
+- [#10934](https://github.com/better-auth/better-auth/pull/10934) [`c7a5c1a`](https://github.com/better-auth/better-auth/commit/c7a5c1a7ed65a5169e98bd347df91b16bb394692) Thanks [@bytaesu](https://github.com/bytaesu)! - Cookie-cache reads now warn when signed session data is invalid instead of silently appearing as a signed-out session.
+
+- [#10879](https://github.com/better-auth/better-auth/pull/10879) [`78f0c39`](https://github.com/better-auth/better-auth/commit/78f0c3922c273de29bd0b77213fbc37cc3b5917e) Thanks [@starslingdev](https://github.com/apps/starslingdev)! - Test suites using `getTestInstance` now run faster because the shared fixture avoids production password-hashing costs by default. Custom `emailAndPassword.password` implementations continue to take precedence.
+
+- [#10907](https://github.com/better-auth/better-auth/pull/10907) [`a021eaf`](https://github.com/better-auth/better-auth/commit/a021eafaf235dd08c0835d91ee714aca24c4605e) Thanks [@heliohm](https://github.com/heliohm)! - A client created with more plugins is again assignable to a client type declaring fewer plugins, as in 1.6.
+
+- [#10877](https://github.com/better-auth/better-auth/pull/10877) [`649818a`](https://github.com/better-auth/better-auth/commit/649818a2969594e58147a2cc08157812ea0b75ef) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent disabled MyISAM indexes from satisfying migration index checks.
+
+- Updated dependencies [[`64da15b`](https://github.com/better-auth/better-auth/commit/64da15b0b1ca078d80f115ee0a5bd9ad4ca4d64e), [`d5d889b`](https://github.com/better-auth/better-auth/commit/d5d889bfd8708601d8f27526d35fb9568450b51e), [`ea77118`](https://github.com/better-auth/better-auth/commit/ea77118d4e00f69ddffed4fb42dfedc08594ea9e)]:
+  - @better-auth/core@1.7.2
+  - @better-auth/kysely-adapter@1.7.2
+  - @better-auth/drizzle-adapter@1.7.2
+  - @better-auth/memory-adapter@1.7.2
+  - @better-auth/mongo-adapter@1.7.2
+  - @better-auth/prisma-adapter@1.7.2
+  - @better-auth/telemetry@1.7.2
+
 ## 1.7.1
 
 ### Patch Changes
