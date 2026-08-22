@@ -553,6 +553,79 @@ describe("Fetch Metadata CSRF Protection", async () => {
 			);
 		}
 	});
+
+	/**
+	 * `Referrer-Policy: no-referrer` is the recommended policy for any page whose
+	 * URL carries a secret — password reset, OAuth consent. A page serving it
+	 * sends the LITERAL `Origin: null` on the HTML form it navigates with, so the
+	 * Origin value alone cannot distinguish a first-party form post from a
+	 * sandboxed iframe. `Sec-Fetch-Site` is what separates them.
+	 *
+	 * @see https://fetch.spec.whatwg.org/#append-a-request-origin-header
+	 */
+	describe("null Origin from a page served Referrer-Policy: no-referrer", () => {
+		const formPost = (headers: Record<string, string>) =>
+			new Request("http://localhost:3000/api/auth/sign-in/email", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					// Signed-in surfaces are where `no-referrer` pages live, and a
+					// request carrying cookies is the path that reaches `validateOrigin`
+					// directly rather than the Fetch Metadata branch.
+					cookie: "better-auth.session_token=whatever",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					...headers,
+				},
+				body: JSON.stringify({
+					email: testUser.email,
+					password: testUser.password,
+				}),
+			});
+
+		it("should allow a same-origin form post whose Origin the browser nulled", async () => {
+			const response = await auth.handler(
+				formPost({ origin: "null", "Sec-Fetch-Site": "same-origin" }),
+			);
+
+			expect(response.status).not.toBe(403);
+			const error = await response.json().catch(() => null);
+			expect(error?.code).not.toBe("MISSING_OR_NULL_ORIGIN");
+		});
+
+		// `null` is also what a foreign opaque origin sends. Only the browser's own
+		// same-origin verdict may rescue it.
+		it.each([
+			"cross-site",
+			"same-site",
+		])("should still reject a null Origin the browser calls %s", async (site) => {
+			const response = await auth.handler(
+				formPost({ origin: "null", "Sec-Fetch-Site": site }),
+			);
+
+			expect(response.status).toBe(403);
+			const error = await response.json().catch(() => null);
+			expect(error?.code).toBe("MISSING_OR_NULL_ORIGIN");
+		});
+
+		it("should still reject a null Origin with no Sec-Fetch-Site to vouch for it", async () => {
+			const response = await auth.handler(formPost({ origin: "null" }));
+
+			expect(response.status).toBe(403);
+			const error = await response.json().catch(() => null);
+			expect(error?.code).toBe("MISSING_OR_NULL_ORIGIN");
+		});
+
+		it("should still reject a request with no Origin at all", async () => {
+			const response = await auth.handler(
+				formPost({ "Sec-Fetch-Site": "same-origin" }),
+			);
+
+			expect(response.status).toBe(403);
+			const error = await response.json().catch(() => null);
+			expect(error?.code).toBe("MISSING_OR_NULL_ORIGIN");
+		});
+	});
 });
 
 describe("origin check middleware", async () => {
