@@ -35,6 +35,7 @@ const postgresMap = {
 	string: ["character varying", "varchar", "text", "uuid"],
 	number: [
 		"int4",
+		"int8",
 		"integer",
 		"bigint",
 		"smallint",

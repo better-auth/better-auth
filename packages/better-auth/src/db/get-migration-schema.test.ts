@@ -4,7 +4,7 @@ import { CamelCasePlugin, Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { betterAuth } from "../auth/full";
-import { getMigrations } from "./get-migration";
+import { getMigrations, matchType } from "./get-migration";
 
 const CONNECTION_STRING = "postgres://user:password@localhost:5433/better_auth";
 // Check if PostgreSQL is available
@@ -828,5 +828,63 @@ describe("index generation for columns added to existing tables", () => {
 
 		const repeated = await getMigrations(upgradedConfig);
 		await expect(repeated.compileMigrations()).resolves.toBe(";");
+	});
+});
+
+describe("matchType", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10718
+	 *
+	 * Kysely's PostgreSQL introspector reports `pg_type.typname`, so a
+	 * `bigint` column comes back as `int8` — the name the acceptable-types
+	 * map has to carry for the diff to recognize Better Auth's own
+	 * `rateLimit.lastRequest` column.
+	 */
+	it("should accept the pg_type name Kysely reports for a bigint column", () => {
+		expect(matchType("int8", "number", "postgres")).toBe(true);
+	});
+
+	it("should still accept the spelled-out bigint name", () => {
+		expect(matchType("bigint", "number", "postgres")).toBe(true);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10718
+ */
+describe.runIf(isPostgresAvailable)("PostgreSQL rate limit schema diff", () => {
+	const pool = new Pool({ connectionString: CONNECTION_STRING });
+	const dropTables = `DROP TABLE IF EXISTS public."rateLimit" CASCADE; DROP TABLE IF EXISTS public.session CASCADE; DROP TABLE IF EXISTS public.account CASCADE; DROP TABLE IF EXISTS public.verification CASCADE; DROP TABLE IF EXISTS public."user" CASCADE;`;
+
+	beforeAll(async () => {
+		await pool.query(dropTables);
+	});
+
+	afterAll(async () => {
+		await pool.query(dropTables);
+		await pool.end();
+	});
+
+	it("should not warn about its own bigint lastRequest column on a subsequent run", async () => {
+		const warnings: string[] = [];
+		const config: BetterAuthOptions = {
+			database: pool,
+			rateLimit: {
+				storage: "database",
+			},
+			logger: {
+				log: (level, message) => {
+					if (level === "warn") warnings.push(message);
+				},
+			},
+		};
+
+		const initial = await getMigrations(config);
+		await initial.runMigrations();
+
+		const second = await getMigrations(config);
+		expect(second.toBeCreated.length).toBe(0);
+		expect(second.toBeAdded.length).toBe(0);
+		expect(warnings.filter((w) => w.includes("lastRequest"))).toEqual([]);
 	});
 });
