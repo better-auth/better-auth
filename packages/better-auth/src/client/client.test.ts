@@ -420,10 +420,10 @@ describe("run time proxy", async () => {
 });
 
 describe("type", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10897
+	 */
 	it("keeps a client with more plugins assignable to a client type with fewer plugins", () => {
-		// Regression for #10897: hydrateSession as an arrow-function property
-		// made this check contravariant, so any plugin that widens the session
-		// (admin adds user.banned) broke the assignment.
 		type EmailOtpClient = ReactAuthClient<{
 			plugins: [ReturnType<typeof emailOTPClient>];
 		}>;
