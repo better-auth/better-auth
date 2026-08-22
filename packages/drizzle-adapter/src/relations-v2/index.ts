@@ -28,6 +28,9 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
+import type { TablesRelationalConfig } from "drizzle-orm/relations";
+import type { RelationKeysByModel } from "../join-relation-key";
+import { getOneToOneRelationKey } from "../join-relation-key";
 import {
 	escapedLike,
 	insensitiveEq,
@@ -38,6 +41,25 @@ import {
 
 export interface DB {
 	[key: string]: any;
+}
+
+function buildV2RelationKeysByModel(
+	schema: Record<string, unknown> | undefined,
+): RelationKeysByModel {
+	const relationKeysByModel = new Map<string, Set<string>>();
+	for (const relations of Object.values(schema ?? {})) {
+		for (const [model, tableRelations] of Object.entries(
+			relations as TablesRelationalConfig,
+		)) {
+			if (!tableRelations?.relations) continue;
+			const relationKeys = relationKeysByModel.get(model) ?? new Set<string>();
+			for (const relationKey of Object.keys(tableRelations.relations)) {
+				relationKeys.add(relationKey);
+			}
+			relationKeysByModel.set(model, relationKeys);
+		}
+	}
+	return relationKeysByModel;
 }
 
 function escapeLikePattern(
@@ -264,6 +286,7 @@ export interface DrizzleAdapterConfig {
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	let mysqlNoIdWarned = false;
+	const relationKeysByModel = buildV2RelationKeysByModel(config.schema);
 	const createCustomAdapter =
 		(db: DB, inTransaction = false): AdapterFactoryCustomizeAdapterCreator =>
 		({ getFieldName, getDefaultModelName, options, schema: baSchema }) => {
@@ -335,14 +358,23 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 
 				return null;
 			}
-			/**
-			 * Mirror the schema generator's relation-key naming. One-to-one keeps
-			 * the singular model name. One-to-many is pluralized unless the model
-			 * already ends in "s" or `usePlural` keeps the schema keys as-is.
-			 */
-			function getJoinRelationKey(model: string, isUnique: boolean) {
-				if (isUnique || config.usePlural || model.endsWith("s")) return model;
-				return `${model}s`;
+			function getJoinRelationKey(
+				baseModel: string,
+				joinModel: string,
+				relationKeys: ReadonlySet<string> | undefined,
+				isUnique: boolean,
+			) {
+				if (isUnique) {
+					return getOneToOneRelationKey({
+						baseModel,
+						joinModel,
+						relationKeys,
+						schema: baSchema,
+						getDefaultModelName,
+					});
+				}
+				if (config.usePlural || joinModel.endsWith("s")) return joinModel;
+				return `${joinModel}s`;
 			}
 			const withReturning = async (
 				model: string,
@@ -705,19 +737,28 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| Record<string, { limit: number } | boolean>
 								| undefined;
 
-							const pluralJoinResults: { key: string; target: string }[] = [];
+							const renamedJoinResults: { key: string; target: string }[] = [];
+							const relationKeys = relationKeysByModel.get(queryModel);
 							includes = {};
 							const joinEntries = Object.entries(join);
-							for (const [model, joinAttr] of joinEntries) {
+							for (const [joinModel, joinAttr] of joinEntries) {
 								const limit =
 									joinAttr.limit ??
 									options.advanced?.database?.defaultFindManyLimit ??
 									100;
 								const isUnique = joinAttr.relation === "one-to-one";
-								const relationKey = getJoinRelationKey(model, isUnique);
+								const relationKey = getJoinRelationKey(
+									model,
+									joinModel,
+									relationKeys,
+									isUnique,
+								);
 								includes[relationKey] = isUnique ? true : { limit };
-								if (!isUnique) {
-									pluralJoinResults.push({ key: relationKey, target: model });
+								if (relationKey !== joinModel) {
+									renamedJoinResults.push({
+										key: relationKey,
+										target: joinModel,
+									});
 								}
 							}
 							const clause = convertNewWhereClause(where, model);
@@ -738,8 +779,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							const res = await query;
 
 							if (res) {
-								for (const { key, target } of pluralJoinResults) {
-									if (key === target) continue;
+								for (const { key, target } of renamedJoinResults) {
 									res[target] = res[key];
 									delete res[key];
 								}
@@ -785,19 +825,29 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								| Record<string, { limit: number; offset?: number } | boolean>
 								| undefined;
 
-							const pluralJoinResults: { key: string; target: string }[] = [];
+							const renamedJoinResults: { key: string; target: string }[] = [];
+							const relationKeys = relationKeysByModel.get(queryModel);
 							includes = {};
 							const joinEntries = Object.entries(join);
-							for (const [model, joinAttr] of joinEntries) {
+							for (const [joinModel, joinAttr] of joinEntries) {
 								const isUnique = joinAttr.relation === "one-to-one";
 								const limit =
 									joinAttr.limit ??
 									options.advanced?.database?.defaultFindManyLimit ??
 									100;
-								const relationKey = getJoinRelationKey(model, isUnique);
+								const relationKey = getJoinRelationKey(
+									model,
+									joinModel,
+									relationKeys,
+									isUnique,
+								);
 								includes[relationKey] = isUnique ? true : { limit };
-								if (!isUnique)
-									pluralJoinResults.push({ key: relationKey, target: model });
+								if (relationKey !== joinModel) {
+									renamedJoinResults.push({
+										key: relationKey,
+										target: joinModel,
+									});
+								}
 							}
 							let orderBy: Record<string, "asc" | "desc"> | undefined =
 								undefined;
@@ -828,8 +878,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							const res = await query;
 							if (res) {
 								for (const item of res) {
-									for (const { key, target } of pluralJoinResults) {
-										if (key === target) continue;
+									for (const { key, target } of renamedJoinResults) {
 										item[target] = item[key];
 										delete item[key];
 									}
