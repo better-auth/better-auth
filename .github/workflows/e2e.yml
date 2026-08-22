@@ -75,6 +75,7 @@ jobs:
           deno-version: 2.6.4
 
       - name: Smoke
+        timeout-minutes: 10
         run: pnpm e2e:smoke
 
       - name: Docker Compose Diagnostics

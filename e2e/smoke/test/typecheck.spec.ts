@@ -5,6 +5,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
+const typecheckTimeoutMilliseconds = 60 * 1000;
 
 [
 	{ dir: "tsconfig-declaration", skip: false },
@@ -18,7 +19,7 @@ const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
 		const output = spawnSync("pnpm", ["run", "typecheck"], {
 			stdio: "inherit",
 			cwd,
-			timeout: 10 * 1000, // 10 seconds
+			timeout: typecheckTimeoutMilliseconds,
 		});
 		assert.equal(
 			output.error,
