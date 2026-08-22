@@ -297,19 +297,56 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				? await beginAttempt(DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS)
 				: null;
 			let status: boolean;
+			let matchedStep: number | null = null;
 			try {
 				const decrypted = await symmetricDecrypt({
 					key: ctx.context.secretConfig,
 					data: twoFactor.secret,
 				});
-				status = await createOTP(decrypted, {
+				const otp = createOTP(decrypted, {
 					period: opts.period,
 					digits: opts.digits,
-				}).verify(ctx.body.code);
+				});
+				// Walk the same ±1 acceptance window the util's verify() uses, but
+				// capture WHICH time step matched so one-time use can be enforced.
+				// currentStep is read once so a Date.now() tick across a period
+				// boundary cannot shift the window between deciding validity and
+				// recording the consumed step.
+				const window = 1;
+				const currentStep = Math.floor(Date.now() / (opts.period * 1000));
+				for (let i = -window; i <= window; i++) {
+					const candidateStep = currentStep + i;
+					const candidate = await otp.hotp(candidateStep);
+					if (candidate === ctx.body.code) {
+						matchedStep = candidateStep;
+						break;
+					}
+				}
+				status = matchedStep !== null;
 			} catch (error) {
 				// A server error before the code is checked must not spend the slot.
 				await attempt?.restore();
 				throw error;
+			}
+			// Enforce RFC 6238 §5.2 one-time use on the step-up (re-verification)
+			// path. Here the session is already active, so there is no per-challenge
+			// verification row to consume — nothing stops the exact same code from
+			// being accepted again and again. Reject a code whose step was already
+			// consumed, or any earlier step still inside the acceptance window. The
+			// sign-in path is intentionally left to its existing single-use guard:
+			// its 2FA challenge row is consumed atomically on success, which already
+			// blocks replay against that challenge. lastUsedStep is null on
+			// pre-migration rows (and document stores predating the column), so the
+			// first use is always allowed; the monotonic `<=` also rejects delayed
+			// replays of an older in-window step.
+			if (
+				!isSignIn &&
+				status &&
+				matchedStep !== null &&
+				typeof twoFactor.lastUsedStep === "number" &&
+				matchedStep <= twoFactor.lastUsedStep
+			) {
+				status = false;
 			}
 			if (!status) {
 				await attempt?.recordFailure();
@@ -358,7 +395,21 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					where: [{ field: "id", value: twoFactor.id }],
 				});
 			}
-			return valid(ctx);
+			// Issue the session first; valid() runs any remaining side effects and
+			// only a genuinely successful validation reaches the step below.
+			const result = await valid(ctx);
+			// Burn the consumed time step on the step-up path so this code — and any
+			// earlier step still inside the acceptance window — cannot be verified
+			// again on the active session (RFC 6238 §5.2). Scoped to !isSignIn to
+			// match the guard above; matchedStep is non-null whenever status is true.
+			if (!isSignIn && matchedStep !== null) {
+				await ctx.context.adapter.update({
+					model: twoFactorTable,
+					update: { lastUsedStep: matchedStep },
+					where: [{ field: "id", value: twoFactor.id }],
+				});
+			}
+			return result;
 		},
 	);
 
