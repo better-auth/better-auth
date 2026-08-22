@@ -588,6 +588,56 @@ describe("Admin plugin", async () => {
 		expect(res.data?.user?.banExpires).toBeDefined();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10820
+	 */
+	it("should clear a previous ban expiration when banning without one", async () => {
+		const created = await client.admin.createUser(
+			{
+				name: "Permanently Banned User",
+				email: "permanent-ban@email.com",
+				password: "test",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		const userId = created.data?.user?.id || "";
+
+		const temporaryBan = await client.admin.banUser(
+			{
+				userId,
+				banExpiresIn: 60 * 60 * 24,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(temporaryBan.data?.user?.banExpires).toBeDefined();
+
+		const permanentBan = await client.admin.banUser(
+			{
+				userId,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(permanentBan.data?.user?.banned).toBe(true);
+		expect(permanentBan.data?.user?.banExpires).toBeNull();
+
+		// the stale expiration would now be in the past, which used to un-ban the
+		// user on their next sign in attempt
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(60 * 60 * 25 * 1000);
+		const signIn = await client.signIn.email({
+			email: "permanent-ban@email.com",
+			password: "test",
+		});
+		expect(signIn.error?.code).toBe("BANNED_USER");
+	});
+
 	it("should not allow banned user to sign in", async () => {
 		const res = await client.signIn.email({
 			email: newUser?.email || "",
