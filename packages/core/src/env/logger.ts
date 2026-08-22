@@ -1,3 +1,4 @@
+import { tryGetCurrentAuthContext } from "../context/endpoint-context";
 import { getColorDepth } from "./color-depth";
 
 export const TTY_COLORS = {
@@ -142,4 +143,22 @@ export const createLogger = (options?: Logger | undefined): InternalLogger => {
 	};
 };
 
-export const logger = createLogger();
+const defaultLogger = createLogger();
+
+const getCurrentLogger = (): InternalLogger => {
+	const currentLogger = tryGetCurrentAuthContext()?.context.logger;
+	return currentLogger && currentLogger !== logger
+		? currentLogger
+		: defaultLogger;
+};
+
+export const logger: InternalLogger = {
+	debug: (...params) => getCurrentLogger().debug(...params),
+	info: (...params) => getCurrentLogger().info(...params),
+	success: (...params) => getCurrentLogger().success(...params),
+	warn: (...params) => getCurrentLogger().warn(...params),
+	error: (...params) => getCurrentLogger().error(...params),
+	get level() {
+		return getCurrentLogger().level;
+	},
+};

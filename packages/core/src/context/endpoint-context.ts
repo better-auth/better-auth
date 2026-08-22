@@ -32,6 +32,18 @@ export async function getCurrentAuthContextAsyncLocalStorage() {
 	return ensureAsyncStorage();
 }
 
+/**
+ * Returns the current auth context without initializing async storage.
+ *
+ * @internal
+ */
+export function tryGetCurrentAuthContext(): AuthEndpointContext | undefined {
+	const storage = __getBetterAuthGlobal().context.endpointContextAsyncStorage as
+		| AsyncLocalStorage<AuthEndpointContext>
+		| undefined;
+	return storage?.getStore();
+}
+
 export async function getCurrentAuthContext(): Promise<AuthEndpointContext> {
 	const als = await ensureAsyncStorage();
 	const context = als.getStore();
