@@ -17,6 +17,7 @@ import {
 import { parseSessionOutput, parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
 import type { AccessControl, ArrayElement } from "../access";
+import { getBearerAuthenticated } from "../bearer/state";
 import type { defaultStatements } from "./access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { hasPermission } from "./has-permission";
@@ -1272,6 +1273,13 @@ export const impersonateUser = (opts: AdminOptions) =>
 						ADMIN_ERROR_CODES.YOU_CANNOT_IMPERSONATE_ADMINS,
 					);
 				}
+			}
+
+			if (await getBearerAuthenticated()) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ADMIN_ERROR_CODES.YOU_CANNOT_IMPERSONATE_WITH_BEARER,
+				);
 			}
 
 			const session = await ctx.context.internalAdapter.createSession(
