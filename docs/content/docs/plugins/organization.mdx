@@ -928,6 +928,24 @@ To invite users to an organization, you can use the `invite` function provided b
     invitation is sent.
 </Callout>
 
+### Resend Invitation
+
+Use the invitation ID when resending an existing invitation. The ID-bound
+operation renews the same pending invitation atomically, including an expired
+pending invitation, and fails if another request accepted, rejected, canceled,
+or renewed that invitation first.
+
+<APIMethod path="/organization/resend-invitation" method="POST" requireSession>
+  ```ts
+  type resendInvitation = {
+      /**
+       * The ID of the pending invitation to resend.
+       */
+      invitationId: string = "invitation-id"
+  }
+  ```
+</APIMethod>
+
 ### Accept Invitation
 
 When a user receives an invitation email, they can click on the invitation link to accept the invitation. The invitation link should include the invitation ID, which will be used to accept the invitation.
@@ -1218,6 +1236,19 @@ To leave organization you can use `organization.leave` function. This function w
   }
   ```
 </APIMethod>
+
+<Callout type="info">
+  When a member is removed or leaves, Better Auth clears that organization from
+  all of the user's server-backed sessions. A previously issued
+  `session_data` cookie on another device cannot be deleted remotely, so a plain
+  `getSession` call can expose the cached previous selection until the cookie is
+  refreshed or reaches its configured `maxAge`. Routes protected by the
+  organization session middleware bypass that cache in stateful deployments and
+  refresh it before their handler runs. If a generic session read must reflect
+  the cleanup immediately, use `disableCookieCache: true`, disable cookie cache,
+  or configure a shorter cache lifetime. The cached organization ID is a
+  selector, not proof of membership.
+</Callout>
 
 ## Access Control
 
