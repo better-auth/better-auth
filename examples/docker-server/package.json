@@ -1,0 +1,22 @@
+{
+  "name": "better-auth-docker-server-example",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx server.ts",
+    "migrate": "auth migrate --yes"
+  },
+  "dependencies": {
+    "better-auth": "^1.6.0",
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/pg": "^8.11.10",
+    "auth": "latest",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

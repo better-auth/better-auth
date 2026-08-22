@@ -1,0 +1,183 @@
+---
+title: Deploy with Docker
+description: Containerize a self-hosted Better Auth server with a production-ready Dockerfile, docker-compose, and database migrations.
+---
+
+Better Auth runs anywhere Node runs, so you can self-host it as a standalone auth
+server inside a container. This guide packages a Node server that mounts the
+Better Auth handler, wires up a database with `docker-compose`, and runs the
+schema migration on startup.
+
+This guide assumes you already have a Better Auth instance and a Node server that
+mounts its handler. If not, follow [Installation](/docs/installation) and the
+[Express integration](/docs/integrations/express) first.
+
+<Callout>
+  A complete, runnable version of everything below lives in
+  [`examples/docker-server`](https://github.com/better-auth/better-auth/tree/main/examples/docker-server).
+</Callout>
+
+<Callout>
+  Better Auth ships as ESM only. Make sure your server package has
+  `"type": "module"` set, otherwise the build will fail inside the container.
+</Callout>
+
+## The server
+
+A minimal Express server that mounts the handler. The health endpoint at
+`/api/auth/ok` is what the container healthcheck below polls.
+
+```ts title="server.ts"
+import express from "express";
+import { toNodeHandler } from "better-auth/node";
+import { auth } from "./auth";
+
+const app = express();
+
+// Mount the Better Auth handler BEFORE express.json().
+app.all("/api/auth/*", toNodeHandler(auth)); // ExpressJS v4
+app.use(express.json());
+
+const port = Number(process.env.PORT ?? 3000);
+app.listen(port, () => console.log(`Auth server listening on ${port}`));
+```
+
+## Dockerfile
+
+A multi-stage build keeps the final image small and runs as a non-root user.
+Adjust the build/start scripts to match your `package.json`.
+
+```dockerfile title="Dockerfile"
+# ---- build ----
+FROM node:22-slim AS builder
+WORKDIR /app
+
+# Install deps first for better layer caching.
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
+# ---- runtime ----
+FROM node:22-slim AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+
+# Only production deps in the final image.
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+COPY --from=builder /app/dist ./dist
+
+# Run as the built-in non-root user.
+USER node
+
+EXPOSE 3000
+CMD ["node", "dist/server.js"]
+```
+
+Add a `.dockerignore` so local `node_modules` and secrets never enter the build
+context:
+
+```text title=".dockerignore"
+node_modules
+dist
+.env
+.env.*
+.git
+```
+
+## docker-compose
+
+Compose runs the auth server alongside its database. The `migrate` service
+applies the Better Auth schema once the database is healthy, then the app
+starts. This example uses PostgreSQL; swap the image and `DATABASE_URL` for MySQL
+if that is your adapter.
+
+```yaml title="docker-compose.yml"
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: better_auth
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: better_auth
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U better_auth -d better_auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build: .
+    command: npx -y auth@latest migrate --yes
+    environment:
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL}
+      DATABASE_URL: postgres://better_auth:${DB_PASSWORD}@db:5432/better_auth
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL}
+      DATABASE_URL: postgres://better_auth:${DB_PASSWORD}@db:5432/better_auth
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/api/auth/ok').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  db_data:
+```
+
+<Callout type="warn">
+  The `migrate` command applies the schema directly and is only available with
+  the built-in Kysely adapter. If you use Prisma or Drizzle, run your ORM's
+  migration tool in the `migrate` service instead (for example
+  `npx prisma migrate deploy`). See the [CLI docs](/docs/concepts/cli).
+</Callout>
+
+## Environment and secrets
+
+Never bake secrets into the image. Pass them at runtime via compose (from a
+`.env` file or your orchestrator's secret store):
+
+```bash title=".env"
+# Generate with: openssl rand -base64 32
+BETTER_AUTH_SECRET=your-generated-secret
+# Public URL clients and the server use to reach this service
+BETTER_AUTH_URL=https://auth.example.com
+DB_PASSWORD=your-db-password
+```
+
+Bring the stack up:
+
+```bash
+docker compose up -d --build
+```
+
+## Production notes
+
+- **Terminate TLS at a reverse proxy** (nginx, Caddy, Traefik) in front of the
+  container and forward to port `3000`. Set `BETTER_AUTH_URL` to the public
+  HTTPS URL.
+- **Set [`trustedOrigins`](/docs/reference/options#trustedorigins)** to your
+  frontend origins so cross-origin requests are accepted.
+- **Keep `BETTER_AUTH_SECRET` stable** across deploys — rotating it invalidates
+  existing sessions.
+- **Run migrations as a separate step** (as above) rather than on every app
+  boot, so scaling to multiple app replicas doesn't race on the schema.

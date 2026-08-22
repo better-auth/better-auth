@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: better_auth
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: better_auth
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U better_auth -d better_auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-off: apply the Better Auth schema, then exit. Runs before the app so
+  # scaling to multiple app replicas doesn't race on the schema.
+  migrate:
+    build: .
+    command: npx -y auth@latest migrate --yes
+    environment:
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL}
+      DATABASE_URL: postgres://better_auth:${DB_PASSWORD}@db:5432/better_auth
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL}
+      DATABASE_URL: postgres://better_auth:${DB_PASSWORD}@db:5432/better_auth
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/api/auth/ok').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  db_data:
