@@ -2998,6 +2998,64 @@ describe("oauth - config", () => {
 		expect(tokenPayload.token_type).toBe("Bearer");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10706
+	 */
+	it("should preserve JSON body when req.body was pre-parsed", async () => {
+		const { auth: authorizationServer } = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+				}),
+			],
+		});
+
+		const nodeHandler = toNodeHandler(authorizationServer.handler);
+		server = await listen(
+			async (req, res) => {
+				const chunks: Uint8Array[] = [];
+				for await (const chunk of req) {
+					chunks.push(chunk);
+				}
+				const bodyString = Buffer.concat(chunks).toString("utf-8");
+				const requestWithParsedBody = req as typeof req & {
+					body?: unknown;
+				};
+				requestWithParsedBody.body = JSON.parse(bodyString || "{}");
+
+				await nodeHandler(req, res);
+			},
+			{
+				port,
+			},
+		);
+
+		const response = await fetch(
+			new URL("/api/auth/sign-in/email", server.url),
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					email: "test-nonexistent@email.com",
+					password: "password123",
+				}),
+			},
+		);
+
+		const json = (await response.json()) as { message?: string; code?: string };
+		expect(response.status).toBe(401);
+		expect(json.code).toBe("INVALID_EMAIL_OR_PASSWORD");
+	});
+
 	it.for([
 		{
 			storeClientSecret: undefined,
