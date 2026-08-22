@@ -1,5 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
-import { logger } from "@better-auth/core/env";
+import type { AuthEndpointContext } from "@better-auth/core/context";
+import { runWithEndpointContext } from "@better-auth/core/context";
+import { createLogger } from "@better-auth/core/env";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
@@ -15,6 +17,7 @@ import {
 	describe,
 	expect,
 	it,
+	onTestFinished,
 	vi,
 } from "vitest";
 import {
@@ -1274,7 +1277,7 @@ describe("Cookie Cache Field Filtering", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10902
 	 */
-	it("should warn when a signed compact cookie has an invalid payload", async () => {
+	it("should use the configured logger for an invalid signed compact cookie", async () => {
 		const secret = "test-secret";
 		const bakeCookie = async (emailVerified: boolean | null) => {
 			const now = new Date().toISOString();
@@ -1313,25 +1316,35 @@ describe("Cookie Cache Field Filtering", () => {
 			isSecure: false,
 			secret,
 		};
-		const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
-		try {
-			const validCache = await getCookieCache(
-				new Headers({ cookie: `p.session_data=${await bakeCookie(false)}` }),
-				config,
-			);
-			expect(validCache).not.toBeNull();
-			expect(warn).not.toHaveBeenCalled();
+		const log = vi.fn();
+		const defaultWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		onTestFinished(() => defaultWarn.mockRestore());
+		const endpointContext = {
+			context: { logger: createLogger({ log }) },
+		} as unknown as AuthEndpointContext;
+		const validCookie = await bakeCookie(false);
 
-			const invalidCache = await getCookieCache(
-				new Headers({ cookie: `p.session_data=${await bakeCookie(null)}` }),
+		const validCache = await runWithEndpointContext(endpointContext, () =>
+			getCookieCache(
+				new Headers({ cookie: `p.session_data=${validCookie}` }),
 				config,
-			);
+			),
+		);
+		expect(validCache).not.toBeNull();
+		expect(log).not.toHaveBeenCalled();
+		const invalidCookie = await bakeCookie(null);
 
-			expect(invalidCache).toBeNull();
-			expect(warn).toHaveBeenCalledTimes(1);
-		} finally {
-			warn.mockRestore();
-		}
+		const invalidCache = await runWithEndpointContext(endpointContext, () =>
+			getCookieCache(
+				new Headers({ cookie: `p.session_data=${invalidCookie}` }),
+				config,
+			),
+		);
+
+		expect(invalidCache).toBeNull();
+		expect(log).toHaveBeenCalledTimes(1);
+		expect(log.mock.calls[0]?.[0]).toBe("warn");
+		expect(defaultWarn).not.toHaveBeenCalled();
 	});
 
 	it("should return null for invalid JWT token", async () => {
