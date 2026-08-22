@@ -249,6 +249,26 @@ async function validateOrigin(
 	}
 
 	if (!originHeader || originHeader === "null") {
+		// A page served `Referrer-Policy: no-referrer` sends the LITERAL string
+		// `Origin: null` on an HTML form it navigates with: per Fetch, "Append a
+		// request `Origin` header" nulls the serialized origin of a non-CORS
+		// non-`GET` request under that policy. `no-referrer` is standard hardening
+		// for exactly the pages whose URL carries a secret — password reset, OAuth
+		// consent — so this is a first-party page posting to its own backend, and
+		// the Origin value alone cannot tell it apart from a sandboxed iframe.
+		//
+		// `Sec-Fetch-Site` can. It is a forbidden header name, so no page may set
+		// it, and `same-origin` is the browser's own statement that the initiator's
+		// origin IS this request's origin — the question `trustedOrigins` below is
+		// asking. Anything else (`cross-site`, `same-site`, or no Fetch Metadata at
+		// all) stays rejected. `fetch()` never reaches this branch: mode "cors"
+		// always carries a real Origin, so only an HTML form submission is affected.
+		if (
+			originHeader === "null" &&
+			headers.get("sec-fetch-site") === "same-origin"
+		) {
+			return;
+		}
 		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN);
 	}
 
