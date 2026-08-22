@@ -29,6 +29,45 @@ export function withApplyDefault(
 	return value;
 }
 
+/**
+ * Parses a value read back from an adapter into a `Date`.
+ *
+ * Adapters that don't natively return `Date` instances for `date`-typed
+ * fields (or drivers/columns that hand back epoch milliseconds instead of an
+ * ISO string) can return a `number`, or a `string` that is either an ISO
+ * date or a numeric-millisecond value such as `"1774295570569"` or
+ * `"1774295570569.0"`.
+ *
+ * A bare `new Date(value)` mis-parses the numeric-string case: the `Date`
+ * constructor only recognizes ISO 8601 date strings, so a purely numeric
+ * string is treated as an invalid ISO date and yields `Invalid Date` instead
+ * of the intended timestamp.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/9963
+ */
+export function parseDateValue(value: unknown): unknown {
+	if (value instanceof Date) {
+		return value;
+	}
+	if (typeof value === "number") {
+		return new Date(value);
+	}
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		// A purely numeric string of at least 9 digits (optionally with a
+		// trailing fractional part, e.g. "1774295570569" or
+		// "1774295570569.0") represents epoch milliseconds, not an ISO date
+		// string. Shorter numeric strings (e.g. "2026" or "0") are valid
+		// inputs to `new Date()` with a different meaning and must not be
+		// reinterpreted as epoch milliseconds.
+		if (/^-?\d{9,}(\.\d+)?$/.test(trimmed)) {
+			return new Date(Number(trimmed));
+		}
+		return new Date(value);
+	}
+	return value;
+}
+
 function isObject(item: unknown): item is Record<string, unknown> {
 	return item !== null && typeof item === "object" && !Array.isArray(item);
 }
