@@ -1,0 +1,97 @@
+---
+title: Feedback
+description: Submit feedback about Better Auth from an AI agent, without authentication.
+---
+
+Better Auth exposes a public endpoint for **agent feedback**. If an agent working with Better Auth finds documentation that is wrong, missing, or unclear, or hits behavior that doesn't match the docs, it can report that directly.
+
+**Endpoint:** `POST https://www.better-auth.com/api/feedback`
+
+There is no authentication and no signup. Submissions are rate limited to 10 per hour per IP.
+
+<Callout type="info">
+  There is no cross-vendor standard for agent feedback submission today. This endpoint is advertised through the channels agents actually read: [`/llms.txt`](https://www.better-auth.com/llms.txt), the per-page markdown served at `/llms.txt/**.md`, and the [documentation MCP server](/docs/ai-resources/mcp).
+</Callout>
+
+## Submitting feedback
+
+```bash title="terminal"
+curl -X POST https://www.better-auth.com/api/feedback \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "docs-missing",
+    "message": "The passkey plugin docs do not cover handling multiple credentials per user.",
+    "page": "/docs/plugins/passkey",
+    "version": "1.4.2",
+    "agent": "claude-code"
+  }'
+```
+
+A successful submission returns `201`:
+
+```json
+{
+  "id": "9f2c1e7a-...",
+  "message": "Feedback received. Thank you."
+}
+```
+
+## Request body
+
+<TypeTable
+  type={{
+type: {
+  description: "What the feedback is about.",
+  type: '"docs-incorrect" | "docs-missing" | "docs-unclear" | "bug" | "feature-request" | "other"',
+  default: '"other"',
+},
+message: {
+  description: "The feedback itself. Between 10 and 5000 characters.",
+  type: "string",
+},
+page: {
+  description: "Docs path or URL the feedback refers to.",
+  type: "string",
+},
+version: {
+  description: "Better Auth version in use.",
+  type: "string",
+},
+agent: {
+  description: "Identifier of the submitting agent, e.g. `claude-code`.",
+  type: "string",
+},
+context: {
+  description: "Error output, a code snippet, or reproduction steps.",
+  type: "string",
+},
+contact: {
+  description: "Email address, only if you want a reply.",
+  type: "string",
+},
+}}
+/>
+
+Only `message` is required.
+
+## Discovering the schema
+
+`GET https://www.better-auth.com/api/feedback` returns a machine-readable description of the endpoint, so an agent that has only the URL can learn the payload shape without reading this page:
+
+```bash title="terminal"
+curl https://www.better-auth.com/api/feedback
+```
+
+Validation failures return `422` with a per-field `issues` array and the same schema, so a failed submission is self-correcting.
+
+## Guidance for agents
+
+* Send one submission per distinct issue, not one per retry.
+* Include `page` whenever the feedback is about a specific documentation page.
+* Put error output and reproduction steps in `context` rather than inlining them in `message`.
+* Use `bug` only for behavior that contradicts the documentation. For a question about intended behavior, use the [MCP server](/docs/ai-resources/mcp) or [Ask AI](/docs/ai-resources) instead.
+* Do not include secrets, tokens, or user data in any field.
+
+<Callout type="warn">
+  This endpoint is for feedback, not support. It is not monitored for urgent issues. For security reports, follow the [security policy](https://github.com/better-auth/better-auth/blob/main/SECURITY.md) instead.
+</Callout>

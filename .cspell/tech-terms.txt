@@ -82,3 +82,5 @@ pjpeg
 styl
 vbscript
 unvalidated
+lpush
+ltrim
