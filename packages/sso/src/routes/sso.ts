@@ -2,6 +2,7 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import { createOAuthAccountIssuer } from "@better-auth/core/db";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type {
 	PrivateKeyJwtSigningAlgorithm,
@@ -1689,8 +1690,11 @@ async function handleOIDCCallback(
 	};
 	const accountKey = {
 		issuer:
-			(verifiedIdToken && readStringClaim(verifiedIdToken.payload, "iss")) ||
-			provider.issuer,
+			ctx.context.options.account?.identityStrategy === "provider-id"
+				? createOAuthAccountIssuer(provider.providerId)
+				: (verifiedIdToken &&
+						readStringClaim(verifiedIdToken.payload, "iss")) ||
+					provider.issuer,
 		accountId: userInfoId,
 	};
 	const isTrustedProvider =

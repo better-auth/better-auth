@@ -2,6 +2,7 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import { createOAuthAccountIssuer } from "@better-auth/core/db";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type { User } from "better-auth";
 import { APIError } from "better-auth/api";
@@ -670,7 +671,10 @@ export async function processSAMLResponse(
 		emailVerified: userInfo.emailVerified,
 	};
 	const accountKey = {
-		issuer,
+		issuer:
+			ctx.context.options.account?.identityStrategy === "provider-id"
+				? createOAuthAccountIssuer(provider.providerId)
+				: issuer,
 		accountId: userInfo.id as string,
 	};
 

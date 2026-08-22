@@ -56,6 +56,8 @@ These features change the schema:
 
 `auth migrate` recognizes 1.6 data and switches to a guided migration that changes data and schema together. It covers the built-in PostgreSQL, MySQL, SQLite, and SQL Server configurations, plus SQL-backed Drizzle and Prisma adapters. Back up the database, stop authentication writes, and run:
 
+If the 1.6 database contains external accounts, first set `account.identityStrategy` explicitly. Use `"provider-id"` to preserve 1.6 account identity, which is the recommended migration path. Set `"issuer"` only when you intend to adopt issuer-scoped identity and have audited every integration that depends on account identity. The migration blocks before writing when external accounts need a backfill and this option is omitted.
+
 ```bash title="Terminal"
 npx auth migrate plan
 npx auth migrate apply
@@ -91,6 +93,29 @@ Better Auth now recognizes an external account by the unique pair of `issuer` an
 
 `auth migrate apply` performs this backfill for the adapters it supports, deriving each provider's issuer from your configuration and asking for the ones it cannot derive. Follow the steps below when you use another adapter, or when the CLI reports a collision only you can resolve.
 
+#### Preserve 1.6 provider-scoped account identity
+
+Better Auth 1.6 recognized an external account by `providerId` and `accountId`, so the compatibility-preserving migration path uses `"provider-id"`. The guided migration recommends this strategy and requires an explicit choice when populated external accounts still need an issuer backfill. Configure it before running `auth migrate plan` or `auth migrate apply`, then deploy the same option with 1.7:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  account: {
+    identityStrategy: "provider-id",
+  },
+  // ...
+});
+```
+
+This option keeps the required 1.7 `issuer` column and compound index, but stores `local:oauth:<encoded providerId>` as the issuer for external accounts. Credential and SIWE accounts keep their existing local namespaces. Better Auth still performs each provider's normal token and profile verification before accepting the account subject; the option changes only the namespace used to recognize and persist that account.
+
+Keep this option identical on every instance that reads or writes the database. Under this strategy, renaming a provider changes its account namespace, and two provider aliases for the same OpenID Connect issuer remain separate identities, matching the provider-scoped behavior of 1.6.
+
+Set `account.identityStrategy` to `"issuer"` before migration only when you deliberately want the 1.7 identity behavior. This can merge provider aliases that share an issuer and change the namespace observed by systems that use the 1.6 `providerId` and `accountId` pair.
+
+Fresh 1.7 applications still default to `"issuer"`. Do not enable `"provider-id"` after completing an issuer-scoped 1.7 migration. The guided migration reports a blocker if an account already stores a different issuer rather than silently re-keying it. Leave the `"issuer"` strategy in place for an already migrated database; changing its identity strategy requires a separate, reviewed account re-key migration.
+
 <Callout type="warn">
   Use a maintenance window and stop authentication writes, including background jobs and admin APIs that insert into `account` directly, before changing the account schema. The generated migration cannot choose trusted issuers or resolve identity collisions for you.
 </Callout>
@@ -123,15 +148,16 @@ Better Auth now recognizes an external account by the unique pair of `issuer` an
 2. Add `issuer` as nullable during the backfill. Keep the existing physical `accountId` column.
 3. Populate both fields according to the account type:
 
-   | Account type                          | `issuer`                                  | `accountId`                            |
-   | ------------------------------------- | ----------------------------------------- | -------------------------------------- |
-   | Credential                            | `local:credential`                        | Stable `id` from the linked `user` row |
-   | SIWE wallet, `providerId` `siwe`      | `local:siwe`                              | Existing `<address>:<chainId>` value   |
-   | Google One Tap, `providerId` `google` | `https://accounts.google.com`             | Existing Google `sub`                  |
-   | Provider with an issuer               | Exact trusted issuer used by the provider | Existing provider account identifier   |
-   | OAuth provider without an issuer      | `local:oauth:<encoded providerId>`        | Existing provider account identifier   |
+   | Account type                          | Identity strategy | `issuer`                                  | `accountId`                            |
+   | ------------------------------------- | ----------------- | ----------------------------------------- | -------------------------------------- |
+   | Email/password credential             | Either            | `local:credential`                        | Stable `id` from the linked `user` row |
+   | SIWE wallet, `providerId` `siwe`      | Either            | `local:siwe`                              | Existing `<address>:<chainId>` value   |
+   | Any external provider                 | `provider-id`     | `local:oauth:<encoded providerId>`        | Existing provider account identifier   |
+   | Google One Tap, `providerId` `google` | `issuer`          | `https://accounts.google.com`             | Existing Google `sub`                  |
+   | Provider with an issuer               | `issuer`          | Exact trusted issuer used by the provider | Existing provider account identifier   |
+   | OAuth provider without an issuer      | `issuer`          | `local:oauth:<encoded providerId>`        | Existing provider account identifier   |
 
-   The synthetic issuer percent-encodes its provider ID segment exactly as `encodeURIComponent(providerId)`; for example, `local:oauth:github` and `local:oauth:team%2Fgithub`. Build an explicit `providerId`-to-issuer map for your deployment. Multiple provider configurations that represent the same OpenID Connect authority must use the same issuer. Do not derive an issuer from email, display name, an unverified request value, or a mutable authorization endpoint. SIWE and Google One Tap are not OAuth providers, so the synthetic `local:oauth:` namespace never applies to them.
+   The synthetic issuer percent-encodes its provider ID segment exactly as `encodeURIComponent(providerId)`; for example, `local:oauth:github` and `local:oauth:team%2Fgithub`. Build an explicit `providerId`-to-issuer map for your deployment. Under the `"issuer"` strategy, multiple provider configurations that represent the same OpenID Connect authority must use the same issuer. Do not derive an issuer from email, display name, an unverified request value, or a mutable authorization endpoint.
 4. Find collisions before creating the unique index. Adapt this query to your physical table and field names:
 
    ```sql title="Identity collision check"

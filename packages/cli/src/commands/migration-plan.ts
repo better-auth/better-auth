@@ -101,6 +101,8 @@ function summarizeMigrationRemediation(blocker: MigrationBlockerDetail) {
 	switch (blocker.code) {
 		case "account-identity-collision":
 			return `Merge or remove the duplicate rows in "${blocker.table}" so issuer "${blocker.issuer}" holds provider account id "${blocker.providerAccountId}" once, then migrate again.`;
+		case "account-identity-strategy-required":
+			return 'Set account.identityStrategy to "provider-id" in your Better Auth configuration to preserve 1.6 account identity (recommended), or explicitly set it to "issuer" after auditing integrations, then migrate again.';
 		case "account-issuer-conflict":
 			return `Remove account "${blocker.accountId}" from accountIssuers in ${MIGRATION_DECISIONS_FILE} to keep "${blocker.storedIssuer}", or correct the stored issuer before migrating.`;
 		case "account-issuer-decision-required":
@@ -159,6 +161,8 @@ function resolveMigrationGuideAnchor(blocker: MigrationBlockerDetail) {
 		case "issuer-conflict":
 		case "issuer-required":
 			return "account-identity-is-scoped-by-issuer";
+		case "account-identity-strategy-required":
+			return "preserve-16-provider-scoped-account-identity";
 		case "reprovision-data":
 		case "scim-decision-required":
 		case "scim-inventory-mismatch":

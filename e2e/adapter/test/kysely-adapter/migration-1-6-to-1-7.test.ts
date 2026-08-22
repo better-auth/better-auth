@@ -566,6 +566,79 @@ it("migrates users created by published 1.6.30 and authenticates them through 1.
 	}
 });
 
+it("preserves a published 1.6.30 provider-scoped account through the 1.7 cutover", {
+	timeout: 60_000,
+}, async () => {
+	const database = new DatabaseSync(":memory:");
+	try {
+		const auth1630 = betterAuth1630({
+			baseURL: "http://localhost:3000",
+			database,
+			emailAndPassword: { enabled: true },
+		});
+		await (await getMigrations1630(auth1630.options)).runMigrations();
+		const source = await auth1630.api.signUpEmail({
+			body: {
+				email: "provider-scoped@sqlite.example.com",
+				name: "Provider Scoped User",
+				password: "correct-horse-battery-staple",
+			},
+		});
+		const sourceContext = await auth1630.$context;
+		await sourceContext.internalAdapter.linkAccount({
+			accountId: "published-google-subject",
+			providerId: "google",
+			userId: source.user.id,
+		});
+
+		const auth17 = betterAuth({
+			account: { identityStrategy: "provider-id" },
+			baseURL: "http://localhost:3000",
+			database,
+			emailAndPassword: { enabled: true },
+			socialProviders: {
+				google: {
+					clientId: "google-client",
+					clientSecret: "google-secret",
+				},
+			},
+		});
+		const migration = await migrateFrom16(auth17.options, {});
+		expect(migration.accounts).toEqual({
+			migrated: 2,
+			providers: { credential: 1, google: 1 },
+		});
+
+		const signIn = await auth17.api.signInEmail({
+			body: {
+				email: "provider-scoped@sqlite.example.com",
+				password: "correct-horse-battery-staple",
+			},
+			returnHeaders: true,
+		});
+		const sessionCookie = signIn.headers.getSetCookie()[0];
+		if (!sessionCookie) throw new Error("Expected 1.7 to create a session");
+		const accounts = await auth17.api.listUserAccounts({
+			headers: { cookie: sessionCookie },
+		});
+		expect(accounts).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					issuer: "local:credential",
+					providerId: "credential",
+				}),
+				expect.objectContaining({
+					accountId: "published-google-subject",
+					issuer: "local:oauth:google",
+					providerId: "google",
+				}),
+			]),
+		);
+	} finally {
+		database.close();
+	}
+});
+
 it("rejects invalid OAuth data before changing the 1.6 database", async () => {
 	const database = new DatabaseSync(":memory:");
 	try {
@@ -1253,6 +1326,7 @@ it("retires published 1.6.30 SCIM credentials with a custom account ID column an
 				fields: {
 					accountId: "externalAccountId",
 				},
+				identityStrategy: "issuer",
 			},
 			baseURL: "http://localhost:3000",
 			database: {
@@ -1430,6 +1504,7 @@ it("checkpoints MySQL legacy tables and rolls back interrupted SCIM retirement",
 			},
 		};
 		const auth17 = betterAuth({
+			account: { identityStrategy: "issuer" },
 			baseURL: "http://localhost:3000",
 			database: { db: currentDatabase, transaction: true, type: "mysql" },
 			emailAndPassword: { enabled: true },

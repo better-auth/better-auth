@@ -626,9 +626,11 @@ describe("migrate published 1.6.30 account data", () => {
 async function createReleaseDecisionFixture(
 	db: Database.Database,
 	{
+		identityStrategy = "issuer",
 		sourceClientSecretStorage = "plain",
 		targetClientSecretStorage = "hashed",
 	}: {
+		identityStrategy?: "issuer" | "provider-id" | "unset";
 		sourceClientSecretStorage?: "encrypted" | "hashed" | "plain";
 		targetClientSecretStorage?: "encrypted" | "hashed";
 	} = {},
@@ -707,6 +709,7 @@ async function createReleaseDecisionFixture(
 	});
 
 	const options17: BetterAuthOptions = {
+		...(identityStrategy !== "unset" && { account: { identityStrategy } }),
 		baseURL: "http://localhost:3000",
 		database: db,
 		emailAndPassword: {
@@ -996,7 +999,9 @@ describe("migrate command modes", () => {
 describe("plan every unresolved 1.6.30 release decision", () => {
 	it("reports the missing issuer, consent strategy, and SCIM inventory in one run", async () => {
 		const db = new Database(":memory:");
-		const { scimAccountId } = await createReleaseDecisionFixture(db);
+		const { scimAccountId } = await createReleaseDecisionFixture(db, {
+			identityStrategy: "unset",
+		});
 		const plan = await writeMigrationDecisions({
 			formatVersion: 1,
 			migration: "1.6-to-1.7",
@@ -1025,13 +1030,12 @@ describe("plan every unresolved 1.6.30 release decision", () => {
 			expect(jsonPlan.blockers).toEqual([
 				{
 					accountCount: 1,
-					code: "issuer-required",
-					providerId: "workforce-fixture",
-					reason: "unconfigured-provider",
+					code: "account-identity-strategy-required",
+					providerIds: ["workforce-fixture"],
 					remediation: {
-						docs: "https://better-auth.com/docs/guides/1-7-upgrade-guide#account-identity-is-scoped-by-issuer",
+						docs: "https://better-auth.com/docs/guides/1-7-upgrade-guide#preserve-16-provider-scoped-account-identity",
 						summary:
-							'Record the issuer for "workforce-fixture" under issuers in better-auth-migration.json, or run `auth migrate apply` in a terminal to answer it there.',
+							'Set account.identityStrategy to "provider-id" in your Better Auth configuration to preserve 1.6 account identity (recommended), or explicitly set it to "issuer" after auditing integrations, then migrate again.',
 					},
 					table: "account",
 				},
