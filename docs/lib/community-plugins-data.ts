@@ -152,6 +152,17 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
+		name: "better-auth-solana-payments",
+		url: "https://github.com/alexasomba/better-auth-solana-payments",
+		description:
+			"One-time Solana payment integration for Better Auth with Solana Pay checkout, server-side transfer verification, payment tracking, organization payments, and more.",
+		author: {
+			name: "alexasomba",
+			github: "alexasomba",
+			avatar: "https://github.com/alexasomba.png",
+		},
+	},
+	{
 		name: "better-auth-lark",
 		url: "https://github.com/uselark/better-auth-lark",
 		description:
