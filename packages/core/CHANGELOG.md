@@ -1,5 +1,11 @@
 # @better-auth/core
 
+## 1.7.2
+
+### Patch Changes
+
+- [#10855](https://github.com/better-auth/better-auth/pull/10855) [`64da15b`](https://github.com/better-auth/better-auth/commit/64da15b0b1ca078d80f115ee0a5bd9ad4ca4d64e) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent async context loss in Cloudflare Workers bundles that enable multiple runtime conditions.
+
 ## 1.7.1
 
 ## 1.7.0
