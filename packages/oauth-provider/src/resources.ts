@@ -195,7 +195,7 @@ export interface ResolvedResourcePolicy {
 	 * resource's `allowedScopes`. When no requested resource defines an
 	 * allowlist, equals `requestedScopes` unchanged.
 	 *
-	 * - A resource with `allowedScopes: null` is treated as "no restriction"
+	 * - A resource with an empty `allowedScopes` is treated as "no restriction"
 	 *   for that resource (other resources' allowlists still apply).
 	 * - A resource whose allowlist excludes every requested scope causes
 	 *   {@link resolveResourcePolicy} to throw `invalid_scope`.
@@ -409,17 +409,18 @@ export async function resolveResourcePolicy(
 	// not a gate.
 	//
 	// Algorithm:
-	//   - For each requested resource with a non-null allowlist, retain only
-	//     the requested scopes that are members of that resource's allowlist.
+	//   - For each requested resource with an allowlist, retain only the
+	//     requested scopes that are members of that resource's allowlist.
 	//   - A resource whose allowlist excludes every requested scope still
 	//     fails closed with `invalid_scope` for that resource (the caller
 	//     would otherwise mint a token with no scopes for a resource that
 	//     refuses all of them).
-	//   - Resources with a null allowlist contribute no narrowing (treated as
-	//     "any requested scope is acceptable here").
+	//   - An empty allowlist means "no allowlist", not "deny everything": a
+	//     Prisma scalar list cannot hold null, so a resource seeded without
+	//     one reads back as `[]`. Use `disabled` to stop issuance.
 	let effectiveScopes: string[] = [...params.requestedScopes];
 	for (const row of resolved) {
-		if (row.allowedScopes === null || row.allowedScopes === undefined) {
+		if (!row.allowedScopes?.length) {
 			continue;
 		}
 		const allowed = new Set(row.allowedScopes);
@@ -739,7 +740,8 @@ export function collectResourceInputs(
 /**
  * Builds the row payload sent to the adapter for a seed insert. All policy
  * columns default to `null` (= inherit plugin default at issuance time)
- * when the input doesn't specify a value.
+ * when the input doesn't specify a value, except `allowedScopes`, which
+ * defaults to `[]` since a scalar list cannot hold null.
  */
 function buildSeedRow(input: OAuthResourceInput, now: Date) {
 	return {
@@ -749,7 +751,7 @@ function buildSeedRow(input: OAuthResourceInput, now: Date) {
 		refreshTokenTtl: input.refreshTokenTtl ?? null,
 		signingAlgorithm: input.signingAlgorithm ?? null,
 		signingKeyId: input.signingKeyId ?? null,
-		allowedScopes: input.allowedScopes ?? null,
+		allowedScopes: input.allowedScopes ?? [],
 		customClaims: input.customClaims ?? null,
 		dpopBoundAccessTokensRequired: input.dpopBoundAccessTokensRequired ?? false,
 		disabled: input.disabled ?? false,
@@ -764,7 +766,7 @@ function buildSeedRow(input: OAuthResourceInput, now: Date) {
  * Builds the partial update payload when re-seeding an existing row.
  *
  * - `overwrite` mode replaces every policy column with the input value
- *   (omitted fields fall back to `null` to clear stale state).
+ *   (omitted fields are cleared: `null`, or `[]` for `allowedScopes`).
  * - `merge` mode updates only fields present in the input — admin edits to
  *   other fields are preserved.
  */
