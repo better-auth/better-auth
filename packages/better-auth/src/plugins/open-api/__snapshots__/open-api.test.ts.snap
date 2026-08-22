@@ -2005,6 +2005,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "anyOf": [
                       {
                         "enum": [
+                          "agentid",
                           "apple",
                           "atlassian",
                           "cognito",
@@ -4121,6 +4122,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "anyOf": [
                       {
                         "enum": [
+                          "agentid",
                           "apple",
                           "atlassian",
                           "cognito",

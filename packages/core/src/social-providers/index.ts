@@ -1,5 +1,6 @@
 import * as z from "zod";
 import type { AwaitableFunction } from "../types";
+import { agentid } from "./agentid";
 import { apple } from "./apple";
 import { atlassian } from "./atlassian";
 import { cognito } from "./cognito";
@@ -37,6 +38,7 @@ import { wechat } from "./wechat";
 import { zoom } from "./zoom";
 
 export const socialProviders = {
+	agentid,
 	apple,
 	atlassian,
 	cognito,
@@ -93,6 +95,7 @@ export type SocialProviders = {
 	>;
 };
 
+export * from "./agentid";
 export * from "./apple";
 export * from "./atlassian";
 export * from "./cognito";

@@ -1,0 +1,122 @@
+---
+title: AgentID
+description: AgentID provider setup and usage.
+---
+
+[AgentMail](https://agentmail.to) gives AI agents email addresses and inboxes.
+[AgentID](https://agentid.com) uses those addresses as OpenID Connect identities
+so agents can sign in as users.
+
+<Steps>
+  <Step>
+    ### Get your AgentID credentials
+
+    Register at [console.agentid.com](https://console.agentid.com), add
+    `http://localhost:3000/api/auth/callback/agentid` as a development callback,
+    and copy the client ID and secret. **The secret is shown once.**
+
+    Keep the default `client_secret_basic` token authentication method.
+
+    <Callout type="info">
+      Alternatively, use an **HTTPS URL you control** as the client ID and omit
+      the secret. These clients are limited to `openid` and `email`, and their
+      redirect URI must share the client ID's origin, so they cannot run on
+      `localhost`.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Configure the provider
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+
+    export const auth = betterAuth({
+      socialProviders: {
+        agentid: {
+          clientId: process.env.AGENTID_CLIENT_ID as string, // [!code highlight]
+          clientSecret: process.env.AGENTID_CLIENT_SECRET as string, // [!code highlight]
+        },
+      },
+    })
+    ```
+  </Step>
+
+  <Step>
+    ### Sign In with AgentID
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+
+    const authClient = createAuthClient()
+
+    const signIn = async () => {
+      const data = await authClient.signIn.social({
+        provider: "agentid"
+      })
+    }
+    ```
+
+    The browser waits while the agent approves the displayed request ID. After
+    approval, it returns to your `callbackURL`, and
+    `session.user.email` is the agent's inbox address.
+  </Step>
+</Steps>
+
+## Scopes
+
+`openid` and `email` are requested by default. Registered clients can request
+three additional scopes:
+
+```ts title="auth.ts"
+agentid: {
+  clientId: process.env.AGENTID_CLIENT_ID as string,
+  clientSecret: process.env.AGENTID_CLIENT_SECRET as string,
+  scope: ["profile", "owner_profile", "owner_email"], // [!code highlight]
+}
+```
+
+| Scope           | Claim                       |
+| --------------- | --------------------------- |
+| `profile`       | Agent display name (`name`) |
+| `owner_profile` | Owner name (`owner_name`)   |
+| `owner_email`   | Owner email (`owner_email`) |
+
+For unregistered clients, `profile` returns no `name`, while owner scopes fail
+with `invalid_scope`, potentially after approval.
+
+## Owner claims
+
+Owner claims identify the human behind the agent and are served only through
+UserInfo. The provider fetches them when requested and verifies that their
+subject matches the ID token. Use `mapProfileToUser` to add them to your user:
+
+```ts title="auth.ts"
+agentid: {
+  clientId: process.env.AGENTID_CLIENT_ID as string,
+  clientSecret: process.env.AGENTID_CLIENT_SECRET as string,
+  scope: ["owner_profile", "owner_email"],
+  mapProfileToUser: (profile) => ({ // [!code highlight]
+    ownerName: profile.owner_name, // [!code highlight]
+    ownerEmail: profile.owner_email, // [!code highlight]
+  }), // [!code highlight]
+}
+```
+
+Declare matching [`user.additionalFields`](/docs/concepts/database#extending-core-schema)
+to store these values.
+
+<Callout type="warn">
+  Owner claims require matching signing permission and exactly one designated
+  organization owner. Otherwise, AgentID rejects the request.
+</Callout>
+
+## Notes
+
+* **PKCE:** Always uses `S256` and cannot be disabled.
+* **Missing names:** Falls back to the inbox local part, such as `support` for
+  `support@acme.agentmail.to`.
+* **Expired tokens:** AgentID has no refresh token, so users must sign in again.
+
+For `client_secret_post`, set `tokenEndpointAuthentication: "post"`. See
+[Provider Options](/docs/concepts/oauth#provider-options) for shared options.
