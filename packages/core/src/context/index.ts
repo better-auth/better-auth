@@ -1,8 +1,9 @@
 export {
 	type AuthEndpointContext,
 	getCurrentAuthContext,
-	getCurrentAuthContextAsyncLocalStorage,
+	getCurrentAuthEndpointContext,
 	runWithEndpointContext,
+	tryGetCurrentAuthEndpointContext,
 } from "./endpoint-context";
 export { getBetterAuthVersion } from "./global";
 export {
