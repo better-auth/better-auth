@@ -4,10 +4,11 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { router } from "better-auth/api";
-import { describe, expect, expectTypeOf, test } from "vitest";
+import { describe, expect, expectTypeOf, test, vi } from "vitest";
 import { createAuthClient } from "../client";
 import { getTestInstance } from "../test-utils";
 import type { Auth } from "../types";
+import { createBetterAuth } from "./base";
 import { betterAuth } from "./full";
 
 describe("auth type", () => {
@@ -68,6 +69,33 @@ describe("auth type", () => {
 		type G = E["getSession"];
 		type R = Awaited<ReturnType<G>>;
 		expectTypeOf<R>().toEqualTypeOf<{ data: { message: string } }>();
+	});
+});
+
+describe("auth initialization", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10105
+	 */
+	test("should handle async initialization rejection until context is awaited", async () => {
+		const error = new Error("init failed");
+		const onUnhandledRejection = vi.fn();
+		process.on("unhandledRejection", onUnhandledRejection);
+
+		try {
+			const auth = createBetterAuth({}, async () => {
+				throw error;
+			});
+
+			await new Promise((resolve) => setTimeout(resolve, 0));
+
+			expect(onUnhandledRejection).not.toHaveBeenCalled();
+			await expect(auth.$context).rejects.toThrow("init failed");
+			await expect(
+				auth.handler(new Request("http://localhost:3000/api/auth/ok")),
+			).rejects.toThrow("init failed");
+		} finally {
+			process.off("unhandledRejection", onUnhandledRejection);
+		}
 	});
 });
 
