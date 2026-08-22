@@ -211,6 +211,37 @@ export const auth = betterAuth({
 });
 ```
 
+## Text Date Columns
+
+Drizzle converts `Date` values itself before they reach the driver, so Better
+Auth hands it a `Date` and lets it do the work. That is what the generated
+schema relies on: `timestamp` on PostgreSQL and MySQL, and
+`integer({ mode: "timestamp_ms" })` on SQLite.
+
+A `text()` column has no such conversion. If you declared your date columns as
+`text()` instead, the raw `Date` reaches the driver, and a strict driver such as
+Cloudflare D1 rejects it:
+
+```
+D1_TYPE_ERROR: Type 'object' not supported for value 'Mon Aug 10 2026 14:47:14 GMT-0400'
+```
+
+Set `supportsDates` to `false` so Better Auth writes an ISO 8601 string and
+parses it back into a `Date` on read:
+
+```ts
+export const auth = betterAuth({
+  database: drizzleAdapter(db, {
+    provider: "sqlite",
+    supportsDates: false, // [!code highlight]
+  }),
+});
+```
+
+Leave it alone if your date columns came from the Better Auth CLI. Setting it to
+`false` against a `timestamp` or `integer({ mode: "timestamp_ms" })` column sends
+a string to a column that expects a `Date`, which fails.
+
 ## Custom Schema namespace
 
 If you're using PostgreSQL and you want to generate the schema with a custom schema namespace,
