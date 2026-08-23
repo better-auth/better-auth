@@ -173,6 +173,41 @@ export async function validateApiKey({
 	return { apiKey: newApiKey, opts };
 }
 
+async function claimUsageInDatabase({
+	ctx,
+	apiKey,
+	opts,
+	hashedKey,
+}: {
+	ctx: GenericEndpointContext;
+	apiKey: ApiKey;
+	opts: PredefinedApiKeyOptions;
+	hashedKey: string;
+}): Promise<ApiKey> {
+	const canDefer =
+		opts.deferUpdates &&
+		ctx.context.options.advanced?.backgroundTasks?.handler !== undefined;
+	if (!canDefer) {
+		return claimUsageInDatabaseAuthoritatively({
+			ctx,
+			apiKey,
+			opts,
+			hashedKey,
+		});
+	}
+
+	const mutations = getOptimisticUsageMutations(apiKey, opts);
+	await ctx.context.runInBackgroundOrAwait(
+		claimUsageInDatabaseAuthoritatively({
+			ctx,
+			apiKey,
+			opts,
+			hashedKey,
+		}),
+	);
+	return { ...apiKey, ...mutations };
+}
+
 /**
  * Atomically consume quota and a rate-limit slot against the database row, the
  * source of truth for `database` and `secondary-storage` + `fallbackToDatabase`
@@ -181,7 +216,7 @@ export async function validateApiKey({
  * `requestCount` past the configured max. The cache (when present) is refreshed
  * from the resulting row.
  */
-async function claimUsageInDatabase({
+async function claimUsageInDatabaseAuthoritatively({
 	ctx,
 	apiKey,
 	opts,
@@ -394,31 +429,7 @@ async function claimUsageInSecondaryStorage({
 	opts: PredefinedApiKeyOptions;
 	hashedKey: string;
 }): Promise<ApiKey> {
-	let remaining = apiKey.remaining;
-	let lastRefillAt = apiKey.lastRefillAt;
-
-	if (remaining !== null) {
-		const now = Date.now();
-		const { refillInterval, refillAmount } = apiKey;
-		const lastTime = new Date(lastRefillAt ?? apiKey.createdAt).getTime();
-		if (refillInterval && refillAmount && now - lastTime > refillInterval) {
-			remaining = refillAmount;
-			lastRefillAt = new Date();
-		}
-		if (remaining === 0) {
-			throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
-		}
-		remaining--;
-	}
-
-	const rateLimitUpdate = applyRateLimitToSnapshot(apiKey, opts);
-
-	const mutations: Partial<ApiKey> = {
-		...rateLimitUpdate,
-		remaining,
-		lastRefillAt,
-		updatedAt: new Date(),
-	};
+	const mutations = getOptimisticUsageMutations(apiKey, opts);
 
 	const performUpdate = async (): Promise<ApiKey | null> => {
 		const fresh = await getApiKey(ctx, hashedKey, opts);
@@ -447,6 +458,35 @@ async function claimUsageInSecondaryStorage({
 		);
 	}
 	return updated;
+}
+
+function getOptimisticUsageMutations(
+	apiKey: ApiKey,
+	opts: PredefinedApiKeyOptions,
+): Partial<ApiKey> {
+	let remaining = apiKey.remaining;
+	let lastRefillAt = apiKey.lastRefillAt;
+
+	if (remaining !== null) {
+		const now = Date.now();
+		const { refillInterval, refillAmount } = apiKey;
+		const lastTime = new Date(lastRefillAt ?? apiKey.createdAt).getTime();
+		if (refillInterval && refillAmount && now - lastTime > refillInterval) {
+			remaining = refillAmount;
+			lastRefillAt = new Date();
+		}
+		if (remaining === 0) {
+			throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
+		}
+		remaining--;
+	}
+
+	return {
+		...applyRateLimitToSnapshot(apiKey, opts),
+		remaining,
+		lastRefillAt,
+		updatedAt: new Date(),
+	};
 }
 
 /**

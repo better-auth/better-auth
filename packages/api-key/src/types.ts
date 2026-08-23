@@ -253,7 +253,9 @@ export interface ApiKeyConfigurationOptions {
 	 * ⚠️ Warning: Enabling this introduces eventual consistency where the response
 	 * returns optimistic data before the database is updated. If the deferred update
 	 * fails, the database will have stale values. Only enable if your application
-	 * can tolerate this trade-off for improved latency.
+	 * can tolerate this trade-off for improved latency. Concurrent verifications
+	 * can be accepted from the same persisted counter snapshot, so strict concurrent
+	 * quota and rate-limit enforcement requires synchronous updates.
 	 *
 	 * @default false
 	 */
