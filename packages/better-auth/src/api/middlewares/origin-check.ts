@@ -225,7 +225,8 @@ async function validateOrigin(
 	if (!headers || !ctx.request) {
 		return;
 	}
-	const originHeader = headers.get("origin") || headers.get("referer") || "";
+	const origin = headers.get("origin");
+	const originHeader = origin || headers.get("referer") || "";
 	const useCookies = headers.has("cookie");
 
 	if (ctx.context.skipCSRFCheck) {
@@ -248,7 +249,15 @@ async function validateOrigin(
 		return;
 	}
 
-	if (!originHeader || originHeader === "null") {
+	// A same-origin form using `no-referrer` can send `Origin: null`.
+	// Fetch Metadata lets us infer the origin from the request target.
+	const canInferOriginFromFetchMetadata =
+		origin === "null" && headers.get("sec-fetch-site") === "same-origin";
+	const originToValidate = canInferOriginFromFetchMetadata
+		? new URL(ctx.request.url).origin
+		: originHeader;
+
+	if (!originToValidate || originToValidate === "null") {
 		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN);
 	}
 
@@ -264,12 +273,12 @@ async function validateOrigin(
 			];
 
 	const isTrustedOrigin = trustedOrigins.some((origin) =>
-		matchesOriginPattern(originHeader, origin),
+		matchesOriginPattern(originToValidate, origin),
 	);
 	if (!isTrustedOrigin) {
-		ctx.context.logger.error(`Invalid origin: ${originHeader}`);
+		ctx.context.logger.error(`Invalid origin: ${originToValidate}`);
 		ctx.context.logger.info(
-			`If it's a valid URL, please add ${originHeader} to trustedOrigins in your auth config\n`,
+			`If it's a valid URL, please add ${originToValidate} to trustedOrigins in your auth config\n`,
 			`Current list of trustedOrigins: ${trustedOrigins}`,
 		);
 		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_ORIGIN);
