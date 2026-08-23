@@ -371,17 +371,20 @@ describe("sign-in with additionalFields", async () => {
 
 describe("sign-in with form data", async () => {
 	const { auth, testUser } = await getTestInstance({
-		trustedOrigins: ["http://localhost:3000", "https://app.example.com"],
+		trustedOrigins: ["http://localhost:3000"],
 		emailAndPassword: {
 			enabled: true,
 		},
 		advanced: {
 			disableCSRFCheck: false,
 			disableOriginCheck: false,
-			trustedProxyHeaders: true,
 		},
 	});
-	const createFormRequest = (url: string, headers: Record<string, string>) =>
+	const createFormRequest = (
+		url: string,
+		headers: Record<string, string>,
+		credentials: { email: string; password: string } = testUser,
+	) =>
 		new Request(url, {
 			method: "POST",
 			headers: {
@@ -392,8 +395,8 @@ describe("sign-in with form data", async () => {
 				...headers,
 			},
 			body: new URLSearchParams({
-				email: testUser.email,
-				password: testUser.password,
+				email: credentials.email,
+				password: credentials.password,
 			}),
 		});
 
@@ -437,20 +440,50 @@ describe("sign-in with form data", async () => {
 		expect(data.user.email).toBe(testUser.email);
 	});
 
-	it("infers a null Origin from trusted proxy headers", async () => {
-		const response = await auth.handler(
-			createFormRequest("http://internal:3000/api/auth/sign-in/email", {
-				origin: "null",
-				"Sec-Fetch-Site": "same-origin",
-				"x-forwarded-host": "app.example.com",
-				"x-forwarded-proto": "https",
-			}),
+	it("accepts a null Origin through a trusted reverse proxy", async () => {
+		const { auth: proxyAuth, testUser: proxyTestUser } = await getTestInstance({
+			trustedOrigins: ["https://app.example.com"],
+			emailAndPassword: { enabled: true },
+			advanced: {
+				disableCSRFCheck: false,
+				disableOriginCheck: false,
+				trustedProxyHeaders: true,
+			},
+		});
+		const response = await proxyAuth.handler(
+			createFormRequest(
+				"http://internal:3000/api/auth/sign-in/email",
+				{
+					origin: "null",
+					"Sec-Fetch-Site": "same-origin",
+					"x-forwarded-host": "app.example.com",
+					"x-forwarded-proto": "https",
+				},
+				proxyTestUser,
+			),
 		);
 
 		expect(response.status).toBe(200);
 		const data = await response.json();
 		expect(data.token).toBeTypeOf("string");
-		expect(data.user.email).toBe(testUser.email);
+		expect(data.user.email).toBe(proxyTestUser.email);
+	});
+
+	it("ignores forwarded origins when proxy headers are not trusted", async () => {
+		const response = await auth.handler(
+			createFormRequest("https://untrusted.example/api/auth/sign-in/email", {
+				origin: "null",
+				"Sec-Fetch-Site": "same-origin",
+				"x-forwarded-host": "localhost:3000",
+				"x-forwarded-proto": "http",
+			}),
+		);
+
+		expect(response.status).toBe(403);
+		expect(await response.json()).toMatchObject({
+			code: BASE_ERROR_CODES.INVALID_ORIGIN.code,
+			message: BASE_ERROR_CODES.INVALID_ORIGIN.message,
+		});
 	});
 
 	it("rejects a null Origin when the same-origin target is not trusted", async () => {
