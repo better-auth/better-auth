@@ -258,6 +258,8 @@ export interface ApiKeyConfigurationOptions {
 	 * enforcement is available only for database storage and secondary storage with
 	 * database fallback. Secondary-storage-only enforcement currently uses a
 	 * best-effort read-modify-write flow until atomic consumption is implemented.
+	 * Policy changes that race an optimistic verification, such as disabling a key
+	 * or changing its permissions, may take effect on the next verification.
 	 *
 	 * @default false
 	 */
