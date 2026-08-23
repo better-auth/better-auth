@@ -871,9 +871,17 @@ describe("internal adapter test", async () => {
 			session: Session;
 			user?: User | null;
 		}>(testMap.get(session.token));
+		const found = await testCtx.internalAdapter.findSession(session.token);
+		const cachedAfterRead = safeJSONParse<{
+			session: Session;
+			user?: User | null;
+		}>(testMap.get(session.token));
 
 		expect(cached?.session.token).toBe(session.token);
 		expect(cached).not.toHaveProperty("user");
+		expect(found?.session.token).toBe(session.token);
+		expect(found?.user.id).toBe(user.id);
+		expect(cachedAfterRead).not.toHaveProperty("user");
 	});
 
 	/**
@@ -908,8 +916,114 @@ describe("internal adapter test", async () => {
 		expect(found?.session.token).toBe(session.token);
 		expect(found?.user.id).toBe(user.id);
 		expect(
-			safeJSONParse<{ user: User }>(testMap.get(session.token))?.user.id,
-		).toBe(user.id);
+			safeJSONParse<{ user: User | null }>(testMap.get(session.token))?.user,
+		).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10884
+	 */
+	it.each([
+		"deleteSession",
+		"deleteSessions",
+	] as const)("does not recreate a cached session revoked by %s during user recovery", async (revokeMethod) => {
+		const testMap = new Map<string, string>();
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(testMap),
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "concurrently-revoked-user",
+				email: `concurrently-revoked-${revokeMethod}@example.com`,
+			},
+			{ method: "test" },
+		);
+		const session = await testCtx.internalAdapter.createSession(user.id);
+		const cached = safeJSONParse<{ session: Session; user: User }>(
+			testMap.get(session.token),
+		);
+		testMap.set(
+			session.token,
+			JSON.stringify({ session: cached!.session, user: null }),
+		);
+
+		const originalFindOne = testCtx.adapter.findOne.bind(testCtx.adapter);
+		let signalLookupStarted!: () => void;
+		const lookupStarted = new Promise<void>((resolve) => {
+			signalLookupStarted = resolve;
+		});
+		let releaseLookup!: () => void;
+		const lookupGate = new Promise<void>((resolve) => {
+			releaseLookup = resolve;
+		});
+		vi.spyOn(testCtx.adapter, "findOne").mockImplementation(async (input) => {
+			signalLookupStarted();
+			await lookupGate;
+			return originalFindOne(input);
+		});
+
+		const inFlightRead = testCtx.internalAdapter.findSession(session.token);
+		await lookupStarted;
+		if (revokeMethod === "deleteSession") {
+			await testCtx.internalAdapter.deleteSession(session.token);
+		} else {
+			await testCtx.internalAdapter.deleteSessions([session.token]);
+		}
+		const wasDeletedBeforeRecoveryFinished = !testMap.has(session.token);
+		releaseLookup();
+		const recovered = await inFlightRead;
+
+		expect(wasDeletedBeforeRecoveryFinished).toBe(true);
+		expect(recovered?.session.token).toBe(session.token);
+		expect(testMap.has(session.token)).toBe(false);
+		expect(await testCtx.internalAdapter.findSession(session.token)).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10884
+	 */
+	it("does not let a secondary-storage write failure break user recovery", async () => {
+		const testMap = new Map<string, string>();
+		const storage = createStringSecondaryStorage(testMap);
+		let failWrites = false;
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				...storage,
+				set(key, value, ttl) {
+					if (failWrites) throw new Error("secondary storage write failed");
+					return storage.set(key, value, ttl);
+				},
+			} satisfies SecondaryStorage,
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "write-failure-user",
+				email: "write-failure@example.com",
+			},
+			{ method: "test" },
+		);
+		const session = await testCtx.internalAdapter.createSession(user.id);
+		const cached = safeJSONParse<{ session: Session; user: User }>(
+			testMap.get(session.token),
+		);
+		testMap.set(
+			session.token,
+			JSON.stringify({ session: cached!.session, user: null }),
+		);
+		failWrites = true;
+
+		await expect(
+			testCtx.internalAdapter.findSession(session.token),
+		).resolves.toMatchObject({
+			session: { token: session.token },
+			user: { id: user.id },
+		});
 	});
 
 	it("keeps valid secondary session reads on the cache-hit path", async () => {
@@ -970,8 +1084,43 @@ describe("internal adapter test", async () => {
 		expect(sessions).toHaveLength(1);
 		expect(sessions[0]?.user.id).toBe(user.id);
 		expect(
-			safeJSONParse<{ user: User }>(testMap.get(session.token))?.user.id,
-		).toBe(user.id);
+			safeJSONParse<{ user: User | null }>(testMap.get(session.token))?.user,
+		).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10884
+	 */
+	it("propagates authoritative user lookup errors from findSessions", async () => {
+		const testMap = new Map<string, string>();
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(testMap),
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "lookup-error-user",
+				email: "lookup-error@example.com",
+			},
+			{ method: "test" },
+		);
+		const session = await testCtx.internalAdapter.createSession(user.id);
+		const cached = safeJSONParse<{ session: Session; user: User }>(
+			testMap.get(session.token),
+		);
+		testMap.set(
+			session.token,
+			JSON.stringify({ session: cached!.session, user: null }),
+		);
+		vi.spyOn(testCtx.adapter, "findOne").mockRejectedValueOnce(
+			new Error("authoritative user lookup failed"),
+		);
+
+		await expect(
+			testCtx.internalAdapter.findSessions([session.token]),
+		).rejects.toThrow("authoritative user lookup failed");
 	});
 
 	it("should delete on secondary storage", async () => {
