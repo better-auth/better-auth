@@ -113,7 +113,7 @@ overrides:
   valibot@<1.4.2: '>=1.4.2 <2'
   '@babel/core@<7.29.6': '>=7.29.6 <8'
   sharp: '>=0.35.3 <0.36'
-  better-sqlite3@<12.11.1: '>=12.11.1 <13'
+  better-sqlite3@>=12 <12.10.0: '>=12.10.0 <13'
 
 packageExtensionsChecksum: sha256-cX1laHnAcMMdOXVmjthaDi7iH9suQXcE1QM/hILndGo=
 
@@ -993,7 +993,7 @@ importers:
         specifier: 'catalog:'
         version: 1.4.0(zod@4.3.6)
       better-sqlite3:
-        specifier: '>=12.11.1 <13'
+        specifier: '>=12.10.0 <13'
         version: 12.11.1
       defu:
         specifier: '>=6.1.5 <7'
@@ -8489,7 +8489,7 @@ packages:
     peerDependencies:
       '@electric-sql/pglite': '*'
       '@libsql/client': '*'
-      better-sqlite3: '>=12.11.1 <13'
+      better-sqlite3: '>=12.10.0 <13'
       drizzle-orm: '*'
       mysql2: '*'
       sqlite3: '*'
@@ -8702,7 +8702,7 @@ packages:
       '@upstash/redis': '>=1.34.7'
       '@vercel/postgres': '>=0.8.0'
       '@xata.io/client': '*'
-      better-sqlite3: '>=12.11.1 <13'
+      better-sqlite3: '>=12.10.0 <13'
       bun-types: '*'
       expo-sqlite: '>=14.0.0'
       gel: '>=2'
@@ -8801,7 +8801,7 @@ packages:
       '@vercel/postgres': '>=0.8.0'
       '@xata.io/client': '*'
       arktype: '>=2.0.0'
-      better-sqlite3: '>=12.11.1 <13'
+      better-sqlite3: '>=12.10.0 <13'
       bun-types: '*'
       effect: '>=4.0.0-beta.58 || >=4.0.0'
       expo-sqlite: '>=14.0.0'
@@ -12059,7 +12059,7 @@ packages:
     engines: {node: ^20.19 || ^22.12 || >=24.0}
     hasBin: true
     peerDependencies:
-      better-sqlite3: '>=12.11.1 <13'
+      better-sqlite3: '>=12.10.0 <13'
       typescript: '>=5.4.0'
     peerDependenciesMeta:
       better-sqlite3:
@@ -12072,7 +12072,7 @@ packages:
     engines: {node: ^20.19 || ^22.12 || >=24.0}
     hasBin: true
     peerDependencies:
-      better-sqlite3: '>=12.11.1 <13'
+      better-sqlite3: '>=12.10.0 <13'
       typescript: '>=5.4.0'
     peerDependenciesMeta:
       better-sqlite3:

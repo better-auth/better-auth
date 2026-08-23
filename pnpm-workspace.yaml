@@ -59,8 +59,8 @@ overrides:
   'valibot@<1.4.2': '>=1.4.2 <2'
   '@babel/core@<7.29.6': '>=7.29.6 <8'
   sharp: '>=0.35.3 <0.36'
-  # Node 26 removed v8::PropertyCallbackInfo::This(); better-sqlite3 < 12.11.1 fails to build.
-  better-sqlite3@<12.11.1: '>=12.11.1 <13'
+  # better-sqlite3 12.10.0 added Node 26 support.
+  'better-sqlite3@>=12 <12.10.0': '>=12.10.0 <13'
 
 catalog:
   '@better-auth/utils': 0.4.2
