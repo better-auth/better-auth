@@ -203,6 +203,29 @@ export const createInternalAdapter = (
 		);
 	}
 
+	async function resolveCachedSessionUser(
+		session: Session,
+		cachedUser: User | null | undefined,
+	): Promise<User | null> {
+		if (cachedUser) return cachedUser;
+
+		const user = await (await getCurrentAdapter(adapter)).findOne<User>({
+			model: "user",
+			where: [{ field: "id", value: session.userId }],
+		});
+		if (!user || !secondaryStorage) return user;
+
+		const sessionTTL = getTTLSeconds(new Date(session.expiresAt));
+		if (sessionTTL > 0) {
+			await secondaryStorage.set(
+				session.token,
+				JSON.stringify({ session, user }),
+				sessionTTL,
+			);
+		}
+		return user;
+	}
+
 	async function withVerificationConsumeLock<T>(
 		key: string,
 		fn: () => Promise<T>,
@@ -556,7 +579,9 @@ export const createInternalAdapter = (
 				if (sessionTTL > 0) {
 					await secondaryStorage.set(
 						data.token,
-						JSON.stringify({ session: sessionData, user }),
+						JSON.stringify(
+							user ? { session: sessionData, user } : { session: sessionData },
+						),
 						sessionTTL,
 					);
 				}
@@ -620,9 +645,11 @@ export const createInternalAdapter = (
 				if (sessionStringified) {
 					const s = safeJSONParse<{
 						session: Session;
-						user: User;
+						user?: User | null;
 					}>(sessionStringified);
-					if (!s) return null;
+					if (!s?.session) return null;
+					const user = await resolveCachedSessionUser(s.session, s.user);
+					if (!user) return null;
 					const parsedSession = parseSessionOutput(ctx.options, {
 						...s.session,
 						expiresAt: new Date(s.session.expiresAt),
@@ -630,9 +657,9 @@ export const createInternalAdapter = (
 						updatedAt: new Date(s.session.updatedAt),
 					});
 					const parsedUser = parseUserOutput(ctx.options, {
-						...s.user,
-						createdAt: new Date(s.user.createdAt),
-						updatedAt: new Date(s.user.updatedAt),
+						...user,
+						createdAt: new Date(user.createdAt),
+						updatedAt: new Date(user.updatedAt),
 					});
 					return {
 						session: parsedSession,
@@ -690,22 +717,24 @@ export const createInternalAdapter = (
 									: sessionStringified
 							) as {
 								session: Session;
-								user: User;
+								user?: User | null;
 							};
-							if (!s) continue;
+							if (!s?.session) continue;
 							const expiresAt = new Date(s.session.expiresAt);
 							if (options?.onlyActiveSessions && expiresAt <= new Date()) {
 								continue;
 							}
+							const user = await resolveCachedSessionUser(s.session, s.user);
+							if (!user) continue;
 							const session = {
 								session: {
 									...s.session,
 									expiresAt: new Date(s.session.expiresAt),
 								},
 								user: {
-									...s.user,
-									createdAt: new Date(s.user.createdAt),
-									updatedAt: new Date(s.user.updatedAt),
+									...user,
+									createdAt: new Date(user.createdAt),
+									updatedAt: new Date(user.updatedAt),
 								},
 							} as {
 								session: Session;
