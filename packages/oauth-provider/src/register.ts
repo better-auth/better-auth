@@ -4,7 +4,10 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import { isLoopbackIP } from "@better-auth/core/utils/host";
-import { isReverseDomainPrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
+import {
+	isHostBearingPrivateUseRedirectUri,
+	isReverseDomainPrivateUseRedirectUri,
+} from "@better-auth/core/utils/redirect-uri";
 import { APIError, getSessionFromCtx, NO_STORE_HEADERS } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
@@ -227,10 +230,13 @@ function validateClientRedirectUri(
 
 	if (
 		FORBIDDEN_NATIVE_REDIRECT_SCHEMES.has(url.protocol) ||
-		!isReverseDomainPrivateUseRedirectUri(url)
+		!(
+			isReverseDomainPrivateUseRedirectUri(url) ||
+			isHostBearingPrivateUseRedirectUri(url)
+		)
 	) {
 		invalidRedirectUri(
-			`native private-use redirect URI schemes must be well-formed reverse-domain names, omit the naming authority, and must not use a reserved scheme: ${redirectUri}`,
+			`native private-use redirect URI schemes must not use a reserved scheme; they must be an authority-free reverse-domain URI or a custom-scheme URI with an authority: ${redirectUri}`,
 		);
 	}
 }
@@ -399,7 +405,8 @@ export async function checkOAuthClient(
 		// A CIMD document may omit application_type. Preserve that absence in
 		// storage while validating against the safe union of web and native
 		// redirect forms. The native validator is that union: non-loopback HTTPS,
-		// exact loopback HTTP, or an authority-free private-use scheme.
+		// exact loopback HTTP, an authority-free reverse-domain private-use
+		// scheme, or a host-bearing non-reserved custom scheme.
 		validateClientRedirectUri(
 			uri,
 			(applicationType as "web" | "native" | undefined) ??

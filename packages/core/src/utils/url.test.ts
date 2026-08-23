@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	isHostBearingPrivateUseRedirectUri,
 	isReverseDomainPrivateUseRedirectUri,
 	SafeUrlSchema,
 } from "./redirect-uri";
@@ -117,5 +118,43 @@ describe("isReverseDomainPrivateUseRedirectUri", () => {
 				new URL("com.example.app:///callback"),
 			),
 		).toBe(false);
+		expect(
+			isReverseDomainPrivateUseRedirectUri(
+				new URL("cursor://anysphere.cursor-mcp/oauth/callback"),
+			),
+		).toBe(false);
+	});
+});
+
+describe("isHostBearingPrivateUseRedirectUri", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10946
+	 */
+	it("accepts host-bearing custom-scheme URIs used by native MCP clients", () => {
+		expect(
+			isHostBearingPrivateUseRedirectUri(
+				new URL("cursor://anysphere.cursor-mcp/oauth/callback"),
+			),
+		).toBe(true);
+		expect(
+			isHostBearingPrivateUseRedirectUri(
+				new URL("com.example.app://host/callback"),
+			),
+		).toBe(true);
+	});
+
+	it("rejects reserved schemes and authority-free URIs", () => {
+		expect(
+			isHostBearingPrivateUseRedirectUri(new URL("https://example.com/cb")),
+		).toBe(false);
+		expect(
+			isHostBearingPrivateUseRedirectUri(new URL("file://host/callback")),
+		).toBe(false);
+		expect(
+			isHostBearingPrivateUseRedirectUri(new URL("com.example.app:/callback")),
+		).toBe(false);
+		expect(isHostBearingPrivateUseRedirectUri(new URL("myapp:/callback"))).toBe(
+			false,
+		);
 	});
 });

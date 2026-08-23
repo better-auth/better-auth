@@ -1730,7 +1730,6 @@ describe("oauth register - application_type", async () => {
 		"com.example..app:/callback",
 		"com.example.-app:/callback",
 		"com.example.app-:/callback",
-		"com.example.app://host/callback",
 		"https://localhost/callback",
 		"https://localhost./callback",
 		"https://localhost../callback",
@@ -1757,6 +1756,8 @@ describe("oauth register - application_type", async () => {
 		"http://127.0.0.1:54921/callback",
 		"http://[::1]:61234/callback",
 		"com.example.app:/callback",
+		"com.example.app://host/callback",
+		"cursor://anysphere.cursor-mcp/oauth/callback",
 		"https://app.example.com/callback",
 	])("accepts valid native redirect URI %s", async (redirectUri) => {
 		const response = await register({
@@ -1779,5 +1780,31 @@ describe("oauth register - application_type", async () => {
 		expect(accepted.status).toBe(201);
 		const body = (await accepted.json()) as OAuthClient;
 		expect(body.application_type).toBe("web");
+	});
+
+	/**
+	 * Cursor's MCP OAuth client registers `cursor://…` as a native private-use
+	 * redirect. Host-bearing custom schemes are valid native URIs (RFC 8252 §7.1
+	 * recommends, but does not require, the authority-free reverse-domain form).
+	 * A `web` registration with the same URI still fails — this is not a
+	 * `web`→`native` coercion.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10946
+	 */
+	it("registers Cursor's host-bearing cursor:// redirect for native clients only", async () => {
+		const native = await register({
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			redirect_uris: ["cursor://anysphere.cursor-mcp/oauth/callback"],
+		});
+		expect(native.status).toBe(201);
+
+		const web = await register({
+			application_type: "web",
+			redirect_uris: ["cursor://anysphere.cursor-mcp/oauth/callback"],
+		});
+		expect(web.status).toBe(400);
+		const webBody = (await web.json()) as { error?: string };
+		expect(webBody.error).toBe("invalid_redirect_uri");
 	});
 });
