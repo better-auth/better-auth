@@ -24,14 +24,16 @@ export const auth = betterAuth({
 
 ### SentinelOptions
 
-| Option       | Type              | Description                                                           |
-| ------------ | ----------------- | --------------------------------------------------------------------- |
-| `apiUrl`     | `string`          | Better Auth Infrastructure API URL                                    |
-| `kvUrl`      | `string`          | KV store URL for rate limiting data                                   |
-| `apiKey`     | `string`          | Your API key for authentication                                       |
-| `apiTimeout` | `number`          | Timeout in ms for Infra API HTTP requests (`apiUrl`). Default: `3000` |
-| `kvTimeout`  | `number`          | Timeout in ms for KV HTTP requests (`kvUrl`). Default: `1000`         |
-| `security`   | `SecurityOptions` | Security feature configuration                                        |
+| Option       | Type              | Description                                                                           |
+| ------------ | ----------------- | ------------------------------------------------------------------------------------- |
+| `apiUrl`     | `string`          | Better Auth infrastructure API URL. Default: `https://dash.better-auth.com`           |
+| `kvUrl`      | `string`          | Better Auth identification infrastructure URL. Default: `https://kv.better-auth.com`  |
+| `apiKey`     | `string`          | Your API key for authentication.                                                      |
+| `apiOptions` | `object`          | Dash API HTTP options. Accepts `timeout?: number` in ms.                              |
+| `kvOptions`  | `object`          | KV HTTP options. Accepts `timeout?: number` and `retry?: { attempts?: number; ... }`. |
+| `apiTimeout` | `number`          | Deprecated alias for `apiOptions.timeout`.                                            |
+| `kvTimeout`  | `number`          | Deprecated alias for `kvOptions.timeout`.                                             |
+| `security`   | `SecurityOptions` | Security feature configuration.                                                       |
 
 ### SecurityOptions
 
@@ -342,10 +344,12 @@ export const authClient = createAuthClient({
 
 ### Configuration
 
-| Option               | Type      | Default | Description                                             |
-| -------------------- | --------- | ------- | ------------------------------------------------------- |
-| `autoSolveChallenge` | `boolean` | `true`  | Automatically solve PoW challenges                      |
-| `kvTimeout`          | `number`  | `1000`  | Timeout in ms for KV identify and related HTTP requests |
+| Option               | Type      | Default                                                                    | Description                                     |
+| -------------------- | --------- | -------------------------------------------------------------------------- | ----------------------------------------------- |
+| `identifyUrl`        | `string`  | `BETTER_AUTH_KV_URL` or `https://kv.better-auth.com`                       | Base URL for the identify endpoint.             |
+| `identifyOptions`    | `object`  | `{ timeout: 1000, retry: { attempts: 2, baseDelay: 400, maxDelay: 600 } }` | Identify HTTP client settings.                  |
+| `autoSolveChallenge` | `boolean` | `true`                                                                     | Automatically solve PoW challenges.             |
+| `kvTimeout`          | `number`  | `1000`                                                                     | Deprecated alias for `identifyOptions.timeout`. |
 
 ### Browser Fingerprinting
 
@@ -424,15 +428,16 @@ export const authClient = createAuthClient({
 
 #### `sentinelNativeClient` options
 
-| Option                | Type                            | Default                                                 | Description                                                                 |
-| --------------------- | ------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `identifyUrl`         | `string`                        | `BETTER_AUTH_KV_URL`, then `https://kv.better-auth.com` | KV identify endpoint base URL                                               |
-| `kvTimeout`           | `number`                        | `1000`                                                  | Timeout in ms for KV identify and related HTTP requests                     |
-| `autoSolveChallenge`  | `boolean`                       | `true`                                                  | On `423` with `X-PoW-Challenge`, solve and retry once with `X-PoW-Solution` |
-| `onChallengeReceived` | `(reason: string) => void`      | —                                                       | Called when a PoW challenge is received                                     |
-| `onChallengeSolved`   | `(solveTimeMs: number) => void` | —                                                       | Called after a successful solve                                             |
-| `onChallengeFailed`   | `(error: Error) => void`        | —                                                       | Called if solving fails                                                     |
-| `storage`             | `{ getItem, setItem }`          | Async Storage when installed                            | Persistent async storage for a stable per-install visitor ID                |
+| Option                | Type                            | Default                                                                    | Description                                                                  |
+| --------------------- | ------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `identifyUrl`         | `string`                        | `BETTER_AUTH_KV_URL`, then `https://kv.better-auth.com`                    | Identify endpoint base URL.                                                  |
+| `identifyOptions`     | `object`                        | `{ timeout: 1000, retry: { attempts: 2, baseDelay: 400, maxDelay: 600 } }` | Identify HTTP timeout and retry policy.                                      |
+| `kvTimeout`           | `number`                        | `1000`                                                                     | Deprecated alias for `identifyOptions.timeout`.                              |
+| `autoSolveChallenge`  | `boolean`                       | `true`                                                                     | On `423` with `X-PoW-Challenge`, solve and retry once with `X-PoW-Solution`. |
+| `onChallengeReceived` | `(reason: string) => void`      | —                                                                          | Called when a PoW challenge is received.                                     |
+| `onChallengeSolved`   | `(solveTimeMs: number) => void` | —                                                                          | Called after a successful solve.                                             |
+| `onChallengeFailed`   | `(error: Error) => void`        | —                                                                          | Called if solving fails.                                                     |
+| `storage`             | `{ getItem, setItem }`          | Async Storage when installed                                               | Persistent async storage for a stable per-install visitor ID.                |
 
 ## Security Events
 

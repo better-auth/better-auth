@@ -1,7 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
-	generateCodeChallenge,
+	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
@@ -152,25 +152,22 @@ export const zoom = (userOptions: ZoomOptions) => {
 	return {
 		id: "zoom",
 		name: "Zoom",
-		createAuthorizationURL: async ({ state, redirectURI, codeVerifier }) => {
-			const params = new URLSearchParams({
-				response_type: "code",
-				redirect_uri: options.redirectURI ? options.redirectURI : redirectURI,
-				client_id: options.clientId,
+		accountSubject: ({ profile }) => profile.id,
+		createAuthorizationURL: async ({
+			state,
+			redirectURI,
+			codeVerifier,
+			additionalParams,
+		}) =>
+			createAuthorizationURL({
+				id: "zoom",
+				options,
+				authorizationEndpoint: "https://zoom.us/oauth/authorize",
 				state,
-			});
-
-			if (options.pkce) {
-				const codeChallenge = await generateCodeChallenge(codeVerifier);
-				params.set("code_challenge_method", "S256");
-				params.set("code_challenge", codeChallenge);
-			}
-
-			const url = new URL("https://zoom.us/oauth/authorize");
-			url.search = params.toString();
-
-			return url;
-		},
+				redirectURI,
+				codeVerifier: options.pkce ? codeVerifier : undefined,
+				additionalParams,
+			}),
 		validateAuthorizationCode: async ({ code, redirectURI, codeVerifier }) => {
 			return validateAuthorizationCode({
 				code,
@@ -214,7 +211,6 @@ export const zoom = (userOptions: ZoomOptions) => {
 
 			return {
 				user: {
-					id: profile.id,
 					name: profile.display_name,
 					image: profile.pic_url,
 					email: profile.email,
