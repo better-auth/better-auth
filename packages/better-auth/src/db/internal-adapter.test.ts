@@ -1053,6 +1053,43 @@ describe("internal adapter test", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10884
 	 */
+	it("recovers omitted users while finding cached sessions", async () => {
+		const testMap = new Map<string, string>();
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(testMap),
+		} satisfies BetterAuthOptions;
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "listed-omitted-user",
+				email: "listed-omitted@example.com",
+			},
+			{ method: "test" },
+		);
+		const session = await testCtx.internalAdapter.createSession(user.id);
+		const cached = safeJSONParse<{ session: Session; user: User }>(
+			testMap.get(session.token),
+		);
+		testMap.set(session.token, JSON.stringify({ session: cached!.session }));
+
+		const sessions = await testCtx.internalAdapter.findSessions([
+			session.token,
+		]);
+
+		expect(sessions).toHaveLength(1);
+		expect(sessions[0]?.user.id).toBe(user.id);
+		expect(
+			safeJSONParse<{ session: Session; user?: User | null }>(
+				testMap.get(session.token),
+			),
+		).not.toHaveProperty("user");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10884
+	 */
 	it("recovers null users while finding cached sessions", async () => {
 		const testMap = new Map<string, string>();
 		const testOpts = {
