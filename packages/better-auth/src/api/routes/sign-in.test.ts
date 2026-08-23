@@ -371,13 +371,14 @@ describe("sign-in with additionalFields", async () => {
 
 describe("sign-in with form data", async () => {
 	const { auth, testUser } = await getTestInstance({
-		trustedOrigins: ["http://localhost:3000"],
+		trustedOrigins: ["http://localhost:3000", "https://app.example.com"],
 		emailAndPassword: {
 			enabled: true,
 		},
 		advanced: {
 			disableCSRFCheck: false,
 			disableOriginCheck: false,
+			trustedProxyHeaders: true,
 		},
 	});
 	const createFormRequest = (url: string, headers: Record<string, string>) =>
@@ -427,6 +428,22 @@ describe("sign-in with form data", async () => {
 			createFormRequest("http://localhost:3000/api/auth/sign-in/email", {
 				origin: "null",
 				"Sec-Fetch-Site": "same-origin",
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		const data = await response.json();
+		expect(data.token).toBeTypeOf("string");
+		expect(data.user.email).toBe(testUser.email);
+	});
+
+	it("infers a null Origin from trusted proxy headers", async () => {
+		const response = await auth.handler(
+			createFormRequest("http://internal:3000/api/auth/sign-in/email", {
+				origin: "null",
+				"Sec-Fetch-Site": "same-origin",
+				"x-forwarded-host": "app.example.com",
+				"x-forwarded-proto": "https",
 			}),
 		);
 
